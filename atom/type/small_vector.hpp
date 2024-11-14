@@ -21,7 +21,8 @@ Description: A Small Vector Implementation
 #include <initializer_list>
 #include <limits>
 #include <utility>
-#include "error/exception.hpp"
+
+#include "atom/error/exception.hpp"
 #include "atom/macro.hpp"
 
 template <typename T, std::size_t N>

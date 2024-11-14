@@ -19,7 +19,8 @@ Description: A simple wrapper of std::jthread
 #include <thread>
 #include <type_traits>
 #include <utility>
-#include "type/noncopyable.hpp"
+
+#include "atom/type/noncopyable.hpp"
 
 namespace atom::async {
 /**

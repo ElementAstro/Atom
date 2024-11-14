@@ -4,7 +4,8 @@
 #include <fstream>
 #include <iostream>
 #include <random>
-#include "error/exception.hpp"
+
+#include "atom/error/exception.hpp"
 
 #if USE_SIMD
 #include <immintrin.h>

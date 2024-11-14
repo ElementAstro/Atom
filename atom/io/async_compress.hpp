@@ -3,10 +3,12 @@
 
 #include <zlib.h>
 #include <array>
-#include <asio.hpp>
 #include <filesystem>
 #include <fstream>
 #include <vector>
+#include <utility>
+
+#include <asio.hpp>
 
 namespace fs = std::filesystem;
 #ifdef _WIN32

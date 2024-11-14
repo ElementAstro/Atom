@@ -156,7 +156,7 @@ private:
      * @param message The message to filter.
      * @return True if the message passes the filter, false otherwise.
      */
-    bool applyFilter(const Subscriber& subscriber, const T& message);
+    auto applyFilter(const Subscriber& subscriber, const T& message) -> bool;
 
     /**
      * @brief Handle the timeout for a given subscriber and message.
@@ -165,7 +165,7 @@ private:
      * @return True if the message was processed within the timeout, false
      * otherwise.
      */
-    bool handleTimeout(const Subscriber& subscriber, const T& message);
+    auto handleTimeout(const Subscriber& subscriber, const T& message) -> bool;
 };
 
 template <typename T>
@@ -176,17 +176,18 @@ void MessageQueue<T>::subscribe(CallbackType callback,
     std::lock_guard lock(m_mutex_);
     m_subscribers_.emplace_back(subscriberName, callback, priority, filter,
                                 timeout);
-    std::ranges::sort(m_subscribers_, std::greater{});
+    // std::sort(m_subscribers_.begin(), m_subscribers_.end(), std::greater<>());
 }
 
 template <typename T>
 void MessageQueue<T>::unsubscribe(CallbackType callback) {
     std::lock_guard lock(m_mutex_);
-    auto iterator = std::ranges::remove_if(
-        m_subscribers_, [&callback](const auto& subscriber) {
+    auto iterator = std::remove_if(
+        m_subscribers_.begin(), m_subscribers_.end(),
+        [&callback](const auto& subscriber) {
             return subscriber.callback.target_type() == callback.target_type();
         });
-    m_subscribers_.erase(iterator.begin(), iterator.end());
+    m_subscribers_.erase(iterator, m_subscribers_.end());
 }
 
 template <typename T>
@@ -234,8 +235,8 @@ void MessageQueue<T>::cancelMessages(
 }
 
 template <typename T>
-bool MessageQueue<T>::applyFilter(const Subscriber& subscriber,
-                                  const T& message) {
+auto MessageQueue<T>::applyFilter(const Subscriber& subscriber,
+                                  const T& message) -> bool {
     if (!subscriber.filter) {
         return true;
     }
@@ -243,8 +244,8 @@ bool MessageQueue<T>::applyFilter(const Subscriber& subscriber,
 }
 
 template <typename T>
-bool MessageQueue<T>::handleTimeout(const Subscriber& subscriber,
-                                    const T& message) {
+auto MessageQueue<T>::handleTimeout(const Subscriber& subscriber,
+                                    const T& message) -> bool {
     if (subscriber.timeout == std::chrono::milliseconds::zero()) {
         subscriber.callback(message);
         return true;
@@ -255,11 +256,7 @@ bool MessageQueue<T>::handleTimeout(const Subscriber& subscriber,
     auto future = task.get_future();
     asio::post(ioContext_, std::move(task));
 
-    if (future.wait_for(subscriber.timeout) == std::future_status::timeout) {
-        return false;  // Timeout occurred.
-    }
-
-    return true;  // Process completed within timeout.
+    return future.wait_for(subscriber.timeout) != std::future_status::timeout;
 }
 
 template <typename T>

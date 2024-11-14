@@ -48,6 +48,10 @@ public:
     auto addHeader(const std::string &key,
                    const std::string &value) -> CurlWrapper &;
     auto onError(std::function<void(CURLcode)> callback) -> CurlWrapper &;
+    auto setOnErrorCallback(std::function<void(CURLcode)> callback)
+        -> CurlWrapper &;
+    auto setOnResponseCallback(
+        std::function<void(const std::string &)> callback) -> CurlWrapper &;
     auto onResponse(std::function<void(const std::string &)> callback)
         -> CurlWrapper &;
     auto setTimeout(long timeout) -> CurlWrapper &;

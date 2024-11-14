@@ -65,7 +65,7 @@ public:
      * @throw std::runtime_error if the task is not valid.
      * @return The result of the task.
      */
-    auto getResult() -> ResultType;
+    [[nodiscard]] auto getResult() -> ResultType;
 
     /**
      * @brief Cancels the task.
@@ -156,7 +156,7 @@ public:
      * @return A shared pointer to the created AsyncWorker instance.
      */
     template <typename Func, typename... Args>
-    auto createWorker(Func &&func, Args &&...args)
+    [[nodiscard]] auto createWorker(Func &&func, Args &&...args)
         -> std::shared_ptr<AsyncWorker<ResultType>>;
 
     /**
@@ -169,7 +169,7 @@ public:
      *
      * @return True if all tasks are done, false otherwise.
      */
-    auto allDone() const -> bool;
+    [[nodiscard]] auto allDone() const -> bool;
 
     /**
      * @brief Waits for all the managed tasks to complete.
@@ -182,7 +182,8 @@ public:
      * @param worker The AsyncWorker instance to check.
      * @return True if the task is done, false otherwise.
      */
-    bool isDone(std::shared_ptr<AsyncWorker<ResultType>> worker) const;
+    [[nodiscard]] auto isDone(
+        std::shared_ptr<AsyncWorker<ResultType>> worker) const -> bool;
 
     /**
      * @brief Cancels a specific task.
@@ -232,13 +233,13 @@ void AsyncWorker<ResultType>::cancel() {
 }
 
 template <typename ResultType>
-auto AsyncWorker<ResultType>::isDone() const -> bool {
+[[nodiscard]] auto AsyncWorker<ResultType>::isDone() const -> bool {
     return task_.valid() && (task_.wait_for(std::chrono::seconds(0)) ==
                              std::future_status::ready);
 }
 
 template <typename ResultType>
-auto AsyncWorker<ResultType>::isActive() const -> bool {
+[[nodiscard]] auto AsyncWorker<ResultType>::isActive() const -> bool {
     return task_.valid() && (task_.wait_for(std::chrono::seconds(0)) ==
                              std::future_status::timeout);
 }
@@ -247,6 +248,7 @@ template <typename ResultType>
 auto AsyncWorker<ResultType>::validate(
     std::function<bool(ResultType)> validator) -> bool {
     if (!isDone()) {
+        return false;
     }
     ResultType result = getResult();
     return validator(result);
@@ -265,10 +267,11 @@ void AsyncWorker<ResultType>::setTimeout(std::chrono::seconds timeout) {
 
 template <typename ResultType>
 void AsyncWorker<ResultType>::waitForCompletion() {
+    constexpr auto kSleepDuration = std::chrono::milliseconds(100);
     if (timeout_ != std::chrono::seconds(0)) {
         auto startTime = std::chrono::steady_clock::now();
         while (!isDone()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(kSleepDuration);
             if (std::chrono::steady_clock::now() - startTime > timeout_) {
                 cancel();
                 break;
@@ -276,7 +279,7 @@ void AsyncWorker<ResultType>::waitForCompletion() {
         }
     } else {
         while (!isDone()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(kSleepDuration);
         }
     }
 
@@ -291,39 +294,42 @@ template <typename Func, typename... Args>
     Func &&func, Args &&...args) -> std::shared_ptr<AsyncWorker<ResultType>> {
     auto worker = std::make_shared<AsyncWorker<ResultType>>();
     workers_.push_back(worker);
-    worker->StartAsync(std::forward<Func>(func), std::forward<Args>(args)...);
+    worker->startAsync(std::forward<Func>(func), std::forward<Args>(args)...);
     return worker;
 }
 
 template <typename ResultType>
 void AsyncWorkerManager<ResultType>::cancelAll() {
     for (auto &worker : workers_) {
-        worker->Cancel();
+        worker->cancel();
     }
 }
 
 template <typename ResultType>
-auto AsyncWorkerManager<ResultType>::allDone() const -> bool {
+[[nodiscard]] auto AsyncWorkerManager<ResultType>::allDone() const -> bool {
     return std::all_of(workers_.begin(), workers_.end(),
-                       [](const auto &worker) { return worker->IsDone(); });
+                       [](const auto &worker) { return worker->isDone(); });
 }
 
 template <typename ResultType>
 void AsyncWorkerManager<ResultType>::waitForAll() {
     while (!allDone()) {
+        for (auto &worker : workers_) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
     }
 }
 
 template <typename ResultType>
-auto AsyncWorkerManager<ResultType>::isDone(
+[[nodiscard]] auto AsyncWorkerManager<ResultType>::isDone(
     std::shared_ptr<AsyncWorker<ResultType>> worker) const -> bool {
-    return worker->IsDone();
+    return worker->isDone();
 }
 
 template <typename ResultType>
 void AsyncWorkerManager<ResultType>::cancel(
     std::shared_ptr<AsyncWorker<ResultType>> worker) {
-    worker->Cancel();
+    worker->cancel();
 }
 
 template <typename T>
@@ -411,7 +417,6 @@ auto asyncRetry(Func &&func, int attemptsLeft,
                 ExceptionHandler &&exceptionHandler,
                 CompleteHandler &&completeHandler, Args &&...args)
     -> std::future<typename std::invoke_result_t<Func, Args...>> {
-
     return std::async(std::launch::async, [=]() mutable {
         return asyncRetryImpl(std::forward<Func>(func), attemptsLeft,
                               initialDelay, strategy, maxTotalDelay,
@@ -425,11 +430,11 @@ auto asyncRetry(Func &&func, int attemptsLeft,
 template <typename Func, typename Callback, typename ExceptionHandler,
           typename CompleteHandler, typename... Args>
 auto asyncRetryE(Func &&func, int attemptsLeft,
-                std::chrono::milliseconds initialDelay,
-                BackoffStrategy strategy,
-                std::chrono::milliseconds maxTotalDelay, Callback &&callback,
-                ExceptionHandler &&exceptionHandler,
-                CompleteHandler &&completeHandler, Args &&...args)
+                 std::chrono::milliseconds initialDelay,
+                 BackoffStrategy strategy,
+                 std::chrono::milliseconds maxTotalDelay, Callback &&callback,
+                 ExceptionHandler &&exceptionHandler,
+                 CompleteHandler &&completeHandler, Args &&...args)
     -> EnhancedFuture<typename std::invoke_result_t<Func, Args...>> {
     using ReturnType = typename std::invoke_result_t<Func, Args...>;
 

@@ -1,91 +1,51 @@
-#include "atom/algorithm/huffman.hpp"
-
 #include <iostream>
 #include <unordered_map>
+#include <vector>
+
+#include "atom/algorithm/huffman.hpp"
+
+using namespace atom::algorithm;
 
 int main() {
-    {
-        // Frequency map for characters
-        std::unordered_map<char, int> frequencies = {
-            {'a', 5}, {'b', 9}, {'c', 12}, {'d', 13}, {'e', 16}, {'f', 45}};
+    // Example data to compress
+    std::string data = "this is an example for huffman encoding";
+    std::vector<unsigned char> inputData(data.begin(), data.end());
 
-        // Create Huffman Tree
-        auto huffmanTree = atom::algorithm::createHuffmanTree(frequencies);
-
-        if (huffmanTree) {
-            std::cout << "Huffman tree created successfully." << std::endl;
-        }
+    // Step 1: Calculate frequencies of each byte
+    std::unordered_map<unsigned char, int> frequencies;
+    for (unsigned char byte : inputData) {
+        frequencies[byte]++;
     }
 
-    {
-        // Example frequency map
-        std::unordered_map<char, int> frequencies = {
-            {'a', 5}, {'b', 9}, {'c', 12}, {'d', 13}, {'e', 16}, {'f', 45}};
+    // Step 2: Create Huffman Tree
+    auto huffmanTreeRoot = createHuffmanTree(frequencies);
 
-        // Create Huffman Tree
-        auto huffmanTree = atom::algorithm::createHuffmanTree(frequencies);
+    // Step 3: Generate Huffman Codes
+    std::unordered_map<unsigned char, std::string> huffmanCodes;
+    generateHuffmanCodes(huffmanTreeRoot.get(), "", huffmanCodes);
 
-        // Generate Huffman Codes
-        std::unordered_map<char, std::string> huffmanCodes;
-        atom::algorithm::generateHuffmanCodes(huffmanTree.get(), "",
-                                              huffmanCodes);
+    // Step 4: Compress Data
+    std::string compressedData = compressData(inputData, huffmanCodes);
+    std::cout << "Compressed Data: " << compressedData << std::endl;
 
-        // Print Huffman Codes
-        for (const auto& pair : huffmanCodes) {
-            std::cout << "Character: " << pair.first
-                      << ", Code: " << pair.second << std::endl;
-        }
-    }
+    // Step 5: Decompress Data
+    std::vector<unsigned char> decompressedData =
+        decompressData(compressedData, huffmanTreeRoot.get());
+    std::string decompressedString(decompressedData.begin(),
+                                   decompressedData.end());
+    std::cout << "Decompressed Data: " << decompressedString << std::endl;
 
-    {
-        // Example frequency map
-        std::unordered_map<char, int> frequencies = {
-            {'a', 5}, {'b', 9}, {'c', 12}, {'d', 13}, {'e', 16}, {'f', 45}};
+    // Step 6: Serialize Huffman Tree
+    std::string serializedTree = serializeTree(huffmanTreeRoot.get());
+    std::cout << "Serialized Huffman Tree: " << serializedTree << std::endl;
 
-        // Create Huffman Tree
-        auto huffmanTree = atom::algorithm::createHuffmanTree(frequencies);
+    // Step 7: Deserialize Huffman Tree
+    size_t index = 0;
+    auto deserializedTreeRoot = deserializeTree(serializedTree, index);
 
-        // Generate Huffman Codes
-        std::unordered_map<char, std::string> huffmanCodes;
-        atom::algorithm::generateHuffmanCodes(huffmanTree.get(), "",
-                                              huffmanCodes);
-
-        // Example text
-        std::string text = "abcdef";
-
-        // Compress Text
-        std::string compressedText =
-            atom::algorithm::compressText(text, huffmanCodes);
-
-        std::cout << "Compressed Text: " << compressedText << std::endl;
-    }
-
-    {
-        // Example frequency map
-        std::unordered_map<char, int> frequencies = {
-            {'a', 5}, {'b', 9}, {'c', 12}, {'d', 13}, {'e', 16}, {'f', 45}};
-
-        // Create Huffman Tree
-        auto huffmanTree = atom::algorithm::createHuffmanTree(frequencies);
-
-        // Generate Huffman Codes
-        std::unordered_map<char, std::string> huffmanCodes;
-        atom::algorithm::generateHuffmanCodes(huffmanTree.get(), "",
-                                              huffmanCodes);
-
-        // Example text
-        std::string text = "abcdef";
-
-        // Compress Text
-        std::string compressedText =
-            atom::algorithm::compressText(text, huffmanCodes);
-
-        // Decompress Text
-        std::string decompressedText =
-            atom::algorithm::decompressText(compressedText, huffmanTree.get());
-
-        std::cout << "Decompressed Text: " << decompressedText << std::endl;
-    }
+    // Step 8: Visualize Huffman Tree
+    std::cout << "Huffman Tree Structure:" << std::endl;
+    visualizeHuffmanTree(huffmanTreeRoot.get());
 
     return 0;
 }

@@ -528,7 +528,9 @@ public:
     void pushFront(T value) {
         Node* newNode = new Node(value);
         newNode->next = head_.load();
-        while (!head_.compare_exchange_weak(newNode->next, newNode)) {
+        Node* expected = newNode->next.load();
+        while (!head_.compare_exchange_weak(expected, newNode)) {
+            newNode->next = expected;
         }
     }
 

@@ -46,6 +46,7 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     endif()
     message(STATUS "Using MSVC version ${CMAKE_CXX_COMPILER_VERSION}")
 endif()
+message(STATUS "Using C++${CMAKE_CXX_STANDARD}")
 
 # Set C standard
 set(CMAKE_C_STANDARD 17)

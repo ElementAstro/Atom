@@ -36,8 +36,8 @@ public:
      *
      * @param args Arguments to be stored in the view.
      */
-    constexpr explicit ArgsView(Args&&... args) noexcept
-        : args_(std::forward<Args>(args)...) {}
+    constexpr explicit ArgsView(Args... args) noexcept
+        : args_(std::move(args)...) {}
 
     /**
      * @brief Construct a new ArgsView object from a tuple.
@@ -65,7 +65,7 @@ public:
 
     template <typename... OptionalArgs>
 
-    constexpr explicit ArgsView(std::optional<OptionalArgs>... optional_args)
+    constexpr explicit ArgsView(std::optional<OptionalArgs>&&... optional_args)
         : args_(std::make_tuple(optional_args.value_or(Args{})...)) {}
 
     /**

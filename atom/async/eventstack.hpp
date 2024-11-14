@@ -316,7 +316,7 @@ void EventStack<T>::deserializeStack(std::string_view serializedData) {
     size_t nextPos = 0;
     while ((nextPos = serializedData.find(';', pos)) !=
            std::string_view::npos) {
-        T event = serializedData.substr(pos, nextPos - pos);
+        T event = std::string(serializedData.substr(pos, nextPos - pos));
         events_.push_back(std::move(event));
         pos = nextPos + 1;
     }

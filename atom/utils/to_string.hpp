@@ -67,7 +67,7 @@ auto toString(T&& value) -> std::string {
 }
 
 // 将 char 类型转换为 std::string
-auto toString(char value) -> std::string { return std::string(1, value); }
+inline auto toString(char value) -> std::string { return std::string(1, value); }
 
 // 将枚举类型转换为 std::string
 template <EnumType T>

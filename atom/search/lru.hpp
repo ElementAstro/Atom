@@ -367,13 +367,20 @@ void ThreadSafeLRUCache<Key, Value>::saveToFile(
     if (ofs.is_open()) {
         size_t size = cache_items_map_.size();
         ofs.write(reinterpret_cast<const char*>(&size), sizeof(size));
+
         for (const auto& pair : cache_items_list_) {
             ofs.write(reinterpret_cast<const char*>(&pair.first),
                       sizeof(pair.first));
-            size_t valueSize = pair.second.size();
-            ofs.write(reinterpret_cast<const char*>(&valueSize),
-                      sizeof(valueSize));
-            ofs.write(pair.second.c_str(), valueSize);
+
+            if constexpr (std::is_same_v<Value, std::string>) {
+                size_t valueSize = pair.second.size();
+                ofs.write(reinterpret_cast<const char*>(&valueSize),
+                          sizeof(valueSize));
+                ofs.write(pair.second.c_str(), valueSize);
+            } else {
+                ofs.write(reinterpret_cast<const char*>(&pair.second),
+                          sizeof(pair.second));
+            }
         }
     }
 }
@@ -395,8 +402,13 @@ void ThreadSafeLRUCache<Key, Value>::loadFromFile(const std::string& filename) {
             ifs.read(reinterpret_cast<char*>(&key), sizeof(key));
             size_t valueSize;
             ifs.read(reinterpret_cast<char*>(&valueSize), sizeof(valueSize));
-            std::string value(valueSize, '\0');
-            ifs.read(value.data(), static_cast<std::streamsize>(valueSize));
+            Value value;
+            if constexpr (std::is_same_v<Value, std::string>) {
+                value.resize(valueSize);
+                ifs.read(value.data(), static_cast<std::streamsize>(valueSize));
+            } else {
+                ifs.read(reinterpret_cast<char*>(&value), sizeof(value));
+            }
             put(key, value);
         }
     }

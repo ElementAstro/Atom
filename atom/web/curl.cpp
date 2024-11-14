@@ -42,6 +42,10 @@ public:
     auto addHeader(const std::string &key,
                    const std::string &value) -> CurlWrapper::Impl &;
     auto onError(std::function<void(CURLcode)> callback) -> CurlWrapper::Impl &;
+    auto setOnErrorCallback(std::function<void(CURLcode)> callback)
+        -> CurlWrapper::Impl &;
+    auto setOnResponseCallback(std::function<void(const std::string &)>
+                                   callback) -> CurlWrapper::Impl &;
     auto onResponse(std::function<void(const std::string &)> callback)
         -> CurlWrapper::Impl &;
     auto setTimeout(long timeout) -> CurlWrapper::Impl &;
@@ -92,6 +96,18 @@ auto CurlWrapper::addHeader(const std::string &key,
 auto CurlWrapper::onError(std::function<void(CURLcode)> callback)
     -> CurlWrapper & {
     pImpl_->onError(std::move(callback));
+    return *this;
+}
+
+auto CurlWrapper::setOnErrorCallback(std::function<void(CURLcode)> callback)
+    -> CurlWrapper & {
+    pImpl_->setOnErrorCallback(std::move(callback));
+    return *this;
+}
+
+auto CurlWrapper::setOnResponseCallback(
+    std::function<void(const std::string &)> callback) -> CurlWrapper & {
+    pImpl_->setOnResponseCallback(std::move(callback));
     return *this;
 }
 
@@ -201,6 +217,20 @@ auto CurlWrapper::Impl::onError(std::function<void(CURLcode)> callback)
     -> CurlWrapper::Impl & {
     LOG_F(INFO, "Setting onError callback");
     onErrorCallback_ = std::move(callback);
+    return *this;
+}
+
+auto CurlWrapper::Impl::setOnErrorCallback(
+    std::function<void(CURLcode)> callback) -> CurlWrapper::Impl & {
+    LOG_F(INFO, "Setting onError callback");
+    onErrorCallback_ = std::move(callback);
+    return *this;
+}
+
+auto CurlWrapper::Impl::setOnResponseCallback(
+    std::function<void(const std::string &)> callback) -> CurlWrapper::Impl & {
+    LOG_F(INFO, "Setting onResponse callback");
+    onResponseCallback_ = std::move(callback);
     return *this;
 }
 

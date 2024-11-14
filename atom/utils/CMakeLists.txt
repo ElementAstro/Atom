@@ -24,6 +24,7 @@ set(${PROJECT_NAME}_SOURCES
     stopwatcher.cpp
     time.cpp
     uuid.cpp
+    valid_string.cpp
     xml.cpp
 )
 
@@ -44,6 +45,7 @@ set(${PROJECT_NAME}_HEADERS
     switch.hpp
     time.hpp
     uuid.hpp
+    valid_string.hpp
     xml.hpp
 )
 

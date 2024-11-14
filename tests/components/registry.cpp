@@ -2,8 +2,9 @@
 #include <gtest/gtest.h>
 #include <stdexcept>
 #include <string>
-#include "components/component.hpp"
-#include "error/exception.hpp"
+
+#include "atom/components/component.hpp"
+#include "atom/error/exception.hpp"
 
 class TestComponent : public Component {
 public:

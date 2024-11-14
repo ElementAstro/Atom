@@ -1,123 +1,149 @@
-#include "atom/async/message_queue.hpp"
-#include <gtest/gtest.h>
+// FILE: atom/async/test_message_queue.hpp
 
+#include <gtest/gtest.h>
+#include <asio/io_context.hpp>
+#include <memory>
+
+#include "atom/async/message_queue.hpp"
 
 using namespace atom::async;
 
-class MessageQueueTest : public ::testing::Test {};
+class MessageQueueTest : public ::testing::Test {
+protected:
+    asio::io_context io_context;
+    std::shared_ptr<MessageQueue<int>> messageQueue;
 
-// 测试订阅和发布消息
-TEST_F(MessageQueueTest, SubscribeAndPublish) {
-    MessageQueue<int> queue;
+    void SetUp() override {
+        messageQueue = std::make_shared<MessageQueue<int>>(io_context);
+    }
+};
 
-    bool received = false;
-    queue.subscribe(
-        [&](const int &msg) {
-            received = true;
+TEST_F(MessageQueueTest, Subscribe) {
+    bool called = false;
+    messageQueue->subscribe(
+        [&](const int& msg) {
+            (void)msg;  // Avoid unused parameter warning
+            called = true;
             EXPECT_EQ(msg, 42);
         },
         "test_subscriber");
 
-    queue.publish(42);
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(100));  // 等待消息处理
-    EXPECT_TRUE(received);
+    messageQueue->publish(42);
+    io_context.run();
+    EXPECT_TRUE(called);
 }
 
-// 测试取消订阅
 TEST_F(MessageQueueTest, Unsubscribe) {
-    MessageQueue<int> queue;
+    bool called = false;
+    auto callback = [&](const int& msg) {
+        (void)msg;  // Avoid unused parameter warning
+        called = true;
+    };
 
-    bool received = false;
-    auto callback = [&](const int &msg) { received = true; };
+    messageQueue->subscribe(callback, "test_subscriber");
+    messageQueue->unsubscribe(callback);
 
-    queue.subscribe(callback, "test_subscriber");
-    queue.unsubscribe(callback);
-
-    queue.publish(42);
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(100));  // 等待消息处理
-
-    EXPECT_FALSE(received);
+    messageQueue->publish(42);
+    io_context.run();
+    EXPECT_FALSE(called);
 }
 
-// 测试多线程环境下的消息发布和订阅
-TEST_F(MessageQueueTest, MultiThreadedPublishAndSubscribe) {
-    MessageQueue<int> queue;
-    std::atomic<int> receivedCount{0};
-
-    queue.startProcessingThread();
-    queue.subscribe(
-        [&](const int &msg) {
-            receivedCount++;
-            EXPECT_EQ(msg, 42);
-        },
-        "test_subscriber");
-
-    std::thread publisher1([&queue]() {
-        for (int i = 0; i < 10; ++i) {
-            queue.publish(42);
-        }
-    });
-
-    std::thread publisher2([&queue]() {
-        for (int i = 0; i < 10; ++i) {
-            queue.publish(42);
-        }
-    });
-
-    publisher1.join();
-    publisher2.join();
-
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(100));  // 等待消息处理
-    EXPECT_EQ(receivedCount.load(), 20);
-
-    queue.stopProcessingThread();
-}
-
-// 测试获取消息数量
-TEST_F(MessageQueueTest, GetMessageCount) {
-    MessageQueue<int> queue;
-
-    EXPECT_EQ(queue.getMessageCount(), 0);
-
-    queue.publish(42);
-    EXPECT_EQ(queue.getMessageCount(), 1);
-
-    queue.publish(43);
-    EXPECT_EQ(queue.getMessageCount(), 2);
-}
-
-// 测试获取订阅者数量
-TEST_F(MessageQueueTest, GetSubscriberCount) {
-    MessageQueue<int> queue;
-
-    EXPECT_EQ(queue.getSubscriberCount(), 0);
-
-    queue.subscribe([](const int &msg) {}, "subscriber1");
-    EXPECT_EQ(queue.getSubscriberCount(), 1);
-
-    queue.subscribe([](const int &msg) {}, "subscriber2");
-    EXPECT_EQ(queue.getSubscriberCount(), 2);
-}
-
-// 测试优先级订阅
-TEST_F(MessageQueueTest, PrioritySubscribe) {
-    MessageQueue<int> queue;
+TEST_F(MessageQueueTest, PublishWithPriority) {
     std::vector<int> receivedMessages;
+    messageQueue->subscribe(
+        [&](const int& msg) { receivedMessages.push_back(msg); }, "subscriber1",
+        1);
 
-    queue.subscribe([&](const int &msg) { receivedMessages.push_back(1); },
-                    "subscriber1", 1);
+    messageQueue->subscribe(
+        [&](const int& msg) { receivedMessages.push_back(msg); }, "subscriber2",
+        2);
 
-    queue.subscribe([&](const int &msg) { receivedMessages.push_back(2); },
-                    "subscriber2", 2);
-
-    queue.publish(42);
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(100));  // 等待消息处理
+    messageQueue->publish(1, 1);
+    messageQueue->publish(2, 2);
+    io_context.run();
 
     ASSERT_EQ(receivedMessages.size(), 2);
-    EXPECT_EQ(receivedMessages[0], 2);  // subscriber2 has higher priority
-    EXPECT_EQ(receivedMessages[1], 1);  // subscriber1 has lower priority
+    EXPECT_EQ(receivedMessages[0], 2);
+    EXPECT_EQ(receivedMessages[1], 1);
+}
+
+TEST_F(MessageQueueTest, StartAndStopProcessing) {
+    bool called = false;
+    messageQueue->subscribe(
+        [&](const int& msg) {
+            (void)msg;  // Avoid unused parameter warning
+            called = true;
+        },
+        "test_subscriber");
+
+    messageQueue->publish(42);
+    messageQueue->stopProcessing();
+    io_context.run();
+    EXPECT_FALSE(called);
+
+    messageQueue->startProcessing();
+    messageQueue->publish(42);
+    io_context.run();
+    EXPECT_TRUE(called);
+}
+
+TEST_F(MessageQueueTest, GetMessageCount) {
+    EXPECT_EQ(messageQueue->getMessageCount(), 0);
+    messageQueue->publish(42);
+    EXPECT_EQ(messageQueue->getMessageCount(), 1);
+}
+
+TEST_F(MessageQueueTest, GetSubscriberCount) {
+    EXPECT_EQ(messageQueue->getSubscriberCount(), 0);
+    messageQueue->subscribe([](const int& msg) { (void)msg; },
+                            "test_subscriber");
+    EXPECT_EQ(messageQueue->getSubscriberCount(), 1);
+}
+
+TEST_F(MessageQueueTest, CancelMessages) {
+    bool called = false;
+    messageQueue->subscribe(
+        [&](const int& msg) {
+            (void)msg;  // Avoid unused parameter warning
+            called = true;
+        },
+        "test_subscriber");
+
+    messageQueue->publish(42);
+    messageQueue->cancelMessages([](const int& msg) { return msg == 42; });
+    io_context.run();
+    EXPECT_FALSE(called);
+}
+
+TEST_F(MessageQueueTest, ApplyFilter) {
+    bool called = false;
+    messageQueue->subscribe(
+        [&](const int& msg) {
+            (void)msg;  // Avoid unused parameter warning
+            called = true;
+        },
+        "test_subscriber", 0, [](const int& msg) { return msg == 42; });
+
+    messageQueue->publish(43);
+    io_context.run();
+    EXPECT_FALSE(called);
+
+    messageQueue->publish(42);
+    io_context.run();
+    EXPECT_TRUE(called);
+}
+
+TEST_F(MessageQueueTest, HandleTimeout) {
+    bool called = false;
+    messageQueue->subscribe(
+        [&](const int& msg) {
+            (void)msg;  // Avoid unused parameter warning
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            called = true;
+        },
+        "test_subscriber", 0, nullptr, std::chrono::milliseconds(100));
+
+    messageQueue->publish(42);
+    io_context.run();
+    EXPECT_FALSE(called);
 }

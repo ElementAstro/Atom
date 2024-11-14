@@ -9,11 +9,6 @@ set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 # 递归查找当前目录及其子目录下的所有 .cpp 文件
 file(GLOB_RECURSE cpp_files "${SOURCE_DIR}/*.cpp")
 
-# 设置编译选项
-set(CMAKE_CXX_STANDARD 17)  # 设置C++标准
-set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
 # 创建一个用于存放所有目标的输出目录
 set(OUTPUT_DIR ${CMAKE_BINARY_DIR}/bin)
 
@@ -41,7 +36,7 @@ foreach(cpp_file ${cpp_files})
     )
 
     # 如果需要链接一些外部库，可以通过 target_link_libraries
-    # target_link_libraries(${target_name} PRIVATE some_library)
+    target_link_libraries(${target_name} PRIVATE atom-algorithm)
 
     # 打印每个目标的生成情况
     message(STATUS "Added target: ${target_name} from source: ${cpp_file}")

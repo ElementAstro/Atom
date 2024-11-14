@@ -241,7 +241,6 @@ public:
                 m_queue_.pop();
             }
 
-#pragma omp parallel for
             for (size_t i = 0; i < vec.size(); ++i) {
                 func(vec[i]);
             }

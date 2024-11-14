@@ -56,7 +56,7 @@ public:
 
     ~LoggerImpl() {
         {
-            std::lock_guard<std::mutex> lock(queue_mutex_);
+            std::lock_guard lock(queue_mutex_);
             finished_ = true;
         }
         cv_.notify_one();
@@ -72,17 +72,17 @@ public:
     }
 
     void setThreadName(const std::string& name) {
-        std::lock_guard<std::mutex> lock(thread_mutex_);
+        std::lock_guard lock(thread_mutex_);
         thread_names_[std::this_thread::get_id()] = name;
     }
 
     void setLevel(LogLevel level) {
-        std::lock_guard<std::mutex> lock(level_mutex_);
+        std::lock_guard lock(level_mutex_);
         min_level_ = level;
     }
 
     void setPattern(const std::string& pattern) {
-        std::lock_guard<std::mutex> lock(pattern_mutex_);
+        std::lock_guard lock(pattern_mutex_);
         pattern_ = pattern;
     }
 
@@ -91,23 +91,23 @@ public:
             // 防止注册自身以避免递归调用
             return;
         }
-        std::lock_guard<std::mutex> lock(sinks_mutex_);
+        std::lock_guard lock(sinks_mutex_);
         sinks_.emplace_back(logger);
     }
 
     void removeSink(const std::shared_ptr<LoggerImpl>& logger) {
-        std::lock_guard<std::mutex> lock(sinks_mutex_);
+        std::lock_guard lock(sinks_mutex_);
         sinks_.erase(std::remove(sinks_.begin(), sinks_.end(), logger),
                      sinks_.end());
     }
 
     void clearSinks() {
-        std::lock_guard<std::mutex> lock(sinks_mutex_);
+        std::lock_guard lock(sinks_mutex_);
         sinks_.clear();
     }
 
     void enableSystemLogging(bool enable) {
-        std::lock_guard<std::mutex> lock(system_log_mutex_);
+        std::lock_guard lock(system_log_mutex_);
         system_logging_enabled_ = enable;
 
 #ifdef _WIN32
@@ -125,7 +125,7 @@ public:
     }
 
     void registerCustomLogLevel(const std::string& name, int severity) {
-        std::lock_guard<std::mutex> lock(custom_level_mutex_);
+        std::lock_guard lock(custom_level_mutex_);
         custom_levels_[name] = severity;
     }
 
@@ -137,7 +137,7 @@ public:
         auto formattedMsg = formatMessage(level, msg);
 
         {
-            std::lock_guard<std::mutex> lock(queue_mutex_);
+            std::lock_guard lock(queue_mutex_);
             log_queue_.push(formattedMsg);
         }
         cv_.notify_one();
@@ -171,16 +171,16 @@ private:
     HANDLE h_event_log_ = nullptr;
 #endif
 
-    std::mutex thread_mutex_;
-    std::mutex pattern_mutex_;
-    std::mutex sinks_mutex_;
-    std::mutex system_log_mutex_;
-    std::mutex level_mutex_;
-    std::mutex custom_level_mutex_;
+    std::shared_mutex thread_mutex_;
+    std::shared_mutex pattern_mutex_;
+    std::shared_mutex sinks_mutex_;
+    std::shared_mutex system_log_mutex_;
+    std::shared_mutex level_mutex_;
+    std::shared_mutex custom_level_mutex_;
     std::unordered_map<std::string, int> custom_levels_;
 
     void rotateLogFile() {
-        std::lock_guard<std::mutex> lock(queue_mutex_);
+        std::lock_guard lock(queue_mutex_);
         if (log_file_.is_open()) {
             log_file_.close();
         }
@@ -223,7 +223,7 @@ private:
     }
 
     auto getThreadName() -> std::string {
-        std::lock_guard<std::mutex> lock(thread_mutex_);
+        std::lock_guard lock(thread_mutex_);
         auto thread_id = std::this_thread::get_id();
         if (thread_names_.contains(thread_id)) {
             return thread_names_[thread_id];
@@ -255,7 +255,7 @@ private:
         auto currentTime = utils::getChinaTimestampString();
         auto threadName = getThreadName();
 
-        std::shared_lock<std::mutex> patternLock(pattern_mutex_);
+        std::shared_lock patternLock(pattern_mutex_);
         return std::vformat(pattern_, std::make_format_args(
                                           currentTime, logLevelToString(level),
                                           threadName, msg));
@@ -265,7 +265,7 @@ private:
         while (!stop_token.stop_requested()) {
             std::string msg;
             {
-                std::unique_lock<std::mutex> lock(queue_mutex_);
+                std::unique_lock lock(queue_mutex_);
                 cv_.wait(lock,
                          [this] { return !log_queue_.empty() || finished_; });
 
@@ -370,14 +370,14 @@ private:
     }
 
     void dispatchToSinks(LogLevel level, const std::string& msg) {
-        std::shared_lock<std::mutex> lock(sinks_mutex_);
+        std::shared_lock lock(sinks_mutex_);
         for (const auto& sink : sinks_) {
             sink->log(level, msg);
         }
     }
 
     auto getCustomLogLevel(const std::string& name) -> LogLevel {
-        std::shared_lock<std::mutex> lock(custom_level_mutex_);
+        std::shared_lock lock(custom_level_mutex_);
         if (custom_levels_.find(name) != custom_levels_.end()) {
             return static_cast<LogLevel>(custom_levels_.at(name));
         }

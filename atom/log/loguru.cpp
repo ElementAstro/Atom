@@ -1,4 +1,4 @@
-#include "macro.hpp"
+#include "atom/macro.hpp"
 #if defined(__GNUC__) || defined(__clang__)
 // Disable all warnings from gcc/clang:
 #pragma GCC diagnostic push

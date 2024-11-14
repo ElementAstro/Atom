@@ -1,8 +1,10 @@
 // test_var_manager.cpp
 #include "atom/components/var.hpp"
+
 #include <gtest/gtest.h>
 #include <string>
-#include "error/exception.hpp"
+
+#include "atom/error/exception.hpp"
 
 struct TestClass {
     int intValue;

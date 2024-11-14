@@ -42,6 +42,11 @@ set(${PROJECT_NAME}_HEADERS
     tea.hpp
 )
 
+set(${PROJECT_NAME}_LIBS
+    loguru
+    atom-error
+)
+
 # Build Object Library
 add_library(${PROJECT_NAME}_OBJECT OBJECT)
 set_property(TARGET ${PROJECT_NAME}_OBJECT PROPERTY POSITION_INDEPENDENT_CODE 1)

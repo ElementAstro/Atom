@@ -1,91 +1,69 @@
 #include "atom/async/threadlocal.hpp"
+
 #include <gtest/gtest.h>
+#include <thread>
+#include <vector>
 
+using namespace atom::async;
 
-class ThreadLocalTest : public ::testing::Test {
-protected:
-    void SetUp() override {
-        // 可选：在每个测试用例之前设置通用的初始化代码
-    }
-
-    void TearDown() override {
-        // 可选：在每个测试用例之后设置通用的清理代码
-    }
-};
-
-// 测试默认构造函数和 get 函数
-TEST_F(ThreadLocalTest, DefaultConstructor) {
-    ThreadLocal<int> threadLocalInt;
-    EXPECT_THROW(threadLocalInt.get(), std::bad_optional_access);
+TEST(ThreadLocalTest, DefaultConstructor) {
+    ThreadLocal<int> threadLocal;
+    EXPECT_FALSE(threadLocal.hasValue());
 }
 
-// 测试带初始化函数的构造函数和 get 函数
-TEST_F(ThreadLocalTest, ConstructorWithInitializer) {
-    ThreadLocal<int> threadLocalInt([] { return 42; });
-    EXPECT_EQ(threadLocalInt.get(), 42);
+TEST(ThreadLocalTest, InitializerConstructor) {
+    ThreadLocal<int> threadLocal([]() { return 42; });
+    EXPECT_EQ(threadLocal.get(), 42);
 }
 
-// 测试 reset 函数
-TEST_F(ThreadLocalTest, Reset) {
-    ThreadLocal<int> threadLocalInt([] { return 42; });
-    threadLocalInt.reset(100);
-    EXPECT_EQ(threadLocalInt.get(), 100);
+TEST(ThreadLocalTest, GetAndSet) {
+    ThreadLocal<int> threadLocal([]() { return 0; });
+    threadLocal.get() = 10;
+    EXPECT_EQ(threadLocal.get(), 10);
 }
 
-// 测试 hasValue 函数
-TEST_F(ThreadLocalTest, HasValue) {
-    ThreadLocal<int> threadLocalInt;
-    EXPECT_FALSE(threadLocalInt.hasValue());
-    threadLocalInt.reset(10);
-    EXPECT_TRUE(threadLocalInt.hasValue());
+TEST(ThreadLocalTest, Reset) {
+    ThreadLocal<int> threadLocal([]() { return 0; });
+    threadLocal.reset(20);
+    EXPECT_EQ(threadLocal.get(), 20);
 }
 
-// 测试 getPointer 函数
-TEST_F(ThreadLocalTest, GetPointer) {
-    ThreadLocal<int> threadLocalInt([] { return 42; });
-    int* ptr = threadLocalInt.getPointer();
-    ASSERT_NE(ptr, nullptr);
-    EXPECT_EQ(*ptr, 42);
-
-    const ThreadLocal<int>& constThreadLocalInt = threadLocalInt;
-    const int* constPtr = constThreadLocalInt.getPointer();
-    ASSERT_NE(constPtr, nullptr);
-    EXPECT_EQ(*constPtr, 42);
+TEST(ThreadLocalTest, HasValue) {
+    ThreadLocal<int> threadLocal([]() { return 0; });
+    EXPECT_FALSE(threadLocal.hasValue());
+    threadLocal.get();
+    EXPECT_TRUE(threadLocal.hasValue());
 }
 
-// 测试 forEach 函数
-TEST_F(ThreadLocalTest, ForEach) {
-    ThreadLocal<int> threadLocalInt([] { return 42; });
-    threadLocalInt.reset(100);
-
-    int sum = 0;
-    threadLocalInt.forEach([&sum](int value) { sum += value; });
-    EXPECT_EQ(sum, 100);
+TEST(ThreadLocalTest, GetPointer) {
+    ThreadLocal<int> threadLocal([]() { return 0; });
+    EXPECT_EQ(threadLocal.getPointer(), nullptr);
+    threadLocal.get();
+    EXPECT_NE(threadLocal.getPointer(), nullptr);
 }
 
-// 测试 clear 函数
-TEST_F(ThreadLocalTest, Clear) {
-    ThreadLocal<int> threadLocalInt([] { return 42; });
-    threadLocalInt.reset(100);
-    threadLocalInt.clear();
-    EXPECT_FALSE(threadLocalInt.hasValue());
+TEST(ThreadLocalTest, ForEach) {
+    ThreadLocal<int> threadLocal([]() { return 0; });
+    threadLocal.get() = 10;
+
+    std::thread t1([&threadLocal]() { threadLocal.get() = 20; });
+    std::thread t2([&threadLocal]() { threadLocal.get() = 30; });
+
+    t1.join();
+    t2.join();
+
+    std::vector<int> values;
+    threadLocal.forEach([&values](int& value) { values.push_back(value); });
+
+    EXPECT_EQ(values.size(), 3);
+    EXPECT_NE(std::find(values.begin(), values.end(), 10), values.end());
+    EXPECT_NE(std::find(values.begin(), values.end(), 20), values.end());
+    EXPECT_NE(std::find(values.begin(), values.end(), 30), values.end());
 }
 
-// 测试多线程环境下的功能
-TEST_F(ThreadLocalTest, MultiThreaded) {
-    ThreadLocal<int> threadLocalInt([] { return 42; });
-
-    auto threadFunc = [&threadLocalInt](int id) {
-        threadLocalInt.reset(id);
-        EXPECT_EQ(threadLocalInt.get(), id);
-    };
-
-    std::thread thread1(threadFunc, 1);
-    std::thread thread2(threadFunc, 2);
-
-    thread1.join();
-    thread2.join();
-
-    // 主线程应保持原始状态
-    EXPECT_EQ(threadLocalInt.get(), 42);
+TEST(ThreadLocalTest, Clear) {
+    ThreadLocal<int> threadLocal([]() { return 0; });
+    threadLocal.get() = 10;
+    threadLocal.clear();
+    EXPECT_FALSE(threadLocal.hasValue());
 }

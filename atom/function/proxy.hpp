@@ -9,8 +9,6 @@
 #ifndef ATOM_META_PROXY_HPP
 #define ATOM_META_PROXY_HPP
 
-#include "config.h"
-
 #include <any>
 #include <chrono>
 #include <functional>

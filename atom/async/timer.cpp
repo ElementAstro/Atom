@@ -14,7 +14,8 @@ Description: Timer class for C++
 
 #include "timer.hpp"
 #include <cstddef>
-#include "error/exception.hpp"
+
+#include "atom/error/exception.hpp"
 
 namespace atom::async {
 TimerTask::TimerTask(std::function<void()> func, unsigned int delay,

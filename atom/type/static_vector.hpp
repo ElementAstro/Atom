@@ -25,8 +25,8 @@ Description: A static vector (Optimized with C++20 features)
 #include <stdexcept>
 #include <utility>
 
+#include "atom/error/exception.hpp"
 #include "atom/macro.hpp"
-#include "error/exception.hpp"
 
 /**
  * @brief A static vector implementation with a fixed capacity.

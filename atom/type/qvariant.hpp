@@ -25,6 +25,9 @@ public:
      */
     VariantWrapper();
 
+    template <typename... OtherTypes>
+    VariantWrapper(const VariantWrapper<OtherTypes...>& other);
+
     /**
      * @brief Constructs a VariantWrapper with an initial value.
      *
@@ -32,7 +35,7 @@ public:
      * @param value The initial value to store in the variant.
      */
     template <typename T>
-    explicit VariantWrapper(T&& value);
+    VariantWrapper(T&& value);
 
     /**
      * @brief Copy constructor.
@@ -216,6 +219,12 @@ private:
 
 template <typename... Types>
 VariantWrapper<Types...>::VariantWrapper() = default;
+
+template <typename... Types>
+template <typename... OtherTypes>
+VariantWrapper<Types...>::VariantWrapper(
+    const VariantWrapper<OtherTypes...>& other)
+    : variant_(other.variant_) {}
 
 template <typename... Types>
 template <typename T>
@@ -410,6 +419,7 @@ auto operator<<(std::ostream& outputStream,
     variantWrapper.print();
     return outputStream;
 }
+
 }  // namespace atom::type
 
 #endif

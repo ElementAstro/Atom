@@ -41,7 +41,7 @@ TEST_F(RateLimiterTest, SetFunctionLimit) {
         future.wait();
     }
 
-    EXPECT_EQ(limiter.get_rejected_requests("test_function"), 5);
+    EXPECT_EQ(limiter.getRejectedRequests("test_function"), 5);
 }
 
 TEST_F(RateLimiterTest, PauseResume) {
@@ -56,7 +56,7 @@ TEST_F(RateLimiterTest, PauseResume) {
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    EXPECT_EQ(limiter.get_rejected_requests("test_function"), 0);
+    EXPECT_EQ(limiter.getRejectedRequests("test_function"), 0);
 
     limiter.resume();
 
@@ -64,7 +64,7 @@ TEST_F(RateLimiterTest, PauseResume) {
         future.wait();
     }
 
-    EXPECT_EQ(limiter.get_rejected_requests("test_function"), 5);
+    EXPECT_EQ(limiter.getRejectedRequests("test_function"), 5);
 }
 
 TEST_F(RateLimiterTest, MultipleFunction) {
@@ -84,8 +84,8 @@ TEST_F(RateLimiterTest, MultipleFunction) {
         future.wait();
     }
 
-    EXPECT_EQ(limiter.get_rejected_requests("function1"), 5);
-    EXPECT_EQ(limiter.get_rejected_requests("function2"), 0);
+    EXPECT_EQ(limiter.getRejectedRequests("function1"), 5);
+    EXPECT_EQ(limiter.getRejectedRequests("function2"), 0);
 }
 
 TEST_F(RateLimiterTest, TimeWindowReset) {
@@ -111,5 +111,5 @@ TEST_F(RateLimiterTest, TimeWindowReset) {
         future.wait();
     }
 
-    EXPECT_EQ(limiter.get_rejected_requests("test_function"), 0);
+    EXPECT_EQ(limiter.getRejectedRequests("test_function"), 0);
 }
