@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <functional>
 #include <ranges>
+#include <sstream>
 #include <unordered_set>
 #include <vector>
 
@@ -264,6 +265,18 @@ auto transformToVector(const Container& source, MemberFunc memberFunc) {
     return result;  // 返回新容器
 }
 
+template <typename MapContainer>
+    requires std::ranges::input_range<MapContainer> && requires {
+        typename MapContainer::key_type;
+        typename MapContainer::mapped_type;
+    }
+auto unique(const MapContainer& container) {
+    std::unordered_map<typename MapContainer::key_type,
+                       typename MapContainer::mapped_type>
+        map(container.begin(), container.end());
+    return map;
+}
+
 /**
  * @brief Removes duplicate elements from a container.
  *
@@ -440,5 +453,24 @@ auto findIf(const Container& container, Predicate predicate)
 }
 
 }  // namespace atom::utils
+
+inline auto operator"" _vec(const char* str,
+                            size_t) -> std::vector<std::string> {
+    std::vector<std::string> vec;
+    std::string token;
+    std::istringstream tokenStream(str);
+
+    // 使用逗号作为分隔符将字符串分割成多个部分
+    while (std::getline(tokenStream, token, ',')) {
+        // 去除多余的空格
+        size_t start = token.find_first_not_of(" ");
+        size_t end = token.find_last_not_of(" ");
+        if (start != std::string::npos && end != std::string::npos) {
+            vec.push_back(token.substr(start, end - start + 1));
+        }
+    }
+
+    return vec;
+}
 
 #endif  // ATOM_UTILS_CONTAINER_HPP

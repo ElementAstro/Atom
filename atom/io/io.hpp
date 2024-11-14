@@ -18,9 +18,13 @@ Description: IO
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
-#include "macro.hpp"
+
+#include "atom/macro.hpp"
+
 namespace fs = std::filesystem;
 
 namespace atom::io {
@@ -52,6 +56,8 @@ struct CreateDirectoriesOptions {
     std::function<void(const std::string &)> onDelete =
         [](const std::string &) {};
 } ATOM_ALIGNAS(128);
+
+enum class PathType { NOT_EXISTS, REGULAR_FILE, DIRECTORY, SYMLINK, OTHER };
 
 /**
  * @brief Creates a directory with the specified path.
@@ -441,7 +447,7 @@ enum class FileOption { PATH, NAME };
  * @remark The file type is checked by the file extension.
  */
 [[nodiscard]] auto checkFileTypeInFolder(
-    const std::string &folderPath, const std::string &fileType,
+    const std::string &folderPath, const std::vector<std::string> &fileTypes,
     FileOption fileOption) -> std::vector<std::string>;
 
 /**
@@ -561,6 +567,22 @@ void quickMerge(const std::string &outputFilePath,
  */
 [[nodiscard]]
 auto getExecutableNameFromPath(const std::string &path) -> std::string;
+
+/**
+ * @brief Get the file type
+ *
+ * @param path The path of the file.
+ * @return The type of the file.
+ */
+auto checkPathType(const fs::path &path) -> PathType;
+
+auto countLinesInFile(const std::string &filePath) -> std::optional<int>;
+
+auto searchExecutableFiles(const fs::path &dir, const std::string &searchStr)
+    -> std::vector<fs::path>;
+
+auto classifyFiles(const fs::path &directory)
+    -> std::unordered_map<std::string, std::vector<std::string>>;
 }  // namespace atom::io
 
 #endif

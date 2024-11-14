@@ -1,37 +1,22 @@
-/*
- * process.cpp
- *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
- */
-
-/*************************************************
-
-Date: 2023-7-19
-
-Description: Process Manager
-
-**************************************************/
-
 #include "process.hpp"
+#include "command.hpp"
 
 #include <algorithm>
-#include <condition_variable>
 #include <fstream>
-#include <mutex>
 #include <optional>
-#include <shared_mutex>
-#include <sstream>
+#include <regex>
 
 #if defined(_WIN32)
 // clang-format off
 #include <windows.h>
 #include <tlhelp32.h>
-#include <iprtrmib.h>
 #include <iphlpapi.h>
 #include <tchar.h>
+#include <psapi.h>
 // clang-format on
 #elif defined(__linux__) || defined(__ANDROID__)
 #include <dirent.h>
+#include <grp.h>
 #include <pwd.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
@@ -41,7 +26,9 @@ Description: Process Manager
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
-#include <fstream>
+#if __has_include(<sys/capability.h>)
+#include <sys/capability.h>
+#endif
 #elif defined(__APPLE__)
 #include <libproc.h>
 #include <sys/resource.h>
@@ -50,174 +37,9 @@ Description: Process Manager
 #error "Unknown platform"
 #endif
 
-#include "atom/error/exception.hpp"
 #include "atom/log/loguru.hpp"
-#include "atom/system/command.hpp"
-#include "atom/utils/convert.hpp"
-#include "atom/utils/string.hpp"
 
 namespace atom::system {
-class ProcessManager::ProcessManagerImpl {
-public:
-    int m_maxProcesses;
-    std::condition_variable cv;
-    std::vector<Process> processes;
-    mutable std::shared_timed_mutex mtx;
-
-    ProcessManagerImpl(int maxProcess) : m_maxProcesses(maxProcess) {}
-
-    ~ProcessManagerImpl() {
-        // Ensure all processes are cleaned up
-        waitForCompletion();
-    }
-
-    auto createProcess(const std::string &command,
-                       const std::string &identifier) -> bool {
-        pid_t pid;
-
-#ifdef _WIN32
-        STARTUPINFO si;
-        PROCESS_INFORMATION pi;
-        ZeroMemory(&si, sizeof(si));
-        si.cb = sizeof(si);
-        ZeroMemory(&pi, sizeof(pi));
-
-        // Convert command to wide string
-        std::wstring wcommand(command.begin(), command.end());
-
-        // Start the child process.
-        // TODO: Use CreateProcessW instead of CreateProcessA, but some programs
-        // occured
-        /*
-        if (CreateProcessW(wcommand.c_str(),  // Command line
-                NULL,          // 命令行参数，可以传 NULL
-                NULL,          // 进程安全属性
-                NULL,          // 线程安全属性
-                FALSE,         // 不继承句柄
-                0,             // 创建标志
-                NULL,          // 使用父进程的环境
-                NULL,          // 使用父进程的当前目录
-                &si,  // 启动信息
-                &si   // 进程信息
-            == 0)) {
-            return false;
-        }
-        */
-
-        pid = pi.dwProcessId;
-#else
-        pid = fork();
-        if (pid == 0) {
-            // Child process code
-            execlp(command.c_str(), command.c_str(), nullptr);
-            exit(0);
-        } else if (pid < 0) {
-            return false;
-        }
-#endif
-        std::unique_lock lock(mtx);
-        Process process;
-        process.pid = pid;
-        process.name = identifier;
-#ifdef _WIN32
-        process.handle = pi.hProcess;
-#endif
-        processes.push_back(process);
-        return true;
-    }
-
-    auto terminateProcess(int pid, int signal) -> bool {
-        std::unique_lock lock(mtx);
-        auto it =
-            std::find_if(processes.begin(), processes.end(),
-                         [pid](const Process &p) { return p.pid == pid; });
-
-        if (it != processes.end()) {
-#ifdef _WIN32
-            // Windows-specific logic to terminate the process
-            if (!TerminateProcess(it->handle, signal)) {
-                return false;
-            }
-            CloseHandle(it->handle);
-#else
-            kill(pid, signal);
-#endif
-            processes.erase(it);
-            return true;
-        }
-        return false;
-    }
-
-    void waitForCompletion() {
-        for (const auto &process : processes) {
-#ifdef _WIN32
-            // Windows-specific process waiting logic
-            WaitForSingleObject(process.handle, INFINITE);
-            CloseHandle(process.handle);
-#else
-            waitpid(process.pid, nullptr, 0);
-#endif
-        }
-        processes.clear();
-    }
-};
-
-ProcessManager::ProcessManager(int maxProcess)
-    : impl(std::make_unique<ProcessManagerImpl>(maxProcess)) {}
-
-ProcessManager::~ProcessManager() = default;
-
-auto ProcessManager::createShared(int maxProcess)
-    -> std::shared_ptr<ProcessManager> {
-    return std::make_shared<ProcessManager>(maxProcess);
-}
-
-auto ProcessManager::createProcess(const std::string &command,
-                                   const std::string &identifier) -> bool {
-    return impl->createProcess(command, identifier);
-}
-
-auto ProcessManager::terminateProcess(int pid, int signal) -> bool {
-    return impl->terminateProcess(pid, signal);
-}
-
-auto ProcessManager::hasProcess(const std::string &identifier) -> bool {
-    std::shared_lock lock(impl->mtx);
-    for (const auto &process : impl->processes) {
-        if (process.name == identifier) {
-            return true;
-        }
-    }
-    return false;
-}
-
-void ProcessManager::waitForCompletion() { impl->waitForCompletion(); }
-
-auto ProcessManager::getRunningProcesses() const -> std::vector<Process> {
-    std::shared_lock lock(impl->mtx);
-    return impl->processes;
-}
-
-auto ProcessManager::getProcessOutput(const std::string &identifier)
-    -> std::vector<std::string> {
-    auto it = std::find_if(
-        impl->processes.begin(), impl->processes.end(),
-        [&identifier](const Process &p) { return p.name == identifier; });
-
-    if (it != impl->processes.end()) {
-        std::vector<std::string> outputLines;
-        std::stringstream sss(it->output);
-        std::string line;
-
-        while (getline(sss, line)) {
-            outputLines.push_back(line);
-        }
-
-        return outputLines;
-    }
-    return {};
-}
-
 #ifdef _WIN32
 
 auto getAllProcesses() -> std::vector<std::pair<int, std::string>> {
@@ -244,7 +66,7 @@ auto getAllProcesses() -> std::vector<std::pair<int, std::string>> {
 }
 
 #elif defined(__linux__)
-auto GetProcessName(int pid) -> std::optional<std::string> {
+auto getProcessName(int pid) -> std::optional<std::string> {
     std::string path = "/proc/" + std::to_string(pid) + "/comm";
     std::ifstream commFile(path);
     if (commFile) {
@@ -270,7 +92,7 @@ auto getAllProcesses() -> std::vector<std::pair<int, std::string>> {
             char *end;
             long pid = strtol(entry->d_name, &end, 10);
             if (*end == '\0') {
-                if (auto name = GetProcessName(pid)) {
+                if (auto name = getProcessName(pid)) {
                     processes.emplace_back(pid, *name);
                 }
             }
@@ -282,7 +104,7 @@ auto getAllProcesses() -> std::vector<std::pair<int, std::string>> {
 }
 
 #elif defined(__APPLE__)
-std::optional<std::string> GetProcessName(int pid) {
+std::optional<std::string> getProcessName(int pid) {
     char pathbuf[PROC_PIDPATHINFO_MAXSIZE];
     if (proc_pidpath(pid, pathbuf, sizeof(pathbuf)) > 0) {
         std::string path(pathbuf);
@@ -315,7 +137,7 @@ std::vector<std::pair<int, std::string>> getAllProcesses() {
     int procCount = length / sizeof(kinfo_proc);
     for (int i = 0; i < procCount; ++i) {
         int pid = procBuf[i].kp_proc.p_pid;
-        if (auto name = GetProcessName(pid)) {
+        if (auto name = getProcessName(pid)) {
             processes.emplace_back(pid, *name);
         }
     }
@@ -329,56 +151,75 @@ std::vector<std::pair<int, std::string>> getAllProcesses() {
 auto getLatestLogFile(const std::string &folderPath) -> std::string {
     std::vector<fs::path> logFiles;
 
-    for (const auto &entry : fs::directory_iterator(folderPath)) {
-        const auto &path = entry.path();
-        if (path.extension() == ".log") {
-            logFiles.push_back(path);
+    try {
+        for (const auto &entry : fs::directory_iterator(folderPath)) {
+            const auto &path = entry.path();
+            if (path.extension() == ".log") {
+                logFiles.push_back(path);
+            }
         }
+    } catch (const fs::filesystem_error &e) {
+        LOG_F(ERROR, "Error accessing directory {}: {}", folderPath, e.what());
+        return "";
     }
 
     if (logFiles.empty()) {
+        LOG_F(WARNING, "No log files found in directory {}", folderPath);
         return "";
     }
 
     auto latestFile = std::max_element(
         logFiles.begin(), logFiles.end(),
         [](const fs::path &a, const fs::path &b) {
-            return fs::last_write_time(a) < fs::last_write_time(b);
+            try {
+                return fs::last_write_time(a) < fs::last_write_time(b);
+            } catch (const fs::filesystem_error &e) {
+                LOG_F(ERROR, "Error comparing file times: {}", e.what());
+                return false;
+            }
         });
 
+    if (latestFile == logFiles.end()) {
+        LOG_F(ERROR, "Failed to determine the latest log file in directory {}",
+              folderPath);
+        return "";
+    }
+
+    LOG_F(INFO, "Latest log file found: {}", latestFile->string());
     return latestFile->string();
 }
 
-auto getSelfProcessInfo() -> Process {
+auto getProcessInfo(int pid) -> Process {
     Process info;
-
-    // 获取进程ID
-#ifdef _WIN32
-    info.pid = GetCurrentProcessId();
-#else
-    info.pid = getpid();
-#endif
+    info.pid = pid;
 
     // 获取进程位置
 #ifdef _WIN32
-    wchar_t path[MAX_PATH];
-    GetModuleFileNameW(nullptr, path, MAX_PATH);
+    HANDLE hProcess =
+        OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
+    if (hProcess != nullptr) {
+        wchar_t path[MAX_PATH];
+        if (GetModuleFileNameExW(hProcess, nullptr, path, MAX_PATH) != 0) {
+            info.path = fs::path(path).string();
+        }
+        CloseHandle(hProcess);
+    }
 #else
     char path[PATH_MAX];
-    ssize_t count = readlink("/proc/self/exe", path, PATH_MAX);
+    std::string procPath = "/proc/" + std::to_string(pid) + "/exe";
+    ssize_t count = readlink(procPath.c_str(), path, PATH_MAX);
     if (count != -1) {
         path[count] = '\0';
+        info.path = path;
     }
 #endif
-    info.path = path;
 
     // 获取进程名称
-    info.name = info.path.filename().string();
+    info.name = fs::path(info.path).filename().string();
 
     // 获取进程状态
     info.status = "Unknown";
 #ifdef _WIN32
-    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, info.pid);
     if (hProcess != nullptr) {
         DWORD exitCode;
         if ((GetExitCodeProcess(hProcess, &exitCode) != 0) &&
@@ -403,132 +244,71 @@ auto getSelfProcessInfo() -> Process {
     return info;
 }
 
-auto ctermid() -> std::string {
+auto getSelfProcessInfo() -> Process {
 #ifdef _WIN32
-    // Windows平台
-    const int BUFFER_SIZE = 256;
-    char buffer[BUFFER_SIZE];
-    DWORD length = GetConsoleTitleA(buffer, BUFFER_SIZE);
-    if (length > 0) {
-        return std::string(buffer, length);
-    }
+    return getProcessInfo(GetCurrentProcessId());
 #else
-    // 类Unix系统
-    char buffer[L_ctermid];
-    if (::ctermid(buffer) != nullptr) {
-        return buffer;
-    }
+    return getProcessInfo(getpid());
 #endif
-    return "";
 }
+
+auto getProcessInfoByName(const std::string &processName)
+    -> std::vector<Process> {
+    std::vector<Process> processes;
 
 #ifdef _WIN32
-
-auto getProcessPriorityByPid(int pid) -> std::optional<int> {
-    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
-    if (hProcess == nullptr) {
-        return std::nullopt;
-    }
-    int priority = GetPriorityClass(hProcess);
-    CloseHandle(hProcess);
-    return priority;
-}
-
-auto getProcessPriorityByName(const std::string &name) -> std::optional<int> {
-    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (snapshot == INVALID_HANDLE_VALUE) {
-        return std::nullopt;
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) {
+        LOG_F(ERROR, "Unable to create toolhelp snapshot.");
+        return processes;
     }
 
-    PROCESSENTRY32 entry;
-    entry.dwSize = sizeof(PROCESSENTRY32);
+    PROCESSENTRY32W entry{};
+    entry.dwSize = sizeof(PROCESSENTRY32W);
 
-    if (Process32First(snapshot, &entry) != 0) {
-        do {
-            if (name == std::string(entry.szExeFile)) {
-                CloseHandle(snapshot);
-                return getProcessPriorityByPid(entry.th32ProcessID);
-            }
-        } while (Process32Next(snapshot, &entry) != 0);
+    if (!Process32FirstW(snap, &entry)) {
+        CloseHandle(snap);
+        LOG_F(ERROR, "Unable to get the first process.");
+        return processes;
     }
 
-    CloseHandle(snapshot);
-    return std::nullopt;
-}
+    do {
+        std::string currentProcess =
+            atom::utils::WCharArrayToString(entry.szExeFile);
+        if (currentProcess == processName) {
+            processes.push_back(getProcessInfo(entry.th32ProcessID));
+        }
+    } while (Process32NextW(snap, &entry));
 
-#elif defined(__linux__) || defined(__ANDROID__)
-
-std::optional<int> getProcessPriorityByPid(int pid) {
-    int priority = getpriority(PRIO_PROCESS, pid);
-    if (priority == -1 && errno != 0) {
-        return std::nullopt;
-    }
-    return priority;
-}
-
-std::optional<int> getProcessPriorityByName(const std::string &name) {
-    DIR *procDir = opendir("/proc");
-    if (!procDir) {
-        return std::nullopt;
+    CloseHandle(snap);
+#else
+    std::string cmd = "pgrep -fl " + processName;
+    auto [output, status] = executeCommandWithStatus(cmd);
+    if (status != 0) {
+        LOG_F(ERROR, "Failed to find process with name '{}'.", processName);
+        return processes;
     }
 
-    struct dirent *entry;
-    while ((entry = readdir(procDir)) != nullptr) {
-        if (entry->d_type == DT_DIR) {
-            int pid = atoi(entry->d_name);
-            if (pid > 0) {
-                std::ifstream cmdline("/proc/" + std::to_string(pid) +
-                                      "/cmdline");
-                std::string cmd;
-                std::getline(cmdline, cmd, '\0');
-                if (cmd.find(name) != std::string::npos) {
-                    closedir(procDir);
-                    return getProcessPriorityByPid(pid);
-                }
+    std::istringstream iss(output);
+    std::string line;
+    while (std::getline(iss, line)) {
+        std::istringstream lineStream(line);
+        int pid;
+        std::string name;
+        if (lineStream >> pid >> name) {
+            if (name == processName) {
+                processes.push_back(getProcessInfo(pid));
             }
         }
     }
-
-    closedir(procDir);
-    return std::nullopt;
-}
-
-#elif defined(__APPLE__)
-
-std::optional<int> getProcessPriorityByPid(int pid) {
-    int priority = getpriority(PRIO_PROCESS, pid);
-    if (priority == -1 && errno != 0) {
-        return std::nullopt;
-    }
-    return priority;
-}
-
-std::optional<int> getProcessPriorityByName(const std::string &name) {
-    int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
-    size_t length;
-
-    if (sysctl(mib, 4, nullptr, &length, nullptr, 0) == -1) {
-        return std::nullopt;
-    }
-
-    std::vector<kinfo_proc> procs(length / sizeof(kinfo_proc));
-    if (sysctl(mib, 4, procs.data(), &length, nullptr, 0) == -1) {
-        return std::nullopt;
-    }
-
-    for (const auto &proc : procs) {
-        if (name == proc.kp_proc.p_comm) {
-            return getProcessPriorityByPid(proc.kp_proc.p_pid);
-        }
-    }
-
-    return std::nullopt;
-}
-
 #endif
+
+    return processes;
+}
 
 auto isProcessRunning(const std::string &processName) -> bool {
 #ifdef _WIN32
+    // Windows-specific: Use Toolhelp32 API to iterate over running processes.
     HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnapshot == INVALID_HANDLE_VALUE) {
         return false;
@@ -551,13 +331,20 @@ auto isProcessRunning(const std::string &processName) -> bool {
 
     CloseHandle(hSnapshot);
     return isRunning;
-#else
+
+#elif __APPLE__
+    // macOS-specific: Use `pgrep` to search for the process.
+    std::string command = "pgrep -x " + processName + " > /dev/null 2>&1";
+    return system(command.c_str()) == 0;
+
+#elif __linux__ || __ANDROID__
+    // Linux/Android: Iterate over `/proc` to find the process by name.
     std::filesystem::path procDir("/proc");
     if (!std::filesystem::exists(procDir) ||
         !std::filesystem::is_directory(procDir))
         return false;
 
-    for (auto &p : std::filesystem::directory_iterator(procDir)) {
+    for (const auto &p : std::filesystem::directory_iterator(procDir)) {
         if (p.is_directory()) {
             std::string pid = p.path().filename().string();
             if (std::all_of(pid.begin(), pid.end(), isdigit)) {
@@ -613,59 +400,67 @@ auto getParentProcessId(int processId) -> int {
 #endif
 }
 
-auto _CreateProcessAsUser(
-    const std::string &command, const std::string &username,
-    [[maybe_unused]] const std::string &domain,
-    [[maybe_unused]] const std::string &password) -> bool {
+auto createProcessAsUser(const std::string &command, const std::string &user,
+                         [[maybe_unused]] const std::string &domain,
+                         [[maybe_unused]] const std::string &password) -> bool {
 #ifdef _WIN32
-    HANDLE hToken = nullptr;
-    HANDLE hNewToken = nullptr;
-    STARTUPINFOW si;
-    PROCESS_INFORMATION pi;
+    HANDLE tokenHandle = nullptr;
+    HANDLE newTokenHandle = nullptr;
+    STARTUPINFOW startupInfo;
+    PROCESS_INFORMATION processInfo;
     bool result = false;
-    ZeroMemory(&si, sizeof(STARTUPINFO));
-    si.cb = sizeof(STARTUPINFO);
-    ZeroMemory(&pi, sizeof(PROCESS_INFORMATION));
-    if (LogonUserA(atom::utils::StringToLPSTR(username),
+    ZeroMemory(&startupInfo, sizeof(STARTUPINFOW));
+    startupInfo.cb = sizeof(STARTUPINFOW);
+    ZeroMemory(&processInfo, sizeof(PROCESS_INFORMATION));
+
+    struct Cleanup {
+        HANDLE &tokenHandle;
+        HANDLE &newTokenHandle;
+        PROCESS_INFORMATION &processInfo;
+
+        ~Cleanup() {
+            if (tokenHandle != nullptr) {
+                CloseHandle(tokenHandle);
+            }
+            if (newTokenHandle != nullptr) {
+                CloseHandle(newTokenHandle);
+            }
+            if (processInfo.hProcess != nullptr) {
+                CloseHandle(processInfo.hProcess);
+            }
+            if (processInfo.hThread != nullptr) {
+                CloseHandle(processInfo.hThread);
+            }
+        }
+    } cleanup{tokenHandle, newTokenHandle, processInfo};
+
+    if (LogonUserA(atom::utils::StringToLPSTR(user),
                    atom::utils::StringToLPSTR(domain),
                    atom::utils::StringToLPSTR(password),
                    LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_DEFAULT,
-                   &hToken) == 0) {
+                   &tokenHandle) == 0) {
         LOG_F(ERROR, "LogonUser failed with error: {}", GetLastError());
-        goto Cleanup;
+        return false;
     }
 
-    if (DuplicateTokenEx(hToken, TOKEN_ALL_ACCESS, nullptr,
+    if (DuplicateTokenEx(tokenHandle, TOKEN_ALL_ACCESS, nullptr,
                          SecurityImpersonation, TokenPrimary,
-                         &hNewToken) == 0) {
+                         &newTokenHandle) == 0) {
         LOG_F(ERROR, "DuplicateTokenEx failed with error: {}", GetLastError());
-        goto Cleanup;
+        return false;
     }
 
-    if (CreateProcessAsUserW(
-            hNewToken, nullptr, atom::utils::StringToLPWSTR(command), nullptr,
-            nullptr, FALSE, 0, nullptr, nullptr, &si, &pi) == 0) {
+    if (CreateProcessAsUserW(newTokenHandle, nullptr,
+                             atom::utils::StringToLPWSTR(command), nullptr,
+                             nullptr, FALSE, 0, nullptr, nullptr, &startupInfo,
+                             &processInfo) == 0) {
         LOG_F(ERROR, "CreateProcessAsUser failed with error: {}",
               GetLastError());
-        goto Cleanup;
+        return false;
     }
     LOG_F(INFO, "Process created successfully!");
     result = true;
-    WaitForSingleObject(pi.hProcess, INFINITE);
-
-Cleanup:
-    if (hToken != nullptr) {
-        CloseHandle(hToken);
-    }
-    if (hNewToken != nullptr) {
-        CloseHandle(hNewToken);
-    }
-    if (pi.hProcess != nullptr) {
-        CloseHandle(pi.hProcess);
-    }
-    if (pi.hThread != nullptr) {
-        CloseHandle(pi.hThread);
-    }
+    WaitForSingleObject(processInfo.hProcess, INFINITE);
 
     return result;
 #else
@@ -674,9 +469,9 @@ Cleanup:
         LOG_F(ERROR, "Fork failed");
         return false;
     } else if (pid == 0) {
-        struct passwd *pw = getpwnam(username.c_str());
+        struct passwd *pw = getpwnam(user.c_str());
         if (pw == nullptr) {
-            LOG_F(ERROR, "Failed to get user information for {}", username);
+            LOG_F(ERROR, "Failed to get user information for {}", user);
             exit(EXIT_FAILURE);
         }
 
@@ -688,7 +483,7 @@ Cleanup:
             LOG_F(ERROR, "Failed to set user ID");
             exit(EXIT_FAILURE);
         }
-        execl("/bin/sh", "sh", "-c", command.c_str(), (char *)0);
+        execl("/bin/sh", "sh", "-c", command.c_str(), (char *)nullptr);
         LOG_F(ERROR, "Failed to execute command");
         exit(EXIT_FAILURE);
     } else {
@@ -703,58 +498,6 @@ Cleanup:
         return false;
     }
 #endif
-}
-
-#ifdef _WIN32
-auto ProcessManager::getProcessHandle(int pid) const -> HANDLE {
-    return OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
-}
-#else
-auto ProcessManager::getProcFilePath(int pid,
-                                     const std::string &file) -> std::string {
-    return "/proc/" + std::to_string(pid) + "/" + file;
-}
-#endif
-
-auto getNetworkConnections([[maybe_unused]] int pid)
-    -> std::vector<NetworkConnection> {
-    std::vector<NetworkConnection> connections;
-#ifdef _WIN32
-    MIB_TCPTABLE_OWNER_PID *pTCPInfo;
-    DWORD dwSize = 0;
-    GetExtendedTcpTable(nullptr, &dwSize, false, AF_INET,
-                        TCP_TABLE_OWNER_PID_ALL, 0);
-    pTCPInfo = (MIB_TCPTABLE_OWNER_PID *)malloc(dwSize);
-    if (GetExtendedTcpTable(pTCPInfo, &dwSize, false, AF_INET,
-                            TCP_TABLE_OWNER_PID_ALL, 0) == NO_ERROR) {
-        for (DWORD i = 0; i < pTCPInfo->dwNumEntries; i++) {
-            if (pTCPInfo->table[i].dwOwningPid == pid) {
-                std::ostringstream oss;
-                oss << "Local: "
-                    << inet_ntoa(*(in_addr *)&pTCPInfo->table[i].dwLocalAddr)
-                    << ":" << ntohs((u_short)pTCPInfo->table[i].dwLocalPort);
-                oss << " Remote: "
-                    << inet_ntoa(*(in_addr *)&pTCPInfo->table[i].dwRemoteAddr)
-                    << ":" << ntohs((u_short)pTCPInfo->table[i].dwRemotePort);
-                connections.push_back({"TCP", oss.str()});
-            }
-        }
-    }
-    free(pTCPInfo);
-
-#else
-    for (const auto &[protocol, path] :
-         {std::pair{"TCP", "net/tcp"}, {"UDP", "net/udp"}}) {
-        std::ifstream netFile(ProcessManager::getProcFilePath(getpid(), path));
-        if (netFile.is_open()) {
-            std::string line;
-            while (std::getline(netFile, line)) {
-                connections.push_back({protocol, line});
-            }
-        }
-    }
-#endif
-    return connections;
 }
 
 auto getProcessIdByName(const std::string &processName) -> std::vector<int> {
@@ -779,28 +522,26 @@ auto getProcessIdByName(const std::string &processName) -> std::vector<int> {
 
     CloseHandle(hSnapshot);
 #elif defined(__linux__)
-    DIR *dir = opendir("/proc");
-    if (!dir) {
-        LOG_F(ERROR, "Failed to open /proc directory.");
-        return pids;
-    }
-
-    struct dirent *entry;
-    while ((entry = readdir(dir)) != nullptr) {
-        if (isdigit(entry->d_name[0])) {
-            std::string pid_dir = std::string("/proc/") + entry->d_name;
-            std::ifstream cmd_file(pid_dir + "/comm");
-            if (cmd_file) {
-                std::string cmd_name;
-                std::getline(cmd_file, cmd_name);
-                if (cmd_name == processName) {
-                    pids.push_back(
-                        static_cast<pid_t>(std::stoi(entry->d_name)));
+    try {
+        for (const auto &entry : fs::directory_iterator("/proc")) {
+            if (entry.is_directory()) {
+                const std::string DIR_NAME = entry.path().filename().string();
+                if (std::all_of(DIR_NAME.begin(), DIR_NAME.end(), ::isdigit)) {
+                    std::ifstream cmdFile(entry.path() / "comm");
+                    if (cmdFile) {
+                        std::string cmdName;
+                        std::getline(cmdFile, cmdName);
+                        if (cmdName == processName) {
+                            pids.push_back(
+                                static_cast<pid_t>(std::stoi(DIR_NAME)));
+                        }
+                    }
                 }
             }
         }
+    } catch (const std::exception &e) {
+        LOG_F(ERROR, "Error reading /proc directory: {}", e.what());
     }
-    closedir(dir);
 #elif defined(__APPLE__)
     int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
     struct kinfo_proc *processList = nullptr;
@@ -834,5 +575,184 @@ auto getProcessIdByName(const std::string &processName) -> std::vector<int> {
 #endif
     return pids;
 }
+
+#ifdef _WIN32
+// Get current user privileges on Windows systems
+auto getWindowsPrivileges(int pid) -> PrivilegesInfo {
+    PrivilegesInfo info;
+    HANDLE tokenHandle = nullptr;
+    DWORD tokenInfoLength = 0;
+    PTOKEN_PRIVILEGES privileges = nullptr;
+    std::array<char, BUFFER_SIZE> username;
+    auto usernameLen = static_cast<DWORD>(username.size());
+
+    // Get the username
+    if (GetUserNameA(username.data(), &usernameLen) != 0) {
+        info.username = username.data();
+        LOG_F(INFO, "Current User: {}", info.username);
+    } else {
+        LOG_F(ERROR, "Failed to get username. Error: {}", GetLastError());
+    }
+
+    // Open the access token of the specified process
+    HANDLE processHandle = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
+    if (processHandle != nullptr &&
+        OpenProcessToken(processHandle, TOKEN_QUERY, &tokenHandle) != 0) {
+        CloseHandle(processHandle);
+        // Get the length of the token information
+        GetTokenInformation(tokenHandle, TokenPrivileges, nullptr, 0,
+                            &tokenInfoLength);
+        if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
+            privileges =
+                static_cast<PTOKEN_PRIVILEGES>(malloc(tokenInfoLength));
+            if (privileges != nullptr &&
+                GetTokenInformation(tokenHandle, TokenPrivileges, privileges,
+                                    tokenInfoLength, &tokenInfoLength) != 0) {
+                LOG_F(INFO, "Privileges:");
+                for (DWORD i = 0; i < privileges->PrivilegeCount; ++i) {
+                    LUID_AND_ATTRIBUTES laa = privileges->Privileges[i];
+                    std::array<char, BUFFER_SIZE> privilegeName;
+                    auto nameSize = static_cast<DWORD>(privilegeName.size());
+
+                    // Get the privilege name
+                    if (LookupPrivilegeNameA(nullptr, &laa.Luid,
+                                             privilegeName.data(),
+                                             &nameSize) != 0) {
+                        std::string privilege = privilegeName.data();
+                        privilege +=
+                            (laa.Attributes & SE_PRIVILEGE_ENABLED) != 0
+                                ? " - Enabled"
+                                : " - Disabled";
+                        info.privileges.push_back(privilege);
+                        LOG_F(INFO, "  {}", privilege);
+                    } else {
+                        LOG_F(ERROR,
+                              "Failed to lookup privilege name. Error: {}",
+                              GetLastError());
+                    }
+                }
+            } else {
+                LOG_F(ERROR, "Failed to get token information. Error: {}",
+                      GetLastError());
+            }
+            free(privileges);
+        } else {
+            LOG_F(ERROR, "Failed to get token information length. Error: {}",
+                  GetLastError());
+        }
+        CloseHandle(tokenHandle);
+    } else {
+        LOG_F(ERROR, "Failed to open process token. Error: {}", GetLastError());
+    }
+
+    // Check if the user is an administrator
+    BOOL isAdmin = FALSE;
+    SID_IDENTIFIER_AUTHORITY ntAuthority = SECURITY_NT_AUTHORITY;
+    PSID administratorsGroup;
+    if (AllocateAndInitializeSid(&ntAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID,
+                                 DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0,
+                                 &administratorsGroup) != 0) {
+        CheckTokenMembership(nullptr, administratorsGroup, &isAdmin);
+        FreeSid(administratorsGroup);
+    } else {
+        LOG_F(ERROR, "Failed to allocate and initialize SID. Error: {}",
+              GetLastError());
+    }
+    info.isAdmin = isAdmin != 0;
+    LOG_F(INFO, "User has {}Administrator privileges.",
+          info.isAdmin ? "" : "no ");
+
+    return info;
+}
+
+#else
+// Get current user and group privileges on POSIX systems
+auto getPosixPrivileges(pid_t pid) -> PrivilegesInfo {
+    PrivilegesInfo info;
+    std::string procPath = "/proc/" + std::to_string(pid);
+
+    // Read UID and GID from /proc/[pid]/status
+    std::ifstream statusFile(procPath + "/status");
+    if (!statusFile) {
+        LOG_F(ERROR, "Failed to open /proc/{}/status", pid);
+        return info;
+    }
+
+    std::string line;
+    uid_t uid = -1;
+    uid_t euid = -1;
+    gid_t gid = -1;
+    gid_t egid = -1;
+
+    std::regex uidRegex(R"(Uid:\s+(\d+)\s+(\d+))");
+    std::regex gidRegex(R"(Gid:\s+(\d+)\s+(\d+))");
+    std::smatch match;
+
+    while (std::getline(statusFile, line)) {
+        if (std::regex_search(line, match, uidRegex)) {
+            uid = std::stoi(match[1]);
+            euid = std::stoi(match[2]);
+        } else if (std::regex_search(line, match, gidRegex)) {
+            gid = std::stoi(match[1]);
+            egid = std::stoi(match[2]);
+        }
+    }
+
+    struct passwd *pw = getpwuid(uid);
+    struct group *gr = getgrgid(gid);
+
+    if (pw != nullptr) {
+        info.username = pw->pw_name;
+        LOG_F(INFO, "User: {} (UID: {})", info.username, uid);
+    } else {
+        LOG_F(ERROR, "Failed to get user information for UID: {}", uid);
+    }
+    if (gr != nullptr) {
+        info.groupname = gr->gr_name;
+        LOG_F(INFO, "Group: {} (GID: {})", info.groupname, gid);
+    } else {
+        LOG_F(ERROR, "Failed to get group information for GID: {}", gid);
+    }
+
+    // Display effective user and group IDs
+    if (uid != euid) {
+        struct passwd *epw = getpwuid(euid);
+        if (epw != nullptr) {
+            LOG_F(INFO, "Effective User: {} (EUID: {})", epw->pw_name, euid);
+        } else {
+            LOG_F(ERROR, "Failed to get effective user information for EUID: {}",
+                  euid);
+        }
+    }
+
+    if (gid != egid) {
+        struct group *egr = getgrgid(egid);
+        if (egr != nullptr) {
+            LOG_F(INFO, "Effective Group: {} (EGID: {})", egr->gr_name, egid);
+        } else {
+            LOG_F(ERROR, "Failed to get effective group information for EGID: {}",
+                  egid);
+        }
+    }
+
+#if defined(__linux__) && __has_include(<sys/capability.h>)
+    // Check process capabilities on Linux systems
+    std::ifstream capFile(procPath + "/status");
+    if (capFile) {
+        std::string capLine;
+        while (std::getline(capFile, capLine)) {
+            if (capLine.find("CapEff:") == 0) {
+                info.privileges.push_back(capLine);
+                LOG_F(INFO, "Capabilities: {}", capLine);
+            }
+        }
+    } else {
+        LOG_F(ERROR, "Failed to open /proc/{}/status", pid);
+    }
+#endif
+
+    return info;
+}
+#endif
 
 }  // namespace atom::system

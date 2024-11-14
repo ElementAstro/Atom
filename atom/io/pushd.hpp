@@ -1,12 +1,15 @@
-#ifndef DIRECTORYSTACK_H
-#define DIRECTORYSTACK_H
+#ifndef ATOM_IO_PUSHD_HPP
+#define ATOM_IO_PUSHD_HPP
 
-#include <asio.hpp>
 #include <filesystem>
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 
+#include <asio.hpp>
+
+namespace atom::io {
 // Forward declaration of the implementation class
 class DirectoryStackImpl;
 
@@ -151,5 +154,6 @@ private:
     std::unique_ptr<DirectoryStackImpl>
         impl_;  ///< Pointer to the implementation.
 };
+}  // namespace atom::io
 
-#endif  // DIRECTORYSTACK_H
+#endif  // ATOM_IO_PUSHD_HPP
