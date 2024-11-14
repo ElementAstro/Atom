@@ -20,7 +20,7 @@ Description: Pointer Sentinel for Atom
 #include <type_traits>
 #include <variant>
 
-#include "error/exception.hpp"
+#include "atom/error/exception.hpp"
 #include "atom/macro.hpp"
 
 /**
