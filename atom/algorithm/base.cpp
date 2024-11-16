@@ -25,6 +25,12 @@ Description: A collection of algorithms for C++
 #include <arpa/inet.h>
 #endif
 
+#ifdef USE_BOOST_REGEX
+#include <boost/regex.hpp>
+#else
+#include <regex>
+#endif
+
 #ifdef USE_SIMD
 #if defined(__AVX2__) || defined(USE_AVX)
 #include <immintrin.h>
@@ -686,7 +692,8 @@ auto encodeBase32CL(const std::vector<uint8_t>& data) -> std::string {
 
     // 读取内核源代码
     std::string kernelSource = readKernelSource("base32_encode_kernel.cl");
-    cl::Program::Sources sources(1, std::make_pair(kernelSource.c_str(), kernelSource.size()));
+    cl::Program::Sources sources(
+        1, std::make_pair(kernelSource.c_str(), kernelSource.size()));
 
     // 构建程序
     cl::Program program(context, sources);
@@ -698,7 +705,8 @@ auto encodeBase32CL(const std::vector<uint8_t>& data) -> std::string {
     size_t dataSize = data.size();
     size_t encodedSize = ((dataSize * 8) + 4) / 5;  // Base32输出大小
 
-    cl::Buffer inputBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, dataSize, (void*)data.data());
+    cl::Buffer inputBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                           dataSize, (void*)data.data());
     cl::Buffer outputBuffer(context, CL_MEM_WRITE_ONLY, encodedSize);
 
     // 设置内核参数
@@ -714,10 +722,46 @@ auto encodeBase32CL(const std::vector<uint8_t>& data) -> std::string {
 
     // 读取结果
     std::vector<char> encoded(encodedSize);
-    queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, encodedSize, encoded.data());
+    queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, encodedSize,
+                            encoded.data());
 
     // 将编码结果转成字符串
     return std::string(encoded.begin(), encoded.end());
 }
 #endif
+
+// Check if a string is a valid Base64 format
+auto isBase64(const std::string& str) -> bool {
+    // Base64 encoding rules:
+    // 1. The length of the string must be a multiple of 4
+    // 2. It can only contain A-Z, a-z, 0-9, +, / (and up to two = for padding)
+    // 3. There can be at most 2 =, and they can only appear at the end
+
+    // Check if the length is a multiple of 4
+    if (str.empty() || str.length() % 4 != 0) {
+        return false;
+    }
+
+    // Use regular expression to validate the structure of Base64
+#ifdef USE_BOOST_REGEX
+    const boost::regex BASE64_REGEX(R"(^[A-Za-z0-9+/]*={0,2}$)");
+    if (!boost::regex_match(str, BASE64_REGEX)) {
+        return false;
+    }
+#else
+    const std::regex BASE64_REGEX(R"(^[A-Za-z0-9+/]*={0,2}$)");
+    if (!std::regex_match(str, BASE64_REGEX)) {
+        return false;
+    }
+#endif
+
+    // Validate the position of the equal sign (=)
+    size_t paddingCount = 0;
+    for (int i = str.length() - 1; i >= 0 && str[i] == '='; --i) {
+        ++paddingCount;
+    }
+
+    // The number of equal signs can only be 0, 1, or 2
+    return paddingCount <= 2;
+}
 }  // namespace atom::algorithm

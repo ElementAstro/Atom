@@ -202,6 +202,16 @@ constexpr auto cbase64Decode(const StaticString<N> &input) {
 
     return ret;
 }
+
+/**
+ * @brief Check if a string is a valid Base64 encoded string.
+ *
+ * @param str The string to check.
+ * @return true if the string is a valid Base64 encoded string, false otherwise.
+ */
+[[nodiscard("The result of isBase64 is not used.")]] auto isBase64(
+    const std::string &str) -> bool;
+
 }  // namespace atom::algorithm
 
 #endif

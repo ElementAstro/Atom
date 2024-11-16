@@ -18,6 +18,7 @@ Description: UUID Generator
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include "atom/macro.hpp"
 
@@ -200,6 +201,80 @@ auto UUID::generateNameBased(const UUID& namespace_uuid,
  * @return A unique UUID as a string.
  */
 ATOM_NODISCARD auto generateUniqueUUID() -> std::string;
+
+typedef long long __m128i __attribute__((__vector_size__(16), __aligned__(16)));
+
+class FastUUID {
+public:
+    FastUUID();
+    FastUUID(const FastUUID& other);
+    FastUUID(__m128i x);
+    FastUUID(uint64_t x, uint64_t y);
+    FastUUID(const uint8_t* bytes);
+    explicit FastUUID(const std::string& bytes);
+
+    static FastUUID fromStrFactory(const std::string& s);
+    static FastUUID fromStrFactory(const char* raw);
+
+    void fromStr(const char* raw);
+
+    FastUUID& operator=(const FastUUID& other);
+
+    friend bool operator==(const FastUUID& lhs, const FastUUID& rhs);
+    friend bool operator<(const FastUUID& lhs, const FastUUID& rhs);
+    friend bool operator!=(const FastUUID& lhs, const FastUUID& rhs);
+    friend bool operator>(const FastUUID& lhs, const FastUUID& rhs);
+    friend bool operator<=(const FastUUID& lhs, const FastUUID& rhs);
+    friend bool operator>=(const FastUUID& lhs, const FastUUID& rhs);
+
+    std::string bytes() const;
+    void bytes(std::string& out) const;
+    void bytes(char* bytes) const;
+
+    std::string str() const;
+    void str(std::string& s) const;
+    void str(char* res) const;
+
+    friend std::ostream& operator<<(std::ostream& stream, const FastUUID& uuid);
+    friend std::istream& operator>>(std::istream& stream, FastUUID& uuid);
+
+    size_t hash() const;
+
+    alignas(16) uint8_t data[16];
+};
+
+#undef __m128i
+
+template <typename RNG>
+class FastUUIDGenerator {
+public:
+    FastUUIDGenerator();
+    FastUUIDGenerator(uint64_t seed);
+    FastUUIDGenerator(RNG& gen);
+
+    FastUUID getUUID();
+
+private:
+    std::shared_ptr<RNG> generator;
+    std::uniform_int_distribution<uint64_t> distribution;
+};
+
 }  // namespace atom::utils
+
+namespace std {
+template <>
+struct hash<atom::utils::UUID> {
+    auto operator()(const atom::utils::UUID& uuid) const -> size_t {
+        return std::hash<std::string>{}(uuid.toString());
+    }
+};
+
+template <>
+struct hash<atom::utils::FastUUID> {
+    auto operator()(const atom::utils::FastUUID& uuid) const -> size_t {
+        return uuid.hash();
+    }
+};
+}  // namespace std
 
 #endif
