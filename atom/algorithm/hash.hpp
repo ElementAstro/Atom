@@ -23,6 +23,10 @@ Description: A collection of optimized and enhanced hash algorithms
 #include <variant>
 #include <vector>
 
+#ifdef ATOM_USE_BOOST
+#include <boost/functional/hash.hpp>
+#endif
+
 namespace atom::algorithm {
 
 /**
@@ -36,6 +40,17 @@ concept Hashable = requires(T a) {
     { std::hash<T>{}(a) } -> std::convertible_to<std::size_t>;
 };
 
+#ifdef ATOM_USE_BOOST
+/**
+ * @brief Combines two hash values into one using Boost's hash_combine.
+ *
+ * @param seed The initial hash value.
+ * @param hash The hash value to combine with the seed.
+ */
+inline void hashCombine(std::size_t& seed, std::size_t hash) noexcept {
+    boost::hash_combine(seed, hash);
+}
+#else
 /**
  * @brief Combines two hash values into one.
  *
@@ -50,6 +65,7 @@ inline auto hashCombine(std::size_t seed,
     // Magic number from Boost library
     return seed ^ (hash + 0x9e3779b9 + (seed << 6) + (seed >> 2));
 }
+#endif
 
 /**
  * @brief Computes the hash value for a single Hashable value.
@@ -74,7 +90,7 @@ template <Hashable T>
 inline auto computeHash(const std::vector<T>& values) noexcept -> std::size_t {
     std::size_t result = 0;
     for (const auto& value : values) {
-        result = hashCombine(result, computeHash(value));
+        hashCombine(result, computeHash(value));
     }
     return result;
 }
@@ -93,7 +109,7 @@ inline auto computeHash(const std::tuple<Ts...>& tuple) noexcept
     std::size_t result = 0;
     std::apply(
         [&result](const Ts&... values) {
-            ((result = hashCombine(result, computeHash(values))), ...);
+            ((hashCombine(result, computeHash(values))), ...);
         },
         tuple);
     return result;
@@ -111,7 +127,7 @@ template <Hashable T, std::size_t N>
 inline auto computeHash(const std::array<T, N>& array) noexcept -> std::size_t {
     std::size_t result = 0;
     for (const auto& value : array) {
-        result = hashCombine(result, computeHash(value));
+        hashCombine(result, computeHash(value));
     }
     return result;
 }
@@ -129,7 +145,7 @@ inline auto computeHash(const std::array<T, N>& array) noexcept -> std::size_t {
 template <Hashable T1, Hashable T2>
 inline auto computeHash(const std::pair<T1, T2>& pair) noexcept -> std::size_t {
     std::size_t seed = computeHash(pair.first);
-    seed = hashCombine(seed, computeHash(pair.second));
+    hashCombine(seed, computeHash(pair.second));
     return seed;
 }
 
@@ -145,7 +161,11 @@ template <Hashable T>
 inline auto computeHash(const std::optional<T>& opt) noexcept -> std::size_t {
     if (opt.has_value()) {
         return computeHash(*opt) +
+#ifdef ATOM_USE_BOOST
+               1;  // Boost does not require differentiation, handled internally
+#else
                1;  // Adding 1 to differentiate from std::nullopt
+#endif
     }
     return 0;
 }
@@ -160,9 +180,23 @@ inline auto computeHash(const std::optional<T>& opt) noexcept -> std::size_t {
 template <Hashable... Ts>
 inline auto computeHash(const std::variant<Ts...>& var) noexcept
     -> std::size_t {
-    return std::visit(
-        [](const auto& value) -> std::size_t { return computeHash(value); },
+#ifdef ATOM_USE_BOOST
+    std::size_t result = 0;
+    boost::apply_visitor(
+        [&result](const auto& value) {
+            hashCombine(result, computeHash(value));
+        },
         var);
+    return result;
+#else
+    std::size_t result = 0;
+    std::visit(
+        [&result](const auto& value) {
+            hashCombine(result, computeHash(value));
+        },
+        var);
+    return result;
+#endif
 }
 
 /**
@@ -178,8 +212,14 @@ inline auto computeHash(const std::variant<Ts...>& var) noexcept
 inline auto computeHash(const std::any& value) noexcept -> std::size_t {
     if (value.has_value()) {
         const std::type_info& type = value.type();
+#ifdef ATOM_USE_BOOST
+        // Boost does not provide a direct way to hash std::any, so fallback to
+        // type_info
+        return type.hash_code();
+#else
         // Hashing the type information as a fallback
         return type.hash_code();
+#endif
     }
     return 0;
 }

@@ -6,6 +6,10 @@
 #include <omp.h>
 #endif
 
+#ifdef ATOM_USE_BOOST
+#include <boost/algorithm/string.hpp>
+#endif
+
 namespace atom::algorithm {
 
 KMP::KMP(std::string_view pattern) {
@@ -69,6 +73,16 @@ auto KMP::search(std::string_view text) const -> std::vector<int> {
         for (int t = 0; t < omp_get_max_threads(); ++t) {
             occurrences.insert(occurrences.end(), local_occurrences[t].begin(),
                                local_occurrences[t].end());
+        }
+#elif defined(ATOM_USE_BOOST)
+        std::string text_str(text);
+        std::string pattern_str(pattern_);
+        std::vector<std::string::iterator> iters;
+        boost::algorithm::knuth_morris_pratt(
+            text_str.begin(), text_str.end(), pattern_str.begin(),
+            pattern_str.end(), std::back_inserter(iters));
+        for (auto it : iters) {
+            occurrences.push_back(std::distance(text_str.begin(), it));
         }
 #else
         int i = 0;
@@ -169,6 +183,16 @@ auto BoyerMoore::search(std::string_view text) const -> std::vector<int> {
         for (int t = 0; t < omp_get_max_threads(); ++t) {
             occurrences.insert(occurrences.end(), local_occurrences[t].begin(),
                                local_occurrences[t].end());
+        }
+#elif defined(ATOM_USE_BOOST)
+        std::string text_str(text);
+        std::string pattern_str(pattern_);
+        std::vector<std::string::iterator> iters;
+        boost::algorithm::boyer_moore_search(
+            text_str.begin(), text_str.end(), pattern_str.begin(),
+            pattern_str.end(), std::back_inserter(iters));
+        for (auto it : iters) {
+            occurrences.push_back(std::distance(text_str.begin(), it));
         }
 #else
         int i = 0;

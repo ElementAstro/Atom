@@ -1,3 +1,4 @@
+// cpp
 #ifndef ATOM_ALGORITHM_PERLIN_HPP
 #define ATOM_ALGORITHM_PERLIN_HPP
 
@@ -11,6 +12,11 @@
 
 #ifdef USE_OPENCL  // 宏定义：是否启用OpenCL
 #include <CL/cl.h>
+#include "atom/error/exception.hpp"
+#endif
+
+#ifdef ATOM_USE_BOOST
+#include <boost/exception/all.hpp>
 #endif
 
 namespace atom::algorithm {
@@ -108,26 +114,42 @@ private:
 
         err = clGetPlatformIDs(1, &platform, nullptr);
         if (err != CL_SUCCESS) {
-            opencl_available_ = false;
-            return;
+#ifdef ATOM_USE_BOOST
+            throw boost::enable_error_info(std::runtime_error("Failed to get OpenCL platform ID"))
+                << boost::errinfo_api_function("initializeOpenCL");
+#else
+            THROW_RUNTIME_ERROR("Failed to get OpenCL platform ID");
+#endif
         }
 
         err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, nullptr);
         if (err != CL_SUCCESS) {
-            opencl_available_ = false;
-            return;
+#ifdef ATOM_USE_BOOST
+            throw boost::enable_error_info(std::runtime_error("Failed to get OpenCL device ID"))
+                << boost::errinfo_api_function("initializeOpenCL");
+#else
+            THROW_RUNTIME_ERROR("Failed to get OpenCL device ID");
+#endif
         }
 
         context_ = clCreateContext(nullptr, 1, &device, nullptr, nullptr, &err);
         if (err != CL_SUCCESS) {
-            opencl_available_ = false;
-            return;
+#ifdef ATOM_USE_BOOST
+            throw boost::enable_error_info(std::runtime_error("Failed to create OpenCL context"))
+                << boost::errinfo_api_function("initializeOpenCL");
+#else
+            THROW_RUNTIME_ERROR("Failed to create OpenCL context");
+#endif
         }
 
         queue_ = clCreateCommandQueue(context_, device, 0, &err);
         if (err != CL_SUCCESS) {
-            opencl_available_ = false;
-            return;
+#ifdef ATOM_USE_BOOST
+            throw boost::enable_error_info(std::runtime_error("Failed to create OpenCL command queue"))
+                << boost::errinfo_api_function("initializeOpenCL");
+#else
+            THROW_RUNTIME_ERROR("Failed to create OpenCL command queue");
+#endif
         }
 
         const char* kernel_source = R"CLC(
@@ -148,9 +170,9 @@ private:
                 y -= floor(y);
                 z -= floor(z);
 
-                float u = x * x * x * (x * (x * 6 - 15) + 10);
-                float v = y * y * y * (y * (y * 6 - 15) + 10);
-                float w = z * z * z * (z * (z * 6 - 15) + 10);
+                float u = lerp(x, 0.0f, 1.0f); // 简化的fade函数
+                float v = lerp(y, 0.0f, 1.0f);
+                float w = lerp(z, 0.0f, 1.0f);
 
                 int A = p[X] + Y;
                 int AA = p[A] + Z;
@@ -159,16 +181,16 @@ private:
                 int BA = p[B] + Z;
                 int BB = p[B + 1] + Z;
 
-                float res = lerp(w,
-                                 lerp(v, lerp(u, grad(p[AA], x, y, z),
-                                              grad(p[BA], x - 1, y, z)),
-                                      lerp(u, grad(p[AB], x, y - 1, z),
-                                           grad(p[BB], x - 1, y - 1, z))),
-                                 lerp(v, lerp(u, grad(p[AA + 1], x, y, z - 1),
-                                              grad(p[BA + 1], x - 1, y, z - 1)),
-                                      lerp(u, grad(p[AB + 1], x, y - 1, z - 1),
-                                           grad(p[BB + 1], x - 1, y - 1,
-                                                z - 1))));
+                float res = lerp(
+                    w,
+                    lerp(v, lerp(u, grad(p[AA], x, y, z), grad(p[BA], x - 1, y, z)),
+                         lerp(u, grad(p[AB], x, y - 1, z),
+                              grad(p[BB], x - 1, y - 1, z))),
+                    lerp(v,
+                         lerp(u, grad(p[AA + 1], x, y, z - 1),
+                              grad(p[BA + 1], x - 1, y, z - 1)),
+                         lerp(u, grad(p[AB + 1], x, y - 1, z - 1),
+                              grad(p[BB + 1], x - 1, y - 1, z - 1))));
                 result[gid] = (res + 1) / 2;
             }
 
@@ -187,20 +209,32 @@ private:
         program_ = clCreateProgramWithSource(context_, 1, &kernel_source,
                                              nullptr, &err);
         if (err != CL_SUCCESS) {
-            opencl_available_ = false;
-            return;
+#ifdef ATOM_USE_BOOST
+            throw boost::enable_error_info(std::runtime_error("Failed to create OpenCL program"))
+                << boost::errinfo_api_function("initializeOpenCL");
+#else
+            THROW_RUNTIME_ERROR("Failed to create OpenCL program");
+#endif
         }
 
         err = clBuildProgram(program_, 1, &device, nullptr, nullptr, nullptr);
         if (err != CL_SUCCESS) {
-            opencl_available_ = false;
-            return;
+#ifdef ATOM_USE_BOOST
+            throw boost::enable_error_info(std::runtime_error("Failed to build OpenCL program"))
+                << boost::errinfo_api_function("initializeOpenCL");
+#else
+            THROW_RUNTIME_ERROR("Failed to build OpenCL program");
+#endif
         }
 
         noise_kernel_ = clCreateKernel(program_, "noise_kernel", &err);
         if (err != CL_SUCCESS) {
-            opencl_available_ = false;
-            return;
+#ifdef ATOM_USE_BOOST
+            throw boost::enable_error_info(std::runtime_error("Failed to create OpenCL kernel"))
+                << boost::errinfo_api_function("initializeOpenCL");
+#else
+            THROW_RUNTIME_ERROR("Failed to create OpenCL kernel");
+#endif
         }
 
         opencl_available_ = true;
@@ -221,25 +255,68 @@ private:
                           static_cast<float>(z)};
         float result;
 
+        cl_int err;
         cl_mem coords_buffer =
             clCreateBuffer(context_, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                           sizeof(coords), coords, nullptr);
+                           sizeof(coords), coords, &err);
+        if (err != CL_SUCCESS) {
+#ifdef ATOM_USE_BOOST
+            throw boost::enable_error_info(std::runtime_error("Failed to create OpenCL buffer for coords"))
+                << boost::errinfo_api_function("noiseOpenCL");
+#else
+            THROW_RUNTIME_ERROR("Failed to create OpenCL buffer for coords");
+#endif
+        }
+
         cl_mem result_buffer = clCreateBuffer(context_, CL_MEM_WRITE_ONLY,
-                                              sizeof(float), nullptr, nullptr);
+                                              sizeof(float), nullptr, &err);
+        if (err != CL_SUCCESS) {
+#ifdef ATOM_USE_BOOST
+            throw boost::enable_error_info(std::runtime_error("Failed to create OpenCL buffer for result"))
+                << boost::errinfo_api_function("noiseOpenCL");
+#else
+            THROW_RUNTIME_ERROR("Failed to create OpenCL buffer for result");
+#endif
+        }
+
         cl_mem p_buffer =
             clCreateBuffer(context_, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                           p.size() * sizeof(int), p.data(), nullptr);
+                           p.size() * sizeof(int), p.data(), &err);
+        if (err != CL_SUCCESS) {
+#ifdef ATOM_USE_BOOST
+            throw boost::enable_error_info(std::runtime_error("Failed to create OpenCL buffer for permutation"))
+                << boost::errinfo_api_function("noiseOpenCL");
+#else
+            THROW_RUNTIME_ERROR("Failed to create OpenCL buffer for permutation");
+#endif
+        }
 
         clSetKernelArg(noise_kernel_, 0, sizeof(cl_mem), &coords_buffer);
         clSetKernelArg(noise_kernel_, 1, sizeof(cl_mem), &result_buffer);
         clSetKernelArg(noise_kernel_, 2, sizeof(cl_mem), &p_buffer);
 
         size_t global_work_size = 1;
-        clEnqueueNDRangeKernel(queue_, noise_kernel_, 1, nullptr,
-                               &global_work_size, nullptr, 0, nullptr, nullptr);
+        err = clEnqueueNDRangeKernel(queue_, noise_kernel_, 1, nullptr,
+                                     &global_work_size, nullptr, 0, nullptr, nullptr);
+        if (err != CL_SUCCESS) {
+#ifdef ATOM_USE_BOOST
+            throw boost::enable_error_info(std::runtime_error("Failed to enqueue OpenCL kernel"))
+                << boost::errinfo_api_function("noiseOpenCL");
+#else
+            THROW_RUNTIME_ERROR("Failed to enqueue OpenCL kernel");
+#endif
+        }
 
-        clEnqueueReadBuffer(queue_, result_buffer, CL_TRUE, 0, sizeof(float),
-                            &result, 0, nullptr, nullptr);
+        err = clEnqueueReadBuffer(queue_, result_buffer, CL_TRUE, 0, sizeof(float),
+                                  &result, 0, nullptr, nullptr);
+        if (err != CL_SUCCESS) {
+#ifdef ATOM_USE_BOOST
+            throw boost::enable_error_info(std::runtime_error("Failed to read OpenCL buffer for result"))
+                << boost::errinfo_api_function("noiseOpenCL");
+#else
+            THROW_RUNTIME_ERROR("Failed to read OpenCL buffer for result");
+#endif
+        }
 
         clReleaseMemObject(coords_buffer);
         clReleaseMemObject(result_buffer);
@@ -261,7 +338,7 @@ private:
         y -= std::floor(y);
         z -= std::floor(z);
 
-// Compute fade curves for each of x, y, z
+        // Compute fade curves for each of x, y, z
 #ifdef USE_SIMD
         // SIMD-based fade function calculations
         __m256d xSimd = _mm256_set1_pd(x);
@@ -329,7 +406,6 @@ private:
         return ((h & 1) == 0 ? u : -u) + ((h & 2) == 0 ? v : -v);
     }
 };
-
 }  // namespace atom::algorithm
 
 #endif  // ATOM_ALGORITHM_PERLIN_HPP

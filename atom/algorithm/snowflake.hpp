@@ -10,6 +10,12 @@
 #include <string>
 #include <type_traits>
 
+#ifdef ATOM_USE_BOOST
+#include <boost/random.hpp>
+#include <boost/thread/lock_guard.hpp>
+#include <boost/thread/mutex.hpp>
+#endif
+
 namespace atom::algorithm {
 
 // Custom exception classes for clearer error handling
@@ -46,11 +52,23 @@ public:
     void unlock() {}
 };
 
+#ifdef ATOM_USE_BOOST
+using boost_lock_guard = boost::lock_guard<boost::mutex>;
+using mutex_type = boost::mutex;
+#else
+using std_lock_guard = std::lock_guard<std::mutex>;
+using mutex_type = std::mutex;
+#endif
+
 template <uint64_t Twepoch, typename Lock = SnowflakeNonLock>
 class Snowflake {
     static_assert(std::is_same_v<Lock, SnowflakeNonLock> ||
+#ifdef ATOM_USE_BOOST
+                      std::is_same_v<Lock, boost::mutex>,
+#else
                       std::is_same_v<Lock, std::mutex>,
-                  "Lock must be SnowflakeNonLock or std::mutex");
+#endif
+                  "Lock must be SnowflakeNonLock, std::mutex or boost::mutex");
 
 public:
     using lock_type = Lock;
@@ -77,7 +95,11 @@ public:
     auto operator=(const Snowflake &) -> Snowflake & = delete;
 
     void init(uint64_t worker_id, uint64_t datacenter_id) {
-        std::lock_guard<lock_type> lock(lock_);
+#ifdef ATOM_USE_BOOST
+        boost_lock_guard lock(lock_);
+#else
+        std_lock_guard lock(lock_);
+#endif
         if (worker_id > MAX_WORKER_ID) {
             throw InvalidWorkerIdException(worker_id, MAX_WORKER_ID);
         }
@@ -90,7 +112,11 @@ public:
     }
 
     [[nodiscard]] auto nextid() -> uint64_t {
-        std::lock_guard<lock_type> lock(lock_);
+#ifdef ATOM_USE_BOOST
+        boost_lock_guard lock(lock_);
+#else
+        std_lock_guard lock(lock_);
+#endif
         uint64_t timestamp = current_millis();
         if (timestamp < last_timestamp_) {
             throw InvalidTimestampException(timestamp);
@@ -130,7 +156,11 @@ public:
 
     // Additional functionality: Reset the Snowflake generator
     void reset() {
-        std::lock_guard<lock_type> lock(lock_);
+#ifdef ATOM_USE_BOOST
+        boost_lock_guard lock(lock_);
+#else
+        std_lock_guard lock(lock_);
+#endif
         last_timestamp_ = 0;
         sequence_ = 0;
     }
@@ -147,7 +177,7 @@ private:
     uint64_t workerid_ = 0;
     uint64_t datacenterid_ = 0;
     uint64_t sequence_ = 0;
-    mutable lock_type lock_;
+    mutable mutex_type lock_;
     uint64_t secret_key_;
 
     std::atomic<uint64_t> last_timestamp_{0};
@@ -155,11 +185,22 @@ private:
         std::chrono::steady_clock::now();
     uint64_t start_millisecond_ = get_system_millis();
 
+#ifdef ATOM_USE_BOOST
+    boost::random::mt19937_64 eng_;
+    boost::random::uniform_int_distribution<uint64_t> distr_;
+#endif
+
     void initialize() {
+#ifdef ATOM_USE_BOOST
+        boost::random::random_device rd;
+        eng_.seed(rd());
+        secret_key_ = distr_(eng_);
+#else
         std::random_device rd;
         std::mt19937_64 eng(rd());
         std::uniform_int_distribution<uint64_t> distr;
         secret_key_ = distr(eng);
+#endif
 
         if (workerid_ > MAX_WORKER_ID) {
             throw InvalidWorkerIdException(workerid_, MAX_WORKER_ID);

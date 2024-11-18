@@ -14,9 +14,9 @@ Description: Extra Math Library with SIMD support
 
 #include "math.hpp"
 
-#include <bit>        // For std::bit_width
-#include <cmath>      // For std::sqrt
-#include <numeric>    // For std::gcd
+#include <bit>      // For std::bit_width
+#include <cmath>    // For std::sqrt
+#include <numeric>  // For std::gcd
 #ifdef _MSC_VER
 #include <stdexcept>  // For std::runtime_error
 #endif
@@ -32,8 +32,25 @@ Description: Extra Math Library with SIMD support
 #endif
 #endif
 
-namespace atom::algorithm {
+#ifdef ATOM_USE_BOOST
+#include <boost/multiprecision/cpp_int.hpp>
+#include <boost/simd/pack.hpp>
+using boost::simd::pack;
+#endif
 
+namespace atom::algorithm {
+#ifdef ATOM_USE_BOOST
+auto mulDiv64(uint64_t operand, uint64_t multiplier,
+              uint64_t divider) -> uint64_t {
+    if (divider == 0) {
+        THROW_INVALID_ARGUMENT("Division by zero");
+    }
+    boost::multiprecision::uint128_t a = operand;
+    boost::multiprecision::uint128_t b = multiplier;
+    boost::multiprecision::uint128_t c = divider;
+    return static_cast<uint64_t>((a * b) / c);
+}
+#endif
 #if defined(__GNUC__) && defined(__SIZEOF_INT128__)
 auto mulDiv64(uint64_t operand, uint64_t multiplier,
               uint64_t divider) -> uint64_t {
@@ -75,17 +92,35 @@ uint64_t mulDiv64(uint64_t operand, uint64_t multiplier, uint64_t divider) {
 
 auto safeAdd(uint64_t a, uint64_t b) -> uint64_t {
     uint64_t result;
+#ifdef ATOM_USE_BOOST
+    boost::multiprecision::uint128_t temp =
+        boost::multiprecision::uint128_t(a) + b;
+    if (temp > std::numeric_limits<uint64_t>::max()) {
+        THROW_OVERFLOW("Overflow in addition");
+    }
+    result = static_cast<uint64_t>(temp);
+#else
     if (__builtin_add_overflow(a, b, &result)) {
         THROW_OVERFLOW("Overflow in addition");
     }
+#endif
     return result;
 }
 
 auto safeMul(uint64_t a, uint64_t b) -> uint64_t {
     uint64_t result;
+#ifdef ATOM_USE_BOOST
+    boost::multiprecision::uint128_t temp =
+        boost::multiprecision::uint128_t(a) * b;
+    if (temp > std::numeric_limits<uint64_t>::max()) {
+        THROW_OVERFLOW("Overflow in multiplication");
+    }
+    result = static_cast<uint64_t>(temp);
+#else
     if (__builtin_mul_overflow(a, b, &result)) {
         THROW_OVERFLOW("Overflow in multiplication");
     }
+#endif
     return result;
 }
 
@@ -257,5 +292,21 @@ template void vectorMul<int32_t, 8>(const int32_t*, const int32_t*, int32_t*,
                                     size_t);
 
 #endif  // USE_SIMD
+#ifdef ATOM_USE_BOOST
+
+template <typename T>
+void vectorAdd(const T* a, const T* b, T* result, size_t size) {
+    size_t i = 0;
+    for (; i + pack<T>::static_size <= size; i += pack<T>::static_size) {
+        pack<T> pa(&a[i]);
+        pack<T> pb(&b[i]);
+        pack<T> pr = pa + pb;
+        pr.store(&result[i]);
+    }
+    for (; i < size; ++i) {
+        result[i] = a[i] + b[i];
+    }
+}
+#endif
 
 }  // namespace atom::algorithm

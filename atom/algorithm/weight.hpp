@@ -15,6 +15,13 @@
 #include "atom/function/concept.hpp"
 #include "atom/utils/random.hpp"
 
+#ifdef ATOM_USE_BOOST
+#include <boost/format.hpp>
+#include <boost/random.hpp>
+#include <boost/range/algorithm.hpp>
+#include <boost/range/numeric.hpp>
+#endif
+
 namespace atom::algorithm {
 
 template <Arithmetic T>
@@ -29,7 +36,13 @@ public:
 
     class DefaultSelectionStrategy : public SelectionStrategy {
     private:
+#ifdef ATOM_USE_BOOST
+        utils::Random<boost::random::mt19937,
+                      boost::random::uniform_real_distribution<>>
+            random_;
+#else
         utils::Random<std::mt19937, std::uniform_real_distribution<>> random_;
+#endif
 
     public:
         DefaultSelectionStrategy() : random_(0.0, 1.0) {}
@@ -37,37 +50,68 @@ public:
         auto select(std::span<const T> cumulative_weights,
                     T total_weight) -> size_t override {
             T randomValue = random_() * total_weight;
+#ifdef ATOM_USE_BOOST
+            auto it =
+                boost::range::upper_bound(cumulative_weights, randomValue);
+#else
             auto it = std::ranges::upper_bound(cumulative_weights, randomValue);
+#endif
             return std::distance(cumulative_weights.begin(), it);
         }
     };
 
     class BottomHeavySelectionStrategy : public SelectionStrategy {
     private:
+#ifdef ATOM_USE_BOOST
+        utils::Random<boost::random::mt19937,
+                      boost::random::uniform_real_distribution<>>
+            random_;
+#else
         utils::Random<std::mt19937, std::uniform_real_distribution<>> random_;
+#endif
 
     public:
         BottomHeavySelectionStrategy() : random_(0.0, 1.0) {}
 
         auto select(std::span<const T> cumulative_weights,
                     T total_weight) -> size_t override {
+#ifdef ATOM_USE_BOOST
             T randomValue = std::sqrt(random_()) * total_weight;
+#else
+            T randomValue = std::sqrt(random_()) * total_weight;
+#endif
+#ifdef ATOM_USE_BOOST
+            auto it =
+                boost::range::upper_bound(cumulative_weights, randomValue);
+#else
             auto it = std::ranges::upper_bound(cumulative_weights, randomValue);
+#endif
             return std::distance(cumulative_weights.begin(), it);
         }
     };
 
     class RandomSelectionStrategy : public SelectionStrategy {
     private:
+#ifdef ATOM_USE_BOOST
+        utils::Random<boost::random::mt19937,
+                      boost::random::uniform_int_distribution<>>
+            random_index_;
+#else
         utils::Random<std::mt19937, std::uniform_int_distribution<>>
             random_index_;
+#endif
 
     public:
         explicit RandomSelectionStrategy(size_t max_index)
-            : random_index_(0, max_index - 1) {}
+#ifdef ATOM_USE_BOOST
+            : random_index_(0, max_index - 1){}
+#else
+            : random_index_(0, max_index - 1) {
+        }
+#endif
 
-        auto select(std::span<const T> /*cumulative_weights*/,
-                    T /*total_weight*/) -> size_t override {
+              auto select(std::span<const T> /*cumulative_weights*/,
+                          T /*total_weight*/) -> size_t override {
             return random_index_();
         }
     };
@@ -79,8 +123,15 @@ public:
             std::vector<size_t> indices(weights.size());
             std::iota(indices.begin(), indices.end(), 0);
 
+#ifdef ATOM_USE_BOOST
+            utils::Random<boost::random::mt19937,
+                          boost::random::discrete_distribution<>>
+                random(weights.begin(), weights.end());
+#else
             utils::Random<std::mt19937, std::discrete_distribution<>> random(
-                weights);
+                weights.begin(), weights.end());
+#endif
+
             std::vector<size_t> results(n);
             std::generate(results.begin(), results.end(),
                           [&]() { return random(); });
@@ -96,8 +147,12 @@ private:
 
     void updateCumulativeWeights() {
         cumulative_weights_.resize(weights_.size());
+#ifdef ATOM_USE_BOOST
+        boost::range::partial_sum(weights_, cumulative_weights_);
+#else
         std::exclusive_scan(weights_.begin(), weights_.end(),
                             cumulative_weights_.begin(), T{0});
+#endif
     }
 
 public:
@@ -114,7 +169,11 @@ public:
     }
 
     auto select() -> size_t {
+#ifdef ATOM_USE_BOOST
+        T totalWeight = boost::accumulate(weights_, T{0});
+#else
         T totalWeight = std::reduce(weights_.begin(), weights_.end());
+#endif
         if (totalWeight <= T{0}) {
             THROW_RUNTIME_ERROR("Total weight must be greater than zero.");
         }
@@ -152,17 +211,31 @@ public:
     }
 
     void normalizeWeights() {
+#ifdef ATOM_USE_BOOST
+        T sum = boost::accumulate(weights_, T{0});
+#else
         T sum = std::reduce(weights_.begin(), weights_.end());
+#endif
         if (sum > T{0}) {
+#ifdef ATOM_USE_BOOST
+            boost::transform(weights_, weights_.begin(),
+                             [sum](T w) { return w / sum; });
+#else
             std::ranges::transform(weights_, weights_.begin(),
                                    [sum](T w) { return w / sum; });
+#endif
             updateCumulativeWeights();
         }
     }
 
     void applyFunctionToWeights(std::invocable<T> auto&& func) {
+#ifdef ATOM_USE_BOOST
+        boost::transform(weights_, weights_.begin(),
+                         std::forward<decltype(func)>(func));
+#else
         std::ranges::transform(weights_, weights_.begin(),
                                std::forward<decltype(func)>(func));
+#endif
         updateCumulativeWeights();
     }
 
@@ -184,13 +257,23 @@ public:
     }
 
     [[nodiscard]] auto getMaxWeightIndex() const -> size_t {
+#ifdef ATOM_USE_BOOST
+        return std::distance(weights_.begin(),
+                             boost::range::max_element(weights_));
+#else
         return std::distance(weights_.begin(),
                              std::ranges::max_element(weights_));
+#endif
     }
 
     [[nodiscard]] auto getMinWeightIndex() const -> size_t {
+#ifdef ATOM_USE_BOOST
+        return std::distance(weights_.begin(),
+                             boost::range::min_element(weights_));
+#else
         return std::distance(weights_.begin(),
                              std::ranges::min_element(weights_));
+#endif
     }
 
     [[nodiscard]] auto size() const -> size_t { return weights_.size(); }
@@ -200,7 +283,11 @@ public:
     }
 
     [[nodiscard]] auto getTotalWeight() const -> T {
+#ifdef ATOM_USE_BOOST
+        return boost::accumulate(weights_, T{0});
+#else
         return std::reduce(weights_.begin(), weights_.end());
+#endif
     }
 
     void resetWeights(const std::vector<T>& new_weights) {
@@ -209,8 +296,13 @@ public:
     }
 
     void scaleWeights(T factor) {
+#ifdef ATOM_USE_BOOST
+        boost::transform(weights_, weights_.begin(),
+                         [factor](T w) { return w * factor; });
+#else
         std::ranges::transform(weights_, weights_.begin(),
                                [factor](T w) { return w * factor; });
+#endif
         updateCumulativeWeights();
     }
 
@@ -226,18 +318,32 @@ public:
             oss << "[]\n";
             return;
         }
+#ifdef ATOM_USE_BOOST
+        oss << boost::format("[%1$.2f") % weights_.front();
+        for (auto it = weights_.begin() + 1; it != weights_.end(); ++it) {
+            oss << boost::format(", %1$.2f") % *it;
+        }
+        oss << "]\n";
+#else
         oss << std::format("[{:.2f}", weights_.front());
         for (auto it = weights_.begin() + 1; it != weights_.end(); ++it) {
             oss << std::format(", {:.2f}", *it);
         }
         oss << "]\n";
+#endif
     }
 };
 
 template <Arithmetic T>
 class TopHeavySelectionStrategy : public WeightSelector<T>::SelectionStrategy {
 private:
+#ifdef ATOM_USE_BOOST
+    utils::Random<boost::random::mt19937,
+                  boost::random::uniform_real_distribution<>>
+        random_;
+#else
     utils::Random<std::mt19937, std::uniform_real_distribution<>> random_;
+#endif
 
 public:
     TopHeavySelectionStrategy() : random_(0.0, 1.0) {}
@@ -245,11 +351,15 @@ public:
     auto select(std::span<const T> cumulative_weights,
                 T total_weight) -> size_t override {
         T randomValue = std::pow(random_(), 2) * total_weight;
+#ifdef ATOM_USE_BOOST
+        auto it = boost::range::upper_bound(cumulative_weights, randomValue);
+#else
         auto it = std::ranges::upper_bound(cumulative_weights, randomValue);
+#endif
         return std::distance(cumulative_weights.begin(), it);
     }
 };
 
 }  // namespace atom::algorithm
 
-#endif
+#endif  // ATOM_ALGORITHM_WEIGHT_HPP

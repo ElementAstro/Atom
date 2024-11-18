@@ -1,5 +1,13 @@
 #include "tea.hpp"
 
+#include <array>
+#include <cstdint>
+#include <vector>
+
+#ifdef ATOM_USE_BOOST
+#include <boost/endian/conversion.hpp>
+#endif
+
 namespace atom::algorithm {
 // Constants for TEA
 constexpr uint32_t DELTA = 0x9E3779B9;
@@ -43,11 +51,17 @@ auto teaDecrypt(uint32_t &value0, uint32_t &value1,
 // Helper function to convert a byte array to a vector of uint32_t
 auto toUint32Vector(const std::vector<uint8_t> &data) -> std::vector<uint32_t> {
     size_t numElements = (data.size() + 3) / 4;
-    std::vector<uint32_t> result(numElements);
+    std::vector<uint32_t> result(numElements, 0);
 
     for (size_t index = 0; index < data.size(); ++index) {
+#ifdef ATOM_USE_BOOST
+        result[index / 4] |=
+            boost::endian::little_to_native(static_cast<uint32_t>(data[index]))
+            << ((index % 4) * BYTE_SHIFT);
+#else
         result[index / 4] |= static_cast<uint32_t>(data[index])
                              << ((index % 4) * BYTE_SHIFT);
+#endif
     }
 
     return result;
@@ -55,11 +69,16 @@ auto toUint32Vector(const std::vector<uint8_t> &data) -> std::vector<uint32_t> {
 
 // Helper function to convert a vector of uint32_t back to a byte array
 auto toByteArray(const std::vector<uint32_t> &data) -> std::vector<uint8_t> {
-    std::vector<uint8_t> result(data.size() * 4);
+    std::vector<uint8_t> result(data.size() * 4, 0);
 
     for (size_t index = 0; index < data.size() * 4; ++index) {
+#ifdef ATOM_USE_BOOST
+        result[index] = static_cast<uint8_t>(boost::endian::native_to_little(
+            data[index / 4] >> ((index % 4) * BYTE_SHIFT)));
+#else
         result[index] =
             static_cast<uint8_t>(data[index / 4] >> ((index % 4) * BYTE_SHIFT));
+#endif
     }
 
     return result;

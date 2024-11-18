@@ -1,3 +1,4 @@
+// cpp
 /*
  * mhash.cpp
  *
@@ -27,6 +28,10 @@ Description: Implementation of murmur3 hash and quick hash
 #include <openssl/hmac.h>
 #include <openssl/md5.h>
 #include <openssl/sha.h>
+
+#ifdef ATOM_USE_BOOST
+#include <boost/exception/all.hpp>
+#endif
 
 namespace atom::algorithm {
 // Keccak state constants
@@ -193,7 +198,12 @@ auto hexstringFromData(const std::string &data) -> std::string {
 
 auto dataFromHexstring(const std::string &data) -> std::string {
     if (data.size() % 2 != 0) {
+#ifdef ATOM_USE_BOOST
+        throw boost::enable_error_info(InvalidArgumentException())
+            << boost::errinfo_api_function("Hex string length must be even");
+#else
         THROW_INVALID_ARGUMENT("Hex string length must be even");
+#endif
     }
 
     std::string result;
@@ -206,7 +216,12 @@ auto dataFromHexstring(const std::string &data) -> std::string {
             std::from_chars(data.data() + i, data.data() + i + 2, byte, 16);
 
         if (ec == std::errc::invalid_argument || ptr != data.data() + i + 2) {
+#ifdef ATOM_USE_BOOST
+            throw boost::enable_error_info(InvalidArgumentException())
+                << boost::errinfo_api_function("Invalid hex character");
+#else
             THROW_INVALID_ARGUMENT("Invalid hex character");
+#endif
         }
 
         result[outputIndex++] = static_cast<char>(byte);
@@ -286,8 +301,13 @@ inline void keccakP(StateArray &stateArray) {
 void absorb(StateArray &state, const uint8_t *input, size_t length) {
     while (length >= K_RATE_IN_BYTES) {
         for (size_t i = 0; i < K_RATE_IN_BYTES / 8; ++i) {
+#ifdef ATOM_USE_BOOST
+            state[i % K_STATE_SIZE][i / K_STATE_SIZE] ^=
+                boost::bit_cast<uint64_t>(input + i * 8);
+#else
             state[i % K_STATE_SIZE][i / K_STATE_SIZE] ^=
                 std::bit_cast<uint64_t>(input + i * 8);
+#endif
         }
         keccakP(state);
         input += K_RATE_IN_BYTES;
@@ -308,8 +328,13 @@ void padAndAbsorb(StateArray &state, const uint8_t *input, size_t length) {
 void squeeze(StateArray &state, uint8_t *output, size_t outputLength) {
     while (outputLength >= K_RATE_IN_BYTES) {
         for (size_t i = 0; i < K_RATE_IN_BYTES / 8; ++i) {
+#ifdef ATOM_USE_BOOST
             std::memcpy(output + i * 8,
                         &state[i % K_STATE_SIZE][i / K_STATE_SIZE], 8);
+#else
+            std::memcpy(output + i * 8,
+                        &state[i % K_STATE_SIZE][i / K_STATE_SIZE], 8);
+#endif
         }
         keccakP(state);
         output += K_RATE_IN_BYTES;

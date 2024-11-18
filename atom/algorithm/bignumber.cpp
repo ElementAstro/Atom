@@ -6,11 +6,28 @@
 #include "atom/error/exception.hpp"
 #include "atom/log/loguru.hpp"
 
+#ifdef ATOM_USE_BOOST
+#include <boost/multiprecision/cpp_int.hpp>
+#endif
+
 namespace atom::algorithm {
+
+#ifdef ATOM_USE_BOOST
+using BigInt = boost::multiprecision::cpp_int;
+#else
+using BigInt = std::string;
+#endif
+
 auto BigNumber::add(const BigNumber& other) const -> BigNumber {
     try {
         LOG_F(INFO, "Adding {} and {}", this->numberString_,
               other.numberString_);
+#ifdef ATOM_USE_BOOST
+        BigInt num1(this->numberString_);
+        BigInt num2(other.numberString_);
+        BigInt result = num1 + num2;
+        return BigNumber(result.str());
+#else
         if (isNegative() && other.isNegative()) {
             LOG_F(INFO, "Both numbers are negative. Negating and adding.");
             return negate().add(other.negate()).negate();
@@ -39,6 +56,7 @@ auto BigNumber::add(const BigNumber& other) const -> BigNumber {
 
         LOG_F(INFO, "Result of addition: {}", result);
         return BigNumber(result).trimLeadingZeros();
+#endif
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Exception in BigNumber::add: {}", e.what());
         throw;
@@ -49,6 +67,12 @@ auto BigNumber::subtract(const BigNumber& other) const -> BigNumber {
     try {
         LOG_F(INFO, "Subtracting {} from {}", other.numberString_,
               this->numberString_);
+#ifdef ATOM_USE_BOOST
+        BigInt num1(this->numberString_);
+        BigInt num2(other.numberString_);
+        BigInt result = num1 - num2;
+        return BigNumber(result.str());
+#else
         if (isNegative() && other.isNegative()) {
             LOG_F(INFO, "Both numbers are negative. Adjusting subtraction.");
             return other.negate().subtract(negate());
@@ -88,6 +112,7 @@ auto BigNumber::subtract(const BigNumber& other) const -> BigNumber {
 
         LOG_F(INFO, "Result of subtraction before trimming: {}", result);
         return BigNumber(result).trimLeadingZeros();
+#endif
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Exception in BigNumber::subtract: {}", e.what());
         throw;
@@ -98,6 +123,12 @@ auto BigNumber::multiply(const BigNumber& other) const -> BigNumber {
     try {
         LOG_F(INFO, "Multiplying {} and {}", this->numberString_,
               other.numberString_);
+#ifdef ATOM_USE_BOOST
+        BigInt num1(this->numberString_);
+        BigInt num2(other.numberString_);
+        BigInt result = num1 * num2;
+        return BigNumber(result.str());
+#else
         if (*this == BigNumber("0") || other == BigNumber("0")) {
             LOG_F(INFO, "One of the numbers is zero. Result is 0.");
             return BigNumber("0");
@@ -142,6 +173,7 @@ auto BigNumber::multiply(const BigNumber& other) const -> BigNumber {
 
         LOG_F(INFO, "Result of multiplication: {}", resultStr);
         return {resultStr};
+#endif
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Exception in BigNumber::multiply: {}", e.what());
         throw;
@@ -152,6 +184,16 @@ auto BigNumber::divide(const BigNumber& other) const -> BigNumber {
     try {
         LOG_F(INFO, "Dividing {} by {}", this->numberString_,
               other.numberString_);
+#ifdef ATOM_USE_BOOST
+        BigInt num1(this->numberString_);
+        BigInt num2(other.numberString_);
+        if (num2 == 0) {
+            LOG_F(ERROR, "Division by zero");
+            THROW_INVALID_ARGUMENT("Division by zero");
+        }
+        BigInt result = num1 / num2;
+        return BigNumber(result.str());
+#else
         if (other == BigNumber("0")) {
             LOG_F(ERROR, "Division by zero");
             THROW_INVALID_ARGUMENT("Division by zero");
@@ -182,6 +224,7 @@ auto BigNumber::divide(const BigNumber& other) const -> BigNumber {
 
         LOG_F(INFO, "Result of division: {}", quotient.numberString_);
         return quotient;
+#endif
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Exception in BigNumber::divide: {}", e.what());
         throw;
@@ -192,6 +235,11 @@ auto BigNumber::pow(int exponent) const -> BigNumber {
     try {
         LOG_F(INFO, "Raising {} to the power of {}", this->numberString_,
               exponent);
+#ifdef ATOM_USE_BOOST
+        BigInt base(this->numberString_);
+        BigInt result = boost::multiprecision::pow(base, exponent);
+        return BigNumber(result.str());
+#else
         if (exponent < 0) {
             LOG_F(ERROR, "Negative exponents are not supported");
             THROW_INVALID_ARGUMENT("Negative exponents are not supported");
@@ -215,6 +263,7 @@ auto BigNumber::pow(int exponent) const -> BigNumber {
         }
         LOG_F(INFO, "Result of exponentiation: {}", result.numberString_);
         return result;
+#endif
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Exception in BigNumber::pow: {}", e.what());
         throw;
@@ -256,6 +305,11 @@ auto BigNumber::trimLeadingZeros() const -> BigNumber {
 auto operator>(const BigNumber& b1, const BigNumber& b2) -> bool {
     try {
         LOG_F(INFO, "Comparing if {} > {}", b1.numberString_, b2.numberString_);
+#ifdef ATOM_USE_BOOST
+        BigInt num1(b1.numberString_);
+        BigInt num2(b2.numberString_);
+        return num1 > num2;
+#else
         if (b1.isNegative() || b2.isNegative()) {
             if (b1.isNegative() && b2.isNegative()) {
                 LOG_F(INFO, "Both numbers are negative. Flipping comparison.");
@@ -273,6 +327,7 @@ auto operator>(const BigNumber& b1, const BigNumber& b2) -> bool {
                    b2Trimmed.numberString_.size();
         }
         return b1Trimmed.numberString_ > b2Trimmed.numberString_;
+#endif
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Exception in operator>: {}", e.what());
         throw;

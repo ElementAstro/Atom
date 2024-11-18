@@ -26,6 +26,13 @@
 #include "atom/error/exception.hpp"
 #include "atom/log/loguru.hpp"
 
+#ifdef ATOM_USE_BOOST
+#include <boost/numeric/ublas/io.hpp>
+#include <boost/numeric/ublas/lu.hpp>
+#include <boost/numeric/ublas/matrix.hpp>
+#include <boost/random.hpp>
+#endif
+
 namespace atom::algorithm {
 
 template <std::floating_point T>
@@ -55,13 +62,13 @@ private:
         T ssResidual = 0;
 
         residuals_.clear();
-
+        size_t i = 0;
 #ifdef USE_SIMD
 #ifdef __AVX__
         // SIMD optimized loop for x86 using AVX
         __m256d sumSquaredErrorVec = _mm256_setzero_pd();
         __m256d sumAbsoluteErrorVec = _mm256_setzero_pd();
-        size_t i = 0;
+        
 
         for (; i + 4 <= actual.size(); i += 4) {
             __m256d measuredVec = _mm256_loadu_pd(&measured[i]);
@@ -127,15 +134,15 @@ private:
         vst1q_f64(tempAbsoluteError, sumAbsoluteErrorVec);
         sumAbsoluteError = std::accumulate(
             tempAbsoluteError, tempAbsoluteError + 2, sumAbsoluteError);
-
 #endif
 #endif
 
         // Multithreaded computation for remaining elements
         std::vector<std::future<void>> futures;
-        size_t i = 0;
+        size_t startIdx = i;
         size_t chunk_size = 100;
-        for (size_t start = i; start < actual.size(); start += chunk_size) {
+        for (size_t start = startIdx; start < actual.size();
+             start += chunk_size) {
             size_t end = std::min(start + chunk_size, actual.size());
             futures.emplace_back(
                 std::async(std::launch::async, [&, start, end]() {
@@ -236,6 +243,31 @@ private:
                 }
             }
 
+#ifdef ATOM_USE_BOOST
+            // 使用Boost的LU分解来求解线性系统
+            boost::numeric::ublas::matrix<T> A(m, m);
+            boost::numeric::ublas::vector<T> b(m);
+            for (int i = 0; i < m; ++i) {
+                for (int j = 0; j < m; ++j) {
+                    A(i, j) = JTJ[i][j];
+                }
+                b(i) = jTr[i];
+            }
+
+            boost::numeric::ublas::permutation_matrix<std::size_t> pm(
+                A.size1());
+            bool singular = boost::numeric::ublas::lu_factorize(A, pm);
+            if (singular) {
+                THROW_RUNTIME_ERROR("Matrix is singular.");
+            }
+            boost::numeric::ublas::lu_substitute(A, pm, b);
+
+            std::vector<T> delta(m);
+            for (int i = 0; i < m; ++i) {
+                delta[i] = b(i);
+            }
+#else
+            // 使用自定义的高斯消元法
             std::vector<T> delta;
             try {
                 delta = solveLinearSystem(JTJ, jTr);
@@ -244,6 +276,7 @@ private:
                       e.what());
                 throw;
             }
+#endif
 
             prevParams = params;
             for (int i = 0; i < m; ++i) {
@@ -268,6 +301,9 @@ private:
      * @param b Right-hand side vector
      * @return Solution vector
      */
+#ifdef ATOM_USE_BOOST
+    // 使用Boost的线性代数库，无需自定义实现
+#else
     auto solveLinearSystem(const std::vector<std::vector<T>>& A,
                            const std::vector<T>& b) -> std::vector<T> {
         int n = A.size();
@@ -317,6 +353,7 @@ private:
 
         return x;
     }
+#endif
 
 public:
     /**
@@ -473,9 +510,15 @@ public:
 
         std::vector<T> bootstrapSlopes;
         bootstrapSlopes.reserve(n_iterations);
+#ifdef ATOM_USE_BOOST
+        boost::random::random_device rd;
+        boost::random::mt19937 gen(rd());
+        boost::random::uniform_int_distribution<> dis(0, measured.size() - 1);
+#else
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<> dis(0, measured.size() - 1);
+#endif
 
         for (int i = 0; i < n_iterations; ++i) {
             std::vector<T> bootMeasured;

@@ -4,6 +4,10 @@
 #include <iomanip>
 #include <sstream>
 
+#ifdef ATOM_USE_BOOST
+#include <boost/endian/conversion.hpp>
+#endif
+
 namespace atom::algorithm {
 SHA1::SHA1() { reset(); }
 
@@ -17,8 +21,17 @@ void SHA1::update(const uint8_t* data, size_t length) {
         size_t bytesToFill = BLOCK_SIZE - bufferOffset;
         size_t bytesToCopy = std::min(remaining, bytesToFill);
 
+#ifdef ATOM_USE_BOOST
         std::copy(data + offset, data + offset + bytesToCopy,
                   buffer_.data() + bufferOffset);
+        boost::endian::big_to_native_inplace(
+            reinterpret_cast<boost::endian::big_uint32_t*>(buffer_.data() +
+                                                           bufferOffset),
+            bytesToCopy / 4);
+#else
+        std::copy(data + offset, data + offset + bytesToCopy,
+                  buffer_.data() + bufferOffset);
+#endif
         offset += bytesToCopy;
         remaining -= bytesToCopy;
         bitCount_ += bytesToCopy * BITS_PER_BYTE;
@@ -43,20 +56,32 @@ std::array<uint8_t, SHA1::DIGEST_SIZE> SHA1::digest() {
     }
 
     // Append the length of the message
+#ifdef ATOM_USE_BOOST
+    boost::endian::native_to_big_inplace(&bitLength, sizeof(bitLength));
+    std::copy(reinterpret_cast<uint8_t*>(&bitLength),
+              reinterpret_cast<uint8_t*>(&bitLength) + LENGTH_SIZE,
+              buffer_.data() + BLOCK_SIZE - LENGTH_SIZE);
+#else
     for (size_t i = 0; i < LENGTH_SIZE; ++i) {
         buffer_[BLOCK_SIZE - LENGTH_SIZE + i] =
             (bitLength >> (LENGTH_SIZE * BITS_PER_BYTE - i * BITS_PER_BYTE)) &
             BYTE_MASK;
     }
+#endif
     processBlock(buffer_.data());
 
     // Produce the final hash value
     std::array<uint8_t, DIGEST_SIZE> result;
     for (size_t i = 0; i < HASH_SIZE; ++i) {
+#ifdef ATOM_USE_BOOST
+        uint32_t hash_val = boost::endian::native_to_big(hash_[i]);
+        std::memcpy(&result[i * 4], &hash_val, 4);
+#else
         result[i * 4] = (hash_[i] >> 24) & BYTE_MASK;
         result[i * 4 + 1] = (hash_[i] >> 16) & BYTE_MASK;
         result[i * 4 + 2] = (hash_[i] >> 8) & BYTE_MASK;
         result[i * 4 + 3] = hash_[i] & BYTE_MASK;
+#endif
     }
 
     return result;
@@ -76,8 +101,13 @@ void SHA1::reset() {
 void SHA1::processBlock(const uint8_t* block) {
     std::array<uint32_t, SCHEDULE_SIZE> schedule{};
     for (size_t i = 0; i < 16; ++i) {
+#ifdef ATOM_USE_BOOST
+        schedule[i] = boost::endian::big_to_native(
+            *(reinterpret_cast<const uint32_t*>(block + i * 4)));
+#else
         schedule[i] = (block[i * 4] << 24) | (block[i * 4 + 1] << 16) |
                       (block[i * 4 + 2] << 8) | block[i * 4 + 3];
+#endif
     }
 
     for (size_t i = 16; i < SCHEDULE_SIZE; ++i) {
@@ -128,7 +158,8 @@ auto SHA1::rotateLeft(uint32_t value, size_t bits) -> uint32_t {
     return (value << bits) | (value >> (WORD_SIZE - bits));
 }
 
-auto bytesToHex(const std::array<uint8_t, SHA1::DIGEST_SIZE>& bytes) -> std::string {
+auto bytesToHex(const std::array<uint8_t, SHA1::DIGEST_SIZE>& bytes)
+    -> std::string {
     std::ostringstream oss;
     for (uint8_t byte : bytes) {
         oss << std::setw(2) << std::setfill('0') << std::hex << (int)byte;

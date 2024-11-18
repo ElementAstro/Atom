@@ -25,6 +25,10 @@ Description: Enhanced Python-Like fnmatch for C++
 
 #include "atom/log/loguru.hpp"
 
+#ifdef ATOM_USE_BOOST
+#include <boost/regex.hpp>
+#endif
+
 namespace atom::algorithm {
 
 #ifdef _WIN32
@@ -40,6 +44,72 @@ auto fnmatch(std::string_view pattern, std::string_view string,
           pattern, string, flags);
 
     try {
+#ifdef ATOM_USE_BOOST
+#ifdef _WIN32
+        LOG_F(INFO, "Using Boost.Regex for pattern matching on Windows.");
+        // 将fnmatch模式转换为Boost.Regex模式
+        std::string regex_pattern;
+        bool escape = !(flags & FNM_NOESCAPE);
+        bool case_fold = (flags & FNM_CASEFOLD) != 0;
+
+        for (auto it = pattern.begin(); it != pattern.end(); ++it) {
+            switch (*it) {
+                case '*':
+                    regex_pattern += ".*";
+                    break;
+                case '?':
+                    regex_pattern += ".";
+                    break;
+                case '[': {
+                    regex_pattern += "[";
+                    ++it;
+                    if (it != pattern.end() && (*it == '!' || *it == '^')) {
+                        regex_pattern += "^";
+                        ++it;
+                    }
+                    while (it != pattern.end() && *it != ']') {
+                        regex_pattern += *it;
+                        ++it;
+                    }
+                    regex_pattern += "]";
+                    break;
+                }
+                case '\\':
+                    if (escape && (it + 1) != pattern.end()) {
+                        regex_pattern += "\\";
+                        ++it;
+                        regex_pattern += *it;
+                    } else {
+                        regex_pattern += "\\\\";
+                    }
+                    break;
+                default:
+                    if (std::isalnum(*it)) {
+                        regex_pattern += std::string(1, *it);
+                    } else {
+                        regex_pattern += "\\" + std::string(1, *it);
+                    }
+                    break;
+            }
+        }
+
+        boost::regex expr(regex_pattern, case_fold ? boost::regex::icase
+                                                   : boost::regex::ECMAScript);
+        bool match = boost::regex_match(std::string(string), expr);
+        LOG_F(INFO, "Boost.Regex match result: {}", match ? "True" : "False");
+        return match;
+#else
+        // 非Windows平台，保持原有实现或使用Boost.Regex
+        LOG_F(INFO, "Using Boost.Regex for pattern matching on non-Windows.");
+        boost::regex expr(
+            pattern, boost::regex::ECMAScript |
+                         (flags & FNM_CASEFOLD ? boost::regex::icase
+                                               : boost::regex::ECMAScript));
+        bool match = boost::regex_match(std::string(string), expr);
+        LOG_F(INFO, "Boost.Regex match result: {}", match ? "True" : "False");
+        return match;
+#endif
+#else
 #ifdef _WIN32
         auto p = pattern.begin();
         auto s = string.begin();
@@ -159,6 +229,7 @@ auto fnmatch(std::string_view pattern, std::string_view string,
         bool result = (ret == 0);
         LOG_F(INFO, "System fnmatch result: {}", result ? "True" : "False");
         return result;
+#endif
 #endif
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Exception in fnmatch: {}", e.what());

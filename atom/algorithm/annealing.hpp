@@ -20,6 +20,11 @@
 #endif
 #endif
 
+#ifdef ATOM_USE_BOOST
+#include <boost/random.hpp>
+#include <boost/thread.hpp>
+#endif
+
 #include "atom/log/loguru.hpp"
 
 // Define a concept for a problem that Simulated Annealing can solve
@@ -173,9 +178,15 @@ template <typename ProblemType, typename SolutionType>
     requires AnnealingProblem<ProblemType, SolutionType>
 void SimulatedAnnealing<ProblemType, SolutionType>::optimizeThread() {
     try {
+#ifdef ATOM_USE_BOOST
+        boost::random::random_device randomDevice;
+        boost::random::mt19937 generator(randomDevice());
+        boost::random::uniform_real_distribution<double> distribution(0.0, 1.0);
+#else
         std::random_device randomDevice;
         std::mt19937 generator(randomDevice());
         std::uniform_real_distribution<double> distribution(0.0, 1.0);
+#endif
 
         auto currentSolution = problem_instance_.random_solution();
         double currentEnergy = problem_instance_.energy(currentSolution);
@@ -262,6 +273,21 @@ auto SimulatedAnnealing<ProblemType, SolutionType>::optimize(int numThreads)
         numThreads = 1;
     }
 
+#ifdef ATOM_USE_BOOST
+    std::vector<boost::thread> threads;
+    for (int threadIndex = 0; threadIndex < numThreads; ++threadIndex) {
+        threads.emplace_back([this]() { optimizeThread(); });
+        LOG_F(INFO, "Launched optimization thread {}.", threadIndex + 1);
+    }
+
+    for (auto& thread : threads) {
+        try {
+            thread.join();
+        } catch (const std::exception& e) {
+            LOG_F(ERROR, "Exception in optimization thread: {}", e.what());
+        }
+    }
+#else
     std::vector<std::future<void>> futures;
     futures.reserve(numThreads);
     for (int threadIndex = 0; threadIndex < numThreads; ++threadIndex) {
@@ -278,6 +304,7 @@ auto SimulatedAnnealing<ProblemType, SolutionType>::optimize(int numThreads)
             LOG_F(ERROR, "Exception in optimization thread: {}", e.what());
         }
     }
+#endif
 
     LOG_F(INFO, "Optimization completed with best energy: {}", best_energy_);
     return best_solution_;
@@ -356,10 +383,17 @@ inline auto TSP::neighbor(const std::vector<int>& solution)
     -> std::vector<int> {
     std::vector<int> newSolution = solution;
     try {
+#ifdef ATOM_USE_BOOST
+        boost::random::random_device randomDevice;
+        boost::random::mt19937 generator(randomDevice());
+        boost::random::uniform_int_distribution<int> distribution(
+            0, static_cast<int>(solution.size()) - 1);
+#else
         std::random_device randomDevice;
         std::mt19937 generator(randomDevice());
         std::uniform_int_distribution<int> distribution(
             0, static_cast<int>(solution.size()) - 1);
+#endif
         int index1 = distribution(generator);
         int index2 = distribution(generator);
         std::swap(newSolution[index1], newSolution[index2]);
@@ -377,9 +411,15 @@ inline auto TSP::randomSolution() const -> std::vector<int> {
     std::vector<int> solution(cities_.size());
     std::iota(solution.begin(), solution.end(), 0);
     try {
+#ifdef ATOM_USE_BOOST
+        boost::random::random_device randomDevice;
+        boost::random::mt19937 generator(randomDevice());
+        boost::range::random_shuffle(solution, generator);
+#else
         std::random_device randomDevice;
         std::mt19937 generator(randomDevice());
         std::ranges::shuffle(solution, generator);
+#endif
         LOG_F(INFO, "Generated random solution.");
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Exception in TSP::randomSolution: {}", e.what());

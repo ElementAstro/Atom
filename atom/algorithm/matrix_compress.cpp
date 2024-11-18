@@ -1,3 +1,4 @@
+// cpp
 #include "matrix_compress.hpp"
 
 #include <algorithm>
@@ -11,7 +12,13 @@
 #include <immintrin.h>
 #endif
 
+#ifdef ATOM_USE_BOOST
+#include <boost/exception/all.hpp>
+#include <boost/filesystem.hpp>
+#endif
+
 namespace atom::algorithm {
+
 auto MatrixCompressor::compress(const Matrix& matrix) -> CompressedData {
     CompressedData compressed;
     if (matrix.empty() || matrix[0].empty()) {
@@ -73,8 +80,14 @@ auto MatrixCompressor::decompress(const CompressedData& compressed, int rows,
                 int row = index / cols;
                 int col = index % cols;
                 if (row >= rows || col >= cols) {
+#ifdef ATOM_USE_BOOST
+                    throw boost::enable_error_info(MatrixDecompressException())
+                        << boost::errinfo_api_function(
+                               "Decompression error: Invalid matrix size");
+#else
                     THROW_MATRIX_DECOMPRESS_EXCEPTION(
                         "Decompression error: Invalid matrix size");
+#endif
                 }
                 matrix[row][col] = reinterpret_cast<const char*>(&chars)[j];
                 index++;
@@ -88,8 +101,14 @@ auto MatrixCompressor::decompress(const CompressedData& compressed, int rows,
             int row = index / cols;
             int col = index % cols;
             if (row >= rows || col >= cols) {
+#ifdef ATOM_USE_BOOST
+                throw boost::enable_error_info(MatrixDecompressException())
+                    << boost::errinfo_api_function(
+                           "Decompression error: Invalid matrix size");
+#else
                 THROW_MATRIX_DECOMPRESS_EXCEPTION(
                     "Decompression error: Invalid matrix size");
+#endif
             }
             matrix[row][col] = ch;
             index++;
@@ -98,8 +117,14 @@ auto MatrixCompressor::decompress(const CompressedData& compressed, int rows,
 #endif
 
     if (index != rows * cols) {
+#ifdef ATOM_USE_BOOST
+        throw boost::enable_error_info(MatrixDecompressException())
+            << boost::errinfo_api_function(
+                   "Decompression error: Incorrect number of elements");
+#else
         THROW_MATRIX_DECOMPRESS_EXCEPTION(
             "Decompression error: Incorrect number of elements");
+#endif
     }
 
     return matrix;
@@ -132,9 +157,20 @@ auto MatrixCompressor::generateRandomMatrix(
 
 void MatrixCompressor::saveCompressedToFile(const CompressedData& compressed,
                                             const std::string& filename) {
+#ifdef ATOM_USE_BOOST
+    boost::filesystem::path filepath(filename);
+    std::ofstream file(filepath.string(), std::ios::binary);
+#else
     std::ofstream file(filename, std::ios::binary);
+#endif
     if (!file) {
+#ifdef ATOM_USE_BOOST
+        throw boost::enable_error_info(FileOpenException())
+            << boost::errinfo_api_function("Unable to open file for writing: " +
+                                           filename);
+#else
         THROW_FAIL_TO_OPEN_FILE("Unable to open file for writing: " + filename);
+#endif
     }
 
     for (const auto& [ch, count] : compressed) {
@@ -145,9 +181,20 @@ void MatrixCompressor::saveCompressedToFile(const CompressedData& compressed,
 
 auto MatrixCompressor::loadCompressedFromFile(const std::string& filename)
     -> CompressedData {
+#ifdef ATOM_USE_BOOST
+    boost::filesystem::path filepath(filename);
+    std::ifstream file(filepath.string(), std::ios::binary);
+#else
     std::ifstream file(filename, std::ios::binary);
+#endif
     if (!file) {
+#ifdef ATOM_USE_BOOST
+        throw boost::enable_error_info(FileOpenException())
+            << boost::errinfo_api_function("Unable to open file for reading: " +
+                                           filename);
+#else
         THROW_FAIL_TO_OPEN_FILE("Unable to open file for reading: " + filename);
+#endif
     }
 
     CompressedData compressed;
@@ -171,7 +218,13 @@ auto MatrixCompressor::calculateCompressionRatio(
 
 auto MatrixCompressor::downsample(const Matrix& matrix, int factor) -> Matrix {
     if (factor <= 0) {
+#ifdef ATOM_USE_BOOST
+        throw boost::enable_error_info(InvalidArgumentException())
+            << boost::errinfo_api_function(
+                   "Downsampling factor must be positive");
+#else
         THROW_INVALID_ARGUMENT("Downsampling factor must be positive");
+#endif
     }
 
     int rows = static_cast<int>(matrix.size());
@@ -201,7 +254,13 @@ auto MatrixCompressor::downsample(const Matrix& matrix, int factor) -> Matrix {
 
 auto MatrixCompressor::upsample(const Matrix& matrix, int factor) -> Matrix {
     if (factor <= 0) {
+#ifdef ATOM_USE_BOOST
+        throw boost::enable_error_info(InvalidArgumentException())
+            << boost::errinfo_api_function(
+                   "Upsampling factor must be positive");
+#else
         THROW_INVALID_ARGUMENT("Upsampling factor must be positive");
+#endif
     }
 
     int rows = static_cast<int>(matrix.size());
@@ -225,7 +284,13 @@ auto MatrixCompressor::calculateMSE(const Matrix& matrix1,
                                     const Matrix& matrix2) -> double {
     if (matrix1.size() != matrix2.size() ||
         matrix1[0].size() != matrix2[0].size()) {
+#ifdef ATOM_USE_BOOST
+        throw boost::enable_error_info(InvalidArgumentException())
+            << boost::errinfo_api_function(
+                   "Matrices must have the same dimensions");
+#else
         THROW_INVALID_ARGUMENT("Matrices must have the same dimensions");
+#endif
     }
 
     double mse = 0.0;
@@ -270,4 +335,5 @@ void performanceTest(int rows, int cols) {
     std::cout << "Compressed size: " << compressed.size() << " elements\n";
 }
 #endif
+
 }  // namespace atom::algorithm
