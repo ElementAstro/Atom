@@ -7,21 +7,14 @@
 # License: GPL3
 
 cmake_minimum_required(VERSION 3.20)
-project(atom C CXX)
-
-# Versioning
-set(ATOM_VERSION_MAJOR 1)
-set(ATOM_VERSION_MINOR 0)
-set(ATOM_VERSION_PATCH 0)
-set(ATOM_SOVERSION ${ATOM_VERSION_MAJOR})
-set(ATOM_VERSION_STRING "${ATOM_VERSION_MAJOR}.${ATOM_VERSION_MINOR}.${ATOM_VERSION_PATCH}")
+project(atom VERSION 1.0.0 LANGUAGES C CXX)
 
 # Python Support
 option(ATOM_BUILD_PYTHON "Build Atom with Python support" OFF)
 if(ATOM_BUILD_PYTHON)
     find_package(Python COMPONENTS Interpreter Development REQUIRED)
     if(PYTHON_FOUND)
-        message("-- Found Python ${PYTHON_VERSION_STRING}: ${PYTHON_EXECUTABLE}")
+        message(STATUS "Found Python ${PYTHON_VERSION_STRING}: ${PYTHON_EXECUTABLE}")
         find_package(pybind11 QUIET)
         if(pybind11_FOUND)
             message(STATUS "Found pybind11: ${pybind11_INCLUDE_DIRS}")
@@ -92,8 +85,8 @@ target_link_libraries(atom_object ${ATOM_LIBS})
 add_library(atom STATIC)
 set_target_properties(atom PROPERTIES
     IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}atom${CMAKE_STATIC_LIBRARY_SUFFIX}"
-    VERSION ${ATOM_VERSION_STRING}
-    SOVERSION ${ATOM_SOVERSION}
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 
 target_link_libraries(atom atom_object ${CMAKE_THREAD_LIBS_INIT} ${ATOM_LIBS})

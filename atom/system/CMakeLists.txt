@@ -7,18 +7,10 @@
 # License: GPL3
 
 cmake_minimum_required(VERSION 3.20)
-project(atom-system C CXX)
-
-# Version Management
-set(ATOM_SYSTEM_VERSION_MAJOR 1)
-set(ATOM_SYSTEM_VERSION_MINOR 0)
-set(ATOM_SYSTEM_VERSION_PATCH 0)
-
-set(ATOM_SYSTEM_SOVERSION ${ATOM_SYSTEM_VERSION_MAJOR})
-set(ATOM_SYSTEM_VERSION_STRING "${ATOM_SYSTEM_VERSION_MAJOR}.${ATOM_SYSTEM_VERSION_MINOR}.${ATOM_SYSTEM_VERSION_PATCH}")
+project(atom-system VERSION 1.0.0 LANGUAGES C CXX)
 
 # Sources and Headers
-set(ATOM_SYSTEM_SOURCES
+set(SOURCES
     command.cpp
     crash_quotes.cpp
     crash.cpp
@@ -33,7 +25,7 @@ set(ATOM_SYSTEM_SOURCES
     wregistry.cpp
 )
 
-set(ATOM_SYSTEM_HEADERS
+set(HEADERS
     command.hpp
     crash_quotes.hpp
     crash.hpp
@@ -48,43 +40,38 @@ set(ATOM_SYSTEM_HEADERS
     wregistry.hpp
 )
 
-set(ATOM_SYSTEM_LIBS
+set(LIBS
     loguru
     ${CMAKE_THREAD_LIBS_INIT}
     atom-sysinfo
 )
 
 # Build Object Library
-add_library(atom-system-object OBJECT)
-set_property(TARGET atom-system-object PROPERTY POSITION_INDEPENDENT_CODE 1)
+add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
+set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 
-target_sources(atom-system-object
-    PUBLIC
-    ${ATOM_SYSTEM_HEADERS}
-    PRIVATE
-    ${ATOM_SYSTEM_SOURCES}
-)
+target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
 
-add_library(atom-system STATIC)
+# Build Static Library
+add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
+target_include_directories(${PROJECT_NAME} PUBLIC .)
 
 # Platform-specific libraries
 if(WIN32)
-    target_link_libraries(atom-system pdh wlanapi userenv)
+    target_link_libraries(${PROJECT_NAME} PRIVATE pdh wlanapi userenv)
 endif()
 
-target_link_libraries(atom-system atom-system-object ${ATOM_SYSTEM_LIBS})
-target_include_directories(atom-system PUBLIC .)
-
 # Set library properties
-set_target_properties(atom-system PROPERTIES
-    VERSION ${ATOM_SYSTEM_VERSION_STRING}
-    SOVERSION ${ATOM_SYSTEM_SOVERSION}
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
     OUTPUT_NAME ${PROJECT_NAME}
 )
 
 # Installation
-install(TARGETS atom-system
+install(TARGETS ${PROJECT_NAME}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    PUBLIC_HEADER DESTINATION include/atom-system
+    PUBLIC_HEADER DESTINATION include/${PROJECT_NAME}
 )

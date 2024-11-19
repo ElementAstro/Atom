@@ -7,49 +7,47 @@
 # License: GPL3
 
 cmake_minimum_required(VERSION 3.20)
-project(atom-error C CXX)
+project(atom-error VERSION 1.0.0 LANGUAGES C CXX)
 
-list(APPEND ${PROJECT_NAME}_SOURCES
+# Sources
+set(SOURCES
     exception.cpp
     stacktrace.cpp
 )
 
 # Headers
-list(APPEND ${PROJECT_NAME}_HEADERS
+set(HEADERS
     error_code.hpp
     stacktrace.hpp
 )
 
-list(APPEND ${PROJECT_NAME}_LIBS
+# Dependencies
+set(LIBS
     loguru
 )
 
 if (LINUX)
-list (APPEND ${PROJECT_NAME}_LIBS
-    dl
-)
+    list(APPEND LIBS dl)
 endif()
 
 # Build Object Library
-add_library(${PROJECT_NAME}_OBJECT OBJECT)
-set_property(TARGET ${PROJECT_NAME}_OBJECT PROPERTY POSITION_INDEPENDENT_CODE 1)
+add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
+set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 
-target_link_libraries(${PROJECT_NAME}_OBJECT ${${PROJECT_NAME}_LIBS})
+target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
 
-target_sources(${PROJECT_NAME}_OBJECT
-    PUBLIC
-    ${${PROJECT_NAME}_HEADERS}
-    PRIVATE
-    ${${PROJECT_NAME}_SOURCES}
-)
-
-target_link_libraries(${PROJECT_NAME}_OBJECT ${${PROJECT_NAME}_LIBS})
-
-add_library(${PROJECT_NAME} SHARED)
-
-target_link_libraries(${PROJECT_NAME} ${PROJECT_NAME}_OBJECT ${${PROJECT_NAME}_LIBS})
+# Build Shared Library
+add_library(${PROJECT_NAME} SHARED $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
 target_include_directories(${PROJECT_NAME} PUBLIC .)
 
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
+    OUTPUT_NAME ${PROJECT_NAME}
+)
+
+# Install rules
 install(TARGETS ${PROJECT_NAME}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )

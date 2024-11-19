@@ -8,16 +8,18 @@
 #   License: GPL3
 
 cmake_minimum_required(VERSION 3.20)
-project(atom-component LANGUAGES C CXX)
-# Source files with project-specific prefix
-set(${PROJECT_NAME}_SOURCES
+project(atom-component VERSION 1.0.0 LANGUAGES C CXX)
+
+# Source files
+set(SOURCES
     component.cpp
     dispatch.cpp
     registry.cpp
     var.cpp
 )
 
-set(${PROJECT_NAME}_HEADERS
+# Header files
+set(HEADERS
     component.hpp
     dispatch.hpp
     types.hpp
@@ -25,30 +27,31 @@ set(${PROJECT_NAME}_HEADERS
 )
 
 # Dependencies
-set(${PROJECT_NAME}_LIBS
+set(LIBS
     loguru
     atom-error
     atom-type
     atom-utils
+    ${CMAKE_THREAD_LIBS_INIT}
 )
 
 # Include directories
 include_directories(.)
 
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+# Build Object Library
+add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
+set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 
-# Object library for headers and sources with project prefix
-add_library(${PROJECT_NAME}_OBJECT OBJECT ${${PROJECT_NAME}_HEADERS} ${${PROJECT_NAME}_SOURCES})
-# set_target_properties(${PROJECT_NAME}_OBJECT PROPERTIES LINKER_LANGUAGE CXX)
+# Build Shared Library
+add_library(${PROJECT_NAME} SHARED $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
+target_include_directories(${PROJECT_NAME} PUBLIC .)
 
-# Static library target
-add_library(${PROJECT_NAME} SHARED $<TARGET_OBJECTS:${PROJECT_NAME}_OBJECT>)
-
-# Set project properties and definitions
-# set_property(TARGET ${PROJECT_NAME} PROPERTY POSITION_INDEPENDENT_CODE ON)
-
-# Link dependencies to the main target
-target_link_libraries(${PROJECT_NAME} PRIVATE ${${PROJECT_NAME}_LIBS} ${CMAKE_THREAD_LIBS_INIT})
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
+    OUTPUT_NAME ${PROJECT_NAME}
+)
 
 # Install rules
 install(TARGETS ${PROJECT_NAME}

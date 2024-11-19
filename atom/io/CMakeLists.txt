@@ -7,10 +7,10 @@
 # License: GPL3
 
 cmake_minimum_required(VERSION 3.20)
-project(atom-io C CXX)
+project(atom-io VERSION 1.0.0 LANGUAGES C CXX)
 
 # Sources
-set(${PROJECT_NAME}_SOURCES
+set(SOURCES
     compress.cpp
     file_permission.cpp
     io.cpp
@@ -18,7 +18,7 @@ set(${PROJECT_NAME}_SOURCES
 )
 
 # Headers
-set(${PROJECT_NAME}_HEADERS
+set(HEADERS
     compress.hpp
     file_permission.hpp
     glob.hpp
@@ -26,7 +26,8 @@ set(${PROJECT_NAME}_HEADERS
     pushd.hpp
 )
 
-set(${PROJECT_NAME}_LIBS
+# Dependencies
+set(LIBS
     loguru
     MINIZIP::minizip
     ZLIB::ZLIB
@@ -34,26 +35,19 @@ set(${PROJECT_NAME}_LIBS
 )
 
 # Build Object Library
-add_library(${PROJECT_NAME}_OBJECT OBJECT)
-set_property(TARGET ${PROJECT_NAME}_OBJECT PROPERTY POSITION_INDEPENDENT_CODE 1)
+add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
+set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 
-target_sources(${PROJECT_NAME}_OBJECT
-    PUBLIC
-    ${${PROJECT_NAME}_HEADERS}
-    PRIVATE
-    ${${PROJECT_NAME}_SOURCES}
-)
+target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
 
-target_link_libraries(${PROJECT_NAME}_OBJECT ${${PROJECT_NAME}_LIBS})
-
-add_library(${PROJECT_NAME} STATIC)
-
-target_link_libraries(${PROJECT_NAME} ${PROJECT_NAME}_OBJECT ${${PROJECT_NAME}_LIBS})
+# Build Static Library
+add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
 target_include_directories(${PROJECT_NAME} PUBLIC .)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
-    VERSION ${CMAKE_HYDROGEN_VERSION_STRING}
-    SOVERSION ${HYDROGEN_SOVERSION}
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
     OUTPUT_NAME ${PROJECT_NAME}
 )
 
@@ -61,45 +55,37 @@ install(TARGETS ${PROJECT_NAME}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
-set(atom-async-io_SOURCES
+# Async IO
+set(ASYNC_SOURCES
     async_compress.cpp
     async_glob.cpp
     async_io.cpp
 )
 
-set(atom-async-io_HEADERS
+set(ASYNC_HEADERS
     async_compress.hpp
     async_glob.hpp
     async_io.hpp
 )
 
-set(atom-async-io_LIBS
+set(ASYNC_LIBS
     atom-io
     atom-async
     loguru
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
-add_library(atom-async-io_OBJECT OBJECT)
-set_property(TARGET atom-async-io_OBJECT PROPERTY POSITION_INDEPENDENT_CODE 1)
+add_library(atom-async-io_object OBJECT ${ASYNC_SOURCES} ${ASYNC_HEADERS})
+set_property(TARGET atom-async-io_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 
-target_sources(atom-async-io_OBJECT
-    PUBLIC
-    ${atom-async-io_HEADERS}
-    PRIVATE
-    ${atom-async-io_SOURCES}
-)
+target_link_libraries(atom-async-io_object PRIVATE ${ASYNC_LIBS})
 
-target_link_libraries(atom-async-io_OBJECT ${atom-async-io_LIBS})
-
-add_library(atom-async-io STATIC)
-
-target_link_libraries(atom-async-io atom-async-io_OBJECT ${atom-async-io_LIBS})
-
+add_library(atom-async-io STATIC $<TARGET_OBJECTS:atom-async-io_object>)
+target_link_libraries(atom-async-io PRIVATE ${ASYNC_LIBS})
 target_include_directories(atom-async-io PUBLIC .)
 
 set_target_properties(atom-async-io PROPERTIES
-    VERSION ${CMAKE_HYDROGEN_VERSION_STRING}
-    SOVERSION ${HYDROGEN_SOVERSION}
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
     OUTPUT_NAME atom-async-io
 )

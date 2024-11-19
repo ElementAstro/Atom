@@ -7,64 +7,51 @@
 # License: GPL3
 
 cmake_minimum_required(VERSION 3.20)
-project(atom-tests C CXX)
-
-# Version Management
-set(ATOM_TESTS_VERSION_MAJOR 1)
-set(ATOM_TESTS_VERSION_MINOR 0)
-set(ATOM_TESTS_VERSION_PATCH 0)
-
-set(ATOM_TESTS_SOVERSION ${ATOM_TESTS_VERSION_MAJOR})
-set(ATOM_TESTS_VERSION_STRING "${ATOM_TESTS_VERSION_MAJOR}.${ATOM_TESTS_VERSION_MINOR}.${ATOM_TESTS_VERSION_PATCH}")
+project(atom-tests VERSION 1.0.0 LANGUAGES C CXX)
 
 # Sources and Headers
-set(ATOM_TESTS_SOURCES
+set(SOURCES
     benchmark.cpp
     fuzz.cpp
 )
 
-set(ATOM_TESTS_HEADERS
+set(HEADERS
     benchmark.hpp
     fuzz.hpp
     test.hpp
 )
 
-set(ATOM_TESTS_LIBS
+set(LIBS
     loguru
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
 # Build Object Library
-add_library(atom-tests-object OBJECT)
-set_property(TARGET atom-tests-object PROPERTY POSITION_INDEPENDENT_CODE 1)
+add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
+set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 
-target_sources(atom-tests-object
-    PUBLIC
-    ${ATOM_TESTS_HEADERS}
-    PRIVATE
-    ${ATOM_TESTS_SOURCES}
-)
+target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
 
-add_library(atom-tests STATIC)
+# Build Static Library
+add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
+target_include_directories(${PROJECT_NAME} PUBLIC .)
 
 # Platform-specific libraries
 if(WIN32)
-    target_link_libraries(atom-tests pdh wlanapi)
+    target_link_libraries(${PROJECT_NAME} PRIVATE pdh wlanapi)
 endif()
 
-target_link_libraries(atom-tests atom-tests-object ${ATOM_TESTS_LIBS})
-target_include_directories(atom-tests PUBLIC .)
-
 # Set library properties
-set_target_properties(atom-tests PROPERTIES
-    VERSION ${ATOM_TESTS_VERSION_STRING}
-    SOVERSION ${ATOM_TESTS_SOVERSION}
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
     OUTPUT_NAME ${PROJECT_NAME}
 )
 
 # Installation
-install(TARGETS atom-tests
+install(TARGETS ${PROJECT_NAME}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    PUBLIC_HEADER DESTINATION include/atom-tests
+    PUBLIC_HEADER DESTINATION include/${PROJECT_NAME}
 )

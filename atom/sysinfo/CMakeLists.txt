@@ -7,18 +7,10 @@
 # License: GPL3
 
 cmake_minimum_required(VERSION 3.20)
-project(atom-sysinfo C CXX)
-
-# Version Management
-set(ATOM_SYSINFO_VERSION_MAJOR 1)
-set(ATOM_SYSINFO_VERSION_MINOR 0)
-set(ATOM_SYSINFO_VERSION_PATCH 0)
-
-set(ATOM_SYSINFO_SOVERSION ${ATOM_SYSINFO_VERSION_MAJOR})
-set(ATOM_SYSINFO_VERSION_STRING "${ATOM_SYSINFO_VERSION_MAJOR}.${ATOM_SYSINFO_VERSION_MINOR}.${ATOM_SYSINFO_VERSION_PATCH}")
+project(atom-sysinfo VERSION 1.0.0 LANGUAGES C CXX)
 
 # Sources and Headers
-set(ATOM_SYSINFO_SOURCES
+set(SOURCES
     battery.cpp
     bios.cpp
     cpu.cpp
@@ -31,7 +23,7 @@ set(ATOM_SYSINFO_SOURCES
     wm.cpp
 )
 
-set(ATOM_SYSINFO_HEADERS
+set(HEADERS
     battery.hpp
     bios.hpp
     cpu.hpp
@@ -44,42 +36,37 @@ set(ATOM_SYSINFO_HEADERS
     wm.hpp
 )
 
-set(ATOM_SYSINFO_LIBS
+set(LIBS
     loguru
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
 # Build Object Library
-add_library(atom-sysinfo-object OBJECT)
-set_property(TARGET atom-sysinfo-object PROPERTY POSITION_INDEPENDENT_CODE 1)
+add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
+set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 
-target_sources(atom-sysinfo-object
-    PUBLIC
-    ${ATOM_SYSINFO_HEADERS}
-    PRIVATE
-    ${ATOM_SYSINFO_SOURCES}
-)
+target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
 
-add_library(atom-sysinfo STATIC)
+# Build Static Library
+add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
+target_include_directories(${PROJECT_NAME} PUBLIC .)
 
 # Platform-specific libraries
 if(WIN32)
-    target_link_libraries(atom-sysinfo pdh wlanapi)
+    target_link_libraries(${PROJECT_NAME} PRIVATE pdh wlanapi)
 endif()
 
-target_link_libraries(atom-sysinfo atom-sysinfo-object ${ATOM_SYSINFO_LIBS})
-target_include_directories(atom-sysinfo PUBLIC .)
-
 # Set library properties
-set_target_properties(atom-sysinfo PROPERTIES
-    VERSION ${ATOM_SYSINFO_VERSION_STRING}
-    SOVERSION ${ATOM_SYSINFO_SOVERSION}
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
     OUTPUT_NAME ${PROJECT_NAME}
 )
 
 # Installation
-install(TARGETS atom-sysinfo
+install(TARGETS ${PROJECT_NAME}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    PUBLIC_HEADER DESTINATION include/atom-sysinfo
+    PUBLIC_HEADER DESTINATION include/${PROJECT_NAME}
 )

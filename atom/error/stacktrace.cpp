@@ -34,6 +34,10 @@ Description: Enhanced StackTrace with more details
 #include <execinfo.h>
 #endif
 
+#ifdef ATOM_USE_BOOST
+#include <boost/stacktrace.hpp>
+#endif
+
 namespace atom::error {
 
 namespace {
@@ -81,7 +85,9 @@ StackTrace::StackTrace() { capture(); }
 auto StackTrace::toString() const -> std::string {
     std::ostringstream oss;
 
-#ifdef _WIN32
+#ifdef ATOM_USE_BOOST
+    oss << boost::stacktrace::stacktrace();
+#elif defined(_WIN32)
     auto* symbol = reinterpret_cast<SYMBOL_INFO*>(
         calloc(sizeof(SYMBOL_INFO) + 256 * sizeof(char), 1));
     symbol->MaxNameLen = 255;
@@ -119,7 +125,9 @@ auto StackTrace::toString() const -> std::string {
 }
 
 void StackTrace::capture() {
-#ifdef _WIN32
+#ifdef ATOM_USE_BOOST
+    // Boost stacktrace automatically captures the stack trace
+#elif defined(_WIN32)
     constexpr int max_frames = 64;
     frames_.resize(max_frames);
     SymInitialize(GetCurrentProcess(), nullptr, TRUE);

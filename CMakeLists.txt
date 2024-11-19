@@ -8,19 +8,29 @@
 cmake_minimum_required(VERSION 3.21)
 project(Atom LANGUAGES C CXX)
 
+# Set C++ standard
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Add custom target for additional CMake files
 add_custom_target(AtomCmakeAdditionalFiles
-	SOURCES
-	${CMAKE_CURRENT_SOURCE_DIR}/cmake/compiler_options.cmake)
-LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
-LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/")
+    SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/compiler_options.cmake
+)
+
+# Append module paths
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/")
+
+# Include compiler options
 include(cmake/compiler_options.cmake)
 
-SET(CMAKE_CXX_STANDARD 23)
-
-add_subdirectory(extra)
-
+# Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/extra)
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
+include_directories(.)
 
+# Find packages
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(SQLite3 REQUIRED)
@@ -30,14 +40,8 @@ find_package(pybind11 CONFIG REQUIRED)
 find_package(Python COMPONENTS Interpreter REQUIRED)
 include_directories(${pybind11_INCLUDE_DIRS} ${Python_INCLUDE_DIRS})
 
-# Include directories
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
-
-set(BUILD_SHARED_LIBS ON)
-
-include_directories(.)
-
 # Add subdirectories
+add_subdirectory(extra)
 add_subdirectory(example)
 add_subdirectory(atom)
 add_subdirectory(tests)

@@ -7,64 +7,51 @@
 # License: GPL3
 
 cmake_minimum_required(VERSION 3.20)
-project(atom-secret C CXX)
-
-# Version Management
-set(ATOM_SECRET_VERSION_MAJOR 1)
-set(ATOM_SECRET_VERSION_MINOR 0)
-set(ATOM_SECRET_VERSION_PATCH 0)
-
-set(ATOM_SECRET_SOVERSION ${ATOM_SECRET_VERSION_MAJOR})
-set(ATOM_SECRET_VERSION_STRING "${ATOM_SECRET_VERSION_MAJOR}.${ATOM_SECRET_VERSION_MINOR}.${ATOM_SECRET_VERSION_PATCH}")
+project(atom-secret VERSION 1.0.0 LANGUAGES C CXX)
 
 # Sources and Headers
-set(ATOM_SECRET_SOURCES
+set(SOURCES
     password.cpp
 )
 
-set(ATOM_SECRET_HEADERS
+set(HEADERS
     password.hpp
 )
 
-set(ATOM_SECRET_LIBS
+set(LIBS
     loguru
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
 # Build Object Library
-add_library(atom-secret-object OBJECT)
-set_property(TARGET atom-secret-object PROPERTY POSITION_INDEPENDENT_CODE 1)
+add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
+set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 
-target_sources(atom-secret-object
-    PUBLIC
-    ${ATOM_SECRET_HEADERS}
-    PRIVATE
-    ${ATOM_SECRET_SOURCES}
-)
+target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
 
-add_library(atom-secret STATIC)
+# Build Static Library
+add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
 
-target_link_libraries(atom-secret atom-secret-object ${ATOM_SECRET_LIBS})
 if (LINUX)
     find_package(Glib REQUIRED)
     find_package(LibSecret-1 REQUIRED)
-    target_link_libraries(${PROJECT_NAME} PRIVATE Secret-1)
-    target_link_libraries(atom-secret ${GLIB_LIBRARIES} ${LIBSECRET_LIBRARIES})
-    target_include_directories(atom-secret PUBLIC ${GLIB_INCLUDE_DIRS} ${LIBSECRET_INCLUDE_DIRS})
-    include_directories(${GLIB_INCLUDE_DIRS} ${LIBSECRET_INCLUDE_DIRS})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${GLIB_LIBRARIES} ${LIBSECRET_LIBRARIES})
+    target_include_directories(${PROJECT_NAME} PUBLIC ${GLIB_INCLUDE_DIRS} ${LIBSECRET_INCLUDE_DIRS})
 endif()
-target_include_directories(atom-secret PUBLIC .)
+
+target_include_directories(${PROJECT_NAME} PUBLIC .)
 
 # Set library properties
-set_target_properties(atom-secret PROPERTIES
-    VERSION ${ATOM_SECRET_VERSION_STRING}
-    SOVERSION ${ATOM_SECRET_SOVERSION}
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
     OUTPUT_NAME ${PROJECT_NAME}
 )
 
 # Installation
-install(TARGETS atom-secret
+install(TARGETS ${PROJECT_NAME}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    PUBLIC_HEADER DESTINATION include/atom-secret
+    PUBLIC_HEADER DESTINATION include/${PROJECT_NAME}
 )
