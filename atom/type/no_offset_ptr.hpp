@@ -4,21 +4,20 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2024-4-3
-
-Description: No Offset Pointer
-
-**************************************************/
-
 #ifndef ATOM_TYPE_NO_OFFSET_PTR_HPP
 #define ATOM_TYPE_NO_OFFSET_PTR_HPP
 
 #include <cassert>
-#include <concepts>
 #include <type_traits>
 #include <utility>
+
+#ifdef ATOM_USE_BOOST
+#include <boost/type_traits/aligned_storage.hpp>
+#include <boost/type_traits/is_constructible.hpp>
+#include <boost/type_traits/is_nothrow_move_assignable.hpp>
+#include <boost/type_traits/is_nothrow_move_constructible.hpp>
+#include <boost/type_traits/is_object.hpp>
+#endif
 
 /**
  * @brief A lightweight pointer-like class that manages an object of type T
@@ -27,19 +26,25 @@ Description: No Offset Pointer
  * @tparam T The type of the object to manage.
  */
 template <typename T>
+#ifdef ATOM_USE_BOOST
+    requires boost::is_object<T>::value
+#else
     requires std::is_object_v<T>
+#endif
 class UnshiftedPtr {
 public:
     /**
      * @brief Default constructor. Constructs the managed object using T's
      * default constructor.
-     *
-     * @note This constructor is noexcept if T's default constructor is
-     * noexcept.
      */
     constexpr UnshiftedPtr() noexcept(
-        std::is_nothrow_default_constructible_v<T>) {
-        new (&storage_) T;
+#ifdef ATOM_USE_BOOST
+        boost::is_nothrow_default_constructible<T>::value
+#else
+        std::is_nothrow_default_constructible_v<T>
+#endif
+    ) {
+        new (&storage_) T();
     }
 
     /**
@@ -48,46 +53,55 @@ public:
      *
      * @tparam Args Parameter pack for constructor arguments.
      * @param args Arguments to forward to the constructor of T.
-     *
-     * @note This constructor is noexcept if T's constructor with the given
-     * arguments is noexcept.
      */
     template <typename... Args>
+#ifdef ATOM_USE_BOOST
+        requires boost::is_constructible<T, Args&&...>::value
+#else
         requires std::constructible_from<T, Args...>
+#endif
     constexpr explicit UnshiftedPtr(Args&&... args) noexcept(
-        std::is_nothrow_constructible_v<T, Args...>) {
+#ifdef ATOM_USE_BOOST
+        boost::is_nothrow_constructible<T, Args&&...>::value
+#else
+        std::is_nothrow_constructible_v<T, Args...>
+#endif
+    ) {
         new (&storage_) T(std::forward<Args>(args)...);
     }
 
     /**
      * @brief Destructor. Destroys the managed object.
      */
-    constexpr ~UnshiftedPtr() noexcept { get().~T(); }
+    constexpr ~UnshiftedPtr() noexcept(
+#ifdef ATOM_USE_BOOST
+        boost::is_nothrow_destructible<T>::value
+#else
+        std::is_nothrow_destructible_v<T>
+#endif
+    ) {
+        destroy();
+    }
 
-    // Disable copying and moving if T is non-copyable or non-movable
-    UnshiftedPtr(const UnshiftedPtr&) noexcept(
-        std::is_nothrow_copy_constructible_v<T>) = delete;
-    UnshiftedPtr(UnshiftedPtr&&) noexcept(
-        std::is_nothrow_move_constructible_v<T>) = delete;
-
-    auto operator=(const UnshiftedPtr&) noexcept(
-        std::is_nothrow_copy_assignable_v<T>) -> UnshiftedPtr& = delete;
-    auto operator=(UnshiftedPtr&&) noexcept(
-        std::is_nothrow_move_assignable_v<T>) -> UnshiftedPtr& = delete;
+    // Disable copying and moving
+    UnshiftedPtr(const UnshiftedPtr&) = delete;
+    UnshiftedPtr(UnshiftedPtr&&) = delete;
+    auto operator=(const UnshiftedPtr&) -> UnshiftedPtr& = delete;
+    auto operator=(UnshiftedPtr&&) -> UnshiftedPtr& = delete;
 
     /**
      * @brief Provides pointer-like access to the managed object.
      *
      * @return A pointer to the managed object.
      */
-    constexpr auto operator->() noexcept -> T* { return &get(); }
+    constexpr auto operator->() noexcept -> T* { return get_ptr(); }
 
     /**
      * @brief Provides const pointer-like access to the managed object.
      *
      * @return A const pointer to the managed object.
      */
-    constexpr auto operator->() const noexcept -> const T* { return &get(); }
+    constexpr auto operator->() const noexcept -> const T* { return get_ptr(); }
 
     /**
      * @brief Dereferences the managed object.
@@ -109,16 +123,23 @@ public:
      *
      * @tparam Args Parameter pack for constructor arguments.
      * @param args Arguments to forward to the constructor of T.
-     *
-     * @note This function is noexcept if T's destructor and constructor with
-     * the given arguments are noexcept.
      */
     template <typename... Args>
+#ifdef ATOM_USE_BOOST
+        requires boost::is_constructible<T, Args&&...>::value
+#else
         requires std::constructible_from<T, Args...>
+#endif
     constexpr void reset(Args&&... args) noexcept(
-        std::is_nothrow_constructible_v<T, Args...> &&
-        std::is_nothrow_destructible_v<T>) {
-        get().~T();
+#ifdef ATOM_USE_BOOST
+        boost::is_nothrow_destructible<T>::value &&
+        boost::is_nothrow_constructible<T, Args&&...>::value
+#else
+        std::is_nothrow_destructible_v<T> &&
+        std::is_nothrow_constructible_v<T, Args...>
+#endif
+    ) {
+        destroy();
         new (&storage_) T(std::forward<Args>(args)...);
     }
 
@@ -129,23 +150,29 @@ public:
      * @param args The arguments to construct the object with.
      */
     template <typename... Args>
+#ifdef ATOM_USE_BOOST
+        requires boost::is_constructible<T, Args&&...>::value
+#else
         requires std::constructible_from<T, Args...>
+#endif
     constexpr void emplace(Args&&... args) noexcept(
-        std::is_nothrow_constructible_v<T, Args...>) {
+#ifdef ATOM_USE_BOOST
+        boost::is_nothrow_constructible<T, Args&&...>::value
+#else
+        std::is_nothrow_constructible_v<T, Args...>
+#endif
+    ) {
         reset(std::forward<Args>(args)...);
     }
 
     /**
      * @brief Releases ownership of the managed object without destroying it.
-     *        This effectively "releases" the managed object to be used
-     * elsewhere. The UnshiftedPtr should not be used after calling this unless
-     * reset.
      *
      * @return A pointer to the managed object.
      */
     [[nodiscard]] constexpr auto release() noexcept -> T* {
-        T* ptr = new (&storage_) T(std::move(get()));
-        get().~T();  // No managed object left in storage
+        T* ptr = get_ptr();
+        relinquish_ownership();
         return ptr;
     }
 
@@ -155,30 +182,72 @@ public:
      * @return True if the managed object has a value, false otherwise.
      */
     [[nodiscard]] constexpr auto hasValue() const noexcept -> bool {
-        return reinterpret_cast<const T*>(&storage_) != nullptr;
+        return owns_;
     }
 
 private:
+    /**
+     * @brief Retrieves a pointer to the managed object.
+     *
+     * @return A pointer to the managed object.
+     */
+    constexpr auto get_ptr() noexcept -> T* {
+        return reinterpret_cast<T*>(&storage_);
+    }
+
+    /**
+     * @brief Retrieves a const pointer to the managed object.
+     *
+     * @return A const pointer to the managed object.
+     */
+    constexpr auto get_ptr() const noexcept -> const T* {
+        return reinterpret_cast<const T*>(&storage_);
+    }
+
     /**
      * @brief Retrieves a reference to the managed object.
      *
      * @return A reference to the managed object.
      */
-    constexpr auto get() noexcept -> T& {
-        return reinterpret_cast<T&>(storage_);
-    }
+    constexpr auto get() noexcept -> T& { return *get_ptr(); }
 
     /**
      * @brief Retrieves a const reference to the managed object.
      *
      * @return A const reference to the managed object.
      */
-    constexpr auto get() const noexcept -> const T& {
-        return reinterpret_cast<const T&>(storage_);
+    constexpr auto get() const noexcept -> const T& { return *get_ptr(); }
+
+    /**
+     * @brief Destroys the managed object if ownership is held.
+     */
+    constexpr void destroy() noexcept(
+#ifdef ATOM_USE_BOOST
+        boost::is_nothrow_destructible<T>::value
+#else
+        std::is_nothrow_destructible_v<T>
+#endif
+    ) {
+        if (owns_) {
+            get().~T();
+            owns_ = false;
+        }
     }
 
-    /// Storage for the managed object, aligned to T's alignment requirements.
-    std::aligned_storage_t<sizeof(T), alignof(T)> storage_;
+    /**
+     * @brief Relinquishes ownership without destroying the object.
+     */
+    constexpr void relinquish_ownership() noexcept { owns_ = false; }
+
+#ifdef ATOM_USE_BOOST
+    using StorageType =
+        typename boost::aligned_storage<sizeof(T), alignof(T)>::type;
+#else
+    using StorageType = std::aligned_storage_t<sizeof(T), alignof(T)>;
+#endif
+
+    StorageType storage_;
+    bool owns_{true};
 };
 
 #endif  // ATOM_TYPE_NO_OFFSET_PTR_HPP

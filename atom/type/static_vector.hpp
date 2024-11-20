@@ -8,7 +8,8 @@
 
 Date: 2024-3-1
 
-Description: A static vector (Optimized with C++20 features)
+Description: A static vector (Optimized with C++20 features and optional Boost
+support)
 
 **************************************************/
 
@@ -18,7 +19,6 @@ Description: A static vector (Optimized with C++20 features)
 #include <algorithm>
 #include <array>
 #include <cassert>
-#include <compare>
 #include <cstddef>
 #include <iterator>
 #include <ranges>
@@ -26,7 +26,11 @@ Description: A static vector (Optimized with C++20 features)
 #include <utility>
 
 #include "atom/error/exception.hpp"
-#include "atom/macro.hpp"
+
+#ifdef ATOM_USE_BOOST
+#include <boost/container/static_vector.hpp>
+#include <boost/iterator/iterator_facade.hpp>
+#endif
 
 /**
  * @brief A static vector implementation with a fixed capacity.
@@ -50,6 +54,10 @@ public:
     using reverse_iterator = std::reverse_iterator<iterator>;
     using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
+#ifdef ATOM_USE_BOOST
+    using boost_static_vector = boost::container::static_vector<T, Capacity>;
+#endif
+
     /**
      * @brief Default constructor. Constructs an empty StaticVector.
      */
@@ -62,7 +70,13 @@ public:
      */
     constexpr StaticVector(std::initializer_list<T> init) {
         if (init.size() > Capacity) {
-            throw std::length_error("Initializer list size exceeds capacity");
+#ifdef ATOM_USE_BOOST
+            throw boost::container::static_vector<T, Capacity>::
+                static_vector_exception(
+                    "Initializer list size exceeds capacity");
+#else
+            THROW_LENGTH("Initializer list size exceeds capacity");
+#endif
         }
         std::ranges::copy(init, begin());
         m_size_ = init.size();
@@ -130,7 +144,12 @@ public:
      */
     constexpr void pushBack(const T& value) {
         if (m_size_ >= Capacity) {
-            throw std::overflow_error("StaticVector capacity exceeded");
+#ifdef ATOM_USE_BOOST
+            throw boost::container::static_vector<T, Capacity>::
+                static_vector_exception("StaticVector capacity exceeded");
+#else
+            THROW_OVERFLOW("StaticVector capacity exceeded");
+#endif
         }
         m_data_[m_size_++] = value;
     }
@@ -142,7 +161,12 @@ public:
      */
     constexpr void pushBack(T&& value) {
         if (m_size_ >= Capacity) {
-            throw std::overflow_error("StaticVector capacity exceeded");
+#ifdef ATOM_USE_BOOST
+            throw boost::container::static_vector<T, Capacity>::
+                static_vector_exception("StaticVector capacity exceeded");
+#else
+            THROW_OVERFLOW("StaticVector capacity exceeded");
+#endif
         }
         m_data_[m_size_++] = std::move(value);
     }
@@ -157,7 +181,12 @@ public:
     template <typename... Args>
     constexpr auto emplaceBack(Args&&... args) -> reference {
         if (m_size_ >= Capacity) {
-            throw std::overflow_error("StaticVector capacity exceeded");
+#ifdef ATOM_USE_BOOST
+            throw boost::container::static_vector<T, Capacity>::
+                static_vector_exception("StaticVector capacity exceeded");
+#else
+            THROW_OVERFLOW("StaticVector capacity exceeded");
+#endif
         }
         return m_data_[m_size_++] = T(std::forward<Args>(args)...);
     }
@@ -167,7 +196,12 @@ public:
      */
     constexpr void popBack() {
         if (m_size_ == 0) {
-            throw std::underflow_error("StaticVector is empty");
+#ifdef ATOM_USE_BOOST
+            throw boost::container::static_vector<
+                T, Capacity>::static_vector_exception("StaticVector is empty");
+#else
+            THROW_UNDERFLOW("StaticVector is empty");
+#endif
         }
         --m_size_;
     }
@@ -237,7 +271,12 @@ public:
      */
     [[nodiscard]] constexpr auto at(size_type index) -> reference {
         if (index >= m_size_) {
+#ifdef ATOM_USE_BOOST
+            throw boost::container::static_vector<T, Capacity>::
+                static_vector_exception("StaticVector::at: index out of range");
+#else
             throw std::out_of_range("StaticVector::at: index out of range");
+#endif
         }
         return m_data_[index];
     }
@@ -251,7 +290,12 @@ public:
      */
     [[nodiscard]] constexpr auto at(size_type index) const -> const_reference {
         if (index >= m_size_) {
-            throw std::out_of_range("StaticVector::at: index out of range");
+#ifdef ATOM_USE_BOOST
+            throw boost::container::static_vector<T, Capacity>::
+                static_vector_exception("StaticVector::at: index out of range");
+#else
+            THROW_OUT_OF_RANGE("StaticVector::at: index out of range");
+#endif
         }
         return m_data_[index];
     }
@@ -261,9 +305,14 @@ public:
      *
      * @return A reference to the first element.
      */
-    [[nodiscard]] constexpr auto front() noexcept -> reference {
+    [[nodiscard]] constexpr auto front() -> reference {
         if (m_size_ == 0) {
-            throw std::underflow_error("StaticVector is empty");
+#ifdef ATOM_USE_BOOST
+            throw boost::container::static_vector<
+                T, Capacity>::static_vector_exception("StaticVector is empty");
+#else
+            THROW_UNDERFLOW("StaticVector is empty");
+#endif
         }
         return m_data_[0];
     }
@@ -273,9 +322,14 @@ public:
      *
      * @return A const reference to the first element.
      */
-    [[nodiscard]] constexpr auto front() const noexcept -> const_reference {
+    [[nodiscard]] constexpr auto front() const -> const_reference {
         if (m_size_ == 0) {
-            throw std::underflow_error("StaticVector is empty");
+#ifdef ATOM_USE_BOOST
+            throw boost::container::static_vector<
+                T, Capacity>::static_vector_exception("StaticVector is empty");
+#else
+            THROW_UNDERFLOW("StaticVector is empty");
+#endif
         }
         return m_data_[0];
     }
@@ -285,9 +339,14 @@ public:
      *
      * @return A reference to the last element.
      */
-    [[nodiscard]] constexpr auto back() noexcept -> reference {
+    [[nodiscard]] constexpr auto back() -> reference {
         if (m_size_ == 0) {
-            throw std::underflow_error("StaticVector is empty");
+#ifdef ATOM_USE_BOOST
+            throw boost::container::static_vector<
+                T, Capacity>::static_vector_exception("StaticVector is empty");
+#else
+            THROW_UNDERFLOW("StaticVector is empty");
+#endif
         }
         return m_data_[m_size_ - 1];
     }
@@ -297,9 +356,14 @@ public:
      *
      * @return A const reference to the last element.
      */
-    [[nodiscard]] constexpr auto back() const noexcept -> const_reference {
+    [[nodiscard]] constexpr auto back() const -> const_reference {
         if (m_size_ == 0) {
-            throw std::underflow_error("StaticVector is empty");
+#ifdef ATOM_USE_BOOST
+            throw boost::container::static_vector<
+                T, Capacity>::static_vector_exception("StaticVector is empty");
+#else
+            THROW_UNDERFLOW("StaticVector is empty");
+#endif
         }
         return m_data_[m_size_ - 1];
     }

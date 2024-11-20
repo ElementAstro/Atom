@@ -1,3 +1,4 @@
+// FILE: ring.hpp
 #ifndef ATOM_ALGORITHM_RING_HPP
 #define ATOM_ALGORITHM_RING_HPP
 
@@ -7,6 +8,12 @@
 #include <optional>
 #include <stdexcept>
 #include <vector>
+
+#ifdef ATOM_USE_BOOST
+#include <boost/circular_buffer.hpp>
+#include <boost/thread/locks.hpp>
+#include <boost/thread/mutex.hpp>
+#endif
 
 namespace atom::memory {
 /**
@@ -23,11 +30,18 @@ public:
      * @param size The maximum size of the buffer.
      * @throw std::invalid_argument if size is zero.
      */
-    explicit RingBuffer(size_t size) : buffer_(size), max_size_(size) {
+    explicit RingBuffer(size_t size) {
         if (size == 0) {
             throw std::invalid_argument(
                 "RingBuffer size must be greater than zero.");
         }
+#ifdef ATOM_USE_BOOST
+        buffer_ = boost::circular_buffer<T>(size);
+#else
+        buffer_.reserve(size);
+        buffer_.resize(size);
+#endif
+        max_size_ = size;
     }
 
     /**
@@ -39,13 +53,20 @@ public:
      * @throw std::runtime_error if pushing fails due to internal reasons.
      */
     auto push(const T& item) -> bool {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
+#ifdef ATOM_USE_BOOST
+        if (buffer_.full()) {
+            return false;
+        }
+        buffer_.push_back(item);
+#else
         if (full()) {
             return false;
         }
         buffer_[head_] = item;
         head_ = (head_ + 1) % max_size_;
         ++count_;
+#endif
         return true;
     }
 
@@ -55,7 +76,10 @@ public:
      * @param item The item to push.
      */
     void pushOverwrite(const T& item) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
+#ifdef ATOM_USE_BOOST
+        buffer_.push_back(item);
+#else
         buffer_[head_] = item;
         if (full()) {
             tail_ = (tail_ + 1) % max_size_;
@@ -63,6 +87,7 @@ public:
             ++count_;
         }
         head_ = (head_ + 1) % max_size_;
+#endif
     }
 
     /**
@@ -72,7 +97,15 @@ public:
      * was empty.
      */
     auto pop() -> std::optional<T> {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
+#ifdef ATOM_USE_BOOST
+        if (buffer_.empty()) {
+            return std::nullopt;
+        }
+        T item = buffer_.front();
+        buffer_.pop_front();
+        return item;
+#else
         if (empty()) {
             return std::nullopt;
         }
@@ -80,6 +113,7 @@ public:
         tail_ = (tail_ + 1) % max_size_;
         --count_;
         return item;
+#endif
     }
 
     /**
@@ -88,8 +122,12 @@ public:
      * @return true if the buffer is full, false otherwise.
      */
     auto full() const -> bool {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
+#ifdef ATOM_USE_BOOST
+        return buffer_.full();
+#else
         return count_ == max_size_;
+#endif
     }
 
     /**
@@ -98,8 +136,12 @@ public:
      * @return true if the buffer is empty, false otherwise.
      */
     auto empty() const -> bool {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
+#ifdef ATOM_USE_BOOST
+        return buffer_.empty();
+#else
         return count_ == 0;
+#endif
     }
 
     /**
@@ -108,8 +150,12 @@ public:
      * @return size_t The number of items in the buffer.
      */
     auto size() const -> size_t {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
+#ifdef ATOM_USE_BOOST
+        return buffer_.size();
+#else
         return count_;
+#endif
     }
 
     /**
@@ -123,10 +169,14 @@ public:
      * @brief Clear all items from the buffer.
      */
     void clear() {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
+#ifdef ATOM_USE_BOOST
+        buffer_.clear();
+#else
         head_ = 0;
         tail_ = 0;
         count_ = 0;
+#endif
     }
 
     /**
@@ -136,11 +186,18 @@ public:
      * empty.
      */
     auto front() const -> std::optional<T> {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
+#ifdef ATOM_USE_BOOST
+        if (buffer_.empty()) {
+            return std::nullopt;
+        }
+        return buffer_.front();
+#else
         if (empty()) {
             return std::nullopt;
         }
         return buffer_[tail_];
+#endif
     }
 
     /**
@@ -150,12 +207,19 @@ public:
      * empty.
      */
     auto back() const -> std::optional<T> {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
+#ifdef ATOM_USE_BOOST
+        if (buffer_.empty()) {
+            return std::nullopt;
+        }
+        return buffer_.back();
+#else
         if (empty()) {
             return std::nullopt;
         }
         size_t backIndex = (head_ + max_size_ - 1) % max_size_;
         return buffer_[backIndex];
+#endif
     }
 
     /**
@@ -165,7 +229,10 @@ public:
      * @return true if the item is in the buffer, false otherwise.
      */
     auto contains(const T& item) const -> bool {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
+#ifdef ATOM_USE_BOOST
+        return std::find(buffer_.begin(), buffer_.end(), item) != buffer_.end();
+#else
         for (size_t i = 0; i < count_; ++i) {
             size_t index = (tail_ + i) % max_size_;
             if (buffer_[index] == item) {
@@ -173,6 +240,7 @@ public:
             }
         }
         return false;
+#endif
     }
 
     /**
@@ -181,14 +249,18 @@ public:
      * @return std::vector<T> A vector containing the buffer's contents in
      * order.
      */
-    auto view() const -> std::vector<T> {
-        std::lock_guard<std::mutex> lock(mutex_);
+    std::vector<T> view() const {
+        std::lock_guard lock(mutex_);
         std::vector<T> combined;
-        combined.reserve(count_);
+        combined.reserve(size());
+#ifdef ATOM_USE_BOOST
+        std::copy(buffer_.begin(), buffer_.end(), std::back_inserter(combined));
+#else
         for (size_t i = 0; i < count_; ++i) {
             size_t index = (tail_ + i) % max_size_;
             combined.emplace_back(buffer_[index]);
         }
+#endif
         return combined;
     }
 
@@ -216,7 +288,7 @@ public:
             return *this;
         }
 
-        auto operator++(int) -> const Iterator {
+        auto operator++(int) const -> Iterator {
             Iterator tmp = *this;
             ++(*this);
             return tmp;
@@ -242,7 +314,7 @@ public:
      * @return Iterator
      */
     auto begin() const -> Iterator {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
         return Iterator(this, tail_, 0);
     }
 
@@ -252,7 +324,7 @@ public:
      * @return Iterator
      */
     auto end() const -> Iterator {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
         return Iterator(this, head_, count_);
     }
 
@@ -264,11 +336,14 @@ public:
      * elements.
      */
     void resize(size_t new_size) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (new_size < count_) {
+        std::lock_guard lock(mutex_);
+        if (new_size < size()) {
             throw std::runtime_error(
                 "New size cannot be smaller than current number of elements.");
         }
+#ifdef ATOM_USE_BOOST
+        buffer_.set_capacity(new_size);
+#else
         std::vector<T> newBuffer(new_size);
         for (size_t i = 0; i < count_; ++i) {
             size_t oldIndex = (tail_ + i) % max_size_;
@@ -278,6 +353,7 @@ public:
         max_size_ = new_size;
         head_ = count_ % max_size_;
         tail_ = 0;
+#endif
     }
 
     /**
@@ -288,12 +364,16 @@ public:
      * std::nullopt if the index is out of bounds.
      */
     auto at(size_t index) const -> std::optional<T> {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (index >= count_) {
+        std::lock_guard lock(mutex_);
+        if (index >= size()) {
             return std::nullopt;
         }
+#ifdef ATOM_USE_BOOST
+        return buffer_[index];
+#else
         size_t actualIndex = (tail_ + index) % max_size_;
         return buffer_[actualIndex];
+#endif
     }
 
     /**
@@ -303,11 +383,17 @@ public:
      */
     template <std::invocable<T&> F>
     void forEach(F&& func) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
+#ifdef ATOM_USE_BOOST
+        for (auto& item : buffer_) {
+            func(item);
+        }
+#else
         for (size_t i = 0; i < count_; ++i) {
             size_t index = (tail_ + i) % max_size_;
             func(buffer_[index]);
         }
+#endif
     }
 
     /**
@@ -317,7 +403,11 @@ public:
      */
     template <std::predicate<T> P>
     void removeIf(P&& pred) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
+#ifdef ATOM_USE_BOOST
+        buffer_.erase(std::remove_if(buffer_.begin(), buffer_.end(), pred),
+                      buffer_.end());
+#else
         size_t write = tail_;
         size_t newCount = 0;
 
@@ -334,6 +424,7 @@ public:
 
         count_ = newCount;
         head_ = write;
+#endif
     }
 
     /**
@@ -343,11 +434,14 @@ public:
      * negative values rotate right.
      */
     void rotate(int n) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
         if (empty() || n == 0) {
             return;
         }
 
+#ifdef ATOM_USE_BOOST
+        buffer_.rotate(n);
+#else
         size_t effectiveN = static_cast<size_t>(n) % count_;
         if (n < 0) {
             effectiveN = count_ - effectiveN;
@@ -355,16 +449,26 @@ public:
 
         tail_ = (tail_ + effectiveN) % max_size_;
         head_ = (head_ + effectiveN) % max_size_;
+#endif
     }
 
 private:
-    mutable std::mutex mutex_;
+#ifdef ATOM_USE_BOOST
+    using CircularBuffer = boost::circular_buffer<T>;
+    CircularBuffer buffer_;
+    using MutexType = boost::mutex;
+#else
+    using MutexType = std::mutex;
     std::vector<T> buffer_;
     size_t max_size_;
     size_t head_ = 0;
     size_t tail_ = 0;
     size_t count_ = 0;
+#endif
+
+    mutable MutexType mutex_;
 };
+
 }  // namespace atom::memory
 
 #endif  // ATOM_ALGORITHM_RING_HPP

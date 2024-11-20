@@ -19,6 +19,11 @@ Description: Some useful functions about time
 #include <iomanip>
 #include <sstream>
 
+#ifdef ATOM_USE_BOOST
+#include <boost/algorithm/string.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+#endif
+
 namespace atom::utils {
 constexpr int K_MILLISECONDS_IN_SECOND =
     1000;  // Named constant for magic number
@@ -49,20 +54,27 @@ auto getTimestampString() -> std::string {
 }
 
 auto convertToChinaTime(const std::string &utcTimeStr) -> std::string {
-    // 解析UTC时间字符串
+    // Parse UTC time string
     std::tm timeStruct = {};
     std::istringstream inputStream(utcTimeStr);
     inputStream >> std::get_time(&timeStruct, "%Y-%m-%d %H:%M:%S");
 
-    // 转换为时间点
+#ifdef ATOM_USE_BOOST
+    boost::posix_time::ptime utc_ptime = boost::posix_time::from_tm(timeStruct);
+    boost::posix_time::ptime china_ptime =
+        utc_ptime + boost::posix_time::hours(K_CHINA_TIMEZONE_OFFSET);
+    std::stringstream outputStream;
+    outputStream << boost::posix_time::to_simple_string(china_ptime);
+    return outputStream.str();
+#else
+    // Convert to time_point
     auto timePoint =
         std::chrono::system_clock::from_time_t(std::mktime(&timeStruct));
 
     std::chrono::hours offset(K_CHINA_TIMEZONE_OFFSET);
-    auto localTimePoint =
-        std::chrono::time_point_cast<std::chrono::hours>(timePoint) + offset;
+    auto localTimePoint = timePoint + offset;
 
-    // 格式化为字符串
+    // Format as string
     auto localTime = std::chrono::system_clock::to_time_t(localTimePoint);
     std::tm localTimeStruct{};
 #ifdef _WIN32
@@ -77,18 +89,27 @@ auto convertToChinaTime(const std::string &utcTimeStr) -> std::string {
     outputStream << std::put_time(&localTimeStruct, "%Y-%m-%d %H:%M:%S");
 
     return outputStream.str();
+#endif
 }
 
 auto getChinaTimestampString() -> std::string {
-    // 获取当前时间点
+    // Get current time point
     auto now = std::chrono::system_clock::now();
 
-    // 转换为东八区时间点
+#ifdef ATOM_USE_BOOST
+    boost::posix_time::ptime utc_ptime = boost::posix_time::from_time_t(
+        std::chrono::system_clock::to_time_t(now));
+    boost::posix_time::ptime china_ptime =
+        utc_ptime + boost::posix_time::hours(K_CHINA_TIMEZONE_OFFSET);
+    std::stringstream timestampStream;
+    timestampStream << boost::posix_time::to_simple_string(china_ptime);
+    return timestampStream.str();
+#else
+    // Convert to China time
     std::chrono::hours offset(K_CHINA_TIMEZONE_OFFSET);
-    auto localTimePoint =
-        std::chrono::time_point_cast<std::chrono::hours>(now) + offset;
+    auto localTimePoint = now + offset;
 
-    // 格式化为字符串
+    // Format as string
     auto localTime = std::chrono::system_clock::to_time_t(localTimePoint);
     std::tm localTimeStruct{};
 #ifdef _WIN32
@@ -103,6 +124,7 @@ auto getChinaTimestampString() -> std::string {
     timestampStream << std::put_time(&localTimeStruct, "%Y-%m-%d %H:%M:%S");
 
     return timestampStream.str();
+#endif
 }
 
 auto timeStampToString(time_t timestamp) -> std::string {
@@ -117,39 +139,66 @@ auto timeStampToString(time_t timestamp) -> std::string {
         THROW_TIME_CONVERT_ERROR("Failed to convert timestamp to local time");
     }
 
+#ifdef ATOM_USE_BOOST
+    boost::posix_time::ptime pt = boost::posix_time::from_tm(timeStruct);
+    std::stringstream ss;
+    ss << boost::posix_time::to_simple_string(pt);
+    return ss.str();
+#else
     if (std::strftime(buffer.data(), buffer.size(), "%Y-%m-%d %H:%M:%S",
                       &timeStruct) == 0) {
         THROW_TIME_CONVERT_ERROR("strftime failed");
     }
 
     return std::string(buffer.data());
+#endif
 }
 
 // Specially for Astrometry.net
 auto toString(const std::tm &tm, const std::string &format) -> std::string {
+#ifdef ATOM_USE_BOOST
+    std::stringstream oss;
+    oss << boost::posix_time::ptime(
+        boost::gregorian::date(tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday),
+        boost::posix_time::hours(tm.tm_hour) +
+            boost::posix_time::minutes(tm.tm_min) +
+            boost::posix_time::seconds(tm.tm_sec));
+    return oss.str();
+#else
     std::ostringstream oss;
     oss << std::put_time(&tm, format.c_str());
     return oss.str();
+#endif
 }
 
 auto getUtcTime() -> std::string {
     const auto NOW = std::chrono::system_clock::now();
     const std::time_t NOW_TIME_T = std::chrono::system_clock::to_time_t(NOW);
-    std::tm utcTime;
+    std::tm utcTime{};
 #ifdef _WIN32
     if (gmtime_s(&utcTime, &NOW_TIME_T) != 0) {
         THROW_TIME_CONVERT_ERROR("Failed to convert time to UTC");
     }
 #else
-    gmtime_r(&NOW_TIME_T, &utcTime);
+    if (gmtime_r(&NOW_TIME_T, &utcTime) == nullptr) {
+        THROW_TIME_CONVERT_ERROR("Failed to convert time to UTC");
+    }
 #endif
+
+#ifdef ATOM_USE_BOOST
+    boost::posix_time::ptime pt = boost::posix_time::from_tm(utcTime);
+    std::stringstream ss;
+    ss << boost::posix_time::to_iso_extended_string(pt) << "Z";
+    return ss.str();
+#else
     return toString(utcTime, "%FT%TZ");
+#endif
 }
 
 auto timestampToTime(long long timestamp) -> std::tm {
     auto time = static_cast<std::time_t>(timestamp / K_MILLISECONDS_IN_SECOND);
 
-    std::tm timeStruct;
+    std::tm timeStruct{};
 #ifdef _WIN32
     if (localtime_s(&timeStruct, &time) != 0) {
 #else
@@ -160,4 +209,5 @@ auto timestampToTime(long long timestamp) -> std::tm {
 
     return timeStruct;
 }
+
 }  // namespace atom::utils

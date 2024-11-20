@@ -16,6 +16,12 @@
 
 #include "atom/function/concept.hpp"
 
+#ifdef ATOM_USE_BOOST
+#include <boost/endian/conversion.hpp>
+#include <boost/exception/all.hpp>
+#include <boost/format.hpp>
+#endif
+
 namespace atom::utils {
 
 /**
@@ -28,6 +34,22 @@ namespace atom::utils {
 template <typename T>
 concept Serializable = Number<T> || Enum<T> || String<T> || Char<T> ||
                        requires(const T& t) { serialize(t); };
+
+/**
+ * @brief Custom exception type with additional information.
+ *
+ * If Boost is enabled, this exception type inherits from Boost's exception
+ * facilities to provide enriched error information.
+ */
+#ifdef ATOM_USE_BOOST
+struct SerializationException : virtual std::runtime_error,
+                                virtual boost::exception {
+    SerializationException(const std::string& message)
+        : std::runtime_error(message) {}
+};
+#else
+using SerializationException = std::runtime_error;
+#endif
 
 /**
  * @brief Serializes a serializable type into a vector of bytes.
@@ -216,14 +238,21 @@ auto serialize(const std::variant<Ts...>& var) -> std::vector<uint8_t> {
  * @param bytes The span of bytes containing the serialized data.
  * @param offset The offset in the span from where to start deserializing.
  * @return T The deserialized data.
- * @throws std::runtime_error if the data is too short to contain the expected
- * type.
+ * @throws SerializationException if the data is too short to contain the
+ * expected type.
  */
 template <Serializable T>
 auto deserialize(const std::span<const uint8_t>& bytes, size_t& offset) -> T {
     if (bytes.size() < offset + sizeof(T)) {
-        throw std::runtime_error(
+#ifdef ATOM_USE_BOOST
+        throw SerializationException(
+            boost::str(boost::format("Invalid data: too short to contain the "
+                                     "expected type at offset %1%") %
+                       offset));
+#else
+        throw SerializationException(
             "Invalid data: too short to contain the expected type.");
+#endif
     }
     T data;
     std::memcpy(&data, bytes.data() + offset, sizeof(T));
@@ -240,13 +269,22 @@ auto deserialize(const std::span<const uint8_t>& bytes, size_t& offset) -> T {
  * @param bytes The span of bytes containing the serialized data.
  * @param offset The offset in the span from where to start deserializing.
  * @return std::string The deserialized string.
- * @throws std::runtime_error if the size of the string or the data is invalid.
+ * @throws SerializationException if the size of the string or the data is
+ * invalid.
  */
 inline auto deserializeString(const std::span<const uint8_t>& bytes,
                               size_t& offset) -> std::string {
     auto size = deserialize<size_t>(bytes, offset);
     if (bytes.size() < offset + size) {
-        throw std::runtime_error("Invalid data: size mismatch.");
+#ifdef ATOM_USE_BOOST
+        throw SerializationException(
+            boost::str(boost::format("Invalid data: size mismatch while "
+                                     "deserializing string at offset %1%") %
+                       offset));
+#else
+        throw SerializationException(
+            "Invalid data: size mismatch while deserializing string.");
+#endif
     }
     std::string str(reinterpret_cast<const char*>(bytes.data() + offset), size);
     offset += size;
@@ -264,6 +302,7 @@ inline auto deserializeString(const std::span<const uint8_t>& bytes,
  * @param bytes The span of bytes containing the serialized data.
  * @param offset The offset in the span from where to start deserializing.
  * @return std::vector<T> The deserialized vector.
+ * @throws SerializationException if deserialization fails.
  */
 template <typename T>
 auto deserializeVector(const std::span<const uint8_t>& bytes,
@@ -290,6 +329,7 @@ auto deserializeVector(const std::span<const uint8_t>& bytes,
  * @param bytes The span of bytes containing the serialized data.
  * @param offset The offset in the span from where to start deserializing.
  * @return std::list<T> The deserialized list.
+ * @throws SerializationException if deserialization fails.
  */
 template <typename T>
 auto deserializeList(const std::span<const uint8_t>& bytes,
@@ -318,6 +358,7 @@ auto deserializeList(const std::span<const uint8_t>& bytes,
  * @param bytes The span of bytes containing the serialized data.
  * @param offset The offset in the span from where to start deserializing.
  * @return std::map<Key, Value> The deserialized map.
+ * @throws SerializationException if deserialization fails.
  */
 template <typename Key, typename Value>
 auto deserializeMap(const std::span<const uint8_t>& bytes,
@@ -326,9 +367,12 @@ auto deserializeMap(const std::span<const uint8_t>& bytes,
     std::map<Key, Value> map;
 
     for (size_t i = 0; i < size; ++i) {
-        Key key = (std::is_same_v<Key, std::string>)
-                      ? deserializeString(bytes, offset)
-                      : deserialize<Key>(bytes, offset);
+        Key key;
+        if constexpr (std::is_same_v<Key, std::string>) {
+            key = deserializeString(bytes, offset);
+        } else {
+            key = deserialize<Key>(bytes, offset);
+        }
         Value value = deserialize<Value>(bytes, offset);
         map.insert({key, value});
     }
@@ -347,6 +391,7 @@ auto deserializeMap(const std::span<const uint8_t>& bytes,
  * @param bytes The span of bytes containing the serialized data.
  * @param offset The offset in the span from where to start deserializing.
  * @return std::optional<T> The deserialized optional.
+ * @throws SerializationException if deserialization fails.
  */
 template <typename T>
 auto deserializeOptional(const std::span<const uint8_t>& bytes,
@@ -372,19 +417,28 @@ auto deserializeOptional(const std::span<const uint8_t>& bytes,
  * @param index The index of the active alternative in the variant.
  * @param is The index sequence.
  * @return Variant The constructed variant.
+ * @throws SerializationException if deserialization fails.
  */
 template <typename Variant, std::size_t... Is>
 auto constructVariant(const std::span<const uint8_t>& bytes, size_t& offset,
                       size_t index, std::index_sequence<Is...>) -> Variant {
     Variant var;
-    (
-        [&](auto I) {
-            if (index == I) {
-                using T = std::variant_alternative_t<I, Variant>;
-                var = deserialize<T>(bytes, offset);
-            }
-        }(std::integral_constant<std::size_t, Is>{}),
-        ...);
+    bool matched = false;
+    ((index == Is ? (var = deserialize<std::variant_alternative_t<Is, Variant>>(
+                         bytes, offset),
+                     matched = true, void())
+                  : void()),
+     ...);
+#ifdef ATOM_USE_BOOST
+    if (!matched) {
+        throw SerializationException(
+            boost::str(boost::format("Invalid variant index %1%") % index));
+    }
+#else
+    if (!matched) {
+        throw SerializationException("Invalid variant index.");
+    }
+#endif
     return var;
 }
 
@@ -400,14 +454,19 @@ auto constructVariant(const std::span<const uint8_t>& bytes, size_t& offset,
  * @param bytes The span of bytes containing the serialized data.
  * @param offset The offset in the span from where to start deserializing.
  * @return std::variant<Ts...> The deserialized variant.
- * @throws std::runtime_error if the index of the variant is out of range.
+ * @throws SerializationException if the index of the variant is out of range.
  */
 template <typename... Ts>
 auto deserializeVariant(const std::span<const uint8_t>& bytes,
                         size_t& offset) -> std::variant<Ts...> {
     auto index = deserialize<size_t>(bytes, offset);
     if (index >= sizeof...(Ts)) {
-        throw std::runtime_error("Invalid data: variant index out of range.");
+#ifdef ATOM_USE_BOOST
+        throw SerializationException(boost::str(
+            boost::format("Invalid variant index %1%: out of range.") % index));
+#else
+        throw SerializationException("Invalid variant index: out of range.");
+#endif
     }
     return constructVariant<std::variant<Ts...>>(
         bytes, offset, index, std::index_sequence_for<Ts...>{});
@@ -421,16 +480,30 @@ auto deserializeVariant(const std::span<const uint8_t>& bytes,
  *
  * @param data The vector of bytes to save.
  * @param filename The name of the file to write to.
- * @throws std::runtime_error if the file cannot be opened for writing.
+ * @throws SerializationException if the file cannot be opened for writing.
  */
 inline void saveToFile(const std::vector<uint8_t>& data,
                        const std::string& filename) {
     std::ofstream file(filename, std::ios::binary);
     if (!file) {
-        throw std::runtime_error("Could not open file for writing: " +
-                                 filename);
+#ifdef ATOM_USE_BOOST
+        throw SerializationException(boost::str(
+            boost::format("Could not open file for writing: %1%") % filename));
+#else
+        throw SerializationException("Could not open file for writing: " +
+                                     filename);
+#endif
     }
     file.write(reinterpret_cast<const char*>(data.data()), data.size());
+    if (!file) {
+#ifdef ATOM_USE_BOOST
+        throw SerializationException(boost::str(
+            boost::format("Failed to write data to file: %1%") % filename));
+#else
+        throw SerializationException("Failed to write data to file: " +
+                                     filename);
+#endif
+    }
 }
 
 /**
@@ -441,18 +514,41 @@ inline void saveToFile(const std::vector<uint8_t>& data,
  *
  * @param filename The name of the file to read from.
  * @return std::vector<uint8_t> A vector of bytes representing the loaded data.
- * @throws std::runtime_error if the file cannot be opened for reading.
+ * @throws SerializationException if the file cannot be opened for reading.
  */
 inline auto loadFromFile(const std::string& filename) -> std::vector<uint8_t> {
     std::ifstream file(filename, std::ios::binary);
     if (!file) {
-        throw std::runtime_error("Could not open file for reading: " +
-                                 filename);
+#ifdef ATOM_USE_BOOST
+        throw SerializationException(boost::str(
+            boost::format("Could not open file for reading: %1%") % filename));
+#else
+        throw SerializationException("Could not open file for reading: " +
+                                     filename);
+#endif
     }
     file.seekg(0, std::ios::end);
-    std::vector<uint8_t> data(file.tellg());
+    std::streamsize size = file.tellg();
+    if (size < 0) {
+#ifdef ATOM_USE_BOOST
+        throw SerializationException(boost::str(
+            boost::format("Failed to determine size of file: %1%") % filename));
+#else
+        throw SerializationException("Failed to determine size of file: " +
+                                     filename);
+#endif
+    }
     file.seekg(0, std::ios::beg);
-    file.read(reinterpret_cast<char*>(data.data()), data.size());
+    std::vector<uint8_t> data(static_cast<size_t>(size));
+    if (!file.read(reinterpret_cast<char*>(data.data()), size)) {
+#ifdef ATOM_USE_BOOST
+        throw SerializationException(boost::str(
+            boost::format("Failed to read data from file: %1%") % filename));
+#else
+        throw SerializationException("Failed to read data from file: " +
+                                     filename);
+#endif
+    }
     return data;
 }
 

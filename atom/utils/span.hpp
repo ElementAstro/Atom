@@ -3,13 +3,19 @@
 
 #include <algorithm>
 #include <cmath>
-#include <iostream>
 #include <numeric>
 #include <span>
 #include <unordered_map>
 #include <vector>
 
+#ifdef ATOM_USE_BOOST
+#include <boost/range/adaptors.hpp>
+#include <boost/range/algorithm.hpp>
+#include <boost/range/iterator_range.hpp>
+#endif
+
 namespace atom::utils {
+
 /**
  * @brief Computes the sum of elements in a span.
  *
@@ -19,7 +25,11 @@ namespace atom::utils {
  */
 template <typename T>
 auto sum(std::span<T> data) -> T {
+#ifdef ATOM_USE_BOOST
+    return boost::accumulate(data, T{0});
+#else
     return std::accumulate(data.begin(), data.end(), T{0});
+#endif
 }
 
 /**
@@ -32,7 +42,11 @@ auto sum(std::span<T> data) -> T {
  */
 template <typename T>
 auto contains(std::span<T> data, T value) -> bool {
+#ifdef ATOM_USE_BOOST
+    return boost::contains(data, value);
+#else
     return std::find(data.begin(), data.end(), value) != data.end();
+#endif
 }
 
 /**
@@ -43,7 +57,11 @@ auto contains(std::span<T> data, T value) -> bool {
  */
 template <typename T>
 void sortSpan(std::span<T> data) {
+#ifdef ATOM_USE_BOOST
+    boost::sort(data);
+#else
     std::sort(data.begin(), data.end());
+#endif
 }
 
 /**
@@ -58,7 +76,11 @@ void sortSpan(std::span<T> data) {
 template <typename T, typename Predicate>
 auto filterSpan(std::span<T> data, Predicate pred) -> std::vector<T> {
     std::vector<T> result;
+#ifdef ATOM_USE_BOOST
+    boost::copy_if(data, std::back_inserter(result), pred);
+#else
     std::copy_if(data.begin(), data.end(), std::back_inserter(result), pred);
+#endif
     return result;
 }
 
@@ -73,7 +95,11 @@ auto filterSpan(std::span<T> data, Predicate pred) -> std::vector<T> {
  */
 template <typename T, typename Predicate>
 auto countIfSpan(std::span<T> data, Predicate pred) -> size_t {
+#ifdef ATOM_USE_BOOST
+    return boost::count_if(data, pred);
+#else
     return std::count_if(data.begin(), data.end(), pred);
+#endif
 }
 
 /**
@@ -85,7 +111,11 @@ auto countIfSpan(std::span<T> data, Predicate pred) -> size_t {
  */
 template <typename T>
 auto minElementSpan(std::span<T> data) -> T {
+#ifdef ATOM_USE_BOOST
+    return *boost::min_element(data);
+#else
     return *std::min_element(data.begin(), data.end());
+#endif
 }
 
 /**
@@ -97,7 +127,11 @@ auto minElementSpan(std::span<T> data) -> T {
  */
 template <typename T>
 auto maxElementSpan(std::span<T> data) -> T {
+#ifdef ATOM_USE_BOOST
+    return *boost::max_element(data);
+#else
     return *std::max_element(data.begin(), data.end());
+#endif
 }
 
 /**
@@ -109,10 +143,15 @@ auto maxElementSpan(std::span<T> data) -> T {
  */
 template <typename T>
 auto maxElementIndex(std::span<T> data) -> size_t {
-    return std::distance(data.begin(),
-                         std::max_element(data.begin(), data.end()));
+#ifdef ATOM_USE_BOOST
+    auto it = boost::max_element(data);
+#else
+    auto it = std::max_element(data.begin(), data.end());
+#endif
+    return std::distance(data.begin(), it);
 }
 
+#if __DEBUG__
 /**
  * @brief Prints the elements of a span.
  *
@@ -121,11 +160,16 @@ auto maxElementIndex(std::span<T> data) -> size_t {
  */
 template <typename T>
 void printSpan(std::span<T> data) {
+#ifdef ATOM_USE_BOOST
+    boost::copy(data, std::ostream_iterator<T>(std::cout, " "));
+#else
     for (const auto& element : data) {
         std::cout << element << " ";
     }
+#endif
     std::cout << '\n';
 }
+#endif  // __DEBUG__
 
 /**
  * @brief Transposes a matrix represented as a span.
@@ -144,7 +188,11 @@ void transposeMatrix(std::span<T, N> matrix, size_t rows, size_t cols) {
             transposedMatrix[j * rows + i] = matrix[i * cols + j];
         }
     }
+#ifdef ATOM_USE_BOOST
+    boost::copy(transposedMatrix, matrix.begin());
+#else
     std::copy(transposedMatrix.begin(), transposedMatrix.end(), matrix.begin());
+#endif
 }
 
 /**
@@ -155,15 +203,27 @@ void transposeMatrix(std::span<T, N> matrix, size_t rows, size_t cols) {
  */
 template <typename T>
 void normalize(std::span<T> data) {
-    T minVal = *std::min_element(data.begin(), data.end());
-    T maxVal = *std::max_element(data.begin(), data.end());
+    T minVal;
+    T maxVal;
+#ifdef ATOM_USE_BOOST
+    minVal = *boost::min_element(data);
+    maxVal = *boost::max_element(data);
+#else
+    minVal = *std::min_element(data.begin(), data.end());
+    maxVal = *std::max_element(data.begin(), data.end());
+#endif
     T range = maxVal - minVal;
     if (range == 0) {
         return;  // Avoid division by zero
     }
+#ifdef ATOM_USE_BOOST
+    boost::for_each(data,
+                    [&](T& element) { element = (element - minVal) / range; });
+#else
     for (auto& element : data) {
         element = (element - minVal) / range;
     }
+#endif
 }
 
 /**
@@ -194,7 +254,11 @@ auto median(std::span<T> data) -> double {
         return 0.0;
     }
     std::vector<T> sortedData(data.begin(), data.end());
+#ifdef ATOM_USE_BOOST
+    boost::sort(sortedData);
+#else
     std::sort(sortedData.begin(), sortedData.end());
+#endif
     size_t mid = sortedData.size() / 2;
     if (sortedData.size() % 2 == 0) {
         return (sortedData[mid - 1] + sortedData[mid]) / 2.0;
@@ -215,10 +279,17 @@ auto mode(std::span<T> data) -> T {
     for (const auto& element : data) {
         ++frequency[element];
     }
+#ifdef ATOM_USE_BOOST
+    return boost::max_element(
+               frequency,
+               [](const auto& a, const auto& b) { return a.second < b.second; })
+        ->first;
+#else
     return std::max_element(
                frequency.begin(), frequency.end(),
                [](const auto& a, const auto& b) { return a.second < b.second; })
         ->first;
+#endif
 }
 
 /**
@@ -252,9 +323,16 @@ auto standardDeviation(std::span<T> data) -> double {
 template <typename T>
 auto topNElements(std::span<T> data, size_t n) -> std::vector<T> {
     std::vector<T> result(data.begin(), data.end());
-    std::partial_sort(result.begin(), result.begin() + n, result.end(),
-                      std::greater<T>());
-    result.resize(n);
+#ifdef ATOM_USE_BOOST
+    boost::partial_sort(result, result.begin() + std::min(n, result.size()),
+                        result.end(),
+                        [](const T& a, const T& b) { return a > b; });
+#else
+    std::partial_sort(result.begin(),
+                      result.begin() + std::min(n, result.size()), result.end(),
+                      [](const T& a, const T& b) { return a > b; });
+#endif
+    result.resize(std::min(n, result.size()));
     return result;
 }
 
@@ -289,8 +367,16 @@ auto variance(std::span<T> data) -> double {
 template <typename T>
 auto bottomNElements(std::span<T> data, size_t n) -> std::vector<T> {
     std::vector<T> result(data.begin(), data.end());
-    std::partial_sort(result.begin(), result.begin() + n, result.end());
-    result.resize(n);
+#ifdef ATOM_USE_BOOST
+    boost::partial_sort(result, result.begin() + std::min(n, result.size()),
+                        result.end(),
+                        [](const T& a, const T& b) { return a < b; });
+#else
+    std::partial_sort(result.begin(),
+                      result.begin() + std::min(n, result.size()), result.end(),
+                      [](const T& a, const T& b) { return a < b; });
+#endif
+    result.resize(std::min(n, result.size()));
     return result;
 }
 
@@ -304,7 +390,11 @@ auto bottomNElements(std::span<T> data, size_t n) -> std::vector<T> {
 template <typename T>
 auto cumulativeSum(std::span<T> data) -> std::vector<T> {
     std::vector<T> result(data.size());
+#ifdef ATOM_USE_BOOST
+    boost::partial_sum(data, result.begin());
+#else
     std::partial_sum(data.begin(), data.end(), result.begin());
+#endif
     return result;
 }
 
@@ -318,8 +408,12 @@ auto cumulativeSum(std::span<T> data) -> std::vector<T> {
 template <typename T>
 auto cumulativeProduct(std::span<T> data) -> std::vector<T> {
     std::vector<T> result(data.size());
+#ifdef ATOM_USE_BOOST
+    boost::partial_sum(data, result.begin(), std::multiplies<T>());
+#else
     std::partial_sum(data.begin(), data.end(), result.begin(),
                      std::multiplies<T>());
+#endif
     return result;
 }
 
@@ -334,12 +428,17 @@ auto cumulativeProduct(std::span<T> data) -> std::vector<T> {
  */
 template <typename T>
 auto findIndex(std::span<T> data, T value) -> std::optional<size_t> {
+#ifdef ATOM_USE_BOOST
+    auto it = boost::find(data, value);
+#else
     auto it = std::find(data.begin(), data.end(), value);
+#endif
     if (it != data.end()) {
         return std::distance(data.begin(), it);
     }
     return std::nullopt;
 }
+
 }  // namespace atom::utils
 
 #endif  // ATOM_UTILS_SPAN_HPP

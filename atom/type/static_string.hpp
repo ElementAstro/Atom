@@ -19,10 +19,14 @@ Description: A Static String Implementation
 #include <array>
 #include <cstring>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
-#include <string>
+
+#ifdef ATOM_USE_BOOST
+#include <boost/type_traits.hpp>
+#endif
 
 /**
  * @brief A class representing a static string with a fixed maximum size.
@@ -58,7 +62,8 @@ public:
      */
     explicit StaticString(const std::string& str) noexcept : size_(str.size()) {
         if (str.size() > N) {
-            throw std::runtime_error("String size exceeds StaticString capacity");
+            throw std::runtime_error(
+                "String size exceeds StaticString capacity");
         }
         std::copy_n(str.begin(), str.size(), data_.begin());
         data_[str.size()] = '\0';

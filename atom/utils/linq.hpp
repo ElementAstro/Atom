@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <deque>
-#include <iostream>
 #include <list>
 #include <numeric>
 #include <optional>
@@ -13,6 +12,13 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+#ifdef ATOM_USE_BOOST
+#include <boost/container/flat_set.hpp>
+#include <boost/range/adaptors.hpp>
+#include <boost/range/algorithm.hpp>
+#include <boost/range/irange.hpp>
+#endif
 
 namespace atom::utils {
 // Helper to deduce return type for selectMany
@@ -34,9 +40,13 @@ public:
     // Filter
     [[nodiscard]] auto where(auto predicate) const -> Enumerable<T> {
         std::vector<T> result;
+#ifdef ATOM_USE_BOOST
+        boost::copy_if(elements_, std::back_inserter(result), predicate);
+#else
         for (const T& element : elements_ | std::views::filter(predicate)) {
             result.push_back(element);
         }
+#endif
         return Enumerable(result);
     }
 
@@ -64,12 +74,21 @@ public:
 
     [[nodiscard]] auto takeWhile(auto predicate) const -> Enumerable<T> {
         std::vector<T> result;
+#ifdef ATOM_USE_BOOST
         for (const auto& element : elements_) {
             if (!predicate(element)) {
                 break;
             }
             result.push_back(element);
         }
+#else
+        for (const auto& element : elements_) {
+            if (!predicate(element)) {
+                break;
+            }
+            result.push_back(element);
+        }
+#endif
         return Enumerable(result);
     }
 
@@ -92,62 +111,109 @@ public:
 
     [[nodiscard]] auto skipWhile(auto predicate) const -> Enumerable<T> {
         auto iterator =
+#ifdef ATOM_USE_BOOST
+            boost::find_if_not(elements_, predicate);
+#else
             std::find_if_not(elements_.begin(), elements_.end(), predicate);
+#endif
         return Enumerable(std::vector<T>(iterator, elements_.end()));
     }
 
     [[nodiscard]] auto skipWhileI(auto predicate) const -> Enumerable<T> {
         auto iterator =
+#ifdef ATOM_USE_BOOST
+            boost::find_if_not(elements_, [&](const T& element) -> bool {
+                return predicate(element, &element - &elements_[0]);
+            });
+#else
             std::find_if_not(elements_.begin(), elements_.end(),
                              [index = 0, &predicate](const T& element) mutable {
                                  return predicate(element, index++);
                              });
+#endif
         return Enumerable(std::vector<T>(iterator, elements_.end()));
     }
 
     [[nodiscard]] auto orderBy() const -> Enumerable<T> {
         std::vector<T> result = elements_;
+#ifdef ATOM_USE_BOOST
+        boost::sort(result);
+#else
         std::sort(result.begin(), result.end());
+#endif
         return Enumerable(result);
     }
 
     [[nodiscard]] auto orderBy(auto transformer) const -> Enumerable<T> {
         std::vector<T> result = elements_;
+#ifdef ATOM_USE_BOOST
+        boost::sort(result, [&](const T& a, const T& b) {
+            return transformer(a) < transformer(b);
+        });
+#else
         std::sort(result.begin(), result.end(),
                   [&transformer](const T& elementA, const T& elementB) {
                       return transformer(elementA) < transformer(elementB);
                   });
+#endif
         return Enumerable(result);
     }
 
     [[nodiscard]] auto distinct() const -> Enumerable<T> {
+        std::vector<T> result;
+#ifdef ATOM_USE_BOOST
+        boost::container::flat_set<T> set(elements_.begin(), elements_.end());
+        boost::copy(set, std::back_inserter(result));
+#else
         std::unordered_set<T> set(elements_.begin(), elements_.end());
         return Enumerable(std::vector<T>(set.begin(), set.end()));
+#endif
+        return Enumerable(result);
     }
 
     [[nodiscard]] auto distinct(auto transformer) const -> Enumerable<T> {
-        std::unordered_set<std::invoke_result_t<decltype(transformer), T>> set;
         std::vector<T> result;
+#ifdef ATOM_USE_BOOST
+        boost::container::flat_set<
+            std::invoke_result_t<decltype(transformer), T>>
+            set;
         for (const auto& element : elements_) {
             auto transformed = transformer(element);
             if (set.insert(transformed).second) {
                 result.push_back(element);
             }
         }
+#else
+        std::unordered_set<std::invoke_result_t<decltype(transformer), T>> set;
+        for (const auto& element : elements_) {
+            auto transformed = transformer(element);
+            if (set.insert(transformed).second) {
+                result.push_back(element);
+            }
+        }
+#endif
         return Enumerable(result);
     }
 
     [[nodiscard]] auto append(const std::vector<T>& items) const
         -> Enumerable<T> {
         std::vector<T> result = elements_;
+#ifdef ATOM_USE_BOOST
+        boost::copy(items, std::back_inserter(result));
+#else
         result.insert(result.end(), items.begin(), items.end());
+#endif
         return Enumerable(result);
     }
 
     [[nodiscard]] auto prepend(const std::vector<T>& items) const
         -> Enumerable<T> {
         std::vector<T> result = items;
+#ifdef ATOM_USE_BOOST
+        boost::copy(elements_, std::back_inserter(result));
+#else
         result.insert(result.end(), elements_.begin(), elements_.end());
+#endif
         return Enumerable(result);
     }
 
@@ -158,16 +224,26 @@ public:
 
     [[nodiscard]] auto reverse() const -> Enumerable<T> {
         std::vector<T> result = elements_;
+#ifdef ATOM_USE_BOOST
+        boost::reverse(result);
+#else
         std::reverse(result.begin(), result.end());
+#endif
         return Enumerable(result);
     }
 
     template <typename U>
     [[nodiscard]] auto cast() const -> Enumerable<U> {
         std::vector<U> result;
+#ifdef ATOM_USE_BOOST
+        boost::transform(
+            elements_, std::back_inserter(result),
+            [](const T& element) -> U { return static_cast<U>(element); });
+#else
         for (const T& element : elements_) {
             result.push_back(static_cast<U>(element));
         }
+#endif
         return Enumerable<U>(result);
     }
 
@@ -175,10 +251,14 @@ public:
     template <typename U>
     [[nodiscard]] auto select(auto transformer) const -> Enumerable<U> {
         std::vector<U> result;
+#ifdef ATOM_USE_BOOST
+        boost::transform(elements_, std::back_inserter(result), transformer);
+#else
         for (const auto& element :
              elements_ | std::views::transform(transformer)) {
             result.push_back(transformer(element));
         }
+#endif
         return Enumerable<U>(result);
     }
 
@@ -194,23 +274,41 @@ public:
     template <typename U>
     [[nodiscard]] auto groupBy(auto transformer) const -> Enumerable<U> {
         std::unordered_map<U, std::vector<T>> groups;
+#ifdef ATOM_USE_BOOST
+        boost::for_each(elements_, [&](const T& element) {
+            groups[transformer(element)].push_back(element);
+        });
+#else
         for (const T& element : elements_) {
             groups[transformer(element)].push_back(element);
         }
+#endif
         std::vector<U> keys;
+#ifdef ATOM_USE_BOOST
+        boost::copy(boost::irange(0u, static_cast<unsigned>(groups.size())),
+                    std::back_inserter(keys));
+        for (const auto& group : groups) {
+            keys.push_back(group.first);
+        }
+#else
         keys.reserve(groups.size());
         for (const auto& group : groups) {
             keys.push_back(group.first);
         }
+#endif
         return Enumerable<U>(keys);
     }
 
     template <typename U>
     [[nodiscard]] auto selectMany(auto transformer) const -> Enumerable<U> {
         std::vector<std::vector<U>> nested;
+#ifdef ATOM_USE_BOOST
+        boost::transform(elements_, std::back_inserter(nested), transformer);
+#else
         for (const T& element : elements_) {
             nested.push_back(transformer(element));
         }
+#endif
         return Enumerable<U>(flatten(nested));
     }
 
@@ -218,13 +316,21 @@ public:
     [[nodiscard]] auto all(auto predicate = [](const T&) {
         return true;
     }) const -> bool {
+#ifdef ATOM_USE_BOOST
+        return boost::all_of(elements_, predicate);
+#else
         return std::all_of(elements_.begin(), elements_.end(), predicate);
+#endif
     }
 
     [[nodiscard]] auto any(auto predicate = [](const T&) {
         return true;
     }) const -> bool {
+#ifdef ATOM_USE_BOOST
+        return boost::any_of(elements_, predicate);
+#else
         return std::any_of(elements_.begin(), elements_.end(), predicate);
+#endif
     }
 
     [[nodiscard]] auto sum() const -> T {
@@ -234,9 +340,15 @@ public:
     template <typename U>
     [[nodiscard]] auto sum(auto transformer) const -> U {
         U result{};
+#ifdef ATOM_USE_BOOST
+        boost::for_each(elements_, [&](const T& element) {
+            result += transformer(element);
+        });
+#else
         for (const auto& element : elements_) {
             result += transformer(element);
         }
+#endif
         return result;
     }
 
@@ -250,38 +362,66 @@ public:
     }
 
     [[nodiscard]] auto min() const -> T {
+#ifdef ATOM_USE_BOOST
+        return *boost::min_element(elements_);
+#else
         return *std::min_element(elements_.begin(), elements_.end());
+#endif
     }
 
     [[nodiscard]] auto min(auto transformer) const -> T {
+#ifdef ATOM_USE_BOOST
+        return *boost::min_element(elements_, [&](const T& a, const T& b) {
+            return transformer(a) < transformer(b);
+        });
+#else
         return *std::min_element(
             elements_.begin(), elements_.end(),
             [&transformer](const T& elementA, const T& elementB) {
                 return transformer(elementA) < transformer(elementB);
             });
+#endif
     }
 
     [[nodiscard]] auto max() const -> T {
+#ifdef ATOM_USE_BOOST
+        return *boost::max_element(elements_);
+#else
         return *std::max_element(elements_.begin(), elements_.end());
+#endif
     }
 
     [[nodiscard]] auto max(auto transformer) const -> T {
+#ifdef ATOM_USE_BOOST
+        return *boost::max_element(elements_, [&](const T& a, const T& b) {
+            return transformer(a) < transformer(b);
+        });
+#else
         return *std::max_element(
             elements_.begin(), elements_.end(),
             [&transformer](const T& elementA, const T& elementB) {
                 return transformer(elementA) < transformer(elementB);
             });
+#endif
     }
 
     [[nodiscard]] auto count() const -> size_t { return elements_.size(); }
 
     [[nodiscard]] auto count(auto predicate) const -> size_t {
+#ifdef ATOM_USE_BOOST
+        return boost::count_if(elements_, predicate);
+#else
         return std::count_if(elements_.begin(), elements_.end(), predicate);
+#endif
     }
 
     [[nodiscard]] auto contains(const T& value) const -> bool {
+#ifdef ATOM_USE_BOOST
+        return boost::contains(elements_, value);
+#else
         return std::find(elements_.begin(), elements_.end(), value) !=
                elements_.end();
+#endif
     }
 
     [[nodiscard]] auto elementAt(size_t index) const -> T {
@@ -291,7 +431,12 @@ public:
     [[nodiscard]] auto first() const -> T { return elements_.front(); }
 
     [[nodiscard]] auto first(auto predicate) const -> T {
-        return *std::find_if(elements_.begin(), elements_.end(), predicate);
+#ifdef ATOM_USE_BOOST
+        auto it = boost::find_if(elements_, predicate);
+#else
+        auto it = std::find_if(elements_.begin(), elements_.end(), predicate);
+#endif
+        return it != elements_.end() ? *it : T{};
     }
 
     [[nodiscard]] auto firstOrDefault() const -> std::optional<T> {
@@ -301,16 +446,24 @@ public:
 
     [[nodiscard]] auto firstOrDefault(auto predicate) const
         -> std::optional<T> {
-        auto iterator =
-            std::find_if(elements_.begin(), elements_.end(), predicate);
-        return iterator == elements_.end() ? std::nullopt
-                                           : std::optional<T>(*iterator);
+#ifdef ATOM_USE_BOOST
+        auto it = boost::find_if(elements_, predicate);
+#else
+        auto it = std::find_if(elements_.begin(), elements_.end(), predicate);
+#endif
+        return it != elements_.end() ? std::optional<T>(*it) : std::nullopt;
     }
 
     [[nodiscard]] auto last() const -> T { return elements_.back(); }
 
     [[nodiscard]] auto last(auto predicate) const -> T {
-        return *std::find_if(elements_.rbegin(), elements_.rend(), predicate);
+#ifdef ATOM_USE_BOOST
+        auto it =
+            boost::find_if(elements_ | boost::adaptors::reverse, predicate);
+#else
+        auto it = std::find_if(elements_.rbegin(), elements_.rend(), predicate);
+#endif
+        return it != elements_.rend() ? *it : T{};
     }
 
     [[nodiscard]] auto lastOrDefault() const -> std::optional<T> {
@@ -319,10 +472,13 @@ public:
     }
 
     [[nodiscard]] auto lastOrDefault(auto predicate) const -> std::optional<T> {
-        auto iterator =
-            std::find_if(elements_.rbegin(), elements_.rend(), predicate);
-        return iterator == elements_.rend() ? std::nullopt
-                                            : std::optional<T>(*iterator);
+#ifdef ATOM_USE_BOOST
+        auto it =
+            boost::find_if(elements_ | boost::adaptors::reverse, predicate);
+#else
+        auto it = std::find_if(elements_.rbegin(), elements_.rend(), predicate);
+#endif
+        return it != elements_.rend() ? std::optional<T>(*it) : std::nullopt;
     }
 
     // ======== Conversion Methods ========
@@ -342,13 +498,19 @@ public:
         return elements_;
     }
 
+#ifdef __DEBUG__
     // ======== Printing ========
     void print() const {
+#ifdef ATOM_USE_BOOST
+        boost::copy(elements_, std::ostream_iterator<T>(std::cout, " "));
+#else
         for (const T& element : elements_) {
             std::cout << element << " ";
         }
+#endif
         std::cout << std::endl;
     }
+#endif  // __DEBUG__
 
 private:
     std::vector<T> elements_;

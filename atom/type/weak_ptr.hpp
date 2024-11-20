@@ -12,7 +12,21 @@
 #include <thread>
 #include <vector>
 
+#ifdef ATOM_USE_BOOST
+#include <boost/exception/all.hpp>
+#include <boost/type_traits.hpp>
+#endif
+
 namespace atom::type {
+
+#ifdef ATOM_USE_BOOST
+struct EnhancedWeakPtrException : virtual boost::exception,
+                                  virtual std::exception {
+    const char* what() const noexcept override {
+        return "EnhancedWeakPtr exception";
+    }
+};
+#endif
 
 /**
  * @class EnhancedWeakPtr
@@ -112,6 +126,17 @@ public:
      */
     void reset() { ptr_.reset(); }
 
+#ifdef ATOM_USE_BOOST
+    /**
+     * @brief Throws an exception if the managed object has expired.
+     */
+    void validate() const {
+        if (expired()) {
+            throw EnhancedWeakPtrException();
+        }
+    }
+#endif
+
     /**
      * @brief Executes a function with a locked shared pointer.
      * @tparam Func The type of the function.
@@ -172,7 +197,7 @@ public:
      * @brief Gets the total number of EnhancedWeakPtr instances.
      * @return The total number of EnhancedWeakPtr instances.
      */
-    static auto getTotalInstances() -> size_t { return totalInstances; }
+    static auto getTotalInstances() -> size_t { return totalInstances.load(); }
 
     /**
      * @brief Tries to lock the weak pointer and executes one of two functions
@@ -238,7 +263,7 @@ public:
      * @brief Gets the number of lock attempts.
      * @return The number of lock attempts.
      */
-    auto getLockAttempts() const -> size_t { return lockAttempts_; }
+    auto getLockAttempts() const -> size_t { return lockAttempts_.load(); }
 
     /**
      * @brief Asynchronously locks the weak pointer.

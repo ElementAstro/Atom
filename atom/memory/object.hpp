@@ -10,7 +10,7 @@ Date: 2024-04-05
 
 Description: An enhanced implementation of object pool with
 automatic object release, better exception handling, and additional
-functionalities.
+functionalities. Optional Boost support can be enabled with ATOM_USE_BOOST.
 
 **************************************************/
 
@@ -29,10 +29,15 @@ functionalities.
 
 #include "atom/error/exception.hpp"
 
+#ifdef ATOM_USE_BOOST
+#include <boost/pool/object_pool.hpp>
+#endif
+
 template <typename T>
 concept Resettable = requires(T& obj) { obj.reset(); };
 
 namespace atom::memory {
+
 /**
  * @brief A thread-safe object pool for managing reusable objects.
  *
@@ -59,12 +64,17 @@ public:
         CreateFunc creator = []() { return std::make_shared<T>(); })
         : max_size_(max_size),
           available_(max_size),
-          creator_(std::move(creator)) {
+          creator_(std::move(creator))
+#ifdef ATOM_USE_BOOST
+          ,
+          boost_pool_(max_size)
+#endif
+    {
         assert(max_size_ > 0 && "ObjectPool size must be greater than zero.");
         prefill(initial_size);
     }
 
-    // 禁用拷贝和赋值
+    // Disable copy and assignment
     ObjectPool(const ObjectPool&) = delete;
     ObjectPool& operator=(const ObjectPool&) = delete;
 
@@ -230,6 +240,16 @@ private:
      */
     std::shared_ptr<T> acquireImpl() {
         std::shared_ptr<T> obj;
+#ifdef ATOM_USE_BOOST
+        T* raw_ptr = boost_pool_.construct();
+        if (!raw_ptr) {
+            THROW_RUNTIME_ERROR("Boost pool allocation failed.");
+        }
+        obj = std::shared_ptr<T>(raw_ptr, [this](T* ptr) {
+            boost_pool_.destroy(ptr);
+            release(std::shared_ptr<T>());
+        });
+#else
         if (!pool_.empty()) {
             obj = std::move(pool_.back());
             pool_.pop_back();
@@ -238,16 +258,18 @@ private:
             obj = creator_();
         }
 
-        // 创建自定义删除器，确保对象在shared_ptr销毁时返回到对象池
+        // Create a custom deleter to return the object to the pool
         auto deleter = [this](T* ptr) {
             std::shared_ptr<T> sharedPtrObj(ptr, [](T*) {
-                // 自定义删除器为空，防止shared_ptr尝试删除对象
+                // Custom deleter does nothing to prevent deletion
             });
             release(sharedPtrObj);
         };
 
-        // 返回带有自定义删除器的shared_ptr
-        return std::shared_ptr<T>(obj.get(), deleter);
+        // Return a shared_ptr with the custom deleter
+        obj = std::shared_ptr<T>(obj.get(), deleter);
+#endif
+        return obj;
     }
 
     size_t max_size_;
@@ -256,6 +278,10 @@ private:
     std::condition_variable cv_;
     std::vector<std::shared_ptr<T>> pool_;
     CreateFunc creator_;
+
+#ifdef ATOM_USE_BOOST
+    boost::object_pool<T> boost_pool_;
+#endif
 };
 
 }  // namespace atom::memory

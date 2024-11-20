@@ -20,6 +20,10 @@ Description: Pointer Sentinel for Atom
 #include <type_traits>
 #include <variant>
 
+#ifdef ATOM_USE_BOOST
+#include <boost/type_traits.hpp>
+#endif
+
 #include "atom/error/exception.hpp"
 #include "atom/macro.hpp"
 
@@ -31,10 +35,20 @@ Description: Pointer Sentinel for Atom
  */
 template <typename T>
 concept PointerType =
+#ifdef ATOM_USE_BOOST
+    boost::is_pointer<T>::value ||
+    boost::is_same<
+        T, std::shared_ptr<typename std::remove_pointer<T>::type>>::value ||
+    boost::is_same<
+        T, std::unique_ptr<typename std::remove_pointer<T>::type>>::value ||
+    boost::is_same<T,
+                   std::weak_ptr<typename std::remove_pointer<T>::type>>::value;
+#else
     std::is_pointer_v<T> ||
     std::is_same_v<T, std::shared_ptr<typename std::remove_pointer<T>::type>> ||
     std::is_same_v<T, std::unique_ptr<typename std::remove_pointer<T>::type>> ||
     std::is_same_v<T, std::weak_ptr<typename std::remove_pointer<T>::type>>;
+#endif
 
 /**
  * @brief A class template to hold different types of pointers using
@@ -50,6 +64,7 @@ class PointerSentinel {
 
 public:
     PointerSentinel() = default;
+
     /**
      * @brief Construct a new Pointer Sentinel object from a shared pointer.
      *
@@ -88,16 +103,14 @@ public:
               [](const auto& p)
                   -> std::variant<std::shared_ptr<T>, std::unique_ptr<T>,
                                   std::weak_ptr<T>, T*> {
-                  if ATOM_CONSTEXPR (std::is_same_v<std::decay_t<decltype(p)>,
-                                                    std::shared_ptr<T>>) {
+                  if constexpr (std::is_same_v<std::decay_t<decltype(p)>,
+                                               std::shared_ptr<T>>) {
                       return p;
-                  } else if ATOM_CONSTEXPR (std::is_same_v<
-                                                std::decay_t<decltype(p)>,
-                                                std::unique_ptr<T>>) {
+                  } else if constexpr (std::is_same_v<std::decay_t<decltype(p)>,
+                                                      std::unique_ptr<T>>) {
                       return std::make_unique<T>(*p);
-                  } else if ATOM_CONSTEXPR (std::is_same_v<
-                                                std::decay_t<decltype(p)>,
-                                                std::weak_ptr<T>>) {
+                  } else if constexpr (std::is_same_v<std::decay_t<decltype(p)>,
+                                                      std::weak_ptr<T>>) {
                       return p;
                   } else {
                       return new T(*p);
@@ -124,16 +137,16 @@ public:
                 [](const auto& p)
                     -> std::variant<std::shared_ptr<T>, std::unique_ptr<T>,
                                     std::weak_ptr<T>, T*> {
-                    if ATOM_CONSTEXPR (std::is_same_v<std::decay_t<decltype(p)>,
-                                                      std::shared_ptr<T>>) {
+                    if constexpr (std::is_same_v<std::decay_t<decltype(p)>,
+                                                 std::shared_ptr<T>>) {
                         return p;
-                    } else if ATOM_CONSTEXPR (std::is_same_v<
-                                                  std::decay_t<decltype(p)>,
-                                                  std::unique_ptr<T>>) {
+                    } else if constexpr (std::is_same_v<
+                                             std::decay_t<decltype(p)>,
+                                             std::unique_ptr<T>>) {
                         return std::make_unique<T>(*p);
-                    } else if ATOM_CONSTEXPR (std::is_same_v<
-                                                  std::decay_t<decltype(p)>,
-                                                  std::weak_ptr<T>>) {
+                    } else if constexpr (std::is_same_v<
+                                             std::decay_t<decltype(p)>,
+                                             std::weak_ptr<T>>) {
                         return p;
                     } else {
                         return new T(*p);
@@ -162,9 +175,9 @@ public:
         return std::visit(
             [](auto&& arg) -> T* {
                 using U = std::decay_t<decltype(arg)>;
-                if ATOM_CONSTEXPR (std::is_pointer_v<U>) {
+                if constexpr (std::is_pointer_v<U>) {
                     return arg;
-                } else if ATOM_CONSTEXPR (std::is_same_v<U, std::weak_ptr<T>>) {
+                } else if constexpr (std::is_same_v<U, std::weak_ptr<T>>) {
                     auto spt = arg.lock();  // Try to lock the weak_ptr
                     return spt ? spt.get() : nullptr;
                 } else {
@@ -190,9 +203,9 @@ public:
         return std::visit(
             [func, &args...](auto&& arg) -> decltype(auto) {
                 using U = std::decay_t<decltype(arg)>;
-                if ATOM_CONSTEXPR (std::is_pointer_v<U>) {
+                if constexpr (std::is_pointer_v<U>) {
                     return ((*arg).*func)(std::forward<Args>(args)...);
-                } else if ATOM_CONSTEXPR (std::is_same_v<U, std::weak_ptr<T>>) {
+                } else if constexpr (std::is_same_v<U, std::weak_ptr<T>>) {
                     auto spt = arg.lock();
                     if (spt) {
                         return ((*spt.get()).*
@@ -220,9 +233,9 @@ public:
         return std::visit(
             [&callable](auto&& arg) -> decltype(auto) {
                 using U = std::decay_t<decltype(arg)>;
-                if ATOM_CONSTEXPR (std::is_pointer_v<U>) {
+                if constexpr (std::is_pointer_v<U>) {
                     return std::invoke(std::forward<Callable>(callable), arg);
-                } else if ATOM_CONSTEXPR (std::is_same_v<U, std::weak_ptr<T>>) {
+                } else if constexpr (std::is_same_v<U, std::weak_ptr<T>>) {
                     auto spt = arg.lock();
                     if (spt) {
                         return std::invoke(std::forward<Callable>(callable),
@@ -251,10 +264,10 @@ public:
         std::visit(
             [&func, &args...](auto&& arg) {
                 using U = std::decay_t<decltype(arg)>;
-                if ATOM_CONSTEXPR (std::is_pointer_v<U>) {
+                if constexpr (std::is_pointer_v<U>) {
                     std::invoke(std::forward<Func>(func), arg,
                                 std::forward<Args>(args)...);
-                } else if ATOM_CONSTEXPR (std::is_same_v<U, std::weak_ptr<T>>) {
+                } else if constexpr (std::is_same_v<U, std::weak_ptr<T>>) {
                     auto spt = arg.lock();
                     if (spt) {
                         std::invoke(std::forward<Func>(func), spt.get(),

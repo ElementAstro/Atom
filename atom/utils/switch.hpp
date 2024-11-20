@@ -1,29 +1,24 @@
-/*
- * switch.hpp
- *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
- */
-
-/*************************************************
-
-Date: 2023-10-27
-
-Description: Smart Switch just like javascript
-
-**************************************************/
-
 #ifndef ATOM_UTILS_SWITCH_HPP
 #define ATOM_UTILS_SWITCH_HPP
 
 #include <functional>
 #include <optional>
-#include <ranges>
 #include <span>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
 #include <variant>
 #include <vector>
+
+#ifdef ATOM_USE_BOOST
+#include <boost/algorithm/cxx11/contains.hpp>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/find.hpp>
+#include <boost/algorithm/string/trim.hpp>
+#include <boost/optional.hpp>
+#include <boost/range/algorithm.hpp>
+#include <boost/range/iterator_range.hpp>
+#endif
 
 #include "atom/error/exception.hpp"
 #include "atom/macro.hpp"
@@ -33,7 +28,7 @@ namespace atom::utils {
 
 /**
  * @brief A class for implementing a switch statement with string cases,
- * enhanced with C++20 features.
+ * enhanced with C++20 and optional Boost support.
  *
  * This class allows you to register functions associated with string keys,
  * similar to a switch statement in JavaScript. It supports multiple return
@@ -75,9 +70,15 @@ public:
      * @throws std::runtime_error if the case is already registered.
      */
     void registerCase(const std::string &str, Func func) {
+#ifdef ATOM_USE_BOOST
+        if (boost::contains(cases_, str)) {
+            THROW_OBJ_ALREADY_EXIST("Case already registered");
+        }
+#else
         if (cases_.contains(str)) {
             THROW_OBJ_ALREADY_EXIST("Case already registered");
         }
+#endif
         cases_[str] = std::move(func);  // Use move semantics for efficiency
     }
 
@@ -86,7 +87,13 @@ public:
      *
      * @param str The string key for the case to be unregistered.
      */
-    void unregisterCase(const std::string &str) { cases_.erase(str); }
+    void unregisterCase(const std::string &str) {
+#ifdef ATOM_USE_BOOST
+        boost::erase(cases_, str);
+#else
+        cases_.erase(str);
+#endif
+    }
 
     /**
      * @brief Clear all registered cases.
@@ -103,9 +110,15 @@ public:
      */
     auto match(const std::string &str, Args... args)
         -> std::optional<std::variant<std::monostate, int, std::string>> {
-        if (auto iter = cases_.find(str); iter != cases_.end()) {
-            return std::invoke(iter->second, args...);
+#ifdef ATOM_USE_BOOST
+        if (boost::contains(cases_, str)) {
+            return std::invoke(cases_.at(str), args...);
         }
+#else
+        if (cases_.contains(str)) {
+            return std::invoke(cases_.at(str), args...);
+        }
+#endif
 
         if (defaultFunc_) {
             return std::invoke(*defaultFunc_, args...);
@@ -129,10 +142,15 @@ public:
      */
     ATOM_NODISCARD auto getCases() const -> std::vector<std::string> {
         std::vector<std::string> caseList;
-        for (const auto &[key, value] :
+#ifdef ATOM_USE_BOOST
+        boost::copy(cases_ | boost::adaptors::map_keys,
+                    std::back_inserter(caseList));
+#else
+        for (const auto &[key, _] :
              cases_) {  // Use structured bindings for clarity
             caseList.push_back(key);
         }
+#endif
         return caseList;
     }
 
@@ -172,30 +190,53 @@ public:
      */
     auto matchWithSpan(const std::string &str, std::span<Args...> args)
         -> std::optional<std::variant<std::monostate, int, std::string>> {
-        if (auto iter = cases_.find(str); iter != cases_.end()) {
-            return std::apply(iter->second,
-                              std::tuple(args.begin(), args.end()));
+#ifdef ATOM_USE_BOOST
+        if (boost::contains(cases_, str)) {
+            return boost::apply_visitor(
+                [&](auto &&func)
+                    -> std::variant<std::monostate, int, std::string> {
+                    return func(std::get<Args>(args)...);
+                },
+                cases_.at(str));
         }
+#else
+        if (cases_.contains(str)) {
+            return std::apply(cases_.at(str), args);
+        }
+#endif
 
         if (defaultFunc_) {
-            return std::apply(*defaultFunc_,
-                              std::tuple(args.begin(), args.end()));
+#ifdef ATOM_USE_BOOST
+            return boost::apply_visitor(
+                [&](auto &&func)
+                    -> std::variant<std::monostate, int, std::string> {
+                    return func(std::get<Args>(args)...);
+                },
+                *defaultFunc_);
+#else
+            return std::apply(*defaultFunc_, args);
+#endif
         }
 
         return std::nullopt;
     }
 
     /**
-     * @brief Get a vector of all registered cases using ranges.
+     * @brief Get a vector of all registered cases using Boost ranges.
      *
      * @return std::vector<std::string> A vector containing all registered
      * string keys.
      */
     ATOM_NODISCARD auto getCasesWithRanges() const -> std::vector<std::string> {
         std::vector<std::string> result;
-        for (const auto &[key, value] : cases_) {
+#ifdef ATOM_USE_BOOST
+        boost::copy(cases_ | boost::adaptors::map_keys,
+                    std::back_inserter(result));
+#else
+        for (const auto &[key, _] : cases_) {
             result.push_back(key);
         }
+#endif
         return result;
     }
 
@@ -208,4 +249,4 @@ private:
 
 }  // namespace atom::utils
 
-#endif
+#endif  // ATOM_UTILS_SWITCH_HPP

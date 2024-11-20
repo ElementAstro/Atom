@@ -20,8 +20,14 @@ Description: Trackable Object (Optimized with C++20 features)
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <type_traits>
 #include <utility>
 #include <vector>
+
+#ifdef ATOM_USE_BOOST
+#include <boost/core/demangle.hpp>
+#include <boost/type_traits.hpp>
+#endif
 
 #include "atom/error/exception.hpp"
 #include "atom/function/abi.hpp"
@@ -101,7 +107,11 @@ public:
      * @return std::string The demangled type name of the value.
      */
     [[nodiscard]] auto getTypeName() const -> std::string {
+#ifdef ATOM_USE_BOOST
+        return boost::core::demangle(typeid(T).name());
+#else
         return atom::meta::DemangleHelper::demangleType<T>();
+#endif
     }
 
     /**
@@ -131,19 +141,19 @@ public:
      * @return Trackable& Reference to the trackable object.
      */
     auto operator+=(const T& rhs) -> Trackable& {
-        return applyOperation(rhs, std::plus<T>{});
+        return applyOperation(rhs, std::plus<>{});
     }
 
     auto operator-=(const T& rhs) -> Trackable& {
-        return applyOperation(rhs, std::minus<T>{});
+        return applyOperation(rhs, std::minus<>{});
     }
 
     auto operator*=(const T& rhs) -> Trackable& {
-        return applyOperation(rhs, std::multiplies<T>{});
+        return applyOperation(rhs, std::multiplies<>{});
     }
 
     auto operator/=(const T& rhs) -> Trackable& {
-        return applyOperation(rhs, std::divides<T>{});
+        return applyOperation(rhs, std::divides<>{});
     }
 
     /**
@@ -196,32 +206,35 @@ private:
      * @param newVal The new value.
      */
     void notifyObservers(const T& oldVal, const T& newVal) {
-        auto localObservers = observers_;
-        auto localOnChangeCallback = onChangeCallback_;
-        mutex_.unlock();  // Unlock before notifying to avoid deadlocks.
+        // Create copies of the observers to avoid holding the lock during
+        // callbacks
+        std::vector<std::function<void(const T&, const T&)>> localObservers;
+        std::function<void(const T&)> localOnChangeCallback;
+        {
+            std::scoped_lock lock(mutex_);
+            localObservers = observers_;
+            localOnChangeCallback = onChangeCallback_;
+        }
+
         for (const auto& observer : localObservers) {
             try {
                 observer(oldVal, newVal);
             } catch (const std::exception& e) {
-                mutex_.lock();
                 THROW_EXCEPTION("Exception in observer: ", e.what());
             } catch (...) {
-                mutex_.lock();
                 THROW_EXCEPTION("Unknown exception in observer.");
             }
         }
+
         if (localOnChangeCallback) {
             try {
                 localOnChangeCallback(newVal);
             } catch (const std::exception& e) {
-                mutex_.lock();
                 THROW_EXCEPTION("Exception in onChangeCallback: ", e.what());
             } catch (...) {
-                mutex_.lock();
                 THROW_EXCEPTION("Unknown exception in onChangeCallback.");
             }
         }
-        mutex_.lock();
     }
 
     /**

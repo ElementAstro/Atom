@@ -1,4 +1,3 @@
-// FILE: memory.hpp
 #ifndef ATOM_MEMORY_MEMORY_POOL_HPP
 #define ATOM_MEMORY_MEMORY_POOL_HPP
 
@@ -14,7 +13,11 @@
 
 #include "atom/type/noncopyable.hpp"
 
-// 自定义异常类
+#ifdef ATOM_USE_BOOST
+#include <boost/pool/pool.hpp>
+#endif
+
+// Custom exception class
 namespace atom::memory {
 
 class MemoryPoolException : public std::runtime_error {
@@ -164,6 +167,10 @@ private:
      */
     bool isFromPool(T* p);
 
+#ifdef ATOM_USE_BOOST
+    boost::pool<> boostPool_;  ///< Boost memory pool.
+#endif
+
 protected:
     /**
      * @brief Allocates memory with a specified alignment.
@@ -199,7 +206,18 @@ MemoryPool<T, BlockSize>::Chunk::Chunk(size_t s)
 
 template <typename T, size_t BlockSize>
 MemoryPool<T, BlockSize>::MemoryPool()
-    : pool_(), total_allocated_(0), total_available_(0) {}
+#ifdef ATOM_USE_BOOST
+    : boostPool_(BlockSize),
+      pool_(),
+      total_allocated_(0),
+      total_available_(BlockSize)
+#else
+    : pool_(),
+      total_allocated_(0),
+      total_available_(0)
+#endif
+{
+}
 
 template <typename T, size_t BlockSize>
 MemoryPool<T, BlockSize>::~MemoryPool() {
@@ -220,6 +238,17 @@ template <typename T, size_t BlockSize>
 T* MemoryPool<T, BlockSize>::allocate(size_t n) {
     std::lock_guard<std::mutex> lock(mutex_);
     size_t numBytes = n * sizeof(T);
+
+#ifdef ATOM_USE_BOOST
+    void* ptr = boostPool_.malloc();
+    if (!ptr) {
+        throw atom::memory::MemoryPoolException(
+            "Boost pool allocation failed.");
+    }
+    total_allocated_ += sizeof(T);
+    total_available_ -= sizeof(T);
+    return static_cast<T*>(ptr);
+#else
     if (numBytes > maxSize()) {
         throw atom::memory::MemoryPoolException(
             "Requested size exceeds maximum block size.");
@@ -232,12 +261,19 @@ T* MemoryPool<T, BlockSize>::allocate(size_t n) {
     }
 
     return allocateFromChunk(numBytes);
+#endif
 }
 
 template <typename T, size_t BlockSize>
 void MemoryPool<T, BlockSize>::deallocate(T* p, size_t n) {
     std::lock_guard<std::mutex> lock(mutex_);
     size_t numBytes = n * sizeof(T);
+
+#ifdef ATOM_USE_BOOST
+    boostPool_.free(p);
+    total_allocated_ -= sizeof(T);
+    total_available_ += sizeof(T);
+#else
     if (isFromPool(p)) {
         deallocateToPool(p, numBytes);
         total_allocated_ -= numBytes;
@@ -245,6 +281,7 @@ void MemoryPool<T, BlockSize>::deallocate(T* p, size_t n) {
     } else {
         deallocateToChunk(p, numBytes);
     }
+#endif
 }
 
 template <typename T, size_t BlockSize>
@@ -256,6 +293,9 @@ auto MemoryPool<T, BlockSize>::do_is_equal(
 template <typename T, size_t BlockSize>
 void MemoryPool<T, BlockSize>::reset() {
     std::lock_guard<std::mutex> lock(mutex_);
+#ifdef ATOM_USE_BOOST
+    boostPool_.purge_memory();
+#endif
     pool_.clear();
     total_allocated_ = 0;
     total_available_ = 0;
@@ -271,6 +311,7 @@ auto MemoryPool<T, BlockSize>::getTotalAvailable() const -> size_t {
     return total_available_.load();
 }
 
+#ifndef ATOM_USE_BOOST
 template <typename T, size_t BlockSize>
 auto MemoryPool<T, BlockSize>::allocateFromPool(size_t num_bytes) -> T* {
     if (pool_.empty()) {
@@ -371,5 +412,5 @@ void MemoryPool<T, BlockSize>::do_deallocate(void* p, size_t bytes,
     // Note: total_available_ is not updated here as we cannot determine the
     // alignment adjustment
 }
-
+#endif
 #endif  // ATOM_MEMORY_MEMORY_POOL_HPP

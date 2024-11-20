@@ -6,7 +6,13 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+
+#ifdef ATOM_USE_BOOST
+#include <boost/thread/locks.hpp>
+#include <boost/thread/mutex.hpp>
+#else
 #include <mutex>
+#endif
 
 #include "atom/macro.hpp"
 
@@ -28,14 +34,22 @@ namespace atom::memory {
  */
 template <std::size_t N, std::size_t alignment = alignof(std::max_align_t)>
 class Arena {
+#ifdef ATOM_USE_BOOST
+    using MutexType = boost::mutex;
+    using LockGuard = boost::lock_guard<MutexType>;
+#else
+    using MutexType = std::mutex;
+    using LockGuard = std::lock_guard<std::mutex>;
+#endif
+
     alignas(alignment) std::array<char, N> buf_{};
     char* ptr_;
-    mutable std::mutex mutex_;
+    mutable MutexType mutex_;
 
 public:
     Arena() ATOM_NOEXCEPT : ptr_(buf_.data()) {}
     ~Arena() {
-        std::lock_guard<std::mutex> lock(mutex_);
+        LockGuard lock(mutex_);
         ptr_ = nullptr;
     }
 
@@ -51,7 +65,7 @@ public:
      * request.
      */
     auto allocate(std::size_t n) -> void* {
-        std::lock_guard<std::mutex> lock(mutex_);
+        LockGuard lock(mutex_);
         std::size_t space = N - used();
         void* result = ptr_;
         void* alignedPtr = std::align(alignment, n, result, space);
@@ -72,7 +86,7 @@ public:
      * @param n The number of bytes to deallocate.
      */
     void deallocate(void* p, std::size_t n) ATOM_NOEXCEPT {
-        std::lock_guard<std::mutex> lock(mutex_);
+        LockGuard lock(mutex_);
         if (static_cast<char*>(p) + n == ptr_) {
             ptr_ = static_cast<char*>(p);
         }
@@ -107,7 +121,7 @@ public:
      * @brief Reset the arena to its initial state.
      */
     void reset() ATOM_NOEXCEPT {
-        std::lock_guard<std::mutex> lock(mutex_);
+        LockGuard lock(mutex_);
         ptr_ = buf_.data();
     }
 

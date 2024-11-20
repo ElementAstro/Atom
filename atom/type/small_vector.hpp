@@ -8,7 +8,7 @@
 
 Date: 2023-12-17
 
-Description: A Small Vector Implementation
+Description: A Small Vector Implementation with optional Boost support
 
 **************************************************/
 
@@ -20,10 +20,18 @@ Description: A Small Vector Implementation
 #include <cstddef>
 #include <initializer_list>
 #include <limits>
+#include <memory>
 #include <utility>
 
 #include "atom/error/exception.hpp"
 #include "atom/macro.hpp"
+
+#ifdef ATOM_USE_BOOST
+#include <boost/algorithm/copy.hpp>
+#include <boost/core/noinit_adaptor.hpp>
+#include <boost/move/move.hpp>
+#include <boost/range/algorithm.hpp>
+#endif
 
 template <typename T, std::size_t N>
 class SmallVector {
@@ -42,7 +50,7 @@ public:
 
     SmallVector() = default;
 
-    template <std::input_iterator InputIt>
+    template <typename InputIt>
     SmallVector(InputIt first, InputIt last) {
         assign(first, last);
     }
@@ -57,7 +65,9 @@ public:
         assign(other.begin(), other.end());
     }
 
-    SmallVector(SmallVector&& other) ATOM_NOEXCEPT { move(std::move(other)); }
+    SmallVector(SmallVector&& other) ATOM_NOEXCEPT {
+        moveFrom(std::move(other));
+    }
 
     ~SmallVector() {
         clear();
@@ -75,7 +85,7 @@ public:
         if (this != &other) {
             clear();
             deallocate();
-            move(std::move(other));
+            moveFrom(std::move(other));
         }
         return *this;
     }
@@ -89,21 +99,29 @@ public:
         clear();
         if (count > capacity()) {
             deallocate();
-            allocate(count);
+            allocateMemory(count);
         }
-        std::ranges::fill_n(begin(), count, value);
+#ifdef ATOM_USE_BOOST
+        boost::uninitialized_fill_n(begin(), count, value);
+#else
+        std::uninitialized_fill_n(begin(), count, value);
+#endif
         size_ = count;
     }
 
-    template <std::input_iterator InputIt>
+    template <typename InputIt>
     void assign(InputIt first, InputIt last) {
         clear();
-        size_type count = std::ranges::distance(first, last);
+        size_type count = std::distance(first, last);
         if (count > capacity()) {
             deallocate();
-            allocate(count);
+            allocateMemory(count);
         }
-        std::ranges::copy(first, last, begin());
+#ifdef ATOM_USE_BOOST
+        boost::uninitialized_copy(first, last, begin());
+#else
+        std::uninitialized_copy(first, last, begin());
+#endif
         size_ = count;
     }
 
@@ -143,13 +161,9 @@ public:
 
     auto data() const ATOM_NOEXCEPT -> const T* { return begin(); }
 
-    auto begin() ATOM_NOEXCEPT -> iterator {
-        return capacity() > N ? data_ : static_buffer_.data();
-    }
+    auto begin() ATOM_NOEXCEPT -> iterator { return data_; }
 
-    auto begin() const ATOM_NOEXCEPT -> const_iterator {
-        return capacity() > N ? data_ : static_buffer_.data();
-    }
+    auto begin() const ATOM_NOEXCEPT -> const_iterator { return data_; }
 
     auto cbegin() const ATOM_NOEXCEPT -> const_iterator { return begin(); }
 
@@ -193,14 +207,19 @@ public:
         return size_;
     }
 
-    ATOM_NODISCARD auto maxSize() const ATOM_NOEXCEPT -> size_type {
-        return std::numeric_limits<difference_type>::max();
+    ATOM_NODISCARD auto max_size() const ATOM_NOEXCEPT -> size_type {
+        return std::numeric_limits<size_type>::max();
     }
 
     void reserve(size_type new_cap) {
         if (new_cap > capacity()) {
-            T* newData = allocate(new_cap);
-            std::ranges::move(*this, newData);
+            T* newData = allocateMemory(new_cap);
+#ifdef ATOM_USE_BOOST
+            boost::uninitialized_move(begin(), end(), newData);
+#else
+            std::uninitialized_move(begin(), end(), newData);
+#endif
+            clear();
             deallocate();
             data_ = newData;
             capacity_ = new_cap;
@@ -208,13 +227,16 @@ public:
     }
 
     ATOM_NODISCARD auto capacity() const ATOM_NOEXCEPT -> size_type {
-        return capacity_ > N ? capacity_ : N;
+        return capacity_;
     }
 
-    void clear() ATOM_NOEXCEPT { size_ = 0; }
+    void clear() ATOM_NOEXCEPT {
+        destroy(begin(), end());
+        size_ = 0;
+    }
 
     auto insert(const_iterator pos, const T& value) -> iterator {
-        return insert(pos, 1, value);
+        return emplace(pos, value);
     }
 
     auto insert(const_iterator pos, T&& value) -> iterator {
@@ -225,41 +247,53 @@ public:
                 const T& value) -> iterator {
         size_type index = pos - begin();
         if (size() + count > capacity()) {
-            size_type newCap = std::max(size() + count, capacity() * 2);
-            T* newData = allocate(newCap);
-            std::ranges::move(begin(), begin() + index, newData);
-            std::ranges::fill_n(newData + index, count, value);
-            std::ranges::move(begin() + index, end(), newData + index + count);
-            deallocate();
-            data_ = newData;
-            capacity_ = newCap;
-        } else {
-            std::ranges::move_backward(begin() + index, end(), end() + count);
-            std::ranges::fill_n(begin() + index, count, value);
+            reserve(std::max(size() + count, capacity() * 2));
         }
+
+        iterator insertPos = begin() + index;
+        if (insertPos != end()) {
+#ifdef ATOM_USE_BOOST
+            boost::uninitialized_move(insertPos, end(), end() + count);
+#else
+            std::uninitialized_move_n(insertPos, end() - insertPos,
+                                      end() + count);
+#endif
+            destroy(insertPos, insertPos + count);
+        }
+#ifdef ATOM_USE_BOOST
+        boost::uninitialized_fill_n(insert_pos, count, value);
+#else
+        std::uninitialized_fill_n(insertPos, count, value);
+#endif
         size_ += count;
-        return begin() + index;
+        return insertPos;
     }
 
-    template <std::input_iterator InputIt>
+    template <typename InputIt>
     auto insert(const_iterator pos, InputIt first, InputIt last) -> iterator {
         size_type index = pos - begin();
-        size_type count = std::ranges::distance(first, last);
+        size_type count = std::distance(first, last);
         if (size() + count > capacity()) {
-            size_type newCap = std::max(size() + count, capacity() * 2);
-            T* newData = allocate(newCap);
-            std::ranges::move(begin(), begin() + index, newData);
-            std::ranges::copy(first, last, newData + index);
-            std::ranges::move(begin() + index, end(), newData + index + count);
-            deallocate();
-            data_ = newData;
-            capacity_ = newCap;
-        } else {
-            std::ranges::move_backward(begin() + index, end(), end() + count);
-            std::ranges::copy(first, last, begin() + index);
+            reserve(std::max(size() + count, capacity() * 2));
         }
+
+        iterator insertPos = begin() + index;
+        if (insertPos != end()) {
+#ifdef ATOM_USE_BOOST
+            boost::uninitialized_move(insert_pos, end(), end() + count);
+#else
+            std::uninitialized_move_n(insertPos, end() - insertPos,
+                                      end() + count);
+#endif
+            destroy(insertPos, insertPos + count);
+        }
+#ifdef ATOM_USE_BOOST
+        boost::uninitialized_copy(first, last, insert_pos);
+#else
+        std::uninitialized_copy(first, last, insertPos);
+#endif
         size_ += count;
-        return begin() + index;
+        return insertPos;
     }
 
     auto insert(const_iterator pos, std::initializer_list<T> init) -> iterator {
@@ -270,47 +304,58 @@ public:
     auto emplace(const_iterator pos, Args&&... args) -> iterator {
         size_type index = pos - begin();
         if (size() == capacity()) {
-            size_type newCap = capacity() == 0 ? 1 : capacity() * 2;
-            T* newData = allocate(newCap);
-            std::ranges::move(begin(), begin() + index, newData);
-            new (newData + index) T(std::forward<Args>(args)...);
-            std::ranges::move(begin() + index, end(), newData + index + 1);
-            deallocate();
-            data_ = newData;
-            capacity_ = newCap;
-        } else {
-            std::ranges::move_backward(begin() + index, end(), end() + 1);
-            *(begin() + index) = T(std::forward<Args>(args)...);
+            reserve(capacity() == 0 ? 1 : capacity() * 2);
         }
+
+        iterator insertPos = begin() + index;
+        if (insertPos != end()) {
+#ifdef ATOM_USE_BOOST
+            boost::uninitialized_move(insert_pos, end(), end() + 1);
+#else
+            std::uninitialized_move_n(insertPos, end() - insertPos, end() + 1);
+#endif
+            destroy(insertPos);
+        }
+        ::new (static_cast<void*>(insertPos)) T(std::forward<Args>(args)...);
         ++size_;
-        return begin() + index;
+        return insertPos;
     }
 
     auto erase(const_iterator pos) -> iterator { return erase(pos, pos + 1); }
 
     auto erase(const_iterator first, const_iterator last) -> iterator {
-        size_type index = first - begin();
-        size_type count = last - first;
-        std::ranges::move(begin() + index + count, end(), begin() + index);
+        auto nonConstFirst = const_cast<iterator>(first);
+        auto nonConstLast = const_cast<iterator>(last);
+        size_type count = nonConstLast - nonConstFirst;
+        destroy(nonConstFirst, nonConstLast);
+#ifdef ATOM_USE_BOOST
+        boost::uninitialized_move(nonConstLast, end(), nonConstFirst);
+#else
+        std::uninitialized_move(nonConstLast, end(), nonConstFirst);
+#endif
+        destroy(end() - count, end());
         size_ -= count;
-        return begin() + index;
+        return nonConstFirst;
     }
 
-    void pushBack(const T& value) { emplaceBack(value); }
+    void push_back(const T& value) { emplace_back(value); }
 
-    void pushBack(T&& value) { emplaceBack(std::move(value)); }
+    void push_back(T&& value) { emplace_back(std::move(value)); }
 
     template <typename... Args>
-    auto emplaceBack(Args&&... args) -> reference {
+    auto emplace_back(Args&&... args) -> reference {
         if (size() == capacity()) {
             reserve(capacity() == 0 ? 1 : capacity() * 2);
         }
-        new (end()) T(std::forward<Args>(args)...);
+        ::new (static_cast<void*>(end())) T(std::forward<Args>(args)...);
         ++size_;
         return back();
     }
 
-    void popBack() { --size_; }
+    void pop_back() {
+        --size_;
+        destroy(end());
+    }
 
     void resize(size_type count, const T& value = T()) {
         if (count < size()) {
@@ -322,55 +367,62 @@ public:
 
     void swap(SmallVector& other) ATOM_NOEXCEPT {
         using std::swap;
-        if (capacity() > N && other.capacity() > N) {
-            swap(data_, other.data_);
-        } else if (capacity() > N) {
-            T* tempData = data_;
-            data_ = other.allocate(capacity());
-            std::move(other.begin(), other.end(), data_);
-            other.deallocate();
-            other.data_ = tempData;
-        } else if (other.capacity() > N) {
-            T* tempData = other.data_;
-            other.data_ = allocate(other.capacity());
-            std::move(begin(), end(), other.data_);
-            deallocate();
-            data_ = tempData;
-        } else {
-            swap(static_buffer_, other.static_buffer_);
-        }
+        swap(data_, other.data_);
         swap(size_, other.size_);
         swap(capacity_, other.capacity_);
     }
 
 private:
+    // TOOD: Here we can use std::aligned_storage to optimize the memory
     auto allocate(size_type n) -> T* {
         return static_cast<T*>(::operator new(n * sizeof(T)));
     }
 
     void deallocate() {
-        if (capacity() > N) {
+        if (data_ != static_buffer_) {
             ::operator delete(data_);
         }
     }
 
-    void move(SmallVector&& other) {
-        if (other.capacity() > N) {
-            data_ = other.data_;
-            other.data_ = nullptr;
+    void allocateMemory(size_type n) {
+        if (n <= N) {
+            data_ = static_buffer_;
+            capacity_ = N;
         } else {
-            std::move(other.begin(), other.end(), begin());
+            data_ = allocate(n);
+            capacity_ = n;
+        }
+    }
+
+    void moveFrom(SmallVector&& other) {
+        if (other.data_ == other.static_buffer_) {
+            data_ = static_buffer_;
+#ifdef ATOM_USE_BOOST
+            boost::uninitialized_move(other.begin(), other.end(), begin());
+#else
+            std::uninitialized_move(other.begin(), other.end(), begin());
+#endif
+        } else {
+            data_ = other.data_;
+            other.data_ = other.static_buffer_;
         }
         size_ = other.size_;
         capacity_ = other.capacity_;
         other.size_ = 0;
-        other.capacity_ = N;
     }
+
+    void destroy(iterator first, iterator last) {
+        for (; first != last; ++first) {
+            destroy(first);
+        }
+    }
+
+    void destroy(iterator pos) { pos->~T(); }
 
     size_type size_ = 0;
     size_type capacity_ = N;
-    std::array<T, N> static_buffer_;
-    T* data_ = nullptr;
+    alignas(T) std::array<unsigned char, N * sizeof(T)> static_buffer_;
+    T* data_ = reinterpret_cast<T*>(static_buffer_.data());
 };
 
 template <typename T, std::size_t N>

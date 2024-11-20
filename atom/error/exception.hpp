@@ -200,8 +200,8 @@ struct are_all_printable<First, Rest...> {
 };
 }  // namespace internal
 
-#define THROW_RUNTIME_ERROR(...)                                      \
-    throw atom::error::RuntimeError(ATOM_FILE_NAME, ATOM_FILE_LINE,   \
+#define THROW_RUNTIME_ERROR(...)                                    \
+    throw atom::error::RuntimeError(ATOM_FILE_NAME, ATOM_FILE_LINE, \
                                     ATOM_FUNC_NAME, __VA_ARGS__)
 
 #define THROW_NESTED_RUNTIME_ERROR(...)                                      \
@@ -252,6 +252,15 @@ public:
 #define THROW_UNDERFLOW(...)                                              \
     throw atom::error::UnderflowException(ATOM_FILE_NAME, ATOM_FILE_LINE, \
                                           ATOM_FUNC_NAME, __VA_ARGS__);
+
+class LengthException : public Exception {
+public:
+    using Exception::Exception;
+};
+
+#define THROW_LENGTH(...)                                              \
+    throw atom::error::LengthException(ATOM_FILE_NAME, ATOM_FILE_LINE, \
+                                       ATOM_FUNC_NAME, __VA_ARGS__);
 
 class Unkown : public Exception {
 public:

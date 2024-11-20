@@ -15,13 +15,21 @@ Description: Argument Container Library for C++
 #ifndef ATOM_TYPE_ARG_HPP
 #define ATOM_TYPE_ARG_HPP
 
-#include <any>
 #include <concepts>
 #include <optional>
 #include <span>
+#include <stdexcept>
+#include <vector>
+
+#ifdef ATOM_USE_BOOST
+#include <boost/any.hpp>
+#include <boost/container/flat_map.hpp>
+#include <boost/utility/string_view.hpp>
+#else
+#include <any>
 #include <string_view>
 #include <unordered_map>
-#include <vector>
+#endif
 
 // 设置参数的便捷宏
 #define SET_ARGUMENT(container, name, value) container.set(#name, value)
@@ -36,215 +44,256 @@ Description: Argument Container Library for C++
 // 删除参数的便捷宏
 #define REMOVE_ARGUMENT(container, name) container.remove(#name)
 
+namespace atom {
+
+#ifdef ATOM_USE_BOOST
+using string_view_type = boost::string_view;
+using any_type = boost::any;
+template <typename K, typename V>
+using map_type = boost::container::flat_map<K, V>;
+#else
+using string_view_type = std::string_view;
+using any_type = std::any;
+template <typename K, typename V>
+using map_type = std::unordered_map<K, V>;
+#endif
+
 /**
- * @brief 通用容器,用于存储任意类型的键值对。
- * @brief A universal container for storing any type of key-value pairs.
- * @note 这是ArgumentContainer的弱化版,虽然功能少,但是性能更好。
- * @note This is a weak version of ArgumentContainer, although it has fewer
- * features, it has better performance.
+ * @brief A type-safe heterogeneous argument container
+ *
+ * @details The Args class provides a container for storing and retrieving
+ * values of different types in a type-safe way. It supports both STL and
+ * Boost implementations through conditional compilation.
+ *
+ * Features:
+ * - Type-safe storage and retrieval
+ * - Optional Boost integration
+ * - Move-only semantics
+ * - Exception safety
+ * - Convenient macro interface
+ *
+ * @note This class is move-only and cannot be copied
+ *
+ * Example usage:
+ * @code
+ * atom::Args args;
+ * args.set("name", "test");
+ * args.set("count", 42);
+ *
+ * auto name = args.get<std::string>("name");
+ * auto count = args.getOr("count", 0);
+ * @endcode
  */
 class Args {
 public:
-    /**
-     * @brief 设置键值对。
-     * @brief Set key-value pairs.
-     * @param key 键。
-     * @param key Key.
-     * @param value 值。
-     * @param value Value.
-     * @note 如果键已存在,则会覆盖原有的值。
-     * @note If the key exists, it will overwrite the original value.
-     */
-    template <typename T>
-        requires(!std::same_as<std::decay_t<T>, std::any>)
-    void set(std::string_view key, T &&value) {
-        m_data_[key] = std::forward<T>(value);
-    }
+    Args() = default;
+    ~Args() = default;
+
+    // 禁止拷贝,允许移动
+    Args(const Args&) = delete;
+    Args& operator=(const Args&) = delete;
+    Args(Args&&) = default;
+    Args& operator=(Args&&) = default;
 
     /**
-     * @brief 批量设置键值对。
-     * @brief Set multiple key-value pairs.
-     * @param pairs 键值对数组。
-     * @param pairs Array of key-value pairs.
+     * @brief Set a value for a given key
+     * @tparam T The type of the value to store
+     * @param key The key to associate with the value
+     * @param value The value to store
+     * @throws std::runtime_error if value setting fails
      */
     template <typename T>
-        requires(!std::same_as<std::decay_t<T>, std::any>)
-    void set(std::span<const std::pair<std::string_view, T>> pairs) {
-        for (const auto &[key, value] : pairs) {
-            m_data_[key] = value;
+        requires(!std::same_as<std::decay_t<T>, any_type>)
+    void set(string_view_type key, T&& value) {
+        try {
+            m_data_[key] = std::forward<T>(value);
+        } catch (const std::exception& e) {
+            // 处理异常
+            throw std::runtime_error("Failed to set value: " +
+                                     std::string(e.what()));
         }
     }
 
     /**
-     * @brief 获取键对应的值。
-     * @brief Get the value corresponding to the key.
-     * @param key 键。
-     * @param key Key.
-     * @return 值。
-     * @return Value.
-     * @note 如果键不存在,则会抛出异常。
-     * @note If the key does not exist, an exception will be thrown.
+     * @brief Set multiple key-value pairs at once
+     * @tparam T The type of values to store
+     * @param pairs A span of key-value pairs to store
      */
     template <typename T>
-    auto get(std::string_view key) const -> T {
-        return std::any_cast<T>(m_data_.at(key));
+        requires(!std::same_as<std::decay_t<T>, any_type>)
+    void set(std::span<const std::pair<string_view_type, T>> pairs) {
+        m_data_.reserve(m_data_.size() + pairs.size());  // 预分配空间
+        for (const auto& [key, value] : pairs) {
+            set(key, value);
+        }
     }
 
     /**
-     * @brief 获取键对应的值(如果键不存在,则返回默认值)。
-     * @brief Get the value corresponding to the key (if the key does not exist,
-     * return the default value).
-     * @param key 键。
-     * @param key Key.
-     * @param default_value 默认值。
-     * @param default_value Default value.
-     * @return 值。
-     * @return Value.
+     * @brief Get a value by key
+     * @tparam T The type to retrieve
+     * @param key The key to look up
+     * @return The stored value
+     * @throws std::out_of_range if key doesn't exist
+     * @throws bad_any_cast if type doesn't match
      */
     template <typename T>
-    auto getOr(std::string_view key, T &&default_value) const -> T {
-        if (auto data = m_data_.find(key); data != m_data_.end()) {
-            return std::any_cast<T>(data->second);
+    auto get(string_view_type key) const -> T {
+#ifdef ATOM_USE_BOOST
+        return boost::any_cast<T>(m_data_.at(key));
+#else
+        return std::any_cast<T>(m_data_.at(key));
+#endif
+    }
+
+    /**
+     * @brief Get a value by key with default
+     * @tparam T The type to retrieve
+     * @param key The key to look up
+     * @param default_value The value to return if key not found
+     * @return The stored value or default
+     */
+    template <typename T>
+    auto getOr(string_view_type key, T&& default_value) const -> T {
+        if (auto it = m_data_.find(key); it != m_data_.end()) {
+#ifdef ATOM_USE_BOOST
+            return boost::any_cast<T>(it->second);
+#else
+            return std::any_cast<T>(it->second);
+#endif
         }
         return std::forward<T>(default_value);
     }
 
     /**
-     * @brief 获取键对应的值(如果键不存在,则返回 std::nullopt)。
-     * @brief Get the value corresponding to the key (if the key does not exist,
-     * return std::nullopt).
-     * @param key 键。
-     * @param key Key.
-     * @return 值。
-     * @return Value.
+     * @brief Get multiple values by keys
+     * @tparam T The type to retrieve
+     * @param keys Span of keys to look up
+     * @return Vector of optional values
      */
     template <typename T>
-    auto getOptional(std::string_view key) const -> std::optional<T> {
-        if (auto data = m_data_.find(key); data != m_data_.end()) {
-            return std::any_cast<T>(data->second);
+    auto getOptional(string_view_type key) const -> std::optional<T> {
+        if (auto it = m_data_.find(key); it != m_data_.end()) {
+            try {
+#ifdef ATOM_USE_BOOST
+                return boost::any_cast<T>(it->second);
+#else
+                return std::any_cast<T>(it->second);
+#endif
+            } catch (...) {
+                return std::nullopt;
+            }
         }
         return std::nullopt;
     }
 
-    /**
-     * @brief 批量获取键对应的值。
-     * @brief Get the values corresponding to the keys.
-     * @param keys 键数组。
-     * @param keys Array of keys.
-     * @return 值数组。
-     * @return Array of values.
-     */
     template <typename T>
-    auto get(std::span<const std::string_view> keys) const
+    auto get(std::span<const string_view_type> keys) const
         -> std::vector<std::optional<T>> {
         std::vector<std::optional<T>> values;
         values.reserve(keys.size());
-        for (const auto &key : keys) {
+        for (const auto& key : keys) {
             values.push_back(getOptional<T>(key));
         }
         return values;
     }
 
     /**
-     * @brief 检查键是否存在。
-     * @brief Check if the key exists.
-     * @param key 键。
-     * @param key Key.
-     * @return 如果键存在,则返回true；否则返回false。
-     * @return If the key exists, return true; otherwise return false.
+     * @brief Check if a key exists
+     * @param key The key to check
+     * @return true if key exists, false otherwise
      */
-    auto contains(std::string_view key) const noexcept -> bool {
+    auto contains(string_view_type key) const noexcept -> bool {
         return m_data_.contains(key);
     }
 
     /**
-     * @brief 移除键值对。
-     * @brief Remove key-value pairs.
-     * @param key 键。
-     * @param key Key.
+     * @brief Remove a key-value pair
+     * @param key The key to remove
      */
-    void remove(std::string_view key) { m_data_.erase(key); }
+    void remove(string_view_type key) { m_data_.erase(key); }
 
-    /**
-     * @brief 清空容器。
-     * @brief Clear the container.
-     */
+    /** @brief Remove all key-value pairs */
     void clear() noexcept { m_data_.clear(); }
 
     /**
-     * @brief 获取容器中键值对的数量。
-     * @brief Get the number of key-value pairs in the container.
-     * @return 键值对的数量。
-     * @return The number of key-value pairs.
+     * @brief Get number of stored items
+     * @return Number of key-value pairs
      */
     auto size() const noexcept -> size_t { return m_data_.size(); }
 
     /**
-     * @brief 检查容器是否为空。
-     * @brief Check if the container is empty.
-     * @return 如果容器为空,则返回true；否则返回false。
-     * @return If the container is empty, return true; otherwise return false.
+     * @brief Check if container is empty
+     * @return true if empty, false otherwise
      */
     auto empty() const noexcept -> bool { return m_data_.empty(); }
 
     /**
-     * @brief 获取指定键对应的值。
-     * @brief Get the value corresponding to the specified key.
-     * @param key 键。
-     * @param key Key.
-     * @return 值。
-     * @return Value.
-     * @note 如果键不存在,则会插入一个新的键值对。
-     * @note If the key does not exist, a new key-value pair will be inserted.
+     * @brief Access value by key with type
+     * @tparam T The type to retrieve
+     * @param key The key to look up
+     * @return Reference to stored value
+     * @throws bad_any_cast if type doesn't match
      */
     template <typename T>
-    auto operator[](std::string_view key) -> T & {
-        return std::any_cast<T &>(m_data_[key]);
+    auto operator[](string_view_type key) -> T& {
+#ifdef ATOM_USE_BOOST
+        return boost::any_cast<T&>(m_data_[key]);
+#else
+        return std::any_cast<T&>(m_data_[key]);
+#endif
     }
 
     /**
-     * @brief 获取指定键对应的值。
-     * @brief Get the value corresponding to the specified key.
-     * @param key 键。
-     * @param key Key.
-     * @return 值。
-     * @return Value.
-     * @note 如果键不存在,则会抛出异常。
-     * @note If the key does not exist, an exception will be thrown.
+     * @brief Access const value by key with type
+     * @tparam T The type to retrieve
+     * @param key The key to look up
+     * @return Const reference to stored value
+     * @throws std::out_of_range if key doesn't exist
+     * @throws bad_any_cast if type doesn't match
      */
     template <typename T>
-    auto operator[](std::string_view key) const -> const T & {
-        return std::any_cast<const T &>(m_data_.at(key));
+    auto operator[](string_view_type key) const -> const T& {
+#ifdef ATOM_USE_BOOST
+        return boost::any_cast<const T&>(m_data_.at(key));
+#else
+        return std::any_cast<const T&>(m_data_.at(key));
+#endif
     }
 
     /**
-     * @brief 获取指定键对应的值。
-     * @brief Get the value corresponding to the specified key.
-     * @param key 键。
-     * @param key Key.
-     * @return 值。
-     * @return Value.
-     * @note 如果键不存在,则会插入一个新的键值对。
-     * @note If the key does not exist, a new key-value pair will be inserted.
+     * @brief Access underlying any object
+     * @param key The key to look up
+     * @return Reference to any object
      */
-    auto operator[](std::string_view key) -> std::any & { return m_data_[key]; }
+    auto operator[](string_view_type key) -> any_type& { return m_data_[key]; }
 
     /**
-     * @brief 获取指定键对应的值。
-     * @brief Get the value corresponding to the specified key.
-     * @param key 键。
-     * @param key Key.
-     * @return 值。
-     * @return Value.
-     * @note 如果键不存在,则会抛出异常。
-     * @note If the key does not exist, an exception will be thrown.
+     * @brief Access const underlying any object
+     * @param key The key to look up
+     * @return Const reference to any object
+     * @throws std::out_of_range if key doesn't exist
      */
-    auto operator[](std::string_view key) const -> const std::any & {
+    auto operator[](string_view_type key) const -> const any_type& {
         return m_data_.at(key);
     }
 
+#ifdef ATOM_USE_BOOST
+    /**
+     * @brief Serialize the container
+     * @tparam Archive The archive type
+     * @param ar The archive object
+     * @param version The version number
+     */
+    template <class Archive>
+    void serialize(Archive& ar, const unsigned int version) {
+        ar & m_data_;
+    }
+#endif
+
 private:
-    std::unordered_map<std::string_view, std::any> m_data_;
+    map_type<string_view_type, any_type> m_data_;
 };
+
+}  // namespace atom
 
 #endif

@@ -1,16 +1,9 @@
-/*
- * argsview.hpp
- *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+/**
+ * @file argsview.hpp
+ * @brief A class that provides a view over a set of arguments for C++20
+ * @author
+ * @copyright
  */
-
-/*************************************************
-
-Date: 2023-12-28
-
-Description: Argument View for C++20
-
-**************************************************/
 
 #ifndef ATOM_TYPE_ARGSVIEW_HPP
 #define ATOM_TYPE_ARGSVIEW_HPP
@@ -22,6 +15,30 @@ Description: Argument View for C++20
 #include <tuple>
 #include <type_traits>
 #include <utility>
+
+#ifdef ATOM_USE_BOOST
+#include <boost/any.hpp>
+#include <boost/functional/hash.hpp>
+#include <boost/optional.hpp>
+#include <boost/tuple/tuple.hpp>
+#endif
+
+namespace atom {
+
+#ifdef ATOM_USE_BOOST
+using string_type =
+    std::string;
+template <typename T>
+using optional_type = boost::optional<T>;
+template <typename... Args>
+using tuple_type = boost::tuple<Args...>;
+#else
+using string_type = std::string;
+template <typename T>
+using optional_type = std::optional<T>;
+template <typename... Args>
+using tuple_type = std::tuple<Args...>;
+#endif
 
 /**
  * @brief A class that provides a view over a set of arguments.
@@ -46,9 +63,9 @@ public:
      * @param other_tuple Tuple containing the arguments.
      */
     template <typename... OtherArgs>
-    constexpr explicit ArgsView(const std::tuple<OtherArgs...>& other_tuple)
+    constexpr explicit ArgsView(const tuple_type<OtherArgs...>& other_tuple)
         : args_(std::apply(
-              [](const auto&... args) { return std::tuple<Args...>(args...); },
+              [](const auto&... args) { return tuple_type<Args...>(args...); },
               other_tuple)) {}
 
     /**
@@ -60,12 +77,17 @@ public:
     template <typename... OtherArgs>
     constexpr explicit ArgsView(ArgsView<OtherArgs...> other_args_view)
         : args_(std::apply(
-              [](const auto&... args) { return std::tuple<Args...>(args...); },
+              [](const auto&... args) { return tuple_type<Args...>(args...); },
               other_args_view.args_)) {}
 
+    /**
+     * @brief Construct a new ArgsView object from optional arguments.
+     *
+     * @tparam OptionalArgs Types of the optional arguments.
+     * @param optional_args Optional arguments to be stored in the view.
+     */
     template <typename... OptionalArgs>
-
-    constexpr explicit ArgsView(std::optional<OptionalArgs>&&... optional_args)
+    constexpr explicit ArgsView(optional_type<OptionalArgs>&&... optional_args)
         : args_(std::make_tuple(optional_args.value_or(Args{})...)) {}
 
     /**
@@ -112,8 +134,8 @@ public:
      *
      * @tparam Func Type of the function.
      * @param func The function to apply.
-     * @return ArgsView<std::invoke_result_t<Func, Args>...> A new ArgsView with
-     * the transformed arguments.
+     * @return ArgsView<std::decay_t<decltype(f(std::declval<Args>()))>...> A
+     * new ArgsView with the transformed arguments.
      */
     template <typename F>
     auto transform(F&& f) const {
@@ -125,7 +147,14 @@ public:
                 args_));
     }
 
-    std::tuple<Args...> toTuple() const { return std::tuple<Args...>(args_); }
+    /**
+     * @brief Convert the Arguments to a tuple.
+     *
+     * @return std::tuple<Args...> The tuple containing all arguments.
+     */
+    auto toTuple() const -> std::tuple<Args...> {
+        return std::tuple<Args...>(args_);
+    }
 
     /**
      * @brief Accumulate the arguments using a function and an initial value.
@@ -166,10 +195,10 @@ public:
      * @return ArgsView& Reference to this ArgsView.
      */
     template <typename... OtherArgs>
-    constexpr auto operator=(const std::tuple<OtherArgs...>& other_tuple)
+    constexpr auto operator=(const tuple_type<OtherArgs...>& other_tuple)
         -> ArgsView& {
         args_ = std::apply(
-            [](const auto&... args) { return std::tuple<Args...>(args...); },
+            [](const auto&... args) { return tuple_type<Args...>(args...); },
             other_tuple);
         return *this;
     }
@@ -185,7 +214,7 @@ public:
     constexpr auto operator=(ArgsView<OtherArgs...> other_args_view)
         -> ArgsView& {
         args_ = std::apply(
-            [](const auto&... args) { return std::tuple<Args...>(args...); },
+            [](const auto&... args) { return tuple_type<Args...>(args...); },
             other_args_view.args_);
         return *this;
     }
@@ -202,8 +231,8 @@ public:
     auto filter(Pred&& pred) const {
         return std::apply(
             [&](const auto&... args) {
-                return ArgsView{
-                    (pred(args) ? std::optional{args} : std::nullopt)...};
+                return ArgsView{(pred(args) ? optional_type<Args>{args}
+                                            : optional_type<Args>{})...};
             },
             args_);
     }
@@ -213,17 +242,17 @@ public:
      *
      * @tparam Pred Type of the predicate.
      * @param pred The predicate to apply.
-     * @return std::optional<std::decay_t<Args>> The first argument that
-     * satisfies the predicate, or std::nullopt if none do.
+     * @return optional_type<std::common_type_t<Args...>> The first argument
+     * that satisfies the predicate, or std::nullopt if none do.
      */
     template <typename Pred>
     auto find(Pred&& pred) const {
         return std::apply(
             [&](const auto&... args)
-                -> std::optional<std::common_type_t<Args...>> {
+                -> optional_type<std::common_type_t<Args...>> {
                 return ((pred(args)
-                             ? std::optional<std::common_type_t<Args...>>{args}
-                             : std::nullopt) ||
+                             ? optional_type<std::common_type_t<Args...>>{args}
+                             : optional_type<std::common_type_t<Args...>>{}) ||
                         ...);
             },
             args_);
@@ -245,7 +274,7 @@ public:
     }
 
 private:
-    std::tuple<Args...> args_;
+    tuple_type<Args...> args_; /**< Storage for the arguments */
 };
 
 /**
@@ -474,34 +503,61 @@ constexpr auto operator>=(ArgsView<Args1...> lhs,
     return !(lhs < rhs);
 }
 
+}  // namespace atom
+
 namespace std {
+#ifdef ATOM_USE_BOOST
 /**
- * @brief Hash specialization for ArgsView.
+ * @brief Hash specialization for ArgsView using Boost.
  *
  * @tparam Args Types of the arguments.
  */
 template <typename... Args>
-struct hash<ArgsView<Args...>> {
+struct hash<atom::ArgsView<Args...>> {
     /**
      * @brief Compute the hash value for an ArgsView.
      *
      * @param args_view The ArgsView to hash.
      * @return std::size_t The hash value.
      */
-    auto operator()(ArgsView<Args...> args_view) const -> std::size_t {
-        return args_view.apply([](const auto&... args) {
-            std::size_t seed = 0;
-            ((seed ^= std::hash<std::decay_t<decltype(args)>>{}(args) +
-                      0x9e3779b9 + (seed << 6) + (seed >> 2)),
-             ...);
-            return seed;
+    auto operator()(atom::ArgsView<Args...> args_view) const -> std::size_t {
+        std::size_t seed = 0;
+        args_view.forEach([&seed](const auto& arg) {
+            boost::hash_combine(seed, boost::hash_value(arg));
         });
+        return seed;
     }
 };
+#else
+/**
+ * @brief Hash specialization for ArgsView using standard library.
+ *
+ * @tparam Args Types of the arguments.
+ */
+template <typename... Args>
+struct hash<atom::ArgsView<Args...>> {
+    /**
+     * @brief Compute the hash value for an ArgsView.
+     *
+     * @param args_view The ArgsView to hash.
+     * @return std::size_t The hash value.
+     */
+    auto operator()(const atom::ArgsView<Args...>& args_view) const
+        -> std::size_t {
+        std::size_t seed = 0;
+        args_view.forEach([&seed](const auto& arg) {
+            seed ^= std::hash<std::decay_t<decltype(arg)>>{}(arg) + 0x9e3779b9 +
+                    (seed << 6) + (seed >> 2);
+        });
+        return seed;
+    }
+};
+#endif
 }  // namespace std
 
 #ifdef __DEBUG__
 #include <iostream>
+namespace atom {
 /**
  * @brief Print the arguments to the standard output.
  *
@@ -514,6 +570,7 @@ void print(Args&&... args) {
         [](const auto& arg) { std::cout << arg << ' '; });
     std::cout << '\n';
 }
+}  // namespace atom
 #endif
 
-#endif
+#endif  // ATOM_TYPE_ARGSVIEW_HPP

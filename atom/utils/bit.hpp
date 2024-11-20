@@ -1,3 +1,17 @@
+/*
+ * bit.hpp
+ *
+ * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ */
+
+/*************************************************
+
+Date: 2023-4-5
+
+Description: Validate aligned storage with optional Boost support
+
+**************************************************/
+
 #ifndef ATOM_UTILS_BIT_HPP
 #define ATOM_UTILS_BIT_HPP
 
@@ -8,6 +22,12 @@
 #include <limits>
 
 #include "atom/macro.hpp"
+
+#ifdef ATOM_USE_BOOST
+#include <boost/integer.hpp>
+#include <boost/static_assert.hpp>
+#include <boost/type_traits.hpp>
+#endif
 
 namespace atom::utils {
 
@@ -25,6 +45,10 @@ namespace atom::utils {
  */
 template <std::unsigned_integral T>
 constexpr auto createMask(uint32_t bits) ATOM_NOEXCEPT -> T {
+#ifdef ATOM_USE_BOOST
+    BOOST_STATIC_ASSERT_MSG(std::is_unsigned_v<T>,
+                            "T must be an unsigned integral type");
+#endif
     if (bits >= std::numeric_limits<T>::digits) {
         return std::numeric_limits<T>::max();
     }
@@ -44,7 +68,11 @@ constexpr auto createMask(uint32_t bits) ATOM_NOEXCEPT -> T {
  */
 template <std::unsigned_integral T>
 constexpr auto countBytes(T value) ATOM_NOEXCEPT -> uint32_t {
+#ifdef ATOM_USE_BOOST
+    return boost::popcount(value);
+#else
     return static_cast<uint32_t>(std::popcount(value));
+#endif
 }
 
 /**
@@ -60,9 +88,13 @@ constexpr auto countBytes(T value) ATOM_NOEXCEPT -> uint32_t {
  */
 template <std::unsigned_integral T>
 constexpr auto reverseBits(T value) noexcept -> T {
+#ifdef ATOM_USE_BOOST
+    return boost::integer::reverse_bits(value);
+#else
     auto bitset = std::bitset<std::numeric_limits<T>::digits>(value);
     auto reversedValue = bitset.to_ullong();
     return static_cast<T>(reversedValue);
+#endif
 }
 
 /**
@@ -80,7 +112,11 @@ constexpr auto reverseBits(T value) noexcept -> T {
  */
 template <std::unsigned_integral T>
 constexpr auto rotateLeft(T value, int shift) ATOM_NOEXCEPT -> T {
+#ifdef ATOM_USE_BOOST
+    return boost::integer::rotl(value, shift);
+#else
     return std::rotl(value, shift);
+#endif
 }
 
 /**
@@ -98,7 +134,11 @@ constexpr auto rotateLeft(T value, int shift) ATOM_NOEXCEPT -> T {
  */
 template <std::unsigned_integral T>
 constexpr auto rotateRight(T value, int shift) ATOM_NOEXCEPT -> T {
+#ifdef ATOM_USE_BOOST
+    return boost::integer::rotr(value, shift);
+#else
     return std::rotr(value, shift);
+#endif
 }
 
 /**
@@ -114,7 +154,11 @@ constexpr auto rotateRight(T value, int shift) ATOM_NOEXCEPT -> T {
  */
 template <std::unsigned_integral T>
 constexpr auto mergeMasks(T mask1, T mask2) ATOM_NOEXCEPT -> T {
+#ifdef ATOM_USE_BOOST
+    return boost::integer::bitwise_or(mask1, mask2);
+#else
     return mask1 | mask2;
+#endif
 }
 
 /**
@@ -131,11 +175,16 @@ constexpr auto mergeMasks(T mask1, T mask2) ATOM_NOEXCEPT -> T {
 template <std::unsigned_integral T>
 constexpr auto splitMask(T mask,
                          uint32_t position) ATOM_NOEXCEPT -> std::pair<T, T> {
+#ifdef ATOM_USE_BOOST
+    T lowerPart = boost::integer::bitwise_and(mask, createMask<T>(position));
+    T upperPart = boost::integer::bitwise_and(mask, ~createMask<T>(position));
+#else
     T lowerPart = mask & createMask<T>(position);
     T upperPart = mask & ~createMask<T>(position);
+#endif
     return {lowerPart, upperPart};
 }
 
 }  // namespace atom::utils
 
-#endif
+#endif  // ATOM_UTILS_BIT_HPP
