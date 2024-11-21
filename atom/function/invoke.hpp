@@ -19,14 +19,7 @@
 #include <variant>
 
 #include "atom/error/exception.hpp"
-
-/*!
- * \brief Concept to check if a function is invocable with given arguments.
- * \tparam F The function type.
- * \tparam Args The argument types.
- */
-template <typename F, typename... Args>
-concept Invocable = std::is_invocable_v<std::decay_t<F>, std::decay_t<Args>...>;
+#include "atom/function/concept.hpp"
 
 /*!
  * \brief Delays the invocation of a function with given arguments.

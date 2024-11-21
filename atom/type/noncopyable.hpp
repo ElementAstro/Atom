@@ -12,8 +12,8 @@ Description: A simple implementation of noncopyable.
 
 **************************************************/
 
-#ifndef ATOM_EXPERIMENT_NONCOPYABLE_HPP
-#define ATOM_EXPERIMENT_NONCOPYABLE_HPP
+#ifndef ATOM_TYPE_NONCOPYABLE_HPP
+#define ATOM_TYPE_NONCOPYABLE_HPP
 
 #ifdef ATOM_USE_BOOST
 #include <boost/core/noncopyable.hpp>
@@ -44,4 +44,4 @@ public:
 #endif
 };
 
-#endif  // ATOM_EXPERIMENT_NONCOPYABLE_HPP
+#endif  // ATOM_TYPE_NONCOPYABLE_HPP

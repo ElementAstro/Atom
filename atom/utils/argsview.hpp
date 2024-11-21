@@ -18,87 +18,220 @@
 
 namespace atom::utils {
 
+/**
+ * @class ArgumentParser
+ * @brief A class for parsing command-line arguments.
+ *
+ * The ArgumentParser class provides functionality to define and parse
+ * command-line arguments, including support for different argument types,
+ * flags, subcommands, and mutually exclusive groups.
+ */
 class ArgumentParser {
 public:
+    /**
+     * @enum ArgType
+     * @brief Enumeration of possible argument types.
+     */
     enum class ArgType {
-        STRING,
-        INTEGER,
-        UNSIGNED_INTEGER,
-        LONG,
-        UNSIGNED_LONG,
-        FLOAT,
-        DOUBLE,
-        BOOLEAN,
-        FILEPATH,
-        AUTO
+        STRING,           /**< String argument type */
+        INTEGER,          /**< Integer argument type */
+        UNSIGNED_INTEGER, /**< Unsigned integer argument type */
+        LONG,             /**< Long integer argument type */
+        UNSIGNED_LONG,    /**< Unsigned long integer argument type */
+        FLOAT,            /**< Float argument type */
+        DOUBLE,           /**< Double argument type */
+        BOOLEAN,          /**< Boolean argument type */
+        FILEPATH,         /**< File path argument type */
+        AUTO              /**< Automatically detect argument type */
     };
 
+    /**
+     * @enum NargsType
+     * @brief Enumeration of possible nargs types.
+     */
     enum class NargsType {
-        NONE,
-        OPTIONAL,
-        ZERO_OR_MORE,
-        ONE_OR_MORE,
-        CONSTANT
+        NONE,         /**< No arguments */
+        OPTIONAL,     /**< Optional argument */
+        ZERO_OR_MORE, /**< Zero or more arguments */
+        ONE_OR_MORE,  /**< One or more arguments */
+        CONSTANT      /**< Constant number of arguments */
     };
 
+    /**
+     * @struct Nargs
+     * @brief Structure to define the number of arguments.
+     */
     struct Nargs {
-        NargsType type;
-        int count;  // Used if type is CONSTANT
+        NargsType type; /**< Type of nargs */
+        int count;      /**< Count of arguments, used if type is CONSTANT */
 
+        /**
+         * @brief Default constructor initializing to NONE type and count 1.
+         */
         Nargs() : type(NargsType::NONE), count(1) {}
+
+        /**
+         * @brief Constructor with specified type and count.
+         * @param t Type of nargs.
+         * @param c Count of arguments, default is 1.
+         */
         Nargs(NargsType t, int c = 1) : type(t), count(c) {}
     };
 
+    /**
+     * @brief Default constructor.
+     */
     ArgumentParser() = default;
+
+    /**
+     * @brief Constructor with program name.
+     * @param program_name Name of the program.
+     */
     explicit ArgumentParser(std::string program_name);
 
-    // 设置描述和结尾
+    /**
+     * @brief Set the description of the program.
+     * @param description Description text.
+     */
     void setDescription(const std::string& description);
+
+    /**
+     * @brief Set the epilog of the program.
+     * @param epilog Epilog text.
+     */
     void setEpilog(const std::string& epilog);
 
+    /**
+     * @brief Add an argument to the parser.
+     * @param name Name of the argument.
+     * @param type Type of the argument.
+     * @param required Whether the argument is required.
+     * @param default_value Default value of the argument.
+     * @param help Help text for the argument.
+     * @param aliases Aliases for the argument.
+     * @param is_positional Whether the argument is positional.
+     * @param nargs Number of arguments.
+     */
     void addArgument(const std::string& name, ArgType type = ArgType::AUTO,
                      bool required = false, const std::any& default_value = {},
                      const std::string& help = "",
                      const std::vector<std::string>& aliases = {},
                      bool is_positional = false, const Nargs& nargs = Nargs());
 
+    /**
+     * @brief Add a flag to the parser.
+     * @param name Name of the flag.
+     * @param help Help text for the flag.
+     * @param aliases Aliases for the flag.
+     */
     void addFlag(const std::string& name, const std::string& help = "",
                  const std::vector<std::string>& aliases = {});
 
+    /**
+     * @brief Add a subcommand to the parser.
+     * @param name Name of the subcommand.
+     * @param help Help text for the subcommand.
+     */
     void addSubcommand(const std::string& name, const std::string& help = "");
 
+    /**
+     * @brief Add a mutually exclusive group of arguments.
+     * @param group_args Vector of argument names that are mutually exclusive.
+     */
     void addMutuallyExclusiveGroup(const std::vector<std::string>& group_args);
 
-    // 自定义文件解析
+    /**
+     * @brief Enable parsing arguments from a file.
+     * @param prefix Prefix to identify file arguments.
+     */
     void addArgumentFromFile(const std::string& prefix = "@");
+
+    /**
+     * @brief Set the delimiter for file parsing.
+     * @param delimiter Delimiter character.
+     */
     void setFileDelimiter(char delimiter);
 
+    /**
+     * @brief Parse the command-line arguments.
+     * @param argc Argument count.
+     * @param argv Argument vector.
+     */
     void parse(int argc, std::vector<std::string> argv);
 
+    /**
+     * @brief Get the value of an argument.
+     * @tparam T Type of the argument value.
+     * @param name Name of the argument.
+     * @return Optional value of the argument.
+     */
     template <typename T>
     auto get(const std::string& name) const -> std::optional<T>;
 
+    /**
+     * @brief Get the value of a flag.
+     * @param name Name of the flag.
+     * @return Boolean value of the flag.
+     */
     auto getFlag(const std::string& name) const -> bool;
 
+    /**
+     * @brief Get the parser for a subcommand.
+     * @param name Name of the subcommand.
+     * @return Optional reference to the subcommand parser.
+     */
     auto getSubcommandParser(const std::string& name) const
         -> std::optional<std::reference_wrapper<const ArgumentParser>>;
 
+    /**
+     * @brief Print the help message.
+     */
     void printHelp() const;
 
-private:
-    struct Argument {
-        ArgType type;
-        bool required{};
-        std::any defaultValue;
-        std::optional<std::any> value;
-        std::string help;
-        std::vector<std::string> aliases;
-        bool isMultivalue{};
-        bool is_positional{};
-        Nargs nargs;
+    /**
+     * @brief Add a description to the parser.
+     * @param description Description text.
+     */
+    void addDescription(const std::string& description);
 
+    /**
+     * @brief Add an epilog to the parser.
+     * @param epilog Epilog text.
+     */
+    void addEpilog(const std::string& epilog);
+
+private:
+    /**
+     * @struct Argument
+     * @brief Structure to define an argument.
+     */
+    struct Argument {
+        ArgType type;                  /**< Type of the argument */
+        bool required;                 /**< Whether the argument is required */
+        std::any defaultValue;         /**< Default value of the argument */
+        std::optional<std::any> value; /**< Value of the argument */
+        std::string help;              /**< Help text for the argument */
+        std::vector<std::string> aliases; /**< Aliases for the argument */
+        bool isMultivalue;  /**< Whether the argument is multivalue */
+        bool is_positional; /**< Whether the argument is positional */
+        Nargs nargs;        /**< Number of arguments */
+
+        /**
+         * @brief Default constructor.
+         */
         Argument() = default;
 
+        /**
+         * @brief Constructor with specified parameters.
+         * @param t Type of the argument.
+         * @param req Whether the argument is required.
+         * @param def Default value of the argument.
+         * @param hlp Help text for the argument.
+         * @param als Aliases for the argument.
+         * @param mult Whether the argument is multivalue.
+         * @param pos Whether the argument is positional.
+         * @param ng Number of arguments.
+         */
         Argument(ArgType t, bool req, std::any def, std::string hlp,
                  const std::vector<std::string>& als, bool mult = false,
                  bool pos = false, const Nargs& ng = Nargs())
@@ -112,34 +245,71 @@ private:
               nargs(ng) {}
     } ATOM_ALIGNAS(128);
 
+    /**
+     * @struct Flag
+     * @brief Structure to define a flag.
+     */
     struct Flag {
-        bool value;
-        std::string help;
-        std::vector<std::string> aliases;
+        bool value;                       /**< Value of the flag */
+        std::string help;                 /**< Help text for the flag */
+        std::vector<std::string> aliases; /**< Aliases for the flag */
     } ATOM_ALIGNAS(64);
 
     struct Subcommand;
 
-    std::unordered_map<std::string, Argument> arguments_;
-    std::unordered_map<std::string, Flag> flags_;
-    std::unordered_map<std::string, Subcommand> subcommands_;
-    std::unordered_map<std::string, std::string> aliases_;
-    std::vector<std::string> positionalArguments_;
-    std::string description_;
-    std::string epilog_;
-    std::string programName_;
+    std::unordered_map<std::string, Argument>
+        arguments_;                               /**< Map of arguments */
+    std::unordered_map<std::string, Flag> flags_; /**< Map of flags */
+    std::unordered_map<std::string, Subcommand>
+        subcommands_; /**< Map of subcommands */
+    std::unordered_map<std::string, std::string>
+        aliases_; /**< Map of aliases */
+    std::vector<std::string>
+        positionalArguments_; /**< Vector of positional arguments */
+    std::string description_; /**< Description of the program */
+    std::string epilog_;      /**< Epilog of the program */
+    std::string programName_; /**< Name of the program */
 
-    std::vector<std::vector<std::string>> mutuallyExclusiveGroups_;
+    std::vector<std::vector<std::string>>
+        mutuallyExclusiveGroups_; /**< Vector of mutually exclusive groups */
 
-    // 文件解析相关
-    bool enableFileParsing_ = false;
-    std::string filePrefix_ = "@";
-    char fileDelimiter_ = ' ';
+    bool enableFileParsing_ = false; /**< Enable file parsing */
+    std::string filePrefix_ = "@";   /**< Prefix for file arguments */
+    char fileDelimiter_ = ' ';       /**< Delimiter for file parsing */
 
+    /**
+     * @brief Detect the type of an argument from its value.
+     * @param value The value of the argument.
+     * @return The detected argument type.
+     */
     static auto detectType(const std::any& value) -> ArgType;
+
+    /**
+     * @brief Parse the value of an argument.
+     * @param type The type of the argument.
+     * @param value The value of the argument as a string.
+     * @return The parsed value as std::any.
+     */
     static auto parseValue(ArgType type, const std::string& value) -> std::any;
+
+    /**
+     * @brief Convert an argument type to a string.
+     * @param type The type of the argument.
+     * @return The argument type as a string.
+     */
     static auto argTypeToString(ArgType type) -> std::string;
+
+    /**
+     * @brief Convert a value of type std::any to a string.
+     * @param value The value to convert.
+     * @return The value as a string.
+     */
     static auto anyToString(const std::any& value) -> std::string;
+
+    /**
+     * @brief Expand arguments from a file.
+     * @param argv The argument vector to expand.
+     */
     void expandArgumentsFromFile(std::vector<std::string>& argv);
 };
 
@@ -667,6 +837,14 @@ inline void ArgumentParser::expandArgumentsFromFile(
         }
     }
     argv = expandedArgs;
+}
+
+inline void ArgumentParser::addDescription(const std::string& description) {
+    description_ = description;
+}
+
+inline void ArgumentParser::addEpilog(const std::string& epilog) {
+    epilog_ = epilog;
 }
 
 }  // namespace atom::utils
