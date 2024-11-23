@@ -3,36 +3,37 @@
 #include <iostream>
 
 int main() {
-    // 创建一个 LoggerManager 实例
+    // Create an instance of LoggerManager
     lithium::LoggerManager loggerManager;
 
-    // 假设 LoggerManager 有一个方法来添加日志条目
-    lithium::LogEntry entry;
-    entry.fileName = "example.cpp";
-    entry.lineNumber = 42;
-    entry.message = "This is a log message";
+    // Scan the logs folder
+    // This function scans the specified folder for log files.
+    // Replace "path/to/logs" with the actual path to your log files.
+    loggerManager.scanLogsFolder("path/to/logs");
 
-    // 添加日志条目
-    loggerManager.addLogEntry(entry);
+    // Search logs for a specific keyword
+    // This function searches the logs for entries containing the specified
+    // keyword. Replace "error" with the keyword you want to search for.
+    std::vector<lithium::LogEntry> searchResults =
+        loggerManager.searchLogs("error");
 
-    // 假设 LoggerManager 有一个方法来扫描日志文件
-    std::string logFilePath = "logfile.log";
-    loggerManager.scanLogFile(logFilePath);
-
-    // 假设 LoggerManager 有一个方法来分析日志文件
-    loggerManager.analyzeLogs();
-
-    // 假设 LoggerManager 有一个方法来上传日志文件
-    std::string serverUrl = "http://example.com/upload";
-    loggerManager.uploadLogs(serverUrl);
-
-    // 假设 LoggerManager 有一个方法来显示所有日志条目
-    std::vector<lithium::LogEntry> logEntries = loggerManager.getLogEntries();
-    for (const auto& logEntry : logEntries) {
-        std::cout << "File: " << logEntry.fileName
-                  << ", Line: " << logEntry.lineNumber
-                  << ", Message: " << logEntry.message << std::endl;
+    // Print search results
+    // Iterate through the search results and print each log entry.
+    for (const auto& entry : searchResults) {
+        std::cout << "File: " << entry.fileName
+                  << ", Line: " << entry.lineNumber
+                  << ", Message: " << entry.message << std::endl;
     }
+
+    // Upload a log file
+    // This function uploads the specified log file.
+    // Replace "path/to/logfile.log" with the actual path to the log file you
+    // want to upload.
+    loggerManager.uploadFile("path/to/logfile.log");
+
+    // Analyze logs
+    // This function analyzes the collected log files.
+    loggerManager.analyzeLogs();
 
     return 0;
 }

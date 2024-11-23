@@ -1,4 +1,5 @@
-#include "annealing.hpp"
+#include "atom/algorithm/annealing.hpp"
+
 #include <iostream>
 
 // Define a custom progress callback function

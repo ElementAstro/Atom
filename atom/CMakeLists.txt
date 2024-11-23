@@ -27,21 +27,27 @@ if(ATOM_BUILD_PYTHON)
 endif()
 
 # Subdirectories
-add_subdirectory(algorithm)
-add_subdirectory(async)
-add_subdirectory(components)
-add_subdirectory(connection)
-add_subdirectory(error)
-add_subdirectory(function)
-add_subdirectory(io)
-add_subdirectory(log)
-add_subdirectory(search)
-add_subdirectory(secret)
-add_subdirectory(sysinfo)
-add_subdirectory(system)
-add_subdirectory(tests)
-add_subdirectory(utils)
-add_subdirectory(web)
+set(SUBDIRECTORIES
+    algorithm
+    async
+    components
+    connection
+    error
+    function
+    io
+    log
+    search
+    secret
+    sysinfo
+    system
+    tests
+    utils
+    web
+)
+
+foreach(subdir ${SUBDIRECTORIES})
+    add_subdirectory(${subdir})
+endforeach()
 
 # Sources and Headers
 set(ATOM_SOURCES
@@ -57,13 +63,11 @@ set(ATOM_HEADERS
 # Libraries
 set(ATOM_LIBS
     loguru
-    cpp_httplib
     atom-function
     atom-algorithm
     atom-async
     atom-io
     atom-component
-    atom-type
     atom-utils
     atom-search
     atom-web

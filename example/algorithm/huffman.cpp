@@ -1,4 +1,5 @@
-#include "huffman.hpp"
+#include "atom/algorithm/huffman.hpp"
+
 #include <iostream>
 #include <unordered_map>
 #include <vector>

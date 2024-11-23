@@ -1,4 +1,5 @@
-#include "matrix.hpp"
+#include "atom/algorithm/matrix.hpp"
+
 #include <iostream>
 
 int main() {

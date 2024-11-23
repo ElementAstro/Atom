@@ -1,4 +1,5 @@
-#include "snowflake.hpp"
+#include "atom/algorithm/snowflake.hpp"
+
 #include <iostream>
 
 int main() {

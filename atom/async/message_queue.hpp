@@ -8,7 +8,6 @@
 #define ATOM_ASYNC_MESSAGE_QUEUE_HPP
 
 #include <algorithm>
-#include <asio.hpp>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -20,6 +19,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+#include <asio.hpp>
 
 namespace atom::async {
 

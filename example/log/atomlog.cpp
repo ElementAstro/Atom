@@ -1,39 +1,46 @@
 #include "atom/log/atomlog.hpp"
-#include <iostream>
 
 int main() {
-    // 创建一个 Logger 实例
-    atom::log::Logger logger("logfile.log", atom::log::LogLevel::DEBUG);
+    using namespace atom::log;
 
-    // 设置日志级别
-    logger.setLevel(atom::log::LogLevel::INFO);
+    // Create a logger instance with a log file name, minimum log level, max
+    // file size, and max files.
+    Logger logger("logfile.log", LogLevel::DEBUG, 1048576, 5);
 
-    // 设置日志模式
+    // Set the logging level to INFO.
+    logger.setLevel(LogLevel::INFO);
+
+    // Set a custom logging pattern.
     logger.setPattern("[%Y-%m-%d %H:%M:%S] [%l] %v");
 
-    // 设置线程名称
+    // Set the thread name for logging.
     logger.setThreadName("MainThread");
 
-    // 记录不同级别的日志
-    logger.trace("This is a trace message: {}", 1);
-    logger.debug("This is a debug message: {}", 2);
-    logger.info("This is an info message: {}", 3);
-    logger.warn("This is a warning message: {}", 4);
-    logger.error("This is an error message: {}", 5);
-    logger.critical("This is a critical message: {}", 6);
+    // Register a custom log level.
+    logger.registerCustomLogLevel("CUSTOM", 7);
 
-    // 启用系统日志记录
+    // Enable system logging.
     logger.enableSystemLogging(true);
 
-    // 注册一个新的日志接收器
-    auto another_logger =
-        std::make_shared<atom::log::Logger>("another_logfile.log");
-    logger.registerSink(another_logger);
+    // Log messages with different severity levels.
+    logger.trace("This is a trace message with value: {}", 42);
+    logger.debug("This is a debug message with value: {}", 42);
+    logger.info("This is an info message with value: {}", 42);
+    logger.warn("This is a warn message with value: {}", 42);
+    logger.error("This is an error message with value: {}", 42);
+    logger.critical("This is a critical message with value: {}", 42);
 
-    // 移除日志接收器
-    logger.removeSink(another_logger);
+    // Register a sink logger.
+    auto sinkLogger = std::make_shared<Logger>("sinklog.log", LogLevel::DEBUG);
+    logger.registerSink(sinkLogger);
 
-    // 清除所有日志接收器
+    // Log a message that will also be sent to the sink logger.
+    logger.info("This message will be logged to both loggers.");
+
+    // Remove the sink logger.
+    logger.removeSink(sinkLogger);
+
+    // Clear all registered sink loggers.
     logger.clearSinks();
 
     return 0;

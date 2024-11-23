@@ -1,4 +1,4 @@
-#include "perlin.hpp"
+#include "atom/algorithm/perlin.hpp"
 #include <iostream>
 #include <vector>
 

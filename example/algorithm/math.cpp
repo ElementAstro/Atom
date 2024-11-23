@@ -1,4 +1,5 @@
-#include "math.hpp"
+#include "atom/algorithm/math.hpp"
+
 #include <iostream>
 
 int main() {

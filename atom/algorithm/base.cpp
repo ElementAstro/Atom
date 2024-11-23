@@ -205,6 +205,14 @@ auto xorEncryptDecrypt(std::string_view text, uint8_t key) -> std::string {
     return result;
 }
 
+auto xorEncrypt(std::string_view plaintext, uint8_t key) -> std::string {
+    return xorEncryptDecrypt(plaintext, key);
+}
+
+auto xorDecrypt(std::string_view ciphertext, uint8_t key) -> std::string {
+    return xorEncryptDecrypt(ciphertext, key);
+}
+
 constexpr std::string_view BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 auto encodeBase32(const std::vector<uint8_t>& data) -> std::string {

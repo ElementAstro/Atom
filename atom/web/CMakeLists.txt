@@ -30,7 +30,6 @@ set(HEADERS
 # Dependencies
 set(LIBS
     loguru
-    cpp_httplib
     ${CMAKE_THREAD_LIBS_INIT}
 )
 

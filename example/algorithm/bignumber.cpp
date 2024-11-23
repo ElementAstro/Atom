@@ -1,4 +1,4 @@
-#include "bignumber.hpp"
+#include "atom/algorithm/bignumber.hpp"
 
 #include <iostream>
 
@@ -8,7 +8,7 @@ int main() {
     // Example usage of BigNumber constructors
     {
         BigNumber num1("12345678901234567890");
-        BigNumber num2(9876543210987654321LL);
+        BigNumber num2("9876543210987654321");
 
         std::cout << "BigNumber from string: " << num1 << std::endl;
         std::cout << "BigNumber from long long: " << num2 << std::endl;

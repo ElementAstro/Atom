@@ -128,13 +128,19 @@ public:
                           boost::random::discrete_distribution<>>
                 random(weights.begin(), weights.end());
 #else
-            utils::Random<std::mt19937, std::discrete_distribution<>> random(
-                weights.begin(), weights.end());
+            std::discrete_distribution<> dist(weights.begin(), weights.end());
+            std::random_device rd;
+            std::mt19937 gen(rd());
 #endif
 
             std::vector<size_t> results(n);
+#ifdef ATOM_USE_BOOST
             std::generate(results.begin(), results.end(),
                           [&]() { return random(); });
+#else
+            std::generate(results.begin(), results.end(),
+                          [&]() { return dist(gen); });
+#endif
 
             return results;
         }

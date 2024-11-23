@@ -1,4 +1,5 @@
-#include "sha1.hpp"
+#include "atom/algorithm/sha1.hpp"
+
 #include <iostream>
 #include <string>
 

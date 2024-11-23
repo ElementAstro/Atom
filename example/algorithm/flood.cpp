@@ -1,4 +1,5 @@
-#include "flood.hpp"
+#include "atom/algorithm/flood.hpp"
+
 #include <iostream>
 #include <vector>
 

@@ -10,6 +10,7 @@
 #include <mutex>
 #include <numeric>
 #include <random>
+#include <sstream>
 #include <vector>
 
 #ifdef USE_SIMD
@@ -84,7 +85,7 @@ public:
 
     auto optimize(int numThreads = 1) -> SolutionType;
 
-    [[nodiscard]] auto getBestEnergy() const -> double;
+    [[nodiscard]] auto getBestEnergy() -> double;
 };
 
 // Example TSP (Traveling Salesman Problem) implementation
@@ -188,10 +189,16 @@ void SimulatedAnnealing<ProblemType, SolutionType>::optimizeThread() {
         std::uniform_real_distribution<double> distribution(0.0, 1.0);
 #endif
 
-        auto currentSolution = problem_instance_.random_solution();
+        auto threadIdToString = [] {
+            std::ostringstream oss;
+            oss << std::this_thread::get_id();
+            return oss.str();
+        };
+
+        auto currentSolution = problem_instance_.randomSolution();
         double currentEnergy = problem_instance_.energy(currentSolution);
-        LOG_F(INFO, "Thread %ld started with initial energy: {}",
-              std::this_thread::get_id(), currentEnergy);
+        LOG_F(INFO, "Thread {} started with initial energy: {}",
+              threadIdToString(), currentEnergy);
 
         {
             std::lock_guard lock(best_mutex_);
@@ -255,8 +262,8 @@ void SimulatedAnnealing<ProblemType, SolutionType>::optimizeThread() {
                 break;
             }
         }
-        LOG_F(INFO, "Thread %ld completed optimization with best energy: {}",
-              std::this_thread::get_id(), best_energy_);
+        LOG_F(INFO, "Thread {} completed optimization with best energy: {}",
+              threadIdToString(), best_energy_);
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Exception in optimizeThread: {}", e.what());
     }
@@ -312,8 +319,7 @@ auto SimulatedAnnealing<ProblemType, SolutionType>::optimize(int numThreads)
 
 template <typename ProblemType, typename SolutionType>
     requires AnnealingProblem<ProblemType, SolutionType>
-auto SimulatedAnnealing<ProblemType, SolutionType>::getBestEnergy() const
-    -> double {
+auto SimulatedAnnealing<ProblemType, SolutionType>::getBestEnergy() -> double {
     std::lock_guard lock(best_mutex_);
     return best_energy_;
 }

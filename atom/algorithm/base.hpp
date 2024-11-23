@@ -171,26 +171,6 @@ auto decodeBase32(const std::string& encoded) -> std::vector<uint8_t>;
 [[nodiscard("The result of xorDecrypt is not used.")]] auto xorDecrypt(
     std::string_view ciphertext, uint8_t key) -> std::string;
 
-namespace detail {
-
-/**
- * @brief Converts a Base64 character to its corresponding numeric value.
- *
- * @param ch The Base64 character to convert.
- * @return The numeric value of the Base64 character.
- */
-constexpr auto convertChar(char const ch);
-
-/**
- * @brief Converts a numeric value to its corresponding Base64 character.
- *
- * @param num The numeric value to convert.
- * @return The corresponding Base64 character.
- */
-constexpr auto convertNumber(char const num);
-
-}  // namespace detail
-
 /**
  * @brief Decodes a compile-time constant Base64 string.
  *

@@ -42,8 +42,8 @@ include_directories(${pybind11_INCLUDE_DIRS} ${Python_INCLUDE_DIRS})
 
 # Add subdirectories
 add_subdirectory(extra)
-add_subdirectory(example)
 add_subdirectory(atom)
+add_subdirectory(example)
 add_subdirectory(tests)
 
 # Enable folder grouping in IDEs

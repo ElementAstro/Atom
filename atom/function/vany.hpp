@@ -59,7 +59,6 @@ private:
     static void defaultForeach(const void* ptr,
                                const std::function<void(const Any&)>& func) {
         if constexpr (K_IS_ITERABLE_V<T>) {
-#pragma unroll
             for (const auto& item : *static_cast<const T*>(ptr)) {
                 func(Any(item));
             }

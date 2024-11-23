@@ -15,6 +15,7 @@ set(SOURCES
     base.cpp
     bignumber.cpp
     convolve.cpp
+    flood.cpp
     fnmatch.cpp
     fraction.cpp
     huffman.cpp
@@ -22,6 +23,7 @@ set(SOURCES
     matrix_compress.cpp
     md5.cpp
     mhash.cpp
+    sha1.cpp
     tea.cpp
 )
 

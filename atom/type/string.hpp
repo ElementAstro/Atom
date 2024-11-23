@@ -384,6 +384,22 @@ public:
     }
 
     /**
+     * @brief Insert a character at a specific position.
+     */
+    auto insert(size_t pos, char ch) -> String& {
+        m_data_.insert(pos, 1, ch);
+        return *this;
+    }
+
+    /**
+     * @brief Insert a string at a specific position.
+     */
+    auto insert(size_t pos, const String& str) -> String& {
+        m_data_.insert(pos, str.m_data_);
+        return *this;
+    }
+
+    /**
      * @brief Remove a specific character from the string.
      */
     auto remove(char ch) -> size_t {
@@ -400,6 +416,29 @@ public:
     }
 
     /**
+     * @brief Remove all occurrences of a substring.
+     */
+    auto removeAll(const String& str) -> size_t {
+        size_t count = 0;
+        size_t pos = 0;
+
+        while ((pos = m_data_.find(str.m_data_, pos)) != std::string::npos) {
+            m_data_.erase(pos, str.length());
+            ++count;
+        }
+
+        return count;
+    }
+
+    /**
+     * @brief Erase a specific range of characters.
+     */
+    auto erase(size_t pos, size_t count = std::string::npos) -> String& {
+        m_data_.erase(pos, count);
+        return *this;
+    }
+    
+    /**
      * @brief Get the underlying data as a std::string.
      */
     [[nodiscard]] auto data() const -> std::string { return m_data_; }
@@ -409,7 +448,79 @@ public:
      */
     [[nodiscard]] auto empty() const -> bool { return m_data_.empty(); }
 
-    // ... Other member functions ...
+    /**
+     * @brief Pad the string from the left with a specific character.
+     */
+    auto padLeft(size_t totalLength, char paddingChar = ' ') -> String& {
+        if (m_data_.length() < totalLength) {
+            m_data_.insert(m_data_.begin(), totalLength - m_data_.length(),
+                           paddingChar);
+        }
+        return *this;
+    }
+
+    /**
+     * @brief Pad the string from the right with a specific character.
+     */
+    auto padRight(size_t totalLength, char paddingChar = ' ') -> String& {
+        if (m_data_.length() < totalLength) {
+            m_data_.append(totalLength - m_data_.length(), paddingChar);
+        }
+        return *this;
+    }
+
+    /**
+     * @brief Remove a specific prefix from the string.
+     */
+    auto removePrefix(const String& prefix) -> bool {
+        if (startsWith(prefix)) {
+            m_data_.erase(0, prefix.length());
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * @brief Remove a specific suffix from the string.
+     */
+    auto removeSuffix(const String& suffix) -> bool {
+        if (endsWith(suffix)) {
+            m_data_.erase(m_data_.length() - suffix.length());
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * @brief Compress multiple consecutive spaces into a single space.
+     */
+    void compressSpaces() {
+        auto newEnd =
+            std::unique(m_data_.begin(), m_data_.end(), [](char lhs, char rhs) {
+                return (std::isspace(lhs) != 0) && (std::isspace(rhs) != 0);
+            });
+        m_data_.erase(newEnd, m_data_.end());
+    }
+
+    /**
+     * @brief Reverse the order of words in the string.
+     */
+    ATOM_NODISCARD auto reverseWords() const -> String {
+        auto words = split(" ");
+        std::ranges::reverse(words);
+        return join(words, " ");
+    }
+
+    auto replaceRegex(const std::string& pattern,
+                      const std::string& replacement) -> String {
+#ifdef ATOM_USE_BOOST
+        boost::regex rex(pattern);
+        return boost::regex_replace(m_data_, rex, replacement);
+#else
+        std::regex rex(pattern);
+        return std::regex_replace(m_data_, rex, replacement);
+#endif
+    }
 
     /**
      * @brief Format a string.

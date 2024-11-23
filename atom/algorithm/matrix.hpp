@@ -541,7 +541,25 @@ auto singularValueDecomposition(const Matrix<T, Rows, Cols>& m)
     return singularValues;
 }
 
-// 生成随机矩阵
+/**
+ * @brief Generates a random matrix with elements in the specified range.
+ *
+ * This function creates a matrix of the specified dimensions (Rows x Cols)
+ * with elements of type T. The elements are randomly generated within the
+ * range [min, max).
+ *
+ * @tparam T The type of the elements in the matrix.
+ * @tparam Rows The number of rows in the matrix.
+ * @tparam Cols The number of columns in the matrix.
+ * @param min The minimum value for the random elements (inclusive). Default is
+ * 0.
+ * @param max The maximum value for the random elements (exclusive). Default
+ * is 1.
+ * @return Matrix<T, Rows, Cols> A matrix with randomly generated elements.
+ *
+ * @note This function uses a uniform real distribution to generate the random
+ * elements. The random number generator is seeded with a random device.
+ */
 template <typename T, std::size_t Rows, std::size_t Cols>
 auto randomMatrix(T min = 0, T max = 1) -> Matrix<T, Rows, Cols> {
     static std::random_device rd;
@@ -549,7 +567,7 @@ auto randomMatrix(T min = 0, T max = 1) -> Matrix<T, Rows, Cols> {
     std::uniform_real_distribution<> dis(min, max);
 
     Matrix<T, Rows, Cols> result;
-    for (auto& elem : result.get_data()) {
+    for (auto& elem : result.getData()) {
         elem = dis(gen);
     }
     return result;

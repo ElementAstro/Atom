@@ -369,7 +369,11 @@ auto asyncRetryImpl(Func &&func, int attemptsLeft,
             return;
         } else {
             auto result = attempt.get();
-            callback();
+            if constexpr (std::is_same_v<ReturnType, void>) {
+                callback();
+            } else {
+                callback(result);
+            }
             completeHandler();
             return result;
         }
