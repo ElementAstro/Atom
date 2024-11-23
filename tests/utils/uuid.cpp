@@ -132,6 +132,7 @@ protected:
     }
 };
 
+#if ATOM_USE_SIMD
 // Test constructors
 TEST_F(FastUUIDTest, Constructors) {
     FastUUID uuid1;
@@ -227,3 +228,4 @@ TEST_F(FastUUIDGeneratorTest, GetUUID) {
     FastUUID uuid = generator.getUUID();
     EXPECT_FALSE(uuid.str().empty());
 }
+#endif

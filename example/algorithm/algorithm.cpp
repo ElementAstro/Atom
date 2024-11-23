@@ -3,67 +3,86 @@
 #include <iostream>
 
 int main() {
-    // Example 1: Using the KMP algorithm
-    std::string text = "ababcabcababcabc";
-    std::string pattern = "abc";
+    // Example usage of KMP class
+    {
+        // Create a KMP object with a pattern
+        atom::algorithm::KMP kmp("abc");
 
-    // Create a KMP object with the pattern
-    atom::algorithm::KMP kmp(pattern);
+        // Search for the pattern in a given text
+        std::vector<int> positions = kmp.search("abcabcabc");
 
-    // Search for the pattern in the text
-    std::vector<int> kmpResults = kmp.search(text);
+        // Print the positions where the pattern starts in the text
+        std::cout << "KMP search positions: ";
+        for (int pos : positions) {
+            std::cout << pos << " ";
+        }
+        std::cout << std::endl;
 
-    std::cout << "KMP search results for pattern \"" << pattern
-              << "\" in text \"" << text << "\":" << std::endl;
-    for (int position : kmpResults) {
-        std::cout << "Pattern found at position: " << position << std::endl;
+        // Set a new pattern
+        kmp.setPattern("bca");
+
+        // Search for the new pattern in the text
+        positions = kmp.search("abcabcabc");
+
+        // Print the positions where the new pattern starts in the text
+        std::cout << "KMP search positions with new pattern: ";
+        for (int pos : positions) {
+            std::cout << pos << " ";
+        }
+        std::cout << std::endl;
     }
 
-    // Example 2: Using the Boyer-Moore algorithm
-    std::string bmText = "HERE IS A SIMPLE EXAMPLE";
-    std::string bmPattern = "EXAMPLE";
+    // Example usage of BloomFilter class
+    {
+        // Create a BloomFilter object with 1000 bits and 3 hash functions
+        atom::algorithm::BloomFilter<1000> bloomFilter(3);
 
-    // Create a BoyerMoore object with the pattern
-    atom::algorithm::BoyerMoore boyerMoore(bmPattern);
+        // Insert elements into the Bloom filter
+        bloomFilter.insert("hello");
+        bloomFilter.insert("world");
 
-    // Search for the pattern in the text
-    std::vector<int> bmResults = boyerMoore.search(bmText);
+        // Check if elements might be present in the Bloom filter
+        bool mightContainHello = bloomFilter.contains("hello");
+        bool mightContainWorld = bloomFilter.contains("world");
+        bool mightContainTest = bloomFilter.contains("test");
 
-    std::cout << "Boyer-Moore search results for pattern \"" << bmPattern
-              << "\" in text \"" << bmText << "\":" << std::endl;
-    for (int position : bmResults) {
-        std::cout << "Pattern found at position: " << position << std::endl;
+        // Print the results
+        std::cout << "BloomFilter contains 'hello': " << mightContainHello
+                  << std::endl;
+        std::cout << "BloomFilter contains 'world': " << mightContainWorld
+                  << std::endl;
+        std::cout << "BloomFilter contains 'test': " << mightContainTest
+                  << std::endl;
     }
 
-    // Example 3: Using the Bloom Filter
-    const std::size_t BLOOM_FILTER_SIZE = 100;
-    const std::size_t NUM_HASH_FUNCTIONS = 3;
+    // Example usage of BoyerMoore class
+    {
+        // Create a BoyerMoore object with a pattern
+        atom::algorithm::BoyerMoore boyerMoore("abc");
 
-    // Create a BloomFilter object with specified size and number of hash
-    // functions
-    atom::algorithm::BloomFilter<BLOOM_FILTER_SIZE> bloomFilter(
-        NUM_HASH_FUNCTIONS);
+        // Search for the pattern in a given text
+        std::vector<int> positions = boyerMoore.search("abcabcabc");
 
-    // Insert elements into the Bloom filter
-    bloomFilter.insert("apple");
-    bloomFilter.insert("banana");
-    bloomFilter.insert("cherry");
+        // Print the positions where the pattern starts in the text
+        std::cout << "BoyerMoore search positions: ";
+        for (int pos : positions) {
+            std::cout << pos << " ";
+        }
+        std::cout << std::endl;
 
-    // Check for the presence of elements
-    std::string element1 = "apple";
-    std::string element2 = "grape";
+        // Set a new pattern
+        boyerMoore.setPattern("bca");
 
-    std::cout << "Checking presence of \"" << element1
-              << "\" in the Bloom filter: "
-              << (bloomFilter.contains(element1) ? "Possibly present"
-                                                 : "Definitely not present")
-              << std::endl;
+        // Search for the new pattern in the text
+        positions = boyerMoore.search("abcabcabc");
 
-    std::cout << "Checking presence of \"" << element2
-              << "\" in the Bloom filter: "
-              << (bloomFilter.contains(element2) ? "Possibly present"
-                                                 : "Definitely not present")
-              << std::endl;
+        // Print the positions where the new pattern starts in the text
+        std::cout << "BoyerMoore search positions with new pattern: ";
+        for (int pos : positions) {
+            std::cout << pos << " ";
+        }
+        std::cout << std::endl;
+    }
 
     return 0;
 }

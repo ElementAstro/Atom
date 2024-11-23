@@ -14,7 +14,7 @@
 #define NOMINMAX
 #include <windows.h>
 #else
-#include <signal.h>
+#include <csignal>
 #endif
 
 /**

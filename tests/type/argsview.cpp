@@ -1,7 +1,8 @@
-// FILE: atom/type/test_argsview.hpp
-
 #include <gtest/gtest.h>
-#include "argsview.hpp"
+
+#include "atom/type/argsview.hpp"
+
+using namespace atom;
 
 TEST(ArgsViewTest, Constructor) {
     ArgsView<int, double, std::string> args_view(1, 2.0, "test");

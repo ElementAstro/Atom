@@ -1,53 +1,45 @@
-#include "atom/algorithm/base.hpp"
+#include "base.hpp"
 
 #include <iostream>
-#include <string>
-#include <vector>
-
-using namespace atom::algorithm;
 
 int main() {
-    // Example 1: Base64 Encoding
-    std::string data = "Hello, World!";
-    std::string encoded = base64Encode(data);
-    std::cout << "Base64 Encoded: " << encoded << std::endl;
+    // Example usage of base64Encode and base64Decode
+    {
+        std::string data = "Hello, World!";
+        std::string encoded = atom::algorithm::base64Encode(data);
+        std::string decoded = atom::algorithm::base64Decode(encoded);
 
-    // Example 2: Base64 Decoding
-    std::string decoded = base64Decode(encoded);
-    std::cout << "Base64 Decoded: " << decoded << std::endl;
+        std::cout << "Original data: " << data << std::endl;
+        std::cout << "Base64 Encoded: " << encoded << std::endl;
+        std::cout << "Base64 Decoded: " << decoded << std::endl;
+    }
 
-    // Example 3: Faster Base64 Encoding
-    std::vector<unsigned char> inputData(data.begin(), data.end());
-    std::string fastEncoded = fbase64Encode(inputData);
-    std::cout << "Faster Base64 Encoded: " << fastEncoded << std::endl;
+    // Example usage of xorEncrypt and xorDecrypt
+    {
+        std::string plaintext = "Secret Message";
+        uint8_t key = 0xAA;  // Example key
+        std::string encrypted = atom::algorithm::xorEncrypt(plaintext, key);
+        std::string decrypted = atom::algorithm::xorDecrypt(encrypted, key);
 
-    // Example 4: Faster Base64 Decoding
-    std::vector<unsigned char> fastDecoded = fbase64Decode(fastEncoded);
-    std::string fastDecodedStr(fastDecoded.begin(), fastDecoded.end());
-    std::cout << "Faster Base64 Decoded: " << fastDecodedStr << std::endl;
+        std::cout << "Original plaintext: " << plaintext << std::endl;
+        std::cout << "Encrypted text: " << encrypted << std::endl;
+        std::cout << "Decrypted text: " << decrypted << std::endl;
+    }
 
-    // Example 5: XOR Encryption
-    uint8_t key = 0xAA;  // Example key
-    std::string encrypted = xorEncrypt(data, key);
-    std::cout << "XOR Encrypted: " << encrypted << std::endl;
+    // Example usage of isBase64
+    {
+        std::string validBase64 =
+            "SGVsbG8sIFdvcmxkIQ==";  // "Hello, World!" in Base64
+        std::string invalidBase64 = "InvalidBase64String";
 
-    // Example 6: XOR Decryption
-    std::string decrypted = xorDecrypt(encrypted, key);
-    std::cout << "XOR Decrypted: " << decrypted << std::endl;
+        bool isValid = atom::algorithm::isBase64(validBase64);
+        bool isInvalid = atom::algorithm::isBase64(invalidBase64);
 
-    /*
-        TODO: Uncomment the following code to run the compile-time examples
-        // Example 7: Compile-time Base64 Encoding
-        constexpr StaticString<13> staticData("Hello, World!");
-        constexpr auto staticEncoded = cbase64Encode(staticData);
-        std::cout << "Compile-time Base64 Encoded: " << staticEncoded.c_str()
+        std::cout << "Is valid Base64: " << std::boolalpha << isValid
                   << std::endl;
-
-        // Example 8: Compile-time Base64 Decoding
-        constexpr auto staticDecoded = cbase64Decode(staticEncoded);
-        std::cout << "Compile-time Base64 Decoded: " << staticDecoded.c_str()
+        std::cout << "Is invalid Base64: " << std::boolalpha << isInvalid
                   << std::endl;
-    */
+    }
 
     return 0;
 }

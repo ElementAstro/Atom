@@ -1,49 +1,82 @@
-#include <iostream>
-
 #include "atom/memory/object.hpp"
 
-// 定义一个简单的对象类
+#include <iostream>
+
+using namespace atom::memory;
+
+// Define a simple Resettable type
 class MyObject {
 public:
-    MyObject(int id) : id(id) {
-        std::cout << "MyObject " << id << " created." << std::endl;
+    void reset() {
+        // Reset the object state
+        data = 0;
     }
 
-    ~MyObject() {
-        std::cout << "MyObject " << id << " destroyed." << std::endl;
-    }
+    void setData(int value) { data = value; }
 
-    void doSomething() {
-        std::cout << "MyObject " << id << " is doing something." << std::endl;
-    }
-
-    void reset() { std::cout << "MyObject " << id << " reset." << std::endl; }
+    int getData() const { return data; }
 
 private:
-    int id;
+    int data = 0;
 };
 
 int main() {
-    // 创建一个 ObjectPool 对象
-    ObjectPool<MyObject> pool(5);  // 假设池的大小为 5
+    // Create an ObjectPool for MyObject with a maximum size of 5 and prefill
+    // with 2 objects
+    ObjectPool<MyObject> pool(5, 2);
 
-    // 从对象池中获取对象并使用
+    // Acquire an object from the pool
     auto obj1 = pool.acquire();
-    obj1->doSomething();
+    obj1->setData(42);
+    std::cout << "Acquired object with data: " << obj1->getData() << std::endl;
 
+    // Acquire another object from the pool
     auto obj2 = pool.acquire();
-    obj2->doSomething();
+    obj2->setData(84);
+    std::cout << "Acquired another object with data: " << obj2->getData()
+              << std::endl;
 
-    // 将对象归还到对象池中
-    pool.release(std::move(obj1));
-    pool.release(std::move(obj2));
+    // Release the first object back to the pool
+    obj1.reset();
+    std::cout << "Released the first object back to the pool." << std::endl;
 
-    // 再次从对象池中获取对象并使用
-    auto obj3 = pool.acquire();
-    obj3->doSomething();
+    // Try to acquire an object with a timeout
+    auto obj3 = pool.tryAcquireFor(std::chrono::seconds(1));
+    if (obj3) {
+        std::cout << "Acquired object with data: " << (*obj3)->getData()
+                  << std::endl;
+    } else {
+        std::cout << "Failed to acquire object within the timeout."
+                  << std::endl;
+    }
 
-    // 将对象归还到对象池中
-    pool.release(std::move(obj3));
+    // Get the number of available objects in the pool
+    size_t available = pool.available();
+    std::cout << "Number of available objects: " << available << std::endl;
+
+    // Get the current size of the pool
+    size_t size = pool.size();
+    std::cout << "Current pool size: " << size << std::endl;
+
+    // Clear all objects from the pool
+    pool.clear();
+    std::cout << "Cleared all objects from the pool." << std::endl;
+
+    // Resize the pool to a new maximum size
+    pool.resize(10);
+    std::cout << "Resized the pool to a new maximum size of 10." << std::endl;
+
+    // Prefill the pool with 3 objects
+    pool.prefill(3);
+    std::cout << "Prefilled the pool with 3 objects." << std::endl;
+
+    // Apply a function to all objects in the pool
+    pool.applyToAll([](MyObject& obj) { obj.setData(100); });
+    std::cout << "Applied function to all objects in the pool." << std::endl;
+
+    // Get the current number of in-use objects
+    size_t inUseCount = pool.inUseCount();
+    std::cout << "Number of in-use objects: " << inUseCount << std::endl;
 
     return 0;
 }

@@ -36,6 +36,10 @@ Registry::Registry() : pImpl_(std::make_unique<RegistryImpl>()) {
     LOG_F(INFO, "Registry constructor called");
 }
 
+Registry::~Registry() {
+    LOG_F(INFO, "Registry destructor called");
+}
+
 void Registry::loadRegistryFromFile() {
     LOG_F(INFO, "Registry::loadRegistryFromFile called");
     pImpl_->saveRegistryToFile();

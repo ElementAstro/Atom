@@ -1,100 +1,101 @@
-#include "atom/algorithm/bignumber.hpp"
+#include "bignumber.hpp"
 
 #include <iostream>
 
-int main() {
-    {
-        atom::algorithm::BigNumber num1("12345678901234567890");
-        atom::algorithm::BigNumber num2(9876543210LL);
+using namespace atom::algorithm;
 
-        std::cout << "num1: " << num1 << std::endl;
-        std::cout << "num2: " << num2 << std::endl;
+int main() {
+    // Example usage of BigNumber constructors
+    {
+        BigNumber num1("12345678901234567890");
+        BigNumber num2(9876543210987654321LL);
+
+        std::cout << "BigNumber from string: " << num1 << std::endl;
+        std::cout << "BigNumber from long long: " << num2 << std::endl;
     }
 
+    // Example usage of addition, subtraction, multiplication, and division
     {
-        atom::algorithm::BigNumber num1("12345678901234567890");
-        atom::algorithm::BigNumber num2("98765432109876543210");
+        BigNumber num1("12345678901234567890");
+        BigNumber num2("9876543210987654321");
 
-        atom::algorithm::BigNumber sum = num1 + num2;
-        atom::algorithm::BigNumber difference = num2 - num1;
+        BigNumber sum = num1 + num2;
+        BigNumber difference = num1 - num2;
+        BigNumber product = num1 * num2;
+        BigNumber quotient = num1 / num2;
 
         std::cout << "Sum: " << sum << std::endl;
         std::cout << "Difference: " << difference << std::endl;
-    }
-
-    {
-        atom::algorithm::BigNumber num1("123456789");
-        atom::algorithm::BigNumber num2("1000");
-
-        atom::algorithm::BigNumber product = num1 * num2;
-        atom::algorithm::BigNumber quotient = num1 / num2;
-
         std::cout << "Product: " << product << std::endl;
         std::cout << "Quotient: " << quotient << std::endl;
     }
 
+    // Example usage of exponentiation
     {
-        atom::algorithm::BigNumber base("2");
-
-        atom::algorithm::BigNumber result = base ^ 10;
+        BigNumber base("2");
+        int exponent = 10;
+        BigNumber result = base ^ exponent;
 
         std::cout << "2^10: " << result << std::endl;
     }
 
+    // Example usage of comparison operators
     {
-        atom::algorithm::BigNumber num1("123456789");
-        atom::algorithm::BigNumber num2("123456789");
-        atom::algorithm::BigNumber num3("987654321");
+        BigNumber num1("12345678901234567890");
+        BigNumber num2("9876543210987654321");
 
-        std::cout << std::boolalpha;
         std::cout << "num1 == num2: " << (num1 == num2) << std::endl;
-        std::cout << "num1 != num3: " << (num1 != num3) << std::endl;
-    }
-
-    {
-        atom::algorithm::BigNumber num1("123456789");
-        atom::algorithm::BigNumber num2("987654321");
-
-        std::cout << std::boolalpha;
+        std::cout << "num1 > num2: " << (num1 > num2) << std::endl;
         std::cout << "num1 < num2: " << (num1 < num2) << std::endl;
-        std::cout << "num2 > num1: " << (num2 > num1) << std::endl;
+        std::cout << "num1 >= num2: " << (num1 >= num2) << std::endl;
+        std::cout << "num1 <= num2: " << (num1 <= num2) << std::endl;
     }
 
+    // Example usage of negation and absolute value
     {
-        atom::algorithm::BigNumber num1("123456789");
-
-        atom::algorithm::BigNumber negated = num1.negate();
+        BigNumber num("-12345678901234567890");
+        BigNumber negated = num.negate();
+        BigNumber absolute = num.abs();
 
         std::cout << "Negated: " << negated << std::endl;
+        std::cout << "Absolute: " << absolute << std::endl;
     }
 
+    // Example usage of increment and decrement operators
     {
-        atom::algorithm::BigNumber num1("999");
+        BigNumber num("12345678901234567890");
 
-        std::cout << "Before increment: " << num1 << std::endl;
-        ++num1;
-        std::cout << "After increment: " << num1 << std::endl;
+        ++num;
+        std::cout << "After prefix increment: " << num << std::endl;
 
-        --num1;
-        std::cout << "After decrement: " << num1 << std::endl;
+        num++;
+        std::cout << "After postfix increment: " << num << std::endl;
+
+        --num;
+        std::cout << "After prefix decrement: " << num << std::endl;
+
+        num--;
+        std::cout << "After postfix decrement: " << num << std::endl;
     }
 
+    // Example usage of digit access
     {
-        atom::algorithm::BigNumber num1("123456789");
-        atom::algorithm::BigNumber num2("123456788");
+        BigNumber num("12345678901234567890");
 
-        std::cout << "num1 is odd: " << std::boolalpha << num1.isOdd()
-                  << std::endl;
-        std::cout << "num2 is even: " << std::boolalpha << num2.isEven()
-                  << std::endl;
+        std::cout << "Digit at index 0: " << num[0] << std::endl;
+        std::cout << "Digit at index 5: " << num[5] << std::endl;
+        std::cout << "Digit at index 10: " << num[10] << std::endl;
     }
 
+    // Example usage of utility functions
     {
-        atom::algorithm::BigNumber num1("0000123456789");
+        BigNumber num("12345678901234567890");
 
-        std::cout << "Before trimming: " << num1 << std::endl;
-        num1 = num1.trimLeadingZeros();
-        std::cout << "After trimming: " << num1 << std::endl;
+        std::cout << "Number of digits: " << num.digits() << std::endl;
+        std::cout << "Is negative: " << num.isNegative() << std::endl;
+        std::cout << "Is positive: " << num.isPositive() << std::endl;
+        std::cout << "Is even: " << num.isEven() << std::endl;
+        std::cout << "Is odd: " << num.isOdd() << std::endl;
     }
 
     return 0;

@@ -37,7 +37,7 @@ concept AnnealingProblem =
         {
             problemInstance.neighbor(solutionInstance)
         } -> std::same_as<SolutionType>;
-        { problemInstance.random_solution() } -> std::same_as<SolutionType>;
+        { problemInstance.randomSolution() } -> std::same_as<SolutionType>;
     };
 
 // Different cooling strategies for temperature reduction

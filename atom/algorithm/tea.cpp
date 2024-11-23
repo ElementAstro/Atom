@@ -138,7 +138,7 @@ auto xxteaDecrypt(const std::vector<uint32_t> &inputData,
 
     uint32_t sum = (MIN_ROUNDS + MAX_ROUNDS / numElements) * DELTA;
     uint32_t lastElement = inputData[numElements - 1];
-    uint32_t currentElement;
+    uint32_t currentElement = inputData[0];
 
     std::vector<uint32_t> result = inputData;
 

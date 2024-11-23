@@ -19,6 +19,7 @@ Description: Argument Container Library for C++
 #include <optional>
 #include <span>
 #include <stdexcept>
+#include <type_traits>
 #include <vector>
 
 #ifdef ATOM_USE_BOOST
@@ -36,7 +37,7 @@ Description: Argument Container Library for C++
 
 // 获取参数的便捷宏
 #define GET_ARGUMENT(container, name, type) \
-    container.get<type>(#name).value_or(type{})
+    container.get<type>(#name)
 
 // 检查参数是否存在的便捷宏
 #define HAS_ARGUMENT(container, name) container.contains(#name)

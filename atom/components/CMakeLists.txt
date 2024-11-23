@@ -30,7 +30,6 @@ set(HEADERS
 set(LIBS
     loguru
     atom-error
-    atom-type
     atom-utils
     ${CMAKE_THREAD_LIBS_INIT}
 )

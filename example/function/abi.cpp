@@ -1,50 +1,43 @@
+#include "atom/function/abi.hpp"
+
 #include <iostream>
 #include <vector>
 
-#include "atom/function/abi.hpp"
-
-// Example structures and classes to test demangling
-struct MyStruct {
-    int a;
-    double b;
-};
-
-class MyClass {
-public:
-    void myMethod(int x) {}
-};
+using namespace atom::meta;
 
 int main() {
-    // Demangle a simple type
-    std::cout << "Demangled type for int: "
-              << atom::meta::DemangleHelper::demangleType<int>() << std::endl;
+    // Demangle a type name
+    std::string demangledType = DemangleHelper::demangleType<int>();
+    std::cout << "Demangled type: " << demangledType << std::endl;
 
-    // Demangle a struct
-    std::cout << "Demangled type for MyStruct: "
-              << atom::meta::DemangleHelper::demangleType<MyStruct>()
+    // Demangle an instance type
+    int instance = 42;
+    std::string demangledInstanceType = DemangleHelper::demangleType(instance);
+    std::cout << "Demangled instance type: " << demangledInstanceType
               << std::endl;
 
-    // Demangle a class
-    std::cout << "Demangled type for MyClass: "
-              << atom::meta::DemangleHelper::demangleType<MyClass>()
-              << std::endl;
+    // Demangle a mangled name with optional source location
+    std::string mangledName = typeid(int).name();
+    std::string demangledName =
+        DemangleHelper::demangle(mangledName, std::source_location::current());
+    std::cout << "Demangled name with location: " << demangledName << std::endl;
 
-    // Use an instance to demangle
-    MyClass myClassInstance;
-    std::cout << "Demangled type for instance of MyClass: "
-              << atom::meta::DemangleHelper::demangleType(myClassInstance)
-              << std::endl;
-
-    // Demangle multiple types
-    std::vector<std::string_view> typesToDemangle = {
-        "std::vector<int>", "std::map<std::string, std::vector<double>>",
-        "MyClass::myMethod(int)"};
-
-    auto demangledTypes =
-        atom::meta::DemangleHelper::demangleMany(typesToDemangle);
-    std::cout << "Demangled multiple types:\n";
-    for (const auto& type : demangledTypes) {
-        std::cout << " - " << type << std::endl;
+    // Demangle multiple mangled names
+    std::vector<std::string_view> mangledNames = {typeid(int).name(),
+                                                  typeid(double).name()};
+    std::vector<std::string> demangledNames =
+        DemangleHelper::demangleMany(mangledNames);
+    std::cout << "Demangled names: ";
+    for (const auto& name : demangledNames) {
+        std::cout << name << " ";
     }
+    std::cout << std::endl;
+
+#if ENABLE_DEBUG
+    // Visualize a demangled type name
+    std::string visualizedType = DemangleHelper::visualize(demangledType);
+    std::cout << "Visualized type: " << visualizedType << std::endl;
+#endif
+
     return 0;
 }

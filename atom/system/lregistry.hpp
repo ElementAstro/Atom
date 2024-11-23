@@ -27,6 +27,8 @@ namespace atom::system {
 class Registry {
 public:
     Registry();
+
+    ~Registry();
     /**
      * @brief Loads registry data from a file.
      */

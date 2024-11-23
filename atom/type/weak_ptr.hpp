@@ -299,6 +299,124 @@ public:
 };
 
 /**
+ * @brief Specialization of EnhancedWeakPtr for void type.
+ */
+template <>
+class EnhancedWeakPtr<void> {
+private:
+    std::weak_ptr<void> ptr_;      ///< The underlying weak pointer.
+    mutable std::mutex mutex_;     ///< Mutex for thread-safe operations.
+    mutable std::condition_variable cv_;  ///< Condition variable for synchronization.
+    static inline std::atomic<size_t> totalInstances = 0;  ///< Total number of EnhancedWeakPtr instances.
+    mutable std::atomic<size_t> lockAttempts_ = 0;  ///< Number of lock attempts.
+
+public:
+    EnhancedWeakPtr() : ptr_() { ++totalInstances; }
+    explicit EnhancedWeakPtr(const std::shared_ptr<void>& shared) : ptr_(shared) { ++totalInstances; }
+    ~EnhancedWeakPtr() { --totalInstances; }
+    EnhancedWeakPtr(const EnhancedWeakPtr& other) : ptr_(other.ptr_) { ++totalInstances; }
+    EnhancedWeakPtr(EnhancedWeakPtr&& other) noexcept : ptr_(std::move(other.ptr_)) { ++totalInstances; }
+
+    auto operator=(const EnhancedWeakPtr& other) -> EnhancedWeakPtr& {
+        if (this != &other) {
+            ptr_ = other.ptr_;
+        }
+        return *this;
+    }
+
+    auto operator=(EnhancedWeakPtr&& other) noexcept -> EnhancedWeakPtr& {
+        if (this != &other) {
+            ptr_ = std::move(other.ptr_);
+        }
+        return *this;
+    }
+
+    auto lock() const -> std::shared_ptr<void> {
+        ++lockAttempts_;
+        return ptr_.lock();
+    }
+
+    auto expired() const -> bool { return ptr_.expired(); }
+    void reset() { ptr_.reset(); }
+
+#ifdef ATOM_USE_BOOST
+    void validate() const {
+        if (expired()) {
+            throw EnhancedWeakPtrException();
+        }
+    }
+#endif
+
+    template <typename Func, typename R = std::invoke_result_t<Func, void>>
+    auto withLock(Func&& func) const -> std::conditional_t<std::is_void_v<R>, bool, std::optional<R>> {
+        if (auto shared = lock()) {
+            if constexpr (std::is_void_v<R>) {
+                std::forward<Func>(func)();
+                return true;
+            } else {
+                return std::forward<Func>(func)();
+            }
+        }
+        if constexpr (std::is_void_v<R>) {
+            return false;
+        } else {
+            return std::nullopt;
+        }
+    }
+
+    template <typename Rep, typename Period>
+    auto waitFor(const std::chrono::duration<Rep, Period>& timeout) const -> bool {
+        std::unique_lock<std::mutex> lock(mutex_);
+        return cv_.wait_for(lock, timeout, [this] { return !this->expired(); });
+    }
+
+    auto operator==(const EnhancedWeakPtr& other) const -> bool {
+        return !ptr_.owner_before(other.ptr_) && !other.ptr_.owner_before(ptr_);
+    }
+
+    auto useCount() const -> long { return ptr_.use_count(); }
+    static auto getTotalInstances() -> size_t { return totalInstances.load(); }
+
+    template <typename SuccessFunc, typename FailureFunc>
+    auto tryLockOrElse(SuccessFunc&& success, FailureFunc&& failure) const {
+        if (auto shared = lock()) {
+            return std::forward<SuccessFunc>(success)();
+        }
+        return std::forward<FailureFunc>(failure)();
+    }
+
+    template <typename Rep, typename Period>
+    auto tryLockPeriodic(const std::chrono::duration<Rep, Period>& interval, size_t maxAttempts = std::numeric_limits<size_t>::max()) -> std::shared_ptr<void> {
+        for (size_t i = 0; i < maxAttempts; ++i) {
+            if (auto shared = lock()) {
+                return shared;
+            }
+            std::this_thread::sleep_for(interval);
+        }
+        return nullptr;
+    }
+
+    auto getWeakPtr() const -> std::weak_ptr<void> { return ptr_; }
+    auto createShared() const -> std::shared_ptr<void> { return std::shared_ptr<void>(ptr_); }
+    void notifyAll() const { cv_.notify_all(); }
+    auto getLockAttempts() const -> size_t { return lockAttempts_.load(); }
+    auto asyncLock() const -> std::future<std::shared_ptr<void>> {
+        return std::async(std::launch::async, [this] { return this->lock(); });
+    }
+
+    template <typename Predicate>
+    auto waitUntil(Predicate pred) const -> bool {
+        std::unique_lock<std::mutex> lock(mutex_);
+        return cv_.wait(lock, [this, &pred] { return !this->expired() && pred(); });
+    }
+
+    template <typename U>
+    auto cast() const -> EnhancedWeakPtr<U> {
+        return EnhancedWeakPtr<U>(std::static_pointer_cast<U>(ptr_.lock()));
+    }
+};
+
+/**
  * @brief Creates a group of EnhancedWeakPtr from a vector of shared pointers.
  * @tparam T The type of the managed objects.
  * @param sharedPtrs The vector of shared pointers.

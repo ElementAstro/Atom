@@ -242,6 +242,8 @@ constexpr auto hash(const char* str,
     }
     return hash;
 }
+}  // namespace atom::algorithm
+
 
 /**
  * @brief User-defined literal for computing hash values of string literals.
@@ -256,9 +258,7 @@ constexpr auto operator""_hash(const char* str,
                                std::size_t size) noexcept -> std::size_t {
     // The size parameter is not used in this implementation
     static_cast<void>(size);
-    return hash(str);
+    return atom::algorithm::hash(str);
 }
-
-}  // namespace atom::algorithm
 
 #endif  // ATOM_ALGORITHM_HASH_HPP

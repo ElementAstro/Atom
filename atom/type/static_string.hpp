@@ -1,14 +1,15 @@
 /*
  * static_string.hpp
  *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ * Copyright (C) 2023
  */
 
 /*************************************************
 
 Date: 2023-12-17
 
-Description: A Static String Implementation
+Description: An optimized Static String implementation with additional features
+using modern C++.
 
 **************************************************/
 
@@ -17,19 +18,12 @@ Description: A Static String Implementation
 
 #include <algorithm>
 #include <array>
-#include <cstring>
 #include <stdexcept>
-#include <string>
 #include <string_view>
-#include <type_traits>
-#include <utility>
-
-#ifdef ATOM_USE_BOOST
-#include <boost/type_traits.hpp>
-#endif
 
 /**
- * @brief A class representing a static string with a fixed maximum size.
+ * @brief A class representing a static string with a fixed maximum size,
+ * optimized using modern C++ features and providing additional functionalities.
  *
  * @tparam N The maximum size of the string (excluding the null terminator).
  */
@@ -42,7 +36,7 @@ public:
     /**
      * @brief Default constructor. Constructs an empty StaticString.
      */
-    constexpr StaticString() noexcept : size_(0) { data_[0] = '\0'; }
+    constexpr StaticString() noexcept : size_(0) { data_.fill('\0'); }
 
     /**
      * @brief Constructor accepting a C-style string literal.
@@ -50,23 +44,27 @@ public:
      * @param str The C-style string literal to initialize the StaticString
      * with.
      */
-    explicit constexpr StaticString(const std::array<char, N + 1>& str) noexcept
-        : size_(N) {
-        std::copy_n(str.begin(), N + 1, data_.begin());
+    constexpr StaticString(const char (&str)[N + 1]) noexcept : size_(N) {
+        std::copy_n(str, N + 1, data_.begin());
     }
 
     /**
-     * @brief Constructor accepting a std::string.
+     * @brief Constructor accepting a std::string_view.
      *
-     * @param str The std::string to initialize the StaticString with.
+     * @param str The string_view to initialize the StaticString with.
      */
-    explicit StaticString(const std::string& str) noexcept : size_(str.size()) {
+    constexpr StaticString(std::string_view str) : size_(str.size()) {
         if (str.size() > N) {
             throw std::runtime_error(
                 "String size exceeds StaticString capacity");
         }
-        std::copy_n(str.begin(), str.size(), data_.begin());
+        std::copy_n(str.data(), str.size(), data_.begin());
         data_[str.size()] = '\0';
+    }
+
+    constexpr StaticString(const std::array<char, N + 1>& arr) noexcept
+        : size_(N) {
+        std::copy_n(arr.begin(), N + 1, data_.begin());
     }
 
     /**
@@ -79,11 +77,20 @@ public:
     }
 
     /**
+     * @brief Checks if the string is empty.
+     *
+     * @return True if the string is empty, false otherwise.
+     */
+    [[nodiscard]] constexpr auto empty() const noexcept -> bool {
+        return size_ == 0;
+    }
+
+    /**
      * @brief Returns a pointer to the underlying C-style string.
      *
      * @return A pointer to the underlying C-style string.
      */
-    [[nodiscard]] constexpr auto cStr() const noexcept -> const char* {
+    [[nodiscard]] constexpr auto c_str() const noexcept -> const char* {
         return data_.data();
     }
 
@@ -91,6 +98,15 @@ public:
      * @brief Returns an iterator to the beginning of the string.
      *
      * @return An iterator to the beginning of the string.
+     */
+    [[nodiscard]] constexpr auto begin() noexcept -> char* {
+        return data_.data();
+    }
+
+    /**
+     * @brief Returns a const iterator to the beginning of the string.
+     *
+     * @return A const iterator to the beginning of the string.
      */
     [[nodiscard]] constexpr auto begin() const noexcept -> const char* {
         return data_.data();
@@ -101,177 +117,209 @@ public:
      *
      * @return An iterator to the end of the string.
      */
+    [[nodiscard]] constexpr auto end() noexcept -> char* {
+        return data_.data() + size_;
+    }
+
+    /**
+     * @brief Returns a const iterator to the end of the string.
+     *
+     * @return A const iterator to the end of the string.
+     */
     [[nodiscard]] constexpr auto end() const noexcept -> const char* {
         return data_.data() + size_;
     }
 
     /**
-     * @brief Compares the StaticString with a std::string_view for equality.
+     * @brief Accesses the character at the specified position.
      *
-     * @param other The std::string_view to compare with.
-     * @return True if the strings are equal, false otherwise.
+     * @param index The position of the character to access.
+     * @return A reference to the character at the specified position.
      */
-    constexpr auto operator==(std::string_view other) const noexcept -> bool {
-        return std::string_view(data_.data(), size_) == other;
+    constexpr auto operator[](size_type index) noexcept -> char& {
+        return data_[index];
     }
 
     /**
-     * @brief Compares the StaticString with another string for equality.
+     * @brief Accesses the character at the specified position.
      *
-     * @tparam T The type of the other string.
-     * @param other The other string to compare with.
-     * @return True if the strings are equal, false otherwise.
+     * @param index The position of the character to access.
+     * @return A const reference to the character at the specified position.
      */
-    template <typename T>
-    constexpr auto operator==(T&& other) const noexcept -> bool {
-        return std::string_view(data_.data(), size_) ==
-               std::string_view(std::forward<T>(other));
-    }
-
-    /**
-     * @brief Compares the StaticString with another string for inequality.
-     *
-     * @tparam T The type of the other string.
-     * @param other The other string to compare with.
-     * @return True if the strings are not equal, false otherwise.
-     */
-    template <typename T>
-    constexpr auto operator!=(T&& other) const noexcept -> bool {
-        return !(*this == std::forward<T>(other));
-    }
-
-    /**
-     * @brief Compares the StaticString with another string for less-than.
-     *
-     * @tparam T The type of the other string.
-     * @param other The other string to compare with.
-     * @return True if this string is less than the other string, false
-     * otherwise.
-     */
-    template <typename T>
-    constexpr auto operator<(T&& other) const noexcept -> bool {
-        return std::string_view(data_.data(), size_) <
-               std::string_view(std::forward<T>(other));
-    }
-
-    /**
-     * @brief Compares the StaticString with another string for less-than or
-     * equal.
-     *
-     * @tparam T The type of the other string.
-     * @param other The other string to compare with.
-     * @return True if this string is less than or equal to the other string,
-     * false otherwise.
-     */
-    template <typename T>
-    constexpr auto operator<=(T&& other) const noexcept -> bool {
-        return std::string_view(data_.data(), size_) <=
-               std::string_view(std::forward<T>(other));
-    }
-
-    /**
-     * @brief Compares the StaticString with another string for greater-than.
-     *
-     * @tparam T The type of the other string.
-     * @param other The other string to compare with.
-     * @return True if this string is greater than the other string, false
-     * otherwise.
-     */
-    template <typename T>
-    constexpr auto operator>(T&& other) const noexcept -> bool {
-        return std::string_view(data_.data(), size_) >
-               std::string_view(std::forward<T>(other));
-    }
-
-    /**
-     * @brief Compares the StaticString with another string for greater-than or
-     * equal.
-     *
-     * @tparam T The type of the other string.
-     * @param other The other string to compare with.
-     * @return True if this string is greater than or equal to the other string,
-     * false otherwise.
-     */
-    template <typename T>
-    constexpr auto operator>=(T&& other) const noexcept -> bool {
-        return std::string_view(data_.data(), size_) >=
-               std::string_view(std::forward<T>(other));
+    constexpr auto operator[](size_type index) const noexcept -> const char& {
+        return data_[index];
     }
 
     /**
      * @brief Appends a character to the end of the StaticString.
      *
-     * @param character The character to append.
+     * @param ch The character to append.
      * @return A reference to the modified StaticString.
      */
-    constexpr auto operator+=(char character) noexcept -> StaticString<N>& {
-        if (size_ < N) {
-            data_[size_++] = character;
-            data_[size_] = '\0';
+    constexpr auto push_back(char ch) -> StaticString& {
+        if (size_ >= N) {
+            throw std::runtime_error("StaticString overflow on push_back");
         }
+        data_[size_++] = ch;
+        data_[size_] = '\0';
         return *this;
     }
 
     /**
-     * @brief Concatenates a character to the StaticString, producing a new
-     * StaticString.
+     * @brief Appends a string to the end of the StaticString.
      *
-     * @param character The character to concatenate.
-     * @return A new StaticString with the character appended.
+     * @param str The string to append.
+     * @return A reference to the modified StaticString.
      */
-    constexpr auto operator+(char character) const noexcept
-        -> StaticString<N + 1> {
-        StaticString<N + 1> result;
-        std::copy(begin(), end(), result.data_.begin());
-        result += character;
+    constexpr auto append(std::string_view str) -> StaticString& {
+        if (size_ + str.size() > N) {
+            throw std::runtime_error("StaticString overflow on append");
+        }
+        std::copy_n(str.data(), str.size(), data_.data() + size_);
+        size_ += str.size();
+        data_[size_] = '\0';
+        return *this;
+    }
+
+    /**
+     * @brief Returns a substring of the StaticString.
+     *
+     * @param pos The starting position of the substring.
+     * @param count The length of the substring.
+     * @return A new StaticString containing the substring.
+     */
+    constexpr auto substr(size_type pos = 0,
+                          size_type count = npos) const -> StaticString {
+        if (pos > size_) {
+            throw std::out_of_range("Substring position out of range");
+        }
+        size_type len = std::min(count, size_ - pos);
+        StaticString result;
+        result.size_ = len;
+        std::copy_n(data_.data() + pos, len, result.data_.begin());
+        result.data_[len] = '\0';
         return result;
     }
+
+    /**
+     * @brief Finds a character in the StaticString.
+     *
+     * @param ch The character to find.
+     * @param pos The position to start the search.
+     * @return The position of the character, or npos if not found.
+     */
+    constexpr auto find(char ch,
+                        size_type pos = 0) const noexcept -> size_type {
+        for (size_type i = pos; i < size_; ++i) {
+            if (data_[i] == ch) {
+                return i;
+            }
+        }
+        return npos;
+    }
+
+    /**
+     * @brief Replaces a portion of the StaticString with another string.
+     *
+     * @param pos The starting position of the portion to replace.
+     * @param count The length of the portion to replace.
+     * @param str The string to replace with.
+     * @return A reference to the modified StaticString.
+     */
+    constexpr auto replace(size_type pos, size_type count,
+                           std::string_view str) -> StaticString& {
+        if (pos > size_) {
+            throw std::out_of_range("Replace position out of range");
+        }
+        size_type end_pos = pos + count;
+        if (end_pos > size_) {
+            end_pos = size_;
+        }
+        size_type new_size = size_ - (end_pos - pos) + str.size();
+        if (new_size > N) {
+            throw std::runtime_error("StaticString overflow on replace");
+        }
+        // Move the tail
+        std::move_backward(data_.data() + end_pos, data_.data() + size_,
+                           data_.data() + new_size);
+        // Copy the new string
+        std::copy_n(str.data(), str.size(), data_.data() + pos);
+        size_ = new_size;
+        data_[size_] = '\0';
+        return *this;
+    }
+
+    /**
+     * @brief Comparison operator ==
+     *
+     * @param other The StaticString to compare with.
+     * @return True if the strings are equal, false otherwise.
+     */
+    constexpr bool operator==(const StaticString& other) const noexcept {
+        return size_ == other.size_ &&
+               std::equal(begin(), end(), other.begin());
+    }
+
+    /**
+     * @brief Comparison operator !=
+     *
+     * @param other The StaticString to compare with.
+     * @return True if the strings are not equal, false otherwise.
+     */
+    constexpr bool operator!=(const StaticString& other) const noexcept {
+        return !(*this == other);
+    }
+
+    constexpr auto operator+=(char ch) -> StaticString& {
+        return push_back(ch);
+    }
+
+    constexpr auto operator+=(std::string_view str) -> StaticString& {
+        return append(str);
+    }
+
+    constexpr auto operator+=(const StaticString& other) -> StaticString& {
+        return append(other);
+    }
+
+    /**
+     * @brief Concatenation operator +
+     *
+     * @param other The StaticString to concatenate.
+     * @return A new StaticString with concatenated content.
+     */
+    template <std::size_t M>
+    constexpr auto operator+(const StaticString<M>& other) const
+        -> StaticString<N + M> {
+        StaticString<N + M> result;
+        result.size_ = size_ + other.size();
+        if (result.size_ > result.capacity()) {
+            throw std::runtime_error("StaticString overflow on concatenation");
+        }
+        std::copy_n(data_.data(), size_, result.data_.begin());
+        std::copy_n(other.data_.data(), other.size(),
+                    result.data_.begin() + size_);
+        result.data_[result.size_] = '\0';
+        return result;
+    }
+
+    /**
+     * @brief Returns the maximum capacity of the StaticString.
+     *
+     * @return The capacity of the StaticString.
+     */
+    [[nodiscard]] constexpr auto capacity() const noexcept -> size_type {
+        return N;
+    }
+
+    /**
+     * @brief The value used to represent an invalid position.
+     */
+    static constexpr size_type npos = static_cast<size_type>(-1);
 
     size_type size_;  ///< The current size of the string.
     std::array<char, N + 1>
         data_{};  ///< The underlying data storage for the string.
 };
-
-/**
- * @brief Concatenates two StaticString objects.
- *
- * @tparam N The size of the first StaticString.
- * @tparam M The size of the second StaticString.
- * @param lhs The first StaticString.
- * @param rhs The second StaticString.
- * @return A new StaticString containing the concatenation of the two input
- * strings.
- */
-template <std::size_t N, std::size_t M>
-constexpr auto operator+(const StaticString<N>& lhs,
-                         const StaticString<M>& rhs) noexcept
-    -> StaticString<N + M> {
-    StaticString<N + M> result;
-    std::copy(lhs.begin(), lhs.end(), result.data_.begin());
-    std::copy(rhs.begin(), rhs.end(), result.data_.begin() + N);
-    result += '\0';
-    return result;
-}
-
-/**
- * @brief Concatenates a StaticString with a string literal.
- *
- * @tparam N The size of the StaticString.
- * @tparam M The size of the string literal (including the null terminator).
- * @param lhs The StaticString.
- * @param rhs The string literal.
- * @return A new StaticString containing the concatenation of the StaticString
- * and the string literal.
- */
-template <std::size_t N, std::size_t M>
-constexpr auto operator+(const StaticString<N>& lhs,
-                         const std::array<char, M>& rhs) noexcept
-    -> StaticString<N + M - 1> {
-    StaticString<N + M - 1> result;
-    std::copy(lhs.begin(), lhs.end(), result.data_.begin());
-    std::copy_n(rhs.begin(), M - 1, result.data_.begin() + N);
-    result += '\0';
-    return result;
-}
 
 #endif  // ATOM_EXPERIMENT_SSTRING_HPP

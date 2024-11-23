@@ -55,6 +55,7 @@ TEST(SpanUtilsTest, MaxElementIndexFunction) {
     ASSERT_EQ(maxElementIndex(span), 0);
 }
 
+#if __DEBUG__
 TEST(SpanUtilsTest, PrintSpanFunction) {
     std::vector<int> data = {1, 2, 3, 4, 5};
     std::span<int> span(data);
@@ -64,6 +65,7 @@ TEST(SpanUtilsTest, PrintSpanFunction) {
     std::cout.rdbuf(oldCoutBuf);
     ASSERT_EQ(oss.str(), "1 2 3 4 5 \n");
 }
+#endif
 
 TEST(SpanUtilsTest, TransposeMatrixFunction) {
     std::vector<int> data = {1, 2, 3, 4, 5, 6};

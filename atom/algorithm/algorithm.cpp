@@ -13,7 +13,7 @@
 namespace atom::algorithm {
 
 KMP::KMP(std::string_view pattern) {
-    LOG_F(INFO, "Initializing KMP with pattern: %.*s",
+    LOG_F(INFO, "Initializing KMP with pattern: {}",
           static_cast<int>(pattern.size()), pattern.data());
     setPattern(pattern);
 }
@@ -24,7 +24,7 @@ auto KMP::search(std::string_view text) const -> std::vector<int> {
         std::shared_lock lock(mutex_);
         auto n = static_cast<int>(text.length());
         auto m = static_cast<int>(pattern_.length());
-        LOG_F(INFO, "KMP searching text of length %d with pattern length %d.",
+        LOG_F(INFO, "KMP searching text of length {} with pattern length {}.",
               n, m);
         if (m == 0) {
             LOG_F(WARNING, "Empty pattern provided to KMP::search.");
@@ -137,7 +137,7 @@ auto KMP::computeFailureFunction(std::string_view pattern) -> std::vector<int> {
 }
 
 BoyerMoore::BoyerMoore(std::string_view pattern) {
-    LOG_F(INFO, "Initializing BoyerMoore with pattern: %.*s",
+    LOG_F(INFO, "Initializing BoyerMoore with pattern: {}",
           static_cast<int>(pattern.size()), pattern.data());
     setPattern(pattern);
 }
@@ -149,7 +149,7 @@ auto BoyerMoore::search(std::string_view text) const -> std::vector<int> {
         auto n = static_cast<int>(text.length());
         auto m = static_cast<int>(pattern_.length());
         LOG_F(INFO,
-              "BoyerMoore searching text of length %d with pattern length %d.",
+              "BoyerMoore searching text of length {} with pattern length {}.",
               n, m);
         if (m == 0) {
             LOG_F(WARNING, "Empty pattern provided to BoyerMoore::search.");

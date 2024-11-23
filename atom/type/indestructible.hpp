@@ -163,7 +163,7 @@ private:
 #endif
             std::memcpy(&object, &other.object, sizeof(T));
         } else {
-            new (&object) T(std::forward<U>(other.object));
+            new (&object) T(std::forward<U>(other).object);
         }
     }
 
@@ -186,7 +186,11 @@ private:
         if constexpr (std::is_copy_assignable_v<T> ||
                       std::is_move_assignable_v<T>) {
 #endif
-            object = std::forward<U>(other.object);
+            if constexpr (std::is_rvalue_reference_v<U&&>) {
+                object = std::move(other.object);
+            } else {
+                object = other.object;
+            }
         }
     }
 

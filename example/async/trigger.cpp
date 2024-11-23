@@ -1,31 +1,56 @@
-#include <iostream>
-
 #include "atom/async/trigger.hpp"
 
+#include <iostream>
+#include <thread>
+
+using namespace atom::async;
+
+// Example callback function
+void exampleCallback(int value) {
+    std::cout << "Callback called with value: " << value << std::endl;
+}
+
+// Example callback function with high priority
+void highPriorityCallback(int value) {
+    std::cout << "High priority callback called with value: " << value
+              << std::endl;
+}
+
 int main() {
-    atom::async::Trigger<int> trigger;
+    // Create a Trigger object
+    Trigger<int> trigger;
 
-    // Registering callbacks
-    trigger.registerCallback(
-        "onEvent", [](int x) { std::cout << "Callback 1: " << x << std::endl; },
-        atom::async::Trigger<int>::CallbackPriority::High);
-    trigger.registerCallback("onEvent", [](int x) {
-        std::cout << "Callback 2: " << x << std::endl;
-    });
+    // Register callbacks for an event
+    trigger.registerCallback("exampleEvent", exampleCallback);
+    trigger.registerCallback("exampleEvent", highPriorityCallback,
+                             Trigger<int>::CallbackPriority::High);
 
-    // Triggering event
-    trigger.trigger("onEvent", 42);
+    // Trigger the event
+    trigger.trigger("exampleEvent", 42);
 
-    // Scheduling a delayed trigger
-    trigger.scheduleTrigger("onEvent", 84, std::chrono::milliseconds(500));
+    // Schedule a trigger for the event after a delay
+    trigger.scheduleTrigger("exampleEvent", 84,
+                            std::chrono::milliseconds(1000));
 
-    // Scheduling async trigger
-    auto future = trigger.scheduleAsyncTrigger("onEvent", 126);
-    future.get();  // Waiting for async trigger to complete
+    // Schedule an asynchronous trigger for the event
+    auto future = trigger.scheduleAsyncTrigger("exampleEvent", 126);
+    future.get();  // Wait for the asynchronous trigger to complete
 
-    // Cancel an event
-    trigger.cancelTrigger("onEvent");
+    // Unregister a callback
+    trigger.unregisterCallback("exampleEvent", exampleCallback);
 
-    // Cancel all events
+    // Trigger the event again to show that the callback has been unregistered
+    trigger.trigger("exampleEvent", 168);
+
+    // Cancel the scheduled trigger for the event
+    trigger.cancelTrigger("exampleEvent");
+
+    // Register another callback and cancel all triggers
+    trigger.registerCallback("exampleEvent", exampleCallback);
     trigger.cancelAllTriggers();
+
+    // Trigger the event to show that all triggers have been cancelled
+    trigger.trigger("exampleEvent", 210);
+
+    return 0;
 }

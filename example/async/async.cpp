@@ -1,82 +1,92 @@
-#include <chrono>
-#include <functional>
+#include "atom/async/async.hpp"
+
 #include <iostream>
 #include <thread>
 
-#include "atom/async/async.hpp"
+using namespace atom::async;
 
-// Sample function to be run asynchronously
-int sampleTask(int duration) {
-    std::this_thread::sleep_for(std::chrono::seconds(duration));
-    return duration;  // Return the duration as result
+// Example function to be executed asynchronously
+int exampleFunction(int a, int b) {
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    return a + b;
+}
+
+// Example callback function
+void exampleCallback(int result) {
+    std::cout << "Callback: Result is " << result << std::endl;
+}
+
+// Example exception handler
+void exampleExceptionHandler(const std::exception& e) {
+    std::cerr << "Exception: " << e.what() << std::endl;
+}
+
+// Example complete handler
+void exampleCompleteHandler() {
+    std::cout << "Complete: Task finished" << std::endl;
 }
 
 int main() {
-    // Create an AsyncWorker object for managing asynchronous tasks
-    atom::async::AsyncWorker<int> worker;
+    // Create an AsyncWorker for int result type
+    AsyncWorker<int> worker;
 
-    // Start an asynchronous task
-    worker.startAsync(sampleTask, 3);  // This will sleep for 3 seconds
+    // Start the async task
+    worker.startAsync(exampleFunction, 5, 10);
 
-    // Set a callback to handle the result when the task is done
-    worker.setCallback([](int result) {
-        std::cout << "Task completed with result: " << result << std::endl;
-    });
+    // Set a callback function
+    worker.setCallback(exampleCallback);
 
-    // Set a timeout of 5 seconds
+    // Set a timeout for the task
     worker.setTimeout(std::chrono::seconds(5));
 
-    // Wait for completion
-    std::cout << "Waiting for task completion...\n";
+    // Wait for the task to complete
     worker.waitForCompletion();
 
-    // Get the result (this will work since we know the task completed)
-    try {
+    // Get the result of the task
+    if (worker.isDone()) {
         int result = worker.getResult();
-        std::cout << "Result retrieved successfully: " << result << std::endl;
-    } catch (const std::exception &e) {
-        std::cerr << "Error retrieving result: " << e.what() << std::endl;
+        std::cout << "Result: " << result << std::endl;
     }
 
-    // Using AsyncWorkerManager to manage multiple workers
-    atom::async::AsyncWorkerManager<int> manager;
+    // Create an AsyncWorkerManager for int result type
+    AsyncWorkerManager<int> manager;
 
-    // Create multiple async workers
-    manager.createWorker(sampleTask, 1);  // 1 second task
-    manager.createWorker(sampleTask, 2);  // 2 seconds task
-    manager.createWorker(sampleTask, 3);  // 3 seconds task
+    // Create multiple workers and start tasks
+    auto worker1 = manager.createWorker(exampleFunction, 1, 2);
+    auto worker2 = manager.createWorker(exampleFunction, 3, 4);
 
-    // Wait for all created tasks to complete
-    std::cout << "Waiting for all tasks to complete...\n";
+    // Wait for all tasks to complete
     manager.waitForAll();
 
     // Check if all tasks are done
     if (manager.allDone()) {
-        std::cout << "All tasks have completed successfully.\n";
-    } else {
-        std::cout << "Some tasks are still running.\n";
+        std::cout << "All tasks are done." << std::endl;
     }
 
-    // Retry logic using asyncRetry for a task that may fail
-    auto retryExample = [](int x) {
-        static int attempt = 0;
-        attempt++;
-        if (attempt < 3) {
-            std::cerr << "Attempt " << attempt << " failed, retrying...\n";
-            throw std::runtime_error("Simulated failure");
-        }
-        return x * 2;  // Successful result
-    };
+    // Get results from workers
+    if (worker1->isDone()) {
+        std::cout << "Worker 1 result: " << worker1->getResult() << std::endl;
+    }
+    if (worker2->isDone()) {
+        std::cout << "Worker 2 result: " << worker2->getResult() << std::endl;
+    }
 
-    // Execute with retry
-    std::future<int> futureResult = atom::async::asyncRetry(
-        retryExample, 3, std::chrono::milliseconds(500), 5);
+    // Cancel all tasks
+    manager.cancelAll();
+
+    // Example of asyncRetry usage
+    auto retryFuture =
+        asyncRetry(exampleFunction, 3, std::chrono::milliseconds(100),
+                   BackoffStrategy::EXPONENTIAL,
+                   std::chrono::milliseconds(1000), exampleCallback,
+                   exampleExceptionHandler, exampleCompleteHandler, 5, 10);
+
+    // Wait for the retry task to complete
     try {
-        int finalResult = futureResult.get();
-        std::cout << "Final result after retrying: " << finalResult
-                  << std::endl;
-    } catch (const std::exception &e) {
-        std::cerr << "Error after retries: " << e.what() << std::endl;
+        int retryResult = retryFuture.get();
+        std::cout << "Retry result: " << retryResult << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Retry exception: " << e.what() << std::endl;
     }
 
     return 0;

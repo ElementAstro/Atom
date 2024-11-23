@@ -40,7 +40,6 @@ add_subdirectory(secret)
 add_subdirectory(sysinfo)
 add_subdirectory(system)
 add_subdirectory(tests)
-add_subdirectory(type)
 add_subdirectory(utils)
 add_subdirectory(web)
 

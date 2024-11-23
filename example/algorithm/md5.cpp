@@ -3,22 +3,15 @@
 #include <iostream>
 
 int main() {
-    {
-        // Example strings to hash
-        std::string test1 = "Hello, World!";
-        std::string test2 = "The quick brown fox jumps over the lazy dog";
-        std::string test3 = "MD5 Hash Example";
+    // Example input string to be hashed
+    std::string input = "Hello, World!";
 
-        // Call the encrypt method and output the result
-        std::string hash1 = atom::algorithm::MD5::encrypt(test1);
-        std::string hash2 = atom::algorithm::MD5::encrypt(test2);
-        std::string hash3 = atom::algorithm::MD5::encrypt(test3);
+    // Encrypt the input string using the MD5 algorithm
+    std::string hash = atom::algorithm::MD5::encrypt(input);
 
-        // Output the results
-        std::cout << "MD5(\"" << test1 << "\") = " << hash1 << std::endl;
-        std::cout << "MD5(\"" << test2 << "\") = " << hash2 << std::endl;
-        std::cout << "MD5(\"" << test3 << "\") = " << hash3 << std::endl;
-    }
+    // Print the resulting MD5 hash
+    std::cout << "Input: " << input << std::endl;
+    std::cout << "MD5 Hash: " << hash << std::endl;
 
     return 0;
 }

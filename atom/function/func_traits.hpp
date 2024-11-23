@@ -241,6 +241,19 @@ inline constexpr bool is_noexcept_v = FunctionTraits<Func>::is_noexcept;
 template <typename Func>
 inline constexpr bool is_variadic_v = FunctionTraits<Func>::is_variadic;
 
+template <typename Tuple>
+constexpr auto tuple_has_reference() -> bool {
+    return []<typename... Types>(std::tuple<Types...> *) {
+        return (std::is_reference_v<Types> || ...);
+    }(static_cast<Tuple *>(nullptr));
+}
+
+template <typename Func>
+constexpr auto has_reference_argument() -> bool {
+    using args_tuple = typename FunctionTraits<Func>::args_tuple;
+    return tuple_has_reference<args_tuple>();
+}
+
 #if ENABLE_DEBUG
 // Helper function to print tuple types
 template <typename Tuple>

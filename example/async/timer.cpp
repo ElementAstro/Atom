@@ -3,51 +3,70 @@
 #include <iostream>
 #include <thread>
 
-void task1() { std::cout << "Task 1 executed!" << std::endl; }
+using namespace atom::async;
 
-void task2(int value) {
-    std::cout << "Task 2 executed with value: " << value << std::endl;
+// Example function to be executed by the timer
+void exampleFunction() {
+    std::cout << "Task executed at "
+              << std::chrono::steady_clock::now().time_since_epoch().count()
+              << std::endl;
+}
+
+// Example function with arguments
+void exampleFunctionWithArgs(int value) {
+    std::cout << "Task executed with value: " << value << " at "
+              << std::chrono::steady_clock::now().time_since_epoch().count()
+              << std::endl;
 }
 
 int main() {
-    // 创建一个Timer对象
-    atom::async::Timer timer;
+    // Create a Timer object
+    Timer timer;
 
-    // 设置一个延迟执行的任务（一次性任务）
-    auto future1 = timer.setTimeout(task1, 2000);  // 2秒后执行task1
-    future1.get();  // 获取任务的结果（等待执行完成）
+    // Schedule a task to be executed once after a delay
+    auto future = timer.setTimeout(exampleFunction, 1000);
+    future.get();  // Wait for the task to complete
 
-    // 设置一个定时重复任务（每3秒执行一次，重复5次）
-    timer.setInterval(task2, 3000, 5, 1, 42);  // 任务优先级为1，参数为42
+    // Schedule a task to be executed repeatedly at an interval
+    timer.setInterval(exampleFunctionWithArgs, 500, 5, 1, 42);
 
-    // 设置一个匿名函数任务（lambda表达式）
-    auto future2 = timer.setTimeout(
-        []() {
-            std::cout << "Lambda task executed after 1 second!" << std::endl;
-        },
-        1000);  // 1秒后执行
+    // Wait for a short duration to let some tasks execute
+    std::this_thread::sleep_for(std::chrono::seconds(3));
 
-    future2.get();  // 获取lambda任务的结果（等待执行完成）
+    // Get the current time
+    auto currentTime = timer.now();
+    std::cout << "Current time: " << currentTime.time_since_epoch().count()
+              << std::endl;
 
-    // 模拟暂停定时器
-    std::this_thread::sleep_for(std::chrono::seconds(5));
-    std::cout << "Pausing timer..." << std::endl;
+    // Get the number of scheduled tasks
+    size_t taskCount = timer.getTaskCount();
+    std::cout << "Number of scheduled tasks: " << taskCount << std::endl;
+
+    // Pause the timer
     timer.pause();
+    std::cout << "Timer paused" << std::endl;
 
-    // 暂停2秒
+    // Wait for a short duration
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
-    // 恢复定时器
-    std::cout << "Resuming timer..." << std::endl;
+    // Resume the timer
     timer.resume();
+    std::cout << "Timer resumed" << std::endl;
 
-    // 等待一段时间后取消所有任务
-    std::this_thread::sleep_for(std::chrono::seconds(10));
-    std::cout << "Cancelling all tasks..." << std::endl;
+    // Set a callback function to be called when a task is executed
+    timer.setCallback(
+        []() { std::cout << "Callback: Task executed" << std::endl; });
+
+    // Wait for all tasks to complete
+    timer.wait();
+
+    // Cancel all scheduled tasks
     timer.cancelAllTasks();
+    std::cout << "All tasks cancelled" << std::endl;
 
-    // 停止定时器
+    // Stop the timer
     timer.stop();
+    std::cout << "Timer stopped" << std::endl;
 
     return 0;
 }

@@ -27,13 +27,17 @@ public:
 };
 
 HttpHeaderParser::HttpHeaderParser()
-    : m_pImpl(std::make_unique<HttpHeaderParser::HttpHeaderParserImpl>()) {
+    : impl_(std::make_unique<HttpHeaderParser::HttpHeaderParserImpl>()) {
     LOG_F(INFO, "HttpHeaderParser constructor called");
+}
+
+HttpHeaderParser::~HttpHeaderParser() {
+    LOG_F(INFO, "HttpHeaderParser destructor called");
 }
 
 void HttpHeaderParser::parseHeaders(const std::string &rawHeaders) {
     LOG_F(INFO, "parseHeaders called with rawHeaders: {}", rawHeaders);
-    m_pImpl->headers.clear();
+    impl_->headers.clear();
     std::istringstream iss(rawHeaders);
 
     std::string line;
@@ -46,7 +50,7 @@ void HttpHeaderParser::parseHeaders(const std::string &rawHeaders) {
             key.erase(key.find_last_not_of(' ') + 1);
             value.erase(0, value.find_first_not_of(' '));
 
-            m_pImpl->headers[key].push_back(value);
+            impl_->headers[key].push_back(value);
             LOG_F(INFO, "Parsed header: {}: {}", key, value);
         }
     }
@@ -56,7 +60,7 @@ void HttpHeaderParser::parseHeaders(const std::string &rawHeaders) {
 void HttpHeaderParser::setHeaderValue(const std::string &key,
                                       const std::string &value) {
     LOG_F(INFO, "setHeaderValue called with key: {}, value: {}", key, value);
-    m_pImpl->headers[key] = {value};
+    impl_->headers[key] = {value};
     LOG_F(INFO, "Header set: {}: {}", key, value);
 }
 
@@ -64,21 +68,21 @@ void HttpHeaderParser::setHeaders(
     const std::map<std::string, std::vector<std::string>> &headers) {
     LOG_F(INFO, "setHeaders called with headers: {}",
           atom::utils::toString(headers));
-    m_pImpl->headers = headers;
+    impl_->headers = headers;
     LOG_F(INFO, "Headers set successfully");
 }
 
 void HttpHeaderParser::addHeaderValue(const std::string &key,
                                       const std::string &value) {
     LOG_F(INFO, "addHeaderValue called with key: {}, value: {}", key, value);
-    m_pImpl->headers[key].push_back(value);
+    impl_->headers[key].push_back(value);
     LOG_F(INFO, "Header value added: {}: {}", key, value);
 }
 
 auto HttpHeaderParser::getHeaderValues(const std::string &key) const
     -> std::optional<std::vector<std::string>> {
     LOG_F(INFO, "getHeaderValues called with key: {}", key);
-    if (auto it = m_pImpl->headers.find(key); it != m_pImpl->headers.end()) {
+    if (auto it = impl_->headers.find(key); it != impl_->headers.end()) {
         LOG_F(INFO, "Header values found for key {}: {}", key,
               atom::utils::toString(it->second));
         return it->second;
@@ -89,26 +93,26 @@ auto HttpHeaderParser::getHeaderValues(const std::string &key) const
 
 void HttpHeaderParser::removeHeader(const std::string &key) {
     LOG_F(INFO, "removeHeader called with key: {}", key);
-    m_pImpl->headers.erase(key);
+    impl_->headers.erase(key);
     LOG_F(INFO, "Header removed: {}", key);
 }
 
 auto HttpHeaderParser::getAllHeaders() const
     -> std::map<std::string, std::vector<std::string>> {
     LOG_F(INFO, "getAllHeaders called");
-    return m_pImpl->headers;
+    return impl_->headers;
 }
 
 auto HttpHeaderParser::hasHeader(const std::string &key) const -> bool {
     LOG_F(INFO, "hasHeader called with key: {}", key);
-    bool result = m_pImpl->headers.contains(key);  // Use C++20 contains method
+    bool result = impl_->headers.contains(key);  // Use C++20 contains method
     LOG_F(INFO, "hasHeader result for key {}: {}", key, result);
     return result;
 }
 
 void HttpHeaderParser::clearHeaders() {
     LOG_F(INFO, "clearHeaders called");
-    m_pImpl->headers.clear();
+    impl_->headers.clear();
     LOG_F(INFO, "All headers cleared");
 }
 

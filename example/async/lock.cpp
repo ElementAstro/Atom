@@ -1,90 +1,78 @@
+#include "atom/async/lock.hpp"
+
 #include <iostream>
 #include <thread>
 #include <vector>
 
-#include "atom/async/lock.hpp"
+using namespace atom::async;
 
-// Global shared variable
-int sharedCounter = 0;
-const int NUM_INCREMENTS = 1000;
-
-// Example using Spinlock
-atom::async::Spinlock spinlock;
-
-void incrementCounterWithSpinlock() {
-    for (int i = 0; i < NUM_INCREMENTS; ++i) {
-        spinlock.lock();
-        ++sharedCounter;  // Critical section
-        spinlock.unlock();
+// Example function to demonstrate Spinlock usage
+void spinlockExample(Spinlock& spinlock, int& counter) {
+    for (int i = 0; i < 1000; ++i) {
+        ScopedLock<Spinlock> lock(spinlock);
+        ++counter;
     }
 }
 
-// Example using TicketSpinlock
-atom::async::TicketSpinlock ticketSpinlock;
-
-void incrementCounterWithTicketSpinlock() {
-    for (int i = 0; i < NUM_INCREMENTS; ++i) {
-        ticketSpinlock.lock();
-        ++sharedCounter;  // Critical section
-        ticketSpinlock.unlock(
-            0);  // Unlock with ticket 0 (not optimal for brevity)
+// Example function to demonstrate TicketSpinlock usage
+void ticketSpinlockExample(TicketSpinlock& ticketSpinlock, int& counter) {
+    for (int i = 0; i < 1000; ++i) {
+        TicketSpinlock::LockGuard lock(ticketSpinlock);
+        ++counter;
     }
 }
 
-// Example using UnfairSpinlock
-atom::async::UnfairSpinlock unfairSpinlock;
-
-void incrementCounterWithUnfairSpinlock() {
-    for (int i = 0; i < NUM_INCREMENTS; ++i) {
-        unfairSpinlock.lock();
-        ++sharedCounter;  // Critical section
-        unfairSpinlock.unlock();
+// Example function to demonstrate UnfairSpinlock usage
+void unfairSpinlockExample(UnfairSpinlock& unfairSpinlock, int& counter) {
+    for (int i = 0; i < 1000; ++i) {
+        ScopedUnfairLock<UnfairSpinlock> lock(unfairSpinlock);
+        ++counter;
     }
 }
 
 int main() {
-    sharedCounter = 0;  // Reset shared counter
+    // Spinlock example
+    Spinlock spinlock;
+    int spinlockCounter = 0;
+    std::vector<std::thread> spinlockThreads;
+    for (int i = 0; i < 10; ++i) {
+        spinlockThreads.emplace_back(spinlockExample, std::ref(spinlock),
+                                     std::ref(spinlockCounter));
+    }
+    for (auto& thread : spinlockThreads) {
+        thread.join();
+    }
+    std::cout << "Spinlock counter: " << spinlockCounter << std::endl;
 
-    // Using Spinlock
-    std::vector<std::thread> threads;
-    std::cout << "Using Spinlock:\n";
-    for (int i = 0; i < 5; ++i) {
-        threads.emplace_back(incrementCounterWithSpinlock);
+    // TicketSpinlock example
+    TicketSpinlock ticketSpinlock;
+    int ticketSpinlockCounter = 0;
+    std::vector<std::thread> ticketSpinlockThreads;
+    for (int i = 0; i < 10; ++i) {
+        ticketSpinlockThreads.emplace_back(ticketSpinlockExample,
+                                           std::ref(ticketSpinlock),
+                                           std::ref(ticketSpinlockCounter));
     }
-    for (auto &t : threads) {
-        t.join();
+    for (auto& thread : ticketSpinlockThreads) {
+        thread.join();
     }
-    std::cout << "Final counter value (Spinlock): " << sharedCounter << "\n";
+    std::cout << "TicketSpinlock counter: " << ticketSpinlockCounter
+              << std::endl;
 
-    // Reset shared counter for next demo
-    sharedCounter = 0;
-    threads.clear();
-
-    // Using TicketSpinlock
-    std::cout << "Using TicketSpinlock:\n";
-    for (int i = 0; i < 5; ++i) {
-        threads.emplace_back(incrementCounterWithTicketSpinlock);
+    // UnfairSpinlock example
+    UnfairSpinlock unfairSpinlock;
+    int unfairSpinlockCounter = 0;
+    std::vector<std::thread> unfairSpinlockThreads;
+    for (int i = 0; i < 10; ++i) {
+        unfairSpinlockThreads.emplace_back(unfairSpinlockExample,
+                                           std::ref(unfairSpinlock),
+                                           std::ref(unfairSpinlockCounter));
     }
-    for (auto &t : threads) {
-        t.join();
+    for (auto& thread : unfairSpinlockThreads) {
+        thread.join();
     }
-    std::cout << "Final counter value (TicketSpinlock): " << sharedCounter
-              << "\n";
-
-    // Reset shared counter for next demo
-    sharedCounter = 0;
-    threads.clear();
-
-    // Using UnfairSpinlock
-    std::cout << "Using UnfairSpinlock:\n";
-    for (int i = 0; i < 5; ++i) {
-        threads.emplace_back(incrementCounterWithUnfairSpinlock);
-    }
-    for (auto &t : threads) {
-        t.join();
-    }
-    std::cout << "Final counter value (UnfairSpinlock): " << sharedCounter
-              << "\n";
+    std::cout << "UnfairSpinlock counter: " << unfairSpinlockCounter
+              << std::endl;
 
     return 0;
 }

@@ -1,6 +1,8 @@
 #include "atom/type/args.hpp"
 #include <gtest/gtest.h>
 
+using namespace atom;
+
 TEST(ArgsTest, SetAndGet) {
     Args args;
     args.set("key1", 10);

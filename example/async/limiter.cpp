@@ -1,72 +1,67 @@
-#include <chrono>
+#include "atom/async/limiter.hpp"
+
 #include <iostream>
 #include <thread>
 
-#include "atom/async/limiter.hpp"
+using namespace atom::async;
 
-// Function to be rate limited
-void criticalFunction() {
-    std::cout << "Critical function executed at "
-              << std::chrono::steady_clock::now().time_since_epoch().count()
-              << std::endl;
-}
-
-// Function to demonstrate debouncing
-void debouncedFunction() {
-    std::cout << "Debounced function executed at "
-              << std::chrono::steady_clock::now().time_since_epoch().count()
-              << std::endl;
-}
-
-// Function to demonstrate throttling
-void throttledFunction() {
-    std::cout << "Throttled function executed at "
+// Example function to be rate-limited, debounced, or throttled
+void exampleFunction() {
+    std::cout << "Function called at "
               << std::chrono::steady_clock::now().time_since_epoch().count()
               << std::endl;
 }
 
 int main() {
-    // Rate Limiter Example
-    atom::async::RateLimiter rateLimiter;
-    rateLimiter.setFunctionLimit("criticalFunction", 3,
-                                 std::chrono::seconds(5));
+    // RateLimiter example
+    RateLimiter rateLimiter;
+    rateLimiter.setFunctionLimit("exampleFunction", 3, std::chrono::seconds(5));
 
-    // Simulate requests to the critical function
     for (int i = 0; i < 5; ++i) {
-        auto awaiter = rateLimiter.acquire("criticalFunction");
-        awaiter.await_suspend({});
-        criticalFunction();
-        std::this_thread::sleep_for(
-            std::chrono::seconds(1));  // Simulate time between function calls
+        auto awaiter = rateLimiter.acquire("exampleFunction");
+        if (!awaiter.await_ready()) {
+            std::cout << "Rate limit exceeded, waiting..." << std::endl;
+            awaiter.await_suspend(std::noop_coroutine());
+        }
+        exampleFunction();
+        std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
-    // Debounce Example
-    atom::async::Debounce debouncer(debouncedFunction,
-                                    std::chrono::milliseconds(500), true);
+    // Print the log of requests
+    rateLimiter.printLog();
 
-    // Simulate rapid calls
+    // Get the number of rejected requests
+    size_t rejectedRequests =
+        rateLimiter.getRejectedRequests("exampleFunction");
+    std::cout << "Number of rejected requests: " << rejectedRequests
+              << std::endl;
+
+    // Debounce example
+    Debounce debounce(exampleFunction, std::chrono::milliseconds(500), true);
+
     for (int i = 0; i < 5; ++i) {
-        debouncer();  // Calls will be debounced
-        std::this_thread::sleep_for(
-            std::chrono::milliseconds(200));  // Calls within the debounce delay
+        debounce();
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(600));  // Wait for debounced call to execute
+    // Flush the debounced function
+    debounce.flush();
 
-    // Throttle Example
-    atom::async::Throttle throttler(throttledFunction,
-                                    std::chrono::milliseconds(1000), true);
+    // Get the call count
+    size_t debounceCallCount = debounce.callCount();
+    std::cout << "Debounce call count: " << debounceCallCount << std::endl;
 
-    // Simulate rapid throttled calls
+    // Throttle example
+    Throttle throttle(exampleFunction, std::chrono::milliseconds(500), true);
+
     for (int i = 0; i < 5; ++i) {
-        throttler();  // Throttled function calls
-        std::this_thread::sleep_for(
-            std::chrono::milliseconds(300));  // Calls within the throttle time
+        throttle();
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(2000));  // Wait to ensure throttling works
+    // Get the call count
+    size_t throttleCallCount = throttle.callCount();
+    std::cout << "Throttle call count: " << throttleCallCount << std::endl;
 
     return 0;
 }

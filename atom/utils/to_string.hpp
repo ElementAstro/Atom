@@ -19,20 +19,33 @@
 
 namespace atom::utils {
 
-// StringType 概念
+/**
+ * @brief Concept for string types.
+ *
+ * This concept checks if a type is a string, const char*, or char*.
+ */
 template <typename T>
 concept StringType = std::is_same_v<std::decay_t<T>, std::string> ||
                      std::is_same_v<std::decay_t<T>, const char*> ||
                      std::is_same_v<std::decay_t<T>, char*>;
 
-// Container 概念
+/**
+ * @brief Concept for container types.
+ *
+ * This concept checks if a type has begin and end iterators.
+ */
 template <typename T>
 concept Container = requires(T container) {
     std::begin(container);
     std::end(container);
 };
 
-// MapType 概念
+/**
+ * @brief Concept for map types.
+ *
+ * This concept checks if a type has key_type and mapped_type, and has begin and
+ * end iterators.
+ */
 template <typename T>
 concept MapType = requires(T map) {
     typename T::key_type;
@@ -41,22 +54,40 @@ concept MapType = requires(T map) {
     std::end(map);
 };
 
-// PointerType 概念
+/**
+ * @brief Concept for pointer types.
+ *
+ * This concept checks if a type is a pointer but not a string type.
+ */
 template <typename T>
 concept PointerType = std::is_pointer_v<T> && !StringType<T>;
 
-// EnumType 概念
+/**
+ * @brief Concept for enum types.
+ *
+ * This concept checks if a type is an enum.
+ */
 template <typename T>
 concept EnumType = std::is_enum_v<T>;
 
-// SmartPointer 概念
+/**
+ * @brief Concept for smart pointer types.
+ *
+ * This concept checks if a type has dereference and get methods.
+ */
 template <typename T>
 concept SmartPointer = requires(T smartPtr) {
     *smartPtr;
     smartPtr.get();
 };
 
-// 将字符串类型转换为 std::string
+/**
+ * @brief Converts a string type to std::string.
+ *
+ * @tparam T The type of the input value.
+ * @param value The input value to be converted.
+ * @return The converted std::string.
+ */
 template <StringType T>
 auto toString(T&& value) -> std::string {
     if constexpr (std::is_same_v<std::decay_t<T>, std::string>) {
@@ -66,16 +97,35 @@ auto toString(T&& value) -> std::string {
     }
 }
 
-// 将 char 类型转换为 std::string
-inline auto toString(char value) -> std::string { return std::string(1, value); }
+/**
+ * @brief Converts a char type to std::string.
+ *
+ * @param value The input char value to be converted.
+ * @return The converted std::string.
+ */
+inline auto toString(char value) -> std::string {
+    return std::string(1, value);
+}
 
-// 将枚举类型转换为 std::string
+/**
+ * @brief Converts an enum type to std::string.
+ *
+ * @tparam T The type of the input value.
+ * @param value The input enum value to be converted.
+ * @return The converted std::string.
+ */
 template <EnumType T>
 auto toString(T value) -> std::string {
     return std::to_string(static_cast<std::underlying_type_t<T>>(value));
 }
 
-// 将指针类型转换为 std::string
+/**
+ * @brief Converts a pointer type to std::string.
+ *
+ * @tparam T The type of the input pointer.
+ * @param ptr The input pointer to be converted.
+ * @return The converted std::string.
+ */
 template <PointerType T>
 auto toString(T ptr) -> std::string {
     if (ptr) {
@@ -84,7 +134,13 @@ auto toString(T ptr) -> std::string {
     return "nullptr";
 }
 
-// 将智能指针类型转换为 std::string
+/**
+ * @brief Converts a smart pointer type to std::string.
+ *
+ * @tparam T The type of the input smart pointer.
+ * @param ptr The input smart pointer to be converted.
+ * @return The converted std::string.
+ */
 template <SmartPointer T>
 auto toString(const T& ptr) -> std::string {
     if (ptr) {
@@ -93,7 +149,14 @@ auto toString(const T& ptr) -> std::string {
     return "nullptr";
 }
 
-// 将容器类型转换为 std::string
+/**
+ * @brief Converts a container type to std::string.
+ *
+ * @tparam T The type of the input container.
+ * @param container The input container to be converted.
+ * @param separator The separator to be used between elements.
+ * @return The converted std::string.
+ */
 template <Container T>
 auto toString(const T& container,
               const std::string& separator = ", ") -> std::string {
@@ -125,7 +188,13 @@ auto toString(const T& container,
     return oss.str();
 }
 
-// 将一般类型转换为 std::string
+/**
+ * @brief Converts a general type to std::string.
+ *
+ * @tparam T The type of the input value.
+ * @param value The input value to be converted.
+ * @return The converted std::string.
+ */
 template <typename T>
     requires(!StringType<T> && !Container<T> && !PointerType<T> &&
              !EnumType<T> && !SmartPointer<T>)
@@ -139,19 +208,32 @@ auto toString(const T& value) -> std::string {
     }
 }
 
-// 将多个参数连接成一个命令行字符串
+/**
+ * @brief Joins multiple arguments into a single command line string.
+ *
+ * @tparam Args The types of the input arguments.
+ * @param args The input arguments to be joined.
+ * @return The joined command line string.
+ */
 template <typename... Args>
 auto joinCommandLine(const Args&... args) -> std::string {
     std::ostringstream oss;
     ((oss << toString(args) << ' '), ...);
     std::string result = oss.str();
     if (!result.empty()) {
-        result.pop_back();  // 移除尾部空格
+        result.pop_back();  // Remove trailing space
     }
     return result;
 }
 
-// 将数组转换为 std::string
+/**
+ * @brief Converts an array to std::string.
+ *
+ * @tparam T The type of the input array.
+ * @param array The input array to be converted.
+ * @param separator The separator to be used between elements.
+ * @return The converted std::string.
+ */
 template <Container T>
 auto toStringArray(const T& array,
                    const std::string& separator = " ") -> std::string {
@@ -167,7 +249,15 @@ auto toStringArray(const T& array,
     return oss.str();
 }
 
-// 将范围转换为 std::string
+/**
+ * @brief Converts a range to std::string.
+ *
+ * @tparam Iterator The type of the input iterators.
+ * @param begin The beginning iterator of the range.
+ * @param end The ending iterator of the range.
+ * @param separator The separator to be used between elements.
+ * @return The converted std::string.
+ */
 template <typename Iterator>
 auto toStringRange(Iterator begin, Iterator end,
                    const std::string& separator = ", ") -> std::string {
@@ -183,13 +273,28 @@ auto toStringRange(Iterator begin, Iterator end,
     return oss.str();
 }
 
-// 将 std::array 转换为 std::string
+/**
+ * @brief Converts a std::array to std::string.
+ *
+ * @tparam T The type of the elements in the array.
+ * @tparam N The size of the array.
+ * @param array The input array to be converted.
+ * @return The converted std::string.
+ */
 template <typename T, std::size_t N>
 auto toString(const std::array<T, N>& array) -> std::string {
     return toStringRange(array.begin(), array.end());
 }
 
-// 将元组转换为 std::string
+/**
+ * @brief Helper function to convert a tuple to std::string.
+ *
+ * @tparam Tuple The type of the input tuple.
+ * @tparam I The indices of the tuple elements.
+ * @param tpl The input tuple to be converted.
+ * @param separator The separator to be used between elements.
+ * @return The converted std::string.
+ */
 template <typename Tuple, std::size_t... I>
 auto tupleToStringImpl(const Tuple& tpl, std::index_sequence<I...>,
                        const std::string& separator) -> std::string {
@@ -202,7 +307,14 @@ auto tupleToStringImpl(const Tuple& tpl, std::index_sequence<I...>,
     return oss.str();
 }
 
-// 将 std::tuple 转换为 std::string
+/**
+ * @brief Converts a std::tuple to std::string.
+ *
+ * @tparam Args The types of the elements in the tuple.
+ * @param tpl The input tuple to be converted.
+ * @param separator The separator to be used between elements.
+ * @return The converted std::string.
+ */
 template <typename... Args>
 auto toString(const std::tuple<Args...>& tpl,
               const std::string& separator = ", ") -> std::string {
@@ -210,7 +322,13 @@ auto toString(const std::tuple<Args...>& tpl,
                              separator);
 }
 
-// 将 std::optional 转换为 std::string
+/**
+ * @brief Converts a std::optional to std::string.
+ *
+ * @tparam T The type of the value in the optional.
+ * @param opt The input optional to be converted.
+ * @return The converted std::string.
+ */
 template <typename T>
 auto toString(const std::optional<T>& opt) -> std::string {
     if (opt.has_value()) {
@@ -219,7 +337,13 @@ auto toString(const std::optional<T>& opt) -> std::string {
     return "nullopt";
 }
 
-// 将 std::variant 转换为 std::string
+/**
+ * @brief Converts a std::variant to std::string.
+ *
+ * @tparam Ts The types of the values in the variant.
+ * @param var The input variant to be converted.
+ * @return The converted std::string.
+ */
 template <typename... Ts>
 auto toString(const std::variant<Ts...>& var) -> std::string {
     return std::visit(

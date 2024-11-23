@@ -1,42 +1,74 @@
 #include "atom/async/message_queue.hpp"
 
-#include <chrono>
 #include <iostream>
 #include <thread>
 
-// Message structure
-struct MyMessage {
+#include <asio/io_context.hpp>
+
+using namespace atom::async;
+
+// Example message type
+struct ExampleMessage {
     std::string content;
 };
 
-// Subscriber function to handle incoming messages
-void messageHandler(const MyMessage &msg) {
-    std::cout << "Received message: " << msg.content << std::endl;
+// Example callback function
+void exampleCallback(const ExampleMessage& message) {
+    std::cout << "Received message: " << message.content << std::endl;
+}
+
+// Example filter function
+bool exampleFilter(const ExampleMessage& message) {
+    return message.content.find("filter") != std::string::npos;
 }
 
 int main() {
-    // Create a MessageQueue instance for MyMessage
-    atom::async::MessageQueue<MyMessage> messageQueue;
+    // Create an Asio io_context
+    asio::io_context io_context;
 
-    // Subscribe to the message queue
-    messageQueue.subscribe(messageHandler, "MessageHandler");
+    // Create a MessageQueue instance
+    MessageQueue<ExampleMessage> messageQueue(io_context);
 
-    // Start the processing thread
-    messageQueue.startProcessingThread();
+    // Subscribe to messages with a callback, filter, and timeout
+    messageQueue.subscribe(exampleCallback, "exampleSubscriber", 1,
+                           exampleFilter, std::chrono::milliseconds(1000));
 
-    // Publish some messages to the queue
-    for (int i = 0; i < 5; ++i) {
-        MyMessage msg{"Hello World " + std::to_string(i)};
-        messageQueue.publish(msg);
-        std::this_thread::sleep_for(std::chrono::milliseconds(
-            200));  // Simulate some delay between messages
-    }
+    // Publish a message
+    ExampleMessage message{"Hello, World!"};
+    messageQueue.publish(message);
 
-    // Allow some time for processing before stopping
+    // Publish a message that passes the filter
+    ExampleMessage filteredMessage{"This message contains filter keyword"};
+    messageQueue.publish(filteredMessage);
+
+    // Start processing messages in a separate thread
+    std::thread processingThread([&io_context]() { io_context.run(); });
+
+    // Wait for a short duration to ensure the message is processed
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
-    // Stop the processing thread
-    messageQueue.stopProcessingThread();
+    // Get the number of messages in the queue
+    size_t messageCount = messageQueue.getMessageCount();
+    std::cout << "Number of messages in the queue: " << messageCount
+              << std::endl;
+
+    // Get the number of subscribers
+    size_t subscriberCount = messageQueue.getSubscriberCount();
+    std::cout << "Number of subscribers: " << subscriberCount << std::endl;
+
+    // Cancel specific messages that meet a given condition
+    messageQueue.cancelMessages([](const ExampleMessage& msg) {
+        return msg.content == "Hello, World!";
+    });
+
+    // Unsubscribe from messages
+    messageQueue.unsubscribe(exampleCallback);
+
+    // Stop processing messages
+    messageQueue.stopProcessing();
+
+    // Join the processing thread
+    processingThread.join();
 
     return 0;
 }

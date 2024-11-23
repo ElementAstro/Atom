@@ -175,13 +175,16 @@ inline uint64_t swap_u64(uint64_t value) {
 }
 #endif  // FALLBACK_SWAP
 
+#if ATOM_USE_SIMD
 #include <emmintrin.h>
 #include <immintrin.h>
 #include <smmintrin.h>
+#endif
 
 #include "random.hpp"
 
 namespace atom::utils {
+#if ATOM_USE_SIMD
 namespace detail {
 /*
 Converts a 128-bits unsigned int to an UUIDv4 string representation.
@@ -272,6 +275,8 @@ __m128i inline stom128i(const char* mem) {
 }
 
 }  // namespace detail
+#endif
+
 UUID::UUID() { generateRandom(); }
 
 UUID::UUID(const std::array<uint8_t, 16>& data) : data_(data) {}
@@ -553,6 +558,7 @@ auto generateUniqueUUID() -> std::string {
     return uuid;
 }
 
+#if ATOM_USE_SIMD
 FastUUID::FastUUID() {}
 
 FastUUID::FastUUID(const FastUUID& other) {
@@ -694,4 +700,5 @@ FastUUID FastUUIDGenerator<RNG>::getUUID() {
 
     return {uuid};
 }
+#endif
 }  // namespace atom::utils

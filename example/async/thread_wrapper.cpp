@@ -1,46 +1,69 @@
+#include "atom/async/thread_wrapper.hpp"
+
 #include <chrono>
 #include <iostream>
 #include <thread>
 
-#include "atom/async/thread_wrapper.hpp"
+using namespace atom::async;
 
-// A sample function to be executed in a thread
-void threadFunction(int id, std::chrono::milliseconds duration) {
-    std::cout << "Thread " << id << " started. Sleeping for "
-              << duration.count() << "ms.\n";
-    std::this_thread::sleep_for(duration);
-    std::cout << "Thread " << id << " finished processing!\n";
+// Example function to be executed by the thread
+void exampleFunction() {
+    std::cout << "Thread is running" << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::cout << "Thread has finished" << std::endl;
 }
 
-// A sample function that supports stopping
-void stoppableThreadFunction(std::stop_token stopToken) {
-    for (int i = 0; i < 5; ++i) {
-        if (stopToken.stop_requested()) {
-            std::cout << "Thread is stopping early!\n";
-            return;
-        }
-        std::cout << "Working... " << i + 1 << "\n";
-        std::this_thread::sleep_for(
-            std::chrono::milliseconds(500));  // Simulate work
+// Example function with stop token
+void exampleFunctionWithStop(std::stop_token stopToken) {
+    while (!stopToken.stop_requested()) {
+        std::cout << "Thread is running with stop token" << std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(1));
     }
+    std::cout << "Thread has been requested to stop" << std::endl;
 }
 
 int main() {
-    // Create a Thread for normal execution
-    atom::async::Thread normalThread;
-    normalThread.start(threadFunction, 1, std::chrono::milliseconds(2000));
-    normalThread.join();  // Wait for it to finish
+    // Create a Thread object
+    Thread thread;
 
-    // Create a Thread that can be stopped
-    atom::async::Thread stoppableThread;
-    stoppableThread.start(stoppableThreadFunction);  // Start a stoppable thread
+    // Start the thread with a simple function
+    thread.start(exampleFunction);
 
-    // Give it some time to work
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-    std::cout << "Requesting the stoppable thread to stop...\n";
-    stoppableThread.requestStop();  // Request it to stop
+    // Wait for the thread to finish
+    thread.join();
 
-    stoppableThread.join();  // Wait for it to finish
+    // Start the thread with a function that uses a stop token
+    thread.start(exampleFunctionWithStop);
+
+    // Let the thread run for a while
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+
+    // Request the thread to stop
+    thread.requestStop();
+
+    // Wait for the thread to finish
+    thread.join();
+
+    // Check if the thread is running
+    if (thread.running()) {
+        std::cout << "Thread is still running" << std::endl;
+    } else {
+        std::cout << "Thread is not running" << std::endl;
+    }
+
+    // Get the thread ID
+    std::cout << "Thread ID: " << thread.getId() << std::endl;
+
+    // Get the stop source and stop token
+    auto stopSource = thread.getStopSource();
+    auto stopToken = thread.getStopToken();
+
+    // Swap threads
+    Thread anotherThread;
+    thread.swap(anotherThread);
+
+    // Check the swapped thread ID
+    std::cout << "Swapped Thread ID: " << anotherThread.getId() << std::endl;
 
     return 0;
 }

@@ -34,6 +34,11 @@ public:
     HttpHeaderParser();
 
     /**
+     * @brief Destructor.
+     */
+    ~HttpHeaderParser();
+
+    /**
      * @brief Parses the raw HTTP headers and stores them internally.
      * @param rawHeaders The raw HTTP headers as a string.
      */
@@ -95,7 +100,7 @@ public:
 
 private:
     class HttpHeaderParserImpl;
-    std::unique_ptr<HttpHeaderParserImpl> m_pImpl;  // Pointer to implementation
+    std::unique_ptr<HttpHeaderParserImpl> impl_;  // Pointer to implementation
 };
 }  // namespace atom::web
 

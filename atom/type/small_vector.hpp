@@ -207,13 +207,14 @@ public:
         return size_;
     }
 
-    ATOM_NODISCARD auto max_size() const ATOM_NOEXCEPT -> size_type {
+    ATOM_NODISCARD auto maxSize() const ATOM_NOEXCEPT -> size_type {
         return std::numeric_limits<size_type>::max();
     }
 
     void reserve(size_type new_cap) {
         if (new_cap > capacity()) {
-            T* newData = allocateMemory(new_cap);
+            allocateMemory(new_cap);
+            T* newData = data_;
 #ifdef ATOM_USE_BOOST
             boost::uninitialized_move(begin(), end(), newData);
 #else
@@ -261,7 +262,7 @@ public:
             destroy(insertPos, insertPos + count);
         }
 #ifdef ATOM_USE_BOOST
-        boost::uninitialized_fill_n(insert_pos, count, value);
+        boost::uninitialized_fill_n(insertPos, count, value);
 #else
         std::uninitialized_fill_n(insertPos, count, value);
 #endif
@@ -280,7 +281,7 @@ public:
         iterator insertPos = begin() + index;
         if (insertPos != end()) {
 #ifdef ATOM_USE_BOOST
-            boost::uninitialized_move(insert_pos, end(), end() + count);
+            boost::uninitialized_move(insertPos, end(), end() + count);
 #else
             std::uninitialized_move_n(insertPos, end() - insertPos,
                                       end() + count);
@@ -288,7 +289,7 @@ public:
             destroy(insertPos, insertPos + count);
         }
 #ifdef ATOM_USE_BOOST
-        boost::uninitialized_copy(first, last, insert_pos);
+        boost::uninitialized_copy(first, last, insertPos);
 #else
         std::uninitialized_copy(first, last, insertPos);
 #endif
@@ -310,7 +311,7 @@ public:
         iterator insertPos = begin() + index;
         if (insertPos != end()) {
 #ifdef ATOM_USE_BOOST
-            boost::uninitialized_move(insert_pos, end(), end() + 1);
+            boost::uninitialized_move(insertPos, end(), end() + 1);
 #else
             std::uninitialized_move_n(insertPos, end() - insertPos, end() + 1);
 #endif
@@ -338,12 +339,12 @@ public:
         return nonConstFirst;
     }
 
-    void push_back(const T& value) { emplace_back(value); }
+    void pushBack(const T& value) { emplaceBack(value); }
 
-    void push_back(T&& value) { emplace_back(std::move(value)); }
+    void pushBack(T&& value) { emplaceBack(std::move(value)); }
 
     template <typename... Args>
-    auto emplace_back(Args&&... args) -> reference {
+    auto emplaceBack(Args&&... args) -> reference {
         if (size() == capacity()) {
             reserve(capacity() == 0 ? 1 : capacity() * 2);
         }
@@ -352,7 +353,7 @@ public:
         return back();
     }
 
-    void pop_back() {
+    void popBack() {
         --size_;
         destroy(end());
     }
@@ -373,20 +374,20 @@ public:
     }
 
 private:
-    // TOOD: Here we can use std::aligned_storage to optimize the memory
+    // TODO: Here we can use std::aligned_storage to optimize the memory
     auto allocate(size_type n) -> T* {
         return static_cast<T*>(::operator new(n * sizeof(T)));
     }
 
     void deallocate() {
-        if (data_ != static_buffer_) {
+        if (data_ != reinterpret_cast<T*>(static_buffer_.data())) {
             ::operator delete(data_);
         }
     }
 
     void allocateMemory(size_type n) {
         if (n <= N) {
-            data_ = static_buffer_;
+            data_ = reinterpret_cast<T*>(static_buffer_.data());
             capacity_ = N;
         } else {
             data_ = allocate(n);
@@ -395,8 +396,8 @@ private:
     }
 
     void moveFrom(SmallVector&& other) {
-        if (other.data_ == other.static_buffer_) {
-            data_ = static_buffer_;
+        if (other.data_ == reinterpret_cast<T*>(other.static_buffer_.data())) {
+            data_ = reinterpret_cast<T*>(static_buffer_.data());
 #ifdef ATOM_USE_BOOST
             boost::uninitialized_move(other.begin(), other.end(), begin());
 #else
@@ -404,7 +405,7 @@ private:
 #endif
         } else {
             data_ = other.data_;
-            other.data_ = other.static_buffer_;
+            other.data_ = reinterpret_cast<T*>(other.static_buffer_.data());
         }
         size_ = other.size_;
         capacity_ = other.capacity_;

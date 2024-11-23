@@ -202,6 +202,7 @@ auto UUID::generateNameBased(const UUID& namespace_uuid,
  */
 ATOM_NODISCARD auto generateUniqueUUID() -> std::string;
 
+#if ATOM_USE_SIMD
 typedef long long __m128i __attribute__((__vector_size__(16), __aligned__(16)));
 
 class FastUUID {
@@ -258,7 +259,7 @@ private:
     std::shared_ptr<RNG> generator;
     std::uniform_int_distribution<uint64_t> distribution;
 };
-
+#endif
 }  // namespace atom::utils
 
 namespace std {
@@ -269,12 +270,14 @@ struct hash<atom::utils::UUID> {
     }
 };
 
+#if ATOM_USE_SIMD
 template <>
 struct hash<atom::utils::FastUUID> {
     auto operator()(const atom::utils::FastUUID& uuid) const -> size_t {
         return uuid.hash();
     }
 };
+#endif
 }  // namespace std
 
 #endif

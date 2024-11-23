@@ -498,9 +498,9 @@ public:
         return elements_;
     }
 
-#ifdef __DEBUG__
     // ======== Printing ========
     void print() const {
+#ifdef __DEBUG__
 #ifdef ATOM_USE_BOOST
         boost::copy(elements_, std::ostream_iterator<T>(std::cout, " "));
 #else
@@ -509,8 +509,8 @@ public:
         }
 #endif
         std::cout << std::endl;
-    }
 #endif  // __DEBUG__
+    }
 
 private:
     std::vector<T> elements_;
