@@ -79,7 +79,7 @@ public:
 
         std::vector<ConvertFunc> conversions;
         {
-            std::shared_lock conv_lock(conversion_mutex_);
+            std::shared_lock convLock(conversion_mutex_);
             auto path = findShortestConversionPath(srcInfo.value(), destInfo);
             conversions.reserve(path.size() - 1);
             for (size_t i = 0; i < path.size() - 1; ++i) {
@@ -104,8 +104,8 @@ public:
      */
     template <typename SourceType, typename DestinationType>
     void registerConversion(ConvertFunc func) {
-        std::unique_lock type_lock(type_mutex_);
-        std::unique_lock conv_lock(conversion_mutex_);
+        std::unique_lock typeLock(type_mutex_);
+        std::unique_lock convLock(conversion_mutex_);
 
         auto srcInfo = userType<SourceType>();
         auto destInfo = userType<DestinationType>();
@@ -129,10 +129,10 @@ public:
      */
     template <typename T>
     void registerAlias(const std::string& alias) {
-        std::unique_lock type_lock(type_mutex_);
-        auto type_info = userType<T>();
-        type_alias_map_[alias] = type_info;
-        type_name_map_[alias] = type_info;
+        std::unique_lock typeLock(type_mutex_);
+        auto typeInfo = userType<T>();
+        type_alias_map_[alias] = typeInfo;
+        type_name_map_[alias] = typeInfo;
     }
 
     /*!
@@ -142,7 +142,7 @@ public:
      */
     void registerTypeGroup(const std::string& groupName,
                            const std::vector<std::string>& types) {
-        std::unique_lock type_lock(type_mutex_);
+        std::unique_lock typeLock(type_mutex_);
         for (const auto& typeName : types) {
             type_group_map_[typeName] = groupName;
         }
@@ -170,7 +170,7 @@ public:
      * \return True if a conversion exists, false otherwise.
      */
     auto hasConversion(TypeInfo src, TypeInfo dst) const -> bool {
-        std::shared_lock conv_lock(conversion_mutex_);
+        std::shared_lock convLock(conversion_mutex_);
         return conversions_.find(src) != conversions_.end() &&
                conversions_.at(src).find(dst) != conversions_.at(src).end();
     }
@@ -180,7 +180,7 @@ public:
      * \return A vector of registered type names.
      */
     auto getRegisteredTypes() const -> std::vector<std::string> {
-        std::shared_lock type_lock(type_mutex_);
+        std::shared_lock typeLock(type_mutex_);
         std::vector<std::string> typeNames;
         typeNames.reserve(type_name_map_.size());
         for (const auto& [name, info] : type_name_map_) {
@@ -196,7 +196,7 @@ public:
      */
     template <typename T>
     void registerType(const std::string& name) {
-        std::unique_lock type_lock(type_mutex_);
+        std::unique_lock typeLock(type_mutex_);
         auto type_info = userType<T>();
         type_name_map_[name] = type_info;
         type_name_map_[typeid(T).name()] = type_info;
@@ -214,7 +214,7 @@ public:
     void registerEnumValue(const std::string& enum_name,
                            const std::string& string_value,
                            EnumType enum_value) {
-        std::unique_lock enum_lock(enum_mutex_);
+        std::unique_lock enumLock(enum_mutex_);
         if (!m_enumMaps_.contains(enum_name)) {
             m_enumMaps_[enum_name] =
                 std::unordered_map<std::string, EnumType>();
@@ -237,7 +237,7 @@ public:
     template <typename EnumType>
     auto enumToString(EnumType value,
                       const std::string& enum_name) -> std::string {
-        std::shared_lock enum_lock(enum_mutex_);
+        std::shared_lock enumLock(enum_mutex_);
         const auto& enumMap = getEnumMap<EnumType>(enum_name);
         for (const auto& [key, enumValue] : enumMap) {
             if (enumValue == value) {
@@ -258,7 +258,7 @@ public:
     template <typename EnumType>
     auto stringToEnum(const std::string& string_value,
                       const std::string& enum_name) -> EnumType {
-        std::shared_lock enum_lock(enum_mutex_);
+        std::shared_lock enumLock(enum_mutex_);
         const auto& enumMap = getEnumMap<EnumType>(enum_name);
         auto iterator = enumMap.find(string_value);
         if (iterator != enumMap.end()) {
@@ -279,7 +279,7 @@ private:
     mutable std::shared_mutex type_mutex_;
     mutable std::shared_mutex conversion_mutex_;
     mutable std::shared_mutex enum_mutex_;
-    static inline std::shared_mutex registry_mutex_;
+    static inline std::shared_mutex registryMutex;
 
     /*!
      * \brief Registers built-in types.
@@ -310,7 +310,6 @@ private:
      */
     auto findShortestConversionPath(TypeInfo src, TypeInfo dst) const
         -> std::vector<TypeInfo> {
-        // 已经在调用方获取了读锁,这里不需要重复加锁
         std::string cacheKey = makeCacheKey(src, dst);
 
         if (auto it = conversion_paths_cache_.find(cacheKey);
@@ -318,13 +317,27 @@ private:
             return it->second;
         }
 
-        // 查找路径的过程中使用已获取的读锁
         auto path = findPath(src, dst);
         conversion_paths_cache_[cacheKey] = path;
         return path;
     }
 
     // 辅助方法:实际的路径查找逻辑
+    /**
+     * @brief Finds a conversion path between two types.
+     *
+     * This function attempts to find a sequence of type conversions that can
+     * transform an object of type `src` to an object of type `dst`. It uses
+     * a breadth-first search algorithm to explore possible conversion paths.
+     *
+     * @param src The source type information.
+     * @param dst The destination type information.
+     * @return A vector of TypeInfo objects representing the conversion path
+     * from `src` to `dst`. If no such path exists, a runtime error is thrown.
+     *
+     * @throws std::runtime_error If no conversion path is found between the
+     * given types.
+     */
     auto findPath(TypeInfo src, TypeInfo dst) const -> std::vector<TypeInfo> {
         std::queue<std::vector<TypeInfo>> paths;
         std::unordered_set<TypeInfo> visited;

@@ -21,6 +21,13 @@
 #include "atom/error/exception.hpp"
 #include "atom/function/concept.hpp"
 
+#ifdef ATOM_USE_BOOST
+#include <boost/any.hpp>
+#include <boost/asio.hpp>
+#include <boost/functional.hpp>
+#include <boost/thread.hpp>
+#endif
+
 /*!
  * \brief Delays the invocation of a function with given arguments.
  * \tparam F The function type.
@@ -219,8 +226,13 @@ auto safeTryCatchWithCustomHandler(
 template <typename Func, typename... Args>
     requires Invocable<Func, Args...>
 auto asyncCall(Func &&func, Args &&...args) {
+#ifdef ATOM_USE_BOOST
+    return boost::async(boost::launch::async, std::forward<Func>(func),
+                        std::forward<Args>(args)...);
+#else
     return std::async(std::launch::async, std::forward<Func>(func),
                       std::forward<Args>(args)...);
+#endif
 }
 
 /*!
@@ -257,12 +269,39 @@ template <typename Func, typename... Args>
     requires Invocable<Func, Args...>
 auto timeoutCall(Func &&func, std::chrono::milliseconds timeout,
                  Args &&...args) {
+#ifdef ATOM_USE_BOOST
+    boost::asio::io_context io;
+    boost::asio::steady_timer timer(io, timeout);
+    std::optional<std::invoke_result_t<Func, Args...>> resultOpt;
+    bool completed = false;
+
+    std::thread ioThread([&io]() { io.run(); });
+
+    std::thread funcThread([&]() {
+        resultOpt =
+            std::invoke(std::forward<Func>(func), std::forward<Args>(args)...);
+        completed = true;
+        timer.cancel();
+    });
+
+    timer.async_wait([&](const boost::system::error_code &ec) {
+        if (!ec && !completed) {
+            THROW_RUNTIME_ERROR("Function call timed out");
+        }
+    });
+
+    funcThread.join();
+    ioThread.join();
+
+    return resultOpt.value_or(std::invoke_result_t<Func, Args...>{});
+#else
     auto future = std::async(std::launch::async, std::forward<Func>(func),
                              std::forward<Args>(args)...);
     if (future.wait_for(timeout) == std::future_status::timeout) {
         THROW_RUNTIME_ERROR("Function call timed out");
     }
     return future.get();
+#endif
 }
 
 /*!

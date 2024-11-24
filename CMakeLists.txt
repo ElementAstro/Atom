@@ -18,6 +18,9 @@ add_custom_target(AtomCmakeAdditionalFiles
     ${CMAKE_CURRENT_SOURCE_DIR}/cmake/compiler_options.cmake
 )
 
+option(ATOM_BUILD_EXAMPLES "Build the examples" OFF)
+option(ATOM_BUILD_TESTS "Build the tests" OFF)
+
 # Append module paths
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/")
@@ -43,8 +46,12 @@ include_directories(${pybind11_INCLUDE_DIRS} ${Python_INCLUDE_DIRS})
 # Add subdirectories
 add_subdirectory(extra)
 add_subdirectory(atom)
-add_subdirectory(example)
-add_subdirectory(tests)
+if (ATOM_BUILD_EXAMPLES)
+    add_subdirectory(example)
+endif()
+if (ATOM_BUILD_TESTS)
+    add_subdirectory(tests)
+endif()
 
 # Enable folder grouping in IDEs
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)

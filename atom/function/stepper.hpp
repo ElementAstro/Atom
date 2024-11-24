@@ -19,6 +19,12 @@
 #include "atom/algorithm/hash.hpp"
 #include "atom/error/exception.hpp"
 
+#ifdef ATOM_USE_BOOST
+#include <boost/any.hpp>
+#include <boost/asio.hpp>
+#include <boost/thread.hpp>
+#endif
+
 namespace atom::meta {
 
 class FunctionSequence {
@@ -83,38 +89,101 @@ public:
     // Run the last function asynchronously with each set of arguments provided
     auto runAsync(const std::vector<std::vector<std::any>>& argsBatch)
         -> std::future<std::vector<std::any>> {
+#ifdef ATOM_USE_BOOST
+        return boost::async(boost::launch::async,
+                            [this, argsBatch] { return this->run(argsBatch); });
+#else
         return std::async(std::launch::async,
                           [this, argsBatch] { return this->run(argsBatch); });
+#endif
     }
 
     // Run all functions asynchronously with each set of arguments provided
     auto runAllAsync(const std::vector<std::vector<std::any>>& argsBatch)
         -> std::future<std::vector<std::vector<std::any>>> {
+#ifdef ATOM_USE_BOOST
+        return boost::async(boost::launch::async, [this, argsBatch] {
+            return this->runAll(argsBatch);
+        });
+#else
         return std::async(std::launch::async, [this, argsBatch] {
             return this->runAll(argsBatch);
         });
+#endif
     }
 
     // Run the last function with each set of arguments provided, with a timeout
     auto runWithTimeout(const std::vector<std::vector<std::any>>& argsBatch,
                         std::chrono::milliseconds timeout)
         -> std::vector<std::any> {
+#ifdef ATOM_USE_BOOST
+        boost::asio::io_context io;
+        boost::asio::steady_timer timer(io, timeout);
+        std::optional<std::vector<std::any>> resultOpt;
+        bool completed = false;
+
+        std::thread ioThread([&io]() { io.run(); });
+
+        std::thread funcThread([&]() {
+            resultOpt = run(argsBatch);
+            completed = true;
+            timer.cancel();
+        });
+
+        timer.async_wait([&](const boost::system::error_code& ec) {
+            if (!ec && !completed) {
+                THROW_EXCEPTION("Function execution timed out");
+            }
+        });
+
+        funcThread.join();
+        ioThread.join();
+
+        return resultOpt.value_or(std::vector<std::any>{});
+#else
         auto future = runAsync(argsBatch);
         if (future.wait_for(timeout) == std::future_status::timeout) {
             THROW_EXCEPTION("Function execution timed out");
         }
         return future.get();
+#endif
     }
 
     // Run all functions with each set of arguments provided, with a timeout
     auto runAllWithTimeout(const std::vector<std::vector<std::any>>& argsBatch,
                            std::chrono::milliseconds timeout)
         -> std::vector<std::vector<std::any>> {
+#ifdef ATOM_USE_BOOST
+        boost::asio::io_context io;
+        boost::asio::steady_timer timer(io, timeout);
+        std::optional<std::vector<std::vector<std::any>>> resultOpt;
+        bool completed = false;
+
+        std::thread ioThread([&io]() { io.run(); });
+
+        std::thread funcThread([&]() {
+            resultOpt = runAll(argsBatch);
+            completed = true;
+            timer.cancel();
+        });
+
+        timer.async_wait([&](const boost::system::error_code& ec) {
+            if (!ec && !completed) {
+                THROW_EXCEPTION("Function execution timed out");
+            }
+        });
+
+        funcThread.join();
+        ioThread.join();
+
+        return resultOpt.value_or(std::vector<std::vector<std::any>>{});
+#else
         auto future = runAllAsync(argsBatch);
         if (future.wait_for(timeout) == std::future_status::timeout) {
             THROW_EXCEPTION("Function execution timed out");
         }
         return future.get();
+#endif
     }
 
     // Run the last function with each set of arguments provided, with retries

@@ -9,18 +9,8 @@
 #include <typeinfo>
 
 #include "atom/error/exception.hpp"
+#include "atom/function/concept.hpp"
 #include "atom/macro.hpp"
-
-template <typename T, typename = void>
-struct IsIterable : std::false_type {};
-
-template <typename T>
-struct IsIterable<T, std::void_t<decltype(std::begin(std::declval<T>())),
-                                 decltype(std::end(std::declval<T>()))>>
-    : std::true_type {};
-
-template <typename T>
-inline constexpr bool K_IS_ITERABLE_V = IsIterable<T>::value;
 
 namespace atom::meta {
 class Any {
@@ -58,7 +48,7 @@ private:
     template <typename T>
     static void defaultForeach(const void* ptr,
                                const std::function<void(const Any&)>& func) {
-        if constexpr (K_IS_ITERABLE_V<T>) {
+        if constexpr (Iterable<T>) {
             for (const auto& item : *static_cast<const T*>(ptr)) {
                 func(Any(item));
             }

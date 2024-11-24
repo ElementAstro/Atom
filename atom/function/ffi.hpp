@@ -34,6 +34,12 @@
 
 #include "atom/error/exception.hpp"
 
+#ifdef ATOM_USE_BOOST
+#include <boost/any.hpp>
+#include <boost/asio.hpp>
+#include <boost/thread.hpp>
+#endif
+
 class FFIException : public atom::error::Exception {
 public:
     using atom::error::Exception::Exception;
@@ -87,6 +93,24 @@ constexpr auto getFFIType() -> ffi_type* {
         static_assert(false, "Unsupported type passed to getFFIType.");
     }
 }
+// Helper to automatically generate getFFITypeLayout for classes
+template <typename T>
+struct FFITypeLayoutGenerator {
+    static auto getFFITypeLayout() -> ffi_type {
+        ffi_type layout;
+        // Assuming T has a static method to provide the layout details
+        T::defineFFITypeLayout(layout);
+        return layout;
+    }
+};
+
+// Specialization for classes
+template <typename T>
+constexpr auto getFFIType() -> ffi_type* requires(std::is_class_v<T>) {
+    static ffi_type customStructType =
+        FFITypeLayoutGenerator<T>::getFFITypeLayout();
+    return &customStructType;
+}
 
 template <typename ReturnType, typename... Args>
 class FFIWrapper {
@@ -117,6 +141,31 @@ public:
     // Overload with timeout
     auto callWithTimeout(void* funcPtr, std::chrono::milliseconds timeout,
                          Args... args) -> std::optional<ReturnType> {
+#ifdef ATOM_USE_BOOST
+        boost::asio::io_context io;
+        boost::asio::steady_timer timer(io, timeout);
+        std::optional<std::optional<ReturnType>> resultOpt;
+        bool completed = false;
+
+        std::thread ioThread([&io]() { io.run(); });
+
+        std::thread funcThread([&]() {
+            resultOpt = call(funcPtr, args...);
+            completed = true;
+            timer.cancel();
+        });
+
+        timer.async_wait([&](const boost::system::error_code& ec) {
+            if (!ec && !completed) {
+                THROW_FFI_EXCEPTION("Function call timed out.");
+            }
+        });
+
+        funcThread.join();
+        ioThread.join();
+
+        return *resultOpt;
+#else
         auto future = std::async(std::launch::async, [this, funcPtr, args...] {
             return this->call(funcPtr, args...);
         });
@@ -124,6 +173,7 @@ public:
             THROW_FFI_EXCEPTION("Function call timed out.");
         }
         return future.get();
+#endif
     }
 
 private:
@@ -306,8 +356,13 @@ public:
     template <typename Func>
     void registerCallback(const std::string& callbackName, Func&& func) {
         std::unique_lock lock(mutex_);
+#ifdef ATOM_USE_BOOST
+        callbackMap_[callbackName] = std::make_any<std::function<Func>>(
+            boost::function<Func>(std::forward<Func>(func)));
+#else
         callbackMap_[callbackName] =
             std::make_any<std::function<Func>>(std::forward<Func>(func));
+#endif
     }
 
     // Retrieve a registered callback
@@ -325,27 +380,18 @@ public:
     template <typename Func>
     void registerAsyncCallback(const std::string& callbackName, Func&& func) {
         std::unique_lock lock(mutex_);
+#ifdef ATOM_USE_BOOST
+        callbackMap_[callbackName] = std::make_any<std::function<Func>>(
+            std::async(boost::launch::async, std::forward<Func>(func)));
+#else
         callbackMap_[callbackName] = std::make_any<std::function<Func>>(
             std::async(std::launch::async, std::forward<Func>(func)));
+#endif
     }
 
 private:
     std::unordered_map<std::string, std::any> callbackMap_;  // Callback map
     mutable std::shared_mutex mutex_;
-};
-
-// Example of struct handling in FFI
-struct MyStruct {
-    int field1;
-    double field2;
-
-    static ffi_type* getFFITypeLayout() {
-        static ffi_type* elements[] = {&ffi_type_sint, &ffi_type_double,
-                                       nullptr};
-        static ffi_type structType = {sizeof(MyStruct), alignof(MyStruct),
-                                      FFI_TYPE_STRUCT, elements};
-        return &structType;
-    }
 };
 
 template <typename T>
