@@ -91,3 +91,54 @@ TEST(StringUtilsTest, StringToWString) {
 TEST(StringUtilsTest, WStringToString) {
     EXPECT_EQ(wstringToString(L"hello"), "hello");
 }
+
+TEST(SplitStringTest, BasicSplitCharDelimiter) {
+    std::string str = "apple,banana,grape,orange";
+    auto result = split(str, ',').collectVector();
+    std::vector<std::string> expected = {"apple", "banana", "grape", "orange"};
+    EXPECT_EQ(result, expected);
+}
+
+TEST(SplitStringTest, BasicSplitStringDelimiter) {
+    std::string str = "apple--banana--grape--orange";
+    auto result = split(str, std::string_view("--")).collectVector();
+    std::vector<std::string> expected = {"apple", "banana", "grape", "orange"};
+    EXPECT_EQ(result, expected);
+}
+
+TEST(SplitStringTest, CustomDelimiterFunction) {
+    std::string str = "a1b2c3d4e5f";
+    auto isDigit = [](char c) { return std::isdigit(c); };
+    auto result = split(str, isDigit).collectVector();
+    std::vector<std::string> expected = {"a", "b", "c", "d", "e", "f"};
+    EXPECT_EQ(result, expected);
+}
+
+TEST(SplitStringTest, TrimWhitespace) {
+    std::string str = " apple , banana , grape , orange ";
+    auto result = split(str, ',', true, false).collectVector();
+    std::vector<std::string> expected = {"apple", "banana", "grape", "orange"};
+    EXPECT_EQ(result, expected);
+}
+
+TEST(SplitStringTest, SkipEmptySegments) {
+    std::string str = "apple,,banana,,grape,,orange";
+    auto result = split(str, ',', false, true).collectVector();
+    std::vector<std::string> expected = {"apple", "banana", "grape", "orange"};
+    EXPECT_EQ(result, expected);
+}
+
+TEST(SplitStringTest, CollectToList) {
+    std::string str = "apple,banana,grape,orange";
+    auto result = split(str, ',').collectList();
+    std::list<std::string> expected = {"apple", "banana", "grape", "orange"};
+    EXPECT_EQ(result, expected);
+}
+
+TEST(SplitStringTest, CollectToArray) {
+    std::string str = "apple,banana,grape,orange";
+    auto result = split(str, ',').collectArray<4>();
+    std::array<std::string, 4> expected = {"apple", "banana", "grape",
+                                           "orange"};
+    EXPECT_EQ(result, expected);
+}

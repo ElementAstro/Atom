@@ -11,6 +11,10 @@ struct alignas(64) CronJob {
 public:
     std::string time_;     ///< Scheduled time for the Cron job.
     std::string command_;  ///< Command to be executed by the Cron job.
+    bool enabled_;         ///< Status of the Cron job.
+
+    CronJob(const std::string& time = "", const std::string& command = "", bool enabled = true)
+        : time_(time), command_(command), enabled_(enabled) {}
 
     /**
      * @brief Converts the CronJob object to a JSON representation.
@@ -90,9 +94,25 @@ public:
 
     /**
      * @brief Gets statistics about the current Cron jobs.
-     * @return An integer representing the statistics.
+     * @return An integer representing the number of Cron jobs.
      */
     auto statistics() -> int;
+
+    /**
+     * @brief Enables a Cron job with the specified command.
+     * @param command The command of the Cron job to enable.
+     * @return True if the job was enabled successfully, false otherwise.
+     */
+    auto enableCronJob(const std::string& command) -> bool;
+
+    /**
+     * @brief Disables a Cron job with the specified command.
+     * @param command The command of the Cron job to disable.
+     * @return True if the job was disabled successfully, false otherwise.
+     */
+    auto disableCronJob(const std::string& command) -> bool;
+
+    auto exportToCrontab() -> bool;
 
 private:
     std::vector<CronJob> jobs_;  ///< List of Cron jobs.

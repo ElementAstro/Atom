@@ -3,6 +3,7 @@
 #include "test_ring.hpp"
 #include "test_shared.hpp"
 #include "test_short_alloc.hpp"
+#include "test_utils.hpp"
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

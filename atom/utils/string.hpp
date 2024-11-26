@@ -15,6 +15,7 @@ Description: Some useful string functions
 #ifndef ATOM_UTILS_STRING_HPP
 #define ATOM_UTILS_STRING_HPP
 
+#include <list>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -233,6 +234,178 @@ auto stol(std::string_view str, std::size_t* idx = nullptr,
 [[nodiscard("the result of nstrtok is not used")]]
 auto nstrtok(std::string_view& str,
              const std::string_view& delims) -> std::optional<std::string_view>;
+
+template <class Delimiter>
+struct SplitString {
+    SplitString(std::string_view str, Delimiter delimiter, bool trim = false,
+                bool skipEmpty = false)
+        : str_(str),
+          delimiter_(delimiter),
+          trim_(trim),
+          skipEmpty_(skipEmpty) {}
+
+    struct Sentinel {
+        explicit Sentinel() = default;
+    };
+
+    struct Iterator {
+        explicit Iterator(std::string_view str, Delimiter delimiter, bool trim,
+                          bool skipEmpty) noexcept
+            : str_(str),
+              delimiter_(delimiter),
+              trim_(trim),
+              skipEmpty_(skipEmpty),
+              ended_(false),
+              toBeEnded_(false) {
+            findNext();
+        }
+
+        auto operator*() const noexcept -> std::string_view { return current_; }
+
+        auto operator++() -> Iterator& {
+            findNext();
+            return *this;
+        }
+
+        auto operator!=(Sentinel) const noexcept -> bool { return !ended_; }
+
+        auto operator==(Sentinel) const noexcept -> bool { return ended_; }
+
+    private:
+        void findNext() {
+            do {
+                auto pos = findDelimiter();
+                if (pos == std::string_view::npos) {
+                    current_ = str_;
+                    str_ = {};
+                    ended_ = toBeEnded_;
+                    toBeEnded_ = true;
+                } else {
+                    current_ = str_.substr(0, pos);
+                    str_ = str_.substr(pos + delimiterLength());
+                }
+
+                if (trim_) {
+                    current_ = trimWhitespace(current_);
+                }
+            } while (skipEmpty_ && current_.empty() && !ended_);
+        }
+
+        [[nodiscard]] auto findDelimiter() const -> size_t {
+            if constexpr (std::is_same_v<Delimiter, std::string_view>) {
+                return str_.find(delimiter_);
+            } else if constexpr (std::is_same_v<Delimiter, char>) {
+                return str_.find(delimiter_);
+            } else if constexpr (std::is_invocable_r_v<bool, Delimiter, char>) {
+                for (size_t i = 0; i < str_.size(); ++i) {
+                    if (delimiter_(str_[i])) {
+                        return i;
+                    }
+                }
+                return std::string_view::npos;
+            } else {
+                static_assert(!std::is_void_v<Delimiter>,
+                              "Delimiter cannot be void");
+            }
+            return std::string_view::npos;
+        }
+
+        [[nodiscard]] auto delimiterLength() const -> size_t {
+            if constexpr (std::is_same_v<Delimiter, std::string_view>) {
+                return delimiter_.size();
+            } else if constexpr (std::is_same_v<Delimiter, char>) {
+                return 1;
+            } else if constexpr (std::is_invocable_r_v<bool, Delimiter, char>) {
+                return 1;
+            } else {
+                static_assert(!std::is_void_v<Delimiter>,
+                              "Delimiter cannot be void");
+            }
+            return 0;
+        }
+
+        [[nodiscard]] auto trimWhitespace(std::string_view sv) const
+            -> std::string_view {
+            size_t start = 0;
+            while (start < sv.size() &&
+                   (std::isspace(static_cast<unsigned char>(sv[start])) != 0)) {
+                ++start;
+            }
+            size_t end = sv.size();
+            while (end > start && (std::isspace(static_cast<unsigned char>(
+                                       sv[end - 1])) != 0)) {
+                --end;
+            }
+            return sv.substr(start, end - start);
+        }
+
+        std::string_view str_;
+        Delimiter delimiter_;
+        std::string_view current_;
+        bool trim_;
+        bool skipEmpty_;
+        bool ended_;
+        bool toBeEnded_;
+    };
+
+    [[nodiscard]] auto begin() const noexcept -> Iterator {
+        return Iterator(str_, delimiter_, trim_, skipEmpty_);
+    }
+
+    [[nodiscard]] auto end() const noexcept -> Sentinel { return Sentinel(); }
+
+    [[nodiscard]] auto collectVector() const -> std::vector<std::string> {
+        std::vector<std::string> result;
+        for (auto&& part : *this) {
+            result.emplace_back(part);
+        }
+        return result;
+    }
+
+    [[nodiscard]] auto collectList() const -> std::list<std::string> {
+        std::list<std::string> result;
+        for (auto&& part : *this) {
+            result.emplace_back(part);
+        }
+        return result;
+    }
+
+    template <std::size_t N>
+    auto collectArray() const -> std::array<std::string, N> {
+        std::array<std::string, N> result{};
+        std::size_t i = 0;
+        for (auto it = begin(); it != end(); ++it, ++i) {
+            if (i >= N) {
+                break;
+            }
+            result[i] = std::string(*it);
+        }
+        return result;
+    }
+
+private:
+    std::string_view str_;
+    Delimiter delimiter_;
+    bool trim_;
+    bool skipEmpty_;
+};
+
+inline auto split(std::string_view str, std::string_view delimiter,
+                        bool trim = false, bool skipEmpty = false)
+    -> SplitString<std::string_view> {
+    return {str, delimiter, trim, skipEmpty};
+}
+
+inline auto split(std::string_view str, char delimiter, bool trim = false,
+                        bool skipEmpty = false) -> SplitString<char> {
+    return {str, delimiter, trim, skipEmpty};
+}
+
+template <typename Func>
+inline auto split(std::string_view str, Func delimiter, bool trim = false,
+                        bool skipEmpty = false) -> SplitString<Func> {
+    return {str, delimiter, trim, skipEmpty};
+}
 }  // namespace atom::utils
 
 #endif
