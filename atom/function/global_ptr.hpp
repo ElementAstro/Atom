@@ -39,6 +39,15 @@
         THROW_UNLAWFUL_OPERATION("Failed to create " #type ".");             \
     }
 
+#define GET_OR_CREATE_PTR_WITH_CAPTURE(variable, type, constant, capture) \
+    if (auto ptr = GetPtrOrCreate<type>(constant, [capture] {             \
+            return std::make_shared<type>(capture);                       \
+        })) {                                                             \
+        variable = ptr;                                                   \
+    } else {                                                              \
+        THROW_UNLAWFUL_OPERATION("Failed to create " #type ".");          \
+    }
+
 #define GET_OR_CREATE_PTR_THIS(variable, type, constant, ...)    \
     if (auto ptr = GetPtrOrCreate<type>(constant, [this] {       \
             return std::make_shared<type>(__VA_ARGS__);          \
