@@ -15,6 +15,7 @@ set(SOURCES
     convert.cpp
     difflib.cpp
     error_stack.cpp
+    print.cpp
     qdatetime.cpp
     qprocess.cpp
     qtimer.cpp
@@ -23,6 +24,7 @@ set(SOURCES
     string.cpp
     stopwatcher.cpp
     time.cpp
+    to_any.cpp
     uuid.cpp
     valid_string.cpp
     xml.cpp

@@ -420,7 +420,7 @@ inline void ArgumentParser::parse(int argc, std::vector<std::string> argv) {
         // Handle optional arguments and flags
         if (arg.starts_with("--") || arg.starts_with("-")) {
             std::string argName;
-            bool isFlag = false;
+            // bool isFlag = false;
 
             if (arg.starts_with("--")) {
                 argName = arg.substr(2);
@@ -446,7 +446,7 @@ inline void ArgumentParser::parse(int argc, std::vector<std::string> argv) {
 
                 // Handle nargs
                 int expected = 1;
-                bool is_constant = false;
+                bool isConstant = false;
                 if (argument.nargs.type == NargsType::ONE_OR_MORE) {
                     expected = -1;  // Indicate multiple
                 } else if (argument.nargs.type == NargsType::ZERO_OR_MORE) {
@@ -455,20 +455,19 @@ inline void ArgumentParser::parse(int argc, std::vector<std::string> argv) {
                     expected = 1;
                 } else if (argument.nargs.type == NargsType::CONSTANT) {
                     expected = argument.nargs.count;
-                    is_constant = true;
+                    isConstant = true;
                 }
 
                 // Collect values based on nargs
                 for (int j = 0; j < expected || expected == -1; ++j) {
-                    if (i + 1 < static_cast<int>(argv.size()) &&
-                        !argv[i + 1].starts_with("-")) {
+                    if (i + 1 < argv.size() && !argv[i + 1].starts_with("-")) {
                         values.emplace_back(argv[++i]);
                     } else {
                         break;
                     }
                 }
 
-                if (is_constant &&
+                if (isConstant &&
                     static_cast<int>(values.size()) != argument.nargs.count) {
                     THROW_INVALID_ARGUMENT(
                         "Argument " + argName + " expects " +

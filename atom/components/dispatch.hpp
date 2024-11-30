@@ -1,18 +1,6 @@
 #ifndef ATOM_COMMAND_DISPATCH_HPP
 #define ATOM_COMMAND_DISPATCH_HPP
 
-#include <any>
-#include <chrono>
-#include <functional>
-#include <future>
-#include <memory>
-#include <optional>
-#include <string>
-#include <tuple>
-#include <type_traits>
-#include <utility>
-#include <vector>
-
 #if ENABLE_FASTHASH
 #include "emhash/hash_set8.hpp"
 #include "emhash/hash_table8.hpp"
@@ -22,6 +10,7 @@
 #endif
 
 #include "atom/error/exception.hpp"
+#include "atom/function/abi.hpp"
 #include "atom/function/proxy.hpp"
 #include "atom/function/type_caster.hpp"
 #include "atom/type/json.hpp"
@@ -85,14 +74,14 @@ public:
              const std::string& description, std::function<Ret(Args...)> func,
              std::optional<std::function<bool()>> precondition = std::nullopt,
              std::optional<std::function<void()>> postcondition = std::nullopt,
-             std::vector<atom::meta::Arg> arg_info = {}, bool isTimed = false);
+             std::vector<atom::meta::Arg> arg_info = {});
 
     /**
      * @brief Checks if a command exists.
      * @param name The name of the command.
      * @return True if the command exists, false otherwise.
      */
-    [[nodiscard]] auto has(const std::string& name) const -> bool;
+    [[nodiscard]] auto has(const std::string& name) -> bool;
 
     /**
      * @brief Adds an alias for a command.
@@ -189,8 +178,13 @@ public:
      */
     [[nodiscard]] auto getAllCommands() const -> std::vector<std::string>;
 
+    struct CommandArgRet {
+        std::vector<atom::meta::Arg> argTypes;
+        std::string returnType;
+    } ATOM_ALIGNAS(64);
+
     [[nodiscard]] auto getCommandArgAndReturnType(const std::string& name)
-        -> std::pair<std::vector<atom::meta::Arg>, std::string>;
+        -> std::vector<CommandArgRet>;
 
     struct Command {
         std::function<std::any(const std::vector<std::any>&)> func;
@@ -219,6 +213,9 @@ private:
     auto dispatchHelper(const std::string& name,
                         const ArgsType& args) -> std::any;
 
+    auto dispatchHelper(const std::string& name,
+                        const std::vector<std::any>& args) -> std::any;
+
     /**
      * @brief Converts a tuple to a vector of arguments.
      * @tparam Args The types of the arguments.
@@ -232,9 +229,10 @@ private:
     /**
      * @brief Finds a command by name.
      * @param name The name of the command.
+     * @param signature The signature of the command.
      * @return An iterator to the command.
      */
-    auto findCommand(const std::string& name);
+    auto findCommand(const std::string& name, const std::string& signature);
 
     /**
      * @brief Completes the arguments for a command.
@@ -280,8 +278,8 @@ private:
      * @return The result of the command execution.
      */
     static auto executeWithTimeout(const Command& cmd, const std::string& name,
-                            const std::vector<std::any>& args,
-                            const std::chrono::duration<double>& timeout)
+                                   const std::vector<std::any>& args,
+                                   const std::chrono::duration<double>& timeout)
         -> std::any;
 
     /**
@@ -291,8 +289,9 @@ private:
      * @param args The arguments for the command.
      * @return The result of the command execution.
      */
-    static auto executeWithoutTimeout(const Command& cmd, const std::string& name,
-                               const std::vector<std::any>& args) -> std::any;
+    static auto executeWithoutTimeout(
+        const Command& cmd, const std::string& name,
+        const std::vector<std::any>& args) -> std::any;
 
     /**
      * @brief Executes the functions of a command.
@@ -301,21 +300,24 @@ private:
      * @return The result of the command execution.
      */
     static auto executeFunctions(const Command& cmd,
-                          const std::vector<std::any>& args) -> std::any;
+                                 const std::vector<std::any>& args) -> std::any;
 
     /**
      * @brief Computes the hash of the function arguments.
      * @param args The arguments for the command.
      * @return The hash of the function arguments.
      */
-    static auto computeFunctionHash(const std::vector<std::any>& args) -> std::string;
+    static auto computeFunctionHash(const std::vector<std::any>& args)
+        -> std::string;
 
 #if ENABLE_FASTHASH
-    emhash8::HashMap<std::string, Command> commands;
-    emhash8::HashMap<std::string, std::string> groupMap;
-    emhash8::HashMap<std::string, std::chrono::milliseconds> timeoutMap;
+    emhash8::HashMap<std::string, std::unordered_map<std::string, Command>>
+        commands_;
+    emhash8::HashMap<std::string, std::string> groupMap_;
+    emhash8::HashMap<std::string, std::chrono::milliseconds> timeoutMap_;
 #else
-    std::unordered_map<std::string, Command> commands_;
+    std::unordered_map<std::string, std::unordered_map<std::string, Command>>
+        commands_;
     std::unordered_map<std::string, std::string> groupMap_;
     std::unordered_map<std::string, std::chrono::milliseconds> timeoutMap_;
 #endif
@@ -324,13 +326,11 @@ private:
 };
 
 inline void to_json(json& j, const CommandDispatcher::Command& cmd) {
-    j = json{
-        {"returnType", cmd.returnType},
-        {"argTypes", cmd.argTypes},
-        {"hash", cmd.hash},
-        {"description", cmd.description},
-        {"aliases", cmd.aliases}
-    };
+    j = json{{"returnType", cmd.returnType},
+             {"argTypes", cmd.argTypes},
+             {"hash", cmd.hash},
+             {"description", cmd.description},
+             {"aliases", cmd.aliases}};
 
     if (cmd.precondition) {
         j["precondition"] = true;
@@ -365,21 +365,28 @@ inline void from_json(const json& j, CommandDispatcher::Command& cmd) {
     }
 }
 
-ATOM_INLINE auto CommandDispatcher::findCommand(const std::string& name) {
+ATOM_INLINE auto CommandDispatcher::findCommand(const std::string& name,
+                                                const std::string& signature) {
     auto it = commands_.find(name);
-    if (it == commands_.end()) {
-        for (const auto& [cmdName, cmd] : commands_) {
-            if (std::ranges::find(cmd.aliases.begin(), cmd.aliases.end(), name) !=
-                cmd.aliases.end()) {
-#if ENABLE_DEBUG
+    if (it != commands_.end()) {
+        auto cmdIt = it->second.find(signature);
+        if (cmdIt != it->second.end()) {
+            return cmdIt;
+        }
+    }
+    for (const auto& [cmdName, cmdMap] : commands_) {
+        for (const auto& [sig, cmd] : cmdMap) {
+            if (std::ranges::find(cmd.aliases.begin(), cmd.aliases.end(),
+                                  name) != cmd.aliases.end()) {
+#if ATOM_ENABLE_DEBUG
                 std::cout << "Command '" << name
                           << "' not found, did you mean '" << cmdName << "'?\n";
 #endif
-                return commands_.find(cmdName);
+                return commands_.find(cmdName)->second.find(sig);
             }
         }
     }
-    return it;
+    return commands_.end()->second.end();
 }
 
 template <typename Ret, typename... Args>
@@ -388,27 +395,10 @@ void CommandDispatcher::def(const std::string& name, const std::string& group,
                             std::function<Ret(Args...)> func,
                             std::optional<std::function<bool()>> precondition,
                             std::optional<std::function<void()>> postcondition,
-                            std::vector<atom::meta::Arg> arg_info,
-                            bool isTimed) {
+                            std::vector<atom::meta::Arg> arg_info) {
     std::function<std::any(const std::vector<std::any>&)> wrappedFunc;
     atom::meta::FunctionInfo info;
-    if (isTimed) {
-        // TODO: Custom timeout duration for each command
-        auto _func = atom::meta::TimerProxyFunction(std::move(func));
-        info = _func.getFunctionInfo();
-        wrappedFunc =
-            [_func](const std::vector<std::any>& args) mutable -> std::any {
-            std::chrono::milliseconds defaultTimeout(1000);
-            return _func(args, defaultTimeout);
-        };
-    } else {
-        auto _func = atom::meta::ProxyFunction(std::move(func));
-        wrappedFunc =
-            [_func](const std::vector<std::any>& args) mutable -> std::any {
-            return _func(args);
-        };
-    }
-    Command cmd{{std::move(wrappedFunc)},
+    Command cmd{{atom::meta::ProxyFunction(std::move(func), info)},
                 {info.getReturnType()},
                 arg_info,
                 {info.getHash()},
@@ -416,7 +406,16 @@ void CommandDispatcher::def(const std::string& name, const std::string& group,
                 {},
                 std::move(precondition),
                 std::move(postcondition)};
-    commands_[name] = std::move(cmd);
+    std::string signature = info.getReturnType() + "(";
+    for (const auto& arg : arg_info) {
+        signature +=
+            atom::meta::DemangleHelper::demangle(arg.getType().name()) + ",";
+    }
+    if (!arg_info.empty()) {
+        signature.pop_back();
+    }
+    signature += ")";
+    commands_[name][signature] = std::move(cmd);
     groupMap_[name] = group;
 }
 
@@ -444,8 +443,16 @@ auto CommandDispatcher::convertToArgsVector(std::tuple<Args...>&& tuple)
 template <typename ArgsType>
 auto CommandDispatcher::dispatchHelper(const std::string& name,
                                        const ArgsType& args) -> std::any {
-    auto it = findCommand(name);
-    if (it == commands_.end()) {
+    std::string signature = "(";
+    for (const auto& arg : args) {
+        signature += std::string(arg.type().name()) + ",";
+    }
+    if (!args.empty()) {
+        signature.pop_back();
+    }
+    signature += ")";
+    auto it = findCommand(name, signature);
+    if (it == commands_.end()->second.end()) {
         THROW_INVALID_ARGUMENT("Unknown command: " + name);
     }
 

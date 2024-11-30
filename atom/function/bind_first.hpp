@@ -9,10 +9,10 @@
 #ifndef ATOM_META_BIND_FIRST_HPP
 #define ATOM_META_BIND_FIRST_HPP
 
-#include <concepts>
 #include <functional>
 #include <future>
-#include <type_traits>
+
+#include "atom/function/concept.hpp"
 
 namespace atom::meta {
 template <typename T>
@@ -35,21 +35,9 @@ constexpr auto removeConstPointer(const T *ptr) noexcept -> T * {
     return const_cast<T *>(ptr);
 }
 
-template <typename F, typename... Args>
-concept invocable = std::is_invocable_v<F, Args...>;
-
-template <typename F, typename... Args>
-concept nothrow_invocable = std::is_nothrow_invocable_v<F, Args...>;
-
-template <typename F, typename... Args>
-constexpr bool IS_INVOCABLE_V = invocable<F, Args...>;
-
-template <typename F, typename... Args>
-constexpr bool IS_NOTHROW_INVOCABLE_V = std::is_nothrow_invocable_v<F, Args...>;
-
 template <typename O, typename Ret, typename P1, typename... Param>
 constexpr auto bindFirst(Ret (*func)(P1, Param...), O &&object)
-    requires invocable<Ret (*)(P1, Param...), O, Param...>
+    requires Invocable<Ret (*)(P1, Param...), O, Param...>
 {
     return [func, object = std::forward<O>(object)](Param... param) -> Ret {
         return func(object, std::forward<Param>(param)...);
@@ -58,7 +46,7 @@ constexpr auto bindFirst(Ret (*func)(P1, Param...), O &&object)
 
 template <typename O, typename Ret, typename Class, typename... Param>
 constexpr auto bindFirst(Ret (Class::*func)(Param...), O &&object)
-    requires invocable<Ret (Class::*)(Param...), O, Param...>
+    requires Invocable<Ret (Class::*)(Param...), O, Param...>
 {
     return [func, object = std::forward<O>(object)](Param... param) -> Ret {
         return (removeConstPointer(getPointer(object))->*func)(
@@ -68,7 +56,7 @@ constexpr auto bindFirst(Ret (Class::*func)(Param...), O &&object)
 
 template <typename O, typename Ret, typename Class, typename... Param>
 constexpr auto bindFirst(Ret (Class::*func)(Param...) const, O &&object)
-    requires invocable<Ret (Class::*)(Param...) const, O, Param...>
+    requires Invocable<Ret (Class::*)(Param...) const, O, Param...>
 {
     return [func, object = std::forward<O>(object)](Param... param) -> Ret {
         return (getPointer(object)->*func)(std::forward<Param>(param)...);
@@ -77,7 +65,7 @@ constexpr auto bindFirst(Ret (Class::*func)(Param...) const, O &&object)
 
 template <typename O, typename Ret, typename P1, typename... Param>
 auto bindFirst(const std::function<Ret(P1, Param...)> &func, O &&object)
-    requires invocable<std::function<Ret(P1, Param...)>, O, Param...>
+    requires Invocable<std::function<Ret(P1, Param...)>, O, Param...>
 {
     return [func, object = std::forward<O>(object)](Param... param) -> Ret {
         return func(object, std::forward<Param>(param)...);
@@ -88,7 +76,7 @@ template <typename F, typename O, typename Ret, typename Class, typename P1,
           typename... Param>
 constexpr auto bindFirst(const F &funcObj, O &&object,
                          Ret (Class::*func)(P1, Param...) const)
-    requires invocable<F, O, P1, Param...>
+    requires Invocable<F, O, P1, Param...>
 {
     return [funcObj, object = std::forward<O>(object),
             func](Param... param) -> Ret {
@@ -98,14 +86,14 @@ constexpr auto bindFirst(const F &funcObj, O &&object,
 
 template <typename F, typename O>
 constexpr auto bindFirst(const F &func, O &&object)
-    requires invocable<F, O>
+    requires Invocable<F, O>
 {
     return bindFirst(func, std::forward<O>(object), &F::operator());
 }
 
 template <typename F, typename O>
 constexpr auto bindFirst(F &&func, O &&object)
-    requires std::invocable<F, O>
+    requires Invocable<F, O>
 {
     return [func = std::forward<F>(func), object = std::forward<O>(object)](
                auto &&...param) -> decltype(auto) {
@@ -137,7 +125,7 @@ auto asyncBindFirst(F &&func, Args &&...args) {
 template <typename O, typename Ret, typename P1, typename... Param>
 constexpr auto bindFirstWithExceptionHandling(Ret (*func)(P1, Param...),
                                               O &&object)
-    requires invocable<Ret (*)(P1, Param...), O, Param...>
+    requires Invocable<Ret (*)(P1, Param...), O, Param...>
 {
     return [func, object = std::forward<O>(object)](Param... param) -> Ret {
         try {

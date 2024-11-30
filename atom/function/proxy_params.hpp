@@ -28,6 +28,7 @@ public:
     Arg(std::string name, std::any default_value);
 
     [[nodiscard]] auto getName() const -> const std::string&;
+    [[nodiscard]] auto getType() const -> const std::type_info&;
     [[nodiscard]] auto getDefaultValue() const
         -> const std::optional<std::any>&;
 
@@ -43,6 +44,10 @@ inline Arg::Arg(std::string name, std::any default_value)
     : name_(std::move(name)), default_value_(std::move(default_value)) {}
 
 inline auto Arg::getName() const -> const std::string& { return name_; }
+
+inline auto Arg::getType() const -> const std::type_info& {
+    return default_value_ ? default_value_->type() : typeid(void);
+}
 
 inline auto Arg::getDefaultValue() const -> const std::optional<std::any>& {
     return default_value_;

@@ -10,18 +10,12 @@
 #define ATOM_META_PROXY_HPP
 
 #include <any>
-#include <chrono>
 #include <functional>
-#include <future>
-#include <thread>
 #include <typeinfo>
 #include <utility>
 #include <vector>
-#include "atom/async/async.hpp"
 
-#include "atom/macro.hpp"
-
-#if ENABLE_DEBUG
+#if ATOM_ENABLE_DEBUG
 #include <iostream>
 #endif
 
@@ -30,6 +24,7 @@
 #include "atom/function/abi.hpp"
 #include "atom/function/func_traits.hpp"
 #include "atom/function/proxy_params.hpp"
+#include "atom/macro.hpp"
 
 namespace atom::meta {
 
@@ -43,7 +38,7 @@ public:
     FunctionInfo() = default;
 
     void logFunctionInfo() const {
-#if ENABLE_DEBUG
+#if ATOM_ENABLE_DEBUG
         std::cout << "Function return type: " << returnType_ << "\n";
         for (size_t i = 0; i < argumentTypes_.size(); ++i) {
             std::cout << "Argument " << i + 1
@@ -55,26 +50,21 @@ public:
     [[nodiscard]] auto getReturnType() const -> const std::string & {
         return returnType_;
     }
-
     [[nodiscard]] auto getArgumentTypes() const
         -> const std::vector<std::string> & {
         return argumentTypes_;
     }
-
     [[nodiscard]] auto getHash() const -> const std::string & { return hash_; }
 
     void setReturnType(const std::string &returnType) {
         returnType_ = returnType;
     }
-
     void addArgumentType(const std::string &argumentType) {
         argumentTypes_.push_back(argumentType);
     }
-
     void setHash(const std::string &hash) { hash_ = hash; }
 };
 
-// TODO: FIX ME - any cast can not cover all cases
 template <typename T>
 auto anyCastRef(std::any &operand) -> T && {
     return *std::any_cast<std::decay_t<T> *>(operand);
@@ -82,7 +72,7 @@ auto anyCastRef(std::any &operand) -> T && {
 
 template <typename T>
 auto anyCastRef(const std::any &operand) -> T & {
-#if ENABLE_DEBUG
+#if ATOM_ENABLE_DEBUG
     std::cout << "type: " << TypeInfo::fromType<T>().name() << "\n";
 #endif
     return *std::any_cast<std::decay_t<T> *>(operand);
@@ -100,9 +90,6 @@ auto anyCastVal(const std::any &operand) -> T {
 
 template <typename T>
 auto anyCastConstRef(const std::any &operand) -> const T & {
-    // Max: 有的时候大道至简
-    // return *std::any_cast<std::remove_reference_t<std::remove_const_t<T>> *>(
-    //    &const_cast<std::any &>(operand));
     return std::any_cast<T>(operand);
 }
 
@@ -134,26 +121,24 @@ template <typename Func>
 class BaseProxyFunction {
 protected:
     std::decay_t<Func> func_;
-
     using Traits = FunctionTraits<Func>;
     static constexpr std::size_t ARITY = Traits::arity;
     FunctionInfo info_;
 
 public:
-    explicit BaseProxyFunction(Func &&func) : func_(std::move(func)) {
+    explicit BaseProxyFunction(Func &&func, FunctionInfo &info)
+        : func_(std::move(func)) {
         collectFunctionInfo();
         calcFuncInfoHash();
+        info = info_;
     }
 
     [[nodiscard]] auto getFunctionInfo() const -> FunctionInfo { return info_; }
 
 protected:
     void collectFunctionInfo() {
-        // Collect return type information
         info_.setReturnType(
             DemangleHelper::demangleType<typename Traits::return_type>());
-
-        // Collect argument types information
         collectArgumentTypes(std::make_index_sequence<ARITY>{});
     }
 
@@ -165,16 +150,20 @@ protected:
     }
 
     void calcFuncInfoHash() {
-        // 仅根据参数类型进行区分,返回值不支持,具体是因为在dispatch时不知道返回值的类型
+        // Max: Here we need to check the difference between different compilers
         if (!info_.getArgumentTypes().empty()) {
-            info_.setHash(std::to_string(
-                atom::algorithm::computeHash(info_.getArgumentTypes())));
+            std::string combinedTypes = info_.getReturnType();
+            for (const auto &argType : info_.getArgumentTypes()) {
+                combinedTypes += argType;
+            }
+            info_.setHash(
+                std::to_string(atom::algorithm::computeHash(combinedTypes)));
         }
     }
 
     void logArgumentTypes() const {
-#if ENABLE_DEBUG
-        std::cout << "Function Arity: " << arity << "\n";
+#if ATOM_ENABLE_DEBUG
+        std::cout << "Function Arity: " << ARITY << "\n";
         info_.logFunctionInfo();
 #endif
     }
@@ -208,22 +197,12 @@ protected:
     auto callMemberFunction(const std::vector<std::any> &args,
                             std::index_sequence<Is...> /*unused*/) -> std::any {
         auto invokeFunc = [this](auto &obj, auto &&...args) {
-            if constexpr (Traits::is_const_member_function) {
-                if constexpr (std::is_void_v<typename Traits::return_type>) {
-                    (obj.*func_)(std::forward<decltype(args)>(args)...);
-                    return std::any{};
-                } else {
-                    return std::make_any<typename Traits::return_type>(
-                        (obj.*func_)(std::forward<decltype(args)>(args)...));
-                }
+            if constexpr (std::is_void_v<typename Traits::return_type>) {
+                (obj.*func_)(std::forward<decltype(args)>(args)...);
+                return std::any{};
             } else {
-                if constexpr (std::is_void_v<typename Traits::return_type>) {
-                    (obj.*func_)(std::forward<decltype(args)>(args)...);
-                    return std::any{};
-                } else {
-                    return std::make_any<typename Traits::return_type>(
-                        (obj.*func_)(std::forward<decltype(args)>(args)...));
-                }
+                return std::make_any<typename Traits::return_type>(
+                    (obj.*func_)(std::forward<decltype(args)>(args)...));
             }
         };
 
@@ -247,43 +226,44 @@ protected:
 };
 
 template <typename Func>
-class ProxyFunction : public BaseProxyFunction<Func> {
+class ProxyFunction : protected BaseProxyFunction<Func> {
     using Base = BaseProxyFunction<Func>;
     using Traits = typename Base::Traits;
-    static constexpr std::size_t arity = Base::ARITY;
+    static constexpr std::size_t ARITY = Base::ARITY;
 
 public:
-    explicit ProxyFunction(Func &&func) : Base(std::move(func)) {}
+    explicit ProxyFunction(Func &&func, FunctionInfo &info)
+        : Base(std::move(func), info) {}
 
     auto operator()(const std::vector<std::any> &args) -> std::any {
         this->logArgumentTypes();
         if constexpr (Traits::is_member_function) {
-            if (args.size() != arity + 1) {
+            if (args.size() != ARITY + 1) {
                 THROW_EXCEPTION("Incorrect number of arguments");
             }
             return this->callMemberFunction(args,
-                                            std::make_index_sequence<arity>());
+                                            std::make_index_sequence<ARITY>());
         } else {
-#if ENABLE_DEBUG
+#if ATOM_ENABLE_DEBUG
             std::cout << "Function Arity: " << arity << "\n";
             std::cout << "Arguments size: " << args.size() << "\n";
 #endif
-            if (args.size() != arity) {
+            if (args.size() != ARITY) {
                 THROW_EXCEPTION("Incorrect number of arguments");
             }
-            return this->callFunction(args, std::make_index_sequence<arity>());
+            return this->callFunction(args, std::make_index_sequence<ARITY>());
         }
     }
 
     auto operator()(const FunctionParams &params) -> std::any {
         this->logArgumentTypes();
         if constexpr (Traits::is_member_function) {
-            if (params.size() != arity + 1) {
+            if (params.size() != ARITY + 1) {
                 THROW_EXCEPTION("Incorrect number of arguments");
             }
             return this->callMemberFunction(params.toVector());
         } else {
-            if (params.size() != arity) {
+            if (params.size() != ARITY) {
                 THROW_EXCEPTION("Incorrect number of arguments");
             }
             return this->callFunction(params.toVector());
@@ -291,104 +271,6 @@ public:
     }
 };
 
-template <typename Func>
-class TimerProxyFunction : public BaseProxyFunction<Func> {
-    using Base = BaseProxyFunction<Func>;
-    using Traits = typename Base::Traits;
-    static constexpr std::size_t arity = Base::ARITY;
-
-public:
-    explicit TimerProxyFunction(Func &&func) : Base(std::move(func)) {}
-
-    auto operator()(const std::vector<std::any> &args,
-                    std::chrono::milliseconds timeout) -> std::any {
-        this->logArgumentTypes();
-        if constexpr (Traits::is_member_function) {
-            if (args.size() != arity + 1) {
-                THROW_EXCEPTION(
-                    "Incorrect number of arguments for member function");
-            }
-            return this->callMemberFunctionWithTimeout(
-                args, timeout, std::make_index_sequence<arity>());
-        } else {
-            if (args.size() != arity) {
-                THROW_EXCEPTION(
-                    "Incorrect number of arguments for non-member function");
-            }
-            return this->callFunctionWithTimeout(
-                args, timeout, std::make_index_sequence<arity>());
-        }
-    }
-
-private:
-    template <std::size_t... Is>
-    auto callFunctionWithTimeout(
-        const std::vector<std::any> &args, std::chrono::milliseconds timeout,
-        std::index_sequence<Is...> /*unused*/) -> std::any {
-        auto task = [this, &args]() -> std::any {
-            if constexpr (std::is_void_v<typename Traits::return_type>) {
-                std::invoke(
-                    this->func_,
-                    std::any_cast<typename Traits::template argument_t<Is>>(
-                        args[Is])...);
-                return {};
-            } else {
-                return std::make_any<typename Traits::return_type>(std::invoke(
-                    this->func_,
-                    std::any_cast<typename Traits::template argument_t<Is>>(
-                        args[Is])...));
-            }
-        };
-
-        return executeWithTimeout(task, timeout);
-    }
-
-    template <std::size_t... Is>
-    auto callMemberFunctionWithTimeout(
-        const std::vector<std::any> &args, std::chrono::milliseconds timeout,
-        std::index_sequence<Is...> /*unused*/) -> std::any {
-        auto task = [this, &args]() -> std::any {
-            auto &obj =
-                std::any_cast<
-                    std::reference_wrapper<typename Traits::class_type>>(
-                    args[0])
-                    .get();
-
-            if constexpr (std::is_void_v<typename Traits::return_type>) {
-                (obj.*(this->func_))(
-                    std::any_cast<typename Traits::template argument_t<Is>>(
-                        args[Is + 1])...);
-                return {};
-            } else {
-                return std::make_any<typename Traits::return_type>(
-                    (obj.*(this->func_))(
-                        std::any_cast<typename Traits::template argument_t<Is>>(
-                            args[Is + 1])...));
-            }
-        };
-
-        return executeWithTimeout(task, timeout);
-    }
-
-    template <typename TaskFunc>
-    auto executeWithTimeout(
-        TaskFunc task, std::chrono::milliseconds timeout) const -> std::any {
-        std::packaged_task<std::any()> packagedTask(std::move(task));
-        std::future<std::any> future = packagedTask.get_future();
-#if __cplusplus >= 201703L
-        std::jthread taskThread(std::move(packagedTask));
-#else
-        std::thread taskThread(std::move(packagedTask));
-#endif
-        if (future.wait_for(timeout) == std::future_status::timeout) {
-            taskThread.detach();  // Detach the thread on timeout
-            THROW_TIMEOUT_EXCEPTION("Function execution timed out");
-        }
-
-        taskThread.join();  // Ensure the thread has finished
-        return future.get();
-    }
-};
 }  // namespace atom::meta
 
 #endif

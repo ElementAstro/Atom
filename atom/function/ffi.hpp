@@ -10,19 +10,11 @@
 #define ATOM_META_FFI_HPP
 
 #include <any>
-#include <chrono>
-#include <cstdint>
-#include <functional>
 #include <future>
-#include <iostream>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
-#include <string>
-#include <string_view>
-#include <type_traits>
 #include <unordered_map>
-#include <vector>
 
 #ifdef _MSC_VER
 #include <windows.h>
@@ -49,10 +41,6 @@ public:
     throw FFIException(__FILE__, __LINE__, __func__, __VA_ARGS__)
 
 namespace atom::meta {
-
-// Logger for debug information
-void log(const std::string& msg) { std::cerr << "[LOG] " << msg << std::endl; }
-
 template <typename T>
 constexpr auto getFFIType() -> ffi_type* {
     if constexpr (std::is_same_v<T, int>) {
@@ -211,7 +199,6 @@ public:
             THROW_FFI_EXCEPTION("Failed to load dynamic library: " + error);
         }
 #endif
-        log("Library loaded: " + std::string(libraryPath_));
     }
 
     void unloadLibrary() {
@@ -221,7 +208,6 @@ public:
 #else
             dlclose(handle_);
 #endif
-            log("Library unloaded.");
             handle_ = nullptr;
         }
         functionMap_.clear();
@@ -249,7 +235,6 @@ public:
             THROW_FFI_EXCEPTION("Failed to load symbol: " +
                                 std::string(functionName) + " (" + error + ")");
         }
-        log("Loaded function: " + std::string(functionName));
         return std::function<Func>(reinterpret_cast<Func*>(proc));
     }
 
@@ -265,7 +250,6 @@ public:
         std::shared_lock lock(mutex_);
         auto findIt = functionMap_.find(std::string(functionName));
         if (findIt == functionMap_.end()) {
-            log("Function not found in map: " + std::string(functionName));
             return std::nullopt;
         }
 
@@ -288,7 +272,6 @@ public:
         std::shared_lock lock(mutex_);
         auto findIt = functionMap_.find(std::string(functionName));
         if (findIt == functionMap_.end()) {
-            log("Function not found in map: " + std::string(functionName));
             return std::nullopt;
         }
 
@@ -405,7 +388,6 @@ public:
                 factoryFuncName);
         }
         object_.reset(factory());
-        log("Library object created.");
     }
 
     auto operator->() const -> T* { return object_.get(); }

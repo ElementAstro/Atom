@@ -74,7 +74,11 @@ Env::Env(int argc, char **argv) : impl_(std::make_shared<Impl>()) {
 
     impl_->mExe = exePath.string();
     impl_->mCwd = exePath.parent_path().string() + '/';
-    impl_->mProgram = argv[0];
+    if (argv != nullptr) {
+        impl_->mProgram = argv[0];
+    } else {
+        impl_->mProgram = "";
+    }
 
     LOG_F(INFO, "Executable path: {}", impl_->mExe);
     LOG_F(INFO, "Current working directory: {}", impl_->mCwd);

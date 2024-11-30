@@ -78,7 +78,7 @@ public:
         using BareT = BareType<T>;
         Flags flags;
         flags.set(IS_CONST_FLAG, std::is_const_v<std::remove_reference_t<T>>);
-        flags.set(IS_REFERENCE_FLAG, meta::isRef<T>);
+        flags.set(IS_REFERENCE_FLAG, std::is_reference_v<T>);
         flags.set(IS_POINTER_FLAG, Pointer<T> || Pointer<BareT> ||
                                        SmartPointer<T> || SmartPointer<BareT>);
         flags.set(IS_VOID_FLAG, std::is_void_v<T>);
@@ -90,7 +90,7 @@ public:
         }
         flags.set(IS_ARRAY_FLAG, std::is_array_v<T>);
         flags.set(IS_ENUM_FLAG, std::is_enum_v<T>);
-        flags.set(IS_CLASS_FLAG, meta::isClass<T>);
+        flags.set(IS_CLASS_FLAG, std::is_class_v<T>);
         flags.set(IS_FUNCTION_FLAG, std::is_function_v<T>);
         flags.set(IS_TRIVIAL_FLAG, std::is_trivial_v<T>);
         flags.set(IS_STANDARD_LAYOUT_FLAG, std::is_standard_layout_v<T>);

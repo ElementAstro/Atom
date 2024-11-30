@@ -1,7 +1,8 @@
-#ifndef ATOMMETA_FIELD_COUNT_HPP
-#define ATOMMETA_FIELD_COUNT_HPP
+#ifndef ATOM_META_FIELD_COUNT_HPP
+#define ATOM_META_FIELD_COUNT_HPP
 
 #include <array>
+
 namespace atom::meta::details {
 struct Any;
 

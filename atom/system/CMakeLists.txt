@@ -14,11 +14,18 @@ set(SOURCES
     command.cpp
     crash_quotes.cpp
     crash.cpp
+    crontab.cpp
+    device.cpp
     env.cpp
+    gpio.cpp
     lregistry.cpp
+    network_manager.cpp
     pidwatcher.cpp
     power.cpp
+    priority.cpp
+    process_manager.cpp
     process.cpp
+    signal.cpp
     software.cpp
     storage.cpp
     user.cpp

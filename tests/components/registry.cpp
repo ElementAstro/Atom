@@ -1,7 +1,6 @@
 #include "atom/components/registry.hpp"
+
 #include <gtest/gtest.h>
-#include <stdexcept>
-#include <string>
 
 #include "atom/components/component.hpp"
 #include "atom/error/exception.hpp"

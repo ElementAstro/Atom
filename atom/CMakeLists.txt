@@ -66,6 +66,7 @@ set(ATOM_LIBS
     atom-function
     atom-algorithm
     atom-async
+    atom-async-io
     atom-io
     atom-component
     atom-utils

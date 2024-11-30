@@ -54,6 +54,9 @@ template <typename T>
 concept FunctionPointer = std::is_function_v<std::remove_pointer_t<T>>;
 
 template <typename T>
+concept MemberFunctionPointer = std::is_member_function_pointer_v<T>;
+
+template <typename T>
 concept Callable = requires(T obj) {
     { std::function{std::declval<T>()} };
 };

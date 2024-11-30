@@ -127,31 +127,6 @@ private:
     mutable std::string what_message_;
 };
 
-// Nested exception handling
-class NestedException : public Exception {
-public:
-    explicit NestedException(const char *file, int line, const char *func,
-                             std::exception_ptr ptr)
-        : Exception(file, line, func), exception_ptr_(std::move(ptr)) {}
-
-    const char *what() const noexcept override {
-        if (what_message_.empty()) {
-            try {
-                std::rethrow_exception(exception_ptr_);
-            } catch (const std::exception &e) {
-                what_message_ = "Nested exception: " + std::string(e.what());
-            } catch (...) {
-                what_message_ = "Nested unknown exception";
-            }
-        }
-        return what_message_.c_str();
-    }
-
-private:
-    std::exception_ptr exception_ptr_;
-    mutable std::string what_message_;
-};
-
 #define THROW_EXCEPTION(...)                                     \
     throw atom::error::Exception(ATOM_FILE_NAME, ATOM_FILE_LINE, \
                                  ATOM_FUNC_NAME, __VA_ARGS__)

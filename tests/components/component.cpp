@@ -1,7 +1,6 @@
 #include "atom/components/component.hpp"
+
 #include <gtest/gtest.h>
-#include <memory>
-#include <string>
 
 // Test fixture for Component
 class ComponentTest : public ::testing::Test {

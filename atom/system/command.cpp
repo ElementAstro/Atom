@@ -332,14 +332,15 @@ void executeCommands(const std::vector<std::string> &commands) {
     std::vector<std::string> errors;
     std::mutex errorMutex;
 
+    threads.reserve(commands.size());
     for (const auto &command : commands) {
         threads.emplace_back([&command, &errors, &errorMutex]() {
             try {
                 int status = 0;
-                executeCommand(command, false, nullptr);
+                [[maybe_unused]] auto res =
+                    executeCommand(command, false, nullptr);
                 if (status != 0) {
-                    throw std::runtime_error("Error executing command: " +
-                                             command);
+                    THROW_RUNTIME_ERROR("Error executing command: " + command);
                 }
             } catch (const std::runtime_error &e) {
                 std::lock_guard lock(errorMutex);

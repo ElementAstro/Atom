@@ -9,26 +9,15 @@
 #ifndef ATOM_META_FUNC_TRAITS_HPP
 #define ATOM_META_FUNC_TRAITS_HPP
 
-#include <functional>
-#include <string>
-#include <tuple>
-#include <type_traits>
-#include <utility>
+#include "atom/function/abi.hpp"
+#include "atom/function/concept.hpp"
 
-#include "abi.hpp"
-#include "concept.hpp"
-
-#if ENABLE_DEBUG
+#if ATOM_ENABLE_DEBUG
 #include <iostream>
 #endif
 
 namespace atom::meta {
-template <typename T>
-concept FunctionPointer =
-    std::is_function_v<std::remove_pointer_t<T>> && std::is_pointer_v<T>;
 
-template <typename T>
-concept MemberFunctionPointer = std::is_member_function_pointer_v<T>;
 
 template <typename Func>
 struct FunctionTraits;
@@ -254,7 +243,7 @@ constexpr auto has_reference_argument() -> bool {
     return tuple_has_reference<args_tuple>();
 }
 
-#if ENABLE_DEBUG
+#if ATOM_ENABLE_DEBUG
 // Helper function to print tuple types
 template <typename Tuple>
 void print_tuple_types() {

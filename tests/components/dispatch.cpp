@@ -1,8 +1,8 @@
 #include "atom/components/dispatch.hpp"
-#include <gtest/gtest.h>
-#include <optional>
-#include "exception.hpp"
 
+#include <gtest/gtest.h>
+
+#include "atom/error/exception.hpp"
 #include "atom/function/type_caster.hpp"
 
 // Test fixture for CommandDispatcher tests
@@ -29,18 +29,6 @@ TEST_F(CommandDispatcherTest, DefineAndDispatchSimpleFunction) {
 
     std::any result = dispatcher.dispatch("add", 3, 4);
     ASSERT_EQ(std::any_cast<int>(result), 7);
-}
-
-// Test the `defT` method with a function that times out
-TEST_F(CommandDispatcherTest, DefineAndDispatchTimeoutFunction) {
-    dispatcher.def("sleepy", "test", "Sleeps for a while",
-                   std::function<void()>([]() {
-                       std::this_thread::sleep_for(std::chrono::seconds(2));
-                   }),
-                   std::nullopt, std::nullopt, {}, true);
-    dispatcher.setTimeout("sleepy", std::chrono::milliseconds(500));
-
-    ASSERT_THROW(dispatcher.dispatch("sleepy"), DispatchTimeout);
 }
 
 // Test dispatching with missing arguments and default values

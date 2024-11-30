@@ -227,7 +227,9 @@ public:
                 LOG_F(ERROR, "Error monitoring PID {}: {}", processIt->pid,
                       [&] {
                           std::array<char, BUFFER_SIZE> buffer;
-                          strerror_r(errno, buffer.data(), buffer.size());
+                          char *errorMsg =
+                              strerror_r(errno, buffer.data(), buffer.size());
+                          return std::string(errorMsg);
                           return std::string(buffer.data());
                       }());
                 processIt = processes.erase(processIt);
@@ -310,7 +312,7 @@ auto ProcessManager::createProcess(const std::string &command,
         return impl->createProcess(command, identifier, isBackground);
     } catch (const ProcessException &e) {
         LOG_F(ERROR, "Failed to create process {}: {}", identifier, e.what());
-        THROW_NESTED_PROCESS_ERROR(e.what());
+        THROW_PROCESS_ERROR("Failed to create process.");
     }
 }
 

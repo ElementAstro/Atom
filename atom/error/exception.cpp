@@ -29,20 +29,20 @@ namespace atom::error {
 auto Exception::what() const noexcept -> const char* {
     if (full_message_.empty()) {
         std::ostringstream oss;
-        oss << "Exception at " << file_ << ":" << line_ << " in " << func_
-            << "()";
-        oss << " (thread " << thread_id_ << ")";
-        oss << "\n\tMessage: " << message_;
+        oss << "Exception occurred:\n";
+        oss << "  File: " << file_ << "\n";
+        oss << "  Line: " << line_ << "\n";
+        oss << "  Function: " << func_ << "()\n";
+        oss << "  Thread ID: " << thread_id_ << "\n";
+        oss << "  Message: " << message_ << "\n";
 #if ENABLE_CPPTRACE
-        oss << "\n\tStack trace:\n"
-            << cpptrace::generate()
+        oss << "  Stack trace:\n" << cpptrace::generate();
 #elif defined(ENABLE_BOOST_STACKTRACE)
-        full_message_ += std::format(
-            "\n\tStack trace:\n{}", boost::stacktrace::to_string(stack_trace_));
+        oss << "  Stack trace:\n" << boost::stacktrace::to_string(stack_trace_);
 #else
-        oss << "\n\tStack trace:\n" << stack_trace_.toString();
+        oss << "  Stack trace:\n" << stack_trace_.toString();
 #endif
-                   full_message_ = oss.str();
+        full_message_ = oss.str();
     }
     return full_message_.c_str();
 }

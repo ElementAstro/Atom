@@ -1,8 +1,6 @@
-// test_var_manager.cpp
 #include "atom/components/var.hpp"
 
 #include <gtest/gtest.h>
-#include <string>
 
 #include "atom/error/exception.hpp"
 

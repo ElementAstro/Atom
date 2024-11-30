@@ -15,14 +15,7 @@ Description: Variable Manager
 #ifndef ATOM_COMPONENT_VAR_HPP
 #define ATOM_COMPONENT_VAR_HPP
 
-#include <algorithm>
 #include <any>
-#include <memory>
-#include <string>
-#include <utility>
-#include <vector>
-
-#include "atom/macro.hpp"
 
 #if ENABLE_FASTHASH
 #include "emhash/hash_table8.hpp"
@@ -31,8 +24,11 @@ Description: Variable Manager
 #endif
 
 #include "atom/error/exception.hpp"
+#include "atom/function/concept.hpp"
 #include "atom/log/loguru.hpp"
 #include "atom/type/trackable.hpp"
+
+#include "atom/macro.hpp"
 
 class VariableManager {
 public:
@@ -50,8 +46,7 @@ public:
                      const std::string& alias = "",
                      const std::string& group = "");
 
-    template <typename T>
-        requires std::is_arithmetic_v<T>
+    template <Arithmetic T>
     void setRange(const std::string& name, T min, T max);
 
     void setStringOptions(const std::string& name,
@@ -123,8 +118,7 @@ void VariableManager::addVariable(const std::string& name, T C::*memberPointer,
     variables_[name] = {std::move(variable), description, alias, group};
 }
 
-template <typename T>
-    requires std::is_arithmetic_v<T>
+template <Arithmetic T>
 void VariableManager::setRange(const std::string& name, T min, T max) {
     LOG_F(INFO, "Setting range for variable: {}", name);
     if (auto variable = getVariable<T>(name)) {

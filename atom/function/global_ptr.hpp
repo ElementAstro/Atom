@@ -22,6 +22,7 @@
 #include <unordered_map>
 #endif
 
+#include "atom/memory/utils.hpp"
 #include "atom/type/noncopyable.hpp"
 
 #define GetPtr GlobalSharedPtrManager::getInstance().getSharedPtr
@@ -31,21 +32,33 @@
 #define GetPtrOrCreate \
     GlobalSharedPtrManager::getInstance().getOrCreateSharedPtr
 
+#define GET_WEAK_PTR(type, name, id)                        \
+    std::weak_ptr<type> name##Ptr;                          \
+    GET_OR_CREATE_WEAK_PTR(name##Ptr, type, Constants::id); \
+    auto(name) = name##Ptr.lock();                          \
+    if (!(name)) {                                          \
+        THROW_OBJ_NOT_EXIST("Component: ", Constants::id);  \
+    }
+
+#define GET_OR_CREATE_PTR_IMPL(variable, type, constant, capture, create_expr, \
+                               weak_ptr, deleter)                              \
+    if (auto ptr = GetPtrOrCreate<type>(constant, capture create_expr)) {      \
+        variable = weak_ptr ? std::weak_ptr(ptr) : ptr;                        \
+    } else {                                                                   \
+        THROW_UNLAWFUL_OPERATION("Failed to create " #type ".");               \
+    }
+
+#define GET_OR_CREATE_PTR_WITH_CAPTURE(variable, type, constant, capture) \
+    GET_OR_CREATE_PTR_IMPL(                                               \
+        variable, type, constant, [capture],                              \
+        { return atom::memory::makeShared<type>(capture); }, false, nullptr)
+
 #define GET_OR_CREATE_PTR(variable, type, constant, ...)                     \
     if (auto ptr = GetPtrOrCreate<type>(                                     \
             constant, [] { return std::make_shared<type>(__VA_ARGS__); })) { \
         variable = ptr;                                                      \
     } else {                                                                 \
         THROW_UNLAWFUL_OPERATION("Failed to create " #type ".");             \
-    }
-
-#define GET_OR_CREATE_PTR_WITH_CAPTURE(variable, type, constant, capture) \
-    if (auto ptr = GetPtrOrCreate<type>(constant, [capture] {             \
-            return std::make_shared<type>(capture);                       \
-        })) {                                                             \
-        variable = ptr;                                                   \
-    } else {                                                              \
-        THROW_UNLAWFUL_OPERATION("Failed to create " #type ".");          \
     }
 
 #define GET_OR_CREATE_PTR_THIS(variable, type, constant, ...)    \

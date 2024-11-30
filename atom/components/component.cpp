@@ -15,6 +15,7 @@ Description: Basic Component Definition
 #include "component.hpp"
 
 #include "atom/log/loguru.hpp"
+#include "dispatch.hpp"
 
 Component::Component(std::string name) : m_name_(std::move(name)) {
     LOG_F(INFO, "Component created: {}", m_name_);
@@ -105,7 +106,7 @@ auto Component::getCommandAliases(const std::string& name) const
 }
 
 auto Component::getCommandArgAndReturnType(const std::string& name)
-    -> std::pair<std::vector<atom::meta::Arg>, std::string> {
+    -> std::vector<CommandDispatcher::CommandArgRet> {
     LOG_SCOPE_FUNCTION(INFO);
     return m_CommandDispatcher_->getCommandArgAndReturnType(name);
 }

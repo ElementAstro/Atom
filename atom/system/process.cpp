@@ -252,6 +252,10 @@ auto getSelfProcessInfo() -> Process {
 #endif
 }
 
+auto getProcessInfoByPid(int pid) -> Process {
+    return getProcessInfo(pid);
+}
+
 auto getProcessInfoByName(const std::string &processName)
     -> std::vector<Process> {
     std::vector<Process> processes;

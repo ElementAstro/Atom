@@ -1,5 +1,7 @@
 #include "dispatch.hpp"
 
+#include <future>
+
 #include "atom/log/loguru.hpp"
 #include "atom/utils/to_string.hpp"
 
@@ -132,17 +134,19 @@ auto CommandDispatcher::computeFunctionHash(const std::vector<std::any>& args)
     return hash;
 }
 
-auto CommandDispatcher::has(const std::string& name) const -> bool {
+auto CommandDispatcher::has(const std::string& name) -> bool {
     LOG_SCOPE_FUNCTION(INFO);
     if (commands_.find(name) != commands_.end()) {
         LOG_F(INFO, "Command '{}' found.", name);
         return true;
     }
     for (const auto& command : commands_) {
-        if (command.second.aliases.find(name) != command.second.aliases.end()) {
-            LOG_F(INFO, "Alias '{}' found for command '{}'.", name,
-                  command.first);
-            return true;
+        for (const auto& cmd : command.second) {
+            if (cmd.second.aliases.find(name) != cmd.second.aliases.end()) {
+                LOG_F(INFO, "Alias '{}' found for command '{}'.", name,
+                      command.first);
+                return true;
+            }
         }
     }
     LOG_F(INFO, "Command '{}' not found.", name);
@@ -154,7 +158,14 @@ void CommandDispatcher::addAlias(const std::string& name,
     LOG_SCOPE_FUNCTION(INFO);
     auto it = commands_.find(name);
     if (it != commands_.end()) {
-        it->second.aliases.insert(alias);
+        for (const auto& cmd : it->second) {
+            if (cmd.second.aliases.find(alias) != cmd.second.aliases.end()) {
+                LOG_F(WARNING, "Alias '{}' already exists for command '{}'.",
+                      alias, name);
+                return;
+            }
+            // Max: Here we nned to change the alias to the new name
+        }
         commands_[alias] = it->second;
         groupMap_[alias] = groupMap_[name];
         LOG_F(INFO, "Alias '{}' added for command '{}'.", alias, name);
@@ -205,9 +216,11 @@ auto CommandDispatcher::getCommandDescription(const std::string& name) const
     LOG_SCOPE_FUNCTION(INFO);
     auto it = commands_.find(name);
     if (it != commands_.end()) {
-        LOG_F(INFO, "Description for command '{}': {}", name,
-              it->second.description);
-        return it->second.description;
+        for (const auto& [hash, cmd] : it->second) {
+            LOG_F(INFO, "Description for command '{}': {}", name,
+                  cmd.description);
+            return cmd.description;
+        }
     }
     LOG_F(INFO, "No description found for command '{}'.", name);
     return "";
@@ -218,9 +231,11 @@ auto CommandDispatcher::getCommandAliases(const std::string& name) const
     LOG_SCOPE_FUNCTION(INFO);
     auto it = commands_.find(name);
     if (it != commands_.end()) {
-        LOG_F(INFO, "Aliases for command '{}': {}", name,
-              atom::utils::toString(it->second.aliases));
-        return it->second.aliases;
+        for (const auto& [hash, cmd] : it->second) {
+            LOG_F(INFO, "Aliases for command '{}': {}", name,
+                  atom::utils::toString(cmd.aliases));
+            return cmd.aliases;
+        }
     }
     LOG_F(INFO, "No aliases found for command '{}'.", name);
     return {};
@@ -249,38 +264,59 @@ auto CommandDispatcher::getAllCommands() const -> std::vector<std::string> {
         result.push_back(pair.first);
     }
     for (const auto& command : commands_) {
-        for (const auto& alias : command.second.aliases) {
-            result.push_back(alias);
+        for (const auto& cmd : command.second) {
+            for (const auto& alias : cmd.second.aliases) {
+                result.push_back(alias);
+            }
         }
     }
-    auto it = std::unique(result.begin(), result.end());
-    result.erase(it, result.end());
+    auto uniqueIt = std::unique(result.begin(), result.end());
+    result.erase(uniqueIt, result.end());
     LOG_F(INFO, "All commands: {}", atom::utils::toString(result));
     return result;
 }
 
 namespace atom::utils {
-    auto toString(const std::vector<atom::meta::Arg> &arg) -> std::string{
-        std::string result;
-        for (const auto& a : arg) {
-            result += a.getName() + " ";
+auto toString(const std::vector<atom::meta::Arg>& arg) -> std::string {
+    std::string result;
+    for (const auto& a : arg) {
+        result += a.getName() + " ";
+    }
+    return result;
+}
+}  // namespace atom::utils
+
+auto CommandDispatcher::getCommandArgAndReturnType(const std::string& name)
+    -> std::vector<CommandArgRet> {
+    LOG_SCOPE_FUNCTION(INFO);
+    auto commandIterator = commands_.find(name);
+    if (commandIterator != commands_.end()) {
+        std::vector<CommandArgRet> result;
+        for (const auto& [hash, cmd] : commandIterator->second) {
+            LOG_F(INFO,
+                  "Argument and return types for command '{}': args = [{}], "
+                  "return = {}",
+                  name, atom::utils::toString(cmd.argTypes), cmd.returnType);
+            result.emplace_back(CommandArgRet{cmd.argTypes, cmd.returnType});
         }
         return result;
     }
+    LOG_F(INFO, "No argument and return types found for command '{}'.", name);
+    return {};
 }
 
-auto CommandDispatcher::getCommandArgAndReturnType(const std::string& name)
-    -> std::pair<std::vector<atom::meta::Arg>, std::string> {
+auto CommandDispatcher::dispatchHelper(
+    const std::string& name, const std::vector<std::any>& args) -> std::any {
     LOG_SCOPE_FUNCTION(INFO);
-    auto it = commands_.find(name);
-    if (it != commands_.end()) {
-        LOG_F(INFO,
-              "Argument and return types for command '{}': args = [{}], return "
-              "= {}",
-              name, atom::utils::toString(it->second.argTypes),
-              it->second.returnType);
-        return {it->second.argTypes, it->second.returnType};
+    auto commandIterator = commands_.find(name);
+    if (commandIterator != commands_.end()) {
+        for (const auto& [hash, cmd] : commandIterator->second) {
+            if (cmd.hash == computeFunctionHash(args)) {
+                return executeCommand(cmd, name, args);
+            }
+        }
     }
-    LOG_F(INFO, "No argument and return types found for command '{}'.", name);
-    return {{}, ""};
+    LOG_F(ERROR, "Command '{}' not found or no matching overload.", name);
+    THROW_INVALID_ARGUMENT("Command '{}' not found or no matching overload.",
+                           name);
 }

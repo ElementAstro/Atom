@@ -1,7 +1,6 @@
 #ifndef ATOM_META_PROPERTY_HPP
 #define ATOM_META_PROPERTY_HPP
 
-#include <chrono>
 #include <functional>
 #include <future>
 #include <optional>
@@ -9,7 +8,7 @@
 #include <unordered_map>
 
 #include "atom/error/exception.hpp"
-#include "concept.hpp"
+#include "atom/function/concept.hpp"
 
 /**
  * @brief A template class that encapsulates a property with optional getter,

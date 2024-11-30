@@ -27,6 +27,7 @@
 #include "atom/error/exception.hpp"
 #include "atom/log/loguru.hpp"
 #include "atom/system/command.hpp"
+#include "atom/utils/to_string.hpp"
 
 namespace atom::system {
 class NetworkInterface::NetworkInterfaceImpl {
@@ -160,7 +161,8 @@ auto NetworkManager::getNetworkInterfaces() -> std::vector<NetworkInterface> {
                               name, std::vector<std::string>{address},
                               getMacAddress(name).value_or("N/A"), isUp));
             } else {
-                ifaceMap[name].getAddresses().emplace_back(address);
+                // TODO: Fix this
+                // ifaceMap[name].getAddresses().emplace_back(address);
             }
         }
     }
@@ -486,7 +488,7 @@ void NetworkManager::monitorConnectionStatus() {
                     LOG_F(INFO,
                           "Interface: {} | Status: {} | IPs: {} | MAC: {}",
                           iface.getName(), iface.isUp() ? "Up" : "Down",
-                          iface.getAddresses(), iface.getMac());
+                          atom::utils::toString(iface.getAddresses()), iface.getMac());
                     for (const auto& ip : iface.getAddresses()) {
                         LOG_F(INFO, "IP: {}", ip);
                     }

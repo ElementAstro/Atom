@@ -15,12 +15,6 @@ Description: Basic Component Definition
 #ifndef ATOM_COMPONENT_HPP
 #define ATOM_COMPONENT_HPP
 
-#include <functional>
-#include <memory>
-#include <type_traits>
-#include <utility>
-#include <vector>
-
 #include "dispatch.hpp"
 #include "module_macro.hpp"
 #include "var.hpp"
@@ -389,7 +383,7 @@ public:
     auto getCommandDescription(const std::string& name) const -> std::string;
 
     auto getCommandArgAndReturnType(const std::string& name)
-        -> std::pair<std::vector<atom::meta::Arg>, std::string>;
+        -> std::vector<CommandDispatcher::CommandArgRet>;
 
 #if ENABLE_FASTHASH
     emhash::HashSet<std::string> getCommandAliases(
