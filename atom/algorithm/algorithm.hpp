@@ -19,7 +19,6 @@ Description: A collection of algorithms for C++
 #include <exception>
 #include <mutex>
 #include <shared_mutex>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_map>

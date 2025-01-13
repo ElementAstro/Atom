@@ -23,6 +23,7 @@
 #endif
 #endif
 
+#include "atom/async/pool.hpp"
 #include "atom/error/exception.hpp"
 #include "atom/log/loguru.hpp"
 
@@ -36,7 +37,7 @@
 namespace atom::algorithm {
 
 template <std::floating_point T>
-class AdvancedErrorCalibration {
+class ErrorCalibration {
 private:
     T slope_ = 1.0;
     T intercept_ = 0.0;
@@ -46,6 +47,17 @@ private:
     T mae_ = 0.0;  // Mean Absolute Error
 
     std::mutex metrics_mutex_;
+    std::unique_ptr<atom::async::ThreadPool<>> thread_pool_;
+
+    /**
+     * Initialize thread pool if not already initialized
+     */
+    void initThreadPool() {
+        if (!thread_pool_) {
+            thread_pool_ = std::make_unique<atom::async::ThreadPool<>>(
+                std::thread::hardware_concurrency());
+        }
+    }
 
     /**
      * Calculate calibration metrics
@@ -54,6 +66,7 @@ private:
      */
     void calculateMetrics(const std::vector<T>& measured,
                           const std::vector<T>& actual) {
+        initThreadPool();
         T sumSquaredError = 0.0;
         T sumAbsoluteError = 0.0;
         T meanActual =
@@ -137,15 +150,16 @@ private:
 #endif
 #endif
 
-        // Multithreaded computation for remaining elements
-        std::vector<std::future<void>> futures;
+        // Thread pool computation for remaining elements
         size_t startIdx = i;
         size_t chunk_size = 100;
+        std::vector<std::future<void>> futures;
+        
         for (size_t start = startIdx; start < actual.size();
              start += chunk_size) {
             size_t end = std::min(start + chunk_size, actual.size());
             futures.emplace_back(
-                std::async(std::launch::async, [&, start, end]() {
+                thread_pool_->enqueue([&, start, end]() {
                     T localSumSquared = 0.0;
                     T localSumAbsolute = 0.0;
                     T localSsTotal = 0.0;
@@ -460,6 +474,80 @@ public:
         calculateMetrics(measured, actual);
     }
 
+    /**
+     * Logarithmic calibration using the least squares method
+     * @param measured Vector of measured values
+     * @param actual Vector of actual values
+     */
+    void logarithmicCalibrate(const std::vector<T>& measured,
+                              const std::vector<T>& actual) {
+        if (measured.size() != actual.size() || measured.empty()) {
+            THROW_INVALID_ARGUMENT(
+                "Input vectors must be non-empty and of equal size");
+        }
+        if (std::any_of(measured.begin(), measured.end(),
+                        [](T val) { return val <= 0; })) {
+            THROW_INVALID_ARGUMENT(
+                "Measured values must be positive for logarithmic calibration.");
+        }
+
+        auto logFunc = [](T x, const std::vector<T>& params) -> T {
+            return params[0] + params[1] * std::log(x);
+        };
+
+        std::vector<T> initialParams = {0.0, 1.0};
+        auto params =
+            levenbergMarquardt(measured, actual, logFunc, initialParams);
+
+        if (params.size() < 2) {
+            THROW_RUNTIME_ERROR(
+                "Insufficient parameters returned from calibration.");
+        }
+
+        slope_ = params[1];
+        intercept_ = params[0];
+
+        calculateMetrics(measured, actual);
+    }
+
+    /**
+     * Power law calibration using the least squares method
+     * @param measured Vector of measured values
+     * @param actual Vector of actual values
+     */
+    void powerLawCalibrate(const std::vector<T>& measured,
+                           const std::vector<T>& actual) {
+        if (measured.size() != actual.size() || measured.empty()) {
+            THROW_INVALID_ARGUMENT(
+                "Input vectors must be non-empty and of equal size");
+        }
+        if (std::any_of(measured.begin(), measured.end(),
+                        [](T val) { return val <= 0; }) ||
+            std::any_of(actual.begin(), actual.end(),
+                        [](T val) { return val <= 0; })) {
+            THROW_INVALID_ARGUMENT(
+                "Values must be positive for power law calibration.");
+        }
+
+        auto powerFunc = [](T x, const std::vector<T>& params) -> T {
+            return params[0] * std::pow(x, params[1]);
+        };
+
+        std::vector<T> initialParams = {1.0, 1.0};
+        auto params =
+            levenbergMarquardt(measured, actual, powerFunc, initialParams);
+
+        if (params.size() < 2) {
+            THROW_RUNTIME_ERROR(
+                "Insufficient parameters returned from calibration.");
+        }
+
+        slope_ = params[1];
+        intercept_ = params[0];
+
+        calculateMetrics(measured, actual);
+    }
+
     [[nodiscard]] auto apply(T value) const -> T {
         return slope_ * value + intercept_;
     }
@@ -531,7 +619,7 @@ public:
                 bootActual.push_back(actual[idx]);
             }
 
-            AdvancedErrorCalibration<T> bootCalibrator;
+            ErrorCalibration<T> bootCalibrator;
             try {
                 bootCalibrator.linearCalibrate(bootMeasured, bootActual);
                 bootstrapSlopes.push_back(bootCalibrator.getSlope());
@@ -623,7 +711,7 @@ public:
                 }
             }
 
-            AdvancedErrorCalibration<T> cvCalibrator;
+            ErrorCalibration<T> cvCalibrator;
             try {
                 cvCalibrator.linearCalibrate(trainMeasured, trainActual);
             } catch (const std::exception& e) {

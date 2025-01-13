@@ -71,14 +71,6 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
 endif()
 
-# Enable Address Sanitizer (ASan) for Debug builds
-if(CMAKE_BUILD_TYPE MATCHES "Debug")
-    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND NOT MINGW)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
-    endif()
-endif()
-
 # Enable Link Time Optimization (LTO) for Release builds
 if(CMAKE_BUILD_TYPE MATCHES "Release")
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")

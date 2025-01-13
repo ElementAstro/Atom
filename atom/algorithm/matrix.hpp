@@ -47,6 +47,7 @@ template <typename T, std::size_t Rows, std::size_t Cols>
 class Matrix {
 private:
     std::array<T, Rows * Cols> data_{};
+    mutable std::mutex mutex_; // For thread safety
 
 public:
     /**
@@ -223,6 +224,45 @@ public:
             det *= U(i, i);
         }
         return det;
+    }
+
+    /**
+     * @brief Computes the inverse of the matrix using LU decomposition.
+     *
+     * @return Matrix The inverse matrix.
+     * @throws std::runtime_error If the matrix is singular (non-invertible).
+     */
+    auto inverse() const -> Matrix {
+        static_assert(Rows == Cols,
+                      "Inverse is only defined for square matrices");
+        const T det = determinant();
+        if (std::abs(det) < 1e-10) {
+            THROW_RUNTIME_ERROR("Matrix is singular (non-invertible)");
+        }
+
+        auto [L, U] = luDecomposition(*this);
+        Matrix<T, Rows, Cols> inv = identity<T, Rows>();
+
+        // Forward substitution (L * Y = I)
+        for (std::size_t k = 0; k < Cols; ++k) {
+            for (std::size_t i = k + 1; i < Rows; ++i) {
+                for (std::size_t j = 0; j < k; ++j) {
+                    inv(i, k) -= L(i, j) * inv(j, k);
+                }
+            }
+        }
+
+        // Backward substitution (U * X = Y)
+        for (std::size_t k = 0; k < Cols; ++k) {
+            for (std::size_t i = Rows; i-- > 0;) {
+                for (std::size_t j = i + 1; j < Cols; ++j) {
+                    inv(i, k) -= U(i, j) * inv(j, k);
+                }
+                inv(i, k) /= U(i, i);
+            }
+        }
+
+        return inv;
     }
 
     /**
