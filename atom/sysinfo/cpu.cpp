@@ -58,21 +58,43 @@ auto getCurrentCpuUsage() -> float {
     float cpuUsage = 0.0;
 
 #ifdef _WIN32
-    PDH_HQUERY query;
-    PdhOpenQuery(nullptr, 0, &query);
+    PDH_HQUERY query = nullptr;
+    PDH_HCOUNTER counter = nullptr;
+    PDH_STATUS status;
 
-    PDH_HCOUNTER counter;
-    PdhAddCounter(query, "\\Processor(_Total)\\% Processor Time", 0, &counter);
-    PdhCollectQueryData(query);
+    status = PdhOpenQuery(nullptr, 0, &query);
+    if (status != ERROR_SUCCESS) {
+        LOG_F(ERROR, "Failed to open PDH query: error code {}", status);
+        return cpuUsage;
+    }
+
+    status = PdhAddCounter(
+        query, "\\Processor Information(_Total)\\% Processor Utility", 0,
+        &counter);
+    if (status != ERROR_SUCCESS) {
+        LOG_F(ERROR, "Failed to add PDH counter: error code {}", status);
+        PdhCloseQuery(query);
+        return cpuUsage;
+    }
+
+    status = PdhCollectQueryData(query);
+    if (status != ERROR_SUCCESS) {
+        LOG_F(ERROR, "Failed to collect query data: error code {}", status);
+        PdhCloseQuery(query);
+        return cpuUsage;
+    }
 
     PDH_FMT_COUNTERVALUE counterValue;
-    PdhGetFormattedCounterValue(counter, PDH_FMT_DOUBLE, nullptr,
-                                &counterValue);
-
-    cpuUsage = static_cast<float>(counterValue.doubleValue);
+    status = PdhGetFormattedCounterValue(counter, PDH_FMT_DOUBLE, nullptr,
+                                         &counterValue);
+    if (status == ERROR_SUCCESS) {
+        cpuUsage = static_cast<float>(counterValue.doubleValue);
+        LOG_F(INFO, "CPU Usage: {}%", cpuUsage);
+    } else {
+        LOG_F(ERROR, "Failed to get counter value: error code {}", status);
+    }
 
     PdhCloseQuery(query);
-    LOG_F(INFO, "CPU Usage: %.2f", cpuUsage);
 #elif __linux__
     std::ifstream file("/proc/stat");
     if (!file.is_open()) {
@@ -95,7 +117,7 @@ auto getCurrentCpuUsage() -> float {
 
     float usage = static_cast<float>(totalTime - idleTime) / totalTime;
     cpuUsage = usage * 100.0;
-    LOG_F(INFO, "CPU Usage: %.2f", cpuUsage);
+    LOG_F(INFO, "CPU Usage: {}", cpuUsage);
 #elif __APPLE__
     host_cpu_load_info_data_t cpu_load;
     mach_msg_type_number_t count = HOST_CPU_LOAD_INFO_COUNT;
@@ -111,7 +133,7 @@ auto getCurrentCpuUsage() -> float {
 
         cpuUsage = static_cast<float>(user_time + sys_time) / total_time;
         cpuUsage *= 100.0;
-        LOG_F(INFO, "CPU Usage: %.2f", cpuUsage);
+        LOG_F(INFO, "CPU Usage: {}", cpuUsage);
     } else {
         LOG_F(ERROR, "Failed to get CPU usage");
     }
@@ -131,7 +153,7 @@ auto getCurrentCpuUsage() -> float {
 
     cpuUsage = static_cast<float>(user_time + system_time) / total_time;
     cpuUsage *= 100.0;
-    LOG_F(INFO, "CPU Usage: %.2f", cpuUsage);
+    LOG_F(INFO, "CPU Usage: {}", cpuUsage);
 #endif
 
     LOG_F(INFO, "Finished getCurrentCpuUsage function");
@@ -154,7 +176,7 @@ auto getCurrentCpuTemperature() -> float {
                             (LPBYTE)&temperatureValue,
                             &size) == ERROR_SUCCESS) {
             temperature = static_cast<float>(temperatureValue) / 10.0F;
-            LOG_F(INFO, "CPU Temperature: %.2f", temperature);
+            LOG_F(INFO, "CPU Temperature: {}", temperature);
         }
         RegCloseKey(hKey);
     } else {
@@ -172,9 +194,9 @@ auto getCurrentCpuTemperature() -> float {
                 std::string tempStr = result.substr(pos1 + 2, pos2 - pos1 - 2);
                 try {
                     temperature = std::stof(tempStr);
-                    LOG_F(INFO, "CPU Temperature: %.2f", temperature);
+                    LOG_F(INFO, "CPU Temperature: {}", temperature);
                 } catch (const std::exception &e) {
-                    LOG_F(ERROR, "GetCpuTemperature error: %s", e.what());
+                    LOG_F(ERROR, "GetCpuTemperature error: {}", e.what());
                 }
             }
         } else {
@@ -194,7 +216,7 @@ auto getCurrentCpuTemperature() -> float {
             tempFile >> temp;
             tempFile.close();
             temperature = static_cast<float>(temp) / 1000.0F;
-            LOG_F(INFO, "CPU Temperature: %.2f", temperature);
+            LOG_F(INFO, "CPU Temperature: {}", temperature);
         } else {
             LOG_F(ERROR,
                   "GetCpuTemperature error: open "
@@ -209,7 +231,7 @@ auto getCurrentCpuTemperature() -> float {
         tempFile >> temp;
         tempFile.close();
         temperature = static_cast<float>(temp) / 1000.0f;
-        LOG_F(INFO, "CPU Temperature: %.2f", temperature);
+        LOG_F(INFO, "CPU Temperature: {}", temperature);
     } else {
         LOG_F(ERROR,
               "GetCpuTemperature error: open "
@@ -235,7 +257,7 @@ auto getCPUModel() -> std::string {
         if (RegQueryValueEx(hKey, "ProcessorNameString", nullptr, nullptr,
                             (LPBYTE)cpuName, &size) == ERROR_SUCCESS) {
             cpuModel = cpuName;
-            LOG_F(INFO, "CPU Model: %s", cpuModel.c_str());
+            LOG_F(INFO, "CPU Model: {}", cpuModel.c_str());
         }
         RegCloseKey(hKey);
     } else {
@@ -249,7 +271,7 @@ auto getCPUModel() -> std::string {
     while (std::getline(cpuinfo, line)) {
         if (line.substr(0, 10) == "model name") {
             cpuModel = line.substr(line.find(':') + 2);
-            LOG_F(INFO, "CPU Model: %s", cpuModel.c_str());
+            LOG_F(INFO, "CPU Model: {}", cpuModel.c_str());
             break;
         }
     }
@@ -262,7 +284,7 @@ auto getCPUModel() -> std::string {
             cpuModel = buffer;
             cpuModel.erase(std::remove(cpuModel.begin(), cpuModel.end(), '\n'),
                            cpuModel.end());
-            LOG_F(INFO, "CPU Model: %s", cpuModel.c_str());
+            LOG_F(INFO, "CPU Model: {}", cpuModel.c_str());
         } else {
             LOG_F(ERROR, "GetCPUModel error: popen error");
         }
@@ -278,7 +300,7 @@ auto getCPUModel() -> std::string {
             cpuModel = buffer;
             cpuModel.erase(std::remove(cpuModel.begin(), cpuModel.end(), '\n'),
                            cpuModel.end());
-            LOG_F(INFO, "CPU Model: %s", cpuModel.c_str());
+            LOG_F(INFO, "CPU Model: {}", cpuModel.c_str());
         } else {
             LOG_F(ERROR, "GetCPUModel error: popen error");
         }
@@ -308,7 +330,7 @@ auto getProcessorIdentifier() -> std::string {
         RegCloseKey(hKey);
 
         identifier = identifierValue;
-        LOG_F(INFO, "Processor Identifier: %s", identifier.c_str());
+        LOG_F(INFO, "Processor Identifier: {}", identifier.c_str());
     } else {
         LOG_F(ERROR, "Failed to open registry key for processor identifier");
     }
@@ -318,7 +340,7 @@ auto getProcessorIdentifier() -> std::string {
     while (std::getline(cpuinfo, line)) {
         if (line.substr(0, 9) == "processor") {
             identifier = line.substr(line.find(':') + 2);
-            LOG_F(INFO, "Processor Identifier: %s", identifier.c_str());
+            LOG_F(INFO, "Processor Identifier: {}", identifier.c_str());
             break;
         }
     }
@@ -332,7 +354,7 @@ auto getProcessorIdentifier() -> std::string {
             identifier.erase(
                 std::remove(identifier.begin(), identifier.end(), '\n'),
                 identifier.end());
-            LOG_F(INFO, "Processor Identifier: %s", identifier.c_str());
+            LOG_F(INFO, "Processor Identifier: {}", identifier.c_str());
         } else {
             LOG_F(ERROR, "GetProcessorIdentifier error: popen error");
         }
@@ -347,7 +369,7 @@ auto getProcessorIdentifier() -> std::string {
     while (std::getline(cpuinfo, line)) {
         if (line.substr(0, 9) == "processor") {
             identifier = line.substr(line.find(":") + 2);
-            LOG_F(INFO, "Processor Identifier: %s", identifier.c_str());
+            LOG_F(INFO, "Processor Identifier: {}", identifier.c_str());
             break;
         }
     }
@@ -376,7 +398,7 @@ auto getProcessorFrequency() -> double {
 
         frequency = static_cast<double>(frequencyValue) /
                     1000.0;  // Convert frequency to GHz
-        LOG_F(INFO, "Processor Frequency: %.2f GHz", frequency);
+        LOG_F(INFO, "Processor Frequency: {} GHz", frequency);
     } else {
         LOG_F(ERROR, "Failed to open registry key for processor frequency");
     }
@@ -389,7 +411,7 @@ auto getProcessorFrequency() -> double {
             std::size_t pos = line.find(':') + 2;
             frequency = std::stod(line.substr(pos)) /
                         1000.0;  // Convert frequency to GHz
-            LOG_F(INFO, "Processor Frequency: %.2f GHz", frequency);
+            LOG_F(INFO, "Processor Frequency: {} GHz", frequency);
             break;
         }
     }
@@ -401,7 +423,7 @@ auto getProcessorFrequency() -> double {
         char buffer[128];
         if (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
             frequency = std::stod(buffer) / 1e9;  // Convert frequency to GHz
-            LOG_F(INFO, "Processor Frequency: %.2f GHz", frequency);
+            LOG_F(INFO, "Processor Frequency: {} GHz", frequency);
         } else {
             LOG_F(ERROR, "GetProcessorFrequency error: popen error");
         }
