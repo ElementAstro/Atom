@@ -41,9 +41,30 @@ Description: A collection of optimized and enhanced hash algorithms
 #include <immintrin.h>
 #endif
 
-// Forward declaration
 constexpr auto hash(const char* str,
-                    std::size_t basis = 2166136261u) noexcept -> std::size_t;
+                    std::size_t basis = 2166136261u) noexcept -> std::size_t {
+#if defined(__AVX2__)
+    __m256i hash_vec = _mm256_set1_epi64x(basis);
+    const __m256i prime = _mm256_set1_epi64x(16777619u);
+
+    while (*str != '\0') {
+        __m256i char_vec = _mm256_set1_epi64x(static_cast<std::int64_t>(*str));
+        hash_vec = _mm256_xor_si256(hash_vec, char_vec);
+        hash_vec = _mm256_mullo_epi64(hash_vec, prime);
+        ++str;
+    }
+
+    return _mm256_extract_epi64(hash_vec, 0);
+#else
+    std::size_t hash = basis;
+    while (*str != '\0') {
+        hash ^= static_cast<std::size_t>(*str);
+        hash *= 16777619u;
+        ++str;
+    }
+    return hash;
+#endif
+}
 
 namespace atom::algorithm {
 

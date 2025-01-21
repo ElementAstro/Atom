@@ -46,6 +46,7 @@ set(HEADERS
     stopwatcher.hpp
     switch.hpp
     time.hpp
+    utf.cpp
     uuid.hpp
     valid_string.hpp
     xml.hpp
