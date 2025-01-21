@@ -240,7 +240,7 @@ SimulatedAnnealing<ProblemType, SolutionType>::SimulatedAnnealing(
       restart_interval_(builder.restart_interval_) {
     LOG_F(INFO,
           "SimulatedAnnealing initialized with max_iterations: {}, "
-          "initial_temperature: %.2f, cooling_strategy: {}, cooling_rate: %.2f",
+          "initial_temperature: {}, cooling_strategy: {}, cooling_rate: {}",
           max_iterations_, initial_temperature_,
           static_cast<int>(cooling_strategy_), cooling_rate_);
     setCoolingSchedule(cooling_strategy_);
