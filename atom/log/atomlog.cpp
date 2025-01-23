@@ -51,7 +51,7 @@ public:
           min_level_(min_level),
           system_logging_enabled_(false) {
         rotateLogFile();
-        worker_ = std::jthread(&LoggerImpl::run, this);
+        worker_ = std::jthread([this](std::stop_token st) { this->run(st); });
     }
 
     ~LoggerImpl() {

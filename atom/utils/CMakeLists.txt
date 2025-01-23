@@ -25,6 +25,7 @@ set(SOURCES
     stopwatcher.cpp
     time.cpp
     to_any.cpp
+    utf.cpp
     uuid.cpp
     valid_string.cpp
     xml.cpp
@@ -46,7 +47,7 @@ set(HEADERS
     stopwatcher.hpp
     switch.hpp
     time.hpp
-    utf.cpp
+    utf.hpp
     uuid.hpp
     valid_string.hpp
     xml.hpp
