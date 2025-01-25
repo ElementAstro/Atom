@@ -391,7 +391,7 @@ enum NamedVerbosity : Verbosity {
 
     // Verbosity levels 1-9 are generally not written to stderr, but are written
     // to file.
-    Verbosity_1 = +1,
+    Verbosity_DEBUG = +1,
     Verbosity_2 = +2,
     Verbosity_3 = +3,
     Verbosity_4 = +4,

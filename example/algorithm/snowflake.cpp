@@ -12,7 +12,7 @@ int main() {
     Snowflake<customEpoch> snowflake(1, 1);
 
     // Generate a unique ID
-    uint64_t id = snowflake.nextid();
+    uint64_t id = snowflake.nextid()[0];
     std::cout << "Generated ID: " << id << std::endl;
 
     // Parse the generated ID
@@ -29,7 +29,7 @@ int main() {
     std::cout << "Snowflake generator reset." << std::endl;
 
     // Generate another unique ID after reset
-    uint64_t newId = snowflake.nextid();
+    uint64_t newId = snowflake.nextid()[0];
     std::cout << "Generated new ID after reset: " << newId << std::endl;
 
     // Retrieve current worker ID and datacenter ID

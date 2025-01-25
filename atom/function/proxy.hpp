@@ -232,8 +232,11 @@ class ProxyFunction : protected BaseProxyFunction<Func> {
     static constexpr std::size_t ARITY = Base::ARITY;
 
 public:
+    explicit ProxyFunction(Func &&func)
+        : Base(std::forward<Func>(func), Base::info_) {}
+
     explicit ProxyFunction(Func &&func, FunctionInfo &info)
-        : Base(std::move(func), info) {}
+        : Base(std::forward<Func>(func), info) {}
 
     auto operator()(const std::vector<std::any> &args) -> std::any {
         this->logArgumentTypes();
@@ -270,6 +273,12 @@ public:
         }
     }
 };
+
+template <typename Func>
+ProxyFunction(Func) -> ProxyFunction<Func>;
+
+template <typename Func>
+ProxyFunction(Func &&, FunctionInfo &) -> ProxyFunction<std::decay_t<Func>>;
 
 }  // namespace atom::meta
 

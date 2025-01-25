@@ -547,7 +547,7 @@ void syslogLog(void* /*user_data*/, const Message& message) {
             case Verbosity_INFO:
                 level = 5;
                 break;  // System Notice
-            case Verbosity_1:
+            case Verbosity_DEBUG:
                 level = 6;
                 break;  // System Info
             default:

@@ -70,109 +70,80 @@ private:
 };
 
 template <typename FuncType>
-struct decorator;
-
-template <typename R, typename... Args>
-struct decorator<R(Args...)> {
-    using FuncType = std::function<R(Args...)>;
-    using CallbackType =
-        std::conditional_t<std::is_void_v<R>, std::function<void()>,
-                           std::function<void(R)>>;
-
-private:
+class decorator {
+protected:
     FuncType func_;
-    std::function<void()> before_;
-    CallbackType callback_;
-    std::function<void(std::chrono::microseconds)> after_;
 
 public:
     explicit decorator(FuncType func) : func_(std::move(func)) {}
-
-    template <typename Before, typename Callback = CallbackType,
-              typename After = std::function<void(std::chrono::microseconds)>>
-    auto withHooks(
-        Before&& before, Callback&& callback = CallbackType(),
-        After&& after = [](auto) {}) const -> decorator<R(Args...)> {
-        decorator<R(Args...)> copy(func_);
-        copy.before_ = std::forward<Before>(before);
-        copy.callback_ = std::forward<Callback>(callback);
-        copy.after_ = std::forward<After>(after);
-        return copy;
-    }
-
-    template <std::size_t... Is>
-    auto callImpl(std::tuple<Args...>& args,
-                  std::index_sequence<Is...> /*unused*/) const {
-        if (before_) {
-            before_();
-        }
-        auto start = std::chrono::high_resolution_clock::now();
-
-        if constexpr (std::is_void_v<R>) {
-            std::invoke(func_, std::get<Is>(args)...);
-            if (callback_) {
-                callback_();
-            }
-        } else {
-            auto result = std::invoke(func_, std::get<Is>(args)...);
-            if (callback_) {
-                callback_(result);
-            }
-            auto end = std::chrono::high_resolution_clock::now();
-            if (after_) {
-                after_(std::chrono::duration_cast<std::chrono::microseconds>(
-                    end - start));
-            }
-            return result;
-        }
-
-        auto end = std::chrono::high_resolution_clock::now();
-        if (after_) {
-            after_(std::chrono::duration_cast<std::chrono::microseconds>(
-                end - start));
-        }
-    }
-
-    auto operator()(Args... args) const {
-        auto tupleArgs = std::make_tuple(std::forward<Args>(args)...);
-        return callImpl(tupleArgs, std::make_index_sequence<sizeof...(Args)>{});
+    
+    template <typename... Args>
+    auto operator()(Args&&... args) const {
+        return func_(std::forward<Args>(args)...);
     }
 };
 
-template <typename F>
-auto makeDecorator(F&& func) {
-    return decorator<std::remove_reference_t<F>>(std::forward<F>(func));
-}
-
 template <typename FuncType>
-struct LoopDecorator : public decorator<FuncType> {
+class LoopDecorator : public decorator<FuncType> {
     using Base = decorator<FuncType>;
-    using Base::Base;
-
-    template <typename... TArgs>
-    auto operator()(int loopCount, TArgs&&... args) const {
-        using ReturnType = decltype(this->func(args...));
+    
+public:
+    using Base::Base;  // 继承构造函数
+    
+    template <typename... Args>
+    auto operator()(int loopCount, Args&&... args) const {
+        using ReturnType = std::invoke_result_t<FuncType, Args...>;
         std::optional<ReturnType> result;
-
-#pragma unroll
+        
         for (int i = 0; i < loopCount; ++i) {
             if constexpr (std::is_void_v<ReturnType>) {
-                Base::operator()(std::forward<TArgs>(args)...);
+                this->func_(std::forward<Args>(args)...);
             } else {
-                result = Base::operator()(std::forward<TArgs>(args)...);
+                result = this->func_(std::forward<Args>(args)...);
             }
         }
-
+        
         if constexpr (!std::is_void_v<ReturnType>) {
             return *result;
         }
     }
 };
 
-template <typename FuncType>
-auto makeLoopDecorator(FuncType&& func) {
-    return LoopDecorator<std::remove_reference_t<FuncType>>(
-        std::forward<FuncType>(func));
+template <typename Func>
+auto makeLoopDecorator(Func&& func) {
+    return LoopDecorator<std::decay_t<Func>>(std::forward<Func>(func));
+}
+
+// RetryDecorator 实现
+template <typename R, typename... Args>
+class RetryDecorator : public BaseDecorator<R, Args...> {
+    using FuncType = std::function<R(Args...)>;
+    FuncType func_;
+    int retryCount_;
+
+public:
+    RetryDecorator(FuncType func, int retryCount) 
+        : func_(std::move(func)), retryCount_(retryCount) {}
+
+    auto operator()(Args... args) -> R override {
+        for (int i = 0; i < retryCount_; ++i) {
+            try {
+                return func_(std::forward<Args>(args)...);
+            } catch (...) {
+                if (i == retryCount_ - 1) throw;
+            }
+        }
+        throw DecoratorError("Retry limit reached");
+    }
+};
+
+// Helper function
+template <typename Func>
+auto makeRetryDecorator(Func&& func, int retryCount) {
+    using FuncType = std::decay_t<Func>;
+    return RetryDecorator<typename FunctionTraits<FuncType>::return_type,
+                         typename FunctionTraits<FuncType>::argument_types>(
+        std::forward<Func>(func), retryCount);
 }
 
 template <typename FuncType>
@@ -307,29 +278,6 @@ public:
     }
 };
 
-// 新增功能：重试装饰器
-template <typename R, typename... Args>
-class RetryDecorator : public BaseDecorator<R, Args...> {
-    using FuncType = std::function<R(Args...)>;
-    int retryCount_;
-
-public:
-    explicit RetryDecorator(int retryCount) : retryCount_(retryCount) {}
-
-    auto operator()(FuncType func, Args... args) -> R override {
-        for (int i = 0; i < retryCount_; ++i) {
-            try {
-                return func(std::forward<Args>(args)...);
-            } catch (...) {
-                if (i == retryCount_ - 1) {
-                    throw;
-                }
-            }
-        }
-        throw DecoratorError("Retry limit reached");
-    }
-};
-
 // 新增功能：异步装饰器
 template <typename R, typename... Args>
 class AsyncDecorator : public BaseDecorator<R, Args...> {
@@ -353,17 +301,6 @@ auto makeCacheDecorator(Func&& func) {
     return CacheDecorator<ReturnType, std::tuple_element_t<0, ArgumentTuple>,
                           std::tuple_element_t<1, ArgumentTuple>>(
         std::forward<Func>(func));
-}
-
-// Helper function: Create RetryDecorator
-template <typename Func>
-auto makeRetryDecorator(Func&& func, int retryCount) {
-    using Traits = FunctionTraits<std::remove_reference_t<Func>>;
-    using ReturnType = typename Traits::return_type;
-    using ArgumentTuple = typename Traits::argument_types;
-
-    return RetryDecorator<ReturnType, std::tuple_element_t<0, ArgumentTuple>,
-                          std::tuple_element_t<1, ArgumentTuple>>(retryCount);
 }
 
 // Helper function: Create AsyncDecorator

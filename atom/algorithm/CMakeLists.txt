@@ -14,6 +14,7 @@ set(SOURCES
     algorithm.cpp
     base.cpp
     bignumber.cpp
+    blowfish.cpp
     convolve.cpp
     flood.cpp
     fnmatch.cpp

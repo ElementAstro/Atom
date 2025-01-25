@@ -118,7 +118,8 @@ public:
     void insert(const Key& key, const T& value) {
         std::unique_lock lock(mtx);
         data[key] = value;
-        if (lru_cache.exists(key)) {
+        auto cache_it = lru_cache.get(key);
+        if (cache_it.has_value()) {
             lru_cache.put(key, value);
         }
     }
@@ -141,10 +142,9 @@ public:
             }
         }
 
-        // If not found, try to get from LRU cache
-        T* value = lru_cache.get(key);
-        if (value) {
-            return *value;
+        auto cache_value = lru_cache.get(key);
+        if (cache_value.has_value()) {
+            return cache_value;
         }
 
         return std::nullopt;
@@ -225,12 +225,10 @@ public:
     void batch_erase(const std::vector<Key>& keys) {
         std::unique_lock lock(mtx);
         for (const auto& key : keys) {
-            // Erase from main data structure
             data.erase(key);
-            // Erase from LRU cache (need to add erase method in LRUCache class)
-            if (lru_cache.exists(key)) {
-                lru_cache.put(key, T());  // Temporarily keep this line until
-                                          // LRUCache::erase is implemented
+            auto cache_it = lru_cache.get(key);
+            if (cache_it.has_value()) {
+                lru_cache.erase(key);
             }
         }
     }
@@ -276,8 +274,7 @@ public:
     void clear() {
         std::unique_lock lock(mtx);
         data.clear();
-        // Clear the cache
-        lru_cache = LRUCache<Key, T>(lru_cache.get_max_size());
+        lru_cache.clear();
     }
 
     /**

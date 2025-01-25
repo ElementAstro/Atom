@@ -7,8 +7,8 @@ int main() {
     std::vector<double> measured = {1.0, 2.0, 3.0, 4.0, 5.0};
     std::vector<double> actual = {1.1, 1.9, 3.2, 3.8, 5.1};
 
-    // Create an instance of AdvancedErrorCalibration
-    atom::algorithm::AdvancedErrorCalibration<double> calibrator;
+    // Create an instance of ErrorCalibration
+    atom::algorithm::ErrorCalibration<double> calibrator;
 
     // Perform linear calibration
     calibrator.linearCalibrate(measured, actual);

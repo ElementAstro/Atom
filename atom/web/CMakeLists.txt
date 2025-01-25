@@ -9,9 +9,12 @@
 cmake_minimum_required(VERSION 3.20)
 project(atom-web VERSION 1.0.0 LANGUAGES C CXX)
 
+find_package(CURL REQUIRED)
+
 # Sources
 set(SOURCES
     address.cpp
+    curl.cpp
     downloader.cpp
     httpparser.cpp
     utils.cpp
@@ -21,6 +24,7 @@ set(SOURCES
 # Headers
 set(HEADERS
     address.hpp
+    curl.hpp
     downloader.hpp
     httpparser.hpp
     utils.hpp

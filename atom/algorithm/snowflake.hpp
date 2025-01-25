@@ -343,7 +343,7 @@ private:
         return last_cached_millis;
     }
 
-    [[nodiscard]] auto wait_next_millis(uint64_t last) const -> uint64_t {
+    [[nodiscard]] auto wait_next_millis(uint64_t last) -> uint64_t {
         uint64_t timestamp = current_millis();
         while (timestamp <= last) {
             timestamp = current_millis();

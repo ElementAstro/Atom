@@ -187,7 +187,6 @@ public:
 
         SimulatedAnnealing build() { return SimulatedAnnealing(*this); }
 
-    private:
         ProblemType& problem_instance_;
         AnnealingStrategy cooling_strategy_ = AnnealingStrategy::EXPONENTIAL;
         int max_iterations_ = K_DEFAULT_MAX_ITERATIONS;

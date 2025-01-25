@@ -240,6 +240,19 @@ auto customConstructor(CustomConstructor custom_constructor) {
     };
 }
 
+/*!
+ * \brief Constructs an instance of a class with specified arguments.
+ * \tparam Class Type of the class.
+ * \tparam Args Types of the constructor arguments.
+ * \return A lambda that constructs a shared pointer to the class.
+ */
+template <typename Class, typename... Args>
+auto constructorWithArgs() {
+    return [](Args... args) -> std::shared_ptr<Class> {
+        return std::make_shared<Class>(std::forward<Args>(args)...);
+    };
+}
+
 }  // namespace atom::meta
 
 #endif  // ATOM_META_CONSTRUCTOR_HPP

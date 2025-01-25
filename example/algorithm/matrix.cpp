@@ -26,7 +26,7 @@ int main() {
     std::cout << "\nTrace of the Matrix: " << trace << std::endl;
 
     // Calculate the Frobenius norm of the matrix
-    double frobeniusNorm = matrix.freseniusNorm();
+    double frobeniusNorm = matrix.frobeniusNorm();
     std::cout << "Frobenius Norm of the Matrix: " << frobeniusNorm << std::endl;
 
     // Find the maximum and minimum elements in the matrix
@@ -77,13 +77,6 @@ int main() {
     Matrix<double, 3, 3> scalarProductMatrix = matrix * 2.0;
     std::cout << "\nScalar Product of Matrix (2.0):" << std::endl;
     scalarProductMatrix.print();
-
-    // Perform Hadamard product
-    Matrix<double, 3, 3> hadamardMatrix =
-        hadamardProduct(matrix, identityMatrix);
-    std::cout << "\nHadamard Product of Matrix and Identity Matrix:"
-              << std::endl;
-    hadamardMatrix.print();
 
     // Transpose the matrix
     Matrix<double, 3, 3> transposedMatrix = transpose(matrix);

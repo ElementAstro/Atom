@@ -47,7 +47,9 @@ template <typename T, std::size_t Rows, std::size_t Cols>
 class Matrix {
 private:
     std::array<T, Rows * Cols> data_{};
-    mutable std::mutex mutex_; // For thread safety
+    // 移除 mutable 互斥量成员
+    // 改为使用静态互斥量
+    static inline std::mutex mutex_;
 
 public:
     /**
@@ -62,6 +64,30 @@ public:
      */
     constexpr explicit Matrix(const std::array<T, Rows * Cols>& arr)
         : data_(arr) {}
+
+    // 添加显式复制构造函数
+    Matrix(const Matrix& other) {
+        std::copy(other.data_.begin(), other.data_.end(), data_.begin());
+    }
+
+    // 添加移动构造函数
+    Matrix(Matrix&& other) noexcept { data_ = std::move(other.data_); }
+
+    // 添加复制赋值运算符
+    Matrix& operator=(const Matrix& other) {
+        if (this != &other) {
+            std::copy(other.data_.begin(), other.data_.end(), data_.begin());
+        }
+        return *this;
+    }
+
+    // 添加移动赋值运算符
+    Matrix& operator=(Matrix&& other) noexcept {
+        if (this != &other) {
+            data_ = std::move(other.data_);
+        }
+        return *this;
+    }
 
     /**
      * @brief Accesses the matrix element at the given row and column.
@@ -139,7 +165,7 @@ public:
      *
      * @return T The Frobenius norm of the matrix.
      */
-    auto freseniusNorm() const -> T {
+    auto frobeniusNorm() const -> T {
         T sum = T{};
         for (const auto& elem : data_) {
             sum += std::norm(elem);
@@ -435,8 +461,8 @@ constexpr auto operator*(U scalar, const Matrix<T, Rows, Cols>& m) {
  * product.
  */
 template <typename T, std::size_t Rows, std::size_t Cols>
-constexpr auto hadamardProduct(const Matrix<T, Rows, Cols>& a,
-                               const Matrix<T, Rows, Cols>& b)
+constexpr auto elementWiseProduct(const Matrix<T, Rows, Cols>& a,
+                                  const Matrix<T, Rows, Cols>& b)
     -> Matrix<T, Rows, Cols> {
     Matrix<T, Rows, Cols> result{};
     for (std::size_t i = 0; i < Rows * Cols; ++i) {

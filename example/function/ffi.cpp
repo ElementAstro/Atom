@@ -37,7 +37,7 @@ void demoFFIWrapper() {
     void* addFuncPtr = reinterpret_cast<void*>(&add);
 
     // Call `add` function using FFIWrapper
-    int result = ffiAddWrapper.call(addFuncPtr, 3, 4);
+    int result = ffiAddWrapper.call(addFuncPtr, 3, 4).value();
     std::cout << "Result of add(3, 4): " << result << std::endl;
 }
 

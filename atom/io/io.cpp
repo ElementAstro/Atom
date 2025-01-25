@@ -425,8 +425,13 @@ auto isFolderExists(const std::string &folderName) -> bool {
 
 auto isFileExists(const std::string &fileName) -> bool {
     LOG_F(INFO, "isFileExists called with fileName: {}", fileName);
-    bool result = isFileNameValid(fileName) && fs::exists(fileName) &&
-                  fs::is_regular_file(fileName);
+    fs::path filePath(fileName);
+    std::string fileNameWithoutExtension = filePath.stem().string();
+    fs::path directory = filePath.parent_path();
+    fs::path newFilePath = directory / fileNameWithoutExtension;
+    bool result = isFileNameValid(fileNameWithoutExtension) &&
+                  fs::exists(filePath) && fs::is_regular_file(newFilePath);
+
     LOG_F(INFO, "isFileExists returning: {}", result);
     return result;
 }
