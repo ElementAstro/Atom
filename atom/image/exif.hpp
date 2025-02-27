@@ -2,9 +2,45 @@
 #define ATOM_IMAGE_EXIF_HPP
 
 #include <cstdint>
+#include <optional>
+#include <stdexcept>
 #include <string>
 
 namespace atom::image {
+
+/**
+ * @class ExifException
+ * @brief Exception class for EXIF parsing errors
+ */
+class ExifException : public std::runtime_error {
+public:
+    explicit ExifException(const std::string& message)
+        : std::runtime_error(message) {}
+};
+
+/**
+ * @struct GpsCoordinate
+ * @brief Structure to represent GPS coordinate data
+ */
+struct GpsCoordinate {
+    double degrees;
+    double minutes;
+    double seconds;
+    char direction;  // 'N', 'S', 'E', or 'W'
+
+    // Convert to decimal degrees
+    [[nodiscard]] double toDecimalDegrees() const noexcept {
+        double value = degrees + minutes / 60.0 + seconds / 3600.0;
+        return (direction == 'S' || direction == 'W') ? -value : value;
+    }
+
+    // Create from decimal degrees
+    [[nodiscard]] static GpsCoordinate fromDecimalDegrees(
+        double decimal, bool isLatitude) noexcept;
+
+    // Convert to string representation
+    [[nodiscard]] std::string toString() const;
+};
 
 /**
  * @struct ExifData
@@ -18,8 +54,10 @@ struct alignas(128) ExifData {
     std::string fNumber;       ///< The f-number (aperture) of the photo.
     std::string isoSpeed;      ///< The ISO speed of the photo.
     std::string focalLength;   ///< The focal length of the lens.
-    std::string gpsLatitude;   ///< The GPS latitude where the photo was taken.
-    std::string gpsLongitude;  ///< The GPS longitude where the photo was taken.
+    std::optional<GpsCoordinate>
+        gpsLatitude;  ///< The GPS latitude where the photo was taken.
+    std::optional<GpsCoordinate>
+        gpsLongitude;  ///< The GPS longitude where the photo was taken.
 };
 
 /**

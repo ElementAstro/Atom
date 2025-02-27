@@ -12,10 +12,8 @@ check_cxx_compiler_flag(-std=c++23 HAS_CXX23_FLAG)
 
 if(HAS_CXX23_FLAG)
     set(CMAKE_CXX_STANDARD 23)
-elseif(HAS_CXX20_FLAG)
-    set(CMAKE_CXX_STANDARD 20)
 else()
-    message(FATAL_ERROR "C++20 standard is required!")
+    message(FATAL_ERROR "C++23 standard is required!")
 endif()
 
 # Check and set compiler version requirements

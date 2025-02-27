@@ -10,14 +10,23 @@
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
 #include <chrono>
+#include <concepts>
 #include <fstream>
 #include <iostream>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include <ranges>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <unordered_map>
 #include <vector>
+
+// 移除未使用的头文件
+// #include <filesystem>
+// #include <optional>
+// #include <span>
 
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -25,24 +34,62 @@ namespace net = boost::asio;
 using tcp = boost::asio::ip::tcp;
 using json = nlohmann::json;
 
-class HttpClient {
+// Concepts for handlers
+template <typename T>
+concept HttpResponseHandler =
+    requires(T h, beast::error_code ec, http::response<http::string_body> res) {
+        { h(ec, res) } -> std::same_as<void>;
+    };
+
+template <typename T>
+concept JsonResponseHandler = requires(T h, beast::error_code ec, json j) {
+    { h(ec, j) } -> std::same_as<void>;
+};
+
+template <typename T>
+concept BatchResponseHandler =
+    requires(T h, std::vector<http::response<http::string_body>> res) {
+        { h(res) } -> std::same_as<void>;
+    };
+
+template <typename T>
+concept FileCompletionHandler =
+    requires(T h, beast::error_code ec, bool success) {
+        { h(ec, success) } -> std::same_as<void>;
+    };
+
+class HttpClient : public std::enable_shared_from_this<HttpClient> {
 public:
     /**
      * @brief Constructs an HttpClient with the given I/O context.
      * @param ioc The I/O context to use for asynchronous operations.
+     * @throws std::bad_alloc If memory allocation fails
      */
     explicit HttpClient(net::io_context& ioc);
+
+    // Prevent copy construction and assignment
+    HttpClient(const HttpClient&) = delete;
+    HttpClient& operator=(const HttpClient&) = delete;
+
+    // Allow move construction and assignment
+    HttpClient(HttpClient&&) noexcept = default;
+    // 删除隐式定义的移动赋值运算符，解决了TCP流不可移动的问题
+    // HttpClient& operator=(HttpClient&&) noexcept = default;
+
+    ~HttpClient() noexcept = default;
 
     /**
      * @brief Sets a default header for all requests.
      * @param key The header key.
      * @param value The header value.
+     * @throws std::invalid_argument If key is empty
      */
-    void setDefaultHeader(const std::string& key, const std::string& value);
+    void setDefaultHeader(std::string_view key, std::string_view value);
 
     /**
      * @brief Sets the timeout duration for the HTTP operations.
      * @param timeout The timeout duration in seconds.
+     * @throws std::invalid_argument If timeout is zero or negative
      */
     void setTimeout(std::chrono::seconds timeout);
 
@@ -58,12 +105,14 @@ public:
      * @param body The request body.
      * @param headers Additional headers to include in the request.
      * @return The HTTP response.
+     * @throws std::invalid_argument If host or port is empty
+     * @throws beast::system_error On connection or request failure
      */
     template <class Body = http::string_body>
-    auto request(http::verb method, const std::string& host,
-                 const std::string& port, const std::string& target,
-                 int version = 11, const std::string& content_type = "",
-                 const std::string& body = "",
+    auto request(http::verb method, std::string_view host,
+                 std::string_view port, std::string_view target,
+                 int version = 11, std::string_view content_type = "",
+                 std::string_view body = "",
                  const std::unordered_map<std::string, std::string>& headers =
                      {}) -> http::response<Body>;
 
@@ -81,12 +130,14 @@ public:
      * @param content_type The content type of the request body.
      * @param body The request body.
      * @param headers Additional headers to include in the request.
+     * @throws std::invalid_argument If host or port is empty
      */
-    template <class Body = http::string_body, class ResponseHandler>
+    template <class Body = http::string_body,
+              HttpResponseHandler ResponseHandler>
     void asyncRequest(
-        http::verb method, const std::string& host, const std::string& port,
-        const std::string& target, ResponseHandler&& handler, int version = 11,
-        const std::string& content_type = "", const std::string& body = "",
+        http::verb method, std::string_view host, std::string_view port,
+        std::string_view target, ResponseHandler&& handler, int version = 11,
+        std::string_view content_type = "", std::string_view body = "",
         const std::unordered_map<std::string, std::string>& headers = {});
 
     /**
@@ -99,12 +150,15 @@ public:
      * @param json_body The JSON body of the request.
      * @param headers Additional headers to include in the request.
      * @return The JSON response.
+     * @throws std::invalid_argument If host or port is empty
+     * @throws beast::system_error On connection or request failure
+     * @throws json::exception If JSON parsing fails
      */
-    auto jsonRequest(http::verb method, const std::string& host,
-                     const std::string& port, const std::string& target,
-                     const json& json_body = {},
-                     const std::unordered_map<std::string, std::string>&
-                         headers = {}) -> json;
+    [[nodiscard]] auto jsonRequest(
+        http::verb method, std::string_view host, std::string_view port,
+        std::string_view target, const json& json_body = {},
+        const std::unordered_map<std::string, std::string>& headers = {})
+        -> json;
 
     /**
      * @brief Sends an asynchronous HTTP request with a JSON body and returns a
@@ -118,11 +172,12 @@ public:
      * @param handler The handler to call when the operation completes.
      * @param json_body The JSON body of the request.
      * @param headers Additional headers to include in the request.
+     * @throws std::invalid_argument If host or port is empty
      */
-    template <class ResponseHandler>
+    template <JsonResponseHandler ResponseHandler>
     void asyncJsonRequest(
-        http::verb method, const std::string& host, const std::string& port,
-        const std::string& target, ResponseHandler&& handler,
+        http::verb method, std::string_view host, std::string_view port,
+        std::string_view target, ResponseHandler&& handler,
         const json& json_body = {},
         const std::unordered_map<std::string, std::string>& headers = {});
 
@@ -134,10 +189,12 @@ public:
      * @param filepath The path to the file to upload.
      * @param field_name The field name for the file (default is "file").
      * @return The HTTP response.
+     * @throws std::invalid_argument If host, port, or filepath is empty
+     * @throws beast::system_error On connection or request failure
      */
-    auto uploadFile(const std::string& host, const std::string& port,
-                    const std::string& target, const std::string& filepath,
-                    const std::string& field_name = "file")
+    auto uploadFile(std::string_view host, std::string_view port,
+                    std::string_view target, std::string_view filepath,
+                    std::string_view field_name = "file")
         -> http::response<http::string_body>;
 
     /**
@@ -146,9 +203,11 @@ public:
      * @param port The server port.
      * @param target The target URI.
      * @param filepath The path to save the downloaded file.
+     * @throws std::invalid_argument If host, port, or filepath is empty
+     * @throws beast::system_error On connection or request failure
      */
-    void downloadFile(const std::string& host, const std::string& port,
-                      const std::string& target, const std::string& filepath);
+    void downloadFile(std::string_view host, std::string_view port,
+                      std::string_view target, std::string_view filepath);
 
     /**
      * @brief Sends a synchronous HTTP request with retry logic.
@@ -163,12 +222,14 @@ public:
      * @param body The request body.
      * @param headers Additional headers to include in the request.
      * @return The HTTP response.
+     * @throws std::invalid_argument If host or port is empty
+     * @throws beast::system_error On connection or request failure
      */
     template <class Body = http::string_body>
     auto requestWithRetry(
-        http::verb method, const std::string& host, const std::string& port,
-        const std::string& target, int retry_count = 3, int version = 11,
-        const std::string& content_type = "", const std::string& body = "",
+        http::verb method, std::string_view host, std::string_view port,
+        std::string_view target, int retry_count = 3, int version = 11,
+        std::string_view content_type = "", std::string_view body = "",
         const std::unordered_map<std::string, std::string>& headers = {})
         -> http::response<Body>;
 
@@ -179,6 +240,7 @@ public:
      * port, and target for each request.
      * @param headers Additional headers to include in each request.
      * @return A vector of HTTP responses.
+     * @throws std::invalid_argument If any host or port is empty
      */
     template <class Body = http::string_body>
     std::vector<http::response<Body>> batchRequest(
@@ -194,8 +256,9 @@ public:
      * port, and target for each request.
      * @param handler The handler to call when the operation completes.
      * @param headers Additional headers to include in each request.
+     * @throws std::invalid_argument If any host or port is empty
      */
-    template <class ResponseHandler>
+    template <BatchResponseHandler ResponseHandler>
     void asyncBatchRequest(
         const std::vector<std::tuple<http::verb, std::string, std::string,
                                      std::string>>& requests,
@@ -217,11 +280,11 @@ public:
      * @param target The target URI.
      * @param filepath The path to save the downloaded file.
      * @param handler The handler to call when the operation completes.
+     * @throws std::invalid_argument If host, port, or filepath is empty
      */
-    template <class ResponseHandler>
-    void asyncDownloadFile(const std::string& host, const std::string& port,
-                           const std::string& target,
-                           const std::string& filepath,
+    template <FileCompletionHandler ResponseHandler>
+    void asyncDownloadFile(std::string_view host, std::string_view port,
+                           std::string_view target, std::string_view filepath,
                            ResponseHandler&& handler);
 
 private:
@@ -234,14 +297,22 @@ private:
 };
 
 template <class Body>
-auto HttpClient::request(http::verb method, const std::string& host,
-                         const std::string& port, const std::string& target,
-                         int version, const std::string& content_type,
-                         const std::string& body,
+auto HttpClient::request(http::verb method, std::string_view host,
+                         std::string_view port, std::string_view target,
+                         int version, std::string_view content_type,
+                         std::string_view body,
                          const std::unordered_map<std::string, std::string>&
                              headers) -> http::response<Body> {
-    http::request<http::string_body> req{method, target, version};
-    req.set(http::field::host, host);
+    if (host.empty() || port.empty()) {
+        throw std::invalid_argument("Host and port must not be empty");
+    }
+
+    // 修复：正确初始化 HTTP 请求
+    http::request<http::string_body> req;
+    req.method(method);
+    req.target(std::string(target));
+    req.version(version);
+    req.set(http::field::host, std::string(host));
     req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
 
     for (const auto& [key, value] : default_headers_) {
@@ -253,15 +324,16 @@ auto HttpClient::request(http::verb method, const std::string& host,
     }
 
     if (!content_type.empty()) {
-        req.set(http::field::content_type, content_type);
+        req.set(http::field::content_type, std::string(content_type));
     }
 
     if (!body.empty()) {
-        req.body() = body;
+        req.body() = std::string(body);
         req.prepare_payload();
     }
 
-    auto const results = resolver_.resolve(host, port);
+    auto const results =
+        resolver_.resolve(std::string(host), std::string(port));
     stream_.connect(results);
 
     stream_.expires_after(timeout_);
@@ -273,20 +345,28 @@ auto HttpClient::request(http::verb method, const std::string& host,
     http::read(stream_, buffer, res);
 
     beast::error_code ec;
-    stream_.socket().shutdown(tcp::socket::shutdown_both, ec);
+    // 修复：处理返回值
+    auto result = stream_.socket().shutdown(tcp::socket::shutdown_both, ec);
+    (void)result;  // 显式忽略返回值
 
     return res;
 }
 
-template <class Body, class ResponseHandler>
+template <class Body, HttpResponseHandler ResponseHandler>
 void HttpClient::asyncRequest(
-    http::verb method, const std::string& host, const std::string& port,
-    const std::string& target, ResponseHandler&& handler, int version,
-    const std::string& content_type, const std::string& body,
+    http::verb method, std::string_view host, std::string_view port,
+    std::string_view target, ResponseHandler&& handler, int version,
+    std::string_view content_type, std::string_view body,
     const std::unordered_map<std::string, std::string>& headers) {
-    auto req = std::make_shared<http::request<http::string_body>>(
-        method, target, version);
-    req->set(http::field::host, host);
+    if (host.empty() || port.empty()) {
+        throw std::invalid_argument("Host and port must not be empty");
+    }
+
+    auto req = std::make_shared<http::request<http::string_body>>();
+    req->method(method);
+    req->target(std::string(target));
+    req->version(version);
+    req->set(http::field::host, std::string(host));
     req->set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
 
     for (const auto& [key, value] : default_headers_) {
@@ -298,16 +378,16 @@ void HttpClient::asyncRequest(
     }
 
     if (!content_type.empty()) {
-        req->set(http::field::content_type, content_type);
+        req->set(http::field::content_type, std::string(content_type));
     }
 
     if (!body.empty()) {
-        req->body() = body;
+        req->body() = std::string(body);
         req->prepare_payload();
     }
 
     resolver_.async_resolve(
-        host, port,
+        std::string(host), std::string(port),
         [this, req, handler = std::forward<ResponseHandler>(handler)](
             beast::error_code ec, tcp::resolver::results_type results) {
             if (ec) {
@@ -341,8 +421,11 @@ void HttpClient::asyncRequest(
                                 [this, res, buffer,
                                  handler = std::move(handler)](
                                     beast::error_code ec, std::size_t) {
-                                    stream_.socket().shutdown(
-                                        tcp::socket::shutdown_both, ec);
+                                    beast::error_code shutdown_ec;
+                                    auto result = stream_.socket().shutdown(
+                                        tcp::socket::shutdown_both,
+                                        shutdown_ec);
+                                    (void)result;  // 显式忽略返回值
                                     handler(ec, std::move(*res));
                                 });
                         });
@@ -350,10 +433,10 @@ void HttpClient::asyncRequest(
         });
 }
 
-template <class ResponseHandler>
+template <JsonResponseHandler ResponseHandler>
 void HttpClient::asyncJsonRequest(
-    http::verb method, const std::string& host, const std::string& port,
-    const std::string& target, ResponseHandler&& handler, const json& json_body,
+    http::verb method, std::string_view host, std::string_view port,
+    std::string_view target, ResponseHandler&& handler, const json& json_body,
     const std::unordered_map<std::string, std::string>& headers) {
     asyncRequest<http::string_body>(
         method, host, port, target,
@@ -377,11 +460,15 @@ void HttpClient::asyncJsonRequest(
 
 template <class Body>
 auto HttpClient::requestWithRetry(
-    http::verb method, const std::string& host, const std::string& port,
-    const std::string& target, int retry_count, int version,
-    const std::string& content_type, const std::string& body,
+    http::verb method, std::string_view host, std::string_view port,
+    std::string_view target, int retry_count, int version,
+    std::string_view content_type, std::string_view body,
     const std::unordered_map<std::string, std::string>& headers)
     -> http::response<Body> {
+    if (host.empty() || port.empty()) {
+        throw std::invalid_argument("Host and port must not be empty");
+    }
+
     beast::error_code ec;
     http::response<Body> response;
     for (int attempt = 0; attempt < retry_count; ++attempt) {
@@ -409,6 +496,10 @@ std::vector<http::response<Body>> HttpClient::batchRequest(
     const std::unordered_map<std::string, std::string>& headers) {
     std::vector<http::response<Body>> responses;
     for (const auto& [method, host, port, target] : requests) {
+        if (host.empty() || port.empty()) {
+            throw std::invalid_argument("Host and port must not be empty");
+        }
+
         try {
             responses.push_back(
                 request<Body>(method, host, port, target, 11, "", "", headers));
@@ -423,7 +514,7 @@ std::vector<http::response<Body>> HttpClient::batchRequest(
     return responses;
 }
 
-template <class ResponseHandler>
+template <BatchResponseHandler ResponseHandler>
 void HttpClient::asyncBatchRequest(
     const std::vector<std::tuple<http::verb, std::string, std::string,
                                  std::string>>& requests,
@@ -434,6 +525,10 @@ void HttpClient::asyncBatchRequest(
     auto remaining = std::make_shared<std::atomic<int>>(requests.size());
 
     for (const auto& [method, host, port, target] : requests) {
+        if (host.empty() || port.empty()) {
+            throw std::invalid_argument("Host and port must not be empty");
+        }
+
         asyncRequest<http::string_body>(
             method, host, port, target,
             [handler, responses, remaining](
@@ -455,12 +550,16 @@ void HttpClient::asyncBatchRequest(
     }
 }
 
-template <class ResponseHandler>
-void HttpClient::asyncDownloadFile(const std::string& host,
-                                   const std::string& port,
-                                   const std::string& target,
-                                   const std::string& filepath,
+template <FileCompletionHandler ResponseHandler>
+void HttpClient::asyncDownloadFile(std::string_view host, std::string_view port,
+                                   std::string_view target,
+                                   std::string_view filepath,
                                    ResponseHandler&& handler) {
+    if (host.empty() || port.empty() || filepath.empty()) {
+        throw std::invalid_argument(
+            "Host, port, and filepath must not be empty");
+    }
+
     asyncRequest<http::string_body>(
         http::verb::get, host, port, target,
         [filepath, handler = std::forward<ResponseHandler>(handler)](
@@ -468,7 +567,7 @@ void HttpClient::asyncDownloadFile(const std::string& host,
             if (ec) {
                 handler(ec, false);
             } else {
-                std::ofstream outFile(filepath, std::ios::binary);
+                std::ofstream outFile(std::string(filepath), std::ios::binary);
                 if (!outFile) {
                     std::cerr << "Failed to open file for writing: " << filepath
                               << std::endl;

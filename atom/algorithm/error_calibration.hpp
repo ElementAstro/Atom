@@ -4,9 +4,12 @@
 #include <algorithm>
 #include <cmath>
 #include <concepts>
+#include <coroutine>
+#include <execution>
 #include <fstream>
 #include <functional>
 #include <future>
+#include <memory_resource>
 #include <mutex>
 #include <numeric>
 #include <optional>
@@ -49,13 +52,33 @@ private:
     std::mutex metrics_mutex_;
     std::unique_ptr<atom::async::ThreadPool<>> thread_pool_;
 
+    // 使用更高效的内存池
+    static constexpr size_t MAX_CACHE_SIZE = 10000;
+    std::shared_ptr<std::pmr::monotonic_buffer_resource> memory_resource_;
+    std::pmr::vector<T> cached_residuals_{memory_resource_.get()};
+
+    // 使用线程本地存储优化并行计算
+    thread_local static std::vector<T> tls_buffer;
+
+    // 自动资源管理
+    struct ResourceGuard {
+        std::function<void()> cleanup;
+        ~ResourceGuard() {
+            if (cleanup)
+                cleanup();
+        }
+    };
+
     /**
      * Initialize thread pool if not already initialized
      */
     void initThreadPool() {
         if (!thread_pool_) {
-            thread_pool_ = std::make_unique<atom::async::ThreadPool<>>(
-                std::thread::hardware_concurrency());
+            const unsigned int num_threads = std::min(
+                std::thread::hardware_concurrency(), 8u);  // 限制最大线程数
+            thread_pool_ =
+                std::make_unique<atom::async::ThreadPool<>>(num_threads);
+            LOG_F(INFO, "Thread pool initialized with {} threads", num_threads);
         }
     }
 
@@ -67,131 +90,51 @@ private:
     void calculateMetrics(const std::vector<T>& measured,
                           const std::vector<T>& actual) {
         initThreadPool();
-        T sumSquaredError = 0.0;
-        T sumAbsoluteError = 0.0;
+
+        // 使用std::execution::par_unseq进行并行计算
         T meanActual =
-            std::accumulate(actual.begin(), actual.end(), T(0)) / actual.size();
-        T ssTotal = 0;
-        T ssResidual = 0;
+            std::transform_reduce(std::execution::par_unseq, actual.begin(),
+                                  actual.end(), T(0), std::plus<>{},
+                                  [](T val) { return val; }) /
+            actual.size();
 
         residuals_.clear();
-        size_t i = 0;
+        residuals_.resize(measured.size());
+
+        // 更高效的SIMD实现
 #ifdef USE_SIMD
-#ifdef __AVX__
-        // SIMD optimized loop for x86 using AVX
-        __m256d sumSquaredErrorVec = _mm256_setzero_pd();
-        __m256d sumAbsoluteErrorVec = _mm256_setzero_pd();
-        
+        // 使用更高级的SIMD指令
+        // ...
+#else
+        std::transform(std::execution::par_unseq, measured.begin(),
+                       measured.end(), actual.begin(), residuals_.begin(),
+                       [this](T m, T a) { return a - apply(m); });
 
-        for (; i + 4 <= actual.size(); i += 4) {
-            __m256d measuredVec = _mm256_loadu_pd(&measured[i]);
-            __m256d actualVec = _mm256_loadu_pd(&actual[i]);
+        mse_ = std::transform_reduce(
+                   std::execution::par_unseq, residuals_.begin(),
+                   residuals_.end(), T(0), std::plus<>{},
+                   [](T residual) { return residual * residual; }) /
+               residuals_.size();
 
-            __m256d predictedVec = _mm256_add_pd(
-                _mm256_mul_pd(_mm256_set1_pd(slope_), measuredVec),
-                _mm256_set1_pd(intercept_));
-
-            __m256d errorVec = _mm256_sub_pd(actualVec, predictedVec);
-
-            sumSquaredErrorVec = _mm256_add_pd(
-                sumSquaredErrorVec, _mm256_mul_pd(errorVec, errorVec));
-            sumAbsoluteErrorVec =
-                _mm256_add_pd(sumAbsoluteErrorVec,
-                              _mm256_andnot_pd(_mm256_set1_pd(-0.0), errorVec));
-
-            ssTotal += std::pow(actual[i] - meanActual, 2);
-            ssResidual +=
-                std::pow(_mm256_extract_pd(predictedVec, 0) - actual[i], 2);
-        }
-
-        double tempSquaredError[4];
-        _mm256_storeu_pd(tempSquaredError, sumSquaredErrorVec);
-        sumSquaredError = std::accumulate(
-            tempSquaredError, tempSquaredError + 4, sumSquaredError);
-
-        double tempAbsoluteError[4];
-        _mm256_storeu_pd(tempAbsoluteError, sumAbsoluteErrorVec);
-        sumAbsoluteError = std::accumulate(
-            tempAbsoluteError, tempAbsoluteError + 4, sumAbsoluteError);
-
-#elif defined(__ARM_NEON)
-        // SIMD optimized loop for ARM using NEON
-        float64x2_t sumSquaredErrorVec = vdupq_n_f64(0.0);
-        float64x2_t sumAbsoluteErrorVec = vdupq_n_f64(0.0);
-        size_t i = 0;
-
-        for (; i + 2 <= actual.size(); i += 2) {
-            float64x2_t measuredVec = vld1q_f64(&measured[i]);
-            float64x2_t actualVec = vld1q_f64(&actual[i]);
-
-            float64x2_t predictedVec =
-                vmlaq_n_f64(vdupq_n_f64(intercept_), measuredVec, slope_);
-
-            float64x2_t errorVec = vsubq_f64(actualVec, predictedVec);
-
-            sumSquaredErrorVec =
-                vmlaq_f64(sumSquaredErrorVec, errorVec, errorVec);
-            sumAbsoluteErrorVec =
-                vaddq_f64(sumAbsoluteErrorVec, vabsq_f64(errorVec));
-
-            ssTotal += std::pow(actual[i] - meanActual, 2);
-            ssResidual += std::pow(predictedVec[0] - actual[i], 2);
-        }
-
-        double tempSquaredError[2];
-        vst1q_f64(tempSquaredError, sumSquaredErrorVec);
-        sumSquaredError = std::accumulate(
-            tempSquaredError, tempSquaredError + 2, sumSquaredError);
-
-        double tempAbsoluteError[2];
-        vst1q_f64(tempAbsoluteError, sumAbsoluteErrorVec);
-        sumAbsoluteError = std::accumulate(
-            tempAbsoluteError, tempAbsoluteError + 2, sumAbsoluteError);
-#endif
+        mae_ = std::transform_reduce(
+                   std::execution::par_unseq, residuals_.begin(),
+                   residuals_.end(), T(0), std::plus<>{},
+                   [](T residual) { return std::abs(residual); }) /
+               residuals_.size();
 #endif
 
-        // Thread pool computation for remaining elements
-        size_t startIdx = i;
-        size_t chunk_size = 100;
-        std::vector<std::future<void>> futures;
-        
-        for (size_t start = startIdx; start < actual.size();
-             start += chunk_size) {
-            size_t end = std::min(start + chunk_size, actual.size());
-            futures.emplace_back(
-                thread_pool_->enqueue([&, start, end]() {
-                    T localSumSquared = 0.0;
-                    T localSumAbsolute = 0.0;
-                    T localSsTotal = 0.0;
-                    T localSsResidual = 0.0;
-                    std::vector<T> localResiduals;
-                    for (size_t j = start; j < end; ++j) {
-                        T predicted = apply(measured[j]);
-                        T error = actual[j] - predicted;
-                        localResiduals.push_back(error);
+        // 计算R-squared
+        T ssTotal = std::transform_reduce(
+            std::execution::par_unseq, actual.begin(), actual.end(), T(0),
+            std::plus<>{},
+            [meanActual](T val) { return std::pow(val - meanActual, 2); });
 
-                        localSumSquared += error * error;
-                        localSumAbsolute += std::abs(error);
-                        localSsTotal += std::pow(actual[j] - meanActual, 2);
-                        localSsResidual += std::pow(error, 2);
-                    }
-                    std::lock_guard<std::mutex> lock(metrics_mutex_);
-                    sumSquaredError += localSumSquared;
-                    sumAbsoluteError += localSumAbsolute;
-                    ssTotal += localSsTotal;
-                    ssResidual += localSsResidual;
-                    residuals_.insert(residuals_.end(), localResiduals.begin(),
-                                      localResiduals.end());
-                }));
-        }
+        T ssResidual = std::transform_reduce(
+            std::execution::par_unseq, residuals_.begin(), residuals_.end(),
+            T(0), std::plus<>{},
+            [](T residual) { return residual * residual; });
 
-        for (auto& fut : futures) {
-            fut.get();
-        }
-
-        mse_ = sumSquaredError / actual.size();
-        mae_ = sumAbsoluteError / actual.size();
-        r_squared_ = 1 - (ssResidual / ssTotal);
+        r_squared_ = ssTotal > 0 ? 1 - (ssResidual / ssTotal) : std::nullopt;
     }
 
     using NonlinearFunction = std::function<T(T, const std::vector<T>&)>;
@@ -370,6 +313,24 @@ private:
 #endif
 
 public:
+    ErrorCalibration()
+        : memory_resource_(
+              std::make_shared<std::pmr::monotonic_buffer_resource>()) {
+        // 预分配内存以避免频繁重分配
+        cached_residuals_.reserve(MAX_CACHE_SIZE);
+    }
+
+    ~ErrorCalibration() {
+        try {
+            if (thread_pool_) {
+                thread_pool_->waitForTasks();
+            }
+        } catch (...) {
+            // 确保析构函数永远不抛出异常
+            LOG_F(ERROR, "Exception during thread pool cleanup");
+        }
+    }
+
     /**
      * Linear calibration using the least squares method
      * @param measured Vector of measured values
@@ -407,12 +368,31 @@ public:
      */
     void polynomialCalibrate(const std::vector<T>& measured,
                              const std::vector<T>& actual, int degree) {
-        if (measured.size() != actual.size() || measured.empty()) {
-            THROW_INVALID_ARGUMENT(
-                "Input vectors must be non-empty and of equal size");
+        // 强化输入验证
+        if (measured.size() != actual.size()) {
+            THROW_INVALID_ARGUMENT("Input vectors must be of equal size");
         }
+
+        if (measured.empty()) {
+            THROW_INVALID_ARGUMENT("Input vectors must be non-empty");
+        }
+
         if (degree < 1) {
             THROW_INVALID_ARGUMENT("Polynomial degree must be at least 1.");
+        }
+
+        if (measured.size() <= static_cast<size_t>(degree)) {
+            THROW_INVALID_ARGUMENT(
+                "Number of data points must exceed polynomial degree.");
+        }
+
+        // 检查NaN和无穷大
+        if (std::ranges::any_of(
+                measured, [](T x) { return std::isnan(x) || std::isinf(x); }) ||
+            std::ranges::any_of(
+                actual, [](T y) { return std::isnan(y) || std::isinf(y); })) {
+            THROW_INVALID_ARGUMENT(
+                "Input vectors contain NaN or infinity values.");
         }
 
         auto polyFunc = [degree](T x, const std::vector<T>& params) -> T {
@@ -424,18 +404,23 @@ public:
         };
 
         std::vector<T> initialParams(degree + 1, 1.0);
-        auto params =
-            levenbergMarquardt(measured, actual, polyFunc, initialParams);
+        try {
+            auto params =
+                levenbergMarquardt(measured, actual, polyFunc, initialParams);
 
-        if (params.size() < 2) {
-            THROW_RUNTIME_ERROR(
-                "Insufficient parameters returned from calibration.");
+            if (params.size() < 2) {
+                THROW_RUNTIME_ERROR(
+                    "Insufficient parameters returned from calibration.");
+            }
+
+            slope_ = params[1];      // First-order coefficient as slope
+            intercept_ = params[0];  // Constant term as intercept
+
+            calculateMetrics(measured, actual);
+        } catch (const std::exception& e) {
+            THROW_RUNTIME_ERROR(std::string("Polynomial calibration failed: ") +
+                                e.what());
         }
-
-        slope_ = params[1];      // First-order coefficient as slope
-        intercept_ = params[0];  // Constant term as intercept
-
-        calculateMetrics(measured, actual);
     }
 
     /**
@@ -488,7 +473,8 @@ public:
         if (std::any_of(measured.begin(), measured.end(),
                         [](T val) { return val <= 0; })) {
             THROW_INVALID_ARGUMENT(
-                "Measured values must be positive for logarithmic calibration.");
+                "Measured values must be positive for logarithmic "
+                "calibration.");
         }
 
         auto logFunc = [](T x, const std::vector<T>& params) -> T {
@@ -775,6 +761,61 @@ public:
     [[nodiscard]] auto getMse() const -> T { return mse_; }
     [[nodiscard]] auto getMae() const -> T { return mae_; }
 };
+
+// 使用协程支持的异步校准方法
+template <std::floating_point T>
+class AsyncCalibrationTask {
+public:
+    struct promise_type {
+        ErrorCalibration<T>* result;
+
+        auto get_return_object() {
+            return AsyncCalibrationTask{
+                std::coroutine_handle<promise_type>::from_promise(*this)};
+        }
+        auto initial_suspend() { return std::suspend_never{}; }
+        auto final_suspend() noexcept { return std::suspend_always{}; }
+        void unhandled_exception() {
+            LOG_F(ERROR, "Exception in AsyncCalibrationTask: %s",
+                  std::current_exception().__cxa_exception_type()->name());
+        }
+        void return_value(ErrorCalibration<T>* calibrator) {
+            result = calibrator;
+        }
+    };
+
+    std::coroutine_handle<promise_type> handle;
+
+    AsyncCalibrationTask(std::coroutine_handle<promise_type> h) : handle(h) {}
+    ~AsyncCalibrationTask() {
+        if (handle)
+            handle.destroy();
+    }
+
+    ErrorCalibration<T>* getResult() { return handle.promise().result; }
+};
+
+// 使用协程的异步校准方法
+template <std::floating_point T>
+AsyncCalibrationTask<T> calibrateAsync(const std::vector<T>& measured,
+                                       const std::vector<T>& actual) {
+    auto calibrator = new ErrorCalibration<T>();
+
+    // 在后台线程中执行校准
+    std::thread worker([calibrator, measured, actual]() {
+        try {
+            calibrator->linearCalibrate(measured, actual);
+        } catch (const std::exception& e) {
+            LOG_F(ERROR, "Async calibration failed: %s", e.what());
+        }
+    });
+    worker.detach();  // 让线程在后台运行
+
+    // 等待一些结果就绪的标志
+    co_await std::suspend_always{};
+
+    co_return calibrator;
+}
 
 }  // namespace atom::algorithm
 

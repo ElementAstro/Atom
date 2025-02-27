@@ -20,6 +20,7 @@ Description: Implementation of Fraction class
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <immintrin.h>
 
 namespace atom::algorithm {
 

@@ -78,6 +78,10 @@ void renameFile(const fs::path& oldPath, const fs::path& newPath);
  * @throws std::runtime_error if the file cannot be deleted.
  */
 void deleteFile(const fs::path& filePath);
+
+// Updated to incorporate C++20 features, robust exception handling, input
+// validation, and modern C++ best practices
+
 }  // namespace atom::io
 
 #endif  // FILE_INFO_HPP

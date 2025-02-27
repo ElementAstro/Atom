@@ -1,403 +1,334 @@
 #ifndef ATOM_ALGORITHM_BIGNUMBER_HPP
 #define ATOM_ALGORITHM_BIGNUMBER_HPP
 
-#include <algorithm>
 #include <cctype>
+#include <concepts>
+#include <cstdint>
 #include <ostream>
-#include <stdexcept>
+#include <span>
 #include <string>
-#include <utility>
-#include "atom/macro.hpp"
+#include <string_view>
+#include <vector>
 
 namespace atom::algorithm {
 
 /**
  * @class BigNumber
- * @brief A class to represent and manipulate large numbers.
+ * @brief A class to represent and manipulate large numbers with C++20 features.
  */
 class BigNumber {
 public:
+    // 添加默认构造函数
+    constexpr BigNumber() noexcept : isNegative_(false), digits_{0} {}
+
     /**
-     * @brief Constructs a BigNumber from a string.
+     * @brief Constructs a BigNumber from a string_view.
      * @param number The string representation of the number.
+     * @throws std::invalid_argument If the string is not a valid number.
      */
-    BigNumber(std::string number) : numberString_(std::move(number)) {
-        numberString_ = trimLeadingZeros().numberString_;
-        validate();
+    explicit BigNumber(std::string_view number);
+
+    /**
+     * @brief Constructs a BigNumber from an integer.
+     * @tparam T Integer type that satisfies std::integral concept
+     */
+    template <std::integral T>
+    constexpr explicit BigNumber(T number) noexcept;
+
+    // 支持移动语义
+    BigNumber(BigNumber&& other) noexcept = default;
+    BigNumber& operator=(BigNumber&& other) noexcept = default;
+
+    // 支持拷贝
+    BigNumber(const BigNumber&) = default;
+    BigNumber& operator=(const BigNumber&) = default;
+
+    ~BigNumber() = default;
+
+    /**
+     * @brief 添加两个BigNumber对象
+     * @param other 要相加的另一个BigNumber
+     * @return 加法结果
+     */
+    [[nodiscard]] auto add(const BigNumber& other) const -> BigNumber;
+
+    /**
+     * @brief 从一个BigNumber减去另一个
+     * @param other 要减去的另一个BigNumber
+     * @return 减法结果
+     */
+    [[nodiscard]] auto subtract(const BigNumber& other) const -> BigNumber;
+
+    /**
+     * @brief 乘以另一个BigNumber
+     * @param other 要相乘的另一个BigNumber
+     * @return 乘法结果
+     */
+    [[nodiscard]] auto multiply(const BigNumber& other) const -> BigNumber;
+
+    /**
+     * @brief 使用Karatsuba算法进行优化乘法运算
+     * @param other 要相乘的另一个BigNumber
+     * @return 乘法结果
+     */
+    [[nodiscard]] auto multiplyKaratsuba(const BigNumber& other) const
+        -> BigNumber;
+
+    /**
+     * @brief 除以另一个BigNumber
+     * @param other 作为除数的BigNumber
+     * @return 除法结果
+     * @throws std::invalid_argument 如果除数为零
+     */
+    [[nodiscard]] auto divide(const BigNumber& other) const -> BigNumber;
+
+    /**
+     * @brief 计算幂
+     * @param exponent 指数值
+     * @return BigNumber的指数结果
+     * @throws std::invalid_argument 如果指数为负数
+     */
+    [[nodiscard]] auto pow(int exponent) const -> BigNumber;
+
+    /**
+     * @brief 获取字符串表示
+     * @return 大数的字符串表示
+     */
+    [[nodiscard]] auto toString() const -> std::string;
+
+    /**
+     * @brief 从字符串设置值
+     * @param newStr 新的字符串表示
+     * @return 更新后的BigNumber引用
+     * @throws std::invalid_argument 如果字符串不是有效的数字
+     */
+    auto setString(std::string_view newStr) -> BigNumber&;
+
+    /**
+     * @brief 返回此数的负数
+     * @return 取反后的BigNumber
+     */
+    [[nodiscard]] auto negate() const -> BigNumber;
+
+    /**
+     * @brief 移除前导零
+     * @return 移除前导零后的BigNumber
+     */
+    [[nodiscard]] auto trimLeadingZeros() const noexcept -> BigNumber;
+
+    /**
+     * @brief 判断两个BigNumber是否相等
+     * @param other 要比较的BigNumber
+     * @return 是否相等
+     */
+    [[nodiscard]] constexpr auto equals(const BigNumber& other) const noexcept
+        -> bool;
+
+    /**
+     * @brief 判断与整数是否相等
+     * @tparam T 整数类型
+     * @param other 要比较的整数
+     * @return 是否相等
+     */
+    template <std::integral T>
+    [[nodiscard]] constexpr auto equals(T other) const noexcept -> bool {
+        return equals(BigNumber(other));
     }
 
     /**
-     * @brief Constructs a BigNumber from a long long integer.
-     * @param number The long long integer representation of the number.
+     * @brief 判断与字符串表示的数字是否相等
+     * @param other 数字字符串
+     * @return 是否相等
      */
-    BigNumber(long long number) : numberString_(std::to_string(number)) {}
-
-    /**
-     * @brief Adds two BigNumber objects.
-     * @param other The other BigNumber to add.
-     * @return The result of the addition.
-     */
-    ATOM_NODISCARD auto add(const BigNumber& other) const -> BigNumber;
-
-    /**
-     * @brief Subtracts one BigNumber from another.
-     * @param other The other BigNumber to subtract.
-     * @return The result of the subtraction.
-     */
-    ATOM_NODISCARD auto subtract(const BigNumber& other) const -> BigNumber;
-
-    /**
-     * @brief Multiplies two BigNumber objects.
-     * @param other The other BigNumber to multiply.
-     * @return The result of the multiplication.
-     */
-    ATOM_NODISCARD auto multiply(const BigNumber& other) const -> BigNumber;
-
-    /**
-     * @brief Divides one BigNumber by another.
-     * @param other The other BigNumber to divide by.
-     * @return The result of the division.
-     */
-    ATOM_NODISCARD auto divide(const BigNumber& other) const -> BigNumber;
-
-    /**
-     * @brief Raises the BigNumber to the power of an exponent.
-     * @param exponent The exponent to raise the number to.
-     * @return The result of the exponentiation.
-     */
-    ATOM_NODISCARD auto pow(int exponent) const -> BigNumber;
-
-    /**
-     * @brief Gets the string representation of the BigNumber.
-     * @return The string representation of the number.
-     */
-    ATOM_NODISCARD auto getString() const -> std::string {
-        return numberString_;
+    [[nodiscard]] auto equals(std::string_view other) const -> bool {
+        return equals(BigNumber(other));
     }
 
     /**
-     * @brief Sets the string representation of the BigNumber.
-     * @param newStr The new string representation of the number.
-     * @return A reference to the updated BigNumber.
+     * @brief 获取数字位数
+     * @return 数字的位数
      */
-    auto setString(const std::string& newStr) -> BigNumber {
-        numberString_ = newStr;
-        numberString_ = trimLeadingZeros().numberString_;
-        validate();
-        return *this;
+    [[nodiscard]] constexpr auto digits() const noexcept -> size_t {
+        return digits_.size();
     }
 
     /**
-     * @brief Negates the BigNumber.
-     * @return The negated BigNumber.
+     * @brief 检查是否为负数
+     * @return 是否为负数
      */
-    ATOM_NODISCARD auto negate() const -> BigNumber {
-        if (isNegative()) {
-            return BigNumber(numberString_.substr(1));
-        } else {
-            return BigNumber("-" + numberString_);
-        }
+    [[nodiscard]] constexpr auto isNegative() const noexcept -> bool {
+        return isNegative_;
     }
 
     /**
-     * @brief Trims leading zeros from the BigNumber.
-     * @return The BigNumber with leading zeros removed.
+     * @brief 检查是否为正数或零
+     * @return 是否为正数或零
      */
-    ATOM_NODISCARD auto trimLeadingZeros() const -> BigNumber;
-
-    /**
-     * @brief Checks if two BigNumber objects are equal.
-     * @param other The other BigNumber to compare with.
-     * @return True if the numbers are equal, false otherwise.
-     */
-    ATOM_NODISCARD auto equals(const BigNumber& other) const -> bool {
-        return numberString_ == other.numberString_;
+    [[nodiscard]] constexpr auto isPositive() const noexcept -> bool {
+        return !isNegative();
     }
 
     /**
-     * @brief Checks if the BigNumber is equal to a long long integer.
-     * @param other The long long integer to compare with.
-     * @return True if the number is equal to the integer, false otherwise.
+     * @brief 检查是否为偶数
+     * @return 是否为偶数
      */
-    ATOM_NODISCARD auto equals(const long long& other) const -> bool {
-        return numberString_ == std::to_string(other);
+    [[nodiscard]] constexpr auto isEven() const noexcept -> bool {
+        return digits_.empty() ? true : (digits_[0] % 2 == 0);
     }
 
     /**
-     * @brief Checks if the BigNumber is equal to a string.
-     * @param other The string to compare with.
-     * @return True if the number is equal to the string, false otherwise.
+     * @brief 检查是否为奇数
+     * @return 是否为奇数
      */
-    ATOM_NODISCARD auto equals(const std::string& other) const -> bool {
-        return numberString_ == other;
+    [[nodiscard]] constexpr auto isOdd() const noexcept -> bool {
+        return !isEven();
     }
 
     /**
-     * @brief Gets the number of digits in the BigNumber.
-     * @return The number of digits.
+     * @brief 获取绝对值
+     * @return 绝对值
      */
-    ATOM_NODISCARD auto digits() const -> unsigned int {
-        return numberString_.length() - (isNegative() ? 1 : 0);
-    }
+    [[nodiscard]] auto abs() const -> BigNumber;
 
-    /**
-     * @brief Checks if the BigNumber is negative.
-     * @return True if the number is negative, false otherwise.
-     */
-    ATOM_NODISCARD auto isNegative() const -> bool {
-        return !numberString_.empty() && numberString_[0] == '-';
-    }
-
-    /**
-     * @brief Checks if the BigNumber is positive.
-     * @return True if the number is positive, false otherwise.
-     */
-    ATOM_NODISCARD auto isPositive() const -> bool { return !isNegative(); }
-
-    /**
-     * @brief Checks if the BigNumber is even.
-     * @return True if the number is even, false otherwise.
-     */
-    ATOM_NODISCARD auto isEven() const -> bool {
-        if (numberString_.empty())
-            return false;
-        return (numberString_.back() - '0') % 2 == 0;
-    }
-
-    /**
-     * @brief Checks if the BigNumber is odd.
-     * @return True if the number is odd, false otherwise.
-     */
-    ATOM_NODISCARD auto isOdd() const -> bool { return !isEven(); }
-
-    /**
-     * @brief Gets the absolute value of the BigNumber.
-     * @return The absolute value of the number.
-     */
-    ATOM_NODISCARD auto abs() const -> BigNumber {
-        return isNegative() ? BigNumber(numberString_.substr(1)) : *this;
-    }
-
-    /**
-     * @brief Overloads the stream insertion operator for BigNumber.
-     * @param os The output stream.
-     * @param num The BigNumber to insert into the stream.
-     * @return The output stream.
-     */
+    // 运算符重载
     friend auto operator<<(std::ostream& os,
-                           const BigNumber& num) -> std::ostream& {
-        os << num.numberString_;
-        return os;
-    }
+                           const BigNumber& num) -> std::ostream&;
 
-    /**
-     * @brief Overloads the addition operator for BigNumber.
-     * @param b1 The first BigNumber.
-     * @param b2 The second BigNumber.
-     * @return The result of the addition.
-     */
     friend auto operator+(const BigNumber& b1,
                           const BigNumber& b2) -> BigNumber {
         return b1.add(b2);
     }
 
-    /**
-     * @brief Overloads the subtraction operator for BigNumber.
-     * @param b1 The first BigNumber.
-     * @param b2 The second BigNumber.
-     * @return The result of the subtraction.
-     */
     friend auto operator-(const BigNumber& b1,
                           const BigNumber& b2) -> BigNumber {
         return b1.subtract(b2);
     }
 
-    /**
-     * @brief Overloads the multiplication operator for BigNumber.
-     * @param b1 The first BigNumber.
-     * @param b2 The second BigNumber.
-     * @return The result of the multiplication.
-     */
     friend auto operator*(const BigNumber& b1,
                           const BigNumber& b2) -> BigNumber {
         return b1.multiply(b2);
     }
 
-    /**
-     * @brief Overloads the division operator for BigNumber.
-     * @param b1 The first BigNumber.
-     * @param b2 The second BigNumber.
-     * @return The result of the division.
-     */
     friend auto operator/(const BigNumber& b1,
                           const BigNumber& b2) -> BigNumber {
         return b1.divide(b2);
     }
 
-    /**
-     * @brief Overloads the exponentiation operator for BigNumber.
-     * @param b1 The BigNumber base.
-     * @param b2 The exponent.
-     * @return The result of the exponentiation.
-     */
     friend auto operator^(const BigNumber& b1, int b2) -> BigNumber {
         return b1.pow(b2);
     }
 
-    /**
-     * @brief Overloads the equality operator for BigNumber.
-     * @param b1 The first BigNumber.
-     * @param b2 The second BigNumber.
-     * @return True if the numbers are equal, false otherwise.
-     */
-    friend auto operator==(const BigNumber& b1, const BigNumber& b2) -> bool {
+    friend auto operator==(const BigNumber& b1,
+                           const BigNumber& b2) noexcept -> bool {
         return b1.equals(b2);
     }
 
-    /**
-     * @brief Overloads the greater than operator for BigNumber.
-     * @param b1 The first BigNumber.
-     * @param b2 The second BigNumber.
-     * @return True if the first number is greater than the second, false
-     * otherwise.
-     */
     friend auto operator>(const BigNumber& b1, const BigNumber& b2) -> bool;
 
-    /**
-     * @brief Overloads the less than operator for BigNumber.
-     * @param b1 The first BigNumber.
-     * @param b2 The second BigNumber.
-     * @return True if the first number is less than the second, false
-     * otherwise.
-     */
     friend auto operator<(const BigNumber& b1, const BigNumber& b2) -> bool {
         return !(b1 == b2) && !(b1 > b2);
     }
 
-    /**
-     * @brief Overloads the greater than or equal to operator for BigNumber.
-     * @param b1 The first BigNumber.
-     * @param b2 The second BigNumber.
-     * @return True if the first number is greater than or equal to the second,
-     * false otherwise.
-     */
     friend auto operator>=(const BigNumber& b1, const BigNumber& b2) -> bool {
         return b1 > b2 || b1 == b2;
     }
 
-    /**
-     * @brief Overloads the less than or equal to operator for BigNumber.
-     * @param b1 The first BigNumber.
-     * @param b2 The second BigNumber.
-     * @return True if the first number is less than or equal to the second,
-     * false otherwise.
-     */
     friend auto operator<=(const BigNumber& b1, const BigNumber& b2) -> bool {
         return b1 < b2 || b1 == b2;
     }
 
-    /**
-     * @brief Overloads the addition assignment operator for BigNumber.
-     * @param other The other BigNumber to add.
-     * @return A reference to the updated BigNumber.
-     */
-    auto operator+=(const BigNumber& other) -> BigNumber& {
-        *this = *this + other;
-        return *this;
-    }
+    // 复合赋值运算符
+    auto operator+=(const BigNumber& other) -> BigNumber&;
+    auto operator-=(const BigNumber& other) -> BigNumber&;
+    auto operator*=(const BigNumber& other) -> BigNumber&;
+    auto operator/=(const BigNumber& other) -> BigNumber&;
+
+    // 前缀和后缀增减运算符
+    auto operator++() -> BigNumber&;
+    auto operator--() -> BigNumber&;
+    auto operator++(int) -> BigNumber;
+    auto operator--(int) -> BigNumber;
 
     /**
-     * @brief Overloads the subtraction assignment operator for BigNumber.
-     * @param other The other BigNumber to subtract.
-     * @return A reference to the updated BigNumber.
+     * @brief 访问特定位置的数字
+     * @param index 要访问的索引
+     * @return 该位置的数字
+     * @throws std::out_of_range 如果索引超出范围
      */
-    auto operator-=(const BigNumber& other) -> BigNumber& {
-        *this = *this - other;
-        return *this;
-    }
+    [[nodiscard]] constexpr auto at(size_t index) const -> uint8_t;
 
     /**
-     * @brief Overloads the multiplication assignment operator for BigNumber.
-     * @param other The other BigNumber to multiply.
-     * @return A reference to the updated BigNumber.
+     * @brief 下标运算符
+     * @param index 要访问的索引
+     * @return 该位置的数字
+     * @throws std::out_of_range 如果索引超出范围
      */
-    auto operator*=(const BigNumber& other) -> BigNumber& {
-        *this = *this * other;
-        return *this;
-    }
+    auto operator[](size_t index) const -> uint8_t { return at(index); }
 
-    /**
-     * @brief Overloads the division assignment operator for BigNumber.
-     * @param other The other BigNumber to divide by.
-     * @return A reference to the updated BigNumber.
-     */
-    auto operator/=(const BigNumber& other) -> BigNumber& {
-        *this = *this / other;
-        return *this;
-    }
-
-    /**
-     * @brief Overloads the prefix increment operator for BigNumber.
-     * @return A reference to the incremented BigNumber.
-     */
-    auto operator++() -> BigNumber& {
-        *this += BigNumber("1");
-        return *this;
-    }
-
-    /**
-     * @brief Overloads the prefix decrement operator for BigNumber.
-     * @return A reference to the decremented BigNumber.
-     */
-    auto operator--() -> BigNumber& {
-        *this -= BigNumber("1");
-        return *this;
-    }
-
-    /**
-     * @brief Overloads the postfix increment operator for BigNumber.
-     * @return The BigNumber before incrementing.
-     */
-    auto operator++(int) -> BigNumber {
-        BigNumber temp(*this);
-        ++(*this);
-        return temp;
-    }
-
-    /**
-     * @brief Overloads the postfix decrement operator for BigNumber.
-     * @return The BigNumber before decrementing.
-     */
-    auto operator--(int) -> BigNumber {
-        BigNumber temp(*this);
-        --(*this);
-        return temp;
-    }
-
-    /**
-     * @brief Overloads the subscript operator for BigNumber.
-     * @param index The index of the digit to access.
-     * @return The digit at the specified index.
-     */
-    auto operator[](int index) const -> unsigned int {
-        if (index < 0 || index >= static_cast<int>(numberString_.size())) {
-            throw std::out_of_range("Index out of range");
-        }
-        if (isNegative() && index == 0) {
-            throw std::invalid_argument("Cannot access the negative sign");
-        }
-        return static_cast<unsigned int>(numberString_[index] - '0');
-    }
+    // 添加并行计算支持
+    [[nodiscard]] auto parallelMultiply(const BigNumber& other) const
+        -> BigNumber;
 
 private:
-    std::string numberString_;  ///< The string representation of the number.
+    bool isNegative_;              ///< 是否为负数
+    std::vector<uint8_t> digits_;  ///< 数字存储，个位在前，高位在后
 
     /**
-     * @brief Validates the BigNumber string.
-     * @throws std::invalid_argument if the string is not a valid number.
+     * @brief 验证字符串是否为有效数字
+     * @param str 要验证的字符串
+     * @throws std::invalid_argument 如果字符串不是有效的数字
      */
+    static void validateString(std::string_view str);
+
     void validate() const;
+
+    /**
+     * @brief 从字符串初始化数字向量
+     * @param str 数字字符串
+     */
+    void initFromString(std::string_view str);
+
+    /**
+     * @brief Karatsuba乘法算法的递归实现
+     * @param a 第一个BigNumber的数据
+     * @param b 第二个BigNumber的数据
+     * @return 计算结果
+     */
+    static std::vector<uint8_t> karatsubaMultiply(std::span<const uint8_t> a,
+                                                  std::span<const uint8_t> b);
 };
+
+// 整数类型的构造函数实现
+template <std::integral T>
+constexpr BigNumber::BigNumber(T number) noexcept : isNegative_(number < 0) {
+    // 处理0的特殊情况
+    if (number == 0) {
+        digits_.push_back(0);
+        return;
+    }
+
+    // 转换为正数处理
+    auto absNumber =
+        static_cast<std::make_unsigned_t<T>>(number < 0 ? -number : number);
+
+    // 逐位提取数字
+    while (absNumber > 0) {
+        digits_.push_back(static_cast<uint8_t>(absNumber % 10));
+        absNumber /= 10;
+    }
+}
+
+constexpr auto BigNumber::equals(const BigNumber& other) const noexcept
+    -> bool {
+    return isNegative_ == other.isNegative_ && digits_ == other.digits_;
+}
+
+constexpr auto BigNumber::at(size_t index) const -> uint8_t {
+    if (index >= digits_.size()) {
+        throw std::out_of_range("Index out of range in BigNumber::at");
+    }
+    return digits_[index];
+}
 
 }  // namespace atom::algorithm
 

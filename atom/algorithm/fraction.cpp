@@ -16,6 +16,7 @@ Description: Implementation of Fraction class
 
 #include <numeric>
 #include <sstream>
+#include <immintrin.h>
 
 namespace atom::algorithm {
 
@@ -45,99 +46,118 @@ void Fraction::reduce() noexcept {
 /* ------------------------ Arithmetic Operators ------------------------ */
 
 auto Fraction::operator+=(const Fraction& other) -> Fraction& {
-    // Avoid overflow by using long long for intermediate calculations
-    long long commonDenominator =
-        static_cast<long long>(denominator) * other.denominator;
-    long long newNumerator =
-        static_cast<long long>(numerator) * other.denominator +
-        static_cast<long long>(other.numerator) * denominator;
+    try {
+        long long commonDenominator =
+            static_cast<long long>(denominator) * other.denominator;
+        long long newNumerator =
+            static_cast<long long>(numerator) * other.denominator +
+            static_cast<long long>(other.numerator) * denominator;
 
-    if (newNumerator > std::numeric_limits<int>::max() ||
-        newNumerator < std::numeric_limits<int>::min() ||
-        commonDenominator > std::numeric_limits<int>::max() ||
-        commonDenominator < std::numeric_limits<int>::min()) {
-        throw FractionException("Integer overflow during addition.");
+        if (newNumerator > std::numeric_limits<int>::max() ||
+            newNumerator < std::numeric_limits<int>::min() ||
+            commonDenominator > std::numeric_limits<int>::max() ||
+            commonDenominator < std::numeric_limits<int>::min()) {
+            throw FractionException("Integer overflow during addition.");
+        }
+
+        numerator = static_cast<int>(newNumerator);
+        denominator = static_cast<int>(commonDenominator);
+        reduce();
+    } catch (const std::exception& e) {
+        std::cerr << "Error in operator+=: " << e.what() << '\n';
+        throw;
     }
-
-    numerator = static_cast<int>(newNumerator);
-    denominator = static_cast<int>(commonDenominator);
-    reduce();
     return *this;
 }
 
 auto Fraction::operator-=(const Fraction& other) -> Fraction& {
-    long long commonDenominator =
-        static_cast<long long>(denominator) * other.denominator;
-    long long newNumerator =
-        static_cast<long long>(numerator) * other.denominator -
-        static_cast<long long>(other.numerator) * denominator;
+    try {
+        long long commonDenominator =
+            static_cast<long long>(denominator) * other.denominator;
+        long long newNumerator =
+            static_cast<long long>(numerator) * other.denominator -
+            static_cast<long long>(other.numerator) * denominator;
 
-    if (newNumerator > std::numeric_limits<int>::max() ||
-        newNumerator < std::numeric_limits<int>::min() ||
-        commonDenominator > std::numeric_limits<int>::max() ||
-        commonDenominator < std::numeric_limits<int>::min()) {
-        throw FractionException("Integer overflow during subtraction.");
+        if (newNumerator > std::numeric_limits<int>::max() ||
+            newNumerator < std::numeric_limits<int>::min() ||
+            commonDenominator > std::numeric_limits<int>::max() ||
+            commonDenominator < std::numeric_limits<int>::min()) {
+            throw FractionException("Integer overflow during subtraction.");
+        }
+
+        numerator = static_cast<int>(newNumerator);
+        denominator = static_cast<int>(commonDenominator);
+        reduce();
+    } catch (const std::exception& e) {
+        std::cerr << "Error in operator-=: " << e.what() << '\n';
+        throw;
     }
-
-    numerator = static_cast<int>(newNumerator);
-    denominator = static_cast<int>(commonDenominator);
-    reduce();
     return *this;
 }
 
 auto Fraction::operator*=(const Fraction& other) -> Fraction& {
-    if (other.numerator == 0) {
-        numerator = 0;
-        denominator = 1;
-        return *this;
+    try {
+        if (other.numerator == 0) {
+            numerator = 0;
+            denominator = 1;
+            return *this;
+        }
+
+        long long newNumerator =
+            static_cast<long long>(numerator) * other.numerator;
+        long long newDenominator =
+            static_cast<long long>(denominator) * other.denominator;
+
+        if (newNumerator > std::numeric_limits<int>::max() ||
+            newNumerator < std::numeric_limits<int>::min() ||
+            newDenominator > std::numeric_limits<int>::max() ||
+            newDenominator < std::numeric_limits<int>::min()) {
+            throw FractionException("Integer overflow during multiplication.");
+        }
+
+        numerator = static_cast<int>(newNumerator);
+        denominator = static_cast<int>(newDenominator);
+        reduce();
+    } catch (const std::exception& e) {
+        std::cerr << "Error in operator*=: " << e.what() << '\n';
+        throw;
     }
-
-    long long newNumerator =
-        static_cast<long long>(numerator) * other.numerator;
-    long long newDenominator =
-        static_cast<long long>(denominator) * other.denominator;
-
-    if (newNumerator > std::numeric_limits<int>::max() ||
-        newNumerator < std::numeric_limits<int>::min() ||
-        newDenominator > std::numeric_limits<int>::max() ||
-        newDenominator < std::numeric_limits<int>::min()) {
-        throw FractionException("Integer overflow during multiplication.");
-    }
-
-    numerator = static_cast<int>(newNumerator);
-    denominator = static_cast<int>(newDenominator);
-    reduce();
     return *this;
 }
 
 auto Fraction::operator/=(const Fraction& other) -> Fraction& {
-    if (other.numerator == 0) {
-        throw FractionException("Division by zero.");
-    }
+    try {
+        if (other.numerator == 0) {
+            throw FractionException("Division by zero.");
+        }
 
-    long long newNumerator =
-        static_cast<long long>(numerator) * other.denominator;
-    long long newDenominator =
-        static_cast<long long>(denominator) * other.numerator;
+        long long newNumerator =
+            static_cast<long long>(numerator) * other.denominator;
+        long long newDenominator =
+            static_cast<long long>(denominator) * other.numerator;
 
-    if (newDenominator == 0) {
-        throw FractionException("Denominator cannot be zero after division.");
-    }
+        if (newDenominator == 0) {
+            throw FractionException("Denominator cannot be zero after division.");
+        }
 
-    if (newNumerator > std::numeric_limits<int>::max() ||
-        newNumerator < std::numeric_limits<int>::min() ||
-        newDenominator > std::numeric_limits<int>::max() ||
-        newDenominator < std::numeric_limits<int>::min()) {
-        throw FractionException("Integer overflow during division.");
-    }
+        if (newNumerator > std::numeric_limits<int>::max() ||
+            newNumerator < std::numeric_limits<int>::min() ||
+            newDenominator > std::numeric_limits<int>::max() ||
+            newDenominator < std::numeric_limits<int>::min()) {
+            throw FractionException("Integer overflow during division.");
+        }
 
-    numerator = static_cast<int>(newNumerator);
-    denominator = static_cast<int>(newDenominator);
-    if (denominator < 0) {  // Handle negative denominators
-        numerator = -numerator;
-        denominator = -denominator;
+        numerator = static_cast<int>(newNumerator);
+        denominator = static_cast<int>(newDenominator);
+        if (denominator < 0) {  // Handle negative denominators
+            numerator = -numerator;
+            denominator = -denominator;
+        }
+        reduce();
+    } catch (const std::exception& e) {
+        std::cerr << "Error in operator/=: " << e.what() << '\n';
+        throw;
     }
-    reduce();
     return *this;
 }
 

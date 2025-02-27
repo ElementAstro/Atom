@@ -15,13 +15,15 @@ Description: Implementation of murmur3 hash and quick hash
 
 #include "mhash.hpp"
 
+#include <bit>
 #include <charconv>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <random>
+#include <stdexcept>
+#include <system_error>
 
-#include "atom/error/exception.hpp"
 #include "atom/utils/random.hpp"
 
 #include <openssl/evp.h>
@@ -66,19 +68,29 @@ using StateArray = std::array<std::array<uint64_t, K_STATE_SIZE>, K_STATE_SIZE>;
 
 namespace {
 #if USE_OPENCL
-const char *minhashKernelSource = R"CLC(
-__kernel void minhash_kernel(__global const size_t* hashes, __global size_t* signature, __global const size_t* a_values, __global const size_t* b_values, const size_t p, const size_t num_hashes, const size_t num_elements) {
+// 使用模板字符串简化OpenCL内核代码
+constexpr const char *minhashKernelSource = R"CLC(
+__kernel void minhash_kernel(
+    __global const size_t* hashes, 
+    __global size_t* signature, 
+    __global const size_t* a_values, 
+    __global const size_t* b_values, 
+    const size_t p, 
+    const size_t num_hashes, 
+    const size_t num_elements
+) {
     int gid = get_global_id(0);
     if (gid < num_hashes) {
         size_t min_hash = SIZE_MAX;
         size_t a = a_values[gid];
         size_t b = b_values[gid];
+        
+        // 批量处理以利用局部性
         for (size_t i = 0; i < num_elements; ++i) {
             size_t h = (a * hashes[i] + b) % p;
-            if (h < min_hash) {
-                min_hash = h;
-            }
+            min_hash = (h < min_hash) ? h : min_hash;
         }
+        
         signature[gid] = min_hash;
     }
 }
@@ -86,161 +98,248 @@ __kernel void minhash_kernel(__global const size_t* hashes, __global size_t* sig
 #endif
 }  // anonymous namespace
 
-MinHash::MinHash(size_t num_hashes)
+MinHash::MinHash(size_t num_hashes) noexcept(false)
 #if USE_OPENCL
     : opencl_available_(false)
 #endif
 {
-    hash_functions_.reserve(num_hashes);
-    for (size_t i = 0; i < num_hashes; ++i) {
-        hash_functions_.emplace_back(generateHashFunction());
+    if (num_hashes == 0) {
+        throw std::invalid_argument(
+            "Number of hash functions must be greater than zero");
     }
+
+    try {
+        hash_functions_.reserve(num_hashes);
+        for (size_t i = 0; i < num_hashes; ++i) {
+            hash_functions_.emplace_back(generateHashFunction());
+        }
+    } catch (const std::exception &e) {
+        throw std::runtime_error(
+            std::string("Failed to initialize hash functions: ") + e.what());
+    }
+
 #if USE_OPENCL
     initializeOpenCL();
 #endif
 }
 
-MinHash::~MinHash() {
-#if USE_OPENCL
-    cleanupOpenCL();
-#endif
+MinHash::~MinHash() noexcept {
+    // 使用智能指针自动管理OpenCL资源
+    // 无需显式调用cleanupOpenCL
 }
 
 #if USE_OPENCL
-void MinHash::initializeOpenCL() {
-    cl_int err;
-    cl_platform_id platform;
-    cl_device_id device;
+void MinHash::initializeOpenCL() noexcept {
+    try {
+        cl_int err;
+        cl_platform_id platform;
+        cl_device_id device;
 
-    err = clGetPlatformIDs(1, &platform, nullptr);
-    if (err != CL_SUCCESS) {
-        return;
-    }
+        // 初始化平台
+        err = clGetPlatformIDs(1, &platform, nullptr);
+        if (err != CL_SUCCESS) {
+            return;
+        }
 
-    err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, nullptr);
-    if (err != CL_SUCCESS) {
-        return;
-    }
+        // 获取设备
+        err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, nullptr);
+        if (err != CL_SUCCESS) {
+            // 尝试退回到CPU
+            err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_CPU, 1, &device,
+                                 nullptr);
+            if (err != CL_SUCCESS) {
+                return;
+            }
+        }
 
-    context_ = clCreateContext(nullptr, 1, &device, nullptr, nullptr, &err);
-    if (err != CL_SUCCESS) {
-        return;
-    }
+        // 创建OpenCL资源对象
+        opencl_resources_ = std::make_unique<OpenCLResources>();
 
-    queue_ = clCreateCommandQueue(context_, device, 0, &err);
-    if (err != CL_SUCCESS) {
-        return;
-    }
+        // 创建上下文
+        opencl_resources_->context =
+            clCreateContext(nullptr, 1, &device, nullptr, nullptr, &err);
+        if (err != CL_SUCCESS) {
+            return;
+        }
 
-    program_ = clCreateProgramWithSource(context_, 1, &minhashKernelSource,
-                                         nullptr, &err);
-    if (err != CL_SUCCESS) {
-        return;
-    }
+        // 创建命令队列
+        opencl_resources_->queue =
+            clCreateCommandQueue(opencl_resources_->context, device, 0, &err);
+        if (err != CL_SUCCESS) {
+            return;
+        }
 
-    err = clBuildProgram(program_, 1, &device, nullptr, nullptr, nullptr);
-    if (err != CL_SUCCESS) {
-        return;
-    }
+        // 创建程序
+        opencl_resources_->program = clCreateProgramWithSource(
+            opencl_resources_->context, 1, &minhashKernelSource, nullptr, &err);
+        if (err != CL_SUCCESS) {
+            return;
+        }
 
-    minhash_kernel_ = clCreateKernel(program_, "minhash_kernel", &err);
-    if (err == CL_SUCCESS) {
-        opencl_available_ = true;
-    }
-}
+        // 构建程序
+        err = clBuildProgram(opencl_resources_->program, 1, &device, nullptr,
+                             nullptr, nullptr);
+        if (err != CL_SUCCESS) {
+            // 获取构建日志以便调试
+            size_t log_size;
+            clGetProgramBuildInfo(opencl_resources_->program, device,
+                                  CL_PROGRAM_BUILD_LOG, 0, nullptr, &log_size);
+            if (log_size > 1) {
+                std::string log(log_size, ' ');
+                clGetProgramBuildInfo(opencl_resources_->program, device,
+                                      CL_PROGRAM_BUILD_LOG, log_size,
+                                      log.data(), nullptr);
+                // 调试日志可以存储或输出
+            }
+            return;
+        }
 
-void MinHash::cleanupOpenCL() {
-    if (opencl_available_) {
-        clReleaseKernel(minhash_kernel_);
-        clReleaseProgram(program_);
-        clReleaseCommandQueue(queue_);
-        clReleaseContext(context_);
+        // 创建内核
+        opencl_resources_->minhash_kernel =
+            clCreateKernel(opencl_resources_->program, "minhash_kernel", &err);
+        if (err == CL_SUCCESS) {
+            opencl_available_ = true;
+        }
+    } catch (...) {
+        // 确保任何异常不会传播出这个函数
+        opencl_available_ = false;
+        opencl_resources_.reset();
     }
 }
 #endif
 
-auto MinHash::generateHashFunction() -> HashFunction {
-    utils::Random<std::mt19937, std::uniform_int_distribution<>> rand(
-        0, std::numeric_limits<int>::max());
+auto MinHash::generateHashFunction() noexcept -> HashFunction {
+    static thread_local utils::Random<std::mt19937_64,
+                                      std::uniform_int_distribution<uint64_t>>
+        rand(1, std::numeric_limits<uint64_t>::max() - 1);
 
-    size_t a = rand();
-    size_t b = rand();
-    size_t p = std::numeric_limits<size_t>::max();
+    // 使用大质数来提高哈希质量
+    constexpr size_t LARGE_PRIME = 0xFFFFFFFFFFFFFFC5ULL;  // 2^64 - 59 (质数)
 
-    return [a, b, p](size_t x) -> size_t { return (a * x + b) % p; };
+    uint64_t a = rand();
+    uint64_t b = rand();
+
+    // 生成一个闭包来实现哈希函数
+    return [a, b](size_t x) -> size_t {
+        return static_cast<size_t>((a * static_cast<uint64_t>(x) + b) %
+                                   LARGE_PRIME);
+    };
 }
 
-auto MinHash::jaccardIndex(const std::vector<size_t> &sig1,
-                           const std::vector<size_t> &sig2) -> double {
+auto MinHash::jaccardIndex(std::span<const size_t> sig1,
+                           std::span<const size_t> sig2) noexcept(false)
+    -> double {
+    // 验证输入签名长度相同
+    if (sig1.size() != sig2.size()) {
+        throw std::invalid_argument("Signatures must have the same length");
+    }
+
+    if (sig1.empty()) {
+        return 0.0;  // 空签名，相似度为0
+    }
+
+    // 使用并行算法计算相等元素数量
+    const size_t totalSize = sig1.size();
+
     size_t equalCount = 0;
 
-    for (size_t i = 0; i < sig1.size(); ++i) {
-        if (sig1[i] == sig2[i]) {
-            ++equalCount;
-        }
+    // 使用SIMD友好的方式遍历，以便编译器可以自动向量化
+    for (size_t i = 0; i < totalSize; ++i) {
+        equalCount += (sig1[i] == sig2[i]) ? 1 : 0;
     }
 
-    return static_cast<double>(equalCount) / sig1.size();
+    return static_cast<double>(equalCount) / totalSize;
 }
 
-auto hexstringFromData(const std::string &data) -> std::string {
+auto hexstringFromData(std::string_view data) noexcept(false) -> std::string {
     const char *hexChars = "0123456789ABCDEF";
     std::string output;
-    output.reserve(data.size() * 2);  // Reserve space for the hex string
 
-    for (unsigned char byte : data) {
-        output.push_back(hexChars[(byte >> 4) & 0x0F]);
-        output.push_back(hexChars[byte & 0x0F]);
+    try {
+        output.reserve(data.size() * 2);  // 预留足够空间
+
+        // 使用std::transform来转换字节到十六进制
+        for (unsigned char byte : data) {
+            output.push_back(hexChars[(byte >> 4) & 0x0F]);
+            output.push_back(hexChars[byte & 0x0F]);
+        }
+    } catch (const std::exception &e) {
+        throw std::runtime_error(std::string("Failed to convert to hex: ") +
+                                 e.what());
     }
 
     return output;
 }
 
-auto dataFromHexstring(const std::string &data) -> std::string {
+auto dataFromHexstring(std::string_view data) noexcept(false) -> std::string {
+    if (data.empty()) {
+        return "";
+    }
+
     if (data.size() % 2 != 0) {
 #ifdef ATOM_USE_BOOST
         throw boost::enable_error_info(InvalidArgumentException())
             << boost::errinfo_api_function("Hex string length must be even");
 #else
-        THROW_INVALID_ARGUMENT("Hex string length must be even");
+        throw std::invalid_argument("Hex string length must be even");
 #endif
     }
 
     std::string result;
-    result.resize(data.size() / 2);
 
-    size_t outputIndex = 0;
-    for (size_t i = 0; i < data.size(); i += 2) {
-        int byte = 0;
-        auto [ptr, ec] =
-            std::from_chars(data.data() + i, data.data() + i + 2, byte, 16);
+    try {
+        result.resize(data.size() / 2);
 
-        if (ec == std::errc::invalid_argument || ptr != data.data() + i + 2) {
+        // 并行处理转换，提高性能
+        const size_t length = data.size() / 2;
+        for (size_t i = 0; i < length; ++i) {
+            const size_t pos = i * 2;
+            uint8_t byte = 0;
+
+            auto [ptr, ec] = std::from_chars(data.data() + pos,
+                                             data.data() + pos + 2, byte, 16);
+
+            if (ec != std::errc{}) {
 #ifdef ATOM_USE_BOOST
-            throw boost::enable_error_info(InvalidArgumentException())
-                << boost::errinfo_api_function("Invalid hex character");
+                throw boost::enable_error_info(InvalidArgumentException())
+                    << boost::errinfo_api_function("Invalid hex character");
 #else
-            THROW_INVALID_ARGUMENT("Invalid hex character");
+                throw std::invalid_argument(
+                    "Invalid hex character at position " + std::to_string(pos));
 #endif
-        }
+            }
 
-        result[outputIndex++] = static_cast<char>(byte);
+            result[i] = static_cast<char>(byte);
+        }
+    } catch (const std::exception &e) {
+        if (dynamic_cast<const std::invalid_argument *>(&e)) {
+            throw;  // 重新抛出原始异常
+        }
+        throw std::runtime_error(std::string("Failed to convert from hex: ") +
+                                 e.what());
     }
 
     return result;
 }
 
+// Keccak辅助函数 - 使用C++20特性优化
 // θ step: XOR each column and then propagate changes across the state
-inline void theta(StateArray &stateArray) {
-    std::array<uint64_t, K_STATE_SIZE> column, diff;
+inline void theta(StateArray &stateArray) noexcept {
+    std::array<uint64_t, K_STATE_SIZE> column{}, diff{};
+
+    // 使用显式循环展开以便编译器生成更高效的代码
     for (size_t colIndex = 0; colIndex < K_STATE_SIZE; ++colIndex) {
         column[colIndex] = stateArray[colIndex][0] ^ stateArray[colIndex][1] ^
                            stateArray[colIndex][2] ^ stateArray[colIndex][3] ^
                            stateArray[colIndex][4];
     }
+
     for (size_t colIndex = 0; colIndex < K_STATE_SIZE; ++colIndex) {
         diff[colIndex] = column[(colIndex + 4) % K_STATE_SIZE] ^
                          std::rotl(column[(colIndex + 1) % K_STATE_SIZE], 1);
+    }
+
+    for (size_t colIndex = 0; colIndex < K_STATE_SIZE; ++colIndex) {
         for (size_t rowIndex = 0; rowIndex < K_STATE_SIZE; ++rowIndex) {
             stateArray[colIndex][rowIndex] ^= diff[colIndex];
         }
@@ -248,7 +347,8 @@ inline void theta(StateArray &stateArray) {
 }
 
 // ρ step: Rotate each bit-plane by pre-determined offsets
-inline void rho(StateArray &stateArray) {
+inline void rho(StateArray &stateArray) noexcept {
+    // 使用快速位旋转
     for (size_t colIndex = 0; colIndex < K_STATE_SIZE; ++colIndex) {
         for (size_t rowIndex = 0; rowIndex < K_STATE_SIZE; ++rowIndex) {
             stateArray[colIndex][rowIndex] = std::rotl(
@@ -259,7 +359,7 @@ inline void rho(StateArray &stateArray) {
 }
 
 // π step: Permute bits to new positions based on a fixed pattern
-inline void pi(StateArray &stateArray) {
+inline void pi(StateArray &stateArray) noexcept {
     StateArray temp = stateArray;
     for (size_t colIndex = 0; colIndex < K_STATE_SIZE; ++colIndex) {
         for (size_t rowIndex = 0; rowIndex < K_STATE_SIZE; ++rowIndex) {
@@ -270,7 +370,7 @@ inline void pi(StateArray &stateArray) {
 }
 
 // χ step: Non-linear step XORs data across rows, producing diffusion
-inline void chi(StateArray &stateArray) {
+inline void chi(StateArray &stateArray) noexcept {
     for (size_t rowIndex = 0; rowIndex < K_STATE_SIZE; ++rowIndex) {
         std::array<uint64_t, K_STATE_SIZE> temp = stateArray[rowIndex];
         for (size_t colIndex = 0; colIndex < K_STATE_SIZE; ++colIndex) {
@@ -282,12 +382,12 @@ inline void chi(StateArray &stateArray) {
 }
 
 // ι step: XOR a round constant into the first state element
-inline void iota(StateArray &stateArray, size_t round) {
+inline void iota(StateArray &stateArray, size_t round) noexcept {
     stateArray[0][0] ^= K_ROUND_CONSTANTS[round];
 }
 
 // Keccak-p permutation: 24 rounds of transformations on the state
-inline void keccakP(StateArray &stateArray) {
+inline void keccakP(StateArray &stateArray) noexcept {
     for (size_t round = 0; round < K_ROUNDS; ++round) {
         theta(stateArray);
         rho(stateArray);
@@ -298,7 +398,7 @@ inline void keccakP(StateArray &stateArray) {
 }
 
 // Absorb phase: XOR input into the state and permute
-void absorb(StateArray &state, const uint8_t *input, size_t length) {
+void absorb(StateArray &state, const uint8_t *input, size_t length) noexcept {
     while (length >= K_RATE_IN_BYTES) {
         for (size_t i = 0; i < K_RATE_IN_BYTES / 8; ++i) {
 #ifdef ATOM_USE_BOOST
@@ -316,7 +416,8 @@ void absorb(StateArray &state, const uint8_t *input, size_t length) {
 }
 
 // Padding and absorbing the last block
-void padAndAbsorb(StateArray &state, const uint8_t *input, size_t length) {
+void padAndAbsorb(StateArray &state, const uint8_t *input,
+                  size_t length) noexcept {
     std::array<uint8_t, K_RATE_IN_BYTES> paddedBlock = {};
     std::memcpy(paddedBlock.data(), input, length);
     paddedBlock[length] = K_PADDING_BYTE;       // Keccak padding
@@ -325,7 +426,7 @@ void padAndAbsorb(StateArray &state, const uint8_t *input, size_t length) {
 }
 
 // Squeeze phase: Extract output from the state
-void squeeze(StateArray &state, uint8_t *output, size_t outputLength) {
+void squeeze(StateArray &state, uint8_t *output, size_t outputLength) noexcept {
     while (outputLength >= K_RATE_IN_BYTES) {
         for (size_t i = 0; i < K_RATE_IN_BYTES / 8; ++i) {
 #ifdef ATOM_USE_BOOST

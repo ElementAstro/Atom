@@ -3,10 +3,11 @@
 
 #include <zlib.h>
 #include <array>
+#include <concepts>
+#include <coroutine>
 #include <filesystem>
 #include <fstream>
 #include <vector>
-#include <utility>
 
 #include <asio.hpp>
 
@@ -20,6 +21,17 @@ using StreamHandle = asio::posix::stream_descriptor;
 #endif
 
 namespace atom::async::io {
+
+// File size concept to enforce size restrictions
+template <typename T>
+concept FileSizeType = std::integral<T> || std::floating_point<T>;
+
+// Path validator concept
+template <typename T>
+concept PathLike = requires(T t) {
+    { std::filesystem::path(t) } -> std::same_as<std::filesystem::path>;
+};
+
 constexpr std::size_t CHUNK = 16384;
 
 /**
@@ -31,8 +43,11 @@ public:
      * @brief Constructs a BaseCompressor.
      * @param io_context The ASIO I/O context.
      * @param output_file The path to the output file.
+     * @throws std::runtime_error If initialization fails.
      */
     BaseCompressor(asio::io_context& io_context, const fs::path& output_file);
+
+    virtual ~BaseCompressor() noexcept;
 
     /**
      * @brief Starts the compression process.
@@ -43,6 +58,7 @@ protected:
     /**
      * @brief Opens the output file for writing.
      * @param output_file The path to the output file.
+     * @throws std::runtime_error If file opening fails.
      */
     void openOutputFile(const fs::path& output_file);
 
@@ -65,6 +81,7 @@ protected:
     StreamHandle output_stream_;            ///< The output stream handle.
     std::array<char, CHUNK> out_buffer_{};  ///< Buffer for compressed data.
     z_stream zlib_stream_{};                ///< Zlib stream for compression.
+    bool is_initialized_ = false;  ///< Flag to track initialization status.
 };
 
 /**
@@ -77,6 +94,7 @@ public:
      * @param io_context The ASIO I/O context.
      * @param input_file The path to the input file.
      * @param output_file The path to the output file.
+     * @throws std::runtime_error If initialization fails.
      */
     SingleFileCompressor(asio::io_context& io_context,
                          const fs::path& input_file,
@@ -91,6 +109,7 @@ private:
     /**
      * @brief Opens the input file for reading.
      * @param input_file The path to the input file.
+     * @throws std::runtime_error If file opening fails.
      */
     void openInputFile(const fs::path& input_file);
 
@@ -118,6 +137,7 @@ public:
      * @param io_context The ASIO I/O context.
      * @param input_dir The path to the input directory.
      * @param output_file The path to the output file.
+     * @throws std::runtime_error If initialization fails.
      */
     DirectoryCompressor(asio::io_context& io_context, fs::path input_dir,
                         const fs::path& output_file);
@@ -147,7 +167,19 @@ private:
     std::vector<fs::path> files_to_compress_;  ///< List of files to compress.
     fs::path current_file_;       ///< The current file being compressed.
     std::ifstream input_stream_;  ///< Input stream for the current file.
-    std::array<char, CHUNK> in_buffer_{};  ///< Buffer for input data.
+    std::array<char, CHUNK> in_buffer_{};    ///< Buffer for input data.
+    std::size_t total_bytes_processed_ = 0;  ///< Total bytes processed.
+};
+
+// C++20 awaitable compression task
+struct CompressionAwaitable {
+    struct promise_type {
+        CompressionAwaitable get_return_object() { return {}; }
+        std::suspend_never initial_suspend() noexcept { return {}; }
+        std::suspend_never final_suspend() noexcept { return {}; }
+        void return_void() {}
+        void unhandled_exception() {}
+    };
 };
 
 /**
@@ -159,9 +191,9 @@ public:
      * @brief Constructs a BaseDecompressor.
      * @param io_context The ASIO I/O context.
      */
-    explicit BaseDecompressor(asio::io_context& io_context);
+    explicit BaseDecompressor(asio::io_context& io_context) noexcept;
 
-    virtual ~BaseDecompressor() = default;
+    virtual ~BaseDecompressor() noexcept = default;
 
     /**
      * @brief Starts the decompression process.
@@ -207,7 +239,7 @@ public:
                            fs::path output_folder);
 
     ~SingleFileDecompressor() override = default;
-    
+
     /**
      * @brief Starts the decompression process.
      */
@@ -269,7 +301,7 @@ private:
  */
 class ZipOperation {
 public:
-    virtual ~ZipOperation() = default;
+    virtual ~ZipOperation() noexcept = default;
     /**
      * @brief Starts the ZIP operation.
      */
@@ -285,6 +317,7 @@ public:
      * @brief Constructs a ListFilesInZip.
      * @param io_context The ASIO I/O context.
      * @param zip_file The path to the ZIP file.
+     * @throws std::invalid_argument If zip_file is empty.
      */
     ListFilesInZip(asio::io_context& io_context, std::string_view zip_file);
 
@@ -297,7 +330,7 @@ public:
      * @brief Gets the list of files in the ZIP archive.
      * @return A vector of file names.
      */
-    [[nodiscard]] auto getFileList() const -> std::vector<std::string>;
+    [[nodiscard]] auto getFileList() const noexcept -> std::vector<std::string>;
 
 private:
     /**
@@ -308,6 +341,7 @@ private:
     asio::io_context& io_context_;       ///< The ASIO I/O context.
     std::string zip_file_;               ///< The path to the ZIP file.
     std::vector<std::string> fileList_;  ///< List of files in the ZIP archive.
+    std::mutex fileListMutex_;  ///< Mutex for thread-safe access to fileList_
 };
 
 /**
@@ -320,6 +354,7 @@ public:
      * @param io_context The ASIO I/O context.
      * @param zip_file The path to the ZIP file.
      * @param file_name The name of the file to check.
+     * @throws std::invalid_argument If zip_file or file_name is empty.
      */
     FileExistsInZip(asio::io_context& io_context, std::string_view zip_file,
                     std::string_view file_name);
@@ -334,7 +369,7 @@ public:
      * @brief Checks if the file was found in the ZIP archive.
      * @return True if the file was found, false otherwise.
      */
-    [[nodiscard]] auto found() const -> bool;
+    [[nodiscard]] auto found() const noexcept -> bool;
 
 private:
     /**
@@ -345,7 +380,8 @@ private:
     asio::io_context& io_context_;  ///< The ASIO I/O context.
     std::string zip_file_;          ///< The path to the ZIP file.
     std::string file_name_;         ///< The name of the file to check.
-    bool fileExists_ = false;  ///< Whether the file exists in the ZIP archive.
+    std::atomic<bool> fileExists_ =
+        false;  ///< Whether the file exists in the ZIP archive.
 };
 
 /**
@@ -358,6 +394,7 @@ public:
      * @param io_context The ASIO I/O context.
      * @param zip_file The path to the ZIP file.
      * @param file_name The name of the file to remove.
+     * @throws std::invalid_argument If zip_file or file_name is empty.
      */
     RemoveFileFromZip(asio::io_context& io_context, std::string_view zip_file,
                       std::string_view file_name);
@@ -371,7 +408,7 @@ public:
      * @brief Checks if the file removal was successful.
      * @return True if the file was successfully removed, false otherwise.
      */
-    [[nodiscard]] auto isSuccessful() const -> bool;
+    [[nodiscard]] auto isSuccessful() const noexcept -> bool;
 
 private:
     /**
@@ -382,7 +419,8 @@ private:
     asio::io_context& io_context_;  ///< The ASIO I/O context.
     std::string zip_file_;          ///< The path to the ZIP file.
     std::string file_name_;         ///< The name of the file to remove.
-    bool success_ = false;  ///< Whether the file removal was successful.
+    std::atomic<bool> success_ =
+        false;  ///< Whether the file removal was successful.
 };
 
 /**
@@ -394,6 +432,7 @@ public:
      * @brief Constructs a GetZipFileSize.
      * @param io_context The ASIO I/O context.
      * @param zip_file The path to the ZIP file.
+     * @throws std::invalid_argument If zip_file is empty.
      */
     GetZipFileSize(asio::io_context& io_context, std::string_view zip_file);
 
@@ -406,7 +445,7 @@ public:
      * @brief Gets the size of the ZIP file.
      * @return The size of the ZIP file.
      */
-    [[nodiscard]] auto getSizeValue() const -> size_t;
+    [[nodiscard]] auto getSizeValue() const noexcept -> size_t;
 
 private:
     /**
@@ -416,7 +455,7 @@ private:
 
     asio::io_context& io_context_;  ///< The ASIO I/O context.
     std::string zip_file_;          ///< The path to the ZIP file.
-    size_t size_ = 0;               ///< The size of the ZIP file.
+    std::atomic<size_t> size_ = 0;  ///< The size of the ZIP file.
 };
 }  // namespace atom::async::io
 

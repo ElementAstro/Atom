@@ -69,7 +69,7 @@ struct HuffmanNode {
  * @throws HuffmanException if the frequency map is empty.
  */
 [[nodiscard]] auto createHuffmanTree(
-    const std::unordered_map<unsigned char, int>& frequencies)
+    const std::unordered_map<unsigned char, int>& frequencies) noexcept(false)
     -> std::shared_ptr<HuffmanNode>;
 
 /**
@@ -83,10 +83,11 @@ struct HuffmanNode {
  * @param code Current Huffman code generated during the traversal.
  * @param huffmanCodes A reference to a map where the byte and its
  * corresponding Huffman code will be stored.
+ * @throws HuffmanException if the root is null.
  */
-void generateHuffmanCodes(
-    const HuffmanNode* root, const std::string& code,
-    std::unordered_map<unsigned char, std::string>& huffmanCodes);
+void generateHuffmanCodes(const HuffmanNode* root, const std::string& code,
+                          std::unordered_map<unsigned char, std::string>&
+                              huffmanCodes) noexcept(false);
 
 /**
  * @brief Compresses data using Huffman codes.
@@ -103,8 +104,8 @@ void generateHuffmanCodes(
  */
 [[nodiscard]] auto compressData(
     const std::vector<unsigned char>& data,
-    const std::unordered_map<unsigned char, std::string>& huffmanCodes)
-    -> std::string;
+    const std::unordered_map<unsigned char, std::string>&
+        huffmanCodes) noexcept(false) -> std::string;
 
 /**
  * @brief Decompresses Huffman encoded data back to its original form.
@@ -121,7 +122,7 @@ void generateHuffmanCodes(
  * null.
  */
 [[nodiscard]] auto decompressData(const std::string& compressedData,
-                                  const HuffmanNode* root)
+                                  const HuffmanNode* root) noexcept(false)
     -> std::vector<unsigned char>;
 
 /**

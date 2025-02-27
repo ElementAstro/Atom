@@ -8,8 +8,8 @@
 
 Date: 2023-11-10
 
-Description: Implementation of one-dimensional and two-dimensional convolution
-and deconvolution.
+Description: Header for one-dimensional and two-dimensional convolution
+and deconvolution with optional OpenCL support.
 
 **************************************************/
 
@@ -17,117 +17,124 @@ and deconvolution.
 #define ATOM_ALGORITHM_CONVOLVE_HPP
 
 #include <complex>
+#include <thread>
 #include <vector>
 
+// Define if OpenCL support is required
+#ifndef USE_OPENCL
+#define USE_OPENCL 0
+#endif
+
+// Define if SIMD support is required
+#ifndef USE_SIMD
+#define USE_SIMD 1
+#endif
+
 namespace atom::algorithm {
-/**
- * @brief Performs 1D convolution operation.
- *
- * This function convolves the input signal with the given kernel.
- *
- * @param input The input signal.
- * @param kernel The convolution kernel.
- * @return The convolved signal.
- */
-[[nodiscard("The result of convolve is not used.")]] auto convolve(
-    const std::vector<double> &input,
-    const std::vector<double> &kernel) -> std::vector<double>;
+
+// Global constant for default thread usage
+const int availableThreads = std::thread::hardware_concurrency();
 
 /**
- * @brief Performs 1D deconvolution operation.
+ * @brief Performs 2D convolution of an input with a kernel
  *
- * This function deconvolves the input signal with the given kernel.
- *
- * @param input The input signal.
- * @param kernel The deconvolution kernel.
- * @return The deconvolved signal.
+ * @param input 2D matrix to be convolved
+ * @param kernel 2D kernel to convolve with
+ * @param numThreads Number of threads to use (default: all available cores)
+ * @return std::vector<std::vector<double>> Result of convolution
  */
-[[nodiscard("The result of deconvolve is not used.")]] auto deconvolve(
-    const std::vector<double> &input,
-    const std::vector<double> &kernel) -> std::vector<double>;
-
-/**
- * @brief Performs 2D convolution operation.
- *
- * This function convolves the input image with the given kernel.
- *
- * @param input The input image.
- * @param kernel The convolution kernel.
- * @param numThreads Number of threads for parallel execution (default: 1).
- * @return The convolved image.
- */
-[[nodiscard("The result of convolve2D is not used.")]] auto convolve2D(
-    const std::vector<std::vector<double>> &input,
-    const std::vector<std::vector<double>> &kernel,
-    int numThreads = 1) -> std::vector<std::vector<double>>;
-
-/**
- * @brief Performs 2D deconvolution operation.
- *
- * This function deconvolves the input image with the given kernel.
- *
- * @param signal The input image.
- * @param kernel The deconvolution kernel.
- * @param numThreads Number of threads for parallel execution (default: 1).
- * @return The deconvolved image.
- */
-[[nodiscard("The result of deconvolve2D is not used.")]] auto deconvolve2D(
-    const std::vector<std::vector<double>> &signal,
-    const std::vector<std::vector<double>> &kernel,
-    int numThreads = 1) -> std::vector<std::vector<double>>;
-
-/**
- * @brief Performs 2D Discrete Fourier Transform (DFT).
- *
- * This function computes the 2D DFT of the input image.
- *
- * @param signal The input image.
- * @param numThreads Number of threads for parallel execution (default: 1).
- * @return The 2D DFT spectrum.
- */
-[[nodiscard("The result of DFT2D is not used.")]] auto dfT2D(
-    const std::vector<std::vector<double>> &signal,
-    int numThreads = 1) -> std::vector<std::vector<std::complex<double>>>;
-
-/**
- * @brief Performs 2D Inverse Discrete Fourier Transform (IDFT).
- *
- * This function computes the 2D IDFT of the input spectrum.
- *
- * @param spectrum The input spectrum.
- * @param numThreads Number of threads for parallel execution (default: 1).
- * @return The 2D IDFT image.
- */
-[[nodiscard("The result of IDFT2D is not used.")]] auto idfT2D(
-    const std::vector<std::vector<std::complex<double>>> &spectrum,
-    int numThreads = 1) -> std::vector<std::vector<double>>;
-
-/**
- * @brief Generates a Gaussian kernel for 2D convolution.
- *
- * This function generates a Gaussian kernel for 2D convolution.
- *
- * @param size The size of the kernel.
- * @param sigma The standard deviation of the Gaussian distribution.
- * @return The generated Gaussian kernel.
- */
-[[nodiscard("The result of generateGaussianKernel is not used.")]] auto
-generateGaussianKernel(int size,
-                       double sigma) -> std::vector<std::vector<double>>;
-
-/**
- * @brief Applies a Gaussian filter to an image.
- *
- * This function applies a Gaussian filter to an image.
- *
- * @param image The input image.
- * @param kernel The Gaussian kernel.
- * @return The filtered image.
- */
-[[nodiscard("The result of applyGaussianFilter is not used.")]] auto
-applyGaussianFilter(const std::vector<std::vector<double>> &image,
-                    const std::vector<std::vector<double>> &kernel)
+auto convolve2D(const std::vector<std::vector<double>>& input,
+                const std::vector<std::vector<double>>& kernel,
+                int numThreads = availableThreads)
     -> std::vector<std::vector<double>>;
+
+/**
+ * @brief Performs 2D deconvolution (inverse of convolution)
+ *
+ * @param signal 2D matrix signal (result of convolution)
+ * @param kernel 2D kernel used for convolution
+ * @param numThreads Number of threads to use (default: all available cores)
+ * @return std::vector<std::vector<double>> Original input recovered via
+ * deconvolution
+ */
+auto deconvolve2D(const std::vector<std::vector<double>>& signal,
+                  const std::vector<std::vector<double>>& kernel,
+                  int numThreads = availableThreads)
+    -> std::vector<std::vector<double>>;
+
+/**
+ * @brief Computes 2D Discrete Fourier Transform
+ *
+ * @param signal 2D input signal in spatial domain
+ * @param numThreads Number of threads to use (default: all available cores)
+ * @return std::vector<std::vector<std::complex<double>>> Frequency domain
+ * representation
+ */
+auto dfT2D(const std::vector<std::vector<double>>& signal,
+           int numThreads = availableThreads)
+    -> std::vector<std::vector<std::complex<double>>>;
+
+/**
+ * @brief Computes inverse 2D Discrete Fourier Transform
+ *
+ * @param spectrum 2D input in frequency domain
+ * @param numThreads Number of threads to use (default: all available cores)
+ * @return std::vector<std::vector<double>> Spatial domain representation
+ */
+auto idfT2D(const std::vector<std::vector<std::complex<double>>>& spectrum,
+            int numThreads = availableThreads)
+    -> std::vector<std::vector<double>>;
+
+/**
+ * @brief Generates a 2D Gaussian kernel for image filtering
+ *
+ * @param size Size of the kernel (should be odd)
+ * @param sigma Standard deviation of the Gaussian distribution
+ * @return std::vector<std::vector<double>> Gaussian kernel
+ */
+auto generateGaussianKernel(int size,
+                            double sigma) -> std::vector<std::vector<double>>;
+
+/**
+ * @brief Applies a Gaussian filter to an image
+ *
+ * @param image Input image as 2D matrix
+ * @param kernel Gaussian kernel to apply
+ * @return std::vector<std::vector<double>> Filtered image
+ */
+auto applyGaussianFilter(const std::vector<std::vector<double>>& image,
+                         const std::vector<std::vector<double>>& kernel)
+    -> std::vector<std::vector<double>>;
+
+#if USE_OPENCL
+/**
+ * @brief Performs 2D convolution using OpenCL acceleration
+ *
+ * @param input 2D matrix to be convolved
+ * @param kernel 2D kernel to convolve with
+ * @param numThreads Used for fallback if OpenCL fails
+ * @return std::vector<std::vector<double>> Result of convolution
+ */
+auto convolve2DOpenCL(const std::vector<std::vector<double>>& input,
+                      const std::vector<std::vector<double>>& kernel,
+                      int numThreads = availableThreads)
+    -> std::vector<std::vector<double>>;
+
+/**
+ * @brief Performs 2D deconvolution using OpenCL acceleration
+ *
+ * @param signal 2D matrix signal (result of convolution)
+ * @param kernel 2D kernel used for convolution
+ * @param numThreads Used for fallback if OpenCL fails
+ * @return std::vector<std::vector<double>> Original input recovered via
+ * deconvolution
+ */
+auto deconvolve2DOpenCL(const std::vector<std::vector<double>>& signal,
+                        const std::vector<std::vector<double>>& kernel,
+                        int numThreads = availableThreads)
+    -> std::vector<std::vector<double>>;
+#endif
+
 }  // namespace atom::algorithm
 
-#endif
+#endif  // ATOM_ALGORITHM_CONVOLVE_HPP

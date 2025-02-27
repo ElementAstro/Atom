@@ -19,35 +19,74 @@ Description: A simple thread safe queue
 #include <atomic>
 #include <concepts>
 #include <condition_variable>
+#include <execution>
 #include <functional>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <queue>
+#include <span>
+#include <stdexcept>
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
 
 namespace atom::async {
+
+// Concepts for improved compile-time type checking
 template <typename T>
+concept Movable = std::move_constructible<T> && std::assignable_from<T&, T>;
+
+template <typename T, typename U>
+concept ExtractableWith = requires(T t, U u) {
+    { u(t) } -> std::convertible_to<bool>;
+};
+
+template <Movable T>
 class ThreadSafeQueue {
 public:
     ThreadSafeQueue() = default;
-
-    void put(T element) {
-        {
-            std::lock_guard lock(m_mutex_);
-            m_queue_.push(std::move(element));
+    ThreadSafeQueue(const ThreadSafeQueue&) = delete;  // Prevent copying
+    ThreadSafeQueue& operator=(const ThreadSafeQueue&) = delete;
+    ThreadSafeQueue(ThreadSafeQueue&&) noexcept = default;
+    ThreadSafeQueue& operator=(ThreadSafeQueue&&) noexcept = default;
+    ~ThreadSafeQueue() noexcept {
+        try {
+            destroy();
+        } catch (...) {
+            // Ensure no exceptions escape destructor
         }
-        m_conditionVariable_.notify_one();
     }
 
-    auto take() -> std::optional<T> {
+    /**
+     * @brief Add an element to the queue
+     * @param element Element to be added
+     * @throws std::bad_alloc if memory allocation fails
+     */
+    void put(T element) noexcept(std::is_nothrow_move_constructible_v<T>) {
+        try {
+            {
+                std::lock_guard lock(m_mutex_);
+                m_queue_.push(std::move(element));
+            }
+            m_conditionVariable_.notify_one();
+        } catch (const std::exception& e) {
+            // Log error - in a real implementation, use proper logging
+        }
+    }
+
+    /**
+     * @brief Take an element from the queue
+     * @return Optional containing the element or nothing if queue is being
+     * destroyed
+     */
+    [[nodiscard]] auto take() -> std::optional<T> {
         std::unique_lock lock(m_mutex_);
         m_conditionVariable_.wait(
             lock, [this] { return m_mustReturnNullptr_ || !m_queue_.empty(); });
 
-        if (m_mustReturnNullptr_) {
+        if (m_mustReturnNullptr_ || m_queue_.empty()) {
             return std::nullopt;
         }
 
@@ -57,7 +96,11 @@ public:
         return ret;
     }
 
-    auto destroy() -> std::queue<T> {
+    /**
+     * @brief Destroy the queue and return remaining elements
+     * @return Queue containing all remaining elements
+     */
+    [[nodiscard]] auto destroy() noexcept -> std::queue<T> {
         {
             std::lock_guard lock(m_mutex_);
             m_mustReturnNullptr_ = true;
@@ -72,23 +115,39 @@ public:
         return result;
     }
 
-    [[nodiscard]] auto size() const -> size_t {
+    /**
+     * @brief Get the size of the queue
+     * @return Current size of the queue
+     */
+    [[nodiscard]] auto size() const noexcept -> size_t {
         std::lock_guard lock(m_mutex_);
         return m_queue_.size();
     }
 
-    [[nodiscard]] auto empty() const -> bool {
+    /**
+     * @brief Check if the queue is empty
+     * @return True if queue is empty, false otherwise
+     */
+    [[nodiscard]] auto empty() const noexcept -> bool {
         std::lock_guard lock(m_mutex_);
         return m_queue_.empty();
     }
 
-    void clear() {
+    /**
+     * @brief Clear all elements from the queue
+     */
+    void clear() noexcept {
         std::lock_guard lock(m_mutex_);
         std::queue<T> empty;
         std::swap(m_queue_, empty);
     }
 
-    auto front() -> std::optional<T> {
+    /**
+     * @brief Get the front element without removing it
+     * @return Optional containing the front element or nothing if queue is
+     * empty
+     */
+    [[nodiscard]] auto front() const -> std::optional<T> {
         std::lock_guard lock(m_mutex_);
         if (m_queue_.empty()) {
             return std::nullopt;
@@ -96,7 +155,11 @@ public:
         return m_queue_.front();
     }
 
-    auto back() -> std::optional<T> {
+    /**
+     * @brief Get the back element without removing it
+     * @return Optional containing the back element or nothing if queue is empty
+     */
+    [[nodiscard]] auto back() const -> std::optional<T> {
         std::lock_guard lock(m_mutex_);
         if (m_queue_.empty()) {
             return std::nullopt;
@@ -104,24 +167,40 @@ public:
         return m_queue_.back();
     }
 
+    /**
+     * @brief Emplace an element in the queue
+     * @param args Arguments to construct the element
+     * @throws std::bad_alloc if memory allocation fails
+     */
     template <typename... Args>
+        requires std::constructible_from<T, Args...>
     void emplace(Args&&... args) {
-        {
-            std::lock_guard lock(m_mutex_);
-            m_queue_.emplace(std::forward<Args>(args)...);
+        try {
+            {
+                std::lock_guard lock(m_mutex_);
+                m_queue_.emplace(std::forward<Args>(args)...);
+            }
+            m_conditionVariable_.notify_one();
+        } catch (const std::exception& e) {
+            // Log error
         }
-        m_conditionVariable_.notify_one();
     }
 
+    /**
+     * @brief Wait for an element satisfying a predicate
+     * @param predicate Function to check if an element satisfies a condition
+     * @return Optional containing the element or nothing if queue is being
+     * destroyed
+     */
     template <std::predicate<const T&> Predicate>
-    auto waitFor(Predicate predicate) -> std::optional<T> {
+    [[nodiscard]] auto waitFor(Predicate predicate) -> std::optional<T> {
         std::unique_lock lock(m_mutex_);
         m_conditionVariable_.wait(lock, [this, &predicate] {
             return m_mustReturnNullptr_ ||
                    (!m_queue_.empty() && predicate(m_queue_.front()));
         });
 
-        if (m_mustReturnNullptr_)
+        if (m_mustReturnNullptr_ || m_queue_.empty())
             return std::nullopt;
 
         T ret = std::move(m_queue_.front());
@@ -130,18 +209,32 @@ public:
         return ret;
     }
 
-    void waitUntilEmpty() {
+    /**
+     * @brief Wait until the queue becomes empty
+     */
+    void waitUntilEmpty() noexcept {
         std::unique_lock lock(m_mutex_);
         m_conditionVariable_.wait(
             lock, [this] { return m_mustReturnNullptr_ || m_queue_.empty(); });
     }
 
-    template <std::predicate<const T&> UnaryPredicate>
-    auto extractIf(UnaryPredicate pred) -> std::vector<T> {
+    /**
+     * @brief Extract elements that satisfy a predicate
+     * @param pred Predicate function
+     * @return Vector of extracted elements
+     */
+    template <ExtractableWith<const T&> UnaryPredicate>
+    [[nodiscard]] auto extractIf(UnaryPredicate pred) -> std::vector<T> {
         std::vector<T> result;
         {
             std::lock_guard lock(m_mutex_);
+            if (m_queue_.empty()) {
+                return result;
+            }
+
+            result.reserve(m_queue_.size());  // Pre-allocate memory
             std::queue<T> remaining;
+
             while (!m_queue_.empty()) {
                 T& item = m_queue_.front();
                 if (pred(item)) {
@@ -156,28 +249,53 @@ public:
         return result;
     }
 
+    /**
+     * @brief Sort the elements in the queue
+     * @param comp Comparison function
+     */
     template <typename Compare>
-        requires std::is_invocable_r_v<bool, Compare, const T&, const T&>
+        requires std::predicate<Compare, const T&, const T&>
     void sort(Compare comp) {
         std::lock_guard lock(m_mutex_);
+        if (m_queue_.empty()) {
+            return;
+        }
+
         std::vector<T> temp;
         temp.reserve(m_queue_.size());
+
         while (!m_queue_.empty()) {
             temp.push_back(std::move(m_queue_.front()));
             m_queue_.pop();
         }
-        std::sort(temp.begin(), temp.end(), comp);
+
+        // Use parallel algorithm when available
+        if (temp.size() > 1000) {
+            std::sort(std::execution::par, temp.begin(), temp.end(), comp);
+        } else {
+            std::sort(temp.begin(), temp.end(), comp);
+        }
+
         for (auto& elem : temp) {
             m_queue_.push(std::move(elem));
         }
     }
 
+    /**
+     * @brief Transform elements using a function and return a new queue
+     * @param func Transformation function
+     * @return Shared pointer to a queue of transformed elements
+     */
     template <typename ResultType>
-    auto transform(std::function<ResultType(T)> func)
+    [[nodiscard]] auto transform(std::function<ResultType(T)> func)
         -> std::shared_ptr<ThreadSafeQueue<ResultType>> {
-        std::shared_ptr<ThreadSafeQueue<ResultType>> resultQueue;
+        auto resultQueue = std::make_shared<ThreadSafeQueue<ResultType>>();
         {
             std::lock_guard lock(m_mutex_);
+            if (m_queue_.empty()) {
+                return resultQueue;
+            }
+
             std::vector<T> original;
             original.reserve(m_queue_.size());
 
@@ -186,33 +304,66 @@ public:
                 m_queue_.pop();
             }
 
-            std::vector<ResultType> transformed(original.size());
-            std::transform(original.begin(), original.end(),
-                           transformed.begin(), func);
+            // Use parallel transform for large collections
+            if (original.size() > 1000) {
+                std::vector<ResultType> transformed(original.size());
+                std::transform(std::execution::par, original.begin(),
+                               original.end(), transformed.begin(), func);
 
-            for (auto& item : transformed) {
-                resultQueue->put(std::move(item));
+                for (auto& item : transformed) {
+                    resultQueue->put(std::move(item));
+                }
+            } else {
+                for (auto& item : original) {
+                    resultQueue->put(func(std::move(item)));
+                }
+            }
+
+            // Restore original items to the queue
+            for (auto& item : original) {
+                m_queue_.push(std::move(item));
             }
         }
         return resultQueue;
     }
 
+    /**
+     * @brief Group elements by a key
+     * @param func Function to extract the key
+     * @return Vector of queues, each containing elements with the same key
+     */
     template <typename GroupKey>
-    auto groupBy(std::function<GroupKey(const T&)> func)
+        requires std::movable<GroupKey> && std::equality_comparable<GroupKey>
+    [[nodiscard]] auto groupBy(std::function<GroupKey(const T&)> func)
         -> std::vector<std::shared_ptr<ThreadSafeQueue<T>>> {
         std::unordered_map<GroupKey, std::shared_ptr<ThreadSafeQueue<T>>>
             resultMap;
+        std::vector<T> originalItems;
+
         {
             std::lock_guard lock(m_mutex_);
-            while (!m_queue_.empty()) {
-                T item = std::move(m_queue_.front());
-                m_queue_.pop();
-                GroupKey key = func(item);
-                if (!resultMap.contains(key)) {
-                    resultMap[key] = std::make_shared<ThreadSafeQueue<T>>();
-                }
-                resultMap[key]->put(std::move(item));
+            if (m_queue_.empty()) {
+                return {};
             }
+
+            originalItems.reserve(m_queue_.size());
+
+            while (!m_queue_.empty()) {
+                originalItems.push_back(std::move(m_queue_.front()));
+                m_queue_.pop();
+            }
+        }
+
+        // Process items
+        for (auto& item : originalItems) {
+            GroupKey key = func(item);
+            if (!resultMap.contains(key)) {
+                resultMap[key] = std::make_shared<ThreadSafeQueue<T>>();
+            }
+            resultMap[key]->put(T(item));  // Make a copy for the result map
+
+            // Put back into the original queue
+            m_queue_.push(std::move(item));
         }
 
         std::vector<std::shared_ptr<ThreadSafeQueue<T>>> resultQueues;
@@ -224,43 +375,82 @@ public:
         return resultQueues;
     }
 
-    auto toVector() const -> std::vector<T> {
+    /**
+     * @brief Convert queue contents to a vector
+     * @return Vector containing copies of all elements
+     */
+    [[nodiscard]] auto toVector() const -> std::vector<T> {
         std::lock_guard lock(m_mutex_);
-        return std::vector<T>(m_queue_.front(), m_queue_.back());
+        if (m_queue_.empty()) {
+            return {};
+        }
+
+        std::vector<T> result;
+        result.reserve(m_queue_.size());
+
+        // We can't directly convert from queue to vector
+        // Need to make a copy of the queue first
+        std::queue<T> queueCopy = m_queue_;
+
+        while (!queueCopy.empty()) {
+            result.push_back(std::move(queueCopy.front()));
+            queueCopy.pop();
+        }
+
+        return result;
     }
 
+    /**
+     * @brief Apply a function to each element
+     * @param func Function to apply
+     * @param parallel Whether to process in parallel
+     */
     template <typename Func>
-        requires std::is_invocable_r_v<void, Func, T&>
+        requires std::invocable<Func, T&>
     void forEach(Func func, bool parallel = false) {
-        std::lock_guard lock(m_mutex_);
-        if (parallel) {
-            std::vector<T> vec;
+        std::vector<T> vec;
+        {
+            std::lock_guard lock(m_mutex_);
+            if (m_queue_.empty()) {
+                return;
+            }
+
             vec.reserve(m_queue_.size());
+            std::queue<T> tempQueue;
+
+            // Extract all items
             while (!m_queue_.empty()) {
                 vec.push_back(std::move(m_queue_.front()));
                 m_queue_.pop();
             }
+        }
 
-            for (size_t i = 0; i < vec.size(); ++i) {
-                func(vec[i]);
+        // Process items
+        if (parallel && vec.size() > 1000) {
+            // Use parallel execution policy
+            std::for_each(std::execution::par, vec.begin(), vec.end(),
+                          [&func](auto& item) { func(item); });
+        } else {
+            // Sequential processing
+            for (auto& item : vec) {
+                func(item);
             }
+        }
 
+        // Put items back into the queue
+        {
+            std::lock_guard lock(m_mutex_);
             for (auto& item : vec) {
                 m_queue_.push(std::move(item));
             }
-        } else {
-            std::queue<T> tempQueue;
-            while (!m_queue_.empty()) {
-                T& item = m_queue_.front();
-                func(item);
-                tempQueue.push(std::move(item));
-                m_queue_.pop();
-            }
-            m_queue_ = std::move(tempQueue);
         }
     }
 
-    auto tryTake() -> std::optional<T> {
+    /**
+     * @brief Try to take an element without waiting
+     * @return Optional containing the element or nothing if queue is empty
+     */
+    [[nodiscard]] auto tryTake() noexcept -> std::optional<T> {
         std::lock_guard lock(m_mutex_);
         if (m_queue_.empty()) {
             return std::nullopt;
@@ -270,14 +460,20 @@ public:
         return ret;
     }
 
+    /**
+     * @brief Try to take an element with a timeout
+     * @param timeout Maximum time to wait
+     * @return Optional containing the element or nothing if timed out or queue
+     * is being destroyed
+     */
     template <typename Rep, typename Period>
-    auto takeFor(const std::chrono::duration<Rep, Period>& timeout)
-        -> std::optional<T> {
+    [[nodiscard]] auto takeFor(
+        const std::chrono::duration<Rep, Period>& timeout) -> std::optional<T> {
         std::unique_lock lock(m_mutex_);
         if (m_conditionVariable_.wait_for(lock, timeout, [this] {
                 return !m_queue_.empty() || m_mustReturnNullptr_;
             })) {
-            if (m_mustReturnNullptr_) {
+            if (m_mustReturnNullptr_ || m_queue_.empty()) {
                 return std::nullopt;
             }
             T ret = std::move(m_queue_.front());
@@ -287,14 +483,20 @@ public:
         return std::nullopt;
     }
 
+    /**
+     * @brief Try to take an element until a time point
+     * @param timeout_time Time point until which to wait
+     * @return Optional containing the element or nothing if timed out or queue
+     * is being destroyed
+     */
     template <typename Clock, typename Duration>
-    auto takeUntil(const std::chrono::time_point<Clock, Duration>& timeout_time)
-        -> std::optional<T> {
+    [[nodiscard]] auto takeUntil(const std::chrono::time_point<Clock, Duration>&
+                                     timeout_time) -> std::optional<T> {
         std::unique_lock lock(m_mutex_);
         if (m_conditionVariable_.wait_until(lock, timeout_time, [this] {
                 return !m_queue_.empty() || m_mustReturnNullptr_;
             })) {
-            if (m_mustReturnNullptr_) {
+            if (m_mustReturnNullptr_ || m_queue_.empty()) {
                 return std::nullopt;
             }
             T ret = std::move(m_queue_.front());
@@ -302,6 +504,87 @@ public:
             return ret;
         }
         return std::nullopt;
+    }
+
+    /**
+     * @brief Process batch of items in parallel
+     * @param batchSize Size of each batch
+     * @param processor Function to process each batch
+     * @return Number of processed batches
+     */
+    template <typename Processor>
+        requires std::invocable<Processor, std::span<T>>
+    size_t processBatches(size_t batchSize, Processor processor) {
+        if (batchSize == 0) {
+            throw std::invalid_argument("Batch size must be positive");
+        }
+
+        std::vector<T> items;
+        {
+            std::lock_guard lock(m_mutex_);
+            if (m_queue_.empty()) {
+                return 0;
+            }
+
+            items.reserve(m_queue_.size());
+            while (!m_queue_.empty()) {
+                items.push_back(std::move(m_queue_.front()));
+                m_queue_.pop();
+            }
+        }
+
+        size_t numBatches = (items.size() + batchSize - 1) / batchSize;
+        std::vector<std::future<void>> futures;
+        futures.reserve(numBatches);
+
+        // Process batches in parallel
+        for (size_t i = 0; i < items.size(); i += batchSize) {
+            size_t end = std::min(i + batchSize, items.size());
+            futures.push_back(
+                std::async(std::launch::async, [&processor, &items, i, end]() {
+                    std::span<T> batch(&items[i], end - i);
+                    processor(batch);
+                }));
+        }
+
+        // Wait for all batches to complete
+        for (auto& future : futures) {
+            future.wait();
+        }
+
+        // Put processed items back
+        {
+            std::lock_guard lock(m_mutex_);
+            for (auto& item : items) {
+                m_queue_.push(std::move(item));
+            }
+        }
+
+        return numBatches;
+    }
+
+    /**
+     * @brief Apply a filter to the queue elements
+     * @param predicate Predicate determining which elements to keep
+     */
+    template <std::predicate<const T&> Predicate>
+    void filter(Predicate predicate) {
+        std::lock_guard lock(m_mutex_);
+        if (m_queue_.empty()) {
+            return;
+        }
+
+        std::queue<T> filtered;
+        while (!m_queue_.empty()) {
+            T item = std::move(m_queue_.front());
+            m_queue_.pop();
+
+            if (predicate(item)) {
+                filtered.push(std::move(item));
+            }
+        }
+
+        std::swap(m_queue_, filtered);
     }
 
 private:

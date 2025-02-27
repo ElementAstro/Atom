@@ -5,95 +5,80 @@
 
 using namespace atom::type;
 
+// 示例错误枚举
+enum class DivisionError {
+    DivideByZero,
+    Overflow
+};
+
+// 安全除法函数，返回expected
+expected<double, DivisionError> safe_divide(double a, double b) {
+    if (b == 0.0) {
+        return unexpected(DivisionError::DivideByZero);
+    }
+    
+    if (a > 1e100 && b < 1e-100) {
+        return unexpected(DivisionError::Overflow);
+    }
+    
+    return a / b;
+}
+
+// fnmatch示例对应的错误处理
+enum class PatternError {
+    InvalidPattern,
+    EmptyInput
+};
+
+// 一个简单的模式匹配函数
+expected<bool, PatternError> simple_pattern_match(const std::string& pattern, 
+                                                 const std::string& input) {
+    if (pattern.empty()) {
+        return unexpected(PatternError::InvalidPattern);
+    }
+    
+    if (input.empty()) {
+        return unexpected(PatternError::EmptyInput);
+    }
+    
+    // 简单实现，仅作演示
+    return pattern == "*" || pattern == input;
+}
+
 int main() {
-    // Create an expected object with a value
-    expected<int> valueExpected(42);
-    if (valueExpected.has_value()) {
-        std::cout << "Value: " << valueExpected.value() << std::endl;
+    // 除法示例
+    auto result1 = safe_divide(10.0, 2.0);
+    if (result1) {
+        std::cout << "除法结果: " << result1.value() << std::endl;
     } else {
-        std::cout << "Error: " << valueExpected.error().error() << std::endl;
+        std::cout << "除法错误" << std::endl;
     }
-
-    // Create an expected object with an error
-    expected<int> errorExpected(make_unexpected("An error occurred"));
-    if (errorExpected.has_value()) {
-        std::cout << "Value: " << errorExpected.value() << std::endl;
-    } else {
-        std::cout << "Error: " << errorExpected.error().error() << std::endl;
+    
+    auto result2 = safe_divide(10.0, 0.0);
+    if (!result2) {
+        std::cout << "预期的错误: 除数为零" << std::endl;
     }
-
-    // Use and_then to apply a function to the value if it exists
-    auto result = valueExpected.and_then([](int val) -> expected<std::string> {
-        return std::to_string(val);
-    });
-    if (result.has_value()) {
-        std::cout << "Result: " << result.value() << std::endl;
-    } else {
-        std::cout << "Error: " << result.error().error() << std::endl;
+    
+    // 模式匹配示例
+    auto match1 = simple_pattern_match("*", "任何字符串");
+    if (match1 && match1.value()) {
+        std::cout << "模式匹配成功" << std::endl;
     }
-
-    // Use map to transform the value if it exists
-    auto mappedResult = valueExpected.map([](int val) {
-        return val * 2;
-    });
-    if (mappedResult.has_value()) {
-        std::cout << "Mapped Result: " << mappedResult.value() << std::endl;
-    } else {
-        std::cout << "Error: " << mappedResult.error().error() << std::endl;
+    
+    auto match2 = simple_pattern_match("", "测试");
+    if (!match2) {
+        std::cout << "预期的错误: 无效模式" << std::endl;
     }
-
-    /*
-    TODO: Fix this
-    // Use transform_error to transform the error if it exists
-    auto transformedError = errorExpected.transform_error([](const std::string& err) {
-        return std::string("Transformed: ") + err;
-    });
-    if (transformedError.has_value()) {
-        std::cout << "Value: " << transformedError.value() << std::endl;
-    } else {
-        std::cout << "Transformed Error: " << transformedError.error().error() << std::endl;
+    
+    // 演示monadic操作
+    auto result3 = safe_divide(10.0, 2.0)
+                    .and_then([](double val) -> expected<std::string, DivisionError> {
+                        return "结果是: " + std::to_string(val);
+                    });
+                    
+    if (result3) {
+        std::cout << result3.value() << std::endl;
     }
-    */
-
-    // Create an expected<void> object with no value
-    expected<void> voidExpected;
-    if (voidExpected.has_value()) {
-        std::cout << "Void expected has value" << std::endl;
-    } else {
-        std::cout << "Error: " << voidExpected.error().error() << std::endl;
-    }
-
-    // Create an expected<void> object with an error
-    expected<void> voidErrorExpected(make_unexpected("Void error occurred"));
-    if (voidErrorExpected.has_value()) {
-        std::cout << "Void expected has value" << std::endl;
-    } else {
-        std::cout << "Error: " << voidErrorExpected.error().error() << std::endl;
-    }
-
-    // Use and_then with expected<void>
-    auto voidResult = voidExpected.and_then([]() -> expected<void> {
-        std::cout << "Void and_then executed" << std::endl;
-        return expected<void>();
-    });
-    if (voidResult.has_value()) {
-        std::cout << "Void result has value" << std::endl;
-    } else {
-        std::cout << "Error: " << voidResult.error().error() << std::endl;
-    }
-
-    /*
-    TODO: Fix this
-    // Use transform_error with expected<void>
-    auto voidTransformedError = voidErrorExpected.transform_error([](const std::string& err) {
-        return std::string("Void Transformed: ") + err;
-    });
-    if (voidTransformedError.has_value()) {
-        std::cout << "Void transformed error has value" << std::endl;
-    } else {
-        std::cout << "Void Transformed Error: " << voidTransformedError.error().error() << std::endl;
-    }
-    */
-
+    
     return 0;
 }

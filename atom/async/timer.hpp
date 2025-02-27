@@ -23,10 +23,17 @@ Description: Timer class for C++
 #include <mutex>
 #include <queue>
 #include <thread>
+#include <type_traits>
 
 #include "future.hpp"
 
 namespace atom::async {
+
+template <typename F, typename... Args>
+concept Invocable = requires(F &&f, Args &&...args) {
+    std::invoke(std::forward<F>(f), std::forward<Args>(args)...);
+};
+
 /**
  * @brief Represents a task to be scheduled and executed by the Timer.
  */
@@ -40,9 +47,10 @@ public:
      * @param repeatCount The number of times the task should be repeated. -1
      * for infinite repetition.
      * @param priority The priority of the task.
+     * @throws std::invalid_argument If func is null or delay is invalid
      */
     explicit TimerTask(std::function<void()> func, unsigned int delay,
-                       int repeatCount, int priority);
+                       int repeatCount, int priority) noexcept(false);
 
     /**
      * @brief Comparison operator for comparing two TimerTask objects based on
@@ -52,19 +60,21 @@ public:
      * @return True if this task's next execution time is earlier than the other
      * task's next execution time.
      */
-    auto operator<(const TimerTask &other) const -> bool;
+    [[nodiscard]] auto operator<(const TimerTask &other) const noexcept -> bool;
 
     /**
      * @brief Executes the task's associated function.
+     * @throws Propagates any exceptions thrown by the task function
      */
-    void run();
+    void run() noexcept(false);
 
     /**
      * @brief Get the next scheduled execution time of the task.
      *
      * @return The steady clock time point representing the next execution time.
      */
-    auto getNextExecutionTime() const -> std::chrono::steady_clock::time_point;
+    [[nodiscard]] auto getNextExecutionTime() const noexcept
+        -> std::chrono::steady_clock::time_point;
 
     std::function<void()> m_func;  ///< The function to be executed.
     unsigned int m_delay;          ///< The delay before the first execution.
@@ -82,12 +92,17 @@ public:
     /**
      * @brief Constructor for Timer.
      */
-    Timer();
+    Timer() noexcept(false);
 
     /**
      * @brief Destructor for Timer.
      */
-    ~Timer();
+    ~Timer() noexcept;
+
+    Timer(const Timer &) = delete;
+    Timer &operator=(const Timer &) = delete;
+    Timer(Timer &&) = delete;
+    Timer &operator=(Timer &&) = delete;
 
     /**
      * @brief Schedules a task to be executed once after a specified delay.
@@ -99,11 +114,13 @@ public:
      * @param args The arguments to be passed to the function.
      * @return An EnhancedFuture representing the result of the function
      * execution.
+     * @throws std::invalid_argument If the function is null or delay is invalid
      */
     template <typename Function, typename... Args>
+        requires Invocable<Function, Args...>
     [[nodiscard]] auto setTimeout(Function &&func, unsigned int delay,
-                                  Args &&...args)
-        -> EnhancedFuture<typename std::result_of<Function(Args...)>::type>;
+                                  Args &&...args) noexcept(false)
+        -> EnhancedFuture<std::invoke_result_t<Function, Args...>>;
 
     /**
      * @brief Schedules a task to be executed repeatedly at a specified
@@ -117,48 +134,54 @@ public:
      * -1 for infinite repetition.
      * @param priority The priority of the task.
      * @param args The arguments to be passed to the function.
+     * @throws std::invalid_argument If func is null, interval is 0, or
+     * repeatCount is < -1
      */
     template <typename Function, typename... Args>
+        requires Invocable<Function, Args...>
     void setInterval(Function &&func, unsigned int interval, int repeatCount,
-                     int priority, Args &&...args);
+                     int priority, Args &&...args) noexcept(false);
 
-    [[nodiscard]] auto now() const -> std::chrono::steady_clock::time_point;
+    [[nodiscard]] auto now() const noexcept
+        -> std::chrono::steady_clock::time_point;
 
     /**
      * @brief Cancels all scheduled tasks.
      */
-    void cancelAllTasks();
+    void cancelAllTasks() noexcept;
 
     /**
      * @brief Pauses the execution of scheduled tasks.
      */
-    void pause();
+    void pause() noexcept;
 
     /**
      * @brief Resumes the execution of scheduled tasks after pausing.
      */
-    void resume();
+    void resume() noexcept;
 
     /**
      * @brief Stops the timer and cancels all tasks.
      */
-    void stop();
+    void stop() noexcept;
 
     /**
      * @brief Blocks the calling thread until all tasks are completed.
      */
-    void wait();
+    void wait() noexcept;
 
     /**
      * @brief Sets a callback function to be called when a task is executed.
      *
      * @tparam Function The type of the callback function.
      * @param func The callback function to be set.
+     * @throws std::invalid_argument If the function is null
      */
     template <typename Function>
-    void setCallback(Function &&func);
+        requires Invocable<Function>
+    void setCallback(Function &&func) noexcept(false);
 
-    [[nodiscard]] auto getTaskCount() const -> size_t;
+    [[nodiscard]] auto getTaskCount() const noexcept -> size_t;
 
 private:
     /**
@@ -173,23 +196,30 @@ private:
      * @param args The arguments to be passed to the function.
      * @return An EnhancedFuture representing the result of the function
      * execution.
+     * @throws std::invalid_argument If func is null or parameters are invalid
      */
     template <typename Function, typename... Args>
+        requires Invocable<Function, Args...>
     auto addTask(Function &&func, unsigned int delay, int repeatCount,
-                 int priority, Args &&...args)
-        -> EnhancedFuture<typename std::result_of<Function(Args...)>::type>;
+                 int priority, Args &&...args) noexcept(false)
+        -> EnhancedFuture<std::invoke_result_t<Function, Args...>>;
 
     /**
      * @brief Main execution loop for processing and running tasks.
      */
-    void run();
+    void run() noexcept;
 
-#if _cplusplus >= 202203L
-    std::jthread
-        m_thread;  ///< The thread for running the timer loop (C++20 or later).
-#else
-    std::thread m_thread;  ///< The thread for running the timer loop.
-#endif
+    /**
+     * @brief Validates task parameters
+     *
+     * @param delay The delay value to validate
+     * @param repeatCount The repeat count to validate
+     * @throws std::invalid_argument If parameters are invalid
+     */
+    static void validateTaskParams(unsigned int delay,
+                                   int repeatCount) noexcept(false);
+
+    std::jthread m_thread;  ///< The thread for running the timer loop (C++20)
     std::priority_queue<TimerTask>
         m_taskQueue;             ///< The priority queue for scheduled tasks.
     mutable std::mutex m_mutex;  ///< Mutex for thread synchronization.
@@ -197,48 +227,91 @@ private:
         m_cond;  ///< Condition variable for thread synchronization.
     std::function<void()> m_callback;  ///< The callback function to be called
                                        ///< when a task is executed.
-    bool m_stop;    ///< Flag indicating whether the timer should stop.
-    bool m_paused;  ///< Flag indicating whether the timer is paused.
+    std::atomic<bool> m_stop{
+        false};  ///< Flag indicating whether the timer should stop.
+    std::atomic<bool> m_paused{
+        false};  ///< Flag indicating whether the timer is paused.
 };
 
 template <typename Function, typename... Args>
-auto Timer::setTimeout(Function &&func, unsigned int delay, Args &&...args)
-    -> EnhancedFuture<typename std::result_of<Function(Args...)>::type> {
-    using ReturnType = typename std::result_of<Function(Args...)>::type;
+    requires Invocable<Function, Args...>
+auto Timer::setTimeout(Function &&func, unsigned int delay,
+                       Args &&...args) noexcept(false)
+    -> EnhancedFuture<std::invoke_result_t<Function, Args...>> {
+    if (!func) {
+        throw std::invalid_argument(
+            "Timer::setTimeout: Function cannot be null");
+    }
+    validateTaskParams(delay, 1);
+
+    using ReturnType = std::invoke_result_t<Function, Args...>;
     auto task = std::make_shared<std::packaged_task<ReturnType()>>(
         std::bind(std::forward<Function>(func), std::forward<Args>(args)...));
     std::future<ReturnType> result = task->get_future();
-    std::unique_lock lock(m_mutex);
-    m_taskQueue.emplace([task]() { (*task)(); }, delay, 1, 0);
+
+    {
+        std::scoped_lock lock(m_mutex);
+        m_taskQueue.emplace([task]() { (*task)(); }, delay, 1, 0);
+    }
+
     m_cond.notify_all();
     return EnhancedFuture<ReturnType>(std::move(result).share());
 }
 
 template <typename Function, typename... Args>
+    requires Invocable<Function, Args...>
 void Timer::setInterval(Function &&func, unsigned int interval, int repeatCount,
-                        int priority, Args &&...args) {
+                        int priority, Args &&...args) noexcept(false) {
+    if (!func) {
+        throw std::invalid_argument(
+            "Timer::setInterval: Function cannot be null");
+    }
+    if (interval == 0) {
+        throw std::invalid_argument(
+            "Timer::setInterval: Interval must be greater than 0");
+    }
+    validateTaskParams(interval, repeatCount);
+
     addTask(std::forward<Function>(func), interval, repeatCount, priority,
             std::forward<Args>(args)...);
 }
 
 template <typename Function, typename... Args>
+    requires Invocable<Function, Args...>
 auto Timer::addTask(Function &&func, unsigned int delay, int repeatCount,
-                    int priority, Args &&...args)
-    -> EnhancedFuture<typename std::result_of<Function(Args...)>::type> {
-    using ReturnType = typename std::result_of<Function(Args...)>::type;
+                    int priority, Args &&...args) noexcept(false)
+    -> EnhancedFuture<std::invoke_result_t<Function, Args...>> {
+    if (!func) {
+        throw std::invalid_argument("Timer::addTask: Function cannot be null");
+    }
+    validateTaskParams(delay, repeatCount);
+
+    using ReturnType = std::invoke_result_t<Function, Args...>;
     auto task = std::make_shared<std::packaged_task<ReturnType()>>(
         std::bind(std::forward<Function>(func), std::forward<Args>(args)...));
     std::future<ReturnType> result = task->get_future();
-    std::unique_lock lock(m_mutex);
-    m_taskQueue.emplace([task]() { (*task)(); }, delay, repeatCount, priority);
+
+    {
+        std::scoped_lock lock(m_mutex);
+        m_taskQueue.emplace([task]() { (*task)(); }, delay, repeatCount,
+                            priority);
+    }
+
     m_cond.notify_all();
     return EnhancedFuture<ReturnType>(std::move(result).share());
 }
 
 template <typename Function>
-void Timer::setCallback(Function &&func) {
+    requires Invocable<Function>
+void Timer::setCallback(Function &&func) noexcept(false) {
+    if (!func) {
+        throw std::invalid_argument(
+            "Timer::setCallback: Callback function cannot be null");
+    }
+    std::scoped_lock lock(m_mutex);
     m_callback = std::forward<Function>(func);
 }
+
 }  // namespace atom::async
 
 #endif

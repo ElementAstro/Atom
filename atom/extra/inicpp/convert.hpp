@@ -1,6 +1,8 @@
 #ifndef ATOM_EXTRA_INICPP_CONVERT_HPP
 #define ATOM_EXTRA_INICPP_CONVERT_HPP
 
+#include <cmath>
+#include <iomanip>
 #include <stdexcept>
 #include <string>
 #include "common.hpp"
@@ -23,20 +25,23 @@ struct Convert<bool> {
      * @brief Decodes a string view to a bool.
      * @param value The string view to decode.
      * @param result The resulting bool.
-     * @throws std::invalid_argument if the string is not "TRUE" or "FALSE".
+     * @throws std::invalid_argument if the string is not a valid boolean
+     * representation.
      */
-    void decode(std::string_view value, bool &result) {
+    void decode(std::string_view value, bool &result) const {
         std::string str(value);
         std::ranges::transform(str, str.begin(), [](char c) {
             return static_cast<char>(::toupper(c));
         });
 
-        if (str == "TRUE")
+        if (str == "TRUE" || str == "YES" || str == "1" || str == "ON") {
             result = true;
-        else if (str == "FALSE")
+        } else if (str == "FALSE" || str == "NO" || str == "0" ||
+                   str == "OFF") {
             result = false;
-        else
-            throw std::invalid_argument("field is not a bool");
+        } else {
+            throw std::invalid_argument("Field is not a valid boolean value");
+        }
     }
 
     /**
@@ -44,7 +49,7 @@ struct Convert<bool> {
      * @param value The bool to encode.
      * @param result The resulting string.
      */
-    void encode(const bool value, std::string &result) {
+    void encode(const bool value, std::string &result) const noexcept {
         result = value ? "true" : "false";
     }
 };
@@ -60,9 +65,10 @@ struct Convert<char> {
      * @param result The resulting char.
      * @throws std::invalid_argument if the string is empty.
      */
-    void decode(std::string_view value, char &result) {
+    void decode(std::string_view value, char &result) const {
         if (value.empty())
-            throw std::invalid_argument("field is empty");
+            throw std::invalid_argument(
+                "Field is empty, cannot convert to char");
         result = value.front();
     }
 
@@ -71,7 +77,9 @@ struct Convert<char> {
      * @param value The char to encode.
      * @param result The resulting string.
      */
-    void encode(const char value, std::string &result) { result = value; }
+    void encode(const char value, std::string &result) const noexcept {
+        result = value;
+    }
 };
 
 /**
@@ -85,7 +93,7 @@ struct Convert<unsigned char> {
      * @param result The resulting unsigned char.
      * @throws std::invalid_argument if the string is empty.
      */
-    void decode(std::string_view value, unsigned char &result) {
+    void decode(std::string_view value, unsigned char &result) const {
         if (value.empty())
             throw std::invalid_argument("field is empty");
         result = value.front();
@@ -96,230 +104,116 @@ struct Convert<unsigned char> {
      * @param value The unsigned char to encode.
      * @param result The resulting string.
      */
-    void encode(const unsigned char value, std::string &result) {
+    void encode(const unsigned char value, std::string &result) const noexcept {
         result = value;
     }
 };
 
 /**
- * @brief Specialization of Convert for short type.
+ * @brief Specialization of Convert for integral types using a concept.
  */
-template <>
-struct Convert<short> {
+template <std::integral T>
+    requires(!std::is_same_v<T, bool> && !std::is_same_v<T, char> &&
+             !std::is_same_v<T, unsigned char>)
+struct Convert<T> {
     /**
-     * @brief Decodes a string view to a short.
+     * @brief Decodes a string view to an integral type.
      * @param value The string view to decode.
-     * @param result The resulting short.
-     * @throws std::invalid_argument if the string cannot be converted to a
-     * short.
+     * @param result The resulting integral value.
+     * @throws std::invalid_argument if the string cannot be converted.
      */
-    void decode(std::string_view value, short &result) {
-        if (auto tmp = strToLong(value); tmp.has_value())
-            result = static_cast<short>(tmp.value());
-        else
-            throw std::invalid_argument("field is not a short");
+    void decode(std::string_view value, T &result) const {
+        try {
+            if constexpr (std::is_signed_v<T>) {
+                if (auto tmp = strToLong(value); tmp.has_value()) {
+                    if (tmp.value() < std::numeric_limits<T>::min() ||
+                        tmp.value() > std::numeric_limits<T>::max()) {
+                        throw std::out_of_range(
+                            "Value out of range for the specified integral "
+                            "type");
+                    }
+                    result = static_cast<T>(tmp.value());
+                } else {
+                    throw std::invalid_argument(
+                        "Cannot convert to integral type");
+                }
+            } else {
+                if (auto tmp = strToULong(value); tmp.has_value()) {
+                    if (tmp.value() > std::numeric_limits<T>::max()) {
+                        throw std::out_of_range(
+                            "Value out of range for the specified integral "
+                            "type");
+                    }
+                    result = static_cast<T>(tmp.value());
+                } else {
+                    throw std::invalid_argument(
+                        "Cannot convert to integral type");
+                }
+            }
+        } catch (const std::exception &e) {
+            throw std::invalid_argument(
+                std::string("Failed to convert value: ") + e.what());
+        }
     }
 
     /**
-     * @brief Encodes a short to a string.
-     * @param value The short to encode.
+     * @brief Encodes an integral value to a string.
+     * @param value The integral value to encode.
      * @param result The resulting string.
      */
-    void encode(const short value, std::string &result) {
+    void encode(const T value, std::string &result) const noexcept {
         result = std::to_string(value);
     }
 };
 
 /**
- * @brief Specialization of Convert for unsigned short type.
+ * @brief Specialization of Convert for floating point types.
  */
-template <>
-struct Convert<unsigned short> {
+template <std::floating_point T>
+struct Convert<T> {
     /**
-     * @brief Decodes a string view to an unsigned short.
+     * @brief Decodes a string view to a floating point type.
      * @param value The string view to decode.
-     * @param result The resulting unsigned short.
-     * @throws std::invalid_argument if the string cannot be converted to an
-     * unsigned short.
+     * @param result The resulting floating point value.
+     * @throws std::invalid_argument if the string cannot be converted.
      */
-    void decode(std::string_view value, unsigned short &result) {
-        if (auto tmp = strToULong(value); tmp.has_value())
-            result = static_cast<unsigned short>(tmp.value());
-        else
-            throw std::invalid_argument("field is not an unsigned short");
+    void decode(std::string_view value, T &result) const {
+        try {
+            std::string str(value);
+            result = static_cast<T>(std::stod(str));
+
+            // Validate for infinity/NaN results
+            if (!std::isfinite(result)) {
+                throw std::out_of_range(
+                    "Conversion resulted in non-finite value");
+            }
+        } catch (const std::exception &e) {
+            throw std::invalid_argument(
+                std::string("Failed to convert to floating point: ") +
+                e.what());
+        }
     }
 
     /**
-     * @brief Encodes an unsigned short to a string.
-     * @param value The unsigned short to encode.
+     * @brief Encodes a floating point value to a string.
+     * @param value The floating point value to encode.
      * @param result The resulting string.
      */
-    void encode(const unsigned short value, std::string &result) {
-        result = std::to_string(value);
-    }
-};
+    void encode(const T value, std::string &result) const {
+        // Handle special cases to ensure consistency
+        if (std::isnan(value)) {
+            result = "nan";
+            return;
+        }
+        if (std::isinf(value)) {
+            result = value > 0 ? "inf" : "-inf";
+            return;
+        }
 
-/**
- * @brief Specialization of Convert for int type.
- */
-template <>
-struct Convert<int> {
-    /**
-     * @brief Decodes a string view to an int.
-     * @param value The string view to decode.
-     * @param result The resulting int.
-     * @throws std::invalid_argument if the string cannot be converted to an
-     * int.
-     */
-    void decode(std::string_view value, int &result) {
-        if (auto tmp = strToLong(value); tmp.has_value())
-            result = static_cast<int>(tmp.value());
-        else
-            throw std::invalid_argument("field is not an int");
-    }
-
-    /**
-     * @brief Encodes an int to a string.
-     * @param value The int to encode.
-     * @param result The resulting string.
-     */
-    void encode(const int value, std::string &result) {
-        result = std::to_string(value);
-    }
-};
-
-/**
- * @brief Specialization of Convert for unsigned int type.
- */
-template <>
-struct Convert<unsigned int> {
-    /**
-     * @brief Decodes a string view to an unsigned int.
-     * @param value The string view to decode.
-     * @param result The resulting unsigned int.
-     * @throws std::invalid_argument if the string cannot be converted to an
-     * unsigned int.
-     */
-    void decode(std::string_view value, unsigned int &result) {
-        if (auto tmp = strToULong(value); tmp.has_value())
-            result = static_cast<unsigned int>(tmp.value());
-        else
-            throw std::invalid_argument("field is not an unsigned int");
-    }
-
-    /**
-     * @brief Encodes an unsigned int to a string.
-     * @param value The unsigned int to encode.
-     * @param result The resulting string.
-     */
-    void encode(const unsigned int value, std::string &result) {
-        result = std::to_string(value);
-    }
-};
-
-/**
- * @brief Specialization of Convert for long type.
- */
-template <>
-struct Convert<long> {
-    /**
-     * @brief Decodes a string view to a long.
-     * @param value The string view to decode.
-     * @param result The resulting long.
-     * @throws std::invalid_argument if the string cannot be converted to a
-     * long.
-     */
-    void decode(std::string_view value, long &result) {
-        if (auto tmp = strToLong(value); tmp.has_value())
-            result = tmp.value();
-        else
-            throw std::invalid_argument("field is not a long");
-    }
-
-    /**
-     * @brief Encodes a long to a string.
-     * @param value The long to encode.
-     * @param result The resulting string.
-     */
-    void encode(const long value, std::string &result) {
-        result = std::to_string(value);
-    }
-};
-
-/**
- * @brief Specialization of Convert for unsigned long type.
- */
-template <>
-struct Convert<unsigned long> {
-    /**
-     * @brief Decodes a string view to an unsigned long.
-     * @param value The string view to decode.
-     * @param result The resulting unsigned long.
-     * @throws std::invalid_argument if the string cannot be converted to an
-     * unsigned long.
-     */
-    void decode(std::string_view value, unsigned long &result) {
-        if (auto tmp = strToULong(value); tmp.has_value())
-            result = tmp.value();
-        else
-            throw std::invalid_argument("field is not an unsigned long");
-    }
-
-    /**
-     * @brief Encodes an unsigned long to a string.
-     * @param value The unsigned long to encode.
-     * @param result The resulting string.
-     */
-    void encode(const unsigned long value, std::string &result) {
-        result = std::to_string(value);
-    }
-};
-
-/**
- * @brief Specialization of Convert for double type.
- */
-template <>
-struct Convert<double> {
-    /**
-     * @brief Decodes a string view to a double.
-     * @param value The string view to decode.
-     * @param result The resulting double.
-     */
-    void decode(std::string_view value, double &result) {
-        result = std::stod(std::string(value));
-    }
-
-    /**
-     * @brief Encodes a double to a string.
-     * @param value The double to encode.
-     * @param result The resulting string.
-     */
-    void encode(const double value, std::string &result) {
-        result = std::to_string(value);
-    }
-};
-
-/**
- * @brief Specialization of Convert for float type.
- */
-template <>
-struct Convert<float> {
-    /**
-     * @brief Decodes a string view to a float.
-     * @param value The string view to decode.
-     * @param result The resulting float.
-     */
-    void decode(std::string_view value, float &result) {
-        result = std::stof(std::string(value));
-    }
-
-    /**
-     * @brief Encodes a float to a string.
-     * @param value The float to encode.
-     * @param result The resulting string.
-     */
-    void encode(const float value, std::string &result) {
-        result = std::to_string(value);
+        // Use precision-controlled conversion for better output
+        std::ostringstream ss;
+        ss << std::setprecision(std::numeric_limits<T>::max_digits10) << value;
+        result = ss.str();
     }
 };
 
@@ -333,14 +227,16 @@ struct Convert<std::string> {
      * @param value The string view to decode.
      * @param result The resulting std::string.
      */
-    void decode(std::string_view value, std::string &result) { result = value; }
+    void decode(std::string_view value, std::string &result) const noexcept {
+        result = value;
+    }
 
     /**
      * @brief Encodes a std::string to a string.
      * @param value The std::string to encode.
      * @param result The resulting string.
      */
-    void encode(const std::string &value, std::string &result) {
+    void encode(const std::string &value, std::string &result) const noexcept {
         result = value;
     }
 };
@@ -356,7 +252,8 @@ struct Convert<std::string_view> {
      * @param value The string view to decode.
      * @param result The resulting std::string_view.
      */
-    void decode(std::string_view value, std::string_view &result) {
+    void decode(std::string_view value,
+                std::string_view &result) const noexcept {
         result = value;
     }
 
@@ -365,7 +262,9 @@ struct Convert<std::string_view> {
      * @param value The std::string_view to encode.
      * @param result The resulting string.
      */
-    void encode(std::string_view value, std::string &result) { result = value; }
+    void encode(std::string_view value, std::string &result) const noexcept {
+        result = value;
+    }
 };
 #endif
 
@@ -379,7 +278,7 @@ struct Convert<const char *> {
      * @param value The const char* to encode.
      * @param result The resulting string.
      */
-    void encode(const char *const &value, std::string &result) {
+    void encode(const char *const &value, std::string &result) const noexcept {
         result = value;
     }
 
@@ -388,7 +287,7 @@ struct Convert<const char *> {
      * @param value The string view to decode.
      * @param result The resulting const char*.
      */
-    void decode(std::string_view value, const char *&result) {
+    void decode(std::string_view value, const char *&result) const noexcept {
         result = value.data();
     }
 };
@@ -406,7 +305,7 @@ struct Convert<char[N]> {
      * @throws std::invalid_argument if the string is too large for the char
      * array.
      */
-    void decode(const std::string &value, char (&result)[N]) {
+    void decode(const std::string &value, char (&result)[N]) const {
         if (value.size() >= N)
             throw std::invalid_argument(
                 "field value is too large for the char array");
@@ -419,7 +318,9 @@ struct Convert<char[N]> {
      * @param value The char array to encode.
      * @param result The resulting string.
      */
-    void encode(const char (&value)[N], std::string &result) { result = value; }
+    void encode(const char (&value)[N], std::string &result) const noexcept {
+        result = value;
+    }
 };
 
 }  // namespace inicpp

@@ -15,13 +15,20 @@ Description: A collection of algorithms for C++
 #ifndef ATOM_ALGORITHM_BASE16_HPP
 #define ATOM_ALGORITHM_BASE16_HPP
 
+#include <concepts>
 #include <cstdint>
+#include <ranges>
+#include <span>
 #include <string>
 #include <vector>
 
+#include "atom/type/expected.hpp"
 #include "atom/type/static_string.hpp"
 
 namespace atom::algorithm {
+
+using Error = std::string;
+
 namespace detail {
 /**
  * @brief Base64 character set.
@@ -104,83 +111,111 @@ constexpr auto convertNumber(char const num) {
                        : '/';
 }
 
+constexpr bool isValidBase64Char(char c) noexcept {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+           (c >= '0' && c <= '9') || c == '+' || c == '/' || c == '=';
+}
+
+// 使用concept约束输入类型
+template <typename T>
+concept ByteContainer =
+    std::ranges::contiguous_range<T> && requires(T container) {
+        { container.data() } -> std::convertible_to<const std::byte*>;
+        { container.size() } -> std::convertible_to<std::size_t>;
+    };
+
 }  // namespace detail
 
 /**
- * @brief Encodes a vector of bytes into a Base32 string.
+ * @brief Encodes a byte container into a Base32 string.
  *
- * @param data The input data to encode.
- * @return A Base32 encoded string.
+ * @tparam T Container type that satisfies ByteContainer concept
+ * @param data The input data to encode
+ * @return atom::type::expected<std::string> Encoded string or error
  */
-auto encodeBase32(const std::vector<uint8_t>& data) -> std::string;
+template <detail::ByteContainer T>
+[[nodiscard]] auto encodeBase32(const T& data) noexcept
+    -> atom::type::expected<std::string>;
 
 /**
- * @brief Decodes a Base32 encoded string back into a vector of bytes.
- *
- * @param encoded The Base32 encoded string.
- * @return A vector of decoded bytes.
+ * @brief Specialized Base32 encoder for vector<uint8_t>
+ * @param data The input data to encode
+ * @return atom::type::expected<std::string> Encoded string or error
  */
-auto decodeBase32(const std::string& encoded) -> std::vector<uint8_t>;
+[[nodiscard]] auto encodeBase32(std::span<const uint8_t> data) noexcept
+    -> atom::type::expected<std::string>;
+
+/**
+ * @brief Decodes a Base32 encoded string back into bytes.
+ *
+ * @param encoded The Base32 encoded string
+ * @return atom::type::expected<std::vector<uint8_t>> Decoded bytes or error
+ */
+[[nodiscard]] auto decodeBase32(std::string_view encoded) noexcept
+    -> atom::type::expected<std::vector<uint8_t>>;
 
 /**
  * @brief Encodes a string into a Base64 encoded string.
  *
- * This function converts the input string into its Base64 representation.
- *
- * @param input The input string to encode.
- * @return A Base64 encoded string.
+ * @param input The input string to encode
+ * @param padding Whether to add padding characters (=) to the output
+ * @return atom::type::expected<std::string> Encoded string or error
  */
-[[nodiscard("The result of base64Encode is not used.")]] auto base64Encode(
-    std::string_view input) -> std::string;
+[[nodiscard]] auto base64Encode(std::string_view input,
+                                bool padding = true) noexcept
+    -> atom::type::expected<std::string>;
 
 /**
- * @brief Decodes a Base64 encoded string back into its original string.
+ * @brief Decodes a Base64 encoded string back into its original form.
  *
- * This function converts the Base64 encoded input string back to its original
- * form.
- *
- * @param input The Base64 encoded string to decode.
- * @return The decoded original string.
+ * @param input The Base64 encoded string to decode
+ * @return atom::type::expected<std::string> Decoded string or error
  */
-[[nodiscard("The result of base64Decode is not used.")]] auto base64Decode(
-    std::string_view input) -> std::string;
+[[nodiscard]] auto base64Decode(std::string_view input) noexcept
+    -> atom::type::expected<std::string>;
 
 /**
  * @brief Encrypts a string using the XOR algorithm.
  *
- * This function applies an XOR operation on each character of the input string
- * with the provided key.
- *
- * @param plaintext The input string to encrypt.
- * @param key The encryption key.
- * @return The encrypted string.
+ * @param plaintext The input string to encrypt
+ * @param key The encryption key
+ * @return std::string The encrypted string
  */
-[[nodiscard("The result of xorEncrypt is not used.")]] auto xorEncrypt(
-    std::string_view plaintext, uint8_t key) -> std::string;
+[[nodiscard]] auto xorEncrypt(std::string_view plaintext,
+                              uint8_t key) noexcept -> std::string;
 
 /**
  * @brief Decrypts a string using the XOR algorithm.
  *
- * This function reverses the XOR encryption on the input string using the
- * provided key.
- *
- * @param ciphertext The encrypted string to decrypt.
- * @param key The decryption key.
- * @return The decrypted string.
+ * @param ciphertext The encrypted string to decrypt
+ * @param key The decryption key
+ * @return std::string The decrypted string
  */
-[[nodiscard("The result of xorDecrypt is not used.")]] auto xorDecrypt(
-    std::string_view ciphertext, uint8_t key) -> std::string;
+[[nodiscard]] auto xorDecrypt(std::string_view ciphertext,
+                              uint8_t key) noexcept -> std::string;
 
 /**
  * @brief Decodes a compile-time constant Base64 string.
  *
- * This template function decodes a Base64 encoded string known at compile time.
- *
- * @tparam string A StaticString representing the Base64 encoded string.
- * @return A StaticString containing the decoded bytes.
+ * @tparam string A StaticString representing the Base64 encoded string
+ * @return StaticString containing the decoded bytes or empty if invalid
  */
 template <StaticString string>
-constexpr auto decode() {
+consteval auto decodeBase64() {
+    // 验证输入是否为有效的Base64
+    constexpr bool valid = [&]() {
+        for (size_t i = 0; i < string.size(); ++i) {
+            if (!detail::isValidBase64Char(string[i])) {
+                return false;
+            }
+        }
+        return string.size() % 4 == 0;
+    }();
+
+    if constexpr (!valid) {
+        return StaticString<0>{};
+    }
+
     constexpr auto STRING_SIZE = string.size();
     constexpr auto PADDING_POS = std::ranges::find(string.buf, '=');
     constexpr auto DECODED_SIZE = ((PADDING_POS - string.buf.data()) * 3) / 4;
@@ -196,7 +231,9 @@ constexpr auto decode() {
             static_cast<char>(detail::convertChar(string[i + 2]) << 6 |
                               detail::convertChar(string[i + 3]))};
         result[j] = bytes[0];
-        result[j + 1] = bytes[1];
+        if (string[i + 2] != '=') {
+            result[j + 1] = bytes[1];
+        }
         if (string[i + 3] != '=') {
             result[j + 2] = bytes[2];
         }
@@ -244,8 +281,17 @@ constexpr auto encode() {
  * @return true If the string is a valid Base64 encoded string.
  * @return false Otherwise.
  */
-[[nodiscard("The result of isBase64 is not used.")]] auto isBase64(
-    const std::string& str) -> bool;
+[[nodiscard]] auto isBase64(std::string_view str) noexcept -> bool;
+
+/**
+ * @brief 基于指定线程数的并行算法执行器
+ *
+ * @param data 要处理的数据
+ * @param threadCount 线程数量（0表示使用硬件支持的线程数）
+ * @param func 每个线程执行的函数
+ */
+template <typename T, std::invocable<std::span<T>> Func>
+void parallelExecute(std::span<T> data, size_t threadCount, Func func) noexcept;
 
 }  // namespace atom::algorithm
 

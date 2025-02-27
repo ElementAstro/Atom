@@ -143,12 +143,6 @@ auto ExifParser::parseIFD(const std::byte* data, bool isLittleEndian,
             case 0x920A:
                 m_exifData.focalLength = value;
                 break;
-            case 0x0002:
-                m_exifData.gpsLatitude = value;
-                break;
-            case 0x0004:
-                m_exifData.gpsLongitude = value;
-                break;
             default:
                 break;
         }
@@ -185,7 +179,7 @@ auto ExifParser::parse() -> bool {
         }
 
         if (buffer[pos] == std::byte{0xFF}) {
-            uint8_t marker = std::to_integer<uint8_t>(buffer[pos + 1]);
+            uint16_t marker = readUint16Be(&buffer[pos]);
             uint16_t segmentLength = readUint16Be(&buffer[pos + 2]);
 
             if (pos + 2 + segmentLength > buffer.size()) {
