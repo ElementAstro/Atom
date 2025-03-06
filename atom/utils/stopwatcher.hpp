@@ -1,8 +1,10 @@
 #ifndef ATOM_UTILS_STOPWATCHER_HPP
 #define ATOM_UTILS_STOPWATCHER_HPP
 
+#include <concepts>
 #include <functional>
 #include <memory>
+#include <span>
 #include <string>
 
 namespace atom::utils {
@@ -16,6 +18,11 @@ enum class StopWatcherState {
     Paused,   ///< Timer is paused, can be resumed
     Stopped   ///< Timer is stopped, must be reset before starting again
 };
+
+// Concept for valid callback functions
+template <typename T>
+concept ValidCallback =
+    std::invocable<T> && std::same_as<std::invoke_result_t<T>, void>;
 
 /**
  * @brief A high-precision stopwatch class for timing operations
@@ -74,22 +81,25 @@ public:
     /**
      * @brief Stops the stopwatch
      * @note Thread-safe
+     * @return bool True if successfully stopped, false if already stopped
      */
-    void stop();
+    [[nodiscard]] bool stop();
 
     /**
      * @brief Pauses the stopwatch without resetting
      * @throws std::runtime_error if the stopwatch is not running
      * @note Thread-safe
+     * @return bool True if successfully paused, false if not running
      */
-    void pause();
+    [[nodiscard]] bool pause();
 
     /**
      * @brief Resumes the stopwatch from paused state
      * @throws std::runtime_error if the stopwatch is not paused
      * @note Thread-safe
+     * @return bool True if successfully resumed, false if not paused
      */
-    void resume();
+    [[nodiscard]] bool resume();
 
     /**
      * @brief Resets the stopwatch to initial state
@@ -131,7 +141,7 @@ public:
      * @return std::vector<double> Vector of lap times in milliseconds
      * @note Thread-safe
      */
-    [[nodiscard]] auto getLapTimes() const -> std::vector<double>;
+    [[nodiscard]] auto getLapTimes() const -> std::span<const double>;
 
     /**
      * @brief Gets the average of all recorded lap times
@@ -141,6 +151,13 @@ public:
     [[nodiscard]] auto getAverageLapTime() const -> double;
 
     /**
+     * @brief Gets the total number of laps recorded
+     * @return size_t Number of laps
+     * @note Thread-safe
+     */
+    [[nodiscard]] auto getLapCount() const -> size_t;
+
+    /**
      * @brief Registers a callback to be called after specified time
      * @param callback Function to be called
      * @param milliseconds Time in milliseconds after which callback should
@@ -148,18 +165,32 @@ public:
      * @throws std::invalid_argument if milliseconds is negative
      * @note Thread-safe
      */
-    void registerCallback(std::function<void()> callback, int milliseconds);
+    template <ValidCallback CallbackType>
+    void registerCallback(CallbackType&& callback, int milliseconds) {
+        registerCallbackImpl(std::forward<CallbackType>(callback),
+                             milliseconds);
+    }
 
     /**
      * @brief Records current time as a lap time
      * @throws std::runtime_error if stopwatch is not running
      * @note Thread-safe
+     * @return double The recorded lap time in milliseconds
      */
-    void lap();
+    [[nodiscard]] auto lap() -> double;
+
+    /**
+     * @brief Checks if the stopwatch is running
+     * @return bool True if running, false otherwise
+     * @note Thread-safe
+     */
+    [[nodiscard]] bool isRunning() const;
 
 private:
     class Impl;
-    std::unique_ptr<Impl> impl_;  ///< Implementation pointer (iMPL_ idiom)
+    std::unique_ptr<Impl> impl_;  ///< Implementation pointer (PIMPL idiom)
+
+    void registerCallbackImpl(std::function<void()> callback, int milliseconds);
 };
 
 }  // namespace atom::utils

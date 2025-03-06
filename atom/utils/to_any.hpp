@@ -3,10 +3,13 @@
 
 #include <any>
 #include <atomic>
+#include <concepts>
 #include <functional>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "atom/error/exception.hpp"
@@ -17,32 +20,42 @@ public:
     using atom::error::RuntimeError::RuntimeError;
 };
 
-#define THROW_PAESER_ERROR(...)                                           \
+#define THROW_PARSER_ERROR(...)                                           \
     throw ParserException(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, \
                           __VA_ARGS__)
 
-#define THROW_NESTED_PAESER_ERROR(...)                             \
+#define THROW_NESTED_PARSER_ERROR(...)                             \
     ParserException::rethrowNested(ATOM_FILE_NAME, ATOM_FILE_LINE, \
                                    ATOM_FUNC_NAME, __VA_ARGS__)
 
+// Numeric concept for type constraints
+template <typename T>
+concept Numeric = std::integral<T> || std::floating_point<T>;
+
+// String-like concept
+template <typename T>
+concept StringLike = std::convertible_to<T, std::string_view>;
+
 /**
  * @class Parser
- * @brief A class that provides various parsing functionalities.
+ * @brief A class that provides various parsing functionalities with C++20
+ * features.
  *
  * The Parser class offers methods to parse literals, JSON, CSV, and custom
- * types. It also allows registering custom parsers and provides utility
- * functions for printing and logging parsed values.
+ * types with enhanced type safety using concepts. It also allows registering
+ * custom parsers and provides utility functions for printing and logging parsed
+ * values.
  */
 class Parser {
 public:
     /**
      * @brief Type alias for a custom parser function.
      *
-     * A custom parser function takes a string as input and returns an optional
-     * std::any.
+     * A custom parser function takes a string_view as input and returns an
+     * optional std::any for efficiency.
      */
     using CustomParserFunc =
-        std::function<std::optional<std::any>(const std::string&)>;
+        std::function<std::optional<std::any>(std::string_view)>;
 
     /**
      * @brief Constructs a new Parser object.
@@ -59,8 +72,10 @@ public:
      *
      * @param input The input string to parse.
      * @return An optional std::any containing the parsed value.
+     * @throws ParserException if the parser is already processing or input is
+     * invalid.
      */
-    auto parseLiteral(const std::string& input) -> std::optional<std::any>;
+    auto parseLiteral(std::string_view input) -> std::optional<std::any>;
 
     /**
      * @brief Parses a literal string into an std::any type with a default
@@ -69,8 +84,9 @@ public:
      * @param input The input string to parse.
      * @param defaultValue The default value to return if parsing fails.
      * @return The parsed value or the default value if parsing fails.
+     * @throws ParserException if the parser is already processing.
      */
-    auto parseLiteralWithDefault(const std::string& input,
+    auto parseLiteralWithDefault(std::string_view input,
                                  const std::any& defaultValue) -> std::any;
 
     /**
@@ -86,24 +102,28 @@ public:
      * @param input The input string that was parsed.
      * @param result The result of the parsing.
      */
-    void logParsing(const std::string& input, const std::any& result) const;
+    void logParsing(std::string_view input, const std::any& result) const;
 
     /**
-     * @brief Converts a vector of strings to a vector of std::any types.
+     * @brief Converts a range of strings to a vector of std::any types.
      *
-     * @param input The vector of strings to convert.
+     * @tparam Range Type that satisfies std::ranges::input_range
+     * @param input The range of strings to convert.
      * @return A vector of std::any containing the converted values.
      */
-    auto convertToAnyVector(const std::vector<std::string>& input)
-        -> std::vector<std::any>;
+    template <std::ranges::input_range Range>
+        requires std::convertible_to<std::ranges::range_value_t<Range>,
+                                     std::string_view>
+    auto convertToAnyVector(const Range& input) -> std::vector<std::any>;
 
     /**
      * @brief Registers a custom parser for a specific type.
      *
      * @param type The type for which the custom parser is registered.
      * @param parser The custom parser function.
+     * @throws ParserException if the type is empty or parser is null.
      */
-    void registerCustomParser(const std::string& type, CustomParserFunc parser);
+    void registerCustomParser(std::string_view type, CustomParserFunc parser);
 
     /**
      * @brief Prints the registered custom parsers.
@@ -114,16 +134,27 @@ public:
      * @brief Parses a JSON string.
      *
      * @param jsonString The JSON string to parse.
+     * @throws ParserException if JSON parsing fails.
      */
-    void parseJson(const std::string& jsonString) const;
+    void parseJson(std::string_view jsonString) const;
 
     /**
      * @brief Parses a CSV string.
      *
      * @param csvString The CSV string to parse.
      * @param delimiter The delimiter used in the CSV string. Default is ','.
+     * @throws ParserException if CSV parsing fails.
      */
-    void parseCsv(const std::string& csvString, char delimiter = ',') const;
+    void parseCsv(std::string_view csvString, char delimiter = ',') const;
+
+    /**
+     * @brief Performs parallel parsing of multiple inputs.
+     *
+     * @param inputs Vector of string inputs to parse in parallel.
+     * @return Vector of parsed values.
+     */
+    auto parseParallel(const std::vector<std::string>& inputs)
+        -> std::vector<std::any>;
 
 private:
     class Impl;  ///< Forward declaration of the implementation class.

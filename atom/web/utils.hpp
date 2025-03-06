@@ -15,6 +15,10 @@ Description: Network Utils
 #ifndef ATOM_WEB_UTILS_HPP
 #define ATOM_WEB_UTILS_HPP
 
+#include <concepts>
+#include <future>
+#include <memory>
+#include <optional>
 #include <string>
 
 #if defined(__linux__) || defined(__APPLE__)
@@ -23,6 +27,22 @@ Description: Network Utils
 #endif
 
 namespace atom::web {
+
+// C++20 concept to ensure a type is a valid port number
+template <typename T>
+concept PortNumber = std::integral<T> && requires(T port) {
+    { port >= 0 && port <= 65535 } -> std::same_as<bool>;
+};
+
+/**
+ * @brief Initialize networking subsystem (Windows-specific)
+ * 初始化网络子系统（Windows特定）
+ *
+ * @return true if initialization succeeded, false otherwise
+ * @throws std::runtime_error if initialization fails with a specific error
+ * message
+ */
+auto initializeWindowsSocketAPI() -> bool;
 
 /**
  * @brief Check if a port is in use.
@@ -43,8 +63,11 @@ namespace atom::web {
  *     std::cout << "Port 8080 is available." << std::endl;
  * }
  * @endcode
+ *
+ * @throws std::invalid_argument if port is outside valid range
+ * @throws std::runtime_error if socket operations fail
  */
-auto isPortInUse(int port) -> bool;
+auto isPortInUse(PortNumber auto port) -> bool;
 
 /**
  * @brief Check if there is any program running on the specified port and kill
@@ -65,8 +88,32 @@ auto isPortInUse(int port) -> bool;
  *     std::cout << "No program running on port 8080." << std::endl;
  * }
  * @endcode
+ *
+ * @throws std::invalid_argument if port is outside valid range
+ * @throws std::runtime_error if socket operations fail
+ * @throws std::system_error if process termination fails
  */
-auto checkAndKillProgramOnPort(int port) -> bool;
+auto checkAndKillProgramOnPort(PortNumber auto port) -> bool;
+
+/**
+ * @brief Get the process ID of the program running on a specific port
+ * 获取在特定端口上运行的程序的进程ID
+ *
+ * @param port The port number to check
+ * @return std::optional<int> The process ID if found, empty optional otherwise
+ * @throws std::invalid_argument if port is outside valid range
+ * @throws std::runtime_error if command execution fails
+ */
+auto getProcessIDOnPort(PortNumber auto port) -> std::optional<int>;
+
+/**
+ * @brief Asynchronously check if a port is in use
+ * 异步检查端口是否在使用中
+ *
+ * @param port The port number to check
+ * @return std::future<bool> Future result of the check
+ */
+auto isPortInUseAsync(PortNumber auto port) -> std::future<bool>;
 
 #if defined(__linux__) || defined(__APPLE__)
 /**
@@ -80,17 +127,21 @@ auto checkAndKillProgramOnPort(int port) -> bool;
  * @param src Source address information. 源地址信息。
  * @return `0` on success, `-1` on failure. 成功返回`0`，失败返回`-1`。
  *
+ * @throws std::invalid_argument if src is nullptr
+ * @throws std::runtime_error if memory allocation fails
+ *
  * @code
  * struct addrinfo* src = ...;
- * struct addrinfo* dst = nullptr;
- * if (atom::web::dumpAddrInfo(&dst, src) == 0) {
- *     std::cout << "Address information dumped successfully." << std::endl;
- * } else {
- *     std::cout << "Failed to dump address information." << std::endl;
+ * std::unique_ptr<struct addrinfo, decltype(&freeaddrinfo)> dst(nullptr,
+ * freeaddrinfo); if (atom::web::dumpAddrInfo(&dst, src) == 0) { std::cout <<
+ * "Address information dumped successfully." << std::endl; } else { std::cout
+ * << "Failed to dump address information." << std::endl;
  * }
  * @endcode
  */
-auto dumpAddrInfo(struct addrinfo** dst, struct addrinfo* src) -> int;
+auto dumpAddrInfo(
+    std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)>& dst,
+    const struct addrinfo* src) -> int;
 
 /**
  * @brief Convert address information to string.
@@ -109,8 +160,10 @@ auto dumpAddrInfo(struct addrinfo** dst, struct addrinfo* src) -> int;
  * std::string addrStr = atom::web::addrInfoToString(addrInfo, true);
  * std::cout << addrStr << std::endl;
  * @endcode
+ *
+ * @throws std::invalid_argument if addrInfo is nullptr
  */
-auto addrInfoToString(struct addrinfo* addrInfo,
+auto addrInfoToString(const struct addrinfo* addrInfo,
                       bool jsonFormat = false) -> std::string;
 
 /**
@@ -122,37 +175,23 @@ auto addrInfoToString(struct addrinfo* addrInfo,
  *
  * @param hostname The hostname to resolve. 要解析的主机名。
  * @param service The service to resolve. 要解析的服务。
- * @return Pointer to the address information. 地址信息的指针。
+ * @return Smart pointer to the address information. 地址信息的智能指针。
+ *
+ * @throws std::runtime_error if getaddrinfo fails
+ * @throws std::invalid_argument if hostname or service is empty
  *
  * @code
- * struct addrinfo* addrInfo = atom::web::getAddrInfo("www.google.com", "http");
- * if (addrInfo) {
+ * try {
+ *     auto addrInfo = atom::web::getAddrInfo("www.google.com", "http");
  *     std::cout << "Address information retrieved successfully." << std::endl;
- *     atom::web::freeAddrInfo(addrInfo);
- * } else {
- *     std::cout << "Failed to retrieve address information." << std::endl;
+ *     // No need to manually free, handled by smart pointer
+ * } catch (const std::exception& e) {
+ *     std::cout << "Error: " << e.what() << std::endl;
  * }
  * @endcode
  */
-auto getAddrInfo(const std::string& hostname,
-                 const std::string& service) -> struct addrinfo*;
-
-/**
- * @brief Free address information.
- * 释放地址信息。
- *
- * This function frees the memory allocated for address information.
- * 该函数释放为地址信息分配的内存。
- *
- * @param addrInfo Pointer to the address information to free.
- * 要释放的地址信息的指针。
- *
- * @code
- * struct addrinfo* addrInfo = ...;
- * atom::web::freeAddrInfo(addrInfo);
- * @endcode
- */
-void freeAddrInfo(struct addrinfo* addrInfo);
+auto getAddrInfo(const std::string& hostname, const std::string& service)
+    -> std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)>;
 
 /**
  * @brief Compare two address information structures.
@@ -165,6 +204,8 @@ void freeAddrInfo(struct addrinfo* addrInfo);
  * @param addrInfo2 Second address information structure. 第二个地址信息结构。
  * @return `true` if the structures are equal, `false` otherwise.
  * 如果结构相等，则返回`true`，否则返回`false`。
+ *
+ * @throws std::invalid_argument if either addrInfo1 or addrInfo2 is nullptr
  *
  * @code
  * struct addrinfo* addrInfo1 = ...;
@@ -190,19 +231,27 @@ auto compareAddrInfo(const struct addrinfo* addrInfo1,
  * @param addrInfo Address information to filter. 要过滤的地址信息。
  * @param family The family to filter by (e.g., AF_INET).
  * 要过滤的家庭（例如，AF_INET）。
- * @return Filtered address information. 过滤后的地址信息。
+ * @return Filtered address information (smart pointer).
+ * 过滤后的地址信息（智能指针）。
+ *
+ * @throws std::invalid_argument if addrInfo is nullptr
  *
  * @code
- * struct addrinfo* addrInfo = ...;
- * struct addrinfo* filtered = atom::web::filterAddrInfo(addrInfo, AF_INET);
- * if (filtered) {
- *     std::cout << "Filtered address information retrieved successfully." <<
- * std::endl; atom::web::freeAddrInfo(filtered); } else { std::cout << "No
- * address information matched the filter." << std::endl;
+ * try {
+ *     auto addrInfo = atom::web::getAddrInfo("www.google.com", "http");
+ *     auto filtered = atom::web::filterAddrInfo(addrInfo.get(), AF_INET);
+ *     if (filtered) {
+ *         std::cout << "Filtered address information retrieved successfully."
+ * << std::endl; } else { std::cout << "No address information matched the
+ * filter." << std::endl;
+ *     }
+ * } catch (const std::exception& e) {
+ *     std::cout << "Error: " << e.what() << std::endl;
  * }
  * @endcode
  */
-auto filterAddrInfo(struct addrinfo* addrInfo, int family) -> struct addrinfo*;
+auto filterAddrInfo(const struct addrinfo* addrInfo, int family)
+    -> std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)>;
 
 /**
  * @brief Sort address information by family.
@@ -212,19 +261,27 @@ auto filterAddrInfo(struct addrinfo* addrInfo, int family) -> struct addrinfo*;
  * 该函数按家庭排序地址信息。
  *
  * @param addrInfo Address information to sort. 要排序的地址信息。
- * @return Sorted address information. 排序后的地址信息。
+ * @return Sorted address information (smart pointer).
+ * 排序后的地址信息（智能指针）。
+ *
+ * @throws std::invalid_argument if addrInfo is nullptr
  *
  * @code
- * struct addrinfo* addrInfo = ...;
- * struct addrinfo* sorted = atom::web::sortAddrInfo(addrInfo);
- * if (sorted) {
- *     std::cout << "Sorted address information retrieved successfully." <<
- * std::endl; atom::web::freeAddrInfo(sorted); } else { std::cout << "Failed to
- * sort address information." << std::endl;
+ * try {
+ *     auto addrInfo = atom::web::getAddrInfo("www.google.com", "http");
+ *     auto sorted = atom::web::sortAddrInfo(addrInfo.get());
+ *     if (sorted) {
+ *         std::cout << "Sorted address information retrieved successfully." <<
+ * std::endl; } else { std::cout << "Failed to sort address information." <<
+ * std::endl;
+ *     }
+ * } catch (const std::exception& e) {
+ *     std::cout << "Error: " << e.what() << std::endl;
  * }
  * @endcode
  */
-auto sortAddrInfo(struct addrinfo* addrInfo) -> struct addrinfo*;
+auto sortAddrInfo(const struct addrinfo* addrInfo)
+    -> std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)>;
 #endif
 
 }  // namespace atom::web

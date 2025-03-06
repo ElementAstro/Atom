@@ -2,9 +2,12 @@
 #define ATOM_UTILS_QTIMEZONE_HPP
 
 #include <chrono>
+#include <concepts>
 #include <ctime>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "atom/error/exception.hpp"
@@ -22,7 +25,13 @@ class GetTimeException : public error::Exception {
     atom::utils::GetTimeException::rethrowNested( \
         ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, __VA_ARGS__)
 
+// Concept for string-like types
+template <typename T>
+concept StringLike = std::convertible_to<T, std::string_view>;
+
+// Forward declarations
 class QDateTime;
+
 /**
  * @brief A class representing a time zone.
  *
@@ -37,18 +46,20 @@ public:
      *
      * Initializes an invalid `QTimeZone` instance with no time zone identifier.
      */
-    QTimeZone();
+    QTimeZone() noexcept;
 
     /**
      * @brief Constructs a `QTimeZone` object from a time zone identifier.
      *
      * @param timeZoneId The identifier of the time zone to use.
+     * @throws error::Exception if the time zone ID is invalid.
      *
      * This constructor initializes the `QTimeZone` object using the specified
      * time zone identifier. The identifier should be a valid time zone ID
      * recognized by the system.
      */
-    explicit QTimeZone(const std::string& timeZoneId);
+    template <StringLike TZId>
+    explicit QTimeZone(TZId&& timeZoneId);
 
     /**
      * @brief Returns a list of available time zone identifiers.
@@ -60,7 +71,7 @@ public:
      * available on the system. These identifiers can be used to create
      * `QTimeZone` objects.
      */
-    static auto availableTimeZoneIds() -> std::vector<std::string>;
+    static auto availableTimeZoneIds() noexcept -> std::vector<std::string>;
 
     /**
      * @brief Gets the time zone identifier.
@@ -71,7 +82,12 @@ public:
      * `QTimeZone` object. The identifier is a string that represents the time
      * zone, such as "America/New_York".
      */
-    [[nodiscard]] auto id() const -> std::string;
+    [[nodiscard]] auto identifier() const noexcept -> std::string_view;
+
+    // Alias for backward compatibility
+    [[nodiscard]] auto id() const noexcept -> std::string {
+        return std::string(identifier());
+    }
 
     /**
      * @brief Gets the display name of the time zone.
@@ -81,7 +97,7 @@ public:
      * This method returns a human-readable name of the time zone, which is
      * often used for user interfaces.
      */
-    [[nodiscard]] auto displayName() const -> std::string;
+    [[nodiscard]] auto displayName() const noexcept -> std::string_view;
 
     /**
      * @brief Checks if the `QTimeZone` object is valid.
@@ -92,12 +108,13 @@ public:
      * time zone. An invalid time zone means the time zone ID was not recognized
      * or initialized properly.
      */
-    [[nodiscard]] auto isValid() const -> bool;
+    [[nodiscard]] auto isValid() const noexcept -> bool;
 
     /**
      * @brief Gets the offset from UTC for a specific date and time.
      *
      * @param dateTime The `QDateTime` object for which to calculate the offset.
+     * @throws GetTimeException if the time conversion fails.
      *
      * @return The offset from UTC as a `std::chrono::seconds` value.
      *
@@ -117,7 +134,8 @@ public:
      * This method returns the standard time offset from UTC for the time zone,
      * excluding any daylight saving time adjustments.
      */
-    [[nodiscard]] auto standardTimeOffset() const -> std::chrono::seconds;
+    [[nodiscard]] auto standardTimeOffset() const noexcept
+        -> std::chrono::seconds;
 
     /**
      * @brief Gets the daylight saving time offset from UTC.
@@ -128,7 +146,8 @@ public:
      * This method returns the additional offset from UTC during daylight saving
      * time, if applicable.
      */
-    [[nodiscard]] auto daylightTimeOffset() const -> std::chrono::seconds;
+    [[nodiscard]] auto daylightTimeOffset() const noexcept
+        -> std::chrono::seconds;
 
     /**
      * @brief Checks if the time zone observes daylight saving time.
@@ -139,13 +158,14 @@ public:
      * This method determines whether the time zone includes daylight saving
      * time adjustments.
      */
-    [[nodiscard]] auto hasDaylightTime() const -> bool;
+    [[nodiscard]] auto hasDaylightTime() const noexcept -> bool;
 
     /**
      * @brief Checks if a specific date and time is within the daylight saving
      * time period.
      *
      * @param dateTime The `QDateTime` object to check.
+     * @throws GetTimeException if the time conversion fails.
      *
      * @return `true` if the specified date and time falls within the daylight
      * saving time period, `false` otherwise.
@@ -167,14 +187,45 @@ public:
      * This method allows for comparison of `QTimeZone` objects using the
      * spaceship operator (`<=>`), which supports three-way comparisons.
      */
-    auto operator<=>(const QTimeZone& other) const = default;
+    auto operator<=>(const QTimeZone& other) const noexcept = delete;
 
 private:
-    std::string timeZoneId_;  ///< The identifier of the time zone.
+    std::string timeZoneId_;   ///< The identifier of the time zone.
+    std::string displayName_;  ///< Cached display name
     std::optional<std::chrono::seconds>
         offset_;  ///< Optional time offset from UTC.
+
+    // Cache for DST calculations
+    mutable std::unordered_map<time_t, bool> dstCache_;
+
+    // Helper method to initialize the timezone
+    void initialize();
 };
 
 }  // namespace atom::utils
 
 #endif
+
+#ifndef ATOM_UTILS_QTIMEZONE_TPP
+#define ATOM_UTILS_QTIMEZONE_TPP
+
+#include <algorithm>
+
+namespace atom::utils {
+
+template <StringLike TZId>
+QTimeZone::QTimeZone(TZId&& timeZoneId) {
+    std::string tzId{std::forward<TZId>(timeZoneId)};
+
+    auto availableIds = availableTimeZoneIds();
+    if (std::ranges::find(availableIds, tzId) == availableIds.end()) {
+        THROW_INVALID_ARGUMENT("Invalid time zone ID: " + tzId);
+    }
+
+    timeZoneId_ = std::move(tzId);
+    initialize();
+}
+
+}  // namespace atom::utils
+
+#endif  // ATOM_UTILS_QTIMEZONE_TPP

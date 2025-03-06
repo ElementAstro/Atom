@@ -16,15 +16,36 @@ Description: Simple random number generator
 #define ATOM_UTILS_RANDOM_HPP
 
 #include <algorithm>
+#include <concepts>
 #include <iterator>
 #include <random>
+#include <ranges>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
 #include "atom/error/exception.hpp"
 
 namespace atom::utils {
+
+template <typename T>
+concept RandomEngine = requires(T engine) {
+    typename T::result_type;
+    { engine() } -> std::convertible_to<typename T::result_type>;
+    { engine.min() } -> std::convertible_to<typename T::result_type>;
+    { engine.max() } -> std::convertible_to<typename T::result_type>;
+    { engine.seed() } -> std::same_as<void>;
+};
+
+template <typename T>
+concept RandomDistribution = requires(T dist, std::mt19937& gen) {
+    typename T::result_type;
+    typename T::param_type;
+    { dist(gen) } -> std::convertible_to<typename T::result_type>;
+    { dist.param() } -> std::convertible_to<typename T::param_type>;
+};
+
 /**
  * @brief A template class that combines a random number engine and a
  * distribution.
@@ -34,7 +55,7 @@ namespace atom::utils {
  * @tparam Distribution A type of distribution (e.g.,
  * std::uniform_int_distribution).
  */
-template <typename Engine, typename Distribution>
+template <RandomEngine Engine, RandomDistribution Distribution>
 class Random {
 public:
     using EngineType = Engine;  ///< Public type alias for the engine.
@@ -58,6 +79,7 @@ public:
      *
      * @param min The minimum value of the distribution.
      * @param max The maximum value of the distribution.
+     * @throws InvalidArgumentException if min > max
      */
     Random(ResultType min, ResultType max)
         : engine_(std::random_device{}()), distribution_(min, max) {
@@ -75,7 +97,9 @@ public:
      * @param args Arguments to initialize the distribution.
      */
     template <typename Seed, typename... Args>
-    explicit Random(Seed&& seed, Args&&... args)
+    explicit Random(Seed&& seed, Args&&... args) noexcept(
+        std::is_nothrow_constructible_v<EngineType, Seed> &&
+        std::is_nothrow_constructible_v<DistributionType, Args...>)
         : engine_(std::forward<Seed>(seed)),
           distribution_(std::forward<Args>(args)...) {}
 
@@ -85,7 +109,7 @@ public:
      * @param value The seed value (default is obtained from
      * std::random_device).
      */
-    void seed(ResultType value = std::random_device{}()) {
+    void seed(ResultType value = std::random_device{}()) noexcept {
         engine_.seed(value);
     }
 
@@ -95,7 +119,9 @@ public:
      *
      * @return A randomly generated value.
      */
-    auto operator()() -> ResultType { return distribution_(engine_); }
+    [[nodiscard]] auto operator()() noexcept -> ResultType {
+        return distribution_(engine_);
+    }
 
     /**
      * @brief Generates a random value using the underlying distribution and
@@ -104,8 +130,21 @@ public:
      * @param parm Parameters for the distribution.
      * @return A randomly generated value.
      */
-    auto operator()(const ParamType& parm) -> ResultType {
+    [[nodiscard]] auto operator()(const ParamType& parm) noexcept
+        -> ResultType {
         return distribution_(engine_, parm);
+    }
+
+    /**
+     * @brief Fills a range with randomly generated values.
+     *
+     * @param range A range to fill with random values
+     */
+    template <std::ranges::range Range>
+        requires std::assignable_from<std::ranges::range_value_t<Range>&,
+                                      ResultType>
+    void generate(Range&& range) noexcept {
+        std::ranges::generate(range, [this]() { return (*this)(); });
     }
 
     /**
@@ -115,7 +154,7 @@ public:
      * @param last An iterator pointing to the end of the range.
      */
     template <typename OutputIt>
-    void generate(OutputIt first, OutputIt last) {
+    void generate(OutputIt first, OutputIt last) noexcept {
         std::generate(first, last, [this]() { return (*this)(); });
     }
 
@@ -124,12 +163,22 @@ public:
      *
      * @param count The number of values to generate.
      * @return A vector containing randomly generated values.
+     * @throws std::bad_alloc if memory allocation fails
      */
-    auto vector(size_t count) -> std::vector<ResultType> {
+    [[nodiscard]] auto vector(size_t count) -> std::vector<ResultType> {
+        if (count > std::vector<ResultType>().max_size()) {
+            THROW_INVALID_ARGUMENT("Count exceeds maximum vector size");
+        }
+
         std::vector<ResultType> vec;
-        vec.reserve(count);
-        std::generate_n(std::back_inserter(vec), count,
-                        [this]() { return (*this)(); });
+        try {
+            vec.reserve(count);
+            std::generate_n(std::back_inserter(vec), count,
+                            [this]() { return (*this)(); });
+        } catch (const std::exception& e) {
+            THROW_RUNTIME_ERROR("Failed to generate random vector: " +
+                                std::string(e.what()));
+        }
         return vec;
     }
 
@@ -138,24 +187,77 @@ public:
      *
      * @param parm The new parameters for the distribution.
      */
-    void param(const ParamType& parm) { distribution_.param(parm); }
+    void param(const ParamType& parm) noexcept { distribution_.param(parm); }
 
     /**
      * @brief Accessor for the underlying engine.
      *
      * @return A reference to the engine.
      */
-    auto engine() -> EngineType& { return engine_; }
+    [[nodiscard]] auto engine() noexcept -> EngineType& { return engine_; }
 
     /**
      * @brief Accessor for the underlying distribution.
      *
      * @return A reference to the distribution.
      */
-    auto distribution() -> DistributionType& { return distribution_; }
+    [[nodiscard]] auto distribution() noexcept -> DistributionType& {
+        return distribution_;
+    }
+
+    /**
+     * @brief Generate random values in a range
+     *
+     * @param count Number of values to generate
+     * @param min Minimum value
+     * @param max Maximum value
+     * @return std::vector<ResultType> Vector of random values
+     * @throws InvalidArgumentException if min > max or count exceeds limits
+     */
+    [[nodiscard]] static auto range(size_t count, ResultType min,
+                                    ResultType max) -> std::vector<ResultType> {
+        if (min > max) {
+            THROW_INVALID_ARGUMENT(
+                "Minimum value must be less than or equal to maximum value");
+        }
+
+        Random<Engine, Distribution> random(min, max);
+        return random.vector(count);
+    }
 };
 
-[[nodiscard]] auto generateRandomString(int length) -> std::string;
+/**
+ * @brief Generates a random string of specified length
+ *
+ * @param length Length of the string to generate
+ * @param charset Optional character set to use (defaults to alphanumeric)
+ * @return std::string Random string
+ * @throws InvalidArgumentException if length is invalid
+ */
+[[nodiscard]] auto generateRandomString(
+    int length, const std::string& charset = "") -> std::string;
+
+/**
+ * @brief Generate a cryptographically secure random string
+ *
+ * @param length Length of the string to generate
+ * @return std::string Secure random string
+ * @throws InvalidArgumentException if length is invalid
+ */
+[[nodiscard]] auto generateSecureRandomString(int length) -> std::string;
+
+/**
+ * @brief Shuffle elements in a container using a secure random generator
+ *
+ * @tparam Container Container type that supports std::ranges
+ * @param container Container to shuffle
+ */
+template <std::ranges::random_access_range Container>
+void secureShuffleRange(Container&& container) noexcept {
+    std::random_device rd;
+    std::mt19937_64 g(rd());
+    std::ranges::shuffle(container, g);
+}
 
 }  // namespace atom::utils
 

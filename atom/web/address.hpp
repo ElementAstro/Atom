@@ -1,25 +1,35 @@
-/*
- * address.hpp
- *
- * Copyright (C)
- */
-
-/*************************************************
-
-Date: 2024-1-4
-
-Description: Enhanced Address class for IPv4, IPv6, and Unix domain sockets.
-
-**************************************************/
-
 #ifndef ATOM_WEB_ADDRESS_HPP
 #define ATOM_WEB_ADDRESS_HPP
 
+#include <array>  // For fixed-size arrays
 #include <cstdint>
+#include <memory>     // For smart pointers
+#include <optional>   // For nullable return types
+#include <stdexcept>  // For custom exceptions
 #include <string>
-#include <vector>
+#include <string_view>  // For efficient string passing
 
 namespace atom::web {
+
+// Custom exceptions for better error handling
+class AddressException : public std::runtime_error {
+public:
+    explicit AddressException(const std::string& message)
+        : std::runtime_error(message) {}
+};
+
+class InvalidAddressFormat : public AddressException {
+public:
+    explicit InvalidAddressFormat(const std::string& message)
+        : AddressException("Invalid address format: " + message) {}
+};
+
+class AddressRangeError : public AddressException {
+public:
+    explicit AddressRangeError(const std::string& message)
+        : AddressException("Address range error: " + message) {}
+};
+
 /**
  * @class Address
  * @brief A base class representing a generic network address.
@@ -30,38 +40,19 @@ protected:
 
 public:
     Address() = default;
-
-    /**
-     * @brief Virtual destructor.
-     */
     virtual ~Address() = default;
-
-    /**
-     * @brief Copy constructor.
-     */
     Address(const Address& other) = default;
-
-    /**
-     * @brief Copy assignment operator.
-     */
     Address& operator=(const Address& other) = default;
-
-    /**
-     * @brief Move constructor.
-     */
     Address(Address&& other) noexcept = default;
-
-    /**
-     * @brief Move assignment operator.
-     */
     Address& operator=(Address&& other) noexcept = default;
 
     /**
      * @brief Parses the address string.
      * @param address The address string to parse.
      * @return True if the address is successfully parsed, false otherwise.
+     * @throws InvalidAddressFormat if the address format is invalid.
      */
-    virtual auto parse(const std::string& address) -> bool = 0;
+    virtual auto parse(std::string_view address) -> bool = 0;
 
     /**
      * @brief Prints the address type.
@@ -73,9 +64,10 @@ public:
      * @param start The start address of the range.
      * @param end The end address of the range.
      * @return True if the address is within the range, false otherwise.
+     * @throws AddressRangeError if the range is invalid.
      */
-    virtual auto isInRange(const std::string& start,
-                           const std::string& end) -> bool = 0;
+    virtual auto isInRange(std::string_view start,
+                           std::string_view end) -> bool = 0;
 
     /**
      * @brief Converts the address to its binary representation.
@@ -87,7 +79,9 @@ public:
      * @brief Gets the address string.
      * @return The address as a string.
      */
-    [[nodiscard]] auto getAddress() const -> std::string { return addressStr; }
+    [[nodiscard]] auto getAddress() const -> std::string_view {
+        return addressStr;
+    }
 
     /**
      * @brief Checks if two addresses are equal.
@@ -100,38 +94,50 @@ public:
      * @brief Gets the address type.
      * @return The address type as a string.
      */
-    [[nodiscard]] virtual auto getType() const -> std::string = 0;
+    [[nodiscard]] virtual auto getType() const -> std::string_view = 0;
 
     /**
      * @brief Gets the network address given a subnet mask.
      * @param mask The subnet mask.
      * @return The network address as a string.
+     * @throws InvalidAddressFormat if the mask format is invalid.
      */
-    [[nodiscard]] virtual auto getNetworkAddress(const std::string& mask) const
+    [[nodiscard]] virtual auto getNetworkAddress(std::string_view mask) const
         -> std::string = 0;
 
     /**
      * @brief Gets the broadcast address given a subnet mask.
      * @param mask The subnet mask.
      * @return The broadcast address as a string.
+     * @throws InvalidAddressFormat if the mask format is invalid.
      */
-    [[nodiscard]] virtual auto getBroadcastAddress(
-        const std::string& mask) const -> std::string = 0;
+    [[nodiscard]] virtual auto getBroadcastAddress(std::string_view mask) const
+        -> std::string = 0;
 
     /**
      * @brief Checks if two addresses are in the same subnet.
      * @param other The other address to compare with.
      * @param mask The subnet mask.
      * @return True if the addresses are in the same subnet, false otherwise.
+     * @throws InvalidAddressFormat if the mask format is invalid.
      */
     [[nodiscard]] virtual auto isSameSubnet(
-        const Address& other, const std::string& mask) const -> bool = 0;
+        const Address& other, std::string_view mask) const -> bool = 0;
 
     /**
      * @brief Converts the address to its hexadecimal representation.
      * @return The hexadecimal representation of the address as a string.
      */
     [[nodiscard]] virtual auto toHex() const -> std::string = 0;
+
+    /**
+     * @brief Creates an address object from a string.
+     * @param addressStr The address string.
+     * @return A unique_ptr to an Address object or nullptr if the address type
+     * cannot be determined.
+     */
+    static auto createFromString(std::string_view addressStr)
+        -> std::unique_ptr<Address>;
 };
 
 /**
@@ -145,78 +151,30 @@ public:
     /**
      * @brief Constructs an IPv4 address from a string.
      * @param address The IPv4 address as a string.
+     * @throws InvalidAddressFormat if the address format is invalid.
      */
-    explicit IPv4(const std::string& address);
+    explicit IPv4(std::string_view address);
 
     /**
      * @brief Parses the IPv4 address string.
      * @param address The IPv4 address string to parse.
      * @return True if the address is successfully parsed, false otherwise.
+     * @throws InvalidAddressFormat if the address format is invalid.
      */
-    auto parse(const std::string& address) -> bool override;
+    auto parse(std::string_view address) -> bool override;
 
-    /**
-     * @brief Prints the address type.
-     */
     void printAddressType() const override;
-
-    /**
-     * @brief Checks if the address is within the specified range.
-     * @param start The start address of the range.
-     * @param end The end address of the range.
-     * @return True if the address is within the range, false otherwise.
-     */
-    auto isInRange(const std::string& start,
-                   const std::string& end) -> bool override;
-
-    /**
-     * @brief Converts the address to its binary representation.
-     * @return The binary representation of the address as a string.
-     */
+    auto isInRange(std::string_view start,
+                   std::string_view end) -> bool override;
     [[nodiscard]] auto toBinary() const -> std::string override;
-
-    /**
-     * @brief Checks if two addresses are equal.
-     * @param other The other address to compare with.
-     * @return True if the addresses are equal, false otherwise.
-     */
     [[nodiscard]] auto isEqual(const Address& other) const -> bool override;
-
-    /**
-     * @brief Gets the address type.
-     * @return The address type as a string.
-     */
-    [[nodiscard]] auto getType() const -> std::string override;
-
-    /**
-     * @brief Gets the network address given a subnet mask.
-     * @param mask The subnet mask.
-     * @return The network address as a string.
-     */
-    [[nodiscard]] auto getNetworkAddress(const std::string& mask) const
+    [[nodiscard]] auto getType() const -> std::string_view override;
+    [[nodiscard]] auto getNetworkAddress(std::string_view mask) const
         -> std::string override;
-
-    /**
-     * @brief Gets the broadcast address given a subnet mask.
-     * @param mask The subnet mask.
-     * @return The broadcast address as a string.
-     */
-    [[nodiscard]] auto getBroadcastAddress(const std::string& mask) const
+    [[nodiscard]] auto getBroadcastAddress(std::string_view mask) const
         -> std::string override;
-
-    /**
-     * @brief Checks if two addresses are in the same subnet.
-     * @param other The other address to compare with.
-     * @param mask The subnet mask.
-     * @return True if the addresses are in the same subnet, false otherwise.
-     */
     [[nodiscard]] auto isSameSubnet(
-        const Address& other, const std::string& mask) const -> bool override;
-
-    /**
-     * @brief Converts the address to its hexadecimal representation.
-     * @return The hexadecimal representation of the address as a string.
-     */
+        const Address& other, std::string_view mask) const -> bool override;
     [[nodiscard]] auto toHex() const -> std::string override;
 
     /**
@@ -224,8 +182,17 @@ public:
      * @param cidr The CIDR notation string.
      * @return True if the CIDR notation is successfully parsed, false
      * otherwise.
+     * @throws InvalidAddressFormat if the CIDR format is invalid.
      */
-    auto parseCIDR(const std::string& cidr) -> bool;
+    auto parseCIDR(std::string_view cidr) -> bool;
+
+    /**
+     * @brief Gets the prefix length from a CIDR notation.
+     * @param cidr The CIDR notation string.
+     * @return The prefix length or std::nullopt if invalid.
+     */
+    [[nodiscard]] static auto getPrefixLength(std::string_view cidr)
+        -> std::optional<int>;
 
 private:
     uint32_t ipValue{0};  ///< Stores the IP address as an integer.
@@ -234,8 +201,9 @@ private:
      * @brief Converts an IP address string to an integer.
      * @param ipAddr The IP address string.
      * @return The IP address as an integer.
+     * @throws InvalidAddressFormat if the address format is invalid.
      */
-    [[nodiscard]] auto ipToInteger(const std::string& ipAddr) const -> uint32_t;
+    [[nodiscard]] auto ipToInteger(std::string_view ipAddr) const -> uint32_t;
 
     /**
      * @brief Converts an integer to an IP address string.
@@ -243,6 +211,13 @@ private:
      * @return The IP address string.
      */
     [[nodiscard]] auto integerToIp(uint32_t ipAddr) const -> std::string;
+
+    /**
+     * @brief Validates an IPv4 address string.
+     * @param address The IPv4 address string.
+     * @return True if the address is valid, false otherwise.
+     */
+    [[nodiscard]] static auto isValidIPv4(std::string_view address) -> bool;
 };
 
 /**
@@ -256,78 +231,23 @@ public:
     /**
      * @brief Constructs an IPv6 address from a string.
      * @param address The IPv6 address as a string.
+     * @throws InvalidAddressFormat if the address format is invalid.
      */
-    explicit IPv6(const std::string& address);
+    explicit IPv6(std::string_view address);
 
-    /**
-     * @brief Parses the IPv6 address string.
-     * @param address The IPv6 address string to parse.
-     * @return True if the address is successfully parsed, false otherwise.
-     */
-    auto parse(const std::string& address) -> bool override;
-
-    /**
-     * @brief Prints the address type.
-     */
+    auto parse(std::string_view address) -> bool override;
     void printAddressType() const override;
-
-    /**
-     * @brief Checks if the address is within the specified range.
-     * @param start The start address of the range.
-     * @param end The end address of the range.
-     * @return True if the address is within the range, false otherwise.
-     */
-    auto isInRange(const std::string& start,
-                   const std::string& end) -> bool override;
-
-    /**
-     * @brief Converts the address to its binary representation.
-     * @return The binary representation of the address as a string.
-     */
+    auto isInRange(std::string_view start,
+                   std::string_view end) -> bool override;
     [[nodiscard]] auto toBinary() const -> std::string override;
-
-    /**
-     * @brief Checks if two addresses are equal.
-     * @param other The other address to compare with.
-     * @return True if the addresses are equal, false otherwise.
-     */
     [[nodiscard]] auto isEqual(const Address& other) const -> bool override;
-
-    /**
-     * @brief Gets the address type.
-     * @return The address type as a string.
-     */
-    [[nodiscard]] auto getType() const -> std::string override;
-
-    /**
-     * @brief Gets the network address given a subnet mask.
-     * @param mask The subnet mask.
-     * @return The network address as a string.
-     */
-    [[nodiscard]] auto getNetworkAddress(const std::string& mask) const
+    [[nodiscard]] auto getType() const -> std::string_view override;
+    [[nodiscard]] auto getNetworkAddress(std::string_view mask) const
         -> std::string override;
-
-    /**
-     * @brief Gets the broadcast address given a subnet mask.
-     * @param mask The subnet mask.
-     * @return The broadcast address as a string.
-     */
-    [[nodiscard]] auto getBroadcastAddress(const std::string& mask) const
+    [[nodiscard]] auto getBroadcastAddress(std::string_view mask) const
         -> std::string override;
-
-    /**
-     * @brief Checks if two addresses are in the same subnet.
-     * @param other The other address to compare with.
-     * @param mask The subnet mask.
-     * @return True if the addresses are in the same subnet, false otherwise.
-     */
     [[nodiscard]] auto isSameSubnet(
-        const Address& other, const std::string& mask) const -> bool override;
-
-    /**
-     * @brief Converts the address to its hexadecimal representation.
-     * @return The hexadecimal representation of the address as a string.
-     */
+        const Address& other, std::string_view mask) const -> bool override;
     [[nodiscard]] auto toHex() const -> std::string override;
 
     /**
@@ -335,26 +255,43 @@ public:
      * @param cidr The CIDR notation string.
      * @return True if the CIDR notation is successfully parsed, false
      * otherwise.
+     * @throws InvalidAddressFormat if the CIDR format is invalid.
      */
-    auto parseCIDR(const std::string& cidr) -> bool;
+    auto parseCIDR(std::string_view cidr) -> bool;
+
+    /**
+     * @brief Gets the prefix length from a CIDR notation.
+     * @param cidr The CIDR notation string.
+     * @return The prefix length or std::nullopt if invalid.
+     */
+    [[nodiscard]] static auto getPrefixLength(std::string_view cidr)
+        -> std::optional<int>;
+
+    /**
+     * @brief Validates an IPv6 address string.
+     * @param address The IPv6 address string.
+     * @return True if the address is valid, false otherwise.
+     */
+    [[nodiscard]] static auto isValidIPv6(std::string_view address) -> bool;
 
 private:
-    std::vector<uint16_t> ipSegments;  ///< Stores the IP address segments.
+    std::array<uint16_t, 8> ipSegments{};  ///< Stores the IP address segments.
 
     /**
      * @brief Converts an IP address string to a vector of segments.
      * @param ipAddr The IP address string.
      * @return The IP address as a vector of segments.
+     * @throws InvalidAddressFormat if the address format is invalid.
      */
-    [[nodiscard]] auto ipToVector(const std::string& ipAddr) const
-        -> std::vector<uint16_t>;
+    [[nodiscard]] auto ipToArray(std::string_view ipAddr) const
+        -> std::array<uint16_t, 8>;
 
     /**
      * @brief Converts a vector of segments to an IP address string.
      * @param segments The IP address segments.
      * @return The IP address string.
      */
-    [[nodiscard]] auto vectorToIp(const std::vector<uint16_t>& segments) const
+    [[nodiscard]] auto arrayToIp(const std::array<uint16_t, 8>& segments) const
         -> std::string;
 };
 
@@ -369,80 +306,33 @@ public:
     /**
      * @brief Constructs a Unix domain socket address from a path.
      * @param path The Unix domain socket path.
+     * @throws InvalidAddressFormat if the path format is invalid.
      */
-    explicit UnixDomain(const std::string& path);
+    explicit UnixDomain(std::string_view path);
 
-    /**
-     * @brief Parses the Unix domain socket path.
-     * @param path The Unix domain socket path to parse.
-     * @return True if the path is successfully parsed, false otherwise.
-     */
-    auto parse(const std::string& path) -> bool override;
-
-    /**
-     * @brief Prints the address type.
-     */
+    auto parse(std::string_view path) -> bool override;
     void printAddressType() const override;
-
-    /**
-     * @brief Checks if the address is within the specified range.
-     * @param start The start address of the range.
-     * @param end The end address of the range.
-     * @return True if the address is within the range, false otherwise.
-     */
-    auto isInRange(const std::string& start,
-                   const std::string& end) -> bool override;
-
-    /**
-     * @brief Converts the address to its binary representation.
-     * @return The binary representation of the address as a string.
-     */
+    auto isInRange(std::string_view start,
+                   std::string_view end) -> bool override;
     [[nodiscard]] auto toBinary() const -> std::string override;
-
-    /**
-     * @brief Checks if two addresses are equal.
-     * @param other The other address to compare with.
-     * @return True if the addresses are equal, false otherwise.
-     */
     [[nodiscard]] auto isEqual(const Address& other) const -> bool override;
-
-    /**
-     * @brief Gets the address type.
-     * @return The address type as a string.
-     */
-    [[nodiscard]] auto getType() const -> std::string override;
-
-    /**
-     * @brief Gets the network address given a subnet mask.
-     * @param mask The subnet mask.
-     * @return The network address as a string.
-     */
-    [[nodiscard]] auto getNetworkAddress(const std::string& mask) const
+    [[nodiscard]] auto getType() const -> std::string_view override;
+    [[nodiscard]] auto getNetworkAddress(std::string_view mask) const
         -> std::string override;
-
-    /**
-     * @brief Gets the broadcast address given a subnet mask.
-     * @param mask The subnet mask.
-     * @return The broadcast address as a string.
-     */
-    [[nodiscard]] auto getBroadcastAddress(const std::string& mask) const
+    [[nodiscard]] auto getBroadcastAddress(std::string_view mask) const
         -> std::string override;
-
-    /**
-     * @brief Checks if two addresses are in the same subnet.
-     * @param other The other address to compare with.
-     * @param mask The subnet mask.
-     * @return True if the addresses are in the same subnet, false otherwise.
-     */
     [[nodiscard]] auto isSameSubnet(
-        const Address& other, const std::string& mask) const -> bool override;
+        const Address& other, std::string_view mask) const -> bool override;
+    [[nodiscard]] auto toHex() const -> std::string override;
 
     /**
-     * @brief Converts the address to its hexadecimal representation.
-     * @return The hexadecimal representation of the address as a string.
+     * @brief Validates a Unix domain socket path.
+     * @param path The path to validate.
+     * @return True if the path is valid, false otherwise.
      */
-    [[nodiscard]] auto toHex() const -> std::string override;
+    [[nodiscard]] static auto isValidPath(std::string_view path) -> bool;
 };
+
 }  // namespace atom::web
 
 #endif  // ATOM_WEB_ADDRESS_HPP

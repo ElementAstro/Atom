@@ -16,99 +16,218 @@ Description: UDP Client Class
 #define ATOM_CONNECTION_UDPCLIENT_HPP
 
 #include <chrono>
+#include <coroutine>
+#include <expected>
 #include <functional>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
+#include "atom/type/expected.hpp"
+
 namespace atom::connection {
+
+/**
+ * @brief Error codes for UDP operations
+ */
+enum class UdpError {
+    None,
+    SocketCreationFailed,
+    BindFailed,
+    SendFailed,
+    ReceiveFailed,
+    HostNotFound,
+    Timeout,
+    InvalidParameter,
+    InternalError
+};
+
+/**
+ * @brief UDP client result type that can contain either a value or an error
+ */
+template <typename T>
+using UdpResult = type::expected<T, UdpError>;
+
+/**
+ * @brief Structure holding information about the remote endpoint
+ */
+struct RemoteEndpoint {
+    std::string host;
+    uint16_t port;
+
+    bool operator==(const RemoteEndpoint&) const = default;
+};
+
+/**
+ * @brief Callback concept for data received events
+ */
+template <typename T>
+concept DataReceivedHandler = requires(T callback, std::span<const char> data,
+                                       const RemoteEndpoint& endpoint) {
+    { callback(data, endpoint) } -> std::same_as<void>;
+};
+
+/**
+ * @brief Callback concept for error events
+ */
+template <typename T>
+concept ErrorHandler =
+    requires(T callback, UdpError error, const std::string& message) {
+        { callback(error, message) } -> std::same_as<void>;
+    };
 /**
  * @class UdpClient
- * @brief Represents a UDP client for sending and receiving datagrams.
+ * @brief Represents a UDP client for sending and receiving datagrams with
+ * modern C++20 features.
  */
 class UdpClient {
 public:
-    using OnDataReceivedCallback = std::function<void(
-        const std::vector<char>&, const std::string&,
-        int)>; /**< Type definition for data received callback function. */
-    using OnErrorCallback =
-        std::function<void(const std::string&)>; /**< Type definition for error
-                                                    callback function. */
-
     /**
-     * @brief Constructor.
+     * @brief Default constructor
+     * @throws std::runtime_error if the socket creation fails
      */
     UdpClient();
 
     /**
-     * @brief Destructor.
+     * @brief Constructor with specific local port
+     * @param port Local port to bind to
+     * @throws std::runtime_error if the socket creation or binding fails
+     */
+    explicit UdpClient(uint16_t port);
+
+    /**
+     * @brief Destructor
      */
     ~UdpClient();
 
     /**
-     * @brief Deleted copy constructor to prevent copying.
+     * @brief Deleted copy constructor to prevent copying
      */
     UdpClient(const UdpClient&) = delete;
 
     /**
-     * @brief Deleted copy assignment operator to prevent copying.
+     * @brief Deleted copy assignment operator to prevent copying
      */
     UdpClient& operator=(const UdpClient&) = delete;
 
     /**
-     * @brief Binds the client to a specific port for receiving data.
-     * @param port The port number to bind to.
-     * @return True if the binding is successful, false otherwise.
+     * @brief Move constructor
      */
-    bool bind(int port);
+    UdpClient(UdpClient&&) noexcept;
 
     /**
-     * @brief Sends data to a specified host and port.
-     * @param host The destination host address.
-     * @param port The destination port number.
-     * @param data The data to be sent.
-     * @return True if the data is sent successfully, false otherwise.
+     * @brief Move assignment operator
      */
-    bool send(const std::string& host, int port, const std::vector<char>& data);
+    UdpClient& operator=(UdpClient&&) noexcept;
 
     /**
-     * @brief Receives data from a remote host.
-     * @param size The number of bytes to receive.
-     * @param remoteHost The hostname or IP address of the remote host.
-     * @param remotePort The port number of the remote host.
-     * @param timeout The receive timeout duration.
-     * @return The received data.
+     * @brief Binds the client to a specific port for receiving data
+     * @param port The port number to bind to
+     * @return Result containing success or error code
      */
-    std::vector<char> receive(
-        size_t size, std::string& remoteHost, int& remotePort,
-        std::chrono::milliseconds timeout = std::chrono::milliseconds::zero());
+    [[nodiscard]] UdpResult<bool> bind(uint16_t port) noexcept;
 
     /**
-     * @brief Sets the callback function to be called when data is received.
-     * @param callback The callback function.
+     * @brief Sends data to a specified host and port
+     * @param endpoint The destination endpoint (host and port)
+     * @param data The data to be sent
+     * @return Result containing bytes sent or error code
      */
-    void setOnDataReceivedCallback(const OnDataReceivedCallback& callback);
+    [[nodiscard]] UdpResult<size_t> send(const RemoteEndpoint& endpoint,
+                                         std::span<const char> data) noexcept;
 
     /**
-     * @brief Sets the callback function to be called when an error occurs.
-     * @param callback The callback function.
+     * @brief Convenience overload for sending string data
      */
-    void setOnErrorCallback(const OnErrorCallback& callback);
+    [[nodiscard]] UdpResult<size_t> send(const RemoteEndpoint& endpoint,
+                                         const std::string& data) noexcept;
 
     /**
-     * @brief Starts receiving data asynchronously.
-     * @param bufferSize The size of the receive buffer.
+     * @brief Receives data from a remote host
+     * @param maxSize Maximum number of bytes to receive
+     * @param timeout The receive timeout duration
+     * @return Result containing received data and endpoint or error code
      */
-    void startReceiving(size_t bufferSize);
+    [[nodiscard]] UdpResult<std::pair<std::vector<char>, RemoteEndpoint>>
+    receive(size_t maxSize, std::chrono::milliseconds timeout =
+                                std::chrono::milliseconds::zero()) noexcept;
 
     /**
-     * @brief Stops receiving data.
+     * @brief Awaitable coroutine for asynchronous receiving
      */
-    void stopReceiving();
+    struct [[nodiscard]] ReceiveAwaitable {
+        UdpClient& client;
+        size_t maxSize;
+        std::chrono::milliseconds timeout;
+
+        ReceiveAwaitable(UdpClient& client, size_t maxSize,
+                         std::chrono::milliseconds timeout)
+            : client(client), maxSize(maxSize), timeout(timeout) {}
+
+        bool await_ready() const noexcept { return false; }
+        void await_suspend(std::coroutine_handle<> h);
+        UdpResult<std::pair<std::vector<char>, RemoteEndpoint>> await_resume();
+
+    private:
+        UdpResult<std::pair<std::vector<char>, RemoteEndpoint>> result_;
+    };
+
+    /**
+     * @brief Create an awaitable for asynchronous receiving
+     */
+    [[nodiscard]] ReceiveAwaitable receiveAsync(
+        size_t maxSize, std::chrono::milliseconds timeout =
+                            std::chrono::milliseconds::zero()) noexcept {
+        return ReceiveAwaitable(*this, maxSize, timeout);
+    }
+
+    /**
+     * @brief Sets the callback function to be called when data is received
+     * @param callback The callback function
+     */
+    template <typename Handler>
+        requires DataReceivedHandler<Handler>
+    void setOnDataReceivedCallback(Handler&& callback) {
+        onDataReceivedCallback_ = std::forward<Handler>(callback);
+    }
+
+    /**
+     * @brief Sets the callback function to be called when an error occurs
+     * @param callback The callback function
+     */
+    template <typename Handler>
+        requires ErrorHandler<Handler>
+    void setOnErrorCallback(Handler&& callback) {
+        onErrorCallback_ = std::forward<Handler>(callback);
+    }
+
+    /**
+     * @brief Starts receiving data asynchronously
+     * @param bufferSize The size of the receive buffer
+     * @return Result containing success or error code
+     */
+    [[nodiscard]] UdpResult<bool> startReceiving(size_t bufferSize) noexcept;
+
+    /**
+     * @brief Stops receiving data
+     */
+    void stopReceiving() noexcept;
+
+    /**
+     * @brief Check if the client is currently receiving data
+     */
+    [[nodiscard]] bool isReceiving() const noexcept;
 
 private:
-    class Impl; /**< Forward declaration of the implementation class. */
-    std::unique_ptr<Impl> impl_; /**< Pointer to the implementation object. */
+    class Impl;
+    std::unique_ptr<Impl> impl_;
+
+    // Store callbacks at this level to enforce concept constraints
+    std::function<void(std::span<const char>, const RemoteEndpoint&)>
+        onDataReceivedCallback_;
+    std::function<void(UdpError, const std::string&)> onErrorCallback_;
 };
+
 }  // namespace atom::connection
 #endif  // ATOM_CONNECTION_UDPCLIENT_HPP

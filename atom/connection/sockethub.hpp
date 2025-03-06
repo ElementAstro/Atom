@@ -1,94 +1,79 @@
-/*
- * sockethub.hpp
- *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
- */
-
-/*************************************************
-
-Date: 2023-6-1
-
-Description: SocketHub class for managing socket connections.
-
-*************************************************/
-
 #ifndef ATOM_CONNECTION_SOCKETHUB_HPP
 #define ATOM_CONNECTION_SOCKETHUB_HPP
 
+#include <concepts>
 #include <functional>
 #include <memory>
-#include <string>
+#include <string_view>
 
 namespace atom::connection {
 
 class SocketHubImpl;
 
+// Define concepts for message handlers
+template <typename T>
+concept MessageHandler = requires(T h, std::string_view msg) {
+    { h(msg) } -> std::same_as<void>;
+};
+
 /**
  * @class SocketHub
- * @brief Manages socket connections.
- *
- * The SocketHub class is responsible for managing socket connections.
- * It provides functionality to start and stop the socket service, and
- * handles multiple client connections. For each client, it spawns a
- * thread to handle incoming messages. The class allows for adding
- * custom message handlers that are called when a message is received
- * from a client.
+ * @brief Manages socket connections with improved C++20 features
  */
 class SocketHub {
 public:
     /**
      * @brief Constructs a SocketHub instance.
+     * @throws std::bad_alloc If memory allocation fails
      */
     SocketHub();
 
     /**
      * @brief Destroys the SocketHub instance.
-     *
-     * Cleans up resources and stops any ongoing socket operations.
      */
-    ~SocketHub();
+    ~SocketHub() noexcept;
+
+    // Prevent copying
+    SocketHub(const SocketHub&) = delete;
+    SocketHub& operator=(const SocketHub&) = delete;
+
+    // Allow moving
+    SocketHub(SocketHub&&) noexcept;
+    SocketHub& operator=(SocketHub&&) noexcept;
 
     /**
      * @brief Starts the socket service.
-     * @param port The port number on which the socket service will listen.
-     *
-     * Initializes the socket service and starts listening for incoming
-     * connections on the specified port. It spawns threads to handle
-     * each connected client.
+     * @param port The port number (valid range: 1-65535)
+     * @throws std::invalid_argument If port is invalid
+     * @throws std::runtime_error If socket creation fails
      */
     void start(int port);
 
     /**
      * @brief Stops the socket service.
-     *
-     * Shuts down the socket service, closes all client connections,
-     * and stops any running threads associated with handling client
-     * messages.
+     * @throws std::runtime_error If cleanup operations fail
      */
-    void stop();
+    void stop() noexcept;
 
     /**
      * @brief Adds a message handler.
-     * @param handler A function to handle incoming messages from clients.
-     *
-     * The provided handler function will be called with the received
-     * message as a string parameter. Multiple handlers can be added
-     * and will be called in the order they are added.
+     * @param handler A function to handle incoming messages
+     * @throws std::invalid_argument If handler is invalid
      */
-    void addHandler(std::function<void(std::string)> handler);
+    template <MessageHandler H>
+    void addHandler(H&& handler) {
+        addHandlerImpl(std::forward<H>(handler));
+    }
 
     /**
-     * @brief Checks if the socket service is currently running.
-     * @return True if the socket service is running, false otherwise.
-     *
-     * This method returns the status of the socket service, indicating
-     * whether it is currently active and listening for connections.
+     * @brief Checks if the socket service is running.
+     * @return True if running, false otherwise
      */
-    [[nodiscard]] auto isRunning() const -> bool;
+    [[nodiscard]] auto isRunning() const noexcept -> bool;
 
 private:
-    std::unique_ptr<SocketHubImpl>
-        impl_;  ///< Pointer to the implementation details of SocketHub.
+    void addHandlerImpl(std::function<void(std::string_view)> handler);
+    std::unique_ptr<SocketHubImpl> impl_;
 };
 
 }  // namespace atom::connection

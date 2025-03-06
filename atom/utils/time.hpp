@@ -15,12 +15,23 @@ Description: Some useful functions about time
 #ifndef ATOM_UTILS_TIME_HPP
 #define ATOM_UTILS_TIME_HPP
 
+#include <chrono>
+#include <concepts>
 #include <ctime>
+#include <optional>
 #include <string>
+#include <string_view>
 
 #include "atom/error/exception.hpp"
 
 namespace atom::utils {
+
+// Forward declarations for concepts
+template <typename T>
+concept TimeFormattable = requires(const T& t, const std::string& format) {
+    { toString(t, format) } -> std::convertible_to<std::string>;
+};
+
 class TimeConvertException : public atom::error::Exception {
     using atom::error::Exception::Exception;
 };
@@ -34,12 +45,24 @@ class TimeConvertException : public atom::error::Exception {
         ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, __VA_ARGS__)
 
 /**
+ * @brief Validates a timestamp string against a specified format
+ *
+ * @param timestampStr The timestamp string to validate
+ * @param format The expected format (default: "%Y-%m-%d %H:%M:%S")
+ * @return true if the timestamp matches the format, false otherwise
+ */
+[[nodiscard]] bool validateTimestampFormat(
+    std::string_view timestampStr,
+    std::string_view format = "%Y-%m-%d %H:%M:%S");
+
+/**
  * @brief Retrieves the current timestamp as a formatted string.
  *
  * This function returns the current local time formatted as a string with the
  * pattern "%Y-%m-%d %H:%M:%S".
  *
  * @return std::string The current timestamp formatted as "%Y-%m-%d %H:%M:%S".
+ * @throws TimeConvertException If time conversion fails
  */
 [[nodiscard]] auto getTimestampString() -> std::string;
 
@@ -55,8 +78,10 @@ class TimeConvertException : public atom::error::Exception {
  *
  * @return std::string The corresponding time in China Standard Time, formatted
  * as "%Y-%m-%d %H:%M:%S".
+ * @throws TimeConvertException If the input format is invalid or conversion
+ * fails
  */
-[[nodiscard]] auto convertToChinaTime(const std::string &utcTimeStr)
+[[nodiscard]] auto convertToChinaTime(std::string_view utcTimeStr)
     -> std::string;
 
 /**
@@ -69,6 +94,7 @@ class TimeConvertException : public atom::error::Exception {
  *
  * @return std::string The current China Standard Time formatted as "%Y-%m-%d
  * %H:%M:%S".
+ * @throws TimeConvertException If time conversion fails
  */
 [[nodiscard]] auto getChinaTimestampString() -> std::string;
 
@@ -81,10 +107,14 @@ class TimeConvertException : public atom::error::Exception {
  *
  * @param timestamp The timestamp to be converted, typically expressed in
  * seconds since the Unix epoch.
+ * @param format Optional format string (defaults to "%Y-%m-%d %H:%M:%S")
  *
  * @return std::string The string representation of the timestamp.
+ * @throws TimeConvertException If the timestamp is invalid or conversion fails
  */
-[[nodiscard]] auto timeStampToString(time_t timestamp) -> std::string;
+[[nodiscard]] auto timeStampToString(
+    time_t timestamp,
+    std::string_view format = "%Y-%m-%d %H:%M:%S") -> std::string;
 
 /**
  * @brief Converts a `tm` structure to a formatted string.
@@ -97,9 +127,10 @@ class TimeConvertException : public atom::error::Exception {
  *
  * @return std::string The formatted time string based on the `tm` structure and
  * format.
+ * @throws TimeConvertException If formatting fails
  */
-[[nodiscard]] auto toString(const std::tm &tm,
-                            const std::string &format) -> std::string;
+[[nodiscard]] auto toString(const std::tm& tm,
+                            std::string_view format) -> std::string;
 
 /**
  * @brief Retrieves the current UTC time as a formatted string.
@@ -108,6 +139,7 @@ class TimeConvertException : public atom::error::Exception {
  * pattern "%Y-%m-%d %H:%M:%S".
  *
  * @return std::string The current UTC time formatted as "%Y-%m-%d %H:%M:%S".
+ * @throws TimeConvertException If time conversion fails
  */
 [[nodiscard]] auto getUtcTime() -> std::string;
 
@@ -121,10 +153,28 @@ class TimeConvertException : public atom::error::Exception {
  * @param timestamp The timestamp to be converted, typically expressed in
  * seconds since the Unix epoch.
  *
- * @return std::tm The corresponding `std::tm` structure representing the
- * timestamp.
+ * @return std::optional<std::tm> The corresponding `std::tm` structure
+ * representing the timestamp, or nullopt if conversion fails.
  */
-[[nodiscard]] auto timestampToTime(long long timestamp) -> std::tm;
+[[nodiscard]] auto timestampToTime(long long timestamp)
+    -> std::optional<std::tm>;
+
+/**
+ * @brief Get time elapsed since a specific time point in milliseconds
+ *
+ * @tparam Clock Clock type (default: std::chrono::steady_clock)
+ * @param startTime The starting time point
+ * @return int64_t Elapsed time in milliseconds
+ */
+template <typename Clock = std::chrono::steady_clock>
+[[nodiscard]] int64_t getElapsedMilliseconds(
+    const typename Clock::time_point& startTime) {
+    auto now = Clock::now();
+    return std::chrono::duration_cast<std::chrono::milliseconds>(now -
+                                                                 startTime)
+        .count();
+}
+
 }  // namespace atom::utils
 
 #endif

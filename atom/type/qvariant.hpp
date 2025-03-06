@@ -1,15 +1,30 @@
 #ifndef ATOM_TYPE_QVARIANT_HPP
 #define ATOM_TYPE_QVARIANT_HPP
 
+#include <exception>
+#include <format>
 #include <iostream>
+#include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <typeinfo>
 #include <utility>
 #include <variant>
 
 namespace atom::type {
+
+/**
+ * @brief Custom exception class for variant operations
+ */
+class VariantException : public std::runtime_error {
+public:
+    explicit VariantException(const std::string& message)
+        : std::runtime_error(message) {}
+};
+
 /**
  * @brief A wrapper class for std::variant with additional utility functions.
  *
@@ -23,10 +38,17 @@ public:
     /**
      * @brief Default constructor.
      */
-    VariantWrapper();
+    constexpr VariantWrapper() noexcept = default;
 
+    /**
+     * @brief Constructs from another VariantWrapper with different types.
+     */
     template <typename... OtherTypes>
-    VariantWrapper(const VariantWrapper<OtherTypes...>& other);
+    explicit VariantWrapper(
+        const VariantWrapper<OtherTypes...>&
+            other) noexcept(std::
+                                is_nothrow_copy_constructible_v<std::variant<
+                                    std::monostate, OtherTypes...>>);
 
     /**
      * @brief Constructs a VariantWrapper with an initial value.
@@ -35,74 +57,56 @@ public:
      * @param value The initial value to store in the variant.
      */
     template <typename T>
-    VariantWrapper(T&& value);
+    explicit VariantWrapper(T&& value) noexcept(
+        std::is_nothrow_constructible_v<VariantType, T>);
 
     /**
      * @brief Copy constructor.
-     *
-     * @param other The other VariantWrapper to copy from.
      */
-    VariantWrapper(const VariantWrapper& other);
+    VariantWrapper(const VariantWrapper& other) noexcept(
+        std::is_nothrow_copy_constructible_v<VariantType>);
 
     /**
      * @brief Move constructor.
-     *
-     * @param other The other VariantWrapper to move from.
      */
     VariantWrapper(VariantWrapper&& other) noexcept;
 
     /**
      * @brief Copy assignment operator.
-     *
-     * @param other The other VariantWrapper to copy from.
-     * @return A reference to this VariantWrapper.
      */
-    auto operator=(const VariantWrapper& other) -> VariantWrapper&;
+    auto operator=(const VariantWrapper& other) noexcept(
+        std::is_nothrow_copy_assignable_v<VariantType>) -> VariantWrapper&;
 
     /**
      * @brief Move assignment operator.
-     *
-     * @param other The other VariantWrapper to move from.
-     * @return A reference to this VariantWrapper.
      */
     auto operator=(VariantWrapper&& other) noexcept -> VariantWrapper&;
 
     /**
      * @brief Assignment operator for a value.
-     *
-     * @tparam T The type of the value.
-     * @param value The value to assign to the variant.
-     * @return A reference to this VariantWrapper.
      */
     template <typename T>
-    auto operator=(T&& value) -> VariantWrapper&;
+    auto operator=(T&& value) noexcept(
+        std::is_nothrow_assignable_v<VariantType, T>) -> VariantWrapper&;
 
     /**
      * @brief Gets the name of the type currently held by the variant.
-     *
-     * @return The name of the type as a string.
      */
     [[nodiscard]] auto typeName() const -> std::string;
 
     /**
      * @brief Gets the value of the specified type from the variant.
      *
-     * @tparam T The type of the value to get.
-     * @return The value of the specified type.
-     * @throws std::bad_variant_access if the variant does not hold the
-     * specified type.
+     * @throws VariantException if the variant does not hold the specified type.
      */
     template <typename T>
-    auto get() const -> T;
+    [[nodiscard]] auto get() const -> T;
 
     /**
      * @brief Checks if the variant holds the specified type.
-     *
-     * @tparam T The type to check.
-     * @return True if the variant holds the specified type, false otherwise.
      */
     template <typename T>
-    [[nodiscard]] auto is() const -> bool;
+    [[nodiscard]] constexpr auto is() const noexcept -> bool;
 
     /**
      * @brief Prints the current value of the variant to the standard output.
@@ -111,96 +115,72 @@ public:
 
     /**
      * @brief Equality operator.
-     *
-     * @param other The other VariantWrapper to compare with.
-     * @return True if the variants are equal, false otherwise.
      */
-    [[nodiscard]] auto operator==(const VariantWrapper& other) const -> bool;
+    [[nodiscard]] constexpr auto operator==(
+        const VariantWrapper& other) const noexcept -> bool;
 
     /**
      * @brief Inequality operator.
-     *
-     * @param other The other VariantWrapper to compare with.
-     * @return True if the variants are not equal, false otherwise.
      */
-    [[nodiscard]] auto operator!=(const VariantWrapper& other) const -> bool;
+    [[nodiscard]] constexpr auto operator!=(
+        const VariantWrapper& other) const noexcept -> bool;
 
     /**
      * @brief Visits the variant with a visitor.
-     *
-     * @tparam Visitor The type of the visitor.
-     * @param visitor The visitor to apply to the variant.
-     * @return The result of the visitor.
      */
     template <typename Visitor>
-    auto visit(Visitor&& visitor) const -> decltype(auto);
+    [[nodiscard]] auto visit(Visitor&& visitor) const -> decltype(auto);
 
     /**
      * @brief Gets the index of the currently held type in the variant.
-     *
-     * @return The index of the currently held type.
      */
-    [[nodiscard]] auto index() const -> std::size_t;
+    [[nodiscard]] constexpr auto index() const noexcept -> std::size_t;
 
     /**
      * @brief Tries to get the value of the specified type from the variant.
-     *
-     * @tparam T The type of the value to get.
-     * @return An optional containing the value if the variant holds the
-     * specified type, std::nullopt otherwise.
      */
     template <typename T>
-    auto tryGet() const -> std::optional<T>;
+    [[nodiscard]] auto tryGet() const noexcept -> std::optional<T>;
 
     /**
      * @brief Tries to convert the current value to an int.
-     *
-     * @return An optional containing the int value if the conversion is
-     * successful, std::nullopt otherwise.
      */
-    [[nodiscard]] auto toInt() const -> std::optional<int>;
+    [[nodiscard]] auto toInt() const noexcept -> std::optional<int>;
 
     /**
      * @brief Tries to convert the current value to a double.
-     *
-     * @return An optional containing the double value if the conversion is
-     * successful, std::nullopt otherwise.
      */
-    [[nodiscard]] auto toDouble() const -> std::optional<double>;
+    [[nodiscard]] auto toDouble() const noexcept -> std::optional<double>;
 
     /**
      * @brief Tries to convert the current value to a bool.
-     *
-     * @return An optional containing the bool value if the conversion is
-     * successful, std::nullopt otherwise.
      */
-    [[nodiscard]] auto toBool() const -> std::optional<bool>;
+    [[nodiscard]] auto toBool() const noexcept -> std::optional<bool>;
 
     /**
      * @brief Converts the current value to a string.
-     *
-     * @return The string representation of the current value.
      */
     [[nodiscard]] auto toString() const -> std::string;
 
     /**
      * @brief Resets the variant to hold std::monostate.
      */
-    void reset();
+    constexpr void reset() noexcept;
 
     /**
      * @brief Checks if the variant holds a value other than std::monostate.
-     *
-     * @return True if the variant holds a value, false otherwise.
      */
-    [[nodiscard]] auto hasValue() const -> bool;
+    [[nodiscard]] constexpr auto hasValue() const noexcept -> bool;
+
+    /**
+     * @brief Execute a function safely with thread protection if this is
+     * shared.
+     */
+    template <typename Func>
+    auto withThreadSafety(Func&& func) const -> decltype(auto);
 
     /**
      * @brief Stream insertion operator for VariantWrapper.
-     *
-     * @param outputStream The output stream.
-     * @param variantWrapper The VariantWrapper to insert into the stream.
-     * @return The output stream.
      */
     friend auto operator<<(std::ostream& outputStream,
                            const VariantWrapper& variantWrapper)
@@ -212,37 +192,53 @@ public:
     ~VariantWrapper() = default;
 
 private:
-    VariantType variant_ = VariantType(std::in_place_index<0>);
+    VariantType variant_{std::in_place_index<0>};
+    mutable std::shared_mutex mutex_;  // For thread-safe operations
+
+    // Helper template for checking if a type is suitable for our variant
+    template <typename T>
+    static constexpr bool is_valid_type_v = (std::is_same_v<T, Types> || ...);
 };
 
-// 实现部分
-
-template <typename... Types>
-VariantWrapper<Types...>::VariantWrapper() = default;
+// Implementation
 
 template <typename... Types>
 template <typename... OtherTypes>
-VariantWrapper<Types...>::VariantWrapper(
-    const VariantWrapper<OtherTypes...>& other)
-    : variant_(other.variant_) {}
+VariantWrapper<Types...>::
+    VariantWrapper(const VariantWrapper<OtherTypes...>& other) noexcept(
+        std::is_nothrow_copy_constructible_v<
+            std::variant<std::monostate, OtherTypes...>>)
+    : variant_(other.withThreadSafety([&](const auto& v) { return v; })) {}
 
 template <typename... Types>
 template <typename T>
-VariantWrapper<Types...>::VariantWrapper(T&& value)
-    : variant_(std::forward<T>(value)) {}
+VariantWrapper<Types...>::VariantWrapper(T&& value) noexcept(
+    std::is_nothrow_constructible_v<VariantType, T>) {
+    static_assert(is_valid_type_v<std::decay_t<T>> ||
+                      std::is_same_v<std::decay_t<T>, std::monostate>,
+                  "Type not supported by this VariantWrapper");
+    variant_ = std::forward<T>(value);
+}
 
 template <typename... Types>
-VariantWrapper<Types...>::VariantWrapper(const VariantWrapper& other)
-    : variant_(other.variant_) {}
+VariantWrapper<Types...>::VariantWrapper(const VariantWrapper& other) noexcept(
+    std::is_nothrow_copy_constructible_v<VariantType>) {
+    auto shared_lock = std::shared_lock(other.mutex_);
+    variant_ = other.variant_;
+}
 
 template <typename... Types>
-VariantWrapper<Types...>::VariantWrapper(VariantWrapper&& other) noexcept
-    : variant_(std::move(other.variant_)) {}
+VariantWrapper<Types...>::VariantWrapper(VariantWrapper&& other) noexcept {
+    auto lock = std::unique_lock(other.mutex_);
+    variant_ = std::move(other.variant_);
+}
 
 template <typename... Types>
-auto VariantWrapper<Types...>::operator=(const VariantWrapper& other)
-    -> VariantWrapper& {
+auto VariantWrapper<Types...>::operator=(const VariantWrapper& other) noexcept(
+    std::is_nothrow_copy_assignable_v<VariantType>) -> VariantWrapper& {
     if (this != &other) {
+        auto this_lock = std::unique_lock(mutex_);
+        auto other_lock = std::shared_lock(other.mutex_);
         variant_ = other.variant_;
     }
     return *this;
@@ -252,6 +248,8 @@ template <typename... Types>
 auto VariantWrapper<Types...>::operator=(VariantWrapper&& other) noexcept
     -> VariantWrapper& {
     if (this != &other) {
+        auto this_lock = std::unique_lock(mutex_);
+        auto other_lock = std::unique_lock(other.mutex_);
         variant_ = std::move(other.variant_);
     }
     return *this;
@@ -259,55 +257,95 @@ auto VariantWrapper<Types...>::operator=(VariantWrapper&& other) noexcept
 
 template <typename... Types>
 template <typename T>
-auto VariantWrapper<Types...>::operator=(T&& value) -> VariantWrapper& {
+auto VariantWrapper<Types...>::operator=(T&& value) noexcept(
+    std::is_nothrow_assignable_v<VariantType, T>) -> VariantWrapper& {
+    static_assert(is_valid_type_v<std::decay_t<T>> ||
+                      std::is_same_v<std::decay_t<T>, std::monostate>,
+                  "Type not supported by this VariantWrapper");
+    auto lock = std::unique_lock(mutex_);
     variant_ = std::forward<T>(value);
     return *this;
 }
 
 template <typename... Types>
 auto VariantWrapper<Types...>::typeName() const -> std::string {
-    return std::visit(
-        [](auto&& arg) -> std::string { return typeid(arg).name(); }, variant_);
+    return withThreadSafety([this]() -> std::string {
+        try {
+            return std::visit(
+                [](auto&& arg) -> std::string { return typeid(arg).name(); },
+                variant_);
+        } catch (const std::exception& e) {
+            return std::string("Error getting type name: ") + e.what();
+        }
+    });
 }
 
 template <typename... Types>
 template <typename T>
 auto VariantWrapper<Types...>::get() const -> T {
-    if (!std::holds_alternative<T>(variant_)) {
-        throw std::bad_variant_access();
-    }
-    return std::get<T>(variant_);
+    return withThreadSafety([this]() -> T {
+        try {
+            if (!std::holds_alternative<T>(variant_)) {
+                throw VariantException(
+                    std::format("Variant does not hold requested type {}",
+                                typeid(T).name()));
+            }
+            return std::get<T>(variant_);
+        } catch (const std::bad_variant_access& e) {
+            throw VariantException(
+                std::format("Bad variant access: {}", e.what()));
+        } catch (const VariantException&) {
+            throw;  // Rethrow our custom exception
+        } catch (const std::exception& e) {
+            throw VariantException(
+                std::format("Error getting value: {}", e.what()));
+        }
+    });
 }
 
 template <typename... Types>
 template <typename T>
-auto VariantWrapper<Types...>::is() const -> bool {
-    return std::holds_alternative<T>(variant_);
+constexpr auto VariantWrapper<Types...>::is() const noexcept -> bool {
+    return withThreadSafety(
+        [this]() { return std::holds_alternative<T>(variant_); });
 }
 
 template <typename... Types>
 void VariantWrapper<Types...>::print() const {
-    std::visit(
-        [](const auto& value) {
-            if constexpr (std::is_same_v<std::decay_t<decltype(value)>,
-                                         std::monostate>) {
-                std::cout << "Current value: std::monostate" << std::endl;
-            } else {
-                std::cout << "Current value: " << value << std::endl;
-            }
-        },
-        variant_);
+    withThreadSafety([this]() {
+        try {
+            std::visit(
+                [](const auto& value) {
+                    if constexpr (std::is_same_v<std::decay_t<decltype(value)>,
+                                                 std::monostate>) {
+                        std::cout << "Current value: std::monostate"
+                                  << std::endl;
+                    } else {
+                        std::cout << "Current value: " << value << std::endl;
+                    }
+                },
+                variant_);
+        } catch (const std::exception& e) {
+            std::cerr << "Error printing variant: " << e.what() << std::endl;
+        }
+    });
 }
 
 template <typename... Types>
-auto VariantWrapper<Types...>::operator==(const VariantWrapper& other) const
-    -> bool {
-    return variant_ == other.variant_;
+constexpr auto VariantWrapper<Types...>::operator==(
+    const VariantWrapper& other) const noexcept -> bool {
+    if (this == &other)
+        return true;
+
+    return withThreadSafety([this, &other]() {
+        auto other_lock = std::shared_lock(other.mutex_);
+        return variant_ == other.variant_;
+    });
 }
 
 template <typename... Types>
-auto VariantWrapper<Types...>::operator!=(const VariantWrapper& other) const
-    -> bool {
+constexpr auto VariantWrapper<Types...>::operator!=(
+    const VariantWrapper& other) const noexcept -> bool {
     return !(*this == other);
 }
 
@@ -315,74 +353,159 @@ template <typename... Types>
 template <typename Visitor>
 auto VariantWrapper<Types...>::visit(Visitor&& visitor) const
     -> decltype(auto) {
-    return std::visit(std::forward<Visitor>(visitor), variant_);
+    return withThreadSafety([this, &visitor]() -> decltype(auto) {
+        try {
+            return std::visit(std::forward<Visitor>(visitor), variant_);
+        } catch (const std::exception& e) {
+            throw VariantException(
+                std::format("Error during variant visit: {}", e.what()));
+        }
+    });
 }
 
 template <typename... Types>
-auto VariantWrapper<Types...>::index() const -> std::size_t {
-    return variant_.index();
+constexpr auto VariantWrapper<Types...>::index() const noexcept -> std::size_t {
+    return withThreadSafety([this]() { return variant_.index(); });
 }
 
 template <typename... Types>
 template <typename T>
-auto VariantWrapper<Types...>::tryGet() const -> std::optional<T> {
-    if (is<T>()) {
-        return get<T>();
-    }
-    return std::nullopt;
-}
-
-template <typename... Types>
-auto VariantWrapper<Types...>::toInt() const -> std::optional<int> {
-    return visit([](auto&& arg) -> std::optional<int> {
-        using T = std::decay_t<decltype(arg)>;
-        if constexpr (std::is_convertible_v<T, int>) {
-            return static_cast<int>(arg);
-        } else if constexpr (std::is_convertible_v<T, std::string>) {
-            try {
-                return std::stoi(arg);
-            } catch (...) {
-                return std::nullopt;
+auto VariantWrapper<Types...>::tryGet() const noexcept -> std::optional<T> {
+    return withThreadSafety([this]() -> std::optional<T> {
+        try {
+            if (is<T>()) {
+                return std::get<T>(variant_);
             }
-        } else {
+            return std::nullopt;
+        } catch (...) {
             return std::nullopt;
         }
     });
 }
 
 template <typename... Types>
-auto VariantWrapper<Types...>::toDouble() const -> std::optional<double> {
-    return visit([](auto&& arg) -> std::optional<double> {
-        using T = std::decay_t<decltype(arg)>;
-        if constexpr (std::is_convertible_v<T, double>) {
-            return static_cast<double>(arg);
-        } else if constexpr (std::is_convertible_v<T, std::string>) {
-            try {
-                return std::stod(arg);
-            } catch (...) {
-                return std::nullopt;
-            }
-        } else {
+auto VariantWrapper<Types...>::toInt() const noexcept -> std::optional<int> {
+    return withThreadSafety([this]() -> std::optional<int> {
+        try {
+            return std::visit(
+                [](auto&& arg) -> std::optional<int> {
+                    using T = std::decay_t<decltype(arg)>;
+
+                    if constexpr (std::is_same_v<T, std::monostate>) {
+                        return std::nullopt;
+                    } else if constexpr (std::is_arithmetic_v<T>) {
+                        if constexpr (std::is_floating_point_v<T>) {
+                            // Check for overflow/underflow for floating-point
+                            // conversions
+                            constexpr auto int_max =
+                                static_cast<T>(std::numeric_limits<int>::max());
+                            constexpr auto int_min =
+                                static_cast<T>(std::numeric_limits<int>::min());
+
+                            if (arg > int_max || arg < int_min) {
+                                return std::nullopt;
+                            }
+                        }
+                        return static_cast<int>(arg);
+                    } else if constexpr (std::is_convertible_v<T,
+                                                               std::string> ||
+                                         std::is_same_v<T, std::string>) {
+                        try {
+                            std::size_t pos = 0;
+                            const int result = std::stoi(arg, &pos);
+                            // Ensure entire string was consumed
+                            if (pos == arg.length()) {
+                                return result;
+                            }
+                            return std::nullopt;
+                        } catch (...) {
+                            return std::nullopt;
+                        }
+                    } else {
+                        return std::nullopt;
+                    }
+                },
+                variant_);
+        } catch (...) {
             return std::nullopt;
         }
     });
 }
 
 template <typename... Types>
-auto VariantWrapper<Types...>::toBool() const -> std::optional<bool> {
-    return visit([](auto&& arg) -> std::optional<bool> {
-        using T = std::decay_t<decltype(arg)>;
-        if constexpr (std::is_convertible_v<T, bool>) {
-            return static_cast<bool>(arg);
-        } else if constexpr (std::is_convertible_v<T, std::string>) {
-            if (arg == "true") {
-                return true;
-            }
-            if (arg == "false") {
-                return false;
-            }
+auto VariantWrapper<Types...>::toDouble() const noexcept
+    -> std::optional<double> {
+    return withThreadSafety([this]() -> std::optional<double> {
+        try {
+            return std::visit(
+                [](auto&& arg) -> std::optional<double> {
+                    using T = std::decay_t<decltype(arg)>;
+
+                    if constexpr (std::is_same_v<T, std::monostate>) {
+                        return std::nullopt;
+                    } else if constexpr (std::is_arithmetic_v<T>) {
+                        return static_cast<double>(arg);
+                    } else if constexpr (std::is_convertible_v<T,
+                                                               std::string> ||
+                                         std::is_same_v<T, std::string>) {
+                        try {
+                            std::size_t pos = 0;
+                            const double result = std::stod(arg, &pos);
+                            // Ensure entire string was consumed
+                            if (pos == arg.length()) {
+                                return result;
+                            }
+                            return std::nullopt;
+                        } catch (...) {
+                            return std::nullopt;
+                        }
+                    } else {
+                        return std::nullopt;
+                    }
+                },
+                variant_);
+        } catch (...) {
             return std::nullopt;
-        } else {
+        }
+    });
+}
+
+template <typename... Types>
+auto VariantWrapper<Types...>::toBool() const noexcept -> std::optional<bool> {
+    return withThreadSafety([this]() -> std::optional<bool> {
+        try {
+            return std::visit(
+                [](auto&& arg) -> std::optional<bool> {
+                    using T = std::decay_t<decltype(arg)>;
+
+                    if constexpr (std::is_same_v<T, std::monostate>) {
+                        return std::nullopt;
+                    } else if constexpr (std::is_convertible_v<T, bool>) {
+                        return static_cast<bool>(arg);
+                    } else if constexpr (std::is_convertible_v<T,
+                                                               std::string> ||
+                                         std::is_same_v<T, std::string>) {
+                        std::string str = arg;
+                        // Convert to lowercase for case-insensitive comparison
+                        std::transform(
+                            str.begin(), str.end(), str.begin(),
+                            [](unsigned char c) { return std::tolower(c); });
+
+                        if (str == "true" || str == "1" || str == "yes" ||
+                            str == "y") {
+                            return true;
+                        }
+                        if (str == "false" || str == "0" || str == "no" ||
+                            str == "n") {
+                            return false;
+                        }
+                        return std::nullopt;
+                    } else {
+                        return std::nullopt;
+                    }
+                },
+                variant_);
+        } catch (...) {
             return std::nullopt;
         }
     });
@@ -390,33 +513,57 @@ auto VariantWrapper<Types...>::toBool() const -> std::optional<bool> {
 
 template <typename... Types>
 auto VariantWrapper<Types...>::toString() const -> std::string {
-    return visit([](auto&& arg) -> std::string {
-        if constexpr (std::is_same_v<std::decay_t<decltype(arg)>,
-                                     std::monostate>) {
-            return "std::monostate";
-        } else {
-            std::ostringstream oss;
-            oss << arg;
-            return oss.str();
+    return withThreadSafety([this]() -> std::string {
+        try {
+            return std::visit(
+                [](auto&& arg) -> std::string {
+                    using T = std::decay_t<decltype(arg)>;
+
+                    if constexpr (std::is_same_v<T, std::monostate>) {
+                        return "std::monostate";
+                    } else if constexpr (std::is_same_v<T, std::string>) {
+                        return arg;
+                    } else if constexpr (requires { std::to_string(arg); }) {
+                        return std::to_string(arg);
+                    } else {
+                        std::ostringstream oss;
+                        oss << arg;
+                        return oss.str();
+                    }
+                },
+                variant_);
+        } catch (const std::exception& e) {
+            return std::string("Error converting to string: ") + e.what();
         }
     });
 }
 
 template <typename... Types>
-void VariantWrapper<Types...>::reset() {
+constexpr void VariantWrapper<Types...>::reset() noexcept {
+    auto lock = std::unique_lock(mutex_);
     variant_.template emplace<std::monostate>();
 }
 
 template <typename... Types>
-auto VariantWrapper<Types...>::hasValue() const -> bool {
-    return variant_.index() != 0;  // std::monostate is the first type
+constexpr auto VariantWrapper<Types...>::hasValue() const noexcept -> bool {
+    return withThreadSafety([this]() {
+        return variant_.index() != 0;  // std::monostate is the first type
+    });
+}
+
+template <typename... Types>
+template <typename Func>
+auto VariantWrapper<Types...>::withThreadSafety(Func&& func) const
+    -> decltype(auto) {
+    auto lock = std::shared_lock(mutex_);
+    return std::forward<Func>(func)();
 }
 
 template <typename... Types>
 auto operator<<(std::ostream& outputStream,
                 const VariantWrapper<Types...>& variantWrapper)
     -> std::ostream& {
-    variantWrapper.print();
+    outputStream << variantWrapper.toString();
     return outputStream;
 }
 

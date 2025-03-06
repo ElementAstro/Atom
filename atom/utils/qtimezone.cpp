@@ -1,135 +1,225 @@
 #include "qtimezone.hpp"
 #include "qdatetime.hpp"
 
-#include <algorithm>
 #include <chrono>
 #include <ctime>
 #include <string>
 #include <vector>
+#include <mutex>
+#include <shared_mutex>
+
+#ifdef __AVX2__
+#include <immintrin.h>
+#endif
 
 #include "atom/log/loguru.hpp"
 
 namespace atom::utils {
 
-QTimeZone::QTimeZone() : timeZoneId_("UTC"), offset_(std::chrono::seconds(0)) {
-    LOG_F(INFO, "QTimeZone default constructor called, set to UTC");
-}
-
-QTimeZone::QTimeZone(const std::string& timeZoneId_) {
-    LOG_F(INFO, "QTimeZone constructor called with timeZoneId: {}",
-          timeZoneId_);
-    auto availableIds = availableTimeZoneIds();
-    if (std::find(availableIds.begin(), availableIds.end(), timeZoneId_) ==
-        availableIds.end()) {
-        LOG_F(ERROR, "Invalid time zone ID: {}", timeZoneId_);
-        THROW_INVALID_ARGUMENT("Invalid time zone ID");
+// Thread-safe time zone data cache
+class TimeZoneCache {
+public:
+    static TimeZoneCache& instance() {
+        static TimeZoneCache cache;
+        return cache;
     }
-    this->timeZoneId_ = timeZoneId_;
 
-    std::tm localTime = {};
-    std::time_t currentTime = std::time(nullptr);
+    bool isDSTForDateTime(const std::string& tzId, std::time_t timestamp) {
+        {
+            std::shared_lock<std::shared_mutex> lock(mutex_);
+            auto tzIt = dstCache_.find(tzId);
+            if (tzIt != dstCache_.end()) {
+                auto timeIt = tzIt->second.find(timestamp);
+                if (timeIt != tzIt->second.end()) {
+                    return timeIt->second;
+                }
+            }
+        }
+        
+        // Calculate DST status (implementation depends on TimeZone::isDaylightTime logic)
+        bool isDST = calculateDST(tzId, timestamp);
+        
+        {
+            std::unique_lock<std::shared_mutex> lock(mutex_);
+            dstCache_[tzId][timestamp] = isDST;
+        }
+        
+        return isDST;
+    }
+    
+    // Helper to calculate DST status for a timezone + timestamp
+    bool calculateDST(const std::string& tzId, std::time_t timestamp) {
+        // This is a simplified implementation - full implementation would depend 
+        // on the actual DST rules for each timezone
+        if (tzId == "UTC") return false;
+        
+        std::tm localTime{};
 #ifdef _WIN32
-    if (localtime_s(&localTime, &currentTime) != 0) {
-        LOG_F(ERROR, "Failed to get local time");
-        THROW_GET_TIME_ERROR("Failed to get local time");
-    }
+        localtime_s(&localTime, &timestamp);
 #else
-    if (localtime_r(&currentTime, &localTime) == nullptr) {
-        LOG_F(ERROR, "Failed to get local time");
-        THROW_GET_TIME_ERROR("Failed to get local time");
-    }
+        localtime_r(&timestamp, &localTime);
 #endif
-
-    std::tm utcTime = {};
-#ifdef _WIN32
-    if (gmtime_s(&utcTime, &currentTime) != 0) {
-        LOG_F(ERROR, "Failed to get UTC time");
-        THROW_GET_TIME_ERROR("Failed to get UTC time");
+        return localTime.tm_isdst > 0;
     }
-#else
-    if (gmtime_r(&currentTime, &utcTime) == nullptr) {
-        LOG_F(ERROR, "Failed to get UTC time");
-        THROW_GET_TIME_ERROR("Failed to get UTC time");
+    
+    const std::unordered_map<std::string, std::string>& getDisplayNames() {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
+        return displayNameCache_;
     }
-#endif
-
-    auto localTimeT = std::mktime(&localTime);
-    auto utcTimeT = std::mktime(&utcTime);
-    offset_ = std::chrono::seconds(localTimeT - utcTimeT);
-    LOG_F(INFO, "QTimeZone initialized with offset: {}", offset_->count());
-}
-
-auto QTimeZone::availableTimeZoneIds() -> std::vector<std::string> {
-    LOG_F(INFO, "QTimeZone::availableTimeZoneIds called");
-    return {"UTC", "PST", "EST", "CST", "MST"};
-}
-
-auto QTimeZone::id() const -> std::string {
-    LOG_F(INFO, "QTimeZone::id called, returning: {}", timeZoneId_);
-    return timeZoneId_;
-}
-
-auto QTimeZone::displayName() const -> std::string {
-    LOG_F(INFO, "QTimeZone::displayName called for timeZoneId: {}",
-          timeZoneId_);
-    if (timeZoneId_ == "UTC") {
-        return "Coordinated Universal Time";
-    }
-    if (timeZoneId_ == "PST") {
-        return "Pacific Standard Time";
-    }
-    if (timeZoneId_ == "EST") {
-        return "Eastern Standard Time";
-    }
-    if (timeZoneId_ == "CST") {
-        return "Central Standard Time";
-    }
-    if (timeZoneId_ == "MST") {
-        return "Mountain Standard Time";
-    }
-    return "";
-}
-
-auto QTimeZone::isValid() const -> bool {
-    LOG_F(INFO, "QTimeZone::isValid called, returning: {}",
-          offset_.has_value());
-    return offset_.has_value();
-}
-
-auto QTimeZone::offsetFromUtc(const QDateTime& dateTime) const
-    -> std::chrono::seconds {
-    LOG_F(INFO, "QTimeZone::offsetFromUtc called for dateTime: {}",
-          dateTime.toString("%Y-%m-%d %H:%M:%S"));
-    std::time_t currentTime = dateTime.toTimeT();
-    std::tm utcTime = *gmtime(&currentTime);
-
-    std::tm localTime = utcTime;
-    localTime.tm_sec += static_cast<int>(offset_.value().count());
-    if (mktime(&localTime) == -1) {
-        LOG_F(ERROR, "Failed to convert time");
-        THROW_GET_TIME_ERROR("Failed to convert time");
-    }
-
-    if (hasDaylightTime() && isDaylightTime(dateTime)) {
-        localTime.tm_sec += static_cast<int>(daylightTimeOffset().count());
-        if (mktime(&localTime) == -1) {
-            LOG_F(ERROR, "Failed to convert time with daylight saving");
-            THROW_GET_TIME_ERROR("Failed to convert time with daylight saving");
+    
+    void initializeDisplayNames() {
+        std::unique_lock<std::shared_mutex> lock(mutex_);
+        if (displayNameCache_.empty()) {
+            displayNameCache_ = {
+                {"UTC", "Coordinated Universal Time"},
+                {"PST", "Pacific Standard Time"},
+                {"EST", "Eastern Standard Time"},
+                {"CST", "Central Standard Time"},
+                {"MST", "Mountain Standard Time"}
+            };
         }
     }
 
-    auto result = std::chrono::seconds(mktime(&localTime) - mktime(&utcTime));
-    LOG_F(INFO, "QTimeZone::offsetFromUtc returning: {}", result.count());
-    return result;
+private:
+    TimeZoneCache() {
+        initializeDisplayNames();
+    }
+    
+    std::shared_mutex mutex_;
+    std::unordered_map<std::string, std::unordered_map<std::time_t, bool>> dstCache_;
+    std::unordered_map<std::string, std::string> displayNameCache_;
+};
+
+QTimeZone::QTimeZone() noexcept 
+    : timeZoneId_("UTC"), 
+      displayName_("Coordinated Universal Time"),
+      offset_(std::chrono::seconds(0)) {
+    LOG_F(INFO, "QTimeZone default constructor called, set to UTC");
 }
 
-auto QTimeZone::standardTimeOffset() const -> std::chrono::seconds {
+void QTimeZone::initialize() {
+    try {
+        auto& cache = TimeZoneCache::instance();
+        auto names = cache.getDisplayNames();
+        auto it = names.find(timeZoneId_);
+        if (it != names.end()) {
+            displayName_ = it->second;
+        } else {
+            displayName_ = timeZoneId_; // Fallback to using ID as display name
+        }
+
+        std::tm localTime{};
+        std::time_t currentTime = std::time(nullptr);
+#ifdef _WIN32
+        if (localtime_s(&localTime, &currentTime) != 0) {
+            LOG_F(ERROR, "Failed to get local time");
+            THROW_GET_TIME_ERROR("Failed to get local time");
+        }
+#else
+        if (localtime_r(&currentTime, &localTime) == nullptr) {
+            LOG_F(ERROR, "Failed to get local time");
+            THROW_GET_TIME_ERROR("Failed to get local time");
+        }
+#endif
+
+        std::tm utcTime{};
+#ifdef _WIN32
+        if (gmtime_s(&utcTime, &currentTime) != 0) {
+            LOG_F(ERROR, "Failed to get UTC time");
+            THROW_GET_TIME_ERROR("Failed to get UTC time");
+        }
+#else
+        if (gmtime_r(&currentTime, &utcTime) == nullptr) {
+            LOG_F(ERROR, "Failed to get UTC time");
+            THROW_GET_TIME_ERROR("Failed to get UTC time");
+        }
+#endif
+
+        std::time_t localTimeT = std::mktime(&localTime);
+        std::time_t utcTimeT = std::mktime(&utcTime);
+        
+        if (localTimeT == -1 || utcTimeT == -1) {
+            LOG_F(ERROR, "Failed to convert time");
+            THROW_GET_TIME_ERROR("Failed to convert time");
+        }
+        
+        offset_ = std::chrono::seconds(localTimeT - utcTimeT);
+        LOG_F(INFO, "QTimeZone initialized with offset: {}", offset_->count());
+    } catch (const std::exception& e) {
+        LOG_F(ERROR, "Exception during QTimeZone initialization: {}", e.what());
+        throw;
+    }
+}
+
+auto QTimeZone::availableTimeZoneIds() noexcept -> std::vector<std::string> {
+    LOG_F(INFO, "QTimeZone::availableTimeZoneIds called");
+    static const std::vector<std::string> timeZoneIds = {"UTC", "PST", "EST", "CST", "MST"};
+    return timeZoneIds;
+}
+
+auto QTimeZone::identifier() const noexcept -> std::string_view {
+    LOG_F(INFO, "QTimeZone::identifier called, returning: {}", timeZoneId_);
+    return timeZoneId_;
+}
+
+auto QTimeZone::displayName() const noexcept -> std::string_view {
+    LOG_F(INFO, "QTimeZone::displayName called for timeZoneId: {}", timeZoneId_);
+    return displayName_;
+}
+
+auto QTimeZone::isValid() const noexcept -> bool {
+    LOG_F(INFO, "QTimeZone::isValid called, returning: {}", offset_.has_value());
+    return offset_.has_value();
+}
+
+auto QTimeZone::offsetFromUtc(const QDateTime& dateTime) const -> std::chrono::seconds {
+    LOG_F(INFO, "QTimeZone::offsetFromUtc called");
+    
+    try {
+        if (!dateTime.isValid()) {
+            LOG_F(WARNING, "QTimeZone::offsetFromUtc called with invalid QDateTime");
+            return std::chrono::seconds(0);
+        }
+        
+        std::time_t currentTime = dateTime.toTimeT();
+        std::tm utcTime{};
+        
+#ifdef _WIN32
+        if (gmtime_s(&utcTime, &currentTime) != 0) {
+            LOG_F(ERROR, "Failed to get UTC time");
+            THROW_GET_TIME_ERROR("Failed to get UTC time");
+        }
+#else
+        if (gmtime_r(&currentTime, &utcTime) == nullptr) {
+            LOG_F(ERROR, "Failed to get UTC time");
+            THROW_GET_TIME_ERROR("Failed to get UTC time");
+        }
+#endif
+
+        std::chrono::seconds baseOffset = standardTimeOffset();
+        std::chrono::seconds result = baseOffset;
+        
+        if (hasDaylightTime() && 
+            TimeZoneCache::instance().isDSTForDateTime(timeZoneId_, currentTime)) {
+            result += daylightTimeOffset();
+            LOG_F(INFO, "Adding DST offset: {}", daylightTimeOffset().count());
+        }
+        
+        LOG_F(INFO, "QTimeZone::offsetFromUtc returning: {}", result.count());
+        return result;
+    } catch (const std::exception& e) {
+        LOG_F(ERROR, "Exception in offsetFromUtc: {}", e.what());
+        THROW_GET_TIME_ERROR("Failed to calculate time offset: " + std::string(e.what()));
+    }
+}
+
+auto QTimeZone::standardTimeOffset() const noexcept -> std::chrono::seconds {
     LOG_F(INFO, "QTimeZone::standardTimeOffset called, returning: {}",
           offset_.value_or(std::chrono::seconds(0)).count());
     return offset_.value_or(std::chrono::seconds(0));
 }
 
-auto QTimeZone::daylightTimeOffset() const -> std::chrono::seconds {
+auto QTimeZone::daylightTimeOffset() const noexcept -> std::chrono::seconds {
     LOG_F(INFO, "QTimeZone::daylightTimeOffset called for timeZoneId: {}",
           timeZoneId_);
     static constexpr int K_ONE_HOUR_IN_SECONDS = 3600;
@@ -140,68 +230,123 @@ auto QTimeZone::daylightTimeOffset() const -> std::chrono::seconds {
     return std::chrono::seconds(0);
 }
 
-auto QTimeZone::hasDaylightTime() const -> bool {
+auto QTimeZone::hasDaylightTime() const noexcept -> bool {
     LOG_F(INFO, "QTimeZone::hasDaylightTime called for timeZoneId: {}",
           timeZoneId_);
-    return timeZoneId_ == "PST" || timeZoneId_ == "EST" ||
-           timeZoneId_ == "CST" || timeZoneId_ == "MST";
+    return timeZoneId_ != "UTC";
 }
 
 auto QTimeZone::isDaylightTime(const QDateTime& dateTime) const -> bool {
-    LOG_F(INFO, "QTimeZone::isDaylightTime called for dateTime: {}",
-          dateTime.toString("%Y-%m-%d %H:%M:%S"));
+    LOG_F(INFO, "QTimeZone::isDaylightTime called");
+    
+    if (!dateTime.isValid()) {
+        LOG_F(WARNING, "QTimeZone::isDaylightTime called with invalid QDateTime");
+        return false;
+    }
+    
     if (!hasDaylightTime()) {
-        LOG_F(INFO,
-              "QTimeZone::isDaylightTime returning false (no daylight saving "
-              "time)");
+        LOG_F(INFO, "QTimeZone::isDaylightTime returning false (no daylight saving time)");
         return false;
     }
 
     std::time_t currentTime = dateTime.toTimeT();
-    std::tm localTime = *localtime(&currentTime);
+    
+    // Check the cache first
+    auto cacheIt = dstCache_.find(currentTime);
+    if (cacheIt != dstCache_.end()) {
+        return cacheIt->second;
+    }
+    
+    try {
+        // Determine DST rules for Northern Hemisphere
+        std::tm localTime{};
+#ifdef _WIN32
+        if (localtime_s(&localTime, &currentTime) != 0) {
+            LOG_F(ERROR, "Failed to get local time");
+            THROW_GET_TIME_ERROR("Failed to get local time");
+        }
+#else
+        if (localtime_r(&currentTime, &localTime) == nullptr) {
+            LOG_F(ERROR, "Failed to get local time");
+            THROW_GET_TIME_ERROR("Failed to get local time");
+        }
+#endif
 
-    static constexpr int K_MARCH = 2;
-    static constexpr int K_NOVEMBER = 10;
-    static constexpr int K_SECOND_SUNDAY = 8;
-    static constexpr int K_FIRST_SUNDAY = 1;
-    static constexpr int K_ONE_WEEK = 7;
-
-    std::tm startDST = {
-        0, 0,  2, K_SECOND_SUNDAY, K_MARCH, localTime.tm_year, 0,
-        0, -1, 0};  // March 8th 2:00 AM
-    std::tm endDST = {
-        0, 0,  2, K_FIRST_SUNDAY, K_NOVEMBER, localTime.tm_year, 0,
-        0, -1, 0};  // November 1st 2:00 AM
-
-    while (startDST.tm_wday != 0) {
-        startDST.tm_mday += 1;
-        if (mktime(&startDST) == -1) {
+        static constexpr int K_MARCH = 2;     // 0-based month (March)
+        static constexpr int K_NOVEMBER = 10; // 0-based month (November)
+        
+        // Create current year's DST start date (2nd Sunday in March at 2AM)
+        std::tm startDST{};
+        startDST.tm_year = localTime.tm_year;
+        startDST.tm_mon = K_MARCH;
+        startDST.tm_mday = 1; // Start with the 1st
+        startDST.tm_hour = 2;
+        startDST.tm_min = 0;
+        startDST.tm_sec = 0;
+        
+        // Find second Sunday in March
+        std::time_t startTime = std::mktime(&startDST);
+        if (startTime == -1) {
             LOG_F(ERROR, "Failed to convert time for startDST");
             THROW_GET_TIME_ERROR("Failed to convert time for startDST");
         }
-    }
-    startDST.tm_mday += K_ONE_WEEK;
-    if (mktime(&startDST) == -1) {
-        LOG_F(ERROR,
-              "Failed to convert time for startDST after adding one week");
-        THROW_GET_TIME_ERROR(
-            "Failed to convert time for startDST after adding one week");
-    }
-
-    while (endDST.tm_wday != 0) {
-        endDST.tm_mday += 1;
-        if (mktime(&endDST) == -1) {
+        
+        int sundayCount = 0;
+        while (sundayCount < 2) {
+            // Re-get the tm structure
+#ifdef _WIN32
+            localtime_s(&startDST, &startTime);
+#else
+            localtime_r(&startTime, &startDST);
+#endif
+            if (startDST.tm_wday == 0) { // Sunday
+                sundayCount++;
+            }
+            if (sundayCount < 2) {
+                startTime += 24 * 60 * 60; // Add one day
+            }
+        }
+        
+        // Create current year's DST end date (1st Sunday in November at 2AM)
+        std::tm endDST{};
+        endDST.tm_year = localTime.tm_year;
+        endDST.tm_mon = K_NOVEMBER;
+        endDST.tm_mday = 1; // Start with the 1st
+        endDST.tm_hour = 2;
+        endDST.tm_min = 0;
+        endDST.tm_sec = 0;
+        
+        // Find first Sunday in November
+        std::time_t endTime = std::mktime(&endDST);
+        if (endTime == -1) {
             LOG_F(ERROR, "Failed to convert time for endDST");
             THROW_GET_TIME_ERROR("Failed to convert time for endDST");
         }
+        
+        while (true) {
+            // Re-get the tm structure
+#ifdef _WIN32
+            localtime_s(&endDST, &endTime);
+#else
+            localtime_r(&endTime, &endDST);
+#endif
+            if (endDST.tm_wday == 0) { // Sunday
+                break;
+            }
+            endTime += 24 * 60 * 60; // Add one day
+        }
+        
+        bool isDST = (currentTime >= startTime && currentTime < endTime);
+        
+        // Cache the result
+        dstCache_[currentTime] = isDST;
+        
+        LOG_F(INFO, "QTimeZone::isDaylightTime returning: {}", isDST);
+        return isDST;
+    } catch (const std::exception& e) {
+        LOG_F(ERROR, "Exception in isDaylightTime: {}", e.what());
+        THROW_GET_TIME_ERROR("Failed to determine DST status: " + std::string(e.what()));
     }
-
-    std::time_t startDstT = mktime(&startDST);
-    std::time_t endDstT = mktime(&endDST);
-
-    bool result = (currentTime >= startDstT && currentTime < endDstT);
-    LOG_F(INFO, "QTimeZone::isDaylightTime returning: {}", result);
-    return result;
 }
 
 }  // namespace atom::utils

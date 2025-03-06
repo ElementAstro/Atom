@@ -1,7 +1,7 @@
 /*
  * random.cpp
  *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ * Copyright (C) 2023-2024 Max Q. <contact@lightapt.com>
  */
 
 /*************************************************
@@ -13,21 +13,67 @@ Description: Simple random number generator
 **************************************************/
 
 #include "random.hpp"
+#include <execution>  // For parallel algorithms
+#include <random>     // For random number generation
 
 namespace atom::utils {
-auto generateRandomString(int length) -> std::string {
-    if (length <= 0) {
-        THROW_INVALID_ARGUMENT("Length must be a positive integer.");
-    }
-    const std::string CHARACTERS =
+
+namespace {
+// Thread-safe random device initialization
+std::random_device& getRandomDevice() {
+    static std::random_device rd;
+    return rd;
+}
+
+// Default charset for random strings
+const std::string& getDefaultCharset() {
+    static const std::string DEFAULT_CHARSET =
         "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    Random<std::mt19937, std::uniform_int_distribution<int>> rng(
-        0, static_cast<int>(CHARACTERS.size() - 1));
+    return DEFAULT_CHARSET;
+}
+}  // namespace
+
+auto generateRandomString(int length,
+                          const std::string& charset) -> std::string {
+    if (length <= 0) {
+        throw std::invalid_argument("Length must be a positive integer.");
+    }
+
+    const std::string& chars = charset.empty() ? getDefaultCharset() : charset;
+
+    if (chars.empty()) {
+        throw std::invalid_argument("Character set cannot be empty.");
+    }
+
+    // 修复: 直接使用随机数生成器而不是 Random 模板类
+    std::mt19937_64 engine(getRandomDevice()());
+    std::uniform_int_distribution<size_t> dist(0, chars.size() - 1);
 
     std::string randomString(length, '\0');
-    std::generate(randomString.begin(), randomString.end(),
-                  [&]() { return CHARACTERS[rng()]; });
+    std::generate(std::execution::par_unseq, randomString.begin(),
+                  randomString.end(), [&]() { return chars[dist(engine)]; });
 
     return randomString;
 }
+
+auto generateSecureRandomString(int length) -> std::string {
+    if (length <= 0) {
+        throw std::invalid_argument("Length must be a positive integer.");
+    }
+
+    std::string result(length, '\0');
+    std::random_device& rd = getRandomDevice();
+
+    std::independent_bits_engine<std::random_device, 8, unsigned char> engine(
+        rd);
+    const std::string& chars = getDefaultCharset();
+
+    for (int i = 0; i < length; ++i) {
+        unsigned char random_byte = engine();
+        result[i] = chars[random_byte % chars.size()];
+    }
+
+    return result;
+}
+
 }  // namespace atom::utils

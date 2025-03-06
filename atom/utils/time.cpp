@@ -16,8 +16,11 @@ Description: Some useful functions about time
 
 #include <array>
 #include <chrono>
+#include <format>
 #include <iomanip>
+#include <mutex>
 #include <sstream>
+#include <unordered_map>
 
 #ifdef ATOM_USE_BOOST
 #include <boost/algorithm/string.hpp>
@@ -25,189 +28,402 @@ Description: Some useful functions about time
 #endif
 
 namespace atom::utils {
-constexpr int K_MILLISECONDS_IN_SECOND =
-    1000;  // Named constant for magic number
+namespace {
+// Thread-safe caching mechanism for time conversions
+std::mutex timeCacheMutex;
+std::unordered_map<std::string, std::string> timeConversionCache;
+constexpr size_t MAX_CACHE_SIZE = 1000;
+
+// Constants
+constexpr int K_MILLISECONDS_IN_SECOND = 1000;
 constexpr int K_CHINA_TIMEZONE_OFFSET = 8;
+constexpr int K_SECONDS_PER_HOUR = 3600;
+constexpr time_t K_MAX_TIMESTAMP = std::numeric_limits<time_t>::max();
+constexpr size_t K_BUFFER_SIZE = 80;
 
-auto getTimestampString() -> std::string {
-    auto now = std::chrono::system_clock::now();
-    auto time = std::chrono::system_clock::to_time_t(now);
-    auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            now.time_since_epoch()) %
-                        K_MILLISECONDS_IN_SECOND;
+thread_local std::array<char, K_BUFFER_SIZE> tls_buffer{};
+thread_local std::tm tls_timeInfo{};
 
-    std::tm timeInfo{};
-#ifdef _WIN32
-    if (localtime_s(&timeInfo, &time) != 0) {
-#else
-    if (localtime_r(&time, &timeInfo) == nullptr) {
-#endif
-        THROW_TIME_CONVERT_ERROR("Failed to convert time to local time");
-    }
-
-    std::stringstream timestampStream;
-    timestampStream << std::put_time(&timeInfo, "%Y-%m-%d %H:%M:%S") << '.'
-                    << std::setfill('0') << std::setw(3)
-                    << milliseconds.count();
-
-    return timestampStream.str();
+// Check if a timestamp is valid
+bool isValidTimestamp(time_t timestamp) {
+    return timestamp >= 0 && timestamp < K_MAX_TIMESTAMP;
 }
 
-auto convertToChinaTime(const std::string &utcTimeStr) -> std::string {
-    // Parse UTC time string
-    std::tm timeStruct = {};
-    std::istringstream inputStream(utcTimeStr);
-    inputStream >> std::get_time(&timeStruct, "%Y-%m-%d %H:%M:%S");
-
-#ifdef ATOM_USE_BOOST
-    boost::posix_time::ptime utc_ptime = boost::posix_time::from_tm(timeStruct);
-    boost::posix_time::ptime china_ptime =
-        utc_ptime + boost::posix_time::hours(K_CHINA_TIMEZONE_OFFSET);
-    std::stringstream outputStream;
-    outputStream << boost::posix_time::to_simple_string(china_ptime);
-    return outputStream.str();
-#else
-    // Convert to time_point
-    auto timePoint =
-        std::chrono::system_clock::from_time_t(std::mktime(&timeStruct));
-
-    std::chrono::hours offset(K_CHINA_TIMEZONE_OFFSET);
-    auto localTimePoint = timePoint + offset;
-
-    // Format as string
-    auto localTime = std::chrono::system_clock::to_time_t(localTimePoint);
-    std::tm localTimeStruct{};
+// Safe conversion of time to tm structure
+std::optional<std::tm> safeLocalTime(const time_t* time) {
+    std::tm result{};
 #ifdef _WIN32
-    if (localtime_s(&localTimeStruct, &localTime) != 0) {
+    if (localtime_s(&result, time) != 0) {
+        return std::nullopt;
+    }
 #else
-    if (localtime_r(&localTime, &localTimeStruct) == nullptr) {
+    if (localtime_r(time, &result) == nullptr) {
+        return std::nullopt;
+    }
 #endif
-        THROW_TIME_CONVERT_ERROR("Failed to convert time to local time");
+    return result;
+}
+
+// Safe conversion of time to UTC tm structure
+std::optional<std::tm> safeGmTime(const time_t* time) {
+    std::tm result{};
+#ifdef _WIN32
+    if (gmtime_s(&result, time) != 0) {
+        return std::nullopt;
+    }
+#else
+    if (gmtime_r(time, &result) == nullptr) {
+        return std::nullopt;
+    }
+#endif
+    return result;
+}
+
+}  // anonymous namespace
+
+bool validateTimestampFormat(std::string_view timestampStr,
+                             std::string_view format) {
+    std::tm tm{};
+    // 修复函数声明错误
+    std::istringstream ss((std::string(timestampStr)));
+    ss >> std::get_time(&tm, format.data());
+    return !ss.fail() && ss.eof();
+}
+
+auto getTimestampString() -> std::string {
+    try {
+        // Use chrono literals for readability
+        using namespace std::chrono;
+
+        auto now = system_clock::now();
+        auto time = system_clock::to_time_t(now);
+        // 修复变量自引用初始化问题
+        auto ms = duration_cast<milliseconds>(now.time_since_epoch()) %
+                  K_MILLISECONDS_IN_SECOND;
+
+        auto timeInfoOpt = safeLocalTime(&time);
+        if (!timeInfoOpt) {
+            THROW_TIME_CONVERT_ERROR("Failed to convert time to local time");
+        }
+
+        auto& timeInfo = *timeInfoOpt;
+
+        // Use C++20 std::format if available
+#if __cpp_lib_format >= 202106L
+        std::stringstream timestampStream;
+        timestampStream << std::put_time(&timeInfo, "%Y-%m-%d %H:%M:%S") << '.'
+                        << std::setfill('0') << std::setw(3) << ms.count();
+        return timestampStream.str();
+#else
+        std::stringstream timestampStream;
+        timestampStream << std::put_time(&timeInfo, "%Y-%m-%d %H:%M:%S") << '.'
+                        << std::setfill('0') << std::setw(3) << ms.count();
+        return timestampStream.str();
+#endif
+    } catch (const std::exception& e) {
+        THROW_TIME_CONVERT_ERROR(std::string("Error generating timestamp: ") +
+                                 e.what());
+    }
+}
+
+auto convertToChinaTime(std::string_view utcTimeStr) -> std::string {
+    // Input validation
+    if (utcTimeStr.empty()) {
+        THROW_TIME_CONVERT_ERROR("Empty UTC time string provided");
     }
 
-    std::stringstream outputStream;
-    outputStream << std::put_time(&localTimeStruct, "%Y-%m-%d %H:%M:%S");
+    if (!validateTimestampFormat(utcTimeStr)) {
+        THROW_TIME_CONVERT_ERROR("Invalid UTC time string format: " +
+                                 std::string(utcTimeStr));
+    }
 
-    return outputStream.str();
+    // Check cache first
+    {
+        std::unique_lock<std::mutex> lock(timeCacheMutex);
+        auto it = timeConversionCache.find(std::string(utcTimeStr));
+        if (it != timeConversionCache.end()) {
+            return it->second;
+        }
+    }
+
+    try {
+        // Parse UTC time string
+        std::tm timeStruct = {};
+        // 修复函数声明错误
+        std::istringstream inputStream((std::string(utcTimeStr)));
+        inputStream >> std::get_time(&timeStruct, "%Y-%m-%d %H:%M:%S");
+        if (inputStream.fail()) {
+            THROW_TIME_CONVERT_ERROR("Failed to parse UTC time string: " +
+                                     std::string(utcTimeStr));
+        }
+
+#ifdef ATOM_USE_BOOST
+        boost::posix_time::ptime utc_ptime =
+            boost::posix_time::from_tm(timeStruct);
+        boost::posix_time::ptime china_ptime =
+            utc_ptime + boost::posix_time::hours(K_CHINA_TIMEZONE_OFFSET);
+        std::stringstream outputStream;
+        outputStream << boost::posix_time::to_simple_string(china_ptime);
+        auto result = outputStream.str();
+#else
+        // Convert to time_point
+        using namespace std::chrono;
+        auto timePoint = system_clock::from_time_t(std::mktime(&timeStruct));
+        if (timePoint == system_clock::time_point{}) {
+            THROW_TIME_CONVERT_ERROR("Invalid time conversion for: " +
+                                     std::string(utcTimeStr));
+        }
+
+        hours offset(K_CHINA_TIMEZONE_OFFSET);
+        auto localTimePoint = timePoint + offset;
+
+        // Format as string
+        auto localTime = system_clock::to_time_t(localTimePoint);
+        auto localTimeStructOpt = safeLocalTime(&localTime);
+        if (!localTimeStructOpt) {
+            THROW_TIME_CONVERT_ERROR("Failed to convert time to local time");
+        }
+
+        auto& localTimeStruct = *localTimeStructOpt;
+
+#if __cpp_lib_format >= 202106L
+        // 使用 put_time 替代 std::format
+        std::stringstream outputStream;
+        outputStream << std::put_time(&localTimeStruct, "%Y-%m-%d %H:%M:%S");
+        auto result = outputStream.str();
+#else
+        std::stringstream outputStream;
+        outputStream << std::put_time(&localTimeStruct, "%Y-%m-%d %H:%M:%S");
+        auto result = outputStream.str();
 #endif
+#endif
+
+        // Update cache
+        {
+            std::unique_lock<std::mutex> lock(timeCacheMutex);
+            if (timeConversionCache.size() >= MAX_CACHE_SIZE) {
+                timeConversionCache.clear();  // Simple cache eviction policy
+            }
+            timeConversionCache[std::string(utcTimeStr)] = result;
+        }
+
+        return result;
+    } catch (const TimeConvertException&) {
+        throw;  // Re-throw our own exceptions
+    } catch (const std::exception& e) {
+        THROW_TIME_CONVERT_ERROR(
+            std::string("Error converting to China time: ") + e.what());
+    }
 }
 
 auto getChinaTimestampString() -> std::string {
-    // Get current time point
-    auto now = std::chrono::system_clock::now();
+    try {
+        // Get current time point
+        using namespace std::chrono;
+        auto now = system_clock::now();
 
 #ifdef ATOM_USE_BOOST
-    boost::posix_time::ptime utc_ptime = boost::posix_time::from_time_t(
-        std::chrono::system_clock::to_time_t(now));
-    boost::posix_time::ptime china_ptime =
-        utc_ptime + boost::posix_time::hours(K_CHINA_TIMEZONE_OFFSET);
-    std::stringstream timestampStream;
-    timestampStream << boost::posix_time::to_simple_string(china_ptime);
-    return timestampStream.str();
+        boost::posix_time::ptime utc_ptime =
+            boost::posix_time::from_time_t(system_clock::to_time_t(now));
+        boost::posix_time::ptime china_ptime =
+            utc_ptime + boost::posix_time::hours(K_CHINA_TIMEZONE_OFFSET);
+        std::stringstream timestampStream;
+        timestampStream << boost::posix_time::to_simple_string(china_ptime);
+        return timestampStream.str();
 #else
-    // Convert to China time
-    std::chrono::hours offset(K_CHINA_TIMEZONE_OFFSET);
-    auto localTimePoint = now + offset;
+        // Convert to China time (UTC+8)
+        hours offset(K_CHINA_TIMEZONE_OFFSET);
+        auto localTimePoint = now + offset;
 
-    // Format as string
-    auto localTime = std::chrono::system_clock::to_time_t(localTimePoint);
-    std::tm localTimeStruct{};
-#ifdef _WIN32
-    if (localtime_s(&localTimeStruct, &localTime) != 0) {
+        // Format as string
+        auto localTime = system_clock::to_time_t(localTimePoint);
+        auto localTimeStructOpt = safeLocalTime(&localTime);
+        if (!localTimeStructOpt) {
+            THROW_TIME_CONVERT_ERROR("Failed to convert time to local time");
+        }
+
+        auto& localTimeStruct = *localTimeStructOpt;
+
+#if __cpp_lib_format >= 202106L
+        // 使用 put_time 替代 std::format
+        std::stringstream timestampStream;
+        timestampStream << std::put_time(&localTimeStruct, "%Y-%m-%d %H:%M:%S");
+        return timestampStream.str();
 #else
-    if (localtime_r(&localTime, &localTimeStruct) == nullptr) {
+        std::stringstream timestampStream;
+        timestampStream << std::put_time(&localTimeStruct, "%Y-%m-%d %H:%M:%S");
+        return timestampStream.str();
 #endif
-        THROW_TIME_CONVERT_ERROR("Failed to convert time to local time");
+#endif
+    } catch (const TimeConvertException&) {
+        throw;  // Re-throw our own exceptions
+    } catch (const std::exception& e) {
+        THROW_TIME_CONVERT_ERROR(
+            std::string("Error getting China timestamp: ") + e.what());
     }
-
-    std::stringstream timestampStream;
-    timestampStream << std::put_time(&localTimeStruct, "%Y-%m-%d %H:%M:%S");
-
-    return timestampStream.str();
-#endif
 }
 
-auto timeStampToString(time_t timestamp) -> std::string {
-    constexpr size_t K_BUFFER_SIZE = 80;  // Named constant for magic number
-    std::array<char, K_BUFFER_SIZE> buffer{};
-    std::tm timeStruct{};
-#ifdef _WIN32
-    if (localtime_s(&timeStruct, &timestamp) != 0) {
-#else
-    if (localtime_r(&timestamp, &timeStruct) == nullptr) {
-#endif
-        THROW_TIME_CONVERT_ERROR("Failed to convert timestamp to local time");
+auto timeStampToString(time_t timestamp,
+                       std::string_view format) -> std::string {
+    // Input validation
+    if (!isValidTimestamp(timestamp)) {
+        THROW_TIME_CONVERT_ERROR("Invalid timestamp value: " +
+                                 std::to_string(timestamp));
     }
+
+    if (format.empty()) {
+        THROW_TIME_CONVERT_ERROR("Empty format string provided");
+    }
+
+    try {
+        auto timeStructOpt = safeLocalTime(&timestamp);
+        if (!timeStructOpt) {
+            THROW_TIME_CONVERT_ERROR(
+                "Failed to convert timestamp to local time");
+        }
+        auto& timeStruct = *timeStructOpt;
 
 #ifdef ATOM_USE_BOOST
-    boost::posix_time::ptime pt = boost::posix_time::from_tm(timeStruct);
-    std::stringstream ss;
-    ss << boost::posix_time::to_simple_string(pt);
-    return ss.str();
+        boost::posix_time::ptime pt = boost::posix_time::from_tm(timeStruct);
+        std::stringstream ss;
+        ss << boost::posix_time::to_simple_string(pt);
+        return ss.str();
 #else
-    if (std::strftime(buffer.data(), buffer.size(), "%Y-%m-%d %H:%M:%S",
-                      &timeStruct) == 0) {
-        THROW_TIME_CONVERT_ERROR("strftime failed");
-    }
-
-    return std::string(buffer.data());
+        // C++20 format approach if available
+#if __cpp_lib_format >= 202106L
+        try {
+            // 使用 strftime 替代 std::format
+            if (std::strftime(tls_buffer.data(), tls_buffer.size(),
+                              format.data(), &timeStruct) == 0) {
+                THROW_TIME_CONVERT_ERROR("strftime failed with format: " +
+                                         std::string(format));
+            }
+            return std::string(tls_buffer.data());
+        } catch (const std::exception& e) {
+            THROW_TIME_CONVERT_ERROR(std::string("Format error: ") + e.what());
+        }
+#else
+        if (std::strftime(tls_buffer.data(), tls_buffer.size(), format.data(),
+                          &timeStruct) == 0) {
+            THROW_TIME_CONVERT_ERROR("strftime failed with format: " +
+                                     std::string(format));
+        }
+        return std::string(tls_buffer.data());
 #endif
+#endif
+    } catch (const TimeConvertException&) {
+        throw;  // Re-throw our own exceptions
+    } catch (const std::exception& e) {
+        THROW_TIME_CONVERT_ERROR(
+            std::string("Error converting timestamp to string: ") + e.what());
+    }
 }
 
 // Specially for Astrometry.net
-auto toString(const std::tm &tm, const std::string &format) -> std::string {
+auto toString(const std::tm& tm, std::string_view format) -> std::string {
+    if (format.empty()) {
+        THROW_TIME_CONVERT_ERROR("Empty format string provided");
+    }
+
+    try {
 #ifdef ATOM_USE_BOOST
-    std::stringstream oss;
-    oss << boost::posix_time::ptime(
-        boost::gregorian::date(tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday),
-        boost::posix_time::hours(tm.tm_hour) +
-            boost::posix_time::minutes(tm.tm_min) +
-            boost::posix_time::seconds(tm.tm_sec));
-    return oss.str();
+        std::stringstream oss;
+        oss << boost::posix_time::ptime(
+            boost::gregorian::date(tm.tm_year + 1900, tm.tm_mon + 1,
+                                   tm.tm_mday),
+            boost::posix_time::hours(tm.tm_hour) +
+                boost::posix_time::minutes(tm.tm_min) +
+                boost::posix_time::seconds(tm.tm_sec));
+        return oss.str();
 #else
-    std::ostringstream oss;
-    oss << std::put_time(&tm, format.c_str());
-    return oss.str();
+        // C++20 format approach if available
+#if __cpp_lib_format >= 202106L
+        try {
+            // 使用 strftime 替代 std::format
+            if (std::strftime(tls_buffer.data(), tls_buffer.size(),
+                              format.data(), &tm) == 0) {
+                THROW_TIME_CONVERT_ERROR("strftime failed with format: " +
+                                         std::string(format));
+            }
+            return std::string(tls_buffer.data());
+        } catch (const std::exception& e) {
+            THROW_TIME_CONVERT_ERROR(std::string("Format error: ") + e.what());
+        }
+#else
+        std::ostringstream oss;
+        oss << std::put_time(&tm, format.data());
+        if (oss.fail()) {
+            THROW_TIME_CONVERT_ERROR("Failed to format time with format: " +
+                                     std::string(format));
+        }
+        return oss.str();
 #endif
+#endif
+    } catch (const TimeConvertException&) {
+        throw;  // Re-throw our own exceptions
+    } catch (const std::exception& e) {
+        THROW_TIME_CONVERT_ERROR(
+            std::string("Error converting tm to string: ") + e.what());
+    }
 }
 
 auto getUtcTime() -> std::string {
-    const auto NOW = std::chrono::system_clock::now();
-    const std::time_t NOW_TIME_T = std::chrono::system_clock::to_time_t(NOW);
-    std::tm utcTime{};
-#ifdef _WIN32
-    if (gmtime_s(&utcTime, &NOW_TIME_T) != 0) {
-        THROW_TIME_CONVERT_ERROR("Failed to convert time to UTC");
-    }
-#else
-    if (gmtime_r(&NOW_TIME_T, &utcTime) == nullptr) {
-        THROW_TIME_CONVERT_ERROR("Failed to convert time to UTC");
-    }
-#endif
+    try {
+        using namespace std::chrono;
+        const auto NOW = system_clock::now();
+        const std::time_t NOW_TIME_T = system_clock::to_time_t(NOW);
+
+        auto utcTimeOpt = safeGmTime(&NOW_TIME_T);
+        if (!utcTimeOpt) {
+            THROW_TIME_CONVERT_ERROR("Failed to convert time to UTC");
+        }
+        auto& utcTime = *utcTimeOpt;
 
 #ifdef ATOM_USE_BOOST
-    boost::posix_time::ptime pt = boost::posix_time::from_tm(utcTime);
-    std::stringstream ss;
-    ss << boost::posix_time::to_iso_extended_string(pt) << "Z";
-    return ss.str();
+        boost::posix_time::ptime pt = boost::posix_time::from_tm(utcTime);
+        std::stringstream ss;
+        ss << boost::posix_time::to_iso_extended_string(pt) << "Z";
+        return ss.str();
 #else
-    return toString(utcTime, "%FT%TZ");
+        // C++20 format approach if available
+#if __cpp_lib_format >= 202106L
+        // 使用 strftime 替代 std::format
+        if (std::strftime(tls_buffer.data(), tls_buffer.size(), "%FT%TZ",
+                          &utcTime) == 0) {
+            THROW_TIME_CONVERT_ERROR("strftime failed with format %FT%TZ");
+        }
+        return std::string(tls_buffer.data());
+#else
+        return toString(utcTime, "%FT%TZ");
 #endif
+#endif
+    } catch (const TimeConvertException&) {
+        throw;  // Re-throw our own exceptions
+    } catch (const std::exception& e) {
+        THROW_TIME_CONVERT_ERROR(std::string("Error getting UTC time: ") +
+                                 e.what());
+    }
 }
 
-auto timestampToTime(long long timestamp) -> std::tm {
-    auto time = static_cast<std::time_t>(timestamp / K_MILLISECONDS_IN_SECOND);
+auto timestampToTime(long long timestamp) -> std::optional<std::tm> {
+    // Input validation
+    if (timestamp < 0) {
+        return std::nullopt;
+    }
 
-    std::tm timeStruct{};
-#ifdef _WIN32
-    if (localtime_s(&timeStruct, &time) != 0) {
-#else
-    if (localtime_r(&time, &timeStruct) == nullptr) {
-#endif
-        THROW_TIME_CONVERT_ERROR("Failed to convert timestamp to local time");
-    }  // Use localtime_s for thread safety
+    try {
+        auto time =
+            static_cast<std::time_t>(timestamp / K_MILLISECONDS_IN_SECOND);
 
-    return timeStruct;
+        if (!isValidTimestamp(time)) {
+            return std::nullopt;
+        }
+
+        return safeLocalTime(&time);
+    } catch (const std::exception&) {
+        // Return nullopt instead of throwing for this function
+        return std::nullopt;
+    }
 }
 
 }  // namespace atom::utils

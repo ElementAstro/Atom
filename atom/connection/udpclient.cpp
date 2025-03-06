@@ -13,9 +13,13 @@ Description: UDP Client Class
 *************************************************/
 
 #include "udpclient.hpp"
+
+#include <atomic>
 #include <cstring>
+#include <mutex>
 #include <stdexcept>
 #include <thread>
+#include <utility>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -24,214 +28,473 @@ Description: UDP Client Class
 #include <mstcpip.h>
 #else
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #endif
 
-#include "atom/error/exception.hpp"
+namespace {
+// Constants
+constexpr uint16_t MIN_PORT = 1024;
+constexpr uint16_t MAX_PORT = 65535;
+constexpr size_t MAX_BUFFER_SIZE = 65536;
+
+// Utility functions
+bool isValidPort(uint16_t port) { return port >= MIN_PORT && port <= MAX_PORT; }
+
+bool setSocketNonBlocking(int socket) {
+#ifdef _WIN32
+    u_long mode = 1;
+    return ioctlsocket(socket, FIONBIO, &mode) == 0;
+#else
+    int flags = fcntl(socket, F_GETFL, 0);
+    if (flags == -1)
+        return false;
+    return fcntl(socket, F_SETFL, flags | O_NONBLOCK) == 0;
+#endif
+}
+
+std::string getLastErrorMsg() {
+#ifdef _WIN32
+    char* s = nullptr;
+    FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+                       FORMAT_MESSAGE_IGNORE_INSERTS,
+                   NULL, WSAGetLastError(),
+                   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&s, 0,
+                   NULL);
+    std::string error(s);
+    LocalFree(s);
+    return error;
+#else
+    return std::strerror(errno);
+#endif
+}
+}  // namespace
 
 namespace atom::connection {
+
 class UdpClient::Impl {
 public:
     Impl() {
+        try {
 #ifdef _WIN32
-        WSADATA wsaData;
-        int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
-        if (result != 0) {
-            THROW_RUNTIME_ERROR("WSAStartup failed");
-        }
+            WSADATA wsaData;
+            int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
+            if (result != 0) {
+                throw std::runtime_error("WSAStartup failed: " +
+                                         std::to_string(result));
+            }
 #endif
-        socket_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        if (socket_ < 0) {
-            THROW_RUNTIME_ERROR("Socket creation failed");
-        }
+
+            socket_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+            if (socket_ < 0) {
+                throw std::runtime_error("Socket creation failed: " +
+                                         getLastErrorMsg());
+            }
+
+            // Set socket to non-blocking mode
+            if (!setSocketNonBlocking(socket_)) {
+                throw std::runtime_error(
+                    "Failed to set socket to non-blocking mode");
+            }
+
 #ifdef __linux__
-        epoll_fd_ = epoll_create1(0);
-        if (epoll_fd_ == -1) {
-            THROW_RUNTIME_ERROR("Epoll creation failed");
-        }
+            epoll_fd_ = epoll_create1(0);
+            if (epoll_fd_ == -1) {
+                throw std::runtime_error("Epoll creation failed: " +
+                                         getLastErrorMsg());
+            }
 #endif
+        } catch (const std::exception& e) {
+            cleanup();
+            throw;
+        }
     }
 
-    ~Impl() {
+    ~Impl() { cleanup(); }
+
+    void cleanup() {
         stopReceiving();
+
+        if (socket_ >= 0) {
 #ifdef _WIN32
-        closesocket(socket_);
+            closesocket(socket_);
+#else
+            close(socket_);
+#endif
+            socket_ = -1;
+        }
+
+#ifdef __linux__
+        if (epoll_fd_ >= 0) {
+            close(epoll_fd_);
+            epoll_fd_ = -1;
+        }
+#endif
+
+#ifdef _WIN32
         WSACleanup();
-#else
-        close(socket_);
-        close(epoll_fd_);
 #endif
     }
 
-    bool bind(int port) {
-        struct sockaddr_in address {};
-        address.sin_family = AF_INET;
-        address.sin_addr.s_addr = INADDR_ANY;
-        address.sin_port = htons(port);
-
-        if (::bind(socket_, reinterpret_cast<struct sockaddr*>(&address),
-                   sizeof(address)) < 0) {
-            errorMessage_ = "Bind failed";
-            return false;
-        }
-
-        return true;
+    Impl(Impl&& other) noexcept
+        : socket_(std::exchange(other.socket_, -1)),
+#ifdef __linux__
+          epoll_fd_(std::exchange(other.epoll_fd_, -1)),
+#endif
+          bound_(other.bound_.load()),
+          receivingStopped_(other.receivingStopped_.load()),
+          isReceiving_(other.isReceiving_.load()) {
+        // Move the thread if it's running
+        receivingThread_ = std::move(other.receivingThread_);
     }
 
-    bool send(const std::string& host, int port,
-              const std::vector<char>& data) {
-        struct hostent* server = gethostbyname(host.c_str());
-        if (server == nullptr) {
-            errorMessage_ = "Host not found";
-            return false;
+    UdpResult<bool> bind(uint16_t port) noexcept {
+        try {
+            if (!isValidPort(port) &&
+                port != 0) {  // Allow port 0 for system-assigned port
+                return type::unexpected(UdpError::InvalidParameter);
+            }
+
+            struct sockaddr_in address {};
+            address.sin_family = AF_INET;
+            address.sin_addr.s_addr = INADDR_ANY;
+            address.sin_port = htons(port);
+
+            // Set SO_REUSEADDR to prevent "address already in use" errors
+            int reuseAddr = 1;
+            if (setsockopt(socket_, SOL_SOCKET, SO_REUSEADDR,
+                           reinterpret_cast<char*>(&reuseAddr),
+                           sizeof(reuseAddr)) < 0) {
+                return type::unexpected(UdpError::BindFailed);
+            }
+
+            if (::bind(socket_, reinterpret_cast<struct sockaddr*>(&address),
+                       sizeof(address)) < 0) {
+                return type::unexpected(UdpError::BindFailed);
+            }
+
+            bound_ = true;
+            return true;
+        } catch (...) {
+            return type::unexpected(UdpError::InternalError);
         }
-
-        struct sockaddr_in address {};
-        address.sin_family = AF_INET;
-        std::memcpy(&address.sin_addr.s_addr, server->h_addr, server->h_length);
-        address.sin_port = htons(port);
-
-        if (sendto(socket_, data.data(), data.size(), 0,
-                   reinterpret_cast<struct sockaddr*>(&address),
-                   sizeof(address)) < 0) {
-            errorMessage_ = "Send failed";
-            return false;
-        }
-
-        return true;
     }
 
-    std::vector<char> receive(
-        size_t size, std::string& remoteHost, int& remotePort,
-        std::chrono::milliseconds timeout = std::chrono::milliseconds::zero()) {
-        if (timeout > std::chrono::milliseconds::zero()) {
+    UdpResult<size_t> send(const RemoteEndpoint& endpoint,
+                           std::span<const char> data) noexcept {
+        try {
+            if (data.empty() || data.size() > MAX_BUFFER_SIZE) {
+                return type::unexpected(UdpError::InvalidParameter);
+            }
+
+            if (!isValidPort(endpoint.port)) {
+                return type::unexpected(UdpError::InvalidParameter);
+            }
+
+            struct addrinfo hints {};
+            struct addrinfo* result = nullptr;
+
+            hints.ai_family = AF_INET;
+            hints.ai_socktype = SOCK_DGRAM;
+
+            // Use getaddrinfo instead of gethostbyname (which is deprecated)
+            int status = getaddrinfo(endpoint.host.c_str(),
+                                     std::to_string(endpoint.port).c_str(),
+                                     &hints, &result);
+            if (status != 0) {
+                return type::unexpected(UdpError::HostNotFound);
+            }
+
+            std::unique_ptr<addrinfo, decltype(&freeaddrinfo)> resultGuard(
+                result, freeaddrinfo);
+
+            ssize_t bytesSent =
+                sendto(socket_, data.data(), data.size(), 0,
+                       resultGuard->ai_addr, resultGuard->ai_addrlen);
+
+            if (bytesSent < 0) {
+                return type::unexpected(UdpError::SendFailed);
+            }
+
+            return static_cast<size_t>(bytesSent);
+        } catch (...) {
+            return type::unexpected(UdpError::InternalError);
+        }
+    }
+
+    UdpResult<std::pair<std::vector<char>, RemoteEndpoint>> receive(
+        size_t maxSize, std::chrono::milliseconds timeout) noexcept {
+        try {
+            if (maxSize == 0 || maxSize > MAX_BUFFER_SIZE) {
+                return type::unexpected(UdpError::InvalidParameter);
+            }
+
+            bool hasTimeout = timeout > std::chrono::milliseconds::zero();
+
+            if (hasTimeout) {
 #ifdef _WIN32
-            DWORD timeout_ms = static_cast<DWORD>(timeout.count());
-            setsockopt(socket_, SOL_SOCKET, SO_RCVTIMEO,
-                       reinterpret_cast<const char*>(&timeout_ms),
-                       sizeof(timeout_ms));
+                // Set receive timeout on Windows
+                DWORD timeout_ms = static_cast<DWORD>(timeout.count());
+                if (setsockopt(socket_, SOL_SOCKET, SO_RCVTIMEO,
+                               reinterpret_cast<const char*>(&timeout_ms),
+                               sizeof(timeout_ms)) != 0) {
+                    return type::unexpected(UdpError::ReceiveFailed);
+                }
 #else
-            struct epoll_event event;
-            event.events = EPOLLIN;
-            event.data.fd = socket_;
-            if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, socket_, &event) == -1) {
-                errorMessage_ = "Epoll control failed";
-                return {};
-            }
+                // Use epoll for timeout on Linux/Unix
+                struct epoll_event event {};
+                event.events = EPOLLIN;
+                event.data.fd = socket_;
 
-            struct epoll_event events[1];
-            int nfds = epoll_wait(epoll_fd_, events, 1, timeout.count());
-            if (nfds == 0) {
-                errorMessage_ = "Receive timeout";
-                return {};
-            } else if (nfds == -1) {
-                errorMessage_ = "Epoll wait failed";
-                return {};
-            }
+                if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, socket_, &event) ==
+                    -1) {
+                    return type::unexpected(UdpError::ReceiveFailed);
+                }
+
+                struct epoll_event events[1];
+                int nfds = epoll_wait(epoll_fd_, events, 1,
+                                      static_cast<int>(timeout.count()));
+
+                if (nfds == 0) {
+                    return type::unexpected(UdpError::Timeout);
+                } else if (nfds == -1) {
+                    return type::unexpected(UdpError::ReceiveFailed);
+                }
+
+                // Clean up after epoll
+                epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, socket_, nullptr);
 #endif
+            }
+
+            std::vector<char> data(maxSize);
+            struct sockaddr_in clientAddress {};
+            socklen_t clientAddressLength = sizeof(clientAddress);
+
+            ssize_t bytesRead =
+                recvfrom(socket_, data.data(), maxSize, 0,
+                         reinterpret_cast<struct sockaddr*>(&clientAddress),
+                         &clientAddressLength);
+
+            if (bytesRead < 0) {
+#ifdef _WIN32
+                int error = WSAGetLastError();
+                if (error == WSAEWOULDBLOCK || error == WSAETIMEDOUT) {
+                    return type::unexpected(UdpError::Timeout);
+                }
+#else
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    return type::unexpected(UdpError::Timeout);
+                }
+#endif
+                return type::unexpected(UdpError::ReceiveFailed);
+            }
+
+            data.resize(bytesRead);
+
+            RemoteEndpoint remote;
+            remote.host = inet_ntoa(clientAddress.sin_addr);
+            remote.port = ntohs(clientAddress.sin_port);
+
+            return std::make_pair(std::move(data), std::move(remote));
+        } catch (...) {
+            return type::unexpected(UdpError::InternalError);
         }
+    }
 
-        std::vector<char> data(size);
-        struct sockaddr_in clientAddress {};
-        socklen_t clientAddressLength = sizeof(clientAddress);
+    UdpResult<bool> startReceiving(
+        size_t bufferSize,
+        const std::function<void(std::span<const char>, const RemoteEndpoint&)>&
+            onDataCallback,
+        const std::function<void(UdpError, const std::string&)>&
+            onErrorCallback) noexcept {
+        try {
+            if (bufferSize == 0 || bufferSize > MAX_BUFFER_SIZE) {
+                return type::unexpected(UdpError::InvalidParameter);
+            }
 
-        ssize_t bytesRead =
-            recvfrom(socket_, data.data(), size, 0,
-                     reinterpret_cast<struct sockaddr*>(&clientAddress),
-                     &clientAddressLength);
-        if (bytesRead < 0) {
-            errorMessage_ = "Receive failed";
-            return {};
+            if (!onDataCallback) {
+                return type::unexpected(UdpError::InvalidParameter);
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(receivingMutex_);
+                if (isReceiving_) {
+                    stopReceiving();
+                }
+
+                receivingStopped_ = false;
+                isReceiving_ = true;
+
+                receivingThread_ =
+                    std::jthread([this, bufferSize, onDataCallback,
+                                  onErrorCallback](std::stop_token stopToken) {
+                        receivingLoop(bufferSize, onDataCallback,
+                                      onErrorCallback, stopToken);
+                    });
+            }
+
+            return true;
+        } catch (...) {
+            return type::unexpected(UdpError::InternalError);
         }
-
-        data.resize(bytesRead);
-        remoteHost = inet_ntoa(clientAddress.sin_addr);
-        remotePort = ntohs(clientAddress.sin_port);
-
-        return data;
     }
 
-    void setOnDataReceivedCallback(const OnDataReceivedCallback& callback) {
-        onDataReceivedCallback_ = callback;
-    }
-
-    void setOnErrorCallback(const OnErrorCallback& callback) {
-        onErrorCallback_ = callback;
-    }
-
-    void startReceiving(size_t bufferSize) {
-        stopReceiving();
-        receivingThread_ = std::jthread(&Impl::receivingLoop, this, bufferSize);
-    }
-
-    void stopReceiving() {
-        if (receivingThread_.joinable()) {
+    void stopReceiving() noexcept {
+        std::lock_guard<std::mutex> lock(receivingMutex_);
+        if (isReceiving_) {
             receivingStopped_ = true;
-            receivingThread_.join();
-            receivingStopped_ = false;
+
+            if (receivingThread_.joinable()) {
+                receivingThread_.request_stop();
+                receivingThread_.join();
+            }
+
+            isReceiving_ = false;
         }
     }
+
+    bool isReceiving() const noexcept { return isReceiving_.load(); }
 
 private:
-    void receivingLoop(size_t bufferSize) {
-        while (!receivingStopped_) {
-            std::string remoteHost;
-            int remotePort;
-            std::vector<char> data =
-                receive(bufferSize, remoteHost, remotePort);
-            if (!data.empty() && onDataReceivedCallback_) {
-                onDataReceivedCallback_(data, remoteHost, remotePort);
+    void receivingLoop(
+        size_t bufferSize,
+        const std::function<void(std::span<const char>, const RemoteEndpoint&)>&
+            onDataCallback,
+        const std::function<void(UdpError, const std::string&)>&
+            onErrorCallback,
+        std::stop_token stopToken) {
+        std::vector<char> buffer(bufferSize);
+
+        while (!receivingStopped_ && !stopToken.stop_requested()) {
+            struct sockaddr_in clientAddress {};
+            socklen_t clientAddressLength = sizeof(clientAddress);
+
+            ssize_t bytesRead =
+                recvfrom(socket_, buffer.data(), buffer.size(), 0,
+                         reinterpret_cast<struct sockaddr*>(&clientAddress),
+                         &clientAddressLength);
+
+            if (bytesRead > 0) {
+                try {
+                    RemoteEndpoint remote;
+                    remote.host = inet_ntoa(clientAddress.sin_addr);
+                    remote.port = ntohs(clientAddress.sin_port);
+
+                    onDataCallback(
+                        std::span<const char>{buffer.data(),
+                                              static_cast<size_t>(bytesRead)},
+                        remote);
+                } catch (const std::exception& e) {
+                    if (onErrorCallback) {
+                        onErrorCallback(UdpError::InternalError,
+                                        "Exception in data callback: " +
+                                            std::string(e.what()));
+                    }
+                }
+            } else if (bytesRead < 0) {
+#ifdef _WIN32
+                int error = WSAGetLastError();
+                if (error != WSAEWOULDBLOCK && error != WSAETIMEDOUT &&
+                    onErrorCallback) {
+                    onErrorCallback(UdpError::ReceiveFailed,
+                                    "Receive error: " + getLastErrorMsg());
+                }
+#else
+                if (errno != EAGAIN && errno != EWOULDBLOCK &&
+                    onErrorCallback) {
+                    onErrorCallback(UdpError::ReceiveFailed,
+                                    "Receive error: " + getLastErrorMsg());
+                }
+#endif
             }
+
+            // Small sleep to avoid busy-waiting and high CPU usage
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
 
 #ifdef _WIN32
-    SOCKET socket_;
+    SOCKET socket_ = INVALID_SOCKET;
 #else
-    int socket_;
-    int epoll_fd_;
+    int socket_ = -1;
+    int epoll_fd_ = -1;
 #endif
-    std::string errorMessage_;
-
-    OnDataReceivedCallback onDataReceivedCallback_;
-    OnErrorCallback onErrorCallback_;
-
+    std::atomic<bool> bound_ = false;
     std::jthread receivingThread_;
     std::atomic<bool> receivingStopped_ = false;
+    std::atomic<bool> isReceiving_ = false;
+    std::mutex receivingMutex_;
 };
 
+// UdpClient implementation
 UdpClient::UdpClient() : impl_(std::make_unique<Impl>()) {}
+
+UdpClient::UdpClient(uint16_t port) : impl_(std::make_unique<Impl>()) {
+    auto result = bind(port);
+    if (!result) {
+        throw std::runtime_error("Failed to bind UDP socket to port " +
+                                 std::to_string(port));
+    }
+}
 
 UdpClient::~UdpClient() = default;
 
-bool UdpClient::bind(int port) { return impl_->bind(port); }
+UdpClient::UdpClient(UdpClient&&) noexcept = default;
+UdpClient& UdpClient::operator=(UdpClient&&) noexcept = default;
 
-bool UdpClient::send(const std::string& host, int port,
-                     const std::vector<char>& data) {
-    return impl_->send(host, port, data);
+UdpResult<bool> UdpClient::bind(uint16_t port) noexcept {
+    return impl_->bind(port);
 }
 
-std::vector<char> UdpClient::receive(size_t size, std::string& remoteHost,
-                                     int& remotePort,
-                                     std::chrono::milliseconds timeout) {
-    return impl_->receive(size, remoteHost, remotePort, timeout);
+UdpResult<size_t> UdpClient::send(const RemoteEndpoint& endpoint,
+                                  std::span<const char> data) noexcept {
+    return impl_->send(endpoint, data);
 }
 
-void UdpClient::setOnDataReceivedCallback(
-    const OnDataReceivedCallback& callback) {
-    impl_->setOnDataReceivedCallback(callback);
+UdpResult<size_t> UdpClient::send(const RemoteEndpoint& endpoint,
+                                  const std::string& data) noexcept {
+    return impl_->send(endpoint,
+                       std::span<const char>(data.data(), data.size()));
 }
 
-void UdpClient::setOnErrorCallback(const OnErrorCallback& callback) {
-    impl_->setOnErrorCallback(callback);
+UdpResult<std::pair<std::vector<char>, RemoteEndpoint>> UdpClient::receive(
+    size_t maxSize, std::chrono::milliseconds timeout) noexcept {
+    return impl_->receive(maxSize, timeout);
 }
 
-void UdpClient::startReceiving(size_t bufferSize) {
-    impl_->startReceiving(bufferSize);
+void UdpClient::ReceiveAwaitable::await_suspend(std::coroutine_handle<> h) {
+    // Execute the receive operation asynchronously
+    std::thread([this, h]() {
+        result_ = client.receive(maxSize, timeout);
+        h.resume();
+    }).detach();
 }
 
-void UdpClient::stopReceiving() { impl_->stopReceiving(); }
+UdpResult<std::pair<std::vector<char>, RemoteEndpoint>>
+UdpClient::ReceiveAwaitable::await_resume() {
+    return result_;
+}
+
+UdpResult<bool> UdpClient::startReceiving(size_t bufferSize) noexcept {
+    return impl_->startReceiving(
+        bufferSize,
+        [this](std::span<const char> data, const RemoteEndpoint& endpoint) {
+            if (onDataReceivedCallback_) {
+                onDataReceivedCallback_(data, endpoint);
+            }
+        },
+        [this](UdpError error, const std::string& message) {
+            if (onErrorCallback_) {
+                onErrorCallback_(error, message);
+            }
+        });
+}
+
+void UdpClient::stopReceiving() noexcept { impl_->stopReceiving(); }
+
+bool UdpClient::isReceiving() const noexcept { return impl_->isReceiving(); }
+
 }  // namespace atom::connection

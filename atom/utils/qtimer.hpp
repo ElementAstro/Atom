@@ -4,8 +4,16 @@
 #include <chrono>
 #include <cstdint>
 #include <optional>
+#include <stdexcept>
+#include <type_traits>
 
 namespace atom::utils {
+
+// Concept for duration types
+template <typename T>
+concept ChronoDuration = std::is_convertible_v<
+    T, std::chrono::duration<typename T::rep, typename T::period>>;
+
 /**
  * @brief Class to measure elapsed time using std::chrono.
  *
@@ -28,7 +36,14 @@ public:
      *
      * Initializes the timer. The timer is initially not started.
      */
-    ElapsedTimer();
+    ElapsedTimer() = default;
+
+    /**
+     * @brief Constructor that starts the timer immediately.
+     *
+     * @param start_now If true, the timer starts immediately.
+     */
+    explicit ElapsedTimer(bool start_now);
 
     /**
      * @brief Start or restart the timer.
@@ -49,7 +64,30 @@ public:
      *
      * @return true if the timer is valid and started, false otherwise.
      */
-    [[nodiscard]] auto isValid() const -> bool;
+    [[nodiscard]] auto isValid() const noexcept -> bool;
+
+    /**
+     * @brief Get elapsed time in a specified duration type.
+     *
+     * @tparam DurationType The duration type to return.
+     * @return Elapsed time in the specified duration type since the timer was
+     * started. Returns 0 if the timer is not valid.
+     * @throws std::logic_error if the timer is not valid and throw_if_invalid
+     * is true.
+     */
+    template <ChronoDuration DurationType, bool throw_if_invalid = false>
+    [[nodiscard]] auto elapsed() const -> typename DurationType::rep {
+        if (!isValid()) {
+            if constexpr (throw_if_invalid) {
+                throw std::logic_error("Timer is not valid");
+            }
+            return 0;
+        }
+
+        return std::chrono::duration_cast<DurationType>(Clock::now() -
+                                                        start_time_.value())
+            .count();
+    }
 
     /**
      * @brief Get elapsed time in nanoseconds.
@@ -110,8 +148,10 @@ public:
     /**
      * @brief Check if a specified duration (in milliseconds) has passed.
      *
-     * @param ms Duration in milliseconds to check against elapsed time.
+     * @param ms Duration in milliseconds to check against elapsed time. Must be
+     * non-negative.
      * @return true if the specified duration has passed, false otherwise.
+     * @throws std::invalid_argument if ms is negative.
      */
     [[nodiscard]] auto hasExpired(int64_t ms) const -> bool;
 
@@ -119,10 +159,12 @@ public:
      * @brief Get the remaining time until the specified duration (in
      * milliseconds) has passed.
      *
-     * @param ms Duration in milliseconds to check against elapsed time.
+     * @param ms Duration in milliseconds to check against elapsed time. Must be
+     * non-negative.
      * @return Remaining time in milliseconds until the specified duration
      * passes. Returns 0 if the duration has already passed or the timer is
      * invalid.
+     * @throws std::invalid_argument if ms is negative.
      */
     [[nodiscard]] auto remainingTimeMs(int64_t ms) const -> int64_t;
 
@@ -131,65 +173,16 @@ public:
      *
      * @return Current time in milliseconds since epoch.
      */
-    static auto currentTimeMs() -> int64_t;
+    static auto currentTimeMs() noexcept -> int64_t;
 
-    /**
-     * @brief Compare two ElapsedTimer objects.
-     *
-     * @param other Another ElapsedTimer object to compare against.
-     * @return true if this timer's start time is earlier than the other timer's
-     * start time. false otherwise.
-     */
-    auto operator<(const ElapsedTimer& other) const -> bool;
-
-    /**
-     * @brief Compare two ElapsedTimer objects.
-     *
-     * @param other Another ElapsedTimer object to compare against.
-     * @return true if this timer's start time is later than the other timer's
-     * start time. false otherwise.
-     */
-    auto operator>(const ElapsedTimer& other) const -> bool;
-
-    /**
-     * @brief Compare two ElapsedTimer objects.
-     *
-     * @param other Another ElapsedTimer object to compare against.
-     * @return true if this timer's start time is earlier than or equal to the
-     * other timer's start time. false otherwise.
-     */
-    auto operator<=(const ElapsedTimer& other) const -> bool;
-
-    /**
-     * @brief Compare two ElapsedTimer objects.
-     *
-     * @param other Another ElapsedTimer object to compare against.
-     * @return true if this timer's start time is later than or equal to the
-     * other timer's start time. false otherwise.
-     */
-    auto operator>=(const ElapsedTimer& other) const -> bool;
-
-    /**
-     * @brief Compare two ElapsedTimer objects for equality.
-     *
-     * @param other Another ElapsedTimer object to compare against.
-     * @return true if this timer's start time is equal to the other timer's
-     * start time. false otherwise.
-     */
-    auto operator==(const ElapsedTimer& other) const -> bool;
-
-    /**
-     * @brief Compare two ElapsedTimer objects for inequality.
-     *
-     * @param other Another ElapsedTimer object to compare against.
-     * @return true if this timer's start time is not equal to the other timer's
-     * start time. false otherwise.
-     */
-    auto operator!=(const ElapsedTimer& other) const -> bool;
+    // Comparison operators
+    [[nodiscard]] auto operator<=>(const ElapsedTimer& other) const noexcept -> std::strong_ordering;
+    [[nodiscard]] auto operator==(const ElapsedTimer& other) const noexcept -> bool;
 
 private:
     std::optional<Clock::time_point> start_time_;  ///< Start time of the timer.
 };
+
 }  // namespace atom::utils
 
 #endif  // ATOM_UTILS_QTIMER_HPP

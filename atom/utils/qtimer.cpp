@@ -1,111 +1,122 @@
 #include "qtimer.hpp"
 
+#include <algorithm>
+#include <compare>
+
+#include "atom/error/exception.hpp"
+
 namespace atom::utils {
-// Constructor
-ElapsedTimer::ElapsedTimer() = default;
 
-// Start or restart the timer
-void ElapsedTimer::start() { start_time_ = Clock::now(); }
+ElapsedTimer::ElapsedTimer(bool start_now) {
+    if (start_now) {
+        start();
+    }
+}
 
-// Invalidate the timer
+void ElapsedTimer::start() {
+    try {
+        start_time_ = Clock::now();
+    } catch (const std::exception& e) {
+        THROW_RUNTIME_ERROR(std::string("Failed to start timer: ") + e.what());
+    }
+}
+
 void ElapsedTimer::invalidate() { start_time_.reset(); }
 
-// Check if the timer has been started and is valid
-auto ElapsedTimer::isValid() const -> bool { return start_time_.has_value(); }
+auto ElapsedTimer::isValid() const noexcept -> bool {
+    return start_time_.has_value();
+}
 
-// Get elapsed time in nanoseconds
 auto ElapsedTimer::elapsedNs() const -> int64_t {
-    return isValid() ? std::chrono::duration_cast<Nanoseconds>(
-                           Clock::now() - start_time_.value())
-                           .count()
-                     : 0;
+    return elapsed<Nanoseconds>();
 }
 
-// Get elapsed time in microseconds
 auto ElapsedTimer::elapsedUs() const -> int64_t {
-    return isValid() ? std::chrono::duration_cast<Microseconds>(
-                           Clock::now() - start_time_.value())
-                           .count()
-                     : 0;
+    return elapsed<Microseconds>();
 }
 
-// Get elapsed time in milliseconds
 auto ElapsedTimer::elapsedMs() const -> int64_t {
-    return isValid() ? std::chrono::duration_cast<Milliseconds>(
-                           Clock::now() - start_time_.value())
-                           .count()
-                     : 0;
+    return elapsed<Milliseconds>();
 }
 
-// Get elapsed time in seconds
-auto ElapsedTimer::elapsedSec() const -> int64_t {
-    return isValid() ? std::chrono::duration_cast<Seconds>(Clock::now() -
-                                                           start_time_.value())
-                           .count()
-                     : 0;
-}
+auto ElapsedTimer::elapsedSec() const -> int64_t { return elapsed<Seconds>(); }
 
-// Get elapsed time in minutes
-auto ElapsedTimer::elapsedMin() const -> int64_t {
-    return isValid() ? std::chrono::duration_cast<Minutes>(Clock::now() -
-                                                           start_time_.value())
-                           .count()
-                     : 0;
-}
+auto ElapsedTimer::elapsedMin() const -> int64_t { return elapsed<Minutes>(); }
 
-// Get elapsed time in hours
-auto ElapsedTimer::elapsedHrs() const -> int64_t {
-    return isValid() ? std::chrono::duration_cast<Hours>(Clock::now() -
-                                                         start_time_.value())
-                           .count()
-                     : 0;
-}
+auto ElapsedTimer::elapsedHrs() const -> int64_t { return elapsed<Hours>(); }
 
-// Get elapsed time in milliseconds (same as elapsedMs for compatibility)
 auto ElapsedTimer::elapsed() const -> int64_t { return elapsedMs(); }
 
-// Check if a specified duration (in milliseconds) has passed
 auto ElapsedTimer::hasExpired(int64_t ms) const -> bool {
+    if (ms < 0) {
+        THROW_INVALID_ARGUMENT("Duration cannot be negative");
+    }
+
     return elapsedMs() >= ms;
 }
 
-// Get the remaining time until the specified duration (in milliseconds) has
-// passed
 auto ElapsedTimer::remainingTimeMs(int64_t ms) const -> int64_t {
+    if (ms < 0) {
+        THROW_INVALID_ARGUMENT("Duration cannot be negative");
+    }
+
+    if (!isValid()) {
+        return 0;
+    }
+
     int64_t elapsed = elapsedMs();
-    return ms > elapsed ? ms - elapsed : 0;
+    return std::max<int64_t>(0, ms - elapsed);
 }
 
-// Get the current absolute time in milliseconds since epoch
-auto ElapsedTimer::currentTimeMs() -> int64_t {
-    return std::chrono::duration_cast<Milliseconds>(
-               Clock::now().time_since_epoch())
-        .count();
+auto ElapsedTimer::currentTimeMs() noexcept -> int64_t {
+    try {
+        return std::chrono::duration_cast<Milliseconds>(
+                   Clock::now().time_since_epoch())
+            .count();
+    } catch (...) {
+        // In case of any unexpected error, return 0
+        return 0;
+    }
 }
 
-// Compare two timers
-auto ElapsedTimer::operator<(const ElapsedTimer& other) const -> bool {
-    return start_time_ < other.start_time_;
+auto ElapsedTimer::operator<=>(const ElapsedTimer& other) const noexcept
+    -> std::strong_ordering {
+    // If both timers are invalid, they are considered equal
+    if (!isValid() && !other.isValid()) {
+        return std::strong_ordering::equal;
+    }
+
+    // An invalid timer is considered less than a valid one
+    if (!isValid()) {
+        return std::strong_ordering::less;
+    }
+
+    if (!other.isValid()) {
+        return std::strong_ordering::greater;
+    }
+
+    // Compare the actual start times
+    if (start_time_.value() < other.start_time_.value()) {
+        return std::strong_ordering::less;
+    } else if (start_time_.value() > other.start_time_.value()) {
+        return std::strong_ordering::greater;
+    } else {
+        return std::strong_ordering::equal;
+    }
 }
 
-auto ElapsedTimer::operator>(const ElapsedTimer& other) const -> bool {
-    return start_time_ > other.start_time_;
-}
+auto ElapsedTimer::operator==(const ElapsedTimer& other) const noexcept
+    -> bool {
+    // Two timers are equal if they are both invalid or have the same start time
+    if (!isValid() && !other.isValid()) {
+        return true;
+    }
 
-auto ElapsedTimer::operator<=(const ElapsedTimer& other) const -> bool {
-    return start_time_ <= other.start_time_;
-}
+    if (isValid() != other.isValid()) {
+        return false;
+    }
 
-auto ElapsedTimer::operator>=(const ElapsedTimer& other) const -> bool {
-    return start_time_ >= other.start_time_;
-}
-
-auto ElapsedTimer::operator==(const ElapsedTimer& other) const -> bool {
-    return start_time_ == other.start_time_;
-}
-
-auto ElapsedTimer::operator!=(const ElapsedTimer& other) const -> bool {
-    return start_time_ != other.start_time_;
+    return start_time_.value() == other.start_time_.value();
 }
 
 }  // namespace atom::utils

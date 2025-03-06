@@ -1,26 +1,15 @@
-/*
- * flatset.hpp
- *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
- */
-
-/*************************************************
-
-Date: 2024-4-16
-
-Description: A FlatSet
-
-**************************************************/
-
 #ifndef ATOM_TYPE_FLAT_SET_HPP
 #define ATOM_TYPE_FLAT_SET_HPP
 
 #include <algorithm>
 #include <concepts>
+#include <execution>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
 #include <ranges>
+#include <stdexcept>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -28,6 +17,10 @@ namespace atom::type {
 
 /**
  * @brief A flat set implementation using a sorted vector.
+ *
+ * This container provides set semantics with contiguous memory layout for
+ * better cache locality. It trades insertion/deletion performance for faster
+ * lookups and iteration.
  *
  * @tparam T The type of elements.
  * @tparam Compare The comparison function object type (default is
@@ -51,6 +44,9 @@ public:
     using key_compare = Compare;
     using value_compare = Compare;
 
+    // Default initial capacity to reduce reallocations
+    static constexpr size_type DEFAULT_CAPACITY = 16;
+
 private:
     std::vector<T> m_data_;
     Compare m_comp_;
@@ -59,7 +55,13 @@ public:
     /**
      * @brief Default constructor.
      */
-    FlatSet() = default;
+    FlatSet() noexcept(noexcept(Compare())) {
+        try {
+            m_data_.reserve(DEFAULT_CAPACITY);
+        } catch (const std::bad_alloc& e) {
+            // Fall back to default capacity handling if reserve fails
+        }
+    }
 
     /**
      * @brief Destructor.
@@ -71,7 +73,15 @@ public:
      *
      * @param comp The comparator to use.
      */
-    explicit FlatSet(const Compare& comp) : m_comp_(comp) {}
+    explicit FlatSet(const Compare& comp) noexcept(
+        std::is_nothrow_copy_constructible_v<Compare>)
+        : m_comp_(comp) {
+        try {
+            m_data_.reserve(DEFAULT_CAPACITY);
+        } catch (const std::bad_alloc& e) {
+            // Fall back to default capacity handling if reserve fails
+        }
+    }
 
     /**
      * @brief Constructs a FlatSet from a range of elements.
@@ -80,13 +90,50 @@ public:
      * @param first The beginning of the range.
      * @param last The end of the range.
      * @param comp The comparator to use (default is Compare()).
+     * @throws std::invalid_argument If the input iterators are invalid.
      */
     template <std::input_iterator InputIt>
     FlatSet(InputIt first, InputIt last, const Compare& comp = Compare())
-        : m_data_(first, last), m_comp_(comp) {
-        std::ranges::sort(m_data_, m_comp_);
-        m_data_.erase(std::unique(m_data_.begin(), m_data_.end()),
-                      m_data_.end());
+        : m_comp_(comp) {
+        try {
+            // Validate input iterators
+            if constexpr (std::sized_sentinel_for<InputIt, InputIt>) {
+                if (first > last) {
+                    throw std::invalid_argument(
+                        "Iterator range is invalid: first > last");
+                }
+                auto size = std::distance(first, last);
+                m_data_.reserve(size);
+            } else {
+                m_data_.reserve(DEFAULT_CAPACITY);
+            }
+
+            m_data_.assign(first, last);
+
+            // Use parallel sort for large datasets
+            if (m_data_.size() > 10000) {
+                std::sort(std::execution::par_unseq, m_data_.begin(),
+                          m_data_.end(), m_comp_);
+            } else {
+                std::sort(m_data_.begin(), m_data_.end(), m_comp_);
+            }
+
+            // Remove duplicates
+            auto last_unique = std::unique(
+                m_data_.begin(), m_data_.end(), [this](const T& a, const T& b) {
+                    return !m_comp_(a, b) && !m_comp_(b, a);
+                });
+
+            m_data_.erase(last_unique, m_data_.end());
+
+            // Shrink to fit if we have significant excess capacity
+            if (m_data_.capacity() > m_data_.size() * 1.5) {
+                m_data_.shrink_to_fit();
+            }
+        } catch (const std::exception& e) {
+            clear();  // Ensure no memory leaks
+            throw;
+        }
     }
 
     /**
@@ -248,6 +295,43 @@ public:
     }
 
     /**
+     * @brief Returns the current capacity of the underlying container.
+     *
+     * @return The current capacity.
+     */
+    [[nodiscard]] auto capacity() const noexcept -> size_type {
+        return m_data_.capacity();
+    }
+
+    /**
+     * @brief Reserves storage for at least the specified number of elements.
+     *
+     * @param new_cap The new capacity.
+     * @throws std::length_error If new_cap > max_size().
+     */
+    void reserve(size_type new_cap) {
+        try {
+            m_data_.reserve(new_cap);
+        } catch (const std::length_error& e) {
+            throw std::length_error("FlatSet::reserve: " +
+                                    std::string(e.what()));
+        } catch (const std::bad_alloc& e) {
+            throw std::bad_alloc();
+        }
+    }
+
+    /**
+     * @brief Reduces memory usage by freeing unused capacity.
+     */
+    void shrink_to_fit() noexcept {
+        try {
+            m_data_.shrink_to_fit();
+        } catch (...) {
+            // Ignore any exceptions as this is an optimization
+        }
+    }
+
+    /**
      * @brief Clears the set.
      */
     void clear() noexcept { m_data_.clear(); }
@@ -261,11 +345,29 @@ public:
      * insertion took place.
      */
     auto insert(const T& value) -> std::pair<iterator, bool> {
-        auto data = std::ranges::lower_bound(m_data_, value, m_comp_);
-        if (data != m_data_.end() && !m_comp_(value, *data)) {
-            return {data, false};
+        try {
+            // Use binary search to find the insertion point
+            auto pos = lowerBound(value);
+
+            // Check if element already exists
+            if (pos != end() && !m_comp_(value, *pos) &&
+                !m_comp_(*pos, value)) {
+                return {pos, false};
+            }
+
+            // Grow capacity if we're close to full to reduce reallocations
+            if (m_data_.size() == m_data_.capacity()) {
+                size_type new_capacity = m_data_.capacity() * 2;
+                if (new_capacity == 0)
+                    new_capacity = DEFAULT_CAPACITY;
+                m_data_.reserve(new_capacity);
+            }
+
+            return {m_data_.insert(pos, value), true};
+        } catch (const std::exception& e) {
+            throw std::runtime_error(std::string("Insert operation failed: ") +
+                                     e.what());
         }
-        return {m_data_.insert(data, value), true};
     }
 
     /**
@@ -277,11 +379,26 @@ public:
      * insertion took place.
      */
     auto insert(T&& value) -> std::pair<iterator, bool> {
-        auto data = std::ranges::lower_bound(m_data_, value, m_comp_);
-        if (data != m_data_.end() && !m_comp_(value, *data)) {
-            return {data, false};
+        try {
+            auto pos = lowerBound(value);
+
+            if (pos != end() && !m_comp_(value, *pos) &&
+                !m_comp_(*pos, value)) {
+                return {pos, false};
+            }
+
+            if (m_data_.size() == m_data_.capacity()) {
+                size_type new_capacity = m_data_.capacity() * 2;
+                if (new_capacity == 0)
+                    new_capacity = DEFAULT_CAPACITY;
+                m_data_.reserve(new_capacity);
+            }
+
+            return {m_data_.insert(pos, std::move(value)), true};
+        } catch (const std::exception& e) {
+            throw std::runtime_error(std::string("Insert operation failed: ") +
+                                     e.what());
         }
-        return {m_data_.insert(data, std::move(value)), true};
     }
 
     /**
@@ -291,15 +408,33 @@ public:
      * inserted.
      * @param value The value to insert.
      * @return An iterator to the inserted element.
+     * @throws std::invalid_argument If hint is invalid.
      */
     auto insert(const_iterator hint, const T& value) -> iterator {
-        if (hint == m_data_.end() || m_comp_(value, *hint)) {
-            if (hint == m_data_.begin() || m_comp_(*(hint - 1), value)) {
-                return m_data_.insert(hint, value);
+        try {
+            // Validate hint is within our range
+            if (hint < begin() || hint > end()) {
+                throw std::invalid_argument("Invalid hint provided to insert");
             }
+
+            // Check if the hint is valid (value belongs right at or after the
+            // hint)
+            if (hint == end() || m_comp_(value, *hint)) {
+                // Check if value belongs right at hint
+                if (hint == begin() || m_comp_(*(std::prev(hint)), value)) {
+                    // Efficient insertion with validated hint
+                    return m_data_.insert(hint, value);
+                }
+            }
+
+            // Hint wasn't optimal, fall back to regular insert
             return insert(value).first;
+        } catch (const std::invalid_argument& e) {
+            throw;
+        } catch (const std::exception& e) {
+            throw std::runtime_error(std::string("Insert operation failed: ") +
+                                     e.what());
         }
-        return hint;
     }
 
     /**
@@ -309,15 +444,27 @@ public:
      * inserted.
      * @param value The value to insert.
      * @return An iterator to the inserted element.
+     * @throws std::invalid_argument If hint is invalid.
      */
     auto insert(const_iterator hint, T&& value) -> iterator {
-        if (hint == m_data_.end() || m_comp_(value, *hint)) {
-            if (hint == m_data_.begin() || m_comp_(*(hint - 1), value)) {
-                return m_data_.insert(hint, std::move(value));
+        try {
+            if (hint < begin() || hint > end()) {
+                throw std::invalid_argument("Invalid hint provided to insert");
             }
+
+            if (hint == end() || m_comp_(value, *hint)) {
+                if (hint == begin() || m_comp_(*(std::prev(hint)), value)) {
+                    return m_data_.insert(hint, std::move(value));
+                }
+            }
+
             return insert(std::move(value)).first;
+        } catch (const std::invalid_argument& e) {
+            throw;
+        } catch (const std::exception& e) {
+            throw std::runtime_error(std::string("Insert operation failed: ") +
+                                     e.what());
         }
-        return hint;
     }
 
     /**
@@ -326,11 +473,69 @@ public:
      * @tparam InputIt The type of the input iterator.
      * @param first The beginning of the range.
      * @param last The end of the range.
+     * @throws std::invalid_argument If the iterator range is invalid.
      */
     template <std::input_iterator InputIt>
     void insert(InputIt first, InputIt last) {
-        while (first != last) {
-            insert(*first++);
+        try {
+            // Validate iterator range
+            if constexpr (std::sized_sentinel_for<InputIt, InputIt>) {
+                if (first > last) {
+                    throw std::invalid_argument(
+                        "Invalid iterator range: first > last");
+                }
+
+                // Reserve space for potentially new elements
+                if constexpr (std::random_access_iterator<InputIt>) {
+                    auto range_size = std::distance(first, last);
+                    if (range_size > 0) {
+                        reserve(size() + range_size);
+                    }
+                }
+            }
+
+            // For large ranges, use a more efficient bulk insertion strategy
+            if constexpr (std::random_access_iterator<InputIt>) {
+                if (std::distance(first, last) > 1000) {
+                    // Copy elements to a temporary vector
+                    std::vector<T> temp(first, last);
+
+                    // Add existing elements to ensure we don't lose them
+                    temp.insert(temp.end(), m_data_.begin(), m_data_.end());
+
+                    // Use parallel sort for large sets
+                    if (temp.size() > 10000) {
+                        std::sort(std::execution::par_unseq, temp.begin(),
+                                  temp.end(), m_comp_);
+                    } else {
+                        std::sort(temp.begin(), temp.end(), m_comp_);
+                    }
+
+                    // Remove duplicates
+                    auto last_unique =
+                        std::unique(temp.begin(), temp.end(),
+                                    [this](const T& a, const T& b) {
+                                        return !m_comp_(a, b) && !m_comp_(b, a);
+                                    });
+
+                    temp.erase(last_unique, temp.end());
+
+                    // Swap with our container
+                    m_data_.swap(temp);
+                    return;
+                }
+            }
+
+            // Default implementation for smaller ranges or non-random access
+            // iterators
+            while (first != last) {
+                insert(*first++);
+            }
+        } catch (const std::invalid_argument& e) {
+            throw;
+        } catch (const std::exception& e) {
+            throw std::runtime_error(
+                std::string("Bulk insert operation failed: ") + e.what());
         }
     }
 
@@ -354,7 +559,12 @@ public:
      */
     template <typename... Args>
     std::pair<iterator, bool> emplace(Args&&... args) {
-        return insert(T(std::forward<Args>(args)...));
+        try {
+            return insert(T(std::forward<Args>(args)...));
+        } catch (const std::exception& e) {
+            throw std::runtime_error(std::string("Emplace operation failed: ") +
+                                     e.what());
+        }
     }
 
     /**
@@ -368,7 +578,12 @@ public:
      */
     template <typename... Args>
     auto emplace_hint(const_iterator hint, Args&&... args) -> iterator {
-        return insert(hint, T(std::forward<Args>(args)...));
+        try {
+            return insert(hint, T(std::forward<Args>(args)...));
+        } catch (const std::exception& e) {
+            throw std::runtime_error(
+                std::string("Emplace hint operation failed: ") + e.what());
+        }
     }
 
     /**
@@ -376,8 +591,22 @@ public:
      *
      * @param pos An iterator to the element to erase.
      * @return An iterator to the element following the erased element.
+     * @throws std::invalid_argument If pos is not a valid iterator.
      */
-    auto erase(const_iterator pos) -> iterator { return m_data_.erase(pos); }
+    auto erase(const_iterator pos) -> iterator {
+        try {
+            if (pos < begin() || pos >= end()) {
+                throw std::invalid_argument(
+                    "Invalid iterator position for erase");
+            }
+            return m_data_.erase(pos);
+        } catch (const std::invalid_argument& e) {
+            throw;
+        } catch (const std::exception& e) {
+            throw std::runtime_error(std::string("Erase operation failed: ") +
+                                     e.what());
+        }
+    }
 
     /**
      * @brief Erases a range of elements from the set.
@@ -386,9 +615,20 @@ public:
      * @param last An iterator to the element following the last element to
      * erase.
      * @return An iterator to the element following the erased elements.
+     * @throws std::invalid_argument If the iterator range is invalid.
      */
     auto erase(const_iterator first, const_iterator last) -> iterator {
-        return m_data_.erase(first, last);
+        try {
+            if (first < begin() || last > end() || first > last) {
+                throw std::invalid_argument("Invalid iterator range for erase");
+            }
+            return m_data_.erase(first, last);
+        } catch (const std::invalid_argument& e) {
+            throw;
+        } catch (const std::exception& e) {
+            throw std::runtime_error(
+                std::string("Range erase operation failed: ") + e.what());
+        }
     }
 
     /**
@@ -398,12 +638,17 @@ public:
      * @return The number of elements erased.
      */
     auto erase(const T& value) -> size_type {
-        auto data = find(value);
-        if (data != m_data_.end()) {
-            erase(data);
-            return 1;
+        try {
+            auto it = find(value);
+            if (it != end()) {
+                erase(it);
+                return 1;
+            }
+            return 0;
+        } catch (const std::exception& e) {
+            throw std::runtime_error(
+                std::string("Value erase operation failed: ") + e.what());
         }
-        return 0;
     }
 
     /**
@@ -411,7 +656,9 @@ public:
      *
      * @param other The other set to swap with.
      */
-    void swap(FlatSet& other) noexcept {
+    void swap(FlatSet& other) noexcept(
+        std::is_nothrow_swappable_v<std::vector<T>> &&
+        std::is_nothrow_swappable_v<Compare>) {
         std::swap(m_data_, other.m_data_);
         std::swap(m_comp_, other.m_comp_);
     }
@@ -423,7 +670,7 @@ public:
      * @return The number of elements matching the value.
      */
     auto count(const T& value) const -> size_type {
-        return find(value) != m_data_.end() ? 1 : 0;
+        return contains(value) ? 1 : 0;
     }
 
     /**
@@ -433,11 +680,18 @@ public:
      * @return An iterator to the element, or end() if not found.
      */
     auto find(const T& value) -> iterator {
-        auto data = std::ranges::lower_bound(m_data_, value, m_comp_);
-        if (data != m_data_.end() && !m_comp_(value, *data)) {
-            return data;
+        try {
+            // Use binary search for finding elements
+            auto pos = lowerBound(value);
+            if (pos != end() && !m_comp_(value, *pos) &&
+                !m_comp_(*pos, value)) {
+                return pos;
+            }
+            return end();
+        } catch (const std::exception& e) {
+            throw std::runtime_error(std::string("Find operation failed: ") +
+                                     e.what());
         }
-        return m_data_.end();
     }
 
     /**
@@ -447,11 +701,17 @@ public:
      * @return A const iterator to the element, or end() if not found.
      */
     auto find(const T& value) const -> const_iterator {
-        auto data = std::ranges::lower_bound(m_data_, value, m_comp_);
-        if (data != m_data_.end() && !m_comp_(value, *data)) {
-            return data;
+        try {
+            auto pos = lowerBound(value);
+            if (pos != end() && !m_comp_(value, *pos) &&
+                !m_comp_(*pos, value)) {
+                return pos;
+            }
+            return end();
+        } catch (const std::exception& e) {
+            throw std::runtime_error(std::string("Find operation failed: ") +
+                                     e.what());
         }
-        return m_data_.end();
     }
 
     /**
@@ -461,7 +721,19 @@ public:
      * @return A pair of iterators to the range of elements.
      */
     auto equalRange(const T& value) -> std::pair<iterator, iterator> {
-        return std::ranges::equal_range(m_data_, value, m_comp_);
+        try {
+            // Use optimized implementation for large sets
+            if (size() > 10000) {
+                return std::equal_range(std::execution::par_unseq,
+                                        m_data_.begin(), m_data_.end(), value,
+                                        m_comp_);
+            }
+            return std::equal_range(m_data_.begin(), m_data_.end(), value,
+                                    m_comp_);
+        } catch (const std::exception& e) {
+            throw std::runtime_error(
+                std::string("Equal range operation failed: ") + e.what());
+        }
     }
 
     /**
@@ -472,7 +744,18 @@ public:
      */
     auto equalRange(const T& value) const
         -> std::pair<const_iterator, const_iterator> {
-        return std::ranges::equal_range(m_data_, value, m_comp_);
+        try {
+            if (size() > 10000) {
+                return std::equal_range(std::execution::par_unseq,
+                                        m_data_.begin(), m_data_.end(), value,
+                                        m_comp_);
+            }
+            return std::equal_range(m_data_.begin(), m_data_.end(), value,
+                                    m_comp_);
+        } catch (const std::exception& e) {
+            throw std::runtime_error(
+                std::string("Equal range operation failed: ") + e.what());
+        }
     }
 
     /**
@@ -483,7 +766,19 @@ public:
      * @return An iterator to the first element not less than the given value.
      */
     auto lowerBound(const T& value) -> iterator {
-        return std::ranges::lower_bound(m_data_, value, m_comp_);
+        try {
+            // Use parallel algorithm for large sets
+            if (size() > 10000) {
+                return std::lower_bound(std::execution::par_unseq,
+                                        m_data_.begin(), m_data_.end(), value,
+                                        m_comp_);
+            }
+            return std::lower_bound(m_data_.begin(), m_data_.end(), value,
+                                    m_comp_);
+        } catch (const std::exception& e) {
+            throw std::runtime_error(
+                std::string("Lower bound operation failed: ") + e.what());
+        }
     }
 
     /**
@@ -495,7 +790,18 @@ public:
      * value.
      */
     auto lowerBound(const T& value) const -> const_iterator {
-        return std::ranges::lower_bound(m_data_, value, m_comp_);
+        try {
+            if (size() > 10000) {
+                return std::lower_bound(std::execution::par_unseq,
+                                        m_data_.begin(), m_data_.end(), value,
+                                        m_comp_);
+            }
+            return std::lower_bound(m_data_.begin(), m_data_.end(), value,
+                                    m_comp_);
+        } catch (const std::exception& e) {
+            throw std::runtime_error(
+                std::string("Lower bound operation failed: ") + e.what());
+        }
     }
 
     /**
@@ -506,7 +812,18 @@ public:
      * @return An iterator to the first element greater than the given value.
      */
     auto upperBound(const T& value) -> iterator {
-        return std::ranges::upper_bound(m_data_, value, m_comp_);
+        try {
+            if (size() > 10000) {
+                return std::upper_bound(std::execution::par_unseq,
+                                        m_data_.begin(), m_data_.end(), value,
+                                        m_comp_);
+            }
+            return std::upper_bound(m_data_.begin(), m_data_.end(), value,
+                                    m_comp_);
+        } catch (const std::exception& e) {
+            throw std::runtime_error(
+                std::string("Upper bound operation failed: ") + e.what());
+        }
     }
 
     /**
@@ -518,7 +835,18 @@ public:
      * value.
      */
     auto upperBound(const T& value) const -> const_iterator {
-        return std::ranges::upper_bound(m_data_, value, m_comp_);
+        try {
+            if (size() > 10000) {
+                return std::upper_bound(std::execution::par_unseq,
+                                        m_data_.begin(), m_data_.end(), value,
+                                        m_comp_);
+            }
+            return std::upper_bound(m_data_.begin(), m_data_.end(), value,
+                                    m_comp_);
+        } catch (const std::exception& e) {
+            throw std::runtime_error(
+                std::string("Upper bound operation failed: ") + e.what());
+        }
     }
 
     /**
@@ -542,17 +870,30 @@ public:
      * @return True if the value is found, false otherwise.
      */
     auto contains(const T& value) const -> bool {
-        return find(value) != m_data_.end();
+        try {
+            return find(value) != end();
+        } catch (const std::exception& e) {
+            throw std::runtime_error(
+                std::string("Contains operation failed: ") + e.what());
+        }
     }
+
+    /**
+     * @brief Returns a view of the underlying data as a range.
+     *
+     * @return A view of the underlying data.
+     */
+    auto view() const { return std::ranges::subrange(begin(), end()); }
 };
 
 /**
- * @brief Swaps the contents of two FlatSets.
+ * @brief Equality comparison operator for FlatSets.
  *
  * @tparam T The type of elements.
  * @tparam Compare The comparison function object type.
  * @param lhs The first FlatSet.
  * @param rhs The second FlatSet.
+ * @return True if the sets are equal, false otherwise.
  */
 template <typename T, typename Compare>
 auto operator==(const FlatSet<T, Compare>& lhs,
@@ -562,12 +903,13 @@ auto operator==(const FlatSet<T, Compare>& lhs,
 }
 
 /**
- * @brief Swaps the contents of two FlatSets.
+ * @brief Inequality comparison operator for FlatSets.
  *
  * @tparam T The type of elements.
  * @tparam Compare The comparison function object type.
  * @param lhs The first FlatSet.
  * @param rhs The second FlatSet.
+ * @return True if the sets are not equal, false otherwise.
  */
 template <typename T, typename Compare>
 auto operator!=(const FlatSet<T, Compare>& lhs,
@@ -576,12 +918,13 @@ auto operator!=(const FlatSet<T, Compare>& lhs,
 }
 
 /**
- * @brief Swaps the contents of two FlatSets.
+ * @brief Less than comparison operator for FlatSets.
  *
  * @tparam T The type of elements.
  * @tparam Compare The comparison function object type.
  * @param lhs The first FlatSet.
  * @param rhs The second FlatSet.
+ * @return True if lhs is lexicographically less than rhs, false otherwise.
  */
 template <typename T, typename Compare>
 auto operator<(const FlatSet<T, Compare>& lhs,
@@ -591,12 +934,14 @@ auto operator<(const FlatSet<T, Compare>& lhs,
 }
 
 /**
- * @brief Swaps the contents of two FlatSets.
+ * @brief Less than or equal comparison operator for FlatSets.
  *
  * @tparam T The type of elements.
  * @tparam Compare The comparison function object type.
  * @param lhs The first FlatSet.
  * @param rhs The second FlatSet.
+ * @return True if lhs is lexicographically less than or equal to rhs, false
+ * otherwise.
  */
 template <typename T, typename Compare>
 auto operator<=(const FlatSet<T, Compare>& lhs,
@@ -605,12 +950,13 @@ auto operator<=(const FlatSet<T, Compare>& lhs,
 }
 
 /**
- * @brief Swaps the contents of two FlatSets.
+ * @brief Greater than comparison operator for FlatSets.
  *
  * @tparam T The type of elements.
  * @tparam Compare The comparison function object type.
  * @param lhs The first FlatSet.
  * @param rhs The second FlatSet.
+ * @return True if lhs is lexicographically greater than rhs, false otherwise.
  */
 template <typename T, typename Compare>
 auto operator>(const FlatSet<T, Compare>& lhs,
@@ -619,12 +965,14 @@ auto operator>(const FlatSet<T, Compare>& lhs,
 }
 
 /**
- * @brief Swaps the contents of two FlatSets.
+ * @brief Greater than or equal comparison operator for FlatSets.
  *
  * @tparam T The type of elements.
  * @tparam Compare The comparison function object type.
  * @param lhs The first FlatSet.
  * @param rhs The second FlatSet.
+ * @return True if lhs is lexicographically greater than or equal to rhs, false
+ * otherwise.
  */
 template <typename T, typename Compare>
 auto operator>=(const FlatSet<T, Compare>& lhs,
