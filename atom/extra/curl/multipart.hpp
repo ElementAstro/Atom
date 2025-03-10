@@ -3,104 +3,116 @@
 
 #include <curl/curl.h>
 #include <string_view>
+
+namespace atom::extra::curl {
+/**
+ * @brief A class for building multipart/form-data requests.
+ *
+ * This class simplifies the creation of multipart/form-data requests,
+ * which are commonly used for uploading files and submitting forms
+ * with various data types. It uses the libcurl's mime API to construct
+ * the form data.
+ */
 class MultipartForm {
 public:
-    MultipartForm() : form_(nullptr) {}
+    /**
+     * @brief Constructor for the MultipartForm class.
+     *
+     * Initializes an empty multipart form.
+     */
+    MultipartForm();
 
-    ~MultipartForm() {
-        if (form_) {
-            curl_mime_free(form_);
-        }
-    }
+    /**
+     * @brief Destructor for the MultipartForm class.
+     *
+     * Frees the resources used by the multipart form.
+     */
+    ~MultipartForm();
 
-    // 禁止拷贝
+    // Disable copy construction
     MultipartForm(const MultipartForm&) = delete;
+
+    // Disable copy assignment
     MultipartForm& operator=(const MultipartForm&) = delete;
 
-    // 允许移动
-    MultipartForm(MultipartForm&& other) noexcept : form_(other.form_) {
-        other.form_ = nullptr;
-    }
+    // Allow move construction
+    MultipartForm(MultipartForm&& other) noexcept;
 
-    MultipartForm& operator=(MultipartForm&& other) noexcept {
-        if (this != &other) {
-            if (form_) {
-                curl_mime_free(form_);
-            }
-            form_ = other.form_;
-            other.form_ = nullptr;
-        }
-        return *this;
-    }
+    // Allow move assignment
+    MultipartForm& operator=(MultipartForm&& other) noexcept;
 
-    // 添加文件
+    /**
+     * @brief Adds a file to the multipart form.
+     *
+     * @param name The name of the form field.
+     * @param filepath The path to the file to be added.
+     * @param content_type The content type of the file (optional). If not
+     * specified, libcurl will attempt to determine the content type
+     * automatically.
+     */
     void add_file(std::string_view name, std::string_view filepath,
-                  std::string_view content_type = "") {
-        if (!form_) {
-            initialize();
-        }
+                  std::string_view content_type = "");
 
-        curl_mimepart* part = curl_mime_addpart(form_);
-        curl_mime_name(part, name.data());
-        curl_mime_filedata(part, filepath.data());
-        if (!content_type.empty()) {
-            curl_mime_type(part, content_type.data());
-        }
-    }
-
-    // 添加内存数据作为文件
+    /**
+     * @brief Adds a buffer of data as a file to the multipart form.
+     *
+     * @param name The name of the form field.
+     * @param data A pointer to the data buffer.
+     * @param size The size of the data buffer in bytes.
+     * @param filename The filename to be associated with the data.
+     * @param content_type The content type of the data (optional).
+     */
     void add_buffer(std::string_view name, const void* data, size_t size,
                     std::string_view filename,
-                    std::string_view content_type = "") {
-        if (!form_) {
-            initialize();
-        }
+                    std::string_view content_type = "");
 
-        curl_mimepart* part = curl_mime_addpart(form_);
-        curl_mime_name(part, name.data());
-        curl_mime_data(part, static_cast<const char*>(data), size);
-        curl_mime_filename(part, filename.data());
-        if (!content_type.empty()) {
-            curl_mime_type(part, content_type.data());
-        }
-    }
+    /**
+     * @brief Adds a form field to the multipart form.
+     *
+     * @param name The name of the form field.
+     * @param content The content of the form field.
+     */
+    void add_field(std::string_view name, std::string_view content);
 
-    // 添加表单字段
-    void add_field(std::string_view name, std::string_view content) {
-        if (!form_) {
-            initialize();
-        }
-
-        curl_mimepart* part = curl_mime_addpart(form_);
-        curl_mime_name(part, name.data());
-        curl_mime_data(part, content.data(), content.size());
-    }
-
-    // 添加表单字段，指定内容类型
+    /**
+     * @brief Adds a form field to the multipart form with a specified content
+     * type.
+     *
+     * @param name The name of the form field.
+     * @param content The content of the form field.
+     * @param content_type The content type of the form field.
+     */
     void add_field_with_type(std::string_view name, std::string_view content,
-                             std::string_view content_type) {
-        if (!form_) {
-            initialize();
-        }
+                             std::string_view content_type);
 
-        curl_mimepart* part = curl_mime_addpart(form_);
-        curl_mime_name(part, name.data());
-        curl_mime_data(part, content.data(), content.size());
-        curl_mime_type(part, content_type.data());
-    }
-
-    curl_mime* handle() const { return form_; }
+    /**
+     * @brief Gets the curl_mime handle associated with the multipart form.
+     *
+     * This handle can be used with libcurl to set the request body.
+     *
+     * @return A pointer to the curl_mime handle.
+     */
+    curl_mime* handle() const;
 
 private:
+    /** @brief The curl_mime handle for the multipart form. */
     curl_mime* form_;
 
-    void initialize() {
-        CURL* curl = curl_easy_init();
-        form_ = curl_mime_init(curl);
-        curl_easy_cleanup(curl);
-    }
+    /**
+     * @brief Initializes the curl_mime handle.
+     *
+     * This method is called when the first part is added to the form.
+     */
+    void initialize();
 
+    /**
+     * @brief Friend class declaration for Session.
+     *
+     * Allows the Session class to access private members of the MultipartForm
+     * class.
+     */
     friend class Session;
 };
+}  // namespace atom::extra::curl
 
-#endif
+#endif  // ATOM_EXTRA_CURL_MULTIPART_HPP

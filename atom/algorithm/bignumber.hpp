@@ -329,7 +329,6 @@ constexpr auto BigNumber::at(size_t index) const -> uint8_t {
     }
     return digits_[index];
 }
-
 }  // namespace atom::algorithm
 
 #endif  // ATOM_ALGORITHM_BIGNUMBER_HPP

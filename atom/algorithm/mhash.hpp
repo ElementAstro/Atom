@@ -386,6 +386,8 @@ ATOM_NODISCARD inline auto keccak256(std::string_view input) noexcept(false)
                      input.size());
 }
 
+bool supportsHexStringConversion(const std::string &str);
+
 }  // namespace atom::algorithm
 
 #endif  // ATOM_ALGORITHM_MHASH_HPP

@@ -458,4 +458,18 @@ auto keccak256(const uint8_t *input,
     return hash;
 }
 
+bool supportsHexStringConversion(const std::string &str) {
+    if (str.empty()) {
+        return false;
+    }
+
+    for (char c : str) {
+        if (!std::isxdigit(c)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 }  // namespace atom::algorithm

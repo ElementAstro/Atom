@@ -6,6 +6,7 @@
 #include <regex>
 #include <sstream>
 
+namespace atom::extra::curl {
 // Cookie implementation
 Cookie::Cookie(std::string name, std::string value, std::string domain,
                std::string path, bool secure, bool http_only,
@@ -267,3 +268,4 @@ void CookieJar::parse_cookie_header(const std::string& header,
     Cookie cookie(name, value, domain, path, secure, http_only, expires);
     set_cookie(cookie);
 }
+}  // namespace atom::extra::curl
