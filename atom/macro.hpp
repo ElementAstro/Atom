@@ -14,6 +14,17 @@ Description: Useful Macros
 
 #pragma once
 
+#if defined(_WIN32) || defined(_WIN64)
+#define ATOM_PLATFORM_WINDOWS
+#include <malloc.h>
+#elif defined(__APPLE__)
+#define ATOM_PLATFORM_APPLE
+#include <stdlib.h>
+#elif defined(__linux__) || defined(__unix__)
+#define ATOM_PLATFORM_LINUX
+#include <stdlib.h>
+#endif
+
 //-------------------------------------------------------------------------------
 // Include checks and C++ version support
 //-------------------------------------------------------------------------------

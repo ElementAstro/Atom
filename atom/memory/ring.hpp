@@ -1,4 +1,3 @@
-// FILE: ring.hpp
 #ifndef ATOM_ALGORITHM_RING_HPP
 #define ATOM_ALGORITHM_RING_HPP
 
