@@ -51,7 +51,7 @@ set(LIBS
     loguru
     ${CMAKE_THREAD_LIBS_INIT}
     atom-sysinfo
-    atom-function
+    atom-meta
 )
 
 # Build Object Library

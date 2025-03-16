@@ -1,4 +1,4 @@
-set_project("atom-function")
+set_project("atom-meta")
     set_version("1.0.0")
     set_xmakever("2.5.1")
 
@@ -16,16 +16,16 @@ set_project("atom-function")
     }
 
     -- Object Library
-    target("atom-function_object")
+    target("atom-meta_object")
         set_kind("object")
         add_files(table.unpack(source_files))
         add_headerfiles(table.unpack(header_files))
     target_end()
 
     -- Static Library
-    target("atom-function")
+    target("atom-meta")
         set_kind("static")
-        add_deps("atom-function_object")
+        add_deps("atom-meta_object")
         add_files(table.unpack(source_files))
         add_headerfiles(table.unpack(header_files))
         add_includedirs(".")

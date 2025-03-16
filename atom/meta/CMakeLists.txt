@@ -1,13 +1,13 @@
-# CMakeLists.txt for Atom-Function
+# CMakeLists.txt for atom-meta
 # This project is licensed under the terms of the GPL3 license.
 #
-# Project Name: Atom-Function
+# Project Name: atom-meta
 # Description: a library for meta programming in C++
 # Author: Max Qian
 # License: GPL3
 
 cmake_minimum_required(VERSION 3.20)
-project(atom-function VERSION 1.0.0 LANGUAGES C CXX)
+project(atom-meta VERSION 1.0.0 LANGUAGES C CXX)
 
 # Sources
 set(SOURCES

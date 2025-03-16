@@ -19,7 +19,7 @@ local atom_packages = {
 }
 
 local atom_libs = {
-    "atom-function",
+    "atom-meta",
     "atom-algorithm",
     "atom-async",
     "atom-task",

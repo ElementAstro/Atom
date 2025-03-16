@@ -33,9 +33,9 @@ set(SUBDIRECTORIES
     components
     connection
     error
-    function
     io
     log
+    meta
     search
     secret
     sysinfo
@@ -63,7 +63,7 @@ set(ATOM_HEADERS
 # Libraries
 set(ATOM_LIBS
     loguru
-    atom-function
+    atom-meta
     atom-algorithm
     atom-async
     atom-async-io
