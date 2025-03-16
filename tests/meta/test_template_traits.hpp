@@ -6,7 +6,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "atom/function/template_traits.hpp"
+#include "atom/meta/template_traits.hpp"
 
 #include <array>
 #include <functional>

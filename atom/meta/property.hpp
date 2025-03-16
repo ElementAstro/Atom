@@ -8,7 +8,7 @@
 #include <unordered_map>
 
 #include "atom/error/exception.hpp"
-#include "atom/function/concept.hpp"
+#include "atom/meta/concept.hpp"
 
 /**
  * @brief A template class that encapsulates a property with optional getter,

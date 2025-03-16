@@ -14,7 +14,7 @@
 #include <variant>
 #include <vector>
 
-#include "atom/function/concept.hpp"
+#include "atom/meta/concept.hpp"
 
 #ifdef ATOM_USE_BOOST
 #include <boost/endian/conversion.hpp>

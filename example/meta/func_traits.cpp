@@ -6,7 +6,7 @@
  * \copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-#include "atom/function/func_traits.hpp"
+#include "atom/meta/func_traits.hpp"
 
 #include <functional>
 #include <iostream>

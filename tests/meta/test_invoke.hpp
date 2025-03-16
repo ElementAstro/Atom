@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "atom/function/invoke.hpp"
+#include "atom/meta/invoke.hpp"
 
 #include <chrono>
 #include <functional>

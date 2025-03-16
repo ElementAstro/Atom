@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "atom/function/proxy_params.hpp"
+#include "atom/meta/proxy_params.hpp"
 
 #include <algorithm>
 #include <string>

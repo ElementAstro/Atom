@@ -1,9 +1,9 @@
-// atom/function/test_enum.hpp
+// atom/meta/test_enum.hpp
 #ifndef ATOM_TEST_ENUM_HPP
 #define ATOM_TEST_ENUM_HPP
 
 #include <gtest/gtest.h>
-#include "atom/function/enum.hpp"
+#include "atom/meta/enum.hpp"
 
 #include <array>
 #include <string_view>

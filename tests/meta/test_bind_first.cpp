@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "atom/function/bind_first.hpp"
+#include "atom/meta/bind_first.hpp"
 
 #include <functional>
 #include <memory>

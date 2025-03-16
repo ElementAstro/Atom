@@ -1,9 +1,9 @@
-// atom/function/test_func_traits.hpp
+// atom/meta/test_func_traits.hpp
 #ifndef ATOM_TEST_FUNC_TRAITS_HPP
 #define ATOM_TEST_FUNC_TRAITS_HPP
 
 #include <gtest/gtest.h>
-#include "atom/function/func_traits.hpp"
+#include "atom/meta/func_traits.hpp"
 
 #include <functional>
 #include <string>

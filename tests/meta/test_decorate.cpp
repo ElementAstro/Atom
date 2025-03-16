@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "atom/function/decorate.hpp"
+#include "atom/meta/decorate.hpp"
 
 #include <algorithm>
 #include <chrono>

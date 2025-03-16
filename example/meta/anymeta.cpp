@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "atom/function/anymeta.hpp"
+#include "atom/meta/anymeta.hpp"
 
 // Sample class to demonstrate the functionality
 class Sample {

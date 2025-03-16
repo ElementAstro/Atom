@@ -1,5 +1,5 @@
 #include "stacktrace.hpp"
-#include "atom/function/abi.hpp"
+#include "atom/meta/abi.hpp"
 
 #include <iomanip>
 #include <regex>

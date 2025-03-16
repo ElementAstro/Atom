@@ -10,7 +10,7 @@
 #include <utility>
 
 #include "atom/error/exception.hpp"
-#include "atom/function/concept.hpp"
+#include "atom/meta/concept.hpp"
 #include "atom/macro.hpp"
 
 namespace atom::meta {

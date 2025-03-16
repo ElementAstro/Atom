@@ -1,9 +1,9 @@
-// atom/function/test_conversion.hpp
+// atom/meta/test_conversion.hpp
 #ifndef ATOM_TEST_CONVERSION_HPP
 #define ATOM_TEST_CONVERSION_HPP
 
 #include <gtest/gtest.h>
-#include "atom/function/conversion.hpp"
+#include "atom/meta/conversion.hpp"
 
 #include <deque>
 #include <list>

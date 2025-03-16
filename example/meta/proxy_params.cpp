@@ -5,7 +5,7 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-#include "atom/function/proxy_params.hpp"
+#include "atom/meta/proxy_params.hpp"
 
 #include <any>
 #include <iostream>

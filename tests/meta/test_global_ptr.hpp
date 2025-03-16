@@ -10,7 +10,7 @@
 #define ATOM_TEST_GLOBAL_PTR_HPP
 
 #include <gtest/gtest.h>
-#include "atom/function/global_ptr.hpp"
+#include "atom/meta/global_ptr.hpp"
 
 #include <chrono>
 #include <string>

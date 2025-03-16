@@ -5,7 +5,7 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-#include "atom/function/property.hpp"
+#include "atom/meta/property.hpp"
 
 #include <iostream>
 #include <string>

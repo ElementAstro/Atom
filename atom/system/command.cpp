@@ -45,7 +45,7 @@ Description: Simple wrapper for executing commands.
 #include "atom/macro.hpp"
 
 #include "atom/error/exception.hpp"
-#include "atom/function/global_ptr.hpp"
+#include "atom/meta/global_ptr.hpp"
 #include "atom/log/loguru.hpp"
 #include "atom/system/process.hpp"
 

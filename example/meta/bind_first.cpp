@@ -12,7 +12,7 @@ Description: Example usage of the bindFirst function.
 
 **************************************************/
 
-#include "atom/function/bind_first.hpp"
+#include "atom/meta/bind_first.hpp"
 
 #include <iostream>
 

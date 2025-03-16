@@ -15,7 +15,7 @@ Description: Basic Component Types Definition and Some Utilities
 #ifndef ATOM_COMPONENT_TYPES_HPP
 #define ATOM_COMPONENT_TYPES_HPP
 
-#include "atom/function/enum.hpp"
+#include "atom/meta/enum.hpp"
 
 enum class ComponentType {
     NONE,

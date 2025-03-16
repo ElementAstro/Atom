@@ -24,9 +24,9 @@
 #endif
 
 #include "atom/algorithm/hash.hpp"
-#include "atom/function/abi.hpp"
-#include "atom/function/func_traits.hpp"
-#include "atom/function/proxy_params.hpp"
+#include "atom/meta/abi.hpp"
+#include "atom/meta/func_traits.hpp"
+#include "atom/meta/proxy_params.hpp"
 #include "atom/macro.hpp"
 
 namespace atom::meta {

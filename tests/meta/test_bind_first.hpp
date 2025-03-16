@@ -1,10 +1,10 @@
-// filepath: /home/max/Atom-1/atom/function/test_bind_first.hpp
-// atom/function/test_bind_first.hpp
+// filepath: /home/max/Atom-1/atom/meta/test_bind_first.hpp
+// atom/meta/test_bind_first.hpp
 #ifndef ATOM_TEST_BIND_FIRST_HPP
 #define ATOM_TEST_BIND_FIRST_HPP
 
 #include <gtest/gtest.h>
-#include "atom/function/bind_first.hpp"
+#include "atom/meta/bind_first.hpp"
 
 #include <functional>
 #include <memory>

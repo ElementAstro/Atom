@@ -5,7 +5,7 @@
 #include <type_traits>
 
 #include "atom/error/exception.hpp"
-#include "atom/function/concept.hpp"
+#include "atom/meta/concept.hpp"
 #include "rjson.hpp"
 #include "ryaml.hpp"
 

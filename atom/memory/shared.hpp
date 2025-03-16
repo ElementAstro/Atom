@@ -16,7 +16,7 @@
 #include <vector>
 
 #include "atom/error/exception.hpp"
-#include "atom/function/concept.hpp"
+#include "atom/meta/concept.hpp"
 #include "atom/log/loguru.hpp"
 #include "atom/macro.hpp"
 #include "atom/type/noncopyable.hpp"

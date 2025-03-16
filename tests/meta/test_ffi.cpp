@@ -6,7 +6,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "atom/function/ffi.hpp"
+#include "atom/meta/ffi.hpp"
 
 #include <chrono>
 #include <string>

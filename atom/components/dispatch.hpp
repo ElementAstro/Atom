@@ -10,9 +10,9 @@
 #endif
 
 #include "atom/error/exception.hpp"
-#include "atom/function/abi.hpp"
-#include "atom/function/proxy.hpp"
-#include "atom/function/type_caster.hpp"
+#include "atom/meta/abi.hpp"
+#include "atom/meta/proxy.hpp"
+#include "atom/meta/type_caster.hpp"
 #include "atom/type/json.hpp"
 
 #include "atom/macro.hpp"

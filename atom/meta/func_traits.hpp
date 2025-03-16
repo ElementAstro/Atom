@@ -9,8 +9,8 @@
 #ifndef ATOM_META_FUNC_TRAITS_HPP
 #define ATOM_META_FUNC_TRAITS_HPP
 
-#include "atom/function/abi.hpp"
-#include "atom/function/concept.hpp"
+#include "atom/meta/abi.hpp"
+#include "atom/meta/concept.hpp"
 
 #if ATOM_ENABLE_DEBUG
 #include <iostream>

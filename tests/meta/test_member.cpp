@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "atom/function/member.hpp"
+#include "atom/meta/member.hpp"
 
 #include <array>
 #include <list>

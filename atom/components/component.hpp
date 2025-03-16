@@ -19,12 +19,12 @@ Description: Basic Component Definition
 #include "module_macro.hpp"
 #include "var.hpp"
 
-#include "atom/function/concept.hpp"
-#include "atom/function/constructor.hpp"
-#include "atom/function/conversion.hpp"
-#include "atom/function/func_traits.hpp"
-#include "atom/function/type_caster.hpp"
-#include "atom/function/type_info.hpp"
+#include "atom/meta/concept.hpp"
+#include "atom/meta/constructor.hpp"
+#include "atom/meta/conversion.hpp"
+#include "atom/meta/func_traits.hpp"
+#include "atom/meta/type_caster.hpp"
+#include "atom/meta/type_info.hpp"
 #include "atom/log/loguru.hpp"
 #include "atom/type/pointer.hpp"
 

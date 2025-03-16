@@ -6,7 +6,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "atom/function/type_info.hpp"
+#include "atom/meta/type_info.hpp"
 
 #include <array>
 #include <list>

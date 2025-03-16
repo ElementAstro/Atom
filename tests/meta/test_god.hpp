@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "atom/function/god.hpp"
+#include "atom/meta/god.hpp"
 
 #include <array>
 #include <atomic>

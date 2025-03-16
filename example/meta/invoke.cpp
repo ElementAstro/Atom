@@ -6,7 +6,7 @@
  * \copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-#include "atom/function/invoke.hpp"
+#include "atom/meta/invoke.hpp"
 
 #include <exception>
 #include <functional>

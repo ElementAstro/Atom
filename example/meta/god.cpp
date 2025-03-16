@@ -5,7 +5,7 @@
  * (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-#include "atom/function/god.hpp"
+#include "atom/meta/god.hpp"
 
 #include <cstring>
 #include <iostream>

@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "atom/function/proxy.hpp"
+#include "atom/meta/proxy.hpp"
 
 #include <chrono>
 #include <functional>

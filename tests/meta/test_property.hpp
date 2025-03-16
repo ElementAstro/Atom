@@ -2,7 +2,7 @@
 #define ATOM_META_TEST_PROPERTY_HPP
 
 #include <gtest/gtest.h>
-#include "atom/function/property.hpp"
+#include "atom/meta/property.hpp"
 
 #include <atomic>
 #include <iostream>

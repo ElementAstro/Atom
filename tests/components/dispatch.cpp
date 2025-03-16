@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 
 #include "atom/error/exception.hpp"
-#include "atom/function/type_caster.hpp"
+#include "atom/meta/type_caster.hpp"
 
 // Test fixture for CommandDispatcher tests
 class CommandDispatcherTest : public ::testing::Test {
