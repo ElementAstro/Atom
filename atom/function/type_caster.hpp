@@ -28,6 +28,14 @@
 
 namespace atom::meta {
 
+// Add the missing detail::getTypeRegistry function
+namespace detail {
+inline auto getTypeRegistry() -> std::unordered_map<std::string, TypeInfo>& {
+    static std::unordered_map<std::string, TypeInfo> registry;
+    return registry;
+}
+}  // namespace detail
+
 /*!
  * \class TypeCaster
  * \brief A class that provides type casting functionality with support for type

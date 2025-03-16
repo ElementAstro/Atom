@@ -14,7 +14,7 @@
 #include <thread>
 #include <vector>
 
-#ifdef USE_SIMD
+#ifdef ATOM_USE_SIMD
 #ifdef __x86_64__
 #include <immintrin.h>
 #elif __aarch64__
@@ -27,9 +27,9 @@
 #include <boost/thread.hpp>
 #endif
 
+#include "atom/error/exception.hpp"
 #include "atom/log/loguru.hpp"
 
-// 优化AnnealingProblem概念，使用更精确的约束
 template <typename ProblemType, typename SolutionType>
 concept AnnealingProblem =
     requires(ProblemType problemInstance, SolutionType solutionInstance) {
@@ -407,11 +407,9 @@ void SimulatedAnnealing<ProblemType, SolutionType>::optimizeThread() {
                 rejected_steps_++;
             }
 
-            // Update statistics and check for restart
             updateStatistics(iteration, currentEnergy);
             restartOptimization();
 
-            // Adapt temperature if using adaptive strategy
             if (total_steps_ > 0) {
                 double acceptance_rate =
                     static_cast<double>(accepted_steps_) / total_steps_;
@@ -442,7 +440,6 @@ void SimulatedAnnealing<ProblemType, SolutionType>::optimizeThread() {
     }
 }
 
-// 在 optimize 方法中添加更完善的异常处理
 template <typename ProblemType, typename SolutionType>
     requires AnnealingProblem<ProblemType, SolutionType>
 auto SimulatedAnnealing<ProblemType, SolutionType>::optimize(int numThreads)
@@ -455,7 +452,7 @@ auto SimulatedAnnealing<ProblemType, SolutionType>::optimize(int numThreads)
             numThreads = 1;
         }
 
-        std::vector<std::jthread> threads;  // 使用C++20的std::jthread
+        std::vector<std::jthread> threads;
         threads.reserve(numThreads);
 
         for (int threadIndex = 0; threadIndex < numThreads; ++threadIndex) {
@@ -465,10 +462,9 @@ auto SimulatedAnnealing<ProblemType, SolutionType>::optimize(int numThreads)
             LOG_F(INFO, "Launched optimization thread {}.", threadIndex + 1);
         }
 
-        // std::jthread析构时会自动join，无需手动join
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Exception in optimize: {}", e.what());
-        throw;  // 重新抛出异常以便上层处理
+        throw;
     }
 
     LOG_F(INFO, "Optimization completed with best energy: {}", best_energy_);
@@ -504,33 +500,66 @@ void SimulatedAnnealing<ProblemType, SolutionType>::setCoolingRate(
     LOG_F(INFO, "Cooling rate set to: {}", rate);
 }
 
-// TSP class implementation
 inline TSP::TSP(const std::vector<std::pair<double, double>>& cities)
     : cities_(cities) {
     LOG_F(INFO, "TSP instance created with %zu cities.", cities_.size());
 }
 
-// 优化TSP::energy方法中的SIMD代码
 inline auto TSP::energy(const std::vector<int>& solution) const -> double {
     double totalDistance = 0.0;
     size_t numCities = solution.size();
 
-#ifdef USE_SIMD
+#ifdef ATOM_USE_SIMD
 #ifdef __AVX2__
-    // AVX2 实现
+    // AVX2 implementation
     __m256d totalDistanceVec = _mm256_setzero_pd();
-    // ... AVX2 代码 ...
+
+    for (size_t i = 0; i < numCities; ++i) {
+        size_t nextCity = (i + 1) % numCities;
+
+        auto [x1, y1] = cities_[solution[i]];
+        auto [x2, y2] = cities_[solution[nextCity]];
+
+        __m256d v1 = _mm256_set_pd(0.0, 0.0, y1, x1);
+        __m256d v2 = _mm256_set_pd(0.0, 0.0, y2, x2);
+        __m256d diff = _mm256_sub_pd(v1, v2);
+        __m256d squared = _mm256_mul_pd(diff, diff);
+
+        // Extract x^2 and y^2
+        __m128d low = _mm256_extractf128_pd(squared, 0);
+        double dx_squared = _mm_cvtsd_f64(low);
+        double dy_squared = _mm_cvtsd_f64(_mm_permute_pd(low, 1));
+
+        // Calculate distance and add to total
+        double distance = std::sqrt(dx_squared + dy_squared);
+        totalDistance += distance;
+    }
 
 #elif defined(__ARM_NEON)
-    // ARM NEON 实现
+    // ARM NEON implementation
     float32x4_t totalDistanceVec = vdupq_n_f32(0.0f);
-    // ... ARM NEON 代码 ...
+
+    for (size_t i = 0; i < numCities; ++i) {
+        size_t nextCity = (i + 1) % numCities;
+
+        auto [x1, y1] = cities_[solution[i]];
+        auto [x2, y2] = cities_[solution[nextCity]];
+
+        float32x2_t p1 =
+            vset_f32(static_cast<float>(x1), static_cast<float>(y1));
+        float32x2_t p2 =
+            vset_f32(static_cast<float>(x2), static_cast<float>(y2));
+
+        float32x2_t diff = vsub_f32(p1, p2);
+        float32x2_t squared = vmul_f32(diff, diff);
+
+        // Sum x^2 + y^2 and take sqrt
+        float sum = vget_lane_f32(vpadd_f32(squared, squared), 0);
+        totalDistance += std::sqrt(static_cast<double>(sum));
+    }
 
 #else
-// 针对其他架构的兼容性SIMD实现
-#endif
-#else
-    // 普通实现，已优化循环结构
+    // Fallback SIMD implementation for other architectures
     for (size_t i = 0; i < numCities; ++i) {
         size_t nextCity = (i + 1) % numCities;
 
@@ -539,8 +568,20 @@ inline auto TSP::energy(const std::vector<int>& solution) const -> double {
 
         double deltaX = x1 - x2;
         double deltaY = y1 - y2;
-        totalDistance +=
-            std::hypot(deltaX, deltaY);  // 使用std::hypot代替手动计算
+        totalDistance += std::sqrt(deltaX * deltaX + deltaY * deltaY);
+    }
+#endif
+#else
+    // Standard optimized implementation
+    for (size_t i = 0; i < numCities; ++i) {
+        size_t nextCity = (i + 1) % numCities;
+
+        auto [x1, y1] = cities_[solution[i]];
+        auto [x2, y2] = cities_[solution[nextCity]];
+
+        double deltaX = x1 - x2;
+        double deltaY = y1 - y2;
+        totalDistance += std::hypot(deltaX, deltaY);
     }
 #endif
 

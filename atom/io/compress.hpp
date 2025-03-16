@@ -8,226 +8,243 @@
 
 Date: 2023-3-31
 
-Description: Compressor using ZLib
+Description: Compressor using ZLib and MiniZip-ng
 
 **************************************************/
 
 #ifndef ATOM_IO_COMPRESS_HPP
 #define ATOM_IO_COMPRESS_HPP
 
-#include <filesystem>
 #include <future>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace atom::io {
 
-// Concepts for path-like types
-template <typename T>
-concept PathLike = requires(T t) { std::filesystem::path(t); };
+// 前向声明压缩选项结构体
+struct CompressionOptions;
+struct DecompressionOptions;
+
+// 压缩状态和结果结构
+struct CompressionResult {
+    bool success{false};
+    std::string error_message;
+    size_t original_size{0};
+    size_t compressed_size{0};
+    double compression_ratio{0.0};
+};
+
+// 基本的压缩选项
+struct CompressionOptions {
+    int level{-1};             // 压缩级别 (-1 = 默认, 0-9)
+    size_t chunk_size{16384};  // 处理块大小
+    bool use_parallel{true};   // 是否使用并行处理
+    size_t num_threads{std::thread::hardware_concurrency()};  // 并行线程数
+    bool create_backup{false};  // 是否创建备份
+    std::string password;       // 加密密码(可选)
+};
+
+// 基本的解压选项
+struct DecompressionOptions {
+    size_t chunk_size{16384};  // 处理块大小
+    bool use_parallel{true};   // 是否使用并行处理
+    size_t num_threads{std::thread::hardware_concurrency()};  // 并行线程数
+    bool verify_checksum{true};  // 是否验证校验和
+    std::string password;        // 解密密码(如果需要)
+};
 
 /**
- * @brief Compress a single file
- * @param file_name The name (including path) of the file to be compressed.
- * @param output_folder The folder where the compressed file will be saved.
- * @return Whether the compression is successful.
- *
- * This function compresses a single file, and the compressed file is named by
- * adding the .gz suffix to the source file name.
- *
- * @note If the file name already contains a .gz suffix, it will not be
- * compressed again.
- * @throws std::filesystem::filesystem_error if there are issues with file
- * operations
+ * @brief 压缩单个文件
+ * @param file_path 要压缩的文件路径
+ * @param output_folder 输出文件夹
+ * @param options 压缩选项
+ * @return 压缩结果
  */
-auto compressFile(std::string_view file_name,
-                  std::string_view output_folder) -> bool;
+CompressionResult compressFile(
+    std::string_view file_path, std::string_view output_folder,
+    const CompressionOptions& options = CompressionOptions{});
 
 /**
- * @brief Decompress a single file
- * @param file_name The name (including path) of the file to be decompressed.
- * @param output_folder The folder where the decompressed file will be saved.
- * @return Whether the decompression is successful.
- *
- * This function decompresses a single compressed file, and the decompressed
- * file is named by removing the .gz suffix from the source file name.
- *
- * @note If the file name does not contain a .gz suffix, it will not be
- * decompressed.
- * @throws std::filesystem::filesystem_error if there are issues with file
- * operations
+ * @brief 解压单个文件
+ * @param file_path 要解压的文件路径
+ * @param output_folder 输出文件夹
+ * @param options 解压选项
+ * @return 操作结果
  */
-auto decompressFile(std::string_view file_name,
-                    std::string_view output_folder) -> bool;
+CompressionResult decompressFile(
+    std::string_view file_path, std::string_view output_folder,
+    const DecompressionOptions& options = DecompressionOptions{});
 
 /**
- * @brief Compress all files in a specified directory
- * @param folder_name The name (absolute path) of the folder to be compressed.
- * @return Whether the compression is successful.
- *
- * This function compresses all files in the specified folder, and the
- * compressed file is named by adding the .gz suffix to each source file name.
- *
- * @note The compressed files will be saved in the original directory, and files
- * in subdirectories will not be compressed.
- * @throws std::filesystem::filesystem_error if there are issues with file
- * operations
+ * @brief 压缩整个文件夹
+ * @param folder_path 要压缩的文件夹路径
+ * @param output_path 输出文件路径
+ * @param options 压缩选项
+ * @return 压缩结果
  */
-auto compressFolder(const char* folder_name) -> bool;
+CompressionResult compressFolder(
+    std::string_view folder_path, std::string_view output_path,
+    const CompressionOptions& options = CompressionOptions{});
 
 /**
- * @brief Extract a single ZIP file
- * @param zip_file The name (including path) of the ZIP file to be extracted.
- * @param destination_folder The path where the extracted files will be saved
- * (including path).
- * @return Whether the extraction is successful.
- *
- * This function extracts a single ZIP file, and the extracted files are saved
- * in the specified path.
- *
- * @note If the specified path does not exist, the function will attempt to
- * create it.
+ * @brief 解压ZIP文件
+ * @param zip_path ZIP文件路径
+ * @param output_folder 输出文件夹
+ * @param options 解压选项
+ * @return 操作结果
  */
-auto extractZip(std::string_view zip_file,
-                std::string_view destination_folder) -> bool;
+CompressionResult extractZip(
+    std::string_view zip_path, std::string_view output_folder,
+    const DecompressionOptions& options = DecompressionOptions{});
 
 /**
- * @brief Create a ZIP file
- * @param source_folder The name (including path) of the folder to be
- * compressed.
- * @param zip_file The name (including path) of the resulting ZIP file.
- * @param compression_level Compression level (optional, default is -1, meaning
- * use default level).
- * @return Whether the creation is successful.
- *
- * This function creates a ZIP file and compresses the files in the specified
- * folder into the ZIP file.
- *
- * @note If the specified path does not exist, the function will attempt to
- * create it.
+ * @brief 创建ZIP文件
+ * @param source_path 源文件夹或文件路径
+ * @param zip_path 目标ZIP文件路径
+ * @param options 压缩选项
+ * @return 操作结果
  */
-auto createZip(std::string_view source_folder, std::string_view zip_file,
-               int compression_level = -1) -> bool;
+CompressionResult createZip(
+    std::string_view source_path, std::string_view zip_path,
+    const CompressionOptions& options = CompressionOptions{});
+
+// ZIP文件信息结构
+struct ZipFileInfo {
+    std::string name;
+    size_t size;
+    size_t compressed_size;
+    std::string datetime;
+    bool is_directory;
+    bool is_encrypted;
+    uint32_t crc;
+};
 
 /**
- * @brief List files in a ZIP file
- * @param zip_file The name (including path) of the ZIP file.
- * @return A list of file names.
- *
- * This function lists the files in a ZIP file.
- *
- * @note If the specified ZIP file does not exist, the function will return an
- * empty list.
+ * @brief 列出ZIP文件中的内容
+ * @param zip_path ZIP文件路径
+ * @return 文件信息列表
  */
-auto listFilesInZip(std::string_view zip_file) -> std::vector<std::string>;
+std::vector<ZipFileInfo> listZipContents(std::string_view zip_path);
 
 /**
- * @brief Check if a specified file exists in a ZIP file
- * @param zip_file The name (including path) of the ZIP file.
- * @param file_name The name of the file to check.
- * @return Whether the file exists.
- *
- * This function checks if a specified file exists in a ZIP file.
- *
- * @note If the specified ZIP file does not exist, the function will return
- * false.
+ * @brief 检查文件在ZIP中是否存在
+ * @param zip_path ZIP文件路径
+ * @param file_path 要检查的文件路径
+ * @return 是否存在
  */
-auto fileExistsInZip(std::string_view zip_file,
-                     std::string_view file_name) -> bool;
+bool fileExistsInZip(std::string_view zip_path, std::string_view file_path);
 
 /**
- * @brief Remove a specified file from a ZIP file
- * @param zip_file The name (including path) of the ZIP file.
- * @param file_name The name of the file to be removed.
- * @return Whether the removal is successful.
- *
- * This function removes a specified file from a ZIP file.
- *
- * @note If the specified ZIP file does not exist, the function will return
- * false.
+ * @brief 从ZIP文件移除指定文件
+ * @param zip_path ZIP文件路径
+ * @param file_path 要移除的文件路径
+ * @return 操作结果
  */
-auto removeFileFromZip(std::string_view zip_file,
-                       std::string_view file_name) -> bool;
+CompressionResult removeFromZip(std::string_view zip_path,
+                                std::string_view file_path);
 
 /**
- * @brief Get the size of a file in a ZIP file
- * @param zip_file The name (including path) of the ZIP file.
- * @return The file size.
- *
- * This function gets the size of a file in a ZIP file.
- *
- * @note If the specified ZIP file does not exist, the function will return 0.
+ * @brief 获取ZIP文件大小
+ * @param zip_path ZIP文件路径
+ * @return 文件大小(字节)
  */
-auto getZipFileSize(std::string_view zip_file) -> size_t;
+std::optional<size_t> getZipSize(std::string_view zip_path);
 
 /**
- * @brief Compress a file slice by slice with parallel processing
- * @param inputFile The name of the file to be compressed
- * @param sliceSize The size of each slice
- * @param numThreads Number of threads to use (default: hardware concurrency)
+ * @brief 分片压缩大文件
+ * @param file_path 要压缩的文件路径
+ * @param slice_size 分片大小(字节)
+ * @param options 压缩选项
+ * @return 操作结果
  */
-void compressFileSlice(const std::string& inputFile, size_t sliceSize,
-                       size_t numThreads = std::thread::hardware_concurrency());
+CompressionResult compressFileInSlices(
+    std::string_view file_path, size_t slice_size,
+    const CompressionOptions& options = CompressionOptions{});
 
 /**
- * @brief Decompress file slices with parallel processing
- * @param sliceFiles Vector of slice files to decompress
- * @param sliceSize Expected size of each decompressed slice
- * @param outputFile Name of the output file to reconstruct
+ * @brief 合并压缩分片
+ * @param slice_files 分片文件路径列表
+ * @param output_path 输出文件路径
+ * @param options 解压选项
+ * @return 操作结果
  */
-void decompressFileSlices(const std::vector<std::string>& sliceFiles,
-                          size_t sliceSize, const std::string& outputFile);
+CompressionResult mergeCompressedSlices(
+    const std::vector<std::string>& slice_files, std::string_view output_path,
+    const DecompressionOptions& options = DecompressionOptions{});
 
 /**
- * @brief Process a batch of files in parallel using coroutines
- * @param filenames Vector of filenames to process
- * @return A future that completes when all files are processed
+ * @brief 异步处理多个文件
+ * @param file_paths 文件路径列表
+ * @param options 压缩选项
+ * @return future
  */
-std::future<void> processFilesAsync(const std::vector<std::string>& filenames);
+std::future<std::vector<CompressionResult>> processFilesAsync(
+    const std::vector<std::string>& file_paths,
+    const CompressionOptions& options = CompressionOptions{});
 
 /**
- * @brief Create a backup of a file with optional compression
- * @param originalFile Path to the original file
- * @param backupFile Path for the backup file
- * @param compress Whether to compress the backup
- * @return Whether the backup was successful
+ * @brief 创建文件备份(可选压缩)
+ * @param source_path 源文件路径
+ * @param backup_path 备份文件路径
+ * @param compress 是否压缩
+ * @param options 压缩选项
+ * @return 操作结果
  */
-bool createBackup(const std::string& originalFile,
-                  const std::string& backupFile, bool compress = false);
+CompressionResult createBackup(
+    std::string_view source_path, std::string_view backup_path,
+    bool compress = false,
+    const CompressionOptions& options = CompressionOptions{});
 
 /**
- * @brief Restore from a backup file
- * @param backupFile Path to the backup file
- * @param originalFile Path to restore to
- * @param decompress Whether to decompress the backup
- * @return Whether the restoration was successful
+ * @brief 从备份恢复文件
+ * @param backup_path 备份文件路径
+ * @param restore_path 恢复文件路径
+ * @param compressed 备份是否压缩
+ * @param options 解压选项
+ * @return 操作结果
  */
-bool restoreBackup(const std::string& backupFile,
-                   const std::string& originalFile, bool decompress = false);
+CompressionResult restoreFromBackup(
+    std::string_view backup_path, std::string_view restore_path,
+    bool compressed = false,
+    const DecompressionOptions& options = DecompressionOptions{});
 
 /**
- * @brief Template function to compress any data that can be viewed as bytes
- * @tparam T Type of the input data container
- * @param data Input data to compress
- * @return Compressed data as vector of bytes
- */
-template <typename T>
-    requires std::ranges::contiguous_range<T>
-std::vector<unsigned char> compressData(const T& data);
-
-/**
- * @brief Template function to decompress data
- * @tparam T Type of the input data container
- * @param compressedData Compressed input data
- * @param expectedSize Expected size of decompressed data (0 for unknown)
- * @return Decompressed data as vector of bytes
+ * @brief 通用数据压缩模板
+ * @tparam T 输入数据类型
+ * @param data 要压缩的数据
+ * @param options 压缩选项
+ * @return 压缩结果和数据
  */
 template <typename T>
     requires std::ranges::contiguous_range<T>
-std::vector<unsigned char> decompressData(const T& compressedData,
-                                          size_t expectedSize = 0);
+std::pair<CompressionResult, std::vector<unsigned char>> compressData(
+    const T& data, const CompressionOptions& options = CompressionOptions{});
+
+/**
+ * @brief 通用数据解压模板
+ * @tparam T 输入数据类型
+ * @param compressed_data 压缩数据
+ * @param expected_size 预期解压大小(可选)
+ * @param options 解压选项
+ * @return 解压结果和数据
+ */
+template <typename T>
+    requires std::ranges::contiguous_range<T>
+std::pair<CompressionResult, std::vector<unsigned char>> decompressData(
+    const T& compressed_data, size_t expected_size = 0,
+    const DecompressionOptions& options = DecompressionOptions{});
+
+// 显式模板实例化声明
+extern template std::pair<CompressionResult, std::vector<unsigned char>>
+compressData<std::vector<unsigned char>>(const std::vector<unsigned char>&,
+                                         const CompressionOptions&);
+
+extern template std::pair<CompressionResult, std::vector<unsigned char>>
+decompressData<std::vector<unsigned char>>(const std::vector<unsigned char>&,
+                                           size_t, const DecompressionOptions&);
 
 }  // namespace atom::io
 
-#endif
+#endif  // ATOM_IO_COMPRESS_HPP

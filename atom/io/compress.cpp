@@ -8,86 +8,47 @@
 
 Date: 2023-3-31
 
-Description: Compressor using ZLib
+Description: Compressor using ZLib and MiniZip-ng
 
 **************************************************/
 
 #include "compress.hpp"
+#include "atom/log/loguru.hpp"
+#include "atom/type/json.hpp"
 
+#include <minizip-ng/mz.h>
 #include <minizip-ng/mz_compat.h>
 #include <minizip-ng/mz_strm.h>
-#include <minizip-ng/mz_strm_buf.h>
-#include <minizip-ng/mz_strm_mem.h>
-#include <minizip-ng/mz_strm_split.h>
-#include <minizip-ng/mz_strm_zlib.h>
 #include <minizip-ng/mz_zip.h>
+#include <minizip-ng/mz_zip_rw.h>
 #include <zlib.h>
+
+using json = nlohmann::json;
+
 #include <algorithm>
 #include <array>
-#include <condition_variable>
-#include <coroutine>
-#include <cstring>
-#include <execution>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <future>
-#include <memory>
 #include <mutex>
-#include <queue>
-#include <span>
-#include <string>
-#include <thread>
+
 #ifdef __cpp_lib_format
 #include <format>
 #else
 #include <fmt/format.h>
 #endif
-#ifdef _WIN32
-#include <windows.h>
-#define PATH_SEPARATOR '\\'
-#else
-#include <dirent.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#define PATH_SEPARATOR '/'
-#endif
 
-#include "atom/log/loguru.hpp"
-#include "atom/type/json.hpp"
+#include "atom/error/exception.hpp"
 
-using json = nlohmann::json;
 namespace fs = std::filesystem;
 
-constexpr int CHUNK = 16384;
-constexpr int BUFFER_SIZE = 8192;
-constexpr int FILENAME_SIZE = 256;
+namespace {
 
-namespace atom::io {
+// 常量定义
+constexpr size_t DEFAULT_CHUNK_SIZE = 16384;
 
-// Helper struct for RAII style zlib management
-struct ZLibCloser {
-    void operator()(gzFile file) const {
-        if (file)
-            gzclose(file);
-    }
-};
-
-// Helper struct for RAII style minizip management
-struct ZipCloser {
-    void operator()(void* zip) const {
-        if (zip)
-            unzClose(zip);
-    }
-};
-
-struct ZipWriterCloser {
-    void operator()(void* zip) const {
-        if (zip)
-            zipClose(zip, nullptr);
-    }
-};
-
-// Thread-safe logger wrapper
+// 线程安全的日志包装器
 class ThreadSafeLogger {
     std::mutex mutex_;
 
@@ -111,1461 +72,1353 @@ public:
     }
 };
 
-// Global thread-safe logger
 ThreadSafeLogger g_logger;
 
-// Structure for coroutine task
-struct Task {
-    struct promise_type {
-        Task get_return_object() { return {}; }
-        std::suspend_never initial_suspend() { return {}; }
-        std::suspend_never final_suspend() { return {}; }
-        void return_void() {}
-        void unhandled_exception() { std::terminate(); }
-    };
+class ZStreamGuard {
+    z_stream stream_;
+    bool initialized_{false};
+
+public:
+    ZStreamGuard() noexcept {
+        stream_.zalloc = Z_NULL;
+        stream_.zfree = Z_NULL;
+        stream_.opaque = Z_NULL;
+    }
+
+    ~ZStreamGuard() {
+        if (initialized_) {
+            deflateEnd(&stream_);
+        }
+    }
+
+    bool init(int level) {
+        int ret = deflateInit(&stream_, level);
+        if (ret == Z_OK) {
+            initialized_ = true;
+            return true;
+        }
+        return false;
+    }
+
+    z_stream* get() { return &stream_; }
+    const z_stream* get() const { return &stream_; }
 };
 
-auto compressFile(std::string_view input_file_name,
-                  std::string_view output_folder) -> bool {
+// 错误处理辅助函数
+std::string getZlibErrorMessage(int error_code) {
+    switch (error_code) {
+        case Z_ERRNO:
+            return "File operation error";
+        case Z_STREAM_ERROR:
+            return "Stream state inconsistent";
+        case Z_DATA_ERROR:
+            return "Input data corrupted";
+        case Z_MEM_ERROR:
+            return "Out of memory";
+        case Z_BUF_ERROR:
+            return "Buffer error";
+        case Z_VERSION_ERROR:
+            return "zlib version incompatible";
+        default:
+            return "Unknown error";
+    }
+}
+
+struct ProgressInfo {
+    std::atomic<size_t> bytes_processed{0};
+    std::atomic<size_t> total_bytes{0};
+    std::atomic<bool> cancelled{false};
+};
+
+struct ZipCloser {
+    void operator()(zipFile file) const {
+        if (file) {
+            zipClose(file, nullptr);
+        }
+    }
+};
+
+struct UnzipCloser {
+    void operator()(unzFile file) const {
+        if (file) {
+            unzClose(file);
+        }
+    }
+};
+
+}  // anonymous namespace
+
+namespace atom::io {
+
+CompressionResult compressFile(std::string_view file_path,
+                               std::string_view output_folder,
+                               const CompressionOptions& options) {
+    CompressionResult result;
     try {
-        g_logger.info(
-            "compressFile called with input_file_name: {}, output_folder: {}",
-            input_file_name, output_folder);
-
-        // Input validation
-        if (input_file_name.empty() || output_folder.empty()) {
-            g_logger.error(
-                "Invalid arguments: empty input file or output folder");
-            return false;
+        if (file_path.empty() || output_folder.empty()) {
+            result.error_message = "Empty file path or output folder";
+            return result;
         }
 
-        fs::path inputPath(input_file_name);
-        if (!fs::exists(inputPath)) {
-            g_logger.error("Input file {} does not exist.", input_file_name);
-            return false;
+        fs::path input_path(file_path);
+        if (!fs::exists(input_path)) {
+            result.error_message = "Input file does not exist";
+            return result;
         }
 
-        // Create output directory if it doesn't exist
-        fs::path outputDir(output_folder);
-        if (!fs::exists(outputDir)) {
-            try {
-                fs::create_directories(outputDir);
-            } catch (const fs::filesystem_error& e) {
-                g_logger.error("Failed to create output directory: {}",
-                               e.what());
-                return false;
+        fs::path output_dir(output_folder);
+        if (!fs::exists(output_dir)) {
+            if (!fs::create_directories(output_dir)) {
+                result.error_message = "Failed to create output directory";
+                return result;
             }
         }
 
-        fs::path outputPath = outputDir / inputPath.filename().concat(".gz");
+        fs::path output_path = output_dir / input_path.filename().concat(".gz");
 
-        // Use unique_ptr with custom deleter for RAII
-        std::unique_ptr<gzFile_s, ZLibCloser> out(
-            gzopen(outputPath.string().data(), "wb"));
-        if (!out) {
-            g_logger.error("Failed to create compressed file {}",
-                           outputPath.string());
-            return false;
+        if (options.create_backup && fs::exists(output_path)) {
+            fs::path backup_path = output_path.string() + ".bak";
+            fs::rename(output_path, backup_path);
         }
 
-        std::ifstream input(input_file_name.data(), std::ios::binary);
+        std::ifstream input(input_path, std::ios::binary);
         if (!input) {
-            g_logger.error("Failed to open input file {}", input_file_name);
-            return false;
+            result.error_message = "Failed to open input file";
+            return result;
         }
 
-        std::array<char, CHUNK> buf;
-        while (input.read(buf.data(), buf.size())) {
-            if (gzwrite(out.get(), buf.data(),
-                        static_cast<unsigned>(input.gcount())) == 0) {
-                g_logger.error("Failed to compress file {}", input_file_name);
-                return false;
+        input.seekg(0, std::ios::end);
+        result.original_size = input.tellg();
+        input.seekg(0, std::ios::beg);
+
+        gzFile out = gzopen(output_path.string().c_str(), "wb");
+        if (!out) {
+            result.error_message = "Failed to create output file";
+            return result;
+        }
+
+        gzsetparams(out, options.level, Z_DEFAULT_STRATEGY);
+
+        std::unique_ptr<gzFile_s, decltype(&gzclose)> out_guard(out, gzclose);
+
+        std::vector<char> buffer(options.chunk_size);
+
+        while (input.read(buffer.data(), buffer.size())) {
+            if (gzwrite(out, buffer.data(),
+                        static_cast<unsigned>(input.gcount())) <= 0) {
+                result.error_message = "Failed to write compressed data";
+                return result;
             }
         }
 
-        if (input.eof()) {
-            if (gzwrite(out.get(), buf.data(),
-                        static_cast<unsigned>(input.gcount())) == 0) {
-                g_logger.error("Failed to compress file {}", input_file_name);
-                return false;
+        if (input.gcount() > 0) {
+            if (gzwrite(out, buffer.data(),
+                        static_cast<unsigned>(input.gcount())) <= 0) {
+                result.error_message = "Failed to write final compressed data";
+                return result;
             }
-        } else if (input.bad()) {
-            g_logger.error("Failed to read input file {}", input_file_name);
-            return false;
         }
 
-        g_logger.info("Compressed file {} -> {}", input_file_name,
-                      outputPath.string());
-        return true;
+        result.compressed_size = fs::file_size(output_path);
+        result.compression_ratio = static_cast<double>(result.compressed_size) /
+                                   static_cast<double>(result.original_size);
+        result.success = true;
+
+        g_logger.info("Successfully compressed {} -> {} (ratio: {:.2f}%)",
+                      file_path, output_path.string(),
+                      (1.0 - result.compression_ratio) * 100);
+
     } catch (const std::exception& e) {
-        g_logger.error("Exception in compressFile: {}", e.what());
-        return false;
+        result.error_message =
+            std::string("Exception during compression: ") + e.what();
+        g_logger.error(result.error_message.c_str());
     }
+
+    return result;
 }
 
-auto compressFile(const fs::path& file, gzFile out) -> bool {
+CompressionResult decompressFile(std::string_view file_path,
+                                 std::string_view output_folder,
+                                 const DecompressionOptions& options) {
+    CompressionResult result;
     try {
-        g_logger.info("compressFile called with file: {}", file.string());
-
-        // Input validation
-        if (!fs::exists(file)) {
-            g_logger.error("Input file {} does not exist.", file.string());
-            return false;
+        // 输入验证
+        if (file_path.empty() || output_folder.empty()) {
+            result.error_message = "Empty file path or output folder";
+            return result;
         }
 
-        if (!out) {
-            g_logger.error("Invalid gzFile handle");
-            return false;
+        fs::path input_path(file_path);
+        if (!fs::exists(input_path)) {
+            result.error_message = "Input file does not exist";
+            return result;
         }
 
-        std::ifstream input_file(file, std::ios::binary);
-        if (!input_file) {
-            g_logger.error("Failed to open file {}", file.string());
-            return false;
-        }
-
-        std::array<char, CHUNK> buf;
-        while (input_file.read(buf.data(), buf.size())) {
-            if (gzwrite(out, buf.data(),
-                        static_cast<unsigned>(input_file.gcount())) !=
-                static_cast<int>(input_file.gcount())) {
-                g_logger.error("Failed to compress file {}", file.string());
-                return false;
+        // 创建输出目录
+        fs::path output_dir(output_folder);
+        if (!fs::exists(output_dir)) {
+            if (!fs::create_directories(output_dir)) {
+                result.error_message = "Failed to create output directory";
+                return result;
             }
         }
 
-        if (input_file.eof()) {
-            if (gzwrite(out, buf.data(),
-                        static_cast<unsigned>(input_file.gcount())) !=
-                static_cast<int>(input_file.gcount())) {
-                g_logger.error("Failed to compress file {}", file.string());
-                return false;
-            }
-        } else if (input_file.bad()) {
-            g_logger.error("Failed to read file {}", file.string());
-            return false;
-        }
+        // 准备输出文件路径
+        fs::path output_path = output_dir / input_path.stem();
 
-        g_logger.info("Compressed file {}", file.string());
-        return true;
-    } catch (const std::exception& e) {
-        g_logger.error("Exception in compressFile: {}", e.what());
-        return false;
-    }
-}
+        // 获取原始文件大小
+        result.compressed_size = fs::file_size(input_path);
 
-auto decompressFile(std::string_view input_file_name,
-                    std::string_view output_folder) -> bool {
-    try {
-        g_logger.info(
-            "decompressFile called with input_file_name: {}, output_folder: {}",
-            input_file_name, output_folder);
-
-        // Input validation
-        if (input_file_name.empty() || output_folder.empty()) {
-            g_logger.error(
-                "Invalid arguments: empty input file or output folder");
-            return false;
-        }
-
-        fs::path inputPath(input_file_name);
-        if (!fs::exists(inputPath)) {
-            g_logger.error("Input file {} does not exist.", input_file_name);
-            return false;
-        }
-
-        // Create output directory if it doesn't exist
-        fs::path outputDir(output_folder);
-        if (!fs::exists(outputDir)) {
-            try {
-                fs::create_directories(outputDir);
-            } catch (const fs::filesystem_error& e) {
-                g_logger.error("Failed to create output directory: {}",
-                               e.what());
-                return false;
-            }
-        }
-
-        fs::path outputPath =
-            outputDir / inputPath.filename().stem().concat(".out");
-
-        std::unique_ptr<FILE, decltype([](FILE* f) {
-                            if (f)
-                                fclose(f);
-                        })>
-            out(fopen(outputPath.string().data(), "wb"));
-
-        if (!out) {
-            g_logger.error("Failed to create decompressed file {}",
-                           outputPath.string());
-            return false;
-        }
-
-        std::unique_ptr<gzFile_s, ZLibCloser> in(
-            gzopen(input_file_name.data(), "rb"));
+        // 打开压缩文件
+        gzFile in = gzopen(input_path.string().c_str(), "rb");
         if (!in) {
-            g_logger.error("Failed to open compressed file {}",
-                           input_file_name);
-            return false;
+            result.error_message = "Failed to open compressed file";
+            return result;
         }
 
-        std::array<char, CHUNK> buf;
-        int bytesRead;
-        while ((bytesRead = gzread(in.get(), buf.data(), buf.size())) > 0) {
-            if (fwrite(buf.data(), 1, bytesRead, out.get()) !=
-                static_cast<size_t>(bytesRead)) {
-                g_logger.error("Failed to decompress file {}", input_file_name);
-                return false;
-            }
+        // 使用智能指针确保自动关闭
+        std::unique_ptr<gzFile_s, decltype(&gzclose)> in_guard(in, gzclose);
+
+        // 打开输出文件
+        std::ofstream output(output_path, std::ios::binary);
+        if (!output) {
+            result.error_message = "Failed to create output file";
+            return result;
         }
 
-        if (bytesRead < 0) {
-            g_logger.error("Failed to read compressed file {}",
-                           input_file_name);
-            return false;
+        // 设置缓冲区
+        std::vector<char> buffer(options.chunk_size);
+
+        // 解压数据
+        int bytes_read;
+        size_t total_bytes = 0;
+        while ((bytes_read = gzread(in, buffer.data(), buffer.size())) > 0) {
+            output.write(buffer.data(), bytes_read);
+            total_bytes += bytes_read;
         }
 
-        g_logger.info("Decompressed file {} -> {}", input_file_name,
-                      outputPath.string());
-        return true;
+        if (bytes_read < 0) {
+            result.error_message = "Error during decompression";
+            return result;
+        }
+
+        result.original_size = total_bytes;
+        result.compression_ratio = static_cast<double>(result.compressed_size) /
+                                   static_cast<double>(result.original_size);
+        result.success = true;
+
+        g_logger.info("Successfully decompressed {} -> {} (ratio: {:.2f}%)",
+                      file_path, output_path.string(),
+                      (1.0 - result.compression_ratio) * 100);
+
     } catch (const std::exception& e) {
-        g_logger.error("Exception in decompressFile: {}", e.what());
-        return false;
+        result.error_message =
+            std::string("Exception during decompression: ") + e.what();
+        g_logger.error(result.error_message.c_str());
     }
+
+    return result;
 }
 
-auto compressFolder(const fs::path& folder_name) -> bool {
+CompressionResult compressFolder(std::string_view folder_path,
+                                 std::string_view output_path,
+                                 const CompressionOptions& options) {
+    CompressionResult result;
     try {
-        g_logger.info("compressFolder called with folder_name: {}",
-                      folder_name.string());
-
-        // Input validation
-        if (!fs::exists(folder_name) || !fs::is_directory(folder_name)) {
-            g_logger.error("Folder {} does not exist or is not a directory",
-                           folder_name.string());
-            return false;
+        // 输入验证
+        fs::path input_dir(folder_path);
+        if (!fs::exists(input_dir) || !fs::is_directory(input_dir)) {
+            result.error_message = "Invalid input directory";
+            return result;
         }
 
-        auto outfileName = folder_name.string() + ".gz";
-        std::unique_ptr<gzFile_s, ZLibCloser> out(
-            gzopen(outfileName.data(), "wb"));
-        if (!out) {
-            g_logger.error("Failed to create compressed file {}", outfileName);
-            return false;
+        // 准备输出文件
+        fs::path zip_path(output_path);
+        if (zip_path.extension() != ".zip") {
+            zip_path += ".zip";
         }
 
-        bool success = true;
-
-// Use C++20 ranges and views for cleaner iteration
-#if defined(__cpp_lib_ranges) && defined(__cpp_lib_execution)
-        try {
-            std::vector<fs::path> files;
-            for (const auto& entry :
-                 fs::recursive_directory_iterator(folder_name)) {
-                if (entry.is_regular_file()) {
-                    files.push_back(entry.path());
-                }
-            }
-
-            std::atomic<bool> compressionSuccess = true;
-            std::for_each(std::execution::par, files.begin(), files.end(),
-                          [&out, &compressionSuccess](const fs::path& file) {
-                              if (!compressFile(file, out.get())) {
-                                  compressionSuccess = false;
-                              }
-                          });
-
-            success = compressionSuccess.load();
-        } catch (const std::exception& e) {
-            g_logger.error("Error during parallel compression: {}", e.what());
-            success = false;
+        // 创建ZIP文件
+        std::unique_ptr<void, ZipCloser> zip_file(
+            zipOpen64(zip_path.string().c_str(), 0));
+        if (!zip_file) {
+            result.error_message = "Failed to create ZIP file";
+            return result;
         }
-#else
-        // Fall back to sequential processing if C++20 features unavailable
-        for (const auto& entry :
-             fs::recursive_directory_iterator(folder_name)) {
-            if (entry.is_regular_file()) {
-                if (!compressFile(entry.path(), out.get())) {
-                    success = false;
-                    break;
-                }
+
+        // 收集所有文件
+        std::vector<fs::path> files;
+        for (const auto& entry : fs::recursive_directory_iterator(input_dir)) {
+            if (fs::is_regular_file(entry)) {
+                files.push_back(entry.path());
             }
         }
-#endif
 
-        if (success) {
-            g_logger.info("Compressed folder {} -> {}", folder_name.string(),
-                          outfileName);
-        }
-        return success;
-    } catch (const std::exception& e) {
-        g_logger.error("Exception in compressFolder: {}", e.what());
-        return false;
-    }
-}
+        result.original_size = 0;
+        result.compressed_size = 0;
 
-auto compressFolder(const char* folder_name) -> bool {
-    if (!folder_name) {
-        g_logger.error("Invalid null folder name");
-        return false;
-    }
-    g_logger.info("compressFolder called with folder_name: {}", folder_name);
-    return compressFolder(fs::path(folder_name));
-}
+        // 并行处理文件
+        if (options.use_parallel && files.size() > 1) {
+            std::mutex writer_mutex;
+            std::atomic<bool> has_error{false};
+            std::string error_msg;
 
-void compressFileSlice(const std::string& inputFile, size_t sliceSize,
-                       size_t numThreads) {
-    try {
-        // Input validation
-        if (inputFile.empty() || sliceSize == 0) {
-            g_logger.error(
-                "Invalid arguments: empty input file or zero slice size");
-            return;
-        }
+            auto process_file = [&](const fs::path& file_path) {
+                try {
+                    // 计算相对路径
+                    auto rel_path = fs::relative(file_path, input_dir);
 
-        if (!fs::exists(inputFile)) {
-            g_logger.error("Input file {} does not exist", inputFile);
-            return;
-        }
+                    // 读取文件数据
+                    std::ifstream file(file_path, std::ios::binary);
+                    std::vector<char> buffer(options.chunk_size);
 
-        std::ifstream inFile(inputFile, std::ios::binary);
-        if (!inFile) {
-            g_logger.error("Failed to open input file {}.", inputFile);
-            return;
-        }
+                    zip_fileinfo zi = {};
+                    auto ftime = fs::last_write_time(file_path);
+                    auto tt = std::chrono::system_clock::to_time_t(
+                        std::chrono::clock_cast<std::chrono::system_clock>(
+                            ftime));
+                    auto* tm = std::localtime(&tt);
 
-        // Get file size for progress tracking
-        inFile.seekg(0, std::ios::end);
-        const auto fileSize = inFile.tellg();
-        inFile.seekg(0, std::ios::beg);
-
-        // Create thread pool for parallel compression
-        std::vector<std::future<void>> futures;
-        std::atomic<int> completedSlices = 0;
-        numThreads = std::max(size_t(1), numThreads);
-
-        std::mutex queueMutex;
-        std::condition_variable queueCondition;
-        std::queue<size_t> sliceQueue;
-        std::atomic<bool> done = false;
-
-        // Launch worker threads
-        for (size_t i = 0; i < numThreads; ++i) {
-            futures.push_back(std::async(std::launch::async, [&]() {
-                std::vector<char> buffer(sliceSize);
-
-                while (true) {
-                    size_t sliceIndex;
+                    zi.tmz_date.tm_year = tm->tm_year;
+                    zi.tmz_date.tm_mon = tm->tm_mon;
+                    zi.tmz_date.tm_mday = tm->tm_mday;
+                    zi.tmz_date.tm_hour = tm->tm_hour;
+                    zi.tmz_date.tm_min = tm->tm_min;
+                    zi.tmz_date.tm_sec = tm->tm_sec;
 
                     {
-                        std::unique_lock lock(queueMutex);
-                        queueCondition.wait(
-                            lock, [&] { return !sliceQueue.empty() || done; });
+                        std::lock_guard lock(writer_mutex);
 
-                        if (sliceQueue.empty() && done)
-                            break;
-
-                        sliceIndex = sliceQueue.front();
-                        sliceQueue.pop();
-                    }
-
-                    // Calculate slice offset
-                    const auto offset = sliceIndex * sliceSize;
-
-                    // Thread-safe file reading
-                    size_t bytesRead;
-                    {
-                        std::unique_lock lock(
-                            queueMutex);  // Protect file access
-                        inFile.seekg(offset);
-                        inFile.read(buffer.data(), sliceSize);
-                        bytesRead = inFile.gcount();
-                    }
-
-                    if (bytesRead > 0) {
-                        // Prepare compressed data
-                        std::vector<unsigned char> compressedData(
-                            compressBound(bytesRead));
-                        uLongf compressedSize = compressedData.size();
-
-                        // Compress the data
-                        if (compress(
-                                reinterpret_cast<Bytef*>(compressedData.data()),
-                                &compressedSize,
-                                reinterpret_cast<const Bytef*>(buffer.data()),
-                                bytesRead) != Z_OK) {
-                            g_logger.error("Compression failed for slice {}.",
-                                           sliceIndex);
-                            continue;
+                        // 添加文件到ZIP
+                        if (zipOpenNewFileInZip3_64(
+                                zip_file.get(), rel_path.string().c_str(), &zi,
+                                nullptr, 0, nullptr, 0, nullptr, Z_DEFLATED,
+                                options.level, 0, -MAX_WBITS, DEF_MEM_LEVEL,
+                                Z_DEFAULT_STRATEGY, nullptr, 0, 0) != UNZ_OK) {
+                            has_error = true;
+                            error_msg = "Failed to add file to ZIP: " +
+                                        rel_path.string();
+                            return;
                         }
 
-                        // Write the compressed data to a new file
-                        std::string compressedFileName =
-                            inputFile + ".slice_" + std::to_string(sliceIndex) +
-                            ".zlib";
-                        std::ofstream outFile(compressedFileName,
-                                              std::ios::binary);
-                        if (!outFile) {
-                            g_logger.error(
-                                "Failed to open output file for slice {}.",
-                                sliceIndex);
-                            continue;
+                        // 写入数据
+                        while (file.read(buffer.data(), buffer.size())) {
+                            if (zipWriteInFileInZip(
+                                    zip_file.get(), buffer.data(),
+                                    static_cast<unsigned int>(file.gcount())) !=
+                                UNZ_OK) {
+                                has_error = true;
+                                error_msg = "Failed to write file data: " +
+                                            rel_path.string();
+                                return;
+                            }
                         }
 
-                        // Write header with metadata for reconstruction
-                        const uint32_t magic = 0x5A4C4942;  // "ZLIB"
-                        const uint32_t version = 1;
-                        const uint64_t originalSize = bytesRead;
-
-                        outFile.write(reinterpret_cast<const char*>(&magic),
-                                      sizeof(magic));
-                        outFile.write(reinterpret_cast<const char*>(&version),
-                                      sizeof(version));
-                        outFile.write(
-                            reinterpret_cast<const char*>(&sliceIndex),
-                            sizeof(sliceIndex));
-                        outFile.write(
-                            reinterpret_cast<const char*>(&originalSize),
-                            sizeof(originalSize));
-                        outFile.write(
-                            reinterpret_cast<const char*>(&compressedSize),
-                            sizeof(compressedSize));
-
-                        // Write the compressed data
-                        outFile.write(
-                            reinterpret_cast<char*>(compressedData.data()),
-                            compressedSize);
-
-                        // Update progress
-                        ++completedSlices;
-                        if (fileSize > 0) {
-                            const double progress = std::min(
-                                100.0, (offset + bytesRead) * 100.0 / fileSize);
-                            g_logger.info(
-                                "Compression progress: {:.1f}% (slice {} "
-                                "complete)",
-                                progress, sliceIndex);
+                        // 关闭当前文件
+                        if (zipCloseFileInZip(zip_file.get()) != UNZ_OK) {
+                            has_error = true;
+                            error_msg = "Failed to close file in ZIP: " +
+                                        rel_path.string();
+                            return;
                         }
                     }
+
+                } catch (const std::exception& e) {
+                    has_error = true;
+                    error_msg =
+                        std::string("Exception while processing file: ") +
+                        e.what();
                 }
-            }));
-        }
+            };
 
-        // Calculate total slices
-        const auto totalSlices =
-            (static_cast<size_t>(fileSize) + sliceSize - 1) / sliceSize;
-
-        // Enqueue all slice indices
-        for (size_t i = 0; i < totalSlices; ++i) {
-            std::lock_guard lock(queueMutex);
-            sliceQueue.push(i);
-            queueCondition.notify_one();
-        }
-
-        // Signal completion and wait for all workers
-        {
-            std::lock_guard lock(queueMutex);
-            done = true;
-            queueCondition.notify_all();
-        }
-
-        // Wait for all threads to complete
-        for (auto& future : futures) {
-            future.wait();
-        }
-
-        // Create manifest file with metadata
-        json manifest;
-        manifest["filename"] = fs::path(inputFile).filename().string();
-        manifest["original_size"] = static_cast<std::int64_t>(fileSize);
-        manifest["slice_size"] = static_cast<std::int64_t>(sliceSize);
-        manifest["total_slices"] = totalSlices;
-        manifest["compression_method"] = "zlib";
-        manifest["version"] = "1.0";
-
-        std::ofstream manifestFile(inputFile + ".manifest.json");
-        manifestFile << manifest.dump(4);
-
-        g_logger.info("File sliced and compressed successfully into {} slices.",
-                      totalSlices);
-    } catch (const std::exception& e) {
-        g_logger.error("Exception in compressFileSlice: {}", e.what());
-    }
-}
-
-void decompressFileSlices(const std::vector<std::string>& sliceFiles,
-                          size_t sliceSize, const std::string& outputFile) {
-    try {
-        // Input validation
-        if (sliceFiles.empty() || sliceSize == 0 || outputFile.empty()) {
-            g_logger.error(
-                "Invalid arguments: empty slice files, zero slice size, or "
-                "empty output file");
-            return;
-        }
-
-        std::ofstream outFile(outputFile, std::ios::binary);
-        if (!outFile) {
-            g_logger.error("Failed to open output file {}.", outputFile);
-            return;
-        }
-
-        for (const auto& sliceFile : sliceFiles) {
-            std::ifstream inFile(sliceFile, std::ios::binary);
-            if (!inFile) {
-                g_logger.error("Failed to open slice file {}.", sliceFile);
-                continue;
+            // 创建线程池
+            std::vector<std::future<void>> futures;
+            for (const auto& file : files) {
+                futures.push_back(
+                    std::async(std::launch::async, process_file, file));
             }
 
-            // Read header with metadata for reconstruction
-            uint32_t magic, version;
-            size_t sliceIndex, originalSize, compressedSize;
-
-            inFile.read(reinterpret_cast<char*>(&magic), sizeof(magic));
-            inFile.read(reinterpret_cast<char*>(&version), sizeof(version));
-            inFile.read(reinterpret_cast<char*>(&sliceIndex),
-                        sizeof(sliceIndex));
-            inFile.read(reinterpret_cast<char*>(&originalSize),
-                        sizeof(originalSize));
-            inFile.read(reinterpret_cast<char*>(&compressedSize),
-                        sizeof(compressedSize));
-
-            if (magic != 0x5A4C4942 || version != 1) {
-                g_logger.error("Invalid slice file format: {}", sliceFile);
-                continue;
+            // 等待所有任务完成
+            for (auto& future : futures) {
+                future.wait();
             }
 
-            // Read compressed data
-            std::vector<unsigned char> compressedData(compressedSize);
-            inFile.read(reinterpret_cast<char*>(compressedData.data()),
-                        compressedSize);
-
-            // Prepare buffer for decompressed data
-            std::vector<unsigned char> decompressedData(originalSize);
-            uLongf decompressedSize = originalSize;
-
-            // Decompress the data
-            if (uncompress(
-                    reinterpret_cast<Bytef*>(decompressedData.data()),
-                    &decompressedSize,
-                    reinterpret_cast<const Bytef*>(compressedData.data()),
-                    compressedSize) != Z_OK) {
-                g_logger.error("Decompression failed for slice file: {}",
-                               sliceFile);
-                continue;
+            if (has_error) {
+                result.error_message = error_msg;
+                return result;
             }
 
-            // Write the decompressed data to the output file
-            outFile.write(reinterpret_cast<char*>(decompressedData.data()),
-                          decompressedSize);
-        }
-
-        g_logger.info("File slices decompressed successfully into {}.",
-                      outputFile);
-    } catch (const std::exception& e) {
-        g_logger.error("Exception in decompressFileSlices: {}", e.what());
-    }
-}
-
-void listCompressedFiles() {
-    for (const auto& entry : std::filesystem::directory_iterator(".")) {
-        if (entry.path().extension() == ".zlib") {
-            g_logger.info("{}", entry.path().filename().string());
-        }
-    }
-}
-
-void deleteCompressedFiles() {
-    for (const auto& entry : std::filesystem::directory_iterator(".")) {
-        if (entry.path().extension() == ".zlib") {
-            std::filesystem::remove(entry.path());
-            g_logger.info("Deleted: {}", entry.path().filename().string());
-        }
-    }
-}
-
-auto extractZip(std::string_view zip_file,
-                std::string_view destination_folder) -> bool {
-    try {
-        g_logger.info(
-            "extractZip called with zip_file: {}, destination_folder: {}",
-            zip_file, destination_folder);
-
-        // Input validation
-        if (zip_file.empty() || destination_folder.empty()) {
-            g_logger.error(
-                "Invalid arguments: empty zip file or destination folder");
-            return false;
-        }
-
-        std::unique_ptr<void, ZipCloser> zipReader(unzOpen(zip_file.data()));
-        if (!zipReader) {
-            g_logger.error("Failed to open ZIP file: {}", zip_file);
-            return false;
-        }
-
-        if (unzGoToFirstFile(zipReader.get()) != UNZ_OK) {
-            g_logger.error("Failed to read first file in ZIP: {}", zip_file);
-            return false;
-        }
-
-        do {
-            std::array<char, FILENAME_SIZE> filename;
-            unz_file_info fileInfo;
-            if (unzGetCurrentFileInfo(zipReader.get(), &fileInfo,
-                                      filename.data(), filename.size(), nullptr,
-                                      0, nullptr, 0) != UNZ_OK) {
-                g_logger.error("Failed to get file info in ZIP: {}", zip_file);
-                return false;
-            }
-
-            std::string filePath = "./" +
-                                   fs::path(destination_folder).string() + "/" +
-                                   filename.data();
-            if (filename[filename.size() - 1] == '/') {
-                fs::create_directories(filePath);
-                continue;
-            }
-
-            if (unzOpenCurrentFile(zipReader.get()) != UNZ_OK) {
-                g_logger.error("Failed to open file in ZIP: {}",
-                               filename.data());
-                return false;
-            }
-
-            std::ofstream outFile(filePath, std::ios::binary);
-            if (!outFile) {
-                g_logger.error("Failed to create file: {}", filePath);
-                unzCloseCurrentFile(zipReader.get());
-                return false;
-            }
-
-            std::array<char, BUFFER_SIZE> buffer;
-            int readSize = 0;
-            while ((readSize = unzReadCurrentFile(
-                        zipReader.get(), buffer.data(), buffer.size())) > 0) {
-                outFile.write(buffer.data(), readSize);
-            }
-
-            unzCloseCurrentFile(zipReader.get());
-            outFile.close();
-            g_logger.info("Extracted file {}", filePath);
-        } while (unzGoToNextFile(zipReader.get()) != UNZ_END_OF_LIST_OF_FILE);
-
-        g_logger.info("Extracted ZIP file {}", zip_file);
-        return true;
-    } catch (const std::exception& e) {
-        g_logger.error("Exception in extractZip: {}", e.what());
-        return false;
-    }
-}
-
-auto createZip(std::string_view source_folder, std::string_view zip_file,
-               int compression_level) -> bool {
-    try {
-        g_logger.info(
-            "createZip called with source_folder: {}, zip_file: {}, "
-            "compression_level: {}",
-            source_folder, zip_file, compression_level);
-
-        // Input validation
-        if (source_folder.empty() || zip_file.empty()) {
-            g_logger.error(
-                "Invalid arguments: empty source folder or zip file");
-            return false;
-        }
-
-        std::unique_ptr<void, ZipWriterCloser> zipWriter(
-            zipOpen(zip_file.data(), APPEND_STATUS_CREATE));
-        if (!zipWriter) {
-            g_logger.error("Failed to create ZIP file: {}", zip_file);
-            return false;
-        }
-
-        try {
-            for (const auto& entry :
-                 fs::recursive_directory_iterator(source_folder)) {
-                if (fs::is_regular_file(entry)) {
-                    std::string filePath = entry.path().string();
-                    std::string relativePath =
-                        fs::relative(filePath, source_folder).string();
-
-                    zip_fileinfo fileInfo = {};
-                    if (zipOpenNewFileInZip(
-                            zipWriter.get(), relativePath.data(), &fileInfo,
-                            nullptr, 0, nullptr, 0, nullptr, Z_DEFLATED,
-                            compression_level) != ZIP_OK) {
-                        g_logger.error("Failed to add file to ZIP: {}",
-                                       relativePath);
-                        return false;
-                    }
-
-                    std::ifstream inFile(filePath, std::ios::binary);
-                    if (!inFile) {
-                        g_logger.error("Failed to open file for reading: {}",
-                                       filePath);
-                        zipCloseFileInZip(zipWriter.get());
-                        return false;
-                    }
-
-                    std::array<char, BUFFER_SIZE> buffer;
-                    while (inFile.read(buffer.data(), buffer.size())) {
-                        zipWriteInFileInZip(zipWriter.get(), buffer.data(),
-                                            inFile.gcount());
-                    }
-                    if (inFile.gcount() > 0) {
-                        zipWriteInFileInZip(zipWriter.get(), buffer.data(),
-                                            inFile.gcount());
-                    }
-
-                    inFile.close();
-                    zipCloseFileInZip(zipWriter.get());
-                }
-            }
-
-            g_logger.info("ZIP file created successfully: {}", zip_file);
-            return true;
-        } catch (const std::exception& e) {
-            g_logger.error("Failed to create ZIP file: {}", zip_file);
-            return false;
-        }
-    } catch (const std::exception& e) {
-        g_logger.error("Exception in createZip: {}", e.what());
-        return false;
-    }
-}
-
-auto listFilesInZip(std::string_view zip_file) -> std::vector<std::string> {
-    try {
-        g_logger.info("listFilesInZip called with zip_file: {}", zip_file);
-        std::vector<std::string> fileList;
-
-        // Input validation
-        if (zip_file.empty()) {
-            g_logger.error("Invalid argument: empty zip file");
-            return fileList;
-        }
-
-        std::unique_ptr<void, ZipCloser> zipReader(unzOpen(zip_file.data()));
-        if (!zipReader) {
-            g_logger.error("Failed to open ZIP file: {}", zip_file);
-            return fileList;
-        }
-
-        if (unzGoToFirstFile(zipReader.get()) != UNZ_OK) {
-            g_logger.error("Failed to read first file in ZIP: {}", zip_file);
-            return fileList;
-        }
-
-        do {
-            std::array<char, FILENAME_SIZE> filename;
-            unz_file_info fileInfo;
-            if (unzGetCurrentFileInfo(zipReader.get(), &fileInfo,
-                                      filename.data(), filename.size(), nullptr,
-                                      0, nullptr, 0) != UNZ_OK) {
-                g_logger.error("Failed to get file info in ZIP: {}", zip_file);
-                return fileList;
-            }
-            fileList.emplace_back(filename.data());
-            g_logger.info("Found file in ZIP: {}", filename.data());
-        } while (unzGoToNextFile(zipReader.get()) != UNZ_END_OF_LIST_OF_FILE);
-
-        g_logger.info("Listed files in ZIP: {}", zip_file);
-        return fileList;
-    } catch (const std::exception& e) {
-        g_logger.error("Exception in listFilesInZip: {}", e.what());
-        return {};
-    }
-}
-
-auto fileExistsInZip(std::string_view zip_file,
-                     std::string_view file_name) -> bool {
-    try {
-        g_logger.info("fileExistsInZip called with zip_file: {}, file_name: {}",
-                      zip_file, file_name);
-
-        // Input validation
-        if (zip_file.empty() || file_name.empty()) {
-            g_logger.error("Invalid arguments: empty zip file or file name");
-            return false;
-        }
-
-        std::unique_ptr<void, ZipCloser> zipReader(unzOpen(zip_file.data()));
-        if (!zipReader) {
-            g_logger.error("Failed to open ZIP file: {}", zip_file);
-            return false;
-        }
-
-        bool exists =
-            unzLocateFile(zipReader.get(), file_name.data(), 0) == UNZ_OK;
-        if (exists) {
-            g_logger.info("File found in ZIP: {}", file_name);
         } else {
-            g_logger.warning("File not found in ZIP: {}", file_name);
+            // 顺序处理文件
+            for (const auto& file_path : files) {
+                auto rel_path = fs::relative(file_path, input_dir);
+
+                zip_fileinfo zi = {};
+                auto ftime = fs::last_write_time(file_path);
+                auto tt = std::chrono::system_clock::to_time_t(
+                    std::chrono::clock_cast<std::chrono::system_clock>(ftime));
+                auto* tm = std::localtime(&tt);
+
+                zi.tmz_date.tm_year = tm->tm_year;
+                zi.tmz_date.tm_mon = tm->tm_mon;
+                zi.tmz_date.tm_mday = tm->tm_mday;
+                zi.tmz_date.tm_hour = tm->tm_hour;
+                zi.tmz_date.tm_min = tm->tm_min;
+                zi.tmz_date.tm_sec = tm->tm_sec;
+
+                if (zipOpenNewFileInZip3_64(
+                        zip_file.get(), rel_path.string().c_str(), &zi, nullptr,
+                        0, nullptr, 0, nullptr, Z_DEFLATED, options.level, 0,
+                        -MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY, nullptr,
+                        0, 0) != UNZ_OK) {
+                    result.error_message =
+                        "Failed to add file to ZIP: " + rel_path.string();
+                    return result;
+                }
+
+                std::ifstream file(file_path, std::ios::binary);
+                std::vector<char> buffer(options.chunk_size);
+
+                while (file.read(buffer.data(), buffer.size())) {
+                    if (zipWriteInFileInZip(zip_file.get(), buffer.data(),
+                                            static_cast<unsigned int>(
+                                                file.gcount())) != UNZ_OK) {
+                        result.error_message =
+                            "Failed to write file data: " + rel_path.string();
+                        return result;
+                    }
+                }
+
+                if (zipCloseFileInZip(zip_file.get()) != UNZ_OK) {
+                    result.error_message = "Failed to close file in ZIP";
+                    return result;
+                }
+
+                result.original_size += fs::file_size(file_path);
+            }
         }
 
-        return exists;
+        result.compressed_size = fs::file_size(zip_path);
+        result.compression_ratio = static_cast<double>(result.compressed_size) /
+                                   static_cast<double>(result.original_size);
+        result.success = true;
+
+        g_logger.info(
+            "Successfully compressed folder {} -> {} (ratio: {:.2f}%)",
+            folder_path, zip_path.string(),
+            (1.0 - result.compression_ratio) * 100);
+
+    } catch (const std::exception& e) {
+        result.error_message =
+            std::string("Exception during folder compression: ") + e.what();
+        g_logger.error(result.error_message.c_str());
+    }
+
+    return result;
+}
+
+CompressionResult extractZip(std::string_view zip_path,
+                             std::string_view output_folder,
+                             const DecompressionOptions& options) {
+    CompressionResult result;
+    try {
+        // 输入验证
+        if (zip_path.empty() || output_folder.empty()) {
+            result.error_message = "Empty ZIP path or output folder";
+            return result;
+        }
+
+        fs::path zip_file(zip_path);
+        if (!fs::exists(zip_file)) {
+            result.error_message = "ZIP file does not exist";
+            return result;
+        }
+
+        // 创建输出目录
+        fs::path output_dir(output_folder);
+        if (!fs::exists(output_dir)) {
+            if (!fs::create_directories(output_dir)) {
+                result.error_message = "Failed to create output directory";
+                return result;
+            }
+        }
+
+        // 打开ZIP文件
+        std::unique_ptr<void, UnzipCloser> unz(
+            unzOpen64(zip_file.string().c_str()));
+        if (!unz) {
+            result.error_message = "Failed to open ZIP file";
+            return result;
+        }
+
+        result.compressed_size = fs::file_size(zip_file);
+        result.original_size = 0;
+
+        // 获取ZIP文件信息
+        unz_global_info64 gi;
+        if (unzGetGlobalInfo64(unz.get(), &gi) != UNZ_OK) {
+            result.error_message = "Failed to get ZIP file info";
+            return result;
+        }
+
+        // 处理所有文件
+        if (unzGoToFirstFile(unz.get()) != UNZ_OK) {
+            result.error_message = "Failed to go to first file in ZIP";
+            return result;
+        }
+
+        std::vector<char> buffer(options.chunk_size);
+
+        do {
+            // 获取当前文件信息
+            unz_file_info64 file_info;
+            char filename[512];
+            if (unzGetCurrentFileInfo64(unz.get(), &file_info, filename,
+                                        sizeof(filename), nullptr, 0, nullptr,
+                                        0) != UNZ_OK) {
+                result.error_message = "Failed to get file info";
+                return result;
+            }
+
+            fs::path target_path = output_dir / filename;
+
+            // 如果是目录，创建它
+            if (filename[strlen(filename) - 1] == '/') {
+                fs::create_directories(target_path);
+                continue;
+            }
+
+            // 确保父目录存在
+            fs::create_directories(target_path.parent_path());
+
+            // 打开ZIP中的文件
+            if (unzOpenCurrentFilePassword(
+                    unz.get(), options.password.empty()
+                                   ? nullptr
+                                   : options.password.c_str()) != UNZ_OK) {
+                result.error_message =
+                    "Failed to open file in ZIP: " + std::string(filename);
+                return result;
+            }
+
+            // 打开输出文件
+            std::ofstream outfile(target_path, std::ios::binary);
+            if (!outfile) {
+                unzCloseCurrentFile(unz.get());
+                result.error_message =
+                    "Failed to create output file: " + target_path.string();
+                return result;
+            }
+
+            // 读取和写入文件内容
+            int err = UNZ_OK;
+            do {
+                err =
+                    unzReadCurrentFile(unz.get(), buffer.data(), buffer.size());
+                if (err < 0) {
+                    unzCloseCurrentFile(unz.get());
+                    result.error_message = "Error reading ZIP file";
+                    return result;
+                }
+
+                if (err > 0) {
+                    outfile.write(buffer.data(), err);
+                    if (!outfile) {
+                        unzCloseCurrentFile(unz.get());
+                        result.error_message = "Error writing output file";
+                        return result;
+                    }
+                    result.original_size += err;
+                }
+            } while (err > 0);
+
+            // 设置文件时间
+            fs::last_write_time(target_path, fs::file_time_type::clock::now());
+
+            unzCloseCurrentFile(unz.get());
+            outfile.close();
+
+            g_logger.info("Extracted: {}", filename);
+
+        } while (unzGoToNextFile(unz.get()) == UNZ_OK);
+
+        result.success = true;
+        result.compression_ratio = static_cast<double>(result.compressed_size) /
+                                   static_cast<double>(result.original_size);
+
+        g_logger.info("Successfully extracted {} files from {} -> {}",
+                      gi.number_entry, zip_path, output_folder);
+
+    } catch (const std::exception& e) {
+        result.error_message =
+            std::string("Exception during extraction: ") + e.what();
+        g_logger.error(result.error_message.c_str());
+    }
+
+    return result;
+}
+
+std::vector<ZipFileInfo> listZipContents(std::string_view zip_path) {
+    std::vector<ZipFileInfo> result;
+
+    try {
+        // 打开ZIP文件
+        std::unique_ptr<void, UnzipCloser> unz(unzOpen64(zip_path.data()));
+        if (!unz) {
+            g_logger.error("Failed to open ZIP file: {}", zip_path);
+            return result;
+        }
+
+        // 获取ZIP文件信息
+        unz_global_info64 gi;
+        if (unzGetGlobalInfo64(unz.get(), &gi) != UNZ_OK) {
+            g_logger.error("Failed to get ZIP file info");
+            return result;
+        }
+
+        // 预分配空间
+        result.reserve(gi.number_entry);
+
+        // 遍历所有文件
+        if (unzGoToFirstFile(unz.get()) != UNZ_OK) {
+            g_logger.error("Failed to go to first file in ZIP");
+            return result;
+        }
+
+        do {
+            unz_file_info64 file_info;
+            char filename[512];
+
+            if (unzGetCurrentFileInfo64(unz.get(), &file_info, filename,
+                                        sizeof(filename), nullptr, 0, nullptr,
+                                        0) != UNZ_OK) {
+                g_logger.error("Failed to get file info");
+                continue;
+            }
+
+            ZipFileInfo info;
+            info.name = filename;
+            info.size = file_info.uncompressed_size;
+            info.compressed_size = file_info.compressed_size;
+            info.is_directory = (filename[strlen(filename) - 1] == '/');
+            info.is_encrypted = (file_info.flag & 1) != 0;
+            info.crc = file_info.crc;
+
+            // 构建时间字符串
+            char datetime[32];
+            std::snprintf(
+                datetime, sizeof(datetime), "%04u-%02u-%02u %02u:%02u:%02u",
+                file_info.tmu_date.tm_year + 1900,
+                file_info.tmu_date.tm_mon + 1, file_info.tmu_date.tm_mday,
+                file_info.tmu_date.tm_hour, file_info.tmu_date.tm_min,
+                file_info.tmu_date.tm_sec);
+            info.datetime = datetime;
+
+            result.push_back(std::move(info));
+
+        } while (unzGoToNextFile(unz.get()) == UNZ_OK);
+
+        g_logger.info("Listed {} files in ZIP: {}", result.size(), zip_path);
+
+    } catch (const std::exception& e) {
+        g_logger.error("Exception in listZipContents: {}", e.what());
+        result.clear();
+    }
+
+    return result;
+}
+
+bool fileExistsInZip(std::string_view zip_path, std::string_view file_path) {
+    try {
+        // 打开ZIP文件
+        std::unique_ptr<void, UnzipCloser> unz(unzOpen64(zip_path.data()));
+        if (!unz) {
+            g_logger.error("Failed to open ZIP file: {}", zip_path);
+            return false;
+        }
+
+        // 定位文件
+        if (unzLocateFile(unz.get(), file_path.data(), 0) != UNZ_OK) {
+            g_logger.info("File not found in ZIP: {}", file_path);
+            return false;
+        }
+
+        g_logger.info("File exists in ZIP: {}", file_path);
+        return true;
+
     } catch (const std::exception& e) {
         g_logger.error("Exception in fileExistsInZip: {}", e.what());
         return false;
     }
 }
 
-auto removeFileFromZip(std::string_view zip_file,
-                       std::string_view file_name) -> bool {
+CompressionResult removeFromZip(std::string_view zip_path,
+                                std::string_view file_path) {
+    CompressionResult result;
     try {
-        g_logger.info(
-            "removeFileFromZip called with zip_file: {}, file_name: {}",
-            zip_file, file_name);
-
-        // Input validation
-        if (zip_file.empty() || file_name.empty()) {
-            g_logger.error("Invalid arguments: empty zip file or file name");
-            return false;
+        // 输入验证
+        if (zip_path.empty() || file_path.empty()) {
+            result.error_message = "Empty ZIP path or file path";
+            return result;
         }
 
-        std::unique_ptr<void, ZipCloser> zipReader(unzOpen(zip_file.data()));
-        if (!zipReader) {
-            g_logger.error("Failed to open ZIP file: {}", zip_file);
-            return false;
+        fs::path zip_file(zip_path);
+        if (!fs::exists(zip_file)) {
+            result.error_message = "ZIP file does not exist";
+            return result;
         }
 
-        if (unzLocateFile(zipReader.get(), file_name.data(), 0) != UNZ_OK) {
-            g_logger.error("File not found in ZIP: {}", file_name);
-            return false;
+        // 创建临时ZIP文件
+        fs::path temp_zip = zip_file.string() + ".tmp";
+
+        // 打开源ZIP文件
+        std::unique_ptr<void, UnzipCloser> src_zip(
+            unzOpen64(zip_file.string().c_str()));
+        if (!src_zip) {
+            result.error_message = "Failed to open source ZIP file";
+            return result;
         }
 
-        std::string tempZipFile = std::string(zip_file) + ".tmp";
-        std::unique_ptr<void, ZipWriterCloser> zipWriter(
-            zipOpen(tempZipFile.c_str(), APPEND_STATUS_CREATE));
-        if (!zipWriter) {
-            g_logger.error("Failed to create temporary ZIP file: {}",
-                           tempZipFile);
-            return false;
+        // 创建目标ZIP文件
+        std::unique_ptr<void, ZipCloser> dst_zip(
+            zipOpen64(temp_zip.string().c_str(), 0));
+        if (!dst_zip) {
+            result.error_message = "Failed to create temporary ZIP file";
+            return result;
         }
 
-        if (unzGoToFirstFile(zipReader.get()) != UNZ_OK) {
-            g_logger.error("Failed to read first file in ZIP: {}", zip_file);
-            return false;
+        // 获取源ZIP文件信息
+        unz_global_info64 gi;
+        if (unzGetGlobalInfo64(src_zip.get(), &gi) != UNZ_OK) {
+            result.error_message = "Failed to get ZIP file info";
+            return result;
+        }
+
+        // 设置缓冲区
+        std::vector<char> buffer(DEFAULT_CHUNK_SIZE);
+
+        // 遍历所有文件
+        if (unzGoToFirstFile(src_zip.get()) != UNZ_OK) {
+            result.error_message = "Failed to go to first file in ZIP";
+            return result;
         }
 
         do {
-            std::array<char, FILENAME_SIZE> filename;
-            unz_file_info fileInfo;
-            if (unzGetCurrentFileInfo(zipReader.get(), &fileInfo,
-                                      filename.data(), filename.size(), nullptr,
-                                      0, nullptr, 0) != UNZ_OK) {
-                g_logger.error("Failed to get file info in ZIP: {}", zip_file);
-                return false;
+            unz_file_info64 file_info;
+            char filename[512];
+            if (unzGetCurrentFileInfo64(src_zip.get(), &file_info, filename,
+                                        sizeof(filename), nullptr, 0, nullptr,
+                                        0) != UNZ_OK) {
+                result.error_message = "Failed to get file info";
+                return result;
             }
 
-            if (file_name == filename.data()) {
-                g_logger.info("Skipping file: {} for removal", filename.data());
+            // 跳过要删除的文件
+            if (filename == std::string(file_path)) {
                 continue;
             }
 
-            if (unzOpenCurrentFile(zipReader.get()) != UNZ_OK) {
-                g_logger.error("Failed to open file in ZIP: {}",
-                               filename.data());
-                return false;
+            // 打开源文件
+            if (unzOpenCurrentFile(src_zip.get()) != UNZ_OK) {
+                result.error_message = "Failed to open file in source ZIP";
+                return result;
             }
 
-            zip_fileinfo fileInfoOut = {};
-            if (zipOpenNewFileInZip(zipWriter.get(), filename.data(),
-                                    &fileInfoOut, nullptr, 0, nullptr, 0,
-                                    nullptr, Z_DEFLATED,
-                                    Z_DEFAULT_COMPRESSION) != ZIP_OK) {
-                g_logger.error("Failed to add file to temporary ZIP: {}",
-                               filename.data());
-                unzCloseCurrentFile(zipReader.get());
-                return false;
+            // 准备复制到新ZIP
+            zip_fileinfo zi = {};
+            zi.tmz_date.tm_year = file_info.tmu_date.tm_year;
+            zi.tmz_date.tm_mon = file_info.tmu_date.tm_mon;
+            zi.tmz_date.tm_mday = file_info.tmu_date.tm_mday;
+            zi.tmz_date.tm_hour = file_info.tmu_date.tm_hour;
+            zi.tmz_date.tm_min = file_info.tmu_date.tm_min;
+            zi.tmz_date.tm_sec = file_info.tmu_date.tm_sec;
+
+            if (zipOpenNewFileInZip3_64(dst_zip.get(), filename, &zi, nullptr,
+                                        0, nullptr, 0, nullptr, Z_DEFLATED,
+                                        Z_DEFAULT_COMPRESSION, 0, -MAX_WBITS,
+                                        DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY,
+                                        nullptr, 0, 0) != UNZ_OK) {
+                unzCloseCurrentFile(src_zip.get());
+                result.error_message =
+                    "Failed to create file in destination ZIP";
+                return result;
             }
 
-            std::array<char, BUFFER_SIZE> buffer;
-            int readSize = 0;
-            while ((readSize = unzReadCurrentFile(
-                        zipReader.get(), buffer.data(), buffer.size())) > 0) {
-                zipWriteInFileInZip(zipWriter.get(), buffer.data(), readSize);
+            // 复制数据
+            int bytes_read;
+            while ((bytes_read = unzReadCurrentFile(
+                        src_zip.get(), buffer.data(), buffer.size())) > 0) {
+                if (zipWriteInFileInZip(dst_zip.get(), buffer.data(),
+                                        static_cast<unsigned>(bytes_read)) !=
+                    UNZ_OK) {
+                    unzCloseCurrentFile(src_zip.get());
+                    zipCloseFileInZip(dst_zip.get());
+                    result.error_message = "Failed to write to destination ZIP";
+                    return result;
+                }
             }
 
-            unzCloseCurrentFile(zipReader.get());
-            zipCloseFileInZip(zipWriter.get());
-        } while (unzGoToNextFile(zipReader.get()) != UNZ_END_OF_LIST_OF_FILE);
+            if (bytes_read < 0) {
+                unzCloseCurrentFile(src_zip.get());
+                zipCloseFileInZip(dst_zip.get());
+                result.error_message = "Error reading from source ZIP";
+                return result;
+            }
 
+            unzCloseCurrentFile(src_zip.get());
+            zipCloseFileInZip(dst_zip.get());
+
+        } while (unzGoToNextFile(src_zip.get()) == UNZ_OK);
+
+        // 关闭所有文件句柄 (智能指针会自动处理)
+
+        // 替换原始文件
         fs::remove(zip_file);
-        fs::rename(tempZipFile, zip_file);
+        fs::rename(temp_zip, zip_file);
 
-        g_logger.info("File removed from ZIP: {}", file_name);
-        return true;
+        result.success = true;
+        g_logger.info("Successfully removed {} from ZIP file {}", file_path,
+                      zip_path);
+
     } catch (const std::exception& e) {
-        g_logger.error("Exception in removeFileFromZip: {}", e.what());
-        return false;
+        result.error_message =
+            std::string("Exception during file removal: ") + e.what();
+        g_logger.error(result.error_message.c_str());
     }
+
+    return result;
 }
 
-auto getZipFileSize(std::string_view zip_file) -> size_t {
+std::optional<size_t> getZipSize(std::string_view zip_path) {
     try {
-        g_logger.info("getZipFileSize called with zip_file: {}", zip_file);
-
-        // Input validation
-        if (zip_file.empty()) {
-            g_logger.error("Invalid argument: empty zip file");
-            return 0;
+        if (zip_path.empty()) {
+            g_logger.error("Empty ZIP path");
+            return std::nullopt;
         }
 
-        std::ifstream inputFile(zip_file.data(),
-                                std::ifstream::ate | std::ifstream::binary);
-        size_t size = inputFile.tellg();
-        g_logger.info("Size of ZIP file {}: {}", zip_file, size);
+        fs::path zip_file(zip_path);
+        if (!fs::exists(zip_file)) {
+            g_logger.error("ZIP file does not exist: {}", zip_path);
+            return std::nullopt;
+        }
+
+        auto size = fs::file_size(zip_file);
+        g_logger.info("ZIP file size: {} bytes", size);
         return size;
+
     } catch (const std::exception& e) {
-        g_logger.error("Exception in getZipFileSize: {}", e.what());
-        return 0;
+        g_logger.error("Exception in getZipSize: {}", e.what());
+        return std::nullopt;
     }
 }
 
-bool decompressChunk(const std::vector<unsigned char>& chunkData,
-                     std::vector<unsigned char>& outputBuffer) {
+CompressionResult compressFileInSlices(std::string_view file_path,
+                                       size_t slice_size,
+                                       const CompressionOptions& options) {
+    CompressionResult result;
     try {
-        g_logger.info("decompressChunk called");
-        z_stream stream;
-        stream.zalloc = Z_NULL;
-        stream.zfree = Z_NULL;
-        stream.opaque = Z_NULL;
-
-        if (inflateInit(&stream) != Z_OK) {
-            g_logger.error("Error initializing zlib inflate.");
-            return false;
+        if (file_path.empty() || slice_size == 0) {
+            result.error_message = "Invalid parameters";
+            return result;
         }
 
-        stream.avail_in = static_cast<uInt>(chunkData.size());
-        stream.next_in = const_cast<Bytef*>(chunkData.data());
-
-        do {
-            stream.avail_out = static_cast<uInt>(outputBuffer.size());
-            stream.next_out = outputBuffer.data();
-
-            int ret = inflate(&stream, Z_NO_FLUSH);
-            if (ret == Z_STREAM_ERROR || ret == Z_DATA_ERROR) {
-                g_logger.error(
-                    "Data error detected. Skipping corrupted chunk.");
-                inflateEnd(&stream);
-                return false;
-            }
-
-        } while (stream.avail_out == 0);
-
-        inflateEnd(&stream);
-        g_logger.info("Chunk decompressed successfully");
-        return true;
-    } catch (const std::exception& e) {
-        g_logger.error("Exception in decompressChunk: {}", e.what());
-        return false;
-    }
-}
-
-constexpr int CHUNK_SIZE = 4096;
-
-void processFilesInParallel(const std::vector<std::string>& filenames) {
-    try {
-        g_logger.info("processFilesInParallel called with {} files",
-                      filenames.size());
-
-        // Input validation
-        if (filenames.empty()) {
-            g_logger.error("Invalid argument: empty filenames");
-            return;
+        fs::path input_path(file_path);
+        if (!fs::exists(input_path)) {
+            result.error_message = "Input file does not exist";
+            return result;
         }
 
-        std::vector<std::future<void>> futures;
+        // 获取文件大小
+        result.original_size = fs::file_size(input_path);
+        result.compressed_size = 0;
 
-        for (const auto& filename : filenames) {
-            futures.push_back(std::async(std::launch::async, [filename]() {
-                g_logger.info("Processing file: {}", filename);
-                std::ifstream file(filename, std::ios::binary);
+        // 计算分片数量
+        size_t num_slices =
+            (result.original_size + slice_size - 1) / slice_size;
 
-                if (!file) {
-                    g_logger.error("Failed to open file: {}", filename);
-                    return;
-                }
-
-                std::vector<unsigned char> chunkData(CHUNK_SIZE);
-                std::vector<unsigned char> outputBuffer(CHUNK_SIZE * 2);
-
-                while (file.read(reinterpret_cast<char*>(chunkData.data()),
-                                 CHUNK_SIZE) ||
-                       file.gcount() > 0) {
-                    if (!decompressChunk(chunkData, outputBuffer)) {
-                        g_logger.error(
-                            "Failed to decompress chunk for file: {}",
-                            filename);
-                    }
-                }
-                g_logger.info("Finished processing file: {}", filename);
-            }));
+        // 打开输入文件
+        std::ifstream input(input_path, std::ios::binary);
+        if (!input) {
+            result.error_message = "Failed to open input file";
+            return result;
         }
 
-        for (auto& future : futures) {
-            future.get();
-        }
-        g_logger.info("All files processed in parallel");
-    } catch (const std::exception& e) {
-        g_logger.error("Exception in processFilesInParallel: {}", e.what());
-    }
-}
+        // 创建JSON清单文件
+        json manifest;
+        manifest["original_file"] = input_path.filename().string();
+        manifest["original_size"] = result.original_size;
+        manifest["slice_size"] = slice_size;
+        manifest["num_slices"] = num_slices;
+        manifest["compression_level"] = options.level;
+        manifest["created_at"] =
+            std::chrono::system_clock::now().time_since_epoch().count();
 
-bool createBackup(const std::string& originalFile,
-                  const std::string& backupFile) {
-    try {
-        g_logger.info(
-            "createBackup called with originalFile: {}, backupFile: {}",
-            originalFile, backupFile);
+        // 并行处理分片
+        if (options.use_parallel && num_slices > 1) {
+            std::vector<std::future<bool>> futures;
+            std::atomic<size_t> total_compressed_size = 0;
+            std::mutex error_mutex;
+            std::string error_message;
 
-        // Input validation
-        if (originalFile.empty() || backupFile.empty()) {
-            g_logger.error(
-                "Invalid arguments: empty original file or backup file");
-            return false;
-        }
+            for (size_t i = 0; i < num_slices; ++i) {
+                futures.push_back(
+                    std::async(std::launch::async, [&, i]() -> bool {
+                        try {
+                            // 计算当前分片大小
+                            size_t current_slice_size =
+                                (i == num_slices - 1)
+                                    ? (result.original_size - i * slice_size)
+                                    : slice_size;
 
-        std::filesystem::copy(
-            originalFile, backupFile,
-            std::filesystem::copy_options::overwrite_existing);
-        g_logger.info("Backup created: {}", backupFile);
-        return true;
-    } catch (const std::filesystem::filesystem_error& e) {
-        g_logger.error("Failed to create backup: {}", e.what());
-        return false;
-    }
-}
+                            // 创建分片文件名
+                            fs::path slice_path = input_path.string() +
+                                                  ".slice_" +
+                                                  std::to_string(i) + ".gz";
 
-bool restoreBackup(const std::string& backupFile,
-                   const std::string& originalFile) {
-    try {
-        g_logger.info(
-            "restoreBackup called with backupFile: {}, originalFile: {}",
-            backupFile, originalFile);
+                            // 读取数据
+                            std::vector<char> buffer(current_slice_size);
+                            {
+                                std::ifstream slice_input(input_path,
+                                                          std::ios::binary);
+                                slice_input.seekg(i * slice_size);
+                                slice_input.read(buffer.data(),
+                                                 current_slice_size);
+                            }
 
-        // Input validation
-        if (backupFile.empty() || originalFile.empty()) {
-            g_logger.error(
-                "Invalid arguments: empty backup file or original file");
-            return false;
-        }
+                            // 压缩数据
+                            gzFile out =
+                                gzopen(slice_path.string().c_str(), "wb");
+                            if (!out) {
+                                std::lock_guard lock(error_mutex);
+                                error_message =
+                                    "Failed to create compressed slice";
+                                return false;
+                            }
 
-        std::filesystem::copy(
-            backupFile, originalFile,
-            std::filesystem::copy_options::overwrite_existing);
-        g_logger.info("Backup restored: {}", originalFile);
-        return true;
-    } catch (const std::filesystem::filesystem_error& e) {
-        g_logger.error("Failed to restore backup: {}", e.what());
-        return false;
-    }
-}
+                            gzsetparams(out, options.level, Z_DEFAULT_STRATEGY);
 
-// 实现并发处理文件的协程版本
-std::future<void> processFilesAsync(const std::vector<std::string>& filenames) {
-    try {
-        g_logger.info("processFilesAsync called with {} files",
-                      filenames.size());
+                            if (gzwrite(out, buffer.data(),
+                                        static_cast<unsigned>(
+                                            current_slice_size)) <= 0) {
+                                gzclose(out);
+                                std::lock_guard lock(error_mutex);
+                                error_message =
+                                    "Failed to write compressed data";
+                                return false;
+                            }
 
-        // 输入验证
-        if (filenames.empty()) {
-            g_logger.error("Invalid argument: empty filenames list");
-            std::promise<void> promise;
-            promise.set_value();
-            return promise.get_future();
-        }
+                            gzclose(out);
 
-        // 创建一个promise来返回future
-        auto promise = std::make_shared<std::promise<void>>();
-        auto future = promise->get_future();
+                            // 更新总压缩大小
+                            total_compressed_size += fs::file_size(slice_path);
+                            return true;
 
-        // 启动线程来处理协程
-        std::thread([promise, filenames = filenames]() {
-            try {
-// 使用std::execution::par_unseq来并行处理文件
-#if defined(__cpp_lib_parallel_algorithm)
-                std::for_each(
-                    std::execution::par_unseq, filenames.begin(),
-                    filenames.end(), [](const std::string& filename) {
-                        g_logger.info("Async processing file: {}", filename);
-                        // 检查文件是否存在
-                        if (!fs::exists(filename)) {
-                            g_logger.error("File does not exist: {}", filename);
-                            return;
+                        } catch (const std::exception& e) {
+                            std::lock_guard lock(error_mutex);
+                            error_message =
+                                std::string(
+                                    "Exception in slice compression: ") +
+                                e.what();
+                            return false;
                         }
-
-                        std::ifstream file(filename, std::ios::binary);
-                        if (!file) {
-                            g_logger.error("Failed to open file: {}", filename);
-                            return;
-                        }
-
-                        std::vector<unsigned char> chunkData(CHUNK_SIZE);
-                        std::vector<unsigned char> outputBuffer(CHUNK_SIZE * 2);
-
-                        while (
-                            file.read(reinterpret_cast<char*>(chunkData.data()),
-                                      CHUNK_SIZE) ||
-                            file.gcount() > 0) {
-                            // 处理每个数据块
-                            if (!decompressChunk(chunkData, outputBuffer)) {
-                                g_logger.error(
-                                    "Failed to process chunk for file: {}",
-                                    filename);
-                            }
-                        }
-                        g_logger.info("Finished async processing file: {}",
-                                      filename);
-                    });
-#else
-                // 退回到标准线程池模式
-                std::vector<std::future<void>> futures;
-                for (const auto& filename : filenames) {
-                    futures.push_back(
-                        std::async(std::launch::async, [filename]() {
-                            g_logger.info("Async processing file: {}",
-                                          filename);
-                            if (!fs::exists(filename)) {
-                                g_logger.error("File does not exist: {}",
-                                               filename);
-                                return;
-                            }
-
-                            std::ifstream file(filename, std::ios::binary);
-                            if (!file) {
-                                g_logger.error("Failed to open file: {}",
-                                               filename);
-                                return;
-                            }
-
-                            std::vector<unsigned char> chunkData(CHUNK_SIZE);
-                            std::vector<unsigned char> outputBuffer(CHUNK_SIZE *
-                                                                    2);
-
-                            while (file.read(reinterpret_cast<char*>(
-                                                 chunkData.data()),
-                                             CHUNK_SIZE) ||
-                                   file.gcount() > 0) {
-                                if (!decompressChunk(chunkData, outputBuffer)) {
-                                    g_logger.error(
-                                        "Failed to process chunk for file: {}",
-                                        filename);
-                                }
-                            }
-                            g_logger.info("Finished async processing file: {}",
-                                          filename);
-                        }));
-                }
-
-                // 等待所有任务完成
-                for (auto& future : futures) {
-                    future.get();
-                }
-#endif
-
-                g_logger.info("All files processed asynchronously");
-                promise->set_value();
-            } catch (const std::exception& e) {
-                g_logger.error("Exception in processFilesAsync thread: {}",
-                               e.what());
-                promise->set_exception(std::current_exception());
-            }
-        }).detach();
-
-        return future;
-    } catch (const std::exception& e) {
-        g_logger.error("Exception in processFilesAsync: {}", e.what());
-        std::promise<void> promise;
-        promise.set_exception(std::current_exception());
-        return promise.get_future();
-    }
-}
-
-bool createBackup(const std::string& originalFile,
-                  const std::string& backupFile, bool compress) {
-    try {
-        g_logger.info(
-            "createBackup called with originalFile: {}, backupFile: {}, "
-            "compress: {}",
-            originalFile, backupFile, compress);
-
-        // 输入验证
-        if (originalFile.empty() || backupFile.empty()) {
-            g_logger.error(
-                "Invalid arguments: empty original file or backup file path");
-            return false;
-        }
-
-        if (!fs::exists(originalFile)) {
-            g_logger.error("Original file does not exist: {}", originalFile);
-            return false;
-        }
-
-        // 创建备份目录（如果不存在）
-        fs::path backupPath(backupFile);
-        if (auto parentPath = backupPath.parent_path(); !parentPath.empty()) {
-            if (!fs::exists(parentPath)) {
-                fs::create_directories(parentPath);
-            }
-        }
-
-        if (compress) {
-            // 使用压缩功能创建备份
-            std::ifstream inFile(originalFile, std::ios::binary);
-            if (!inFile) {
-                g_logger.error("Failed to open original file for reading: {}",
-                               originalFile);
-                return false;
+                    }));
             }
 
-            std::unique_ptr<gzFile_s, ZLibCloser> out(
-                gzopen(backupFile.c_str(), "wb"));
-            if (!out) {
-                g_logger.error("Failed to create compressed backup file: {}",
-                               backupFile);
-                return false;
-            }
-
-            std::array<char, CHUNK> buffer;
-            while (inFile.read(buffer.data(), buffer.size())) {
-                if (gzwrite(out.get(), buffer.data(),
-                            static_cast<unsigned>(inFile.gcount())) == 0) {
-                    g_logger.error(
-                        "Failed to write to compressed backup file: {}",
-                        backupFile);
-                    return false;
+            // 等待所有分片完成
+            bool all_success = true;
+            for (auto& future : futures) {
+                if (!future.get()) {
+                    all_success = false;
+                    break;
                 }
             }
 
-            if (inFile.eof() && inFile.gcount() > 0) {
-                if (gzwrite(out.get(), buffer.data(),
-                            static_cast<unsigned>(inFile.gcount())) == 0) {
-                    g_logger.error(
-                        "Failed to write final chunk to compressed backup: {}",
-                        backupFile);
-                    return false;
-                }
+            if (!all_success) {
+                result.error_message = error_message;
+                return result;
             }
 
-            g_logger.info("Compressed backup created: {}", backupFile);
+            result.compressed_size = total_compressed_size;
+
         } else {
-            // 直接复制文件
-            fs::copy(originalFile, backupFile,
-                     fs::copy_options::overwrite_existing);
-            g_logger.info("Backup created: {}", backupFile);
-        }
+            // 顺序处理分片
+            std::vector<char> buffer(slice_size);
 
-        return true;
-    } catch (const std::exception& e) {
-        g_logger.error("Exception in createBackup: {}", e.what());
-        return false;
-    }
-}
+            for (size_t i = 0; i < num_slices; ++i) {
+                size_t current_slice_size =
+                    (i == num_slices - 1)
+                        ? (result.original_size - i * slice_size)
+                        : slice_size;
 
-bool restoreBackup(const std::string& backupFile,
-                   const std::string& originalFile, bool decompress) {
-    try {
-        g_logger.info(
-            "restoreBackup called with backupFile: {}, originalFile: {}, "
-            "decompress: {}",
-            backupFile, originalFile, decompress);
+                // 创建分片文件名
+                fs::path slice_path =
+                    input_path.string() + ".slice_" + std::to_string(i) + ".gz";
 
-        // 输入验证
-        if (backupFile.empty() || originalFile.empty()) {
-            g_logger.error(
-                "Invalid arguments: empty backup file or original file path");
-            return false;
-        }
+                // 读取数据
+                input.read(buffer.data(), current_slice_size);
 
-        if (!fs::exists(backupFile)) {
-            g_logger.error("Backup file does not exist: {}", backupFile);
-            return false;
-        }
-
-        // 创建目标目录（如果不存在）
-        fs::path originalPath(originalFile);
-        if (auto parentPath = originalPath.parent_path(); !parentPath.empty()) {
-            if (!fs::exists(parentPath)) {
-                fs::create_directories(parentPath);
-            }
-        }
-
-        if (decompress) {
-            // 解压缩备份
-            std::unique_ptr<gzFile_s, ZLibCloser> in(
-                gzopen(backupFile.c_str(), "rb"));
-            if (!in) {
-                g_logger.error("Failed to open compressed backup file: {}",
-                               backupFile);
-                return false;
-            }
-
-            std::unique_ptr<FILE, decltype([](FILE* f) {
-                                if (f)
-                                    fclose(f);
-                            })>
-                out(fopen(originalFile.c_str(), "wb"));
-
-            if (!out) {
-                g_logger.error("Failed to create original file: {}",
-                               originalFile);
-                return false;
-            }
-
-            std::array<char, CHUNK> buffer;
-            int bytesRead;
-
-            while ((bytesRead =
-                        gzread(in.get(), buffer.data(), buffer.size())) > 0) {
-                if (fwrite(buffer.data(), 1, bytesRead, out.get()) !=
-                    static_cast<size_t>(bytesRead)) {
-                    g_logger.error("Failed to write to original file: {}",
-                                   originalFile);
-                    return false;
+                // 压缩数据
+                gzFile out = gzopen(slice_path.string().c_str(), "wb");
+                if (!out) {
+                    result.error_message = "Failed to create compressed slice";
+                    return result;
                 }
-            }
 
-            if (bytesRead < 0) {
-                g_logger.error("Failed to read compressed backup file: {}",
-                               backupFile);
-                return false;
-            }
+                gzsetparams(out, options.level, Z_DEFAULT_STRATEGY);
 
-            g_logger.info("Backup decompressed and restored: {}", originalFile);
-        } else {
-            // 直接复制文件
-            fs::copy(backupFile, originalFile,
-                     fs::copy_options::overwrite_existing);
-            g_logger.info("Backup restored: {}", originalFile);
+                if (gzwrite(out, buffer.data(),
+                            static_cast<unsigned>(current_slice_size)) <= 0) {
+                    gzclose(out);
+                    result.error_message = "Failed to write compressed data";
+                    return result;
+                }
+
+                gzclose(out);
+                result.compressed_size += fs::file_size(slice_path);
+            }
         }
 
-        return true;
+        // 写入清单文件
+        manifest["compressed_size"] = result.compressed_size;
+        manifest["compression_ratio"] =
+            static_cast<double>(result.compressed_size) /
+            static_cast<double>(result.original_size);
+
+        std::ofstream manifest_file(input_path.string() + ".manifest.json");
+        manifest_file << manifest.dump(4);
+
+        result.success = true;
+        result.compression_ratio = static_cast<double>(result.compressed_size) /
+                                   static_cast<double>(result.original_size);
+
+        g_logger.info("Successfully created {} slices for {} (ratio: {:.2f}%)",
+                      num_slices, file_path,
+                      (1.0 - result.compression_ratio) * 100);
+
     } catch (const std::exception& e) {
-        g_logger.error("Exception in restoreBackup: {}", e.what());
-        return false;
+        result.error_message =
+            std::string("Exception in slice compression: ") + e.what();
+        g_logger.error(result.error_message.c_str());
     }
+
+    return result;
 }
 
-// 通用数据压缩模板实现
+CompressionResult mergeCompressedSlices(
+    const std::vector<std::string>& slice_files, std::string_view output_path,
+    const DecompressionOptions& options) {
+    CompressionResult result;
+    try {
+        if (slice_files.empty() || output_path.empty()) {
+            result.error_message = "Invalid parameters";
+            return result;
+        }
+
+        // 打开输出文件
+        std::ofstream output(output_path.data(), std::ios::binary);
+        if (!output) {
+            result.error_message = "Failed to create output file";
+            return result;
+        }
+
+        result.original_size = 0;
+        result.compressed_size = 0;
+
+        // 并行处理分片
+        if (options.use_parallel) {
+            std::vector<std::future<std::pair<bool, std::vector<char>>>>
+                futures;
+            std::string error_message;
+
+            for (const auto& slice_file : slice_files) {
+                futures.push_back(std::async(
+                    std::launch::async,
+                    [&](const std::string& slice)
+                        -> std::pair<bool, std::vector<char>> {
+                        try {
+                            gzFile in = gzopen(slice.c_str(), "rb");
+                            if (!in) {
+                                THROW_RUNTIME_ERROR(
+                                    "Failed to open slice file");
+                            }
+
+                            std::vector<char> buffer;
+                            std::vector<char> chunk(options.chunk_size);
+                            int bytes_read;
+
+                            while ((bytes_read = gzread(in, chunk.data(),
+                                                        chunk.size())) > 0) {
+                                buffer.insert(buffer.end(), chunk.begin(),
+                                              chunk.begin() + bytes_read);
+                            }
+
+                            gzclose(in);
+
+                            if (bytes_read < 0) {
+                                THROW_RUNTIME_ERROR(
+                                    "Error reading compressed data");
+                            }
+
+                            return {true, std::move(buffer)};
+
+                        } catch (const std::exception& e) {
+                            return {false, std::vector<char>()};
+                        }
+                    },
+                    slice_file));
+            }
+
+            // 收集结果
+            std::vector<std::pair<size_t, std::vector<char>>> decompressed_data;
+            decompressed_data.reserve(futures.size());
+
+            for (size_t i = 0; i < futures.size(); ++i) {
+                auto [success, data] = futures[i].get();
+                if (!success) {
+                    result.error_message =
+                        "Failed to decompress slice " + std::to_string(i);
+                    return result;
+                }
+                decompressed_data.emplace_back(i, std::move(data));
+            }
+
+            // 按顺序写入
+            std::sort(decompressed_data.begin(), decompressed_data.end());
+            for (const auto& [_, data] : decompressed_data) {
+                output.write(data.data(), data.size());
+                result.original_size += data.size();
+            }
+
+        } else {
+            // 顺序处理
+            std::vector<char> buffer(options.chunk_size);
+
+            for (const auto& slice_file : slice_files) {
+                gzFile in = gzopen(slice_file.c_str(), "rb");
+                if (!in) {
+                    result.error_message = "Failed to open slice file";
+                    return result;
+                }
+
+                int bytes_read;
+                while ((bytes_read = gzread(in, buffer.data(), buffer.size())) >
+                       0) {
+                    output.write(buffer.data(), bytes_read);
+                    result.original_size += bytes_read;
+                }
+
+                gzclose(in);
+
+                if (bytes_read < 0) {
+                    result.error_message = "Error reading compressed data";
+                    return result;
+                }
+
+                result.compressed_size += fs::file_size(slice_file);
+            }
+        }
+
+        result.success = true;
+        result.compression_ratio = static_cast<double>(result.compressed_size) /
+                                   static_cast<double>(result.original_size);
+
+        g_logger.info("Successfully merged {} slices into {} (ratio: {:.2f}%)",
+                      slice_files.size(), output_path,
+                      (1.0 - result.compression_ratio) * 100);
+
+    } catch (const std::exception& e) {
+        result.error_message =
+            std::string("Exception in slice merging: ") + e.what();
+        g_logger.error(result.error_message.c_str());
+    }
+
+    return result;
+}
+
 template <typename T>
     requires std::ranges::contiguous_range<T>
-std::vector<unsigned char> compressData(const T& data) {
-    try {
-        g_logger.info("compressData called with data of size {}",
-                      std::size(data));
+std::pair<CompressionResult, std::vector<unsigned char>> compressData(
+    const T& data, const CompressionOptions& options) {
+    std::pair<CompressionResult, std::vector<unsigned char>> result;
+    auto& [compression_result, compressed_data] = result;
 
-        // 输入验证
-        if (std::empty(data)) {
-            g_logger.error("Empty data provided for compression");
-            return {};
+    try {
+        if (data.empty()) {
+            compression_result.error_message = "Empty input data";
+            return result;
         }
 
-        // 计算压缩后可能的最大大小
-        uLong sourceSize = static_cast<uLong>(std::size(data) *
-                                              sizeof(typename T::value_type));
-        uLong destSize = compressBound(sourceSize);
+        compression_result.original_size = data.size();
 
-        // 准备输出缓冲区
-        std::vector<unsigned char> compressedData(destSize);
+        // 估算压缩后的大小
+        uLong compressed_bound = compressBound(data.size());
+        compressed_data.resize(compressed_bound);
 
         // 压缩数据
-        int result = compress2(compressedData.data(), &destSize,
-                               reinterpret_cast<const Bytef*>(std::data(data)),
-                               sourceSize, Z_BEST_COMPRESSION);
+        uLongf compressed_size = compressed_bound;
+        int ret = compress2(reinterpret_cast<Bytef*>(compressed_data.data()),
+                            &compressed_size,
+                            reinterpret_cast<const Bytef*>(data.data()),
+                            data.size(), options.level);
 
-        if (result != Z_OK) {
-            g_logger.error("Compression failed with error code: {}", result);
-            return {};
+        if (ret != Z_OK) {
+            compression_result.error_message = getZlibErrorMessage(ret);
+            compressed_data.clear();
+            return result;
         }
 
-        // 调整缓冲区大小以匹配实际压缩后的大小
-        compressedData.resize(destSize);
-        g_logger.info(
-            "Data compressed successfully. Original size: {}, compressed size: "
-            "{}",
-            sourceSize, destSize);
+        // 调整到实际大小
+        compressed_data.resize(compressed_size);
+        compression_result.compressed_size = compressed_size;
+        compression_result.compression_ratio =
+            static_cast<double>(compressed_size) /
+            static_cast<double>(data.size());
+        compression_result.success = true;
 
-        return compressedData;
+        g_logger.info(
+            "Successfully compressed {} bytes to {} bytes (ratio: {:.2f}%)",
+            data.size(), compressed_size,
+            (1.0 - compression_result.compression_ratio) * 100);
+
     } catch (const std::exception& e) {
-        g_logger.error("Exception in compressData: {}", e.what());
-        return {};
+        compression_result.error_message =
+            std::string("Exception during compression: ") + e.what();
+        g_logger.error(compression_result.error_message.c_str());
+        compressed_data.clear();
     }
+
+    return result;
 }
 
-// 通用数据解压缩模板实现
+template std::pair<CompressionResult, std::vector<unsigned char>>
+compressData<std::vector<unsigned char>>(const std::vector<unsigned char>&,
+                                         const CompressionOptions&);
+template std::pair<CompressionResult, std::vector<unsigned char>>
+compressData<std::string>(const std::string&, const CompressionOptions&);
+template std::pair<CompressionResult, std::vector<unsigned char>>
+compressData<std::vector<char>>(const std::vector<char>&,
+                                const CompressionOptions&);
+template std::pair<CompressionResult, std::vector<unsigned char>>
+compressData<std::span<const unsigned char>>(
+    const std::span<const unsigned char>&, const CompressionOptions&);
+template std::pair<CompressionResult, std::vector<unsigned char>>
+compressData<std::span<const char>>(const std::span<const char>&,
+                                    const CompressionOptions&);
+
 template <typename T>
     requires std::ranges::contiguous_range<T>
-std::vector<unsigned char> decompressData(const T& compressedData,
-                                          size_t expectedSize) {
+std::pair<CompressionResult, std::vector<unsigned char>> decompressData(
+    const T& compressed_data, size_t expected_size,
+    const DecompressionOptions& options) {
+    std::pair<CompressionResult, std::vector<unsigned char>> result;
+    auto& [compression_result, decompressed_data] = result;
+
     try {
-        g_logger.info("decompressData called with compressed data of size {}",
-                      std::size(compressedData));
-
-        // 输入验证
-        if (std::empty(compressedData)) {
-            g_logger.error("Empty compressed data provided for decompression");
-            return {};
+        if (compressed_data.empty()) {
+            compression_result.error_message = "Empty compressed data";
+            return result;
         }
 
-        // 如果未知预期大小，先尝试一个合理的大小再动态调整
-        size_t outputSize =
-            expectedSize > 0 ? expectedSize : std::size(compressedData) * 4;
-        std::vector<unsigned char> decompressedData(outputSize);
-        uLongf destLen = static_cast<uLongf>(outputSize);
+        compression_result.compressed_size = compressed_data.size();
 
-        int result = uncompress(
-            decompressedData.data(), &destLen,
-            reinterpret_cast<const Bytef*>(std::data(compressedData)),
-            static_cast<uLong>(std::size(compressedData)));
+        // 如果提供了预期大小，使用它；否则估算
+        size_t buffer_size =
+            expected_size > 0 ? expected_size : compressed_data.size() * 4;
+        decompressed_data.resize(buffer_size);
 
-        if (result == Z_BUF_ERROR && expectedSize == 0) {
-            // 缓冲区不足，尝试更大的缓冲区
-            g_logger.info("Buffer too small, trying with larger buffer");
-            outputSize *= 4;  // 扩大4倍
-            decompressedData.resize(outputSize);
-            destLen = static_cast<uLongf>(outputSize);
+        // 使用 options.verify_checksum 检测数据完整性
+        int window_bits = options.verify_checksum ? 15 : -15;
 
-            result = uncompress(
-                decompressedData.data(), &destLen,
-                reinterpret_cast<const Bytef*>(std::data(compressedData)),
-                static_cast<uLong>(std::size(compressedData)));
+        z_stream zs = {};
+        zs.next_in = const_cast<Bytef*>(
+            reinterpret_cast<const Bytef*>(compressed_data.data()));
+        zs.avail_in = compressed_data.size();
+        zs.next_out = reinterpret_cast<Bytef*>(decompressed_data.data());
+        zs.avail_out = buffer_size;
+
+        int ret = inflateInit2(&zs, window_bits);
+        if (ret != Z_OK) {
+            compression_result.error_message = getZlibErrorMessage(ret);
+            return result;
         }
 
-        if (result != Z_OK) {
-            g_logger.error("Decompression failed with error code: {}", result);
-            return {};
+        // 确保资源释放
+        std::unique_ptr<z_stream, decltype(&inflateEnd)> guard(&zs, inflateEnd);
+
+        ret = inflate(&zs, Z_FINISH);
+
+        // 处理缓冲区不足的情况
+        if (ret == Z_BUF_ERROR && expected_size == 0) {
+            // 重新设置解压缩状态
+            inflateEnd(&zs);
+
+            // 使用更大的缓冲区重试
+            buffer_size *= 4;
+            decompressed_data.resize(buffer_size);
+
+            zs = {};
+            zs.next_in = const_cast<Bytef*>(
+                reinterpret_cast<const Bytef*>(compressed_data.data()));
+            zs.avail_in = compressed_data.size();
+            zs.next_out = reinterpret_cast<Bytef*>(decompressed_data.data());
+            zs.avail_out = buffer_size;
+
+            ret = inflateInit2(&zs, window_bits);
+            if (ret != Z_OK) {
+                compression_result.error_message = getZlibErrorMessage(ret);
+                return result;
+            }
+
+            // 更新智能指针
+            guard = std::unique_ptr<z_stream, decltype(&inflateEnd)>(
+                &zs, inflateEnd);
+            ret = inflate(&zs, Z_FINISH);
         }
 
-        // 调整缓冲区大小以匹配实际解压后的大小
-        decompressedData.resize(destLen);
+        if (ret != Z_STREAM_END && ret != Z_OK) {
+            compression_result.error_message = getZlibErrorMessage(ret);
+            decompressed_data.clear();
+            return result;
+        }
+
+        // 调整到实际大小
+        size_t decompressed_size = zs.total_out;
+        decompressed_data.resize(decompressed_size);
+        compression_result.original_size = decompressed_size;
+        compression_result.compression_ratio =
+            static_cast<double>(compressed_data.size()) /
+            static_cast<double>(decompressed_size);
+        compression_result.success = true;
+
         g_logger.info(
-            "Data decompressed successfully. Compressed size: {}, decompressed "
-            "size: {}",
-            std::size(compressedData), destLen);
+            "Successfully decompressed {} bytes to {} bytes (ratio: {:.2f}%)",
+            compressed_data.size(), decompressed_size,
+            (1.0 - compression_result.compression_ratio) * 100);
 
-        return decompressedData;
     } catch (const std::exception& e) {
-        g_logger.error("Exception in decompressData: {}", e.what());
-        return {};
+        compression_result.error_message =
+            std::string("Exception during decompression: ") + e.what();
+        g_logger.error(compression_result.error_message.c_str());
+        decompressed_data.clear();
     }
+
+    return result;
 }
 
-// 显式模板实例化，以支持常用类型
-template std::vector<unsigned char> compressData<std::vector<unsigned char>>(
-    const std::vector<unsigned char>& data);
-template std::vector<unsigned char> compressData<std::string>(
-    const std::string& data);
-template std::vector<unsigned char> compressData<
-    std::span<const unsigned char>>(const std::span<const unsigned char>& data);
-
-template std::vector<unsigned char> decompressData<std::vector<unsigned char>>(
-    const std::vector<unsigned char>& compressedData, size_t expectedSize);
-template std::vector<unsigned char> decompressData<std::string>(
-    const std::string& compressedData, size_t expectedSize);
-template std::vector<unsigned char>
+template std::pair<CompressionResult, std::vector<unsigned char>>
+decompressData<std::vector<unsigned char>>(const std::vector<unsigned char>&,
+                                           size_t, const DecompressionOptions&);
+template std::pair<CompressionResult, std::vector<unsigned char>>
+decompressData<std::string>(const std::string&, size_t,
+                            const DecompressionOptions&);
+template std::pair<CompressionResult, std::vector<unsigned char>>
+decompressData<std::vector<char>>(const std::vector<char>&, size_t,
+                                  const DecompressionOptions&);
+template std::pair<CompressionResult, std::vector<unsigned char>>
 decompressData<std::span<const unsigned char>>(
-    const std::span<const unsigned char>& compressedData, size_t expectedSize);
+    const std::span<const unsigned char>&, size_t, const DecompressionOptions&);
+template std::pair<CompressionResult, std::vector<unsigned char>>
+decompressData<std::span<const char>>(const std::span<const char>&, size_t,
+                                      const DecompressionOptions&);
+
 }  // namespace atom::io

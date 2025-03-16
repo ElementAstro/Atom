@@ -1,22 +1,55 @@
 /*!
  * \file god.hpp
- * \brief Some useful functions, inspired by Coost
+ * \brief Advanced utility functions, inspired by Coost
  * \author Max Qian <lightapt.com>
  * \date 2023-06-17
  * \copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ * \version 2.0
  */
 
 #ifndef ATOM_META_GOD_HPP
 #define ATOM_META_GOD_HPP
 
+#include <atomic>
+#include <bit>       // C++20: For bit manipulation functions
+#include <concepts>  // C++20: For concept definitions
 #include <cstddef>
 #include <cstring>
+#include <functional>
 #include <type_traits>
 #include <utility>
 
 #include "atom/macro.hpp"
 
 namespace atom::meta {
+
+//==============================================================================
+// Concepts (C++20)
+//==============================================================================
+
+/*!
+ * \brief Concept for integral types with bitwise operations support
+ */
+template <typename T>
+concept BitwiseOperatable =
+    std::integral<T> || std::is_pointer_v<T> || std::is_enum_v<T>;
+
+/*!
+ * \brief Concept for types that can be aligned
+ */
+template <typename T>
+concept Alignable = std::is_integral_v<T> || std::is_pointer_v<T>;
+
+/*!
+ * \brief Concept for types that are safely copyable with memcpy
+ */
+template <typename T>
+concept TriviallyCopyable = std::is_trivially_copyable_v<T>;
+
+//==============================================================================
+// Basic Utilities
+//==============================================================================
+
 /*!
  * \brief No-op function for blessing with no bugs.
  */
@@ -30,8 +63,46 @@ ATOM_INLINE void blessNoBugs() {}
  * \return The casted value.
  */
 template <typename To, typename From>
-constexpr auto cast(From&& fromValue) -> To {
+[[nodiscard]] constexpr auto cast(From&& fromValue) noexcept -> To {
     return static_cast<To>(std::forward<From>(fromValue));
+}
+
+/*!
+ * \brief Safe enumeration cast with compile-time verification.
+ * \tparam ToEnum Target enum type
+ * \tparam FromEnum Source enum type
+ * \param value Value to cast
+ * \return The safely casted enum value
+ */
+template <typename ToEnum, typename FromEnum>
+    requires std::is_enum_v<ToEnum> && std::is_enum_v<FromEnum>
+[[nodiscard]] constexpr auto enumCast(FromEnum value) noexcept -> ToEnum {
+    using ToType = std::underlying_type_t<ToEnum>;
+    using FromType = std::underlying_type_t<FromEnum>;
+    return static_cast<ToEnum>(
+        static_cast<ToType>(static_cast<FromType>(value)));
+}
+
+//==============================================================================
+// Alignment Functions
+//==============================================================================
+
+/*!
+ * \brief Checks if a value is aligned to the specified power-of-2 boundary.
+ * \tparam Alignment The alignment value, must be a power of 2.
+ * \tparam ValueType The type of the value to check.
+ * \param value The value to check.
+ * \return True if aligned, false otherwise.
+ */
+template <std::size_t Alignment, Alignable ValueType>
+[[nodiscard]] constexpr auto isAligned(ValueType value) noexcept -> bool {
+    static_assert((Alignment & (Alignment - 1)) == 0,
+                  "Alignment must be power of 2");
+    if constexpr (std::is_pointer_v<ValueType>) {
+        return (reinterpret_cast<std::size_t>(value) & (Alignment - 1)) == 0;
+    } else {
+        return (static_cast<std::size_t>(value) & (Alignment - 1)) == 0;
+    }
 }
 
 /*!
@@ -41,8 +112,8 @@ constexpr auto cast(From&& fromValue) -> To {
  * \param value The value to align.
  * \return The aligned value.
  */
-template <std::size_t Alignment, typename ValueType>
-constexpr auto alignUp(ValueType value) -> ValueType {
+template <std::size_t Alignment, Alignable ValueType>
+[[nodiscard]] constexpr auto alignUp(ValueType value) noexcept -> ValueType {
     static_assert((Alignment & (Alignment - 1)) == 0,
                   "Alignment must be power of 2");
     return (value + static_cast<ValueType>(Alignment - 1)) &
@@ -57,7 +128,8 @@ constexpr auto alignUp(ValueType value) -> ValueType {
  * \return The aligned pointer.
  */
 template <std::size_t Alignment, typename PointerType>
-constexpr auto alignUp(PointerType* pointer) -> PointerType* {
+[[nodiscard]] constexpr auto alignUp(PointerType* pointer) noexcept
+    -> PointerType* {
     return reinterpret_cast<PointerType*>(
         alignUp<Alignment>(reinterpret_cast<std::size_t>(pointer)));
 }
@@ -70,10 +142,12 @@ constexpr auto alignUp(PointerType* pointer) -> PointerType* {
  * \param alignment The alignment value.
  * \return The aligned value.
  */
-template <typename ValueType, typename AlignmentType>
-constexpr auto alignUp(ValueType value, AlignmentType alignment) -> ValueType {
-    static_assert(std::is_integral<AlignmentType>::value,
-                  "Alignment must be integral type");
+template <Alignable ValueType, std::integral AlignmentType>
+[[nodiscard]] constexpr auto alignUp(
+    ValueType value, AlignmentType alignment) noexcept -> ValueType {
+    // Assert alignment is a power of 2 at runtime
+    assert((alignment & (alignment - 1)) == 0 &&
+           "Alignment must be power of 2");
     return (value + static_cast<ValueType>(alignment - 1)) &
            ~static_cast<ValueType>(alignment - 1);
 }
@@ -86,9 +160,9 @@ constexpr auto alignUp(ValueType value, AlignmentType alignment) -> ValueType {
  * \param alignment The alignment value.
  * \return The aligned pointer.
  */
-template <typename PointerType, typename AlignmentType>
-constexpr auto alignUp(PointerType* pointer,
-                       AlignmentType alignment) -> PointerType* {
+template <typename PointerType, std::integral AlignmentType>
+[[nodiscard]] constexpr auto alignUp(
+    PointerType* pointer, AlignmentType alignment) noexcept -> PointerType* {
     return reinterpret_cast<PointerType*>(
         alignUp(reinterpret_cast<std::size_t>(pointer), alignment));
 }
@@ -100,8 +174,8 @@ constexpr auto alignUp(PointerType* pointer,
  * \param value The value to align.
  * \return The aligned value.
  */
-template <std::size_t Alignment, typename ValueType>
-constexpr auto alignDown(ValueType value) -> ValueType {
+template <std::size_t Alignment, Alignable ValueType>
+[[nodiscard]] constexpr auto alignDown(ValueType value) noexcept -> ValueType {
     static_assert((Alignment & (Alignment - 1)) == 0,
                   "Alignment must be power of 2");
     return value & ~static_cast<ValueType>(Alignment - 1);
@@ -115,7 +189,8 @@ constexpr auto alignDown(ValueType value) -> ValueType {
  * \return The aligned pointer.
  */
 template <std::size_t Alignment, typename PointerType>
-constexpr auto alignDown(PointerType* pointer) -> PointerType* {
+[[nodiscard]] constexpr auto alignDown(PointerType* pointer) noexcept
+    -> PointerType* {
     return reinterpret_cast<PointerType*>(
         alignDown<Alignment>(reinterpret_cast<std::size_t>(pointer)));
 }
@@ -128,11 +203,12 @@ constexpr auto alignDown(PointerType* pointer) -> PointerType* {
  * \param alignment The alignment value.
  * \return The aligned value.
  */
-template <typename ValueType, typename AlignmentType>
-constexpr auto alignDown(ValueType value,
-                         AlignmentType alignment) -> ValueType {
-    static_assert(std::is_integral<AlignmentType>::value,
-                  "Alignment must be integral type");
+template <Alignable ValueType, std::integral AlignmentType>
+[[nodiscard]] constexpr auto alignDown(
+    ValueType value, AlignmentType alignment) noexcept -> ValueType {
+    // Assert alignment is a power of 2 at runtime
+    assert((alignment & (alignment - 1)) == 0 &&
+           "Alignment must be power of 2");
     return value & ~static_cast<ValueType>(alignment - 1);
 }
 
@@ -144,12 +220,16 @@ constexpr auto alignDown(ValueType value,
  * \param alignment The alignment value.
  * \return The aligned pointer.
  */
-template <typename PointerType, typename AlignmentType>
-constexpr auto alignDown(PointerType* pointer,
-                         AlignmentType alignment) -> PointerType* {
+template <typename PointerType, std::integral AlignmentType>
+[[nodiscard]] constexpr auto alignDown(
+    PointerType* pointer, AlignmentType alignment) noexcept -> PointerType* {
     return reinterpret_cast<PointerType*>(
         alignDown(reinterpret_cast<std::size_t>(pointer), alignment));
 }
+
+//==============================================================================
+// Math Functions
+//==============================================================================
 
 /*!
  * \brief Computes the base-2 logarithm of an integral value.
@@ -157,27 +237,59 @@ constexpr auto alignDown(PointerType* pointer,
  * \param value The value to compute the logarithm of.
  * \return The base-2 logarithm of the value.
  */
-template <typename IntegralType>
-constexpr auto log2(IntegralType value) -> IntegralType {
-    static_assert(std::is_integral<IntegralType>::value,
-                  "IntegralType must be integral type");
-    return value <= 1 ? 0 : 1 + atom::meta::log2(value >> 1);
+template <std::integral IntegralType>
+[[nodiscard]] constexpr auto log2(IntegralType value) noexcept -> IntegralType {
+    // Use C++20's std::bit_width for better performance when available
+    if constexpr (std::is_unsigned_v<IntegralType> &&
+                  sizeof(IntegralType) <= sizeof(unsigned long long)) {
+        return value == 0
+                   ? 0
+                   : static_cast<IntegralType>(std::bit_width(value) - 1);
+    } else {
+        return value <= 1 ? 0 : 1 + log2(value >> 1);
+    }
 }
 
 /*!
- * \brief Computes the number of blocks of size N needed to cover a value.
- * \tparam BlockSize The block size, must be a power of 2.
- * \tparam ValueType The type of the value.
- * \param value The value to compute the number of blocks for.
- * \return The number of blocks needed to cover the value.
+ * \brief Computes the number of blocks of size BlockSize needed to cover a
+ * value. \tparam BlockSize The block size, must be a power of 2. \tparam
+ * ValueType The type of the value. \param value The value to compute the number
+ * of blocks for. \return The number of blocks needed to cover the value.
  */
-template <std::size_t BlockSize, typename ValueType>
-constexpr auto nb(ValueType value) -> ValueType {
+template <std::size_t BlockSize, std::integral ValueType>
+[[nodiscard]] constexpr auto nb(ValueType value) noexcept -> ValueType {
     static_assert((BlockSize & (BlockSize - 1)) == 0,
                   "BlockSize must be power of 2");
-    return (value >> atom::meta::log2(static_cast<ValueType>(BlockSize))) +
+    return (value >> log2(static_cast<ValueType>(BlockSize))) +
            !!(value & static_cast<ValueType>(BlockSize - 1));
 }
+
+/*!
+ * \brief Compute the ceiling of value/divisor for integer division.
+ * \tparam T Numeric type
+ * \param value The dividend
+ * \param divisor The divisor
+ * \return Ceiling of the division
+ */
+template <std::integral T>
+[[nodiscard]] constexpr T divCeil(T value, T divisor) noexcept {
+    return (value + divisor - 1) / divisor;
+}
+
+/*!
+ * \brief Determine if a number is a power of two
+ * \tparam T Integer type
+ * \param value Value to test
+ * \return True if value is a power of two
+ */
+template <std::integral T>
+[[nodiscard]] constexpr bool isPowerOf2(T value) noexcept {
+    return value > 0 && (value & (value - 1)) == 0;
+}
+
+//==============================================================================
+// Memory Functions
+//==============================================================================
 
 /*!
  * \brief Compares two values for equality.
@@ -187,32 +299,103 @@ constexpr auto nb(ValueType value) -> ValueType {
  * \return True if the values are equal, false otherwise.
  */
 template <typename ValueType>
-ATOM_INLINE auto eq(const void* first, const void* second) -> bool {
+[[nodiscard]] ATOM_INLINE auto eq(const void* first,
+                                  const void* second) noexcept -> bool {
     return *reinterpret_cast<const ValueType*>(first) ==
            *reinterpret_cast<const ValueType*>(second);
 }
 
 /*!
- * \brief Copies N bytes from src to dst.
+ * \brief Copies N bytes from src to dst with compile-time optimization.
  * \tparam NumBytes The number of bytes to copy.
  * \param destination Pointer to the destination.
  * \param source Pointer to the source.
+ * \return Pointer to the destination after copy
  */
 template <std::size_t NumBytes>
-ATOM_INLINE void copy(void* destination, const void* source) {
-    if constexpr (NumBytes > 0) {
-        std::memcpy(destination, source, NumBytes);
+ATOM_INLINE void* copy(void* destination, const void* source) noexcept {
+    if constexpr (NumBytes == 0) {
+        return destination;
+    } else if constexpr (NumBytes == 1) {
+        *static_cast<std::byte*>(destination) =
+            *static_cast<const std::byte*>(source);
+        return destination;
+    } else if constexpr (NumBytes == 2) {
+        *static_cast<uint16_t*>(destination) =
+            *static_cast<const uint16_t*>(source);
+        return destination;
+    } else if constexpr (NumBytes == 4) {
+        *static_cast<uint32_t*>(destination) =
+            *static_cast<const uint32_t*>(source);
+        return destination;
+    } else if constexpr (NumBytes == 8) {
+        *static_cast<uint64_t*>(destination) =
+            *static_cast<const uint64_t*>(source);
+        return destination;
+    } else {
+        return std::memcpy(destination, source, NumBytes);
     }
 }
 
 /*!
- * \brief Specialization of copy for NumBytes = 0, does nothing.
+ * \brief Safely copies data from source to destination with bounds checking.
+ * \param destination Destination memory buffer
+ * \param destSize Size of destination buffer
+ * \param source Source memory buffer
+ * \param sourceSize Size of source buffer
+ * \return Number of bytes copied
  */
-template <>
-ATOM_INLINE void copy<0>(void*, const void*) {}
+[[nodiscard]] inline std::size_t safeCopy(void* destination,
+                                          std::size_t destSize,
+                                          const void* source,
+                                          std::size_t sourceSize) noexcept {
+    const std::size_t copySize = std::min(destSize, sourceSize);
+    std::memcpy(destination, source, copySize);
+    return copySize;
+}
 
 /*!
- * \brief Swaps the value pointed to by pointer with value.
+ * \brief Zero-initializes a memory region.
+ * \param ptr Pointer to the memory region
+ * \param size Size in bytes
+ */
+ATOM_INLINE void zeroMemory(void* ptr, std::size_t size) noexcept {
+    std::memset(ptr, 0, size);
+}
+
+/*!
+ * \brief Checks if memory regions contain equal data
+ * \param a First memory region
+ * \param b Second memory region
+ * \param size Size to compare
+ * \return True if regions contain identical data
+ */
+[[nodiscard]] ATOM_INLINE bool memoryEquals(const void* a, const void* b,
+                                            std::size_t size) noexcept {
+    return std::memcmp(a, b, size) == 0;
+}
+
+//==============================================================================
+// Atomic Operations
+//==============================================================================
+
+/*!
+ * \brief Swaps the value pointed to by pointer with value atomically.
+ * \tparam T The type of the value.
+ * \param pointer Pointer to the value to swap.
+ * \param value The value to swap with.
+ * \param order Memory order for the operation.
+ * \return The original value pointed to by pointer.
+ */
+template <typename T>
+[[nodiscard]] ATOM_INLINE T
+atomicSwap(std::atomic<T>* pointer, T value,
+           std::memory_order order = std::memory_order_seq_cst) noexcept {
+    return pointer->exchange(value, order);
+}
+
+/*!
+ * \brief Non-atomic swap for regular (non-atomic) values.
  * \tparam PointerType The type of the value pointed to by pointer.
  * \tparam ValueType The type of the value.
  * \param pointer Pointer to the value to swap.
@@ -220,7 +403,8 @@ ATOM_INLINE void copy<0>(void*, const void*) {}
  * \return The original value pointed to by pointer.
  */
 template <typename PointerType, typename ValueType>
-ATOM_INLINE auto swap(PointerType* pointer, ValueType value) -> PointerType {
+[[nodiscard]] ATOM_INLINE auto swap(PointerType* pointer,
+                                    ValueType value) noexcept -> PointerType {
     PointerType originalValue = *pointer;
     *pointer = static_cast<PointerType>(value);
     return originalValue;
@@ -235,11 +419,26 @@ ATOM_INLINE auto swap(PointerType* pointer, ValueType value) -> PointerType {
  * \return The original value pointed to by pointer.
  */
 template <typename PointerType, typename ValueType>
-ATOM_INLINE auto fetchAdd(PointerType* pointer,
-                          ValueType value) -> PointerType {
+[[nodiscard]] ATOM_INLINE auto fetchAdd(
+    PointerType* pointer, ValueType value) noexcept -> PointerType {
     PointerType originalValue = *pointer;
     *pointer += value;
     return originalValue;
+}
+
+/*!
+ * \brief Atomic version of fetchAdd
+ * \tparam T Type supporting atomic operations
+ * \param pointer Pointer to atomic value
+ * \param value Value to add
+ * \param order Memory ordering constraint
+ * \return Original value before addition
+ */
+template <typename T>
+[[nodiscard]] ATOM_INLINE T
+atomicFetchAdd(std::atomic<T>* pointer, T value,
+               std::memory_order order = std::memory_order_seq_cst) noexcept {
+    return pointer->fetch_add(value, order);
 }
 
 /*!
@@ -250,11 +449,26 @@ ATOM_INLINE auto fetchAdd(PointerType* pointer,
  * original value pointed to by pointer.
  */
 template <typename PointerType, typename ValueType>
-ATOM_INLINE auto fetchSub(PointerType* pointer,
-                          ValueType value) -> PointerType {
+[[nodiscard]] ATOM_INLINE auto fetchSub(
+    PointerType* pointer, ValueType value) noexcept -> PointerType {
     PointerType originalValue = *pointer;
     *pointer -= value;
     return originalValue;
+}
+
+/*!
+ * \brief Atomic version of fetchSub
+ * \tparam T Type supporting atomic operations
+ * \param pointer Pointer to atomic value
+ * \param value Value to subtract
+ * \param order Memory ordering constraint
+ * \return Original value before subtraction
+ */
+template <typename T>
+[[nodiscard]] ATOM_INLINE T
+atomicFetchSub(std::atomic<T>* pointer, T value,
+               std::memory_order order = std::memory_order_seq_cst) noexcept {
+    return pointer->fetch_sub(value, order);
 }
 
 /*!
@@ -265,11 +479,28 @@ ATOM_INLINE auto fetchSub(PointerType* pointer,
  * \return The original value pointed to by pointer.
  */
 template <typename PointerType, typename ValueType>
-ATOM_INLINE auto fetchAnd(PointerType* pointer,
-                          ValueType value) -> PointerType {
+    requires BitwiseOperatable<PointerType>
+[[nodiscard]] ATOM_INLINE auto fetchAnd(
+    PointerType* pointer, ValueType value) noexcept -> PointerType {
     PointerType originalValue = *pointer;
     *pointer &= static_cast<PointerType>(value);
     return originalValue;
+}
+
+/*!
+ * \brief Atomic version of fetchAnd
+ * \tparam T Type supporting atomic operations
+ * \param pointer Pointer to atomic value
+ * \param value Value to AND with
+ * \param order Memory ordering constraint
+ * \return Original value before AND operation
+ */
+template <typename T>
+    requires BitwiseOperatable<T>
+[[nodiscard]] ATOM_INLINE T
+atomicFetchAnd(std::atomic<T>* pointer, T value,
+               std::memory_order order = std::memory_order_seq_cst) noexcept {
+    return pointer->fetch_and(value, order);
 }
 
 /*!
@@ -280,10 +511,28 @@ ATOM_INLINE auto fetchAnd(PointerType* pointer,
  * \return The original value pointed to by pointer.
  */
 template <typename PointerType, typename ValueType>
-ATOM_INLINE auto fetchOr(PointerType* pointer, ValueType value) -> PointerType {
+    requires BitwiseOperatable<PointerType>
+[[nodiscard]] ATOM_INLINE auto fetchOr(
+    PointerType* pointer, ValueType value) noexcept -> PointerType {
     PointerType originalValue = *pointer;
     *pointer |= static_cast<PointerType>(value);
     return originalValue;
+}
+
+/*!
+ * \brief Atomic version of fetchOr
+ * \tparam T Type supporting atomic operations
+ * \param pointer Pointer to atomic value
+ * \param value Value to OR with
+ * \param order Memory ordering constraint
+ * \return Original value before OR operation
+ */
+template <typename T>
+    requires BitwiseOperatable<T>
+[[nodiscard]] ATOM_INLINE T
+atomicFetchOr(std::atomic<T>* pointer, T value,
+              std::memory_order order = std::memory_order_seq_cst) noexcept {
+    return pointer->fetch_or(value, order);
 }
 
 /*!
@@ -294,20 +543,41 @@ ATOM_INLINE auto fetchOr(PointerType* pointer, ValueType value) -> PointerType {
  * \return The original value pointed to by pointer.
  */
 template <typename PointerType, typename ValueType>
-ATOM_INLINE auto fetchXor(PointerType* pointer,
-                          ValueType value) -> PointerType {
+    requires BitwiseOperatable<PointerType>
+[[nodiscard]] ATOM_INLINE auto fetchXor(
+    PointerType* pointer, ValueType value) noexcept -> PointerType {
     PointerType originalValue = *pointer;
     *pointer ^= static_cast<PointerType>(value);
     return originalValue;
 }
 
 /*!
+ * \brief Atomic version of fetchXor
+ * \tparam T Type supporting atomic operations
+ * \param pointer Pointer to atomic value
+ * \param value Value to XOR with
+ * \param order Memory ordering constraint
+ * \return Original value before XOR operation
+ */
+template <typename T>
+    requires BitwiseOperatable<T>
+[[nodiscard]] ATOM_INLINE T
+atomicFetchXor(std::atomic<T>* pointer, T value,
+               std::memory_order order = std::memory_order_seq_cst) noexcept {
+    return pointer->fetch_xor(value, order);
+}
+
+//==============================================================================
+// Type Traits
+//==============================================================================
+
+/*!
  * \brief Alias for std::enable_if_t.
  * \tparam Condition The condition.
  * \tparam Type The type to enable if the condition is true.
  */
-template <bool Condition, typename Type = void>
-using if_t = std::enable_if_t<Condition, Type>;
+template <bool _Cond, typename _IfTrue, typename _IfFalse = void>
+using if_t = typename std::conditional<_Cond, _IfTrue, _IfFalse>::type;
 
 /*!
  * \brief Alias for std::remove_reference_t.
@@ -352,6 +622,22 @@ using constT = std::add_const_t<Type>;
 template <typename Type>
 using constRefT = std::add_lvalue_reference_t<constT<rmRefT<Type>>>;
 
+/*!
+ * \brief Alias for removing pointer
+ * \tparam Type The type to remove pointer from
+ */
+template <typename Type>
+using rmPtrT = std::remove_pointer_t<Type>;
+
+/*!
+ * \brief Checks if Type is nothrow relocatable
+ * \tparam Type Type to check
+ */
+template <typename Type>
+inline constexpr bool isNothrowRelocatable =
+    std::is_nothrow_move_constructible_v<Type> &&
+    std::is_nothrow_destructible_v<Type>;
+
 namespace detail {
 
 /*!
@@ -386,7 +672,7 @@ struct IsSame<FirstType, SecondType, RemainingTypes...> {
  * \return True if all types are the same, false otherwise.
  */
 template <typename FirstType, typename SecondType, typename... RemainingTypes>
-constexpr auto isSame() -> bool {
+[[nodiscard]] constexpr auto isSame() noexcept -> bool {
     return detail::IsSame<FirstType, SecondType, RemainingTypes...>::K_VALUE;
 }
 
@@ -396,7 +682,7 @@ constexpr auto isSame() -> bool {
  * \return True if the type is a reference, false otherwise.
  */
 template <typename Type>
-constexpr auto isRef() -> bool {
+[[nodiscard]] constexpr auto isRef() noexcept -> bool {
     return std::is_reference_v<Type>;
 }
 
@@ -406,7 +692,7 @@ constexpr auto isRef() -> bool {
  * \return True if the type is an array, false otherwise.
  */
 template <typename Type>
-constexpr auto isArray() -> bool {
+[[nodiscard]] constexpr auto isArray() noexcept -> bool {
     return std::is_array_v<Type>;
 }
 
@@ -416,7 +702,7 @@ constexpr auto isArray() -> bool {
  * \return True if the type is a class, false otherwise.
  */
 template <typename Type>
-constexpr auto isClass() -> bool {
+[[nodiscard]] constexpr auto isClass() noexcept -> bool {
     return std::is_class_v<Type>;
 }
 
@@ -426,7 +712,7 @@ constexpr auto isClass() -> bool {
  * \return True if the type is a scalar, false otherwise.
  */
 template <typename Type>
-constexpr auto isScalar() -> bool {
+[[nodiscard]] constexpr auto isScalar() noexcept -> bool {
     return std::is_scalar_v<Type>;
 }
 
@@ -436,7 +722,7 @@ constexpr auto isScalar() -> bool {
  * \return True if the type is trivially copyable, false otherwise.
  */
 template <typename Type>
-constexpr auto isTriviallyCopyable() -> bool {
+[[nodiscard]] constexpr auto isTriviallyCopyable() noexcept -> bool {
     return std::is_trivially_copyable_v<Type>;
 }
 
@@ -446,7 +732,7 @@ constexpr auto isTriviallyCopyable() -> bool {
  * \return True if the type is trivially destructible, false otherwise.
  */
 template <typename Type>
-constexpr auto isTriviallyDestructible() -> bool {
+[[nodiscard]] constexpr auto isTriviallyDestructible() noexcept -> bool {
     return std::is_trivially_destructible_v<Type>;
 }
 
@@ -457,7 +743,7 @@ constexpr auto isTriviallyDestructible() -> bool {
  * \return True if BaseType is a base of DerivedType, false otherwise.
  */
 template <typename BaseType, typename DerivedType>
-constexpr auto isBaseOf() -> bool {
+[[nodiscard]] constexpr auto isBaseOf() noexcept -> bool {
     return std::is_base_of_v<BaseType, DerivedType>;
 }
 
@@ -467,8 +753,76 @@ constexpr auto isBaseOf() -> bool {
  * \return True if the type has a virtual destructor, false otherwise.
  */
 template <typename Type>
-constexpr auto hasVirtualDestructor() -> bool {
+[[nodiscard]] constexpr auto hasVirtualDestructor() noexcept -> bool {
     return std::has_virtual_destructor_v<Type>;
+}
+
+//==============================================================================
+// Resource Management
+//==============================================================================
+
+/*!
+ * \brief RAII scope guard to execute a function when going out of scope
+ */
+class ScopeGuard {
+public:
+    template <typename Callback>
+    explicit ScopeGuard(Callback&& callback)
+        : m_callback(std::forward<Callback>(callback)), m_active(true) {}
+
+    ~ScopeGuard() noexcept {
+        if (m_active) {
+            m_callback();
+        }
+    }
+
+    // Disable copy
+    ScopeGuard(const ScopeGuard&) = delete;
+    ScopeGuard& operator=(const ScopeGuard&) = delete;
+
+    // Enable move
+    ScopeGuard(ScopeGuard&& other) noexcept
+        : m_callback(std::move(other.m_callback)), m_active(other.m_active) {
+        other.m_active = false;
+    }
+
+    ScopeGuard& operator=(ScopeGuard&& other) noexcept {
+        if (this != &other) {
+            m_callback = std::move(other.m_callback);
+            m_active = other.m_active;
+            other.m_active = false;
+        }
+        return *this;
+    }
+
+    // Cancel the guard
+    void dismiss() noexcept { m_active = false; }
+
+private:
+    std::function<void()> m_callback;
+    bool m_active;
+};
+
+/*!
+ * \brief Create a scope guard with the provided callback
+ * \tparam Callback Function type to execute on scope exit
+ * \param callback Function to call when going out of scope
+ * \return ScopeGuard object
+ */
+template <typename Callback>
+[[nodiscard]] auto makeGuard(Callback&& callback) {
+    return ScopeGuard(std::forward<Callback>(callback));
+}
+
+/*!
+ * \brief Thread safe singleton access template
+ * \tparam T The singleton class type
+ * \return Reference to the singleton instance
+ */
+template <typename T>
+T& singleton() {
+    static T instance;
+    return instance;
 }
 
 }  // namespace atom::meta

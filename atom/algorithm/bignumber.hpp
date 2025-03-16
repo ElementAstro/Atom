@@ -18,7 +18,6 @@ namespace atom::algorithm {
  */
 class BigNumber {
 public:
-    // 添加默认构造函数
     constexpr BigNumber() noexcept : isNegative_(false), digits_{0} {}
 
     /**
@@ -35,100 +34,100 @@ public:
     template <std::integral T>
     constexpr explicit BigNumber(T number) noexcept;
 
-    // 支持移动语义
+    // Support move semantics
     BigNumber(BigNumber&& other) noexcept = default;
     BigNumber& operator=(BigNumber&& other) noexcept = default;
 
-    // 支持拷贝
+    // Support copy semantics
     BigNumber(const BigNumber&) = default;
     BigNumber& operator=(const BigNumber&) = default;
 
     ~BigNumber() = default;
 
     /**
-     * @brief 添加两个BigNumber对象
-     * @param other 要相加的另一个BigNumber
-     * @return 加法结果
+     * @brief Adds two BigNumber objects.
+     * @param other The other BigNumber to add.
+     * @return The result of the addition.
      */
     [[nodiscard]] auto add(const BigNumber& other) const -> BigNumber;
 
     /**
-     * @brief 从一个BigNumber减去另一个
-     * @param other 要减去的另一个BigNumber
-     * @return 减法结果
+     * @brief Subtracts another BigNumber from this one.
+     * @param other The BigNumber to subtract.
+     * @return The result of the subtraction.
      */
     [[nodiscard]] auto subtract(const BigNumber& other) const -> BigNumber;
 
     /**
-     * @brief 乘以另一个BigNumber
-     * @param other 要相乘的另一个BigNumber
-     * @return 乘法结果
+     * @brief Multiplies by another BigNumber.
+     * @param other The BigNumber to multiply by.
+     * @return The result of the multiplication.
      */
     [[nodiscard]] auto multiply(const BigNumber& other) const -> BigNumber;
 
     /**
-     * @brief 使用Karatsuba算法进行优化乘法运算
-     * @param other 要相乘的另一个BigNumber
-     * @return 乘法结果
+     * @brief Optimizes multiplication using the Karatsuba algorithm.
+     * @param other The BigNumber to multiply by.
+     * @return The result of the multiplication.
      */
     [[nodiscard]] auto multiplyKaratsuba(const BigNumber& other) const
         -> BigNumber;
 
     /**
-     * @brief 除以另一个BigNumber
-     * @param other 作为除数的BigNumber
-     * @return 除法结果
-     * @throws std::invalid_argument 如果除数为零
+     * @brief Divides by another BigNumber.
+     * @param other The BigNumber to use as the divisor.
+     * @return The result of the division.
+     * @throws std::invalid_argument If the divisor is zero.
      */
     [[nodiscard]] auto divide(const BigNumber& other) const -> BigNumber;
 
     /**
-     * @brief 计算幂
-     * @param exponent 指数值
-     * @return BigNumber的指数结果
-     * @throws std::invalid_argument 如果指数为负数
+     * @brief Calculates the power.
+     * @param exponent The exponent value.
+     * @return The result of the BigNumber raised to the exponent.
+     * @throws std::invalid_argument If the exponent is negative.
      */
     [[nodiscard]] auto pow(int exponent) const -> BigNumber;
 
     /**
-     * @brief 获取字符串表示
-     * @return 大数的字符串表示
+     * @brief Gets the string representation.
+     * @return The string representation of the BigNumber.
      */
     [[nodiscard]] auto toString() const -> std::string;
 
     /**
-     * @brief 从字符串设置值
-     * @param newStr 新的字符串表示
-     * @return 更新后的BigNumber引用
-     * @throws std::invalid_argument 如果字符串不是有效的数字
+     * @brief Sets the value from a string.
+     * @param newStr The new string representation.
+     * @return A reference to the updated BigNumber.
+     * @throws std::invalid_argument If the string is not a valid number.
      */
     auto setString(std::string_view newStr) -> BigNumber&;
 
     /**
-     * @brief 返回此数的负数
-     * @return 取反后的BigNumber
+     * @brief Returns the negation of this number.
+     * @return The negated BigNumber.
      */
     [[nodiscard]] auto negate() const -> BigNumber;
 
     /**
-     * @brief 移除前导零
-     * @return 移除前导零后的BigNumber
+     * @brief Removes leading zeros.
+     * @return The BigNumber with leading zeros removed.
      */
     [[nodiscard]] auto trimLeadingZeros() const noexcept -> BigNumber;
 
     /**
-     * @brief 判断两个BigNumber是否相等
-     * @param other 要比较的BigNumber
-     * @return 是否相等
+     * @brief Checks if two BigNumbers are equal.
+     * @param other The BigNumber to compare.
+     * @return True if they are equal.
      */
     [[nodiscard]] constexpr auto equals(const BigNumber& other) const noexcept
         -> bool;
 
     /**
-     * @brief 判断与整数是否相等
-     * @tparam T 整数类型
-     * @param other 要比较的整数
-     * @return 是否相等
+     * @brief Checks if equal to an integer.
+     * @tparam T The integer type.
+     * @param other The integer to compare.
+     * @return True if they are equal.
      */
     template <std::integral T>
     [[nodiscard]] constexpr auto equals(T other) const noexcept -> bool {
@@ -136,61 +135,61 @@ public:
     }
 
     /**
-     * @brief 判断与字符串表示的数字是否相等
-     * @param other 数字字符串
-     * @return 是否相等
+     * @brief Checks if equal to a number represented as a string.
+     * @param other The number string.
+     * @return True if they are equal.
      */
     [[nodiscard]] auto equals(std::string_view other) const -> bool {
         return equals(BigNumber(other));
     }
 
     /**
-     * @brief 获取数字位数
-     * @return 数字的位数
+     * @brief Gets the number of digits.
+     * @return The number of digits.
      */
     [[nodiscard]] constexpr auto digits() const noexcept -> size_t {
         return digits_.size();
     }
 
     /**
-     * @brief 检查是否为负数
-     * @return 是否为负数
+     * @brief Checks if the number is negative.
+     * @return True if the number is negative.
      */
     [[nodiscard]] constexpr auto isNegative() const noexcept -> bool {
         return isNegative_;
     }
 
     /**
-     * @brief 检查是否为正数或零
-     * @return 是否为正数或零
+     * @brief Checks if the number is positive or zero.
+     * @return True if the number is positive or zero.
      */
     [[nodiscard]] constexpr auto isPositive() const noexcept -> bool {
         return !isNegative();
     }
 
     /**
-     * @brief 检查是否为偶数
-     * @return 是否为偶数
+     * @brief Checks if the number is even.
+     * @return True if the number is even.
      */
     [[nodiscard]] constexpr auto isEven() const noexcept -> bool {
         return digits_.empty() ? true : (digits_[0] % 2 == 0);
     }
 
     /**
-     * @brief 检查是否为奇数
-     * @return 是否为奇数
+     * @brief Checks if the number is odd.
+     * @return True if the number is odd.
      */
     [[nodiscard]] constexpr auto isOdd() const noexcept -> bool {
         return !isEven();
     }
 
     /**
-     * @brief 获取绝对值
-     * @return 绝对值
+     * @brief Gets the absolute value.
+     * @return The absolute value.
      */
     [[nodiscard]] auto abs() const -> BigNumber;
 
-    // 运算符重载
+    // Operator overloading
     friend auto operator<<(std::ostream& os,
                            const BigNumber& num) -> std::ostream&;
 
@@ -237,81 +236,83 @@ public:
         return b1 < b2 || b1 == b2;
     }
 
-    // 复合赋值运算符
+    // Compound assignment operators
     auto operator+=(const BigNumber& other) -> BigNumber&;
     auto operator-=(const BigNumber& other) -> BigNumber&;
     auto operator*=(const BigNumber& other) -> BigNumber&;
     auto operator/=(const BigNumber& other) -> BigNumber&;
 
-    // 前缀和后缀增减运算符
+    // Prefix and postfix increment/decrement operators
     auto operator++() -> BigNumber&;
     auto operator--() -> BigNumber&;
     auto operator++(int) -> BigNumber;
     auto operator--(int) -> BigNumber;
 
     /**
-     * @brief 访问特定位置的数字
-     * @param index 要访问的索引
-     * @return 该位置的数字
-     * @throws std::out_of_range 如果索引超出范围
+     * @brief Accesses a digit at a specific position.
+     * @param index The index to access.
+     * @return The digit at that position.
+     * @throws std::out_of_range If the index is out of range.
      */
     [[nodiscard]] constexpr auto at(size_t index) const -> uint8_t;
 
     /**
-     * @brief 下标运算符
-     * @param index 要访问的索引
-     * @return 该位置的数字
-     * @throws std::out_of_range 如果索引超出范围
+     * @brief Subscript operator.
+     * @param index The index to access.
+     * @return The digit at that position.
+     * @throws std::out_of_range If the index is out of range.
      */
     auto operator[](size_t index) const -> uint8_t { return at(index); }
 
-    // 添加并行计算支持
+    // Add support for parallel computation
     [[nodiscard]] auto parallelMultiply(const BigNumber& other) const
         -> BigNumber;
 
 private:
-    bool isNegative_;              ///< 是否为负数
-    std::vector<uint8_t> digits_;  ///< 数字存储，个位在前，高位在后
+    bool isNegative_;              ///< Whether the number is negative.
+    std::vector<uint8_t> digits_;  ///< Digit storage, least significant digit
+                                   ///< first, most significant digit last.
 
     /**
-     * @brief 验证字符串是否为有效数字
-     * @param str 要验证的字符串
-     * @throws std::invalid_argument 如果字符串不是有效的数字
+     * @brief Validates if a string is a valid number.
+     * @param str The string to validate.
+     * @throws std::invalid_argument If the string is not a valid number.
      */
     static void validateString(std::string_view str);
 
     void validate() const;
 
     /**
-     * @brief 从字符串初始化数字向量
-     * @param str 数字字符串
+     * @brief Initializes the digit vector from a string.
+     * @param str The number string.
      */
     void initFromString(std::string_view str);
 
     /**
-     * @brief Karatsuba乘法算法的递归实现
-     * @param a 第一个BigNumber的数据
-     * @param b 第二个BigNumber的数据
-     * @return 计算结果
+     * @brief Recursive implementation of the Karatsuba multiplication
+     * algorithm.
+     * @param a The data of the first BigNumber.
+     * @param b The data of the second BigNumber.
+     * @return The result of the calculation.
      */
     static std::vector<uint8_t> karatsubaMultiply(std::span<const uint8_t> a,
                                                   std::span<const uint8_t> b);
 };
 
-// 整数类型的构造函数实现
+// Implementation of the constructor for integer types
 template <std::integral T>
 constexpr BigNumber::BigNumber(T number) noexcept : isNegative_(number < 0) {
-    // 处理0的特殊情况
+    // Handle the special case of 0
     if (number == 0) {
         digits_.push_back(0);
         return;
     }
 
-    // 转换为正数处理
+    // Convert to positive for processing
     auto absNumber =
         static_cast<std::make_unsigned_t<T>>(number < 0 ? -number : number);
 
-    // 逐位提取数字
+    // Extract digits one by one
     while (absNumber > 0) {
         digits_.push_back(static_cast<uint8_t>(absNumber % 10));
         absNumber /= 10;

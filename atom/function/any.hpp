@@ -26,8 +26,6 @@
 #include <utility>
 #include <vector>
 
-#include "atom/error/exception.hpp"
-#include "atom/function/proxy.hpp"
 #include "atom/macro.hpp"
 #include "type_info.hpp"
 
@@ -558,6 +556,13 @@ auto constVar(const T& value) -> BoxedValue {
 }
 
 inline auto voidVar() -> BoxedValue { return {}; }
+
+template <typename T>
+auto varWithDesc(T&& value, std::string_view description) -> BoxedValue {
+    auto result = var(std::forward<T>(value));
+    result.setAttr("description", BoxedValue(description));
+    return result;
+}
 
 /*!
  * \brief Helper function to create a BoxedValue instance with additional
