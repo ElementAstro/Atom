@@ -13,8 +13,6 @@
 #include <functional>
 #include <future>
 #include <memory>
-#include <source_location>
-#include <string_view>
 #include <utility>
 
 #include "atom/meta/concept.hpp"
@@ -291,36 +289,6 @@ template <typename O, typename Ret, typename... Param>
         return (object.get()->*func)(std::forward<Param>(param)...);
     };
 }
-
-// C++20 coroutine support
-//-----------------------
-
-#if __cpp_lib_coroutine
-#include <coroutine>
-
-/**
- * @brief Simple awaitable wrapper for bound functions
- */
-template <typename Ret>
-struct BoundAwaitable {
-    std::function<Ret()> func;
-
-    bool await_ready() const noexcept { return false; }
-    void await_suspend(std::coroutine_handle<> h) const {}
-    Ret await_resume() { return func(); }
-};
-
-/**
- * @brief Create awaitable from bound function
- */
-template <typename F, typename O>
-    requires Invocable<F, O>
-[[nodiscard]] auto makeAwaitable(F&& func, O&& obj) {
-    auto bound = bindFirst(std::forward<F>(func), std::forward<O>(obj));
-    return BoundAwaitable<std::invoke_result_t<decltype(bound)>>{
-        std::move(bound)};
-}
-#endif
 
 }  // namespace atom::meta
 

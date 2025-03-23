@@ -396,6 +396,11 @@ public:
         return result;
     }
 
+    template <typename T>
+    static constexpr auto create() noexcept -> TypeInfo {
+        return fromType<T>();
+    }
+
 private:
     const std::type_info* mTypeInfo_ = &typeid(void);
     const std::type_info* mBareTypeInfo_ = &typeid(void);

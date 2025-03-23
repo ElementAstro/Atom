@@ -14,13 +14,12 @@
 #include <expected>  // C++23
 #include <format>    // C++20
 #include <functional>
-#include <future>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <source_location>  // C++20
-#include <span>             // C++20
 #include <string_view>
+#include <thread>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -151,37 +150,6 @@ public:
     BaseDecorator& operator=(BaseDecorator&&) noexcept = default;
 };
 
-// ==== New Feature: Expected-based error handling ====
-template <typename R, typename... Args>
-class ExpectedDecorator
-    : public BaseDecorator<type::expected<R, std::string>, Args...> {
-    using FuncType = std::function<R(Args...)>;
-    FuncType func_;
-
-public:
-    explicit ExpectedDecorator(FuncType func) noexcept(
-        std::is_nothrow_move_constructible_v<FuncType>)
-        : func_(std::move(func)) {}
-
-    auto operator()(FuncType,
-                    Args... args) -> type::expected<R, std::string> override {
-        try {
-            if constexpr (std::is_void_v<R>) {
-                func_(std::forward<Args>(args)...);
-                return type::expected<R, std::string>();
-            } else {
-                return func_(std::forward<Args>(args)...);
-            }
-        } catch (const std::exception& e) {
-            return type::unexpected(std::string(e.what()));
-        } catch (...) {
-            return type::unexpected("Unknown exception occurred");
-        }
-    }
-};
-
-// ==== Enhanced Decorators ====
-// Improved LoopDecorator with optional progress callback
 template <typename FuncType>
 class LoopDecorator : public decorator<FuncType> {
     using Base = decorator<FuncType>;
@@ -191,27 +159,32 @@ public:
 
     template <typename ProgressCallback = std::nullptr_t, typename... Args>
     auto operator()(int loopCount, ProgressCallback&& callback = nullptr,
-                    Args&&... args) const {
+                    Args&&... args) {
         using ReturnType = std::invoke_result_t<FuncType, Args...>;
-        std::optional<ReturnType> result;
 
-        for (int i = 0; i < loopCount; ++i) {
-            if constexpr (!std::is_null_pointer_v<
-                              std::decay_t<ProgressCallback>>) {
-                if constexpr (Callable<ProgressCallback, int, int>) {
-                    std::invoke(std::forward<ProgressCallback>(callback), i,
-                                loopCount);
+        if constexpr (std::is_void_v<ReturnType>) {
+            for (int i = 0; i < loopCount; ++i) {
+                if constexpr (!std::is_null_pointer_v<
+                                  std::decay_t<ProgressCallback>>) {
+                    if constexpr (Callable<ProgressCallback, int, int>) {
+                        std::invoke(std::forward<ProgressCallback>(callback), i,
+                                    loopCount);
+                    }
                 }
-            }
-
-            if constexpr (std::is_void_v<ReturnType>) {
                 std::invoke(this->func_, std::forward<Args>(args)...);
-            } else {
+            }
+        } else {
+            std::optional<ReturnType> result;
+            for (int i = 0; i < loopCount; ++i) {
+                if constexpr (!std::is_null_pointer_v<
+                                  std::decay_t<ProgressCallback>>) {
+                    if constexpr (Callable<ProgressCallback, int, int>) {
+                        std::invoke(std::forward<ProgressCallback>(callback), i,
+                                    loopCount);
+                    }
+                }
                 result = std::invoke(this->func_, std::forward<Args>(args)...);
             }
-        }
-
-        if constexpr (!std::is_void_v<ReturnType>) {
             return *result;
         }
     }
@@ -261,6 +234,136 @@ public:
         }
 
         std::rethrow_exception(lastException);
+    }
+};
+
+// Standalone RetryDecorator for use without the BaseDecorator framework
+template <typename Func>
+class FunctionRetryDecorator {
+    using Traits = FunctionTraits<Func>;
+    using R = typename Traits::return_type;
+
+    Func func_;
+    int maxRetries_;
+    std::chrono::milliseconds initialBackoff_;
+    double backoffMultiplier_;
+    bool useExponentialBackoff_;
+
+public:
+    FunctionRetryDecorator(Func func, int maxRetries,
+                           std::chrono::milliseconds initialBackoff =
+                               std::chrono::milliseconds(100),
+                           double backoffMultiplier = 2.0,
+                           bool useExponentialBackoff = true)
+        : func_(std::move(func)),
+          maxRetries_(maxRetries),
+          initialBackoff_(initialBackoff),
+          backoffMultiplier_(backoffMultiplier),
+          useExponentialBackoff_(useExponentialBackoff) {}
+
+    template <typename... Args>
+    auto operator()(Args&&... args) {
+        std::exception_ptr lastException;
+
+        for (int attempt = 0; attempt < maxRetries_ + 1; ++attempt) {
+            try {
+                if constexpr (std::is_void_v<R>) {
+                    func_(std::forward<Args>(args)...);
+                    return;
+                } else {
+                    return func_(std::forward<Args>(args)...);
+                }
+            } catch (...) {
+                lastException = std::current_exception();
+
+                if (attempt < maxRetries_) {
+                    auto delay = initialBackoff_;
+                    if (useExponentialBackoff_ && attempt > 0) {
+                        delay = std::chrono::milliseconds(static_cast<long>(
+                            initialBackoff_.count() *
+                            std::pow(backoffMultiplier_, attempt)));
+                    }
+                    std::this_thread::sleep_for(delay);
+                }
+            }
+        }
+        std::rethrow_exception(lastException);
+    }
+};
+
+// ==== Timing Decorator ====
+// Standalone TimingDecorator for direct function wrapping
+template <typename Func>
+class FunctionTimingDecorator {
+    using Traits = FunctionTraits<Func>;
+    using R = typename Traits::return_type;
+
+    std::string name_;
+    std::function<void(std::string_view, std::chrono::microseconds)> callback_;
+    Func func_;
+
+public:
+    FunctionTimingDecorator(
+        Func f, std::string name,
+        std::function<void(std::string_view, std::chrono::microseconds)> cb)
+        : func_(std::move(f)),
+          name_(std::move(name)),
+          callback_(std::move(cb)) {}
+
+    template <typename... Args>
+    auto operator()(Args&&... args) {
+        auto start = std::chrono::high_resolution_clock::now();
+
+        if constexpr (std::is_void_v<R>) {
+            func_(std::forward<Args>(args)...);
+            auto end = std::chrono::high_resolution_clock::now();
+            callback_(name_,
+                      std::chrono::duration_cast<std::chrono::microseconds>(
+                          end - start));
+        } else {
+            auto result = func_(std::forward<Args>(args)...);
+            auto end = std::chrono::high_resolution_clock::now();
+            callback_(name_,
+                      std::chrono::duration_cast<std::chrono::microseconds>(
+                          end - start));
+            return result;
+        }
+    }
+};
+
+// BaseDecorator-compatible TimingDecorator for use with DecorateStepper
+template <typename R, typename... Args>
+class TimingDecorator : public BaseDecorator<R, Args...> {
+    using FuncType = std::function<R(Args...)>;
+    using TimingCallback =
+        std::function<void(std::string_view, std::chrono::microseconds)>;
+
+    TimingCallback callback_;
+    std::string name_;
+
+public:
+    TimingDecorator(std::string name, TimingCallback callback)
+        : name_(std::move(name)), callback_(std::move(callback)) {}
+
+    auto operator()(FuncType func, Args... args) -> R override {
+        auto start = std::chrono::high_resolution_clock::now();
+
+        if constexpr (std::is_void_v<R>) {
+            func(std::forward<Args>(args)...);
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration =
+                std::chrono::duration_cast<std::chrono::microseconds>(end -
+                                                                      start);
+            callback_(name_, duration);
+        } else {
+            auto result = func(std::forward<Args>(args)...);
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration =
+                std::chrono::duration_cast<std::chrono::microseconds>(end -
+                                                                      start);
+            callback_(name_, duration);
+            return result;
+        }
     }
 };
 
@@ -410,42 +513,6 @@ public:
         maxSize_ = maxSize;
         if (cache_.size() > maxSize_) {
             cleanup();
-        }
-    }
-};
-
-// ==== New Feature: Timing Decorator ====
-template <typename R, typename... Args>
-class TimingDecorator : public BaseDecorator<R, Args...> {
-    using FuncType = std::function<R(Args...)>;
-    using TimingCallback =
-        std::function<void(std::string_view, std::chrono::microseconds)>;
-
-    TimingCallback callback_;
-    std::string name_;
-
-public:
-    TimingDecorator(std::string name, TimingCallback callback)
-        : name_(std::move(name)), callback_(std::move(callback)) {}
-
-    auto operator()(FuncType func, Args... args) -> R override {
-        auto start = std::chrono::high_resolution_clock::now();
-
-        if constexpr (std::is_void_v<R>) {
-            func(std::forward<Args>(args)...);
-            auto end = std::chrono::high_resolution_clock::now();
-            auto duration =
-                std::chrono::duration_cast<std::chrono::microseconds>(end -
-                                                                      start);
-            callback_(name_, duration);
-        } else {
-            auto result = func(std::forward<Args>(args)...);
-            auto end = std::chrono::high_resolution_clock::now();
-            auto duration =
-                std::chrono::duration_cast<std::chrono::microseconds>(end -
-                                                                      start);
-            callback_(name_, duration);
-            return result;
         }
     }
 };

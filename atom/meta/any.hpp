@@ -324,6 +324,15 @@ public:
     }
 
     /*!
+     * \brief Check if the value is void.
+     * \return True if the value is void, false otherwise.
+     */
+    [[nodiscard]] auto isVoid() const noexcept -> bool {
+        std::shared_lock lock(m_mutex_);
+        return m_data_->mTypeInfo == userType<VoidType>();
+    }
+
+    /*!
      * \brief Check if the value is a constant data pointer.
      * \return True if the value is a constant data pointer, false
      * otherwise.

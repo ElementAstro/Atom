@@ -445,6 +445,31 @@ public:
         }
         THROW_CONVERSION_ERROR(fromType.name(), toType.name());
     }
+    
+    // 添加convertTo方法，通过类型推断自动处理转换
+    template <typename To>
+    [[nodiscard]] auto convertTo(const std::any& from) const -> std::any {
+        TypeInfo toType = userType<To>();
+        
+        for (const auto& [fromType, convList] : conversions_) {
+            for (const auto& conv : convList) {
+                if (conv->getToType() == toType) {
+                    try {
+                        return conv->convert(from);
+                    } catch (const std::bad_any_cast&) {
+                        // 尝试下一个转换器
+                        continue;
+                    } catch (const BadConversionException&) {
+                        // 尝试下一个转换器
+                        continue;
+                    }
+                }
+            }
+        }
+        
+        // 如果没找到合适的转换器，抛出异常
+        THROW_CONVERSION_ERROR("无法找到从", typeid(from).name(), "到", toType.name(), "的转换器");
+    }
 
     [[nodiscard]] auto canConvert(const TypeInfo& fromTypeInfo,
                                   const TypeInfo& toTypeInfo) const -> bool {

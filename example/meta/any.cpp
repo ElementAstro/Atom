@@ -404,8 +404,8 @@ int main() {
     std::cout << "\n[9. Special State Handling]\n" << std::endl;
 
     // Create null, undefined, void values
-    BoxedValue nullValue;  // Default constructor creates a null value
-    auto undefValue = makeBoxedValue<void>();  // Create an undefined value
+    BoxedValue nullValue;         // Default constructor creates a null value
+    auto undefValue = voidVar();  // Create an undefined value
 
     std::cout << "nullValue is null? " << (nullValue.isNull() ? "Yes" : "No")
               << std::endl;
@@ -426,8 +426,7 @@ int main() {
 
     // Exception handling with null/undef values
     try {
-        auto result = nullValue.get();
-        std::cout << "Value: " << result << std::endl;
+        std::cout << "Value: " << nullValue.debugString() << std::endl;
     } catch (const std::exception& e) {
         std::cout << "Expected exception when accessing null value: "
                   << e.what() << std::endl;

@@ -11,7 +11,8 @@
 #define ATOM_META_GOD_HPP
 
 #include <atomic>
-#include <bit>       // C++20: For bit manipulation functions
+#include <bit>  // C++20: For bit manipulation functions
+#include <cassert>
 #include <concepts>  // C++20: For concept definitions
 #include <cstddef>
 #include <cstring>

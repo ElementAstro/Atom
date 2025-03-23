@@ -10,8 +10,8 @@
 #include <utility>
 
 #include "atom/error/exception.hpp"
-#include "atom/meta/concept.hpp"
 #include "atom/macro.hpp"
+#include "atom/meta/concept.hpp"
 
 namespace atom::meta {
 
@@ -185,21 +185,6 @@ public:
         }
 
         return static_cast<T*>(ptr);
-    }
-
-    // Reset the object, freeing resources
-    void reset() noexcept {
-        if (vptr_ != nullptr) {
-            vptr_->destroy(getPtr());
-
-            if (!is_small_ && ptr != nullptr) {
-                std::free(ptr);
-                ptr = nullptr;
-            }
-
-            vptr_ = nullptr;
-            is_small_ = true;
-        }
     }
 
 public:
@@ -380,6 +365,149 @@ public:
         Any temp(std::move(*this));
         *this = std::move(other);
         other = std::move(temp);
+    }
+
+    /**
+     * @brief Check if the Any object is empty (holds no value).
+     * @return True if empty, false otherwise.
+     */
+    [[nodiscard]] bool empty() const noexcept { return vptr_ == nullptr; }
+
+    /**
+     * @brief Get the type information of the contained value.
+     * @return The type_info of the contained value or typeid(void) if empty.
+     */
+    [[nodiscard]] const std::type_info& type() const noexcept {
+        return vptr_ ? vptr_->type() : typeid(void);
+    }
+
+    /**
+     * @brief Convert the contained value to a string representation.
+     * @return String representation of the value.
+     */
+    [[nodiscard]] std::string toString() const {
+        if (empty()) {
+            return "[empty]";
+        }
+        return vptr_->toString(getPtr());
+    }
+
+    /**
+     * @brief Check if the Any contains a value of the specified type.
+     * @tparam T The type to check for.
+     * @return True if the contained value is of type T, false otherwise.
+     */
+    template <typename T>
+    [[nodiscard]] bool is() const noexcept {
+        return !empty() && vptr_->type() == typeid(T);
+    }
+
+    /**
+     * @brief Cast the contained value to the specified type with type checking.
+     * @tparam T The type to cast to.
+     * @return The value cast to type T.
+     * @throws std::bad_cast if the contained value is not of type T.
+     */
+    template <typename T>
+    [[nodiscard]] T cast() const {
+        if (!is<T>()) {
+            throw std::bad_cast();
+        }
+        return *static_cast<const T*>(getPtr());
+    }
+
+    /**
+     * @brief Cast the contained value to the specified type without type
+     * checking.
+     * @tparam T The type to cast to.
+     * @return The value cast to type T.
+     * @warning This method does not perform type checking and may cause
+     * undefined behavior.
+     */
+    template <typename T>
+    [[nodiscard]] T unsafeCast() const noexcept {
+        return *static_cast<const T*>(getPtr());
+    }
+
+    /**
+     * @brief Invoke a function with the contained value.
+     * @param func The function to invoke.
+     * @throws std::runtime_error if Any is empty.
+     */
+    void invoke(const std::function<void(const void*)>& func) const {
+        if (empty()) {
+            throw std::runtime_error("Cannot invoke function on empty Any");
+        }
+        vptr_->invoke(getPtr(), func);
+    }
+
+    /**
+     * @brief Iterate over the contained value if it's iterable.
+     * @param func The function to invoke for each element.
+     * @throws std::runtime_error if Any is empty.
+     * @throws std::invalid_argument if the contained value is not iterable.
+     */
+    void foreach (const std::function<void(const Any&)>& func) const {
+        if (empty()) {
+            throw std::runtime_error("Cannot iterate over empty Any");
+        }
+        vptr_->foreach (getPtr(), func);
+    }
+
+    /**
+     * @brief Compare two Any objects for equality.
+     * @param other The other Any object to compare with.
+     * @return True if the objects are equal, false otherwise.
+     */
+    bool operator==(const Any& other) const noexcept {
+        if (empty() && other.empty())
+            return true;
+        if (empty() || other.empty())
+            return false;
+        if (vptr_->type() != other.vptr_->type())
+            return false;
+        return vptr_->equals(getPtr(), other.getPtr());
+    }
+
+    /**
+     * @brief Compare two Any objects for inequality.
+     * @param other The other Any object to compare with.
+     * @return True if the objects are not equal, false otherwise.
+     */
+    bool operator!=(const Any& other) const noexcept {
+        return !(*this == other);
+    }
+
+    /**
+     * @brief Get the hash value of the contained value.
+     * @return The hash value.
+     */
+    [[nodiscard]] size_t hash() const noexcept {
+        if (empty())
+            return 0;
+        return vptr_->hash(getPtr());
+    }
+
+    /**
+     * @brief Check if the object is stored using small object optimization.
+     * @return True if stored inline, false if dynamically allocated.
+     * @note This is primarily for demonstration purposes.
+     */
+    [[nodiscard]] bool isSmallObject() const noexcept { return is_small_; }
+
+    // Reset the object, freeing resources
+    void reset() noexcept {
+        if (vptr_ != nullptr) {
+            vptr_->destroy(getPtr());
+
+            if (!is_small_ && ptr != nullptr) {
+                std::free(ptr);
+                ptr = nullptr;
+            }
+
+            vptr_ = nullptr;
+            is_small_ = true;
+        }
     }
 };
 

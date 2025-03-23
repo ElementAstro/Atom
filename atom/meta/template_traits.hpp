@@ -34,7 +34,7 @@ struct type_identity {
     using type = T;
 };
 
-// Enhanced version with better constexpr support and value handling
+// 在identity结构体中修复字符串字面量的问题 - 使用std::string_view代替
 template <typename T, auto... Values>
 struct identity {
     using type = T;
@@ -341,20 +341,19 @@ template <typename T, typename... Args>
 constexpr std::size_t count_occurrences_v =
     (0 + ... + (std::is_same_v<T, Args> ? 1 : 0));
 
-// Find the index of the first occurrence of a type in a parameter pack with
-// bounds checking
+// 修复find_first_index_v实现
 template <typename T, typename... Args>
-constexpr std::size_t find_first_index_v = []() {
-    constexpr std::size_t value =
-        []<std::size_t... I>(std::index_sequence<I...>) {
-            std::size_t index = std::numeric_limits<std::size_t>::max();
-            ((std::is_same_v<T, std::tuple_element_t<I, std::tuple<Args...>>> &&
-                      index == std::numeric_limits<std::size_t>::max()
-                  ? (index = I, true)
-                  : false),
-             ...);
-            return index;
-        }(std::index_sequence_for<Args...>{});
+constexpr std::size_t find_first_index_v = []() consteval {
+    constexpr std::size_t value = []<std::size_t... I>(
+                                      std::index_sequence<I...>) consteval {
+        std::size_t index = std::numeric_limits<std::size_t>::max();
+        (((std::is_same_v<T, std::tuple_element_t<I, std::tuple<Args...>>> &&
+           index == std::numeric_limits<std::size_t>::max())
+              ? (index = I, 0)
+              : 0),
+         ...);
+        return index;
+    }(std::index_sequence_for<Args...>{});
 
     // Provide useful static_assert while still returning a valid value for
     // SFINAE
@@ -372,7 +371,7 @@ constexpr std::size_t find_first_index_v = []() {
     }
 }();
 
-// Find all indices of a type in a parameter pack
+// 修复find_all_indices实现
 template <typename T, typename... Args>
 struct find_all_indices {
 private:
@@ -383,8 +382,8 @@ private:
 
         std::size_t idx = 0;
         ((std::is_same_v<T, std::tuple_element_t<I, std::tuple<Args...>>>
-              ? (result[idx++] = I, true)
-              : false),
+              ? (result[idx++] = I, 0)
+              : 0),
          ...);
 
         return result;
@@ -395,9 +394,6 @@ public:
         indices_impl(std::index_sequence_for<Args...>{});
     static constexpr std::size_t count = value.size();
 };
-
-template <typename T, typename... Args>
-inline constexpr auto find_all_indices_v = find_all_indices<T, Args...>::value;
 
 //------------------------------------------------------------------------------
 // Type extraction and manipulation utilities
@@ -587,9 +583,10 @@ enum class constraint_level {
     trivial      // Trivial implementation
 };
 
-// Check copyability with detailed constraints
+// 修复拼写错误 - 替换copyability和relocatability
+// Check copy operations with detailed constraints
 template <typename T>
-consteval bool has_copyability(constraint_level level) {
+consteval bool has_copy_operations(constraint_level level) {
     switch (level) {
         case constraint_level::none:
             return true;
@@ -608,9 +605,9 @@ consteval bool has_copyability(constraint_level level) {
     }
 }
 
-// Check relocatability with improved consistency
+// Check move operations with improved consistency
 template <typename T>
-consteval bool has_relocatability(constraint_level level) {
+consteval bool has_move_operations(constraint_level level) {
     switch (level) {
         case constraint_level::none:
             return true;
@@ -647,24 +644,25 @@ consteval bool has_destructibility(constraint_level level) {
     }
 }
 
-// Concepts for common constraints
+// 修复概念定义，使用新的函数名
 template <typename T>
-concept Copyable = has_copyability<T>(constraint_level::nontrivial);
+concept Copyable = has_copy_operations<T>(constraint_level::nontrivial);
 
 template <typename T>
-concept NothrowCopyable = has_copyability<T>(constraint_level::nothrow);
+concept NothrowCopyable = has_copy_operations<T>(constraint_level::nothrow);
 
 template <typename T>
-concept TriviallyCopyable = has_copyability<T>(constraint_level::trivial);
+concept TriviallyCopyable = has_copy_operations<T>(constraint_level::trivial);
 
 template <typename T>
-concept Relocatable = has_relocatability<T>(constraint_level::nontrivial);
+concept Relocatable = has_move_operations<T>(constraint_level::nontrivial);
 
 template <typename T>
-concept NothrowRelocatable = has_relocatability<T>(constraint_level::nothrow);
+concept NothrowRelocatable = has_move_operations<T>(constraint_level::nothrow);
 
 template <typename T>
-concept TriviallyRelocatable = has_relocatability<T>(constraint_level::trivial);
+concept TriviallyRelocatable =
+    has_move_operations<T>(constraint_level::trivial);
 
 //------------------------------------------------------------------------------
 // Template base class detection (improved)
@@ -833,10 +831,13 @@ struct static_error {
     static constexpr auto location = Location;
 };
 
-// Compile-time type name (for better error messages)
+// 修复type_name实现，避免返回悬空指针
 template <typename T>
-inline constexpr std::string_view type_name =
-    DemangleHelper::demangle(typeid(T).name());
+inline constexpr auto type_name = [] {
+    std::string name = DemangleHelper::demangle(typeid(T).name());
+    static std::string stored_name = name;
+    return stored_name;
+}();
 
 }  // namespace atom::meta
 
