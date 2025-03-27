@@ -16,9 +16,9 @@
 #include <vector>
 
 #include "atom/error/exception.hpp"
-#include "atom/meta/concept.hpp"
 #include "atom/log/loguru.hpp"
 #include "atom/macro.hpp"
+#include "atom/meta/concept.hpp"
 #include "atom/type/noncopyable.hpp"
 
 #ifdef _WIN32
@@ -362,6 +362,15 @@ public:
      */
     ATOM_NODISCARD auto isInitialized() const -> bool;
 
+    /**
+     * @brief Gets the pointer to the actual data in shared memory.
+     *
+     * @return Pointer to the data.
+     */
+    void* getDataPtr() const {
+        return static_cast<char*>(buffer_) + sizeof(SharedMemoryHeader);
+    }
+
 private:
     std::string name_;       ///< The name of the shared memory.
     std::size_t totalSize_;  ///< The total size of the shared memory.
@@ -432,15 +441,6 @@ private:
      * @brief Platform-specific cleanup.
      */
     void platformSpecificCleanup();
-
-    /**
-     * @brief Gets the pointer to the actual data in shared memory.
-     *
-     * @return Pointer to the data.
-     */
-    void* getDataPtr() const {
-        return static_cast<char*>(buffer_) + sizeof(SharedMemoryHeader);
-    }
 
     /**
      * @brief Gets the detailed message for the last error.

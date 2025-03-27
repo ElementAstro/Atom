@@ -822,24 +822,22 @@ public:
     [[nodiscard]] constexpr auto operator+(const StaticString<M>& other) const
         -> StaticString<N + M> {
         StaticString<N + M> result;
-        result.size_ = size_ + other.size();
 
-        if (result.size_ > result.capacity()) {
+        size_type total_size = this->size() + other.size();
+
+        if (total_size > N + M) {
             throw std::runtime_error("StaticString overflow on concatenation");
         }
 
         try {
-            // Copy this string
-            std::copy_n(data_.data(), size_, result.data_.begin());
+            std::copy_n(this->data(), this->size(), result.data());
 
-            // Copy other string
-            std::copy_n(other.data_.data(), other.size(),
-                        result.data_.begin() + size_);
+            std::copy_n(other.data(), other.size(),
+                        result.data() + this->size());
 
-            result.data_[result.size_] = '\0';
+            result.resize(total_size);
             return result;
         } catch (const std::exception& e) {
-            // Ensure result is in valid state
             result.clear();
             throw;
         }

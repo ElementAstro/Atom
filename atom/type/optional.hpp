@@ -42,12 +42,10 @@ public:
 
 // Concepts for validating template parameters
 template <typename T>
-concept Copyable =
-    std::is_copy_constructible_v<T> && std::is_copy_assignable_v<T>;
+concept Copyable = std::is_copy_constructible_v<std::remove_cvref_t<T>>;
 
 template <typename T>
-concept Movable =
-    std::is_move_constructible_v<T> && std::is_move_assignable_v<T>;
+concept Movable = std::is_move_constructible_v<std::remove_cvref_t<T>>;
 
 /**
  * @brief A thread-safe optional wrapper with enhanced functionality.
@@ -92,8 +90,8 @@ public:
      *
      * @param value The value to be contained.
      */
-    template <typename U = T>
-        requires Copyable<U>
+    template <typename U>
+        requires std::convertible_to<U, T>
     explicit Optional(const U& value) : storage_(value) {
         is_initialized_.store(true, std::memory_order_release);
     }
@@ -106,10 +104,9 @@ public:
      *
      * @param value The value to be moved into the object.
      */
-    template <typename U = T>
-        requires Movable<U>
-    explicit Optional(U&& value) noexcept(
-        std::is_nothrow_move_constructible_v<T>)
+    template <typename U>
+        requires std::convertible_to<U, T>
+    explicit Optional(U&& value) noexcept(std::is_nothrow_constructible_v<T, U>)
         : storage_(std::forward<U>(value)) {
         is_initialized_.store(true, std::memory_order_release);
     }
@@ -224,8 +221,8 @@ public:
      * @param value The new value to assign.
      * @return A reference to this `Optional` object.
      */
-    template <typename U = T>
-        requires Copyable<U>
+    template <typename U>
+        requires std::convertible_to<U, T>
     Optional& operator=(const U& value) {
         std::unique_lock lock(mutex_);
         try {
@@ -247,10 +244,10 @@ public:
      * @param value The new value to move into the object.
      * @return A reference to this `Optional` object.
      */
-    template <typename U = T>
-        requires Movable<U>
+    template <typename U>
+        requires std::convertible_to<U, T>
     Optional& operator=(U&& value) noexcept(
-        std::is_nothrow_move_assignable_v<T>) {
+        std::is_nothrow_assignable_v<std::optional<T>&, U>) {
         std::unique_lock lock(mutex_);
         storage_ = std::forward<U>(value);
         is_initialized_.store(true, std::memory_order_release);

@@ -19,6 +19,7 @@ Description: Validate aligned storage with optional Boost support
 #include <bit>
 #include <concepts>
 #include <cstdint>
+#include <execution>
 #include <future>
 #include <limits>
 #include <span>
@@ -499,6 +500,13 @@ auto parallelBitOp(std::span<const T> input, Op op) -> std::vector<T> {
         future.wait();
     }
 
+    return result;
+}
+
+template <typename Iterator, typename BitOp>
+auto parallelBitOperation(Iterator begin, Iterator end, BitOp op) {
+    std::vector<decltype(op(*begin))> result(std::distance(begin, end));
+    std::transform(std::execution::par, begin, end, result.begin(), op);
     return result;
 }
 

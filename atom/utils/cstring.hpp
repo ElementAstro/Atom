@@ -367,7 +367,16 @@ constexpr int BASE_2 = 2;
 constexpr int BASE_16 = 16;
 constexpr int MIN_DIGIT = 10;
 
-// Constexpr version for compile-time string literals
+/**
+ * @brief Converts a character array to another array at compile-time.
+ *
+ * This function creates a copy of the input character array at compile-time.
+ * Useful for constexpr contexts.
+ *
+ * @tparam N The size of the input character array.
+ * @param input The input character array to be copied.
+ * @return std::array<char, N> A new character array with the same content.
+ */
 template <size_t N>
 constexpr auto charArrayToArrayConstexpr(const std::array<char, N>& input)
     -> std::array<char, N> {
@@ -378,7 +387,16 @@ constexpr auto charArrayToArrayConstexpr(const std::array<char, N>& input)
     return result;
 }
 
-// Non-constexpr version for runtime strings
+/**
+ * @brief Converts a character array to another array at runtime.
+ *
+ * This function creates a copy of the input character array at runtime.
+ * Functionally identical to the constexpr version but designed for runtime use.
+ *
+ * @tparam N The size of the input character array.
+ * @param input The input character array to be copied.
+ * @return std::array<char, N> A new character array with the same content.
+ */
 template <size_t N>
 auto charArrayToArray(const std::array<char, N>& input) -> std::array<char, N> {
     std::array<char, N> result{};

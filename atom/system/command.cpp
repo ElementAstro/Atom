@@ -14,12 +14,18 @@ Description: Simple wrapper for executing commands.
 
 #include "command.hpp"
 
+#include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdio>
 #include <cstring>
 #include <future>
+#include <list>
 #include <memory>
+#include <mutex>
+#include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <thread>
@@ -45,8 +51,8 @@ Description: Simple wrapper for executing commands.
 #include "atom/macro.hpp"
 
 #include "atom/error/exception.hpp"
-#include "atom/meta/global_ptr.hpp"
 #include "atom/log/loguru.hpp"
+#include "atom/meta/global_ptr.hpp"
 #include "atom/system/process.hpp"
 
 #ifdef _WIN32
@@ -532,6 +538,303 @@ auto isCommandAvailable(const std::string &command) -> bool {
     checkCommand = "command -v " + command + " > /dev/null 2>&1";
 #endif
     return atom::system::executeCommandSimple(checkCommand);
+}
+
+auto executeCommandAsync(const std::string &command, bool openTerminal,
+                         const std::function<void(const std::string &)>
+                             &processLine) -> std::future<std::string> {
+    LOG_F(INFO, "executeCommandAsync called with command: {}, openTerminal: {}",
+          command, openTerminal);
+
+    return std::async(
+        std::launch::async, [command, openTerminal, processLine]() {
+            int status = 0;
+            auto result = executeCommandInternal(command, openTerminal,
+                                                 processLine, status);
+            LOG_F(INFO, "Async command '{}' completed with status: {}", command,
+                  status);
+            return result;
+        });
+}
+
+auto executeCommandWithTimeout(const std::string &command,
+                               const std::chrono::milliseconds &timeout,
+                               bool openTerminal,
+                               const std::function<void(const std::string &)>
+                                   &processLine) -> std::optional<std::string> {
+    LOG_F(INFO,
+          "executeCommandWithTimeout called with command: {}, timeout: {}ms",
+          command, timeout.count());
+
+    auto future = executeCommandAsync(command, openTerminal, processLine);
+    auto status = future.wait_for(timeout);
+
+    if (status == std::future_status::timeout) {
+        LOG_F(WARNING, "Command '{}' timed out after {}ms", command,
+              timeout.count());
+
+        // Attempt to kill the process (implementation depends on platform)
+        // This is simplified; in reality would need process tracking
+#ifdef _WIN32
+        std::string killCmd =
+            "taskkill /F /IM " + command.substr(0, command.find(' ')) + ".exe";
+#else
+        std::string killCmd = "pkill -f \"" + command + "\"";
+#endif
+        executeCommandSimple(killCmd);
+        return std::nullopt;
+    }
+
+    try {
+        auto result = future.get();
+        LOG_F(INFO, "Command with timeout completed successfully");
+        return result;
+    } catch (const std::exception &e) {
+        LOG_F(ERROR, "Command with timeout failed: {}", e.what());
+        return std::nullopt;
+    }
+}
+
+auto executeCommandsWithCommonEnv(
+    const std::vector<std::string> &commands,
+    const std::unordered_map<std::string, std::string> &envVars,
+    bool stopOnError) -> std::vector<std::pair<std::string, int>> {
+    LOG_F(INFO, "executeCommandsWithCommonEnv called with {} commands",
+          commands.size());
+
+    std::vector<std::pair<std::string, int>> results;
+    results.reserve(commands.size());
+
+    // Save the current environment
+    std::unordered_map<std::string, std::string> oldEnvVars;
+    std::shared_ptr<utils::Env> env;
+    GET_OR_CREATE_PTR(env, utils::Env, "LITHIUM.ENV");
+
+    // Set new environment variables
+    {
+        std::lock_guard lock(envMutex);
+        for (const auto &var : envVars) {
+            auto oldValue = env->getEnv(var.first);
+            if (!oldValue.empty()) {
+                oldEnvVars[var.first] = oldValue;
+            }
+            env->setEnv(var.first, var.second);
+        }
+    }
+
+    // Execute commands
+    for (const auto &command : commands) {
+        auto [output, status] = executeCommandWithStatus(command);
+        results.emplace_back(output, status);
+
+        if (stopOnError && status != 0) {
+            LOG_F(WARNING,
+                  "Command '{}' failed with status {}. Stopping sequence.",
+                  command, status);
+            break;
+        }
+    }
+
+    // Restore old environment
+    {
+        std::lock_guard lock(envMutex);
+        for (const auto &var : envVars) {
+            if (oldEnvVars.find(var.first) != oldEnvVars.end()) {
+                env->setEnv(var.first, oldEnvVars[var.first]);
+            } else {
+                env->unsetEnv(var.first);
+            }
+        }
+    }
+
+    LOG_F(INFO, "executeCommandsWithCommonEnv completed with {} results",
+          results.size());
+    return results;
+}
+
+auto getProcessesBySubstring(const std::string &substring)
+    -> std::vector<std::pair<int, std::string>> {
+    LOG_F(INFO, "getProcessesBySubstring called with substring: {}", substring);
+
+    std::vector<std::pair<int, std::string>> processes;
+
+#ifdef _WIN32
+    std::string command = "tasklist /FO CSV /NH";
+    auto output = executeCommand(command);
+
+    std::istringstream ss(output);
+    std::string line;
+    std::regex pattern("\"([^\"]+)\",\"(\\d+)\"");
+
+    while (std::getline(ss, line)) {
+        std::smatch matches;
+        if (std::regex_search(line, matches, pattern) && matches.size() > 2) {
+            std::string processName = matches[1].str();
+            int pid = std::stoi(matches[2].str());
+
+            if (processName.find(substring) != std::string::npos) {
+                processes.emplace_back(pid, processName);
+            }
+        }
+    }
+#else
+    std::string command = "ps -eo pid,comm | grep " + substring;
+    auto output = executeCommand(command);
+
+    std::istringstream ss(output);
+    std::string line;
+
+    while (std::getline(ss, line)) {
+        std::istringstream lineStream(line);
+        int pid;
+        std::string processName;
+
+        if (lineStream >> pid >> processName) {
+            // Skip the grep process itself
+            if (processName != "grep") {
+                processes.emplace_back(pid, processName);
+            }
+        }
+    }
+#endif
+
+    LOG_F(INFO, "Found {} processes matching '{}'", processes.size(),
+          substring);
+    return processes;
+}
+
+auto executeCommandGetLines(const std::string &command)
+    -> std::vector<std::string> {
+    LOG_F(INFO, "executeCommandGetLines called with command: {}", command);
+
+    std::vector<std::string> lines;
+    auto output = executeCommand(command);
+
+    std::istringstream ss(output);
+    std::string line;
+
+    while (std::getline(ss, line)) {
+        // Remove trailing carriage return if present
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        lines.push_back(line);
+    }
+
+    LOG_F(INFO, "Command returned {} lines", lines.size());
+    return lines;
+}
+
+auto pipeCommands(const std::string &firstCommand,
+                  const std::string &secondCommand) -> std::string {
+    LOG_F(INFO, "pipeCommands called with commands: '{}' | '{}'", firstCommand,
+          secondCommand);
+
+#ifdef _WIN32
+    // Windows doesn't handle pipes well in system(), so we create a temporary
+    // file
+    std::string tempFile = std::tmpnam(nullptr);
+    std::string combinedCommand = firstCommand + " > " + tempFile + " && " +
+                                  secondCommand + " < " + tempFile +
+                                  " && del " + tempFile;
+#else
+    std::string combinedCommand = firstCommand + " | " + secondCommand;
+#endif
+
+    auto result = executeCommand(combinedCommand);
+    LOG_F(INFO, "pipeCommands completed");
+    return result;
+}
+
+// CommandHistory implementation
+class CommandHistory::Impl {
+public:
+    explicit Impl(size_t maxSize) : _maxSize(maxSize) {}
+
+    void addCommand(const std::string &command, int exitStatus) {
+        std::lock_guard<std::mutex> lock(_mutex);
+
+        if (_history.size() >= _maxSize) {
+            _history.pop_front();
+        }
+
+        _history.emplace_back(command, exitStatus);
+    }
+
+    auto getLastCommands(size_t count) const
+        -> std::vector<std::pair<std::string, int>> {
+        std::lock_guard<std::mutex> lock(_mutex);
+
+        count = std::min(count, _history.size());
+        std::vector<std::pair<std::string, int>> result;
+        result.reserve(count);
+
+        auto it = _history.rbegin();
+        for (size_t i = 0; i < count; ++i, ++it) {
+            result.push_back(*it);
+        }
+
+        return result;
+    }
+
+    auto searchCommands(const std::string &substring) const
+        -> std::vector<std::pair<std::string, int>> {
+        std::lock_guard<std::mutex> lock(_mutex);
+
+        std::vector<std::pair<std::string, int>> result;
+
+        for (const auto &entry : _history) {
+            if (entry.first.find(substring) != std::string::npos) {
+                result.push_back(entry);
+            }
+        }
+
+        return result;
+    }
+
+    void clear() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _history.clear();
+    }
+
+    auto size() const -> size_t {
+        std::lock_guard<std::mutex> lock(_mutex);
+        return _history.size();
+    }
+
+private:
+    mutable std::mutex _mutex;
+    std::list<std::pair<std::string, int>> _history;
+    size_t _maxSize;
+};
+
+CommandHistory::CommandHistory(size_t maxSize)
+    : pImpl(std::make_unique<Impl>(maxSize)) {}
+
+CommandHistory::~CommandHistory() = default;
+
+void CommandHistory::addCommand(const std::string &command, int exitStatus) {
+    pImpl->addCommand(command, exitStatus);
+}
+
+auto CommandHistory::getLastCommands(size_t count) const
+    -> std::vector<std::pair<std::string, int>> {
+    return pImpl->getLastCommands(count);
+}
+
+auto CommandHistory::searchCommands(const std::string &substring) const
+    -> std::vector<std::pair<std::string, int>> {
+    return pImpl->searchCommands(substring);
+}
+
+void CommandHistory::clear() { pImpl->clear(); }
+
+auto CommandHistory::size() const -> size_t { return pImpl->size(); }
+
+auto createCommandHistory(size_t maxHistorySize)
+    -> std::unique_ptr<CommandHistory> {
+    LOG_F(INFO, "Creating command history with max size: {}", maxHistorySize);
+    return std::make_unique<CommandHistory>(maxHistorySize);
 }
 
 }  // namespace atom::system

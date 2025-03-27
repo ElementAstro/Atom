@@ -18,6 +18,10 @@ Description: Simple wrapper for executing commands.
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <future>
+#include <chrono>
+#include <vector>
+#include <optional>
 
 #include "atom/macro.hpp"
 
@@ -158,6 +162,108 @@ auto startProcess(const std::string &command) -> std::pair<int, void *>;
  * @return A boolean indicating whether the command is available.
  */
 auto isCommandAvailable(const std::string &command) -> bool;
+
+/**
+ * @brief Execute a command asynchronously and return a future to the result.
+ * 
+ * @param command The command to execute.
+ * @param openTerminal Whether to open a terminal window for the command.
+ * @param processLine A callback function to process each line of output.
+ * @return A future to the output of the command.
+ */
+ATOM_NODISCARD auto executeCommandAsync(
+    const std::string &command, bool openTerminal = false,
+    const std::function<void(const std::string &)> &processLine = nullptr)
+    -> std::future<std::string>;
+
+/**
+ * @brief Execute a command with a timeout.
+ * 
+ * @param command The command to execute.
+ * @param timeout The maximum time to wait for the command to complete.
+ * @param openTerminal Whether to open a terminal window for the command.
+ * @param processLine A callback function to process each line of output.
+ * @return The output of the command or empty string if timed out.
+ */
+ATOM_NODISCARD auto executeCommandWithTimeout(
+    const std::string &command, 
+    const std::chrono::milliseconds& timeout,
+    bool openTerminal = false,
+    const std::function<void(const std::string &)> &processLine = nullptr)
+    -> std::optional<std::string>;
+
+/**
+ * @brief Execute multiple commands sequentially with a common environment.
+ * 
+ * @param commands The list of commands to execute.
+ * @param envVars The environment variables to set for all commands.
+ * @param stopOnError Whether to stop execution if a command fails.
+ * @return A vector of pairs containing each command's output and status.
+ */
+ATOM_NODISCARD auto executeCommandsWithCommonEnv(
+    const std::vector<std::string> &commands,
+    const std::unordered_map<std::string, std::string> &envVars,
+    bool stopOnError = true)
+    -> std::vector<std::pair<std::string, int>>;
+
+/**
+ * @brief Get a list of running processes containing the specified substring.
+ * 
+ * @param substring The substring to search for in process names.
+ * @return A vector of pairs containing PIDs and process names.
+ */
+ATOM_NODISCARD auto getProcessesBySubstring(const std::string &substring)
+    -> std::vector<std::pair<int, std::string>>;
+
+/**
+ * @brief Execute a command and return its output as a list of lines.
+ * 
+ * @param command The command to execute.
+ * @return A vector of strings, each representing a line of output.
+ */
+ATOM_NODISCARD auto executeCommandGetLines(const std::string &command)
+    -> std::vector<std::string>;
+
+/**
+ * @brief Pipe the output of one command to another command.
+ * 
+ * @param firstCommand The first command to execute.
+ * @param secondCommand The second command that receives the output of the first.
+ * @return The output of the second command.
+ */
+ATOM_NODISCARD auto pipeCommands(
+    const std::string &firstCommand, 
+    const std::string &secondCommand)
+    -> std::string;
+
+/**
+ * @brief Creates a command history tracker to keep track of executed commands.
+ * 
+ * @param maxHistorySize The maximum number of commands to keep in history.
+ * @return A unique pointer to the command history tracker.
+ */
+auto createCommandHistory(size_t maxHistorySize = 100) 
+    -> std::unique_ptr<class CommandHistory>;
+
+/**
+ * @brief Command history class to track executed commands.
+ */
+class CommandHistory {
+public:
+    CommandHistory(size_t maxSize);
+    ~CommandHistory();
+
+    void addCommand(const std::string& command, int exitStatus);
+    ATOM_NODISCARD auto getLastCommands(size_t count) const -> std::vector<std::pair<std::string, int>>;
+    ATOM_NODISCARD auto searchCommands(const std::string& substring) const -> std::vector<std::pair<std::string, int>>;
+    void clear();
+    ATOM_NODISCARD auto size() const -> size_t;
+
+private:
+    class Impl;
+    std::unique_ptr<Impl> pImpl;
+};
+
 }  // namespace atom::system
 
 #endif

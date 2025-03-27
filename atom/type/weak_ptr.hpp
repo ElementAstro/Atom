@@ -347,7 +347,7 @@ public:
     }
 #endif
 
-    template <typename Func, typename R = std::invoke_result_t<Func, void>>
+    template <typename Func, typename R = std::invoke_result_t<Func>>
     auto withLock(Func&& func) const -> std::conditional_t<std::is_void_v<R>, bool, std::optional<R>> {
         if (auto shared = lock()) {
             if constexpr (std::is_void_v<R>) {

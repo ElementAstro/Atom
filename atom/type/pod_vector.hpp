@@ -40,9 +40,11 @@ class PodVector {
 #endif
 
     static constexpr int SIZE_T = sizeof(T);
-    static constexpr int N = 64 / SIZE_T;
+    // 修改 N 的计算方式，确保至少为 1
+    static constexpr int N = std::max(1, 64 / SIZE_T);
 
-    static_assert(N >= 4, "Element size too large");
+    // 移除限制元素大小的断言
+    // static_assert(N >= 4, "Element size too large");
 
 private:
     int size_ = 0;
