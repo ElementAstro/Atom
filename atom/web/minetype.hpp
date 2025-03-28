@@ -25,6 +25,19 @@ concept PathLike = requires(T a) {
 };
 
 /**
+ * @brief Configuration options for MimeTypes class.
+ */
+struct MimeTypeConfig {
+    bool lenient = false;     ///< Whether to be lenient in MIME type detection.
+    bool useCache = true;     ///< Whether to use caching for frequent lookups.
+    size_t cacheSize = 1000;  ///< Maximum number of entries in the cache.
+    bool enableDeepScanning =
+        false;  ///< Whether to enable deep content scanning.
+    std::string defaultType =
+        "application/octet-stream";  ///< Default MIME type when unknown.
+};
+
+/**
  * @class MimeTypes
  * @brief A class for handling MIME types and file extensions.
  */
@@ -41,6 +54,15 @@ public:
                        bool lenient = false);
 
     /**
+     * @brief Constructs a MimeTypes object with custom configuration.
+     * @param knownFiles A vector of known file paths.
+     * @param config Configuration options for MIME type handling.
+     * @throws MimeTypeException if initialization fails.
+     */
+    explicit MimeTypes(std::span<const std::string> knownFiles,
+                       const MimeTypeConfig& config);
+
+    /**
      * @brief Destructor.
      */
     ~MimeTypes();
@@ -51,6 +73,13 @@ public:
      * @throws MimeTypeException if reading the JSON file fails.
      */
     void readJson(const std::string& jsonFile);
+
+    /**
+     * @brief Reads MIME types from an XML file.
+     * @param xmlFile The path to the XML file.
+     * @throws MimeTypeException if reading the XML file fails.
+     */
+    void readXml(const std::string& xmlFile);
 
     /**
      * @brief Guesses the MIME type and charset of a URL.
@@ -106,6 +135,51 @@ public:
      */
     template <PathLike T>
     std::optional<std::string> guessTypeByContent(const T& filePath) const;
+
+    /**
+     * @brief Exports all MIME types to a JSON file.
+     * @param jsonFile The path to the output JSON file.
+     * @throws MimeTypeException if exporting fails.
+     */
+    void exportToJson(const std::string& jsonFile) const;
+
+    /**
+     * @brief Exports all MIME types to an XML file.
+     * @param xmlFile The path to the output XML file.
+     * @throws MimeTypeException if exporting fails.
+     */
+    void exportToXml(const std::string& xmlFile) const;
+
+    /**
+     * @brief Clears the internal cache to free memory.
+     */
+    void clearCache();
+
+    /**
+     * @brief Updates the configuration settings.
+     * @param config New configuration options.
+     */
+    void updateConfig(const MimeTypeConfig& config);
+
+    /**
+     * @brief Gets the current configuration.
+     * @return Current configuration settings.
+     */
+    MimeTypeConfig getConfig() const;
+
+    /**
+     * @brief Checks if a MIME type is registered.
+     * @param mimeType The MIME type to check.
+     * @return True if the MIME type is registered, false otherwise.
+     */
+    bool hasMimeType(const std::string& mimeType) const;
+
+    /**
+     * @brief Checks if a file extension is registered.
+     * @param extension The file extension to check.
+     * @return True if the extension is registered, false otherwise.
+     */
+    bool hasExtension(const std::string& extension) const;
 
 private:
     class Impl;  ///< Forward declaration of the implementation class.

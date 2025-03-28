@@ -98,70 +98,9 @@ public:
         std::coroutine_handle<promise_type> coro_;
     };
 
-    /**
-     * @brief Specialization for void return type
-     */
+    // 前向声明 void 特化
     template <>
-    class Task<void> {
-    public:
-        struct promise_type {
-            std::exception_ptr exception_;
-
-            auto get_return_object() -> Task {
-                return Task{
-                    std::coroutine_handle<promise_type>::from_promise(*this)};
-            }
-            auto initial_suspend() noexcept -> std::suspend_always {
-                return {};
-            }
-            auto final_suspend() noexcept -> std::suspend_always { return {}; }
-            void unhandled_exception() {
-                exception_ = std::current_exception();
-            }
-            void return_void() {}
-        };
-
-        explicit Task(std::coroutine_handle<promise_type> h) : coro_(h) {}
-        ~Task() {
-            if (coro_)
-                coro_.destroy();
-        }
-
-        Task(const Task&) = delete;
-        auto operator=(const Task&) -> Task& = delete;
-
-        Task(Task&& other) noexcept : coro_(other.coro_) { other.coro_ = {}; }
-        auto operator=(Task&& other) noexcept -> Task& {
-            if (this != &other) {
-                if (coro_)
-                    coro_.destroy();
-                coro_ = other.coro_;
-                other.coro_ = {};
-            }
-            return *this;
-        }
-
-        auto operator co_await() {
-            struct Awaiter {
-                std::coroutine_handle<promise_type> coro;
-
-                bool await_ready() const noexcept { return false; }
-                void await_resume() {
-                    if (coro.promise().exception_) {
-                        std::rethrow_exception(coro.promise().exception_);
-                    }
-                }
-                void await_suspend(std::coroutine_handle<> h) const {
-                    coro.resume();
-                    h.resume();
-                }
-            };
-            return Awaiter{coro_};
-        }
-
-    private:
-        std::coroutine_handle<promise_type> coro_;
-    };
+    class Task<void>;
 
     /**
      * @brief Constructor
@@ -350,6 +289,66 @@ private:
     std::unique_ptr<DirectoryStackImpl>
         impl_;  ///< Pointer to the implementation.
 };
+
+// 在类外定义 void 特化
+template <>
+class DirectoryStack::Task<void> {
+public:
+    struct promise_type {
+        std::exception_ptr exception_;
+
+        auto get_return_object() -> Task {
+            return Task{
+                std::coroutine_handle<promise_type>::from_promise(*this)};
+        }
+        auto initial_suspend() noexcept -> std::suspend_always { return {}; }
+        auto final_suspend() noexcept -> std::suspend_always { return {}; }
+        void unhandled_exception() { exception_ = std::current_exception(); }
+        void return_void() {}
+    };
+
+    explicit Task(std::coroutine_handle<promise_type> h) : coro_(h) {}
+    ~Task() {
+        if (coro_)
+            coro_.destroy();
+    }
+
+    Task(const Task&) = delete;
+    auto operator=(const Task&) -> Task& = delete;
+
+    Task(Task&& other) noexcept : coro_(other.coro_) { other.coro_ = {}; }
+    auto operator=(Task&& other) noexcept -> Task& {
+        if (this != &other) {
+            if (coro_)
+                coro_.destroy();
+            coro_ = other.coro_;
+            other.coro_ = {};
+        }
+        return *this;
+    }
+
+    auto operator co_await() {
+        struct Awaiter {
+            std::coroutine_handle<promise_type> coro;
+
+            bool await_ready() const noexcept { return false; }
+            void await_resume() {
+                if (coro.promise().exception_) {
+                    std::rethrow_exception(coro.promise().exception_);
+                }
+            }
+            void await_suspend(std::coroutine_handle<> h) const {
+                coro.resume();
+                h.resume();
+            }
+        };
+        return Awaiter{coro_};
+    }
+
+private:
+    std::coroutine_handle<promise_type> coro_;
+};
+
 }  // namespace atom::io
 
 #endif  // ATOM_IO_PUSHD_HPP

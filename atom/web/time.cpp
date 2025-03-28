@@ -6,12 +6,10 @@
 
 #include "time.hpp"
 
-#include <array>
-#include <chrono>
 #include <cmath>
-#include <cstring>
 #include <ctime>
 #include <fstream>
+#include <future>
 #include <mutex>
 #include <shared_mutex>
 #include <sstream>
@@ -20,14 +18,16 @@
 #include <emmintrin.h>  // SSE2 intrinsics
 #endif
 
-#ifdef _WIN32  // Windows
+#ifdef _WIN32
+#ifdef _MSC_VER
+#pragma comment(lib, "Ws2_32.lib")
+#pragma comment(lib, "Iphlpapi.lib")
+#endif
 #include <windows.h>
 #include <winreg.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#pragma comment(lib, "Ws2_32.lib")
-#pragma comment(lib, "Iphlpapi.lib")
-#else  // Linux
+#else
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -223,10 +223,13 @@ public:
 
             if (SetSystemTime(&sysTime) == 0) {
                 DWORD error = GetLastError();
+                char errBuf[256];
+                strerror_s(errBuf, sizeof(errBuf), error);
+                const char* errStr = errBuf;
                 LOG_F(ERROR,
                       "Failed to set system time to %d-%02d-%02d "
-                      "%02d:%02d:%02d. Error code: %lu",
-                      year, month, day, hour, minute, second, error);
+                      "%02d:%02d:%02d. Error: %s",
+                      year, month, day, hour, minute, second, errStr);
                 return std::error_code(error, std::system_category());
             } else {
                 DLOG_F(
@@ -275,8 +278,11 @@ public:
             TIME_ZONE_INFORMATION tzInfo;
             if (GetTimeZoneInformation(&tzInfo) == TIME_ZONE_ID_INVALID) {
                 DWORD error = GetLastError();
-                LOG_F(ERROR, "Error getting current time zone information: %lu",
-                      error);
+                char errBuf[256];
+                strerror_s(errBuf, sizeof(errBuf), error);
+                const char* errStr = errBuf;
+                LOG_F(ERROR, "Error getting current time zone information: %s",
+                      errStr);
                 return std::error_code(error, std::system_category());
             }
 
@@ -289,8 +295,11 @@ public:
 
             if (SetTimeZoneInformation(&tzInfo) == 0) {
                 DWORD error = GetLastError();
-                LOG_F(ERROR, "Error setting time zone to %s: %lu",
-                      timezoneStr.c_str(), error);
+                char errBuf[256];
+                strerror_s(errBuf, sizeof(errBuf), error);
+                const char* errStr = errBuf;
+                LOG_F(ERROR, "Error setting time zone to %s: %s",
+                      timezoneStr.c_str(), errStr);
                 return std::error_code(error, std::system_category());
             }
 
@@ -321,7 +330,10 @@ public:
             TIME_ZONE_INFORMATION tzInfo;
             if (GetTimeZoneInformation(&tzInfo) == TIME_ZONE_ID_INVALID) {
                 DWORD error = GetLastError();
-                LOG_F(ERROR, "Error getting time zone information: %lu", error);
+                char errBuf[256];
+                strerror_s(errBuf, sizeof(errBuf), error);
+                const char* errStr = errBuf;
+                LOG_F(ERROR, "Error getting time zone information: %s", errStr);
                 return std::error_code(error, std::system_category());
             }
 
@@ -337,7 +349,10 @@ public:
 
             if (SetSystemTime(&rtcTime) == 0) {
                 DWORD error = GetLastError();
-                LOG_F(ERROR, "Failed to set system time from RTC: %lu", error);
+                char errBuf[256];
+                strerror_s(errBuf, sizeof(errBuf), error);
+                const char* errStr = errBuf;
+                LOG_F(ERROR, "Failed to set system time from RTC: %s", errStr);
                 return std::error_code(error, std::system_category());
             }
 
@@ -351,9 +366,8 @@ public:
         }
     }
 
-private:
-    auto getTimeZoneInformationByName(const std::string& timezone,
-                                      DWORD* tzId) -> bool {
+    auto getTimeZoneInformationByName(const std::string& timezone, DWORD* tzId)
+        -> bool {
         LOG_F(INFO, "Entering getTimeZoneInformationByName with timezone: %s",
               timezone.c_str());
         try {
@@ -369,10 +383,17 @@ private:
             }
 
             // 使用智能指针自动关闭注册表句柄
-            struct RegKeyCloser {
-                void operator()(HKEY key) { RegCloseKey(key); }
+            class RegKeyCloser {
+            public:
+                void operator()(HKEY* key) {
+                    if (key) {
+                        RegCloseKey(*key);
+                        delete key;
+                    }
+                }
             };
-            std::unique_ptr<HKEY__, RegKeyCloser> hkeyPtr(&hkey);
+
+            std::unique_ptr<HKEY, RegKeyCloser> hkeyPtr(new HKEY(hkey));
 
             TCHAR subKey[MAX_PATH];
             TCHAR dispName[MAX_PATH];
@@ -403,7 +424,8 @@ private:
                 }
 
                 // 使用智能指针自动关闭注册表句柄
-                std::unique_ptr<HKEY__, RegKeyCloser> localKeyPtr(&localKey);
+                std::unique_ptr<HKEY, RegKeyCloser> localKeyPtr(
+                    new HKEY(localKey));
 
                 DWORD sizeDispName = MAX_PATH;
                 if (RegQueryValueEx(localKey, TEXT("Display"), nullptr, nullptr,
@@ -489,7 +511,7 @@ public:
             }
 
             constexpr int BASE_YEAR = 1900;
-            struct tm newTime {};
+            struct tm newTime{};
             newTime.tm_sec = second;
             newTime.tm_min = minute;
             newTime.tm_hour = hour;
@@ -510,8 +532,9 @@ public:
 
             if (settimeofday(&tv, nullptr) == -1) {
                 int errnum = errno;
-                LOG_F(ERROR, "Failed to set system time: %s",
-                      strerror_r(errnum, buffer_, sizeof(buffer_)));
+                char errBuf[256];
+                const char* errStr = strerror_r(errnum, errBuf, sizeof(errBuf));
+                LOG_F(ERROR, "Failed to set system time: %s", errStr);
                 return std::error_code(errnum, std::system_category());
             }
 
@@ -563,26 +586,30 @@ public:
             // 尝试创建符号链接前先删除现有的
             if (unlink("/etc/localtime") != 0 && errno != ENOENT) {
                 int errnum = errno;
+                char errBuf[256];
+                const char* errStr = strerror_r(errnum, errBuf, sizeof(errBuf));
                 LOG_F(ERROR, "Failed to remove existing timezone link: %s",
-                      strerror_r(errnum, buffer_, sizeof(buffer_)));
+                      errStr);
                 return std::error_code(errnum, std::system_category());
             }
 
             // 创建符号链接
             if (symlink(zonePath.str().c_str(), "/etc/localtime") != 0) {
                 int errnum = errno;
+                char errBuf[256];
+                const char* errStr = strerror_r(errnum, errBuf, sizeof(errBuf));
                 LOG_F(ERROR, "Failed to set timezone to %s: %s",
-                      timezoneStr.c_str(),
-                      strerror_r(errnum, buffer_, sizeof(buffer_)));
+                      timezoneStr.c_str(), errStr);
                 return std::error_code(errnum, std::system_category());
             }
 
             // 更新TZ环境变量
             if (setenv("TZ", timezoneStr.c_str(), 1) != 0) {
                 int errnum = errno;
+                char errBuf[256];
+                const char* errStr = strerror_r(errnum, errBuf, sizeof(errBuf));
                 LOG_F(ERROR, "Error setting TZ environment variable to %s: %s",
-                      timezoneStr.c_str(),
-                      strerror_r(errnum, buffer_, sizeof(buffer_)));
+                      timezoneStr.c_str(), errStr);
                 return std::error_code(errnum, std::system_category());
             }
 
@@ -628,8 +655,10 @@ public:
                 rtcPath = "/dev/rtc";  // 尝试替代路径
                 if (stat(rtcPath, &rtcStat) != 0) {
                     int errnum = errno;
-                    LOG_F(ERROR, "RTC device not found: %s",
-                          strerror_r(errnum, buffer_, sizeof(buffer_)));
+                    char errBuf[256];
+                    const char* errStr =
+                        strerror_r(errnum, errBuf, sizeof(errBuf));
+                    LOG_F(ERROR, "RTC device not found: %s", errStr);
                     return make_error_code(TimeError::NotSupported);
                 }
             }
@@ -694,8 +723,7 @@ public:
             serverAddr.sin_port = htons(NTP_PORT);
 
             // 使用getaddrinfo获取IP地址(支持IPv4和IPv6)
-            struct addrinfo hints {
-            }, *result = nullptr;
+            struct addrinfo hints{}, *result = nullptr;
             hints.ai_family = AF_INET;  // IPv4
             hints.ai_socktype = SOCK_DGRAM;
 
@@ -724,8 +752,19 @@ public:
                        packetBuffer.size(), 0,
                        reinterpret_cast<sockaddr*>(&serverAddr),
                        sizeof(serverAddr)) < 0) {
-                LOG_F(ERROR, "Failed to send NTP request: %s",
-                      strerror_r(errno, buffer_, sizeof(buffer_)));
+#ifdef _WIN32
+                DWORD error = WSAGetLastError();
+                char errBuf[256] = {0};
+                FormatMessageA(
+                    FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                    NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                    errBuf, sizeof(errBuf), NULL);
+                LOG_F(ERROR, "Failed to send NTP request: %s", errBuf);
+#else
+                char errBuf[256];
+                const char* errStr = strerror_r(errno, errBuf, sizeof(errBuf));
+                LOG_F(ERROR, "Failed to send NTP request: %s", errStr);
+#endif
                 return std::nullopt;
             }
 
@@ -734,12 +773,27 @@ public:
             tv.tv_sec = static_cast<long>(timeout.count() / 1000);
             tv.tv_usec = static_cast<long>((timeout.count() % 1000) * 1000);
 
+#ifdef _WIN32
             if (setsockopt(socketHandler.getFd(), SOL_SOCKET, SO_RCVTIMEO,
                            reinterpret_cast<char*>(&tv), sizeof(tv)) < 0) {
-                LOG_F(ERROR, "Failed to set socket timeout: %s",
-                      strerror_r(errno, buffer_, sizeof(buffer_)));
+                DWORD error = WSAGetLastError();
+                char errBuf[256] = {0};
+                FormatMessageA(
+                    FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                    NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                    errBuf, sizeof(errBuf), NULL);
+                LOG_F(ERROR, "Failed to set socket timeout: %s", errBuf);
                 return std::nullopt;
             }
+#else
+            if (setsockopt(socketHandler.getFd(), SOL_SOCKET, SO_RCVTIMEO,
+                           reinterpret_cast<char*>(&tv), sizeof(tv)) < 0) {
+                char errBuf[256];
+                const char* errStr = strerror_r(errno, errBuf, sizeof(errBuf));
+                LOG_F(ERROR, "Failed to set socket timeout: %s", errStr);
+                return std::nullopt;
+            }
+#endif
 
             // 等待响应
             fd_set readfds;
@@ -765,8 +819,19 @@ public:
                 reinterpret_cast<sockaddr*>(&serverResponseAddr), &addrLen);
 
             if (received < 0) {
-                LOG_F(ERROR, "Failed to receive NTP response: %s",
-                      strerror_r(errno, buffer_, sizeof(buffer_)));
+#ifdef _WIN32
+                DWORD error = WSAGetLastError();
+                char errBuf[256] = {0};
+                FormatMessageA(
+                    FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                    NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                    errBuf, sizeof(errBuf), NULL);
+                LOG_F(ERROR, "Failed to receive NTP response: %s", errBuf);
+#else
+                char errBuf[256];
+                const char* errStr = strerror_r(errno, errBuf, sizeof(errBuf));
+                LOG_F(ERROR, "Failed to receive NTP response: %s", errStr);
+#endif
                 return std::nullopt;
             }
 
@@ -831,7 +896,6 @@ public:
 
 private:
     std::shared_mutex mutex_;
-    char buffer_[256] = {0};
     std::chrono::minutes cache_ttl_;
     std::chrono::system_clock::time_point last_update_;
     std::time_t cached_time_{0};
@@ -871,7 +935,7 @@ private:
 
         bool isValid() const {
 #ifdef _WIN32
-            return fd_ != INVALID_SOCKET;
+            return fd_ != static_cast<int>(INVALID_SOCKET);
 #else
             return fd_ >= 0;
 #endif

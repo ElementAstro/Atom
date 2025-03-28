@@ -1,6 +1,12 @@
 #include "address.hpp"
 
+#ifdef _WIN32
+#include <WinSock2.h>
+#include <WS2tcpip.h>
+#else
 #include <arpa/inet.h>
+#endif
+
 #include <immintrin.h>  // For SIMD instructions
 #include <algorithm>
 #include <bitset>
@@ -21,8 +27,32 @@ namespace atom::web {
 constexpr int IPV4_BIT_LENGTH = 32;
 constexpr int IPV6_SEGMENT_COUNT = 8;
 constexpr int IPV6_SEGMENT_BIT_LENGTH = 16;
+#ifdef _WIN32
+constexpr int UNIX_DOMAIN_PATH_MAX_LENGTH = MAX_PATH;  // Windows最大路径长度
+#else
 constexpr int UNIX_DOMAIN_PATH_MAX_LENGTH = 108;
+#endif
 constexpr uint32_t BYTE_MASK = 0xFF;
+
+// 初始化Windows套接字库
+#ifdef _WIN32
+namespace {
+    struct WinsockInitializer {
+        WinsockInitializer() {
+            WSADATA wsaData;
+            if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+                LOG_F(ERROR, "WSAStartup failed");
+                throw std::runtime_error("Failed to initialize Winsock");
+            }
+        }
+        ~WinsockInitializer() {
+            WSACleanup();
+        }
+    };
+    // 全局对象确保WSA初始化
+    static WinsockInitializer winsockInit;
+}
+#endif
 
 // Factory method for creating Address objects
 auto Address::createFromString(std::string_view addressStr)
@@ -665,7 +695,18 @@ auto IPv6::arrayToIp(const std::array<uint16_t, 8>& segments) const
 // UnixDomain Implementation
 
 auto UnixDomain::isValidPath(std::string_view path) -> bool {
+#ifdef _WIN32
+    // Windows命名管道路径格式检查
+    static const std::regex namedPipeRegex(R"(\\\\\.\\pipe\\[^\\/:*?"<>|]+)");
+    // 检查是否是Windows命名管道格式
+    if (std::regex_match(path.begin(), path.end(), namedPipeRegex)) {
+        return true;
+    }
+    // 普通路径检查
+    return !path.empty() && path.length() < MAX_PATH;
+#else
     return !path.empty() && path.length() < UNIX_DOMAIN_PATH_MAX_LENGTH;
+#endif
 }
 
 UnixDomain::UnixDomain(std::string_view path) {
@@ -677,22 +718,36 @@ UnixDomain::UnixDomain(std::string_view path) {
 auto UnixDomain::parse(std::string_view path) -> bool {
     try {
         if (!isValidPath(path)) {
+#ifdef _WIN32
+            LOG_F(ERROR, "Invalid Named Pipe or Unix domain socket path: %s",
+                  std::string(path).c_str());
+#else
             LOG_F(ERROR, "Invalid Unix domain socket path: %s",
                   std::string(path).c_str());
+#endif
             return false;
         }
 
         addressStr = std::string(path);
         return true;
     } catch (const std::exception& e) {
+#ifdef _WIN32
+        LOG_F(ERROR, "Exception while parsing Named Pipe or Unix domain socket path: %s",
+              e.what());
+#else
         LOG_F(ERROR, "Exception while parsing Unix domain socket path: %s",
               e.what());
+#endif
         return false;
     }
 }
 
 void UnixDomain::printAddressType() const {
+#ifdef _WIN32
+    LOG_F(INFO, "Address type: Windows Named Pipe or Unix Domain Socket");
+#else
     LOG_F(INFO, "Address type: Unix Domain Socket");
+#endif
 }
 
 auto UnixDomain::isInRange(std::string_view start,
@@ -772,25 +827,41 @@ auto UnixDomain::getType() const -> std::string_view { return "UnixDomain"; }
 
 auto UnixDomain::getNetworkAddress(std::string_view mask) const -> std::string {
     // This operation doesn't make sense for Unix domain sockets
+#ifdef _WIN32
+    LOG_F(WARNING,
+          "getNetworkAddress operation not applicable for Named Pipes or Unix domain sockets");
+#else
     LOG_F(WARNING,
           "getNetworkAddress operation not applicable for Unix domain sockets");
+#endif
     return "";
 }
 
 auto UnixDomain::getBroadcastAddress(std::string_view mask) const
     -> std::string {
     // This operation doesn't make sense for Unix domain sockets
+#ifdef _WIN32
+    LOG_F(
+        WARNING,
+        "getBroadcastAddress operation not applicable for Named Pipes or Unix domain sockets");
+#else
     LOG_F(
         WARNING,
         "getBroadcastAddress operation not applicable for Unix domain sockets");
+#endif
     return "";
 }
 
 auto UnixDomain::isSameSubnet(const Address& other,
                               std::string_view mask) const -> bool {
     // This operation doesn't make sense for Unix domain sockets
+#ifdef _WIN32
+    LOG_F(WARNING,
+          "isSameSubnet operation not applicable for Named Pipes or Unix domain sockets");
+#else
     LOG_F(WARNING,
           "isSameSubnet operation not applicable for Unix domain sockets");
+#endif
     return false;
 }
 

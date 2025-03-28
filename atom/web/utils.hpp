@@ -15,15 +15,22 @@ Description: Network Utils
 #ifndef ATOM_WEB_UTILS_HPP
 #define ATOM_WEB_UTILS_HPP
 
+#include <chrono>
 #include <concepts>
 #include <future>
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 #if defined(__linux__) || defined(__APPLE__)
 #include <arpa/inet.h>
 #include <netdb.h>
+#elif defined(_WIN32)
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#endif
 #endif
 
 namespace atom::web {
@@ -115,7 +122,75 @@ auto getProcessIDOnPort(PortNumber auto port) -> std::optional<int>;
  */
 auto isPortInUseAsync(PortNumber auto port) -> std::future<bool>;
 
-#if defined(__linux__) || defined(__APPLE__)
+/**
+ * @brief Scan a specific port on a given host to check if it's open
+ * 扫描指定主机上的特定端口，检查是否开放
+ *
+ * @param host The hostname or IP address to scan
+ * @param port The port number to scan
+ * @param timeout The maximum time to wait for a connection (default: 2 seconds)
+ * @return true if the port is open, false otherwise
+ */
+auto scanPort(const std::string& host, uint16_t port,
+              std::chrono::milliseconds timeout =
+                  std::chrono::milliseconds(2000)) -> bool;
+
+/**
+ * @brief Scan a range of ports on a given host to find open ones
+ * 扫描指定主机上的端口范围，查找开放的端口
+ *
+ * @param host The hostname or IP address to scan
+ * @param startPort The beginning of the port range to scan
+ * @param endPort The end of the port range to scan
+ * @param timeout The maximum time to wait for each connection attempt
+ * @return std::vector<uint16_t> List of open ports
+ */
+auto scanPortRange(
+    const std::string& host, uint16_t startPort, uint16_t endPort,
+    std::chrono::milliseconds timeout = std::chrono::milliseconds(1000))
+    -> std::vector<uint16_t>;
+
+/**
+ * @brief Asynchronously scan a range of ports on a given host
+ * 异步扫描指定主机上的端口范围
+ *
+ * @param host The hostname or IP address to scan
+ * @param startPort The beginning of the port range to scan
+ * @param endPort The end of the port range to scan
+ * @param timeout The maximum time to wait for each connection attempt
+ * @return std::future<std::vector<uint16_t>> Future result containing list of
+ * open ports
+ */
+auto scanPortRangeAsync(
+    const std::string& host, uint16_t startPort, uint16_t endPort,
+    std::chrono::milliseconds timeout = std::chrono::milliseconds(1000))
+    -> std::future<std::vector<uint16_t>>;
+
+/**
+ * @brief Get IP addresses for a given hostname through DNS resolution
+ * 通过DNS解析获取指定主机名的IP地址
+ *
+ * @param hostname The hostname to resolve
+ * @return std::vector<std::string> List of IP addresses
+ */
+auto getIPAddresses(const std::string& hostname) -> std::vector<std::string>;
+
+/**
+ * @brief Get all local IP addresses of the machine
+ * 获取本机的所有本地IP地址
+ *
+ * @return std::vector<std::string> List of local IP addresses
+ */
+auto getLocalIPAddresses() -> std::vector<std::string>;
+
+/**
+ * @brief Check if the device has active internet connectivity
+ * 检查设备是否有活跃的互联网连接
+ *
+ * @return true if internet is available, false otherwise
+ */
+auto checkInternetConnectivity() -> bool;
+
 /**
  * @brief Dump address information from source to destination.
  * 将地址信息从源转储到目标。
@@ -163,8 +238,8 @@ auto dumpAddrInfo(
  *
  * @throws std::invalid_argument if addrInfo is nullptr
  */
-auto addrInfoToString(const struct addrinfo* addrInfo,
-                      bool jsonFormat = false) -> std::string;
+auto addrInfoToString(const struct addrinfo* addrInfo, bool jsonFormat = false)
+    -> std::string;
 
 /**
  * @brief Get address information for a given hostname and service.
@@ -282,7 +357,6 @@ auto filterAddrInfo(const struct addrinfo* addrInfo, int family)
  */
 auto sortAddrInfo(const struct addrinfo* addrInfo)
     -> std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)>;
-#endif
 
 }  // namespace atom::web
 

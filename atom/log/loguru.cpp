@@ -337,6 +337,42 @@ inline auto toFile(void* user_data) -> FileRotate* {
 static auto fileLogListInit(FileRotate* file_rotate) -> int {
     std::string logFile(file_rotate->log_path);
 
+#ifdef _WIN32
+    WIN32_FIND_DATAA findData;
+    std::string searchPattern = logFile + ".*";
+    HANDLE hFind = FindFirstFileA(searchPattern.c_str(), &findData);
+
+    if (hFind != INVALID_HANDLE_VALUE) {
+        do {
+            std::string filename = findData.cFileName;
+            // Check if the filename matches our pattern (logFile.N where N is a
+            // number)
+            std::string baseFilename =
+                logFile.substr(logFile.find_last_of("/\\") + 1);
+            if (filename.find(baseFilename + ".") == 0) {
+                std::string logTmp =
+                    logFile + filename.substr(baseFilename.length());
+                if (file_rotate->mode == "a") {
+                    file_rotate->log_list.insert(file_rotate->log_list.begin(),
+                                                 logTmp);
+                } else {
+                    DeleteFileA(logTmp.c_str());
+                }
+            }
+        } while (FindNextFileA(hFind, &findData));
+
+        FindClose(hFind);
+    }
+
+    // Sort the log list by the numeric suffix
+    std::sort(
+        file_rotate->log_list.begin(), file_rotate->log_list.end(),
+        [&baseFilename = logFile](const std::string& a, const std::string& b) {
+            int numA = std::stoi(a.substr(baseFilename.length() + 1));
+            int numB = std::stoi(b.substr(baseFilename.length() + 1));
+            return numA < numB;
+        });
+#else
     struct stat statBuffer;
     for (int i = 1;; i++) {
         std::string logTmp = logFile + "." + std::to_string(i);
@@ -349,6 +385,7 @@ static auto fileLogListInit(FileRotate* file_rotate) -> int {
             std::remove(logTmp.c_str());
         }
     }
+#endif
 
     return 0;
 }
@@ -362,10 +399,21 @@ static auto fileLogInit(FileRotate* file_rotate, char* path, int log_size_m,
 
     // Init log_size_cnt
     int numBytes = 0;
+#ifdef _WIN32
+    WIN32_FILE_ATTRIBUTE_DATA fileAttrData;
+    if (GetFileAttributesExA(file_rotate->log_path.c_str(),
+                             GetFileExInfoStandard, &fileAttrData)) {
+        LARGE_INTEGER fileSize;
+        fileSize.HighPart = fileAttrData.nFileSizeHigh;
+        fileSize.LowPart = fileAttrData.nFileSizeLow;
+        numBytes = static_cast<int>(fileSize.QuadPart);
+    }
+#else
     struct stat statbuffer;
     if (stat(file_rotate->log_path.c_str(), &statbuffer) == 0) {
         numBytes = statbuffer.st_size;
     }
+#endif
     file_rotate->log_size_cnt = numBytes;
 
     // Init log_list
@@ -378,14 +426,15 @@ static auto fileLogRotatingSave(FileRotate* file_rotate) -> int {
     std::string log_file(file_rotate->log_path);
 
     // When log file list greater then max number, del the oldest one
-    while (file_rotate->log_list.size() >= file_rotate->log_num_max) {
+    while (file_rotate->log_list.size() >=
+           static_cast<size_t>(file_rotate->log_num_max)) {
         auto it = file_rotate->log_list.begin();
         std::remove((*it).c_str());
         file_rotate->log_list.erase(it);
     }
 
     // Rename the log file list
-    for (int i = 0; i < file_rotate->log_list.size(); i++) {
+    for (size_t i = 0; i < file_rotate->log_list.size(); i++) {
         std::string name = log_file + "." +
                            std::to_string(file_rotate->log_list.size() - i + 1);
         std::rename(file_rotate->log_list[i].c_str(), name.c_str());
@@ -917,7 +966,7 @@ void suggest_log_path(const char* prefix, char* buff,
     }
 
 #ifdef _WIN32
-    strncat_s(buff, buff_size - strlen(buff) - 1, s_argv0_filename.c_str(),
+    strncat_s(buff, buff_size - strlen(buff) - 1, sArgv0Filename.c_str(),
               buff_size - strlen(buff) - 1);
     strncat_s(buff, buff_size - strlen(buff) - 1, "/",
               buff_size - strlen(buff) - 1);
@@ -1053,8 +1102,8 @@ bool add_file(const char* path_in, FileMode mode, Verbosity verbosity,
 auto add_syslog(const char* app_name, Verbosity verbosity) -> bool {
     return add_syslog(app_name, verbosity, LOG_USER);
 }
-auto add_syslog(const char* app_name, Verbosity verbosity,
-                int facility) -> bool {
+auto add_syslog(const char* app_name, Verbosity verbosity, int facility)
+    -> bool {
 #if LOGURU_SYSLOG
     if (app_name == nullptr) {
         app_name = argv0_filename();
@@ -1938,7 +1987,7 @@ using ECPtr = EcEntryBase*;
 #endif
 static LOGURU_THREAD_LOCAL ECPtr thread_ec_ptr = nullptr;
 
-ECPtr& get_thread_ec_head_ref() { return thread_ec_ptr; }
+ECPtr& getThreadEcHeadRef() { return thread_ec_ptr; }
 #else   // !thread_local
 static pthread_once_t sEcPthreadOnce = PTHREAD_ONCE_INIT;
 static pthread_key_t sEcPthreadKey;
@@ -2094,8 +2143,7 @@ auto ec_to_text(EcHandle ec_handle) -> Text {
     char* withNewline = reinterpret_cast<char*>(malloc(bufferSize));
     withNewline[0] = '\n';
 #ifdef _WIN32
-    strncpy_s(with_newline + 1, buffer_size, parent_ec.c_str(),
-              buffer_size - 2);
+    strncpy_s(withNewline + 1, bufferSize, parentEc.c_str(), bufferSize - 2);
 #else
     strcpy(withNewline + 1, parentEc.c_str());
 #endif
@@ -2186,10 +2234,18 @@ LONG WINAPI windowsExceptionHandler(EXCEPTION_POINTERS* ExceptionInfo) {
             break;
     }
 
-    writeToStderr("\n");
-    writeToStderr("Loguru caught an exception: ");
-    writeToStderr(signalName);
-    writeToStderr("\n");
+    // Get the standard error handle
+    HANDLE hStderr = GetStdHandle(STD_ERROR_HANDLE);
+
+    // Prepare messages
+    const char* newline = "\r\n";
+    const char* prefix = "\r\nLoguru caught an exception: ";
+
+    // Write to stderr using Win32 API
+    DWORD written;
+    WriteFile(hStderr, prefix, (DWORD)strlen(prefix), &written, NULL);
+    WriteFile(hStderr, signalName, (DWORD)strlen(signalName), &written, NULL);
+    WriteFile(hStderr, newline, (DWORD)strlen(newline), &written, NULL);
 
     if (sSignalOptions.unsafe_signal_handler) {
         flush();
@@ -2201,8 +2257,10 @@ LONG WINAPI windowsExceptionHandler(EXCEPTION_POINTERS* ExceptionInfo) {
         try {
             log_message(1, message, false, false);
         } catch (...) {
-            writeToStderr(
-                "Exception caught and ignored by Loguru exception handler.\n");
+            const char* error_msg =
+                "Exception caught and ignored by Loguru exception handler.\r\n";
+            WriteFile(hStderr, error_msg, (DWORD)strlen(error_msg), &written,
+                      NULL);
         }
         flush();
     }
@@ -2210,7 +2268,15 @@ LONG WINAPI windowsExceptionHandler(EXCEPTION_POINTERS* ExceptionInfo) {
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
-void install_signal_handlers(const SignalOptions& signal_options) {
+void writeToStderr(const char* data, size_t size) {
+    HANDLE hStderr = GetStdHandle(STD_ERROR_HANDLE);
+    DWORD written;
+    WriteFile(hStderr, data, (DWORD)size, &written, NULL);
+}
+
+void writeToStderr(const char* data) { writeToStderr(data, strlen(data)); }
+
+void installSignalHandlers(const SignalOptions& signal_options) {
     sSignalOptions = signal_options;
     SetUnhandledExceptionFilter(windowsExceptionHandler);
 }

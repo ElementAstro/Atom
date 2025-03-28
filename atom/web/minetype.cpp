@@ -21,7 +21,9 @@ namespace fs = std::filesystem;
 class MimeTypes::Impl {
 public:
     Impl(std::span<const std::string> knownFiles, bool lenient)
-        : lenient_(lenient), isInitialized_(false) {
+        : lenient_(lenient),
+          config_({lenient, true, 1000, false, "application/octet-stream"}),
+          isInitialized_(false) {
         try {
             if (knownFiles.empty()) {
                 LOG_F(WARNING, "No known MIME type files provided");
@@ -57,6 +59,56 @@ public:
             LOG_F(ERROR, "Failed to initialize MimeTypes: {}", e.what());
             throw MimeTypeException(
                 std::string("Failed to initialize MimeTypes: ") + e.what());
+        }
+
+        // Initialize cache
+        if (config_.useCache) {
+            cache_.reserve(config_.cacheSize);
+        }
+    }
+
+    Impl(std::span<const std::string> knownFiles, const MimeTypeConfig& config)
+        : lenient_(config.lenient), config_(config), isInitialized_(false) {
+        try {
+            if (knownFiles.empty()) {
+                LOG_F(WARNING, "No known MIME type files provided");
+            }
+
+            // Process files concurrently if we have multiple files
+            if (knownFiles.size() > 1) {
+                std::vector<std::future<void>> futures;
+                futures.reserve(knownFiles.size());
+
+                for (const auto& file : knownFiles) {
+                    futures.push_back(
+                        std::async(std::launch::async, [this, &file] {
+                            try {
+                                this->readFile(file);
+                            } catch (const std::exception& e) {
+                                LOG_F(ERROR, "Failed to read file {}: {}", file,
+                                      e.what());
+                            }
+                        }));
+                }
+
+                // Wait for all tasks to complete
+                for (auto& future : futures) {
+                    future.wait();
+                }
+            } else if (knownFiles.size() == 1) {
+                readFile(knownFiles[0]);
+            }
+
+            isInitialized_ = true;
+        } catch (const std::exception& e) {
+            LOG_F(ERROR, "Failed to initialize MimeTypes: {}", e.what());
+            throw MimeTypeException(
+                std::string("Failed to initialize MimeTypes: ") + e.what());
+        }
+
+        // Initialize cache
+        if (config_.useCache) {
+            cache_.reserve(config_.cacheSize);
         }
     }
 
@@ -100,6 +152,186 @@ public:
         }
     }
 
+    void readXml(const std::string& xmlFile) {
+        if (xmlFile.empty()) {
+            throw MimeTypeException("Empty XML file path provided");
+        }
+
+        try {
+            std::ifstream file(xmlFile);
+            if (!file) {
+                throw MimeTypeException("Could not open XML file " + xmlFile);
+            }
+
+            std::string line;
+            std::vector<std::pair<std::string, std::string>> typeEntries;
+
+            std::string currentMimeType;
+            while (std::getline(file, line)) {
+                auto mimeTypePos = line.find("<mime-type type=\"");
+                if (mimeTypePos != std::string::npos) {
+                    size_t start = mimeTypePos + 17;
+                    size_t end = line.find("\"", start);
+                    if (end != std::string::npos) {
+                        currentMimeType = line.substr(start, end - start);
+                    }
+                }
+
+                auto globPos = line.find("<glob pattern=\"*.");
+                if (!currentMimeType.empty() && globPos != std::string::npos) {
+                    size_t start = globPos + 15;
+                    size_t end = line.find("\"", start);
+                    if (end != std::string::npos) {
+                        std::string extension = line.substr(start, end - start);
+                        typeEntries.emplace_back(currentMimeType, extension);
+                    }
+                }
+
+                if (line.find("</mime-type>") != std::string::npos) {
+                    currentMimeType.clear();
+                }
+            }
+
+            if (!typeEntries.empty()) {
+                addTypesBatch(typeEntries);
+                LOG_F(INFO, "Loaded {} MIME types from XML file",
+                      typeEntries.size());
+            }
+
+        } catch (const std::exception& e) {
+            throw MimeTypeException(std::string("Failed to read XML file: ") +
+                                    e.what());
+        }
+    }
+
+    void exportToJson(const std::string& jsonFile) const {
+        if (jsonFile.empty()) {
+            throw MimeTypeException("Empty JSON file path provided");
+        }
+
+        try {
+            json output;
+            std::shared_lock lock(mutex_);
+
+            for (const auto& [mimeType, extensions] : reverseMap_) {
+                json extArray = json::array();
+                for (const auto& ext : extensions) {
+                    extArray.push_back(ext.substr(1));
+                }
+                output[mimeType] = extArray;
+            }
+
+            std::ofstream file(jsonFile);
+            if (!file) {
+                throw MimeTypeException("Could not open file for writing: " +
+                                        jsonFile);
+            }
+
+            file << output.dump(4);
+            LOG_F(INFO, "Exported {} MIME types to JSON file {}", output.size(),
+                  jsonFile);
+        } catch (const json::exception& e) {
+            throw MimeTypeException(std::string("JSON error: ") + e.what());
+        } catch (const std::exception& e) {
+            throw MimeTypeException(std::string("Failed to export to JSON: ") +
+                                    e.what());
+        }
+    }
+
+    void exportToXml(const std::string& xmlFile) const {
+        if (xmlFile.empty()) {
+            throw MimeTypeException("Empty XML file path provided");
+        }
+
+        try {
+            std::ofstream file(xmlFile);
+            if (!file) {
+                throw MimeTypeException("Could not open file for writing: " +
+                                        xmlFile);
+            }
+
+            file << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+            file << "<mime-info "
+                    "xmlns=\"http://www.freedesktop.org/standards/"
+                    "shared-mime-info\">\n";
+
+            std::shared_lock lock(mutex_);
+            for (const auto& [mimeType, extensions] : reverseMap_) {
+                file << "  <mime-type type=\"" << mimeType << "\">\n";
+                for (const auto& ext : extensions) {
+                    file << "    <glob pattern=\"*" << ext << "\"/>\n";
+                }
+                file << "  </mime-type>\n";
+            }
+
+            file << "</mime-info>\n";
+            LOG_F(INFO, "Exported {} MIME types to XML file {}",
+                  reverseMap_.size(), xmlFile);
+        } catch (const std::exception& e) {
+            throw MimeTypeException(std::string("Failed to export to XML: ") +
+                                    e.what());
+        }
+    }
+
+    void clearCache() {
+        if (config_.useCache) {
+            std::unique_lock lock(cacheMutex_);
+            cache_.clear();
+            LOG_F(INFO, "MIME type cache cleared");
+        }
+    }
+
+    void updateConfig(const MimeTypeConfig& config) {
+        std::unique_lock lock(configMutex_);
+        bool cacheChanged = (config_.useCache != config.useCache ||
+                             config_.cacheSize != config.cacheSize);
+
+        config_ = config;
+        lenient_ = config.lenient;
+
+        if (cacheChanged) {
+            std::unique_lock cacheLock(cacheMutex_);
+            if (config_.useCache) {
+                cache_.reserve(config_.cacheSize);
+            } else {
+                cache_.clear();
+            }
+        }
+
+        LOG_F(INFO, "MimeTypes configuration updated");
+    }
+
+    MimeTypeConfig getConfig() const {
+        std::shared_lock lock(configMutex_);
+        return config_;
+    }
+
+    bool hasMimeType(const std::string& mimeType) const {
+        if (mimeType.empty()) {
+            return false;
+        }
+        std::shared_lock lock(mutex_);
+        return reverseMap_.find(mimeType) != reverseMap_.end();
+    }
+
+    bool hasExtension(const std::string& extension) const {
+        if (extension.empty()) {
+            return false;
+        }
+
+        std::string normalizedExt = extension;
+        if (normalizedExt[0] != '.') {
+            normalizedExt = "." + normalizedExt;
+        }
+
+        std::transform(normalizedExt.begin(), normalizedExt.end(),
+                       normalizedExt.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+
+        std::shared_lock lock(mutex_);
+        return typesMap_.find(normalizedExt) != typesMap_.end();
+    }
+
     auto guessType(const std::string& url) const
         -> std::pair<std::optional<std::string>, std::optional<std::string>> {
         if (url.empty()) {
@@ -110,7 +342,6 @@ public:
             fs::path path(url);
             std::string extension = path.extension().string();
 
-            // Ensure extension starts with a dot and convert to lowercase
             if (!extension.empty() && extension[0] == '.') {
                 std::transform(extension.begin(), extension.end(),
                                extension.begin(),
@@ -158,12 +389,10 @@ public:
 
         try {
             std::string normalizedExt = extension;
-            // Ensure extension starts with a dot
             if (normalizedExt[0] != '.') {
                 normalizedExt = "." + normalizedExt;
             }
 
-            // Convert to lowercase for case-insensitive comparison
             std::transform(normalizedExt.begin(), normalizedExt.end(),
                            normalizedExt.begin(),
                            [](unsigned char c) { return std::tolower(c); });
@@ -187,12 +416,10 @@ public:
                 }
 
                 std::string normalizedExt = extension;
-                // Ensure extension starts with a dot
                 if (normalizedExt[0] != '.') {
                     normalizedExt = "." + normalizedExt;
                 }
 
-                // Convert to lowercase for case-insensitive comparison
                 std::transform(normalizedExt.begin(), normalizedExt.end(),
                                normalizedExt.begin(),
                                [](unsigned char c) { return std::tolower(c); });
@@ -234,18 +461,16 @@ public:
         }
 
         try {
-            // First check if file exists and is readable
             if (!fs::exists(path) || !fs::is_regular_file(path)) {
                 LOG_F(WARNING,
                       "File does not exist or is not a regular file: {}", path);
                 return std::nullopt;
             }
 
-            // Check file size
             auto fileSize = fs::file_size(path);
             if (fileSize == 0) {
                 LOG_F(INFO, "File is empty: {}", path);
-                return "text/plain";  // Default to text/plain for empty files
+                return "text/plain";
             }
 
             std::ifstream file(path, std::ios::binary);
@@ -254,14 +479,11 @@ public:
                 return std::nullopt;
             }
 
-            // Read signature bytes
-            constexpr size_t signatureSize =
-                16;  // Increased for better detection
+            constexpr size_t signatureSize = 16;
             std::array<char, signatureSize> buffer{};
             file.read(buffer.data(), buffer.size());
             const size_t bytesRead = file.gcount();
 
-            // Magic number detection
             if (bytesRead >= 2 && buffer[0] == '\xFF' && buffer[1] == '\xD8') {
                 return "image/jpeg";
             }
@@ -285,7 +507,6 @@ public:
                 return "text/html";
             }
 
-            // Text vs. binary detection
             bool isText = true;
             for (size_t i = 0; i < bytesRead && i < 512; i++) {
                 char c = buffer[i];
@@ -300,7 +521,6 @@ public:
                 return "text/plain";
             }
 
-            // Fall back to application/octet-stream for binary data
             return "application/octet-stream";
 
         } catch (const std::exception& e) {
@@ -312,9 +532,13 @@ public:
 
 private:
     mutable std::shared_mutex mutex_;
+    mutable std::shared_mutex cacheMutex_;
+    mutable std::shared_mutex configMutex_;
     std::unordered_map<std::string, std::string> typesMap_;
     std::unordered_map<std::string, std::vector<std::string>> reverseMap_;
+    std::unordered_map<std::string, std::string> cache_;
     bool lenient_;
+    MimeTypeConfig config_;
     std::atomic<bool> isInitialized_;
 
     void readFile(const std::string& file) {
@@ -353,7 +577,6 @@ private:
                 }
             }
 
-            // Batch add the types
             addTypesBatch(batchEntries);
 
         } catch (const std::exception& e) {
@@ -378,6 +601,10 @@ private:
 MimeTypes::MimeTypes(std::span<const std::string> knownFiles, bool lenient)
     : pImpl(std::make_unique<Impl>(knownFiles, lenient)) {}
 
+MimeTypes::MimeTypes(std::span<const std::string> knownFiles,
+                     const MimeTypeConfig& config)
+    : pImpl(std::make_unique<Impl>(knownFiles, config)) {}
+
 MimeTypes::~MimeTypes() = default;
 
 void MimeTypes::readJson(const std::string& jsonFile) {
@@ -387,6 +614,49 @@ void MimeTypes::readJson(const std::string& jsonFile) {
         LOG_F(ERROR, "Failed to read JSON: {}", e.what());
         throw;
     }
+}
+
+void MimeTypes::readXml(const std::string& xmlFile) {
+    try {
+        pImpl->readXml(xmlFile);
+    } catch (const MimeTypeException& e) {
+        LOG_F(ERROR, "Failed to read XML: {}", e.what());
+        throw;
+    }
+}
+
+void MimeTypes::exportToJson(const std::string& jsonFile) const {
+    try {
+        pImpl->exportToJson(jsonFile);
+    } catch (const MimeTypeException& e) {
+        LOG_F(ERROR, "Failed to export to JSON: {}", e.what());
+        throw;
+    }
+}
+
+void MimeTypes::exportToXml(const std::string& xmlFile) const {
+    try {
+        pImpl->exportToXml(xmlFile);
+    } catch (const MimeTypeException& e) {
+        LOG_F(ERROR, "Failed to export to XML: {}", e.what());
+        throw;
+    }
+}
+
+void MimeTypes::clearCache() { pImpl->clearCache(); }
+
+void MimeTypes::updateConfig(const MimeTypeConfig& config) {
+    pImpl->updateConfig(config);
+}
+
+MimeTypeConfig MimeTypes::getConfig() const { return pImpl->getConfig(); }
+
+bool MimeTypes::hasMimeType(const std::string& mimeType) const {
+    return pImpl->hasMimeType(mimeType);
+}
+
+bool MimeTypes::hasExtension(const std::string& extension) const {
+    return pImpl->hasExtension(extension);
 }
 
 auto MimeTypes::guessType(const std::string& url) const
@@ -437,10 +707,7 @@ auto MimeTypes::guessTypeByContent(const T& filePath) const
     }
 }
 
-// Explicit instantiation for common types
 template std::optional<std::string> MimeTypes::guessTypeByContent<std::string>(
     const std::string& filePath) const;
-template std::optional<std::string> MimeTypes::guessTypeByContent<
-    std::filesystem::path>(const std::filesystem::path& filePath) const;
 template std::optional<std::string> MimeTypes::guessTypeByContent<const char*>(
     const char* const& filePath) const;

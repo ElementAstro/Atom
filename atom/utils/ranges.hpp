@@ -265,8 +265,8 @@ auto accumulate(Range&& range, T init, BinaryOp&& op) {
  * std::cout << std::endl;
  */
 template <typename Iterator>
-auto slice(Iterator begin, Iterator end, size_t start,
-           size_t length) -> std::vector<typename Iterator::value_type> {
+auto slice(Iterator begin, Iterator end, size_t start, size_t length)
+    -> std::vector<typename Iterator::value_type> {
     std::vector<typename Iterator::value_type> result;
     using distance_type =
         typename std::iterator_traits<decltype(begin)>::difference_type;
@@ -452,10 +452,9 @@ struct MergeViewImpl {
     template <std::ranges::input_range R1, std::ranges::input_range R2>
         requires std::common_reference_with<std::ranges::range_reference_t<R1>,
                                             std::ranges::range_reference_t<R2>>
-    auto operator()(R1&& r1, R2&& r2)
-        -> generator<
-            std::common_reference_t<std::ranges::range_reference_t<R1>,
-                                    std::ranges::range_reference_t<R2>>> {
+    auto operator()(R1&& r1, R2&& r2) -> generator<
+        std::common_reference_t<std::ranges::range_reference_t<R1>,
+                                std::ranges::range_reference_t<R2>>> {
         auto it1 = std::ranges::begin(r1);
         auto it2 = std::ranges::begin(r2);
         auto end1 = std::ranges::end(r1);
@@ -538,8 +537,8 @@ struct ChunkViewImpl {
 struct FilterViewImpl {
     template <std::ranges::input_range R,
               std::invocable<std::ranges::range_reference_t<R>> Pred>
-    auto operator()(R&& range,
-                    Pred pred) -> generator<std::ranges::range_reference_t<R>> {
+    auto operator()(R&& range, Pred pred)
+        -> generator<std::ranges::range_reference_t<R>> {
         for (auto&& elem : range) {
             if (pred(elem)) {
                 co_yield elem;
@@ -551,9 +550,8 @@ struct FilterViewImpl {
 struct TransformViewImpl {
     template <std::ranges::input_range R,
               std::invocable<std::ranges::range_reference_t<R>> F>
-    auto operator()(R&& range, F f)
-        -> generator<
-            std::invoke_result_t<F, std::ranges::range_reference_t<R>>> {
+    auto operator()(R&& range, F f) -> generator<
+        std::invoke_result_t<F, std::ranges::range_reference_t<R>>> {
         for (auto&& elem : range) {
             co_yield f(elem);
         }
@@ -584,7 +582,11 @@ auto toVector(Range&& range) {
     using ValueType =
         typename std::decay<decltype(*std::begin(std::declval<Range>()))>::type;
     std::vector<ValueType> result;
-    std::ranges::copy(std::forward<Range>(range), std::back_inserter(result));
+
+    // 替换 std::ranges::copy 为手动遍历，这样可以处理非 borrowed_range 类型
+    for (auto&& item : range) {
+        result.push_back(std::forward<decltype(item)>(item));
+    }
     return result;
 }
 }  // namespace atom::utils

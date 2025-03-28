@@ -226,7 +226,7 @@ auto toString(const T& ptr) -> std::string {
 }
 
 /**
- * @brief Converts a container type to std::string.
+ * @brief Converts a container type to std::string with specified separator.
  *
  * @tparam T The type of the input container.
  * @param container The input container to be converted.
@@ -235,8 +235,7 @@ auto toString(const T& ptr) -> std::string {
  * @throws ToStringException if conversion fails
  */
 template <Container T>
-auto toString(const T& container,
-              std::string_view separator = ", ") -> std::string {
+auto toString(const T& container, std::string_view separator) -> std::string {
     try {
         std::ostringstream oss;
 
@@ -282,6 +281,19 @@ auto toString(const T& container,
         throw ToStringException(std::string("Container conversion failed: ") +
                                 e.what());
     }
+}
+
+/**
+ * @brief Overload for container type with default separator.
+ *
+ * @tparam T The type of the input container.
+ * @param container The input container to be converted.
+ * @return The converted std::string.
+ * @throws ToStringException if conversion fails
+ */
+template <Container T>
+auto toString(const T& container) -> std::string {
+    return toString(container, ", ");
 }
 
 /**
@@ -352,8 +364,8 @@ auto joinCommandLine(const Args&... args) -> std::string {
  * @throws ToStringException if conversion fails
  */
 template <Container T>
-auto toStringArray(const T& array,
-                   std::string_view separator = " ") -> std::string {
+auto toStringArray(const T& array, std::string_view separator = " ")
+    -> std::string {
     try {
         std::ostringstream oss;
         bool first = true;
@@ -497,8 +509,8 @@ auto tupleToStringImpl(const Tuple& tpl, std::index_sequence<I...>,
  * @throws ToStringException if conversion fails
  */
 template <typename... Args>
-auto toString(const std::tuple<Args...>& tpl,
-              std::string_view separator = ", ") -> std::string {
+auto toString(const std::tuple<Args...>& tpl, std::string_view separator = ", ")
+    -> std::string {
     return tupleToStringImpl(tpl, std::index_sequence_for<Args...>(),
                              separator);
 }
