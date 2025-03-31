@@ -4,6 +4,7 @@
 #include <concepts>
 #include <cstdint>
 #include <fstream>
+#include <functional>
 #include <memory>
 #include <span>
 #include <stdexcept>
@@ -177,8 +178,113 @@ public:
         return std::span<const T>(data);
     }
 
+    /**
+     * @brief Gets the minimum value in the data.
+     * @return The minimum value.
+     */
+    [[nodiscard]] T getMinValue() const;
+
+    /**
+     * @brief Gets the maximum value in the data.
+     * @return The maximum value.
+     */
+    [[nodiscard]] T getMaxValue() const;
+
+    /**
+     * @brief Gets the mean value of the data.
+     * @return The mean value.
+     */
+    [[nodiscard]] double getMean() const;
+
+    /**
+     * @brief Gets the standard deviation of the data.
+     * @return The standard deviation.
+     */
+    [[nodiscard]] double getStdDev() const;
+
+    /**
+     * @brief Checks if the data contains NaN values.
+     * @return True if NaN values are present, false otherwise.
+     */
+    [[nodiscard]] bool hasNaN() const;
+
+    /**
+     * @brief Checks if the data contains infinity values.
+     * @return True if infinity values are present, false otherwise.
+     */
+    [[nodiscard]] bool hasInfinity() const;
+
+    /**
+     * @brief Validates the data for consistency.
+     * @throws FITSDataException If the data is invalid.
+     */
+    void validateData();
+
+    /**
+     * @brief Optimizes memory usage for the data.
+     */
+    void optimizeMemory();
+
+    /**
+     * @brief Reserves capacity for the data vector.
+     * @param capacity The capacity to reserve.
+     */
+    void reserveCapacity(size_t capacity);
+
+    /**
+     * @brief Compresses the data.
+     */
+    void compress();
+
+    /**
+     * @brief Decompresses the data.
+     */
+    void decompress();
+
+    /**
+     * @brief Checks if the data is compressed.
+     * @return True if the data is compressed, false otherwise.
+     */
+    [[nodiscard]] bool isCompressed() const noexcept { return compressed; }
+
+    /**
+     * @brief Applies a transformation function to the data.
+     * @param func The transformation function.
+     */
+    void transform(const std::function<T(T)>& func);
+
+    /**
+     * @brief Applies a transformation function to the data in parallel.
+     * @param func The transformation function.
+     */
+    void transformParallel(const std::function<T(T)>& func);
+
+    /**
+     * @brief Normalizes the data to a specified range.
+     * @param minVal The minimum value of the range.
+     * @param maxVal The maximum value of the range.
+     */
+    void normalize(T minVal, T maxVal);
+
+    /**
+     * @brief Scales the data by a specified factor.
+     * @param factor The scaling factor.
+     */
+    void scale(double factor);
+
+    /**
+     * @brief Converts the data to another type.
+     * @tparam U The target type.
+     * @return A vector of the converted data.
+     */
+    template <FitsNumericType U>
+    std::vector<U> convertTo() const;
+
 private:
-    std::vector<T> data;  ///< The data vector.
+    std::vector<T> data;       ///< The data vector.
+    bool isOptimized = false;  ///< Flag indicating if memory is optimized.
+    bool compressed = false;   ///< Flag indicating if the data is compressed.
+    std::vector<uint8_t> compressedData;  ///< Compressed data storage.
 
     /**
      * @brief Swaps the endianness of a value.

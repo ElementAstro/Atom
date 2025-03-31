@@ -36,6 +36,19 @@ void FITSHeader::addKeyword(std::string_view keyword,
     records.emplace_back(keyword, value);
 }
 
+void FITSHeader::addComment(std::string_view comment) noexcept {
+    // Ensure comment fits within 72 characters
+    std::array<char, 72> commentField{};
+    std::fill(commentField.begin(), commentField.end(), ' ');
+    const size_t commentLen = std::min(comment.size(), commentField.size());
+    std::copy(comment.begin(), comment.begin() + commentLen,
+              commentField.begin());
+
+    // Add comment as a special record with "COMMENT" keyword
+    records.emplace_back(
+        "COMMENT", std::string_view(commentField.data(), commentField.size()));
+}
+
 std::string FITSHeader::getKeywordValue(std::string_view keyword) const {
     for (const auto& record : records) {
         std::string_view recordKeyword(record.keyword.data(), 8);
@@ -53,6 +66,20 @@ std::string FITSHeader::getKeywordValue(std::string_view keyword) const {
     }
 
     throw FITSHeaderException("Keyword not found: " + std::string(keyword));
+}
+
+std::vector<std::string> FITSHeader::getComments() const {
+    std::vector<std::string> comments;
+    for (const auto& record : records) {
+        std::string_view recordKeyword(record.keyword.data(), 8);
+        if (recordKeyword.substr(0, 7) == "COMMENT") {
+            std::string comment(record.value.data(), record.value.size());
+            // Trim trailing spaces
+            comment.erase(comment.find_last_not_of(' ') + 1);
+            comments.push_back(comment);
+        }
+    }
+    return comments;
 }
 
 std::vector<char> FITSHeader::serialize() const {
@@ -75,12 +102,36 @@ std::vector<char> FITSHeader::serialize() const {
         pos += record.value.size();
     }
 
-    // Add END keyword at the end
-    if (pos + FITS_HEADER_CARD_SIZE <= data.size()) {
-        const char* end = "END     ";
-        std::copy(end, end + 8, data.begin() + pos);
-        // The rest is already filled with spaces
-        pos += FITS_HEADER_CARD_SIZE;
+    // Ensure END keyword is always present
+    if (std::none_of(records.begin(), records.end(),
+                     [](const KeywordRecord& record) {
+                         return std::string_view(record.keyword.data(), 8)
+                                    .substr(0, 3) == "END";
+                     })) {
+        // 修复：使用显式创建的KeywordRecord对象而不是使用emplace_back
+        KeywordRecord endRecord("END", "");
+        // records.push_back(endRecord);
+
+        // 将END记录添加到序列化数据中
+        if (pos + FITS_HEADER_CARD_SIZE <= data.size()) {
+            std::copy(endRecord.keyword.begin(), endRecord.keyword.end(),
+                      data.begin() + pos);
+            pos += endRecord.keyword.size();
+
+            std::copy(endRecord.value.begin(), endRecord.value.end(),
+                      data.begin() + pos);
+            pos += endRecord.value.size();
+        } else {
+            // 扩展数据如果需要
+            data.resize(pos + FITS_HEADER_CARD_SIZE, ' ');
+            std::copy(endRecord.keyword.begin(), endRecord.keyword.end(),
+                      data.begin() + pos);
+            pos += endRecord.keyword.size();
+
+            std::copy(endRecord.value.begin(), endRecord.value.end(),
+                      data.begin() + pos);
+            pos += endRecord.value.size();
+        }
     }
 
     return data;
@@ -148,6 +199,17 @@ void FITSHeader::removeKeyword(std::string_view keyword) noexcept {
                            return recordKeyword.substr(0, kwLen) == keyword;
                        }),
         records.end());
+}
+
+void FITSHeader::clearComments() noexcept {
+    records.erase(std::remove_if(records.begin(), records.end(),
+                                 [](const KeywordRecord& record) {
+                                     std::string_view recordKeyword(
+                                         record.keyword.data(), 8);
+                                     return recordKeyword.substr(0, 7) ==
+                                            "COMMENT";
+                                 }),
+                  records.end());
 }
 
 std::vector<std::string> FITSHeader::getAllKeywords() const {

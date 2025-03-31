@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <execution>
 #include <future>
 #include <numeric>
@@ -692,6 +693,248 @@ ImageHDU::computeImageStatsAsync(int channel) const {
     }
 }
 
+template <FitsNumeric T>
+void ImageHDU::blendImage(const ImageHDU& other, double alpha, int channel) {
+    if (alpha < 0.0 || alpha > 1.0) {
+        throw std::invalid_argument("Alpha must be between 0.0 and 1.0");
+    }
+
+    if (width != other.width || height != other.height ||
+        channels != other.channels) {
+        throw std::invalid_argument(
+            "Images must have the same dimensions and channels for blending");
+    }
+
+    if (!data || !other.data) {
+        throw std::runtime_error("Image data not initialized");
+    }
+
+    try {
+        auto& typedData = dynamic_cast<TypedFITSData<T>&>(*data);
+        const auto& otherTypedData =
+            dynamic_cast<const TypedFITSData<T>&>(*other.data);
+
+        auto& pixelData = typedData.getData();
+        const auto& otherPixelData = otherTypedData.getData();
+
+        for (int c = 0; c < channels; ++c) {
+            if (channel != -1 && c != channel)
+                continue;
+
+            for (size_t i = static_cast<size_t>(c); i < pixelData.size();
+                 i += channels) {
+                pixelData[i] = static_cast<T>(
+                    alpha * pixelData[i] + (1.0 - alpha) * otherPixelData[i]);
+            }
+        }
+    } catch (const std::bad_cast& e) {
+        throw DataFormatException("Data type mismatch in blendImage");
+    }
+}
+
+template <FitsNumeric T>
+void ImageHDU::applyImageMask(const ImageHDU& mask, int maskChannel) {
+    if (width != mask.width || height != mask.height ||
+        channels != mask.channels) {
+        throw std::invalid_argument(
+            "Image and mask must have the same dimensions and channels");
+    }
+
+    if (!data || !mask.data) {
+        throw std::runtime_error("Image data or mask data not initialized");
+    }
+
+    try {
+        auto& typedData = dynamic_cast<TypedFITSData<T>&>(*data);
+        const auto& maskTypedData =
+            dynamic_cast<const TypedFITSData<T>&>(*mask.data);
+
+        auto& pixelData = typedData.getData();
+        const auto& maskPixelData = maskTypedData.getData();
+
+        for (size_t i = 0; i < pixelData.size(); ++i) {
+            if (maskChannel == -1 ||
+                (i % channels) == static_cast<size_t>(maskChannel)) {
+                pixelData[i] = static_cast<T>(pixelData[i] * maskPixelData[i]);
+            }
+        }
+    } catch (const std::bad_cast& e) {
+        throw DataFormatException("Data type mismatch in applyImageMask");
+    }
+}
+
+template <FitsNumeric T>
+void ImageHDU::applyMathOperation(const std::function<T(T)>& operation,
+                                  int channel) {
+    if (!data) {
+        throw std::runtime_error("Image data not initialized");
+    }
+
+    try {
+        auto& typedData = dynamic_cast<TypedFITSData<T>&>(*data);
+        auto& pixelData = typedData.getData();
+
+        for (int c = 0; c < channels; ++c) {
+            if (channel != -1 && c != channel)
+                continue;
+
+            for (size_t i = static_cast<size_t>(c); i < pixelData.size();
+                 i += channels) {
+                pixelData[i] = operation(pixelData[i]);
+            }
+        }
+    } catch (const std::bad_cast& e) {
+        throw DataFormatException("Data type mismatch in applyMathOperation");
+    }
+}
+
+template <FitsNumeric T>
+void ImageHDU::compositeImages(
+    const std::vector<std::reference_wrapper<const ImageHDU>>& images,
+    const std::vector<double>& weights) {
+    if (images.empty() || weights.empty() || images.size() != weights.size()) {
+        throw std::invalid_argument(
+            "Images and weights must have the same non-zero size");
+    }
+
+    if (!data) {
+        throw std::runtime_error("Image data not initialized");
+    }
+
+    for (const auto& image : images) {
+        if (width != image.get().width || height != image.get().height ||
+            channels != image.get().channels) {
+            throw std::invalid_argument(
+                "All images must have the same dimensions and channels");
+        }
+    }
+
+    try {
+        auto& typedData = dynamic_cast<TypedFITSData<T>&>(*data);
+        auto& pixelData = typedData.getData();
+
+        for (size_t i = 0; i < pixelData.size(); ++i) {
+            double compositeValue = 0.0;
+            for (size_t j = 0; j < images.size(); ++j) {
+                const auto& otherTypedData =
+                    dynamic_cast<const TypedFITSData<T>&>(
+                        *images[j].get().data);
+                compositeValue += weights[j] * otherTypedData.getData()[i];
+            }
+            pixelData[i] = static_cast<T>(compositeValue);
+        }
+    } catch (const std::bad_cast& e) {
+        throw DataFormatException("Data type mismatch in compositeImages");
+    }
+}
+
+template <FitsNumeric T>
+void ImageHDU::fft2D(std::vector<std::complex<double>>& data, bool inverse,
+                     int rows, int cols) {
+    if (data.size() != static_cast<size_t>(rows * cols)) {
+        throw std::invalid_argument("Data size does not match dimensions");
+    }
+
+    std::function<void(std::vector<std::complex<double>>&, bool)> fft1D =
+        [&](std::vector<std::complex<double>>& vec, bool inv) {
+            size_t n = vec.size();
+            if (n <= 1)
+                return;
+
+            // Divide
+            std::vector<std::complex<double>> even(n / 2), odd(n / 2);
+            for (size_t i = 0; i < n / 2; ++i) {
+                even[i] = vec[i * 2];
+                odd[i] = vec[i * 2 + 1];
+            }
+
+            // Conquer
+            fft1D(even, inv);
+            fft1D(odd, inv);
+
+            // Combine
+            double angle = 2.0 * M_PI / n * (inverse ? -1 : 1);
+            std::complex<double> w(1), wn(std::cos(angle), std::sin(angle));
+            for (size_t i = 0; i < n / 2; ++i) {
+                vec[i] = even[i] + w * odd[i];
+                vec[i + n / 2] = even[i] - w * odd[i];
+                if (inverse) {
+                    vec[i] /= 2;
+                    vec[i + n / 2] /= 2;
+                }
+                w *= wn;
+            }
+        };
+
+    // Perform FFT on rows
+    for (int r = 0; r < rows; ++r) {
+        std::vector<std::complex<double>> row(cols);
+        for (int c = 0; c < cols; ++c) {
+            row[c] = data[r * cols + c];
+        }
+        fft1D(row, inverse);
+        for (int c = 0; c < cols; ++c) {
+            data[r * cols + c] = row[c];
+        }
+    }
+
+    // Perform FFT on columns
+    for (int c = 0; c < cols; ++c) {
+        std::vector<std::complex<double>> col(rows);
+        for (int r = 0; r < rows; ++r) {
+            col[r] = data[r * cols + c];
+        }
+        fft1D(col, inverse);
+        for (int r = 0; r < rows; ++r) {
+            data[r * cols + c] = col[r];
+        }
+    }
+}
+
+template <FitsNumeric T>
+std::vector<unsigned char> ImageHDU::compressRLE(
+    const std::vector<T>& data) const {
+    std::vector<unsigned char> compressed;
+    size_t size = data.size();
+    for (size_t i = 0; i < size;) {
+        T value = data[i];
+        size_t count = 1;
+        while (i + count < size && data[i + count] == value && count < 255) {
+            ++count;
+        }
+        compressed.push_back(static_cast<unsigned char>(count));
+        compressed.insert(
+            compressed.end(), reinterpret_cast<const unsigned char*>(&value),
+            reinterpret_cast<const unsigned char*>(&value) + sizeof(T));
+        i += count;
+    }
+    return compressed;
+}
+
+template <FitsNumeric T>
+std::vector<T> ImageHDU::decompressRLE(
+    const std::vector<unsigned char>& compressedData,
+    size_t originalSize) const {
+    std::vector<T> decompressed;
+    decompressed.reserve(originalSize);
+
+    size_t i = 0;
+    while (i < compressedData.size()) {
+        unsigned char count = compressedData[i++];
+        T value;
+        std::memcpy(&value, &compressedData[i], sizeof(T));
+        i += sizeof(T);
+        decompressed.insert(decompressed.end(), count, value);
+    }
+
+    if (decompressed.size() != originalSize) {
+        throw std::runtime_error(
+            "Decompressed size does not match original size");
+    }
+
+    return decompressed;
+}
+
 // Explicit template instantiations
 template void ImageHDU::setPixel<uint8_t>(int, int, uint8_t, int);
 template void ImageHDU::setPixel<int16_t>(int, int, int16_t, int);
@@ -789,3 +1032,88 @@ template Task<ImageHDU::ImageStats<float>>
 ImageHDU::computeImageStatsAsync<float>(int) const;
 template Task<ImageHDU::ImageStats<double>>
 ImageHDU::computeImageStatsAsync<double>(int) const;
+
+template void ImageHDU::blendImage<uint8_t>(const ImageHDU&, double, int);
+template void ImageHDU::blendImage<int16_t>(const ImageHDU&, double, int);
+template void ImageHDU::blendImage<int32_t>(const ImageHDU&, double, int);
+template void ImageHDU::blendImage<int64_t>(const ImageHDU&, double, int);
+template void ImageHDU::blendImage<float>(const ImageHDU&, double, int);
+template void ImageHDU::blendImage<double>(const ImageHDU&, double, int);
+
+template void ImageHDU::applyImageMask<uint8_t>(const ImageHDU&, int);
+template void ImageHDU::applyImageMask<int16_t>(const ImageHDU&, int);
+template void ImageHDU::applyImageMask<int32_t>(const ImageHDU&, int);
+template void ImageHDU::applyImageMask<int64_t>(const ImageHDU&, int);
+template void ImageHDU::applyImageMask<float>(const ImageHDU&, int);
+template void ImageHDU::applyImageMask<double>(const ImageHDU&, int);
+
+template void ImageHDU::applyMathOperation<uint8_t>(
+    const std::function<uint8_t(uint8_t)>&, int);
+template void ImageHDU::applyMathOperation<int16_t>(
+    const std::function<int16_t(int16_t)>&, int);
+template void ImageHDU::applyMathOperation<int32_t>(
+    const std::function<int32_t(int32_t)>&, int);
+template void ImageHDU::applyMathOperation<int64_t>(
+    const std::function<int64_t(int64_t)>&, int);
+template void ImageHDU::applyMathOperation<float>(
+    const std::function<float(float)>&, int);
+template void ImageHDU::applyMathOperation<double>(
+    const std::function<double(double)>&, int);
+
+template void ImageHDU::compositeImages<uint8_t>(
+    const std::vector<std::reference_wrapper<const ImageHDU>>&,
+    const std::vector<double>&);
+template void ImageHDU::compositeImages<int16_t>(
+    const std::vector<std::reference_wrapper<const ImageHDU>>&,
+    const std::vector<double>&);
+template void ImageHDU::compositeImages<int32_t>(
+    const std::vector<std::reference_wrapper<const ImageHDU>>&,
+    const std::vector<double>&);
+template void ImageHDU::compositeImages<int64_t>(
+    const std::vector<std::reference_wrapper<const ImageHDU>>&,
+    const std::vector<double>&);
+template void ImageHDU::compositeImages<float>(
+    const std::vector<std::reference_wrapper<const ImageHDU>>&,
+    const std::vector<double>&);
+template void ImageHDU::compositeImages<double>(
+    const std::vector<std::reference_wrapper<const ImageHDU>>&,
+    const std::vector<double>&);
+
+template void ImageHDU::fft2D<uint8_t>(std::vector<std::complex<double>>&, bool,
+                                       int, int);
+template void ImageHDU::fft2D<int16_t>(std::vector<std::complex<double>>&, bool,
+                                       int, int);
+template void ImageHDU::fft2D<int32_t>(std::vector<std::complex<double>>&, bool,
+                                       int, int);
+template void ImageHDU::fft2D<int64_t>(std::vector<std::complex<double>>&, bool,
+                                       int, int);
+template void ImageHDU::fft2D<float>(std::vector<std::complex<double>>&, bool,
+                                     int, int);
+template void ImageHDU::fft2D<double>(std::vector<std::complex<double>>&, bool,
+                                      int, int);
+
+template std::vector<unsigned char> ImageHDU::compressRLE<uint8_t>(
+    const std::vector<uint8_t>&) const;
+template std::vector<unsigned char> ImageHDU::compressRLE<int16_t>(
+    const std::vector<int16_t>&) const;
+template std::vector<unsigned char> ImageHDU::compressRLE<int32_t>(
+    const std::vector<int32_t>&) const;
+template std::vector<unsigned char> ImageHDU::compressRLE<int64_t>(
+    const std::vector<int64_t>&) const;
+template std::vector<unsigned char> ImageHDU::compressRLE<float>(
+    const std::vector<float>&) const;
+template std::vector<unsigned char> ImageHDU::compressRLE<double>(
+    const std::vector<double>&) const;
+
+template std::vector<uint8_t> ImageHDU::decompressRLE<uint8_t>(
+    const std::vector<unsigned char>&, size_t) const;
+template std::vector<int16_t> ImageHDU::decompressRLE<int16_t>(
+    const std::vector<unsigned char>&, size_t) const;
+template std::vector<int32_t> ImageHDU::decompressRLE<int32_t>(
+    const std::vector<unsigned char>&, size_t) const;
+template std::vector<int64_t> ImageHDU::decompressRLE<int64_t>(
+    const std::vector<unsigned char>&, size_t) const;
+template std::vector<float> ImageHDU::decompressRLE<float>(
+    const std::vector<unsigned char>&, size_t) const;
+template std::vector<double> ImageHDU::decompressRLE<double>(
+    const std::vector<unsigned char>&, size_t) const;

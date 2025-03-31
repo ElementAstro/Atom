@@ -7,14 +7,19 @@
 #include <sstream>
 #include <string>
 #include <utility>
+#include <vector>
+#include <chrono>
 
 #ifdef _WIN32
 #include <windows.h>
 #elif __linux__
 #include <unistd.h>
 #include <fstream>
+#include <sys/sysinfo.h>
 #elif __APPLE__
 #include <sys/utsname.h>
+#include <sys/sysctl.h>
+#include <sys/time.h>
 #endif
 
 #include "atom/error/exception.hpp"
@@ -237,6 +242,68 @@ auto isWsl() -> bool {
         LOG_F(ERROR, "Failed to open /proc/version");
     }
     return false;
+}
+
+auto getSystemUptime() -> std::chrono::seconds {
+    LOG_F(INFO, "Getting system uptime");
+#ifdef _WIN32
+    return std::chrono::seconds(GetTickCount64() / 1000);
+#elif __linux__
+    struct sysinfo si;
+    if (sysinfo(&si) == 0) {
+        return std::chrono::seconds(si.uptime);
+    }
+#elif __APPLE__
+    struct timeval boottime;
+    size_t len = sizeof(boottime);
+    int mib[2] = {CTL_KERN, KERN_BOOTTIME};
+    if (sysctl(mib, 2, &boottime, &len, NULL, 0) == 0) {
+        time_t now;
+        time(&now);
+        return std::chrono::seconds(now - boottime.tv_sec);
+    }
+#endif
+    return std::chrono::seconds(0);
+}
+
+auto getLastBootTime() -> std::string {
+    LOG_F(INFO, "Getting last boot time");
+    auto uptime = getSystemUptime();
+    auto now = std::chrono::system_clock::now();
+    auto bootTime = now - uptime;
+    auto bootTimeT = std::chrono::system_clock::to_time_t(bootTime);
+    return std::string(std::ctime(&bootTimeT));
+}
+
+auto getInstalledUpdates() -> std::vector<std::string> {
+    LOG_F(INFO, "Getting installed updates");
+    std::vector<std::string> updates;
+
+#ifdef _WIN32
+    // 使用PowerShell命令获取Windows更新历史
+    std::array<char, 128> buffer;
+    std::string command = "powershell -Command \"Get-HotFix | Select-Object HotFixID\"";
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.c_str(), "r"), pclose);
+    
+    if (pipe) {
+        while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+            updates.push_back(buffer.data());
+        }
+    }
+#elif __linux__
+    // 读取dpkg或rpm日志获取更新历史
+    std::ifstream log("/var/log/dpkg.log");
+    if (log.is_open()) {
+        std::string line;
+        while (std::getline(log, line)) {
+            if (line.find("install") != std::string::npos) {
+                updates.push_back(line);
+            }
+        }
+    }
+#endif
+
+    return updates;
 }
 
 }  // namespace atom::system

@@ -17,6 +17,7 @@ Description: System Information Module - Wifi Information
 
 #include <string>
 #include <vector>
+#include <chrono>
 
 #include "atom/macro.hpp"
 
@@ -62,6 +63,62 @@ ATOM_NODISCARD auto getIPv6Addresses() -> std::vector<std::string>;
  * @return Vector of interface names
  */
 ATOM_NODISCARD auto getInterfaceNames() -> std::vector<std::string>;
+
+/**
+ * @brief Network statistics structure
+ */
+struct NetworkStats {
+    double downloadSpeed;    // MB/s
+    double uploadSpeed;      // MB/s
+    double latency;          // ms
+    double packetLoss;       // Percentage
+    double signalStrength;   // dBm
+    std::vector<std::string> connectedDevices;
+} ATOM_ALIGNAS(32);
+
+/**
+ * @brief Get current network statistics
+ * @return Network statistics
+ */
+ATOM_NODISCARD auto getNetworkStats() -> NetworkStats;
+
+/**
+ * @brief Get network history over a duration
+ * @param duration Duration in minutes
+ * @return Vector of network statistics
+ */
+ATOM_NODISCARD auto getNetworkHistory(std::chrono::minutes duration) -> std::vector<NetworkStats>;
+
+/**
+ * @brief Scan available networks
+ * @return Vector of available network names
+ */
+ATOM_NODISCARD auto scanAvailableNetworks() -> std::vector<std::string>;
+
+/**
+ * @brief Get network security information
+ * @return Network security details
+ */
+ATOM_NODISCARD auto getNetworkSecurity() -> std::string;
+
+/**
+ * @brief Measure bandwidth
+ * @return Pair of upload and download speeds
+ */
+ATOM_NODISCARD auto measureBandwidth() -> std::pair<double, double>;
+
+/**
+ * @brief Analyze network quality
+ * @return Network quality analysis result
+ */
+ATOM_NODISCARD auto analyzeNetworkQuality() -> std::string;
+
+/**
+ * @brief Get connected devices
+ * @return Vector of connected device names
+ */
+ATOM_NODISCARD auto getConnectedDevices() -> std::vector<std::string>;
+
 }  // namespace atom::system
 
 #endif

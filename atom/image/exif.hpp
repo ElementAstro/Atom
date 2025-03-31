@@ -5,6 +5,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <memory>
 
 namespace atom::image {
 
@@ -58,6 +59,14 @@ struct alignas(128) ExifData {
         gpsLatitude;  ///< The GPS latitude where the photo was taken.
     std::optional<GpsCoordinate>
         gpsLongitude;  ///< The GPS longitude where the photo was taken.
+
+    // Additional fields
+    std::string orientation;    ///< Image orientation
+    std::string compression;    ///< Compression method
+    std::string imageWidth;     ///< Image width
+    std::string imageHeight;    ///< Image height
+    std::string colorSpace;     ///< Color space
+    std::string software;       ///< Processing software
 };
 
 /**
@@ -84,10 +93,23 @@ public:
      */
     [[nodiscard]] auto getExifData() const -> const ExifData&;
 
-private:
-    std::string m_filename;  ///< The name of the file to parse.
-    ExifData m_exifData;     ///< The structure to hold the parsed EXIF data.
+    // Virtual destructor
+    virtual ~ExifParser() = default;
 
+    // Optimization method
+    virtual void optimize();
+
+    // Validate data integrity
+    [[nodiscard]] bool validateData() const;
+
+    // Clone interface
+    [[nodiscard]] virtual std::unique_ptr<ExifParser> clone() const;
+
+    // Serialization interface
+    [[nodiscard]] virtual std::string serialize() const;
+    static std::unique_ptr<ExifParser> deserialize(const std::string& data);
+
+protected:
     /**
      * @brief Parses the Image File Directory (IFD) from the EXIF data.
      * @param data Pointer to the EXIF data.
@@ -146,6 +168,20 @@ private:
      * @return The 32-bit unsigned integer.
      */
     auto readUint32Le(const std::byte* data) -> uint32_t;
+
+    // Validate buffer bounds
+    virtual bool validateBufferBounds(const std::byte* ptr, size_t size) const;
+
+    // Clear EXIF data
+    virtual void clearExifData();
+
+private:
+    std::string m_filename;  ///< The name of the file to parse.
+    ExifData m_exifData;     ///< The structure to hold the parsed EXIF data.
+
+    // Private helper methods
+    auto parseColorSpace(const std::byte* data, bool isLittleEndian) -> std::string;
+    auto parseOrientation(const std::byte* data, bool isLittleEndian) -> std::string;
 };
 
 }  // namespace atom::image

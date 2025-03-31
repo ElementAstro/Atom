@@ -1,11 +1,12 @@
 #include "virtual.hpp"
+#include "cpu.hpp"
+#include "memory.hpp"
 
-#include <chrono>
-#include <iostream>
-#include <string>
-#include <array>
-#include <thread>
 #include <algorithm>
+#include <array>
+#include <chrono>
+#include <cmath>
+#include <string>
 
 #ifdef _WIN32
 // clang-format off
@@ -39,15 +40,22 @@ auto getHypervisorVendor() -> std::string {
     std::array<unsigned int, 4> cpuInfo = {0};
 
 #ifdef _WIN32
-    __cpuid(reinterpret_cast<int*>(cpuInfo.data()), CPUID_HYPERVISOR);  // Hypervisor CPUID
+    __cpuid(reinterpret_cast<int*>(cpuInfo.data()),
+            CPUID_HYPERVISOR);  // Hypervisor CPUID
 #else
-    __get_cpuid(CPUID_HYPERVISOR, &cpuInfo[0], &cpuInfo[1], &cpuInfo[2], &cpuInfo[3]);
+    __get_cpuid(CPUID_HYPERVISOR, &cpuInfo[0], &cpuInfo[1], &cpuInfo[2],
+                &cpuInfo[3]);
 #endif
 
     std::array<char, VENDOR_STRING_LENGTH + 1> vendor = {0};
-    std::copy(reinterpret_cast<const char*>(&cpuInfo[1]), reinterpret_cast<const char*>(&cpuInfo[1]) + 4, vendor.begin());
-    std::copy(reinterpret_cast<const char*>(&cpuInfo[2]), reinterpret_cast<const char*>(&cpuInfo[2]) + 4, vendor.begin() + 4);
-    std::copy(reinterpret_cast<const char*>(&cpuInfo[3]), reinterpret_cast<const char*>(&cpuInfo[3]) + 4, vendor.begin() + 8);
+    std::copy(reinterpret_cast<const char*>(&cpuInfo[1]),
+              reinterpret_cast<const char*>(&cpuInfo[1]) + 4, vendor.begin());
+    std::copy(reinterpret_cast<const char*>(&cpuInfo[2]),
+              reinterpret_cast<const char*>(&cpuInfo[2]) + 4,
+              vendor.begin() + 4);
+    std::copy(reinterpret_cast<const char*>(&cpuInfo[3]),
+              reinterpret_cast<const char*>(&cpuInfo[3]) + 4,
+              vendor.begin() + 8);
 
     std::string vendorStr(vendor.data());
     LOG_F(INFO, "Hypervisor vendor: {}", vendorStr);
@@ -60,9 +68,11 @@ auto isVirtualMachine() -> bool {
     std::array<unsigned int, 4> cpuInfo = {0};
 
 #ifdef _WIN32
-    __cpuid(reinterpret_cast<int*>(cpuInfo.data()), CPUID_FEATURES);  // 调用 CPUID 指令，取页码 1
+    __cpuid(reinterpret_cast<int*>(cpuInfo.data()),
+            CPUID_FEATURES);  // 调用 CPUID 指令，取页码 1
 #else
-    __get_cpuid(CPUID_FEATURES, &cpuInfo[0], &cpuInfo[1], &cpuInfo[2], &cpuInfo[3]);
+    __get_cpuid(CPUID_FEATURES, &cpuInfo[0], &cpuInfo[1], &cpuInfo[2],
+                &cpuInfo[3]);
 #endif
 
     bool isVM = static_cast<bool>(cpuInfo[2] & (1u << HYPERVISOR_PRESENT_BIT));
@@ -82,7 +92,8 @@ auto checkBIOS() -> bool {
                      _T("HARDWARE\\DESCRIPTION\\System\\BIOS"), 0, KEY_READ,
                      &hKey) == ERROR_SUCCESS) {
         if (RegQueryValueEx(hKey, _T("SystemManufacturer"), nullptr, nullptr,
-                            reinterpret_cast<LPBYTE>(biosInfo.data()), &bufSize) == ERROR_SUCCESS) {
+                            reinterpret_cast<LPBYTE>(biosInfo.data()),
+                            &bufSize) == ERROR_SUCCESS) {
             std::string bios(biosInfo.data());
             LOG_F(INFO, "BIOS SystemManufacturer: {}", bios);
             if (bios.find("VMware") != std::string::npos ||
@@ -327,8 +338,102 @@ auto checkTimeDrift() -> bool {
             .count();
 
     // 如果时间跳动太大，可能是虚拟机中常见的时间管理问题
-    bool timeDrift = duration > TIME_DRIFT_UPPER_BOUND || duration < TIME_DRIFT_LOWER_BOUND;
+    bool timeDrift =
+        duration > TIME_DRIFT_UPPER_BOUND || duration < TIME_DRIFT_LOWER_BOUND;
     LOG_F(INFO, "Time drift detected: {}", timeDrift);
     return timeDrift;
 }
+
+auto checkCPUCores() -> bool {
+    LOG_F(INFO, "Starting checkCPUCores function");
+    int cores = getNumberOfLogicalCores();
+    LOG_F(INFO, "CPU cores detected: {}", cores);
+    return (cores <= 2 || (cores & (cores - 1)) == 0);
 }
+
+auto checkMemoryConfiguration() -> bool {
+    LOG_F(INFO, "Starting checkMemoryConfiguration function");
+    auto totalMem = getTotalMemorySize();
+    double memGB = static_cast<double>(totalMem) / (1024 * 1024 * 1024);
+    LOG_F(INFO, "Total physical memory: {:.2f} GB", memGB);
+
+    return (memGB <= 4.0 ||
+            std::abs(std::log2(memGB) - std::round(std::log2(memGB))) < 0.01);
+}
+
+auto isDockerContainer() -> bool {
+    LOG_F(INFO, "Starting isDockerContainer function");
+#ifdef _WIN32
+    return false;
+#else
+    std::ifstream cgroup("/proc/1/cgroup");
+    std::string line;
+    if (cgroup.is_open()) {
+        while (std::getline(cgroup, line)) {
+            if (line.find("docker") != std::string::npos) {
+                LOG_F(INFO, "Docker container detected");
+                return true;
+            }
+        }
+    }
+
+    std::ifstream dockerEnv("/.dockerenv");
+    if (dockerEnv.good()) {
+        LOG_F(INFO, "Docker environment file found");
+        return true;
+    }
+#endif
+    return false;
+}
+
+auto getVirtualizationConfidence() -> double {
+    LOG_F(INFO, "Starting getVirtualizationConfidence function");
+    int evidence = 0;
+    int totalChecks = 0;
+
+    if (isVirtualMachine())
+        evidence++;
+    totalChecks++;
+
+    if (checkBIOS())
+        evidence++;
+    totalChecks++;
+
+    if (checkNetworkAdapter())
+        evidence++;
+    totalChecks++;
+
+    if (checkDisk())
+        evidence++;
+    totalChecks++;
+
+    if (checkGraphicsCard())
+        evidence++;
+    totalChecks++;
+
+    if (checkProcesses())
+        evidence++;
+    totalChecks++;
+
+    if (checkPCIBus())
+        evidence++;
+    totalChecks++;
+
+    if (checkTimeDrift())
+        evidence++;
+    totalChecks++;
+
+    if (checkCPUCores())
+        evidence++;
+    totalChecks++;
+
+    if (checkMemoryConfiguration())
+        evidence++;
+    totalChecks++;
+
+    double confidence = static_cast<double>(evidence) / totalChecks;
+    LOG_F(INFO, "Virtualization confidence: {:.2f}", confidence);
+    return confidence;
+}
+
+}  // namespace atom::system

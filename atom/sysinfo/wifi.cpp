@@ -27,6 +27,9 @@ Description: System Information Module - Wifi Information
 #include <iptypes.h>
 #include <wlanapi.h>
 #include <ws2tcpip.h>
+#include <pdh.h>
+#include <thread>
+#include <icmpapi.h>
 #undef max
 #undef min
 // clang-format on
@@ -34,15 +37,20 @@ Description: System Information Module - Wifi Information
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "wlanapi.lib")
+#pragma comment(lib, "pdh.lib")
 #endif
 #elif defined(__linux__)
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <netinet/in.h>
+#include <chrono>
+#include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <iterator>
 #include <memory>
 #include <sstream>
+#include <thread>
 #elif defined(__APPLE__)
 #include <CoreFoundation/CoreFoundation.h>
 #include <SystemConfiguration/CaptiveNetwork.h>
@@ -570,5 +578,211 @@ auto getInterfaceNames() -> std::vector<std::string> {
         freeAddresses(allAddrs);
     }
     return interfaceNames;
+}
+
+float measurePing(const std::string& host, int timeout) {
+    LOG_F(INFO, "Measuring ping to host: {}, timeout: {} ms", host, timeout);
+    float latency = -1.0f;
+
+#ifdef _WIN32
+    // 初始化Winsock
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        LOG_F(ERROR, "WSAStartup failed");
+        return latency;
+    }
+
+    // 创建ICMP句柄
+    HANDLE hIcmp = IcmpCreateFile();
+    if (hIcmp == INVALID_HANDLE_VALUE) {
+        LOG_F(ERROR, "IcmpCreateFile failed");
+        WSACleanup();
+        return latency;
+    }
+
+    // 解析目标IP
+    struct sockaddr_in dest;
+    memset(&dest, 0, sizeof(dest));
+    dest.sin_family = AF_INET;
+
+    struct addrinfo hints, *res;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_RAW;
+
+    if (getaddrinfo(host.c_str(), NULL, &hints, &res) != 0) {
+        LOG_F(ERROR, "getaddrinfo failed for host: {}", host);
+        IcmpCloseHandle(hIcmp);
+        WSACleanup();
+        return latency;
+    }
+
+    dest.sin_addr = ((struct sockaddr_in*)(res->ai_addr))->sin_addr;
+    freeaddrinfo(res);
+
+    // Ping数据准备
+    const int PING_DATA_SIZE = 32;
+    unsigned char pingData[PING_DATA_SIZE];
+    memset(pingData, 0, sizeof(pingData));
+
+    // 分配响应缓冲区
+    const int REPLY_BUFFER_SIZE = sizeof(ICMP_ECHO_REPLY) + PING_DATA_SIZE + 8;
+    unsigned char* replyBuffer = new unsigned char[REPLY_BUFFER_SIZE];
+
+    // 发送Echo请求
+    DWORD replyCount =
+        IcmpSendEcho(hIcmp, dest.sin_addr.S_un.S_addr, pingData, PING_DATA_SIZE,
+                     NULL, replyBuffer, REPLY_BUFFER_SIZE, timeout);
+
+    if (replyCount > 0) {
+        PICMP_ECHO_REPLY pEchoReply = (PICMP_ECHO_REPLY)replyBuffer;
+        latency = static_cast<float>(pEchoReply->RoundTripTime);
+        LOG_F(INFO, "Ping successful, latency: {:.1f} ms", latency);
+    } else {
+        LOG_F(ERROR, "Ping failed, error code: {}", GetLastError());
+    }
+
+    delete[] replyBuffer;
+    IcmpCloseHandle(hIcmp);
+    WSACleanup();
+
+#elif defined(__linux__)
+    // Linux下使用系统命令实现ping
+    char cmd[100];
+    snprintf(cmd, sizeof(cmd), "ping -c 1 -W %d %s 2>/dev/null", timeout / 1000,
+             host.c_str());
+
+    FILE* pipe = popen(cmd, "r");
+    if (pipe) {
+        char buffer[512];
+        while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+            if (strstr(buffer, "time=") || strstr(buffer, "time ")) {
+                // 解析ping输出获取延迟值
+                char* timePos = strstr(buffer, "time=");
+                if (!timePos)
+                    timePos = strstr(buffer, "time ");
+                if (timePos) {
+                    timePos += 5;  // 跳过"time="或"time "
+                    latency = atof(timePos);
+                    LOG_F(INFO, "Ping successful, latency: {:.1f} ms", latency);
+                }
+            }
+        }
+        pclose(pipe);
+    }
+
+    if (latency < 0) {
+        LOG_F(ERROR, "Ping failed for host: {}", host);
+    }
+#endif
+
+    return latency;
+}
+
+auto getNetworkStats() -> NetworkStats {
+    LOG_F(INFO, "Getting network statistics");
+    NetworkStats stats{};
+
+#ifdef _WIN32
+    PDH_HQUERY query;
+    PDH_HCOUNTER bytesRecvCounter, bytesSentCounter;
+    if (PdhOpenQuery(NULL, 0, &query) == ERROR_SUCCESS) {
+#ifdef UNICODE
+        PdhAddCounterW(query, L"\\Network Interface(*)\\Bytes Received/sec", 0,
+                       &bytesRecvCounter);
+        PdhAddCounterW(query, L"\\Network Interface(*)\\Bytes Sent/sec", 0,
+                       &bytesSentCounter);
+#else
+        PdhAddCounterA(query, "\\Network Interface(*)\\Bytes Received/sec", 0,
+                       &bytesRecvCounter);
+        PdhAddCounterA(query, "\\Network Interface(*)\\Bytes Sent/sec", 0,
+                       &bytesSentCounter);
+#endif
+
+        PdhCollectQueryData(query);
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        PdhCollectQueryData(query);
+
+        PDH_FMT_COUNTERVALUE recvValue, sentValue;
+        PdhGetFormattedCounterValue(bytesRecvCounter, PDH_FMT_DOUBLE, NULL,
+                                    &recvValue);
+        PdhGetFormattedCounterValue(bytesSentCounter, PDH_FMT_DOUBLE, NULL,
+                                    &sentValue);
+
+        stats.downloadSpeed =
+            recvValue.doubleValue / 1024 / 1024;  // Convert to MB/s
+        stats.uploadSpeed = sentValue.doubleValue / 1024 / 1024;
+
+        PdhCloseQuery(query);
+    }
+#elif __linux__
+    // 读取/proc/net/dev获取网络统计信息
+    std::ifstream netdev("/proc/net/dev");
+    std::string line;
+    unsigned long long bytesRecv = 0, bytesSent = 0;
+
+    while (std::getline(netdev, line)) {
+        if (line.find(':') != std::string::npos) {
+            std::istringstream iss(line.substr(line.find(':') + 1));
+            unsigned long long recv, send;
+            iss >> recv >> std::ws >> send;
+            bytesRecv += recv;
+            bytesSent += send;
+        }
+    }
+
+    stats.downloadSpeed = bytesRecv / 1024.0 / 1024;  // Convert to MB/s
+    stats.uploadSpeed = bytesSent / 1024.0 / 1024;
+#endif
+
+    // 测量网络延迟
+    std::string host = "8.8.8.8";
+    int timeout = 1000;
+    stats.latency = measurePing(host, timeout);
+
+    // 获取信号强度
+#ifdef _WIN32
+    HANDLE hClient = NULL;
+    PWLAN_INTERFACE_INFO_LIST pIfList = NULL;
+    PWLAN_AVAILABLE_NETWORK_LIST pBssList = NULL;
+
+    DWORD dwVersion = 0;
+    if (WlanOpenHandle(2, NULL, &dwVersion, &hClient) == ERROR_SUCCESS) {
+        if (WlanEnumInterfaces(hClient, NULL, &pIfList) == ERROR_SUCCESS) {
+            for (DWORD i = 0; i < pIfList->dwNumberOfItems; i++) {
+                WlanGetAvailableNetworkList(
+                    hClient, &pIfList->InterfaceInfo[i].InterfaceGuid, 0, NULL,
+                    &pBssList);
+
+                if (pBssList && pBssList->dwNumberOfItems > 0) {
+                    stats.signalStrength =
+                        pBssList->Network[0].wlanSignalQuality;
+                }
+            }
+        }
+        WlanCloseHandle(hClient, NULL);
+    }
+#elif __linux__
+    // 使用iwconfig获取信号强度
+    FILE* pipe = popen("iwconfig 2>/dev/null | grep 'Signal level'", "r");
+    if (pipe) {
+        char buffer[128];
+        while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+            if (strstr(buffer, "Signal level") != nullptr) {
+                sscanf(buffer, "%*[^=]=%d", &stats.signalStrength);
+                break;
+            }
+        }
+        pclose(pipe);
+    }
+#endif
+
+    LOG_F(INFO,
+          "Network stats - Download: {:.2f} MB/s, Upload: {:.2f} MB/s, "
+          "Latency: {:.1f} ms, Signal: {:.1f} dBm",
+          stats.downloadSpeed, stats.uploadSpeed, stats.latency,
+          stats.signalStrength);
+
+    return stats;
 }
 }  // namespace atom::system

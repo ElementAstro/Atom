@@ -1,9 +1,13 @@
 #include "fits_data.hpp"
 
+#include <zlib.h>
 #include <algorithm>
 #include <bit>
+#include <cmath>
 #include <cstring>
+#include <execution>
 #include <fstream>
+#include <numeric>
 #include <stdexcept>
 #include <vector>
 
@@ -154,6 +158,192 @@ template <typename U>
 void TypedFITSData<T>::swapEndian(U& value) noexcept {
     auto* bytes = reinterpret_cast<std::byte*>(&value);
     std::reverse(bytes, bytes + sizeof(U));
+}
+
+template <FitsNumericType T>
+T TypedFITSData<T>::getMinValue() const {
+    if (data.empty()) {
+        throw FITSDataException("Cannot get minimum value of empty data");
+    }
+    return *std::min_element(data.begin(), data.end());
+}
+
+template <FitsNumericType T>
+T TypedFITSData<T>::getMaxValue() const {
+    if (data.empty()) {
+        throw FITSDataException("Cannot get maximum value of empty data");
+    }
+    return *std::max_element(data.begin(), data.end());
+}
+
+template <FitsNumericType T>
+double TypedFITSData<T>::getMean() const {
+    if (data.empty()) {
+        throw FITSDataException("Cannot calculate mean of empty data");
+    }
+    double sum = std::accumulate(data.begin(), data.end(), 0.0);
+    return sum / data.size();
+}
+
+template <FitsNumericType T>
+double TypedFITSData<T>::getStdDev() const {
+    if (data.size() < 2) {
+        throw FITSDataException(
+            "Cannot calculate standard deviation with less than 2 elements");
+    }
+    double mean = getMean();
+    double sumSquares = std::accumulate(data.begin(), data.end(), 0.0,
+                                        [mean](double acc, T val) {
+                                            double diff = val - mean;
+                                            return acc + diff * diff;
+                                        });
+    return std::sqrt(sumSquares / (data.size() - 1));
+}
+
+template <FitsNumericType T>
+bool TypedFITSData<T>::hasNaN() const {
+    if constexpr (std::is_floating_point_v<T>) {
+        return std::any_of(data.begin(), data.end(),
+                           [](T val) { return std::isnan(val); });
+    }
+    return false;
+}
+
+template <FitsNumericType T>
+bool TypedFITSData<T>::hasInfinity() const {
+    if constexpr (std::is_floating_point_v<T>) {
+        return std::any_of(data.begin(), data.end(),
+                           [](T val) { return std::isinf(val); });
+    }
+    return false;
+}
+
+template <FitsNumericType T>
+void TypedFITSData<T>::validateData() {
+    if constexpr (std::is_floating_point_v<T>) {
+        if (hasNaN()) {
+            throw FITSDataException("Data contains NaN values");
+        }
+        if (hasInfinity()) {
+            throw FITSDataException("Data contains infinity values");
+        }
+    }
+}
+
+template <FitsNumericType T>
+void TypedFITSData<T>::optimizeMemory() {
+    if (!isOptimized) {
+        data.shrink_to_fit();
+        isOptimized = true;
+    }
+}
+
+template <FitsNumericType T>
+void TypedFITSData<T>::reserveCapacity(size_t capacity) {
+    data.reserve(capacity);
+}
+
+template <FitsNumericType T>
+void TypedFITSData<T>::compress() {
+    if (compressed || data.empty())
+        return;
+
+    const size_t dataSize = data.size() * sizeof(T);
+    compressedData.resize(compressBound(dataSize));
+    uLongf compressedSize = compressedData.size();
+
+    if (compress2(compressedData.data(), &compressedSize,
+                  reinterpret_cast<const Bytef*>(data.data()), dataSize,
+                  Z_BEST_COMPRESSION) != Z_OK) {
+        throw FITSDataException("Data compression failed");
+    }
+
+    compressedData.resize(compressedSize);
+    data.clear();
+    data.shrink_to_fit();
+    compressed = true;
+}
+
+template <FitsNumericType T>
+void TypedFITSData<T>::decompress() {
+    if (!compressed)
+        return;
+
+    const size_t originalSize = compressedData.size() * sizeof(T);
+    std::vector<T> decompressedData(originalSize / sizeof(T));
+    uLongf decompressedSize = originalSize;
+
+    if (uncompress(reinterpret_cast<Bytef*>(decompressedData.data()),
+                   &decompressedSize, compressedData.data(),
+                   compressedData.size()) != Z_OK) {
+        throw FITSDataException("Data decompression failed");
+    }
+
+    data = std::move(decompressedData);
+    compressedData.clear();
+    compressedData.shrink_to_fit();
+    compressed = false;
+}
+
+template <FitsNumericType T>
+void TypedFITSData<T>::transform(const std::function<T(T)>& func) {
+    if (compressed)
+        decompress();
+    std::transform(data.begin(), data.end(), data.begin(), func);
+}
+
+template <FitsNumericType T>
+void TypedFITSData<T>::transformParallel(const std::function<T(T)>& func) {
+    if (compressed)
+        decompress();
+    std::transform(std::execution::par_unseq, data.begin(), data.end(),
+                   data.begin(), func);
+}
+
+template <FitsNumericType T>
+void TypedFITSData<T>::normalize(T minVal, T maxVal) {
+    if (compressed)
+        decompress();
+    if (data.empty())
+        return;
+
+    T currentMin = getMinValue();
+    T currentMax = getMaxValue();
+    T range = currentMax - currentMin;
+
+    if (range == 0) {
+        std::fill(data.begin(), data.end(), minVal);
+        return;
+    }
+
+    T targetRange = maxVal - minVal;
+    transform([=](T val) {
+        return static_cast<T>(minVal +
+                              (val - currentMin) * targetRange / range);
+    });
+}
+
+template <FitsNumericType T>
+void TypedFITSData<T>::scale(double factor) {
+    if (compressed)
+        decompress();
+    transform([factor](T val) { return static_cast<T>(val * factor); });
+}
+
+template <FitsNumericType T>
+template <FitsNumericType U>
+std::vector<U> TypedFITSData<T>::convertTo() const {
+    if (compressed) {
+        throw FITSDataException("Cannot convert compressed data");
+    }
+
+    std::vector<U> result;
+    result.reserve(data.size());
+
+    std::transform(data.begin(), data.end(), std::back_inserter(result),
+                   [](T val) { return static_cast<U>(val); });
+
+    return result;
 }
 
 // Explicit template instantiations

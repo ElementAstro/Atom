@@ -32,11 +32,15 @@ Description: System Information Module - Disk
 #include <unordered_set>
 
 #ifdef _WIN32
+//clang-format off
+#include <windows.h>
 #include <devguid.h>
 #include <setupapi.h>
-#include <windows.h>
 #include <winioctl.h>
+#include <cfgmgr32.h>
 #pragma comment(lib, "setupapi.lib")
+#pragma comment(lib, "cfgmgr32.lib")
+// clang-format on
 #elif __linux__
 #include <blkid/blkid.h>
 #include <dirent.h>

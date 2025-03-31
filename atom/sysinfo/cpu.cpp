@@ -2730,6 +2730,7 @@ auto getCpuPowerInfo() -> CpuPowerInfo {
         }
     }
 
+    /*
     // Try to get current power draw - difficult in Windows
     // Some laptops expose current power through battery interfaces
     SYSTEM_POWER_STATUS powerStatus;
@@ -2754,6 +2755,7 @@ auto getCpuPowerInfo() -> CpuPowerInfo {
             }
         }
     }
+    */
 
 #elif defined(__linux__)
     // Try Intel RAPL (Running Average Power Limit) for Intel CPUs
@@ -3763,15 +3765,17 @@ auto getCpuScalingGovernor() -> std::string {
 
 #ifdef _WIN32
     // Windows doesn't have governors but power plans
-    GUID activePolicy;
-    if (PowerGetActiveScheme(NULL, &activePolicy) == ERROR_SUCCESS) {
+    /*
+     GUID activePolicy;
+    // 使用PowerGetActiveScheme而非PowerGetActiveScheme
+    if (PowerGetActiveScheme(nullptr, &activePolicy) == ERROR_SUCCESS) {
         // Check which power plan this is
         wchar_t planName[256];
         DWORD nameSize = sizeof(planName);
 
-        if (PowerReadFriendlyName(NULL, &activePolicy, NULL, NULL, planName,
-                                  &nameSize) == ERROR_SUCCESS) {
-            char planNameChar[256];
+        // 使用PowerReadFriendlyName函数
+        if (PowerReadFriendlyName(nullptr, &activePolicy, nullptr, nullptr,
+    planName, &nameSize) == ERROR_SUCCESS) { char planNameChar[256];
             wcstombs(planNameChar, planName, sizeof(planNameChar));
             governor = planNameChar;
         } else {
@@ -3798,6 +3802,8 @@ auto getCpuScalingGovernor() -> std::string {
     } else {
         LOG_F(ERROR, "Failed to get active power scheme");
     }
+    */
+    LOG_F(INFO, "CPU Scaling Governor: {}", governor);
 
 #elif defined(__linux__)
     std::ifstream governorFile(

@@ -14,10 +14,6 @@ Description: System Information Module - Memory
 
 #include "atom/sysinfo/memory.hpp"
 
-#include <fstream>
-#include <regex>
-#include <sstream>
-
 #include "atom/log/loguru.hpp"
 
 #ifdef _WIN32
@@ -29,6 +25,8 @@ Description: System Information Module - Memory
 #include <pdh.h>
 #include <tlhelp32.h>
 #include <wincon.h>
+#include <chrono>
+#include <thread>
 // clang-format on
 #elif __linux__
 #include <dirent.h>
@@ -38,7 +36,10 @@ Description: System Information Module - Memory
 #include <sys/types.h>
 #include <unistd.h>
 #include <csignal>
+#include <fstream>
 #include <iterator>
+#include <regex>
+#include <sstream>
 #elif __APPLE__
 #include <mach/mach_init.h>
 #include <mach/task_info.h>
@@ -60,8 +61,10 @@ auto getMemoryUsage() -> float {
     float totalMemory = 0.0f;
     float availableMemory = 0.0f;
     if (GlobalMemoryStatusEx(&status) != 0) {
-        totalMemory = static_cast<float>(status.ullTotalPhys / 1024 / 1024);
-        availableMemory = static_cast<float>(status.ullAvailPhys / 1024 / 1024);
+        totalMemory =
+            static_cast<float>(status.ullTotalPhys) / 1024.0f / 1024.0f;
+        availableMemory =
+            static_cast<float>(status.ullAvailPhys) / 1024.0f / 1024.0f;
         memoryUsage = (totalMemory - availableMemory) / totalMemory * 100.0;
         LOG_F(INFO,
               "Total Memory: %.2f MB, Available Memory: %.2f MB, Memory Usage: "
@@ -297,7 +300,7 @@ auto getVirtualMemoryMax() -> unsigned long long {
         pclose(pipe);
     }
 #elif defined(__linux__)
-    struct sysinfo si {};
+    struct sysinfo si{};
     if (sysinfo(&si) == 0) {
         virtualMemoryMax = (si.totalram + si.totalswap) / 1024;
         LOG_F(INFO, "Virtual Memory Max: {} kB", virtualMemoryMax);
@@ -338,7 +341,7 @@ auto getVirtualMemoryUsed() -> unsigned long long {
         pclose(pipe);
     }
 #elif defined(__linux__)
-    struct sysinfo si {};
+    struct sysinfo si{};
     if (sysinfo(&si) == 0) {
         virtualMemoryUsed =
             (si.totalram - si.freeram + si.totalswap - si.freeswap) / 1024;
@@ -378,7 +381,7 @@ auto getSwapMemoryTotal() -> unsigned long long {
         pclose(pipe);
     }
 #elif defined(__linux__)
-    struct sysinfo si {};
+    struct sysinfo si{};
     if (sysinfo(&si) == 0) {
         swapMemoryTotal = si.totalswap / 1024;
         LOG_F(INFO, "Swap Memory Total: {} kB", swapMemoryTotal);
@@ -419,7 +422,7 @@ unsigned long long getSwapMemoryUsed() {
         pclose(pipe);
     }
 #elif defined(__linux__)
-    struct sysinfo si {};
+    struct sysinfo si{};
     if (sysinfo(&si) == 0) {
         swapMemoryUsed = (si.totalswap - si.freeswap) / 1024;
         LOG_F(INFO, "Swap Memory Used: {} kB", swapMemoryUsed);
@@ -510,7 +513,8 @@ auto getAvailableMemory() -> size_t {
         std::smatch match;
         if (std::regex_search(line, match, memAvailableRegex)) {
             if (match.size() == 2) {
-                availableMemory = std::stoull(match[1].str()) * 1024;  // Convert from kB to bytes
+                availableMemory = std::stoull(match[1].str()) *
+                                  1024;  // Convert from kB to bytes
                 LOG_F(INFO, "Available Memory: {} bytes", availableMemory);
                 break;
             }
@@ -545,6 +549,181 @@ auto getUncommittedMemory() -> size_t {
     size_t totalMemory = getTotalMemory();
     size_t committedMemory = getCommittedMemory();
     return totalMemory - committedMemory;
+}
+
+auto getDetailedMemoryStats() -> MemoryInfo {
+    LOG_F(INFO, "Starting getDetailedMemoryStats function");
+    MemoryInfo info;
+
+#ifdef _WIN32
+    MEMORYSTATUSEX memStatus;
+    memStatus.dwLength = sizeof(memStatus);
+    if (GlobalMemoryStatusEx(&memStatus)) {
+        info.memoryLoadPercentage = memStatus.dwMemoryLoad;
+        info.totalPhysicalMemory = memStatus.ullTotalPhys;
+        info.availablePhysicalMemory = memStatus.ullAvailPhys;
+        info.virtualMemoryMax = memStatus.ullTotalVirtual;
+        info.virtualMemoryUsed =
+            memStatus.ullTotalVirtual - memStatus.ullAvailVirtual;
+
+        PROCESS_MEMORY_COUNTERS pmc;
+        if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+            info.pageFaultCount = pmc.PageFaultCount;
+            info.peakWorkingSetSize = pmc.PeakWorkingSetSize;
+            info.workingSetSize = pmc.WorkingSetSize;
+            info.quotaPeakPagedPoolUsage = pmc.QuotaPeakPagedPoolUsage;
+            info.quotaPagedPoolUsage = pmc.QuotaPagedPoolUsage;
+        }
+    }
+#elif defined(__linux__)
+    struct sysinfo si;
+    if (sysinfo(&si) == 0) {
+        info.totalPhysicalMemory = si.totalram;
+        info.availablePhysicalMemory = si.freeram;
+        info.memoryLoadPercentage =
+            ((double)(si.totalram - si.freeram) / si.totalram) * 100.0;
+        info.swapMemoryTotal = si.totalswap;
+        info.swapMemoryUsed = si.totalswap - si.freeswap;
+
+        // 读取 /proc/self/status 获取进程相关信息
+        std::ifstream status("/proc/self/status");
+        std::string line;
+        while (std::getline(status, line)) {
+            if (line.find("VmPeak:") != std::string::npos) {
+                info.peakWorkingSetSize =
+                    std::stoull(line.substr(line.find_last_of(" \t") + 1)) *
+                    1024;
+            } else if (line.find("VmSize:") != std::string::npos) {
+                info.workingSetSize =
+                    std::stoull(line.substr(line.find_last_of(" \t") + 1)) *
+                    1024;
+            }
+        }
+    }
+#endif
+
+    LOG_F(INFO, "Finished getDetailedMemoryStats function");
+    return info;
+}
+
+auto getPeakWorkingSetSize() -> size_t {
+    LOG_F(INFO, "Starting getPeakWorkingSetSize function");
+    size_t peakSize = 0;
+
+#ifdef _WIN32
+    PROCESS_MEMORY_COUNTERS pmc;
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+        peakSize = pmc.PeakWorkingSetSize;
+    }
+#elif defined(__linux__)
+    std::ifstream status("/proc/self/status");
+    std::string line;
+    while (std::getline(status, line)) {
+        if (line.find("VmPeak:") != std::string::npos) {
+            peakSize =
+                std::stoull(line.substr(line.find_last_of(" \t") + 1)) * 1024;
+            break;
+        }
+    }
+#endif
+
+    LOG_F(INFO, "Peak working set size: {} bytes", peakSize);
+    return peakSize;
+}
+
+auto getCurrentWorkingSetSize() -> size_t {
+    LOG_F(INFO, "Starting getCurrentWorkingSetSize function");
+    size_t currentSize = 0;
+
+#ifdef _WIN32
+    PROCESS_MEMORY_COUNTERS pmc;
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+        currentSize = pmc.WorkingSetSize;
+    }
+#elif defined(__linux__)
+    std::ifstream status("/proc/self/status");
+    std::string line;
+    while (std::getline(status, line)) {
+        if (line.find("VmSize:") != std::string::npos) {
+            currentSize =
+                std::stoull(line.substr(line.find_last_of(" \t") + 1)) * 1024;
+            break;
+        }
+    }
+#endif
+
+    LOG_F(INFO, "Current working set size: {} bytes", currentSize);
+    return currentSize;
+}
+
+auto getMemoryPerformance() -> MemoryPerformance {
+    LOG_F(INFO, "Getting memory performance metrics");
+    MemoryPerformance perf{};
+    // 测量内存读写速度
+#ifdef _WIN32
+    // 使用Windows性能计数器获取内存性能指标
+    PDH_HQUERY query;
+    PDH_HCOUNTER readCounter, writeCounter;
+    if (PdhOpenQuery(NULL, 0, &query) == ERROR_SUCCESS) {
+        PdhAddCounterW(query, L"\\Memory\\Pages/sec", 0, &readCounter);
+        PdhAddCounterW(query, L"\\Memory\\Page Writes/sec", 0, &writeCounter);
+        PdhCollectQueryData(query);
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        PdhCollectQueryData(query);
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        PdhCollectQueryData(query);
+
+        PDH_FMT_COUNTERVALUE readValue, writeValue;
+        PdhGetFormattedCounterValue(readCounter, PDH_FMT_DOUBLE, NULL,
+                                    &readValue);
+        PdhGetFormattedCounterValue(writeCounter, PDH_FMT_DOUBLE, NULL,
+                                    &writeValue);
+
+        perf.readSpeed =
+            readValue.doubleValue * 4096 / 1024 / 1024;  // Convert to MB/s
+        perf.writeSpeed = writeValue.doubleValue * 4096 / 1024 / 1024;
+
+        PdhCloseQuery(query);
+    }
+#elif __linux__
+    // 使用/proc/meminfo和/proc/vmstat获取内存性能指标
+    std::ifstream vmstat("/proc/vmstat");
+    std::string line;
+    unsigned long pgpgin = 0, pgpgout = 0;
+    while (std::getline(vmstat, line)) {
+        if (line.find("pgpgin") == 0) {
+            pgpgin = std::stoul(line.substr(7));
+        } else if (line.find("pgpgout") == 0) {
+            pgpgout = std::stoul(line.substr(8));
+        }
+    }
+    perf.readSpeed = pgpgin * 4096.0 / 1024 / 1024;  // Convert to MB/s
+    perf.writeSpeed = pgpgout * 4096.0 / 1024 / 1024;
+#endif
+
+    // 计算带宽使用率
+    perf.bandwidthUsage = (perf.readSpeed + perf.writeSpeed) /
+                          (getTotalMemorySize() / 1024.0 / 1024) * 100.0;
+
+    // 测量内存延迟
+    const int TEST_SIZE = 1024 * 1024;  // 1MB
+    std::vector<int> testData(TEST_SIZE);
+    auto start = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < TEST_SIZE; i++) {
+        testData[i] = i;
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    perf.latency =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(end - start)
+            .count() /
+        static_cast<double>(TEST_SIZE);
+
+    LOG_F(INFO,
+          "Memory performance metrics: Read: {:.2f} MB/s, Write: {:.2f} MB/s, "
+          "Bandwidth: {:.1f}%, Latency: {:.2f} ns",
+          perf.readSpeed, perf.writeSpeed, perf.bandwidthUsage, perf.latency);
+
+    return perf;
 }
 
 }  // namespace atom::system
