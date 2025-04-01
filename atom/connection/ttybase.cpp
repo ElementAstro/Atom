@@ -2,14 +2,22 @@
 
 #include <atomic>
 #include <cerrno>
+#include <chrono>
+#include <condition_variable>
 #include <cstring>
+#include <functional>
 #include <mutex>
+#include <queue>
 #include <stdexcept>
 #include <system_error>
+#include <thread>
+#include <vector>
 
-// Windows和POSIX特定的头文件
 #ifdef _WIN32
+// clang-format off
 #include <windows.h>
+#include <io.h>
+// clang-format on
 #else
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -17,14 +25,9 @@
 #include <unistd.h>
 #endif
 
+#include "atom/error/exception.hpp"
 #include "atom/log/loguru.hpp"
 
-/**
- * @class TTYBase::Impl
- * @brief TTYBase类的私有实现
- *
- * 这个类包含所有实际的实现细节，对库用户隐藏
- */
 class TTYBase::Impl {
 public:
     explicit Impl(std::string_view driverName)
@@ -40,7 +43,6 @@ public:
                 disconnect();
             }
         } catch (...) {
-            // 尽力清理，不从析构函数抛出异常
         }
     }
 
@@ -50,8 +52,7 @@ public:
         }
 
 #ifdef _WIN32
-        // Windows特定实现
-        COMMTIMEOUTS timeouts = {0};
+        COMMTIMEOUTS timeouts = {};
         timeouts.ReadIntervalTimeout = timeout * 1000;
         timeouts.ReadTotalTimeoutConstant = timeout * 1000;
         timeouts.ReadTotalTimeoutMultiplier = 0;
@@ -105,21 +106,22 @@ public:
         try {
             if (m_PortFD == -1) {
                 throw std::system_error(errno, std::system_category(),
-                                        "无效的端口描述符");
+                                        "Invalid port descriptor");
             }
 
             nbytesRead = 0;
             const uint32_t nbytes = static_cast<uint32_t>(buffer.size());
 
 #ifdef _WIN32
-            // Windows特定读取实现，具有适当的错误处理
             DWORD bytesRead = 0;
             HANDLE hPort = reinterpret_cast<HANDLE>(m_PortFD);
 
-            // 设置超时
-            COMMTIMEOUTS timeouts = {0};
+            COMMTIMEOUTS timeouts = {};
             timeouts.ReadIntervalTimeout = timeout * 1000;
             timeouts.ReadTotalTimeoutConstant = timeout * 1000;
+            timeouts.ReadTotalTimeoutMultiplier = 0;
+            timeouts.WriteTotalTimeoutConstant = timeout * 1000;
+            timeouts.WriteTotalTimeoutMultiplier = 0;
 
             if (!SetCommTimeouts(hPort, &timeouts)) {
                 return TTYResponse::Errno;
@@ -156,7 +158,7 @@ public:
 
                 if (bytesRead < 0) {
                     if (errno == EINTR) {
-                        // 中断的系统调用，重试
+                        // System call interrupted, retry
                         continue;
                     }
                     if (m_Debug) {
@@ -166,7 +168,7 @@ public:
                 }
 
                 if (bytesRead == 0) {
-                    // 达到文件结尾
+                    // End of file reached
                     break;
                 }
 
@@ -198,7 +200,7 @@ public:
         try {
             if (m_PortFD == -1) {
                 throw std::system_error(errno, std::system_category(),
-                                        "无效的端口描述符");
+                                        "Invalid port descriptor");
             }
 
             nbytesRead = 0;
@@ -216,14 +218,12 @@ public:
 
                 if (bytesRead < 0) {
                     if (errno == EINTR) {
-                        // 中断的系统调用，重试
                         continue;
                     }
                     return TTYResponse::ReadError;
                 }
 
                 if (bytesRead == 0) {
-                    // 达到文件结尾
                     break;
                 }
 
@@ -258,11 +258,10 @@ public:
         try {
             if (m_PortFD == -1) {
                 throw std::system_error(errno, std::system_category(),
-                                        "无效的端口描述符");
+                                        "Invalid port descriptor");
             }
 
 #ifdef _WIN32
-            // Windows特定写入实现，具有适当的错误处理
             DWORD bytesWritten;
             HANDLE hPort = reinterpret_cast<HANDLE>(m_PortFD);
 
@@ -320,31 +319,26 @@ public:
     TTYResponse connect(std::string_view device, uint32_t bitRate,
                         uint8_t wordSize, uint8_t parity, uint8_t stopBits) {
         try {
-            // 验证参数
             if (device.empty()) {
-                throw std::invalid_argument("设备名称不能为空");
+                THROW_INVALID_ARGUMENT("Device name cannot be empty");
             }
 
-            // 验证字长（5-8位）
             if (wordSize < 5 || wordSize > 8) {
-                throw std::invalid_argument("字长必须在5到8位之间");
+                THROW_INVALID_ARGUMENT(
+                    "Word size must be between 5 and 8 bits");
             }
 
-            // 验证奇偶校验（0=无, 1=偶, 2=奇）
             if (parity > 2) {
-                throw std::invalid_argument("无效的奇偶校验值");
+                THROW_INVALID_ARGUMENT("Invalid parity value");
             }
 
-            // 验证停止位（1或2）
             if (stopBits != 1 && stopBits != 2) {
-                throw std::invalid_argument("停止位必须为1或2");
+                THROW_INVALID_ARGUMENT("Stop bits must be 1 or 2");
             }
 
 #ifdef _WIN32
-            // Windows特定实现，具有适当的错误处理
             std::string devicePath(device);
 
-            // 如果设备没有以"\\.\"前缀开始，对于高于COM9的COM端口
             if (devicePath.find("COM") != std::string::npos &&
                 devicePath.find("\\\\.\\") != 0 &&
                 std::stoi(devicePath.substr(3)) > 9) {
@@ -364,7 +358,7 @@ public:
                 return TTYResponse::PortFailure;
             }
 
-            DCB dcbSerialParams = {0};
+            DCB dcbSerialParams = {};
             dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
 
             if (!GetCommState(hSerial, &dcbSerialParams)) {
@@ -380,20 +374,18 @@ public:
             dcbSerialParams.StopBits =
                 (stopBits == 1) ? ONESTOPBIT : TWOSTOPBITS;
 
-            // 设置奇偶校验
             switch (parity) {
-                case 0:  // 无
+                case 0:  // None
                     dcbSerialParams.Parity = NOPARITY;
                     break;
-                case 1:  // 偶
+                case 1:  // Even
                     dcbSerialParams.Parity = EVENPARITY;
                     break;
-                case 2:  // 奇
+                case 2:  // Odd
                     dcbSerialParams.Parity = ODDPARITY;
                     break;
             }
 
-            // 禁用流控制
             dcbSerialParams.fOutxCtsFlow = FALSE;
             dcbSerialParams.fRtsControl = RTS_CONTROL_DISABLE;
             dcbSerialParams.fOutX = FALSE;
@@ -410,7 +402,7 @@ public:
             }
 
             // 设置超时
-            COMMTIMEOUTS timeouts = {0};
+            COMMTIMEOUTS timeouts = {};
             timeouts.ReadIntervalTimeout = MAXDWORD;
             timeouts.ReadTotalTimeoutMultiplier = 0;
             timeouts.ReadTotalTimeoutConstant = 0;
@@ -460,7 +452,6 @@ public:
                 return TTYResponse::PortFailure;
             }
 
-            // 将bitRate映射到POSIX速度常量
             speed_t bps;
             switch (bitRate) {
                 case 0:
@@ -529,7 +520,6 @@ public:
                     return TTYResponse::ParamError;
             }
 
-            // 设置波特率
             if ((cfsetispeed(&ttySetting, bps) < 0) ||
                 (cfsetospeed(&ttySetting, bps) < 0)) {
                 if (m_Debug) {
@@ -540,12 +530,10 @@ public:
                 return TTYResponse::PortFailure;
             }
 
-            // 清除所有相关标志
             ttySetting.c_cflag &=
                 ~(CSIZE | CSTOPB | PARENB | PARODD | HUPCL | CRTSCTS);
             ttySetting.c_cflag |= (CLOCAL | CREAD);
 
-            // 设置字长
             switch (wordSize) {
                 case 5:
                     ttySetting.c_cflag |= CS5;
@@ -569,19 +557,16 @@ public:
                     return TTYResponse::ParamError;
             }
 
-            // 设置奇偶校验
             if (parity == 1) {
-                ttySetting.c_cflag |= PARENB;  // 偶校验
+                ttySetting.c_cflag |= PARENB;
             } else if (parity == 2) {
-                ttySetting.c_cflag |= PARENB | PARODD;  // 奇校验
+                ttySetting.c_cflag |= PARENB | PARODD;
             }
 
-            // 设置停止位
             if (stopBits == 2) {
                 ttySetting.c_cflag |= CSTOPB;
             }
 
-            /* 忽略奇偶校验错误的字节，并使终端原始和简单 */
             ttySetting.c_iflag &= ~(PARMRK | ISTRIP | IGNCR | ICRNL | INLCR |
                                     IXOFF | IXON | IXANY);
             ttySetting.c_iflag |= INPCK | IGNPAR | IGNBRK;
@@ -589,19 +574,15 @@ public:
             /* 原始输出 */
             ttySetting.c_oflag &= ~(OPOST | ONLCR);
 
-            /* 本地模式 - 不回显，不生成信号，不处理字符 */
             ttySetting.c_lflag &=
                 ~(ICANON | ECHO | ECHOE | ISIG | IEXTEN | NOFLSH | TOSTOP);
             ttySetting.c_lflag |= NOFLSH;
 
-            /* 设置读取超时 */
-            ttySetting.c_cc[VMIN] = 1;   // 等待至少1个字符
-            ttySetting.c_cc[VTIME] = 0;  // 第一个字符没有超时
+            ttySetting.c_cc[VMIN] = 1;
+            ttySetting.c_cc[VTIME] = 0;
 
-            // 刷新所有待处理数据
             tcflush(tFd, TCIOFLUSH);
 
-            // 设置原始输入模式（非规范）
             cfmakeraw(&ttySetting);
 
             // 应用设置
@@ -694,35 +675,36 @@ public:
         try {
             switch (code) {
                 case TTYResponse::OK:
-                    return "无错误";
+                    return "No error";
                 case TTYResponse::ReadError:
-                    return "读取错误: " + std::string(strerror(errno));
+                    return "Read error: " + std::string(strerror(errno));
                 case TTYResponse::WriteError:
-                    return "写入错误: " + std::string(strerror(errno));
+                    return "Write error: " + std::string(strerror(errno));
                 case TTYResponse::SelectError:
-                    return "选择错误: " + std::string(strerror(errno));
+                    return "Select error: " + std::string(strerror(errno));
                 case TTYResponse::Timeout:
-                    return "超时错误";
+                    return "Timeout error";
                 case TTYResponse::PortFailure:
                     if (errno == EACCES) {
-                        return "端口失败：访问被拒绝。尝试将您的用户添加到拨号"
-                               "组并重启"
-                               "（sudo adduser $USER dialout）";
+                        return "Port failure: Access denied. Try adding your "
+                               "user "
+                               "to the dialout group and restart "
+                               "(sudo adduser $USER dialout)";
                     } else {
-                        return "端口失败：" + std::string(strerror(errno)) +
-                               "。检查设备是否连接到此端口。";
+                        return "Port failure: " + std::string(strerror(errno)) +
+                               ". Check if device is connected to this port.";
                     }
                 case TTYResponse::ParamError:
-                    return "参数错误";
+                    return "Parameter error";
                 case TTYResponse::Errno:
-                    return "错误: " + std::string(strerror(errno));
+                    return "Error: " + std::string(strerror(errno));
                 case TTYResponse::Overflow:
-                    return "读取溢出错误";
+                    return "Read overflow error";
                 default:
-                    return "未知错误";
+                    return "Unknown error";
             }
         } catch (...) {
-            return "检索错误消息时出错";
+            return "Error retrieving error message";
         }
     }
 
@@ -731,35 +713,157 @@ public:
     bool isConnected() const noexcept { return m_PortFD != -1; }
 
     void startAsyncOperations() {
+        std::lock_guard<std::mutex> lock(m_Mutex);
+
         if (m_IsRunning.load() || m_PortFD == -1) {
             return;
         }
 
         m_IsRunning.store(true);
+        m_ShouldExit.store(false);
 
-        // 在这里您可以初始化任何异步操作线程
-        // 这是潜在实现的存根
+        // Start worker thread
+        m_WorkerThread = std::thread([this]() {
+            std::vector<uint8_t> buffer(m_ReadBufferSize);
+
+            while (!m_ShouldExit.load()) {
+                if (m_PortFD == -1) {
+                    // Port closed, sleep and try again
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    continue;
+                }
+
+                // Check if data is available
+                fd_set readSet;
+                FD_ZERO(&readSet);
+                FD_SET(m_PortFD, &readSet);
+
+                struct timeval tv;
+                tv.tv_sec = 0;
+                tv.tv_usec = 100000;  // 100ms timeout
+
+                int result =
+                    select(m_PortFD + 1, &readSet, nullptr, nullptr, &tv);
+
+                if (result > 0) {
+                    // Data available
+                    uint32_t bytesRead = 0;
+                    TTYResponse response = read(buffer, 0, bytesRead);
+
+                    if (response == TTYResponse::OK && bytesRead > 0) {
+                        // Process data
+                        if (m_DataCallback) {
+                            // Call callback directly
+                            m_DataCallback(buffer, bytesRead);
+                        } else {
+                            // Queue data for later processing
+                            std::vector<uint8_t> data(
+                                buffer.begin(), buffer.begin() + bytesRead);
+                            {
+                                std::lock_guard<std::mutex> asyncLock(
+                                    m_AsyncMutex);
+                                m_DataQueue.push(std::move(data));
+                            }
+                            m_AsyncCV.notify_one();
+                        }
+                    }
+                } else if (result < 0 && errno != EINTR) {
+                    // Error occurred
+                    if (m_Debug) {
+                        LOG_F(ERROR, "Async read select error: {}",
+                              strerror(errno));
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+            }
+        });
+
+        if (m_Debug) {
+            LOG_F(INFO, "Started async operations for {}", m_DriverName);
+        }
     }
 
     void stopAsyncOperations() {
+        std::lock_guard<std::mutex> lock(m_Mutex);
+
         if (!m_IsRunning.load()) {
             return;
         }
 
+        m_ShouldExit.store(true);
         m_IsRunning.store(false);
 
-        // 等待任何异步操作完成
-        // 这是潜在实现的存根
+        if (m_WorkerThread.joinable()) {
+            m_WorkerThread.join();
+        }
+
+        // Clear data queue
+        {
+            std::lock_guard<std::mutex> asyncLock(m_AsyncMutex);
+            std::queue<std::vector<uint8_t>> empty;
+            std::swap(m_DataQueue, empty);
+        }
+
+        if (m_Debug) {
+            LOG_F(INFO, "Stopped async operations for {}", m_DriverName);
+        }
+    }
+
+    void setDataCallback(
+        std::function<void(const std::vector<uint8_t>&, size_t)> callback) {
+        std::lock_guard<std::mutex> lock(m_Mutex);
+        m_DataCallback = std::move(callback);
+    }
+
+    bool getQueuedData(std::vector<uint8_t>& data,
+                       std::chrono::milliseconds timeout) {
+        std::unique_lock<std::mutex> lock(m_AsyncMutex);
+
+        if (m_DataQueue.empty()) {
+            // Wait for data with timeout
+            auto result = m_AsyncCV.wait_for(lock, timeout, [this]() {
+                return !m_DataQueue.empty() || !m_IsRunning.load();
+            });
+
+            if (!result || !m_IsRunning.load()) {
+                return false;
+            }
+        }
+
+        if (!m_DataQueue.empty()) {
+            data = std::move(m_DataQueue.front());
+            m_DataQueue.pop();
+            return true;
+        }
+
+        return false;
+    }
+
+    void setReadBufferSize(size_t size) {
+        if (size > 0) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            m_ReadBufferSize = size;
+        }
     }
 
     // 成员变量
-    int m_PortFD{-1};          ///< TTY端口的文件描述符
-    bool m_Debug{false};       ///< 指示是否启用调试的标志
-    std::string m_DriverName;  ///< 该TTY的驱动程序名称
-    std::atomic<bool> m_IsRunning;  ///< 指示异步操作是否正在运行的标志
+    int m_PortFD{-1};          ///< File descriptor for TTY port
+    bool m_Debug{false};       ///< Flag indicating if debugging is enabled
+    std::string m_DriverName;  ///< Driver name for this TTY
+    std::atomic<bool>
+        m_IsRunning;  ///< Flag indicating if async operations are running
 
-    // 用于线程安全的互斥锁
+    // Mutex for thread safety
     std::mutex m_Mutex;
+
+    // New members for async operations
+    std::thread m_WorkerThread;
+    std::atomic<bool> m_ShouldExit{false};
+    std::function<void(const std::vector<uint8_t>&, size_t)> m_DataCallback;
+    std::condition_variable m_AsyncCV;
+    std::mutex m_AsyncMutex;
+    std::queue<std::vector<uint8_t>> m_DataQueue;
+    size_t m_ReadBufferSize{1024};
 };
 
 // TTYBase类的实现，通过委托到Impl类

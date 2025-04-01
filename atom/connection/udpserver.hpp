@@ -3,11 +3,11 @@
 
 #include <concepts>
 #include <cstdint>
-#include <expected>
 #include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
+
 #include "atom/type/expected.hpp"
 
 namespace atom::connection {

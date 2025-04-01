@@ -487,7 +487,7 @@ public:
         if (lhs.has_value()) {
             return lhs.value_ == rhs.value_;
         }
-        return lhs.error_ == rhs.error_;
+        return lhs.error().error() == rhs.error().error();
     }
 
     /**
@@ -757,7 +757,7 @@ public:
         if (lhs.has_value()) {
             return true;
         }
-        return lhs.error_ == rhs.error_;
+        return lhs.error().error() == rhs.error().error();
     }
 
     /**

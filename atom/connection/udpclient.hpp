@@ -17,7 +17,7 @@ Description: UDP Client Class
 
 #include <chrono>
 #include <coroutine>
-#include <expected>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <span>
@@ -40,7 +40,11 @@ enum class UdpError {
     HostNotFound,
     Timeout,
     InvalidParameter,
-    InternalError
+    InternalError,
+    MulticastError,
+    BroadcastError,
+    NotInitialized,
+    NotSupported
 };
 
 /**
@@ -60,6 +64,45 @@ struct RemoteEndpoint {
 };
 
 /**
+ * @brief UDP packet statistics
+ */
+struct UdpStatistics {
+    std::size_t packetsReceived = 0;
+    std::size_t packetsSent = 0;
+    std::size_t bytesReceived = 0;
+    std::size_t bytesSent = 0;
+    std::size_t receiveErrors = 0;
+    std::size_t sendErrors = 0;
+    std::chrono::system_clock::time_point lastActivity =
+        std::chrono::system_clock::now();
+
+    void reset() {
+        packetsReceived = 0;
+        packetsSent = 0;
+        bytesReceived = 0;
+        bytesSent = 0;
+        receiveErrors = 0;
+        sendErrors = 0;
+        lastActivity = std::chrono::system_clock::now();
+    }
+};
+
+/**
+ * @brief Socket configuration options
+ */
+struct SocketOptions {
+    bool reuseAddress = true;
+    bool reusePort = false;
+    bool broadcast = false;
+    int sendBufferSize = 0;     // 0 means use system default
+    int receiveBufferSize = 0;  // 0 means use system default
+    int ttl = 0;                // 0 means use system default
+    bool nonBlocking = true;
+    std::chrono::milliseconds sendTimeout{0};     // 0 means no timeout
+    std::chrono::milliseconds receiveTimeout{0};  // 0 means no timeout
+};
+
+/**
  * @brief Callback concept for data received events
  */
 template <typename T>
@@ -76,6 +119,15 @@ concept ErrorHandler =
     requires(T callback, UdpError error, const std::string& message) {
         { callback(error, message) } -> std::same_as<void>;
     };
+
+/**
+ * @brief Callback concept for status change events
+ */
+template <typename T>
+concept StatusHandler = requires(T callback, bool status) {
+    { callback(status) } -> std::same_as<void>;
+};
+
 /**
  * @class UdpClient
  * @brief Represents a UDP client for sending and receiving datagrams with
@@ -95,6 +147,14 @@ public:
      * @throws std::runtime_error if the socket creation or binding fails
      */
     explicit UdpClient(uint16_t port);
+
+    /**
+     * @brief Constructor with specific local port and socket options
+     * @param port Local port to bind to
+     * @param options Socket configuration options
+     * @throws std::runtime_error if the socket creation or binding fails
+     */
+    UdpClient(uint16_t port, const SocketOptions& options);
 
     /**
      * @brief Destructor
@@ -144,6 +204,32 @@ public:
                                          const std::string& data) noexcept;
 
     /**
+     * @brief Sends broadcast data to a specified port
+     * @param port The destination port
+     * @param data The data to be sent
+     * @return Result containing bytes sent or error code
+     */
+    [[nodiscard]] UdpResult<size_t> sendBroadcast(
+        uint16_t port, std::span<const char> data) noexcept;
+
+    /**
+     * @brief Convenience overload for sending broadcast string data
+     */
+    [[nodiscard]] UdpResult<size_t> sendBroadcast(
+        uint16_t port, const std::string& data) noexcept;
+
+    /**
+     * @brief Sends data to multiple destinations at once
+     * @param endpoints List of destination endpoints
+     * @param data The data to be sent
+     * @return Result containing number of successful transmissions or error
+     * code
+     */
+    [[nodiscard]] UdpResult<size_t> sendMultiple(
+        const std::vector<RemoteEndpoint>& endpoints,
+        std::span<const char> data) noexcept;
+
+    /**
      * @brief Receives data from a remote host
      * @param maxSize Maximum number of bytes to receive
      * @param timeout The receive timeout duration
@@ -183,6 +269,33 @@ public:
     }
 
     /**
+     * @brief Join a multicast group
+     * @param groupAddress The multicast group address to join
+     * @return Result containing success or error code
+     */
+    [[nodiscard]] UdpResult<bool> joinMulticastGroup(
+        const std::string& groupAddress) noexcept;
+
+    /**
+     * @brief Leave a multicast group
+     * @param groupAddress The multicast group address to leave
+     * @return Result containing success or error code
+     */
+    [[nodiscard]] UdpResult<bool> leaveMulticastGroup(
+        const std::string& groupAddress) noexcept;
+
+    /**
+     * @brief Send data to a multicast group
+     * @param groupAddress The multicast group address
+     * @param port The destination port
+     * @param data The data to be sent
+     * @return Result containing bytes sent or error code
+     */
+    [[nodiscard]] UdpResult<size_t> sendToMulticastGroup(
+        const std::string& groupAddress, uint16_t port,
+        std::span<const char> data) noexcept;
+
+    /**
      * @brief Sets the callback function to be called when data is received
      * @param callback The callback function
      */
@@ -203,6 +316,17 @@ public:
     }
 
     /**
+     * @brief Sets the callback function to be called when connection status
+     * changes
+     * @param callback The callback function
+     */
+    template <typename Handler>
+        requires StatusHandler<Handler>
+    void setOnStatusChangeCallback(Handler&& callback) {
+        onStatusChangeCallback_ = std::forward<Handler>(callback);
+    }
+
+    /**
      * @brief Starts receiving data asynchronously
      * @param bufferSize The size of the receive buffer
      * @return Result containing success or error code
@@ -219,6 +343,48 @@ public:
      */
     [[nodiscard]] bool isReceiving() const noexcept;
 
+    /**
+     * @brief Get socket statistics
+     * @return Current UDP statistics
+     */
+    [[nodiscard]] UdpStatistics getStatistics() const noexcept;
+
+    /**
+     * @brief Reset socket statistics
+     */
+    void resetStatistics() noexcept;
+
+    /**
+     * @brief Configure socket options
+     * @param options The options to set
+     * @return Result containing success or error code
+     */
+    [[nodiscard]] UdpResult<bool> setSocketOptions(
+        const SocketOptions& options) noexcept;
+
+    /**
+     * @brief Close the socket and clean up resources
+     */
+    void close() noexcept;
+
+    /**
+     * @brief Check if socket is bound to a port
+     * @return True if socket is bound, false otherwise
+     */
+    [[nodiscard]] bool isBound() const noexcept;
+
+    /**
+     * @brief Get the local port the socket is bound to
+     * @return Result containing the local port or error code
+     */
+    [[nodiscard]] UdpResult<uint16_t> getLocalPort() const noexcept;
+
+    /**
+     * @brief Check if IPv6 is supported
+     * @return True if IPv6 is supported, false otherwise
+     */
+    [[nodiscard]] static bool isIPv6Supported() noexcept;
+
 private:
     class Impl;
     std::unique_ptr<Impl> impl_;
@@ -227,6 +393,7 @@ private:
     std::function<void(std::span<const char>, const RemoteEndpoint&)>
         onDataReceivedCallback_;
     std::function<void(UdpError, const std::string&)> onErrorCallback_;
+    std::function<void(bool)> onStatusChangeCallback_;
 };
 
 }  // namespace atom::connection
