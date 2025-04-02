@@ -2,15 +2,23 @@
 
 #include <algorithm>
 #include <array>
+#include <sstream>
 #include <fstream>
 #include <unordered_map>
 
 #ifdef _WIN32
+// clang-format off
+#include <windows.h>
+#include <iptypes.h>
 #include <iphlpapi.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <netioapi.h>
+// clang-format on
+#ifdef _MSC_VER
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "iphlpapi.lib")
+#endif
 #else
 #include <arpa/inet.h>
 #include <ifaddrs.h>
