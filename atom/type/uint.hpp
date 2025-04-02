@@ -23,7 +23,7 @@ constexpr uint32_t MAX_UINT32 = 0xFFFFFFFF;
  * @return uint8_t The converted value.
  * @throws std::out_of_range if the value exceeds the range of uint8_t.
  */
-constexpr auto operator"" _u8(unsigned long long value) -> uint8_t {
+constexpr auto operator""_u8(unsigned long long value) -> uint8_t {
     if (value > MAX_UINT8) {  // uint8_t maximum value is 0xFF
         THROW_OUT_OF_RANGE("Value exceeds uint8_t range");
     }
@@ -39,7 +39,7 @@ constexpr auto operator"" _u8(unsigned long long value) -> uint8_t {
  * @return uint16_t The converted value.
  * @throws std::out_of_range if the value exceeds the range of uint16_t.
  */
-constexpr auto operator"" _u16(unsigned long long value) -> uint16_t {
+constexpr auto operator""_u16(unsigned long long value) -> uint16_t {
     if (value > MAX_UINT16) {  // uint16_t maximum value is 0xFFFF
         THROW_OUT_OF_RANGE("Value exceeds uint16_t range");
     }
@@ -55,7 +55,7 @@ constexpr auto operator"" _u16(unsigned long long value) -> uint16_t {
  * @return uint32_t The converted value.
  * @throws std::out_of_range if the value exceeds the range of uint32_t.
  */
-constexpr auto operator"" _u32(unsigned long long value) -> uint32_t {
+constexpr auto operator""_u32(unsigned long long value) -> uint32_t {
     if (value > MAX_UINT32) {  // uint32_t maximum value is 0xFFFFFFFF
         THROW_OUT_OF_RANGE("Value exceeds uint32_t range");
     }
@@ -70,7 +70,7 @@ constexpr auto operator"" _u32(unsigned long long value) -> uint32_t {
  * @param value The value to be converted to uint64_t.
  * @return uint64_t The converted value.
  */
-constexpr auto operator"" _u64(unsigned long long value) -> uint64_t {
+constexpr auto operator""_u64(unsigned long long value) -> uint64_t {
     return static_cast<uint64_t>(value);
 }
 

@@ -124,6 +124,53 @@ public:
         }
     }
 
+    // 添加在类定义中其他构造函数后面:
+
+    // 支持从不同 buffer size 的 SmallVector 进行复制构造
+    template <std::size_t M>
+    SmallVector(const SmallVector<T, M, Allocator>& other)
+        : alloc_{allocator_traits::select_on_container_copy_construction(
+              other.get_allocator())} {
+        try {
+            initializeFromEmpty();
+            assign(other.begin(), other.end());
+        } catch (...) {
+            deallocate();
+            throw;
+        }
+    }
+
+    template <std::size_t M>
+    SmallVector(SmallVector<T, M, Allocator>&& other) noexcept
+        : alloc_{std::move(other.get_allocator())} {
+        initializeFromEmpty();
+        assign(std::make_move_iterator(other.begin()),
+               std::make_move_iterator(other.end()));
+        other.clear();
+    }
+
+    template <std::size_t M>
+    auto operator=(const SmallVector<T, M, Allocator>& other) -> SmallVector& {
+        if (static_cast<const void*>(this) !=
+            static_cast<const void*>(&other)) {
+            assign(other.begin(), other.end());
+        }
+        return *this;
+    }
+
+    template <std::size_t M>
+    auto operator=(SmallVector<T, M, Allocator>&& other) noexcept
+        -> SmallVector& {
+        if (static_cast<const void*>(this) !=
+            static_cast<const void*>(&other)) {
+            clear();
+            assign(std::make_move_iterator(other.begin()),
+                   std::make_move_iterator(other.end()));
+            other.clear();
+        }
+        return *this;
+    }
+
     SmallVector(const SmallVector& other)
         : alloc_{allocator_traits::select_on_container_copy_construction(
               other.alloc_)} {
@@ -429,8 +476,8 @@ public:
         return emplace(pos, std::move(value));
     }
 
-    auto insert(const_iterator pos, size_type count,
-                const T& value) -> iterator {
+    auto insert(const_iterator pos, size_type count, const T& value)
+        -> iterator {
         if (count == 0) {
             return const_cast<iterator>(pos);
         }

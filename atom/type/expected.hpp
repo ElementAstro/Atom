@@ -419,57 +419,38 @@ public:
 
     /**
      * @brief Transforms the stored error using the provided function.
-     *
-     * @tparam Func The type of the function to apply to the error.
-     * @param func The function to apply to the stored error.
-     * @return An `expected` with the transformed error type if an error exists,
-     * otherwise the original `expected`.
      */
     template <typename Func>
     constexpr auto transform_error(
         Func&& func) & -> expected<T, decltype(func(std::declval<E&>()))> {
+        using NewErrorType = decltype(func(std::declval<E&>()));
         if (has_value()) {
-            return *this;
+            return expected<T, NewErrorType>(value());
         }
-        return expected<T, decltype(func(std::declval<E&>()))>(
-            func(error().error()));
+        return expected<T, NewErrorType>(
+            Error<NewErrorType>(func(error().error())));
     }
 
-    /**
-     * @brief Transforms the stored error using the provided constant function.
-     *
-     * @tparam Func The type of the function to apply to the error.
-     * @param func The function to apply to the stored error.
-     * @return An `expected` with the transformed error type if an error exists,
-     * otherwise the original `expected`.
-     */
     template <typename Func>
     constexpr auto transform_error(Func&& func)
         const& -> expected<T, decltype(func(std::declval<const E&>()))> {
+        using NewErrorType = decltype(func(std::declval<const E&>()));
         if (has_value()) {
-            return *this;
+            return expected<T, NewErrorType>(value());
         }
-        return expected<T, decltype(func(std::declval<const E&>()))>(
-            func(error().error()));
+        return expected<T, NewErrorType>(
+            Error<NewErrorType>(func(error().error())));
     }
 
-    /**
-     * @brief Transforms the stored error using the provided function, moving
-     * the error.
-     *
-     * @tparam Func The type of the function to apply to the error.
-     * @param func The function to apply to the stored error.
-     * @return An `expected` with the transformed error type if an error exists,
-     * otherwise the original `expected`.
-     */
     template <typename Func>
     constexpr auto transform_error(
         Func&& func) && -> expected<T, decltype(func(std::declval<E&&>()))> {
+        using NewErrorType = decltype(func(std::declval<E&&>()));
         if (has_value()) {
-            return std::move(*this);
+            return expected<T, NewErrorType>(std::move(value()));
         }
-        return expected<T, decltype(func(std::declval<E&&>()))>(
-            func(std::move(error().error())));
+        return expected<T, NewErrorType>(
+            Error<NewErrorType>(func(std::move(error().error()))));
     }
 
     // Equality operators
