@@ -3,7 +3,7 @@
 #include <format>
 
 #ifdef _WIN32
-#include "windows_voltage.hpp"
+#include "voltage_windows.hpp"
 #elif defined(__APPLE__)
 #include "macos_voltage.hpp"
 #else

@@ -15,6 +15,7 @@ Description: Some system functions to get user information.
 #include "user.hpp"
 
 #include <array>
+#include <cstdlib>
 #include <memory>
 
 #ifdef _WIN32
@@ -23,14 +24,22 @@ Description: Some system functions to get user information.
 #include <lmcons.h>
 #include <tchar.h>
 #include <userenv.h>
+#include <wtsapi32.h>
+#include <lm.h>
 // clang-format on
+#ifdef _MSC_VER
+#pragma comment(lib, "wtsapi32.lib")
+#endif
 #else
 #include <grp.h>
 #include <pwd.h>
+#include <sys/sysinfo.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <utmp.h>
 #include <climits>
 #include <codecvt>
+#include <fstream>
 #include <locale>
 #endif
 
@@ -39,9 +48,7 @@ Description: Some system functions to get user information.
 namespace std {
 template <>
 struct formatter<std::wstring> {
-    constexpr auto parse(format_parse_context &ctx) {
-        return ctx.end();
-    }
+    constexpr auto parse(format_parse_context &ctx) { return ctx.end(); }
 
     // 格式化输出
     template <typename FormatContext>
@@ -373,5 +380,181 @@ auto getLogin() -> std::string {
 #endif
     LOG_F(ERROR, "Error getting login name");
     return "";
+}
+
+auto getEnvironmentVariable(const std::string &name) -> std::string {
+    LOG_F(INFO, "getEnvironmentVariable called with name: {}", name);
+    std::string value;
+
+#ifdef _WIN32
+    DWORD size = GetEnvironmentVariableA(name.c_str(), nullptr, 0);
+    if (size > 0) {
+        std::vector<char> buffer(size);
+        GetEnvironmentVariableA(name.c_str(), buffer.data(), size);
+        value = std::string(buffer.data(),
+                            buffer.size() - 1);  // Remove null terminator
+    }
+#else
+    const char *envValue = std::getenv(name.c_str());
+    if (envValue != nullptr) {
+        value = envValue;
+    }
+#endif
+
+    LOG_F(INFO, "getEnvironmentVariable completed with result: {}", value);
+    return value;
+}
+
+auto getAllEnvironmentVariables()
+    -> std::unordered_map<std::string, std::string> {
+    LOG_F(INFO, "getAllEnvironmentVariables called");
+    std::unordered_map<std::string, std::string> envVars;
+
+#ifdef _WIN32
+    LPCH envStrings = GetEnvironmentStrings();
+    if (envStrings != nullptr) {
+        LPCH current = envStrings;
+        while (*current) {
+            std::string envString(current);
+            size_t pos = envString.find('=');
+            if (pos != std::string::npos && pos > 0) {
+                std::string name = envString.substr(0, pos);
+                std::string value = envString.substr(pos + 1);
+                envVars[name] = value;
+            }
+            current += envString.length() + 1;
+        }
+        FreeEnvironmentStrings(envStrings);
+    }
+#else
+    extern char **environ;
+    for (char **env = environ; *env != nullptr; ++env) {
+        std::string envString(*env);
+        size_t pos = envString.find('=');
+        if (pos != std::string::npos) {
+            std::string name = envString.substr(0, pos);
+            std::string value = envString.substr(pos + 1);
+            envVars[name] = value;
+        }
+    }
+#endif
+
+    LOG_F(INFO, "getAllEnvironmentVariables completed with {} variables",
+          envVars.size());
+    return envVars;
+}
+
+auto setEnvironmentVariable(const std::string &name, const std::string &value)
+    -> bool {
+    LOG_F(INFO, "setEnvironmentVariable called with name: {} and value: {}",
+          name, value);
+    bool success = false;
+
+#ifdef _WIN32
+    success = (SetEnvironmentVariableA(name.c_str(), value.c_str()) != 0);
+#else
+    success = (setenv(name.c_str(), value.c_str(), 1) == 0);
+#endif
+
+    LOG_F(INFO, "setEnvironmentVariable completed with result: {}", success);
+    return success;
+}
+
+auto getSystemUptime() -> uint64_t {
+    LOG_F(INFO, "getSystemUptime called");
+    uint64_t uptime = 0;
+
+#ifdef _WIN32
+    uptime = GetTickCount64() / 1000;  // Convert milliseconds to seconds
+#else
+    struct sysinfo info;
+    if (sysinfo(&info) == 0) {
+        uptime = static_cast<uint64_t>(info.uptime);
+    }
+#endif
+
+    LOG_F(INFO, "getSystemUptime completed with result: {} seconds", uptime);
+    return uptime;
+}
+
+auto getLoggedInUsers() -> std::vector<std::string> {
+    LOG_F(INFO, "getLoggedInUsers called");
+    std::vector<std::string> users;
+
+#ifdef _WIN32
+    WTS_SESSION_INFO *sessionInfo = nullptr;
+    DWORD sessionCount = 0;
+
+    if (WTSEnumerateSessions(WTS_CURRENT_SERVER_HANDLE, 0, 1, &sessionInfo,
+                             &sessionCount)) {
+        for (DWORD i = 0; i < sessionCount; i++) {
+            if (sessionInfo[i].State == WTSActive) {
+                LPSTR buffer = nullptr;
+                DWORD bytesReturned = 0;
+
+                if (WTSQuerySessionInformationA(
+                        WTS_CURRENT_SERVER_HANDLE, sessionInfo[i].SessionId,
+                        WTSUserName, &buffer, &bytesReturned)) {
+                    if (buffer && bytesReturned > 1) {
+                        std::string username(buffer);
+                        if (!username.empty() &&
+                            std::find(users.begin(), users.end(), username) ==
+                                users.end()) {
+                            users.push_back(username);
+                        }
+                    }
+
+                    WTSFreeMemory(buffer);
+                }
+            }
+        }
+
+        WTSFreeMemory(sessionInfo);
+    }
+#else
+    setutent();
+    struct utmp *entry;
+
+    while ((entry = getutent()) != nullptr) {
+        if (entry->ut_type == USER_PROCESS) {
+            std::string username(entry->ut_user);
+            if (!username.empty() && std::find(users.begin(), users.end(),
+                                               username) == users.end()) {
+                users.push_back(username);
+            }
+        }
+    }
+
+    endutent();
+#endif
+
+    LOG_F(INFO, "getLoggedInUsers completed with {} users found", users.size());
+    return users;
+}
+
+auto userExists(const std::string &username) -> bool {
+    LOG_F(INFO, "userExists called with username: {}", username);
+    bool exists = false;
+
+#ifdef _WIN32
+    DWORD level = 1;
+    USER_INFO_1 *userInfo = nullptr;
+    std::wstring wUsername(username.begin(), username.end());
+    NET_API_STATUS status =
+        NetUserGetInfo(nullptr, wUsername.c_str(), level, (LPBYTE *)&userInfo);
+
+    exists = (status == NERR_Success);
+
+    if (userInfo != nullptr) {
+        NetApiBufferFree(userInfo);
+    }
+#else
+    struct passwd *pwd = getpwnam(username.c_str());
+    exists = (pwd != nullptr);
+#endif
+
+    LOG_F(INFO, "userExists completed for username: {} with result: {}",
+          username, exists);
+    return exists;
 }
 }  // namespace atom::system

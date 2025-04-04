@@ -1,4 +1,5 @@
 #include "process.hpp"
+
 #include "command.hpp"
 
 #include <algorithm>
@@ -22,6 +23,7 @@
 #include <psapi.h>
 #include <pdh.h>
 #include <winsock2.h>
+#include <ws2tcpip.h>
 #pragma comment(lib, "pdh.lib")
 // clang-format on
 #elif defined(__linux__) || defined(__ANDROID__)
@@ -53,10 +55,11 @@
 #endif
 
 #include "atom/log/loguru.hpp"
+#include "atom/utils/convert.hpp"
 
 namespace atom::system {
 
-// 添加一个进程监控管理器
+constexpr int BUFFER_SIZE = 1024;
 namespace {
 class ProcessMonitorManager {
 public:
@@ -136,6 +139,126 @@ private:
     std::atomic<int> nextMonitorId_;
     std::unordered_map<int, std::future<void>> tasks_;
     std::unordered_map<int, bool> stopFlags_;
+};
+
+// 资源监控管理器
+class ResourceMonitorManager {
+public:
+    static ResourceMonitorManager &getInstance() {
+        static ResourceMonitorManager instance;
+        return instance;
+    }
+
+    int startMonitoring(
+        int pid, const std::string &resourceType, double threshold,
+        std::function<void(int, const std::string &, double)> callback,
+        unsigned int intervalMs) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        int monitorId = nextMonitorId_++;
+
+        auto task = std::async(std::launch::async, [this, pid, resourceType,
+                                                    threshold, callback,
+                                                    intervalMs, monitorId]() {
+            while (!shouldStop(monitorId)) {
+                try {
+                    double currentValue = -1;
+                    if (resourceType == "cpu") {
+                        currentValue = getProcessCpuUsage(pid);
+                    } else if (resourceType == "memory") {
+                        currentValue =
+                            static_cast<double>(getProcessMemoryUsage(pid));
+                    }
+                    // 可以扩展其他资源类型监控
+
+                    if (currentValue >= threshold) {
+                        callback(pid, resourceType, currentValue);
+                    }
+
+                    std::this_thread::sleep_for(
+                        std::chrono::milliseconds(intervalMs));
+                } catch (const std::exception &e) {
+                    LOG_F(ERROR, "Exception in resource monitor: {}", e.what());
+                    break;
+                }
+            }
+
+            std::lock_guard<std::mutex> taskLock(mutex_);
+            resourceTasks_.erase(monitorId);
+        });
+
+        resourceTasks_[monitorId] = std::move(task);
+        return monitorId;
+    }
+
+    bool stopMonitoring(int monitorId) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = resourceTasks_.find(monitorId);
+        if (it != resourceTasks_.end()) {
+            stopFlags_[monitorId] = true;
+            return true;
+        }
+        return false;
+    }
+
+private:
+    ResourceMonitorManager()
+        : nextMonitorId_(1000) {}  // 从1000开始，区别于普通监控
+
+    bool shouldStop(int monitorId) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = stopFlags_.find(monitorId);
+        if (it != stopFlags_.end()) {
+            return it->second;
+        }
+        return false;
+    }
+
+    std::mutex mutex_;
+    std::atomic<int> nextMonitorId_;
+    std::unordered_map<int, std::future<void>> resourceTasks_;
+    std::unordered_map<int, bool> stopFlags_;
+};
+
+// 性能历史记录管理器
+class PerformanceHistoryManager {
+public:
+    static PerformanceHistoryManager &getInstance() {
+        static PerformanceHistoryManager instance;
+        return instance;
+    }
+
+    PerformanceHistory collectHistory(int pid, std::chrono::seconds duration,
+                                      unsigned int intervalMs) {
+        PerformanceHistory history;
+        history.pid = pid;
+
+        auto endTime = std::chrono::system_clock::now() + duration;
+
+        while (std::chrono::system_clock::now() < endTime) {
+            try {
+                PerformanceDataPoint point;
+                point.timestamp = std::chrono::system_clock::now();
+                point.cpuUsage = getProcessCpuUsage(pid);
+                point.memoryUsage = getProcessMemoryUsage(pid);
+
+                // 这里可以添加获取IO统计信息的代码
+                auto resources = getProcessResources(pid);
+                point.ioReadBytes = resources.ioRead;
+                point.ioWriteBytes = resources.ioWrite;
+
+                history.dataPoints.push_back(point);
+
+                std::this_thread::sleep_for(
+                    std::chrono::milliseconds(intervalMs));
+            } catch (const std::exception &e) {
+                LOG_F(ERROR, "Exception collecting performance history: {}",
+                      e.what());
+                break;
+            }
+        }
+
+        return history;
+    }
 };
 }  // namespace
 
@@ -1496,7 +1619,14 @@ auto monitorProcess(int pid,
 }
 
 auto stopMonitoring(int monitorId) -> bool {
-    return ProcessMonitorManager::getInstance().stopMonitoring(monitorId);
+    // 根据monitorId停止不同类型的监控
+    if (monitorId >= 1000) {
+        // 资源监控任务
+        return ResourceMonitorManager::getInstance().stopMonitoring(monitorId);
+    } else {
+        // 普通进程监控任务
+        return ProcessMonitorManager::getInstance().stopMonitoring(monitorId);
+    }
 }
 
 auto getProcessCommandLine(int pid) -> std::vector<std::string> {
@@ -1505,81 +1635,76 @@ auto getProcessCommandLine(int pid) -> std::vector<std::string> {
 #ifdef _WIN32
     HANDLE hProcess =
         OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
-    if (hProcess == NULL) {
+    if (hProcess == nullptr) {
         LOG_F(ERROR, "无法打开进程: PID={}", pid);
         return cmdline;
     }
 
-    // Windows上没有直接获取命令行参数的API, 使用模块名称作为命令
-    char moduleName[MAX_PATH];
-    if (GetModuleFileNameExA(hProcess, NULL, moduleName, MAX_PATH) > 0) {
-        cmdline.push_back(moduleName);
+    wchar_t exePath[MAX_PATH];
+    if (GetModuleFileNameExW(hProcess, nullptr, exePath, MAX_PATH) != 0) {
+        cmdline.push_back(atom::utils::WCharArrayToString(exePath));
     }
 
     CloseHandle(hProcess);
+
+    // Windows不易直接获取命令行参数，这只返回可执行文件路径
 #elif defined(__linux__)
     std::string cmdlinePath = "/proc/" + std::to_string(pid) + "/cmdline";
     std::ifstream cmdlineFile(cmdlinePath);
-    if (!cmdlineFile) {
-        LOG_F(ERROR, "无法打开命令行文件: {}", cmdlinePath);
+    if (cmdlineFile) {
+        std::string arg;
+        std::string content((std::istreambuf_iterator<char>(cmdlineFile)),
+                            std::istreambuf_iterator<char>());
+
+        // cmdline文件以null字符分隔参数
+        size_t pos = 0;
+        while (pos < content.size()) {
+            std::string token;
+            while (pos < content.size() && content[pos] != '\0') {
+                token += content[pos++];
+            }
+            if (!token.empty()) {
+                cmdline.push_back(token);
+            }
+            pos++;  // 跳过null字符
+        }
+    }
+#elif defined(__APPLE__)
+    int mib[3] = {CTL_KERN, KERN_PROCARGS2, pid};
+    size_t size = 0;
+
+    // 获取所需大小
+    if (sysctl(mib, 3, nullptr, &size, nullptr, 0) < 0) {
+        LOG_F(ERROR, "sysctl获取大小失败: {}", strerror(errno));
         return cmdline;
     }
 
-    std::string line;
-    std::getline(cmdlineFile, line);
-
-    // cmdline文件中参数用\0分隔
-    std::size_t pos = 0;
-    std::size_t lastPos = 0;
-    while ((pos = line.find('\0', lastPos)) != std::string::npos) {
-        if (pos > lastPos) {
-            cmdline.push_back(line.substr(lastPos, pos - lastPos));
-        }
-        lastPos = pos + 1;
-
-        // 处理文件末尾
-        if (lastPos >= line.size()) {
-            break;
-        }
+    std::vector<char> procargs(size);
+    if (sysctl(mib, 3, procargs.data(), &size, nullptr, 0) < 0) {
+        LOG_F(ERROR, "sysctl获取进程参数失败: {}", strerror(errno));
+        return cmdline;
     }
 
-    // 处理最后一个参数
-    if (lastPos < line.size()) {
-        cmdline.push_back(line.substr(lastPos));
-    }
-#elif defined(__APPLE__)
-    char pathbuf[PROC_PIDPATHINFO_MAXSIZE];
-    if (proc_pidpath(pid, pathbuf, sizeof(pathbuf)) > 0) {
-        cmdline.push_back(pathbuf);
-    }
+    // 解析参数
+    int argc = *reinterpret_cast<int *>(procargs.data());
+    char *cp = procargs.data() + sizeof(int);
 
-    int mib[3] = {CTL_KERN, KERN_PROCARGS2, pid};
-    char buffer[4096];
-    size_t bufsize = sizeof(buffer);
-
-    if (sysctl(mib, 3, buffer, &bufsize, nullptr, 0) == 0) {
-        // 解析参数
-        int nargs;
-        memcpy(&nargs, buffer, sizeof(nargs));
-
-        char *cp = buffer + sizeof(nargs);
-
-        // 第一个部分是可执行文件路径，已经添加，所以跳过
-        while (cp < buffer + bufsize && *cp != '\0') {
-            cp++;
-        }
+    // 跳过exec_path
+    while (*cp != '\0') {
         cp++;
+    }
+    cp++;
 
-        // 收集参数
-        while (cp < buffer + bufsize && *cp != '\0') {
-            cmdline.push_back(cp);
+    // 跳过padding
+    while (*cp == '\0') {
+        cp++;
+    }
 
-            // 移动到下一个参数
-            while (cp < buffer + bufsize && *cp != '\0') {
-                cp++;
-            }
-            cp++;
-        }
+    // 现在cp指向参数
+    for (int i = 0; i < argc && cp < procargs.data() + size; i++) {
+        std::string arg = cp;
+        cmdline.push_back(arg);
+        cp += arg.size() + 1;
     }
 #endif
 
@@ -1591,7 +1716,7 @@ auto getProcessEnvironment(int pid)
     std::unordered_map<std::string, std::string> env;
 
 #ifdef _WIN32
-    // Windows无法直接获取其他进程的环境变量
+    // Windows不容易获取其他进程的环境变量
     LOG_F(WARNING, "Windows不支持获取其他进程的环境变量");
 #elif defined(__linux__)
     std::string envPath = "/proc/" + std::to_string(pid) + "/environ";
@@ -1601,22 +1726,26 @@ auto getProcessEnvironment(int pid)
         return env;
     }
 
-    std::string line;
-    std::getline(envFile, line, '\0');
+    std::string content((std::istreambuf_iterator<char>(envFile)),
+                        std::istreambuf_iterator<char>());
 
-    // environ文件中变量用\0分隔
-    std::size_t pos = 0;
-    while (pos < line.size()) {
-        std::string entry = line.substr(pos);
-        std::size_t equalsPos = entry.find('=');
+    // 环境变量以null字符分隔
+    size_t pos = 0;
+    while (pos < content.size()) {
+        std::string entry;
+        while (pos < content.size() && content[pos] != '\0') {
+            entry += content[pos++];
+        }
 
+        // 解析KEY=VALUE格式
+        size_t equalsPos = entry.find('=');
         if (equalsPos != std::string::npos) {
             std::string key = entry.substr(0, equalsPos);
             std::string value = entry.substr(equalsPos + 1);
             env[key] = value;
         }
 
-        pos += entry.size() + 1;
+        pos++;  // 跳过null字符
     }
 #elif defined(__APPLE__)
     // macOS不支持直接获取其他进程的环境变量
@@ -1626,216 +1755,923 @@ auto getProcessEnvironment(int pid)
     return env;
 }
 
-auto getProcessResources(int pid) -> ProcessResource {
-    ProcessResource resources;
+auto suspendProcess(int pid) -> bool {
+#ifdef _WIN32
+    HANDLE hProcess = OpenProcess(PROCESS_SUSPEND_RESUME, FALSE, pid);
+    if (hProcess == nullptr) {
+        LOG_F(ERROR, "无法打开进程: PID={}", pid);
+        return false;
+    }
 
-    // 获取CPU使用率
-    resources.cpuUsage = getProcessCpuUsage(pid);
+    typedef LONG(NTAPI * NtSuspendProcess)(HANDLE ProcessHandle);
+    NtSuspendProcess pfnNtSuspendProcess = reinterpret_cast<NtSuspendProcess>(
+        GetProcAddress(GetModuleHandleA("ntdll.dll"), "NtSuspendProcess"));
 
-    // 获取内存使用量
-    resources.memUsage = getProcessMemoryUsage(pid);
+    if (!pfnNtSuspendProcess) {
+        LOG_F(ERROR, "无法获取NtSuspendProcess函数");
+        CloseHandle(hProcess);
+        return false;
+    }
 
+    LONG status = pfnNtSuspendProcess(hProcess);
+    CloseHandle(hProcess);
+
+    if (status != 0) {
+        LOG_F(ERROR, "挂起进程失败: PID={}, 状态={}", pid, status);
+        return false;
+    }
+
+    return true;
+#elif defined(__linux__)
+    // 在Linux上使用SIGSTOP信号挂起进程
+    if (kill(pid, SIGSTOP) != 0) {
+        LOG_F(ERROR, "挂起进程失败: PID={}, 错误={}", pid, strerror(errno));
+        return false;
+    }
+    return true;
+#elif defined(__APPLE__)
+    // macOS与Linux类似，使用SIGSTOP信号
+    if (kill(pid, SIGSTOP) != 0) {
+        LOG_F(ERROR, "挂起进程失败: PID={}, 错误={}", pid, strerror(errno));
+        return false;
+    }
+    return true;
+#else
+    return false;
+#endif
+}
+
+auto resumeProcess(int pid) -> bool {
+#ifdef _WIN32
+    HANDLE hProcess = OpenProcess(PROCESS_SUSPEND_RESUME, FALSE, pid);
+    if (hProcess == nullptr) {
+        LOG_F(ERROR, "无法打开进程: PID={}", pid);
+        return false;
+    }
+
+    typedef LONG(NTAPI * NtResumeProcess)(HANDLE ProcessHandle);
+    NtResumeProcess pfnNtResumeProcess = reinterpret_cast<NtResumeProcess>(
+        GetProcAddress(GetModuleHandleA("ntdll.dll"), "NtResumeProcess"));
+
+    if (!pfnNtResumeProcess) {
+        LOG_F(ERROR, "无法获取NtResumeProcess函数");
+        CloseHandle(hProcess);
+        return false;
+    }
+
+    LONG status = pfnNtResumeProcess(hProcess);
+    CloseHandle(hProcess);
+
+    if (status != 0) {
+        LOG_F(ERROR, "恢复进程失败: PID={}, 状态={}", pid, status);
+        return false;
+    }
+
+    return true;
+#elif defined(__linux__) || defined(__APPLE__)
+    // 在Linux/macOS上使用SIGCONT信号继续运行进程
+    if (kill(pid, SIGCONT) != 0) {
+        LOG_F(ERROR, "恢复进程失败: PID={}, 错误={}", pid, strerror(errno));
+        return false;
+    }
+    return true;
+#else
+    return false;
+#endif
+}
+
+auto setProcessAffinity(int pid, const std::vector<int> &cpuIndices) -> bool {
+    if (cpuIndices.empty()) {
+        LOG_F(ERROR, "CPU核心索引列表为空");
+        return false;
+    }
+
+#ifdef _WIN32
+    HANDLE hProcess = OpenProcess(PROCESS_SET_INFORMATION, FALSE, pid);
+    if (hProcess == nullptr) {
+        LOG_F(ERROR, "无法打开进程: PID={}", pid);
+        return false;
+    }
+
+    DWORD_PTR affinityMask = 0;
+    for (int index : cpuIndices) {
+        if (index >= 0 && index < 64) {  // Windows支持最多64个处理器
+            affinityMask |= (static_cast<DWORD_PTR>(1) << index);
+        }
+    }
+
+    BOOL result = SetProcessAffinityMask(hProcess, affinityMask);
+    CloseHandle(hProcess);
+
+    if (!result) {
+        LOG_F(ERROR, "设置进程CPU亲和性失败: PID={}, 错误码={}", pid,
+              GetLastError());
+        return false;
+    }
+    return true;
+#elif defined(__linux__)
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+
+    for (int index : cpuIndices) {
+        if (index >= 0 && index < CPU_SETSIZE) {
+            CPU_SET(index, &cpuset);
+        }
+    }
+
+    if (sched_setaffinity(pid, sizeof(cpu_set_t), &cpuset) != 0) {
+        LOG_F(ERROR, "设置进程CPU亲和性失败: PID={}, 错误={}", pid,
+              strerror(errno));
+        return false;
+    }
+    return true;
+#elif defined(__APPLE__)
+    // macOS不支持设置CPU亲和性
+    LOG_F(WARNING, "macOS不支持设置CPU亲和性");
+    return false;
+#else
+    return false;
+#endif
+}
+
+auto getProcessAffinity(int pid) -> std::vector<int> {
+    std::vector<int> cpuIndices;
+
+#ifdef _WIN32
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
+    if (hProcess == nullptr) {
+        LOG_F(ERROR, "无法打开进程: PID={}", pid);
+        return cpuIndices;
+    }
+
+    DWORD_PTR processAffinity, systemAffinity;
+    if (GetProcessAffinityMask(hProcess, &processAffinity, &systemAffinity)) {
+        for (int i = 0; i < 64; i++) {  // 最多64个处理器
+            if (processAffinity & (static_cast<DWORD_PTR>(1) << i)) {
+                cpuIndices.push_back(i);
+            }
+        }
+    } else {
+        LOG_F(ERROR, "获取进程CPU亲和性失败: PID={}, 错误码={}", pid,
+              GetLastError());
+    }
+
+    CloseHandle(hProcess);
+#elif defined(__linux__)
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+
+    if (sched_getaffinity(pid, sizeof(cpu_set_t), &cpuset) == 0) {
+        for (int i = 0; i < CPU_SETSIZE; i++) {
+            if (CPU_ISSET(i, &cpuset)) {
+                cpuIndices.push_back(i);
+            }
+        }
+    } else {
+        LOG_F(ERROR, "获取进程CPU亲和性失败: PID={}, 错误={}", pid,
+              strerror(errno));
+    }
+#elif defined(__APPLE__)
+    // macOS不支持获取CPU亲和性
+    LOG_F(WARNING, "macOS不支持获取CPU亲和性");
+#endif
+
+    return cpuIndices;
+}
+
+auto setProcessMemoryLimit(int pid, std::size_t limitBytes) -> bool {
+#ifdef _WIN32
+    HANDLE hProcess = OpenProcess(PROCESS_SET_QUOTA, FALSE, pid);
+    if (hProcess == nullptr) {
+        LOG_F(ERROR, "无法打开进程: PID={}", pid);
+        return false;
+    }
+
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION jobInfo = {};
+    jobInfo.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_PROCESS_MEMORY;
+    jobInfo.ProcessMemoryLimit = limitBytes;
+
+    HANDLE hJob = CreateJobObject(nullptr, nullptr);
+    if (hJob == nullptr) {
+        LOG_F(ERROR, "创建作业对象失败: 错误码={}", GetLastError());
+        CloseHandle(hProcess);
+        return false;
+    }
+
+    if (!SetInformationJobObject(hJob, JobObjectExtendedLimitInformation,
+                                 &jobInfo, sizeof(jobInfo))) {
+        LOG_F(ERROR, "设置作业对象信息失败: 错误码={}", GetLastError());
+        CloseHandle(hJob);
+        CloseHandle(hProcess);
+        return false;
+    }
+
+    if (!AssignProcessToJobObject(hJob, hProcess)) {
+        LOG_F(ERROR, "将进程分配到作业对象失败: 错误码={}", GetLastError());
+        CloseHandle(hJob);
+        CloseHandle(hProcess);
+        return false;
+    }
+
+    CloseHandle(hProcess);
+    // 注意：不要关闭作业对象句柄，否则限制将被解除
+    // CloseHandle(hJob);
+
+    return true;
+#elif defined(__linux__)
+    // 在Linux上使用cgroups设置内存限制
+    std::string cgroupPath = "/sys/fs/cgroup/memory/";
+    std::string processGroup = "process_" + std::to_string(pid);
+    std::string fullPath = cgroupPath + processGroup;
+
+    // 创建cgroup
+    if (mkdir(fullPath.c_str(), 0755) != 0 && errno != EEXIST) {
+        LOG_F(ERROR, "创建cgroup失败: {}", strerror(errno));
+        return false;
+    }
+
+    // 设置内存限制
+    std::ofstream limitFile(fullPath + "/memory.limit_in_bytes");
+    if (!limitFile) {
+        LOG_F(ERROR, "打开内存限制文件失败");
+        return false;
+    }
+    limitFile << limitBytes;
+    limitFile.close();
+
+    // 添加进程到cgroup
+    std::ofstream tasksFile(fullPath + "/tasks");
+    if (!tasksFile) {
+        LOG_F(ERROR, "打开任务文件失败");
+        return false;
+    }
+    tasksFile << pid;
+    tasksFile.close();
+
+    return true;
+#else
+    LOG_F(WARNING, "当前平台不支持设置进程内存限制");
+    return false;
+#endif
+}
+
+auto getProcessPath(int pid) -> std::string {
 #ifdef _WIN32
     HANDLE hProcess =
         OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
-    if (hProcess != NULL) {
-        // 获取虚拟内存使用量
-        PROCESS_MEMORY_COUNTERS_EX pmc;
-        if (GetProcessMemoryInfo(hProcess, (PROCESS_MEMORY_COUNTERS *)&pmc,
-                                 sizeof(pmc))) {
-            resources.vmUsage = pmc.PrivateUsage;
-        }
-
-        // 获取线程数
-        HANDLE hThreadSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-        if (hThreadSnap != INVALID_HANDLE_VALUE) {
-            THREADENTRY32 te32;
-            te32.dwSize = sizeof(THREADENTRY32);
-            resources.threadCount = 0;
-
-            if (Thread32First(hThreadSnap, &te32)) {
-                do {
-                    if (te32.th32OwnerProcessID == pid) {
-                        resources.threadCount++;
-                    }
-                } while (Thread32Next(hThreadSnap, &te32));
-            }
-
-            CloseHandle(hThreadSnap);
-        }
-
-        CloseHandle(hProcess);
+    if (hProcess == nullptr) {
+        LOG_F(ERROR, "无法打开进程: PID={}", pid);
+        return "";
     }
 
-    // Windows不易获取IO统计和打开文件数
-    resources.ioRead = 0;
-    resources.ioWrite = 0;
-    resources.openFiles = 0;
+    wchar_t path[MAX_PATH];
+    DWORD length = GetModuleFileNameExW(hProcess, nullptr, path, MAX_PATH);
+    CloseHandle(hProcess);
+
+    if (length == 0) {
+        LOG_F(ERROR, "获取进程路径失败: PID={}, 错误码={}", pid,
+              GetLastError());
+        return "";
+    }
+
+    return atom::utils::WCharArrayToString(path);
 #elif defined(__linux__)
-    // 获取虚拟内存使用量
-    std::string statmPath = "/proc/" + std::to_string(pid) + "/statm";
-    std::ifstream statmFile(statmPath);
-    if (statmFile) {
-        std::size_t size;
-        statmFile >> size;
-        resources.vmUsage = size * sysconf(_SC_PAGESIZE);
+    std::string procPath = "/proc/" + std::to_string(pid) + "/exe";
+    char path[PATH_MAX];
+    ssize_t length = readlink(procPath.c_str(), path, PATH_MAX - 1);
+
+    if (length == -1) {
+        LOG_F(ERROR, "获取进程路径失败: PID={}, 错误={}", pid, strerror(errno));
+        return "";
     }
 
-    // 获取线程数
-    std::string statusPath = "/proc/" + std::to_string(pid) + "/status";
-    std::ifstream statusFile(statusPath);
-    if (statusFile) {
-        std::string line;
-        while (std::getline(statusFile, line)) {
-            if (line.find("Threads:") == 0) {
-                std::istringstream iss(line);
-                std::string label;
-                iss >> label >> resources.threadCount;
-                break;
+    path[length] = '\0';
+    return std::string(path);
+#elif defined(__APPLE__)
+    char pathbuf[PROC_PIDPATHINFO_MAXSIZE];
+    int ret = proc_pidpath(pid, pathbuf, sizeof(pathbuf));
+
+    if (ret <= 0) {
+        LOG_F(ERROR, "获取进程路径失败: PID={}, 错误={}", pid, strerror(errno));
+        return "";
+    }
+
+    return std::string(pathbuf);
+#else
+    return "";
+#endif
+}
+
+auto monitorProcessResource(
+    int pid, const std::string &resourceType, double threshold,
+    std::function<void(int, const std::string &, double)> callback,
+    unsigned int intervalMs) -> int {
+    return ResourceMonitorManager::getInstance().startMonitoring(
+        pid, resourceType, threshold, callback, intervalMs);
+}
+
+auto getProcessSyscalls(int pid)
+    -> std::unordered_map<std::string, unsigned long> {
+    std::unordered_map<std::string, unsigned long> syscalls;
+
+#ifdef __linux__
+    // Linux上可以通过/proc/[pid]/syscall查看当前系统调用
+    // 或者通过strace工具统计系统调用
+    std::string cmd = "strace -c -p " + std::to_string(pid) + " 2>&1";
+    auto [output, status] = executeCommandWithStatus(cmd);
+
+    if (status != 0) {
+        LOG_F(ERROR, "执行strace命令失败: {}", output);
+        return syscalls;
+    }
+
+    // 解析strace输出
+    std::istringstream iss(output);
+    std::string line;
+    bool foundHeader = false;
+
+    while (std::getline(iss, line)) {
+        if (line.find("calls") != std::string::npos &&
+            line.find("errors") != std::string::npos) {
+            foundHeader = true;
+            continue;
+        }
+
+        if (foundHeader) {
+            std::istringstream lineStream(line);
+            std::string syscallName;
+            unsigned long callCount;
+
+            // 跳过百分比和其他字段
+            std::string dummy;
+            lineStream >> dummy;      // 百分比
+            lineStream >> callCount;  // 调用次数
+
+            // 跳过多个字段，直到系统调用名称
+            for (int i = 0; i < 4; i++) {
+                lineStream >> dummy;
+            }
+
+            lineStream >> syscallName;
+            if (!syscallName.empty()) {
+                syscalls[syscallName] = callCount;
             }
         }
     }
+#else
+    LOG_F(WARNING, "当前平台不支持获取系统调用统计");
+#endif
 
-    // 获取IO统计
-    std::string ioPath = "/proc/" + std::to_string(pid) + "/io";
-    std::ifstream ioFile(ioPath);
-    if (ioFile) {
-        std::string line;
-        while (std::getline(ioFile, line)) {
-            if (line.find("read_bytes:") == 0) {
-                std::istringstream iss(line);
-                std::string label;
-                iss >> label >> resources.ioRead;
-            } else if (line.find("write_bytes:") == 0) {
-                std::istringstream iss(line);
-                std::string label;
-                iss >> label >> resources.ioWrite;
+    return syscalls;
+}
+
+auto getProcessNetworkConnections(int pid) -> std::vector<NetworkConnection> {
+    std::vector<NetworkConnection> connections;
+
+#ifdef _WIN32
+    // 使用Windows API获取网络连接
+    MIB_TCPTABLE_OWNER_PID *pTcpTable = nullptr;
+    DWORD dwSize = 0;
+    DWORD dwRetVal = 0;
+
+    // 获取TCP表所需大小
+    dwRetVal = GetExtendedTcpTable(nullptr, &dwSize, TRUE, AF_INET,
+                                   TCP_TABLE_OWNER_PID_ALL, 0);
+    if (dwRetVal == ERROR_INSUFFICIENT_BUFFER) {
+        pTcpTable = (MIB_TCPTABLE_OWNER_PID *)malloc(dwSize);
+        if (pTcpTable == nullptr) {
+            LOG_F(ERROR, "内存分配失败");
+            return connections;
+        }
+
+        dwRetVal = GetExtendedTcpTable(pTcpTable, &dwSize, TRUE, AF_INET,
+                                       TCP_TABLE_OWNER_PID_ALL, 0);
+        if (dwRetVal == NO_ERROR) {
+            for (DWORD i = 0; i < pTcpTable->dwNumEntries; i++) {
+                if (pTcpTable->table[i].dwOwningPid ==
+                    static_cast<DWORD>(pid)) {
+                    NetworkConnection conn;
+                    conn.protocol = "TCP";
+
+                    // 获取本地地址
+                    struct in_addr localAddr;
+                    localAddr.s_addr = pTcpTable->table[i].dwLocalAddr;
+                    char localAddrStr[16];  // Buffer size sufficient for IPv4
+                                            // (xxx.xxx.xxx.xxx)
+                    InetNtopA(AF_INET, &localAddr, localAddrStr,
+                              sizeof(localAddrStr));
+                    conn.localAddress = localAddrStr;
+                    conn.localPort =
+                        ntohs((u_short)pTcpTable->table[i].dwLocalPort);
+
+                    // 获取远程地址
+                    struct in_addr remoteAddr;
+                    remoteAddr.s_addr = pTcpTable->table[i].dwRemoteAddr;
+                    char remoteAddrStr[16];  // Buffer size sufficient for IPv4
+                                             // (xxx.xxx.xxx.xxx)
+                    InetNtopA(AF_INET, &remoteAddr, remoteAddrStr,
+                              sizeof(remoteAddrStr));
+                    conn.remoteAddress = remoteAddrStr;
+                    conn.remotePort =
+                        ntohs((u_short)pTcpTable->table[i].dwRemotePort);
+                    // 获取连接状态
+                    switch (pTcpTable->table[i].dwState) {
+                        case MIB_TCP_STATE_CLOSED:
+                            conn.status = "CLOSED";
+                            break;
+                        case MIB_TCP_STATE_LISTEN:
+                            conn.status = "LISTEN";
+                            break;
+                        case MIB_TCP_STATE_ESTAB:
+                            conn.status = "ESTABLISHED";
+                            break;
+                        default:
+                            conn.status = "OTHER";
+                    }
+
+                    connections.push_back(conn);
+                }
             }
         }
+        free(pTcpTable);
+    }
+#elif defined(__linux__)
+    // 读取/proc/[pid]/net/tcp和/proc/[pid]/net/udp文件
+    std::vector<std::string> protocols = {"tcp", "udp"};
+
+    for (const auto &proto : protocols) {
+        std::string netPath = "/proc/" + std::to_string(pid) + "/net/" + proto;
+        std::ifstream netFile(netPath);
+
+        if (!netFile) {
+            continue;
+        }
+
+        std::string line;
+        // 跳过标题行
+        std::getline(netFile, line);
+
+        while (std::getline(netFile, line)) {
+            NetworkConnection conn;
+            conn.protocol = proto;
+
+            std::istringstream iss(line);
+            std::string sl, localAddr, remoteAddr, status, other;
+
+            iss >> sl >> localAddr >> remoteAddr >> status >> other;
+
+            // 解析本地地址和端口
+            size_t colonPos = localAddr.find(':');
+            if (colonPos != std::string::npos) {
+                std::string addrHex = localAddr.substr(0, colonPos);
+                std::string portHex = localAddr.substr(colonPos + 1);
+
+                // 转换十六进制地址为IP地址
+                unsigned int addr;
+                std::stringstream ss;
+                ss << std::hex << addrHex;
+                ss >> addr;
+
+                unsigned char bytes[4];
+                bytes[0] = addr & 0xFF;
+                bytes[1] = (addr >> 8) & 0xFF;
+                bytes[2] = (addr >> 16) & 0xFF;
+                bytes[3] = (addr >> 24) & 0xFF;
+
+                std::stringstream addrStream;
+                addrStream << static_cast<int>(bytes[3]) << "."
+                           << static_cast<int>(bytes[2]) << "."
+                           << static_cast<int>(bytes[1]) << "."
+                           << static_cast<int>(bytes[0]);
+                conn.localAddress = addrStream.str();
+
+                // 转换十六进制端口
+                std::stringstream portStream;
+                portStream << std::hex << portHex;
+                portStream >> conn.localPort;
+            }
+
+            // 解析远程地址和端口
+            colonPos = remoteAddr.find(':');
+            if (colonPos != std::string::npos) {
+                std::string addrHex = remoteAddr.substr(0, colonPos);
+                std::string portHex = remoteAddr.substr(colonPos + 1);
+
+                // 转换十六进制地址为IP地址
+                unsigned int addr;
+                std::stringstream ss;
+                ss << std::hex << addrHex;
+                ss >> addr;
+
+                unsigned char bytes[4];
+                bytes[0] = addr & 0xFF;
+                bytes[1] = (addr >> 8) & 0xFF;
+                bytes[2] = (addr >> 16) & 0xFF;
+                bytes[3] = (addr >> 24) & 0xFF;
+
+                std::stringstream addrStream;
+                addrStream << static_cast<int>(bytes[3]) << "."
+                           << static_cast<int>(bytes[2]) << "."
+                           << static_cast<int>(bytes[1]) << "."
+                           << static_cast<int>(bytes[0]);
+                conn.remoteAddress = addrStream.str();
+
+                // 转换十六进制端口
+                std::stringstream portStream;
+                portStream << std::hex << portHex;
+                portStream >> conn.remotePort;
+            }
+
+            // 转换状态码
+            if (proto == "tcp") {
+                // 将状态代码转换为可读形式
+                switch (std::stoi(status, nullptr, 16)) {
+                    case 1:
+                        conn.status = "ESTABLISHED";
+                        break;
+                    case 2:
+                        conn.status = "SYN_SENT";
+                        break;
+                    case 3:
+                        conn.status = "SYN_RECV";
+                        break;
+                    case 4:
+                        conn.status = "FIN_WAIT1";
+                        break;
+                    case 5:
+                        conn.status = "FIN_WAIT2";
+                        break;
+                    case 6:
+                        conn.status = "TIME_WAIT";
+                        break;
+                    case 7:
+                        conn.status = "CLOSE";
+                        break;
+                    case 8:
+                        conn.status = "CLOSE_WAIT";
+                        break;
+                    case 9:
+                        conn.status = "LAST_ACK";
+                        break;
+                    case 10:
+                        conn.status = "LISTEN";
+                        break;
+                    default:
+                        conn.status = "UNKNOWN";
+                }
+            } else {
+                // UDP没有状态，设为空
+                conn.status = "";
+            }
+
+            connections.push_back(conn);
+        }
+    }
+#elif defined(__APPLE__)
+    // 使用lsof命令获取网络连接信息
+    std::string cmd = "lsof -i -n -P -p " + std::to_string(pid);
+    auto [output, status] = executeCommandWithStatus(cmd);
+
+    if (status != 0) {
+        LOG_F(ERROR, "执行lsof命令失败: {}", output);
+        return connections;
     }
 
-    // 获取打开的文件数
-    std::string fdDir = "/proc/" + std::to_string(pid) + "/fd";
-    DIR *dir = opendir(fdDir.c_str());
+    std::istringstream iss(output);
+    std::string line;
+    bool skipHeader = true;
+
+    while (std::getline(iss, line)) {
+        if (skipHeader) {
+            skipHeader = false;
+            continue;
+        }
+
+        std::istringstream lineStream(line);
+        std::string command, pid, user, fd, type, device, sizeOff, node, name;
+
+        lineStream >> command >> pid >> user >> fd >> type >> device >>
+            sizeOff >> node;
+        std::getline(lineStream, name);  // 剩余部分为name
+
+        // 只处理网络连接
+        if (type != "IPv4" && type != "IPv6") {
+            continue;
+        }
+
+        NetworkConnection conn;
+        conn.protocol = (name.find("UDP") != std::string::npos) ? "UDP" : "TCP";
+
+        // 解析地址和端口信息，格式如： TCP 127.0.0.1:8080->127.0.0.1:12345
+        // (ESTABLISHED)
+        auto addrInfo = name;
+        addrInfo =
+            addrInfo.substr(addrInfo.find_first_not_of(' '));  // 去除前导空格
+
+        // 提取状态信息
+        size_t statusPos = addrInfo.find('(');
+        if (statusPos != std::string::npos) {
+            conn.status = addrInfo.substr(statusPos + 1);
+            conn.status = conn.status.substr(0, conn.status.find(')'));
+            addrInfo = addrInfo.substr(0, statusPos);
+        }
+
+        // 解析本地和远程地址
+        size_t arrowPos = addrInfo.find("->");
+        if (arrowPos != std::string::npos) {
+            // 有远程连接
+            std::string localPart = addrInfo.substr(0, arrowPos);
+            std::string remotePart = addrInfo.substr(arrowPos + 2);
+
+            size_t colonPos = localPart.find(':');
+            if (colonPos != std::string::npos) {
+                conn.localAddress = localPart.substr(0, colonPos);
+                conn.localPort = std::stoi(localPart.substr(colonPos + 1));
+            }
+
+            colonPos = remotePart.find(':');
+            if (colonPos != std::string::npos) {
+                conn.remoteAddress = remotePart.substr(0, colonPos);
+                conn.remotePort = std::stoi(remotePart.substr(colonPos + 1));
+            }
+        } else {
+            // 只有本地监听
+            size_t colonPos = addrInfo.find(':');
+            if (colonPos != std::string::npos) {
+                conn.localAddress = addrInfo.substr(0, colonPos);
+                conn.localPort = std::stoi(addrInfo.substr(colonPos + 1));
+                conn.remoteAddress = "*";
+                conn.remotePort = 0;
+            }
+        }
+
+        connections.push_back(conn);
+    }
+#endif
+
+    return connections;
+}
+
+auto getProcessFileDescriptors(int pid) -> std::vector<FileDescriptor> {
+    std::vector<FileDescriptor> fds;
+
+#ifdef _WIN32
+    // Windows上获取打开的句柄信息比较复杂，这里简化处理
+    LOG_F(WARNING, "Windows平台上获取文件句柄列表功能尚未实现");
+#elif defined(__linux__)
+    std::string fdPath = "/proc/" + std::to_string(pid) + "/fd";
+    DIR *dir = opendir(fdPath.c_str());
     if (dir != nullptr) {
-        resources.openFiles = 0;
         struct dirent *entry;
         while ((entry = readdir(dir)) != nullptr) {
-            if (entry->d_type == DT_LNK) {
-                resources.openFiles++;
+            // 跳过.和..
+            if (strcmp(entry->d_name, ".") == 0 ||
+                strcmp(entry->d_name, "..") == 0) {
+                continue;
+            }
+
+            int fd = std::stoi(entry->d_name);
+            std::string linkPath = fdPath + "/" + entry->d_name;
+            char target[PATH_MAX];
+            ssize_t len = readlink(linkPath.c_str(), target, PATH_MAX - 1);
+
+            if (len != -1) {
+                target[len] = '\0';
+                FileDescriptor fdInfo;
+                fdInfo.fd = fd;
+                fdInfo.path = target;
+
+                // 确定文件类型
+                if (strncmp(target, "socket:", 7) == 0) {
+                    fdInfo.type = "socket";
+                } else if (strncmp(target, "pipe:", 5) == 0) {
+                    fdInfo.type = "pipe";
+                } else if (strncmp(target, "/dev/", 5) == 0) {
+                    fdInfo.type = "device";
+                } else {
+                    fdInfo.type = "regular";
+                }
+
+                // 获取访问模式（这是个近似值，精确值需要更复杂的处理）
+                std::string fdInfoPath =
+                    "/proc/" + std::to_string(pid) + "/fdinfo/" + entry->d_name;
+                std::ifstream fdInfoFile(fdInfoPath);
+                if (fdInfoFile) {
+                    std::string line;
+                    while (std::getline(fdInfoFile, line)) {
+                        if (line.find("flags:") == 0) {
+                            int flags = std::stoi(
+                                line.substr(line.find_first_of("0123456789")));
+                            if ((flags & 0x3) == 0x0) {
+                                fdInfo.mode = "r";
+                            } else if ((flags & 0x3) == 0x1) {
+                                fdInfo.mode = "w";
+                            } else if ((flags & 0x3) == 0x2) {
+                                fdInfo.mode = "rw";
+                            } else {
+                                fdInfo.mode = "unknown";
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                fds.push_back(fdInfo);
             }
         }
         closedir(dir);
     }
 #elif defined(__APPLE__)
-    // 获取进程信息
-    task_t task;
-    if (task_for_pid(mach_task_self(), pid, &task) == KERN_SUCCESS) {
-        // 获取虚拟内存使用量
-        struct task_basic_info_64 info;
-        mach_msg_type_number_t count = TASK_BASIC_INFO_64_COUNT;
-        if (task_info(task, TASK_BASIC_INFO_64, (task_info_t)&info, &count) ==
-            KERN_SUCCESS) {
-            resources.vmUsage = info.virtual_size;
-        }
+    // 在macOS上使用lsof命令获取文件描述符信息
+    std::string cmd = "lsof -p " + std::to_string(pid);
+    auto [output, status] = executeCommandWithStatus(cmd);
 
-        // 获取线程数
-        thread_act_array_t threads;
-        mach_msg_type_number_t thread_count;
-        if (task_threads(task, &threads, &thread_count) == KERN_SUCCESS) {
-            resources.threadCount = thread_count;
-            vm_deallocate(mach_task_self(), (vm_address_t)threads,
-                          thread_count * sizeof(thread_t));
-        }
+    if (status != 0) {
+        LOG_F(ERROR, "执行lsof命令失败: {}", output);
+        return fds;
     }
 
-    // macOS不易获取IO统计和打开文件数
-    resources.ioRead = 0;
-    resources.ioWrite = 0;
-    resources.openFiles = 0;
-#endif
+    std::istringstream iss(output);
+    std::string line;
+    bool skipHeader = true;
 
-    return resources;
-}
+    while (std::getline(iss, line)) {
+        if (skipHeader) {
+            skipHeader = false;
+            continue;
+        }
 
-#ifdef _WIN32
-auto getProcessModules(int pid) -> std::vector<std::string> {
-    std::vector<std::string> modules;
+        std::istringstream lineStream(line);
+        std::string command, pid, user, fd, type, device, sizeOff, node, name;
 
-    HANDLE hProcess =
-        OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
-    if (hProcess == NULL) {
-        LOG_F(ERROR, "无法打开进程: PID={}", pid);
-        return modules;
-    }
+        lineStream >> command >> pid >> user >> fd;
 
-    HMODULE hModules[1024];
-    DWORD cbNeeded;
-
-    if (EnumProcessModules(hProcess, hModules, sizeof(hModules), &cbNeeded)) {
-        for (unsigned int i = 0; i < (cbNeeded / sizeof(HMODULE)); i++) {
-            char moduleName[MAX_PATH];
-            if (GetModuleFileNameExA(hProcess, hModules[i], moduleName,
-                                     sizeof(moduleName))) {
-                modules.emplace_back(moduleName);
+        // 提取文件描述符编号
+        int fdNum = -1;
+        if (fd.find('r') != std::string::npos ||
+            fd.find('w') != std::string::npos) {
+            std::string fdNumStr = fd;
+            fdNumStr.erase(
+                std::remove_if(fdNumStr.begin(), fdNumStr.end(),
+                               [](char c) { return !std::isdigit(c); }),
+                fdNumStr.end());
+            if (!fdNumStr.empty()) {
+                fdNum = std::stoi(fdNumStr);
+            }
+        } else {
+            try {
+                fdNum = std::stoi(fd);
+            } catch (...) {
+                continue;  // 跳过无法解析的行
             }
         }
-    } else {
-        LOG_F(ERROR, "枚举进程模块失败: PID={}, 错误码={}", pid,
-              GetLastError());
-    }
 
-    CloseHandle(hProcess);
-    return modules;
-}
+        if (fdNum == -1) {
+            continue;
+        }
+
+        lineStream >> type >> device >> sizeOff >> node;
+        std::getline(lineStream, name);  // 剩余部分为路径
+
+        FileDescriptor fdInfo;
+        fdInfo.fd = fdNum;
+        fdInfo.path = name;
+        fdInfo.type = type;
+
+        // 确定访问模式
+        if (fd.find('r') != std::string::npos &&
+            fd.find('w') != std::string::npos) {
+            fdInfo.mode = "rw";
+        } else if (fd.find('r') != std::string::npos) {
+            fdInfo.mode = "r";
+        } else if (fd.find('w') != std::string::npos) {
+            fdInfo.mode = "w";
+        } else {
+            fdInfo.mode = "unknown";
+        }
+
+        fds.push_back(fdInfo);
+    }
 #endif
+
+    return fds;
+}
+
+auto getProcessPerformanceHistory(int pid, std::chrono::seconds duration,
+                                  unsigned int intervalMs)
+    -> PerformanceHistory {
+    return PerformanceHistoryManager::getInstance().collectHistory(
+        pid, duration, intervalMs);
+}
+
+auto setProcessIOPriority(int pid, int priority) -> bool {
+    if (priority < 0 || priority > 7) {
+        LOG_F(ERROR, "IO优先级必须在0-7范围内");
+        return false;
+    }
 
 #ifdef __linux__
-auto getProcessCapabilities(int pid) -> std::vector<std::string> {
-    std::vector<std::string> capabilities;
+    // Linux使用ioprio_set系统调用
+    // 由于这是一个不常用的系统调用，需要直接使用syscall
+    long ioprio = (4 << 13) | priority;  // 4是IOPRIO_CLASS_BE (best effort)
+    int ret = syscall(SYS_ioprio_set, 1, pid, ioprio);  // 1是IOPRIO_WHO_PROCESS
 
-#if __has_include(<sys/capability.h>)
-    // 尝试读取进程能力
-    cap_t caps = cap_get_pid(pid);
-    if (caps == NULL) {
-        LOG_F(ERROR, "无法获取进程能力: PID={}, 错误={}", pid, strerror(errno));
-        return capabilities;
+    if (ret == -1) {
+        LOG_F(ERROR, "设置IO优先级失败: PID={}, 错误={}", pid, strerror(errno));
+        return false;
     }
-
-    char *text = cap_to_text(caps, NULL);
-    if (text != NULL) {
-        std::string capsText = text;
-        cap_free(text);
-
-        // 解析能力字符串
-        std::istringstream iss(capsText);
-        std::string cap;
-        while (std::getline(iss, cap, ',')) {
-            capabilities.push_back(cap);
-        }
-    }
-
-    cap_free(caps);
+    return true;
 #else
-    // 如果没有capability.h, 尝试从status文件获取
-    std::string statusPath = "/proc/" + std::to_string(pid) + "/status";
-    std::ifstream statusFile(statusPath);
-
-    if (statusFile) {
-        std::string line;
-        while (std::getline(statusFile, line)) {
-            if (line.find("CapEff:") == 0 || line.find("CapPrm:") == 0 ||
-                line.find("CapInh:") == 0) {
-                capabilities.push_back(line);
-            }
-        }
-    } else {
-        LOG_F(ERROR, "无法打开状态文件: {}", statusPath);
-    }
+    LOG_F(WARNING, "当前平台不支持设置IO优先级");
+    return false;
 #endif
-
-    return capabilities;
 }
+
+auto getProcessIOPriority(int pid) -> int {
+#ifdef __linux__
+    // Linux使用ioprio_get系统调用
+    long ioprio = syscall(SYS_ioprio_get, 1, pid);  // 1是IOPRIO_WHO_PROCESS
+
+    if (ioprio == -1) {
+        LOG_F(ERROR, "获取IO优先级失败: PID={}, 错误={}", pid, strerror(errno));
+        return -1;
+    }
+
+    // 提取优先级值
+    return ioprio & 0xFF;
+#else
+    LOG_F(WARNING, "当前平台不支持获取IO优先级");
+    return -1;
 #endif
+}
+
+auto sendSignalToProcess(int pid, int signal) -> bool {
+#ifdef _WIN32
+    if (signal == SIGTERM) {
+        HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
+        if (hProcess == nullptr) {
+            LOG_F(ERROR, "无法打开进程: PID={}", pid);
+            return false;
+        }
+
+        BOOL result = TerminateProcess(hProcess, 1);
+        CloseHandle(hProcess);
+
+        if (!result) {
+            LOG_F(ERROR, "终止进程失败: PID={}, 错误码={}", pid,
+                  GetLastError());
+            return false;
+        }
+        return true;
+    } else if (signal == SIGINT) {
+        // 发送Ctrl+C事件
+        if (!GenerateConsoleCtrlEvent(CTRL_C_EVENT, pid)) {
+            LOG_F(ERROR, "发送Ctrl+C事件失败: PID={}, 错误码={}", pid,
+                  GetLastError());
+            return false;
+        }
+        return true;
+    } else {
+        LOG_F(ERROR, "Windows平台不支持信号: {}", signal);
+        return false;
+    }
+#else
+    // POSIX系统使用kill发送信号
+    if (kill(pid, signal) != 0) {
+        LOG_F(ERROR, "发送信号失败: PID={}, 信号={}, 错误={}", pid, signal,
+              strerror(errno));
+        return false;
+    }
+    return true;
+#endif
+}
+
+auto findProcesses(std::function<bool(const Process &)> predicate)
+    -> std::vector<int> {
+    std::vector<int> matchingPids;
+
+    auto allProcesses = getAllProcesses();
+    for (const auto &[pid, name] : allProcesses) {
+        try {
+            Process process = getProcessInfoByPid(pid);
+            if (predicate(process)) {
+                matchingPids.push_back(pid);
+            }
+        } catch (const std::exception &e) {
+            LOG_F(WARNING, "获取进程{}信息时出错: {}", pid, e.what());
+        }
+    }
+
+    return matchingPids;
+}
+
+auto ctermid() -> std::string {
+#if defined(_WIN32)
+    return "CON";  // Windows控制台
+#else
+    char term[L_ctermid];
+    return ::ctermid(term);
+#endif
+}
 
 }  // namespace atom::system

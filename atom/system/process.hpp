@@ -194,6 +194,127 @@ auto getProcessModules(int pid) -> std::vector<std::string>;
  */
 auto getProcessCapabilities(int pid) -> std::vector<std::string>;
 #endif
+
+/**
+ * @brief 挂起（暂停）一个进程
+ * @param pid 进程ID
+ * @return 是否成功挂起
+ */
+auto suspendProcess(int pid) -> bool;
+
+/**
+ * @brief 恢复一个被挂起的进程
+ * @param pid 进程ID
+ * @return 是否成功恢复
+ */
+auto resumeProcess(int pid) -> bool;
+
+/**
+ * @brief 设置进程的CPU亲和性（绑定到指定CPU核心）
+ * @param pid 进程ID
+ * @param cpuIndices CPU核心索引列表
+ * @return 是否设置成功
+ */
+auto setProcessAffinity(int pid, const std::vector<int>& cpuIndices) -> bool;
+
+/**
+ * @brief 获取进程的CPU亲和性
+ * @param pid 进程ID
+ * @return CPU核心索引列表，如果失败则返回空vector
+ */
+auto getProcessAffinity(int pid) -> std::vector<int>;
+
+/**
+ * @brief 设置进程的内存使用限制
+ * @param pid 进程ID
+ * @param limitBytes 最大内存使用量（字节）
+ * @return 是否设置成功
+ */
+auto setProcessMemoryLimit(int pid, std::size_t limitBytes) -> bool;
+
+/**
+ * @brief 获取进程的执行路径
+ * @param pid 进程ID
+ * @return 进程可执行文件的完整路径
+ */
+auto getProcessPath(int pid) -> std::string;
+
+/**
+ * @brief 基于资源使用情况监控进程
+ * @param pid 进程ID
+ * @param resourceType 资源类型 (cpu, memory, disk, network)
+ * @param threshold 阈值（对CPU是百分比，对内存是字节数）
+ * @param callback 阈值触发时的回调函数
+ * @param intervalMs 检查间隔（毫秒）
+ * @return 监控任务ID
+ */
+auto monitorProcessResource(int pid, const std::string& resourceType, 
+                           double threshold,
+                           std::function<void(int, const std::string&, double)> callback,
+                           unsigned int intervalMs = 1000) -> int;
+
+/**
+ * @brief 获取进程的系统调用统计信息
+ * @param pid 进程ID
+ * @return 系统调用统计信息
+ */
+auto getProcessSyscalls(int pid) -> std::unordered_map<std::string, unsigned long>;
+
+/**
+ * @brief 获取进程的网络连接信息
+ * @param pid 进程ID
+ * @return 网络连接信息列表
+ */
+auto getProcessNetworkConnections(int pid) -> std::vector<NetworkConnection>;
+
+/**
+ * @brief 获取进程的文件描述符/句柄信息
+ * @param pid 进程ID
+ * @return 文件描述符/句柄信息列表
+ */
+auto getProcessFileDescriptors(int pid) -> std::vector<FileDescriptor>;
+
+/**
+ * @brief 获取指定时间段内的进程性能历史
+ * @param pid 进程ID
+ * @param duration 历史时长
+ * @param intervalMs 采样间隔（毫秒）
+ * @return 性能历史数据点列表
+ */
+auto getProcessPerformanceHistory(int pid, 
+                                 std::chrono::seconds duration,
+                                 unsigned int intervalMs = 1000) -> PerformanceHistory;
+
+/**
+ * @brief 设置进程的IO优先级
+ * @param pid 进程ID
+ * @param priority IO优先级(0-7,值越小优先级越高)
+ * @return 是否设置成功
+ */
+auto setProcessIOPriority(int pid, int priority) -> bool;
+
+/**
+ * @brief 获取进程的IO优先级
+ * @param pid 进程ID
+ * @return IO优先级，如果失败返回-1
+ */
+auto getProcessIOPriority(int pid) -> int;
+
+/**
+ * @brief 向进程发送信号
+ * @param pid 进程ID
+ * @param signal 信号值
+ * @return 是否发送成功
+ */
+auto sendSignalToProcess(int pid, int signal) -> bool;
+
+/**
+ * @brief 查找符合指定条件的进程
+ * @param predicate 判断函数，接收Process对象，返回是否符合条件
+ * @return 符合条件的进程ID列表
+ */
+auto findProcesses(std::function<bool(const Process&)> predicate) -> std::vector<int>;
+
 }  // namespace atom::system
 
 #endif

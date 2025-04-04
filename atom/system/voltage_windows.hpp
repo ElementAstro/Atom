@@ -2,10 +2,11 @@
 
 #pragma once
 
-#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
+
+#include <windows.h>
 
 #include "voltage.hpp"
 
