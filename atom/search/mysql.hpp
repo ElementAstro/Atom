@@ -6,9 +6,9 @@
 
 /*************************************************
 
-Date: 2023-12-6
+Date: 2023-12-6, updated: 2024-04-5
 
-Description: Simple Mysql wrapper
+Description: Enhanced MySQL/MariaDB wrapper
 
 **************************************************/
 
@@ -17,137 +17,285 @@ Description: Simple Mysql wrapper
 
 #include <mariadb/mysql.h>
 #include <functional>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <vector>
+
+namespace atom {
+namespace database {
+
+/**
+ * @brief Custom exception class for MySQL-related errors
+ */
+class MySQLException : public std::runtime_error {
+public:
+    explicit MySQLException(const std::string& message)
+        : std::runtime_error(message) {}
+};
+
+/**
+ * @brief Structure to hold database connection parameters
+ */
+struct ConnectionParams {
+    std::string host;
+    std::string user;
+    std::string password;
+    std::string database;
+    unsigned int port = 3306;
+    std::string socket;
+    unsigned long clientFlag = 0;
+};
+
+/**
+ * @brief Enum for transaction isolation levels
+ */
+enum class TransactionIsolation {
+    READ_UNCOMMITTED,
+    READ_COMMITTED,
+    REPEATABLE_READ,
+    SERIALIZABLE
+};
+
+/**
+ * @brief Class representing a database row
+ */
+class Row {
+public:
+    Row(MYSQL_ROW row, unsigned long* lengths, unsigned int numFields);
+
+    std::string getString(unsigned int index) const;
+    int getInt(unsigned int index) const;
+    double getDouble(unsigned int index) const;
+    bool getBool(unsigned int index) const;
+    bool isNull(unsigned int index) const;
+
+    unsigned int getFieldCount() const { return numFields; }
+
+private:
+    MYSQL_ROW row;
+    std::vector<unsigned long> lengths;
+    unsigned int numFields;
+};
+
+/**
+ * @brief Class representing a database result set
+ */
+class ResultSet {
+public:
+    explicit ResultSet(MYSQL_RES* result);
+    ~ResultSet();
+
+    // Prevent copying
+    ResultSet(const ResultSet&) = delete;
+    ResultSet& operator=(const ResultSet&) = delete;
+
+    // Allow moving
+    ResultSet(ResultSet&& other) noexcept;
+    ResultSet& operator=(ResultSet&& other) noexcept;
+
+    bool next();
+    Row getCurrentRow() const;
+    unsigned int getFieldCount() const;
+    std::string getFieldName(unsigned int index) const;
+    unsigned long long getRowCount() const;
+
+private:
+    MYSQL_RES* result;
+    MYSQL_ROW currentRow;
+    unsigned long* lengths;
+    unsigned int numFields;
+};
+
+/**
+ * @brief Class for prepared statements
+ */
+class PreparedStatement {
+public:
+    PreparedStatement(MYSQL* connection, const std::string& query);
+    ~PreparedStatement();
+
+    // Prevent copying
+    PreparedStatement(const PreparedStatement&) = delete;
+    PreparedStatement& operator=(const PreparedStatement&) = delete;
+
+    // Allow moving
+    PreparedStatement(PreparedStatement&& other) noexcept;
+    PreparedStatement& operator=(PreparedStatement&& other) noexcept;
+
+    // Binding methods
+    PreparedStatement& bindString(int index, const std::string& value);
+    PreparedStatement& bindInt(int index, int value);
+    PreparedStatement& bindDouble(int index, double value);
+    PreparedStatement& bindBool(int index, bool value);
+    PreparedStatement& bindNull(int index);
+
+    bool execute();
+    std::unique_ptr<ResultSet> executeQuery();
+    int executeUpdate();
+
+    void reset();
+    void clearParameters();
+
+private:
+    MYSQL_STMT* stmt;
+    std::vector<MYSQL_BIND> binds;
+    std::vector<std::unique_ptr<char[]>> stringBuffers;
+    std::vector<unsigned long> stringLengths;
+    std::vector<my_bool> isNull;
+};
 
 /**
  * @class MysqlDB
- * @brief This class provides functionalities to interact with a MySQL database.
- *
- * It offers methods to execute queries, retrieve data, and manage transactions.
+ * @brief Enhanced class for interacting with a MySQL/MariaDB database.
  */
 class MysqlDB {
 public:
     /**
-     * @brief Constructor that initializes a connection to a MySQL database.
-     * @param host The hostname or IP address of the MySQL server.
-     * @param user The username for the MySQL database.
-     * @param password The password for the MySQL database.
-     * @param database The name of the database to connect to.
+     * @brief Constructor with connection parameters
      */
-    explicit MysqlDB(const char *host, const char *user, const char *password,
-            const char *database);
+    explicit MysqlDB(const ConnectionParams& params);
 
     /**
-     * @brief Destructor that closes the database connection.
+     * @brief Constructor with individual connection parameters
+     */
+    MysqlDB(const std::string& host, const std::string& user,
+            const std::string& password, const std::string& database,
+            unsigned int port = 3306, const std::string& socket = "",
+            unsigned long clientFlag = 0);
+
+    /**
+     * @brief Destructor that closes the database connection
      */
     ~MysqlDB();
 
-    /**
-     * @brief Executes a given SQL query.
-     * @param query The SQL query string to be executed.
-     * @return True if the query was successfully executed, false otherwise.
-     */
-    bool executeQuery(const char *query);
+    // Prevent copying, allow moving
+    MysqlDB(const MysqlDB&) = delete;
+    MysqlDB& operator=(const MysqlDB&) = delete;
+    MysqlDB(MysqlDB&& other) noexcept;
+    MysqlDB& operator=(MysqlDB&& other) noexcept;
 
     /**
-     * @brief Selects data from the database using a given query and prints the result.
-     * @param query The SQL select query to be executed.
+     * @brief Connects to the database with stored parameters
      */
-    void selectData(const char *query);
+    bool connect();
 
     /**
-     * @brief Retrieves an integer value from the first row in the query result.
-     * @param query The SQL query to be executed.
-     * @return The integer value from the query result.
+     * @brief Reconnects to the database if connection was lost
      */
-    int getIntValue(const char *query);
+    bool reconnect();
 
     /**
-     * @brief Retrieves a double value from the first row in the query result.
-     * @param query The SQL query to be executed.
-     * @return The double value from the query result.
+     * @brief Disconnects from the database
      */
-    double getDoubleValue(const char *query);
+    void disconnect();
 
     /**
-     * @brief Retrieves a text value from the first row in the query result.
-     * @param query The SQL query to be executed.
-     * @return The text value from the query result. Note: the caller must ensure the returned pointer is used appropriately to avoid memory leaks or dangling pointers.
+     * @brief Checks if the connection is alive
      */
-    const char *getTextValue(const char *query);
+    bool isConnected();
 
     /**
-     * @brief Searches for a term within the result of a given query.
-     * @param query The SQL query to be executed.
-     * @param searchTerm The term to search for in the query result.
-     * @return True if the search term is found, false otherwise.
+     * @brief Executes a SQL query
      */
-    bool searchData(const char *query, const char *searchTerm);
+    bool executeQuery(const std::string& query);
 
     /**
-     * @brief Updates data in the database using a given query.
-     * @param query The SQL update query to be executed.
-     * @return True if the data was successfully updated, false otherwise.
+     * @brief Executes a query and returns results
      */
-    bool updateData(const char *query);
+    std::unique_ptr<ResultSet> executeQueryWithResults(
+        const std::string& query);
 
     /**
-     * @brief Deletes data from the database using a given query.
-     * @param query The SQL delete query to be executed.
-     * @return True if the data was successfully deleted, false otherwise.
+     * @brief Executes a data modification query and returns affected rows
      */
-    bool deleteData(const char *query);
+    int executeUpdate(const std::string& query);
 
     /**
-     * @brief Begins a new transaction.
-     * @return True if the transaction was successfully started, false otherwise.
+     * @brief Gets a single integer value from a query
+     */
+    int getIntValue(const std::string& query);
+
+    /**
+     * @brief Gets a single double value from a query
+     */
+    double getDoubleValue(const std::string& query);
+
+    /**
+     * @brief Gets a single string value from a query
+     */
+    std::string getStringValue(const std::string& query);
+
+    /**
+     * @brief Searches for data matching criteria
+     */
+    bool searchData(const std::string& query, const std::string& column,
+                    const std::string& searchTerm);
+
+    /**
+     * @brief Creates a prepared statement for safe query execution
+     */
+    std::unique_ptr<PreparedStatement> prepareStatement(
+        const std::string& query);
+
+    /**
+     * @brief Transaction management methods
      */
     bool beginTransaction();
-
-    /**
-     * @brief Commits the current transaction.
-     * @return True if the transaction was successfully committed, false otherwise.
-     */
     bool commitTransaction();
-
-    /**
-     * @brief Rolls back the current transaction.
-     * @return True if the transaction was successfully rolled back, false otherwise.
-     */
     bool rollbackTransaction();
+    bool setSavepoint(const std::string& savepointName);
+    bool rollbackToSavepoint(const std::string& savepointName);
+    bool setTransactionIsolation(TransactionIsolation level);
 
     /**
-     * @brief Handles any MySQL errors by printing the error message.
+     * @brief Batch operations
      */
-    void handleMySQLError();
+    bool executeBatch(const std::vector<std::string>& queries);
+    bool executeBatchTransaction(const std::vector<std::string>& queries);
 
     /**
-     * @brief Validates data using a provided query and a validation query.
-     * @param query The SQL query to validate the data.
-     * @param validationQuery The SQL query used for validation.
-     * @return True if the data is valid according to the validation query, false otherwise.
+     * @brief Stored procedure execution
      */
-    bool validateData(const char *query, const char *validationQuery);
+    std::unique_ptr<ResultSet> callProcedure(
+        const std::string& procedureName,
+        const std::vector<std::string>& params);
 
     /**
-     * @brief Selects data with pagination support.
-     * @param query The SQL select query to be executed.
-     * @param limit The maximum number of rows to return.
-     * @param offset The offset of the first row to return.
+     * @brief Schema information retrieval
      */
-    void selectDataWithPagination(const char *query, int limit, int offset);
+    std::vector<std::string> getDatabases();
+    std::vector<std::string> getTables();
+    std::vector<std::string> getColumns(const std::string& tableName);
 
     /**
-     * @brief Sets a callback function for handling error messages.
-     * @param errorCallback A function to be called when an error occurs, receiving the error message as a parameter.
+     * @brief Error handling
      */
-    void setErrorMessageCallback(
-        const std::function<void(const char *)> &errorCallback);
+    std::string getLastError() const;
+    unsigned int getLastErrorCode() const;
+    void setErrorCallback(
+        const std::function<void(const std::string&, unsigned int)>& callback);
+
+    /**
+     * @brief Utility functions
+     */
+    std::string escapeString(const std::string& str);
+    unsigned long long getLastInsertId() const;
+    unsigned long long getAffectedRows() const;
+    std::unique_ptr<ResultSet> executeQueryWithPagination(
+        const std::string& query, int limit, int offset);
 
 private:
-    MYSQL *db; ///< Pointer to the MySQL connection handle.
+    MYSQL* db;
+    ConnectionParams params;
+    std::mutex mutex;
+    std::function<void(const std::string&, unsigned int)> errorCallback;
+    bool autoReconnect = true;
 
-private:
-    std::function<void(const char *)> errorCallback; ///< The callback function for error messages.
+    bool handleError(const std::string& operation, bool throwOnError = false);
 };
 
-#endif
+}  // namespace database
+}  // namespace atom
+
+#endif  // ATOM_SEARCH_MYSQL_HPP

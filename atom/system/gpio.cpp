@@ -1,9 +1,5 @@
 #include "gpio.hpp"
 
-#include <fcntl.h>
-#include <poll.h>
-#include <sys/epoll.h>
-#include <unistd.h>
 #include <atomic>
 #include <csignal>
 #include <cstring>
@@ -15,9 +11,29 @@
 #include "atom/error/exception.hpp"
 #include "atom/log/loguru.hpp"
 
+#ifdef _WIN32
+// Windows specific headers
+// clang-format off
+#include <windows.h>
+#include <cfgmgr32.h>
+#include <setupapi.h>
+#include <hidsdi.h>
+// clang-format on
+#ifdef _MSC_VER
+#pragma comment(lib, "setupapi.lib")
+#pragma comment(lib, "cfgmgr32.lib")
+#endif
+#else
+// Linux specific headers
+#include <fcntl.h>
+#include <poll.h>
+#include <sys/epoll.h>
+#include <unistd.h>
+
 #define GPIO_EXPORT "/sys/class/gpio/export"
 #define GPIO_UNEXPORT "/sys/class/gpio/unexport"
 #define GPIO_PATH "/sys/class/gpio"
+#endif
 
 namespace atom::system {
 
@@ -68,7 +84,384 @@ std::string edgeToString(GPIO::Edge edge) {
     }
 }
 
-// Global callback manager for all GPIO pins
+#ifdef _WIN32
+// Windows 版本的 GPIO 回调管理器
+class GPIOCallbackManager {
+public:
+    static GPIOCallbackManager& getInstance() {
+        static GPIOCallbackManager instance;
+        return instance;
+    }
+
+    void registerCallback(const std::string& pin,
+                          std::function<void(bool)> callback) {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        // 如果这是第一个回调，初始化硬件并启动监视线程
+        if (callbacks_.empty() && !monitorThreadRunning_) {
+            if (!deviceInitialized_) {
+                if (!initializeDevice()) {
+                    LOG_F(ERROR, "无法初始化 GPIO 设备");
+                    return;
+                }
+            }
+            startMonitorThread();
+        }
+
+        callbacks_[pin] = std::move(callback);
+
+        // 添加此引脚到引脚状态跟踪中
+        pinStates_[pin] = readPinState(pin);
+    }
+
+    void unregisterCallback(const std::string& pin) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        callbacks_.erase(pin);
+        pinStates_.erase(pin);
+
+        // 如果没有更多回调，停止线程
+        if (callbacks_.empty() && monitorThreadRunning_) {
+            stopMonitorThread();
+        }
+    }
+
+    // 模拟引脚状态变化，供测试使用
+    void simulatePinStateChange(const std::string& pin, bool state) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = callbacks_.find(pin);
+        if (it != callbacks_.end() && pinStates_[pin] != state) {
+            pinStates_[pin] = state;
+            try {
+                it->second(state);
+            } catch (const std::exception& e) {
+                LOG_F(ERROR, "GPIO 回调中发生异常: %s", e.what());
+            } catch (...) {
+                LOG_F(ERROR, "GPIO 回调中发生未知异常");
+            }
+        }
+    }
+
+    ~GPIOCallbackManager() {
+        stopMonitorThread();
+        closeDevice();
+    }
+
+private:
+    GPIOCallbackManager()
+        : monitorThreadRunning_(false),
+          deviceInitialized_(false),
+          deviceHandle_(INVALID_HANDLE_VALUE),
+          useSerialMode_(false) {}
+
+    // 初始化设备 - 尝试 USB 设备，如果失败则尝试串口
+    bool initializeDevice() {
+        // 首先尝试 USB GPIO 适配器
+        if (initializeUsbDevice()) {
+            useSerialMode_ = false;
+            deviceInitialized_ = true;
+            LOG_F(INFO, "已成功初始化 USB GPIO 设备");
+            return true;
+        }
+
+        // 如果 USB 设备失败，尝试串口
+        if (initializeSerialDevice()) {
+            useSerialMode_ = true;
+            deviceInitialized_ = true;
+            LOG_F(INFO, "已成功初始化串口 GPIO 设备");
+            return true;
+        }
+
+        LOG_F(ERROR, "无法找到可用的 GPIO 设备");
+        return false;
+    }
+
+    // 初始化 USB GPIO 适配器
+    bool initializeUsbDevice() {
+        // 查找具有特定 VID/PID 的 USB 设备
+        GUID guid;
+        HDEVINFO deviceInfo;
+        SP_DEVICE_INTERFACE_DATA interfaceData;
+
+        // 使用 HID 设备类 GUID
+        HidD_GetHidGuid(&guid);
+        deviceInfo = SetupDiGetClassDevs(&guid, NULL, NULL,
+                                         DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
+
+        if (deviceInfo == INVALID_HANDLE_VALUE) {
+            LOG_F(ERROR, "无法获取设备信息集");
+            return false;
+        }
+
+        interfaceData.cbSize = sizeof(SP_DEVICE_INTERFACE_DATA);
+
+        // 枚举设备
+        for (DWORD i = 0; SetupDiEnumDeviceInterfaces(deviceInfo, NULL, &guid,
+                                                      i, &interfaceData);
+             i++) {
+            DWORD requiredSize = 0;
+
+            // 获取详细信息所需的大小
+            SetupDiGetDeviceInterfaceDetail(deviceInfo, &interfaceData, NULL, 0,
+                                            &requiredSize, NULL);
+
+            // 分配内存
+            PSP_DEVICE_INTERFACE_DETAIL_DATA detailData =
+                (PSP_DEVICE_INTERFACE_DETAIL_DATA)malloc(requiredSize);
+
+            if (!detailData)
+                continue;
+
+            detailData->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA);
+
+            // 获取详细信息
+            if (SetupDiGetDeviceInterfaceDetail(deviceInfo, &interfaceData,
+                                                detailData, requiredSize, NULL,
+                                                NULL)) {
+                // 尝试打开设备
+                deviceHandle_ = CreateFile(detailData->DevicePath,
+                                           GENERIC_READ | GENERIC_WRITE,
+                                           FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                           NULL, OPEN_EXISTING, 0, NULL);
+
+                if (deviceHandle_ != INVALID_HANDLE_VALUE) {
+                    // TODO: 这里可以添加设备识别代码，检查是否为目标 GPIO 设备
+                    // 例如检查 VID/PID
+
+                    free(detailData);
+                    SetupDiDestroyDeviceInfoList(deviceInfo);
+                    return true;
+                }
+            }
+
+            free(detailData);
+        }
+
+        SetupDiDestroyDeviceInfoList(deviceInfo);
+        return false;
+    }
+
+    // 初始化串口设备
+    bool initializeSerialDevice() {
+        // 尝试常见的串口名称
+        std::vector<std::string> comPorts = {"COM1", "COM2", "COM3", "COM4",
+                                             "COM5"};
+
+        for (const auto& port : comPorts) {
+            // 尝试打开串口
+            std::string portName = "\\\\.\\" + port;
+            deviceHandle_ =
+                CreateFileA(portName.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
+                            NULL, OPEN_EXISTING, 0, NULL);
+
+            if (deviceHandle_ != INVALID_HANDLE_VALUE) {
+                // 配置串口参数
+                DCB dcbSerialParams = {};
+                dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
+
+                if (!GetCommState(deviceHandle_, &dcbSerialParams)) {
+                    CloseHandle(deviceHandle_);
+                    deviceHandle_ = INVALID_HANDLE_VALUE;
+                    continue;
+                }
+
+                // 设置波特率，通常是 9600 或其他值
+                dcbSerialParams.BaudRate = CBR_9600;
+                dcbSerialParams.ByteSize = 8;
+                dcbSerialParams.StopBits = ONESTOPBIT;
+                dcbSerialParams.Parity = NOPARITY;
+
+                if (!SetCommState(deviceHandle_, &dcbSerialParams)) {
+                    CloseHandle(deviceHandle_);
+                    deviceHandle_ = INVALID_HANDLE_VALUE;
+                    continue;
+                }
+
+                // 设置超时
+                COMMTIMEOUTS timeouts = {};
+                timeouts.ReadIntervalTimeout = 50;
+                timeouts.ReadTotalTimeoutConstant = 50;
+                timeouts.ReadTotalTimeoutMultiplier = 10;
+                timeouts.WriteTotalTimeoutConstant = 50;
+                timeouts.WriteTotalTimeoutMultiplier = 10;
+
+                if (!SetCommTimeouts(deviceHandle_, &timeouts)) {
+                    CloseHandle(deviceHandle_);
+                    deviceHandle_ = INVALID_HANDLE_VALUE;
+                    continue;
+                }
+
+                // 验证设备是否为 GPIO 设备
+                if (verifyGpioDevice()) {
+                    LOG_F(INFO, "成功初始化串口 GPIO 设备: %s", port.c_str());
+                    return true;
+                }
+
+                CloseHandle(deviceHandle_);
+                deviceHandle_ = INVALID_HANDLE_VALUE;
+            }
+        }
+
+        return false;
+    }
+
+    // 验证串口设备是否为 GPIO 控制器
+    bool verifyGpioDevice() {
+        if (deviceHandle_ == INVALID_HANDLE_VALUE)
+            return false;
+
+        // 发送识别命令
+        const char* cmd = "IDENTIFY\r\n";
+        DWORD bytesWritten;
+
+        if (!WriteFile(deviceHandle_, cmd, strlen(cmd), &bytesWritten, NULL)) {
+            return false;
+        }
+
+        // 读取响应
+        char buffer[64] = {0};
+        DWORD bytesRead;
+
+        if (!ReadFile(deviceHandle_, buffer, sizeof(buffer) - 1, &bytesRead,
+                      NULL)) {
+            return false;
+        }
+
+        // 检查响应是否包含 GPIO 标识符
+        std::string response(buffer);
+        return (response.find("GPIO") != std::string::npos);
+    }
+
+    // 关闭设备
+    void closeDevice() {
+        if (deviceHandle_ != INVALID_HANDLE_VALUE) {
+            CloseHandle(deviceHandle_);
+            deviceHandle_ = INVALID_HANDLE_VALUE;
+        }
+        deviceInitialized_ = false;
+    }
+
+    // 读取引脚状态，根据连接模式采用不同实现
+    bool readPinState(const std::string& pin) {
+        if (!deviceInitialized_ || deviceHandle_ == INVALID_HANDLE_VALUE) {
+            return false;
+        }
+
+        return useSerialMode_ ? readPinStateSerial(pin) : readPinStateUsb(pin);
+    }
+
+    // 通过 USB 设备读取引脚状态
+    bool readPinStateUsb(const std::string& pin) {
+        // 构建包含 GPIO 引脚编号的命令缓冲区
+        unsigned char buffer[8] = {0};
+        int pinNumber = std::stoi(pin);
+
+        // 命令格式: [命令码 0x01][引脚号]
+        buffer[0] = 0x01;  // 读取命令
+        buffer[1] = static_cast<unsigned char>(pinNumber);
+
+        DWORD bytesWritten = 0;
+        if (!WriteFile(deviceHandle_, buffer, 2, &bytesWritten, NULL)) {
+            LOG_F(ERROR, "写入 USB GPIO 命令失败: %d", GetLastError());
+            return false;
+        }
+
+        // 读取响应
+        memset(buffer, 0, sizeof(buffer));
+        DWORD bytesRead = 0;
+
+        if (!ReadFile(deviceHandle_, buffer, sizeof(buffer), &bytesRead,
+                      NULL)) {
+            LOG_F(ERROR, "读取 USB GPIO 状态失败: %d", GetLastError());
+            return false;
+        }
+
+        // 假设第一个字节是状态值
+        return (buffer[0] != 0);
+    }
+
+    // 通过串口读取引脚状态
+    bool readPinStateSerial(const std::string& pin) {
+        // 构建串口命令
+        std::string cmd = "READ " + pin + "\r\n";
+        DWORD bytesWritten = 0;
+
+        if (!WriteFile(deviceHandle_, cmd.c_str(), cmd.length(), &bytesWritten,
+                       NULL)) {
+            LOG_F(ERROR, "写入串口 GPIO 命令失败: %d", GetLastError());
+            return false;
+        }
+
+        // 读取响应
+        char buffer[64] = {0};
+        DWORD bytesRead = 0;
+
+        if (!ReadFile(deviceHandle_, buffer, sizeof(buffer) - 1, &bytesRead,
+                      NULL)) {
+            LOG_F(ERROR, "读取串口 GPIO 状态失败: %d", GetLastError());
+            return false;
+        }
+
+        // 分析响应字符串
+        std::string response(buffer, bytesRead);
+        return (response.find("HIGH") != std::string::npos ||
+                response.find("1") != std::string::npos);
+    }
+
+    void startMonitorThread() {
+        if (monitorThreadRunning_)
+            return;
+
+        monitorThreadRunning_ = true;
+        monitorThread_ = std::thread([this]() {
+            while (monitorThreadRunning_) {
+                // 定期轮询引脚状态
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    for (auto& [pin, callback] : callbacks_) {
+                        bool currentState = readPinState(pin);
+                        if (pinStates_[pin] != currentState) {
+                            pinStates_[pin] = currentState;
+                            try {
+                                callback(currentState);
+                            } catch (const std::exception& e) {
+                                LOG_F(ERROR, "GPIO 回调中发生异常: %s",
+                                      e.what());
+                            } catch (...) {
+                                LOG_F(ERROR, "GPIO 回调中发生未知异常");
+                            }
+                        }
+                    }
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        });
+    }
+
+    void stopMonitorThread() {
+        if (!monitorThreadRunning_)
+            return;
+
+        monitorThreadRunning_ = false;
+
+        if (monitorThread_.joinable()) {
+            monitorThread_.join();
+        }
+    }
+
+    std::mutex mutex_;
+    std::unordered_map<std::string, std::function<void(bool)>> callbacks_;
+    std::unordered_map<std::string, bool> pinStates_;  // 跟踪引脚状态
+    std::thread monitorThread_;
+    std::atomic<bool> monitorThreadRunning_;
+
+    // 硬件相关成员
+    bool deviceInitialized_;
+    HANDLE deviceHandle_;
+    bool useSerialMode_;  // 标识使用串口模式还是USB模式
+};
+
+#else
+// Linux 版本的 GPIO 回调管理器
 class GPIOCallbackManager {
 public:
     static GPIOCallbackManager& getInstance() {
@@ -263,6 +656,7 @@ private:
     std::atomic<bool> monitorThreadRunning_;
     int epollFd_;
 };
+#endif
 
 class GPIO::Impl {
 public:
@@ -404,6 +798,46 @@ private:
     Edge edge_;
     PullMode pullMode_;
 
+#ifdef _WIN32
+    // Windows 模拟的 GPIO 状态
+    bool currentValue_ = false;
+
+    void exportGPIO() {
+        // Windows 上，这是一个模拟实现
+        LOG_F(INFO, "GPIO pin %s exported (Windows simulation)", pin_.c_str());
+    }
+
+    void unexportGPIO() {
+        // Windows 上，这是一个模拟实现
+        LOG_F(INFO, "GPIO pin %s unexported (Windows simulation)",
+              pin_.c_str());
+    }
+
+    void setGPIODirection(const std::string& direction) {
+        // Windows 上，这是一个模拟实现
+        LOG_F(INFO, "GPIO pin %s direction set to %s (Windows simulation)",
+              pin_.c_str(), direction.c_str());
+    }
+
+    void setGPIOValue(const std::string& value) {
+        // Windows 上，这是一个模拟实现
+        currentValue_ = (value == "1");
+        LOG_F(INFO, "GPIO pin %s value set to %s (Windows simulation)",
+              pin_.c_str(), value.c_str());
+    }
+
+    void setGPIOEdge(const std::string& edge) {
+        // Windows 上，这是一个模拟实现
+        LOG_F(INFO, "GPIO pin %s edge set to %s (Windows simulation)",
+              pin_.c_str(), edge.c_str());
+    }
+
+    bool readGPIOValue() const {
+        // Windows 上，这是一个模拟实现
+        return currentValue_;
+    }
+#else
+    // Linux 实现
     void exportGPIO() {
         // Check if GPIO is already exported
         std::string path = std::string(GPIO_PATH) + "/gpio" + pin_;
@@ -470,6 +904,7 @@ private:
             THROW_RUNTIME_ERROR("Failed to write to gpio path: " + path);
         }
     }
+#endif
 };
 
 GPIO::GPIO(const std::string& pin) : impl_(std::make_unique<Impl>(pin)) {}
@@ -556,5 +991,18 @@ void GPIO::GPIOGroup::setDirection(Direction direction) {
         gpio->setDirection(direction);
     }
 }
+
+#ifdef _WIN32
+// Windows 平台特有的辅助函数，用于模拟 GPIO 状态变化
+// 这仅用于测试目的
+namespace windows {
+
+// 模拟 GPIO 状态变化
+void simulateGPIOStateChange(const std::string& pin, bool state) {
+    GPIOCallbackManager::getInstance().simulatePinStateChange(pin, state);
+}
+
+}  // namespace windows
+#endif
 
 }  // namespace atom::system

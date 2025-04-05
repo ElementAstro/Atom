@@ -3,13 +3,8 @@
 #include <algorithm>
 #include <cstring>
 #include <fstream>
-#include <iostream>
-#include <memory>
-#include <random>
 #include <regex>
-#include <sstream>
 #include <stdexcept>
-#include <thread>
 
 #include <openssl/aes.h>
 #include <openssl/err.h>
@@ -18,12 +13,15 @@
 #include <openssl/sha.h>
 #include <sys/stat.h>
 
-// 平台特定头文件
 #if defined(_WIN32)
-#include <wincred.h>
+// clang-format off
 #include <windows.h>
+#include <wincred.h>
+// clang-format on
+#ifdef _MSC_VER
 #pragma comment(lib, "crypt32.lib")
 #pragma comment(lib, "advapi32.lib")
+#endif
 #elif defined(__APPLE__)
 #include <CoreFoundation/CoreFoundation.h>
 #include <Security/Security.h>
@@ -71,7 +69,7 @@ PasswordManager::PasswordManager()
     OpenSSL_add_all_algorithms();
     ERR_load_crypto_strings();
 
-    LOG_F(INFO, "PasswordManager initialized (version %s)", ATOM_PM_VERSION);
+    LOG_F(INFO, "PasswordManager initialized (version {})", ATOM_PM_VERSION);
 }
 
 PasswordManager::~PasswordManager() {
@@ -227,7 +225,7 @@ bool PasswordManager::initialize(const std::string& masterPassword,
         return true;
 
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Initialization error: %s", e.what());
+        LOG_F(ERROR, "Initialization error: {}", e.what());
         isInitialized = false;
         return false;
     }
@@ -358,7 +356,7 @@ bool PasswordManager::unlock(const std::string& masterPassword) {
         return true;
 
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Unlock error: %s", e.what());
+        LOG_F(ERROR, "Unlock error: {}", e.what());
         secureWipe(masterKey);
         return false;
     }
@@ -420,7 +418,7 @@ bool PasswordManager::changeMasterPassword(const std::string& currentPassword,
         // 使用新密钥重新存储所有密码
         for (const auto& [key, entry] : allEntries) {
             if (!storePassword(key, entry)) {
-                LOG_F(ERROR, "Failed to migrate password for key: %s",
+                LOG_F(ERROR, "Failed to migrate password for key: {}",
                       key.c_str());
             }
         }
@@ -429,7 +427,7 @@ bool PasswordManager::changeMasterPassword(const std::string& currentPassword,
         return true;
 
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Change master password error: %s", e.what());
+        LOG_F(ERROR, "Change master password error: {}", e.what());
         return false;
     }
 }
@@ -481,12 +479,12 @@ bool PasswordManager::storePassword(const std::string& platformKey,
         }
 #endif
 
-        LOG_F(INFO, "Password stored successfully for platform key: %s",
+        LOG_F(INFO, "Password stored successfully for platform key: {}",
               platformKey.c_str());
         return true;
 
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Store password error: %s", e.what());
+        LOG_F(ERROR, "Store password error: {}", e.what());
         return false;
     }
 }
@@ -508,7 +506,7 @@ PasswordEntry PasswordManager::retrievePassword(
     // 先检查缓存
     auto it = cachedPasswords.find(platformKey);
     if (it != cachedPasswords.end()) {
-        LOG_F(INFO, "Password retrieved from cache for platform key: %s",
+        LOG_F(INFO, "Password retrieved from cache for platform key: {}",
               platformKey.c_str());
         return it->second;
     }
@@ -530,7 +528,7 @@ PasswordEntry PasswordManager::retrievePassword(
 #endif
 
         if (encryptedData.empty()) {
-            LOG_F(ERROR, "No password found for platform key: %s",
+            LOG_F(ERROR, "No password found for platform key: {}",
                   platformKey.c_str());
             return PasswordEntry{};
         }
@@ -541,12 +539,12 @@ PasswordEntry PasswordManager::retrievePassword(
         // 更新缓存
         cachedPasswords[platformKey] = entry;
 
-        LOG_F(INFO, "Password retrieved successfully for platform key: %s",
+        LOG_F(INFO, "Password retrieved successfully for platform key: {}",
               platformKey.c_str());
         return entry;
 
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Retrieve password error: %s", e.what());
+        LOG_F(ERROR, "Retrieve password error: {}", e.what());
         return PasswordEntry{};
     }
 }
@@ -582,17 +580,17 @@ bool PasswordManager::deletePassword(const std::string& platformKey) {
 #endif
 
         if (success) {
-            LOG_F(INFO, "Password deleted successfully for platform key: %s",
+            LOG_F(INFO, "Password deleted successfully for platform key: {}",
                   platformKey.c_str());
             return true;
         } else {
-            LOG_F(ERROR, "Failed to delete password for platform key: %s",
+            LOG_F(ERROR, "Failed to delete password for platform key: {}",
                   platformKey.c_str());
             return false;
         }
 
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Delete password error: %s", e.what());
+        LOG_F(ERROR, "Delete password error: {}", e.what());
         return false;
     }
 }
@@ -625,11 +623,11 @@ std::vector<std::string> PasswordManager::getAllPlatformKeys() {
                                   }),
                    keys.end());
 
-        LOG_F(INFO, "Retrieved %zu platform keys", keys.size());
+        LOG_F(INFO, "Retrieved {} platform keys", keys.size());
         return keys;
 
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Get all platform keys error: %s", e.what());
+        LOG_F(ERROR, "Get all platform keys error: {}", e.what());
         return {};
     }
 }
@@ -682,12 +680,12 @@ std::vector<std::string> PasswordManager::searchPasswords(
             }
         }
 
-        LOG_F(INFO, "Search for '%s' returned %zu results", query.c_str(),
+        LOG_F(INFO, "Search for '{}' returned {} results", query.c_str(),
               results.size());
         return results;
 
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Search passwords error: %s", e.what());
+        LOG_F(ERROR, "Search passwords error: {}", e.what());
         return {};
     }
 }
@@ -713,12 +711,12 @@ std::vector<std::string> PasswordManager::filterByCategory(
             }
         }
 
-        LOG_F(INFO, "Filter by category %d returned %zu results",
+        LOG_F(INFO, "Filter by category {} returned {} results",
               static_cast<int>(category), results.size());
         return results;
 
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Filter by category error: %s", e.what());
+        LOG_F(ERROR, "Filter by category error: {}", e.what());
         return {};
     }
 }
@@ -760,7 +758,6 @@ std::string PasswordManager::generatePassword(int length, bool includeSpecial,
             password += chars[randomData[i] % chars.length()];
         }
 
-        // 确保包含必需的字符类型
         bool hasLower = false;
         bool hasUpper = false;
         bool hasDigit = false;
@@ -777,7 +774,10 @@ std::string PasswordManager::generatePassword(int length, bool includeSpecial,
                 hasSpecial = true;
         }
 
-        // 如果缺少必需的字符类型，替换一些字符
+        if (includeMixedCase && !hasLower) {
+            password[0] = std::tolower(password[0]);
+        }
+
         if (includeMixedCase && !hasUpper) {
             password[0] = std::toupper(password[0]);
         }
@@ -791,11 +791,11 @@ std::string PasswordManager::generatePassword(int length, bool includeSpecial,
             password[2] = specials[randomData[1] % 8];
         }
 
-        LOG_F(INFO, "Generated password of length %d", length);
+        LOG_F(INFO, "Generated password of length {}", length);
         return password;
 
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Generate password error: %s", e.what());
+        LOG_F(ERROR, "Generate password error: {}", e.what());
         return "";
     }
 }
@@ -994,7 +994,7 @@ bool PasswordManager::exportPasswords(const std::string& filePath,
         // 写入文件
         std::ofstream outFile(filePath);
         if (!outFile.is_open()) {
-            LOG_F(ERROR, "Failed to open export file for writing: %s",
+            LOG_F(ERROR, "Failed to open export file for writing: {}",
                   filePath.c_str());
             return false;
         }
@@ -1005,12 +1005,12 @@ bool PasswordManager::exportPasswords(const std::string& filePath,
         // 安全清除临时敏感数据
         secureWipe(exportKey);
 
-        LOG_F(INFO, "Successfully exported %zu password entries to %s",
+        LOG_F(INFO, "Successfully exported {} password entries to {}",
               cachedPasswords.size(), filePath.c_str());
         return true;
 
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Export passwords error: %s", e.what());
+        LOG_F(ERROR, "Export passwords error: {}", e.what());
         return false;
     }
 }
@@ -1028,7 +1028,7 @@ bool PasswordManager::importPasswords(const std::string& filePath,
         // 读取导出文件
         std::ifstream inFile(filePath);
         if (!inFile.is_open()) {
-            LOG_F(ERROR, "Failed to open import file for reading: %s",
+            LOG_F(ERROR, "Failed to open import file for reading: {}",
                   filePath.c_str());
             return false;
         }
@@ -1151,12 +1151,12 @@ bool PasswordManager::importPasswords(const std::string& filePath,
         // 安全清除临时敏感数据
         secureWipe(importKey);
 
-        LOG_F(INFO, "Successfully imported %d password entries from %s",
+        LOG_F(INFO, "Successfully imported {} password entries from {}",
               importedCount, filePath.c_str());
         return importedCount > 0;
 
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Import passwords error: %s", e.what());
+        LOG_F(ERROR, "Import passwords error: {}", e.what());
         return false;
     }
 }
@@ -1200,11 +1200,11 @@ std::vector<std::string> PasswordManager::checkExpiredPasswords() {
             }
         }
 
-        LOG_F(INFO, "Found %zu expired passwords", expiredKeys.size());
+        LOG_F(INFO, "Found {} expired passwords", expiredKeys.size());
         return expiredKeys;
 
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Check expired passwords error: %s", e.what());
+        LOG_F(ERROR, "Check expired passwords error: {}", e.what());
         return {};
     }
 }
@@ -1285,7 +1285,7 @@ void PasswordManager::loadAllPasswords() {
                         decryptEntry(encryptedData, masterKey);
                     cachedPasswords[key] = entry;
                 } catch (const std::exception& e) {
-                    LOG_F(ERROR, "Failed to decrypt entry for key %s: %s",
+                    LOG_F(ERROR, "Failed to decrypt entry for key {}: {}",
                           key.c_str(), e.what());
                 }
             }
@@ -1481,14 +1481,14 @@ bool PasswordManager::storeToWindowsCredentialManager(
     if (CredWriteW(&cred, 0)) {
         LOG_F(INFO,
               "Data stored successfully in Windows Credential Manager for "
-              "target: %s",
+              "target: {}",
               target.c_str());
         return true;
     } else {
         DWORD error = GetLastError();
         LOG_F(ERROR,
               "Failed to store data in Windows Credential Manager for target: "
-              "%s. Error: %lu",
+              "{}. Error: %lu",
               target.c_str(), error);
         return false;
     }
@@ -1504,7 +1504,7 @@ std::string PasswordManager::retrieveFromWindowsCredentialManager(
         CredFree(cred);
         LOG_F(INFO,
               "Data retrieved successfully from Windows Credential Manager for "
-              "target: %s",
+              "target: {}",
               target.c_str());
         return encryptedData;
     } else {
@@ -1512,7 +1512,7 @@ std::string PasswordManager::retrieveFromWindowsCredentialManager(
         if (error != ERROR_NOT_FOUND) {
             LOG_F(ERROR,
                   "Failed to retrieve data from Windows Credential Manager for "
-                  "target: %s. Error: %lu",
+                  "target: {}. Error: %lu",
                   target.c_str(), error);
         }
         return "";
@@ -1525,7 +1525,7 @@ bool PasswordManager::deleteFromWindowsCredentialManager(
     if (CredDeleteW(wideTarget.c_str(), CRED_TYPE_GENERIC, 0)) {
         LOG_F(INFO,
               "Data deleted successfully from Windows Credential Manager for "
-              "target: %s",
+              "target: {}",
               target.c_str());
         return true;
     } else {
@@ -1533,7 +1533,7 @@ bool PasswordManager::deleteFromWindowsCredentialManager(
         if (error != ERROR_NOT_FOUND) {
             LOG_F(ERROR,
                   "Failed to delete data from Windows Credential Manager for "
-                  "target: %s. Error: %lu",
+                  "target: {}. Error: %lu",
                   target.c_str(), error);
         }
         return error == ERROR_NOT_FOUND;  // 如果条目不存在，也视为成功删除
@@ -1582,13 +1582,13 @@ bool PasswordManager::storeToMacKeychain(const std::string& service,
         if (status == errSecSuccess) {
             LOG_F(INFO,
                   "Data updated successfully in macOS Keychain for service: "
-                  "%s, account: %s",
+                  "{}, account: {}",
                   service.c_str(), account.c_str());
             return true;
         } else {
             LOG_F(ERROR,
-                  "Failed to update data in macOS Keychain for service: %s, "
-                  "account: %s. Error: %d",
+                  "Failed to update data in macOS Keychain for service: {}, "
+                  "account: {}. Error: {}",
                   service.c_str(), account.c_str(), status);
             return false;
         }
@@ -1601,14 +1601,14 @@ bool PasswordManager::storeToMacKeychain(const std::string& service,
 
         if (status == errSecSuccess) {
             LOG_F(INFO,
-                  "Data stored successfully in macOS Keychain for service: %s, "
-                  "account: %s",
+                  "Data stored successfully in macOS Keychain for service: {}, "
+                  "account: {}",
                   service.c_str(), account.c_str());
             return true;
         } else {
             LOG_F(ERROR,
-                  "Failed to store data in macOS Keychain for service: %s, "
-                  "account: %s. Error: %d",
+                  "Failed to store data in macOS Keychain for service: {}, "
+                  "account: {}. Error: {}",
                   service.c_str(), account.c_str(), status);
             return false;
         }
@@ -1629,14 +1629,14 @@ std::string PasswordManager::retrieveFromMacKeychain(
         SecKeychainItemFreeContent(nullptr, dataOut);
         LOG_F(INFO,
               "Data retrieved successfully from macOS Keychain for service: "
-              "%s, account: %s",
+              "{}, account: {}",
               service.c_str(), account.c_str());
         return encryptedData;
     } else {
         if (status != errSecItemNotFound) {
             LOG_F(ERROR,
                   "Failed to retrieve data from macOS Keychain for service: "
-                  "%s, account: %s. Error: %d",
+                  "{}, account: {}. Error: {}",
                   service.c_str(), account.c_str(), status);
         }
         return "";
@@ -1657,13 +1657,13 @@ bool PasswordManager::deleteFromMacKeychain(const std::string& service,
         if (status == errSecSuccess) {
             LOG_F(INFO,
                   "Data deleted successfully from macOS Keychain for service: "
-                  "%s, account: %s",
+                  "{}, account: {}",
                   service.c_str(), account.c_str());
             return true;
         } else {
             LOG_F(ERROR,
-                  "Failed to delete data from macOS Keychain for service: %s, "
-                  "account: %s. Error: %d",
+                  "Failed to delete data from macOS Keychain for service: {}, "
+                  "account: {}. Error: {}",
                   service.c_str(), account.c_str(), status);
             return false;
         }
@@ -1673,7 +1673,7 @@ bool PasswordManager::deleteFromMacKeychain(const std::string& service,
     } else {
         LOG_F(ERROR,
               "Failed to find data for deletion in macOS Keychain for service: "
-              "%s, account: %s. Error: %d",
+              "{}, account: {}. Error: {}",
               service.c_str(), account.c_str(), status);
         return false;
     }
@@ -1716,7 +1716,7 @@ std::vector<std::string> PasswordManager::getAllMacKeychainItems(
         }
         CFRelease(items);
     } else if (status != errSecItemNotFound) {
-        LOG_F(ERROR, "Failed to list macOS Keychain items. Error: %d", status);
+        LOG_F(ERROR, "Failed to list macOS Keychain items. Error: {}", status);
     }
 
     CFRelease(serviceKey);
@@ -1745,22 +1745,22 @@ bool PasswordManager::storeToLinuxKeyring(const std::string& schema_name,
     if (!success) {
         if (error) {
             LOG_F(ERROR,
-                  "Failed to store data in Linux keyring for schema: %s, "
-                  "attribute: %s. Error: %s",
+                  "Failed to store data in Linux keyring for schema: {}, "
+                  "attribute: {}. Error: {}",
                   schema_name.c_str(), attribute_name.c_str(), error->message);
             g_error_free(error);
         } else {
             LOG_F(ERROR,
-                  "Failed to store data in Linux keyring for schema: %s, "
-                  "attribute: %s",
+                  "Failed to store data in Linux keyring for schema: {}, "
+                  "attribute: {}",
                   schema_name.c_str(), attribute_name.c_str());
         }
         return false;
     }
 
     LOG_F(INFO,
-          "Data stored successfully in Linux keyring for schema: %s, "
-          "attribute: %s",
+          "Data stored successfully in Linux keyring for schema: {}, "
+          "attribute: {}",
           schema_name.c_str(), attribute_name.c_str());
     return true;
 }
@@ -1780,8 +1780,8 @@ std::string PasswordManager::retrieveFromLinuxKeyring(
 
     if (error) {
         LOG_F(ERROR,
-              "Failed to retrieve data from Linux keyring for schema: %s, "
-              "attribute: %s. Error: %s",
+              "Failed to retrieve data from Linux keyring for schema: {}, "
+              "attribute: {}. Error: {}",
               schema_name.c_str(), attribute_name.c_str(), error->message);
         g_error_free(error);
         return "";
@@ -1795,8 +1795,8 @@ std::string PasswordManager::retrieveFromLinuxKeyring(
     secret_password_free(secret);
 
     LOG_F(INFO,
-          "Data retrieved successfully from Linux keyring for schema: %s, "
-          "attribute: %s",
+          "Data retrieved successfully from Linux keyring for schema: {}, "
+          "attribute: {}",
           schema_name.c_str(), attribute_name.c_str());
     return result;
 }
@@ -1816,8 +1816,8 @@ bool PasswordManager::deleteFromLinuxKeyring(
 
     if (error) {
         LOG_F(ERROR,
-              "Failed to delete data from Linux keyring for schema: %s, "
-              "attribute: %s. Error: %s",
+              "Failed to delete data from Linux keyring for schema: {}, "
+              "attribute: {}. Error: {}",
               schema_name.c_str(), attribute_name.c_str(), error->message);
         g_error_free(error);
         return false;
@@ -1825,13 +1825,13 @@ bool PasswordManager::deleteFromLinuxKeyring(
 
     if (result) {
         LOG_F(INFO,
-              "Data deleted successfully from Linux keyring for schema: %s, "
-              "attribute: %s",
+              "Data deleted successfully from Linux keyring for schema: {}, "
+              "attribute: {}",
               schema_name.c_str(), attribute_name.c_str());
     } else {
         LOG_F(INFO,
-              "No data found to delete in Linux keyring for schema: %s, "
-              "attribute: %s",
+              "No data found to delete in Linux keyring for schema: {}, "
+              "attribute: {}",
               schema_name.c_str(), attribute_name.c_str());
     }
 
@@ -1862,7 +1862,7 @@ std::vector<std::string> PasswordManager::getAllLinuxKeyringItems(
                 }
             }
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Failed to parse Linux keyring index: %s", e.what());
+            LOG_F(ERROR, "Failed to parse Linux keyring index: {}", e.what());
         }
     }
 
@@ -1908,7 +1908,7 @@ bool PasswordManager::storeToEncryptedFile(const std::string& identifier,
     // 写入文件
     std::ofstream outFile(filePath, std::ios::binary);
     if (!outFile.is_open()) {
-        LOG_F(ERROR, "Failed to open file for writing: %s", filePath.c_str());
+        LOG_F(ERROR, "Failed to open file for writing: {}", filePath.c_str());
         return false;
     }
 
@@ -1916,7 +1916,7 @@ bool PasswordManager::storeToEncryptedFile(const std::string& identifier,
     outFile.close();
 
     if (outFile.fail()) {
-        LOG_F(ERROR, "Failed to write to file: %s", filePath.c_str());
+        LOG_F(ERROR, "Failed to write to file: {}", filePath.c_str());
         return false;
     }
 
@@ -1956,7 +1956,7 @@ bool PasswordManager::storeToEncryptedFile(const std::string& identifier,
         newIndexFile.close();
     }
 
-    LOG_F(INFO, "Data stored successfully in file for identifier: %s",
+    LOG_F(INFO, "Data stored successfully in file for identifier: {}",
           identifier.c_str());
     return true;
 }
@@ -1999,11 +1999,11 @@ std::string PasswordManager::retrieveFromEncryptedFile(
 
     std::vector<char> buffer(size);
     if (!inFile.read(buffer.data(), size)) {
-        LOG_F(ERROR, "Failed to read from file: %s", filePath.c_str());
+        LOG_F(ERROR, "Failed to read from file: {}", filePath.c_str());
         return "";
     }
 
-    LOG_F(INFO, "Data retrieved successfully from file for identifier: %s",
+    LOG_F(INFO, "Data retrieved successfully from file for identifier: {}",
           identifier.c_str());
     return std::string(buffer.begin(), buffer.end());
 }
@@ -2074,11 +2074,11 @@ bool PasswordManager::deleteFromEncryptedFile(const std::string& identifier) {
             newIndexFile.close();
         }
 
-        LOG_F(INFO, "Data deleted successfully from file for identifier: %s",
+        LOG_F(INFO, "Data deleted successfully from file for identifier: {}",
               identifier.c_str());
         return true;
     } else {
-        LOG_F(ERROR, "Failed to delete file: %s", filePath.c_str());
+        LOG_F(ERROR, "Failed to delete file: {}", filePath.c_str());
         return false;
     }
 }

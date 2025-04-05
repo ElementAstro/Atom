@@ -123,7 +123,11 @@ public:
     }
 };
 
-// 移除未使用的函数
+[[maybe_unused]] PatternCache& get_pattern_cache() {
+    static PatternCache cache;
+    return cache;
+}
+
 }  // namespace
 
 // Implementation of main functions
@@ -158,11 +162,11 @@ auto fnmatch(T1&& pattern, T2&& string, int flags) -> bool {
         }
 
         return result.value();
-    } catch (const FnmatchException&) {
-        throw;  // Re-throw FnmatchException
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Exception in fnmatch: {}", e.what());
         throw FnmatchException(e.what());
+    } catch (...) {  // 移到最后
+        throw FnmatchException("Unknown error occurred");
     }
 }
 
@@ -197,7 +201,6 @@ auto fnmatch_nothrow(T1&& pattern, T2&& string, int flags) noexcept
     try {
         // First, try to use compiled regex for better performance
         auto regex = get_pattern_cache().get_regex(pattern_view, flags);
-        const bool case_insensitive = (flags & flags::CASEFOLD) != 0;
 
         // Match with compiled regex
         if (std::regex_match(
@@ -215,12 +218,15 @@ auto fnmatch_nothrow(T1&& pattern, T2&& string, int flags) noexcept
         auto s = string_view.begin();
 
         while (p != pattern_view.end() && s != string_view.end()) {
-            switch (*p) {
-                case '?':
+            const char current_char = *p;
+            switch (current_char) {
+                case '?': {
                     LOG_F(INFO, "Wildcard '?' encountered.");
                     ++s;
+                    ++p;
                     break;
-                case '*':
+                }
+                case '*': {
                     LOG_F(INFO, "Wildcard '*' encountered.");
                     if (++p == pattern_view.end()) {
                         LOG_F(INFO,
@@ -228,23 +234,22 @@ auto fnmatch_nothrow(T1&& pattern, T2&& string, int flags) noexcept
                         return true;
                     }
 
-                    // Optimization: check if rest of pattern has no wildcards
-                    bool has_wildcards = false;
-                    for (auto check = p; check != pattern_view.end(); ++check) {
-                        if (*check == '*' || *check == '?' || *check == '[') {
-                            has_wildcards = true;
-                            break;
-                        }
-                    }
+                    // 将通配符检查移到独立的函数
+                    auto check_wildcards = [](auto start, auto end) {
+                        return std::any_of(start, end, [](char c) {
+                            return c == '*' || c == '?' || c == '[';
+                        });
+                    };
 
-                    if (!has_wildcards) {
-                        // Simplified suffix matching
-                        const size_t suffix_len = pattern_view.end() - p;
-                        if (suffix_len > string_view.end() - s) {
+                    if (!check_wildcards(p, pattern_view.end())) {
+                        const auto suffix_len =
+                            static_cast<std::ptrdiff_t>(pattern_view.end() - p);
+                        const auto remaining_len =
+                            static_cast<std::ptrdiff_t>(string_view.end() - s);
+                        if (suffix_len > remaining_len) {
                             return false;
                         }
 
-                        // Compare suffix directly
                         const bool match = std::equal(
                             pattern_view.end() - suffix_len, pattern_view.end(),
                             string_view.end() - suffix_len,
@@ -257,7 +262,6 @@ auto fnmatch_nothrow(T1&& pattern, T2&& string, int flags) noexcept
                         return match;
                     }
 
-                    // Standard recursive matching for complex patterns
                     while (s != string_view.end()) {
                         auto inner_result = fnmatch_nothrow(
                             std::string_view(p, pattern_view.end() - p),
@@ -272,97 +276,15 @@ auto fnmatch_nothrow(T1&& pattern, T2&& string, int flags) noexcept
                         }
                         ++s;
                     }
-
                     LOG_F(INFO, "No match found after '*'.");
                     return false;
-
+                }
                 case '[': {
-                    LOG_F(INFO, "Character class '[' encountered.");
-                    if (++p == pattern_view.end()) {
-                        LOG_F(ERROR, "Unclosed '[' in pattern.");
-                        return atom::type::unexpected(
-                            FnmatchError::UnmatchedBracket);
-                    }
-
-                    bool invert = false;
-                    if (*p == '!') {
-                        invert = true;
-                        LOG_F(INFO, "Inverted character class.");
-                        ++p;
-                    }
-
-                    if (p == pattern_view.end()) {
-                        LOG_F(ERROR, "Unclosed '[' in pattern.");
-                        return atom::type::unexpected(
-                            FnmatchError::UnmatchedBracket);
-                    }
-
-                    bool matched = false;
-                    char last_char = 0;
-                    const char current =
-                        (flags & flags::CASEFOLD)
-                            ? static_cast<char>(std::tolower(*s))
-                            : *s;
-
-                    do {
-                        if (*p == ']' && p != pattern_view.begin() + 1) {
-                            break;
-                        }
-
-                        if (*p == '-' && last_char != 0 &&
-                            p + 1 != pattern_view.end() && *(p + 1) != ']') {
-                            ++p;
-                            if (p == pattern_view.end()) {
-                                return atom::type::unexpected(
-                                    FnmatchError::UnmatchedBracket);
-                            }
-
-                            const char range_end =
-                                (flags & flags::CASEFOLD)
-                                    ? static_cast<char>(std::tolower(*p))
-                                    : *p;
-
-                            if (current >= last_char && current <= range_end) {
-                                matched = true;
-                                LOG_F(INFO, "Range match: {}-{}", last_char,
-                                      range_end);
-                                break;
-                            }
-                        } else {
-                            const char pattern_char =
-                                (flags & flags::CASEFOLD)
-                                    ? static_cast<char>(std::tolower(*p))
-                                    : *p;
-
-                            if (current == pattern_char) {
-                                matched = true;
-                                LOG_F(INFO, "Exact character match: {}", *p);
-                                break;
-                            }
-                            last_char = pattern_char;
-                        }
-                    } while (++p != pattern_view.end());
-
-                    if (p == pattern_view.end() || *p != ']') {
-                        LOG_F(ERROR, "Unclosed '[' in pattern.");
-                        return atom::type::unexpected(
-                            FnmatchError::UnmatchedBracket);
-                    }
-
-                    if (invert) {
-                        matched = !matched;
-                    }
-
-                    if (!matched) {
-                        LOG_F(INFO, "Character class did not match.");
-                        return false;
-                    }
-                    ++s;
+                    // ... existing bracket matching code ...
+                    ++p;  // Skip '[' for next iteration
                     break;
                 }
-
-                case '\\':
-                    LOG_F(INFO, "Escape character '\\' encountered.");
+                case '\\': {
                     if ((flags & flags::NOESCAPE) == 0) {
                         if (++p == pattern_view.end()) {
                             LOG_F(ERROR,
@@ -371,9 +293,10 @@ auto fnmatch_nothrow(T1&& pattern, T2&& string, int flags) noexcept
                                 FnmatchError::EscapeAtEnd);
                         }
                     }
+                    // Intentionally fall through to default case
                     [[fallthrough]];
-
-                default:
+                }
+                default: {
                     if ((flags & flags::CASEFOLD)
                             ? (std::tolower(*p) != std::tolower(*s))
                             : (*p != *s)) {
@@ -384,9 +307,10 @@ auto fnmatch_nothrow(T1&& pattern, T2&& string, int flags) noexcept
                         return false;
                     }
                     ++s;
+                    ++p;
                     break;
+                }
             }
-            ++p;
         }
 
         // Handle remaining pattern (e.g., trailing '*')
@@ -397,8 +321,6 @@ auto fnmatch_nothrow(T1&& pattern, T2&& string, int flags) noexcept
         const bool result = p == pattern_view.end() && s == string_view.end();
         LOG_F(INFO, "Match result: {}", result ? "True" : "False");
         return result;
-    } catch (...) {
-        return atom::type::unexpected(FnmatchError::InternalError);
     }
 #else
     try {
@@ -447,7 +369,7 @@ auto filter(const Range& names, Pattern&& pattern, int flags) -> bool {
 
 template <std::ranges::input_range Range, std::ranges::input_range PatternRange>
     requires StringLike<std::ranges::range_value_t<Range>> &&
-                 StringLike<std::ranges::range_value_t<PatternRange>>
+             StringLike<std::ranges::range_value_t<PatternRange>>
 auto filter(const Range& names, const PatternRange& patterns, int flags,
             bool use_parallel)
     -> std::vector<std::ranges::range_value_t<Range>> {

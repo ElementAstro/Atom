@@ -72,6 +72,56 @@ public:
                       std::initializer_list<std::string> tags);
 
     /**
+     * @brief Copy constructor
+     * @param other Document to copy from
+     */
+    Document(const Document& other)
+        : id_(other.id_),
+          content_(other.content_),
+          tags_(other.tags_),
+          clickCount_(other.clickCount_.load()) {}
+
+    /**
+     * @brief Copy assignment operator
+     * @param other Document to copy from
+     * @return Reference to this document
+     */
+    Document& operator=(const Document& other) {
+        if (this != &other) {
+            id_ = other.id_;
+            content_ = other.content_;
+            tags_ = other.tags_;
+            clickCount_.store(other.clickCount_.load());
+        }
+        return *this;
+    }
+
+    /**
+     * @brief Move constructor
+     * @param other Document to move from
+     */
+    Document(Document&& other) noexcept
+        : id_(std::move(other.id_)),
+          content_(std::move(other.content_)),
+          tags_(std::move(other.tags_)),
+          clickCount_(other.clickCount_.load()) {}
+
+    /**
+     * @brief Move assignment operator
+     * @param other Document to move from
+     * @return Reference to this document
+     */
+    Document& operator=(Document&& other) noexcept {
+        if (this != &other) {
+            id_ = std::move(other.id_);
+            content_ = std::move(other.content_);
+            tags_ = std::move(other.tags_);
+            clickCount_.store(other.clickCount_.load());
+        }
+        return *this;
+    }
+
+    /**
      * @brief Validates document fields
      * @throws DocumentValidationException if validation fails
      */

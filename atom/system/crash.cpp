@@ -63,7 +63,7 @@ auto getSystemInfo() -> std::string {
     sss << std::format("Model: {}\n", getCPUModel());
     sss << std::format("Frequency: {} GHz\n", getProcessorFrequency());
     sss << std::format("Temperature: {} °C\n", getCurrentCpuTemperature());
-    sss << std::format("Cores: {}\n", getNumberOfPhysicalCPUs());
+    sss << std::format("Cores: {}\n", getNumberOfPhysicalCores());
     sss << std::format("Packages: {}\n\n", getNumberOfPhysicalPackages());
 
     sss << "==================== Memory Status ====================\n";

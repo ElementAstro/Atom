@@ -171,7 +171,7 @@ void MD5::processBlock(std::span<const std::byte, 64> block) noexcept {
             uint32_t temp = d;
             d = c;
             c = b;
-            b = b + leftRotate(a + f + T[i] + M[g], s[i]);
+            b = b + leftRotate(a + f + T_Constants[i] + M[g], s[i]);
             a = temp;
         }
     }
@@ -196,7 +196,7 @@ void MD5::processBlock(std::span<const std::byte, 64> block) noexcept {
         uint32_t temp = d;
         d = c;
         c = b;
-        b = b + leftRotate(a + f + T[i] + M[g], s[i]);
+        b = b + leftRotate(a + f + T_Constants[i] + M[g], s[i]);
         a = temp;
     }
 #endif

@@ -98,10 +98,6 @@ public:
         std::coroutine_handle<promise_type> coro_;
     };
 
-    // 前向声明 void 特化
-    template <>
-    class Task<void>;
-
     /**
      * @brief Constructor
      * @param io_context The Asio io_context to use for asynchronous operations

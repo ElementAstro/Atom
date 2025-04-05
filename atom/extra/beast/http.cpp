@@ -92,7 +92,7 @@ auto HttpClient::request<http::string_body>(
     http::read(stream_, buffer, res);
 
     LOG_F(INFO, "Received response: %d %s", static_cast<int>(res.result()),
-          res.reason().to_string().c_str());
+          res.reason());
 
     // 关闭连接
     beast::error_code ec;

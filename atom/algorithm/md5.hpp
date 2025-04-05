@@ -34,8 +34,8 @@ public:
 };
 
 // 定义字符串类型的concept
-template <typename T>
-concept StringLike = std::convertible_to<T, std::string_view>;
+template <typename StrType>
+concept StringLike = std::convertible_to<StrType, std::string_view>;
 
 /**
  * @class MD5
@@ -54,8 +54,8 @@ public:
      * @return The MD5 hash of the input string.
      * @throws MD5Exception If input validation fails or internal error occurs.
      */
-    template <StringLike T>
-    static auto encrypt(const T& input) -> std::string;
+    template <StringLike StrType>
+    static auto encrypt(const StrType& input) -> std::string;
 
     /**
      * @brief Computes MD5 hash for binary data
@@ -72,9 +72,9 @@ public:
      * @param hash Expected MD5 hash
      * @return True if the hash of input matches the expected hash
      */
-    template <StringLike T>
-    static auto verify(const T& input,
-                       const std::string& hash) noexcept -> bool;
+    template <StringLike StrType>
+    static auto verify(const StrType& input, const std::string& hash) noexcept
+        -> bool;
 
 private:
     /**
@@ -103,23 +103,23 @@ private:
     void processBlock(std::span<const std::byte, 64> block) noexcept;
 
     // 声明MD5算法使用的四个辅助函数为constexpr以支持编译时计算
-    static constexpr auto F(uint32_t x, uint32_t y,
-                            uint32_t z) noexcept -> uint32_t;
-    static constexpr auto G(uint32_t x, uint32_t y,
-                            uint32_t z) noexcept -> uint32_t;
-    static constexpr auto H(uint32_t x, uint32_t y,
-                            uint32_t z) noexcept -> uint32_t;
-    static constexpr auto I(uint32_t x, uint32_t y,
-                            uint32_t z) noexcept -> uint32_t;
-    static constexpr auto leftRotate(uint32_t x,
-                                     uint32_t n) noexcept -> uint32_t;
+    static constexpr auto F(uint32_t x, uint32_t y, uint32_t z) noexcept
+        -> uint32_t;
+    static constexpr auto G(uint32_t x, uint32_t y, uint32_t z) noexcept
+        -> uint32_t;
+    static constexpr auto H(uint32_t x, uint32_t y, uint32_t z) noexcept
+        -> uint32_t;
+    static constexpr auto I(uint32_t x, uint32_t y, uint32_t z) noexcept
+        -> uint32_t;
+    static constexpr auto leftRotate(uint32_t x, uint32_t n) noexcept
+        -> uint32_t;
 
     uint32_t a_, b_, c_, d_;         ///< MD5 state variables.
     uint64_t count_;                 ///< Number of bits processed.
     std::vector<std::byte> buffer_;  ///< Input buffer.
 
-    // 常量表，使用constexpr定义
-    static constexpr std::array<uint32_t, 64> T{
+    // 常量表，使用constexpr定义，重命名为T_Constants以避免与模板参数冲突
+    static constexpr std::array<uint32_t, 64> T_Constants{
         0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee, 0xf57c0faf, 0x4787c62a,
         0xa8304613, 0xfd469501, 0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be,
         0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821, 0xf61e2562, 0xc040b340,
@@ -140,8 +140,8 @@ private:
 };
 
 // Template implementation
-template <StringLike T>
-auto MD5::encrypt(const T& input) -> std::string {
+template <StringLike StrType>
+auto MD5::encrypt(const StrType& input) -> std::string {
     try {
         std::string_view sv(input);
         if (sv.empty()) {
@@ -155,8 +155,9 @@ auto MD5::encrypt(const T& input) -> std::string {
     }
 }
 
-template <StringLike T>
-auto MD5::verify(const T& input, const std::string& hash) noexcept -> bool {
+template <StringLike StrType>
+auto MD5::verify(const StrType& input, const std::string& hash) noexcept
+    -> bool {
     try {
         return encrypt(input) == hash;
     } catch (...) {

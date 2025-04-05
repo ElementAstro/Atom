@@ -67,8 +67,8 @@ auto executeCommandInternal(
     const std::string &command, bool openTerminal,
     const std::function<void(const std::string &)> &processLine, int &status,
     const std::string &input = "", const std::string &username = "",
-    const std::string &domain = "",
-    const std::string &password = "") -> std::string {
+    const std::string &domain = "", const std::string &password = "")
+    -> std::string {
     LOG_F(INFO,
           "executeCommandInternal called with command: {}, openTerminal: {}, "
           "input: [hidden], username: {}, domain: {}, password: [hidden]",
@@ -219,7 +219,7 @@ auto executeCommandStream(
 
 #ifdef _WIN32
     if (openTerminal) {
-        STARTUPINFO startupInfo{};
+        STARTUPINFOW startupInfo{};
         PROCESS_INFORMATION processInfo{};
         startupInfo.cb = sizeof(startupInfo);
 
@@ -318,10 +318,10 @@ auto executeCommandWithStatus(const std::string &command)
     return {output, status};
 }
 
-auto executeCommandWithInput(const std::string &command,
-                             const std::string &input,
-                             const std::function<void(const std::string &)>
-                                 &processLine) -> std::string {
+auto executeCommandWithInput(
+    const std::string &command, const std::string &input,
+    const std::function<void(const std::string &)> &processLine)
+    -> std::string {
     LOG_F(INFO,
           "executeCommandWithInput called with command: {}, input: [hidden]",
           command);
@@ -371,9 +371,10 @@ void executeCommands(const std::vector<std::string> &commands) {
     LOG_F(INFO, "executeCommands completed");
 }
 
-auto executeCommandWithEnv(const std::string &command,
-                           const std::unordered_map<std::string, std::string>
-                               &envVars) -> std::string {
+auto executeCommandWithEnv(
+    const std::string &command,
+    const std::unordered_map<std::string, std::string> &envVars)
+    -> std::string {
     LOG_F(INFO, "executeCommandWithEnv called with command: {}", command);
     if (command.empty()) {
         LOG_F(WARNING, "Command is empty");
@@ -499,13 +500,14 @@ void killProcessByPID(int pid, int signal) {
 auto startProcess(const std::string &command) -> std::pair<int, void *> {
     LOG_F(INFO, "startProcess called with command: {}", command);
 #ifdef _WIN32
-    STARTUPINFO startupInfo{};
+    STARTUPINFOW startupInfo{};
     PROCESS_INFORMATION processInfo{};
     startupInfo.cb = sizeof(startupInfo);
 
     std::wstring commandW = atom::utils::StringToLPWSTR(command);
-    if (CreateProcessW(nullptr, &commandW[0], nullptr, nullptr, FALSE, 0,
-                       nullptr, nullptr, &startupInfo, &processInfo)) {
+    if (CreateProcessW(nullptr, const_cast<LPWSTR>(commandW.c_str()), nullptr,
+                       nullptr, FALSE, 0, nullptr, nullptr, &startupInfo,
+                       &processInfo)) {
         CloseHandle(processInfo.hThread);
         LOG_F(INFO, "Process '{}' started with PID: {}", command,
               processInfo.dwProcessId);
@@ -540,9 +542,10 @@ auto isCommandAvailable(const std::string &command) -> bool {
     return atom::system::executeCommandSimple(checkCommand);
 }
 
-auto executeCommandAsync(const std::string &command, bool openTerminal,
-                         const std::function<void(const std::string &)>
-                             &processLine) -> std::future<std::string> {
+auto executeCommandAsync(
+    const std::string &command, bool openTerminal,
+    const std::function<void(const std::string &)> &processLine)
+    -> std::future<std::string> {
     LOG_F(INFO, "executeCommandAsync called with command: {}, openTerminal: {}",
           command, openTerminal);
 
@@ -557,11 +560,11 @@ auto executeCommandAsync(const std::string &command, bool openTerminal,
         });
 }
 
-auto executeCommandWithTimeout(const std::string &command,
-                               const std::chrono::milliseconds &timeout,
-                               bool openTerminal,
-                               const std::function<void(const std::string &)>
-                                   &processLine) -> std::optional<std::string> {
+auto executeCommandWithTimeout(
+    const std::string &command, const std::chrono::milliseconds &timeout,
+    bool openTerminal,
+    const std::function<void(const std::string &)> &processLine)
+    -> std::optional<std::string> {
     LOG_F(INFO,
           "executeCommandWithTimeout called with command: {}, timeout: {}ms",
           command, timeout.count());
