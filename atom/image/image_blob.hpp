@@ -17,6 +17,15 @@
 #include <opencv2/imgproc.hpp>
 #endif
 
+#if __has_include(<CImg.h>)
+#include <CImg.h>
+#endif
+
+#if __has_include(<stb_image.h>)
+#include <stb_image.h>
+#include <stb_image_write.h>
+#endif
+
 namespace atom::image {
 
 template <class T>
@@ -121,6 +130,85 @@ public:
                     storage_.insert(storage_.end(), mat.ptr<T>(i),
                                     mat.ptr<T>(i) + mat.cols * mat.elemSize());
                 }
+            }
+        }
+    }
+#endif
+
+#if __has_include(<CImg.h>)
+    explicit Blob(const cimg_library::CImg<unsigned char>& img)
+        : rows_(img.height()),
+          cols_(img.width()),
+          channels_(img.spectrum()),
+          depth_(DEFAULT_DEPTH) {
+        if constexpr (Mode == BlobMode::FAST) {
+            THROW_RUNTIME_ERROR("Cannot create fast blob from CImg");
+        } else {
+            storage_.resize(img.size());
+            std::memcpy(storage_.data(), img.data(), img.size());
+        }
+    }
+
+    cimg_library::CImg<unsigned char> to_cimg() const {
+        if constexpr (Mode == BlobMode::FAST) {
+            THROW_RUNTIME_ERROR("Cannot convert fast blob to CImg");
+        } else {
+            cimg_library::CImg<unsigned char> img(cols_, rows_, 1, channels_);
+            std::memcpy(img.data(), storage_.data(), storage_.size());
+            return img;
+        }
+    }
+
+    void apply_cimg_filter(const cimg_library::CImg<float>& kernel) {
+        if constexpr (Mode == BlobMode::FAST) {
+            THROW_RUNTIME_ERROR("Cannot apply CImg filter in fast mode");
+        } else {
+            auto img = to_cimg();
+            img.convolve(kernel);
+            *this = Blob(img);
+        }
+    }
+#endif
+
+#if __has_include(<stb_image.h>)
+    explicit Blob(const std::string& filename) {
+        if constexpr (Mode == BlobMode::FAST) {
+            THROW_RUNTIME_ERROR("Cannot create fast blob from stb_image");
+        } else {
+            int width, height, channels;
+            unsigned char* data =
+                stbi_load(filename.c_str(), &width, &height, &channels, 0);
+            if (!data) {
+                THROW_RUNTIME_ERROR("Failed to load image using stb_image");
+            }
+            rows_ = height;
+            cols_ = width;
+            channels_ = channels;
+            depth_ = DEFAULT_DEPTH;
+            storage_.resize(width * height * channels);
+            std::memcpy(storage_.data(), data, width * height * channels);
+            stbi_image_free(data);
+        }
+    }
+
+    void save_as(const std::string& filename, const std::string& format) const {
+        if constexpr (Mode == BlobMode::FAST) {
+            THROW_RUNTIME_ERROR("Cannot save fast blob using stb_image");
+        } else {
+            if (format == "png") {
+                stbi_write_png(filename.c_str(), cols_, rows_, channels_,
+                               storage_.data(), cols_ * channels_);
+            } else if (format == "bmp") {
+                stbi_write_bmp(filename.c_str(), cols_, rows_, channels_,
+                               storage_.data());
+            } else if (format == "tga") {
+                stbi_write_tga(filename.c_str(), cols_, rows_, channels_,
+                               storage_.data());
+            } else if (format == "jpg") {
+                stbi_write_jpg(filename.c_str(), cols_, rows_, channels_,
+                               storage_.data(), 100);
+            } else {
+                THROW_RUNTIME_ERROR("Unsupported format for stb_image");
             }
         }
     }

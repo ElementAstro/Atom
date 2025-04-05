@@ -91,7 +91,7 @@ public:
      */
     template <typename T, typename U>
         requires std::convertible_to<T, std::string_view> &&
-                     std::convertible_to<U, std::string_view>
+                 std::convertible_to<U, std::string_view>
     auto replace(const T& str, const U& replacement) const -> std::string {
         return ::boost::regex_replace(std::string(str), regex_,
                                       std::string(replacement));
@@ -298,6 +298,37 @@ public:
      * @return True if the pattern is valid, false otherwise.
      */
     static auto isValidRegex(const std::string& pattern) -> bool {
+        try {
+            ::boost::regex test(pattern);
+            return true;
+        } catch (const ::boost::regex_error&) {
+            return false;
+        }
+    }
+
+    /**
+     * @brief Counts the number of matches of the regex pattern in the given
+     * string.
+     * @tparam T The type of the input string, convertible to std::string_view.
+     * @param str The input string to search.
+     * @return The number of matches found.
+     */
+    template <typename T>
+        requires std::convertible_to<T, std::string_view>
+    auto countMatches(const T& str) const -> size_t {
+        std::string s(str);
+        ::boost::sregex_iterator iter(s.begin(), s.end(), regex_);
+        ::boost::sregex_iterator end;
+        return std::distance(iter, end);
+    }
+
+    /**
+     * @brief Validates and compiles a regex pattern.
+     * @param pattern The regex pattern to validate and compile.
+     * @return True if the pattern is valid and compiled successfully, false
+     * otherwise.
+     */
+    static auto validateAndCompile(const std::string& pattern) -> bool {
         try {
             ::boost::regex test(pattern);
             return true;

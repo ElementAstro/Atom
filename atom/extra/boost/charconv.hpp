@@ -112,8 +112,8 @@ public:
      * @throws std::runtime_error if the conversion fails.
      */
     template <typename T>
-    static auto stringToInt(const std::string& str,
-                            int base = DEFAULT_BASE) -> T {
+    static auto stringToInt(const std::string& str, int base = DEFAULT_BASE)
+        -> T {
         T value;
         auto result = ::boost::charconv::from_chars(
             str.data(), str.data() + str.size(), value, base);
@@ -152,8 +152,8 @@ public:
      * @return The converted string.
      */
     template <typename T>
-    static auto toString(T value,
-                         const FormatOptions& options = {}) -> std::string {
+    static auto toString(T value, const FormatOptions& options = {})
+        -> std::string {
         if constexpr (std::is_integral_v<T>) {
             return intToString(value, DEFAULT_BASE, options);
         } else if constexpr (std::is_floating_point_v<T>) {
@@ -172,8 +172,8 @@ public:
      * @return The converted value.
      */
     template <typename T>
-    static auto fromString(const std::string& str,
-                           int base = DEFAULT_BASE) -> T {
+    static auto fromString(const std::string& str, int base = DEFAULT_BASE)
+        -> T {
         if constexpr (std::is_integral_v<T>) {
             return stringToInt<T>(str, base);
         } else if constexpr (std::is_floating_point_v<T>) {
@@ -241,8 +241,8 @@ private:
      * @param separator The character to use as a thousands separator.
      * @return The modified string with thousands separators.
      */
-    static auto addThousandsSeparator(const std::string& str,
-                                      char separator) -> std::string {
+    static auto addThousandsSeparator(const std::string& str, char separator)
+        -> std::string {
         std::string result;
         int count = 0;
         bool pastDecimalPoint = false;
@@ -270,6 +270,69 @@ private:
             character = std::toupper(character);
         }
         return str;
+    }
+
+    /**
+     * @brief Converts a string to lowercase.
+     * @param str The string to convert.
+     * @return The converted lowercase string.
+     */
+    static auto toLower(std::string str) -> std::string {
+        for (char& character : str) {
+            character = std::tolower(character);
+        }
+        return str;
+    }
+
+    /**
+     * @brief Trims whitespace from both ends of a string.
+     * @param str The string to trim.
+     * @return The trimmed string.
+     */
+    static auto trim(std::string str) -> std::string {
+        auto start = str.find_first_not_of(" \t\n\r");
+        auto end = str.find_last_not_of(" \t\n\r");
+        return (start == std::string::npos || end == std::string::npos)
+                   ? ""
+                   : str.substr(start, end - start + 1);
+    }
+
+    /**
+     * @brief Checks if a string represents a valid number.
+     * @param str The string to check.
+     * @return True if the string is a valid number, false otherwise.
+     */
+    static auto isValidNumber(const std::string& str) -> bool {
+        if (str.empty())
+            return false;
+        char* end = nullptr;
+        std::strtod(str.c_str(), &end);
+        return end == str.c_str() + str.size();
+    }
+
+    /**
+     * @brief Converts a string to a boolean value.
+     * @param str The string to convert (case-insensitive).
+     * @return The converted boolean value.
+     * @throws std::invalid_argument if the string cannot be converted.
+     */
+    static auto stringToBool(const std::string& str) -> bool {
+        auto lowerStr = toLower(trim(str));
+        if (lowerStr == "true" || lowerStr == "1") {
+            return true;
+        } else if (lowerStr == "false" || lowerStr == "0") {
+            return false;
+        }
+        throw std::invalid_argument("Invalid boolean string: " + str);
+    }
+
+    /**
+     * @brief Converts a boolean value to a string.
+     * @param value The boolean value to convert.
+     * @return The converted string ("true" or "false").
+     */
+    static auto boolToString(bool value) -> std::string {
+        return value ? "true" : "false";
     }
 };
 
