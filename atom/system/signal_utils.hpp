@@ -296,7 +296,7 @@ inline std::string getSignalName(int signal) {
  * @param function Function to execute while signal is blocked
  */
 template <typename Func>
-inline void withBlockedSignal(int signal, Func function) {
+inline void withBlockedSignal([[maybe_unused]] int signal, Func function) {
 #if !defined(_WIN32) && !defined(_WIN64)
     sigset_t blockSet, oldSet;
     sigemptyset(&blockSet);

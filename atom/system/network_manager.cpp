@@ -86,7 +86,7 @@ public:
 };
 NetworkManager::NetworkManager() {
 #ifdef _WIN32
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData_) != 0) {
+    if (WSAStartup(MAKEWORD(2, 2), &impl_->wsaData_) != 0) {
         THROW_RUNTIME_ERROR("WSAStartup failed");
     }
 #endif

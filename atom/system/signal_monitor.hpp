@@ -1,5 +1,5 @@
-#ifndef SIGNAL_MONITOR_HPP
-#define SIGNAL_MONITOR_HPP
+#ifndef ATOM_SYSTEM_SIGNAL_MONITOR_HPP
+#define ATOM_SYSTEM_SIGNAL_MONITOR_HPP
 
 #include <atomic>
 #include <chrono>
@@ -343,4 +343,4 @@ private:
     std::map<int, InactivityCallback> inactivityCallbacks_;
 };
 
-#endif  // SIGNAL_MONITOR_HPP
+#endif  // ATOM_SYSTEM_SIGNAL_MONITOR_HPP

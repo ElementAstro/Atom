@@ -75,6 +75,26 @@ struct SignalStats {
         lastReceived;  ///< Timestamp of last received signal
     std::chrono::steady_clock::time_point
         lastProcessed;  ///< Timestamp of last processed signal
+
+    SignalStats() = default;
+
+    SignalStats(const SignalStats& other)
+        : received(other.received.load()),
+          processed(other.processed.load()),
+          dropped(other.dropped.load()),
+          handlerErrors(other.handlerErrors.load()),
+          lastReceived(other.lastReceived),
+          lastProcessed(other.lastProcessed) {}
+
+    SignalStats& operator=(const SignalStats& other) {
+        received.store(other.received.load());
+        processed.store(other.processed.load());
+        dropped.store(other.dropped.load());
+        handlerErrors.store(other.handlerErrors.load());
+        lastReceived = other.lastReceived;
+        lastProcessed = other.lastProcessed;
+        return *this;
+    }
 };
 
 /**

@@ -118,7 +118,7 @@ auto getUserGroups() -> std::vector<std::wstring> {
 
     // 解析用户组信息
     auto *pTokenGroups = reinterpret_cast<PTOKEN_GROUPS>(buffer.data());
-#pragma unroll
+
     for (DWORD i = 0; i < pTokenGroups->GroupCount; i++) {
         SID_NAME_USE sidUse;
         DWORD nameLength = 0;
