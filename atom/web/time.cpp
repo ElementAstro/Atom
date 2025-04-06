@@ -19,14 +19,16 @@
 #endif
 
 #ifdef _WIN32
+// clang-format off
+#include <winsock2.h>
+#include <windows.h>
+#include <winreg.h>
+#include <ws2tcpip.h>
+// clang-format on
 #ifdef _MSC_VER
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "Iphlpapi.lib")
 #endif
-#include <windows.h>
-#include <winreg.h>
-#include <winsock2.h>
-#include <ws2tcpip.h>
 #else
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -152,7 +154,7 @@ public:
             // 初始化缓存，确保首次请求时有值可用
             updateTimeCache();
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Failed to initialize time cache: %s", e.what());
+            LOG_F(ERROR, "Failed to initialize time cache: {}", e.what());
         }
     }
 
@@ -162,10 +164,10 @@ public:
             std::shared_lock<std::shared_mutex> lock(mutex_);
             auto now = std::chrono::system_clock::now();
             auto systemTime = std::chrono::system_clock::to_time_t(now);
-            LOG_F(INFO, "Exiting getSystemTime with value: %ld", systemTime);
+            LOG_F(INFO, "Exiting getSystemTime with value: {}", systemTime);
             return systemTime;
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Error in getSystemTime: %s", e.what());
+            LOG_F(ERROR, "Error in getSystemTime: {}", e.what());
             throw std::system_error(
                 std::error_code(EFAULT, std::system_category()),
                 "Failed to get system time: " + std::string(e.what()));
@@ -180,7 +182,7 @@ public:
             LOG_F(INFO, "Exiting getSystemTimePoint");
             return now;
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Error in getSystemTimePoint: %s", e.what());
+            LOG_F(ERROR, "Error in getSystemTimePoint: {}", e.what());
             throw std::system_error(
                 std::error_code(EFAULT, std::system_category()),
                 "Failed to get system time point: " + std::string(e.what()));
@@ -190,8 +192,7 @@ public:
 #ifdef _WIN32
     auto setSystemTime(int year, int month, int day, int hour, int minute,
                        int second) -> std::error_code {
-        LOG_F(INFO,
-              "Entering setSystemTime with values: %d-%02d-%02d %02d:%02d:%02d",
+        LOG_F(INFO, "Entering setSystemTime with values: {}-{}-{} {}:{}:{}",
               year, month, day, hour, minute, second);
 
         try {
@@ -227,28 +228,26 @@ public:
                 strerror_s(errBuf, sizeof(errBuf), error);
                 const char* errStr = errBuf;
                 LOG_F(ERROR,
-                      "Failed to set system time to %d-%02d-%02d "
-                      "%02d:%02d:%02d. Error: %s",
+                      "Failed to set system time to {}-{}-{} "
+                      "{}:{}:{}. Error: {}",
                       year, month, day, hour, minute, second, errStr);
                 return std::error_code(error, std::system_category());
             } else {
-                DLOG_F(
-                    INFO,
-                    "System time has been set to %d-%02d-%02d %02d:%02d:%02d.",
-                    year, month, day, hour, minute, second);
+                DLOG_F(INFO, "System time has been set to {}-{}-{} {}:{}:{}.",
+                       year, month, day, hour, minute, second);
 
                 // 更新缓存
                 updateTimeCache();
                 return make_error_code(TimeError::None);
             }
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Exception in setSystemTime: %s", e.what());
+            LOG_F(ERROR, "Exception in setSystemTime: {}", e.what());
             return make_error_code(TimeError::SystemError);
         }
     }
 
     auto setSystemTimezone(std::string_view timezone) -> std::error_code {
-        LOG_F(INFO, "Entering setSystemTimezone with timezone: %s",
+        LOG_F(INFO, "Entering setSystemTimezone with timezone: {}",
               timezone.data());
         try {
             // 输入验证
@@ -270,7 +269,7 @@ public:
             std::string timezoneStr(timezone);
             DWORD tzId;
             if (!getTimeZoneInformationByName(timezoneStr, &tzId)) {
-                LOG_F(ERROR, "Error getting time zone id for %s: %lu",
+                LOG_F(ERROR, "Error getting time zone id for {}: %lu",
                       timezoneStr.c_str(), GetLastError());
                 return make_error_code(TimeError::InvalidParameter);
             }
@@ -281,14 +280,14 @@ public:
                 char errBuf[256];
                 strerror_s(errBuf, sizeof(errBuf), error);
                 const char* errStr = errBuf;
-                LOG_F(ERROR, "Error getting current time zone information: %s",
+                LOG_F(ERROR, "Error getting current time zone information: {}",
                       errStr);
                 return std::error_code(error, std::system_category());
             }
 
             if (tzInfo.StandardBias != -static_cast<int>(tzId)) {
                 LOG_F(ERROR,
-                      "Time zone id obtained does not match offset: %lu != %d",
+                      "Time zone id obtained does not match offset: %lu != {}",
                       tzId, -tzInfo.StandardBias);
                 return make_error_code(TimeError::InvalidParameter);
             }
@@ -298,15 +297,15 @@ public:
                 char errBuf[256];
                 strerror_s(errBuf, sizeof(errBuf), error);
                 const char* errStr = errBuf;
-                LOG_F(ERROR, "Error setting time zone to %s: %s",
+                LOG_F(ERROR, "Error setting time zone to {}: {}",
                       timezoneStr.c_str(), errStr);
                 return std::error_code(error, std::system_category());
             }
 
-            LOG_F(INFO, "Timezone successfully set to %s", timezoneStr.c_str());
+            LOG_F(INFO, "Timezone successfully set to {}", timezoneStr.c_str());
             return make_error_code(TimeError::None);
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Exception in setSystemTimezone: %s", e.what());
+            LOG_F(ERROR, "Exception in setSystemTimezone: {}", e.what());
             return make_error_code(TimeError::SystemError);
         }
     }
@@ -333,7 +332,7 @@ public:
                 char errBuf[256];
                 strerror_s(errBuf, sizeof(errBuf), error);
                 const char* errStr = errBuf;
-                LOG_F(ERROR, "Error getting time zone information: %s", errStr);
+                LOG_F(ERROR, "Error getting time zone information: {}", errStr);
                 return std::error_code(error, std::system_category());
             }
 
@@ -352,7 +351,7 @@ public:
                 char errBuf[256];
                 strerror_s(errBuf, sizeof(errBuf), error);
                 const char* errStr = errBuf;
-                LOG_F(ERROR, "Failed to set system time from RTC: %s", errStr);
+                LOG_F(ERROR, "Failed to set system time from RTC: {}", errStr);
                 return std::error_code(error, std::system_category());
             }
 
@@ -361,136 +360,190 @@ public:
             LOG_F(INFO, "System time successfully synchronized from RTC");
             return make_error_code(TimeError::None);
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Exception in syncTimeFromRTC: %s", e.what());
+            LOG_F(ERROR, "Exception in syncTimeFromRTC: {}", e.what());
             return make_error_code(TimeError::SystemError);
         }
     }
 
     auto getTimeZoneInformationByName(const std::string& timezone, DWORD* tzId)
         -> bool {
-        LOG_F(INFO, "Entering getTimeZoneInformationByName with timezone: %s",
+        LOG_F(INFO, "Entering getTimeZoneInformationByName with timezone: {}",
               timezone.c_str());
         try {
-            HKEY hkey;
+            // RAII wrapper for registry key
+            class RegKeyHandle {
+            private:
+                HKEY handle_ = nullptr;
+
+            public:
+                RegKeyHandle() = default;
+                ~RegKeyHandle() {
+                    if (handle_)
+                        RegCloseKey(handle_);
+                }
+                RegKeyHandle(const RegKeyHandle&) = delete;
+                RegKeyHandle& operator=(const RegKeyHandle&) = delete;
+
+                HKEY get() const { return handle_; }
+                PHKEY addr() { return &handle_; }
+                bool isValid() const { return handle_ != nullptr; }
+            };
+
+            // Open main registry key
+            RegKeyHandle mainKey;
             LPCTSTR regPath = TEXT(
                 "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Time "
                 "Zones\\");
-            LONG ret =
-                RegOpenKeyEx(HKEY_LOCAL_MACHINE, regPath, 0, KEY_READ, &hkey);
+            LONG ret = RegOpenKeyEx(HKEY_LOCAL_MACHINE, regPath, 0, KEY_READ,
+                                    mainKey.addr());
             if (ret != ERROR_SUCCESS) {
-                LOG_F(ERROR, "Failed to open registry key: %ld", ret);
+                LOG_F(ERROR, "Failed to open registry key: {}", ret);
                 return false;
             }
 
-            // 使用智能指针自动关闭注册表句柄
-            class RegKeyCloser {
-            public:
-                void operator()(HKEY* key) {
-                    if (key) {
-                        RegCloseKey(*key);
-                        delete key;
-                    }
-                }
-            };
-
-            std::unique_ptr<HKEY, RegKeyCloser> hkeyPtr(new HKEY(hkey));
-
-            TCHAR subKey[MAX_PATH];
-            TCHAR dispName[MAX_PATH];
-            FILETIME ftLastWriteTime;
-            DWORD index = 0;
-            bool found = false;
-
-            // 并行处理注册表项查找
-            std::vector<std::future<bool>> futures;
-            std::mutex resultMutex;
-            std::atomic<bool> searchComplete{false};
-
-            auto processRegistryKey = [&](DWORD keyIndex) -> bool {
-                if (searchComplete)
-                    return false;
-
-                DWORD sizeSubKey = MAX_PATH;
-                HKEY localKey;
-                if (RegEnumKeyEx(hkey, keyIndex, subKey, &sizeSubKey, nullptr,
-                                 nullptr, nullptr,
-                                 &ftLastWriteTime) != ERROR_SUCCESS) {
-                    return false;
-                }
-
-                if (RegOpenKeyEx(hkey, subKey, 0, KEY_READ, &localKey) !=
-                    ERROR_SUCCESS) {
-                    return false;
-                }
-
-                // 使用智能指针自动关闭注册表句柄
-                std::unique_ptr<HKEY, RegKeyCloser> localKeyPtr(
-                    new HKEY(localKey));
-
-                DWORD sizeDispName = MAX_PATH;
-                if (RegQueryValueEx(localKey, TEXT("Display"), nullptr, nullptr,
-                                    reinterpret_cast<LPBYTE>(dispName),
-                                    &sizeDispName) != ERROR_SUCCESS) {
-                    return false;
-                }
-
-                if (timezone == dispName) {
-                    DWORD localTzId;
-                    DWORD sizeTzId = sizeof(DWORD);
-                    if (RegQueryValueEx(localKey, TEXT("TZI"), nullptr, nullptr,
-                                        reinterpret_cast<LPBYTE>(&localTzId),
-                                        &sizeTzId) != ERROR_SUCCESS) {
-                        return false;
-                    }
-
-                    std::lock_guard<std::mutex> lock(resultMutex);
-                    if (!searchComplete) {
-                        *tzId = localTzId;
-                        searchComplete = true;
-                        return true;
-                    }
-                }
+            // Get the total number of subkeys
+            DWORD numSubKeys = 0;
+            if (RegQueryInfoKey(mainKey.get(), nullptr, nullptr, nullptr,
+                                &numSubKeys, nullptr, nullptr, nullptr, nullptr,
+                                nullptr, nullptr, nullptr) != ERROR_SUCCESS) {
+                LOG_F(ERROR, "Failed to query registry key info");
                 return false;
-            };
+            }
 
-            // 创建一组线程处理注册表项
-            const int numThreads = 4;  // 适当的线程数量，根据系统情况调整
-            std::vector<std::thread> threads;
+            // Determine optimal thread count based on hardware and workload
+            const unsigned int numThreads =
+                std::min(std::thread::hardware_concurrency() > 0
+                             ? std::thread::hardware_concurrency()
+                             : 4,
+                         static_cast<unsigned int>(numSubKeys));
+
+            // Shared state between threads
+            std::atomic<bool> found{false};
             std::atomic<DWORD> nextIndex{0};
+            std::mutex resultMutex;
 
-            for (int i = 0; i < numThreads; ++i) {
-                threads.emplace_back([&]() {
-                    while (!searchComplete) {
-                        DWORD currentIndex = nextIndex.fetch_add(1);
-                        if (processRegistryKey(currentIndex)) {
-                            break;  // 找到了，可以退出
+            // Function to process registry keys
+            auto processRegistryKeys = [&]() {
+                TCHAR subKeyName[MAX_PATH];
+                TCHAR displayName[MAX_PATH];
+                DWORD index;
+
+                // Process keys until we either find a match or exhaust all keys
+                while (!found &&
+                       (index = nextIndex.fetch_add(1)) < numSubKeys) {
+                    // Get the name of the subkey
+                    DWORD subKeyNameSize = MAX_PATH;
+                    if (RegEnumKeyEx(mainKey.get(), index, subKeyName,
+                                     &subKeyNameSize, nullptr, nullptr, nullptr,
+                                     nullptr) != ERROR_SUCCESS) {
+                        continue;
+                    }
+
+                    // Open this subkey
+                    RegKeyHandle subKey;
+                    if (RegOpenKeyEx(mainKey.get(), subKeyName, 0, KEY_READ,
+                                     subKey.addr()) != ERROR_SUCCESS) {
+                        continue;
+                    }
+
+                    // Query the Display value
+                    DWORD displayNameSize = sizeof(displayName);
+                    if (RegQueryValueEx(subKey.get(), TEXT("Display"), nullptr,
+                                        nullptr,
+                                        reinterpret_cast<LPBYTE>(displayName),
+                                        &displayNameSize) != ERROR_SUCCESS) {
+                        continue;
+                    }
+
+// Compare timezone names - handle potential encoding issues
+#ifdef UNICODE
+                    // Convert wide string to UTF-8 for comparison
+                    std::wstring wDisplayName(displayName);
+                    std::string utf8DisplayName;
+                    int utf8Size =
+                        WideCharToMultiByte(CP_UTF8, 0, wDisplayName.c_str(),
+                                            -1, nullptr, 0, nullptr, nullptr);
+                    if (utf8Size > 0) {
+                        utf8DisplayName.resize(utf8Size -
+                                               1);  // -1 for null terminator
+                        WideCharToMultiByte(CP_UTF8, 0, wDisplayName.c_str(),
+                                            -1, &utf8DisplayName[0], utf8Size,
+                                            nullptr, nullptr);
+
+                        if (timezone == utf8DisplayName) {
+                            // Found the timezone, now get the TZI information
+                            TIME_ZONE_INFORMATION tzi;
+                            DWORD tziSize = sizeof(tzi);
+
+                            if (RegQueryValueEx(subKey.get(), TEXT("TZI"),
+                                                nullptr, nullptr,
+                                                reinterpret_cast<LPBYTE>(&tzi),
+                                                &tziSize) == ERROR_SUCCESS) {
+                                std::lock_guard<std::mutex> lock(resultMutex);
+                                if (!found) {
+                                    // Map TZI to a timezone ID as needed by the
+                                    // caller This depends on what the caller
+                                    // expects in tzId Here we'll assume it's
+                                    // some hash or identifier
+                                    *tzId = static_cast<DWORD>(tzi.Bias);
+                                    found = true;
+                                }
+                            }
                         }
                     }
-                });
+#else
+                    // Direct comparison for non-Unicode build
+                    if (timezone == displayName) {
+                        // Found the timezone, now get the TZI information
+                        TIME_ZONE_INFORMATION tzi;
+                        DWORD tziSize = sizeof(tzi);
+
+                        if (RegQueryValueEx(subKey.get(), TEXT("TZI"), nullptr,
+                                            nullptr,
+                                            reinterpret_cast<LPBYTE>(&tzi),
+                                            &tziSize) == ERROR_SUCCESS) {
+                            std::lock_guard<std::mutex> lock(resultMutex);
+                            if (!found) {
+                                // Map TZI to a timezone ID as needed by the
+                                // caller
+                                *tzId = static_cast<DWORD>(tzi.Bias);
+                                found = true;
+                            }
+                        }
+                    }
+#endif
+                }
+            };
+
+            // Launch threads to process registry keys in parallel
+            std::vector<std::thread> threads;
+            threads.reserve(numThreads);
+            for (unsigned int i = 0; i < numThreads; ++i) {
+                threads.emplace_back(processRegistryKeys);
             }
 
-            // 等待所有线程完成
+            // Wait for all threads to complete
             for (auto& t : threads) {
                 if (t.joinable()) {
                     t.join();
                 }
             }
 
-            LOG_F(INFO, "Timezone search complete: %s",
-                  searchComplete ? "found" : "not found");
-            return searchComplete;
+            LOG_F(INFO, "Timezone search complete: {}",
+                  found ? "found" : "not found");
+            return found;
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Exception in getTimeZoneInformationByName: %s",
+            LOG_F(ERROR, "Exception in getTimeZoneInformationByName: {}",
                   e.what());
             return false;
         }
     }
+
 #else
 public:
     auto setSystemTime(int year, int month, int day, int hour, int minute,
                        int second) -> std::error_code {
-        LOG_F(INFO,
-              "Entering setSystemTime with values: %d-%02d-%02d %02d:%02d:%02d",
+        LOG_F(INFO, "Entering setSystemTime with values: {}-{}-{} {}:{}:{}",
               year, month, day, hour, minute, second);
 
         try {
@@ -534,25 +587,24 @@ public:
                 int errnum = errno;
                 char errBuf[256];
                 const char* errStr = strerror_r(errnum, errBuf, sizeof(errBuf));
-                LOG_F(ERROR, "Failed to set system time: %s", errStr);
+                LOG_F(ERROR, "Failed to set system time: {}", errStr);
                 return std::error_code(errnum, std::system_category());
             }
 
             // 更新缓存
             updateTimeCache();
 
-            DLOG_F(INFO,
-                   "System time has been set to %d-%02d-%02d %02d:%02d:%02d.",
-                   year, month, day, hour, minute, second);
+            DLOG_F(INFO, "System time has been set to {}-{}-{} {}:{}:{}.", year,
+                   month, day, hour, minute, second);
             return make_error_code(TimeError::None);
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Exception in setSystemTime: %s", e.what());
+            LOG_F(ERROR, "Exception in setSystemTime: {}", e.what());
             return make_error_code(TimeError::SystemError);
         }
     }
 
     auto setSystemTimezone(std::string_view timezone) -> std::error_code {
-        LOG_F(INFO, "Entering setSystemTimezone with timezone: %s",
+        LOG_F(INFO, "Entering setSystemTimezone with timezone: {}",
               timezone.data());
 
         try {
@@ -579,7 +631,7 @@ public:
             zonePath << "/usr/share/zoneinfo/" << timezoneStr;
             struct stat buffer;
             if (stat(zonePath.str().c_str(), &buffer) != 0) {
-                LOG_F(ERROR, "Timezone %s does not exist", timezoneStr.c_str());
+                LOG_F(ERROR, "Timezone {} does not exist", timezoneStr.c_str());
                 return make_error_code(TimeError::InvalidParameter);
             }
 
@@ -588,7 +640,7 @@ public:
                 int errnum = errno;
                 char errBuf[256];
                 const char* errStr = strerror_r(errnum, errBuf, sizeof(errBuf));
-                LOG_F(ERROR, "Failed to remove existing timezone link: %s",
+                LOG_F(ERROR, "Failed to remove existing timezone link: {}",
                       errStr);
                 return std::error_code(errnum, std::system_category());
             }
@@ -598,7 +650,7 @@ public:
                 int errnum = errno;
                 char errBuf[256];
                 const char* errStr = strerror_r(errnum, errBuf, sizeof(errBuf));
-                LOG_F(ERROR, "Failed to set timezone to %s: %s",
+                LOG_F(ERROR, "Failed to set timezone to {}: {}",
                       timezoneStr.c_str(), errStr);
                 return std::error_code(errnum, std::system_category());
             }
@@ -608,7 +660,7 @@ public:
                 int errnum = errno;
                 char errBuf[256];
                 const char* errStr = strerror_r(errnum, errBuf, sizeof(errBuf));
-                LOG_F(ERROR, "Error setting TZ environment variable to %s: %s",
+                LOG_F(ERROR, "Error setting TZ environment variable to {}: {}",
                       timezoneStr.c_str(), errStr);
                 return std::error_code(errnum, std::system_category());
             }
@@ -626,10 +678,10 @@ public:
             // 重新加载时区信息
             tzset();
 
-            LOG_F(INFO, "Timezone successfully set to %s", timezoneStr.c_str());
+            LOG_F(INFO, "Timezone successfully set to {}", timezoneStr.c_str());
             return make_error_code(TimeError::None);
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Exception in setSystemTimezone: %s", e.what());
+            LOG_F(ERROR, "Exception in setSystemTimezone: {}", e.what());
             return make_error_code(TimeError::SystemError);
         }
     }
@@ -658,7 +710,7 @@ public:
                     char errBuf[256];
                     const char* errStr =
                         strerror_r(errnum, errBuf, sizeof(errBuf));
-                    LOG_F(ERROR, "RTC device not found: %s", errStr);
+                    LOG_F(ERROR, "RTC device not found: {}", errStr);
                     return make_error_code(TimeError::NotSupported);
                 }
             }
@@ -668,7 +720,7 @@ public:
             if (result != 0) {
                 LOG_F(
                     ERROR,
-                    "Failed to synchronize time from RTC, hwclock returned: %d",
+                    "Failed to synchronize time from RTC, hwclock returned: {}",
                     result);
                 return make_error_code(TimeError::SystemError);
             }
@@ -679,7 +731,7 @@ public:
             LOG_F(INFO, "System time successfully synchronized from RTC");
             return make_error_code(TimeError::None);
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Exception in syncTimeFromRTC: %s", e.what());
+            LOG_F(ERROR, "Exception in syncTimeFromRTC: {}", e.what());
             return make_error_code(TimeError::SystemError);
         }
     }
@@ -687,12 +739,12 @@ public:
     auto getNtpTime(std::string_view hostname,
                     std::chrono::milliseconds timeout)
         -> std::optional<std::time_t> {
-        LOG_F(INFO, "Entering getNtpTime with hostname: %s", hostname.data());
+        LOG_F(INFO, "Entering getNtpTime with hostname: {}", hostname.data());
 
         try {
             // 输入验证
             if (!validateHostname(hostname)) {
-                LOG_F(ERROR, "Invalid hostname: %s", hostname.data());
+                LOG_F(ERROR, "Invalid hostname: {}", hostname.data());
                 return std::nullopt;
             }
 
@@ -702,7 +754,7 @@ public:
                 auto now = std::chrono::system_clock::now();
                 if (now - last_ntp_query_ < cache_ttl_ &&
                     cached_ntp_time_ > 0 && last_ntp_server_ == hostname) {
-                    LOG_F(INFO, "Using cached NTP time for %s: %ld",
+                    LOG_F(INFO, "Using cached NTP time for {}: {}",
                           hostname.data(), cached_ntp_time_);
                     return cached_ntp_time_;
                 }
@@ -729,7 +781,7 @@ public:
 
             std::string host_str(hostname);
             if (getaddrinfo(host_str.c_str(), nullptr, &hints, &result) != 0) {
-                LOG_F(ERROR, "Failed to resolve hostname: %s", hostname.data());
+                LOG_F(ERROR, "Failed to resolve hostname: {}", hostname.data());
                 return std::nullopt;
             }
 
@@ -759,11 +811,11 @@ public:
                     FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                     NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
                     errBuf, sizeof(errBuf), NULL);
-                LOG_F(ERROR, "Failed to send NTP request: %s", errBuf);
+                LOG_F(ERROR, "Failed to send NTP request: {}", errBuf);
 #else
                 char errBuf[256];
                 const char* errStr = strerror_r(errno, errBuf, sizeof(errBuf));
-                LOG_F(ERROR, "Failed to send NTP request: %s", errStr);
+                LOG_F(ERROR, "Failed to send NTP request: {}", errStr);
 #endif
                 return std::nullopt;
             }
@@ -782,7 +834,7 @@ public:
                     FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                     NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
                     errBuf, sizeof(errBuf), NULL);
-                LOG_F(ERROR, "Failed to set socket timeout: %s", errBuf);
+                LOG_F(ERROR, "Failed to set socket timeout: {}", errBuf);
                 return std::nullopt;
             }
 #else
@@ -790,7 +842,7 @@ public:
                            reinterpret_cast<char*>(&tv), sizeof(tv)) < 0) {
                 char errBuf[256];
                 const char* errStr = strerror_r(errno, errBuf, sizeof(errBuf));
-                LOG_F(ERROR, "Failed to set socket timeout: %s", errStr);
+                LOG_F(ERROR, "Failed to set socket timeout: {}", errStr);
                 return std::nullopt;
             }
 #endif
@@ -826,18 +878,18 @@ public:
                     FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                     NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
                     errBuf, sizeof(errBuf), NULL);
-                LOG_F(ERROR, "Failed to receive NTP response: %s", errBuf);
+                LOG_F(ERROR, "Failed to receive NTP response: {}", errBuf);
 #else
                 char errBuf[256];
                 const char* errStr = strerror_r(errno, errBuf, sizeof(errBuf));
-                LOG_F(ERROR, "Failed to receive NTP response: %s", errStr);
+                LOG_F(ERROR, "Failed to receive NTP response: {}", errStr);
 #endif
                 return std::nullopt;
             }
 
             // 验证响应包大小
             if (received < 48) {
-                LOG_F(ERROR, "Received incomplete NTP packet: %d bytes",
+                LOG_F(ERROR, "Received incomplete NTP packet: {} bytes",
                       received);
                 return std::nullopt;
             }
@@ -886,10 +938,10 @@ public:
                 last_ntp_server_ = std::string(hostname);
             }
 
-            LOG_F(INFO, "NTP time from %s: %ld", hostname.data(), ntpTime);
+            LOG_F(INFO, "NTP time from {}: {}", hostname.data(), ntpTime);
             return ntpTime;
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Exception in getNtpTime: %s", e.what());
+            LOG_F(ERROR, "Exception in getNtpTime: {}", e.what());
             return std::nullopt;
         }
     }
@@ -988,10 +1040,10 @@ auto TimeManager::getSystemTime() -> std::time_t {
     LOG_F(INFO, "TimeManager::getSystemTime called");
     try {
         auto systemTime = impl_->getSystemTime();
-        LOG_F(INFO, "TimeManager::getSystemTime returning: %ld", systemTime);
+        LOG_F(INFO, "TimeManager::getSystemTime returning: {}", systemTime);
         return systemTime;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error in TimeManager::getSystemTime: %s", e.what());
+        LOG_F(ERROR, "Error in TimeManager::getSystemTime: {}", e.what());
         throw;  // 重新抛出异常
     }
 }
@@ -1004,7 +1056,7 @@ auto TimeManager::getSystemTimePoint()
         LOG_F(INFO, "TimeManager::getSystemTimePoint returning time point");
         return timePoint;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error in TimeManager::getSystemTimePoint: %s", e.what());
+        LOG_F(ERROR, "Error in TimeManager::getSystemTimePoint: {}", e.what());
         throw;  // 重新抛出异常
     }
 }
@@ -1012,14 +1064,14 @@ auto TimeManager::getSystemTimePoint()
 auto TimeManager::setSystemTime(int year, int month, int day, int hour,
                                 int minute, int second) -> std::error_code {
     LOG_F(INFO,
-          "TimeManager::setSystemTime called with values: %d-%02d-%02d "
-          "%02d:%02d:%02d",
+          "TimeManager::setSystemTime called with values: {}-{}-{} "
+          "{}:{}:{}",
           year, month, day, hour, minute, second);
 
     auto result = impl_->setSystemTime(year, month, day, hour, minute, second);
 
     if (result) {
-        LOG_F(INFO, "TimeManager::setSystemTime failed: %s",
+        LOG_F(INFO, "TimeManager::setSystemTime failed: {}",
               result.message().c_str());
     } else {
         LOG_F(INFO, "TimeManager::setSystemTime completed successfully");
@@ -1030,13 +1082,13 @@ auto TimeManager::setSystemTime(int year, int month, int day, int hour,
 
 auto TimeManager::setSystemTimezone(std::string_view timezone)
     -> std::error_code {
-    LOG_F(INFO, "TimeManager::setSystemTimezone called with timezone: %s",
+    LOG_F(INFO, "TimeManager::setSystemTimezone called with timezone: {}",
           timezone.data());
 
     auto result = impl_->setSystemTimezone(timezone);
 
     if (result) {
-        LOG_F(INFO, "TimeManager::setSystemTimezone failed: %s",
+        LOG_F(INFO, "TimeManager::setSystemTimezone failed: {}",
               result.message().c_str());
     } else {
         LOG_F(INFO, "TimeManager::setSystemTimezone completed successfully");
@@ -1051,7 +1103,7 @@ auto TimeManager::syncTimeFromRTC() -> std::error_code {
     auto result = impl_->syncTimeFromRTC();
 
     if (result) {
-        LOG_F(INFO, "TimeManager::syncTimeFromRTC failed: %s",
+        LOG_F(INFO, "TimeManager::syncTimeFromRTC failed: {}",
               result.message().c_str());
     } else {
         LOG_F(INFO, "TimeManager::syncTimeFromRTC completed successfully");
@@ -1063,15 +1115,15 @@ auto TimeManager::syncTimeFromRTC() -> std::error_code {
 auto TimeManager::getNtpTime(std::string_view hostname,
                              std::chrono::milliseconds timeout)
     -> std::optional<std::time_t> {
-    LOG_F(INFO, "TimeManager::getNtpTime called with hostname: %s",
+    LOG_F(INFO, "TimeManager::getNtpTime called with hostname: {}",
           hostname.data());
 
     auto ntpTime = impl_->getNtpTime(hostname, timeout);
 
     if (ntpTime) {
-        LOG_F(INFO, "TimeManager::getNtpTime returning: %ld", *ntpTime);
+        LOG_F(INFO, "TimeManager::getNtpTime returning: {}", *ntpTime);
     } else {
-        LOG_F(ERROR, "TimeManager::getNtpTime failed to get time from %s",
+        LOG_F(ERROR, "TimeManager::getNtpTime failed to get time from {}",
               hostname.data());
     }
 

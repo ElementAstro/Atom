@@ -1,8 +1,8 @@
 #include "address.hpp"
 
 #ifdef _WIN32
-#include <WinSock2.h>
 #include <WS2tcpip.h>
+#include <WinSock2.h>
 #else
 #include <arpa/inet.h>
 #endif
@@ -37,21 +37,19 @@ constexpr uint32_t BYTE_MASK = 0xFF;
 // 初始化Windows套接字库
 #ifdef _WIN32
 namespace {
-    struct WinsockInitializer {
-        WinsockInitializer() {
-            WSADATA wsaData;
-            if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-                LOG_F(ERROR, "WSAStartup failed");
-                throw std::runtime_error("Failed to initialize Winsock");
-            }
+struct WinsockInitializer {
+    WinsockInitializer() {
+        WSADATA wsaData;
+        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+            LOG_F(ERROR, "WSAStartup failed");
+            throw std::runtime_error("Failed to initialize Winsock");
         }
-        ~WinsockInitializer() {
-            WSACleanup();
-        }
-    };
-    // 全局对象确保WSA初始化
-    static WinsockInitializer winsockInit;
-}
+    }
+    ~WinsockInitializer() { WSACleanup(); }
+};
+// 全局对象确保WSA初始化
+static WinsockInitializer winsockInit;
+}  // namespace
 #endif
 
 // Factory method for creating Address objects
@@ -103,13 +101,13 @@ auto IPv4::parse(std::string_view address) -> bool {
     try {
         // Validate the format first
         if (!isValidIPv4(address)) {
-            LOG_F(ERROR, "Invalid IPv4 address format: %s",
+            LOG_F(ERROR, "Invalid IPv4 address format: {}",
                   std::string(address).c_str());
             return false;
         }
 
         if (inet_pton(AF_INET, std::string(address).c_str(), &ipValue) != 1) {
-            LOG_F(ERROR, "IPv4 address conversion failed: %s",
+            LOG_F(ERROR, "IPv4 address conversion failed: {}",
                   std::string(address).c_str());
             return false;
         }
@@ -117,7 +115,7 @@ auto IPv4::parse(std::string_view address) -> bool {
         addressStr = std::string(address);
         return true;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception while parsing IPv4 address: %s", e.what());
+        LOG_F(ERROR, "Exception while parsing IPv4 address: {}", e.what());
         return false;
     }
 }
@@ -146,7 +144,7 @@ auto IPv4::getPrefixLength(std::string_view cidr) -> std::optional<int> {
 
         return prefixLength;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in CIDR prefix parsing: %s", e.what());
+        LOG_F(ERROR, "Exception in CIDR prefix parsing: {}", e.what());
         return std::nullopt;
     }
 }
@@ -179,7 +177,7 @@ auto IPv4::parseCIDR(std::string_view cidr) -> bool {
         addressStr = integerToIp(ipValue) + "/" + std::to_string(prefixLength);
         return true;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in CIDR parsing: %s", e.what());
+        LOG_F(ERROR, "Exception in CIDR parsing: {}", e.what());
         return false;
     }
 }
@@ -198,10 +196,10 @@ auto IPv4::isInRange(std::string_view start, std::string_view end) -> bool {
 
         return currentIp >= startIp && currentIp <= endIp;
     } catch (const InvalidAddressFormat& e) {
-        LOG_F(ERROR, "Invalid address in range check: %s", e.what());
+        LOG_F(ERROR, "Invalid address in range check: {}", e.what());
         throw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in range check: %s", e.what());
+        LOG_F(ERROR, "Exception in range check: {}", e.what());
         return false;
     }
 }
@@ -217,7 +215,7 @@ auto IPv4::toBinary() const -> std::string {
         std::bitset<IPV4_BIT_LENGTH> bits(ntohl(ipValue));
         return bits.to_string();
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in binary conversion: %s", e.what());
+        LOG_F(ERROR, "Exception in binary conversion: {}", e.what());
         return "";
     }
 }
@@ -228,7 +226,7 @@ auto IPv4::toHex() const -> std::string {
         ss << std::hex << std::setfill('0') << std::setw(8) << ntohl(ipValue);
         return ss.str();
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in hex conversion: %s", e.what());
+        LOG_F(ERROR, "Exception in hex conversion: {}", e.what());
         return "";
     }
 }
@@ -247,7 +245,7 @@ auto IPv4::isEqual(const Address& other) const -> bool {
 
         return ipValue == ipv4Other->ipValue;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in equality check: %s", e.what());
+        LOG_F(ERROR, "Exception in equality check: {}", e.what());
         return false;
     }
 }
@@ -260,10 +258,10 @@ auto IPv4::getNetworkAddress(std::string_view mask) const -> std::string {
         uint32_t netAddr = ntohl(ipValue) & maskValue;
         return integerToIp(htonl(netAddr));
     } catch (const InvalidAddressFormat& e) {
-        LOG_F(ERROR, "Invalid mask in network address: %s", e.what());
+        LOG_F(ERROR, "Invalid mask in network address: {}", e.what());
         throw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in network address calculation: %s", e.what());
+        LOG_F(ERROR, "Exception in network address calculation: {}", e.what());
         return "";
     }
 }
@@ -274,17 +272,17 @@ auto IPv4::getBroadcastAddress(std::string_view mask) const -> std::string {
         uint32_t broadcastAddr = (ntohl(ipValue) & maskValue) | (~maskValue);
         return integerToIp(htonl(broadcastAddr));
     } catch (const InvalidAddressFormat& e) {
-        LOG_F(ERROR, "Invalid mask in broadcast address: %s", e.what());
+        LOG_F(ERROR, "Invalid mask in broadcast address: {}", e.what());
         throw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in broadcast address calculation: %s",
+        LOG_F(ERROR, "Exception in broadcast address calculation: {}",
               e.what());
         return "";
     }
 }
 
-auto IPv4::isSameSubnet(const Address& other,
-                        std::string_view mask) const -> bool {
+auto IPv4::isSameSubnet(const Address& other, std::string_view mask) const
+    -> bool {
     try {
         if (other.getType() != "IPv4") {
             return false;
@@ -301,10 +299,10 @@ auto IPv4::isSameSubnet(const Address& other,
         uint32_t netAddr2 = ntohl(ipv4Other->ipValue) & maskValue;
         return netAddr1 == netAddr2;
     } catch (const InvalidAddressFormat& e) {
-        LOG_F(ERROR, "Invalid mask in subnet check: %s", e.what());
+        LOG_F(ERROR, "Invalid mask in subnet check: {}", e.what());
         throw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in subnet check: %s", e.what());
+        LOG_F(ERROR, "Exception in subnet check: {}", e.what());
         return false;
     }
 }
@@ -324,7 +322,7 @@ auto IPv4::ipToInteger(std::string_view ipAddr) const -> uint32_t {
     } catch (const InvalidAddressFormat&) {
         throw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in IP to integer conversion: %s", e.what());
+        LOG_F(ERROR, "Exception in IP to integer conversion: {}", e.what());
         throw InvalidAddressFormat(std::string(ipAddr));
     }
 }
@@ -332,7 +330,7 @@ auto IPv4::ipToInteger(std::string_view ipAddr) const -> uint32_t {
 auto IPv4::integerToIp(uint32_t ipAddr) const -> std::string {
     try {
         char buffer[INET_ADDRSTRLEN];
-        struct in_addr addr {};
+        struct in_addr addr{};
         addr.s_addr = ipAddr;
 
         if (inet_ntop(AF_INET, &addr, buffer, INET_ADDRSTRLEN) == nullptr) {
@@ -342,7 +340,7 @@ auto IPv4::integerToIp(uint32_t ipAddr) const -> std::string {
 
         return std::string(buffer);
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in integer to IP conversion: %s", e.what());
+        LOG_F(ERROR, "Exception in integer to IP conversion: {}", e.what());
         return "";
     }
 }
@@ -377,7 +375,7 @@ auto IPv6::parse(std::string_view address) -> bool {
 
         if (inet_pton(AF_INET6, std::string(address).c_str(), addrBuf.data()) !=
             1) {
-            LOG_F(ERROR, "Invalid IPv6 address: %s",
+            LOG_F(ERROR, "Invalid IPv6 address: {}",
                   std::string(address).c_str());
             return false;
         }
@@ -391,7 +389,7 @@ auto IPv6::parse(std::string_view address) -> bool {
 
         return true;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception while parsing IPv6 address: %s", e.what());
+        LOG_F(ERROR, "Exception while parsing IPv6 address: {}", e.what());
         return false;
     }
 }
@@ -419,7 +417,7 @@ auto IPv6::getPrefixLength(std::string_view cidr) -> std::optional<int> {
 
         return prefixLength;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in IPv6 CIDR prefix parsing: %s", e.what());
+        LOG_F(ERROR, "Exception in IPv6 CIDR prefix parsing: {}", e.what());
         return std::nullopt;
     }
 }
@@ -450,7 +448,7 @@ auto IPv6::parseCIDR(std::string_view cidr) -> bool {
         addressStr = std::string(ipAddr) + "/" + std::to_string(prefixLength);
         return true;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in IPv6 CIDR parsing: %s", e.what());
+        LOG_F(ERROR, "Exception in IPv6 CIDR parsing: {}", e.what());
         return false;
     }
 }
@@ -481,10 +479,10 @@ auto IPv6::isInRange(std::string_view start, std::string_view end) -> bool {
 
         return true;
     } catch (const InvalidAddressFormat& e) {
-        LOG_F(ERROR, "Invalid address in IPv6 range check: %s", e.what());
+        LOG_F(ERROR, "Invalid address in IPv6 range check: {}", e.what());
         throw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in IPv6 range check: %s", e.what());
+        LOG_F(ERROR, "Exception in IPv6 range check: {}", e.what());
         return false;
     }
 }
@@ -524,7 +522,7 @@ auto IPv6::toBinary() const -> std::string {
 
         return binaryStr;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in IPv6 binary conversion: %s", e.what());
+        LOG_F(ERROR, "Exception in IPv6 binary conversion: {}", e.what());
         return "";
     }
 }
@@ -541,7 +539,7 @@ auto IPv6::toHex() const -> std::string {
         }
         return ss.str();
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in IPv6 hex conversion: %s", e.what());
+        LOG_F(ERROR, "Exception in IPv6 hex conversion: {}", e.what());
         return "";
     }
 }
@@ -561,7 +559,7 @@ auto IPv6::isEqual(const Address& other) const -> bool {
         return std::equal(ipSegments.begin(), ipSegments.end(),
                           ipv6Other->ipSegments.begin());
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in IPv6 equality check: %s", e.what());
+        LOG_F(ERROR, "Exception in IPv6 equality check: {}", e.what());
         return false;
     }
 }
@@ -581,10 +579,10 @@ auto IPv6::getNetworkAddress(std::string_view mask) const -> std::string {
 
         return arrayToIp(networkSegments);
     } catch (const InvalidAddressFormat& e) {
-        LOG_F(ERROR, "Invalid mask in IPv6 network address: %s", e.what());
+        LOG_F(ERROR, "Invalid mask in IPv6 network address: {}", e.what());
         throw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in IPv6 network address calculation: %s",
+        LOG_F(ERROR, "Exception in IPv6 network address calculation: {}",
               e.what());
         return "";
     }
@@ -603,17 +601,17 @@ auto IPv6::getBroadcastAddress(std::string_view mask) const -> std::string {
 
         return arrayToIp(broadcastSegments);
     } catch (const InvalidAddressFormat& e) {
-        LOG_F(ERROR, "Invalid mask in IPv6 broadcast address: %s", e.what());
+        LOG_F(ERROR, "Invalid mask in IPv6 broadcast address: {}", e.what());
         throw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in IPv6 broadcast address calculation: %s",
+        LOG_F(ERROR, "Exception in IPv6 broadcast address calculation: {}",
               e.what());
         return "";
     }
 }
 
-auto IPv6::isSameSubnet(const Address& other,
-                        std::string_view mask) const -> bool {
+auto IPv6::isSameSubnet(const Address& other, std::string_view mask) const
+    -> bool {
     try {
         if (other.getType() != "IPv6") {
             return false;
@@ -627,21 +625,21 @@ auto IPv6::isSameSubnet(const Address& other,
 
         // Parse the mask as an IPv6 address
         auto maskSegments = ipToArray(mask);
-        
+
         // Compare network addresses
         for (size_t i = 0; i < IPV6_SEGMENT_COUNT; ++i) {
-            if ((ipSegments[i] & maskSegments[i]) != 
+            if ((ipSegments[i] & maskSegments[i]) !=
                 (ipv6Other->ipSegments[i] & maskSegments[i])) {
                 return false;
             }
         }
-        
+
         return true;
     } catch (const InvalidAddressFormat& e) {
-        LOG_F(ERROR, "Invalid mask in IPv6 subnet check: %s", e.what());
+        LOG_F(ERROR, "Invalid mask in IPv6 subnet check: {}", e.what());
         throw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in IPv6 subnet check: %s", e.what());
+        LOG_F(ERROR, "Exception in IPv6 subnet check: {}", e.what());
         return false;
     }
 }
@@ -662,7 +660,7 @@ auto IPv6::ipToArray(std::string_view ipAddr) const -> std::array<uint16_t, 8> {
 
         return segments;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in IPv6 to array conversion: %s", e.what());
+        LOG_F(ERROR, "Exception in IPv6 to array conversion: {}", e.what());
         throw InvalidAddressFormat(std::string(ipAddr));
     }
 }
@@ -686,7 +684,7 @@ auto IPv6::arrayToIp(const std::array<uint16_t, 8>& segments) const
 
         return std::string(buffer);
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in IPv6 array to string conversion: %s",
+        LOG_F(ERROR, "Exception in IPv6 array to string conversion: {}",
               e.what());
         return "";
     }
@@ -719,10 +717,10 @@ auto UnixDomain::parse(std::string_view path) -> bool {
     try {
         if (!isValidPath(path)) {
 #ifdef _WIN32
-            LOG_F(ERROR, "Invalid Named Pipe or Unix domain socket path: %s",
+            LOG_F(ERROR, "Invalid Named Pipe or Unix domain socket path: {}",
                   std::string(path).c_str());
 #else
-            LOG_F(ERROR, "Invalid Unix domain socket path: %s",
+            LOG_F(ERROR, "Invalid Unix domain socket path: {}",
                   std::string(path).c_str());
 #endif
             return false;
@@ -732,10 +730,12 @@ auto UnixDomain::parse(std::string_view path) -> bool {
         return true;
     } catch (const std::exception& e) {
 #ifdef _WIN32
-        LOG_F(ERROR, "Exception while parsing Named Pipe or Unix domain socket path: %s",
-              e.what());
+        LOG_F(
+            ERROR,
+            "Exception while parsing Named Pipe or Unix domain socket path: {}",
+            e.what());
 #else
-        LOG_F(ERROR, "Exception while parsing Unix domain socket path: %s",
+        LOG_F(ERROR, "Exception while parsing Unix domain socket path: {}",
               e.what());
 #endif
         return false;
@@ -750,29 +750,35 @@ void UnixDomain::printAddressType() const {
 #endif
 }
 
-auto UnixDomain::isInRange(std::string_view start,
-                           std::string_view end) -> bool {
+auto UnixDomain::isInRange(std::string_view start, std::string_view end)
+    -> bool {
     try {
-        // For Unix domain sockets, we'll consider lexicographical ordering of paths
-        // This is different from IP ranges but provides a consistent behavior
-        
+        // For Unix domain sockets, we'll consider lexicographical ordering of
+        // paths This is different from IP ranges but provides a consistent
+        // behavior
+
         if (start.empty() || end.empty()) {
-            LOG_F(ERROR, "Empty path provided for Unix domain socket range check");
+            LOG_F(ERROR,
+                  "Empty path provided for Unix domain socket range check");
             throw InvalidAddressFormat("Empty path in range check");
         }
-        
+
         // Check if the range is valid (start <= end lexicographically)
         if (start > end) {
-            throw AddressRangeError("Start path is lexicographically greater than end path");
+            throw AddressRangeError(
+                "Start path is lexicographically greater than end path");
         }
-        
+
         // Check if the current path is in the lexicographical range
-        return addressStr >= std::string(start) && addressStr <= std::string(end);
+        return addressStr >= std::string(start) &&
+               addressStr <= std::string(end);
     } catch (const AddressRangeError& e) {
-        LOG_F(ERROR, "Invalid range in Unix domain socket range check: %s", e.what());
+        LOG_F(ERROR, "Invalid range in Unix domain socket range check: {}",
+              e.what());
         throw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in Unix domain socket range check: %s", e.what());
+        LOG_F(ERROR, "Exception in Unix domain socket range check: {}",
+              e.what());
         return false;
     }
 }
@@ -788,7 +794,7 @@ auto UnixDomain::toBinary() const -> std::string {
 
         return binaryStr;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in Unix domain socket binary conversion: %s",
+        LOG_F(ERROR, "Exception in Unix domain socket binary conversion: {}",
               e.what());
         return "";
     }
@@ -803,7 +809,7 @@ auto UnixDomain::toHex() const -> std::string {
         }
         return ss.str();
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in Unix domain socket hex conversion: %s",
+        LOG_F(ERROR, "Exception in Unix domain socket hex conversion: {}",
               e.what());
         return "";
     }
@@ -817,7 +823,7 @@ auto UnixDomain::isEqual(const Address& other) const -> bool {
 
         return addressStr == other.getAddress();
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in Unix domain socket equality check: %s",
+        LOG_F(ERROR, "Exception in Unix domain socket equality check: {}",
               e.what());
         return false;
     }
@@ -825,44 +831,107 @@ auto UnixDomain::isEqual(const Address& other) const -> bool {
 
 auto UnixDomain::getType() const -> std::string_view { return "UnixDomain"; }
 
-auto UnixDomain::getNetworkAddress(std::string_view mask) const -> std::string {
-    // This operation doesn't make sense for Unix domain sockets
+auto UnixDomain::getNetworkAddress([[maybe_unused]] std::string_view mask) const
+    -> std::string {
+    // Unix域套接字没有网络地址的概念，但我们可以返回路径的目录部分作为"网络"
+    try {
+        std::string path = addressStr;
+        size_t lastSeparator = path.find_last_of("/\\");
+
+        if (lastSeparator != std::string::npos) {
+            return path.substr(0, lastSeparator);
+        }
+
 #ifdef _WIN32
-    LOG_F(WARNING,
-          "getNetworkAddress operation not applicable for Named Pipes or Unix domain sockets");
+        LOG_F(WARNING,
+              "getNetworkAddress operation not fully applicable for Named "
+              "Pipes or Unix domain sockets");
 #else
-    LOG_F(WARNING,
-          "getNetworkAddress operation not applicable for Unix domain sockets");
+        LOG_F(WARNING,
+              "getNetworkAddress operation not fully applicable for Unix "
+              "domain sockets");
 #endif
-    return "";
+        return path;  // 如果没有分隔符，返回整个路径
+    } catch (const std::exception& e) {
+        LOG_F(ERROR, "Exception in Unix domain socket getNetworkAddress: {}",
+              e.what());
+        return "";
+    }
 }
 
-auto UnixDomain::getBroadcastAddress(std::string_view mask) const
-    -> std::string {
-    // This operation doesn't make sense for Unix domain sockets
+auto UnixDomain::getBroadcastAddress(
+    [[maybe_unused]] std::string_view mask) const -> std::string {
+    // Unix域套接字没有广播地址的概念，但我们可以返回目录下的通配符路径
+    try {
+        std::string path = addressStr;
+        size_t lastSeparator = path.find_last_of("/\\");
+
+        if (lastSeparator != std::string::npos) {
+            return path.substr(0, lastSeparator + 1) + "*";
+        }
+
 #ifdef _WIN32
-    LOG_F(
-        WARNING,
-        "getBroadcastAddress operation not applicable for Named Pipes or Unix domain sockets");
+        LOG_F(WARNING,
+              "getBroadcastAddress operation not fully applicable for Named "
+              "Pipes or Unix domain sockets");
 #else
-    LOG_F(
-        WARNING,
-        "getBroadcastAddress operation not applicable for Unix domain sockets");
+        LOG_F(WARNING,
+              "getBroadcastAddress operation not fully applicable for Unix "
+              "domain sockets");
 #endif
-    return "";
+        return path + ".*";  // 如果没有分隔符，在当前路径添加通配符
+    } catch (const std::exception& e) {
+        LOG_F(ERROR, "Exception in Unix domain socket getBroadcastAddress: {}",
+              e.what());
+        return "";
+    }
 }
 
 auto UnixDomain::isSameSubnet(const Address& other,
-                              std::string_view mask) const -> bool {
-    // This operation doesn't make sense for Unix domain sockets
+                              [[maybe_unused]] std::string_view mask) const
+    -> bool {
+    // 对于Unix域套接字，我们可以检查两个路径是否在同一目录
+    try {
+        if (other.getType() != "UnixDomain") {
+            return false;
+        }
+
+        std::string thisPath = addressStr;
+        std::string otherPath = std::string(other.getAddress());
+
+        // 获取各自的目录部分
+        size_t thisLastSeparator = thisPath.find_last_of("/\\");
+        size_t otherLastSeparator = otherPath.find_last_of("/\\");
+
+        // 如果两者都有分隔符，比较目录部分
+        if (thisLastSeparator != std::string::npos &&
+            otherLastSeparator != std::string::npos) {
+            std::string thisDir = thisPath.substr(0, thisLastSeparator);
+            std::string otherDir = otherPath.substr(0, otherLastSeparator);
+            return thisDir == otherDir;
+        }
+
+        // 如果两者都没有分隔符，就看是否在同一工作目录
+        if (thisLastSeparator == std::string::npos &&
+            otherLastSeparator == std::string::npos) {
+            return true;
+        }
+
 #ifdef _WIN32
-    LOG_F(WARNING,
-          "isSameSubnet operation not applicable for Named Pipes or Unix domain sockets");
+        LOG_F(WARNING,
+              "isSameSubnet operation not fully applicable for Named Pipes or "
+              "Unix domain sockets");
 #else
-    LOG_F(WARNING,
-          "isSameSubnet operation not applicable for Unix domain sockets");
+        LOG_F(WARNING,
+              "isSameSubnet operation not fully applicable for Unix domain "
+              "sockets");
 #endif
-    return false;
+        return false;
+    } catch (const std::exception& e) {
+        LOG_F(ERROR, "Exception in Unix domain socket isSameSubnet: {}",
+              e.what());
+        return false;
+    }
 }
 
 }  // namespace atom::web

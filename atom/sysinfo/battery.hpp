@@ -32,6 +32,7 @@ struct BatteryInfo {
      * @brief Default constructor.
      */
     BatteryInfo() = default;
+    BatteryInfo(const BatteryInfo&) = default;
 
     auto operator==(const BatteryInfo& other) const -> bool {
         return isBatteryPresent == other.isBatteryPresent &&
@@ -193,7 +194,8 @@ public:
     void stopMonitoring();
 
     // 获取历史数据
-    [[nodiscard]] std::vector<std::pair<std::chrono::system_clock::time_point, BatteryInfo>> 
+    [[nodiscard]] std::vector<
+        std::pair<std::chrono::system_clock::time_point, BatteryInfo>>
     getHistory(unsigned int maxEntries = 0) const;
 
 private:
@@ -201,7 +203,7 @@ private:
     ~BatteryManager();
     BatteryManager(const BatteryManager&) = delete;
     BatteryManager& operator=(const BatteryManager&) = delete;
-    
+
     class BatteryManagerImpl;
     BatteryManagerImpl* impl;
 };

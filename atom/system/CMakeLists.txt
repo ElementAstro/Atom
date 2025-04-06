@@ -37,6 +37,9 @@ set(HEADERS
     crash_quotes.hpp
     crash.hpp
     env.hpp
+    gpio.hpp
+    lregistry.hpp
+    network_manager.hpp
     pidwatcher.hpp
     platform.hpp
     power.hpp

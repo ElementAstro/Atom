@@ -2,16 +2,15 @@
 
 #include <algorithm>
 #include <array>
-#include <sstream>
 #include <fstream>
+#include <sstream>
 #include <unordered_map>
 
 #ifdef _WIN32
 // clang-format off
-#include <windows.h>
-#include <iptypes.h>
-#include <iphlpapi.h>
 #include <winsock2.h>
+#include <windows.h>
+#include <iphlpapi.h>
 #include <ws2tcpip.h>
 #include <netioapi.h>
 // clang-format on
@@ -243,7 +242,7 @@ auto NetworkManager::getMacAddress(const std::string& interfaceName)
             "Failed to create socket for MAC address retrieval");
     }
 
-    struct ifreq ifr {};
+    struct ifreq ifr{};
     std::strncpy(ifr.ifr_name, interfaceName.c_str(), IFNAMSIZ - 1);
 
     if (::ioctl(socketFd, SIOCGIFHWADDR, &ifr) < 0) {
@@ -275,8 +274,8 @@ void NetworkManager::enableInterface(const std::string& interfaceName) {
 #ifdef _WIN32
     MIB_IFROW ifRow;
     memset(&ifRow, 0, sizeof(MIB_IFROW));
-    strncpy_s(reinterpret_cast<char*>(ifRow.wszName), interfaceName.c_str(),
-              interfaceName.size());
+    strncpy(reinterpret_cast<char*>(ifRow.wszName), interfaceName.c_str(),
+            MAX_ADAPTER_NAME_LENGTH + 4);
 
     if (GetIfEntry(&ifRow) == NO_ERROR) {
         ifRow.dwAdminStatus = MIB_IF_ADMIN_STATUS_UP;
@@ -323,7 +322,7 @@ void NetworkManager::disableInterface(const std::string& interfaceName) {
 }
 
 auto NetworkManager::resolveDNS(const std::string& hostname) -> std::string {
-    struct addrinfo hints {};
+    struct addrinfo hints{};
     struct addrinfo* res;
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;  // IPv4
@@ -496,7 +495,8 @@ void NetworkManager::monitorConnectionStatus() {
                     LOG_F(INFO,
                           "Interface: {} | Status: {} | IPs: {} | MAC: {}",
                           iface.getName(), iface.isUp() ? "Up" : "Down",
-                          atom::utils::toString(iface.getAddresses()), iface.getMac());
+                          atom::utils::toString(iface.getAddresses()),
+                          iface.getMac());
                     for (const auto& ip : iface.getAddresses()) {
                         LOG_F(INFO, "IP: {}", ip);
                     }

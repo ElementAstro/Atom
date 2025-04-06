@@ -17,6 +17,7 @@ Description: Some system functions to get user information.
 #include <array>
 #include <cstdlib>
 #include <memory>
+#include "atom/utils/string.hpp"
 
 #ifdef _WIN32
 // clang-format off
@@ -145,7 +146,7 @@ auto getUserGroups() -> std::vector<std::wstring> {
         std::wstring nameStr(nameBuffer.begin(), nameBuffer.end());
         groupName += nameStr;
         groups.push_back(groupName);
-        LOG_F(INFO, "Found group: {}", nameStr);
+        LOG_F(INFO, "Found group: {}", atom::utils::wstringToString(nameStr));
     }
 
     CloseHandle(hToken);

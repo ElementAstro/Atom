@@ -413,17 +413,15 @@ bool PowerPlanManager::setPowerPlan(PowerPlan plan) {
 
 PowerPlan PowerPlanManager::getCurrentPowerPlan() {
 #ifdef _WIN32
-    // 动态加载 powrprof.dll
     HMODULE hPowrProf = LoadLibraryA("powrprof.dll");
     if (!hPowrProf) {
         LOG_F(ERROR, "Failed to load powrprof.dll");
         return PowerPlan::BALANCED;
     }
 
-    // 获取函数指针
     typedef DWORD(WINAPI * PFN_PowerGetActiveScheme)(HKEY, GUID**);
-    auto pGetActiveScheme = (PFN_PowerGetActiveScheme)GetProcAddress(
-        hPowrProf, "PowerGetActiveScheme");
+    auto pGetActiveScheme = reinterpret_cast<PFN_PowerGetActiveScheme>(
+        GetProcAddress(hPowrProf, "PowerGetActiveScheme"));
 
     if (!pGetActiveScheme) {
         LOG_F(ERROR, "Failed to get PowerGetActiveScheme function");
@@ -447,7 +445,6 @@ PowerPlan PowerPlanManager::getCurrentPowerPlan() {
             result = PowerPlan::PERFORMANCE;
         }
 
-        // 使用正确的API释放内存
         if (pActiveSchemeGuid) {
             HeapFree(GetProcessHeap(), 0, pActiveSchemeGuid);
         }

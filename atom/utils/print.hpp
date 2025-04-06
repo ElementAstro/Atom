@@ -113,13 +113,69 @@ inline void log(Stream& stream, LogLevel level, std::string_view fmt,
     }
 }
 
+// TODO: Add support for other streams like std::cerr, std::clog, etc.
+/*
 template <typename Stream, typename... Args>
 inline void printToStream(Stream& stream, std::string_view fmt,
                           Args&&... args) {
     try {
-        // TODO: Use std::format when available
-        // stream << std::vformat(fmt,
-        //                   std::make_format_args(std::forward<Args>(args)...));
+        // 使用 C++20 标准库的 std::format
+        stream << std::vformat(fmt,
+                      std::make_format_args(std::forward<Args>(args)...));
+    } catch (const std::format_error& e) {
+        stream << "Format error: " << e.what();
+    } catch (const std::exception& e) {
+        stream << "Error during formatting: " << e.what();
+    }
+}
+*/
+
+// 计算格式字符串中的占位符数量
+inline size_t countPlaceholders(std::string_view fmt) {
+    size_t count = 0;
+    size_t pos = 0;
+
+    while ((pos = fmt.find("{}", pos)) != std::string_view::npos) {
+        ++count;
+        pos += 2;  // 跳过 "{}"
+    }
+
+    return count;
+}
+
+template <typename Stream>
+inline void formatToStream(Stream& stream, std::string_view fmt) {
+    stream << fmt;
+}
+
+template <typename Stream, typename T, typename... Args>
+inline void formatToStream(Stream& stream, std::string_view fmt, T&& value,
+                           Args&&... args) {
+    size_t pos = fmt.find("{}");
+    if (pos == std::string_view::npos) {
+        stream << fmt;
+        return;
+    }
+    stream << fmt.substr(0, pos);
+    stream << value;
+    formatToStream(stream, fmt.substr(pos + 2), std::forward<Args>(args)...);
+}
+
+template <typename Stream, typename... Args>
+inline void printToStream(Stream& stream, std::string_view fmt,
+                          Args&&... args) {
+    try {
+        size_t placeholderCount = countPlaceholders(fmt);
+        size_t argCount = sizeof...(args);
+
+        if (placeholderCount != argCount) {
+            stream << "Format error: mismatch between placeholders ("
+                   << placeholderCount << ") and arguments (" << argCount
+                   << ")";
+            return;
+        }
+
+        formatToStream(stream, fmt, std::forward<Args>(args)...);
     } catch (const std::format_error& e) {
         stream << "Format error: " << e.what();
     } catch (const std::exception& e) {
@@ -343,8 +399,9 @@ public:
 
 private:
     template <Container C>
-    [[nodiscard]] static inline auto parallelStdDev(
-        const C& data, double meanValue) -> double {
+    [[nodiscard]] static inline auto parallelStdDev(const C& data,
+                                                    double meanValue)
+        -> double {
         const size_t num_threads = std::min(std::thread::hardware_concurrency(),
                                             static_cast<unsigned>(8));
         const size_t chunk_size = std::ranges::size(data) / num_threads;
@@ -398,7 +455,7 @@ public:
         allocations.erase(identifier);
     }
 
-    inline void printUsage() const {
+    inline void printUsage() {
         std::shared_lock lock(mutex);
 
         size_t total = 0;
@@ -534,8 +591,8 @@ struct formatter<
                     is_same_v<T, std::deque<typename T::value_type>> ||
                     is_same_v<T, std::forward_list<typename T::value_type>>,
                 char>> : formatter<std::string_view> {
-    auto format(const T& container,
-                format_context& ctx) const -> decltype(ctx.out()) {
+    auto format(const T& container, format_context& ctx) const
+        -> decltype(ctx.out()) {
         auto out = ctx.out();
         *out++ = '[';
         bool first = true;
@@ -554,8 +611,8 @@ struct formatter<
 
 template <typename T1, typename T2>
 struct formatter<std::map<T1, T2>> : formatter<std::string_view> {
-    auto format(const std::map<T1, T2>& m,
-                format_context& ctx) const -> decltype(ctx.out()) {
+    auto format(const std::map<T1, T2>& m, format_context& ctx) const
+        -> decltype(ctx.out()) {
         auto out = ctx.out();
         *out++ = '{';
         bool first = true;
@@ -574,8 +631,8 @@ struct formatter<std::map<T1, T2>> : formatter<std::string_view> {
 
 template <typename T1, typename T2>
 struct formatter<std::unordered_map<T1, T2>> : formatter<std::string_view> {
-    auto format(const std::unordered_map<T1, T2>& m,
-                format_context& ctx) const -> decltype(ctx.out()) {
+    auto format(const std::unordered_map<T1, T2>& m, format_context& ctx) const
+        -> decltype(ctx.out()) {
         auto out = ctx.out();
         *out++ = '{';
         bool first = true;
@@ -594,8 +651,8 @@ struct formatter<std::unordered_map<T1, T2>> : formatter<std::string_view> {
 
 template <typename T, std::size_t N>
 struct formatter<std::array<T, N>> : formatter<std::string_view> {
-    auto format(const std::array<T, N>& arr,
-                format_context& ctx) const -> decltype(ctx.out()) {
+    auto format(const std::array<T, N>& arr, format_context& ctx) const
+        -> decltype(ctx.out()) {
         auto out = ctx.out();
         *out++ = '[';
         for (std::size_t i = 0; i < N; ++i) {
@@ -612,8 +669,8 @@ struct formatter<std::array<T, N>> : formatter<std::string_view> {
 
 template <typename T1, typename T2>
 struct formatter<std::pair<T1, T2>> : formatter<std::string_view> {
-    auto format(const std::pair<T1, T2>& p,
-                format_context& ctx) const -> decltype(ctx.out()) {
+    auto format(const std::pair<T1, T2>& p, format_context& ctx) const
+        -> decltype(ctx.out()) {
         auto out = ctx.out();
         *out++ = '(';
         out = std::format_to(out, "{}", p.first);
@@ -627,8 +684,8 @@ struct formatter<std::pair<T1, T2>> : formatter<std::string_view> {
 
 template <typename... Ts>
 struct formatter<std::tuple<Ts...>> : formatter<std::string_view> {
-    auto format(const std::tuple<Ts...>& tup,
-                format_context& ctx) const -> decltype(ctx.out()) {
+    auto format(const std::tuple<Ts...>& tup, format_context& ctx) const
+        -> decltype(ctx.out()) {
         auto out = ctx.out();
         *out++ = '(';
         std::apply(
@@ -647,8 +704,8 @@ struct formatter<std::tuple<Ts...>> : formatter<std::string_view> {
 
 template <typename... Ts>
 struct formatter<std::variant<Ts...>> : formatter<std::string_view> {
-    auto format(const std::variant<Ts...>& var,
-                format_context& ctx) const -> decltype(ctx.out()) {
+    auto format(const std::variant<Ts...>& var, format_context& ctx) const
+        -> decltype(ctx.out()) {
         return std::visit(
             [&ctx](const auto& val) -> decltype(ctx.out()) {
                 return std::format_to(ctx.out(), "{}", val);
@@ -659,8 +716,8 @@ struct formatter<std::variant<Ts...>> : formatter<std::string_view> {
 
 template <typename T>
 struct formatter<std::optional<T>> : formatter<std::string_view> {
-    auto format(const std::optional<T>& opt,
-                format_context& ctx) const -> decltype(ctx.out()) {
+    auto format(const std::optional<T>& opt, format_context& ctx) const
+        -> decltype(ctx.out()) {
         auto out = ctx.out();
         if (opt.has_value()) {
             return std::format_to(out, "Optional({})", opt.value());

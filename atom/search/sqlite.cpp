@@ -13,6 +13,7 @@
 #include <mutex>
 
 #include "atom/log/loguru.hpp"
+#include "atom/macro.hpp"
 
 // SIMD optimization headers
 #if defined(__AVX2__)
@@ -603,7 +604,7 @@ void SqliteDB::rollbackTransaction() {
             return;
         }
 
-        executeQuery("ROLLBACK TRANSACTION");
+        ATOM_UNUSED_RESULT(executeQuery("ROLLBACK TRANSACTION"));
         pImpl->inTransaction = false;
     } catch (const std::exception& e) {
         // Log but don't throw from rollback
