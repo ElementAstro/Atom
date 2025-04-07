@@ -9,41 +9,9 @@
 cmake_minimum_required(VERSION 3.20)
 project(atom-algorithm VERSION 1.0.0 LANGUAGES C CXX)
 
-# Sources
-set(SOURCES
-    algorithm.cpp
-    base.cpp
-    bignumber.cpp
-    blowfish.cpp
-    convolve.cpp
-    flood.cpp
-    fnmatch.cpp
-    fraction.cpp
-    huffman.cpp
-    math.cpp
-    matrix_compress.cpp
-    md5.cpp
-    mhash.cpp
-    sha1.cpp
-    tea.cpp
-)
-
-# Headers
-set(HEADERS
-    algorithm.hpp
-    base.hpp
-    bignumber.hpp
-    convolve.hpp
-    fnmatch.hpp
-    fraction.hpp
-    hash.hpp
-    huffman.hpp
-    math.hpp
-    matrix_compress.hpp
-    md5.hpp
-    mhash.hpp
-    tea.hpp
-)
+# Automatically collect source and header files
+file(GLOB SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
+file(GLOB HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp)
 
 set(LIBS
     loguru

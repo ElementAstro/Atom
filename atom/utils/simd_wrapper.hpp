@@ -13,6 +13,7 @@
 #define SIMD_WRAPPER_HPP
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -109,22 +110,20 @@ struct VecTraits;
 template <typename T, size_t N>
 struct VecTraits {
     using scalar_t = T;
-    using vector_t = T[N];
-    using mask_t = bool[N];
+    using vector_t = std::array<T, N>;
+    using mask_t = std::array<bool, N>;
     static constexpr size_t width = N;
 
     // 初始化函数
     static vector_t zeros() {
         vector_t v;
-        for (size_t i = 0; i < N; ++i)
-            v[i] = 0;
+        v.fill(0);
         return v;
     }
 
     static vector_t set1(scalar_t value) {
         vector_t v;
-        for (size_t i = 0; i < N; ++i)
-            v[i] = value;
+        v.fill(value);
         return v;
     }
 
@@ -421,677 +420,225 @@ struct VecTraits {
 };
 
 //=====================================================================
-// SSE 实现 (128位向量)
+// Vec类 - 向量类通用实现
 //=====================================================================
 
-#if defined(SIMD_ARCH_X86) && SIMD_HAS_SSE
+template <typename T, size_t N>
+class Vec {
+public:
+    using Traits = VecTraits<T, N>;
+    using scalar_t = typename Traits::scalar_t;
+    using vector_t = typename Traits::vector_t;
+    using mask_t = typename Traits::mask_t;
+    static constexpr size_t width = N;
 
-// float 特化 (4 x float)
-template <>
-struct VecTraits<float, 4> {
-    using scalar_t = float;
-    using vector_t = __m128;
-    using mask_t = __m128;
-    static constexpr size_t width = 4;
+private:
+    vector_t data;
 
-    // 基本操作
-    static vector_t zeros() { return _mm_setzero_ps(); }
-    static vector_t set1(scalar_t value) { return _mm_set1_ps(value); }
+public:
+    // 构造函数
+    Vec() = default;
 
-    // 加载/存储
-    static vector_t load(const scalar_t* ptr) { return _mm_load_ps(ptr); }
-    static vector_t loadu(const scalar_t* ptr) { return _mm_loadu_ps(ptr); }
-    static void store(scalar_t* ptr, const vector_t& v) {
-        _mm_store_ps(ptr, v);
-    }
-    static void storeu(scalar_t* ptr, const vector_t& v) {
-        _mm_storeu_ps(ptr, v);
-    }
+    // 从单一值构造(广播)
+    explicit Vec(scalar_t value) : data(Traits::set1(value)) {}
 
-    // 算术操作
-    static vector_t add(const vector_t& a, const vector_t& b) {
-        return _mm_add_ps(a, b);
-    }
-    static vector_t sub(const vector_t& a, const vector_t& b) {
-        return _mm_sub_ps(a, b);
-    }
-    static vector_t mul(const vector_t& a, const vector_t& b) {
-        return _mm_mul_ps(a, b);
-    }
-    static vector_t div(const vector_t& a, const vector_t& b) {
-        return _mm_div_ps(a, b);
-    }
+    // 从数组构造
+    explicit Vec(const vector_t& v) : data(v) {}
 
-// 高级算术操作
-#if SIMD_HAS_SSE3
-    static vector_t hadd(const vector_t& a, const vector_t& b) {
-        return _mm_hadd_ps(a, b);
-    }
-    static vector_t hsub(const vector_t& a, const vector_t& b) {
-        return _mm_hsub_ps(a, b);
-    }
-#endif
+    // 从原始指针构造(对齐)
+    static Vec load(const scalar_t* ptr) { return Vec(Traits::load(ptr)); }
 
-#if SIMD_HAS_AVX2 || SIMD_HAS_FMA
-    static vector_t fmadd(const vector_t& a, const vector_t& b,
-                          const vector_t& c) {
-        return _mm_fmadd_ps(a, b, c);  // a * b + c
+    // 从原始指针构造(非对齐)
+    static Vec loadu(const scalar_t* ptr) { return Vec(Traits::loadu(ptr)); }
+
+    // 存储方法(对齐)
+    void store(scalar_t* ptr) const { Traits::store(ptr, data); }
+
+    // 存储方法(非对齐)
+    void storeu(scalar_t* ptr) const { Traits::storeu(ptr, data); }
+
+    // 获取原始数据
+    const vector_t& raw() const { return data; }
+    vector_t& raw() { return data; }
+
+    // 访问运算符
+    scalar_t operator[](size_t i) const { return data[i]; }
+    scalar_t& operator[](size_t i) { return data[i]; }
+
+    // 算术运算符
+    Vec operator+(const Vec& rhs) const {
+        return Vec(Traits::add(data, rhs.data));
     }
 
-    static vector_t fmsub(const vector_t& a, const vector_t& b,
-                          const vector_t& c) {
-        return _mm_fmsub_ps(a, b, c);  // a * b - c
-    }
-#else
-    static vector_t fmadd(const vector_t& a, const vector_t& b,
-                          const vector_t& c) {
-        return _mm_add_ps(_mm_mul_ps(a, b), c);  // a * b + c
+    Vec operator-(const Vec& rhs) const {
+        return Vec(Traits::sub(data, rhs.data));
     }
 
-    static vector_t fmsub(const vector_t& a, const vector_t& b,
-                          const vector_t& c) {
-        return _mm_sub_ps(_mm_mul_ps(a, b), c);  // a * b - c
-    }
-#endif
-
-    // 数学函数
-    static vector_t sqrt(const vector_t& a) { return _mm_sqrt_ps(a); }
-    static vector_t rcp(const vector_t& a) {
-        return _mm_rcp_ps(a);
-    }  // 倒数近似
-    static vector_t rsqrt(const vector_t& a) {
-        return _mm_rsqrt_ps(a);
-    }  // 平方根倒数近似
-
-    static vector_t abs(const vector_t& a) {
-        return _mm_andnot_ps(_mm_set1_ps(-0.0f), a);  // 清除符号位
+    Vec operator*(const Vec& rhs) const {
+        return Vec(Traits::mul(data, rhs.data));
     }
 
-    static vector_t min(const vector_t& a, const vector_t& b) {
-        return _mm_min_ps(a, b);
-    }
-    static vector_t max(const vector_t& a, const vector_t& b) {
-        return _mm_max_ps(a, b);
+    Vec operator/(const Vec& rhs) const {
+        return Vec(Traits::div(data, rhs.data));
     }
 
-    // 三角函数和指数函数 (使用SVML或者模拟)
-    static vector_t sin(const vector_t& a) {
-#if defined(__INTEL_COMPILER) || defined(_MSC_VER)
-        return _mm_sin_ps(a);  // Intel编译器或使用Intel SVML的MSVC
-#else
-        alignas(16) scalar_t a_array[4], result[4];
-        _mm_store_ps(a_array, a);
-        for (int i = 0; i < 4; ++i)
-            result[i] = std::sin(a_array[i]);
-        return _mm_load_ps(result);
-#endif
+    Vec& operator+=(const Vec& rhs) {
+        data = Traits::add(data, rhs.data);
+        return *this;
     }
 
-    static vector_t cos(const vector_t& a) {
-#if defined(__INTEL_COMPILER) || defined(_MSC_VER)
-        return _mm_cos_ps(a);
-#else
-        alignas(16) scalar_t a_array[4], result[4];
-        _mm_store_ps(a_array, a);
-        for (int i = 0; i < 4; ++i)
-            result[i] = std::cos(a_array[i]);
-        return _mm_load_ps(result);
-#endif
+    Vec& operator-=(const Vec& rhs) {
+        data = Traits::sub(data, rhs.data);
+        return *this;
     }
 
-    static vector_t log(const vector_t& a) {
-#if defined(__INTEL_COMPILER) || defined(_MSC_VER)
-        return _mm_log_ps(a);
-#else
-        alignas(16) scalar_t a_array[4], result[4];
-        _mm_store_ps(a_array, a);
-        for (int i = 0; i < 4; ++i)
-            result[i] = std::log(a_array[i]);
-        return _mm_load_ps(result);
-#endif
+    Vec& operator*=(const Vec& rhs) {
+        data = Traits::mul(data, rhs.data);
+        return *this;
     }
 
-    static vector_t exp(const vector_t& a) {
-#if defined(__INTEL_COMPILER) || defined(_MSC_VER)
-        return _mm_exp_ps(a);
-#else
-        alignas(16) scalar_t a_array[4], result[4];
-        _mm_store_ps(a_array, a);
-        for (int i = 0; i < 4; ++i)
-            result[i] = std::exp(a_array[i]);
-        return _mm_load_ps(result);
-#endif
+    Vec& operator/=(const Vec& rhs) {
+        data = Traits::div(data, rhs.data);
+        return *this;
+    }
+
+    // 数学方法
+    Vec sqrt() const { return Vec(Traits::sqrt(data)); }
+
+    Vec abs() const { return Vec(Traits::abs(data)); }
+
+    Vec sin() const { return Vec(Traits::sin(data)); }
+
+    Vec cos() const { return Vec(Traits::cos(data)); }
+
+    Vec log() const { return Vec(Traits::log(data)); }
+
+    Vec exp() const { return Vec(Traits::exp(data)); }
+
+    // 静态数学方法
+    static Vec min(const Vec& a, const Vec& b) {
+        return Vec(Traits::min(a.data, b.data));
+    }
+
+    static Vec max(const Vec& a, const Vec& b) {
+        return Vec(Traits::max(a.data, b.data));
+    }
+
+    // 融合乘加
+    static Vec fmadd(const Vec& a, const Vec& b, const Vec& c) {
+        return Vec(Traits::fmadd(a.data, b.data, c.data));
+    }
+
+    // 融合乘减
+    static Vec fmsub(const Vec& a, const Vec& b, const Vec& c) {
+        return Vec(Traits::fmsub(a.data, b.data, c.data));
     }
 
     // 比较操作
-    static mask_t cmpeq(const vector_t& a, const vector_t& b) {
-        return _mm_cmpeq_ps(a, b);
-    }
-    static mask_t cmpne(const vector_t& a, const vector_t& b) {
-        return _mm_cmpneq_ps(a, b);
-    }
-    static mask_t cmplt(const vector_t& a, const vector_t& b) {
-        return _mm_cmplt_ps(a, b);
-    }
-    static mask_t cmple(const vector_t& a, const vector_t& b) {
-        return _mm_cmple_ps(a, b);
-    }
-    static mask_t cmpgt(const vector_t& a, const vector_t& b) {
-        return _mm_cmpgt_ps(a, b);
-    }
-    static mask_t cmpge(const vector_t& a, const vector_t& b) {
-        return _mm_cmpge_ps(a, b);
+    mask_t operator==(const Vec& rhs) const {
+        return Traits::cmpeq(data, rhs.data);
     }
 
-    // 位操作
-    static vector_t bitwise_and(const vector_t& a, const vector_t& b) {
-        return _mm_and_ps(a, b);
-    }
-    static vector_t bitwise_or(const vector_t& a, const vector_t& b) {
-        return _mm_or_ps(a, b);
-    }
-    static vector_t bitwise_xor(const vector_t& a, const vector_t& b) {
-        return _mm_xor_ps(a, b);
-    }
-    static vector_t bitwise_not(const vector_t& a) {
-        return _mm_xor_ps(a, _mm_castsi128_ps(_mm_set1_epi32(-1)));
+    mask_t operator!=(const Vec& rhs) const {
+        return Traits::cmpne(data, rhs.data);
     }
 
-    // 混合操作
-    static vector_t blend(const mask_t& mask, const vector_t& a,
-                          const vector_t& b) {
-#if SIMD_HAS_SSE4_1
-        return _mm_blendv_ps(b, a, mask);
-#else
-        return _mm_or_ps(_mm_and_ps(mask, a), _mm_andnot_ps(mask, b));
-#endif
+    mask_t operator<(const Vec& rhs) const {
+        return Traits::cmplt(data, rhs.data);
     }
 
-    // 元素访问
-    // 元素访问
-    static scalar_t extract(const vector_t& v, size_t index) {
-#if SIMD_HAS_SSE4_1
-        switch (index) {
-            case 0:
-                return _mm_cvtss_f32(v);
-            case 1:
-                return _mm_cvtss_f32(
-                    _mm_shuffle_ps(v, v, _MM_SHUFFLE(1, 1, 1, 1)));
-            case 2:
-                return _mm_cvtss_f32(
-                    _mm_shuffle_ps(v, v, _MM_SHUFFLE(2, 2, 2, 2)));
-            case 3:
-                return _mm_cvtss_f32(
-                    _mm_shuffle_ps(v, v, _MM_SHUFFLE(3, 3, 3, 3)));
-            default:
-                return 0;
-        }
-#else
-        alignas(16) scalar_t tmp[4];
-        _mm_store_ps(tmp, v);
-        return tmp[index];
-#endif
+    mask_t operator<=(const Vec& rhs) const {
+        return Traits::cmple(data, rhs.data);
     }
 
-    static vector_t insert(const vector_t& v, size_t index, scalar_t value) {
-#if SIMD_HAS_SSE4_1
-        switch (index) {
-            case 0:
-                return _mm_insert_ps(v, _mm_set_ss(value), 0x00);
-            case 1:
-                return _mm_insert_ps(v, _mm_set_ss(value), 0x10);
-            case 2:
-                return _mm_insert_ps(v, _mm_set_ss(value), 0x20);
-            case 3:
-                return _mm_insert_ps(v, _mm_set_ss(value), 0x30);
-            default:
-                return v;
-        }
-#else
-        alignas(16) scalar_t tmp[4];
-        _mm_store_ps(tmp, v);
-        tmp[index] = value;
-        return _mm_load_ps(tmp);
-#endif
+    mask_t operator>(const Vec& rhs) const {
+        return Traits::cmpgt(data, rhs.data);
     }
 
-    // 洗牌操作
-    template <int I0, int I1, int I2, int I3>
-    static vector_t shuffle(const vector_t& v) {
-        return _mm_shuffle_ps(v, v, _MM_SHUFFLE(I3, I2, I1, I0));
+    mask_t operator>=(const Vec& rhs) const {
+        return Traits::cmpge(data, rhs.data);
     }
 
-    template <int I0, int I1, int I2, int I3>
-    static vector_t shuffle(const vector_t& a, const vector_t& b) {
-        return _mm_shuffle_ps(a, b, _MM_SHUFFLE(I3, I2, I1, I0));
+    // 位操作 (对整数类型)
+    template <typename U = T>
+    typename std::enable_if<std::is_integral<U>::value, Vec>::type operator&(
+        const Vec& rhs) const {
+        return Vec(Traits::bitwise_and(data, rhs.data));
+    }
+
+    template <typename U = T>
+    typename std::enable_if<std::is_integral<U>::value, Vec>::type operator|(
+        const Vec& rhs) const {
+        return Vec(Traits::bitwise_or(data, rhs.data));
+    }
+
+    template <typename U = T>
+    typename std::enable_if<std::is_integral<U>::value, Vec>::type operator^(
+        const Vec& rhs) const {
+        return Vec(Traits::bitwise_xor(data, rhs.data));
+    }
+
+    template <typename U = T>
+    typename std::enable_if<std::is_integral<U>::value, Vec>::type operator~()
+        const {
+        return Vec(Traits::bitwise_not(data));
+    }
+
+    // 移位操作 (对整数类型)
+    template <typename U = T>
+    typename std::enable_if<std::is_integral<U>::value, Vec>::type operator<<(
+        int count) const {
+        return Vec(Traits::shift_left(data, count));
+    }
+
+    template <typename U = T>
+    typename std::enable_if<std::is_integral<U>::value, Vec>::type operator>>(
+        int count) const {
+        return Vec(Traits::shift_right(data, count));
+    }
+
+    // 混合操作(根据掩码选择)
+    static Vec blend(const mask_t& mask, const Vec& a, const Vec& b) {
+        return Vec(Traits::blend(mask, a.data, b.data));
     }
 
     // 水平操作
-    static scalar_t horizontal_sum(const vector_t& v) {
-#if SIMD_HAS_SSE3
-        __m128 temp = _mm_hadd_ps(v, v);
-        temp = _mm_hadd_ps(temp, temp);
-        return _mm_cvtss_f32(temp);
-#else
-        __m128 shuf = _mm_shuffle_ps(v, v, _MM_SHUFFLE(2, 3, 0, 1));
-        __m128 sums = _mm_add_ps(v, shuf);
-        shuf = _mm_movehl_ps(shuf, sums);
-        sums = _mm_add_ss(sums, shuf);
-        return _mm_cvtss_f32(sums);
-#endif
-    }
+    scalar_t horizontal_sum() const { return Traits::horizontal_sum(data); }
 
-    static scalar_t horizontal_max(const vector_t& v) {
-        __m128 shuf = _mm_shuffle_ps(v, v, _MM_SHUFFLE(2, 3, 0, 1));
-        __m128 maxs = _mm_max_ps(v, shuf);
-        shuf = _mm_movehl_ps(shuf, maxs);
-        maxs = _mm_max_ss(maxs, shuf);
-        return _mm_cvtss_f32(maxs);
-    }
+    scalar_t horizontal_max() const { return Traits::horizontal_max(data); }
 
-    static scalar_t horizontal_min(const vector_t& v) {
-        __m128 shuf = _mm_shuffle_ps(v, v, _MM_SHUFFLE(2, 3, 0, 1));
-        __m128 mins = _mm_min_ps(v, shuf);
-        shuf = _mm_movehl_ps(shuf, mins);
-        mins = _mm_min_ss(mins, shuf);
-        return _mm_cvtss_f32(mins);
-    }
+    scalar_t horizontal_min() const { return Traits::horizontal_min(data); }
+
+    // 便捷工厂方法
+    static Vec zeros() { return Vec(Traits::zeros()); }
+
+    static Vec ones() { return Vec(static_cast<T>(1)); }
 };
 
-// int32_t 特化 (4 x int32_t)
-template <>
-struct VecTraits<int32_t, 4> {
-    using scalar_t = int32_t;
-    using vector_t = __m128i;
-    using mask_t = __m128i;
-    static constexpr size_t width = 4;
+//=====================================================================
+// 类型别名 - 为常见的向量大小和类型定义
+//=====================================================================
 
-    // 基本操作
-    static vector_t zeros() { return _mm_setzero_si128(); }
-    static vector_t set1(scalar_t value) { return _mm_set1_epi32(value); }
+using float32x4_t = Vec<float, 4>;    // 128位浮点向量
+using float32x8_t = Vec<float, 8>;    // 256位浮点向量
+using float32x16_t = Vec<float, 16>;  // 512位浮点向量
+using float64x2_t = Vec<double, 2>;   // 128位双精度向量
+using float64x4_t = Vec<double, 4>;   // 256位双精度向量
+using float64x8_t = Vec<double, 8>;   // 512位双精度向量
+using int8x16_t = Vec<int8_t, 16>;    // 128位8位整数向量
+using int16x8_t = Vec<int16_t, 8>;    // 128位16位整数向量
+using int32x4_t = Vec<int32_t, 4>;    // 128位32位整数向量
+using int64x2_t = Vec<int64_t, 2>;    // 128位64位整数向量
+using uint8x16_t = Vec<uint8_t, 16>;  // 128位8位无符号整数向量
+using uint16x8_t = Vec<uint16_t, 8>;  // 128位16位无符号整数向量
+using uint32x4_t = Vec<uint32_t, 4>;  // 128位32位无符号整数向量
+using uint64x2_t = Vec<uint64_t, 2>;  // 128位64位无符号整数向量
 
-    // 加载/存储
-    static vector_t load(const scalar_t* ptr) {
-        return _mm_load_si128(reinterpret_cast<const __m128i*>(ptr));
-    }
-    static vector_t loadu(const scalar_t* ptr) {
-        return _mm_loadu_si128(reinterpret_cast<const __m128i*>(ptr));
-    }
-    static void store(scalar_t* ptr, const vector_t& v) {
-        _mm_store_si128(reinterpret_cast<__m128i*>(ptr), v);
-    }
-    static void storeu(scalar_t* ptr, const vector_t& v) {
-        _mm_storeu_si128(reinterpret_cast<__m128i*>(ptr), v);
-    }
+//=====================================================================
+// 这里可以添加针对特定指令集的优化实现
+// 例如x86的SSE/AVX系列，ARM的NEON/SVE等
+//=====================================================================
 
-    // 算术操作
-    static vector_t add(const vector_t& a, const vector_t& b) {
-        return _mm_add_epi32(a, b);
-    }
-    static vector_t sub(const vector_t& a, const vector_t& b) {
-        return _mm_sub_epi32(a, b);
-    }
+}  // namespace simd
 
-#if SIMD_HAS_SSE4_1
-    static vector_t mul(const vector_t& a, const vector_t& b) {
-        return _mm_mullo_epi32(a, b);
-    }
-#else
-    static vector_t mul(const vector_t& a, const vector_t& b) {
-        __m128i tmp1 = _mm_mul_epu32(a, b);
-        __m128i tmp2 =
-            _mm_mul_epu32(_mm_srli_si128(a, 4), _mm_srli_si128(b, 4));
-        return _mm_unpacklo_epi32(
-            _mm_shuffle_epi32(tmp1, _MM_SHUFFLE(0, 0, 2, 0)),
-            _mm_shuffle_epi32(tmp2, _MM_SHUFFLE(0, 0, 2, 0)));
-    }
-#endif
-
-    // 没有直接的整数除法指令，使用标量模拟
-    static vector_t div(const vector_t& a, const vector_t& b) {
-        alignas(16) scalar_t a_array[4], b_array[4], result[4];
-        _mm_store_si128(reinterpret_cast<__m128i*>(a_array), a);
-        _mm_store_si128(reinterpret_cast<__m128i*>(b_array), b);
-        for (int i = 0; i < 4; ++i)
-            result[i] = a_array[i] / b_array[i];
-        return _mm_load_si128(reinterpret_cast<const __m128i*>(result));
-    }
-
-    // 数学函数
-    static vector_t abs(const vector_t& a) {
-#if SIMD_HAS_SSE4_1
-        return _mm_abs_epi32(a);
-#else
-        // 创建符号掩码
-        __m128i sign_mask = _mm_srai_epi32(a, 31);
-        // XOR并添加来执行2的补码转换
-        return _mm_add_epi32(_mm_xor_si128(a, sign_mask),
-                             _mm_srli_epi32(sign_mask, 31));
-#endif
-    }
-
-    static vector_t min(const vector_t& a, const vector_t& b) {
-#if SIMD_HAS_SSE4_1
-        return _mm_min_epi32(a, b);
-#else
-        // 使用比较和混合
-        __m128i mask = _mm_cmplt_epi32(a, b);
-        return _mm_or_si128(_mm_and_si128(mask, a), _mm_andnot_si128(mask, b));
-#endif
-    }
-
-    static vector_t max(const vector_t& a, const vector_t& b) {
-#if SIMD_HAS_SSE4_1
-        return _mm_max_epi32(a, b);
-#else
-        // 使用比较和混合
-        __m128i mask = _mm_cmpgt_epi32(a, b);
-        return _mm_or_si128(_mm_and_si128(mask, a), _mm_andnot_si128(mask, b));
-#endif
-    }
-
-    // 比较操作
-    static mask_t cmpeq(const vector_t& a, const vector_t& b) {
-        return _mm_cmpeq_epi32(a, b);
-    }
-    static mask_t cmplt(const vector_t& a, const vector_t& b) {
-        return _mm_cmplt_epi32(a, b);
-    }
-    static mask_t cmpgt(const vector_t& a, const vector_t& b) {
-        return _mm_cmpgt_epi32(a, b);
-    }
-
-    static mask_t cmpne(const vector_t& a, const vector_t& b) {
-        return _mm_xor_si128(_mm_cmpeq_epi32(a, b), _mm_set1_epi32(-1));
-    }
-
-    static mask_t cmple(const vector_t& a, const vector_t& b) {
-        return _mm_or_si128(_mm_cmplt_epi32(a, b), _mm_cmpeq_epi32(a, b));
-    }
-
-    static mask_t cmpge(const vector_t& a, const vector_t& b) {
-        return _mm_or_si128(_mm_cmpgt_epi32(a, b), _mm_cmpeq_epi32(a, b));
-    }
-
-    // 位操作
-    static vector_t bitwise_and(const vector_t& a, const vector_t& b) {
-        return _mm_and_si128(a, b);
-    }
-    static vector_t bitwise_or(const vector_t& a, const vector_t& b) {
-        return _mm_or_si128(a, b);
-    }
-    static vector_t bitwise_xor(const vector_t& a, const vector_t& b) {
-        return _mm_xor_si128(a, b);
-    }
-    static vector_t bitwise_not(const vector_t& a) {
-        return _mm_xor_si128(a, _mm_set1_epi32(-1));
-    }
-
-    // 移位操作
-    static vector_t shift_left(const vector_t& a, int count) {
-        return _mm_slli_epi32(a, count);
-    }
-    static vector_t shift_right(const vector_t& a, int count) {
-        return _mm_srli_epi32(a, count);
-    }
-    static vector_t shift_right_arithmetic(const vector_t& a, int count) {
-        return _mm_srai_epi32(a, count);
-    }
-
-    // 混合操作
-    static vector_t blend(const mask_t& mask, const vector_t& a,
-                          const vector_t& b) {
-#if SIMD_HAS_SSE4_1
-        return _mm_blendv_epi8(b, a, mask);
-#else
-        return _mm_or_si128(_mm_and_si128(mask, a), _mm_andnot_si128(mask, b));
-#endif
-    }
-
-    // 元素访问
-    static scalar_t extract(const vector_t& v, size_t index) {
-#if SIMD_HAS_SSE4_1
-        switch (index) {
-            case 0:
-                return _mm_extract_epi32(v, 0);
-            case 1:
-                return _mm_extract_epi32(v, 1);
-            case 2:
-                return _mm_extract_epi32(v, 2);
-            case 3:
-                return _mm_extract_epi32(v, 3);
-            default:
-                return 0;
-        }
-#else
-        alignas(16) scalar_t tmp[4];
-        _mm_store_si128(reinterpret_cast<__m128i*>(tmp), v);
-        return tmp[index];
-#endif
-    }
-
-    static vector_t insert(const vector_t& v, size_t index, scalar_t value) {
-#if SIMD_HAS_SSE4_1
-        switch (index) {
-            case 0:
-                return _mm_insert_epi32(v, value, 0);
-            case 1:
-                return _mm_insert_epi32(v, value, 1);
-            case 2:
-                return _mm_insert_epi32(v, value, 2);
-            case 3:
-                return _mm_insert_epi32(v, value, 3);
-            default:
-                return v;
-        }
-#else
-        alignas(16) scalar_t tmp[4];
-        _mm_store_si128(reinterpret_cast<__m128i*>(tmp), v);
-        tmp[index] = value;
-        return _mm_load_si128(reinterpret_cast<const __m128i*>(tmp));
-#endif
-    }
-
-    // 洗牌操作
-    template <int I0, int I1, int I2, int I3>
-    static vector_t shuffle(const vector_t& v) {
-        return _mm_shuffle_epi32(v, _MM_SHUFFLE(I3, I2, I1, I0));
-    }
-
-    // 水平操作
-    static scalar_t horizontal_sum(const vector_t& v) {
-#if SIMD_HAS_SSE3
-        __m128i temp = _mm_hadd_epi32(v, v);
-        temp = _mm_hadd_epi32(temp, temp);
-        return _mm_cvtsi128_si32(temp);
-#else
-        __m128i t1 =
-            _mm_add_epi32(v, _mm_shuffle_epi32(v, _MM_SHUFFLE(1, 0, 3, 2)));
-        __m128i t2 =
-            _mm_add_epi32(t1, _mm_shuffle_epi32(t1, _MM_SHUFFLE(2, 3, 0, 1)));
-        return _mm_cvtsi128_si32(t2);
-#endif
-    }
-};
-
-// double 特化 (2 x double)
-template <>
-struct VecTraits<double, 2> {
-    using scalar_t = double;
-    using vector_t = __m128d;
-    using mask_t = __m128d;
-    static constexpr size_t width = 2;
-
-    // 基本操作
-    static vector_t zeros() { return _mm_setzero_pd(); }
-    static vector_t set1(scalar_t value) { return _mm_set1_pd(value); }
-
-    // 加载/存储
-    static vector_t load(const scalar_t* ptr) { return _mm_load_pd(ptr); }
-    static vector_t loadu(const scalar_t* ptr) { return _mm_loadu_pd(ptr); }
-    static void store(scalar_t* ptr, const vector_t& v) {
-        _mm_store_pd(ptr, v);
-    }
-    static void storeu(scalar_t* ptr, const vector_t& v) {
-        _mm_storeu_pd(ptr, v);
-    }
-
-    // 算术操作
-    static vector_t add(const vector_t& a, const vector_t& b) {
-        return _mm_add_pd(a, b);
-    }
-    static vector_t sub(const vector_t& a, const vector_t& b) {
-        return _mm_sub_pd(a, b);
-    }
-    static vector_t mul(const vector_t& a, const vector_t& b) {
-        return _mm_mul_pd(a, b);
-    }
-    static vector_t div(const vector_t& a, const vector_t& b) {
-        return _mm_div_pd(a, b);
-    }
-
-// 高级算术操作
-#if SIMD_HAS_AVX2 || SIMD_HAS_FMA
-    static vector_t fmadd(const vector_t& a, const vector_t& b,
-                          const vector_t& c) {
-        return _mm_fmadd_pd(a, b, c);
-    }
-
-    static vector_t fmsub(const vector_t& a, const vector_t& b,
-                          const vector_t& c) {
-        return _mm_fmsub_pd(a, b, c);
-    }
-#else
-    static vector_t fmadd(const vector_t& a, const vector_t& b,
-                          const vector_t& c) {
-        return _mm_add_pd(_mm_mul_pd(a, b), c);
-    }
-
-    static vector_t fmsub(const vector_t& a, const vector_t& b,
-                          const vector_t& c) {
-        return _mm_sub_pd(_mm_mul_pd(a, b), c);
-    }
-#endif
-
-    // 数学函数
-    static vector_t sqrt(const vector_t& a) { return _mm_sqrt_pd(a); }
-
-    static vector_t abs(const vector_t& a) {
-        return _mm_andnot_pd(_mm_set1_pd(-0.0), a);  // 清除符号位
-    }
-
-    static vector_t min(const vector_t& a, const vector_t& b) {
-        return _mm_min_pd(a, b);
-    }
-    static vector_t max(const vector_t& a, const vector_t& b) {
-        return _mm_max_pd(a, b);
-    }
-
-    // 高级数学函数（SVML或标量模拟）
-    static vector_t sin(const vector_t& a) {
-#if defined(__INTEL_COMPILER) || defined(_MSC_VER)
-        return _mm_sin_pd(a);
-#else
-        alignas(16) scalar_t a_array[2], result[2];
-        _mm_store_pd(a_array, a);
-        for (int i = 0; i < 2; ++i)
-            result[i] = std::sin(a_array[i]);
-        return _mm_load_pd(result);
-#endif
-    }
-
-    static vector_t cos(const vector_t& a) {
-#if defined(__INTEL_COMPILER) || defined(_MSC_VER)
-        return _mm_cos_pd(a);
-#else
-        alignas(16) scalar_t a_array[2], result[2];
-        _mm_store_pd(a_array, a);
-        for (int i = 0; i < 2; ++i)
-            result[i] = std::cos(a_array[i]);
-        return _mm_load_pd(result);
-#endif
-    }
-
-    static vector_t log(const vector_t& a) {
-#if defined(__INTEL_COMPILER) || defined(_MSC_VER)
-        return _mm_log_pd(a);
-#else
-        alignas(16) scalar_t a_array[2], result[2];
-        _mm_store_pd(a_array, a);
-        for (int i = 0; i < 2; ++i)
-            result[i] = std::log(a_array[i]);
-        return _mm_load_pd(result);
-#endif
-    }
-
-    static vector_t exp(const vector_t& a) {
-#if defined(__INTEL_COMPILER) || defined(_MSC_VER)
-        return _mm_exp_pd(a);
-#else
-        alignas(16) scalar_t a_array[2], result[2];
-        _mm_store_pd(a_array, a);
-        for (int i = 0; i < 2; ++i)
-            result[i] = std::exp(a_array[i]);
-        return _mm_load_pd(result);
-#endif
-    }
-
-    // 比较操作
-    static mask_t cmpeq(const vector_t& a, const vector_t& b) {
-        return _mm_cmpeq_pd(a, b);
-    }
-    static mask_t cmpne(const vector_t& a, const vector_t& b) {
-        return _mm_cmpneq_pd(a, b);
-    }
-    static mask_t cmplt(const vector_t& a, const vector_t& b) {
-        return _mm_cmplt_pd(a, b);
-    }
-    static mask_t cmple(const vector_t& a, const vector_t& b) {
-        return _mm_cmple_pd(a, b);
-    }
-    static mask_t cmpgt(const vector_t& a, const vector_t& b) {
-        return _mm_cmpgt_pd(a, b);
-    }
-    static mask_t cmpge(const vector_t& a, const vector_t& b) {
-        return _mm_cmpge_pd(a, b);
-    }
-
-    // 位操作
-    static vector_t bitwise_and(const vector_t& a, const vector_t& b) {
-        return _mm_and_pd(a, b);
-    }
-    static vector_t bitwise_or(const vector_t& a, const vector_t& b) {
-        return _mm_or_pd(a, b);
-    }
-    static vector_t bitwise_xor(const vector_t& a, const vector_t& b) {
-        return _mm_xor_pd(a, b);
-    }
-    static vector_t bitwise_not(const vector_t& a) {
-        return _mm_xor_pd(a, _mm_castsi128_pd(_mm_set1_epi64x(-1)));
-    }
-
-    // 混合操作
-    static vector_t blend(const mask_t& mask, const vector_t& a,
-                          const vector_t& b) {
-#if SIMD_HAS_SSE4_1
-        return _mm_blendv_pd(b, a, mask);
-#else
-        return _mm_or_pd(_mm_and_pd(mask, a), _mm_andnot_pd(mask, b));
-#endif
-    }
-
-    // 元素访问
-    static scalar_t extract(const vector_t& v, size_t index) {
-#if SIMD_HAS_SSE4_1
-        switch (index) {
-            case 0:
-                return _mm_cvtsd_f64(v);
-            case 1:
-                return _mm_cvtsd_f64(_mm_shuffle_pd(v, v, 1));
-            default:
-                return 0;
-        }
-#else
-        alignas(16) scalar_t tmp[2];
-        _mm_store_pd(tmp, v);
-        return tmp[index];
+#endif  // SIMD_WRAPPER_HPP

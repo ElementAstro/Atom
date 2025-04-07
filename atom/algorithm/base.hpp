@@ -181,8 +181,8 @@ template <detail::ByteContainer T>
  * @param key The encryption key
  * @return std::string The encrypted string
  */
-[[nodiscard]] auto xorEncrypt(std::string_view plaintext,
-                              uint8_t key) noexcept -> std::string;
+[[nodiscard]] auto xorEncrypt(std::string_view plaintext, uint8_t key) noexcept
+    -> std::string;
 
 /**
  * @brief Decrypts a string using the XOR algorithm.
@@ -191,8 +191,8 @@ template <detail::ByteContainer T>
  * @param key The decryption key
  * @return std::string The decrypted string
  */
-[[nodiscard]] auto xorDecrypt(std::string_view ciphertext,
-                              uint8_t key) noexcept -> std::string;
+[[nodiscard]] auto xorDecrypt(std::string_view ciphertext, uint8_t key) noexcept
+    -> std::string;
 
 /**
  * @brief Decodes a compile-time constant Base64 string.
@@ -284,14 +284,61 @@ constexpr auto encode() {
 [[nodiscard]] auto isBase64(std::string_view str) noexcept -> bool;
 
 /**
- * @brief 基于指定线程数的并行算法执行器
+ * @brief Parallel algorithm executor based on specified thread count
  *
- * @param data 要处理的数据
- * @param threadCount 线程数量（0表示使用硬件支持的线程数）
- * @param func 每个线程执行的函数
+ * Splits data into chunks and processes them in parallel using multiple
+ * threads.
+ *
+ * @tparam T The data element type
+ * @tparam Func A function type that can be invoked with a span of T
+ * @param data The data to be processed
+ * @param threadCount Number of threads (0 means use hardware concurrency)
+ * @param func The function to be executed by each thread
  */
 template <typename T, std::invocable<std::span<T>> Func>
-void parallelExecute(std::span<T> data, size_t threadCount, Func func) noexcept;
+void parallelExecute(std::span<T> data, size_t threadCount,
+                     Func func) noexcept {
+    // Use hardware concurrency if threadCount is 0
+    if (threadCount == 0) {
+        threadCount = std::thread::hardware_concurrency();
+    }
+
+    // Ensure at least one thread
+    threadCount = std::max<size_t>(1, threadCount);
+
+    // Limit threads to data size
+    threadCount = std::min(threadCount, data.size());
+
+    // Calculate chunk size
+    size_t chunkSize = data.size() / threadCount;
+    size_t remainder = data.size() % threadCount;
+
+    std::vector<std::thread> threads;
+    threads.reserve(threadCount);
+
+    size_t startIdx = 0;
+
+    // Launch threads to process chunks
+    for (size_t i = 0; i < threadCount; ++i) {
+        // Calculate this thread's chunk size (distribute remainder)
+        size_t thisChunkSize = chunkSize + (i < remainder ? 1 : 0);
+
+        // Create subspan for this thread
+        std::span<T> chunk = data.subspan(startIdx, thisChunkSize);
+
+        // Launch thread with the chunk
+        threads.emplace_back([func, chunk]() { func(chunk); });
+
+        startIdx += thisChunkSize;
+    }
+
+    // Wait for all threads to complete
+    for (auto& thread : threads) {
+        if (thread.joinable()) {
+            thread.join();
+        }
+    }
+}
 
 }  // namespace atom::algorithm
 

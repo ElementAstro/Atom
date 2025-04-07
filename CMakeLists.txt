@@ -46,6 +46,7 @@ include_directories(${pybind11_INCLUDE_DIRS} ${Python_INCLUDE_DIRS})
 # Add subdirectories
 add_subdirectory(extra)
 add_subdirectory(atom)
+add_subdirectory(python)
 if (ATOM_BUILD_EXAMPLES)
     add_subdirectory(example)
 endif()

@@ -22,6 +22,13 @@
 #include <boost/format.hpp>
 #endif
 
+// Byte order utilities
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#define ATOM_LITTLE_ENDIAN 1
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#define ATOM_BIG_ENDIAN 1
+#endif
+
 namespace atom::utils {
 
 /**
@@ -51,6 +58,19 @@ struct SerializationException : virtual std::runtime_error,
 using SerializationException = std::runtime_error;
 #endif
 
+namespace detail {
+inline void throwSerializationError(auto&&... args) {
+#ifdef ATOM_USE_BOOST
+    throw SerializationException(
+        boost::str(boost::format(std::forward<decltype(args)>(args)...)));
+#else
+    std::ostringstream oss;
+    (oss << ... << std::forward<decltype(args)>(args));
+    throw SerializationException(oss.str());
+#endif
+}
+}  // namespace detail
+
 /**
  * @brief Serializes a serializable type into a vector of bytes.
  *
@@ -64,10 +84,28 @@ using SerializationException = std::runtime_error;
  * @return std::vector<uint8_t> A vector of bytes representing the serialized
  * data.
  */
+namespace detail {
+template <typename T>
+void adjustByteOrder([[maybe_unused]]T& value) {
+#ifdef ATOM_USE_BOOST
+    boost::endian::conditional_reverse_inplace<boost::endian::order::native,
+                                               boost::endian::order::little>(
+        value);
+#elif defined(ATOM_BIG_ENDIAN)
+    if constexpr (std::is_arithmetic_v<T> && sizeof(T) > 1) {
+        auto* ptr = reinterpret_cast<uint8_t*>(&value);
+        std::reverse(ptr, ptr + sizeof(T));
+    }
+#endif
+}
+}  // namespace detail
+
 template <Serializable T>
 auto serialize(const T& data) -> std::vector<uint8_t> {
     std::vector<uint8_t> bytes(sizeof(T));
-    std::memcpy(bytes.data(), &data, sizeof(T));
+    T adjusted = data;
+    detail::adjustByteOrder(adjusted);
+    std::memcpy(bytes.data(), &adjusted, sizeof(T));
     return bytes;
 }
 
@@ -244,19 +282,14 @@ auto serialize(const std::variant<Ts...>& var) -> std::vector<uint8_t> {
 template <Serializable T>
 auto deserialize(const std::span<const uint8_t>& bytes, size_t& offset) -> T {
     if (bytes.size() < offset + sizeof(T)) {
-#ifdef ATOM_USE_BOOST
-        throw SerializationException(
-            boost::str(boost::format("Invalid data: too short to contain the "
-                                     "expected type at offset %1%") %
-                       offset));
-#else
-        throw SerializationException(
-            "Invalid data: too short to contain the expected type.");
-#endif
+        detail::throwSerializationError(
+            "Invalid data: too short to contain the expected type at offset ",
+            offset);
     }
     T data;
     std::memcpy(&data, bytes.data() + offset, sizeof(T));
     offset += sizeof(T);
+    detail::adjustByteOrder(data);
     return data;
 }
 
@@ -305,8 +338,8 @@ inline auto deserializeString(const std::span<const uint8_t>& bytes,
  * @throws SerializationException if deserialization fails.
  */
 template <typename T>
-auto deserializeVector(const std::span<const uint8_t>& bytes,
-                       size_t& offset) -> std::vector<T> {
+auto deserializeVector(const std::span<const uint8_t>& bytes, size_t& offset)
+    -> std::vector<T> {
     auto size = deserialize<size_t>(bytes, offset);
     std::vector<T> vec;
     vec.reserve(size);
@@ -332,8 +365,8 @@ auto deserializeVector(const std::span<const uint8_t>& bytes,
  * @throws SerializationException if deserialization fails.
  */
 template <typename T>
-auto deserializeList(const std::span<const uint8_t>& bytes,
-                     size_t& offset) -> std::list<T> {
+auto deserializeList(const std::span<const uint8_t>& bytes, size_t& offset)
+    -> std::list<T> {
     auto size = deserialize<size_t>(bytes, offset);
     std::list<T> list;
 
@@ -361,8 +394,8 @@ auto deserializeList(const std::span<const uint8_t>& bytes,
  * @throws SerializationException if deserialization fails.
  */
 template <typename Key, typename Value>
-auto deserializeMap(const std::span<const uint8_t>& bytes,
-                    size_t& offset) -> std::map<Key, Value> {
+auto deserializeMap(const std::span<const uint8_t>& bytes, size_t& offset)
+    -> std::map<Key, Value> {
     auto size = deserialize<size_t>(bytes, offset);
     std::map<Key, Value> map;
 
@@ -394,8 +427,8 @@ auto deserializeMap(const std::span<const uint8_t>& bytes,
  * @throws SerializationException if deserialization fails.
  */
 template <typename T>
-auto deserializeOptional(const std::span<const uint8_t>& bytes,
-                         size_t& offset) -> std::optional<T> {
+auto deserializeOptional(const std::span<const uint8_t>& bytes, size_t& offset)
+    -> std::optional<T> {
     bool hasValue = deserialize<bool>(bytes, offset);
     if (hasValue) {
         return deserialize<T>(bytes, offset);
@@ -457,8 +490,8 @@ auto constructVariant(const std::span<const uint8_t>& bytes, size_t& offset,
  * @throws SerializationException if the index of the variant is out of range.
  */
 template <typename... Ts>
-auto deserializeVariant(const std::span<const uint8_t>& bytes,
-                        size_t& offset) -> std::variant<Ts...> {
+auto deserializeVariant(const std::span<const uint8_t>& bytes, size_t& offset)
+    -> std::variant<Ts...> {
     auto index = deserialize<size_t>(bytes, offset);
     if (index >= sizeof...(Ts)) {
 #ifdef ATOM_USE_BOOST
@@ -473,6 +506,54 @@ auto deserializeVariant(const std::span<const uint8_t>& bytes,
 }
 
 /**
+ * @brief Serializes a std::tuple into a vector of bytes.
+ *
+ * This function converts a `std::tuple` into a vector of bytes by serializing
+ * each element.
+ *
+ * @tparam Ts The types of elements in the tuple, must satisfy the
+ * `Serializable` concept.
+ * @param tup The tuple to serialize.
+ * @return std::vector<uint8_t> A vector of bytes representing the serialized
+ * tuple.
+ */
+template <typename... Ts>
+auto serialize(const std::tuple<Ts...>& tup) -> std::vector<uint8_t> {
+    std::vector<uint8_t> bytes;
+    std::apply(
+        [&bytes](const auto&... args) {
+            (bytes.insert(bytes.end(), serialize(args).begin(),
+                          serialize(args).end()),
+             ...);
+        },
+        tup);
+    return bytes;
+}
+
+/**
+ * @brief Deserializes a std::tuple from a span of bytes.
+ *
+ * This function extracts a `std::tuple` from the given span of bytes, starting
+ * from the specified offset.
+ *
+ * @tparam Ts The types of elements in the tuple, must satisfy the
+ * `Serializable` concept.
+ * @param bytes The span of bytes containing the serialized data.
+ * @param offset The offset in the span from where to start deserializing.
+ * @return std::tuple<Ts...> The deserialized tuple.
+ * @throws SerializationException if deserialization fails.
+ */
+template <typename... Ts>
+auto deserializeTuple(const std::span<const uint8_t>& bytes, size_t& offset)
+    -> std::tuple<Ts...> {
+    return std::apply(
+        [&bytes, &offset](Ts&...) {
+            return std::tuple{deserialize<Ts>(bytes, offset)...};
+        },
+        std::tuple<Ts...>{});
+}
+
+/**
  * @brief Saves serialized data to a file.
  *
  * This function writes the given vector of bytes to a file. If the file cannot
@@ -482,28 +563,50 @@ auto deserializeVariant(const std::span<const uint8_t>& bytes,
  * @param filename The name of the file to write to.
  * @throws SerializationException if the file cannot be opened for writing.
  */
+/**
+ * @brief RAII wrapper for file operations
+ */
+class FileHandle {
+    std::fstream file_;
+
+public:
+    FileHandle(const std::string& filename, std::ios::openmode mode)
+        : file_(filename, mode) {
+        if (!file_) {
+            detail::throwSerializationError("Could not open file: ", filename);
+        }
+    }
+
+    void seekg(std::streampos pos, std::ios::seekdir dir = std::ios::beg) {
+        file_.seekg(pos, dir);
+    }
+
+    std::streampos tellg() { return file_.tellg(); }
+
+    bool read(char* s, std::streamsize count) {
+        return static_cast<bool>(file_.read(s, count));
+    }
+
+    ~FileHandle() {
+        if (file_) {
+            file_.close();
+        }
+    }
+
+    operator std::fstream&() { return file_; }
+
+    void write(const std::vector<uint8_t>& data) {
+        file_.write(reinterpret_cast<const char*>(data.data()), data.size());
+        if (!file_) {
+            detail::throwSerializationError("Failed to write data to file");
+        }
+    }
+};
+
 inline void saveToFile(const std::vector<uint8_t>& data,
                        const std::string& filename) {
-    std::ofstream file(filename, std::ios::binary);
-    if (!file) {
-#ifdef ATOM_USE_BOOST
-        throw SerializationException(boost::str(
-            boost::format("Could not open file for writing: %1%") % filename));
-#else
-        throw SerializationException("Could not open file for writing: " +
-                                     filename);
-#endif
-    }
-    file.write(reinterpret_cast<const char*>(data.data()), data.size());
-    if (!file) {
-#ifdef ATOM_USE_BOOST
-        throw SerializationException(boost::str(
-            boost::format("Failed to write data to file: %1%") % filename));
-#else
-        throw SerializationException("Failed to write data to file: " +
-                                     filename);
-#endif
-    }
+    FileHandle file(filename, std::ios::binary | std::ios::out);
+    file.write(data);
 }
 
 /**
@@ -517,37 +620,18 @@ inline void saveToFile(const std::vector<uint8_t>& data,
  * @throws SerializationException if the file cannot be opened for reading.
  */
 inline auto loadFromFile(const std::string& filename) -> std::vector<uint8_t> {
-    std::ifstream file(filename, std::ios::binary);
-    if (!file) {
-#ifdef ATOM_USE_BOOST
-        throw SerializationException(boost::str(
-            boost::format("Could not open file for reading: %1%") % filename));
-#else
-        throw SerializationException("Could not open file for reading: " +
-                                     filename);
-#endif
-    }
+    FileHandle file(filename, std::ios::binary | std::ios::in);
     file.seekg(0, std::ios::end);
     std::streamsize size = file.tellg();
     if (size < 0) {
-#ifdef ATOM_USE_BOOST
-        throw SerializationException(boost::str(
-            boost::format("Failed to determine size of file: %1%") % filename));
-#else
-        throw SerializationException("Failed to determine size of file: " +
-                                     filename);
-#endif
+        detail::throwSerializationError("Failed to determine size of file: ",
+                                        filename);
     }
     file.seekg(0, std::ios::beg);
     std::vector<uint8_t> data(static_cast<size_t>(size));
     if (!file.read(reinterpret_cast<char*>(data.data()), size)) {
-#ifdef ATOM_USE_BOOST
-        throw SerializationException(boost::str(
-            boost::format("Failed to read data from file: %1%") % filename));
-#else
-        throw SerializationException("Failed to read data from file: " +
-                                     filename);
-#endif
+        detail::throwSerializationError("Failed to read data from file: ",
+                                        filename);
     }
     return data;
 }
