@@ -10,7 +10,8 @@ constexpr uint64_t DEFAULT_TWEPOCH = 1577836800000;
 
 // Helper function to wrap Statistics structure
 py::dict convert_statistics_to_dict(
-    const atom::algorithm::Snowflake<DEFAULT_TWEPOCH>::Statistics& stats) {
+    const atom::algorithm::Snowflake<DEFAULT_TWEPOCH, std::mutex>::Statistics&
+        stats) {
     py::dict result;
     result["total_ids_generated"] = stats.total_ids_generated;
     result["sequence_rollovers"] = stats.sequence_rollovers;

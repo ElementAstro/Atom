@@ -4,7 +4,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-
+#include "atom/error/exception.hpp"
 
 namespace py = pybind11;
 
@@ -58,13 +58,13 @@ PYBIND11_MODULE(error_calibration, m) {
         try {
             if (p)
                 std::rethrow_exception(p);
-        } catch (const atom::error::InvalidArgumentException& e) {
+        } catch (const atom::error::InvalidArgument& e) {
             PyErr_SetString(PyExc_ValueError, e.what());
-        } catch (const atom::error::RuntimeException& e) {
+        } catch (const atom::error::RuntimeError& e) {
             PyErr_SetString(PyExc_RuntimeError, e.what());
-        } catch (const atom::error::FailToOpenFileException& e) {
+        } catch (const atom::error::FailToOpenFile& e) {
             PyErr_SetString(PyExc_IOError, e.what());
-        } catch (const atom::error::AtomException& e) {
+        } catch (const atom::error::Exception& e) {
             PyErr_SetString(PyExc_Exception, e.what());
         } catch (const std::invalid_argument& e) {
             PyErr_SetString(PyExc_ValueError, e.what());
@@ -230,10 +230,11 @@ PYBIND11_MODULE(error_calibration, m) {
              "Get the calibration intercept")
         .def(
             "get_r_squared",
-            [](const atom::algorithm::ErrorCalibration<double>& self) {
+            [](const atom::algorithm::ErrorCalibration<double>& self)
+                -> py::object {
                 auto r_squared = self.getRSquared();
                 if (r_squared.has_value()) {
-                    return r_squared.value();
+                    return py::cast(r_squared.value());
                 } else {
                     return py::none();
                 }
@@ -292,10 +293,11 @@ PYBIND11_MODULE(error_calibration, m) {
         .def("get_intercept",
              &atom::algorithm::ErrorCalibration<float>::getIntercept)
         .def("get_r_squared",
-             [](const atom::algorithm::ErrorCalibration<float>& self) {
+             [](const atom::algorithm::ErrorCalibration<float>& self)
+                 -> py::object {
                  auto r_squared = self.getRSquared();
                  if (r_squared.has_value()) {
-                     return r_squared.value();
+                     return py::cast(r_squared.value());
                  } else {
                      return py::none();
                  }
@@ -559,8 +561,8 @@ PYBIND11_MODULE(error_calibration, m) {
                 // Calculate Q-Q plot data
                 auto qq_data =
                     stats.attr("probplot")(residuals, py::arg("dist") = "norm");
-                py::tuple points = qq_data[0];
-                py::tuple slope_intercept = qq_data[1];
+                py::tuple points = qq_data.attr("__getitem__")(0);
+                py::tuple slope_intercept = qq_data.attr("__getitem__")(1);
 
                 // Extract x and y points
                 py::array x_points = points[0];
@@ -572,9 +574,13 @@ PYBIND11_MODULE(error_calibration, m) {
 
                 // Plot the points and line
                 plt.attr("scatter")(x_points, y_points);
-                plt.attr("plot")(x_points,
-                                 intercept + slope * x_points.cast<py::array>(),
-                                 "r--");
+
+                // Calculate the line values using numpy for proper array
+                // operations
+                py::object qq_line_y = np.attr("add")(
+                    intercept, np.attr("multiply")(slope, x_points));
+                plt.attr("plot")(x_points, qq_line_y, "r--");
+
                 plt.attr("xlabel")("Theoretical Quantiles");
                 plt.attr("ylabel")("Sample Quantiles");
                 plt.attr("grid")(true);

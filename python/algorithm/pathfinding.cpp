@@ -3,7 +3,7 @@
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-
+#include <vector>
 
 namespace py = pybind11;
 
@@ -26,8 +26,16 @@ Examples:
              "Constructs a Point object with the given x and y coordinates.")
         .def_readwrite("x", &atom::algorithm::Point::x, "X coordinate")
         .def_readwrite("y", &atom::algorithm::Point::y, "Y coordinate")
-        .def(py::self == py::self)
-        .def(py::self != py::self)
+        .def("__eq__",
+             [](const atom::algorithm::Point& a,
+                const atom::algorithm::Point& b) {
+                 return a.x == b.x && a.y == b.y;
+             })
+        .def("__ne__",
+             [](const atom::algorithm::Point& a,
+                const atom::algorithm::Point& b) {
+                 return a.x != b.x || a.y != b.y;
+             })
         .def("__repr__",
              [](const atom::algorithm::Point& p) {
                  return "Point(" + std::to_string(p.x) + ", " +
@@ -40,27 +48,22 @@ Examples:
     // Register GridMap class
     py::class_<atom::algorithm::GridMap>(
         m, "GridMap",
-        R"(Represents a 2D grid map with obstacles for pathfinding.
-
-A GridMap is a discrete representation of a 2D space divided into cells,
-where each cell can either be free or contain an obstacle.
-
-Args:
-    width: Width of the grid (number of cells horizontally)
-    height: Height of the grid (number of cells vertically)
-    obstacles: Optional list of boolean values representing obstacles (True = obstacle)
-
-Examples:
-    >>> from atom.algorithm.pathfinding import GridMap, Point
-    >>> # Create a 10x10 grid with no obstacles
-    >>> grid = GridMap(10, 10)
-    >>> # Add an obstacle at (2, 3)
-    >>> grid.set_obstacle(Point(2, 3), True)
-)")
+        R"(Represents a 2D grid map with obstacles for pathfinding.)")
         .def(py::init<int, int>(), py::arg("width"), py::arg("height"),
              "Constructs an empty GridMap with specified width and height.")
-        .def(py::init<std::span<const bool>, int, int>(), py::arg("obstacles"),
-             py::arg("width"), py::arg("height"),
+        // Fixed: Handle vector<bool> specially since it doesn't have contiguous storage
+        .def(py::init(
+                 [](const std::vector<bool>& obstacles, int width, int height) {
+                     // Convert to vector<uint8_t> first
+                     std::vector<uint8_t> temp_obstacles;
+                     temp_obstacles.reserve(obstacles.size());
+                     for (bool b : obstacles) {
+                         temp_obstacles.push_back(b ? 1 : 0);
+                     }
+                     return atom::algorithm::GridMap(
+                         std::span<const uint8_t>(temp_obstacles), width, height);
+                 }),
+             py::arg("obstacles"), py::arg("width"), py::arg("height"),
              "Constructs a GridMap with predefined obstacles.")
         .def("neighbors", &atom::algorithm::GridMap::neighbors, py::arg("p"),
              R"(Get all valid neighboring points.
@@ -244,7 +247,8 @@ Examples:
             flat_obstacles.reserve(width * height);
 
             for (const auto& row : obstacles) {
-                if (row.size() != width) {
+                // Fixed comparison of signed/unsigned integers
+                if (static_cast<int>(row.size()) != width) {
                     throw std::invalid_argument(
                         "All rows must have the same width");
                 }
@@ -252,8 +256,8 @@ Examples:
                                       row.end());
             }
 
-            // Create grid map and find path
-            atom::algorithm::GridMap map(flat_obstacles, width, height);
+            atom::algorithm::GridMap map(std::span<const bool>(flat_obstacles),
+                                         width, height);
             auto path = atom::algorithm::PathFinder::findGridPath(
                 map, start, goal, heuristicType);
 

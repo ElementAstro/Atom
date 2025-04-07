@@ -1,4 +1,3 @@
-// cpp
 #ifndef ATOM_ALGORITHM_PERLIN_HPP
 #define ATOM_ALGORITHM_PERLIN_HPP
 
@@ -10,7 +9,7 @@
 #include <span>
 #include <vector>
 
-#ifdef USE_OPENCL  // 宏定义：是否启用OpenCL
+#ifdef ATOM_USE_OPENCL
 #include <CL/cl.h>
 #include "atom/error/exception.hpp"
 #endif
@@ -33,20 +32,20 @@ public:
         std::ranges::copy(std::span(p.begin(), p.begin() + 256),
                           p.begin() + 256);
 
-#ifdef USE_OPENCL
+#ifdef ATOM_USE_OPENCL
         initializeOpenCL();
 #endif
     }
 
     ~PerlinNoise() {
-#ifdef USE_OPENCL
+#ifdef ATOM_USE_OPENCL
         cleanupOpenCL();
 #endif
     }
 
     template <std::floating_point T>
     [[nodiscard]] auto noise(T x, T y, T z) const -> T {
-#ifdef USE_OPENCL
+#ifdef ATOM_USE_OPENCL
         if (opencl_available_) {
             return noiseOpenCL(x, y, z);
         }
@@ -100,7 +99,7 @@ public:
 private:
     std::vector<int> p;
 
-#ifdef USE_OPENCL
+#ifdef ATOM_USE_OPENCL
     cl_context context_;
     cl_command_queue queue_;
     cl_program program_;
@@ -324,7 +323,7 @@ private:
 
         return static_cast<T>(result);
     }
-#endif  // USE_OPENCL
+#endif  // ATOM_USE_OPENCL
 
     template <std::floating_point T>
     [[nodiscard]] auto noiseCPU(T x, T y, T z) const -> T {

@@ -1,8 +1,9 @@
 #include "atom/algorithm/math.hpp"
+#include "atom/error/exception.hpp"
+
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-
 
 namespace py = pybind11;
 
@@ -36,7 +37,7 @@ PYBIND11_MODULE(math, m) {
         try {
             if (p)
                 std::rethrow_exception(p);
-        } catch (const atom::error::InvalidArgumentException& e) {
+        } catch (const atom::error::InvalidArgument& e) {
             PyErr_SetString(PyExc_ValueError, e.what());
         } catch (const atom::error::OverflowException& e) {
             PyErr_SetString(PyExc_OverflowError, e.what());
@@ -851,16 +852,18 @@ PYBIND11_MODULE(math, m) {
     // Function to compute the modular multiplicative inverse
     m.def(
         "mod_inverse",
-        [](int64_t a, int64_t m) {
-            auto [g, x, _] = m.attr("extended_gcd")(a, m).cast<py::tuple>();
-            int64_t gcd = g.cast<int64_t>();
+        [&m](int64_t a, int64_t modulus) {
+            auto result = m.attr("extended_gcd")(a, modulus).cast<py::tuple>();
+            int64_t gcd = result[0].cast<int64_t>();
+            int64_t x = result[1].cast<int64_t>();
 
             if (gcd != 1) {
                 throw py::value_error("Modular inverse does not exist");
             }
 
-            int64_t inverse = x.cast<int64_t>();
-            return (inverse % m + m) % m;  // Ensure result is positive
+            int64_t inverse = x;
+            return (inverse % modulus + modulus) %
+                   modulus;  // Ensure result is positive
         },
         py::arg("a"), py::arg("m"),
         R"pbdoc(

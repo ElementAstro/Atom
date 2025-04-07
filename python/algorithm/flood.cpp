@@ -1,10 +1,9 @@
-// flood_fill_bindings.cpp
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <random>
-#include "flood_fill.h"  // Adjust path as needed
 
+#include "atom/algorithm/flood.hpp"
 
 namespace py = pybind11;
 
@@ -289,17 +288,17 @@ PYBIND11_MODULE(flood_fill, m) {
                     "Density must be between 0.0 and 1.0");
             }
 
-            // Create grid with walls
             std::vector<std::vector<int>> maze(
                 rows, std::vector<int>(cols, wall_value));
 
-            // Define complexity and density
-            int complexity_param =
+            int complexity_factor =
                 static_cast<int>(complexity * (5 * (rows + cols)));
-            int density_param =
-                static_cast<int>(density * ((rows / 2) * (cols / 2)));
+            complexity_factor = std::max(1, complexity_factor);
 
-            // Create empty path in the middle
+            int density_param =
+                static_cast<int>(density * ((static_cast<float>(rows) / 2.0f) *
+                                            (static_cast<float>(cols) / 2.0f)));
+
             for (int i = 1; i < rows - 1; i += 2) {
                 for (int j = 1; j < cols - 1; j += 2) {
                     maze[i][j] = path_value;
@@ -311,13 +310,14 @@ PYBIND11_MODULE(flood_fill, m) {
                 }
             }
 
-            // Create random walls
             std::random_device rd;
             std::mt19937 gen(rd());
             std::uniform_int_distribution<int> distribution_rows(0, rows - 1);
             std::uniform_int_distribution<int> distribution_cols(0, cols - 1);
 
-            for (int i = 0; i < density_param; i++) {
+            int walls_to_add = density_param + (complexity_factor / 10);
+
+            for (int i = 0; i < walls_to_add; i++) {
                 int x = distribution_rows(gen);
                 int y = distribution_cols(gen);
                 if (x > 0 && x < rows - 1 && y > 0 && y < cols - 1) {
@@ -455,14 +455,15 @@ PYBIND11_MODULE(flood_fill, m) {
             std::vector<std::vector<int>> mask(height,
                                                std::vector<int>(width, 0));
 
-            // Set 1s in the mask where target color matches
+            // Set 1s in the mask where target color matches - 修复void指针算术
+            uint8_t *ptr = static_cast<uint8_t *>(buf.ptr);
             for (int y = 0; y < height; y++) {
                 for (int x = 0; x < width; x++) {
                     bool matches = true;
                     for (int c = 0; c < 3; c++) {
-                        if (*static_cast<uint8_t *>(
-                                buf.ptr + y * buf.strides[0] +
-                                x * buf.strides[1] + c * buf.strides[2]) !=
+                        if (ptr[y * buf.strides[0] / sizeof(uint8_t) +
+                                x * buf.strides[1] / sizeof(uint8_t) +
+                                c * buf.strides[2] / sizeof(uint8_t)] !=
                             target_color_vec[c]) {
                             matches = false;
                             break;
@@ -478,15 +479,18 @@ PYBIND11_MODULE(flood_fill, m) {
             atom::algorithm::FloodFill::fillBFS(mask, start_y, start_x, 1, 2,
                                                 conn);
 
-            // Apply the fill color to the result image where mask == 2
+            // Apply the fill color to the result image where mask == 2 -
+            // 修复void指针算术
+            uint8_t *result_ptr = static_cast<uint8_t *>(result_buf.ptr);
             for (int y = 0; y < height; y++) {
                 for (int x = 0; x < width; x++) {
                     if (mask[y][x] == 2) {
                         for (int c = 0; c < 3; c++) {
-                            *static_cast<uint8_t *>(
-                                result_buf.ptr + y * result_buf.strides[0] +
-                                x * result_buf.strides[1] +
-                                c * result_buf.strides[2]) = fill_color_vec[c];
+                            result_ptr
+                                [y * result_buf.strides[0] / sizeof(uint8_t) +
+                                 x * result_buf.strides[1] / sizeof(uint8_t) +
+                                 c * result_buf.strides[2] / sizeof(uint8_t)] =
+                                    fill_color_vec[c];
                         }
                     }
                 }

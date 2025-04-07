@@ -4,7 +4,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(matrix_compress, m) {
@@ -419,8 +418,8 @@ Examples:
             Matrix matrix(buf.shape[0], std::vector<char>(buf.shape[1]));
             char* ptr = static_cast<char*>(buf.ptr);
 
-            for (size_t i = 0; i < buf.shape[0]; i++) {
-                for (size_t j = 0; j < buf.shape[1]; j++) {
+            for (size_t i = 0; i < static_cast<size_t>(buf.shape[0]); i++) {
+                for (size_t j = 0; j < static_cast<size_t>(buf.shape[1]); j++) {
                     matrix[i][j] = ptr[i * buf.shape[1] + j];
                 }
             }

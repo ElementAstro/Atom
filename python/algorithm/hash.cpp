@@ -4,7 +4,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(hash, m) {
@@ -182,11 +181,29 @@ PYBIND11_MODULE(hash, m) {
         "compute_hash",
         [](const py::list& list, bool parallel) {
             size_t result = 0;
-            for (const auto& item : list) {
-                py::object hash_obj =
-                    py::module::import("builtins").attr("hash")(item);
-                size_t item_hash = hash_obj.cast<size_t>();
-                result = atom::algorithm::hashCombine(result, item_hash);
+            if (parallel && list.size() >= 1000) {
+                // Parallel implementation for large lists
+                py::gil_scoped_release release;
+                std::vector<size_t> hashes(list.size());
+                std::transform(
+                    list.begin(), list.end(), hashes.begin(),
+                    [](const py::handle& item) {
+                        py::gil_scoped_acquire acquire;
+                        py::object hash_obj =
+                            py::module::import("builtins").attr("hash")(item);
+                        return hash_obj.cast<size_t>();
+                    });
+                for (const auto& h : hashes) {
+                    result = atom::algorithm::hashCombine(result, h);
+                }
+            } else {
+                // Sequential implementation
+                for (const auto& item : list) {
+                    py::object hash_obj =
+                        py::module::import("builtins").attr("hash")(item);
+                    size_t item_hash = hash_obj.cast<size_t>();
+                    result = atom::algorithm::hashCombine(result, item_hash);
+                }
             }
             return result;
         },
@@ -208,8 +225,9 @@ PYBIND11_MODULE(hash, m) {
         [](const py::dict& dict) {
             size_t result = 0;
             for (const auto& item : dict) {
-                py::object key = item.first;
-                py::object value = item.second;
+                py::object key = py::reinterpret_borrow<py::object>(item.first);
+                py::object value =
+                    py::reinterpret_borrow<py::object>(item.second);
 
                 py::object key_hash =
                     py::module::import("builtins").attr("hash")(key);
@@ -354,7 +372,7 @@ PYBIND11_MODULE(hash, m) {
         .def(
             "get",
             [](atom::algorithm::HashCache<std::string>& self,
-               const std::string& key) {
+               const std::string& key) -> py::object {
                 auto result = self.get(key);
                 if (result) {
                     return py::cast(*result);

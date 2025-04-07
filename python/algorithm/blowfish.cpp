@@ -2,7 +2,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(blowfish, m) {
@@ -56,24 +55,20 @@ PYBIND11_MODULE(blowfish, m) {
             key (bytes): The encryption key (4-56 bytes)
     )pbdoc")
         .def(py::init([](py::bytes key) {
-                 // Convert Python bytes to std::span<const std::byte>
                  const char* data = PyBytes_AsString(key.ptr());
                  size_t size = PyBytes_Size(key.ptr());
 
-                 // Key length check
                  if (size < 4 || size > 56) {
                      throw py::value_error(
                          "Key length must be between 4 and 56 bytes");
                  }
 
-                 // Create a vector of bytes and copy the data
                  std::vector<std::byte> key_bytes(size);
                  for (size_t i = 0; i < size; ++i) {
                      key_bytes[i] = static_cast<std::byte>(data[i]);
                  }
 
-                 return new atom::algorithm::Blowfish(
-                     std::span<const std::byte>(key_bytes));
+                 return std::make_unique<atom::algorithm::Blowfish>(key_bytes);
              }),
              py::arg("key"))
         .def(
@@ -145,21 +140,17 @@ PYBIND11_MODULE(blowfish, m) {
         .def(
             "encrypt_data",
             [](atom::algorithm::Blowfish& self, py::bytes data) {
-                // Handle empty data
                 if (PyBytes_Size(data.ptr()) == 0) {
                     throw py::value_error("Cannot encrypt empty data");
                 }
 
-                // Copy data to a mutable buffer
                 size_t input_size = PyBytes_Size(data.ptr());
                 std::vector<unsigned char> buffer(input_size);
                 std::memcpy(buffer.data(), PyBytes_AsString(data.ptr()),
                             input_size);
 
-                // Encrypt the data
                 self.encrypt_data(std::span<unsigned char>(buffer));
 
-                // Return the encrypted bytes
                 return py::bytes(reinterpret_cast<char*>(buffer.data()),
                                  buffer.size());
             },
@@ -181,29 +172,29 @@ PYBIND11_MODULE(blowfish, m) {
         .def(
             "decrypt_data",
             [](atom::algorithm::Blowfish& self, py::bytes data) {
-                // Check if data is valid
+                // 检查数据是否有效
                 size_t data_size = PyBytes_Size(data.ptr());
                 if (data_size == 0) {
                     throw py::value_error("Cannot decrypt empty data");
                 }
 
-                // Check if data is a multiple of the block size
+                // 检查数据是否是块大小的倍数
                 if (data_size % 8 != 0) {
                     throw py::value_error(
                         "Encrypted data must be a multiple of 8 bytes");
                 }
 
-                // Copy data to a mutable buffer
+                // 复制数据到可变缓冲区
                 std::vector<unsigned char> buffer(data_size);
                 std::memcpy(buffer.data(), PyBytes_AsString(data.ptr()),
                             data_size);
 
-                // Decrypt the data
+                // 修复：正确调用 decrypt_data 方法
                 size_t output_size = data_size;
                 self.decrypt_data(std::span<unsigned char>(buffer),
                                   output_size);
 
-                // Return the decrypted bytes (without padding)
+                // 返回解密后的字节（去除填充）
                 return py::bytes(reinterpret_cast<char*>(buffer.data()),
                                  output_size);
             },
@@ -352,12 +343,12 @@ PYBIND11_MODULE(blowfish, m) {
     m.def(
         "encrypt_with_password",
         [](const std::string& password, py::bytes data) {
-            // Create a key from the password (simple implementation)
+            // 从密码创建密钥（简单实现）
             if (password.empty()) {
                 throw py::value_error("Password cannot be empty");
             }
 
-            // Use a simple key derivation (not secure for production)
+            // 使用简单的密钥派生（不适用于生产环境）
             std::vector<std::byte> key;
             key.reserve(std::min(password.size(), size_t(56)));
 
@@ -365,24 +356,24 @@ PYBIND11_MODULE(blowfish, m) {
                 key.push_back(static_cast<std::byte>(password[i]));
             }
 
-            // Create cipher and encrypt
-            atom::algorithm::Blowfish cipher(std::span<const std::byte>(key));
+            // 修复：创建密码器，正确传递密钥
+            atom::algorithm::Blowfish cipher(key);
 
-            // Handle empty data
+            // 处理空数据
             if (PyBytes_Size(data.ptr()) == 0) {
                 throw py::value_error("Cannot encrypt empty data");
             }
 
-            // Copy data to a mutable buffer
+            // 复制数据到可变缓冲区
             size_t input_size = PyBytes_Size(data.ptr());
             std::vector<unsigned char> buffer(input_size);
             std::memcpy(buffer.data(), PyBytes_AsString(data.ptr()),
                         input_size);
 
-            // Encrypt the data
+            // 加密数据
             cipher.encrypt_data(std::span<unsigned char>(buffer));
 
-            // Return the encrypted bytes
+            // 返回加密后的字节
             return py::bytes(reinterpret_cast<char*>(buffer.data()),
                              buffer.size());
         },
@@ -420,7 +411,7 @@ PYBIND11_MODULE(blowfish, m) {
             }
 
             // Create cipher and decrypt
-            atom::algorithm::Blowfish cipher(std::span<const std::byte>(key));
+            atom::algorithm::Blowfish cipher(key);
 
             // Check if data is valid
             size_t data_size = PyBytes_Size(data.ptr());

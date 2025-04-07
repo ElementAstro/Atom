@@ -1,7 +1,7 @@
 #include "atom/algorithm/huffman.hpp"
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-
 
 namespace py = pybind11;
 
@@ -286,7 +286,7 @@ PYBIND11_MODULE(huffman, m) {
     // All-in-one encode/decode functions with binary serialization
     m.def(
         "encode",
-        [](const py::bytes& data) {
+        [&m](const py::bytes& data) {
             // First compress the data and get the serialized tree
             py::tuple result = m.attr("compress")(data);
             std::string compressed_data = result[0].cast<std::string>();
@@ -361,7 +361,7 @@ PYBIND11_MODULE(huffman, m) {
 
     m.def(
         "decode",
-        [](const py::bytes& encoded_data) {
+        [&m](const py::bytes& encoded_data) {
             // Parse the binary format
             std::string str = encoded_data;
             std::vector<uint8_t> bytes(str.begin(), str.end());

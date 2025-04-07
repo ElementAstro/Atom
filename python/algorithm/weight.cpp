@@ -5,7 +5,6 @@
 #include <pybind11/stl.h>
 #include <sstream>
 
-
 namespace py = pybind11;
 
 // Enumeration for selection strategies
@@ -19,30 +18,31 @@ enum class SelectionStrategyType {
 
 // Helper template for creating the appropriate strategy
 template <typename T>
-auto create_strategy(SelectionStrategyType type, uint32_t seed = 0,
-                     T exponent = 2.0) {
+std::unique_ptr<typename atom::algorithm::WeightSelector<T>::SelectionStrategy>
+create_strategy(SelectionStrategyType type, uint32_t seed = 0,
+                T exponent = 2.0) {
     using namespace atom::algorithm;
+    using WST = WeightSelector<T>;
 
     switch (type) {
         case SelectionStrategyType::DEFAULT:
-            return std::make_unique<
-                typename WeightSelector<T>::DefaultSelectionStrategy>(seed);
+            return std::make_unique<typename WST::DefaultSelectionStrategy>(
+                seed);
         case SelectionStrategyType::BOTTOM_HEAVY:
-            return std::make_unique<
-                typename WeightSelector<T>::BottomHeavySelectionStrategy>(seed);
+            return std::make_unique<typename WST::BottomHeavySelectionStrategy>(
+                seed);
         case SelectionStrategyType::TOP_HEAVY:
-            return std::make_unique<
-                typename WeightSelector<T>::TopHeavySelectionStrategy>(seed);
+            return std::make_unique<typename WST::TopHeavySelectionStrategy>(
+                seed);
         case SelectionStrategyType::RANDOM:
-            return std::make_unique<
-                typename WeightSelector<T>::RandomSelectionStrategy>(0, seed);
+            return std::make_unique<typename WST::RandomSelectionStrategy>(
+                0, seed);
         case SelectionStrategyType::POWER_LAW:
-            return std::make_unique<
-                typename WeightSelector<T>::PowerLawSelectionStrategy>(exponent,
-                                                                       seed);
+            return std::make_unique<typename WST::PowerLawSelectionStrategy>(
+                exponent, seed);
         default:
-            return std::make_unique<
-                typename WeightSelector<T>::DefaultSelectionStrategy>(seed);
+            return std::make_unique<typename WST::DefaultSelectionStrategy>(
+                seed);
     }
 }
 
@@ -51,6 +51,7 @@ template <typename T>
 void declare_weight_selector(py::module& m, const std::string& type_name) {
     using namespace atom::algorithm;
     using WeightSelectorT = WeightSelector<T>;
+    using SamplerT = typename WeightSelector<T>::WeightedRandomSampler;
 
     std::string class_name = "WeightSelector" + type_name;
 
@@ -364,9 +365,8 @@ Examples:
         });
 
     // Create WeightedRandomSampler class
-    py::class_<typename WeightSelectorT::WeightedRandomSampler>(
-        m, ("WeightedRandomSampler" + type_name).c_str(),
-        R"(Utility class for batch sampling with replacement.
+    py::class_<SamplerT>(m, ("WeightedRandomSampler" + type_name).c_str(),
+                         R"(Utility class for batch sampling with replacement.
 
 This class provides methods for weighted random sampling with or without replacement.
 
@@ -386,8 +386,7 @@ Examples:
         )")
         .def(py::init<>())
         .def(py::init<uint32_t>(), py::arg("seed"))
-        .def("sample", &typename WeightSelectorT::WeightedRandomSampler::sample,
-             py::arg("weights"), py::arg("n"),
+        .def("sample", &SamplerT::sample, py::arg("weights"), py::arg("n"),
              R"(Sample n indices according to their weights.
 
 Args:
@@ -401,9 +400,8 @@ Raises:
     ValueError: If weights is empty
 )")
         .def(
-            "sample_unique",
-            &typename WeightSelectorT::WeightedRandomSampler::sampleUnique,
-            py::arg("weights"), py::arg("n"),
+            "sample_unique", &SamplerT::sampleUnique, py::arg("weights"),
+            py::arg("n"),
             R"(Sample n unique indices according to their weights (no replacement).
 
 Args:
@@ -488,8 +486,8 @@ PYBIND11_MODULE(weight, m) {
     // type
     m.def(
         "create_selector",
-        [](const py::object& weights, uint32_t seed,
-           SelectionStrategyType strategy, double exponent) {
+        [m](const py::object& weights, uint32_t seed,
+            SelectionStrategyType strategy, double exponent) {
             if (py::isinstance<py::list>(weights)) {
                 // Check the type of the first element to determine which
                 // WeightSelector to create
@@ -500,34 +498,35 @@ PYBIND11_MODULE(weight, m) {
                     if (py::isinstance<py::int_>(first)) {
                         std::vector<int> int_weights =
                             weights.cast<std::vector<int>>();
+                        auto strat = create_strategy<int>(
+                            strategy, seed, static_cast<int>(exponent));
                         return py::cast(atom::algorithm::WeightSelector<int>(
-                            int_weights, seed,
-                            create_strategy<int>(strategy, seed,
-                                                 static_cast<int>(exponent))));
+                            int_weights, seed, std::move(strat)));
                     } else if (py::isinstance<py::float_>(first)) {
                         std::vector<double> double_weights =
                             weights.cast<std::vector<double>>();
+                        auto strat =
+                            create_strategy<double>(strategy, seed, exponent);
                         return py::cast(atom::algorithm::WeightSelector<double>(
-                            double_weights, seed,
-                            create_strategy<double>(strategy, seed, exponent)));
+                            double_weights, seed, std::move(strat)));
                     }
                 }
 
                 // Default to float weights if list is empty or type is unclear
+                auto strat = create_strategy<float>(
+                    strategy, seed, static_cast<float>(exponent));
                 return py::cast(atom::algorithm::WeightSelector<float>(
-                    std::vector<float>(), seed,
-                    create_strategy<float>(strategy, seed,
-                                           static_cast<float>(exponent))));
+                    std::vector<float>(), seed, std::move(strat)));
             }
 
             // Default to float weights for any other input type
             try {
                 std::vector<float> float_weights =
                     weights.cast<std::vector<float>>();
+                auto strat = create_strategy<float>(
+                    strategy, seed, static_cast<float>(exponent));
                 return py::cast(atom::algorithm::WeightSelector<float>(
-                    float_weights, seed,
-                    create_strategy<float>(strategy, seed,
-                                           static_cast<float>(exponent))));
+                    float_weights, seed, std::move(strat)));
             } catch (const py::error_already_set&) {
                 throw py::type_error(
                     "Weights must be a list of numeric values");
