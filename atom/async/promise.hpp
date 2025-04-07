@@ -7,12 +7,8 @@
 #include <exception>
 #include <functional>
 #include <future>
-// 移除未使用的头文件
-// #include <memory>
-// #include <optional>
 #include <mutex>
 #include <shared_mutex>
-// #include <type_traits>
 #include <vector>
 
 #include "atom/async/future.hpp"
@@ -68,27 +64,27 @@ concept VoidCallbackInvocable = requires(F f) {
 };
 
 /**
- * @class EnhancedPromise
+ * @class Promise
  * @brief A template class that extends the standard promise with additional
  * features.
  * @tparam T The type of the value that the promise will hold.
  */
 template <typename T>
-class EnhancedPromise {
+class Promise {
 public:
     /**
      * @brief Constructor that initializes the promise and shared future.
      */
-    EnhancedPromise() noexcept;
+    Promise() noexcept;
 
     // Rule of five for proper resource management
-    ~EnhancedPromise() noexcept = default;
-    EnhancedPromise(const EnhancedPromise&) = delete;
-    EnhancedPromise& operator=(const EnhancedPromise&) = delete;
+    ~Promise() noexcept = default;
+    Promise(const Promise&) = delete;
+    Promise& operator=(const Promise&) = delete;
 
     // 实现自定义的移动构造函数和移动赋值运算符，而不是默认
-    EnhancedPromise(EnhancedPromise&& other) noexcept;
-    EnhancedPromise& operator=(EnhancedPromise&& other) noexcept;
+    Promise(Promise&& other) noexcept;
+    Promise& operator=(Promise&& other) noexcept;
 
     /**
      * @brief Gets the enhanced future associated with this promise.
@@ -169,25 +165,25 @@ private:
 };
 
 /**
- * @class EnhancedPromise<void>
- * @brief Specialization of the EnhancedPromise class for void type.
+ * @class Promise<void>
+ * @brief Specialization of the Promise class for void type.
  */
 template <>
-class EnhancedPromise<void> {
+class Promise<void> {
 public:
     /**
      * @brief Constructor that initializes the promise and shared future.
      */
-    EnhancedPromise() noexcept;
+    Promise() noexcept;
 
     // Rule of five for proper resource management
-    ~EnhancedPromise() noexcept = default;
-    EnhancedPromise(const EnhancedPromise&) = delete;
-    EnhancedPromise& operator=(const EnhancedPromise&) = delete;
+    ~Promise() noexcept = default;
+    Promise(const Promise&) = delete;
+    Promise& operator=(const Promise&) = delete;
 
     // 实现自定义的移动构造函数和移动赋值运算符，而不是默认
-    EnhancedPromise(EnhancedPromise&& other) noexcept;
-    EnhancedPromise& operator=(EnhancedPromise&& other) noexcept;
+    Promise(Promise&& other) noexcept;
+    Promise& operator=(Promise&& other) noexcept;
 
     /**
      * @brief Gets the enhanced future associated with this promise.
@@ -265,12 +261,11 @@ private:
 };
 
 template <typename T>
-EnhancedPromise<T>::EnhancedPromise() noexcept
-    : future_(promise_.get_future().share()) {}
+Promise<T>::Promise() noexcept : future_(promise_.get_future().share()) {}
 
 // 实现移动构造函数
 template <typename T>
-EnhancedPromise<T>::EnhancedPromise(EnhancedPromise&& other) noexcept
+Promise<T>::Promise(Promise&& other) noexcept
     : promise_(std::move(other.promise_)), future_(std::move(other.future_)) {
     // 锁住 other 的互斥锁，确保安全移动
     std::unique_lock lock(other.mutex_);
@@ -285,8 +280,7 @@ EnhancedPromise<T>::EnhancedPromise(EnhancedPromise&& other) noexcept
 
 // 实现移动赋值运算符
 template <typename T>
-EnhancedPromise<T>& EnhancedPromise<T>::operator=(
-    EnhancedPromise&& other) noexcept {
+Promise<T>& Promise<T>::operator=(Promise&& other) noexcept {
     if (this != &other) {
         promise_ = std::move(other.promise_);
         future_ = std::move(other.future_);
@@ -306,7 +300,7 @@ EnhancedPromise<T>& EnhancedPromise<T>::operator=(
 }
 
 template <typename T>
-[[nodiscard]] auto EnhancedPromise<T>::getEnhancedFuture() noexcept
+[[nodiscard]] auto Promise<T>::getEnhancedFuture() noexcept
     -> EnhancedFuture<T> {
     return EnhancedFuture<T>(future_);
 }
@@ -314,7 +308,7 @@ template <typename T>
 template <typename T>
 template <typename U>
     requires std::convertible_to<U, T>
-void EnhancedPromise<T>::setValue(U&& value) {
+void Promise<T>::setValue(U&& value) {
     if (isCancelled()) {
         THROW_PROMISE_CANCELLED_EXCEPTION(
             "Cannot set value, promise was cancelled.");
@@ -340,8 +334,7 @@ void EnhancedPromise<T>::setValue(U&& value) {
 }
 
 template <typename T>
-void EnhancedPromise<T>::setException(std::exception_ptr exception) noexcept(
-    false) {
+void Promise<T>::setException(std::exception_ptr exception) noexcept(false) {
     if (isCancelled()) {
         THROW_PROMISE_CANCELLED_EXCEPTION(
             "Cannot set exception, promise was cancelled.");
@@ -369,7 +362,7 @@ void EnhancedPromise<T>::setException(std::exception_ptr exception) noexcept(
 template <typename T>
 template <typename F>
     requires CallbackInvocable<T, F>
-void EnhancedPromise<T>::onComplete(F&& func) {
+void Promise<T>::onComplete(F&& func) {
     // First check if cancelled without acquiring the lock for better
     // performance
     if (isCancelled()) {
@@ -404,7 +397,7 @@ void EnhancedPromise<T>::onComplete(F&& func) {
 }
 
 template <typename T>
-[[nodiscard]] bool EnhancedPromise<T>::cancel() noexcept {
+[[nodiscard]] bool Promise<T>::cancel() noexcept {
     bool expectedValue = false;
     const bool wasCancelled =
         cancelled_.compare_exchange_strong(expectedValue, true);
@@ -428,18 +421,18 @@ template <typename T>
 }
 
 template <typename T>
-[[nodiscard]] auto EnhancedPromise<T>::isCancelled() const noexcept -> bool {
+[[nodiscard]] auto Promise<T>::isCancelled() const noexcept -> bool {
     return cancelled_.load(std::memory_order_acquire);
 }
 
 template <typename T>
-[[nodiscard]] auto EnhancedPromise<T>::getFuture() const noexcept
+[[nodiscard]] auto Promise<T>::getFuture() const noexcept
     -> std::shared_future<T> {
     return future_;
 }
 
 template <typename T>
-void EnhancedPromise<T>::runCallbacks() noexcept {
+void Promise<T>::runCallbacks() noexcept {
     if (isCancelled()) {
         return;
     }
@@ -476,7 +469,7 @@ void EnhancedPromise<T>::runCallbacks() noexcept {
 }
 
 template <typename T>
-[[nodiscard]] auto EnhancedPromise<T>::operator co_await() const noexcept {
+[[nodiscard]] auto Promise<T>::operator co_await() const noexcept {
     struct Awaiter {
         std::shared_future<T> future;
 
@@ -500,11 +493,10 @@ template <typename T>
 }
 
 // Implementation for void specialization
-EnhancedPromise<void>::EnhancedPromise() noexcept
-    : future_(promise_.get_future().share()) {}
+Promise<void>::Promise() noexcept : future_(promise_.get_future().share()) {}
 
 // 实现void特化的移动构造函数
-EnhancedPromise<void>::EnhancedPromise(EnhancedPromise&& other) noexcept
+Promise<void>::Promise(Promise&& other) noexcept
     : promise_(std::move(other.promise_)), future_(std::move(other.future_)) {
     std::unique_lock lock(other.mutex_);
     callbacks_ = std::move(other.callbacks_);
@@ -516,8 +508,7 @@ EnhancedPromise<void>::EnhancedPromise(EnhancedPromise&& other) noexcept
 }
 
 // 实现void特化的移动赋值运算符
-EnhancedPromise<void>& EnhancedPromise<void>::operator=(
-    EnhancedPromise&& other) noexcept {
+Promise<void>& Promise<void>::operator=(Promise&& other) noexcept {
     if (this != &other) {
         promise_ = std::move(other.promise_);
         future_ = std::move(other.future_);
@@ -534,12 +525,12 @@ EnhancedPromise<void>& EnhancedPromise<void>::operator=(
     return *this;
 }
 
-[[nodiscard]] auto EnhancedPromise<void>::getEnhancedFuture() noexcept
+[[nodiscard]] auto Promise<void>::getEnhancedFuture() noexcept
     -> EnhancedFuture<void> {
     return EnhancedFuture<void>(future_);
 }
 
-void EnhancedPromise<void>::setValue() {
+void Promise<void>::setValue() {
     if (isCancelled()) {
         THROW_PROMISE_CANCELLED_EXCEPTION(
             "Cannot set value, promise was cancelled.");
@@ -564,8 +555,7 @@ void EnhancedPromise<void>::setValue() {
     }
 }
 
-void EnhancedPromise<void>::setException(std::exception_ptr exception) noexcept(
-    false) {
+void Promise<void>::setException(std::exception_ptr exception) noexcept(false) {
     if (isCancelled()) {
         THROW_PROMISE_CANCELLED_EXCEPTION(
             "Cannot set exception, promise was cancelled.");
@@ -592,7 +582,7 @@ void EnhancedPromise<void>::setException(std::exception_ptr exception) noexcept(
 
 template <typename F>
     requires VoidCallbackInvocable<F>
-void EnhancedPromise<void>::onComplete(F&& func) {
+void Promise<void>::onComplete(F&& func) {
     // First check if cancelled without acquiring the lock for better
     // performance
     if (isCancelled()) {
@@ -626,7 +616,7 @@ void EnhancedPromise<void>::onComplete(F&& func) {
     }
 }
 
-[[nodiscard]] bool EnhancedPromise<void>::cancel() noexcept {
+[[nodiscard]] bool Promise<void>::cancel() noexcept {
     bool expectedValue = false;
     const bool wasCancelled =
         cancelled_.compare_exchange_strong(expectedValue, true);
@@ -649,16 +639,16 @@ void EnhancedPromise<void>::onComplete(F&& func) {
     return wasCancelled;
 }
 
-[[nodiscard]] auto EnhancedPromise<void>::isCancelled() const noexcept -> bool {
+[[nodiscard]] auto Promise<void>::isCancelled() const noexcept -> bool {
     return cancelled_.load(std::memory_order_acquire);
 }
 
-[[nodiscard]] auto EnhancedPromise<void>::getFuture() const noexcept
+[[nodiscard]] auto Promise<void>::getFuture() const noexcept
     -> std::shared_future<void> {
     return future_;
 }
 
-[[nodiscard]] auto EnhancedPromise<void>::operator co_await() const noexcept {
+[[nodiscard]] auto Promise<void>::operator co_await() const noexcept {
     struct Awaiter {
         std::shared_future<void> future;
 
@@ -681,7 +671,7 @@ void EnhancedPromise<void>::onComplete(F&& func) {
     return Awaiter{future_};
 }
 
-void EnhancedPromise<void>::runCallbacks() noexcept {
+void Promise<void>::runCallbacks() noexcept {
     if (isCancelled()) {
         return;
     }

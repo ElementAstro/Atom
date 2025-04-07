@@ -18,10 +18,7 @@ Description: A simple wrapper of std::jthread
 #include <chrono>
 #include <concepts>
 #include <coroutine>
-// 移除未使用的头文件
-// #include <functional>
 #include <future>
-// #include <mutex>
 #include <stdexcept>
 #include <stop_token>
 #include <thread>
@@ -139,8 +136,8 @@ public:
      */
     template <typename R, typename Callable, typename... Args>
         requires ThreadCallable<Callable, Args...>
-    [[nodiscard]] auto startWithResult(Callable&& func,
-                                       Args&&... args) -> std::future<R> {
+    [[nodiscard]] auto startWithResult(Callable&& func, Args&&... args)
+        -> std::future<R> {
         auto task = std::make_shared<std::packaged_task<R()>>(
             [func = std::forward<Callable>(func),
              ... args = std::forward<Args>(args)]() mutable -> R {
@@ -195,8 +192,9 @@ public:
      * @return true if joined successfully, false if timed out
      */
     template <typename Rep, typename Period>
-    [[nodiscard]] auto tryJoinFor(const std::chrono::duration<Rep, Period>&
-                                      timeout_duration) noexcept -> bool {
+    [[nodiscard]] auto tryJoinFor(
+        const std::chrono::duration<Rep, Period>& timeout_duration) noexcept
+        -> bool {
         // Implement a polling-based join with timeout since jthread doesn't
         // provide join_for
         auto start = std::chrono::steady_clock::now();
