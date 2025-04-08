@@ -51,18 +51,19 @@ Examples:
         R"(Represents a 2D grid map with obstacles for pathfinding.)")
         .def(py::init<int, int>(), py::arg("width"), py::arg("height"),
              "Constructs an empty GridMap with specified width and height.")
-        // Fixed: Handle vector<bool> specially since it doesn't have contiguous storage
-        .def(py::init(
-                 [](const std::vector<bool>& obstacles, int width, int height) {
-                     // Convert to vector<uint8_t> first
-                     std::vector<uint8_t> temp_obstacles;
-                     temp_obstacles.reserve(obstacles.size());
-                     for (bool b : obstacles) {
-                         temp_obstacles.push_back(b ? 1 : 0);
-                     }
-                     return atom::algorithm::GridMap(
-                         std::span<const uint8_t>(temp_obstacles), width, height);
-                 }),
+        // Fixed: Handle vector<bool> specially since it doesn't have contiguous
+        // storage
+        .def(py::init([](const std::vector<bool>& obstacles, int width,
+                         int height) {
+                 // Convert to vector<uint8_t> first
+                 std::vector<uint8_t> temp_obstacles;
+                 temp_obstacles.reserve(obstacles.size());
+                 for (bool b : obstacles) {
+                     temp_obstacles.push_back(b ? 1 : 0);
+                 }
+                 return atom::algorithm::GridMap(
+                     std::span<const uint8_t>(temp_obstacles), width, height);
+             }),
              py::arg("obstacles"), py::arg("width"), py::arg("height"),
              "Constructs a GridMap with predefined obstacles.")
         .def("neighbors", &atom::algorithm::GridMap::neighbors, py::arg("p"),
@@ -235,38 +236,35 @@ Examples:
            const atom::algorithm::Point& start,
            const atom::algorithm::Point& goal,
            atom::algorithm::PathFinder::HeuristicType heuristicType) {
-            // Verify non-empty grid
             if (obstacles.empty() || obstacles[0].empty()) {
                 throw std::invalid_argument("Obstacle grid cannot be empty");
             }
 
-            // Create a flat obstacles vector
             int height = obstacles.size();
             int width = obstacles[0].size();
-            std::vector<bool> flat_obstacles;
+
+            // Convert to vector<uint8_t> for proper span conversion
+            std::vector<uint8_t> flat_obstacles;
             flat_obstacles.reserve(width * height);
 
             for (const auto& row : obstacles) {
-                // Fixed comparison of signed/unsigned integers
                 if (static_cast<int>(row.size()) != width) {
                     throw std::invalid_argument(
                         "All rows must have the same width");
                 }
-                flat_obstacles.insert(flat_obstacles.end(), row.begin(),
-                                      row.end());
+                for (bool b : row) {
+                    flat_obstacles.push_back(b ? 1 : 0);
+                }
             }
 
-            atom::algorithm::GridMap map(std::span<const bool>(flat_obstacles),
-                                         width, height);
+            // Create span from uint8_t vector
+            atom::algorithm::GridMap map(
+                std::span<const uint8_t>(flat_obstacles), width, height);
+
             auto path = atom::algorithm::PathFinder::findGridPath(
                 map, start, goal, heuristicType);
 
-            if (path) {
-                return *path;
-            } else {
-                // Return empty list if no path found
-                return std::vector<atom::algorithm::Point>();
-            }
+            return path.value_or(std::vector<atom::algorithm::Point>());
         },
         py::arg("obstacles"), py::arg("start"), py::arg("goal"),
         py::arg("heuristic_type") =

@@ -171,7 +171,7 @@ public:
      * @param signal The signal ID to check
      * @return true if the signal has registered handlers
      */
-    bool hasHandlersForSignal(SignalID signal) const;
+    bool hasHandlersForSignal(SignalID signal);
 
     /**
      * @brief Get statistics for a specific signal
@@ -179,7 +179,7 @@ public:
      * @param signal The signal to get stats for
      * @return const SignalStats& Reference to the stats for the signal
      */
-    const SignalStats& getSignalStats(SignalID signal) const;
+    const SignalStats& getSignalStats(SignalID signal);
 
     /**
      * @brief Reset statistics for all or a specific signal

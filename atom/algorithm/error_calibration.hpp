@@ -8,7 +8,6 @@
 #include <execution>
 #include <fstream>
 #include <functional>
-#include <future>
 #include <memory_resource>
 #include <mutex>
 #include <numeric>
@@ -134,7 +133,11 @@ private:
             T(0), std::plus<>{},
             [](T residual) { return residual * residual; });
 
-        r_squared_ = ssTotal > 0 ? 1 - (ssResidual / ssTotal) : std::nullopt;
+        if (ssTotal > 0) {
+            r_squared_ = 1 - (ssResidual / ssTotal);
+        } else {
+            r_squared_ = std::nullopt;
+        }
     }
 
     using NonlinearFunction = std::function<T(T, const std::vector<T>&)>;
@@ -571,10 +574,11 @@ public:
      * @param confidence_level Confidence level for the interval
      * @return Pair of lower and upper bounds of the confidence interval
      */
-    auto bootstrapConfidenceInterval(
-        const std::vector<T>& measured, const std::vector<T>& actual,
-        int n_iterations = 1000,
-        double confidence_level = 0.95) -> std::pair<T, T> {
+    auto bootstrapConfidenceInterval(const std::vector<T>& measured,
+                                     const std::vector<T>& actual,
+                                     int n_iterations = 1000,
+                                     double confidence_level = 0.95)
+        -> std::pair<T, T> {
         if (n_iterations <= 0) {
             THROW_INVALID_ARGUMENT("Number of iterations must be positive.");
         }
@@ -641,10 +645,10 @@ public:
      * @return Tuple of mean residual, standard deviation, and threshold
      */
     auto outlierDetection(const std::vector<T>& measured,
-                          const std::vector<T>& actual,
-                          T threshold = 2.0) -> std::tuple<T, T, T> {
+                          const std::vector<T>& actual, T threshold = 2.0)
+        -> std::tuple<T, T, T> {
         if (residuals_.empty()) {
-            THROW_RUNTIME_ERROR("Please call calculateMetrics() first.");
+            calculateMetrics(measured, actual);
         }
 
         T meanResidual =
@@ -657,7 +661,7 @@ public:
                             }) /
             residuals_.size());
 
-#if ENABLE_DEBUG
+#if ATOM_ENABLE_DEBUG
         std::cout << "Detected outliers:" << std::endl;
         for (size_t i = 0; i < residuals_.size(); ++i) {
             if (std::abs(residuals_[i] - meanResidual) > threshold * std_dev) {
@@ -733,10 +737,6 @@ public:
             THROW_RUNTIME_ERROR("All cross-validation folds failed.");
         }
 
-        T avgMse = std::accumulate(mseValues.begin(), mseValues.end(), T(0)) /
-                   mseValues.size();
-        T avgMae = std::accumulate(maeValues.begin(), maeValues.end(), T(0)) /
-                   maeValues.size();
         T avgRSquared = 0;
         if (!rSquaredValues.empty()) {
             avgRSquared = std::accumulate(rSquaredValues.begin(),
@@ -744,7 +744,11 @@ public:
                           rSquaredValues.size();
         }
 
-#if ENABLE_DEBUG
+#if ATOM_ENABLE_DEBUG
+        T avgMse = std::accumulate(mseValues.begin(), mseValues.end(), T(0)) /
+                   mseValues.size();
+        T avgMae = std::accumulate(maeValues.begin(), maeValues.end(), T(0)) /
+                   maeValues.size();
         std::cout << "K-fold cross-validation results (k = " << k
                   << "):" << std::endl;
         std::cout << "Average MSE: " << avgMse << std::endl;

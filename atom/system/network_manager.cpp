@@ -2,9 +2,6 @@
 
 #include <algorithm>
 #include <array>
-#include <fstream>
-#include <sstream>
-#include <unordered_map>
 
 #ifdef _WIN32
 // clang-format off
@@ -33,7 +30,9 @@
 
 #include "atom/error/exception.hpp"
 #include "atom/log/loguru.hpp"
+#include "atom/macro.hpp"
 #include "atom/system/command.hpp"
+#include "atom/utils/string.hpp"
 #include "atom/utils/to_string.hpp"
 
 namespace atom::system {
@@ -107,14 +106,14 @@ auto NetworkManager::getNetworkInterfaces() -> std::vector<NetworkInterface> {
     std::vector<BYTE> buffer(outBufLen);
     ULONG flags = GAA_FLAG_INCLUDE_PREFIX;
     PIP_ADAPTER_ADDRESSES pAddresses =
-        reinterpret_cast<PIP_ADAPTER_ADDRESSES*>(buffer.data());
+        reinterpret_cast<PIP_ADAPTER_ADDRESSES>(buffer.data());
     ULONG family = AF_UNSPEC;
 
     DWORD dwRetVal =
         GetAdaptersAddresses(family, flags, nullptr, pAddresses, &outBufLen);
     if (dwRetVal == ERROR_BUFFER_OVERFLOW) {
         buffer.resize(outBufLen);
-        pAddresses = reinterpret_cast<PIP_ADAPTER_ADDRESSES*>(buffer.data());
+        pAddresses = reinterpret_cast<PIP_ADAPTER_ADDRESSES>(buffer.data());
         dwRetVal = GetAdaptersAddresses(family, flags, nullptr, pAddresses,
                                         &outBufLen);
     }
@@ -299,7 +298,8 @@ void NetworkManager::disableInterface(const std::string& interfaceName) {
 #ifdef _WIN32
     MIB_IFROW ifRow;
     memset(&ifRow, 0, sizeof(MIB_IFROW));
-    strncpy_s(reinterpret_cast<char*>(ifRow.wszName), interfaceName.c_str(),
+    strncpy_s(reinterpret_cast<char*>(ifRow.wszName),
+              MAX_ADAPTER_NAME_LENGTH + 4, interfaceName.c_str(),
               interfaceName.size());
 
     if (GetIfEntry(&ifRow) == NO_ERROR) {
@@ -388,7 +388,7 @@ void NetworkManager::setDNSServers(const std::vector<std::string>& dnsServers) {
     ULONG outBufLen = 15000;
     std::vector<BYTE> buffer(outBufLen);
     PIP_ADAPTER_ADDRESSES pAddresses =
-        reinterpret_cast<PIP_ADAPTER_ADDRESSES*>(buffer.data());
+        reinterpret_cast<PIP_ADAPTER_ADDRESSES>(buffer.data());
     ULONG family = AF_UNSPEC;
     ULONG flags = GAA_FLAG_INCLUDE_PREFIX;
 
@@ -396,7 +396,7 @@ void NetworkManager::setDNSServers(const std::vector<std::string>& dnsServers) {
         GetAdaptersAddresses(family, flags, nullptr, pAddresses, &outBufLen);
     if (dwRetVal == ERROR_BUFFER_OVERFLOW) {
         buffer.resize(outBufLen);
-        pAddresses = reinterpret_cast<PIP_ADAPTER_ADDRESSES*>(buffer.data());
+        pAddresses = reinterpret_cast<PIP_ADAPTER_ADDRESSES>(buffer.data());
         dwRetVal = GetAdaptersAddresses(family, flags, nullptr, pAddresses,
                                         &outBufLen);
     }
@@ -419,15 +419,31 @@ void NetworkManager::setDNSServers(const std::vector<std::string>& dnsServers) {
         // Allocate and set DNS servers
         // Note: This is a simplified implementation. Proper implementation
         // requires more detailed handling.
-        OVERLAPPED overlapped = {0};
-        if (!SetAdapterDnsServerAddresses(
-                pCurrAddresses->AdapterName, IPv4,
-                dnsServers.empty()
-                    ? nullptr
-                    : reinterpret_cast<PIP_ADDR_STRING>(dnsList.data()),
-                dnsServers.empty() ? 0 : dnsList.size())) {
+        // Use netsh command as a workaround for setting DNS servers
+        std::wstring command =
+            L"netsh interface ip set dns name=\"" +
+            std::wstring(pCurrAddresses->FriendlyName) + L"\" static " +
+            (dnsServers.empty()
+                 ? L"none"
+                 : std::wstring(dnsServers[0].begin(), dnsServers[0].end()));
+
+        int result =
+            executeCommandWithStatus(atom::utils::wstringToString(command))
+                .second;
+        if (result != 0) {
             THROW_RUNTIME_ERROR("Failed to set DNS servers for adapter: " +
                                 std::string(pCurrAddresses->AdapterName));
+        }
+
+        // 设置额外的 DNS 服务器
+        for (size_t i = 1; i < dnsServers.size(); i++) {
+            std::wstring addCommand =
+                L"netsh interface ip add dns name=\"" +
+                std::wstring(pCurrAddresses->FriendlyName) + L"\" " +
+                std::wstring(dnsServers[i].begin(), dnsServers[i].end()) +
+                L" index=" + std::to_wstring(i + 1);
+            ATOM_UNUSED_RESULT(executeCommandWithStatus(
+                atom::utils::wstringToString(addCommand)));
         }
     }
 #else
@@ -545,7 +561,7 @@ auto getNetworkConnections(int pid) -> std::vector<NetworkConnection> {
     if (GetExtendedTcpTable(pTCPInfo, &dwSize, false, AF_INET,
                             TCP_TABLE_OWNER_PID_ALL, 0) == NO_ERROR) {
         for (DWORD i = 0; i < pTCPInfo->dwNumEntries; ++i) {
-            if (pTCPInfo->table[i].dwOwningPid == pid) {
+            if (static_cast<int>(pTCPInfo->table[i].dwOwningPid) == pid) {
                 NetworkConnection conn;
                 conn.protocol = "TCP";
                 conn.localAddress =

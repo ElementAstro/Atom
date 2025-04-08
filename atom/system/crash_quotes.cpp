@@ -251,8 +251,9 @@ bool QuoteManager::saveQuotesToJson(const std::string &filename) const {
     }
 }
 
-auto QuoteManager::searchQuotes(const std::string &keyword, bool caseSensitive)
-    const -> std::vector<Quote> {
+auto QuoteManager::searchQuotes(const std::string &keyword,
+                                bool caseSensitive) const
+    -> std::vector<Quote> {
     LOG_F(INFO, "Searching quotes with keyword: {} (case sensitive: {})",
           keyword, caseSensitive ? "yes" : "no");
 
@@ -407,9 +408,10 @@ auto QuoteManager::getRandomQuoteObject() const -> std::optional<Quote> {
         return std::nullopt;
     }
 
+    std::random_device rd;
     int quoteId =
         utils::Random<std::mt19937, std::uniform_int_distribution<int>>(
-            0, quotes_.size() - 1)();
+            rd(), 0, quotes_.size() - 1)();
 
     return quotes_[quoteId];
 }

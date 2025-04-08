@@ -209,7 +209,7 @@ PYBIND11_MODULE(annealing, m) {
             py::arg("condition"),
             "Set a function that determines when to stop optimization "
             "(iteration, energy, solution)")
-        .def("optimize", &TspAnnealing::optimize, py::arg("num_threads") = 1,
+        .def("optimize", &TspAnnealing::optimize,
              "Run the optimization with optional parallel threads")
         .def("get_best_energy", &TspAnnealing::getBestEnergy,
              "Get the energy of the best solution found")

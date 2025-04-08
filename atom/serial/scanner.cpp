@@ -1,12 +1,7 @@
 #include "scanner.hpp"
 
 #ifdef _WIN32
-#include <devguid.h>
-#include <setupapi.h>
-#include <windows.h>
-#include <algorithm>
 #include <regex>
-#pragma comment(lib, "setupapi.lib")
 #else
 #include <fcntl.h>
 #include <libudev.h>
@@ -113,8 +108,7 @@ SerialPortScanner::list_available_ports([[maybe_unused]] bool highlight_ch340) {
                 }
             }
 
-            // 获取端口名称（从注册表）
-            HKEY key;
+            HKEY key = nullptr;
             if (SetupDiOpenDevRegKey(device_info_set, &device_info_data,
                                      DICS_FLAG_GLOBAL, 0, DIREG_DEV,
                                      KEY_READ)) {
@@ -268,7 +262,7 @@ SerialPortScanner::get_port_details(const std::string& port_name) {
                 DWORD property_type;
                 DWORD required_size;
 
-                HKEY key;
+                HKEY key = nullptr;
                 if (SetupDiOpenDevRegKey(device_info_set, &device_info_data,
                                          DICS_FLAG_GLOBAL, 0, DIREG_DEV,
                                          KEY_READ)) {

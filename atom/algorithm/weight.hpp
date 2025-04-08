@@ -174,7 +174,8 @@ public:
 
     public:
         explicit RandomSelectionStrategy(size_t max_index)
-            : random_index_(0, max_index > 0 ? max_index - 1 : 0),
+            : random_index_(static_cast<size_t>(0),
+                            max_index > 0 ? max_index - 1 : 0),
               max_index_(max_index) {}
 
         RandomSelectionStrategy(size_t max_index, uint32_t seed)
@@ -189,7 +190,8 @@ public:
         void updateMaxIndex(size_t new_max_index) {
             max_index_ = new_max_index;
             random_index_ = decltype(random_index_)(
-                0, new_max_index > 0 ? new_max_index - 1 : 0);
+                static_cast<size_t>(0),
+                new_max_index > 0 ? new_max_index - 1 : 0);
         }
 
         [[nodiscard]] auto clone() const
@@ -258,7 +260,8 @@ public:
 
     public:
         explicit PowerLawSelectionStrategy(T exponent = 2.0)
-            : random_(min_value, max_value), exponent_(exponent) {
+            : random_(static_cast<T>(min_value), static_cast<T>(max_value)),
+              exponent_(exponent) {
             if (exponent <= 0) {
                 throw WeightError("Exponent must be positive");
             }
@@ -317,8 +320,8 @@ public:
          * @param n Number of samples to draw
          * @return Vector of sampled indices
          */
-        [[nodiscard]] auto sample(std::span<const T> weights,
-                                  size_t n) const -> std::vector<size_t> {
+        [[nodiscard]] auto sample(std::span<const T> weights, size_t n) const
+            -> std::vector<size_t> {
             if (weights.empty()) {
                 throw WeightError("Cannot sample from empty weights");
             }
@@ -389,8 +392,9 @@ public:
         }
 
     private:
-        [[nodiscard]] auto sampleUniqueRejection(
-            std::span<const T> weights, size_t n) const -> std::vector<size_t> {
+        [[nodiscard]] auto sampleUniqueRejection(std::span<const T> weights,
+                                                 size_t n) const
+            -> std::vector<size_t> {
             std::vector<size_t> indices(weights.size());
             std::iota(indices.begin(), indices.end(), 0);
 
@@ -435,8 +439,9 @@ public:
             return results;
         }
 
-        [[nodiscard]] auto sampleUniqueShuffle(
-            std::span<const T> weights, size_t n) const -> std::vector<size_t> {
+        [[nodiscard]] auto sampleUniqueShuffle(std::span<const T> weights,
+                                               size_t n) const
+            -> std::vector<size_t> {
             std::vector<size_t> indices(weights.size());
             std::iota(indices.begin(), indices.end(), 0);
 
@@ -648,7 +653,7 @@ public:
      * @return Selected index
      * @throws WeightError if total weight is zero or negative
      */
-    [[nodiscard]] auto select() const -> size_t {
+    [[nodiscard]] auto select() -> size_t {
         std::shared_lock lock(mutex_);
 
         if (weights_.empty()) {
@@ -1026,9 +1031,16 @@ public:
         }
         oss << "]\n";
 #else
-        oss << std::format("[{:.2f}", weights_.front());
-        for (auto it = weights_.begin() + 1; it != weights_.end(); ++it) {
-            oss << std::format(", {:.2f}", *it);
+        if constexpr (std::is_floating_point_v<T>) {
+            oss << std::format("[{:.2f}", weights_.front());
+            for (auto it = weights_.begin() + 1; it != weights_.end(); ++it) {
+                oss << std::format(", {:.2f}", *it);
+            }
+        } else {
+            oss << '[' << weights_.front();
+            for (auto it = weights_.begin() + 1; it != weights_.end(); ++it) {
+                oss << ", " << *it;
+            }
         }
         oss << "]\n";
 #endif

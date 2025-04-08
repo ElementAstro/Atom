@@ -96,12 +96,16 @@ public:
      * @param seed A seed value to initialize the engine.
      * @param args Arguments to initialize the distribution.
      */
-    template <typename Seed, typename... Args>
-    explicit Random(Seed&& seed, Args&&... args) noexcept(
-        std::is_nothrow_constructible_v<EngineType, Seed> &&
-        std::is_nothrow_constructible_v<DistributionType, Args...>)
-        : engine_(std::forward<Seed>(seed)),
-          distribution_(std::forward<Args>(args)...) {}
+    template <typename... Args>
+    explicit Random(
+        typename EngineType::result_type seed,
+        Args&&... args) noexcept(std::
+                                     is_nothrow_constructible_v<
+                                         EngineType,
+                                         typename EngineType::result_type> &&
+                                 std::is_nothrow_constructible_v<
+                                     DistributionType, Args...>)
+        : engine_(seed), distribution_(std::forward<Args>(args)...) {}
 
     /**
      * @brief Re-seeds the engine.
@@ -234,8 +238,9 @@ public:
  * @return std::string Random string
  * @throws InvalidArgumentException if length is invalid
  */
-[[nodiscard]] auto generateRandomString(
-    int length, const std::string& charset = "") -> std::string;
+[[nodiscard]] auto generateRandomString(int length,
+                                        const std::string& charset = "")
+    -> std::string;
 
 /**
  * @brief Generate a cryptographically secure random string

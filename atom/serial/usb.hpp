@@ -1,4 +1,14 @@
-#pragma once
+/**
+ * @file usb.hpp
+ * @brief USB device communication interface using libusb
+ *
+ * This header provides a C++ wrapper around libusb-1.0 for USB device
+ * communication, featuring asynchronous operations using C++20 coroutines and
+ * hotplug detection.
+ */
+
+#ifndef ATOM_SERIAL_USB_HPP
+#define ATOM_SERIAL_USB_HPP
 
 #include <libusb-1.0/libusb.h>
 #include <atomic>
@@ -6,11 +16,8 @@
 #include <coroutine>
 #include <cstring>
 #include <functional>
-#include <iomanip>
-#include <iostream>
 #include <memory>
 #include <span>
-#include <sstream>
 #include <string>
 #include <system_error>
 #include <thread>
@@ -22,26 +29,59 @@ class UsbContext;
 class UsbDevice;
 class UsbTransfer;
 
+/**
+ * @brief Concept defining requirements for hotplug event handlers
+ *
+ * Any type used as a hotplug handler must implement onHotplugEvent method
+ * that takes a UsbDevice reference and arrival/departure flag.
+ */
 template <typename T>
 concept HotplugHandler = requires(T handler, UsbDevice& device, bool arrived) {
     { handler.onHotplugEvent(device, arrived) } -> std::same_as<void>;
 };
 
+/**
+ * @brief Exception class for USB-related errors
+ *
+ * Wraps libusb error codes with descriptive messages and integrates
+ * with the C++ standard error system.
+ */
 class UsbException : public std::system_error {
 public:
+    /**
+     * @brief Construct with libusb error code
+     * @param error_code The libusb error code
+     */
     explicit UsbException(int error_code)
         : std::system_error(error_code, std::system_category(),
                             libusb_error_name(error_code)) {}
 
+    /**
+     * @brief Construct with error code and custom message
+     * @param error_code The libusb error code
+     * @param what_arg Custom error description
+     */
     explicit UsbException(int error_code, const std::string& what_arg)
         : std::system_error(error_code, std::system_category(), what_arg) {}
 };
 
+/**
+ * @brief Coroutine operation for asynchronous USB transfers
+ *
+ * Represents an asynchronous USB operation that can be awaited.
+ * The coroutine suspends until the transfer completes.
+ */
 struct UsbOperation {
     struct promise_type;
     using handle_type = std::coroutine_handle<promise_type>;
 
+    /**
+     * @brief Promise type for the UsbOperation coroutine
+     */
     struct promise_type {
+        /**
+         * @brief Creates the return object for the coroutine
+         */
         UsbOperation get_return_object() {
             return UsbOperation{handle_type::from_promise(*this)};
         }
@@ -51,12 +91,12 @@ struct UsbOperation {
         void return_void() {}
         void unhandled_exception() { exception_ptr = std::current_exception(); }
 
-        std::exception_ptr exception_ptr;
+        std::exception_ptr exception_ptr;  ///< Stores any unhandled exceptions
     };
 
-    handle_type handle;
+    handle_type handle;  ///< Coroutine handle
 
-    UsbOperation(handle_type h) : handle(h) {}
+    explicit UsbOperation(handle_type h) : handle(h) {}
     UsbOperation(const UsbOperation&) = delete;
     UsbOperation& operator=(const UsbOperation&) = delete;
 
@@ -67,70 +107,57 @@ struct UsbOperation {
     }
 };
 
+/**
+ * @brief Wrapper for libusb transfer operations
+ *
+ * Manages USB transfers with support for control, bulk read and write
+ * operations. Provides asynchronous operation through coroutines.
+ */
 class UsbTransfer {
 public:
-    explicit UsbTransfer()
-        : transfer_(libusb_alloc_transfer(0)),
-          completed_(false),
-          data_buffer_(nullptr) {
-        if (!transfer_) {
-            throw UsbException(LIBUSB_ERROR_NO_MEM,
-                               "Failed to allocate transfer");
-        }
-    }
-
-    ~UsbTransfer() {
-        if (transfer_) {
-            if (!completed_) {
-                libusb_cancel_transfer(transfer_);
-            }
-            libusb_free_transfer(transfer_);
-            transfer_ = nullptr;
-        }
-    }
+    explicit UsbTransfer();
+    ~UsbTransfer();
 
     UsbTransfer(const UsbTransfer&) = delete;
     UsbTransfer& operator=(const UsbTransfer&) = delete;
 
+    /**
+     * @brief Prepares a control transfer
+     * @param handle Device handle
+     * @param request_type Request type field
+     * @param request Request field
+     * @param value Value field
+     * @param index Index field
+     * @param data Data buffer
+     * @param timeout Timeout in milliseconds
+     */
     void prepareControl(libusb_device_handle* handle, uint8_t request_type,
                         uint8_t request, uint16_t value, uint16_t index,
-                        std::span<uint8_t> data, unsigned int timeout) {
-        data_buffer_ = data.data();
-        buffer_length_ = data.size();
+                        std::span<uint8_t> data, unsigned int timeout);
 
-        libusb_fill_control_setup(setup_buffer_, request_type, request, value,
-                                  index, data.size());
-
-        memcpy(setup_buffer_ + LIBUSB_CONTROL_SETUP_SIZE, data.data(),
-               data.size());
-
-        libusb_fill_control_transfer(transfer_, handle, setup_buffer_,
-                                     &UsbTransfer::transferCallback, this,
-                                     timeout);
-    }
-
+    /**
+     * @brief Prepares a bulk write transfer
+     * @param handle Device handle
+     * @param endpoint Endpoint address
+     * @param data Data to write
+     * @param timeout Timeout in milliseconds
+     */
     void prepareBulkWrite(libusb_device_handle* handle, unsigned char endpoint,
-                          std::span<const uint8_t> data, unsigned int timeout) {
-        data_copy_.assign(data.begin(), data.end());
-        data_buffer_ = data_copy_.data();
-        buffer_length_ = data_copy_.size();
+                          std::span<const uint8_t> data, unsigned int timeout);
 
-        libusb_fill_bulk_transfer(
-            transfer_, handle, endpoint,
-            const_cast<unsigned char*>(data_buffer_), buffer_length_,
-            &UsbTransfer::transferCallback, this, timeout);
-    }
-
+    /**
+     * @brief Prepares a bulk read transfer
+     * @param handle Device handle
+     * @param endpoint Endpoint address
+     * @param data Buffer for read data
+     * @param timeout Timeout in milliseconds
+     */
     void prepareBulkRead(libusb_device_handle* handle, unsigned char endpoint,
-                         std::span<uint8_t> data, unsigned int timeout) {
-        data_buffer_ = data.data();
-        buffer_length_ = data.size();
+                         std::span<uint8_t> data, unsigned int timeout);
 
-        libusb_fill_bulk_transfer(transfer_, handle, endpoint, data.data(),
-                                  data.size(), &UsbTransfer::transferCallback,
-                                  this, timeout);
-    }
-
+    /**
+     * @brief Awaiter for transfer submission
+     */
     struct SubmitAwaiter {
         UsbTransfer& transfer;
 
@@ -149,14 +176,23 @@ public:
         void await_resume() const noexcept {}
     };
 
-    SubmitAwaiter submit() {
-        completed_ = false;
-        return SubmitAwaiter{*this};
-    }
+    /**
+     * @brief Submits the transfer for execution
+     * @return Awaiter for the transfer operation
+     */
+    SubmitAwaiter submit();
 
-    libusb_transfer_status getStatus() const { return status_; }
+    /**
+     * @brief Gets the transfer status
+     * @return libusb_transfer_status value
+     */
+    libusb_transfer_status getStatus() const;
 
-    int getActualLength() const { return actual_length_; }
+    /**
+     * @brief Gets the actual number of bytes transferred
+     * @return Number of bytes actually transferred
+     */
+    int getActualLength() const;
 
 private:
     libusb_transfer* transfer_;
@@ -169,57 +205,30 @@ private:
     int buffer_length_{0};
     std::coroutine_handle<> completion_handle_;
 
-    static void transferCallback(libusb_transfer* transfer) {
-        auto* self = static_cast<UsbTransfer*>(transfer->user_data);
-        self->status_ = static_cast<libusb_transfer_status>(transfer->status);
-        self->actual_length_ = transfer->actual_length;
-        self->completed_ = true;
-
-        if (self->completion_handle_) {
-            self->completion_handle_.resume();
-        }
-    }
+    static void transferCallback(libusb_transfer* transfer);
 };
 
+/**
+ * @brief Manages the USB context and hotplug detection
+ *
+ * Wraps libusb context operations and provides hotplug detection capabilities.
+ */
 class UsbContext {
 public:
-    UsbContext() : hotplug_running_(false) {
-        int result = libusb_init(&context_);
-        if (result != LIBUSB_SUCCESS) {
-            throw UsbException(result, "Failed to initialize libusb context");
-        }
-    }
-
-    ~UsbContext() {
-        stopHotplugDetection();
-        libusb_exit(context_);
-    }
+    UsbContext();
+    ~UsbContext();
 
     UsbContext(const UsbContext&) = delete;
     UsbContext& operator=(const UsbContext&) = delete;
 
-    auto getDevices() {
-        libusb_device** device_list;
-        ssize_t count = libusb_get_device_list(context_, &device_list);
+    auto getDevices() -> std::vector<std::shared_ptr<UsbDevice>> ;
 
-        if (count < 0) {
-            throw UsbException(static_cast<int>(count),
-                               "Failed to get device list");
-        }
-
-        std::vector<std::shared_ptr<UsbDevice>> devices;
-        for (ssize_t i = 0; i < count; ++i) {
-            try {
-                devices.push_back(
-                    std::make_shared<UsbDevice>(*this, device_list[i]));
-            } catch (const UsbException& ex) {
-            }
-        }
-
-        libusb_free_device_list(device_list, 1);
-        return devices;
-    }
-
+    /**
+     * @brief Starts hotplug detection with the given handler
+     * @tparam H Handler type satisfying HotplugHandler concept
+     * @param handler Reference to the handler object
+     * @throws UsbException if hotplug is not supported or registration fails
+     */
     template <HotplugHandler H>
     void startHotplugDetection(H& handler) {
         if (!libusb_has_capability(LIBUSB_CAP_HAS_HOTPLUG)) {
@@ -272,24 +281,16 @@ public:
         });
     }
 
-    void stopHotplugDetection() {
-        if (!hotplug_running_) {
-            return;
-        }
+    /**
+     * @brief Stops hotplug detection
+     */
+    void stopHotplugDetection();
 
-        hotplug_running_ = false;
-
-        if (hotplug_thread_.joinable()) {
-            hotplug_thread_.join();
-        }
-
-        if (hotplug_handle_ != -1) {
-            libusb_hotplug_deregister_callback(context_, hotplug_handle_);
-            hotplug_handle_ = -1;
-        }
-    }
-
-    libusb_context* getNativeContext() const { return context_; }
+    /**
+     * @brief Gets the native libusb context
+     * @return Pointer to libusb_context
+     */
+    libusb_context* getNativeContext() const;
 
 private:
     libusb_context* context_{nullptr};
@@ -303,202 +304,94 @@ private:
     friend class UsbTransfer;
 };
 
+/**
+ * @brief Represents a USB device
+ *
+ * Provides methods for device control, bulk transfers, and interface
+ * management.
+ */
 class UsbDevice {
 public:
-    UsbDevice(UsbContext& context, libusb_device* device)
-        : context_(context), device_(device), handle_(nullptr) {
-        if (device_) {
-            libusb_ref_device(device_);
-        }
-    }
-
-    ~UsbDevice() {
-        close();
-        if (device_) {
-            libusb_unref_device(device_);
-            device_ = nullptr;
-        }
-    }
+    /**
+     * @brief Construct from libusb device
+     * @param context USB context
+     * @param device libusb device pointer
+     */
+    UsbDevice(UsbContext& context, libusb_device* device);
+    ~UsbDevice();
 
     UsbDevice(const UsbDevice&) = delete;
     UsbDevice& operator=(const UsbDevice&) = delete;
 
-    void open() {
-        if (!device_) {
-            throw UsbException(LIBUSB_ERROR_NO_DEVICE, "Invalid device");
-        }
+    /**
+     * @brief Opens the device for communication
+     */
+    void open();
 
-        if (handle_) {
-            return;
-        }
+    /**
+     * @brief Closes the device
+     */
+    void close();
 
-        int result = libusb_open(device_, &handle_);
-        if (result != LIBUSB_SUCCESS) {
-            throw UsbException(result, "Failed to open device");
-        }
-    }
+    /**
+     * @brief Claims an interface on the device
+     * @param interface_number Interface number to claim
+     */
+    void claimInterface(int interface_number);
 
-    void close() {
-        if (handle_) {
-            libusb_close(handle_);
-            handle_ = nullptr;
-        }
-    }
+    /**
+     * @brief Releases a claimed interface
+     * @param interface_number Interface number to release
+     */
+    void releaseInterface(int interface_number);
 
-    void claimInterface(int interface_number) {
-        ensureOpen();
-
-        int result = libusb_claim_interface(handle_, interface_number);
-        if (result != LIBUSB_SUCCESS) {
-            throw UsbException(result, "Failed to claim interface " +
-                                           std::to_string(interface_number));
-        }
-
-        claimed_interfaces_.push_back(interface_number);
-    }
-
-    void releaseInterface(int interface_number) {
-        if (!handle_) {
-            return;
-        }
-
-        int result = libusb_release_interface(handle_, interface_number);
-        if (result != LIBUSB_SUCCESS) {
-        }
-
-        claimed_interfaces_.erase(
-            std::remove(claimed_interfaces_.begin(), claimed_interfaces_.end(),
-                        interface_number),
-            claimed_interfaces_.end());
-    }
-
+    /**
+     * @brief Performs a control transfer
+     * @param request_type Request type field
+     * @param request Request field
+     * @param value Value field
+     * @param index Index field
+     * @param data Data buffer
+     * @param timeout Timeout in milliseconds (default: 1000)
+     * @return UsbOperation coroutine for asynchronous operation
+     */
     UsbOperation controlTransfer(uint8_t request_type, uint8_t request,
                                  uint16_t value, uint16_t index,
                                  std::span<uint8_t> data,
-                                 unsigned int timeout = 1000) {
-        ensureOpen();
+                                 unsigned int timeout = 1000);
 
-        auto transfer = std::make_shared<UsbTransfer>(context_);
-        transfer->prepareControl(handle_, request_type, request, value, index,
-                                 data, timeout);
-
-        co_await transfer->submit();
-
-        if (transfer->getStatus() != LIBUSB_TRANSFER_COMPLETED) {
-            throw UsbException(LIBUSB_ERROR_IO,
-                               "Control transfer failed with status: " +
-                                   std::to_string(transfer->getStatus()));
-        }
-
-        co_return;
-    }
-
+    /**
+     * @brief Performs a bulk write
+     * @param endpoint Endpoint address
+     * @param data Data to write
+     * @param timeout Timeout in milliseconds (default: 1000)
+     * @return UsbOperation coroutine for asynchronous operation
+     */
     UsbOperation bulkWrite(unsigned char endpoint,
                            std::span<const uint8_t> data,
-                           unsigned int timeout = 1000) {
-        ensureOpen();
+                           unsigned int timeout = 1000);
 
-        auto transfer = std::make_shared<UsbTransfer>(context_);
-        transfer->prepareBulkWrite(handle_, endpoint, data, timeout);
-
-        co_await transfer->submit();
-
-        if (transfer->getStatus() != LIBUSB_TRANSFER_COMPLETED) {
-            throw UsbException(LIBUSB_ERROR_IO,
-                               "Bulk write failed with status: " +
-                                   std::to_string(transfer->getStatus()));
-        }
-
-        co_return;
-    }
-
+    /**
+     * @brief Performs a bulk read
+     * @param endpoint Endpoint address
+     * @param data Buffer for read data
+     * @param timeout Timeout in milliseconds (default: 1000)
+     * @return UsbOperation coroutine for asynchronous operation
+     */
     UsbOperation bulkRead(unsigned char endpoint, std::span<uint8_t> data,
-                          unsigned int timeout = 1000) {
-        ensureOpen();
+                          unsigned int timeout = 1000);
 
-        auto transfer = std::make_shared<UsbTransfer>(context_);
-        transfer->prepareBulkRead(handle_, endpoint, data, timeout);
+    /**
+     * @brief Gets a description of the device
+     * @return String describing the device
+     */
+    std::string getDescription() const;
 
-        co_await transfer->submit();
-
-        if (transfer->getStatus() != LIBUSB_TRANSFER_COMPLETED) {
-            throw UsbException(LIBUSB_ERROR_IO,
-                               "Bulk read failed with status: " +
-                                   std::to_string(transfer->getStatus()));
-        }
-
-        co_return;
-    }
-
-    std::string getDescription() const {
-        if (!device_) {
-            return "Invalid device";
-        }
-
-        libusb_device_descriptor desc;
-        int result = libusb_get_device_descriptor(device_, &desc);
-        if (result != LIBUSB_SUCCESS) {
-            return "Unknown device (error getting descriptor)";
-        }
-
-        uint8_t bus = libusb_get_bus_number(device_);
-        uint8_t address = libusb_get_device_address(device_);
-
-        char manufacturer[256] = {0};
-        char product[256] = {0};
-
-        if (handle_) {
-            if (desc.iManufacturer) {
-                libusb_get_string_descriptor_ascii(
-                    handle_, desc.iManufacturer,
-                    reinterpret_cast<unsigned char*>(manufacturer),
-                    sizeof(manufacturer) - 1);
-            }
-
-            if (desc.iProduct) {
-                libusb_get_string_descriptor_ascii(
-                    handle_, desc.iProduct,
-                    reinterpret_cast<unsigned char*>(product),
-                    sizeof(product) - 1);
-            }
-        }
-
-        std::stringstream ss;
-        ss << "USB Device " << static_cast<int>(bus) << ":"
-           << static_cast<int>(address) << " [" << std::hex << std::setw(4)
-           << std::setfill('0') << desc.idVendor << ":" << std::hex
-           << std::setw(4) << std::setfill('0') << desc.idProduct << std::dec
-           << "]";
-
-        if (manufacturer[0] || product[0]) {
-            ss << " - ";
-            if (manufacturer[0]) {
-                ss << manufacturer;
-            }
-            if (manufacturer[0] && product[0]) {
-                ss << " ";
-            }
-            if (product[0]) {
-                ss << product;
-            }
-        }
-
-        return ss.str();
-    }
-
-    std::pair<uint16_t, uint16_t> getIds() const {
-        if (!device_) {
-            return {0, 0};
-        }
-
-        libusb_device_descriptor desc;
-        int result = libusb_get_device_descriptor(device_, &desc);
-        if (result != LIBUSB_SUCCESS) {
-            return {0, 0};
-        }
-
-        return {desc.idVendor, desc.idProduct};
-    }
+    /**
+     * @brief Gets the vendor and product IDs
+     * @return Pair of vendor ID and product ID
+     */
+    std::pair<uint16_t, uint16_t> getIds() const;
 
 private:
     UsbContext& context_;
@@ -506,13 +399,11 @@ private:
     libusb_device_handle* handle_;
     std::vector<int> claimed_interfaces_;
 
-    void ensureOpen() {
-        if (!handle_) {
-            throw UsbException(LIBUSB_ERROR_NO_DEVICE, "Device not open");
-        }
-    }
+    void ensureOpen();
 
     friend class UsbTransfer;
 };
 
 }  // namespace atom::serial
+
+#endif  // ATOM_SERIAL_USB_HPP

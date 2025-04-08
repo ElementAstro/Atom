@@ -453,9 +453,7 @@ auto SimulatedAnnealing<ProblemType, SolutionType>::optimize(int numThreads)
         threads.reserve(numThreads);
 
         for (int threadIndex = 0; threadIndex < numThreads; ++threadIndex) {
-            threads.emplace_back([this](const std::stop_token& stopToken) {
-                optimizeThread(stopToken);
-            });
+            threads.emplace_back([this]() { optimizeThread(); });
             LOG_F(INFO, "Launched optimization thread {}.", threadIndex + 1);
         }
 
@@ -480,7 +478,7 @@ template <typename ProblemType, typename SolutionType>
 void SimulatedAnnealing<ProblemType, SolutionType>::setInitialTemperature(
     double temperature) {
     if (temperature <= 0) {
-        throw std::invalid_argument("Initial temperature must be positive");
+        THROW_INVALID_ARGUMENT("Initial temperature must be positive");
     }
     initial_temperature_ = temperature;
     LOG_F(INFO, "Initial temperature set to: {}", temperature);
@@ -491,7 +489,7 @@ template <typename ProblemType, typename SolutionType>
 void SimulatedAnnealing<ProblemType, SolutionType>::setCoolingRate(
     double rate) {
     if (rate <= 0 || rate >= 1) {
-        throw std::invalid_argument("Cooling rate must be between 0 and 1");
+        THROW_INVALID_ARGUMENT("Cooling rate must be between 0 and 1");
     }
     cooling_rate_ = rate;
     LOG_F(INFO, "Cooling rate set to: {}", rate);

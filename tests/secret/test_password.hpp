@@ -1,4 +1,3 @@
-// filepath: /home/max/Atom-1/atom/secret/test_password.cpp
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -9,7 +8,7 @@
 #include <thread>
 #include <vector>
 
-#include "password.hpp"
+#include "atom/secret/password.hpp"
 
 using namespace atom::secret;
 using ::testing::Contains;

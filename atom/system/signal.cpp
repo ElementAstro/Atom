@@ -188,14 +188,13 @@ int SignalHandlerRegistry::processAllPendingSignals(
     return processed;
 }
 
-bool SignalHandlerRegistry::hasHandlersForSignal(SignalID signal) const {
+bool SignalHandlerRegistry::hasHandlersForSignal(SignalID signal) {
     std::lock_guard lock(mutex_);
     auto it = handlers_.find(signal);
     return it != handlers_.end() && !it->second.empty();
 }
 
-const SignalStats& SignalHandlerRegistry::getSignalStats(
-    SignalID signal) const {
+const SignalStats& SignalHandlerRegistry::getSignalStats(SignalID signal) {
     std::lock_guard lock(mutex_);
     static SignalStats emptyStats;
     auto it = signalStats_.find(signal);
@@ -615,7 +614,7 @@ void installPlatformSpecificHandlers() {
     // Common handlers for both platforms
     SafeSignalManager::getInstance().addSafeSignalHandler(
         SIGTERM,
-        [](int signal) {
+        []([[maybe_unused]] int signal) {
             LOG_F(WARNING, "Caught SIGTERM - preparing for shutdown");
         },
         100, "Common-SIGTERM-Handler");

@@ -8,11 +8,15 @@
 #include <vector>
 
 #ifdef _WIN32
+// clang-format off
+#include <windows.h>
 #include <devguid.h>
 #include <setupapi.h>
-#include <windows.h>
-#include <regex>
+#undef interface
+// clang-format on
+#ifdef _MSC_VER
 #pragma comment(lib, "setupapi.lib")
+#endif
 #else
 #include <fcntl.h>
 #include <libudev.h>
