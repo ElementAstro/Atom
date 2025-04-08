@@ -13,6 +13,10 @@
 #include "interceptor.hpp"
 #include "multipart.hpp"
 
+#ifdef _WIN32
+#undef DELETE
+#endif
+
 namespace atom::extra::curl {
 /**
  * @brief Class representing an HTTP request.
