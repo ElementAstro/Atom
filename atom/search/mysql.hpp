@@ -100,11 +100,44 @@ public:
     std::string getFieldName(unsigned int index) const;
     unsigned long long getRowCount() const;
 
+    // Iterator support
+    class iterator {
+    public:
+        iterator(ResultSet* rs, bool end = false) : rs(rs), isEnd(end) {}
+
+        Row operator*() const { return rs->getCurrentRow(); }
+        iterator& operator++() {
+            if (!rs->next()) {
+                isEnd = true;
+            }
+            return *this;
+        }
+        bool operator!=(const iterator& other) const {
+            return isEnd != other.isEnd;
+        }
+
+    private:
+        ResultSet* rs;
+        bool isEnd;
+    };
+
+    iterator begin() {
+        if (!initialized) {
+            initialized = true;
+            if (!next()) {
+                return end();
+            }
+        }
+        return iterator(this);
+    }
+    iterator end() { return iterator(this, true); }
+
 private:
     MYSQL_RES* result;
     MYSQL_ROW currentRow;
     unsigned long* lengths;
     unsigned int numFields;
+    bool initialized = false;
 };
 
 /**
