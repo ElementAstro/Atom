@@ -19,23 +19,27 @@ Description: Main Message Bus with Asio support and additional features
 #include <asio/io_context.hpp>
 #include <asio/post.hpp>
 #include <asio/steady_timer.hpp>
-#include <chrono>
-#include <concepts>   // C++20 concepts
-#include <exception>  // For exception handling
+#include <concepts>
+#include <exception>
 #include <functional>
 #include <iostream>
 #include <memory>
 #include <mutex>
-#include <optional>
 #include <shared_mutex>
 #include <string>
-#include <string_view>  // More efficient string views
+#include <string_view>
 #include <typeindex>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "atom/macro.hpp"
+
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+#include <boost/lockfree/queue.hpp>
+#include <boost/lockfree/spsc_queue.hpp>
+#include "atom/async/queue.hpp"
+#endif
 
 namespace atom::async {
 
@@ -64,12 +68,62 @@ public:
     static constexpr std::size_t K_MAX_SUBSCRIBERS_PER_MESSAGE =
         1000;  ///< Maximum subscribers per message type to prevent DoS
 
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+    // Use lockfree message queue for pending messages
+    struct PendingMessage {
+        std::string name;
+        std::any message;
+        std::type_index type;
+
+        template <MessageConcept MessageType>
+        PendingMessage(std::string n, const MessageType& msg)
+            : name(std::move(n)),
+              message(msg),
+              type(std::type_index(typeid(MessageType))) {}
+
+        // Required for lockfree queue
+        PendingMessage() = default;
+        PendingMessage(const PendingMessage&) = default;
+        PendingMessage& operator=(const PendingMessage&) = default;
+        PendingMessage(PendingMessage&&) noexcept = default;
+        PendingMessage& operator=(PendingMessage&&) noexcept = default;
+    };
+
+    // Different message queue types based on configuration
+    using MessageQueue =
+        std::conditional_t<(defined ATOM_USE_SPSC_QUEUE),
+                           boost::lockfree::spsc_queue<PendingMessage>,
+                           boost::lockfree::queue<PendingMessage>>;
+#endif
+
     /**
      * @brief Constructs a MessageBus with the given io_context.
      * @param io_context The Asio io_context to use for asynchronous operations.
      */
     explicit MessageBus(asio::io_context& io_context)
-        : nextToken_(0), io_context_(io_context) {}
+        : nextToken_(0),
+          io_context_(io_context)
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+          ,
+          pendingMessages_(1024)  // Initial capacity
+          ,
+          processingActive_(false)
+#endif
+    {
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+        // Start the message processing thread
+        startMessageProcessing();
+#endif
+    }
+
+    /**
+     * @brief Destructor to clean up resources
+     */
+    ~MessageBus() {
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+        stopMessageProcessing();
+#endif
+    }
 
     /**
      * @brief Non-copyable
@@ -93,13 +147,122 @@ public:
         return std::make_shared<MessageBus>(io_context);
     }
 
+#ifdef ATOM_USE_LOCKFREE_QUEUE
     /**
-     * @brief Publishes a message to the bus, optionally with a delay.
-     * @tparam MessageType The type of the message.
-     * @param name The name of the message.
-     * @param message The message to publish.
-     * @param delay Optional delay before publishing the message.
-     * @throws MessageBusException if the name is empty
+     * @brief Starts the message processing loop
+     */
+    void startMessageProcessing() {
+        processingActive_ = true;
+        asio::post(io_context_,
+                   [self = shared_from_this()]() { self->processMessages(); });
+    }
+
+    /**
+     * @brief Stops the message processing loop
+     */
+    void stopMessageProcessing() { processingActive_ = false; }
+
+    /**
+     * @brief Process pending messages from the queue
+     */
+    void processMessages() {
+        if (!processingActive_)
+            return;
+
+        const size_t MAX_MESSAGES_PER_BATCH = 20;
+        size_t processed = 0;
+
+        while (processingActive_ && processed < MAX_MESSAGES_PER_BATCH) {
+            PendingMessage msg;
+            if (pendingMessages_.pop(msg)) {
+                processOneMessage(msg);
+                processed++;
+            } else {
+                break;  // No more messages
+            }
+        }
+
+        // Reschedule message processing
+        if (processingActive_) {
+            asio::post(io_context_, [self = shared_from_this()]() {
+                self->processMessages();
+            });
+        }
+    }
+
+    /**
+     * @brief Process a single message from the queue
+     */
+    void processOneMessage(const PendingMessage& pendingMsg) {
+        try {
+            std::shared_lock lock(mutex_);
+            std::unordered_set<Token> calledSubscribers;
+
+            // Find subscribers for this message type
+            auto typeIter = subscribers_.find(pendingMsg.type);
+            if (typeIter != subscribers_.end()) {
+                // Publish to directly matching subscribers
+                auto& nameMap = typeIter->second;
+                auto nameIter = nameMap.find(pendingMsg.name);
+                if (nameIter != nameMap.end()) {
+                    publishToSubscribersLockFree(nameIter->second,
+                                                 pendingMsg.message,
+                                                 calledSubscribers);
+                }
+
+                // Publish to namespace matching subscribers
+                for (const auto& namespaceName : namespaces_) {
+                    if (pendingMsg.name.find(namespaceName + ".") == 0) {
+                        auto nsIter = nameMap.find(namespaceName);
+                        if (nsIter != nameMap.end()) {
+                            publishToSubscribersLockFree(nsIter->second,
+                                                         pendingMsg.message,
+                                                         calledSubscribers);
+                        }
+                    }
+                }
+            }
+        } catch (const std::exception& ex) {
+            std::cerr << "[MessageBus] Error processing message: " << ex.what()
+                      << std::endl;
+        }
+    }
+
+    /**
+     * @brief Helper method to publish to subscribers in lockfree mode
+     */
+    void publishToSubscribersLockFree(
+        const std::vector<Subscriber>& subscribersList, const std::any& message,
+        std::unordered_set<Token>& calledSubscribers) {
+        for (const auto& subscriber : subscribersList) {
+            try {
+                if (subscriber.filter(message) &&
+                    calledSubscribers.insert(subscriber.token).second) {
+                    auto handler = [handlerFunc = subscriber.handler,
+                                    message]() {
+                        try {
+                            handlerFunc(message);
+                        } catch (const std::exception& e) {
+                            std::cerr << "[MessageBus] Handler exception: "
+                                      << e.what() << std::endl;
+                        }
+                    };
+
+                    if (subscriber.async) {
+                        asio::post(io_context_, handler);
+                    } else {
+                        handler();
+                    }
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "[MessageBus] Filter exception: " << e.what()
+                          << std::endl;
+            }
+        }
+    }
+
+    /**
+     * @brief Modified publish method that uses lockfree queue
      */
     template <MessageConcept MessageType>
     void publish(
@@ -110,36 +273,36 @@ public:
                 throw MessageBusException("Message name cannot be empty");
             }
 
+            if (!processingActive_) {
+                startMessageProcessing();
+            }
+
             auto publishTask = [this, name = std::string(name), message]() {
-                try {
-                    std::shared_lock lock(mutex_);
-                    std::unordered_set<Token>
-                        calledSubscribers;  // Track called subscribers
+                // Create the pending message and push to the lockfree queue
+                PendingMessage pendingMsg(name, message);
 
-                    // Publish to directly matching subscribers
-                    publishToSubscribers<MessageType>(name, message,
-                                                      calledSubscribers);
-
-                    // Publish to namespace matching subscribers
-                    for (const auto& namespaceName : namespaces_) {
-                        if (name.find(namespaceName + ".") ==
-                            0) {  // Namespace match must start with
-                                  // namespaceName + dot
-                            publishToSubscribers<MessageType>(
-                                namespaceName, message, calledSubscribers);
-                        }
+                // Try to push to queue with a retry mechanism
+                bool pushed = false;
+                for (int retry = 0; retry < 3 && !pushed; ++retry) {
+                    pushed = pendingMessages_.push(pendingMsg);
+                    if (!pushed) {
+                        std::this_thread::yield();  // Let other threads run
                     }
+                }
 
-                    // Record the message in history
-                    recordMessageHistory<MessageType>(name, message);
-
-                    // Log
-                    std::cout << "[MessageBus] Published message: " << name
+                if (!pushed) {
+                    // Fall back to synchronous processing if queue is full
+                    std::cerr << "[MessageBus] Warning: Message queue full, "
+                                 "processing synchronously"
                               << std::endl;
-                } catch (const std::exception& ex) {
-                    std::cerr
-                        << "[MessageBus] Error in publish task: " << ex.what()
-                        << std::endl;
+                    processOneMessage(pendingMsg);
+                }
+
+                // Record the message in history (with locking)
+                {
+                    std::unique_lock lock(mutex_);
+                    recordMessageHistory<MessageType>(std::string(name),
+                                                      message);
                 }
             };
 
@@ -157,8 +320,8 @@ public:
                         }
                     });
             } else {
-                // Immediately publish asynchronously using asio::post
-                asio::post(io_context_, publishTask);
+                // Immediately execute the publish task
+                publishTask();
             }
         } catch (const std::exception& ex) {
             std::cerr << "[MessageBus] Error in publish: " << ex.what()
@@ -167,6 +330,7 @@ public:
                 std::string("Failed to publish message: ") + ex.what());
         }
     }
+#endif  // ATOM_USE_LOCKFREE_QUEUE
 
     /**
      * @brief Publishes a message to all subscribers globally.
@@ -393,9 +557,9 @@ public:
      * @return A vector of messages.
      */
     template <MessageConcept MessageType>
-    [[nodiscard]] auto getMessageHistory(std::string_view name,
-                                         std::size_t count = K_MAX_HISTORY_SIZE)
-        const -> std::vector<MessageType> {
+    [[nodiscard]] auto getMessageHistory(
+        std::string_view name, std::size_t count = K_MAX_HISTORY_SIZE) const
+        -> std::vector<MessageType> {
         try {
             if (count == 0) {
                 return {};
@@ -559,6 +723,12 @@ private:
         }
         return std::string(name);
     }
+
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+    MessageQueue pendingMessages_;  ///< Lockfree queue of pending messages
+    std::atomic<bool>
+        processingActive_;  ///< Flag to control message processing
+#endif
 
     std::unordered_map<std::type_index,
                        std::unordered_map<std::string, std::vector<Subscriber>>>

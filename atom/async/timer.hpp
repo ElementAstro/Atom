@@ -25,6 +25,10 @@ Description: Timer class for C++
 #include <thread>
 #include <type_traits>
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+#include <boost/lockfree/queue.hpp>
+#endif
+
 #include "future.hpp"
 
 namespace atom::async {
@@ -220,17 +224,70 @@ private:
                                    int repeatCount) noexcept(false);
 
     std::jthread m_thread;  ///< The thread for running the timer loop (C++20)
-    std::priority_queue<TimerTask>
-        m_taskQueue;             ///< The priority queue for scheduled tasks.
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    /**
+     * @brief Task container using Boost.lockfree for better performance in high-concurrency scenarios
+     */
+    class TaskContainer {
+    public:
+        TaskContainer() : m_queue(128) {}  // Default capacity of 128 tasks
+        
+        void push(const TimerTask& task) {
+            // Create a copy on heap since lockfree queue needs ownership
+            auto* taskPtr = new TimerTask(task);
+            // Try pushing until successful
+            while (!m_queue.push(taskPtr)) {
+                // If queue is full, allow other threads to process
+                std::this_thread::yield();
+            }
+        }
+        
+        bool pop(TimerTask& task) {
+            TimerTask* taskPtr = nullptr;
+            if (m_queue.pop(taskPtr)) {
+                if (taskPtr) {
+                    task = *taskPtr;
+                    delete taskPtr;
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        bool empty() const {
+            return m_queue.empty();
+        }
+        
+        void clear() {
+            TimerTask* taskPtr = nullptr;
+            while (m_queue.pop(taskPtr)) {
+                if (taskPtr) {
+                    delete taskPtr;
+                }
+            }
+        }
+        
+        ~TaskContainer() {
+            clear();
+        }
+        
+    private:
+        boost::lockfree::queue<TimerTask*> m_queue;
+    };
+    
+    TaskContainer m_taskContainer;  ///< Lockfree container for pending tasks
+    TimerTask m_currentTask;        ///< The current task being processed
+    std::atomic<bool> m_hasCurrentTask{false}; ///< Flag indicating if there's a current task
+#else
+    std::priority_queue<TimerTask> m_taskQueue;  ///< The priority queue for scheduled tasks.
+#endif
+
     mutable std::mutex m_mutex;  ///< Mutex for thread synchronization.
-    std::condition_variable
-        m_cond;  ///< Condition variable for thread synchronization.
-    std::function<void()> m_callback;  ///< The callback function to be called
-                                       ///< when a task is executed.
-    std::atomic<bool> m_stop{
-        false};  ///< Flag indicating whether the timer should stop.
-    std::atomic<bool> m_paused{
-        false};  ///< Flag indicating whether the timer is paused.
+    std::condition_variable m_cond;  ///< Condition variable for thread synchronization.
+    std::function<void()> m_callback;  ///< The callback function to be called when a task is executed.
+    std::atomic<bool> m_stop{false};  ///< Flag indicating whether the timer should stop.
+    std::atomic<bool> m_paused{false};  ///< Flag indicating whether the timer is paused.
 };
 
 template <typename Function, typename... Args>
@@ -291,11 +348,17 @@ auto Timer::addTask(Function &&func, unsigned int delay, int repeatCount,
         std::bind(std::forward<Function>(func), std::forward<Args>(args)...));
     std::future<ReturnType> result = task->get_future();
 
+    TimerTask timerTask([task]() { (*task)(); }, delay, repeatCount, priority);
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    // For lockfree implementation, we don't need lock for pushing task
+    m_taskContainer.push(timerTask);
+#else
     {
         std::scoped_lock lock(m_mutex);
-        m_taskQueue.emplace([task]() { (*task)(); }, delay, repeatCount,
-                            priority);
+        m_taskQueue.emplace([task]() { (*task)(); }, delay, repeatCount, priority);
     }
+#endif
 
     m_cond.notify_all();
     return EnhancedFuture<ReturnType>(std::move(result).share());

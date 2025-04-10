@@ -28,6 +28,10 @@ Description: A simple but useful async worker manager
 #include <type_traits>
 #include <vector>
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+#include <boost/lockfree/queue.hpp>
+#endif
+
 #include "atom/async/future.hpp"
 #include "atom/error/exception.hpp"
 
@@ -166,6 +170,142 @@ private:
     std::chrono::seconds timeout_{0};
 };
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+/**
+ * @brief Container class for worker pointers in lockfree queue
+ *
+ * This class provides a wrapper for storing AsyncWorker pointers in a
+ * boost::lockfree::queue. It manages memory ownership to ensure proper
+ * cleanup when the container is destroyed.
+ *
+ * @tparam ResultType The type of the result returned by the workers.
+ */
+template <typename ResultType>
+class WorkerContainer {
+public:
+    /**
+     * @brief Constructs a worker container with specified capacity
+     *
+     * @param capacity Initial capacity of the queue
+     */
+    explicit WorkerContainer(size_t capacity = 128) : worker_queue_(capacity) {}
+
+    /**
+     * @brief Adds a worker to the container
+     *
+     * @param worker The worker to add
+     * @return true if the worker was successfully added, false otherwise
+     */
+    bool push(const std::shared_ptr<AsyncWorker<ResultType>>& worker) {
+        // Create a copy of the shared_ptr to ensure proper reference counting
+        auto* workerPtr = new std::shared_ptr<AsyncWorker<ResultType>>(worker);
+        bool pushed = worker_queue_.push(workerPtr);
+        if (!pushed) {
+            delete workerPtr;
+        }
+        return pushed;
+    }
+
+    /**
+     * @brief Retrieves all workers from the container
+     *
+     * @return Vector of workers retrieved from the container
+     */
+    std::vector<std::shared_ptr<AsyncWorker<ResultType>>> retrieveAll() {
+        std::vector<std::shared_ptr<AsyncWorker<ResultType>>> workers;
+        std::shared_ptr<AsyncWorker<ResultType>>* workerPtr = nullptr;
+        while (worker_queue_.pop(workerPtr)) {
+            if (workerPtr) {
+                workers.push_back(*workerPtr);
+                delete workerPtr;
+            }
+        }
+        return workers;
+    }
+
+    /**
+     * @brief Processes all workers with a function
+     *
+     * @param func Function to apply to each worker
+     */
+    void forEach(const std::function<
+                 void(const std::shared_ptr<AsyncWorker<ResultType>>&)>& func) {
+        auto workers = retrieveAll();
+        for (const auto& worker : workers) {
+            func(worker);
+            push(worker);
+        }
+    }
+
+    /**
+     * @brief Removes workers that satisfy a predicate
+     *
+     * @param predicate Function that returns true for workers to remove
+     * @return Number of workers removed
+     */
+    size_t removeIf(
+        const std::function<
+            bool(const std::shared_ptr<AsyncWorker<ResultType>>&)>& predicate) {
+        auto workers = retrieveAll();
+        size_t initial_size = workers.size();
+
+        // Filter workers
+        auto it = std::remove_if(workers.begin(), workers.end(), predicate);
+        size_t removed = std::distance(it, workers.end());
+        workers.erase(it, workers.end());
+
+        // Push back remaining workers
+        for (const auto& worker : workers) {
+            push(worker);
+        }
+
+        return removed;
+    }
+
+    /**
+     * @brief Checks if all workers satisfy a condition
+     *
+     * @param condition Function that returns true if a worker satisfies the
+     * condition
+     * @return true if all workers satisfy the condition, false otherwise
+     */
+    bool allOf(
+        const std::function<
+            bool(const std::shared_ptr<AsyncWorker<ResultType>>&)>& condition) {
+        auto workers = retrieveAll();
+        bool result = std::all_of(workers.begin(), workers.end(), condition);
+
+        // Push back all workers
+        for (const auto& worker : workers) {
+            push(worker);
+        }
+
+        return result;
+    }
+
+    /**
+     * @brief Counts the number of workers in the container
+     *
+     * @return Approximate number of workers in the container
+     */
+    size_t size() const { return worker_queue_.read_available(); }
+
+    /**
+     * @brief Destructor that cleans up all worker pointers
+     */
+    ~WorkerContainer() {
+        std::shared_ptr<AsyncWorker<ResultType>>* workerPtr = nullptr;
+        while (worker_queue_.pop(workerPtr)) {
+            delete workerPtr;
+        }
+    }
+
+private:
+    boost::lockfree::queue<std::shared_ptr<AsyncWorker<ResultType>>*>
+        worker_queue_;
+};
+#endif
+
 /**
  * @brief Class for managing multiple AsyncWorker instances.
  *
@@ -212,8 +352,7 @@ public:
      */
     template <typename Func, typename... Args>
         requires InvocableWithArgs<Func, Args...> &&
-                     std::is_same_v<std::invoke_result_t<Func, Args...>,
-                                    ResultType>
+                 std::is_same_v<std::invoke_result_t<Func, Args...>, ResultType>
     [[nodiscard]] auto createWorker(Func&& func, Args&&... args)
         -> std::shared_ptr<AsyncWorker<ResultType>>;
 
@@ -271,8 +410,14 @@ public:
     size_t pruneCompletedWorkers() noexcept;
 
 private:
-    std::vector<std::shared_ptr<AsyncWorker<ResultType>>> workers_;
-    mutable std::mutex mutex_;  // Thread-safety for concurrent access
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    WorkerContainer<ResultType>
+        workers_;  ///< The lockfree container of workers.
+#else
+    std::vector<std::shared_ptr<AsyncWorker<ResultType>>>
+        workers_;               ///< The list of workers.
+    mutable std::mutex mutex_;  ///< Thread-safety for concurrent access
+#endif
 };
 
 // Coroutine support for C++20
@@ -791,17 +936,37 @@ void AsyncWorker<ResultType>::waitForCompletion() {
 template <typename ResultType>
 template <typename Func, typename... Args>
     requires InvocableWithArgs<Func, Args...> &&
-                 std::is_same_v<std::invoke_result_t<Func, Args...>, ResultType>
-[[nodiscard]] auto AsyncWorkerManager<ResultType>::createWorker(
-    Func&& func, Args&&... args) -> std::shared_ptr<AsyncWorker<ResultType>> {
+             std::is_same_v<std::invoke_result_t<Func, Args...>, ResultType>
+[[nodiscard]] auto AsyncWorkerManager<ResultType>::createWorker(Func&& func,
+                                                                Args&&... args)
+    -> std::shared_ptr<AsyncWorker<ResultType>> {
     auto worker = std::make_shared<AsyncWorker<ResultType>>();
 
     try {
         worker->startAsync(std::forward<Func>(func),
                            std::forward<Args>(args)...);
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        // For lockfree implementation, there's no need to acquire a mutex lock
+        if (!workers_.push(worker)) {
+            // If push fails (queue full), we need to handle it properly
+            for (int retry = 0; retry < 5; ++retry) {
+                std::this_thread::yield();
+                if (workers_.push(worker)) {
+                    return worker;
+                }
+                // Backoff on contention
+                if (retry > 0) {
+                    std::this_thread::sleep_for(
+                        std::chrono::microseconds(1 << retry));
+                }
+            }
+            throw std::runtime_error("Failed to add worker: queue is full");
+        }
+#else
         std::lock_guard<std::mutex> lock(mutex_);
         workers_.push_back(worker);
+#endif
         return worker;
     } catch (const std::exception& e) {
         throw std::runtime_error(std::string("Failed to create worker: ") +
@@ -811,31 +976,47 @@ template <typename Func, typename... Args>
 
 template <typename ResultType>
 void AsyncWorkerManager<ResultType>::cancelAll() noexcept {
-    std::lock_guard<std::mutex> lock(mutex_);
-
-    // Use parallel algorithm if there are many workers
-    if (workers_.size() > 10) {
-        // C++17 parallel execution policy
-        std::for_each(workers_.begin(), workers_.end(), [](auto& worker) {
+    try {
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        workers_.forEach([](const auto& worker) {
             if (worker)
                 worker->cancel();
         });
-    } else {
-        for (auto& worker : workers_) {
-            if (worker)
-                worker->cancel();
+#else
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        // Use parallel algorithm if there are many workers
+        if (workers_.size() > 10) {
+            // C++17 parallel execution policy
+            std::for_each(workers_.begin(), workers_.end(), [](auto& worker) {
+                if (worker)
+                    worker->cancel();
+            });
+        } else {
+            for (auto& worker : workers_) {
+                if (worker)
+                    worker->cancel();
+            }
         }
+#endif
+    } catch (...) {
+        // Ensure noexcept guarantee
     }
 }
 
 template <typename ResultType>
 [[nodiscard]] auto AsyncWorkerManager<ResultType>::allDone() const noexcept
     -> bool {
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    return const_cast<WorkerContainer<ResultType>&>(workers_).allOf(
+        [](const auto& worker) { return worker && worker->isDone(); });
+#else
     std::lock_guard<std::mutex> lock(mutex_);
 
     return std::all_of(
         workers_.begin(), workers_.end(),
         [](const auto& worker) { return worker && worker->isDone(); });
+#endif
 }
 
 template <typename ResultType>
@@ -843,6 +1024,20 @@ void AsyncWorkerManager<ResultType>::waitForAll(
     std::chrono::milliseconds timeout) {
     std::vector<std::jthread> waitThreads;
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    // Create a copy to avoid race conditions
+    auto workersCopy = workers_.retrieveAll();
+
+    for (auto& worker : workersCopy) {
+        if (!worker)
+            continue;
+        waitThreads.emplace_back(
+            [worker, timeout]() { worker->waitForCompletion(); });
+
+        // Add the worker back to the container
+        workers_.push(worker);
+    }
+#else
     {
         std::lock_guard<std::mutex> lock(mutex_);
         // Create a copy to avoid race conditions
@@ -855,6 +1050,7 @@ void AsyncWorkerManager<ResultType>::waitForAll(
                 [worker, timeout]() { worker->waitForCompletion(); });
         }
     }
+#endif
 
     for (auto& thread : waitThreads) {
         if (thread.joinable()) {
@@ -884,22 +1080,36 @@ void AsyncWorkerManager<ResultType>::cancel(
 template <typename ResultType>
 [[nodiscard]] auto AsyncWorkerManager<ResultType>::size() const noexcept
     -> size_t {
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    return workers_.size();
+#else
     std::lock_guard<std::mutex> lock(mutex_);
     return workers_.size();
+#endif
 }
 
 template <typename ResultType>
 size_t AsyncWorkerManager<ResultType>::pruneCompletedWorkers() noexcept {
-    std::lock_guard<std::mutex> lock(mutex_);
-    auto initialSize = workers_.size();
+    try {
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        return workers_.removeIf(
+            [](const auto& worker) { return worker && worker->isDone(); });
+#else
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto initialSize = workers_.size();
 
-    workers_.erase(std::remove_if(workers_.begin(), workers_.end(),
-                                  [](const auto& worker) {
-                                      return worker && worker->isDone();
-                                  }),
-                   workers_.end());
+        workers_.erase(std::remove_if(workers_.begin(), workers_.end(),
+                                      [](const auto& worker) {
+                                          return worker && worker->isDone();
+                                      }),
+                       workers_.end());
 
-    return initialSize - workers_.size();
+        return initialSize - workers_.size();
+#endif
+    } catch (...) {
+        // Ensure noexcept guarantee
+        return 0;
+    }
 }
 }  // namespace atom::async
 #endif

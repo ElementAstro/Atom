@@ -31,7 +31,154 @@ Description: Trigger class for C++
 #include <utility>
 #include <vector>
 
+#ifdef ATOM_USE_BOOST_LOCKS
+#include <boost/thread.hpp>
+#include <boost/thread/future.hpp>
+#include <boost/thread/lock_guard.hpp>
+#include <boost/thread/mutex.hpp>
+#include <boost/thread/shared_lock_guard.hpp>
+#include <boost/thread/shared_mutex.hpp>
+#endif
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+#include <boost/atomic.hpp>
+#include <boost/lockfree/queue.hpp>
+#include <boost/lockfree/spsc_queue.hpp>
+#endif
+
 namespace atom::async {
+
+// Conditionally select threading primitives based on availability of Boost
+namespace internal {
+#ifdef ATOM_USE_BOOST_LOCKS
+using mutex_type = boost::mutex;
+using shared_mutex_type = boost::shared_mutex;
+using unique_lock = boost::unique_lock<mutex_type>;
+using shared_lock = boost::shared_lock<shared_mutex_type>;
+using lock_guard = boost::lock_guard<mutex_type>;
+
+template <typename T>
+using future = boost::future<T>;
+
+template <typename T>
+using promise = boost::promise<T>;
+
+using thread = boost::thread;
+
+template <typename Func, typename... Args>
+auto make_thread(Func&& func, Args&&... args) {
+    return boost::thread(std::forward<Func>(func), std::forward<Args>(args)...);
+}
+
+// Equivalent of std::jthread using Boost threads
+class joining_thread {
+private:
+    boost::thread thread_;
+
+public:
+    template <typename Func, typename... Args>
+    explicit joining_thread(Func&& func, Args&&... args)
+        : thread_(std::forward<Func>(func), std::forward<Args>(args)...) {}
+
+    ~joining_thread() {
+        if (thread_.joinable()) {
+            thread_.join();
+        }
+    }
+
+    void detach() { thread_.detach(); }
+
+    joining_thread(joining_thread&&) = default;
+    joining_thread& operator=(joining_thread&&) = default;
+    joining_thread(const joining_thread&) = delete;
+    joining_thread& operator=(const joining_thread&) = delete;
+};
+#else
+using mutex_type = std::mutex;
+using shared_mutex_type = std::shared_mutex;
+using unique_lock = std::unique_lock<mutex_type>;
+using shared_lock = std::shared_lock<shared_mutex_type>;
+using lock_guard = std::lock_guard<mutex_type>;
+
+template <typename T>
+using future = std::future<T>;
+
+template <typename T>
+using promise = std::promise<T>;
+
+using thread = std::thread;
+
+template <typename Func, typename... Args>
+auto make_thread(Func&& func, Args&&... args) {
+    return std::thread(std::forward<Func>(func), std::forward<Args>(args)...);
+}
+
+using joining_thread = std::jthread;
+#endif
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+template <typename T>
+using atomic = boost::atomic<T>;
+
+// Helper for lock-free operations
+template <typename T>
+class lockfree_queue {
+private:
+    boost::lockfree::queue<T> queue_;
+
+public:
+    explicit lockfree_queue(size_t size) : queue_(size) {}
+
+    bool push(const T& value) { return queue_.push(value); }
+
+    bool pop(T& value) { return queue_.pop(value); }
+
+    bool empty() const { return queue_.empty(); }
+};
+#else
+template <typename T>
+using atomic = std::atomic<T>;
+
+// Simple mutex-based queue as a fallback
+template <typename T>
+class lockfree_queue {
+private:
+    std::vector<T> queue_;
+    mutable mutex_type mutex_;
+
+public:
+    explicit lockfree_queue(size_t) {}
+
+    bool push(const T& value) {
+        lock_guard lock(mutex_);
+        queue_.push_back(value);
+        return true;
+    }
+
+    bool pop(T& value) {
+        lock_guard lock(mutex_);
+        if (queue_.empty()) {
+            return false;
+        }
+        value = queue_.front();
+        queue_.erase(queue_.begin());
+        return true;
+    }
+
+    bool empty() const {
+        lock_guard lock(mutex_);
+        return queue_.empty();
+    }
+};
+#endif
+
+// 添加针对共享互斥锁的锁类型
+template <typename Mutex>
+using unique_lock_t = std::unique_lock<Mutex>;
+
+template <typename Mutex>
+using shared_lock_t = std::shared_lock<Mutex>;
+}  // namespace internal
 
 /**
  * @brief Concept to check if a type can be invoked with a given parameter type.
@@ -162,7 +309,7 @@ public:
      * @return A future that can be used to wait for or cancel the scheduled
      * trigger.
      */
-    [[nodiscard]] std::shared_ptr<std::atomic<bool>> scheduleTrigger(
+    [[nodiscard]] std::shared_ptr<internal::atomic<bool>> scheduleTrigger(
         std::string event, ParamType param, std::chrono::milliseconds delay);
 
     /**
@@ -172,7 +319,7 @@ public:
      * @param param The parameter to be passed to the callbacks.
      * @return A future representing the ongoing operation to trigger the event.
      */
-    [[nodiscard]] std::future<std::size_t> scheduleAsyncTrigger(
+    [[nodiscard]] internal::future<std::size_t> scheduleAsyncTrigger(
         std::string event, ParamType param);
 
     /**
@@ -212,6 +359,34 @@ public:
     [[nodiscard]] std::size_t callbackCount(
         std::string_view event) const noexcept;
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    /**
+     * @brief Creates a lock-free trigger queue for high-throughput event
+     * handling
+     *
+     * This creates an optimized version of the trigger system for scenarios
+     * requiring high-throughput event processing with minimal contention.
+     *
+     * @param queueSize The size of the internal lock-free queue
+     * @return A unique pointer to the created trigger queue
+     */
+    [[nodiscard]] static std::unique_ptr<
+        internal::lockfree_queue<std::pair<std::string, ParamType>>>
+    createLockFreeTriggerQueue(std::size_t queueSize = 1024);
+
+    /**
+     * @brief Process events from a lock-free trigger queue
+     *
+     * @param queue The lock-free trigger queue to process
+     * @param maxEvents Maximum number of events to process in one call (0 for
+     * all available)
+     * @return Number of events processed
+     */
+    std::size_t processLockFreeTriggers(
+        internal::lockfree_queue<std::pair<std::string, ParamType>>& queue,
+        std::size_t maxEvents = 0) noexcept;
+#endif
+
 private:
     struct CallbackInfo {
         CallbackPriority priority;
@@ -219,14 +394,14 @@ private:
         CallbackPtr callback;
     };
 
-    mutable std::shared_mutex
+    mutable internal::shared_mutex_type
         m_mutex_;  ///< Read-write mutex for thread-safe access
     std::unordered_map<std::string, std::vector<CallbackInfo>>
         m_callbacks_;  ///< Map of events to their callbacks
-    std::atomic<std::size_t> m_next_id_{
+    internal::atomic<std::size_t> m_next_id_{
         0};  ///< Counter for generating unique callback IDs
     std::unordered_map<std::string,
-                       std::vector<std::shared_ptr<std::atomic<bool>>>>
+                       std::vector<std::shared_ptr<internal::atomic<bool>>>>
         m_pending_triggers_;  ///< Map of events to their pending triggers
 };
 
@@ -241,7 +416,7 @@ template <typename ParamType>
         throw TriggerException("Callback cannot be null");
     }
 
-    std::unique_lock lock(m_mutex_);
+    internal::unique_lock_t<internal::shared_mutex_type> lock(m_mutex_);
     auto id = m_next_id_++;
     auto callbackPtr = std::make_shared<Callback>(std::move(callback));
     m_callbacks_[std::string(event)].push_back(
@@ -257,7 +432,7 @@ bool Trigger<ParamType>::unregisterCallback(std::string_view event,
         return false;
     }
 
-    std::unique_lock lock(m_mutex_);
+    internal::unique_lock_t<internal::shared_mutex_type> lock(m_mutex_);
     auto it = m_callbacks_.find(std::string(event));
     if (it == m_callbacks_.end()) {
         return false;
@@ -284,7 +459,7 @@ std::size_t Trigger<ParamType>::unregisterAllCallbacks(
         return 0;
     }
 
-    std::unique_lock lock(m_mutex_);
+    internal::unique_lock_t<internal::shared_mutex_type> lock(m_mutex_);
     auto it = m_callbacks_.find(std::string(event));
     if (it == m_callbacks_.end()) {
         return 0;
@@ -307,7 +482,7 @@ std::size_t Trigger<ParamType>::trigger(std::string_view event,
     // them
     std::vector<CallbackPtr> callbacksToExecute;
     {
-        std::shared_lock lock(m_mutex_);
+        internal::shared_lock_t<internal::shared_mutex_type> lock(m_mutex_);
         auto it = m_callbacks_.find(std::string(event));
         if (it == m_callbacks_.end()) {
             return 0;
@@ -349,7 +524,7 @@ std::size_t Trigger<ParamType>::trigger(std::string_view event,
 
 template <typename ParamType>
     requires CallableWithParam<ParamType> && CopyableType<ParamType>
-[[nodiscard]] std::shared_ptr<std::atomic<bool>>
+[[nodiscard]] std::shared_ptr<internal::atomic<bool>>
 Trigger<ParamType>::scheduleTrigger(std::string event, ParamType param,
                                     std::chrono::milliseconds delay) {
     if (event.empty()) {
@@ -359,15 +534,16 @@ Trigger<ParamType>::scheduleTrigger(std::string event, ParamType param,
         throw TriggerException("Delay cannot be negative");
     }
 
-    auto cancelFlag = std::make_shared<std::atomic<bool>>(false);
+    auto cancelFlag = std::make_shared<internal::atomic<bool>>(false);
 
     {
-        std::unique_lock lock(m_mutex_);
+        internal::unique_lock_t<internal::shared_mutex_type> lock(m_mutex_);
         m_pending_triggers_[event].push_back(cancelFlag);
     }
 
-    std::jthread([this, event = std::move(event), param = std::move(param),
-                  delay, cancelFlag]() mutable {
+    internal::joining_thread([this, event = std::move(event),
+                              param = std::move(param), delay,
+                              cancelFlag]() mutable {
         // Early check before sleep
         if (*cancelFlag) {
             return;
@@ -379,7 +555,7 @@ Trigger<ParamType>::scheduleTrigger(std::string event, ParamType param,
             trigger(event, param);
 
             // Remove the cancel flag from pending triggers
-            std::unique_lock lock(m_mutex_);
+            internal::unique_lock_t<internal::shared_mutex_type> lock(m_mutex_);
             auto it = m_pending_triggers_.find(event);
             if (it != m_pending_triggers_.end()) {
                 auto& flags = it->second;
@@ -397,17 +573,17 @@ Trigger<ParamType>::scheduleTrigger(std::string event, ParamType param,
 
 template <typename ParamType>
     requires CallableWithParam<ParamType> && CopyableType<ParamType>
-[[nodiscard]] std::future<std::size_t> Trigger<ParamType>::scheduleAsyncTrigger(
-    std::string event, ParamType param) {
+[[nodiscard]] internal::future<std::size_t>
+Trigger<ParamType>::scheduleAsyncTrigger(std::string event, ParamType param) {
     if (event.empty()) {
         throw TriggerException("Event name cannot be empty");
     }
 
-    auto promise = std::make_shared<std::promise<std::size_t>>();
-    std::future<std::size_t> future = promise->get_future();
+    auto promise = std::make_shared<internal::promise<std::size_t>>();
+    internal::future<std::size_t> future = promise->get_future();
 
-    std::jthread([this, event = std::move(event), param = std::move(param),
-                  promise]() mutable {
+    internal::joining_thread([this, event = std::move(event),
+                              param = std::move(param), promise]() mutable {
         try {
             std::size_t count = trigger(event, param);
             promise->set_value(count);
@@ -430,7 +606,7 @@ std::size_t Trigger<ParamType>::cancelTrigger(std::string_view event) noexcept {
         return 0;
     }
 
-    std::unique_lock lock(m_mutex_);
+    internal::unique_lock_t<internal::shared_mutex_type> lock(m_mutex_);
     auto it = m_pending_triggers_.find(std::string(event));
     if (it == m_pending_triggers_.end()) {
         return 0;
@@ -438,7 +614,11 @@ std::size_t Trigger<ParamType>::cancelTrigger(std::string_view event) noexcept {
 
     std::size_t canceledCount = 0;
     for (auto& flag : it->second) {
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        flag->store(true, boost::memory_order_release);
+#else
         flag->store(true, std::memory_order_release);
+#endif
         ++canceledCount;
     }
 
@@ -449,12 +629,16 @@ std::size_t Trigger<ParamType>::cancelTrigger(std::string_view event) noexcept {
 template <typename ParamType>
     requires CallableWithParam<ParamType> && CopyableType<ParamType>
 std::size_t Trigger<ParamType>::cancelAllTriggers() noexcept {
-    std::unique_lock lock(m_mutex_);
+    internal::unique_lock_t<internal::shared_mutex_type> lock(m_mutex_);
     std::size_t canceledCount = 0;
 
     for (auto& [event, flags] : m_pending_triggers_) {
         for (auto& flag : flags) {
+#ifdef ATOM_USE_BOOST_LOCKFREE
+            flag->store(true, boost::memory_order_release);
+#else
             flag->store(true, std::memory_order_release);
+#endif
             ++canceledCount;
         }
     }
@@ -471,7 +655,7 @@ template <typename ParamType>
         return false;
     }
 
-    std::shared_lock lock(m_mutex_);
+    internal::shared_lock_t<internal::shared_mutex_type> lock(m_mutex_);
     auto it = m_callbacks_.find(std::string(event));
     return it != m_callbacks_.end() && !it->second.empty();
 }
@@ -484,10 +668,37 @@ template <typename ParamType>
         return 0;
     }
 
-    std::shared_lock lock(m_mutex_);
+    internal::shared_lock_t<internal::shared_mutex_type> lock(m_mutex_);
     auto it = m_callbacks_.find(std::string(event));
     return it != m_callbacks_.end() ? it->second.size() : 0;
 }
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+template <typename ParamType>
+    requires CallableWithParam<ParamType> && CopyableType<ParamType>
+[[nodiscard]] std::unique_ptr<
+    internal::lockfree_queue<std::pair<std::string, ParamType>>>
+Trigger<ParamType>::createLockFreeTriggerQueue(std::size_t queueSize) {
+    return std::make_unique<
+        internal::lockfree_queue<std::pair<std::string, ParamType>>>(queueSize);
+}
+
+template <typename ParamType>
+    requires CallableWithParam<ParamType> && CopyableType<ParamType>
+std::size_t Trigger<ParamType>::processLockFreeTriggers(
+    internal::lockfree_queue<std::pair<std::string, ParamType>>& queue,
+    std::size_t maxEvents) noexcept {
+    std::size_t processedCount = 0;
+    std::pair<std::string, ParamType> eventData;
+
+    while ((maxEvents == 0 || processedCount < maxEvents) &&
+           queue.pop(eventData)) {
+        processedCount += trigger(eventData.first, eventData.second);
+    }
+
+    return processedCount;
+}
+#endif
 
 }  // namespace atom::async
 

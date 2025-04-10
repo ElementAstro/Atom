@@ -490,8 +490,9 @@ public:
      * is being destroyed
      */
     template <typename Clock, typename Duration>
-    [[nodiscard]] auto takeUntil(const std::chrono::time_point<Clock, Duration>&
-                                     timeout_time) -> std::optional<T> {
+    [[nodiscard]] auto takeUntil(
+        const std::chrono::time_point<Clock, Duration>& timeout_time)
+        -> std::optional<T> {
         std::unique_lock lock(m_mutex_);
         if (m_conditionVariable_.wait_until(lock, timeout_time, [this] {
                 return !m_queue_.empty() || m_mustReturnNullptr_;
@@ -597,3 +598,219 @@ private:
 }  // namespace atom::async
 
 #endif  // ATOM_ASYNC_QUEUE_HPP
+
+// Add after the ThreadSafeQueue class definition
+
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+
+namespace atom::async {
+/**
+ * @brief Lock-free queue implementation using boost::lockfree
+ * @tparam T Type of elements stored in the queue
+ */
+template <Movable T>
+class LockFreeQueue {
+public:
+    /**
+     * @brief Construct a new Lock Free Queue
+     * @param capacity Initial capacity of the queue
+     */
+    explicit LockFreeQueue(size_t capacity = 128) : m_queue_(capacity) {}
+
+    LockFreeQueue(const LockFreeQueue&) = delete;
+    LockFreeQueue& operator=(const LockFreeQueue&) = delete;
+    LockFreeQueue(LockFreeQueue&&) = delete;
+    LockFreeQueue& operator=(LockFreeQueue&&) = delete;
+
+    /**
+     * @brief Add an element to the queue
+     * @param element Element to be added
+     * @return True if successful, false if queue is full
+     */
+    bool put(const T& element) noexcept { return m_queue_.push(element); }
+
+    /**
+     * @brief Add an element to the queue
+     * @param element Element to be added
+     * @return True if successful, false if queue is full
+     */
+    bool put(T&& element) noexcept { return m_queue_.push(std::move(element)); }
+
+    /**
+     * @brief Take an element from the queue
+     * @return Optional containing the element or nothing if queue is empty
+     */
+    [[nodiscard]] auto take() -> std::optional<T> {
+        T item;
+        if (m_queue_.pop(item)) {
+            return item;
+        }
+        return std::nullopt;
+    }
+
+    /**
+     * @brief Check if the queue is empty
+     * @return True if queue is empty
+     */
+    [[nodiscard]] bool empty() const noexcept { return m_queue_.empty(); }
+
+    /**
+     * @brief Check if the queue is full
+     * @return True if queue is full
+     */
+    [[nodiscard]] bool full() const noexcept { return m_queue_.full(); }
+
+    /**
+     * @brief Resize the queue
+     * @param capacity New capacity
+     * @note This operation is not safe to call concurrently with other
+     * operations
+     */
+    void resize(size_t capacity) { m_queue_.reserve(capacity); }
+
+    /**
+     * @brief Get the capacity of the queue
+     * @return Current maximum capacity of the queue
+     */
+    [[nodiscard]] size_t capacity() const noexcept {
+        return m_queue_.capacity();
+    }
+
+    /**
+     * @brief Try to take an element without waiting
+     * @return Optional containing the element or nothing if queue is empty
+     */
+    [[nodiscard]] auto tryTake() noexcept -> std::optional<T> {
+        return take();  // Same as take() for lockfree queue
+    }
+
+    /**
+     * @brief Process batch of items
+     * @param processor Function to process each item
+     * @param maxItems Maximum number of items to process
+     * @return Number of processed items
+     */
+    template <typename Processor>
+        requires std::invocable<Processor, T&>
+    size_t consume(Processor processor, size_t maxItems = SIZE_MAX) {
+        return m_queue_.consume_all([&processor](T& item) { processor(item); });
+    }
+
+private:
+    boost::lockfree::queue<T> m_queue_;
+};
+
+/**
+ * @brief Single-producer, single-consumer lock-free queue
+ * @tparam T Type of elements stored in the queue
+ */
+template <Movable T>
+class SPSCQueue {
+public:
+    /**
+     * @brief Construct a new SPSC Queue
+     * @param capacity Initial capacity of the queue
+     */
+    explicit SPSCQueue(size_t capacity = 128) : m_queue_(capacity) {}
+
+    SPSCQueue(const SPSCQueue&) = delete;
+    SPSCQueue& operator=(const SPSCQueue&) = delete;
+    SPSCQueue(SPSCQueue&&) = delete;
+    SPSCQueue& operator=(SPSCQueue&&) = delete;
+
+    /**
+     * @brief Add an element to the queue
+     * @param element Element to be added
+     * @return True if successful, false if queue is full
+     */
+    bool put(const T& element) noexcept { return m_queue_.push(element); }
+
+    /**
+     * @brief Take an element from the queue
+     * @return Optional containing the element or nothing if queue is empty
+     */
+    [[nodiscard]] auto take() -> std::optional<T> {
+        T item;
+        if (m_queue_.pop(item)) {
+            return item;
+        }
+        return std::nullopt;
+    }
+
+    /**
+     * @brief Check if the queue is empty
+     * @return True if queue is empty
+     */
+    [[nodiscard]] bool empty() const noexcept { return m_queue_.empty(); }
+
+    /**
+     * @brief Check if the queue is full
+     * @return True if queue is full
+     */
+    [[nodiscard]] bool full() const noexcept { return m_queue_.full(); }
+
+    /**
+     * @brief Get the capacity of the queue
+     * @return Current maximum capacity of the queue
+     */
+    [[nodiscard]] size_t capacity() const noexcept {
+        return m_queue_.capacity();
+    }
+
+private:
+    boost::lockfree::spsc_queue<T> m_queue_;
+};
+
+}  // namespace atom::async
+
+#endif  // ATOM_USE_LOCKFREE_QUEUE
+
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+/**
+ * @brief Queue type selection based on characteristics and requirements
+ */
+template <Movable T>
+class QueueSelector {
+public:
+    /**
+     * @brief Select appropriate queue type based on parameters
+     * @param capacity Initial capacity
+     * @param singleProducerConsumer Whether to use SPSC queue
+     * @return Appropriate queue implementation
+     */
+    static auto select(size_t capacity = 128,
+                       bool singleProducerConsumer = false) {
+        if (singleProducerConsumer) {
+            return std::make_unique<SPSCQueue<T>>(capacity);
+        } else {
+            return std::make_unique<LockFreeQueue<T>>(capacity);
+        }
+    }
+
+    /**
+     * @brief Create a thread-safe queue (blocking implementation)
+     * @return Thread-safe queue instance
+     */
+    static auto createThreadSafe() {
+        return std::make_unique<ThreadSafeQueue<T>>();
+    }
+
+    /**
+     * @brief Create a lock-free queue
+     * @param capacity Initial capacity
+     * @return Lock-free queue instance
+     */
+    static auto createLockFree(size_t capacity = 128) {
+        return std::make_unique<LockFreeQueue<T>>(capacity);
+    }
+
+    /**
+     * @brief Create a single-producer, single-consumer queue
+     * @param capacity Initial capacity
+     * @return SPSC queue instance
+     */
+    static auto createSPSC(size_t capacity = 128) {
+        return std::make_unique<SPSCQueue<T>>(capacity);
+    }
+};
+#endif  // ATOM_USE_LOCKFREE_QUEUE

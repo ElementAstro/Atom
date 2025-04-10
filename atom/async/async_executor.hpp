@@ -26,6 +26,10 @@ Description: Advanced async task executor with thread pooling
 #include <type_traits>
 #include <vector>
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+#include <boost/lockfree/queue.hpp>
+#endif
+
 namespace atom::async {
 
 /**
@@ -71,6 +75,63 @@ inline bool operator<(const ExecutorTask& lhs, const ExecutorTask& rhs) {
     return static_cast<int>(lhs.getPriority()) < static_cast<int>(rhs.getPriority());
 }
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+/**
+ * @brief Container to wrap ExecutorTask in boost::lockfree::queue
+ */
+class ExecutorTaskContainer {
+public:
+    /**
+     * @brief Constructs a lockfree task container with specified capacity
+     * 
+     * @param capacity Initial capacity of the queue
+     */
+    explicit ExecutorTaskContainer(size_t capacity = 128)
+        : task_queue_(capacity) {}
+    
+    /**
+     * @brief Adds a task to the queue
+     * 
+     * @param task The ExecutorTask to be added
+     * @return true if task was successfully added, false otherwise
+     */
+    bool push(ExecutorTask* task) {
+        return task_queue_.push(task);
+    }
+    
+    /**
+     * @brief Retrieves the next task from the queue
+     * 
+     * @param task Output parameter to store the retrieved task
+     * @return true if a task was successfully retrieved, false if queue is empty
+     */
+    bool pop(ExecutorTask*& task) {
+        return task_queue_.pop(task);
+    }
+    
+    /**
+     * @brief Checks if the queue is empty
+     * 
+     * @return true if queue is empty, false otherwise
+     */
+    bool empty() const {
+        return task_queue_.empty();
+    }
+    
+    /**
+     * @brief Returns the approximate size of the queue
+     * 
+     * @return Approximate number of elements in the queue
+     */
+    size_t size_approx() const {
+        return task_queue_.read_available();
+    }
+
+private:
+    boost::lockfree::queue<ExecutorTask*> task_queue_;
+};
+#endif
+
 /**
  * @brief ThreadPool implementation with priority-based task execution.
  * 
@@ -89,8 +150,11 @@ public:
      * @throws std::invalid_argument if numThreads is 0
      */
     explicit ThreadPool(size_t numThreads = std::thread::hardware_concurrency())
-        : stop_(false), active_tasks_(0) {
-        
+        : stop_(false), active_tasks_(0)
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        , task_container_(256) // Initialize with larger capacity for high concurrency
+#endif
+    {
         if (numThreads == 0) {
             throw std::invalid_argument("Thread pool size cannot be zero");
         }
@@ -121,6 +185,16 @@ public:
                 thread.join();
             }
         }
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        // Clean up any tasks that were queued but not executed
+        ExecutorTask* task = nullptr;
+        while (task_container_.pop(task)) {
+            if (task) {
+                delete task;
+            }
+        }
+#endif
     }
 
     // Rule of five - prevent copy, allow move
@@ -153,6 +227,37 @@ public:
         
         std::future<return_type> result = task->get_future();
         
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        auto* executor_task = new ExecutorTask(
+            [task]() { (*task)(); },
+            priority
+        );
+        
+        bool pushed = false;
+        // Try to push the task, with exponential backoff
+        for (int retry = 0; retry < 5; ++retry) {
+            if (stop_) {
+                delete executor_task;
+                throw std::runtime_error("Cannot enqueue task on stopped ThreadPool");
+            }
+            
+            pushed = task_container_.push(executor_task);
+            if (pushed) break;
+            
+            // Backoff on contention
+            std::this_thread::yield();
+            if (retry > 0) {
+                std::this_thread::sleep_for(std::chrono::microseconds(1 << retry));
+            }
+        }
+        
+        if (!pushed) {
+            delete executor_task;
+            throw std::runtime_error("Failed to enqueue task: queue is full");
+        }
+        
+        condition_.notify_one();
+#else
         {
             std::unique_lock<std::mutex> lock(queue_mutex_);
             
@@ -167,6 +272,7 @@ public:
         }
         
         condition_.notify_one();
+#endif
         return result;
     }
 
@@ -176,8 +282,12 @@ public:
      * @return Size of the task queue
      */
     [[nodiscard]] size_t queueSize() const {
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        return task_container_.size_approx();
+#else
         std::unique_lock<std::mutex> lock(queue_mutex_);
         return tasks_.size();
+#endif
     }
 
     /**
@@ -261,10 +371,22 @@ public:
      * @return Number of tasks removed
      */
     size_t clearQueue() {
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        size_t removed = 0;
+        ExecutorTask* task = nullptr;
+        while (task_container_.pop(task)) {
+            if (task) {
+                delete task;
+                removed++;
+            }
+        }
+        return removed;
+#else
         std::unique_lock<std::mutex> lock(queue_mutex_);
         size_t count = tasks_.size();
         tasks_.clear();
         return count;
+#endif
     }
 
     /**
@@ -274,7 +396,11 @@ public:
         std::unique_lock<std::mutex> lock(queue_mutex_);
         
         done_condition_.wait(lock, [this]{
-            return tasks_.empty() && active_tasks_.load() == 0;
+#ifdef ATOM_USE_BOOST_LOCKFREE
+            return (task_container_.empty() && active_tasks_.load() == 0) || stop_;
+#else
+            return (tasks_.empty() && active_tasks_.load() == 0) || stop_;
+#endif
         });
     }
 
@@ -282,6 +408,42 @@ private:
     // Worker thread function
     void workerThread() {
         while (true) {
+#ifdef ATOM_USE_BOOST_LOCKFREE
+            // Lockfree implementation
+            if (threads_to_stop_ > 0) {
+                // Use atomic decrement to avoid race conditions
+                if (threads_to_stop_.fetch_sub(1, std::memory_order_acq_rel) > 0) {
+                    break;
+                }
+                // If we didn't actually need to stop (counter went negative), restore it
+                threads_to_stop_.fetch_add(1, std::memory_order_acq_rel);
+            }
+            
+            if (stop_) {
+                break;
+            }
+            
+            ExecutorTask* task = nullptr;
+            bool dequeued = task_container_.pop(task);
+            
+            if (dequeued && task) {
+                active_tasks_++;
+                task->execute();
+                delete task;
+                active_tasks_--;
+                
+                if (task_container_.empty() && active_tasks_.load() == 0) {
+                    done_condition_.notify_all();
+                }
+            } else {
+                // If no tasks, wait for notification
+                std::unique_lock<std::mutex> lock(queue_mutex_);
+                condition_.wait_for(lock, std::chrono::milliseconds(10), [this] {
+                    return stop_ || !task_container_.empty() || threads_to_stop_ > 0;
+                });
+            }
+#else
+            // Original implementation
             std::optional<ExecutorTask> task;
             
             {
@@ -318,11 +480,14 @@ private:
                     done_condition_.notify_all();
                 }
             }
+#endif
         }
     }
 
     std::vector<std::thread> threads_;
+#ifndef ATOM_USE_BOOST_LOCKFREE
     std::vector<ExecutorTask> tasks_;
+#endif
     
     mutable std::mutex queue_mutex_;
     std::condition_variable condition_;
@@ -330,7 +495,12 @@ private:
     
     bool stop_;
     std::atomic<size_t> active_tasks_;
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    std::atomic<size_t> threads_to_stop_{0};
+    ExecutorTaskContainer task_container_;
+#else
     size_t threads_to_stop_{0};
+#endif
 };
 
 /**

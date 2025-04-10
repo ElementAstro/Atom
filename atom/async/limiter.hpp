@@ -14,6 +14,11 @@
 #include <thread>
 #include <unordered_map>
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+#include <boost/lockfree/queue.hpp>
+#include <boost/lockfree/spsc_queue.hpp>
+#endif
+
 namespace atom::async {
 
 /**
@@ -168,12 +173,117 @@ private:
      */
     void processWaiters();
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    /**
+     * @brief Request entry structure for lockfree containers
+     */
+    struct RequestEntry {
+        std::chrono::steady_clock::time_point timestamp;
+        
+        RequestEntry() = default;
+        explicit RequestEntry(std::chrono::steady_clock::time_point time)
+            : timestamp(time) {}
+    };
+    
+    /**
+     * @brief Coroutine handle wrapper for lockfree containers
+     */
+    struct WaiterEntry {
+        std::coroutine_handle<> handle;
+        
+        WaiterEntry() = default;
+        explicit WaiterEntry(std::coroutine_handle<> h) : handle(h) {}
+    };
+    
+    /**
+     * @brief Lockfree queue container for requests
+     */
+    class LockfreeRequestQueue {
+    public:
+        LockfreeRequestQueue() : m_queue(128) {} // Default capacity
+        
+        void push(const std::chrono::steady_clock::time_point& time) {
+            // Keep trying until we succeed
+            RequestEntry entry(time);
+            while (!m_queue.push(entry)) {
+                std::this_thread::yield();
+            }
+        }
+        
+        bool pop(std::chrono::steady_clock::time_point& time) {
+            RequestEntry entry;
+            if (m_queue.pop(entry)) {
+                time = entry.timestamp;
+                return true;
+            }
+            return false;
+        }
+        
+        bool empty() const {
+            return m_queue.empty();
+        }
+        
+        void clear() {
+            RequestEntry entry;
+            while (m_queue.pop(entry)) {}
+        }
+        
+        size_t size_approx() const {
+            return m_queue.read_available();
+        }
+        
+    private:
+        boost::lockfree::queue<RequestEntry> m_queue;
+    };
+    
+    /**
+     * @brief Lockfree queue container for waiters
+     */
+    class LockfreeWaiterQueue {
+    public:
+        LockfreeWaiterQueue() : m_queue(128) {} // Default capacity
+        
+        void push(std::coroutine_handle<> handle) {
+            // Keep trying until we succeed
+            WaiterEntry entry(handle);
+            while (!m_queue.push(entry)) {
+                std::this_thread::yield();
+            }
+        }
+        
+        bool pop(std::coroutine_handle<>& handle) {
+            WaiterEntry entry;
+            if (m_queue.pop(entry)) {
+                handle = entry.handle;
+                return true;
+            }
+            return false;
+        }
+        
+        bool empty() const {
+            return m_queue.empty();
+        }
+        
+        size_t size_approx() const {
+            return m_queue.read_available();
+        }
+        
+    private:
+        boost::lockfree::queue<WaiterEntry> m_queue;
+    };
+    
+    std::unordered_map<std::string, Settings> settings_;
+    std::unordered_map<std::string, LockfreeRequestQueue> requests_;
+    std::unordered_map<std::string, LockfreeWaiterQueue> waiters_;
+#else
     std::unordered_map<std::string, Settings> settings_;
     std::unordered_map<std::string,
                        std::deque<std::chrono::steady_clock::time_point>>
         requests_;
     std::unordered_map<std::string, std::deque<std::coroutine_handle<>>>
         waiters_;
+#endif
+
     std::unordered_map<std::string,
                        std::deque<std::chrono::steady_clock::time_point>>
         log_;

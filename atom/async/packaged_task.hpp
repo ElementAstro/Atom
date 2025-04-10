@@ -12,6 +12,12 @@
 
 #include "atom/async/future.hpp"
 
+// Add Boost.lockfree support
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+#include <boost/lockfree/queue.hpp>
+#include <boost/lockfree/spsc_queue.hpp>
+#endif
+
 namespace atom::async {
 
 /**
@@ -88,7 +94,13 @@ public:
           promise_(std::move(other.promise_)),
           future_(std::move(other.future_)),
           callbacks_(std::move(other.callbacks_)),
-          cancelled_(other.cancelled_.load()) {}
+          cancelled_(other.cancelled_.load())
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+          ,
+          m_lockfreeCallbacks(std::move(other.m_lockfreeCallbacks))
+#endif
+    {
+    }
 
     EnhancedPackagedTask& operator=(EnhancedPackagedTask&& other) noexcept {
         if (this != &other) {
@@ -97,6 +109,9 @@ public:
             future_ = std::move(other.future_);
             callbacks_ = std::move(other.callbacks_);
             cancelled_.store(other.cancelled_.load());
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+            m_lockfreeCallbacks = std::move(other.m_lockfreeCallbacks);
+#endif
         }
         return *this;
     }
@@ -147,8 +162,10 @@ public:
         }
     }
 
+#ifdef ATOM_USE_LOCKFREE_QUEUE
     /**
-     * @brief Adds a callback to be called upon task completion.
+     * @brief Adds a callback to be called upon task completion using lockfree
+     * queue.
      * @tparam F The type of the callback function.
      * @param func The callback function to add.
      * @throws InvalidPackagedTaskException if the callback is invalid
@@ -161,9 +178,37 @@ public:
                 "Provided callback is invalid");
         }
 
-        std::lock_guard<std::mutex> lock(callbacksMutex_);
-        callbacks_.emplace_back(std::forward<F>(func));
+        // Initialize lockfree callback queue if not already initialized
+        if (!m_lockfreeCallbacks) {
+            std::lock_guard<std::mutex> lock(callbacksMutex_);
+            if (!m_lockfreeCallbacks) {
+                m_lockfreeCallbacks = std::make_unique<LockfreeCallbackQueue>(
+                    CALLBACK_QUEUE_SIZE);
+            }
+        }
+
+        // Try to add to lockfree queue first with retries
+        auto wrappedCallback =
+            std::make_shared<CallbackWrapper>(std::forward<F>(func));
+        bool pushed = false;
+
+        for (int i = 0; i < 3 && !pushed; ++i) {
+            pushed = m_lockfreeCallbacks->push(wrappedCallback);
+            if (!pushed) {
+                std::this_thread::yield();
+            }
+        }
+
+        // Fall back to mutex-protected vector if queue is full
+        if (!pushed) {
+            std::lock_guard<std::mutex> lock(callbacksMutex_);
+            callbacks_.emplace_back(
+                [wrappedCallback](const ResultType& result) {
+                    (*wrappedCallback)(result);
+                });
+        }
     }
+#endif
 
     /**
      * @brief Cancels the task.
@@ -203,7 +248,65 @@ protected:
         cancelled_;  ///< Flag indicating if the task has been cancelled.
     std::mutex callbacksMutex_;  ///< Mutex to protect callbacks vector.
 
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+    // Type-erased callback wrapper that can be stored in lockfree queue
+    struct CallbackWrapper {
+        virtual ~CallbackWrapper() = default;
+        virtual void operator()(const ResultType& result) = 0;
+
+        template <typename F>
+        CallbackWrapper(F&& func) : callback(std::forward<F>(func)) {}
+
+        std::function<void(ResultType)> callback;
+
+        void operator()(const ResultType& result) { callback(result); }
+    };
+
+    // Alias for the lockfree queue type
+    static constexpr size_t CALLBACK_QUEUE_SIZE = 128;
+    using LockfreeCallbackQueue =
+        boost::lockfree::queue<std::shared_ptr<CallbackWrapper>>;
+
+    // Lockfree queue for callbacks
+    std::unique_ptr<LockfreeCallbackQueue> m_lockfreeCallbacks;
+#endif
+
 private:
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+    /**
+     * @brief Runs all the registered callbacks with the given result.
+     * Optimized version that processes lockfree queue first.
+     * @param result The result to pass to the callbacks.
+     */
+    void runCallbacks(const ResultType& result) {
+        // First process callbacks from lockfree queue if available
+        if (m_lockfreeCallbacks) {
+            std::shared_ptr<CallbackWrapper> callback;
+            while (m_lockfreeCallbacks->pop(callback)) {
+                try {
+                    (*callback)(result);
+                } catch (...) {
+                    // Log exception but continue with other callbacks
+                }
+            }
+        }
+
+        // Then process callbacks from vector
+        std::vector<std::function<void(ResultType)>> callbacksCopy;
+        {
+            std::lock_guard<std::mutex> lock(callbacksMutex_);
+            callbacksCopy = callbacks_;
+        }
+
+        for (auto& callback : callbacksCopy) {
+            try {
+                callback(result);
+            } catch (...) {
+                // Log exception but continue with other callbacks
+            }
+        }
+    }
+#else
     /**
      * @brief Runs all the registered callbacks with the given result.
      * @param result The result to pass to the callbacks.
@@ -223,6 +326,7 @@ private:
             }
         }
     }
+#endif
 };
 
 /**
@@ -259,7 +363,13 @@ public:
           promise_(std::move(other.promise_)),
           future_(std::move(other.future_)),
           callbacks_(std::move(other.callbacks_)),
-          cancelled_(other.cancelled_.load()) {}
+          cancelled_(other.cancelled_.load())
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+          ,
+          m_lockfreeCallbacks(std::move(other.m_lockfreeCallbacks))
+#endif
+    {
+    }
 
     EnhancedPackagedTask& operator=(EnhancedPackagedTask&& other) noexcept {
         if (this != &other) {
@@ -268,6 +378,9 @@ public:
             future_ = std::move(other.future_);
             callbacks_ = std::move(other.callbacks_);
             cancelled_.store(other.cancelled_.load());
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+            m_lockfreeCallbacks = std::move(other.m_lockfreeCallbacks);
+#endif
         }
         return *this;
     }
@@ -318,8 +431,10 @@ public:
         }
     }
 
+#ifdef ATOM_USE_LOCKFREE_QUEUE
     /**
-     * @brief Adds a callback to be called upon task completion.
+     * @brief Adds a callback to be called upon task completion using lockfree
+     * queue.
      * @tparam F The type of the callback function.
      * @param func The callback function to add.
      * @throws InvalidPackagedTaskException if the callback is invalid
@@ -332,9 +447,35 @@ public:
                 "Provided callback is invalid");
         }
 
-        std::lock_guard<std::mutex> lock(callbacksMutex_);
-        callbacks_.emplace_back(std::forward<F>(func));
+        // Initialize lockfree callback queue if not already initialized
+        if (!m_lockfreeCallbacks) {
+            std::lock_guard<std::mutex> lock(callbacksMutex_);
+            if (!m_lockfreeCallbacks) {
+                m_lockfreeCallbacks = std::make_unique<LockfreeCallbackQueue>(
+                    CALLBACK_QUEUE_SIZE);
+            }
+        }
+
+        // Try to add to lockfree queue first with retries
+        auto wrappedCallback =
+            std::make_shared<CallbackWrapper>(std::forward<F>(func));
+        bool pushed = false;
+
+        for (int i = 0; i < 3 && !pushed; ++i) {
+            pushed = m_lockfreeCallbacks->push(wrappedCallback);
+            if (!pushed) {
+                std::this_thread::yield();
+            }
+        }
+
+        // Fall back to mutex-protected vector if queue is full
+        if (!pushed) {
+            std::lock_guard<std::mutex> lock(callbacksMutex_);
+            callbacks_.emplace_back(
+                [wrappedCallback]() { (*wrappedCallback)(); });
+        }
     }
+#endif
 
     /**
      * @brief Cancels the task.
@@ -374,7 +515,64 @@ protected:
         cancelled_;  ///< Flag indicating if the task has been cancelled.
     std::mutex callbacksMutex_;  ///< Mutex to protect callbacks vector.
 
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+    // Type-erased callback wrapper that can be stored in lockfree queue
+    struct CallbackWrapper {
+        virtual ~CallbackWrapper() = default;
+        virtual void operator()() = 0;
+
+        template <typename F>
+        CallbackWrapper(F&& func) : callback(std::forward<F>(func)) {}
+
+        std::function<void()> callback;
+
+        void operator()() { callback(); }
+    };
+
+    // Alias for the lockfree queue type
+    static constexpr size_t CALLBACK_QUEUE_SIZE = 128;
+    using LockfreeCallbackQueue =
+        boost::lockfree::queue<std::shared_ptr<CallbackWrapper>>;
+
+    // Lockfree queue for callbacks
+    std::unique_ptr<LockfreeCallbackQueue> m_lockfreeCallbacks;
+#endif
+
 private:
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+    /**
+     * @brief Runs all the registered callbacks.
+     * Optimized version that processes lockfree queue first.
+     */
+    void runCallbacks() {
+        // First process callbacks from lockfree queue if available
+        if (m_lockfreeCallbacks) {
+            std::shared_ptr<CallbackWrapper> callback;
+            while (m_lockfreeCallbacks->pop(callback)) {
+                try {
+                    (*callback)();
+                } catch (...) {
+                    // Log exception but continue with other callbacks
+                }
+            }
+        }
+
+        // Then process callbacks from vector
+        std::vector<std::function<void()>> callbacksCopy;
+        {
+            std::lock_guard<std::mutex> lock(callbacksMutex_);
+            callbacksCopy = callbacks_;
+        }
+
+        for (auto& callback : callbacksCopy) {
+            try {
+                callback();
+            } catch (...) {
+                // Log exception but continue with other callbacks
+            }
+        }
+    }
+#else
     /**
      * @brief Runs all the registered callbacks.
      */
@@ -393,6 +591,7 @@ private:
             }
         }
     }
+#endif
 };
 
 /**

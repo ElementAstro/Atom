@@ -16,10 +16,22 @@ Description: Some useful spinlock implementations
 #define ATOM_ASYNC_LOCK_HPP
 
 #include <atomic>
-#include <concepts>
-#include <thread>
 #include <chrono>
-#include <stdexcept>
+#include <concepts>
+#include <functional>
+#include <thread>
+
+#ifdef ATOM_USE_BOOST_LOCKS
+#include <boost/thread/locks.hpp>
+#include <boost/thread/mutex.hpp>
+#include <boost/thread/recursive_mutex.hpp>
+#include <boost/thread/shared_mutex.hpp>
+#endif
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+#include <boost/atomic.hpp>
+#include <boost/lockfree/queue.hpp>
+#endif
 
 #include "atom/type/noncopyable.hpp"
 
@@ -35,7 +47,8 @@ namespace atom::async {
 #elif defined(__arm__)
 #define cpu_relax() asm volatile("nop\n" : : : "memory")
 #else
-#define cpu_relax() std::this_thread::yield() // Fallback for unknown architectures
+#define cpu_relax() \
+    std::this_thread::yield()  // Fallback for unknown architectures
 #endif
 
 /**
@@ -56,15 +69,16 @@ concept TryableLock = Lock<T> && requires(T lock) {
 };
 
 /**
- * @brief A simple spinlock implementation using atomic_flag with C++20 features.
+ * @brief A simple spinlock implementation using atomic_flag with C++20
+ * features.
  */
 class Spinlock : public NonCopyable {
     std::atomic_flag flag_ = ATOMIC_FLAG_INIT;
-    
-    // For deadlock detection (optional in debug builds)
-    #ifdef ATOM_DEBUG
+
+// For deadlock detection (optional in debug builds)
+#ifdef ATOM_DEBUG
     std::atomic<std::thread::id> owner_{};
-    #endif
+#endif
 
 public:
     /**
@@ -74,13 +88,15 @@ public:
 
     /**
      * @brief Acquires the lock.
-     * @throws std::system_error if the lock is already owned by the current thread (in debug mode)
+     * @throws std::system_error if the lock is already owned by the current
+     * thread (in debug mode)
      */
     void lock();
 
     /**
      * @brief Releases the lock.
-     * @throws std::system_error if the current thread doesn't own the lock (in debug mode)
+     * @throws std::system_error if the current thread doesn't own the lock (in
+     * debug mode)
      */
     void unlock() noexcept;
 
@@ -95,8 +111,9 @@ public:
      * @param timeout Maximum time to wait
      * @return true if the lock was acquired, false otherwise.
      */
-    template<class Rep, class Period>
-    [[nodiscard]] auto tryLock(const std::chrono::duration<Rep, Period>& timeout) noexcept -> bool {
+    template <class Rep, class Period>
+    [[nodiscard]] auto tryLock(
+        const std::chrono::duration<Rep, Period> &timeout) noexcept -> bool {
         auto start = std::chrono::steady_clock::now();
         while (!tryLock()) {
             if (std::chrono::steady_clock::now() - start > timeout) {
@@ -112,16 +129,16 @@ public:
      * @brief Waits until lock becomes available (C++20)
      */
     void wait() const noexcept {
-        #if defined(__cpp_lib_atomic_wait)
+#if defined(__cpp_lib_atomic_wait)
         while (flag_.test(std::memory_order_acquire)) {
             flag_.wait(true, std::memory_order_relaxed);
         }
-        #else
+#else
         // Fallback for compilers without wait support
         while (flag_.test(std::memory_order_acquire)) {
             cpu_relax();
         }
-        #endif
+#endif
     }
 };
 
@@ -132,7 +149,7 @@ public:
 class TicketSpinlock : public NonCopyable {
     std::atomic<uint64_t> ticket_{0};
     std::atomic<uint64_t> serving_{0};
-    
+
     // Max spin count before yielding to prevent CPU starvation
     static constexpr uint32_t MAX_SPIN_COUNT = 1000;
 
@@ -141,7 +158,7 @@ public:
      * @brief Default constructor.
      */
     TicketSpinlock() noexcept = default;
-    
+
     /**
      * @brief Lock guard for TicketSpinlock.
      */
@@ -167,7 +184,7 @@ public:
                 spinlock_.unlock(ticket_);
             }
         }
-        
+
         /**
          * @brief Explicitly unlocks the guarded lock.
          */
@@ -178,10 +195,10 @@ public:
             }
         }
 
-        LockGuard(const LockGuard&) = delete;
-        LockGuard& operator=(const LockGuard&) = delete;
-        LockGuard(LockGuard&&) = delete;
-        LockGuard& operator=(LockGuard&&) = delete;
+        LockGuard(const LockGuard &) = delete;
+        LockGuard &operator=(const LockGuard &) = delete;
+        LockGuard(LockGuard &&) = delete;
+        LockGuard &operator=(LockGuard &&) = delete;
     };
 
     using scoped_lock = LockGuard;
@@ -197,7 +214,8 @@ public:
      * @brief Releases the lock given a specific ticket number.
      *
      * @param ticket The ticket number to release.
-     * @throws std::invalid_argument if the ticket doesn't match the current serving number
+     * @throws std::invalid_argument if the ticket doesn't match the current
+     * serving number
      */
     void unlock(uint64_t ticket);
 
@@ -227,7 +245,7 @@ public:
      * @brief Default constructor.
      */
     UnfairSpinlock() noexcept = default;
-    
+
     /**
      * @brief Acquires the lock.
      */
@@ -259,13 +277,14 @@ class ScopedLock : public NonCopyable {
 
 public:
     /**
-     * @brief Constructs the scoped lock and acquires the lock on the provided mutex.
+     * @brief Constructs the scoped lock and acquires the lock on the provided
+     * mutex.
      *
      * @param mutex The mutex to lock.
      */
-    explicit ScopedLock(Mutex &mutex) noexcept(noexcept(mutex.lock())) 
-        : mutex_(mutex) { 
-        mutex_.lock(); 
+    explicit ScopedLock(Mutex &mutex) noexcept(noexcept(mutex.lock()))
+        : mutex_(mutex) {
+        mutex_.lock();
     }
 
     /**
@@ -305,10 +324,10 @@ using ScopedTicketLock = TicketSpinlock::LockGuard;
 class AdaptiveSpinlock : public NonCopyable {
     std::atomic_flag flag_ = ATOMIC_FLAG_INIT;
     static constexpr int SPIN_COUNT = 1000;
-    
+
 public:
     AdaptiveSpinlock() noexcept = default;
-    
+
     void lock() noexcept {
         // First try spinning a few times
         for (int i = 0; i < SPIN_COUNT; ++i) {
@@ -317,24 +336,196 @@ public:
             }
             cpu_relax();
         }
-        
+
         // If spinning failed, yield to scheduler between attempts
         while (flag_.test_and_set(std::memory_order_acquire)) {
             std::this_thread::yield();
         }
     }
-    
+
     void unlock() noexcept {
         flag_.clear(std::memory_order_release);
-        #if defined(__cpp_lib_atomic_flag_test)
+#if defined(__cpp_lib_atomic_flag_test)
         // In C++20, we can notify waiters
         flag_.notify_one();
-        #endif
+#endif
     }
-    
+
     [[nodiscard]] auto tryLock() noexcept -> bool {
         return !flag_.test_and_set(std::memory_order_acquire);
     }
+};
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+/**
+ * @brief A lock optimized for high contention scenarios using boost::atomic
+ *
+ * This lock uses boost::atomic operations with memory ordering optimizations
+ * and exponential backoff to reduce contention in high-throughput scenarios.
+ */
+class BoostSpinlock : public NonCopyable {
+    boost::atomic<bool> flag_{false};
+
+// For deadlock detection (optional in debug builds)
+#ifdef ATOM_DEBUG
+    boost::atomic<std::thread::id> owner_{};
+#endif
+
+public:
+    /**
+     * @brief Default constructor.
+     */
+    BoostSpinlock() noexcept = default;
+
+    /**
+     * @brief Acquires the lock with optimized spinning pattern.
+     */
+    void lock() noexcept;
+
+    /**
+     * @brief Releases the lock.
+     */
+    void unlock() noexcept;
+
+    /**
+     * @brief Tries to acquire the lock without blocking.
+     * @return true if the lock was acquired, false otherwise.
+     */
+    [[nodiscard]] auto tryLock() noexcept -> bool;
+
+    /**
+     * @brief Tries to acquire the lock with timeout.
+     * @param timeout Maximum time to wait
+     * @return true if the lock was acquired, false otherwise.
+     */
+    template <class Rep, class Period>
+    [[nodiscard]] auto tryLock(
+        const std::chrono::duration<Rep, Period> &timeout) noexcept -> bool {
+        auto start = std::chrono::steady_clock::now();
+        while (!tryLock()) {
+            if (std::chrono::steady_clock::now() - start > timeout) {
+                return false;
+            }
+            cpu_relax();
+        }
+        return true;
+    }
+};
+#endif
+
+#ifdef ATOM_USE_BOOST_LOCKS
+/**
+ * @brief A shared mutex wrapper around boost::shared_mutex.
+ *
+ * Provides both exclusive and shared locking capabilities using Boost's
+ * implementation which may have better performance on some platforms.
+ */
+class BoostSharedMutex : public NonCopyable {
+    boost::shared_mutex mutex_;
+
+public:
+    BoostSharedMutex() = default;
+
+    void lock() { mutex_.lock(); }
+    void unlock() { mutex_.unlock(); }
+    bool tryLock() { return mutex_.try_lock(); }
+
+    void lockShared() { mutex_.lock_shared(); }
+    void unlockShared() { mutex_.unlock_shared(); }
+    bool tryLockShared() { return mutex_.try_lock_shared(); }
+
+    /**
+     * @brief Scoped shared lock for BoostSharedMutex.
+     */
+    class SharedLock {
+        BoostSharedMutex &mutex_;
+        bool locked_{true};
+
+    public:
+        explicit SharedLock(BoostSharedMutex &mutex) : mutex_(mutex) {
+            mutex_.lockShared();
+        }
+
+        ~SharedLock() {
+            if (locked_) {
+                mutex_.unlockShared();
+            }
+        }
+
+        void unlock() {
+            if (locked_) {
+                mutex_.unlockShared();
+                locked_ = false;
+            }
+        }
+
+        SharedLock(const SharedLock &) = delete;
+        SharedLock &operator=(const SharedLock &) = delete;
+    };
+};
+
+/**
+ * @brief A recursive mutex wrapper around boost::recursive_mutex.
+ *
+ * Allows the same thread to acquire the mutex multiple times without
+ * deadlocking.
+ */
+class BoostRecursiveMutex : public NonCopyable {
+    boost::recursive_mutex mutex_;
+
+public:
+    BoostRecursiveMutex() = default;
+
+    void lock() { mutex_.lock(); }
+    void unlock() { mutex_.unlock(); }
+    bool tryLock() { return mutex_.try_lock(); }
+
+    template <class Rep, class Period>
+    bool tryLock(const std::chrono::duration<Rep, Period> &timeout) {
+        return mutex_.try_lock_for(timeout);
+    }
+};
+
+// Convenient type aliases for boost locks
+template <typename Mutex>
+using BoostScopedLock = boost::lock_guard<Mutex>;
+
+template <typename Mutex>
+using BoostUniqueLock = boost::unique_lock<Mutex>;
+#endif
+
+/**
+ * @brief Factory to create the appropriate lock type based on configuration
+ *
+ * This allows runtime selection between different lock implementations
+ * while maintaining a consistent interface.
+ */
+class LockFactory {
+public:
+    enum class LockType {
+        SPINLOCK,
+        TICKET_SPINLOCK,
+        UNFAIR_SPINLOCK,
+        ADAPTIVE_SPINLOCK,
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        BOOST_SPINLOCK,
+#endif
+#ifdef ATOM_USE_BOOST_LOCKS
+        BOOST_MUTEX,
+        BOOST_RECURSIVE_MUTEX,
+        BOOST_SHARED_MUTEX,
+#endif
+    };
+
+    /**
+     * @brief Creates a lock of the specified type wrapped in a unique_ptr
+     *
+     * @param type The type of lock to create
+     * @return std::unique_ptr to the created lock
+     * @throws std::invalid_argument if the lock type is invalid
+     */
+    static auto createLock(LockType type)
+        -> std::unique_ptr<void, std::function<void(void *)>>;
 };
 
 }  // namespace atom::async

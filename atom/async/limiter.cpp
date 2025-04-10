@@ -29,6 +29,18 @@ RateLimiter::RateLimiter() noexcept { LOG_F(INFO, "RateLimiter created"); }
 // Destructor
 RateLimiter::~RateLimiter() noexcept {
     try {
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        std::unique_lock lock(mutex_);
+        // Resume all waiting coroutines to avoid hanging
+        for (auto& [name, queue] : waiters_) {
+            std::coroutine_handle<> handle;
+            while (!queue.empty() && queue.pop(handle)) {
+                lock.unlock();
+                handle.resume();
+                lock.lock();
+            }
+        }
+#else
         std::unique_lock lock(mutex_);
         // 确保所有等待的协程都被唤醒以避免悬挂协程
         for (auto& [_, waiters_queue] : waiters_) {
@@ -40,6 +52,7 @@ RateLimiter::~RateLimiter() noexcept {
                 lock.lock();
             }
         }
+#endif
     } catch (...) {
         // 确保析构函数不抛出异常
     }
@@ -50,8 +63,13 @@ RateLimiter::RateLimiter(RateLimiter&& other) noexcept
     : paused_(other.paused_.load()) {
     std::unique_lock lock(other.mutex_);
     settings_ = std::move(other.settings_);
+#ifdef ATOM_USE_BOOST_LOCKFREE
     requests_ = std::move(other.requests_);
     waiters_ = std::move(other.waiters_);
+#else
+    requests_ = std::move(other.requests_);
+    waiters_ = std::move(other.waiters_);
+#endif
     log_ = std::move(other.log_);
 
     // 移动原子对象
@@ -66,8 +84,13 @@ RateLimiter& RateLimiter::operator=(RateLimiter&& other) noexcept {
     if (this != &other) {
         std::scoped_lock lock(mutex_, other.mutex_);
         settings_ = std::move(other.settings_);
+#ifdef ATOM_USE_BOOST_LOCKFREE
         requests_ = std::move(other.requests_);
         waiters_ = std::move(other.waiters_);
+#else
+        requests_ = std::move(other.requests_);
+        waiters_ = std::move(other.waiters_);
+#endif
         log_ = std::move(other.log_);
         paused_.store(other.paused_.load());
 
@@ -112,6 +135,29 @@ void RateLimiter::Awaiter::await_suspend(std::coroutine_handle<> handle) {
         auto& settings = limiter_.settings_[function_name_];
         limiter_.cleanup(function_name_, settings.timeWindow);
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        // Use lockfree implementation
+        if (limiter_.paused_.load(std::memory_order_acquire) ||
+            limiter_.requests_[function_name_].size_approx() >=
+                settings.maxRequests) {
+            limiter_.waiters_[function_name_].push(handle);
+            limiter_.rejected_requests_[function_name_].fetch_add(
+                1, std::memory_order_relaxed);
+            was_rejected_ = true;
+            LOG_F(WARNING,
+                  "Request for function %s rejected. Total rejected: %zu",
+                  function_name_.c_str(),
+                  limiter_.rejected_requests_[function_name_].load());
+        } else {
+            limiter_.requests_[function_name_].push(
+                std::chrono::steady_clock::now());
+            was_rejected_ = false;
+            lock.unlock();
+            LOG_F(INFO, "Request for function %s accepted",
+                  function_name_.c_str());
+            handle.resume();
+        }
+#else
         if (limiter_.paused_.load(std::memory_order_acquire) ||
             limiter_.requests_[function_name_].size() >= settings.maxRequests) {
             limiter_.waiters_[function_name_].emplace_back(handle);
@@ -131,6 +177,7 @@ void RateLimiter::Awaiter::await_suspend(std::coroutine_handle<> handle) {
                   function_name_.c_str());
             handle.resume();
         }
+#endif
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Exception in await_suspend: %s", e.what());
         handle.resume();  // 确保协程继续执行
@@ -231,22 +278,78 @@ void RateLimiter::cleanup(std::string_view function_name,
           function_name.data(), time_window.count());
 
     auto now = std::chrono::steady_clock::now();
+    auto cutoff_time = now - time_window;
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    // For lockfree implementation, we need to create a new queue and transfer
+    // valid items
+    LockfreeRequestQueue new_queue;
+    auto& current_queue = requests_[std::string(function_name)];
+
+    // Move valid timestamps to the new queue
+    std::chrono::steady_clock::time_point timestamp;
+    while (!current_queue.empty() && current_queue.pop(timestamp)) {
+        if (timestamp >= cutoff_time) {
+            new_queue.push(timestamp);
+        }
+    }
+
+    // Replace the old queue with the new one
+    current_queue = std::move(new_queue);
+#else
     auto& reqs = requests_[std::string(function_name)];
 
-    // 使用移除-擦除习惯用法更高效地清理
-    auto cutoff_time = now - time_window;
+    cutoff_time = now - time_window;
     reqs.erase(std::ranges::remove_if(reqs,
                                       [&cutoff_time](const auto& time) {
                                           return time < cutoff_time;
                                       })
                    .begin(),
                reqs.end());
+#endif
 }
 
 // Implementation of RateLimiter::processWaiters
 void RateLimiter::processWaiters() {
     LOG_F(INFO, "RateLimiter::processWaiters called");
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    // Create temporary storage for waiters to process
+    std::vector<std::pair<std::string, std::coroutine_handle<>>>
+        waiters_to_process;
+
+    // Identify waiters that can be processed
+    for (auto& [function_name, wait_queue] : waiters_) {
+        if (wait_queue.empty())
+            continue;
+
+        auto& settings = settings_[function_name];
+        auto& req_queue = requests_[function_name];
+
+        // Process as many waiters as possible according to rate limits
+        while (!wait_queue.empty() &&
+               req_queue.size_approx() < settings.maxRequests) {
+            std::coroutine_handle<> handle;
+            if (wait_queue.pop(handle)) {
+                req_queue.push(std::chrono::steady_clock::now());
+                waiters_to_process.emplace_back(function_name, handle);
+            }
+        }
+    }
+
+    // Release lock before resuming waiters
+    if (!waiters_to_process.empty()) {
+        mutex_.unlock();
+        // Can use parallel processing for better performance
+        std::for_each(std::execution::par_unseq, waiters_to_process.begin(),
+                      waiters_to_process.end(), [](const auto& pair) {
+                          LOG_F(INFO, "Resuming waiter for function: %s",
+                                pair.first.c_str());
+                          pair.second.resume();
+                      });
+        mutex_.lock();
+    }
+#else
     // 创建临时存储处理的waiter
     std::vector<std::pair<std::string, std::coroutine_handle<>>>
         waiters_to_process;
@@ -279,6 +382,7 @@ void RateLimiter::processWaiters() {
                       });
         mutex_.lock();
     }
+#endif
 }
 
 }  // namespace atom::async

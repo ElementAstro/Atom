@@ -36,6 +36,13 @@ Description: A thread-safe stack data structure for managing events.
 #define HAS_EXECUTION_HEADER 0
 #endif
 
+#if defined(USE_BOOST_LOCKFREE)
+#include <boost/lockfree/stack.hpp>
+#define ATOM_ASYNC_USE_LOCKFREE 1
+#else
+#define ATOM_ASYNC_USE_LOCKFREE 0
+#endif
+
 namespace atom::async {
 
 // Custom exceptions for EventStack
@@ -80,7 +87,16 @@ template <typename T>
     requires std::copyable<T> && std::movable<T>
 class EventStack {
 public:
-    EventStack() = default;
+    EventStack()
+#if ATOM_ASYNC_USE_LOCKFREE
+#if ATOM_ASYNC_LOCKFREE_BOUNDED
+        : events_(ATOM_ASYNC_LOCKFREE_CAPACITY)
+#else
+        : events_(ATOM_ASYNC_LOCKFREE_CAPACITY)
+#endif
+#endif
+    {
+    }
     ~EventStack() = default;
 
     // Rule of five: explicitly define copy constructor, copy assignment
@@ -216,7 +232,7 @@ public:
      */
     template <typename Func>
         requires std::invocable<Func&, const T&> &&
-                     std::same_as<std::invoke_result_t<Func&, const T&>, bool>
+                 std::same_as<std::invoke_result_t<Func&, const T&>, bool>
     [[nodiscard]] auto countEvents(Func&& predicate) const -> size_t;
 
     /**
@@ -229,7 +245,7 @@ public:
      */
     template <typename Func>
         requires std::invocable<Func&, const T&> &&
-                     std::same_as<std::invoke_result_t<Func&, const T&>, bool>
+                 std::same_as<std::invoke_result_t<Func&, const T&>, bool>
     [[nodiscard]] auto findEvent(Func&& predicate) const -> std::optional<T>;
 
     /**
@@ -241,7 +257,7 @@ public:
      */
     template <typename Func>
         requires std::invocable<Func&, const T&> &&
-                     std::same_as<std::invoke_result_t<Func&, const T&>, bool>
+                 std::same_as<std::invoke_result_t<Func&, const T&>, bool>
     [[nodiscard]] auto anyEvent(Func&& predicate) const -> bool;
 
     /**
@@ -253,7 +269,7 @@ public:
      */
     template <typename Func>
         requires std::invocable<Func&, const T&> &&
-                     std::same_as<std::invoke_result_t<Func&, const T&>, bool>
+                 std::same_as<std::invoke_result_t<Func&, const T&>, bool>
     [[nodiscard]] auto allEvents(Func&& predicate) const -> bool;
 
     /**
@@ -284,9 +300,41 @@ public:
     void transformEvents(Func&& transformFunc);
 
 private:
-    std::vector<T> events_;             /**< Vector to store events. */
-    mutable std::shared_mutex mtx_;     /**< Mutex for thread safety. */
-    std::atomic<size_t> eventCount_{0}; /**< Atomic counter for event count. */
+#if ATOM_ASYNC_USE_LOCKFREE
+    boost::lockfree::stack<T> events_{128};  // Initial capacity hint
+    std::atomic<size_t> eventCount_{0};
+
+    // Helper method for operations that need access to all elements
+    std::vector<T> drainStack() {
+        std::vector<T> result;
+        result.reserve(eventCount_.load(std::memory_order_relaxed));
+        T elem;
+        while (events_.pop(elem)) {
+            result.push_back(std::move(elem));
+        }
+        // Order is reversed compared to original stack
+        std::reverse(result.begin(), result.end());
+        return result;
+    }
+
+    // Refill stack from vector (preserves order)
+    void refillStack(const std::vector<T>& elements) {
+        // Clear current stack first
+        T dummy;
+        while (events_.pop(dummy)) {
+        }
+
+        // Push elements in reverse to maintain original order
+        for (auto it = elements.rbegin(); it != elements.rend(); ++it) {
+            events_.push(*it);
+        }
+        eventCount_.store(elements.size(), std::memory_order_relaxed);
+    }
+#else
+    std::vector<T> events_;              // Vector to store events
+    mutable std::shared_mutex mtx_;      // Mutex for thread safety
+    std::atomic<size_t> eventCount_{0};  // Atomic counter for event count
+#endif
 };
 
 // Copy constructor
@@ -359,9 +407,18 @@ template <typename T>
     requires std::copyable<T> && std::movable<T>
 void EventStack<T>::pushEvent(T event) {
     try {
+#if ATOM_ASYNC_USE_LOCKFREE
+        if (events_.push(std::move(event))) {
+            ++eventCount_;
+        } else {
+            throw EventStackException(
+                "Failed to push event: lockfree stack operation failed");
+        }
+#else
         std::unique_lock lock(mtx_);
         events_.push_back(std::move(event));
         ++eventCount_;
+#endif
     } catch (const std::exception& e) {
         throw EventStackException(std::string("Failed to push event: ") +
                                   e.what());
@@ -371,6 +428,17 @@ void EventStack<T>::pushEvent(T event) {
 template <typename T>
     requires std::copyable<T> && std::movable<T>
 auto EventStack<T>::popEvent() noexcept -> std::optional<T> {
+#if ATOM_ASYNC_USE_LOCKFREE
+    T event;
+    if (events_.pop(event)) {
+        size_t current = eventCount_.load(std::memory_order_relaxed);
+        if (current > 0) {
+            eventCount_.compare_exchange_strong(current, current - 1);
+        }
+        return event;
+    }
+    return std::nullopt;
+#else
     std::unique_lock lock(mtx_);
     if (!events_.empty()) {
         T event = std::move(events_.back());
@@ -379,6 +447,7 @@ auto EventStack<T>::popEvent() noexcept -> std::optional<T> {
         return event;
     }
     return std::nullopt;
+#endif
 }
 
 #if ENABLE_DEBUG
@@ -396,8 +465,12 @@ void EventStack<T>::printEvents() const {
 template <typename T>
     requires std::copyable<T> && std::movable<T>
 auto EventStack<T>::isEmpty() const noexcept -> bool {
+#if ATOM_ASYNC_USE_LOCKFREE
+    return eventCount_.load(std::memory_order_relaxed) == 0;
+#else
     std::shared_lock lock(mtx_);
     return events_.empty();
+#endif
 }
 
 template <typename T>
@@ -409,19 +482,48 @@ auto EventStack<T>::size() const noexcept -> size_t {
 template <typename T>
     requires std::copyable<T> && std::movable<T>
 void EventStack<T>::clearEvents() noexcept {
+#if ATOM_ASYNC_USE_LOCKFREE
+    // Drain the stack
+    T dummy;
+    while (events_.pop(dummy)) {
+    }
+    eventCount_.store(0, std::memory_order_relaxed);
+#else
     std::unique_lock lock(mtx_);
     events_.clear();
     eventCount_.store(0, std::memory_order_relaxed);
+#endif
 }
 
 template <typename T>
     requires std::copyable<T> && std::movable<T>
 auto EventStack<T>::peekTopEvent() const -> std::optional<T> {
+#if ATOM_ASYNC_USE_LOCKFREE
+    if (eventCount_.load(std::memory_order_relaxed) == 0) {
+        return std::nullopt;
+    }
+
+    // This operation requires creating a temporary copy of the stack
+    boost::lockfree::stack<T> tempStack(128);
+    tempStack.push(T{});  // Ensure we have at least one element
+    if (!const_cast<boost::lockfree::stack<T>&>(events_).pop_unsafe(
+            [&tempStack](T& item) {
+                tempStack.push(item);
+                return false;
+            })) {
+        return std::nullopt;
+    }
+
+    T result;
+    tempStack.pop(result);
+    return result;
+#else
     std::shared_lock lock(mtx_);
     if (!events_.empty()) {
         return events_.back();
     }
     return std::nullopt;
+#endif
 }
 
 template <typename T>
@@ -444,12 +546,22 @@ template <typename T>
                                        bool>
 void EventStack<T>::filterEvents(Func&& filterFunc) {
     try {
+#if ATOM_ASYNC_USE_LOCKFREE
+        // Get all elements, filter, and refill stack
+        std::vector<T> elements = drainStack();
+        auto newEnd = std::remove_if(
+            elements.begin(), elements.end(),
+            [&](const T& event) { return !std::invoke(filterFunc, event); });
+        elements.erase(newEnd, elements.end());
+        refillStack(elements);
+#else
         std::unique_lock lock(mtx_);
         auto newEnd = std::remove_if(
             events_.begin(), events_.end(),
             [&](const T& event) { return !std::invoke(filterFunc, event); });
         events_.erase(newEnd, events_.end());
         eventCount_.store(events_.size(), std::memory_order_relaxed);
+#endif
     } catch (const std::exception& e) {
         throw EventStackException(std::string("Failed to filter events: ") +
                                   e.what());
@@ -458,7 +570,8 @@ void EventStack<T>::filterEvents(Func&& filterFunc) {
 
 template <typename T>
     requires std::copyable<T> && std::movable<T>
-             auto EventStack<T>::serializeStack() const -> std::string
+                             auto EventStack<T>::serializeStack() const
+             -> std::string
                  requires Serializable<T>
 {
     try {
@@ -571,8 +684,8 @@ template <typename T>
     requires std::copyable<T> && std::movable<T>
                              template <typename Func>
                  requires std::invocable<Func&, const T&> &&
-                              std::same_as<
-                                  std::invoke_result_t<Func&, const T&>, bool>
+                          std::same_as<std::invoke_result_t<Func&, const T&>,
+                                       bool>
 auto EventStack<T>::countEvents(Func&& predicate) const -> size_t {
     try {
         std::shared_lock lock(mtx_);
@@ -595,8 +708,8 @@ template <typename T>
     requires std::copyable<T> && std::movable<T>
                              template <typename Func>
                  requires std::invocable<Func&, const T&> &&
-                              std::same_as<
-                                  std::invoke_result_t<Func&, const T&>, bool>
+                          std::same_as<std::invoke_result_t<Func&, const T&>,
+                                       bool>
 auto EventStack<T>::findEvent(Func&& predicate) const -> std::optional<T> {
     try {
         std::shared_lock lock(mtx_);
@@ -616,8 +729,8 @@ template <typename T>
     requires std::copyable<T> && std::movable<T>
                              template <typename Func>
                  requires std::invocable<Func&, const T&> &&
-                              std::same_as<
-                                  std::invoke_result_t<Func&, const T&>, bool>
+                          std::same_as<std::invoke_result_t<Func&, const T&>,
+                                       bool>
 auto EventStack<T>::anyEvent(Func&& predicate) const -> bool {
     try {
         std::shared_lock lock(mtx_);
@@ -640,8 +753,8 @@ template <typename T>
     requires std::copyable<T> && std::movable<T>
                              template <typename Func>
                  requires std::invocable<Func&, const T&> &&
-                              std::same_as<
-                                  std::invoke_result_t<Func&, const T&>, bool>
+                          std::same_as<std::invoke_result_t<Func&, const T&>,
+                                       bool>
 auto EventStack<T>::allEvents(Func&& predicate) const -> bool {
     try {
         std::shared_lock lock(mtx_);

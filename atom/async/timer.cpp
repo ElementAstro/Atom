@@ -105,8 +105,13 @@ Timer::~Timer() noexcept {
 
 void Timer::cancelAllTasks() noexcept {
     try {
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        m_taskContainer.clear();
+        m_hasCurrentTask.store(false, std::memory_order_release);
+#else
         std::scoped_lock lock(m_mutex);
         m_taskQueue = std::priority_queue<TimerTask>();
+#endif
         m_cond.notify_all();
     } catch (...) {
         // Ensure noexcept guarantee
@@ -134,6 +139,74 @@ auto Timer::now() const noexcept -> std::chrono::steady_clock::time_point {
 void Timer::run() noexcept {
     try {
         while (!m_stop.load(std::memory_order_acquire)) {
+#ifdef ATOM_USE_BOOST_LOCKFREE
+            // Boost.lockfree implementation
+            
+            // Handle current task first if there is one
+            if (m_hasCurrentTask.load(std::memory_order_acquire)) {
+                auto now = std::chrono::steady_clock::now();
+                
+                if (!m_paused.load(std::memory_order_acquire) && 
+                    now >= m_currentTask.getNextExecutionTime()) {
+                    // Clear current task flag before processing to allow new tasks to be set as current
+                    m_hasCurrentTask.store(false, std::memory_order_release);
+                    
+                    // Execute the task
+                    try {
+                        m_currentTask.run();
+                        
+                        // Re-add the task if it needs to repeat
+                        if (m_currentTask.m_repeatCount > 0) {
+                            m_taskContainer.push(m_currentTask);
+                        }
+                        
+                        // Execute callback if defined
+                        std::function<void()> callback;
+                        {
+                            std::scoped_lock callbackLock(m_mutex);
+                            callback = m_callback;
+                        }
+                        
+                        if (callback) {
+                            try {
+                                callback();
+                            } catch (...) {
+                                // Suppress callback exceptions
+                            }
+                        }
+                    } catch (...) {
+                        // Suppress exceptions to keep the timer running
+                    }
+                } else {
+                    // Wait until task execution time or until conditions change
+                    std::unique_lock lock(m_mutex);
+                    auto waitTime = m_paused.load(std::memory_order_acquire) ? 
+                        std::chrono::milliseconds(100) : 
+                        std::chrono::duration_cast<std::chrono::milliseconds>(
+                            m_currentTask.getNextExecutionTime() - now);
+                    
+                    m_cond.wait_for(lock, waitTime, [this]() {
+                        return m_stop.load(std::memory_order_acquire) || 
+                               !m_hasCurrentTask.load(std::memory_order_acquire);
+                    });
+                }
+            } else {
+                // Try to get a new task from the queue
+                TimerTask newTask;
+                if (!m_paused.load(std::memory_order_acquire) && m_taskContainer.pop(newTask)) {
+                    m_currentTask = newTask;
+                    m_hasCurrentTask.store(true, std::memory_order_release);
+                } else {
+                    // No tasks available or paused, wait for a short time
+                    std::unique_lock lock(m_mutex);
+                    m_cond.wait_for(lock, std::chrono::milliseconds(100), [this]() {
+                        return m_stop.load(std::memory_order_acquire) || 
+                               !m_paused.load(std::memory_order_acquire);
+                    });
+                }
+            }
+#else
+            // Original implementation with priority queue
             std::unique_lock lock(m_mutex);
             
             auto waitPredicate = [this]() {
@@ -178,31 +251,34 @@ void Timer::run() noexcept {
                     if (callback) {
                         try {
                             callback();
-                        } catch (const std::exception& e) {
-                            // Log callback exception but continue timer operation
-                            // In a real application, you might want to log this
                         } catch (...) {
-                            // Handle unknown exceptions
+                            // Suppress callback exceptions
                         }
                     }
                 } catch (...) {
-                    // Suppress exceptions to ensure timer continues running
-                    // In a real application, you might want to log this
+                    // Suppress exceptions to keep the timer running
                 }
             } else {
                 m_cond.wait_until(lock, task.getNextExecutionTime());
             }
+#endif
         }
     } catch (...) {
         // Ensure run() maintains noexcept guarantee
-        // In a real application, this would be a critical error worth logging
     }
 }
 
 auto Timer::getTaskCount() const noexcept -> size_t {
     try {
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        // For lockfree implementation, we can't get an exact count easily
+        // since it's not part of the boost::lockfree::queue API.
+        // We only report if there's at least one task (current task)
+        return m_hasCurrentTask.load(std::memory_order_acquire) ? 1 : 0;
+#else
         std::scoped_lock lock(m_mutex);
         return m_taskQueue.size();
+#endif
     } catch (...) {
         // Ensure noexcept guarantee
         return 0;
@@ -211,8 +287,19 @@ auto Timer::getTaskCount() const noexcept -> size_t {
 
 void Timer::wait() noexcept {
     try {
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        // For lockfree implementation, we wait until there are no tasks
+        // and current task is processed
+        while (!m_stop.load(std::memory_order_acquire)) {
+            if (m_taskContainer.empty() && !m_hasCurrentTask.load(std::memory_order_acquire)) {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+#else
         std::unique_lock lock(m_mutex);
         m_cond.wait(lock, [this]() { return m_taskQueue.empty(); });
+#endif
     } catch (...) {
         // Ensure noexcept guarantee
     }

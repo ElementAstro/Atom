@@ -12,6 +12,10 @@
 #include <type_traits>
 #include <vector>
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+#include <boost/lockfree/queue.hpp>
+#endif
+
 #include "atom/error/exception.hpp"
 
 namespace atom::async {
@@ -67,19 +71,90 @@ public:
     struct promise_type;
     using handle_type = std::coroutine_handle<promise_type>;
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    /**
+     * @brief Callback wrapper for lockfree queue
+     */
+    struct CallbackWrapper {
+        std::function<void(T)> callback;
+
+        CallbackWrapper() = default;
+        explicit CallbackWrapper(std::function<void(T)> cb)
+            : callback(std::move(cb)) {}
+    };
+
+    /**
+     * @brief Lockfree callback container
+     */
+    class LockfreeCallbackContainer {
+    public:
+        LockfreeCallbackContainer() : queue_(128) {}  // Default capacity
+
+        void add(const std::function<void(T)>& callback) {
+            auto* wrapper = new CallbackWrapper(callback);
+            // Try pushing until successful
+            while (!queue_.push(wrapper)) {
+                std::this_thread::yield();
+            }
+        }
+
+        void executeAll(const T& value) {
+            CallbackWrapper* wrapper = nullptr;
+            while (queue_.pop(wrapper)) {
+                if (wrapper && wrapper->callback) {
+                    try {
+                        wrapper->callback(value);
+                    } catch (...) {
+                        // Log error but continue with other callbacks
+                    }
+                    delete wrapper;
+                }
+            }
+        }
+
+        bool empty() const { return queue_.empty(); }
+
+        ~LockfreeCallbackContainer() {
+            CallbackWrapper* wrapper = nullptr;
+            while (queue_.pop(wrapper)) {
+                delete wrapper;
+            }
+        }
+
+    private:
+        boost::lockfree::queue<CallbackWrapper*> queue_;
+    };
+#endif
+
     /**
      * @brief Constructs an EnhancedFuture from a shared future.
      * @param fut The shared future to wrap.
      */
     explicit EnhancedFuture(std::shared_future<T>&& fut) noexcept
         : future_(std::move(fut)),
-          cancelled_(std::make_shared<std::atomic<bool>>(false)),
-          callbacks_(std::make_shared<std::vector<std::function<void(T)>>>()) {}
+          cancelled_(std::make_shared<std::atomic<bool>>(false))
+#ifdef ATOM_USE_BOOST_LOCKFREE
+          ,
+          callbacks_(std::make_shared<LockfreeCallbackContainer>())
+#else
+          ,
+          callbacks_(std::make_shared<std::vector<std::function<void(T)>>>())
+#endif
+    {
+    }
 
     explicit EnhancedFuture(const std::shared_future<T>& fut) noexcept
         : future_(fut),
-          cancelled_(std::make_shared<std::atomic<bool>>(false)),
-          callbacks_(std::make_shared<std::vector<std::function<void(T)>>>()) {}
+          cancelled_(std::make_shared<std::atomic<bool>>(false))
+#ifdef ATOM_USE_BOOST_LOCKFREE
+          ,
+          callbacks_(std::make_shared<LockfreeCallbackContainer>())
+#else
+          ,
+          callbacks_(std::make_shared<std::vector<std::function<void(T)>>>())
+#endif
+    {
+    }
 
     // Move constructor and assignment
     EnhancedFuture(EnhancedFuture&& other) noexcept = default;
@@ -163,6 +238,23 @@ public:
             return;
         }
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        callbacks_->add(std::forward<F>(func));
+
+        std::thread([future = future_, callbacks = callbacks_,
+                     cancelled = cancelled_]() mutable {
+            try {
+                if (!*cancelled && future.valid()) {
+                    T result = future.get();
+                    if (!*cancelled) {
+                        callbacks->executeAll(result);
+                    }
+                }
+            } catch (...) {
+                // Future completed with exception
+            }
+        }).detach();
+#else
         callbacks_->emplace_back(std::forward<F>(func));
 
         std::thread([future = future_, callbacks = callbacks_,
@@ -182,6 +274,7 @@ public:
                 // Future completed with exception
             }
         }).detach();
+#endif
     }
 
     /**
@@ -355,8 +448,13 @@ protected:
     std::shared_future<T> future_;  ///< The underlying shared future.
     std::shared_ptr<std::atomic<bool>>
         cancelled_;  ///< Flag indicating if the future has been cancelled.
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    std::shared_ptr<LockfreeCallbackContainer>
+        callbacks_;  ///< Lockfree container for callbacks.
+#else
     std::shared_ptr<std::vector<std::function<void(T)>>>
         callbacks_;  ///< List of callbacks to be called on completion.
+#endif
 };
 
 /**
@@ -370,19 +468,90 @@ public:
     struct promise_type;
     using handle_type = std::coroutine_handle<promise_type>;
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    /**
+     * @brief Callback wrapper for lockfree queue
+     */
+    struct CallbackWrapper {
+        std::function<void()> callback;
+
+        CallbackWrapper() = default;
+        explicit CallbackWrapper(std::function<void()> cb)
+            : callback(std::move(cb)) {}
+    };
+
+    /**
+     * @brief Lockfree callback container for void return type
+     */
+    class LockfreeCallbackContainer {
+    public:
+        LockfreeCallbackContainer() : queue_(128) {}  // Default capacity
+
+        void add(const std::function<void()>& callback) {
+            auto* wrapper = new CallbackWrapper(callback);
+            // Try pushing until successful
+            while (!queue_.push(wrapper)) {
+                std::this_thread::yield();
+            }
+        }
+
+        void executeAll() {
+            CallbackWrapper* wrapper = nullptr;
+            while (queue_.pop(wrapper)) {
+                if (wrapper && wrapper->callback) {
+                    try {
+                        wrapper->callback();
+                    } catch (...) {
+                        // Log error but continue with other callbacks
+                    }
+                    delete wrapper;
+                }
+            }
+        }
+
+        bool empty() const { return queue_.empty(); }
+
+        ~LockfreeCallbackContainer() {
+            CallbackWrapper* wrapper = nullptr;
+            while (queue_.pop(wrapper)) {
+                delete wrapper;
+            }
+        }
+
+    private:
+        boost::lockfree::queue<CallbackWrapper*> queue_;
+    };
+#endif
+
     /**
      * @brief Constructs an EnhancedFuture from a shared future.
      * @param fut The shared future to wrap.
      */
     explicit EnhancedFuture(std::shared_future<void>&& fut) noexcept
         : future_(std::move(fut)),
-          cancelled_(std::make_shared<std::atomic<bool>>(false)),
-          callbacks_(std::make_shared<std::vector<std::function<void()>>>()) {}
+          cancelled_(std::make_shared<std::atomic<bool>>(false))
+#ifdef ATOM_USE_BOOST_LOCKFREE
+          ,
+          callbacks_(std::make_shared<LockfreeCallbackContainer>())
+#else
+          ,
+          callbacks_(std::make_shared<std::vector<std::function<void()>>>())
+#endif
+    {
+    }
 
     explicit EnhancedFuture(const std::shared_future<void>& fut) noexcept
         : future_(fut),
-          cancelled_(std::make_shared<std::atomic<bool>>(false)),
-          callbacks_(std::make_shared<std::vector<std::function<void()>>>()) {}
+          cancelled_(std::make_shared<std::atomic<bool>>(false))
+#ifdef ATOM_USE_BOOST_LOCKFREE
+          ,
+          callbacks_(std::make_shared<LockfreeCallbackContainer>())
+#else
+          ,
+          callbacks_(std::make_shared<std::vector<std::function<void()>>>())
+#endif
+    {
+    }
 
     // Move constructor and assignment
     EnhancedFuture(EnhancedFuture&& other) noexcept = default;
@@ -466,6 +635,23 @@ public:
             return;
         }
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        callbacks_->add(std::forward<F>(func));
+
+        std::thread([future = future_, callbacks = callbacks_,
+                     cancelled = cancelled_]() mutable {
+            try {
+                if (!*cancelled && future.valid()) {
+                    future.get();
+                    if (!*cancelled) {
+                        callbacks->executeAll();
+                    }
+                }
+            } catch (...) {
+                // Future completed with exception
+            }
+        }).detach();
+#else
         callbacks_->emplace_back(std::forward<F>(func));
 
         std::thread([future = future_, callbacks = callbacks_,
@@ -485,6 +671,7 @@ public:
                 // Future completed with exception
             }
         }).detach();
+#endif
     }
 
     /**
@@ -568,8 +755,13 @@ protected:
     std::shared_future<void> future_;  ///< The underlying shared future.
     std::shared_ptr<std::atomic<bool>>
         cancelled_;  ///< Flag indicating if the future has been cancelled.
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    std::shared_ptr<LockfreeCallbackContainer>
+        callbacks_;  ///< Lockfree container for callbacks.
+#else
     std::shared_ptr<std::vector<std::function<void()>>>
         callbacks_;  ///< List of callbacks to be called on completion.
+#endif
 };
 
 /**

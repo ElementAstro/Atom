@@ -684,7 +684,7 @@ public:
      * @param n Number of selections to make
      * @return Vector of selected indices
      */
-    [[nodiscard]] auto selectMultiple(size_t n) const -> std::vector<size_t> {
+    [[nodiscard]] auto selectMultiple(size_t n) -> std::vector<size_t> {
         if (n == 0)
             return {};
 
@@ -941,9 +941,7 @@ public:
      * @brief Calculates the sum of all weights
      * @return Total weight
      */
-    [[nodiscard]] auto calculateTotalWeight() const -> T {
-        // No need to lock because we're called from methods that already have a
-        // lock
+    [[nodiscard]] auto calculateTotalWeight() -> T {
 #ifdef ATOM_USE_BOOST
         return boost::accumulate(weights_, T{0});
 #else
@@ -955,7 +953,7 @@ public:
      * @brief Gets the sum of all weights
      * @return Total weight
      */
-    [[nodiscard]] auto getTotalWeight() const -> T {
+    [[nodiscard]] auto getTotalWeight() -> T {
         std::shared_lock lock(mutex_);
         return calculateTotalWeight();
     }
@@ -1005,7 +1003,7 @@ public:
      * @return Average weight
      * @throws WeightError if weights collection is empty
      */
-    [[nodiscard]] auto getAverageWeight() const -> T {
+    [[nodiscard]] auto getAverageWeight() -> T {
         std::shared_lock lock(mutex_);
         if (weights_.empty()) {
             throw WeightError("Cannot calculate average of empty weights");

@@ -13,8 +13,10 @@ Description: Some useful spinlock implementations
 **************************************************/
 
 #include "lock.hpp"
-#include <system_error>
+
 #include <thread>
+#include <memory>
+#include <functional>
 
 namespace atom::async {
 
@@ -128,10 +130,9 @@ auto TicketSpinlock::lock() noexcept -> uint64_t {
 }
 
 void TicketSpinlock::unlock(uint64_t ticket) {
-    auto expected_ticket = serving_.load(std::memory_order_acquire);
-    
     // Verify correct ticket in debug builds
     #ifdef ATOM_DEBUG
+    auto expected_ticket = serving_.load(std::memory_order_acquire);
     if (expected_ticket != ticket) {
         throw std::invalid_argument("Incorrect ticket provided to unlock");
     }
@@ -176,6 +177,130 @@ void UnfairSpinlock::unlock() noexcept {
     // Wake any waiting threads (C++20 feature)
     flag_.notify_one();
     #endif
+}
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+void BoostSpinlock::lock() noexcept {
+    #ifdef ATOM_DEBUG
+    // Check for recursive lock attempts in debug mode
+    std::thread::id current_id = std::this_thread::get_id();
+    std::thread::id no_thread;
+    if (owner_.load(boost::memory_order_relaxed) == current_id) {
+        // Cannot throw in noexcept function
+        std::terminate();
+    }
+    #endif
+
+    // Fast path first - single attempt
+    if (!flag_.exchange(true, boost::memory_order_acquire)) {
+        #ifdef ATOM_DEBUG
+        owner_.store(current_id, boost::memory_order_relaxed);
+        #endif
+        return;
+    }
+
+    // Slow path - exponential backoff
+    uint32_t backoff_count = 1;
+    constexpr uint32_t MAX_BACKOFF = 1024;
+    
+    // Wait until we acquire the lock
+    while (true) {
+        // First check if lock is free without doing an exchange
+        if (!flag_.load(boost::memory_order_relaxed)) {
+            // Lock appears free, try to acquire
+            if (!flag_.exchange(true, boost::memory_order_acquire)) {
+                #ifdef ATOM_DEBUG
+                owner_.store(current_id, boost::memory_order_relaxed);
+                #endif
+                return;
+            }
+        }
+        
+        // Perform exponential backoff 
+        for (uint32_t i = 0; i < backoff_count; ++i) {
+            cpu_relax();
+        }
+        
+        // Increase backoff time (capped at maximum)
+        backoff_count = std::min(backoff_count * 2, MAX_BACKOFF);
+        
+        // Yield to scheduler if we've been spinning for a while
+        if (backoff_count >= MAX_BACKOFF / 2) {
+            std::this_thread::yield();
+        }
+    }
+}
+
+auto BoostSpinlock::tryLock() noexcept -> bool {
+    bool expected = false;
+    bool success = flag_.compare_exchange_strong(expected, true, 
+                                              boost::memory_order_acquire,
+                                              boost::memory_order_relaxed);
+    
+    #ifdef ATOM_DEBUG
+    if (success) {
+        owner_.store(std::this_thread::get_id(), boost::memory_order_relaxed);
+    }
+    #endif
+    
+    return success;
+}
+
+void BoostSpinlock::unlock() noexcept {
+    #ifdef ATOM_DEBUG
+    std::thread::id current_id = std::this_thread::get_id();
+    if (owner_.load(boost::memory_order_relaxed) != current_id) {
+        // Log error instead of throwing from noexcept function
+        std::terminate(); // Terminate in case of lock violation in debug mode
+    }
+    owner_.store(std::thread::id(), boost::memory_order_relaxed);
+    #endif
+    
+    flag_.store(false, boost::memory_order_release);
+}
+#endif
+
+auto LockFactory::createLock(LockType type) -> std::unique_ptr<void, std::function<void(void*)>> {
+    switch (type) {
+        case LockType::SPINLOCK: {
+            auto lock = new Spinlock();
+            return {lock, [](void* ptr) { delete static_cast<Spinlock*>(ptr); }};
+        }
+        case LockType::TICKET_SPINLOCK: {
+            auto lock = new TicketSpinlock();
+            return {lock, [](void* ptr) { delete static_cast<TicketSpinlock*>(ptr); }};
+        }
+        case LockType::UNFAIR_SPINLOCK: {
+            auto lock = new UnfairSpinlock();
+            return {lock, [](void* ptr) { delete static_cast<UnfairSpinlock*>(ptr); }};
+        }
+        case LockType::ADAPTIVE_SPINLOCK: {
+            auto lock = new AdaptiveSpinlock();
+            return {lock, [](void* ptr) { delete static_cast<AdaptiveSpinlock*>(ptr); }};
+        }
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        case LockType::BOOST_SPINLOCK: {
+            auto lock = new BoostSpinlock();
+            return {lock, [](void* ptr) { delete static_cast<BoostSpinlock*>(ptr); }};
+        }
+#endif
+#ifdef ATOM_USE_BOOST_LOCKS
+        case LockType::BOOST_MUTEX: {
+            auto lock = new boost::mutex();
+            return {lock, [](void* ptr) { delete static_cast<boost::mutex*>(ptr); }};
+        }
+        case LockType::BOOST_RECURSIVE_MUTEX: {
+            auto lock = new BoostRecursiveMutex();
+            return {lock, [](void* ptr) { delete static_cast<BoostRecursiveMutex*>(ptr); }};
+        }
+        case LockType::BOOST_SHARED_MUTEX: {
+            auto lock = new BoostSharedMutex();
+            return {lock, [](void* ptr) { delete static_cast<BoostSharedMutex*>(ptr); }};
+        }
+#endif
+        default:
+            throw std::invalid_argument("Invalid lock type");
+    }
 }
 
 }  // namespace atom::async

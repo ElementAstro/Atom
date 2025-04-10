@@ -37,6 +37,11 @@ Description: A very simple thread pool for preload
 #endif
 #endif
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+#include <boost/lockfree/queue.hpp>
+#include <boost/lockfree/stack.hpp>
+#endif
+
 namespace atom::async {
 
 /// @brief 异常类：线程池错误
@@ -48,8 +53,9 @@ public:
 };
 
 /**
- * @brief 改进的概念用于定义可锁定类型
- * @details 基于C++标准中的Lockable和BasicLockable概念
+ * @brief Improved concept for defining lockable types
+ * @details Based on the Lockable and BasicLockable concepts from the C++
+ * standard
  * @see https://en.cppreference.com/w/cpp/named_req/Lockable
  */
 template <typename Lock>
@@ -60,21 +66,41 @@ concept is_lockable = requires(Lock lock) {
 };
 
 /**
- * @brief 线程安全队列，用于管理多线程环境下的数据访问
- * @tparam T 队列中元素的类型
- * @tparam Lock 锁类型，默认为std::mutex
+ * @brief Thread-safe queue for managing data access in multi-threaded
+ * environments
+ * @tparam T Type of elements stored in the queue
+ * @tparam Lock Lock type, defaults to std::mutex
+ *
+ * @details This class provides a thread-safe wrapper around std::deque with
+ * comprehensive exception handling and support for various queue operations.
+ * All operations are protected by mutex locks to ensure thread safety.
  */
 template <typename T, typename Lock = std::mutex>
     requires is_lockable<Lock>
 class ThreadSafeQueue {
 public:
+    /** @brief Type of elements stored in the queue */
     using value_type = T;
+
+    /** @brief Type used for size operations */
     using size_type = typename std::deque<T>::size_type;
+
+    /** @brief Maximum theoretical size of the queue */
     static constexpr size_type max_size = std::numeric_limits<size_type>::max();
 
+    /**
+     * @brief Default constructor
+     */
     ThreadSafeQueue() = default;
 
-    // Copy constructor
+    /**
+     * @brief Copy constructor
+     * @param other The queue to copy from
+     * @throws ThreadPoolError If copying fails due to any exception
+     *
+     * @details Creates a deep copy of the other queue while maintaining thread
+     * safety by locking the source queue during the copy operation.
+     */
     ThreadSafeQueue(const ThreadSafeQueue& other) {
         try {
             std::scoped_lock lock(other.mutex_);
@@ -85,7 +111,16 @@ public:
         }
     }
 
-    // Copy assignment operator
+    /**
+     * @brief Copy assignment operator
+     * @param other The queue to copy from
+     * @return Reference to this queue after the copy
+     * @throws ThreadPoolError If copying fails due to any exception
+     *
+     * @details Performs a deep copy of the other queue while maintaining thread
+     * safety by locking both queues during the copy operation to prevent
+     * deadlocks.
+     */
     auto operator=(const ThreadSafeQueue& other) -> ThreadSafeQueue& {
         if (this != &other) {
             try {
@@ -101,17 +136,34 @@ public:
         return *this;
     }
 
-    // Move constructor
+    /**
+     * @brief Move constructor
+     * @param other The queue to move from
+     *
+     * @details Moves the contents of the other queue while maintaining thread
+     * safety by locking the source queue during the move operation. Provides
+     * strong exception guarantee to ensure the object remains valid even in
+     * case of exceptions.
+     */
     ThreadSafeQueue(ThreadSafeQueue&& other) noexcept {
         try {
             std::scoped_lock lock(other.mutex_);
             data_ = std::move(other.data_);
         } catch (...) {
-            // 保持强异常安全性，确保即使在异常情况下对象也是有效的
+            // Maintain strong exception safety, ensuring the object is valid
+            // even in case of exceptions
         }
     }
 
-    // Move assignment operator
+    /**
+     * @brief Move assignment operator
+     * @param other The queue to move from
+     * @return Reference to this queue after the move
+     *
+     * @details Moves the contents of the other queue while maintaining thread
+     * safety by locking both queues during the move operation to prevent
+     * deadlocks. Provides strong exception guarantee.
+     */
     auto operator=(ThreadSafeQueue&& other) noexcept -> ThreadSafeQueue& {
         if (this != &other) {
             try {
@@ -120,16 +172,20 @@ public:
                 std::lock(lockThis, lockOther);
                 data_ = std::move(other.data_);
             } catch (...) {
-                // 保持强异常安全性
+                // Maintain strong exception safety
             }
         }
         return *this;
     }
 
     /**
-     * @brief 将元素添加到队列尾部
-     * @param value 要添加的元素
-     * @throws ThreadPoolError 如果队列已满或添加失败
+     * @brief Adds an element to the back of the queue
+     * @param value The element to add (rvalue reference)
+     * @throws ThreadPoolError If the queue is full or if the add operation
+     * fails
+     *
+     * @details Locks the queue, checks if there's space available, and adds the
+     * element to the back of the underlying container using perfect forwarding.
      */
     void pushBack(T&& value) {
         std::scoped_lock lock(mutex_);
@@ -144,9 +200,14 @@ public:
     }
 
     /**
-     * @brief 将元素添加到队列头部
-     * @param value 要添加的元素
-     * @throws ThreadPoolError 如果队列已满或添加失败
+     * @brief Adds an element to the front of the queue
+     * @param value The element to add (rvalue reference)
+     * @throws ThreadPoolError If the queue is full or if the add operation
+     * fails
+     *
+     * @details Locks the queue, checks if there's space available, and adds the
+     * element to the front of the underlying container using perfect
+     * forwarding.
      */
     void pushFront(T&& value) {
         std::scoped_lock lock(mutex_);
@@ -162,34 +223,45 @@ public:
     }
 
     /**
-     * @brief 检查队列是否为空
-     * @return 如果队列为空返回true，否则返回false
+     * @brief Checks if the queue is empty
+     * @return true if the queue is empty, false otherwise
+     *
+     * @details Thread-safe check for queue emptiness. Returns true in case of
+     * any exceptions as a conservative approach.
      */
     [[nodiscard]] auto empty() const noexcept -> bool {
         try {
             std::scoped_lock lock(mutex_);
             return data_.empty();
         } catch (...) {
-            return true;  // 保守返回空
+            return true;  // Conservative approach: return empty on exceptions
         }
     }
 
     /**
-     * @brief 获取队列中元素的数量
-     * @return 队列中元素的数量
+     * @brief Gets the number of elements in the queue
+     * @return The number of elements in the queue
+     *
+     * @details Thread-safe method to get the current size. Returns 0 in case of
+     * any exceptions as a conservative approach.
      */
     [[nodiscard]] auto size() const noexcept -> size_type {
         try {
             std::scoped_lock lock(mutex_);
             return data_.size();
         } catch (...) {
-            return 0;  // 保守返回0
+            return 0;  // Conservative approach: return 0 on exceptions
         }
     }
 
     /**
-     * @brief 弹出队列前面的元素
-     * @return 如果队列不为空，返回队列前面的元素；否则返回std::nullopt
+     * @brief Removes and returns the front element from the queue
+     * @return An optional containing the front element if the queue is not
+     * empty; std::nullopt otherwise
+     *
+     * @details Thread-safe method that removes the front element from the
+     * queue. Returns std::nullopt if the queue is empty or if an exception
+     * occurs.
      */
     [[nodiscard]] auto popFront() noexcept -> std::optional<T> {
         try {
@@ -207,8 +279,12 @@ public:
     }
 
     /**
-     * @brief 弹出队列后面的元素
-     * @return 如果队列不为空，返回队列后面的元素；否则返回std::nullopt
+     * @brief Removes and returns the back element from the queue
+     * @return An optional containing the back element if the queue is not
+     * empty; std::nullopt otherwise
+     *
+     * @details Thread-safe method that removes the back element from the queue.
+     * Returns std::nullopt if the queue is empty or if an exception occurs.
      */
     [[nodiscard]] auto popBack() noexcept -> std::optional<T> {
         try {
@@ -226,8 +302,14 @@ public:
     }
 
     /**
-     * @brief 从队列中偷取一个元素（通常用于工作窃取调度）
-     * @return 如果队列不为空，返回队列后面的元素；否则返回std::nullopt
+     * @brief Steals an element from the back of the queue (typically used for
+     * work-stealing schedulers)
+     * @return An optional containing the back element if the queue is not
+     * empty; std::nullopt otherwise
+     *
+     * @details Thread-safe method that removes and returns the back element
+     * from the queue. This is semantically identical to popBack() but named
+     * differently to indicate its intended use in work-stealing scenarios.
      */
     [[nodiscard]] auto steal() noexcept -> std::optional<T> {
         try {
@@ -245,13 +327,18 @@ public:
     }
 
     /**
-     * @brief 将指定项移动到队列前面
-     * @param item 要移动的项
+     * @brief Moves a specified item to the front of the queue
+     * @param item The item to be moved to the front
+     *
+     * @details Thread-safe method that searches for the item in the queue using
+     * C++20 ranges. If found, it removes the item from its current position and
+     * adds it to the front of the queue. If not found, it simply adds the item
+     * to the front.
      */
     void rotateToFront(const T& item) noexcept {
         try {
             std::scoped_lock lock(mutex_);
-            // 使用C++20 ranges查找元素
+            // Use C++20 ranges to find the element
             auto iter = std::ranges::find(data_, item);
 
             if (iter != data_.end()) {
@@ -260,13 +347,18 @@ public:
 
             data_.push_front(item);
         } catch (...) {
-            // 保持操作的原子性，确保不会导致数据损坏
+            // Maintain atomicity of the operation, ensuring no data corruption
         }
     }
 
     /**
-     * @brief 复制队列前面的元素并将其移动到队尾
-     * @return 如果队列非空，返回前面的元素的复制；否则返回std::nullopt
+     * @brief Copies the front element and moves it to the back of the queue
+     * @return An optional containing a copy of the front element if the queue
+     * is not empty; std::nullopt otherwise
+     *
+     * @details Thread-safe method that removes the front element, adds a copy
+     * to the back of the queue, and returns a copy of the element. Returns
+     * std::nullopt if the queue is empty or if an exception occurs.
      */
     [[nodiscard]] auto copyFrontAndRotateToBack() noexcept -> std::optional<T> {
         try {
@@ -288,21 +380,302 @@ public:
     }
 
     /**
-     * @brief 清空队列
+     * @brief Clears all elements from the queue
+     *
+     * @details Thread-safe method that removes all elements from the underlying
+     * container. Any exceptions that occur during the clear operation are
+     * caught and ignored to maintain the noexcept guarantee.
      */
     void clear() noexcept {
         try {
             std::scoped_lock lock(mutex_);
             data_.clear();
         } catch (...) {
-            // 尝试清空失败时忽略异常
+            // Ignore exceptions during clear attempt
         }
     }
 
 private:
+    /** @brief The underlying container storing the queue elements */
     std::deque<T> data_;
+
+    /** @brief Mutex for thread synchronization, mutable to allow locking in
+     * const methods */
     mutable Lock mutex_;
 };
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+/**
+ * @brief Thread-safe queue implementation using Boost.lockfree
+ * @tparam T Element type in the queue
+ * @tparam Capacity Fixed capacity for the lockfree queue
+ */
+template <typename T, size_t Capacity = 1024>
+class BoostLockFreeQueue {
+public:
+    using value_type = T;
+    using size_type = typename std::deque<T>::size_type;
+    static constexpr size_type max_size = Capacity;
+
+    BoostLockFreeQueue() = default;
+    ~BoostLockFreeQueue() = default;
+
+    // Deleted copy operations as Boost.lockfree containers are not copyable
+    BoostLockFreeQueue(const BoostLockFreeQueue&) = delete;
+    auto operator=(const BoostLockFreeQueue&) -> BoostLockFreeQueue& = delete;
+
+    // Move operations
+    BoostLockFreeQueue(BoostLockFreeQueue&& other) noexcept {
+        // Can't move construct lockfree queue directly
+        // Instead, move elements individually
+        T value;
+        while (other.queue_.pop(value)) {
+            queue_.push(std::move(value));
+        }
+    }
+
+    auto operator=(BoostLockFreeQueue&& other) noexcept -> BoostLockFreeQueue& {
+        if (this != &other) {
+            // Clear current queue and move elements from other
+            T value;
+            while (queue_.pop(value))
+                ;  // Clear current queue
+
+            while (other.queue_.pop(value)) {
+                queue_.push(std::move(value));
+            }
+        }
+        return *this;
+    }
+
+    /**
+     * @brief Push an element to the back of the queue
+     * @param value Element to push
+     * @throws ThreadPoolError if the queue is full or push fails
+     */
+    void pushBack(T&& value) {
+        if (!queue_.push(std::forward<T>(value))) {
+            throw ThreadPoolError(
+                "Boost lockfree queue is full or push failed");
+        }
+    }
+
+    /**
+     * @brief Push an element to the front of the queue (not efficient in
+     * lockfree queue)
+     * @param value Element to push
+     * @throws ThreadPoolError Always throws as front operations aren't
+     * efficient in lockfree queue
+     */
+    void pushFront(T&& value) {
+        // For lockfree queue, pushing to front isn't efficient
+        // We use a stack as temporary storage and re-push everything
+        try {
+            boost::lockfree::stack<T, boost::lockfree::capacity<Capacity>>
+                temp_stack;
+            T temp_value;
+
+            // Pop all existing items and push to temp stack
+            while (queue_.pop(temp_value)) {
+                if (!temp_stack.push(std::move(temp_value))) {
+                    throw std::runtime_error(
+                        "Failed to push to temporary stack");
+                }
+            }
+
+            // Push the new value first
+            if (!queue_.push(std::forward<T>(value))) {
+                throw std::runtime_error("Failed to push new value");
+            }
+
+            // Push back original items
+            while (temp_stack.pop(temp_value)) {
+                if (!queue_.push(std::move(temp_value))) {
+                    throw std::runtime_error("Failed to restore queue items");
+                }
+            }
+        } catch (const std::exception& e) {
+            throw ThreadPoolError(std::string("Push front operation failed: ") +
+                                  e.what());
+        }
+    }
+
+    /**
+     * @brief Check if the queue is empty
+     * @return true if queue is empty, false otherwise
+     */
+    [[nodiscard]] auto empty() const noexcept -> bool { return queue_.empty(); }
+
+    /**
+     * @brief Get approximate size of the queue
+     * @return Approximate number of elements in queue
+     */
+    [[nodiscard]] auto size() const noexcept -> size_type {
+        return queue_.read_available();
+    }
+
+    /**
+     * @brief Pop an element from the front of the queue
+     * @return The front element if queue is not empty, std::nullopt otherwise
+     */
+    [[nodiscard]] auto popFront() noexcept -> std::optional<T> {
+        T value;
+        if (queue_.pop(value)) {
+            return std::optional<T>(std::move(value));
+        }
+        return std::nullopt;
+    }
+
+    /**
+     * @brief Pop an element from the back of the queue (not efficient in
+     * lockfree queue)
+     * @return The back element if queue is not empty, std::nullopt otherwise
+     */
+    [[nodiscard]] auto popBack() noexcept -> std::optional<T> {
+        // This operation is expensive with a lockfree queue
+        // as we need to pop everything and push back all but the last item
+        try {
+            if (queue_.empty()) {
+                return std::nullopt;
+            }
+
+            std::vector<T> temp_storage;
+            T value;
+
+            // Pop all items to a vector
+            while (queue_.pop(value)) {
+                temp_storage.push_back(std::move(value));
+            }
+
+            if (temp_storage.empty()) {
+                return std::nullopt;
+            }
+
+            // Get the back item
+            auto back_item = std::move(temp_storage.back());
+            temp_storage.pop_back();
+
+            // Push back the remaining items in original order
+            for (auto it = temp_storage.rbegin(); it != temp_storage.rend();
+                 ++it) {
+                queue_.push(std::move(*it));
+            }
+
+            return std::optional<T>(std::move(back_item));
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+
+    /**
+     * @brief Steal an element from the queue (same as popBack for consistency)
+     * @return An element if queue is not empty, std::nullopt otherwise
+     */
+    [[nodiscard]] auto steal() noexcept -> std::optional<T> {
+        // In lockfree queue, stealing is the same as popFront
+        return popFront();
+    }
+
+    /**
+     * @brief Rotate specified item to front (not efficient)
+     * @param item Item to rotate
+     */
+    void rotateToFront(const T& item) noexcept {
+        try {
+            std::vector<T> temp_storage;
+            T value;
+            bool found = false;
+
+            // Extract all items
+            while (queue_.pop(value)) {
+                if (value == item) {
+                    found = true;
+                } else {
+                    temp_storage.push_back(std::move(value));
+                }
+            }
+
+            // Push the target item first if found
+            if (found) {
+                queue_.push(item);
+            }
+
+            // Push back all other items
+            for (auto& stored_item : temp_storage) {
+                queue_.push(std::move(stored_item));
+            }
+
+            // If item wasn't found, push it to front
+            if (!found) {
+                T temp_value;
+                std::vector<T> rebuild;
+
+                while (queue_.pop(temp_value)) {
+                    rebuild.push_back(std::move(temp_value));
+                }
+
+                queue_.push(item);
+
+                for (auto& stored_item : rebuild) {
+                    queue_.push(std::move(stored_item));
+                }
+            }
+        } catch (...) {
+            // Maintain strong exception safety
+        }
+    }
+
+    /**
+     * @brief Copy front element and rotate to back
+     * @return Front element if queue is not empty, std::nullopt otherwise
+     */
+    [[nodiscard]] auto copyFrontAndRotateToBack() noexcept -> std::optional<T> {
+        try {
+            if (queue_.empty()) {
+                return std::nullopt;
+            }
+
+            std::vector<T> temp_storage;
+            T value;
+
+            // Pop all items to a vector
+            while (queue_.pop(value)) {
+                temp_storage.push_back(value);  // Copy, not move
+            }
+
+            if (temp_storage.empty()) {
+                return std::nullopt;
+            }
+
+            // Get the front item
+            auto front_item = temp_storage.front();
+
+            // Push back all items including the front item at the end
+            for (size_t i = 1; i < temp_storage.size(); ++i) {
+                queue_.push(std::move(temp_storage[i]));
+            }
+            queue_.push(front_item);  // Push front item to back
+
+            return std::optional<T>(front_item);
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+
+    /**
+     * @brief Clear the queue
+     */
+    void clear() noexcept {
+        T value;
+        while (queue_.pop(value)) {
+            // Just discard all elements
+        }
+    }
+
+private:
+    boost::lockfree::queue<T, boost::lockfree::capacity<Capacity>> queue_;
+};
+#endif  // ATOM_USE_BOOST_LOCKFREE
 
 namespace details {
 #ifdef __cpp_lib_move_only_function
@@ -312,22 +685,39 @@ using default_function_type = std::function<void()>;
 #endif
 }  // namespace details
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+#ifdef ATOM_LOCKFREE_FIXED_CAPACITY
+template <typename T>
+using DefaultQueueType = BoostLockFreeQueue<T, ATOM_LOCKFREE_FIXED_CAPACITY>;
+#else
+template <typename T>
+using DefaultQueueType = BoostLockFreeQueue<T>;
+#endif
+#else
+template <typename T>
+using DefaultQueueType = ThreadSafeQueue<T>;
+#endif
+
 /**
- * @brief 增强的线程池实现，支持工作窃取和优先级调度
- * @tparam FunctionType 任务函数类型
- * @tparam ThreadType 线程类型，默认为std::jthread
+ * @brief Enhanced thread pool implementation with work stealing and priority
+ * scheduling
+ * @tparam FunctionType Task function type
+ * @tparam ThreadType Thread type, defaults to std::jthread
  */
 template <typename FunctionType = details::default_function_type,
-          typename ThreadType = std::jthread>
+          typename ThreadType = std::jthread,
+          template <typename> typename QueueType = DefaultQueueType>
     requires std::invocable<FunctionType> &&
              std::is_same_v<void, std::invoke_result_t<FunctionType>>
 class ThreadPool {
 public:
     /**
-     * @brief 构造函数
-     * @param number_of_threads 线程数，默认为系统硬件支持的线程数
-     * @param init 线程初始化函数，在每个线程启动时执行
-     * @throws ThreadPoolError 如果初始化失败
+     * @brief Constructor
+     * @param number_of_threads Number of threads, defaults to system hardware
+     * concurrency
+     * @param init Thread initialization function, executed when each thread
+     * starts
+     * @throws ThreadPoolError If initialization fails
      */
     template <
         typename InitializationFunction = std::function<void(std::size_t)>>
@@ -391,8 +781,8 @@ public:
     template <typename Function, typename... Args,
               typename ReturnType = std::invoke_result_t<Function&&, Args&&...>>
         requires std::invocable<Function, Args...>
-    [[nodiscard]] auto enqueue(Function func,
-                               Args... args) -> std::future<ReturnType> {
+    [[nodiscard]] auto enqueue(Function func, Args... args)
+        -> std::future<ReturnType> {
         if (is_shutdown_.load(std::memory_order_acquire)) {
             throw ThreadPoolError(
                 "Cannot enqueue task: Thread pool is shutting down");
@@ -569,9 +959,9 @@ public:
 
 private:
     /**
-     * @brief 验证并返回有效的线程数
-     * @param thread_count 请求的线程数
-     * @return 有效的线程数
+     * @brief Validate and return valid thread count
+     * @param thread_count Requested thread count
+     * @return Valid thread count
      */
     static unsigned int validateThreadCount(unsigned int thread_count) {
         const unsigned int min_threads = 1;
@@ -720,26 +1110,41 @@ private:
             tasks_[index].tasks.pushBack(std::forward<Function>(func));
             tasks_[index].signal.release();
         } catch (...) {
-            // 如果失败，回滚计数器
             unassigned_tasks_.fetch_sub(1, std::memory_order_release);
             in_flight_tasks_.fetch_sub(1, std::memory_order_release);
             throw ThreadPoolError("Failed to enqueue task");
         }
     }
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    // Use lockfree queue when the macro is defined
+    struct TaskItem {
+#ifdef ATOM_LOCKFREE_FIXED_CAPACITY
+        // Use a fixed capacity if specified
+        atom::async::BoostLockFreeQueue<FunctionType,
+                                        ATOM_LOCKFREE_FIXED_CAPACITY>
+            tasks{};
+#else
+        // Default capacity
+        atom::async::BoostLockFreeQueue<FunctionType> tasks{};
+#endif
+        std::binary_semaphore signal{0};
+    } ATOM_ALIGNAS(128);
+#else
+    // Use the original implementation
     struct TaskItem {
         atom::async::ThreadSafeQueue<FunctionType> tasks{};
         std::binary_semaphore signal{0};
-    } ATOM_ALIGNAS(128);  // 使用缓存行对齐避免假共享
+    } ATOM_ALIGNAS(128);
+#endif
 
     std::vector<ThreadType> threads_;
     std::deque<TaskItem> tasks_;
     atom::async::ThreadSafeQueue<std::size_t> priority_queue_;
     std::atomic_int_fast64_t unassigned_tasks_{0}, in_flight_tasks_{0};
     std::atomic_bool threads_complete_signal_{false};
-    std::atomic_bool is_shutdown_{false};  // 新增：线程池关闭标志
+    std::atomic_bool is_shutdown_{false};
 };
-
 }  // namespace atom::async
 
 #endif  // ATOM_ASYNC_POOL_HPP
