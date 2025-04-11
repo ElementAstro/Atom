@@ -1,6 +1,8 @@
 #ifndef ATOM_COMMAND_DISPATCH_HPP
 #define ATOM_COMMAND_DISPATCH_HPP
 
+#include "config.hpp"
+
 #if ENABLE_FASTHASH
 #include "emhash/hash_set8.hpp"
 #include "emhash/hash_table8.hpp"
@@ -154,23 +156,20 @@ public:
     [[nodiscard]] auto getCommandDescription(const std::string& name) const
         -> std::string;
 
-#if ENABLE_FASTHASH
-    /**
-     * @brief Gets the aliases of a command.
-     * @param name The name of the command.
-     * @return A set of aliases for the command.
-     */
-    emhash::HashSet<std::string> getCommandAliases(
-        const std::string& name) const;
+#if ATOM_USE_BOOST_CONTAINERS
+    using StringSet = atom::container::string_hash_set;
+#elif ENABLE_FASTHASH
+    using StringSet = emhash::HashSet<std::string>;
 #else
+    using StringSet = std::unordered_set<std::string>;
+#endif
+
     /**
      * @brief Gets the aliases of a command.
      * @param name The name of the command.
      * @return A set of aliases for the command.
      */
-    [[nodiscard]] auto getCommandAliases(const std::string& name) const
-        -> std::unordered_set<std::string>;
-#endif
+    [[nodiscard]] auto getCommandAliases(const std::string& name) const -> StringSet;
 
     /**
      * @brief Gets all commands.
@@ -192,11 +191,7 @@ public:
         std::vector<atom::meta::Arg> argTypes;
         std::string hash;
         std::string description;
-#if ENABLE_FASTHASH
-        emhash::HashSet<std::string> aliases;
-#else
-        std::unordered_set<std::string> aliases;
-#endif
+        StringSet aliases;
         std::optional<std::function<bool()>> precondition;
         std::optional<std::function<void()>> postcondition;
     } ATOM_ALIGNAS(128);
@@ -279,7 +274,7 @@ private:
      */
     static auto executeWithTimeout(const Command& cmd, const std::string& name,
                                    const std::vector<std::any>& args,
-                                   const std::chrono::duration<double>& timeout)
+                                   const std::chrono::milliseconds& timeout)
         -> std::any;
 
     /**
@@ -310,14 +305,21 @@ private:
     static auto computeFunctionHash(const std::vector<std::any>& args)
         -> std::string;
 
-#if ENABLE_FASTHASH
-    emhash8::HashMap<std::string, std::unordered_map<std::string, Command>>
-        commands_;
+    // 使用高性能数据结构来存储命令和相关信息
+#if ATOM_USE_BOOST_CONTAINERS
+    using CommandMap = atom::container::unordered_map<std::string, std::unordered_map<std::string, Command>>;
+    using GroupMap = atom::container::unordered_map<std::string, std::string>;
+    using TimeoutMap = atom::container::unordered_map<std::string, std::chrono::milliseconds>;
+    
+    CommandMap commands_;
+    GroupMap groupMap_;
+    TimeoutMap timeoutMap_;
+#elif ENABLE_FASTHASH
+    emhash8::HashMap<std::string, std::unordered_map<std::string, Command>> commands_;
     emhash8::HashMap<std::string, std::string> groupMap_;
     emhash8::HashMap<std::string, std::chrono::milliseconds> timeoutMap_;
 #else
-    std::unordered_map<std::string, std::unordered_map<std::string, Command>>
-        commands_;
+    std::unordered_map<std::string, std::unordered_map<std::string, Command>> commands_;
     std::unordered_map<std::string, std::string> groupMap_;
     std::unordered_map<std::string, std::chrono::milliseconds> timeoutMap_;
 #endif

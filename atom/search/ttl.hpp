@@ -16,7 +16,61 @@
 #include <unordered_map>
 #include <vector>
 
+// Boost support
+#if defined(ATOM_USE_BOOST_THREAD) || defined(ATOM_USE_BOOST_LOCKFREE)
+  #include <boost/config.hpp>
+#endif
+
+#ifdef ATOM_USE_BOOST_THREAD
+  #include <boost/thread.hpp>
+  #include <boost/thread/mutex.hpp>
+  #include <boost/thread/shared_mutex.hpp>
+  #include <boost/thread/lock_types.hpp>
+  #include <boost/thread/condition_variable.hpp>
+#endif
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+  #include <boost/atomic.hpp>
+  #include <boost/lockfree/queue.hpp>
+  #include <boost/lockfree/spsc_queue.hpp>
+#endif
+
 namespace atom::search {
+
+// Define aliases based on whether we're using Boost or STL
+#if defined(ATOM_USE_BOOST_THREAD)
+  template <typename T>
+  using SharedMutex = boost::shared_mutex;
+  
+  template <typename T>
+  using SharedLock = boost::shared_lock<T>;
+  
+  template <typename T>
+  using UniqueLock = boost::unique_lock<T>;
+  
+  using CondVarAny = boost::condition_variable_any;
+  using Thread = boost::thread;
+#else
+  template <typename T>
+  using SharedMutex = std::shared_mutex;
+  
+  template <typename T>
+  using SharedLock = std::shared_lock<T>;
+  
+  template <typename T>
+  using UniqueLock = std::unique_lock<T>;
+  
+  using CondVarAny = std::condition_variable_any;
+  using Thread = std::thread;
+#endif
+
+#if defined(ATOM_USE_BOOST_LOCKFREE)
+  template <typename T>
+  using Atomic = boost::atomic<T>;
+#else
+  template <typename T>
+  using Atomic = std::atomic<T>;
+#endif
 
 /**
  * @brief Custom exception class for TTL Cache errors.
@@ -242,16 +296,16 @@ private:
     CacheList cache_list_;       ///< List of cache items, ordered by recency.
     CacheMap cache_map_;  ///< Map of cache keys to iterators in the list.
 
-    mutable std::shared_mutex
+    mutable SharedMutex<std::shared_mutex>
         mutex_;  ///< Mutex for synchronizing access to cache data.
-    std::atomic<size_t> hit_count_{0};   ///< Number of cache hits.
-    std::atomic<size_t> miss_count_{0};  ///< Number of cache misses.
+    Atomic<size_t> hit_count_{0};   ///< Number of cache hits.
+    Atomic<size_t> miss_count_{0};  ///< Number of cache misses.
 
-    std::thread
+    Thread
         cleaner_thread_;  ///< Background thread for cleaning up expired items.
-    std::atomic<bool> stop_{
+    Atomic<bool> stop_{
         false};  ///< Flag to signal the cleaner thread to stop.
-    std::condition_variable_any
+    CondVarAny
         cv_;  ///< Condition variable used to wake up the cleaner thread.
 
     /**
@@ -266,7 +320,7 @@ private:
      * @param lock An already acquired unique lock.
      * @param count Number of items to evict (default: 1).
      */
-    void evictItems(std::unique_lock<std::shared_mutex>& lock,
+    void evictItems(UniqueLock<std::shared_mutex>& lock,
                     size_t count = 1) noexcept;
 
     /**
@@ -297,7 +351,7 @@ TTLCache<Key, Value>::TTLCache(Duration ttl, size_t max_capacity,
     }
 
     try {
-        cleaner_thread_ = std::thread([this] { this->cleanerTask(); });
+        cleaner_thread_ = Thread([this] { this->cleanerTask(); });
     } catch (const std::exception& e) {
         throw TTLCacheException(
             std::string("Failed to create cleaner thread: ") + e.what());
@@ -325,7 +379,7 @@ TTLCache<Key, Value>::TTLCache(TTLCache&& other) noexcept
       hit_count_(other.hit_count_.load()),
       miss_count_(other.miss_count_.load()) {
     // Lock the other cache to safely move its content
-    std::unique_lock lock(other.mutex_);
+    UniqueLock lock(other.mutex_);
 
     // Move containers
     cache_list_ = std::move(other.cache_list_);
@@ -340,7 +394,7 @@ TTLCache<Key, Value>::TTLCache(TTLCache&& other) noexcept
     }
 
     stop_ = false;
-    cleaner_thread_ = std::thread([this] { this->cleanerTask(); });
+    cleaner_thread_ = Thread([this] { this->cleanerTask(); });
 }
 
 template <typename Key, typename Value>
@@ -355,8 +409,8 @@ TTLCache<Key, Value>& TTLCache<Key, Value>::operator=(
         }
 
         // Lock both caches
-        std::unique_lock lock1(mutex_, std::defer_lock);
-        std::unique_lock lock2(other.mutex_, std::defer_lock);
+        UniqueLock lock1(mutex_, std::defer_lock);
+        UniqueLock lock2(other.mutex_, std::defer_lock);
         std::lock(lock1, lock2);
 
         // Move data
@@ -377,7 +431,7 @@ TTLCache<Key, Value>& TTLCache<Key, Value>::operator=(
 
         // Start our cleaner thread
         stop_ = false;
-        cleaner_thread_ = std::thread([this] { this->cleanerTask(); });
+        cleaner_thread_ = Thread([this] { this->cleanerTask(); });
     }
     return *this;
 }
@@ -385,7 +439,7 @@ TTLCache<Key, Value>& TTLCache<Key, Value>::operator=(
 template <typename Key, typename Value>
 void TTLCache<Key, Value>::put(const Key& key, const Value& value) {
     try {
-        std::unique_lock lock(mutex_);
+        UniqueLock lock(mutex_);
 
         auto it = cache_map_.find(key);
         if (it != cache_map_.end()) {
@@ -413,7 +467,7 @@ void TTLCache<Key, Value>::put(const Key& key, const Value& value) {
 template <typename Key, typename Value>
 void TTLCache<Key, Value>::put(const Key& key, Value&& value) {
     try {
-        std::unique_lock lock(mutex_);
+        UniqueLock lock(mutex_);
 
         auto it = cache_map_.find(key);
         if (it != cache_map_.end()) {
@@ -446,7 +500,7 @@ void TTLCache<Key, Value>::batch_put(
     }
 
     try {
-        std::unique_lock lock(mutex_);
+        UniqueLock lock(mutex_);
         auto now = Clock::now();
 
         // Reserve space if possible
@@ -487,7 +541,7 @@ void TTLCache<Key, Value>::batch_put(
 template <typename Key, typename Value>
 std::optional<Value> TTLCache<Key, Value>::get(const Key& key) {
     try {
-        std::shared_lock lock(mutex_);
+        SharedLock lock(mutex_);
         auto now = Clock::now();
 
         auto it = cache_map_.find(key);
@@ -513,7 +567,7 @@ template <typename Key, typename Value>
 typename TTLCache<Key, Value>::ValuePtr TTLCache<Key, Value>::get_shared(
     const Key& key) {
     try {
-        std::shared_lock lock(mutex_);
+        SharedLock lock(mutex_);
         auto now = Clock::now();
 
         auto it = cache_map_.find(key);
@@ -546,7 +600,7 @@ std::vector<std::optional<Value>> TTLCache<Key, Value>::batch_get(
     results.reserve(keys.size());
 
     try {
-        std::shared_lock lock(mutex_);
+        SharedLock lock(mutex_);
         auto now = Clock::now();
 
         for (const auto& key : keys) {
@@ -573,7 +627,7 @@ std::vector<std::optional<Value>> TTLCache<Key, Value>::batch_get(
 template <typename Key, typename Value>
 bool TTLCache<Key, Value>::remove(const Key& key) noexcept {
     try {
-        std::unique_lock lock(mutex_);
+        UniqueLock lock(mutex_);
 
         auto it = cache_map_.find(key);
         if (it != cache_map_.end()) {
@@ -591,7 +645,7 @@ bool TTLCache<Key, Value>::remove(const Key& key) noexcept {
 template <typename Key, typename Value>
 bool TTLCache<Key, Value>::contains(const Key& key) const noexcept {
     try {
-        std::shared_lock lock(mutex_);
+        SharedLock lock(mutex_);
         auto now = Clock::now();
 
         auto it = cache_map_.find(key);
@@ -604,7 +658,7 @@ bool TTLCache<Key, Value>::contains(const Key& key) const noexcept {
 template <typename Key, typename Value>
 void TTLCache<Key, Value>::cleanup() noexcept {
     try {
-        std::unique_lock lock(mutex_);
+        UniqueLock lock(mutex_);
         auto now = Clock::now();
 
         // Use reverse iterator to efficiently remove items from the end
@@ -641,7 +695,7 @@ double TTLCache<Key, Value>::hitRate() const noexcept {
 template <typename Key, typename Value>
 size_t TTLCache<Key, Value>::size() const noexcept {
     try {
-        std::shared_lock lock(mutex_);
+        SharedLock lock(mutex_);
         return cache_map_.size();
     } catch (...) {
         return 0;
@@ -651,7 +705,7 @@ size_t TTLCache<Key, Value>::size() const noexcept {
 template <typename Key, typename Value>
 void TTLCache<Key, Value>::clear() noexcept {
     try {
-        std::unique_lock lock(mutex_);
+        UniqueLock lock(mutex_);
         cache_list_.clear();
         cache_map_.clear();
         hit_count_ = 0;
@@ -668,7 +722,7 @@ void TTLCache<Key, Value>::resize(size_t new_capacity) {
     }
 
     try {
-        std::unique_lock lock(mutex_);
+        UniqueLock lock(mutex_);
 
         max_capacity_ = new_capacity;
 
@@ -699,7 +753,7 @@ template <typename Key, typename Value>
 void TTLCache<Key, Value>::cleanerTask() noexcept {
     while (!stop_) {
         try {
-            std::shared_lock lock(mutex_);
+            SharedLock lock(mutex_);
             cv_.wait_for(lock, cleanup_interval_,
                          [this] { return stop_.load(); });
 
@@ -719,7 +773,7 @@ void TTLCache<Key, Value>::cleanerTask() noexcept {
 
 template <typename Key, typename Value>
 void TTLCache<Key, Value>::evictItems(
-    [[maybe_unused]] std::unique_lock<std::shared_mutex>& lock,
+    [[maybe_unused]] UniqueLock<std::shared_mutex>& lock,
     size_t count) noexcept {
     try {
         // First, try to remove expired items

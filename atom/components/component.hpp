@@ -18,16 +18,47 @@ Description: Basic Component Definition
 #include "dispatch.hpp"
 #include "module_macro.hpp"
 #include "var.hpp"
+#include "config.hpp"
 
+#include "atom/log/loguru.hpp"
 #include "atom/meta/concept.hpp"
 #include "atom/meta/constructor.hpp"
 #include "atom/meta/conversion.hpp"
 #include "atom/meta/func_traits.hpp"
 #include "atom/meta/type_caster.hpp"
 #include "atom/meta/type_info.hpp"
-#include "atom/log/loguru.hpp"
 #include "atom/type/pointer.hpp"
 
+#include <chrono>
+#include <memory>
+#include <mutex>
+
+class ObjectExpiredError : public atom::error::Exception {
+public:
+    using atom::error::Exception::Exception;
+};
+
+#define THROW_OBJECT_EXPIRED(...)                                            \
+    throw ObjectExpiredError(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, \
+                             __VA_ARGS__)
+
+/**
+ * @brief 组件生命周期状态
+ */
+enum class ComponentState {
+    Created,      // 创建但未初始化
+    Initializing, // 正在初始化
+    Active,       // 已初始化且活跃
+    Disabled,     // 已禁用
+    Error,        // 发生错误
+    Destroying    // 正在销毁
+};
+
+/**
+ * @brief 组件基类，提供组件服务的基础结构
+ * 
+ * Component类是所有组件的基类，提供了组件注册、命令调度、事件处理等功能。
+ */
 class Component : public std::enable_shared_from_this<Component> {
 public:
     /**
@@ -39,6 +70,41 @@ public:
      * @brief Type definition for cleanup function.
      */
     using CleanupFunc = std::function<void()>;
+
+    /**
+     * @brief 性能统计结构
+     */
+    struct PerformanceStats {
+        std::atomic<uint64_t> commandCallCount{0}; // 命令调用次数
+        std::atomic<uint64_t> commandErrorCount{0}; // 命令错误次数
+        std::atomic<uint64_t> eventCount{0}; // 事件处理次数
+        
+        struct {
+            std::chrono::microseconds totalExecutionTime{0}; // 总执行时间
+            std::chrono::microseconds maxExecutionTime{0};   // 最长执行时间
+            std::chrono::microseconds minExecutionTime{std::chrono::microseconds::max()}; // 最短执行时间
+            std::chrono::microseconds avgExecutionTime{0};   // 平均执行时间
+        } timing;
+        
+        void reset() {
+            commandCallCount = 0;
+            commandErrorCount = 0;
+            eventCount = 0;
+            timing.totalExecutionTime = std::chrono::microseconds{0};
+            timing.maxExecutionTime = std::chrono::microseconds{0};
+            timing.minExecutionTime = std::chrono::microseconds::max();
+            timing.avgExecutionTime = std::chrono::microseconds{0};
+        }
+        
+        void updateExecutionTime(std::chrono::microseconds executionTime) {
+            timing.totalExecutionTime += executionTime;
+            timing.maxExecutionTime = std::max(timing.maxExecutionTime, executionTime);
+            timing.minExecutionTime = std::min(timing.minExecutionTime, executionTime);
+            timing.avgExecutionTime = std::chrono::microseconds{
+                timing.totalExecutionTime.count() / std::max(uint64_t{1}, commandCallCount.load())
+            };
+        }
+    };
 
     /**
      * @brief Constructs a new Component object.
@@ -104,6 +170,84 @@ public:
      * @param typeInfo The type information of the plugin.
      */
     void setTypeInfo(atom::meta::TypeInfo typeInfo);
+
+    /**
+     * @brief 获取组件当前状态
+     * 
+     * @return ComponentState 组件状态
+     */
+    [[nodiscard]] auto getState() const -> ComponentState;
+    
+    /**
+     * @brief 设置组件状态
+     * 
+     * @param state 新的组件状态
+     */
+    void setState(ComponentState state);
+
+    /**
+     * @brief 获取组件性能统计信息
+     * 
+     * @return const PerformanceStats& 性能统计信息
+     */
+    [[nodiscard]] auto getPerformanceStats() const -> const PerformanceStats&;
+    
+    /**
+     * @brief 重置性能统计信息
+     */
+    void resetPerformanceStats();
+
+    // -------------------------------------------------------------------
+    // Event Methods (if enabled)
+    // -------------------------------------------------------------------
+    
+    #if ENABLE_EVENT_SYSTEM
+    /**
+     * @brief 发送事件
+     * 
+     * @param eventName 事件名称
+     * @param eventData 事件数据
+     */
+    void emitEvent(const std::string& eventName, std::any eventData = {});
+    
+    /**
+     * @brief 注册事件处理器
+     * 
+     * @param eventName 事件名称
+     * @param callback 回调函数
+     * @return atom::components::EventCallbackId 回调ID
+     */
+    atom::components::EventCallbackId on(
+        const std::string& eventName, 
+        atom::components::EventCallback callback);
+    
+    /**
+     * @brief 注册一次性事件处理器
+     * 
+     * @param eventName 事件名称
+     * @param callback 回调函数
+     * @return atom::components::EventCallbackId 回调ID
+     */
+    atom::components::EventCallbackId once(
+        const std::string& eventName,
+        atom::components::EventCallback callback);
+    
+    /**
+     * @brief 取消注册事件处理器
+     * 
+     * @param eventName 事件名称
+     * @param callbackId 回调ID
+     * @return bool 是否成功取消
+     */
+    bool off(const std::string& eventName, atom::components::EventCallbackId callbackId);
+    
+    /**
+     * @brief 处理事件
+     * 
+     * @param event 事件对象
+     */
+    virtual void handleEvent(const atom::components::Event& event);
+    #endif
 
     // -------------------------------------------------------------------
     // Variable methods
@@ -250,7 +394,7 @@ public:
     DEF_MEMBER_FUNC(const volatile noexcept)
 
     template <typename Class, typename VarType>
-    void def(const std::string& name, VarType Class::*var,
+    void def(const std::string& name, VarType Class::* var,
              const std::string& group = "",
              const std::string& description = "");
 
@@ -286,14 +430,14 @@ public:
     template <typename MemberType, typename Class, typename InstanceType>
         requires Pointer<InstanceType> || SmartPointer<InstanceType> ||
                  std::is_same_v<InstanceType, PointerSentinel<Class>>
-    void def(const std::string& name, MemberType Class::*var,
+    void def(const std::string& name, MemberType Class::* var,
              const InstanceType& instance, const std::string& group = "",
              const std::string& description = "");
 
     template <typename MemberType, typename Class, typename InstanceType>
         requires Pointer<InstanceType> || SmartPointer<InstanceType> ||
                  std::is_same_v<InstanceType, PointerSentinel<Class>>
-    void def(const std::string& name, const MemberType Class::*var,
+    void def(const std::string& name, const MemberType Class::* var,
              const InstanceType& instance, const std::string& group = "",
              const std::string& description = "");
 
@@ -359,13 +503,46 @@ public:
 
     template <typename... Args>
     auto dispatch(const std::string& name, Args&&... args) -> std::any {
-        return m_CommandDispatcher_->dispatch(name,
-                                              std::forward<Args>(args)...);
+        auto startTime = std::chrono::high_resolution_clock::now();
+        
+        try {
+            auto result = m_CommandDispatcher_->dispatch(name, std::forward<Args>(args)...);
+            auto endTime = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+                endTime - startTime);
+            
+            // 更新性能统计
+            m_PerformanceStats_.commandCallCount++;
+            m_PerformanceStats_.updateExecutionTime(duration);
+            
+            return result;
+        } catch (const std::exception& e) {
+            m_PerformanceStats_.commandErrorCount++;
+            throw; // 重新抛出异常
+        }
     }
 
     auto dispatch(const std::string& name,
                   const std::vector<std::any>& args) const -> std::any {
-        return m_CommandDispatcher_->dispatch(name, args);
+        auto startTime = std::chrono::high_resolution_clock::now();
+        
+        try {
+            auto result = m_CommandDispatcher_->dispatch(name, args);
+            auto endTime = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+                endTime - startTime);
+            
+            // 更新性能统计
+            auto& stats = const_cast<PerformanceStats&>(m_PerformanceStats_);
+            stats.commandCallCount++;
+            stats.updateExecutionTime(duration);
+            
+            return result;
+        } catch (const std::exception& e) {
+            auto& stats = const_cast<PerformanceStats&>(m_PerformanceStats_);
+            stats.commandErrorCount++;
+            throw; // 重新抛出异常
+        }
     }
 
     [[nodiscard]] auto has(const std::string& name) const -> bool;
@@ -407,41 +584,81 @@ public:
      */
 
     /**
-     * @return The names of the components that are needed by this component.
+     * @brief 获取依赖的组件名称列表
+     * 
+     * @return std::vector<std::string> 依赖的组件名称
      * @note This will be called when the component is initialized.
      */
     static auto getNeededComponents() -> std::vector<std::string>;
 
+    /**
+     * @brief 添加对其它组件的引用
+     * 
+     * @param name 组件名称
+     * @param component 组件实例
+     */
     void addOtherComponent(const std::string& name,
                            const std::weak_ptr<Component>& component);
 
+    /**
+     * @brief 移除对其它组件的引用
+     * 
+     * @param name 组件名称
+     */
     void removeOtherComponent(const std::string& name);
 
+    /**
+     * @brief 清空所有组件引用
+     */
     void clearOtherComponents();
 
+    /**
+     * @brief 获取其它组件实例
+     * 
+     * @param name 组件名称
+     * @return std::weak_ptr<Component> 组件实例的弱引用
+     */
     auto getOtherComponent(const std::string& name) -> std::weak_ptr<Component>;
 
-    auto runCommand(const std::string& name,
-                    const std::vector<std::any>& args) -> std::any;
+    /**
+     * @brief 执行命令
+     * 
+     * 会先在本组件中查找命令，如果找不到，则尝试在依赖组件中查找
+     * 
+     * @param name 命令名称
+     * @param args 命令参数
+     * @return std::any 命令执行结果
+     */
+    auto runCommand(const std::string& name, const std::vector<std::any>& args)
+        -> std::any;
 
-    InitFunc initFunc; /**< The initialization function for the component. */
-    CleanupFunc cleanupFunc; /**< The cleanup function for the component. */
+    /**
+     * @brief 初始化函数，由注册器调用
+     */
+    InitFunc initFunc; 
+    
+    /**
+     * @brief 清理函数，由注册器调用
+     */
+    CleanupFunc cleanupFunc; 
 
 private:
-    std::string m_name_;
-    std::string m_doc_;
-    std::string m_configPath_;
-    std::string m_infoPath_;
+    std::string m_name_;               // 组件名称
+    std::string m_doc_;                // 组件文档
+    std::string m_configPath_;         // 配置路径
+    std::string m_infoPath_;           // 信息路径
     atom::meta::TypeInfo m_typeInfo_{atom::meta::userType<Component>()};
     std::unordered_map<std::string_view, atom::meta::TypeInfo> m_classes_;
+    
+    std::atomic<ComponentState> m_state_{ComponentState::Created}; // 组件状态
+    PerformanceStats m_PerformanceStats_; // 性能统计
 
     ///< managing commands.
     std::shared_ptr<VariableManager> m_VariableManager_{
-        std::make_shared<VariableManager>()};  ///< The variable registry for
-                                               ///< managing variables.
+        std::make_shared<VariableManager>()};  ///< 变量管理器
 
     std::unordered_map<std::string, std::weak_ptr<Component>>
-        m_OtherComponents_;
+        m_OtherComponents_; // 其他组件引用
 
     std::shared_ptr<atom::meta::TypeCaster> m_TypeCaster_{
         atom::meta::TypeCaster::createShared()};
@@ -450,7 +667,19 @@ private:
 
     std::shared_ptr<CommandDispatcher> m_CommandDispatcher_{
         std::make_shared<CommandDispatcher>(
-            m_TypeCaster_)};  ///< The command dispatcher for
+            m_TypeCaster_)};  ///< 命令调度器
+    
+    #if ENABLE_EVENT_SYSTEM
+    struct EventHandler {
+        atom::components::EventCallbackId id; // 处理器ID
+        atom::components::EventCallback callback; // 回调函数
+        bool once; // 是否一次性
+    };
+    
+    std::unordered_map<std::string, std::vector<EventHandler>> m_EventHandlers_; // 事件处理器
+    std::mutex m_EventMutex_; // 事件处理互斥锁
+    std::atomic<atom::components::EventCallbackId> m_NextEventId_{1}; // 下一个事件ID
+    #endif
 };
 
 template <typename SourceType, typename DestinationType>
@@ -491,9 +720,9 @@ void Component::def(const std::string& name, Callable&& func,
     using Traits = atom::meta::FunctionTraits<std::decay_t<Callable>>;
     using ReturnType = typename Traits::return_type;
     static_assert(Traits::arity <= 8, "Too many arguments");
-// clang-format off
+    // clang-format off
     #include "component.template"
-// clang-format on
+    // clang-format on
 }
 
 template <typename Ret>
@@ -625,7 +854,7 @@ void Component::def(const std::string& name,
 template <typename MemberType, typename Class, typename InstanceType>
     requires Pointer<InstanceType> || SmartPointer<InstanceType> ||
              std::is_same_v<InstanceType, PointerSentinel<Class>>
-void Component::def(const std::string& name, MemberType Class::*member_var,
+void Component::def(const std::string& name, MemberType Class::* member_var,
                     const InstanceType& instance, const std::string& group,
                     const std::string& description) {
     m_CommandDispatcher_->def(
@@ -645,7 +874,7 @@ template <typename MemberType, typename Class, typename InstanceType>
     requires Pointer<InstanceType> || SmartPointer<InstanceType> ||
              std::is_same_v<InstanceType, PointerSentinel<Class>>
 void Component::def(const std::string& name,
-                    const MemberType Class::*member_var,
+                    const MemberType Class::* member_var,
                     const InstanceType& instance, const std::string& group,
                     const std::string& description) {
     m_CommandDispatcher_->def(
@@ -747,4 +976,4 @@ void Component::def(const std::string& name, const std::string& group,
     def(name, constructor_, group, description);
 }
 
-#endif
+#endif // ATOM_COMPONENT_HPP

@@ -1,6 +1,7 @@
 #include "dispatch.hpp"
 
 #include <future>
+#include <thread>
 
 #include "atom/log/loguru.hpp"
 #include "atom/utils/to_string.hpp"
@@ -13,19 +14,22 @@ void CommandDispatcher::checkPrecondition(const Command& cmd,
         return;
     }
     try {
-        std::invoke(cmd.precondition.value());
+        if (!std::invoke(cmd.precondition.value())) {
+            LOG_F(ERROR, "Precondition failed for command '{}'", name);
+            THROW_DISPATCH_EXCEPTION("Precondition failed for command '{}'", name);
+        }
         LOG_F(INFO, "Precondition for command '{}' passed.", name);
     } catch (const std::bad_function_call& e) {
-        LOG_F(INFO, "Bad precondition function invoke for command '{}': {}",
-              name, e.what());
+        LOG_F(ERROR, "Bad precondition function invoke for command '{}': {}", name, e.what());
+        THROW_DISPATCH_EXCEPTION("Bad precondition function invoke for command '{}': {}", 
+                               name, e.what());
     } catch (const std::bad_optional_access& e) {
-        LOG_F(INFO, "Bad precondition function access for command '{}': {}",
-              name, e.what());
+        LOG_F(ERROR, "Bad precondition function access for command '{}': {}", name, e.what());
+        THROW_DISPATCH_EXCEPTION("Bad precondition function access for command '{}': {}", 
+                               name, e.what());
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Precondition for command '{}' failed: {}", name,
-              e.what());
-        THROW_DISPATCH_EXCEPTION("Precondition failed for command '{}': {}",
-                                 name, e.what());
+        LOG_F(ERROR, "Precondition for command '{}' failed: {}", name, e.what());
+        THROW_DISPATCH_EXCEPTION("Precondition failed for command '{}': {}", name, e.what());
     }
 }
 
@@ -40,16 +44,16 @@ void CommandDispatcher::checkPostcondition(const Command& cmd,
         std::invoke(cmd.postcondition.value());
         LOG_F(INFO, "Postcondition for command '{}' passed.", name);
     } catch (const std::bad_function_call& e) {
-        LOG_F(INFO, "Bad postcondition function invoke for command '{}': {}",
-              name, e.what());
+        LOG_F(ERROR, "Bad postcondition function invoke for command '{}': {}", name, e.what());
+        THROW_DISPATCH_EXCEPTION("Bad postcondition function invoke for command '{}': {}", 
+                               name, e.what());
     } catch (const std::bad_optional_access& e) {
-        LOG_F(INFO, "Bad postcondition function access for command '{}': {}",
-              name, e.what());
+        LOG_F(ERROR, "Bad postcondition function access for command '{}': {}", name, e.what());
+        THROW_DISPATCH_EXCEPTION("Bad postcondition function access for command '{}': {}", 
+                               name, e.what());
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Postcondition for command '{}' failed: {}", name,
-              e.what());
-        THROW_DISPATCH_EXCEPTION("Postcondition failed for command '{}': {}",
-                                 name, e.what());
+        LOG_F(ERROR, "Postcondition for command '{}' failed: {}", name, e.what());
+        THROW_DISPATCH_EXCEPTION("Postcondition failed for command '{}': {}", name, e.what());
     }
 }
 
@@ -59,7 +63,8 @@ auto CommandDispatcher::executeCommand(
     LOG_SCOPE_FUNCTION(INFO);
     if (auto timeoutIt = timeoutMap_.find(name);
         timeoutIt != timeoutMap_.end()) {
-        LOG_F(INFO, "Executing command '{}' with timeout.", name);
+        LOG_F(INFO, "Executing command '{}' with timeout {}ms.", name, 
+              timeoutIt->second.count());
         return executeWithTimeout(cmd, name, args, timeoutIt->second);
     }
     LOG_F(INFO, "Executing command '{}' without timeout.", name);
@@ -69,30 +74,51 @@ auto CommandDispatcher::executeCommand(
 auto CommandDispatcher::executeWithTimeout(
     const Command& cmd, const std::string& name,
     const std::vector<std::any>& args,
-    const std::chrono::duration<double>& timeout) -> std::any {
+    const std::chrono::milliseconds& timeout) -> std::any {
     LOG_SCOPE_FUNCTION(INFO);
-    auto future = std::async(std::launch::async,
-                             [&]() { return executeFunctions(cmd, args); });
-
+    
+    // Create a promise and associated future
+    std::promise<std::any> promise;
+    auto future = promise.get_future();
+    
+    // Run the function in a separate thread
+    std::thread worker([&cmd, &args, &promise]() {
+        try {
+            std::any result = executeFunctions(cmd, args);
+            promise.set_value(result);
+        } catch (...) {
+            // Capture any exception and store it in the promise
+            promise.set_exception(std::current_exception());
+        }
+    });
+    
+    // Detach the thread to avoid blocking
+    worker.detach();
+    
+    // Wait for the result with timeout
     if (future.wait_for(timeout) == std::future_status::timeout) {
-        LOG_F(ERROR, "Command '{}' timed out.", name);
-        THROW_DISPATCH_TIMEOUT("Command '{}' timed out.", name);
+        LOG_F(ERROR, "Command '{}' timed out after {}ms.", name, timeout.count());
+        THROW_DISPATCH_TIMEOUT("Command '{}' timed out after {}ms.", 
+                             name, timeout.count());
     }
-
-    return future.get();
+    
+    // Get the result or propagate exception
+    try {
+        return future.get();
+    } catch (const std::exception& e) {
+        LOG_F(ERROR, "Command '{}' failed: {}", name, e.what());
+        throw; // Re-throw the captured exception
+    }
 }
 
 auto CommandDispatcher::executeWithoutTimeout(
     const Command& cmd, const std::string& name,
     const std::vector<std::any>& args) -> std::any {
     LOG_SCOPE_FUNCTION(INFO);
-    if (!args.empty()) {
-        if (args.size() == 1 &&
-            args[0].type() == typeid(std::vector<std::any>)) {
-            LOG_F(INFO, "Executing command '{}' with nested arguments.", name);
-            return executeFunctions(
-                cmd, std::any_cast<std::vector<std::any>>(args[0]));
-        }
+    // Check for nested arguments
+    if (!args.empty() && args.size() == 1 && args[0].type() == typeid(std::vector<std::any>)) {
+        LOG_F(INFO, "Executing command '{}' with nested arguments.", name);
+        return executeFunctions(cmd, std::any_cast<std::vector<std::any>>(args[0]));
     }
 
     LOG_F(INFO, "Executing command '{}' with arguments.", name);
@@ -102,33 +128,46 @@ auto CommandDispatcher::executeWithoutTimeout(
 auto CommandDispatcher::executeFunctions(
     const Command& cmd, const std::vector<std::any>& args) -> std::any {
     LOG_SCOPE_FUNCTION(INFO);
-    if (std::string funcHash = computeFunctionHash(args);
-        cmd.hash == funcHash) {
+    std::string funcHash = computeFunctionHash(args);
+    
+    // Check if hash matches
+    if (cmd.hash == funcHash) {
         try {
-            LOG_F(INFO, "Executing function for command with hash: {}",
-                  funcHash);
+            LOG_F(INFO, "Executing function for command with hash: {}", funcHash);
             return std::invoke(cmd.func, args);
-        } catch (const std::bad_any_cast&) {
-            LOG_F(ERROR, "Failed to call function for command with hash: {}",
-                  funcHash);
-            THROW_DISPATCH_EXCEPTION(
-                "Failed to call function for command with hash {}", funcHash);
+        } catch (const std::bad_any_cast& e) {
+            LOG_F(ERROR, "Failed to call function for command with hash {}: {}", 
+                  funcHash, e.what());
+            THROW_DISPATCH_EXCEPTION("Failed to call function for command with hash {}: {}", 
+                                   funcHash, e.what());
+        } catch (const std::exception& e) {
+            LOG_F(ERROR, "Error executing function for command with hash {}: {}", 
+                  funcHash, e.what());
+            THROW_DISPATCH_EXCEPTION("Error executing function for command with hash {}: {}", 
+                                   funcHash, e.what());
         }
     }
 
-    LOG_F(ERROR, "No matching overload found for command");
-    THROW_INVALID_ARGUMENT("No matching overload found for command ");
+    LOG_F(ERROR, "No matching overload found for command with hash: {}", funcHash);
+    THROW_INVALID_ARGUMENT("No matching overload found for command with hash: {}", funcHash);
 }
 
 auto CommandDispatcher::computeFunctionHash(const std::vector<std::any>& args)
     -> std::string {
     LOG_SCOPE_FUNCTION(INFO);
+    // Use a more efficient approach for small arg counts
+    if (args.empty()) {
+        return "void";
+    }
+    
     std::vector<std::string> argTypes;
     argTypes.reserve(args.size());
+    
     for (const auto& arg : args) {
         argTypes.emplace_back(
             atom::meta::DemangleHelper::demangle(arg.type().name()));
     }
+    
     auto hash = atom::utils::toString(atom::algorithm::computeHash(argTypes));
     LOG_F(INFO, "Computed function hash: {}", hash);
     return hash;
@@ -136,19 +175,22 @@ auto CommandDispatcher::computeFunctionHash(const std::vector<std::any>& args)
 
 auto CommandDispatcher::has(const std::string& name) -> bool {
     LOG_SCOPE_FUNCTION(INFO);
+    // Direct lookup first for performance
     if (commands_.find(name) != commands_.end()) {
         LOG_F(INFO, "Command '{}' found.", name);
         return true;
     }
-    for (const auto& command : commands_) {
-        for (const auto& cmd : command.second) {
-            if (cmd.second.aliases.find(name) != cmd.second.aliases.end()) {
-                LOG_F(INFO, "Alias '{}' found for command '{}'.", name,
-                      command.first);
+    
+    // Then check aliases
+    for (const auto& [cmdName, cmdMap] : commands_) {
+        for (const auto& [hash, cmd] : cmdMap) {
+            if (cmd.aliases.find(name) != cmd.aliases.end()) {
+                LOG_F(INFO, "Alias '{}' found for command '{}'.", name, cmdName);
                 return true;
             }
         }
     }
+    
     LOG_F(INFO, "Command '{}' not found.", name);
     return false;
 }
@@ -158,26 +200,37 @@ void CommandDispatcher::addAlias(const std::string& name,
     LOG_SCOPE_FUNCTION(INFO);
     auto it = commands_.find(name);
     if (it != commands_.end()) {
-        for (const auto& cmd : it->second) {
-            if (cmd.second.aliases.find(alias) != cmd.second.aliases.end()) {
-                LOG_F(WARNING, "Alias '{}' already exists for command '{}'.",
-                      alias, name);
+        // Add alias to each overload of the command
+        for (auto& [hash, cmd] : it->second) {
+            if (cmd.aliases.find(alias) != cmd.aliases.end()) {
+                LOG_F(WARNING, "Alias '{}' already exists for command '{}'.", alias, name);
                 return;
             }
-            // Max: Here we nned to change the alias to the new name
+            cmd.aliases.insert(alias);
         }
+        
+        // Add command map at the alias key for direct access
         commands_[alias] = it->second;
-        groupMap_[alias] = groupMap_[name];
+        
+        // Copy group if exists
+        if (auto groupIt = groupMap_.find(name); groupIt != groupMap_.end()) {
+            groupMap_[alias] = groupIt->second;
+        }
+        
         LOG_F(INFO, "Alias '{}' added for command '{}'.", alias, name);
     } else {
-        LOG_F(WARNING, "Command '{}' not found. Alias '{}' not added.", name,
-              alias);
+        LOG_F(WARNING, "Command '{}' not found. Alias '{}' not added.", name, alias);
     }
 }
 
 void CommandDispatcher::addGroup(const std::string& name,
                                  const std::string& group) {
     LOG_SCOPE_FUNCTION(INFO);
+    if (commands_.find(name) == commands_.end()) {
+        LOG_F(WARNING, "Command '{}' not found. Group '{}' not added.", name, group);
+        return;
+    }
+    
     groupMap_[name] = group;
     LOG_F(INFO, "Command '{}' added to group '{}'.", name, group);
 }
@@ -185,29 +238,72 @@ void CommandDispatcher::addGroup(const std::string& name,
 void CommandDispatcher::setTimeout(const std::string& name,
                                    std::chrono::milliseconds timeout) {
     LOG_SCOPE_FUNCTION(INFO);
+    if (commands_.find(name) == commands_.end()) {
+        LOG_F(WARNING, "Command '{}' not found. Timeout not set.", name);
+        return;
+    }
+    
     timeoutMap_[name] = timeout;
     LOG_F(INFO, "Timeout set for command '{}': {} ms.", name, timeout.count());
 }
 
 void CommandDispatcher::removeCommand(const std::string& name) {
     LOG_SCOPE_FUNCTION(INFO);
+    if (commands_.find(name) == commands_.end()) {
+        LOG_F(WARNING, "Command '{}' not found. Cannot remove.", name);
+        return;
+    }
+    
+    // Remove all aliases first
+    std::vector<std::string> aliases;
+    for (const auto& [hash, cmd] : commands_[name]) {
+        for (const auto& alias : cmd.aliases) {
+            aliases.push_back(alias);
+        }
+    }
+    
+    // Remove the command and its aliases
     commands_.erase(name);
+    for (const auto& alias : aliases) {
+        commands_.erase(alias);
+    }
+    
+    // Clean up associated maps
     groupMap_.erase(name);
     timeoutMap_.erase(name);
-    LOG_F(INFO, "Command '{}' removed.", name);
+    
+    LOG_F(INFO, "Command '{}' and its aliases removed.", name);
 }
 
 auto CommandDispatcher::getCommandsInGroup(const std::string& group) const
     -> std::vector<std::string> {
     LOG_SCOPE_FUNCTION(INFO);
     std::vector<std::string> result;
-    for (const auto& pair : groupMap_) {
-        if (pair.second == group) {
-            result.push_back(pair.first);
+    std::unordered_set<std::string> uniqueCommands; // For deduplication
+    
+    for (const auto& [name, grp] : groupMap_) {
+        if (grp == group && commands_.find(name) != commands_.end()) {
+            // Only add main commands, not aliases
+            bool isAlias = false;
+            for (const auto& [cmdName, cmdMap] : commands_) {
+                if (cmdName == name) continue; // Skip self-check
+                
+                for (const auto& [hash, cmd] : cmdMap) {
+                    if (cmd.aliases.find(name) != cmd.aliases.end()) {
+                        isAlias = true;
+                        break;
+                    }
+                }
+                if (isAlias) break;
+            }
+            
+            if (!isAlias && uniqueCommands.insert(name).second) {
+                result.push_back(name);
+            }
         }
     }
-    LOG_F(INFO, "Commands in group '{}': {}", group,
-          atom::utils::toString(result));
+    
+    LOG_F(INFO, "Found {} commands in group '{}'", result.size(), group);
     return result;
 }
 
@@ -215,30 +311,63 @@ auto CommandDispatcher::getCommandDescription(const std::string& name) const
     -> std::string {
     LOG_SCOPE_FUNCTION(INFO);
     auto it = commands_.find(name);
-    if (it != commands_.end()) {
-        for (const auto& [hash, cmd] : it->second) {
-            LOG_F(INFO, "Description for command '{}': {}", name,
-                  cmd.description);
-            return cmd.description;
+    if (it != commands_.end() && !it->second.empty()) {
+        // Return description of the first overload
+        const auto& [hash, cmd] = *it->second.begin();
+        LOG_F(INFO, "Description for command '{}': {}", name, cmd.description);
+        return cmd.description;
+    }
+    
+    // Check if this is an alias
+    for (const auto& [cmdName, cmdMap] : commands_) {
+        for (const auto& [hash, cmd] : cmdMap) {
+            if (cmd.aliases.find(name) != cmd.aliases.end()) {
+                LOG_F(INFO, "Description for alias '{}': {}", name, cmd.description);
+                return cmd.description;
+            }
         }
     }
+    
     LOG_F(INFO, "No description found for command '{}'.", name);
     return "";
 }
 
 auto CommandDispatcher::getCommandAliases(const std::string& name) const
-    -> std::unordered_set<std::string> {
+#if ENABLE_FASTHASH
+    -> emhash::HashSet<std::string>
+#else
+    -> std::unordered_set<std::string>
+#endif
+{
     LOG_SCOPE_FUNCTION(INFO);
     auto it = commands_.find(name);
-    if (it != commands_.end()) {
-        for (const auto& [hash, cmd] : it->second) {
-            LOG_F(INFO, "Aliases for command '{}': {}", name,
-                  atom::utils::toString(cmd.aliases));
-            return cmd.aliases;
+    if (it != commands_.end() && !it->second.empty()) {
+        // Return aliases of the first overload
+        const auto& [hash, cmd] = *it->second.begin();
+        LOG_F(INFO, "Found {} aliases for command '{}'", cmd.aliases.size(), name);
+        return cmd.aliases;
+    }
+    
+    // Check if this is itself an alias
+    for (const auto& [cmdName, cmdMap] : commands_) {
+        for (const auto& [hash, cmd] : cmdMap) {
+            if (cmd.aliases.find(name) != cmd.aliases.end()) {
+                // Return all aliases except the name itself
+                auto result = cmd.aliases;
+                result.erase(name);
+                result.insert(cmdName); // Add the original command name
+                LOG_F(INFO, "Found {} aliases for alias '{}'", result.size(), name);
+                return result;
+            }
         }
     }
+    
     LOG_F(INFO, "No aliases found for command '{}'.", name);
+#if ENABLE_FASTHASH
+    return emhash::HashSet<std::string>{};
+#else
     return {};
+#endif
 }
 
 auto CommandDispatcher::dispatch(
@@ -259,20 +388,16 @@ auto CommandDispatcher::dispatch(const std::string& name,
 auto CommandDispatcher::getAllCommands() const -> std::vector<std::string> {
     LOG_SCOPE_FUNCTION(INFO);
     std::vector<std::string> result;
-    result.reserve(commands_.size());
-    for (const auto& pair : commands_) {
-        result.push_back(pair.first);
-    }
-    for (const auto& command : commands_) {
-        for (const auto& cmd : command.second) {
-            for (const auto& alias : cmd.second.aliases) {
-                result.push_back(alias);
-            }
+    std::unordered_set<std::string> uniqueCommands;
+    
+    // First add all main commands
+    for (const auto& [name, _] : commands_) {
+        if (uniqueCommands.insert(name).second) {
+            result.push_back(name);
         }
     }
-    auto uniqueIt = std::unique(result.begin(), result.end());
-    result.erase(uniqueIt, result.end());
-    LOG_F(INFO, "All commands: {}", atom::utils::toString(result));
+    
+    LOG_F(INFO, "Found {} unique commands", result.size());
     return result;
 }
 
@@ -292,6 +417,8 @@ auto CommandDispatcher::getCommandArgAndReturnType(const std::string& name)
     auto commandIterator = commands_.find(name);
     if (commandIterator != commands_.end()) {
         std::vector<CommandArgRet> result;
+        result.reserve(commandIterator->second.size());
+        
         for (const auto& [hash, cmd] : commandIterator->second) {
             LOG_F(INFO,
                   "Argument and return types for command '{}': args = [{}], "
@@ -301,6 +428,19 @@ auto CommandDispatcher::getCommandArgAndReturnType(const std::string& name)
         }
         return result;
     }
+    
+    // Check aliases
+    for (const auto& [cmdName, cmdMap] : commands_) {
+        for (const auto& [hash, cmd] : cmdMap) {
+            if (cmd.aliases.find(name) != cmd.aliases.end()) {
+                std::vector<CommandArgRet> result;
+                result.reserve(1);
+                result.emplace_back(CommandArgRet{cmd.argTypes, cmd.returnType});
+                return result;
+            }
+        }
+    }
+    
     LOG_F(INFO, "No argument and return types found for command '{}'.", name);
     return {};
 }
@@ -309,14 +449,45 @@ auto CommandDispatcher::dispatchHelper(
     const std::string& name, const std::vector<std::any>& args) -> std::any {
     LOG_SCOPE_FUNCTION(INFO);
     auto commandIterator = commands_.find(name);
-    if (commandIterator != commands_.end()) {
-        for (const auto& [hash, cmd] : commandIterator->second) {
-            if (cmd.hash == computeFunctionHash(args)) {
-                return executeCommand(cmd, name, args);
+    if (commandIterator == commands_.end()) {
+        // Check if it's an alias
+        for (const auto& [cmdName, cmdMap] : commands_) {
+            for (const auto& [hash, cmd] : cmdMap) {
+                if (cmd.aliases.find(name) != cmd.aliases.end()) {
+                    LOG_F(INFO, "Found command alias '{}' -> '{}'", name, cmdName);
+                    commandIterator = commands_.find(cmdName);
+                    break;
+                }
             }
+            if (commandIterator != commands_.end()) break;
+        }
+        
+        if (commandIterator == commands_.end()) {
+            LOG_F(ERROR, "Command '{}' not found.", name);
+            THROW_INVALID_ARGUMENT("Command '{}' not found.", name);
         }
     }
-    LOG_F(ERROR, "Command '{}' not found or no matching overload.", name);
-    THROW_INVALID_ARGUMENT("Command '{}' not found or no matching overload.",
-                           name);
+    
+    const std::string funcHash = computeFunctionHash(args);
+    LOG_F(INFO, "Dispatching command '{}' with hash '{}'", name, funcHash);
+    
+    // Try to find a matching overload
+    for (const auto& [hash, cmd] : commandIterator->second) {
+        if (cmd.hash == funcHash) {
+            // Check precondition
+            checkPrecondition(cmd, name);
+            
+            // Execute command
+            std::any result = executeCommand(cmd, name, args);
+            
+            // Check postcondition
+            checkPostcondition(cmd, name);
+            
+            return result;
+        }
+    }
+    
+    LOG_F(ERROR, "No matching overload for command '{}' with the given arguments.", name);
+    THROW_INVALID_ARGUMENT("No matching overload for command '{}' with the given arguments.", 
+                         name);
 }

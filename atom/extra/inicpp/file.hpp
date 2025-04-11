@@ -10,11 +10,33 @@
 #include <span>
 #include <sstream>
 #include <vector>
+#include "atom/macro.hpp"
 #include "section.hpp"
+
+#if INICPP_CONFIG_PATH_QUERY
+#include "path_query.hpp"
+#endif
+
+#if INICPP_CONFIG_EVENT_LISTENERS
+#include "event_listener.hpp"
+#endif
 
 #include "atom/error/exception.hpp"
 
 namespace inicpp {
+
+ATOM_CONSTEXPR auto pathSeparator() noexcept -> char { return '.'; }
+
+inline auto joinPath(const std::vector<std::string>& paths) -> std::string {
+    std::ostringstream oss;
+    for (const auto& path : paths) {
+        if (!oss.str().empty()) {
+            oss << pathSeparator();
+        }
+        oss << path;
+    }
+    return oss.str();
+}
 
 /**
  * @class IniFileBase
@@ -33,6 +55,11 @@ private:
     bool overwriteDuplicateFields_ =
         true;  ///< Flag to allow overwriting duplicate fields.
     mutable std::shared_mutex mutex_;  ///< Shared mutex for thread-safety
+
+#if INICPP_CONFIG_EVENT_LISTENERS
+    EventManager eventManager_;  ///< Event manager for change notifications
+    std::string fileName_;       ///< Name of the loaded file
+#endif
 
     /**
      * @brief Erases comments from a line.
@@ -107,8 +134,125 @@ private:
 
         std::string secName = line.substr(1, pos - 1);
         trim(secName);
-        return &(*this)[secName];
+
+#if INICPP_CONFIG_NESTED_SECTIONS
+        // Handle nested sections
+        auto sectionPtr = createNestedSection(secName);
+#else
+        // 原始代码，不处理嵌套段落
+        auto sectionPtr = &(*this)[secName];
+#endif
+
+#if INICPP_CONFIG_EVENT_LISTENERS
+        // 设置段落名称以便触发事件
+        sectionPtr->setSectionName(secName);
+#endif
+
+        return sectionPtr;
     }
+
+#if INICPP_CONFIG_NESTED_SECTIONS
+    /**
+     * @brief 创建嵌套段落，自动处理段落层次结构
+     * @param fullSectionName 完整的段落名称，可能包含分隔符
+     * @return 指向创建的段落的指针
+     */
+    IniSectionBase<Comparator>* createNestedSection(
+        const std::string& fullSectionName) {
+        // 检查是否包含嵌套段落分隔符
+        if (fullSectionName.find(pathSeparator()) == std::string::npos) {
+            // 没有嵌套，直接创建/获取段落
+            auto& section = (*this)[fullSectionName];
+
+            // 如果是新段落，标记为顶层段落
+            if (this->count(fullSectionName) == 0) {
+                section.setParentSectionName("");
+            }
+
+            return &section;
+        }
+
+        // 处理嵌套段落
+        auto parts = splitPath(fullSectionName);
+        if (parts.empty()) {
+            throw std::invalid_argument("Invalid section name: " +
+                                        fullSectionName);
+        }
+
+        // 创建所有父级段落
+        std::string currentPath = parts[0];
+        auto& rootSection = (*this)[currentPath];
+
+        // 标记为顶层段落（如果是新创建的）
+        if (this->count(currentPath) == 0) {
+            rootSection.setParentSectionName("");
+        }
+
+        // 创建中间段落
+        auto* currentSection = &rootSection;
+        for (size_t i = 1; i < parts.size(); ++i) {
+            std::string parentPath = currentPath;
+            currentPath += pathSeparator() + parts[i];
+
+            // 创建或获取子段落
+            auto& childSection = (*this)[currentPath];
+
+            // 设置父子关系
+            if (this->count(currentPath) == 0) {
+                childSection.setParentSectionName(parentPath);
+                currentSection->addChildSection(currentPath);
+            }
+
+            currentSection = &childSection;
+        }
+
+        return currentSection;
+    }
+
+    /**
+     * @brief 获取嵌套段落
+     * @param sectionPath 段落路径，可能包含分隔符
+     * @return 指向段落的指针，如果未找到则为nullptr
+     */
+    IniSectionBase<Comparator>* getNestedSection(
+        const std::string& sectionPath) {
+        // 直接查找完整路径
+        auto it = this->find(sectionPath);
+        if (it != this->end()) {
+            return &(it->second);
+        }
+
+        // 如果不包含分隔符，则肯定不存在
+        if (sectionPath.find(pathSeparator()) == std::string::npos) {
+            return nullptr;
+        }
+
+        // 尝试递归构建路径
+        auto parts = splitPath(sectionPath);
+        if (parts.empty()) {
+            return nullptr;
+        }
+
+        // 检查根段落是否存在
+        auto rootIt = this->find(parts[0]);
+        if (rootIt == this->end()) {
+            return nullptr;
+        }
+
+        // 递归检查每个段落部分
+        std::string currentPath = parts[0];
+        for (size_t i = 1; i < parts.size(); ++i) {
+            currentPath += pathSeparator() + parts[i];
+            auto it = this->find(currentPath);
+            if (it == this->end()) {
+                return nullptr;
+            }
+        }
+
+        // 找到了完整的段落路径
+        return &(this->at(currentPath));
+    }
+#endif
 
     /**
      * @brief Process a field line from the INI file.
@@ -131,10 +275,16 @@ private:
         auto pos = line.find(fieldSep_);
         if (multiLineValues_ && hasIndent && !multiLineValueFieldName.empty()) {
             // Handle multi-line value continuation
-            (*currentSection)[multiLineValueFieldName] =
-                (*currentSection)[multiLineValueFieldName]
-                    .template as<std::string>() +
-                "\n" + line;
+            std::string oldValue = (*currentSection)[multiLineValueFieldName]
+                                       .template as<std::string>();
+            std::string newValue = oldValue + "\n" + line;
+
+            // 设置新值并捕获可能的事件
+#if INICPP_CONFIG_EVENT_LISTENERS
+            (*currentSection)[multiLineValueFieldName] = newValue;
+#else
+            (*currentSection)[multiLineValueFieldName] = newValue;
+#endif
         } else if (pos == std::string::npos) {
             THROW_LOGIC_ERROR("Field separator missing at line " +
                               std::to_string(lineNo));
@@ -154,7 +304,13 @@ private:
 
             std::string value = line.substr(pos + 1);
             trim(value);
+
+            // 设置新值并捕获可能的事件
+#if INICPP_CONFIG_EVENT_LISTENERS
             (*currentSection)[name] = value;
+#else
+            (*currentSection)[name] = value;
+#endif
 
             multiLineValueFieldName = name;
         }
@@ -171,6 +327,9 @@ public:
      * @param filename The path to the INI file.
      */
     explicit IniFileBase(const std::string& filename) {
+#if INICPP_CONFIG_EVENT_LISTENERS
+        fileName_ = filename;
+#endif
         try {
             load(filename);
         } catch (const std::exception& ex) {
@@ -242,6 +401,40 @@ public:
         overwriteDuplicateFields_ = allowed;
     }
 
+#if INICPP_CONFIG_EVENT_LISTENERS
+    /**
+     * @brief 获取事件管理器以添加/移除监听器
+     * @return 事件管理器的引用
+     */
+    EventManager& getEventManager() noexcept { return eventManager_; }
+
+    /**
+     * @brief 获取事件管理器以添加/移除监听器（const版本）
+     * @return 事件管理器的常量引用
+     */
+    const EventManager& getEventManager() const noexcept {
+        return eventManager_;
+    }
+
+    /**
+     * @brief 设置文件名
+     * @param filename 文件名
+     */
+    void setFileName(const std::string& filename) {
+        std::unique_lock<std::shared_mutex> lock(mutex_);
+        fileName_ = filename;
+    }
+
+    /**
+     * @brief 获取文件名
+     * @return 当前文件名
+     */
+    std::string getFileName() const {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
+        return fileName_;
+    }
+#endif
+
     /**
      * @brief Decodes an INI file from an input stream.
      * @param iss The input stream.
@@ -264,6 +457,15 @@ public:
         } else {
             processLinesSequential(lines);
         }
+
+#if INICPP_CONFIG_EVENT_LISTENERS
+        // 触发文件加载事件
+        if (eventManager_.isEnabled()) {
+            FileEventData eventData{.fileName = fileName_,
+                                    .eventType = FileEventType::FILE_LOADED};
+            eventManager_.notifyFileEvent(eventData);
+        }
+#endif
     }
 
     /**
@@ -416,9 +618,28 @@ public:
                               sectionMap[name] = value;
                           }
 
+#if INICPP_CONFIG_EVENT_LISTENERS
+                          // 设置段落名称
+                          sectionMap.setSectionName(section.name);
+#endif
+
+#if INICPP_CONFIG_NESTED_SECTIONS
+                          // Thread-safe 段落处理
+                          std::lock_guard<std::mutex> lock(mapMutex);
+
+                          // 创建嵌套段落
+                          IniSectionBase<Comparator>* sectionPtr =
+                              createNestedSection(section.name);
+
+                          // 复制字段
+                          for (const auto& [name, value] : section.fields) {
+                              (*sectionPtr)[name] = value;
+                          }
+#else
                           // Thread-safe insert into the main map
                           std::lock_guard<std::mutex> lock(mapMutex);
                           (*this)[section.name] = std::move(sectionMap);
+#endif
                       });
     }
 
@@ -447,6 +668,11 @@ public:
         if (!std::filesystem::is_regular_file(fileName, ec) || ec) {
             THROW_FAIL_TO_OPEN_FILE("Not a regular file: " + fileName);
         }
+
+#if INICPP_CONFIG_EVENT_LISTENERS
+        // 更新文件名
+        fileName_ = fileName;
+#endif
 
         try {
             // For large files, use memory mapping for better performance
@@ -505,6 +731,26 @@ public:
         for (const auto& section : *this) {
             sections.push_back(std::cref(section));
         }
+
+#if INICPP_CONFIG_NESTED_SECTIONS
+        // 对于嵌套段落，先输出顶层段落，然后是其子段落
+        std::sort(sections.begin(), sections.end(),
+                  [](const auto& a, const auto& b) {
+                      const auto& sectionA = a.get().second;
+                      const auto& sectionB = b.get().second;
+
+                      bool aIsTop = sectionA.isTopLevel();
+                      bool bIsTop = sectionB.isTopLevel();
+
+                      if (aIsTop && !bIsTop)
+                          return true;
+                      if (!aIsTop && bIsTop)
+                          return false;
+
+                      // 同层级按名称排序
+                      return a.get().first < b.get().first;
+                  });
+#endif
 
         // Process sections in parallel for large files
         if (sections.size() > 10) {
@@ -589,6 +835,16 @@ public:
             if (oss.fail()) {
                 THROW_FAIL_TO_OPEN_FILE("Failed to write to file: " + fileName);
             }
+
+#if INICPP_CONFIG_EVENT_LISTENERS
+            if (eventManager_.isEnabled()) {
+                FileEventData eventData{.fileName = fileName,
+                                        .sectionName = "",
+                                        .eventType = FileEventType::FILE_SAVED};
+                eventManager_.notifyFileEvent(eventData);
+            }
+#endif
+
         } catch (const std::filesystem::filesystem_error& ex) {
             THROW_FAIL_TO_OPEN_FILE("Filesystem error while saving: " +
                                     std::string(ex.what()));
@@ -603,11 +859,19 @@ public:
      */
     IniSectionBase<Comparator>& getSection(const std::string& sectionName) {
         std::shared_lock<std::shared_mutex> lock(mutex_);
+#if INICPP_CONFIG_NESTED_SECTIONS
+        IniSectionBase<Comparator>* section = getNestedSection(sectionName);
+        if (!section) {
+            throw std::out_of_range("Section not found: " + sectionName);
+        }
+        return *section;
+#else
         auto it = this->find(sectionName);
         if (it == this->end()) {
             throw std::out_of_range("Section not found: " + sectionName);
         }
         return it->second;
+#endif
     }
 
     /**
@@ -619,11 +883,19 @@ public:
     const IniSectionBase<Comparator>& getSection(
         const std::string& sectionName) const {
         std::shared_lock<std::shared_mutex> lock(mutex_);
+#if INICPP_CONFIG_NESTED_SECTIONS
+        IniSectionBase<Comparator>* section = getNestedSection(sectionName);
+        if (!section) {
+            throw std::out_of_range("Section not found: " + sectionName);
+        }
+        return *section;
+#else
         auto it = this->find(sectionName);
         if (it == this->end()) {
             throw std::out_of_range("Section not found: " + sectionName);
         }
         return it->second;
+#endif
     }
 
     /**
@@ -633,7 +905,11 @@ public:
      */
     bool hasSection(const std::string& sectionName) const noexcept {
         std::shared_lock<std::shared_mutex> lock(mutex_);
+#if INICPP_CONFIG_NESTED_SECTIONS
+        return getNestedSection(sectionName) != nullptr;
+#else
         return this->find(sectionName) != this->end();
+#endif
     }
 
     /**
@@ -669,7 +945,7 @@ public:
             if (!hasSection(sectionName)) {
                 return defaultValue;
             }
-            const auto& section = this->at(sectionName);
+            const auto& section = getSection(sectionName);
             return section.template get<T>(fieldName, defaultValue);
         } catch (...) {
             return defaultValue;
@@ -687,9 +963,143 @@ public:
     void setValue(const std::string& sectionName, const std::string& fieldName,
                   const T& value) {
         std::unique_lock<std::shared_mutex> lock(mutex_);
-        auto& section = (*this)[sectionName];
-        section[fieldName] = value;
+#if INICPP_CONFIG_NESTED_SECTIONS
+        IniSectionBase<Comparator>* section = getNestedSection(sectionName);
+        if (!section) {
+            // 创建嵌套段落
+            section = createNestedSection(sectionName);
+        }
+
+        // 准备旧值用于事件通知
+#if INICPP_CONFIG_EVENT_LISTENERS
+        std::string oldValue;
+        bool fieldExists = section->hasField(fieldName);
+        if (fieldExists && eventManager_.isEnabled()) {
+            try {
+                oldValue = section->template get<std::string>(fieldName);
+            } catch (...) {
+                // 忽略转换错误
+            }
+        }
+#endif
+
+        // 设置值
+        section->template set<T>(fieldName, value);
+
+#if INICPP_CONFIG_EVENT_LISTENERS
+        // 触发路径变更事件
+        if (eventManager_.isEnabled()) {
+            std::string path = sectionName + pathSeparator() + fieldName;
+            std::string newValue;
+            try {
+                newValue = section->template get<std::string>(fieldName);
+            } catch (...) {
+                // 忽略转换错误
+            }
+
+            PathChangedEventData eventData{.path = path,
+                                           .oldValue = oldValue,
+                                           .newValue = newValue,
+                                           .isNew = !fieldExists,
+                                           .isRemoved = false};
+
+            eventManager_.notifyPathChanged(eventData);
+        }
+#endif
+#else
+        (*this)[sectionName][fieldName] = value;
+#endif
     }
+
+#if INICPP_CONFIG_PATH_QUERY
+    /**
+     * @brief 使用路径查询获取值
+     * @tparam T 值类型
+     * @param path 路径（例如 "section.subsection.field"）
+     * @return 转换后的值
+     * @throws std::out_of_range 如果路径无效
+     */
+    template <typename T>
+    T getValueByPath(const std::string& path) const {
+        PathQuery query(path);
+        if (!query.isValid() || query.size() < 2) {
+            throw std::out_of_range("Invalid path: " + path);
+        }
+
+        // 最后一部分是字段名，之前的部分是段落路径
+        auto sectionParts = query.getSectionPath();
+        std::string sectionName = joinPath(sectionParts);
+        std::string fieldName = query.getFieldName();
+
+        return getValue<T>(sectionName, fieldName);
+    }
+
+    /**
+     * @brief 使用路径查询获取值（带默认值）
+     * @tparam T 值类型
+     * @param path 路径（例如 "section.subsection.field"）
+     * @param defaultValue 默认值
+     * @return 转换后的值或默认值
+     */
+    template <typename T>
+    T getValueByPath(const std::string& path,
+                     const T& defaultValue) const noexcept {
+        try {
+            return getValueByPath<T>(path);
+        } catch (...) {
+            return defaultValue;
+        }
+    }
+
+    /**
+     * @brief 使用路径查询设置值
+     * @tparam T 值类型
+     * @param path 路径（例如 "section.subsection.field"）
+     * @param value 要设置的值
+     * @throws std::out_of_range 如果路径无效
+     */
+    template <typename T>
+    void setValueByPath(const std::string& path, const T& value) {
+        PathQuery query(path);
+        if (!query.isValid() || query.size() < 2) {
+            throw std::out_of_range("Invalid path: " + path);
+        }
+
+        auto sectionParts = query.getSectionPath();
+        std::string sectionName = joinPath(sectionParts);
+        std::string fieldName = query.getFieldName();
+
+        setValue<T>(sectionName, fieldName, value);
+    }
+
+    /**
+     * @brief 检查路径是否存在
+     * @param path 要检查的路径
+     * @return 如果路径存在则为true
+     */
+    bool hasPath(const std::string& path) const noexcept {
+        try {
+            PathQuery query(path);
+            if (!query.isValid() || query.size() < 2) {
+                return false;
+            }
+
+            auto sectionParts = query.getSectionPath();
+            std::string sectionName = joinPath(sectionParts);
+            std::string fieldName = query.getFieldName();
+
+            std::shared_lock<std::shared_mutex> lock(mutex_);
+            if (!hasSection(sectionName)) {
+                return false;
+            }
+
+            const auto& section = getSection(sectionName);
+            return section.hasField(fieldName);
+        } catch (...) {
+            return false;
+        }
+    }
+#endif
 
     /**
      * @brief Remove a section
@@ -698,7 +1108,46 @@ public:
      */
     bool removeSection(const std::string& sectionName) {
         std::unique_lock<std::shared_mutex> lock(mutex_);
+#if INICPP_CONFIG_NESTED_SECTIONS
+        // 首先检查段落是否存在
+        IniSectionBase<Comparator>* section = getNestedSection(sectionName);
+        if (!section) {
+            return false;
+        }
+
+        // 如果有子段落，也需要移除它们
+        if (section->hasChildSections()) {
+            auto childNames = section->getChildSectionNames();
+            for (const auto& childName : childNames) {
+                this->erase(childName);
+            }
+        }
+
+        // 从父段落中移除此段落
+        if (!section->isTopLevel()) {
+            IniSectionBase<Comparator>* parentSection =
+                getNestedSection(section->getParentSectionName());
+            if (parentSection) {
+                parentSection->removeChildSection(sectionName);
+            }
+        }
+
+#if INICPP_CONFIG_EVENT_LISTENERS
+        // 触发段落移除事件
+        if (eventManager_.isEnabled()) {
+            FileEventData eventData{
+                .fileName = fileName_,
+                .sectionName = sectionName,
+                .eventType = FileEventType::SECTION_REMOVED};
+            eventManager_.notifyFileEvent(eventData);
+        }
+#endif
+
+        // 最后移除段落
         return this->erase(sectionName) > 0;
+#else
+        return this->erase(sectionName) > 0;
+#endif
     }
 
     /**
@@ -710,11 +1159,52 @@ public:
     bool removeField(const std::string& sectionName,
                      const std::string& fieldName) {
         std::unique_lock<std::shared_mutex> lock(mutex_);
+
+#if INICPP_CONFIG_NESTED_SECTIONS
+        IniSectionBase<Comparator>* section = getNestedSection(sectionName);
+        if (!section) {
+            return false;
+        }
+
+        // 保存旧值以便通知事件
+#if INICPP_CONFIG_EVENT_LISTENERS
+        std::string oldValue;
+        bool fieldExists = section->hasField(fieldName);
+        if (fieldExists && eventManager_.isEnabled()) {
+            try {
+                oldValue = section->template get<std::string>(fieldName);
+            } catch (...) {
+                // 忽略转换错误
+            }
+        }
+#endif
+
+        // 删除字段
+        bool result = section->deleteField(fieldName);
+
+#if INICPP_CONFIG_EVENT_LISTENERS
+        // 触发路径变更事件
+        if (result && eventManager_.isEnabled()) {
+            std::string path = sectionName + pathSeparator() + fieldName;
+
+            PathChangedEventData eventData{.path = path,
+                                           .oldValue = oldValue,
+                                           .newValue = "",
+                                           .isNew = false,
+                                           .isRemoved = true};
+
+            eventManager_.notifyPathChanged(eventData);
+        }
+#endif
+
+        return result;
+#else
         auto sectionIt = this->find(sectionName);
         if (sectionIt == this->end()) {
             return false;
         }
         return sectionIt->second.erase(fieldName) > 0;
+#endif
     }
 
     /**
@@ -727,6 +1217,49 @@ public:
         std::shared_lock<std::shared_mutex> otherLock(other.mutex_);
 
         for (const auto& [sectionName, otherSection] : other) {
+#if INICPP_CONFIG_NESTED_SECTIONS
+            // 获取或创建段落
+            IniSectionBase<Comparator>* section = getNestedSection(sectionName);
+            if (!section) {
+                section = createNestedSection(sectionName);
+            }
+
+            // 合并字段
+            for (const auto& [fieldName, otherField] : otherSection) {
+                if (overwrite || !section->hasField(fieldName)) {
+                    (*section)[fieldName] = otherField;
+
+#if INICPP_CONFIG_EVENT_LISTENERS
+                    // 触发事件
+                    if (eventManager_.isEnabled()) {
+                        std::string path =
+                            sectionName + pathSeparator() + fieldName;
+                        std::string newValue =
+                            otherField.template as<std::string>();
+                        std::string oldValue;
+                        bool isNew = !section->hasField(fieldName);
+
+                        if (!isNew) {
+                            try {
+                                oldValue = section->template get<std::string>(
+                                    fieldName);
+                            } catch (...) {
+                                // 忽略转换错误
+                            }
+                        }
+
+                        PathChangedEventData eventData{.path = path,
+                                                       .oldValue = oldValue,
+                                                       .newValue = newValue,
+                                                       .isNew = isNew,
+                                                       .isRemoved = false};
+
+                        eventManager_.notifyPathChanged(eventData);
+                    }
+#endif
+                }
+            }
+#else
             auto it = this->find(sectionName);
             if (it == this->end()) {
                 // Section doesn't exist in this file, add it
@@ -745,13 +1278,62 @@ public:
                     }
                 }
             }
+#endif
         }
     }
+
+#if INICPP_CONFIG_NESTED_SECTIONS
+    /**
+     * @brief 获取段落的所有子段落名称
+     * @param sectionName 段落名称
+     * @return 子段落名称的向量
+     * @throws std::out_of_range 如果段落不存在
+     */
+    std::vector<std::string> getChildSections(
+        const std::string& sectionName) const {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
+        IniSectionBase<Comparator>* section = getNestedSection(sectionName);
+        if (!section) {
+            throw std::out_of_range("Section not found: " + sectionName);
+        }
+
+        return section->getChildSectionNames();
+    }
+
+    /**
+     * @brief 获取顶层段落名称列表
+     * @return 顶层段落名称的向量
+     */
+    std::vector<std::string> getTopLevelSections() const {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
+        std::vector<std::string> result;
+
+        for (const auto& [name, section] : *this) {
+            if (section.isTopLevel()) {
+                result.push_back(name);
+            }
+        }
+
+        return result;
+    }
+#endif
 };
 
 using IniFile = IniFileBase<std::less<>>;  ///< Case-sensitive INI file.
 using IniFileCaseInsensitive =
     IniFileBase<StringInsensitiveLess>;  ///< Case-insensitive INI file.
+
+#if INICPP_HAS_BOOST && INICPP_CONFIG_USE_BOOST_CONTAINERS
+/**
+ * @brief Hash-based INI file for faster lookups with large data sets.
+ */
+using IniFileHash = IniFileBase<std::equal_to<>>;
+
+/**
+ * @brief Case-insensitive hash-based INI file.
+ */
+using IniFileHashCaseInsensitive = IniFileBase<StringInsensitiveEqual>;
+#endif
 
 }  // namespace inicpp
 

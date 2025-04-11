@@ -4,8 +4,10 @@
 #include <atomic>
 #include <cmath>
 #include <exception>
+#include <future>
 #include <memory>
 #include <mutex>
+#include <queue>
 #include <set>
 #include <shared_mutex>
 #include <string>
@@ -14,7 +16,81 @@
 #include <unordered_set>
 #include <vector>
 
+// Add Boost support with conditional compilation
+#ifdef ATOM_USE_BOOST
+#include <boost/lockfree/queue.hpp>
+#include <boost/thread/future.hpp>
+#include <boost/thread/mutex.hpp>
+#include <boost/thread/shared_mutex.hpp>
+#include <boost/thread/thread.hpp>
+#endif
+
 namespace atom::search {
+
+// Define threading and synchronization types based on configuration
+#ifdef ATOM_USE_BOOST
+namespace threading {
+using thread = boost::thread;
+using thread_group = boost::thread_group;
+using mutex = boost::mutex;
+using shared_mutex = boost::shared_mutex;
+using unique_lock = boost::unique_lock<mutex>;
+using shared_lock = boost::shared_lock<shared_mutex>;
+
+template <typename T>
+using future = boost::future<T>;
+template <typename T>
+using shared_future = boost::shared_future<T>;
+template <typename T>
+using promise = boost::promise<T>;
+
+template <typename T>
+using lockfree_queue = boost::lockfree::queue<T>;
+}  // namespace threading
+#else
+namespace threading {
+using thread = std::thread;
+using mutex = std::mutex;
+using shared_mutex = std::shared_mutex;
+using unique_lock = std::unique_lock<mutex>;
+using shared_lock = std::shared_lock<shared_mutex>;
+
+template <typename T>
+using future = std::future<T>;
+template <typename T>
+using shared_future = std::shared_future<T>;
+template <typename T>
+using promise = std::promise<T>;
+
+// Placeholder for std version - would need to implement separately
+template <typename T>
+class lockfree_queue {
+private:
+    std::mutex mutex_;
+    std::queue<T> queue_;
+
+public:
+    lockfree_queue(size_t size [[maybe_unused]] = 128) {}
+    bool push(const T& item) {
+        std::lock_guard lock(mutex_);
+        queue_.push(item);
+        return true;
+    }
+    bool pop(T& item) {
+        std::lock_guard lock(mutex_);
+        if (queue_.empty())
+            return false;
+        item = queue_.front();
+        queue_.pop();
+        return true;
+    }
+    bool empty() {
+        std::lock_guard lock(mutex_);
+        return queue_.empty();
+    }
+};
+}  // namespace threading
+#endif
 
 /**
  * @brief Base exception class for search engine errors.
@@ -158,6 +234,11 @@ public:
      * concurrency)
      */
     explicit SearchEngine(unsigned maxThreads = 0);
+
+    /**
+     * @brief Destructor - cleans up thread resources.
+     */
+    ~SearchEngine();
 
     /**
      * @brief Adds a document to the search engine.
@@ -336,7 +417,27 @@ private:
         0};  ///< Total number of documents in the search engine
 
     // Thread safety
-    mutable std::shared_mutex indexMutex_;  ///< RW mutex for thread safety
+    mutable threading::shared_mutex
+        indexMutex_;  ///< RW mutex for thread safety
+
+#ifdef ATOM_USE_BOOST
+    // Lockfree task queue for parallel processing
+    struct SearchTask {
+        std::vector<std::string> words;
+        std::function<void(const std::vector<std::string>&)> callback;
+    };
+
+    std::unique_ptr<threading::lockfree_queue<SearchTask>> taskQueue_;
+    std::atomic<bool> shouldStopWorkers_{false};
+    std::vector<std::unique_ptr<threading::thread>> workerThreads_;
+
+    // Start worker threads for processing tasks
+    void startWorkerThreads();
+    // Stop worker threads
+    void stopWorkerThreads();
+    // Worker thread function
+    void workerFunction();
+#endif
 };
 
 }  // namespace atom::search

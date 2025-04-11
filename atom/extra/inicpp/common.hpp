@@ -10,7 +10,107 @@
 
 #include "atom/macro.hpp"
 
+// Configuration macro definitions
+#ifndef INICPP_CONFIG_USE_BOOST
+#define INICPP_CONFIG_USE_BOOST 0  // Do not use Boost by default
+#endif
+
+#ifndef INICPP_CONFIG_USE_BOOST_CONTAINERS
+#define INICPP_CONFIG_USE_BOOST_CONTAINERS \
+    0  // Do not use Boost containers by default
+#endif
+
+#ifndef INICPP_CONFIG_USE_MEMORY_POOL
+#define INICPP_CONFIG_USE_MEMORY_POOL 0  // Do not use memory pool by default
+#endif
+
+#ifndef INICPP_CONFIG_NESTED_SECTIONS
+#define INICPP_CONFIG_NESTED_SECTIONS 1  // Enable nested sections by default
+#endif
+
+#ifndef INICPP_CONFIG_EVENT_LISTENERS
+#define INICPP_CONFIG_EVENT_LISTENERS 1  // Enable event listeners by default
+#endif
+
+#ifndef INICPP_CONFIG_PATH_QUERY
+#define INICPP_CONFIG_PATH_QUERY 1  // Enable path query by default
+#endif
+
+#ifndef INICPP_CONFIG_FORMAT_CONVERSION
+#define INICPP_CONFIG_FORMAT_CONVERSION \
+    1  // Enable format conversion by default
+#endif
+
+// Check if Boost is available
+#if INICPP_CONFIG_USE_BOOST
+#ifdef __has_include
+#if __has_include(<boost/version.hpp>)
+#include <boost/version.hpp>
+#define INICPP_HAS_BOOST 1
+#else
+#define INICPP_HAS_BOOST 0
+#if INICPP_CONFIG_USE_BOOST_CONTAINERS
+#undef INICPP_CONFIG_USE_BOOST_CONTAINERS
+#define INICPP_CONFIG_USE_BOOST_CONTAINERS 0
+#endif
+#endif
+#else
+#define INICPP_HAS_BOOST 0
+#endif
+#else
+#define INICPP_HAS_BOOST 0
+#undef INICPP_CONFIG_USE_BOOST_CONTAINERS
+#define INICPP_CONFIG_USE_BOOST_CONTAINERS 0
+#endif
+
+// Include necessary Boost headers
+#if INICPP_HAS_BOOST && INICPP_CONFIG_USE_BOOST_CONTAINERS
+#include <boost/container/flat_map.hpp>
+#include <boost/container/string.hpp>
+#include <boost/pool/object_pool.hpp>
+#include <boost/unordered_map.hpp>
+#else
+#include <map>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#endif
+
 namespace inicpp {
+
+// Container type definitions, select different implementations based on
+// configuration
+#if INICPP_HAS_BOOST && INICPP_CONFIG_USE_BOOST_CONTAINERS
+// Use Boost containers
+template <typename Key, typename Value, typename Compare = std::less<Key>>
+using map_type = boost::container::flat_map<Key, Value, Compare>;
+
+template <typename Key, typename Value, typename Hash = boost::hash<Key>>
+using hash_map_type = boost::unordered_map<Key, Value, Hash>;
+
+// For small strings, use Boost's string type
+using small_string = boost::container::string;
+
+#if INICPP_CONFIG_USE_MEMORY_POOL
+template <typename T>
+using allocator_type = boost::pool_allocator<T>;
+#else
+template <typename T>
+using allocator_type = std::allocator<T>;
+#endif
+#else
+// Use standard library containers
+template <typename Key, typename Value, typename Compare = std::less<Key>>
+using map_type = std::map<Key, Value, Compare>;
+
+template <typename Key, typename Value, typename Hash = std::hash<Key>>
+using hash_map_type = std::unordered_map<Key, Value, Hash>;
+
+using small_string = std::string;
+
+template <typename T>
+using allocator_type = std::allocator<T>;
+#endif
 
 /**
  * @brief Returns a string view of whitespace characters.
@@ -99,8 +199,8 @@ struct StringInsensitiveLess {
      * @param rhs The right-hand side string view.
      * @return True if lhs is less than rhs, false otherwise.
      */
-    auto operator()(std::string_view lhs,
-                    std::string_view rhs) const noexcept -> bool {
+    auto operator()(std::string_view lhs, std::string_view rhs) const noexcept
+        -> bool {
         return std::ranges::lexicographical_compare(
             lhs, rhs, [](unsigned char a, unsigned char b) noexcept {
                 return std::tolower(a) < std::tolower(b);

@@ -4,7 +4,8 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
-#include <utility>
+
+#include "common.hpp"
 #include "convert.hpp"
 
 namespace inicpp {
@@ -14,7 +15,7 @@ namespace inicpp {
  */
 class IniField {
 private:
-    std::string value_;
+    small_string value_;
 
 public:
     /**
@@ -26,7 +27,9 @@ public:
      * @brief Construct from a string value.
      * @param value The value to store.
      */
-    explicit IniField(std::string value) noexcept : value_(std::move(value)) {}
+    template <typename StringType>
+        requires StringLike<StringType>
+    explicit IniField(StringType value) noexcept : value_(value) {}
 
     /**
      * @brief Copy constructor.
@@ -115,7 +118,89 @@ public:
      * @return The raw string value of the field.
      */
     [[nodiscard]] std::string_view raw_value() const noexcept { return value_; }
+
+    /**
+     * @brief Compare two fields for equality.
+     * @param other The other field.
+     * @return True if the fields are equal, false otherwise.
+     */
+    bool operator==(const IniField& other) const noexcept {
+        return value_ == other.value_;
+    }
+
+    /**
+     * @brief Compare two fields for inequality.
+     * @param other The other field.
+     * @return True if the fields are not equal, false otherwise.
+     */
+    bool operator!=(const IniField& other) const noexcept {
+        return !(*this == other);
+    }
+
+    /**
+     * @brief Check if field value is empty.
+     * @return True if the field value is empty, false otherwise.
+     */
+    [[nodiscard]] bool empty() const noexcept {
+        return value_.empty();
+    }
+
+    /**
+     * @brief Get the size of the field value.
+     * @return The size of the field value.
+     */
+    [[nodiscard]] size_t size() const noexcept {
+        return value_.size();
+    }
+
+    /**
+     * @brief Clear the field value.
+     */
+    void clear() noexcept {
+        value_.clear();
+    }
 };
+
+#if INICPP_CONFIG_USE_MEMORY_POOL
+/**
+ * @brief Memory pool for IniField objects.
+ */
+class IniFieldPool {
+private:
+    static boost::object_pool<IniField> pool_;
+    
+public:
+    /**
+     * @brief Allocate a new IniField from the pool.
+     * @return A new IniField.
+     */
+    static IniField* allocate() {
+        return pool_.construct();
+    }
+    
+    /**
+     * @brief Allocate a new IniField from the pool with an initial value.
+     * @param value The initial value.
+     * @return A new IniField.
+     */
+    template <typename StringType>
+        requires StringLike<StringType>
+    static IniField* allocate(StringType value) {
+        return pool_.construct(value);
+    }
+    
+    /**
+     * @brief Free an IniField back to the pool.
+     * @param field The field to free.
+     */
+    static void free(IniField* field) {
+        pool_.destroy(field);
+    }
+};
+
+// 在cpp文件中定义
+inline boost::object_pool<IniField> IniFieldPool::pool_;
+#endif
 
 }  // namespace inicpp
 

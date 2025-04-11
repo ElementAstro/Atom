@@ -5,124 +5,126 @@
 #include <functional>
 #include <ranges>
 #include <sstream>
-#include <unordered_set>
 #include <vector>
 
+// Include high-performance containers
+#include "atom/containers/high_performance.hpp"
+
 namespace atom::utils {
+
+// Type aliases for high-performance containers
+template <typename T>
+using HashSet = atom::containers::HashSet<T>;
+
+template <typename K, typename V>
+using HashMap = atom::containers::HashMap<K, V>;
+
+template <typename T>
+using Vector = atom::containers::Vector<T>;
+
+template <typename K, typename V>
+using Map = atom::containers::Map<K, V>;
+
+template <typename T, size_t N = 16>
+using SmallVector = atom::containers::SmallVector<T, N>;
+
+using String = atom::containers::String;
+
 /**
  * @brief Checks if one container is a subset of another container.
- *
- * @tparam Container1 Type of the subset container.
- * @tparam Container2 Type of the superset container.
- * @param subset The container to check if it is a subset.
- * @param superset The container to check against.
- * @return true if subset is a subset of superset, false otherwise.
+ * @example
+ *   Vector<int> a = {1, 2, 3};
+ *   Vector<int> b = {1, 2, 3, 4};
+ *   bool result = isSubset(a, b); // returns true
  */
 template <typename Container1, typename Container2>
     requires std::ranges::input_range<Container1> &&
-                 std::ranges::input_range<Container2> &&
-                 std::equality_comparable_with<
-                     typename Container1::value_type,
-                     typename Container2::value_type> &&
-                 std::regular<typename Container2::value_type> &&
-                 std::regular<typename Container1::value_type>
+             std::ranges::input_range<Container2> &&
+             std::equality_comparable_with<typename Container1::value_type,
+                                           typename Container2::value_type> &&
+             std::regular<typename Container2::value_type> &&
+             std::regular<typename Container1::value_type>
 auto isSubset(const Container1& subset, const Container2& superset) -> bool {
-    std::unordered_set<typename Container2::value_type> set(superset.begin(),
-                                                            superset.end());
+    HashSet<typename Container2::value_type> set(superset.begin(),
+                                                 superset.end());
     return std::ranges::all_of(
         subset, [&set](const auto& elem) { return set.contains(elem); });
 }
 
 /**
  * @brief Checks if a container contains a specific element.
- *
- * @tparam Container Type of the container.
- * @tparam T Type of the element.
- * @param container The container to check.
- * @param value The element to check for.
- * @return true if the container contains the element, false otherwise.
+ * @example
+ *   Vector<int> v = {1, 2, 3};
+ *   bool result = contains(v, 2); // returns true
  */
 template <typename Container, typename T>
     requires std::ranges::input_range<Container> &&
-                 std::equality_comparable_with<typename Container::value_type,
-                                               T>
+             std::equality_comparable_with<typename Container::value_type, T>
 auto contains(const Container& container, const T& value) -> bool {
     return std::ranges::find(container, value) != container.end();
 }
 
 /**
- * @brief Converts a container to an unordered_set for fast lookup.
- *
- * @tparam Container Type of the container.
- * @param container The container to convert.
- * @return std::unordered_set<typename Container::value_type> The converted
- * unordered_set.
+ * @brief Converts a container to a HashSet for fast lookup.
+ * @example
+ *   Vector<int> v = {1, 2, 2, 3};
+ *   auto set = toHashSet(v); // returns HashSet with {1, 2, 3}
  */
 template <typename Container>
     requires std::ranges::input_range<Container> &&
              std::regular<typename Container::value_type>
-auto toUnorderedSet(const Container& container) {
-    return std::unordered_set<typename Container::value_type>(container.begin(),
-                                                              container.end());
+auto toHashSet(const Container& container) {
+    return HashSet<typename Container::value_type>(container.begin(),
+                                                   container.end());
 }
 
 /**
- * @brief Checks if one container is a subset of another container using linear
- * search.
- *
- * @tparam Container1 Type of the subset container.
- * @tparam Container2 Type of the superset container.
- * @param subset The container to check if it is a subset.
- * @param superset The container to check against.
- * @return true if subset is a subset of superset, false otherwise.
+ * @brief Checks subset relationship using linear search (less efficient).
+ * @example
+ *   Vector<int> a = {1, 2};
+ *   Vector<int> b = {1, 2, 3};
+ *   bool result = isSubsetLinearSearch(a, b); // returns true
  */
 template <typename Container1, typename Container2>
     requires std::ranges::input_range<Container1> &&
-                 std::ranges::input_range<Container2> &&
-                 std::equality_comparable_with<typename Container1::value_type,
-                                               typename Container2::value_type>
-auto isSubsetLinearSearch(const Container1& subset,
-                          const Container2& superset) -> bool {
+             std::ranges::input_range<Container2> &&
+             std::equality_comparable_with<typename Container1::value_type,
+                                           typename Container2::value_type>
+auto isSubsetLinearSearch(const Container1& subset, const Container2& superset)
+    -> bool {
     return std::ranges::all_of(subset, [&superset](const auto& elem) {
         return contains(superset, elem);
     });
 }
 
 /**
- * @brief Checks if one container is a subset of another container using an
- * unordered_set for fast lookup.
- *
- * @tparam Container1 Type of the subset container.
- * @tparam Container2 Type of the superset container.
- * @param subset The container to check if it is a subset.
- * @param superset The container to check against.
- * @return true if subset is a subset of superset, false otherwise.
+ * @brief Checks subset relationship using HashSet (more efficient).
+ * @example
+ *   Vector<int> a = {1, 2};
+ *   Vector<int> b = {1, 2, 3, 4};
+ *   bool result = isSubsetWithHashSet(a, b); // returns true
  */
 template <typename Container1, typename Container2>
     requires std::ranges::input_range<Container1> &&
-                 std::ranges::input_range<Container2> &&
-                 std::equality_comparable_with<
-                     typename Container1::value_type,
-                     typename Container2::value_type> &&
-                 std::regular<typename Container2::value_type>
-auto isSubsetWithHashSet(const Container1& subset,
-                         const Container2& superset) -> bool {
+             std::ranges::input_range<Container2> &&
+             std::equality_comparable_with<typename Container1::value_type,
+                                           typename Container2::value_type> &&
+             std::regular<typename Container2::value_type>
+auto isSubsetWithHashSet(const Container1& subset, const Container2& superset)
+    -> bool {
     auto supersetSet =
-        toUnorderedSet(superset);  // Convert superset to unordered_set
+        toHashSet(superset);  // Using HashSet instead of unordered_set
     return std::ranges::all_of(subset, [&supersetSet](const auto& elem) {
         return supersetSet.contains(elem);
     });
 }
 
 /**
- * @brief Returns the intersection of two containers.
- *
- * @tparam Container1 Type of the first container.
- * @tparam Container2 Type of the second container.
- * @param container1 The first container.
- * @param container2 The second container.
- * @return std::vector<typename Container1::value_type> The intersection of the
- * two containers.
+ * @brief Returns intersection of two containers.
+ * @example
+ *   Vector<int> a = {1, 2, 3};
+ *   Vector<int> b = {2, 3, 4};
+ *   auto result = intersection(a, b); // returns {2, 3}
  */
 template <typename Container1, typename Container2>
     requires std::ranges::input_range<Container1> &&
@@ -130,7 +132,7 @@ template <typename Container1, typename Container2>
              std::equality_comparable_with<typename Container1::value_type,
                                            typename Container2::value_type>
 auto intersection(const Container1& container1, const Container2& container2) {
-    std::vector<typename Container1::value_type> result;
+    Vector<typename Container1::value_type> result;
     for (const auto& elem : container1) {
         if (contains(container2, elem)) {
             result.push_back(elem);
@@ -140,14 +142,11 @@ auto intersection(const Container1& container1, const Container2& container2) {
 }
 
 /**
- * @brief Returns the union of two containers.
- *
- * @tparam Container1 Type of the first container.
- * @tparam Container2 Type of the second container.
- * @param container1 The first container.
- * @param container2 The second container.
- * @return std::vector<typename Container1::value_type> The union of the two
- * containers.
+ * @brief Returns union of two containers.
+ * @example
+ *   Vector<int> a = {1, 2};
+ *   Vector<int> b = {2, 3};
+ *   auto result = unionSet(a, b); // returns {1, 2, 3}
  */
 template <typename Container1, typename Container2>
     requires std::ranges::input_range<Container1> &&
@@ -155,22 +154,19 @@ template <typename Container1, typename Container2>
              std::equality_comparable_with<typename Container1::value_type,
                                            typename Container2::value_type>
 auto unionSet(const Container1& container1, const Container2& container2) {
-    std::unordered_set<typename Container1::value_type> result(
-        container1.begin(), container1.end());
+    HashSet<typename Container1::value_type> result(container1.begin(),
+                                                    container1.end());
     result.insert(container2.begin(), container2.end());
-    return std::vector<typename Container1::value_type>(result.begin(),
-                                                        result.end());
+    return Vector<typename Container1::value_type>(result.begin(),
+                                                   result.end());
 }
 
 /**
- * @brief Returns the difference of two containers (container1 - container2).
- *
- * @tparam Container1 Type of the first container.
- * @tparam Container2 Type of the second container.
- * @param container1 The first container.
- * @param container2 The second container.
- * @return std::vector<typename Container1::value_type> The difference of the
- * two containers.
+ * @brief Returns difference between containers (container1 - container2).
+ * @example
+ *   Vector<int> a = {1, 2, 3};
+ *   Vector<int> b = {2, 4};
+ *   auto result = difference(a, b); // returns {1, 3}
  */
 template <typename Container1, typename Container2>
     requires std::ranges::input_range<Container1> &&
@@ -178,7 +174,7 @@ template <typename Container1, typename Container2>
              std::equality_comparable_with<typename Container1::value_type,
                                            typename Container2::value_type>
 auto difference(const Container1& container1, const Container2& container2) {
-    std::vector<typename Container1::value_type> result;
+    Vector<typename Container1::value_type> result;
     for (const auto& elem : container1) {
         if (!contains(container2, elem)) {
             result.push_back(elem);
@@ -188,14 +184,11 @@ auto difference(const Container1& container1, const Container2& container2) {
 }
 
 /**
- * @brief Returns the symmetric difference of two containers.
- *
- * @tparam Container1 Type of the first container.
- * @tparam Container2 Type of the second container.
- * @param container1 The first container.
- * @param container2 The second container.
- * @return std::vector<typename Container1::value_type> The symmetric difference
- * of the two containers.
+ * @brief Returns symmetric difference between containers.
+ * @example
+ *   Vector<int> a = {1, 2, 3};
+ *   Vector<int> b = {2, 3, 4};
+ *   auto result = symmetricDifference(a, b); // returns {1, 4}
  */
 template <typename Container1, typename Container2>
     requires std::ranges::input_range<Container1> &&
@@ -211,104 +204,110 @@ auto symmetricDifference(const Container1& container1,
 }
 
 /**
- * @brief Checks if two containers are equal.
- *
- * @tparam Container1 Type of the first container.
- * @tparam Container2 Type of the second container.
- * @param container1 The first container.
- * @param container2 The second container.
- * @return true if the containers are equal, false otherwise.
+ * @brief Checks if two containers are equal (same elements, any order).
+ * @example
+ *   Vector<int> a = {1, 2, 3};
+ *   Vector<int> b = {3, 2, 1};
+ *   bool result = isEqual(a, b); // returns true
  */
 template <typename Container1, typename Container2>
     requires std::ranges::input_range<Container1> &&
-                 std::ranges::input_range<Container2> &&
-                 std::equality_comparable_with<typename Container1::value_type,
-                                               typename Container2::value_type>
-auto isEqual(const Container1& container1,
-             const Container2& container2) -> bool {
+             std::ranges::input_range<Container2> &&
+             std::equality_comparable_with<typename Container1::value_type,
+                                           typename Container2::value_type>
+auto isEqual(const Container1& container1, const Container2& container2)
+    -> bool {
     return isSubsetLinearSearch(container1, container2) &&
            isSubsetLinearSearch(container2, container1);
 }
 
+/**
+ * @brief Applies member function to each element and stores results.
+ * @example
+ *   struct Point { int x, y; };
+ *   Vector<Point> points = {{1,2}, {3,4}};
+ *   auto xs = applyAndStore(points, &Point::x); // returns {1, 3}
+ */
 template <typename Container, typename MemberFunc>
 auto applyAndStore(const Container& source, MemberFunc memberFunc) {
-    using ReturnType =
-        decltype((std::invoke(memberFunc, *source.begin())));  // 推导返回值类型
-    std::vector<ReturnType> result;  // 创建存储结果的新容器
+    using ReturnType = decltype((std::invoke(memberFunc, *source.begin())));
+    Vector<ReturnType> result;  // Using high-performance Vector
 
     for (const auto& elem : source) {
-        result.push_back(
-            std::invoke(memberFunc, elem));  // 调用成员函数并存储结果
+        result.push_back(std::invoke(memberFunc, elem));
     }
 
-    return result;  // 返回结果容器
+    return result;
 }
 
 template <typename T, typename U>
-concept HasMemberFunc =
-    std::invocable<U, T>;  // U 是可调用对象，且可以被 T 调用
+concept HasMemberFunc = std::invocable<U, T>;
 
-// 泛型转换函数，带有Concept约束，确保类型符合要求
+/**
+ * @brief Transforms container elements using member function.
+ * @example
+ *   Vector<std::string> strs = {"a", "bb", "ccc"};
+ *   auto lengths = transformToVector(strs, &std::string::size); // returns {1,
+ * 2, 3}
+ */
 template <typename Container, typename MemberFunc>
     requires std::ranges::input_range<Container> &&
              HasMemberFunc<typename Container::value_type, MemberFunc>
 auto transformToVector(const Container& source, MemberFunc memberFunc) {
-    using ReturnType = decltype(std::invoke(
-        memberFunc, *std::begin(source)));  // 推导返回值类型
-    std::vector<ReturnType> result;         // 创建目标类型的std::vector
+    using ReturnType = decltype(std::invoke(memberFunc, *std::begin(source)));
+    Vector<ReturnType> result;  // Using high-performance Vector
 
     for (const auto& elem : source) {
-        result.push_back(
-            std::invoke(memberFunc, elem));  // 调用成员函数并存储结果
+        result.push_back(std::invoke(memberFunc, elem));
     }
 
-    return result;  // 返回新容器
+    return result;
 }
 
+/**
+ * @brief Creates unique map from container of pairs.
+ * @example
+ *   Vector<std::pair<int, string>> pairs = {{1,"a"}, {1,"b"}, {2,"c"}};
+ *   auto uniqueMap = unique(pairs); // returns map with {1:"b", 2:"c"}
+ */
 template <typename MapContainer>
     requires std::ranges::input_range<MapContainer> && requires {
         typename MapContainer::key_type;
         typename MapContainer::mapped_type;
     }
 auto unique(const MapContainer& container) {
-    std::unordered_map<typename MapContainer::key_type,
-                       typename MapContainer::mapped_type>
+    HashMap<typename MapContainer::key_type, typename MapContainer::mapped_type>
         map(container.begin(), container.end());
     return map;
 }
 
 /**
- * @brief Removes duplicate elements from a container.
- *
- * @tparam Container Type of the container.
- * @param container The container from which to remove duplicates.
- * @return std::vector<typename Container::value_type> A new container without
- * duplicates.
+ * @brief Removes duplicate elements from container.
+ * @example
+ *   Vector<int> v = {1, 2, 2, 3};
+ *   auto uniqueVec = unique(v); // returns {1, 2, 3}
  */
 template <typename Container>
     requires std::ranges::input_range<Container> &&
              std::regular<typename Container::value_type>
 auto unique(const Container& container) {
-    std::unordered_set<typename Container::value_type> set(container.begin(),
-                                                           container.end());
-    return std::vector<typename Container::value_type>(set.begin(), set.end());
+    HashSet<typename Container::value_type> set(container.begin(),
+                                                container.end());
+    return Vector<typename Container::value_type>(set.begin(), set.end());
 }
 
 /**
- * @brief Flattens a container of containers into a single container.
- *
- * @tparam Container Type of the outer container.
- * @tparam InnerContainer Type of the inner containers.
- * @param container The container of containers to flatten.
- * @return std::vector<typename InnerContainer::value_type> The flattened
- * container.
+ * @brief Flattens nested container into single container.
+ * @example
+ *   Vector<Vector<int>> nested = {{1,2}, {3}, {4,5}};
+ *   auto flat = flatten(nested); // returns {1,2,3,4,5}
  */
 template <typename Container>
     requires std::ranges::input_range<Container> &&
              std::ranges::input_range<typename Container::value_type>
 auto flatten(const Container& container) {
     using InnerContainer = typename Container::value_type;
-    std::vector<typename InnerContainer::value_type> result;
+    Vector<typename InnerContainer::value_type> result;
 
     for (const auto& inner : container) {
         result.insert(result.end(), inner.begin(), inner.end());
@@ -318,14 +317,11 @@ auto flatten(const Container& container) {
 }
 
 /**
- * @brief Zips two containers into a container of pairs.
- *
- * @tparam Container1 Type of the first container.
- * @tparam Container2 Type of the second container.
- * @param container1 The first container.
- * @param container2 The second container.
- * @return std::vector<std::pair<typename Container1::value_type, typename
- * Container2::value_type>> A container of pairs from the two containers.
+ * @brief Zips two containers into container of pairs.
+ * @example
+ *   Vector<int> a = {1, 2, 3};
+ *   Vector<char> b = {'a', 'b', 'c'};
+ *   auto zipped = zip(a, b); // returns {{1,'a'}, {2,'b'}, {3,'c'}}
  */
 template <typename Container1, typename Container2>
     requires std::ranges::input_range<Container1> &&
@@ -333,7 +329,7 @@ template <typename Container1, typename Container2>
 auto zip(const Container1& container1, const Container2& container2) {
     using ValueType1 = typename Container1::value_type;
     using ValueType2 = typename Container2::value_type;
-    std::vector<std::pair<ValueType1, ValueType2>> result;
+    Vector<std::pair<ValueType1, ValueType2>> result;
 
     auto it1 = container1.begin();
     auto it2 = container2.begin();
@@ -348,14 +344,12 @@ auto zip(const Container1& container1, const Container2& container2) {
 }
 
 /**
- * @brief Computes the Cartesian product of two containers.
- *
- * @tparam Container1 Type of the first container.
- * @tparam Container2 Type of the second container.
- * @param container1 The first container.
- * @param container2 The second container.
- * @return std::vector<std::pair<typename Container1::value_type, typename
- * Container2::value_type>> The Cartesian product of the two containers.
+ * @brief Computes Cartesian product of two containers.
+ * @example
+ *   Vector<int> a = {1, 2};
+ *   Vector<char> b = {'a', 'b'};
+ *   auto product = cartesianProduct(a, b); // returns {{1,'a'}, {1,'b'},
+ * {2,'a'}, {2,'b'}}
  */
 template <typename Container1, typename Container2>
     requires std::ranges::input_range<Container1> &&
@@ -364,7 +358,11 @@ auto cartesianProduct(const Container1& container1,
                       const Container2& container2) {
     using ValueType1 = typename Container1::value_type;
     using ValueType2 = typename Container2::value_type;
-    std::vector<std::pair<ValueType1, ValueType2>> result;
+    // Use SmallVector or regular Vector based on expected size
+    using ResultType = Vector<std::pair<ValueType1, ValueType2>>;
+    ResultType result;
+    // Pre-allocate space to avoid reallocations
+    result.reserve(container1.size() * container2.size());
 
     for (const auto& elem1 : container1) {
         for (const auto& elem2 : container2) {
@@ -376,20 +374,16 @@ auto cartesianProduct(const Container1& container1,
 }
 
 /**
- * @brief Filters elements in a container based on a predicate.
- *
- * @tparam Container Type of the container.
- * @tparam Predicate Type of the predicate function.
- * @param container The container to filter.
- * @param predicate The predicate function to apply.
- * @return std::vector<typename Container::value_type> A new container with
- * elements that satisfy the predicate.
+ * @brief Filters container elements based on predicate.
+ * @example
+ *   Vector<int> v = {1, 2, 3, 4};
+ *   auto even = filter(v, [](int x){ return x % 2 == 0; }); // returns {2, 4}
  */
 template <typename Container, typename Predicate>
     requires std::ranges::input_range<Container> &&
              std::predicate<Predicate, typename Container::value_type>
 auto filter(const Container& container, Predicate predicate) {
-    std::vector<typename Container::value_type> result;
+    Vector<typename Container::value_type> result;
 
     for (const auto& elem : container) {
         if (predicate(elem)) {
@@ -401,22 +395,18 @@ auto filter(const Container& container, Predicate predicate) {
 }
 
 /**
- * @brief Partitions a container into two containers based on a predicate.
- *
- * @tparam Container Type of the container.
- * @tparam Predicate Type of the predicate function.
- * @param container The container to partition.
- * @param predicate The predicate function to apply.
- * @return std::pair<std::vector<typename Container::value_type>,
- * std::vector<typename Container::value_type>> Two containers: one where the
- * predicate is true, and one where it is false.
+ * @brief Partitions container based on predicate.
+ * @example
+ *   Vector<int> v = {1, 2, 3, 4};
+ *   auto [even, odd] = partition(v, [](int x){ return x % 2 == 0; });
+ *   // even = {2, 4}, odd = {1, 3}
  */
 template <typename Container, typename Predicate>
     requires std::ranges::input_range<Container> &&
              std::predicate<Predicate, typename Container::value_type>
 auto partition(const Container& container, Predicate predicate) {
-    std::vector<typename Container::value_type> truePart;
-    std::vector<typename Container::value_type> falsePart;
+    Vector<typename Container::value_type> truePart;
+    Vector<typename Container::value_type> falsePart;
 
     for (const auto& elem : container) {
         if (predicate(elem)) {
@@ -430,18 +420,14 @@ auto partition(const Container& container, Predicate predicate) {
 }
 
 /**
- * @brief Finds the first element in a container that satisfies a predicate.
- *
- * @tparam Container Type of the container.
- * @tparam Predicate Type of the predicate function.
- * @param container The container to search.
- * @param predicate The predicate function.
- * @return std::optional<typename Container::value_type> The first element that
- * satisfies the predicate, or std::nullopt if none found.
+ * @brief Finds first element satisfying predicate.
+ * @example
+ *   Vector<int> v = {1, 2, 3, 4};
+ *   auto result = findIf(v, [](int x){ return x > 2; }); // returns 3
  */
 template <typename Container, typename Predicate>
     requires std::ranges::input_range<Container> &&
-                 std::predicate<Predicate, typename Container::value_type>
+             std::predicate<Predicate, typename Container::value_type>
 auto findIf(const Container& container, Predicate predicate)
     -> std::optional<typename Container::value_type> {
     for (const auto& elem : container) {
@@ -454,15 +440,20 @@ auto findIf(const Container& container, Predicate predicate)
 
 }  // namespace atom::utils
 
-inline auto operator"" _vec(const char* str,
-                            size_t) -> std::vector<std::string> {
-    std::vector<std::string> vec;
-    std::string token;
+/**
+ * @brief String literal to create Vector<String> from comma-separated values.
+ * @example
+ *   auto vec = "one, two, three"_vec; // returns Vector<String>{"one", "two",
+ * "three"}
+ */
+inline auto operator""_vec(const char* str, size_t)
+    -> atom::containers::Vector<atom::containers::String> {
+    atom::containers::Vector<atom::containers::String> vec;
+    atom::containers::String token;
     std::istringstream tokenStream(str);
 
-    // 使用逗号作为分隔符将字符串分割成多个部分
+    // Split string by commas and trim whitespace
     while (std::getline(tokenStream, token, ',')) {
-        // 去除多余的空格
         size_t start = token.find_first_not_of(" ");
         size_t end = token.find_last_not_of(" ");
         if (start != std::string::npos && end != std::string::npos) {

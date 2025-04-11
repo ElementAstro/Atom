@@ -9,29 +9,68 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
+#if defined(ATOM_OPTIMIZE_FOR_SPEED)
+#include "atom/containers/high_performance.hpp"  // Include high performance containers
+#endif
 #include "atom/type/expected.hpp"
 
 namespace atom::utils {
+
+// Use high-performance containers when optimizing for speed
+#if defined(ATOM_OPTIMIZE_FOR_SPEED)
+template <typename K, typename V>
+using DiffMap = atom::containers::HashMap<K, V>;
+
+template <typename T>
+using DiffVector = atom::containers::Vector<T>;
+
+template <typename T>
+using DiffSet = atom::containers::HashSet<T>;
+
+template <typename T, size_t N = 32>
+using SmallDiffVector = atom::containers::SmallVector<T, N>;
+
+using DiffString = atom::containers::String;
+#else
+template <typename K, typename V>
+using DiffMap = std::unordered_map<K, V>;
+
+template <typename T>
+using DiffVector = std::vector<T>;
+
+template <typename T>
+using DiffSet = std::unordered_set<T>;
+
+template <typename T, size_t N = 32>
+using SmallDiffVector = std::vector<T>;
+
+using DiffString = std::string;
+#endif
 
 // Forward declaration for logging callback
 using LogCallback = std::function<void(const std::string&, int)>;
 
 // Enum for diff algorithm selection
 enum class DiffAlgorithm {
-    Default,    ///< Original algorithm
-    Myers,      ///< Myers diff algorithm
-    Patience,   ///< Patience diff algorithm
-    Histogram,  ///< Histogram diff algorithm
+    Default,    /// Original algorithm
+    Myers,      /// Myers diff algorithm
+    Patience,   /// Patience diff algorithm
+    Histogram,  /// Histogram diff algorithm
+#ifdef ATOM_HAS_BOOST_GRAPH
+    Graph,  /// Boost graph-based algorithm (available when Boost.Graph is
+            /// enabled)
+#endif
 };
 
 // Diff statistics structure
 struct DiffStats {
-    int insertions{0};       ///< Number of insertions
-    int deletions{0};        ///< Number of deletions
-    int modifications{0};    ///< Number of modifications
-    double similarity{0.0};  ///< Overall similarity ratio
+    int insertions{0};       /// Number of insertions
+    int deletions{0};        /// Number of deletions
+    int modifications{0};    /// Number of modifications
+    double similarity{0.0};  /// Overall similarity ratio
 
     // Duration of the diff operation
     std::chrono::microseconds duration{0};
@@ -42,15 +81,21 @@ struct DiffStats {
 
 // Performance options for diff operations
 struct DiffOptions {
-    bool enableCaching{true};  ///< Enable result caching
-    bool useParallelProcessing{
-        true};                ///< Use parallel algorithms when possible
-    bool lazyLoading{false};  ///< Enable lazy loading for large diffs
-    int cacheSizeLimit{100};  ///< Maximum number of cached results
+    bool enableCaching{true};          /// Enable result caching
+    bool useParallelProcessing{true};  /// Use parallel algorithms when possible
+    bool lazyLoading{false};           /// Enable lazy loading for large diffs
+    int cacheSizeLimit{100};           /// Maximum number of cached results
     size_t largeFileThreshold{
-        1024 * 1024};  ///< Threshold for large file optimization (bytes)
-    DiffAlgorithm algorithm{DiffAlgorithm::Default};  ///< Diff algorithm to use
-    LogCallback logger{nullptr};  ///< Logging callback function
+        1024 * 1024};  /// Threshold for large file optimization (bytes)
+    DiffAlgorithm algorithm{DiffAlgorithm::Default};  /// Diff algorithm to use
+    LogCallback logger{nullptr};  /// Logging callback function
+
+    // New optimization options
+    bool useFlatContainers{
+        true};  /// Use flat containers to improve cache efficiency
+    bool useSmallBuffers{true};  /// Use stack allocation for small data
+    bool useIntrusive{
+        false};  /// Use intrusive containers to reduce memory allocations
 };
 
 // Custom exceptions for better error handling
@@ -131,7 +176,7 @@ public:
      * length of matching blocks.
      */
     [[nodiscard]] auto getMatchingBlocks() const noexcept
-        -> std::vector<std::tuple<int, int, int>>;
+        -> DiffVector<std::tuple<int, int, int>>;
 
     /**
      * @brief Get a list of opcodes describing how to turn the first sequence
@@ -140,7 +185,7 @@ public:
      * end positions in both sequences.
      */
     [[nodiscard]] auto getOpcodes() const noexcept
-        -> std::vector<std::tuple<std::string, int, int, int, int>>;
+        -> DiffVector<std::tuple<DiffString, int, int, int, int>>;
 
     /**
      * @brief Get performance statistics for the last diff operation.
@@ -154,8 +199,8 @@ public:
     void clearCache() noexcept;
 
 private:
-    class Impl;                    ///< Implementation detail class.
-    std::unique_ptr<Impl> pimpl_;  ///< Pointer to the implementation.
+    class Impl;                    /// Implementation detail class.
+    std::unique_ptr<Impl> pimpl_;  /// Pointer to the implementation.
 };
 
 /**
@@ -183,7 +228,7 @@ public:
      * @throws InvalidInputException If the input sequences are invalid.
      */
     auto compare(std::span<const std::string> vec1,
-                 std::span<const std::string> vec2) -> std::vector<std::string>;
+                 std::span<const std::string> vec2) -> DiffVector<std::string>;
 
     /**
      * @brief Generate a unified diff between two sequences.
@@ -199,7 +244,7 @@ public:
                      std::span<const std::string> vec2,
                      std::string_view label1 = "a",
                      std::string_view label2 = "b", int context = 3)
-        -> std::vector<std::string>;
+        -> DiffVector<std::string>;
 
     /**
      * @brief Set the algorithm and performance options.
@@ -223,7 +268,7 @@ public:
      */
     static auto compare(std::span<const std::string> vec1,
                         std::span<const std::string> vec2,
-                        const DiffOptions& options) -> std::vector<std::string>;
+                        const DiffOptions& options) -> DiffVector<std::string>;
 
     /**
      * @brief Static version of unifiedDiff method.
@@ -240,11 +285,11 @@ public:
                             std::span<const std::string> vec2,
                             std::string_view label1, std::string_view label2,
                             int context, const DiffOptions& options)
-        -> std::vector<std::string>;
+        -> DiffVector<std::string>;
 
 private:
-    class Impl;                    ///< Implementation detail class.
-    std::unique_ptr<Impl> pimpl_;  ///< Pointer to the implementation.
+    class Impl;                    /// Implementation detail class.
+    std::unique_ptr<Impl> pimpl_;  /// Pointer to the implementation.
 };
 
 /**
@@ -268,18 +313,22 @@ public:
     /**
      * @brief Result type for HTML diff operations.
      */
-    using DiffResult = type::expected<std::string, std::string>;
+    using DiffResult = type::expected<DiffString, DiffString>;
 
     /**
      * @brief HTML diff styling options
      */
     struct HtmlDiffOptions {
-        std::string addedClass;    ///< CSS class for added content
-        std::string removedClass;  ///< CSS class for removed content
-        std::string changedClass;  ///< CSS class for changed content
-        bool inlineDiff;           ///< Show character-level inline diffs
-        bool showStatistics;       ///< Show diff statistics
-        bool showLineNumbers;      ///< Show line numbers
+        DiffString addedClass;      /// CSS class for added content
+        DiffString removedClass;    /// CSS class for removed content
+        DiffString changedClass;    /// CSS class for changed content
+        bool inlineDiff;            /// Show character-level inline diffs
+        bool showStatistics;        /// Show diff statistics
+        bool showLineNumbers;       /// Show line numbers
+        bool showSideBySide;        /// Show side-by-side diff view (new option)
+        bool collapsableUnchanged;  /// Make unchanged sections collapsible (new
+                                    /// option)
+        int contextLines;  /// Number of context lines to display (new option)
 
         HtmlDiffOptions()
             : addedClass("diff-add"),
@@ -287,7 +336,10 @@ public:
               changedClass("diff-change"),
               inlineDiff(true),
               showStatistics(true),
-              showLineNumbers(true) {}
+              showLineNumbers(true),
+              showSideBySide(true),
+              collapsableUnchanged(false),
+              contextLines(3) {}
     };
 
     /**
@@ -356,8 +408,8 @@ public:
         const HtmlDiffOptions& htmlOptions = HtmlDiffOptions{}) -> DiffResult;
 
 private:
-    class Impl;                    ///< Implementation detail class.
-    std::unique_ptr<Impl> pimpl_;  ///< Pointer to the implementation.
+    class Impl;                    /// Implementation detail class.
+    std::unique_ptr<Impl> pimpl_;  /// Pointer to the implementation.
 };
 
 /**
@@ -374,9 +426,60 @@ auto getCloseMatches(std::string_view word,
                      std::span<const std::string> possibilities, int n = 3,
                      double cutoff = 0.6,
                      const DiffOptions& options = DiffOptions{})
-    -> std::vector<std::string>;
+    -> DiffVector<std::string>;
 
 /**
+ * @class FuzzyMatcher
+ * @brief Provides fuzzy matching and similarity calculation functionality
+ */
+class FuzzyMatcher {
+public:
+    /**
+     * @brief Constructor
+     * @param options Performance and algorithm options
+     */
+    explicit FuzzyMatcher(const DiffOptions& options = DiffOptions{});
+
+    /**
+     * @brief Destructor
+     */
+    ~FuzzyMatcher() noexcept;
+
+    /**
+     * @brief Calculate the Levenshtein edit distance between two strings
+     */
+    static int levenshteinDistance(std::string_view s1, std::string_view s2);
+
+    /**
+     * @brief Calculate the similarity ratio between two strings (0.0-1.0)
+     */
+    static double similarity(std::string_view s1, std::string_view s2);
+
+    /**
+     * @brief Find the best match in the text
+     * @param needle Text to search for
+     * @param haystack Text to search in
+     * @param cutoff Minimum similarity threshold (0.0-1.0)
+     * @return pair<matched substring, similarity ratio>
+     */
+    std::pair<DiffString, double> findBestMatch(std::string_view needle,
+                                                std::string_view haystack,
+                                                double cutoff = 0.7);
+
+    /**
+     * @brief Find all matches in a collection of texts
+     */
+    DiffVector<std::pair<DiffString, double>> findAllMatches(
+        std::string_view needle, std::span<const std::string> haystacks,
+        double cutoff = 0.7);
+
+private:
+    class Impl;
+    std::unique_ptr<Impl> pimpl_;
+};
+
+/**
+ * @class InlineDiff
  * @brief A utility class to detect changes between lines of text with
  * character-level precision
  */
@@ -401,7 +504,7 @@ public:
      * with the content
      */
     auto compareChars(std::string_view str1, std::string_view str2)
-        -> std::vector<std::tuple<std::string, std::string>>;
+        -> DiffVector<std::tuple<DiffString, DiffString>>;
 
     /**
      * @brief Generate HTML representation of inline diff
@@ -414,7 +517,7 @@ public:
     auto toHtml(
         std::string_view str1, std::string_view str2,
         const HtmlDiff::HtmlDiffOptions& options = HtmlDiff::HtmlDiffOptions{})
-        -> std::pair<std::string, std::string>;
+        -> std::pair<DiffString, DiffString>;
 
     /**
      * @brief Set the algorithm and performance options.
@@ -423,8 +526,8 @@ public:
     void setOptions(const DiffOptions& options);
 
 private:
-    class Impl;                    ///< Implementation detail class.
-    std::unique_ptr<Impl> pimpl_;  ///< Pointer to the implementation.
+    class Impl;                    /// Implementation detail class.
+    std::unique_ptr<Impl> pimpl_;  /// Pointer to the implementation.
 };
 
 /**
@@ -461,6 +564,13 @@ public:
      */
     static void clearCaches();
 
+    /**
+     * @brief Check if high performance containers are supported in the current
+     * environment
+     * @return Whether high performance containers are supported
+     */
+    static bool supportsHighPerformanceContainers();
+
 private:
     static DiffOptions default_options_;
     static LogCallback log_callback_;
@@ -468,4 +578,4 @@ private:
 };
 
 }  // namespace atom::utils
-#endif
+#endif  // ATOM_UTILS_DIFFLIB_HPP

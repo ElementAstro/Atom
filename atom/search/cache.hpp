@@ -24,7 +24,6 @@ Description: ResourceCache class for Atom Search
 #include <algorithm>
 #include <atomic>
 #include <chrono>
-#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <future>
@@ -37,11 +36,155 @@ Description: ResourceCache class for Atom Search
 #include <utility>
 #include <vector>
 
+// Boost support
+#if defined(ATOM_USE_BOOST_THREAD) || defined(ATOM_USE_BOOST_LOCKFREE)
+  #include <boost/config.hpp>
+#endif
+
+#ifdef ATOM_USE_BOOST_THREAD
+  #include <boost/thread.hpp>
+  #include <boost/thread/mutex.hpp>
+  #include <boost/thread/shared_mutex.hpp>
+  #include <boost/thread/lock_types.hpp>
+  #include <boost/thread/future.hpp>
+  #include <boost/thread/condition_variable.hpp>
+#endif
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+  #include <boost/atomic.hpp>
+  #include <boost/lockfree/queue.hpp>
+  #include <boost/lockfree/spsc_queue.hpp>
+#endif
+
 #include "atom/log/loguru.hpp"
 #include "atom/type/json.hpp"
 using json = nlohmann::json;
 
 namespace atom::search {
+
+// Define type aliases based on available libraries
+#if defined(ATOM_USE_BOOST_THREAD)
+  template <typename T>
+  using SharedMutex = boost::shared_mutex;
+  
+  template <typename T>
+  using SharedLock = boost::shared_lock<T>;
+  
+  template <typename T>
+  using UniqueLock = boost::unique_lock<T>;
+  
+  template <typename... Args>
+  using Future = boost::future<Args...>;
+  
+  template <typename... Args>
+  using Promise = boost::promise<Args...>;
+  
+  using Thread = boost::thread;
+  using JThread = boost::thread;
+#else
+  template <typename T>
+  using SharedMutex = std::shared_mutex;
+  
+  template <typename T>
+  using SharedLock = std::shared_lock<T>;
+  
+  template <typename T>
+  using UniqueLock = std::unique_lock<T>;
+  
+  template <typename... Args>
+  using Future = std::future<Args...>;
+  
+  template <typename... Args>
+  using Promise = std::promise<Args...>;
+  
+  using Thread = std::thread;
+  using JThread = std::jthread;
+#endif
+
+#if defined(ATOM_USE_BOOST_LOCKFREE)
+  template <typename T>
+  using Atomic = boost::atomic<T>;
+  
+  template <typename T>
+  class LockFreeQueue {
+  private:
+    boost::lockfree::queue<T*> queue;
+    
+  public:
+    explicit LockFreeQueue(size_t capacity) : queue(capacity) {}
+    
+    bool push(const T& item) {
+      T* ptr = new T(item);
+      if (!queue.push(ptr)) {
+        delete ptr;
+        return false;
+      }
+      return true;
+    }
+    
+    bool pop(T& item) {
+      T* ptr = nullptr;
+      if (!queue.pop(ptr)) {
+        return false;
+      }
+      item = *ptr;
+      delete ptr;
+      return true;
+    }
+    
+    bool empty() const {
+      return queue.empty();
+    }
+    
+    ~LockFreeQueue() {
+      T* ptr;
+      while (queue.pop(ptr)) {
+        delete ptr;
+      }
+    }
+  };
+#else
+  template <typename T>
+  using Atomic = std::atomic<T>;
+  
+  // Fallback implementation using std containers when Boost.lockfree is not available
+  template <typename T>
+  class LockFreeQueue {
+  private:
+    std::mutex mutex_;
+    std::vector<T> items_;
+    size_t capacity_;
+    
+  public:
+    explicit LockFreeQueue(size_t capacity) : capacity_(capacity) {
+      items_.reserve(capacity);
+    }
+    
+    bool push(const T& item) {
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (items_.size() >= capacity_) {
+        return false;
+      }
+      items_.push_back(item);
+      return true;
+    }
+    
+    bool pop(T& item) {
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (items_.empty()) {
+        return false;
+      }
+      item = items_.front();
+      items_.erase(items_.begin());
+      return true;
+    }
+    
+    bool empty(){
+      std::lock_guard<std::mutex> lock(mutex_);
+      return items_.empty();
+    }
+  };
+#endif
 
 template <typename T>
 concept Cacheable = std::copy_constructible<T> && std::is_copy_assignable_v<T>;
@@ -284,16 +427,16 @@ private:
         lastAccessTimes_;  ///< The last access times for the resources.
     std::list<std::string>
         lruList_;  ///< The list of keys in least recently used order.
-    mutable std::shared_mutex
+    mutable SharedMutex<std::shared_mutex>
         cacheMutex_;  ///< Mutex for thread-safe access to the cache.
-    std::jthread cleanupThread_;  ///< Thread for cleaning up expired resources.
-    std::atomic<bool> stopCleanupThread_{
+    JThread cleanupThread_;  ///< Thread for cleaning up expired resources.
+    Atomic<bool> stopCleanupThread_{
         false};  ///< Flag to stop the cleanup thread.
 
     Callback insertCallback_;
     Callback removeCallback_;
-    mutable std::atomic<size_t> hitCount_{0};
-    mutable std::atomic<size_t> missCount_{0};
+    mutable Atomic<size_t> hitCount_{0};
+    mutable Atomic<size_t> missCount_{0};
 
     // Adaptive cleanup interval based on expired entry density
     std::chrono::seconds cleanupInterval_{
@@ -302,7 +445,7 @@ private:
 
 template <Cacheable T>
 ResourceCache<T>::ResourceCache(int maxSize) : maxSize_(maxSize) {
-    cleanupThread_ = std::jthread([this] { cleanupExpiredEntries(); });
+    cleanupThread_ = JThread([this] { cleanupExpiredEntries(); });
 }
 
 template <Cacheable T>
@@ -315,7 +458,7 @@ template <Cacheable T>
 void ResourceCache<T>::insert(const std::string &key, const T &value,
                               std::chrono::seconds expirationTime) {
     try {
-        std::unique_lock lock(cacheMutex_);
+        UniqueLock lock(cacheMutex_);
         if (cache_.size() >= maxSize_) {
             evictOldest();
         }
@@ -333,14 +476,14 @@ void ResourceCache<T>::insert(const std::string &key, const T &value,
 
 template <Cacheable T>
 auto ResourceCache<T>::contains(const std::string &key) const -> bool {
-    std::shared_lock lock(cacheMutex_);
+    SharedLock lock(cacheMutex_);
     return cache_.contains(key);
 }
 
 template <Cacheable T>
 auto ResourceCache<T>::get(const std::string &key) -> std::optional<T> {
     try {
-        std::shared_lock lock(cacheMutex_);
+        SharedLock lock(cacheMutex_);
         if (!contains(key)) {
             missCount_++;
             return std::nullopt;
@@ -354,7 +497,7 @@ auto ResourceCache<T>::get(const std::string &key) -> std::optional<T> {
         hitCount_++;
         lock.unlock();
 
-        std::unique_lock uniqueLock(cacheMutex_);
+        UniqueLock uniqueLock(cacheMutex_);
         lastAccessTimes_[key] = std::chrono::steady_clock::now();
         lruList_.remove(key);
         lruList_.push_front(key);
@@ -368,7 +511,7 @@ auto ResourceCache<T>::get(const std::string &key) -> std::optional<T> {
 template <Cacheable T>
 void ResourceCache<T>::remove(const std::string &key) {
     try {
-        std::unique_lock lock(cacheMutex_);
+        UniqueLock lock(cacheMutex_);
         cache_.erase(key);
         expirationTimes_.erase(key);
         lastAccessTimes_.erase(key);
@@ -414,7 +557,7 @@ auto ResourceCache<T>::asyncInsert(const std::string &key, const T &value,
 
 template <Cacheable T>
 void ResourceCache<T>::clear() {
-    std::unique_lock lock(cacheMutex_);
+    UniqueLock lock(cacheMutex_);
     cache_.clear();
     expirationTimes_.clear();
     lastAccessTimes_.clear();
@@ -423,13 +566,13 @@ void ResourceCache<T>::clear() {
 
 template <Cacheable T>
 auto ResourceCache<T>::size() const -> size_t {
-    std::shared_lock lock(cacheMutex_);
+    SharedLock lock(cacheMutex_);
     return cache_.size();
 }
 
 template <Cacheable T>
 auto ResourceCache<T>::empty() const -> bool {
-    std::shared_lock lock(cacheMutex_);
+    SharedLock lock(cacheMutex_);
     return cache_.empty();
 }
 
@@ -475,14 +618,14 @@ auto ResourceCache<T>::asyncLoad(const std::string &key,
 
 template <Cacheable T>
 void ResourceCache<T>::setMaxSize(int maxSize) {
-    std::unique_lock lock(cacheMutex_);
+    UniqueLock lock(cacheMutex_);
     this->maxSize_ = maxSize;
 }
 
 template <Cacheable T>
 void ResourceCache<T>::setExpirationTime(const std::string &key,
                                          std::chrono::seconds expirationTime) {
-    std::unique_lock lock(cacheMutex_);
+    UniqueLock lock(cacheMutex_);
     if (contains(key)) {
         expirationTimes_[key] = expirationTime;
     }
@@ -494,7 +637,7 @@ void ResourceCache<T>::readFromFile(
     const std::function<T(const std::string &)> &deserializer) {
     std::ifstream inputFile(filePath);
     if (inputFile.is_open()) {
-        std::unique_lock lock(cacheMutex_);
+        UniqueLock lock(cacheMutex_);
         std::string line;
         while (std::getline(inputFile, line)) {
             auto separatorIndex = line.find(':');
@@ -517,7 +660,7 @@ void ResourceCache<T>::writeToFile(
     const std::function<std::string(const T &)> &serializer) {
     std::ofstream outputFile(filePath);
     if (outputFile.is_open()) {
-        std::shared_lock lock(cacheMutex_);
+        SharedLock lock(cacheMutex_);
         for (const auto &pair : cache_) {
             std::string line =
                 pair.first + ":" + serializer(pair.second.first) + "\n";
@@ -529,7 +672,7 @@ void ResourceCache<T>::writeToFile(
 
 template <Cacheable T>
 void ResourceCache<T>::removeExpired() {
-    std::unique_lock lock(cacheMutex_);
+    UniqueLock lock(cacheMutex_);
     auto it = cache_.begin();
     while (it != cache_.end()) {
         if (isExpired(it->first)) {
@@ -549,7 +692,7 @@ void ResourceCache<T>::readFromJsonFile(
     const std::function<T(const json &)> &fromJson) {
     std::ifstream inputFile(filePath);
     if (inputFile.is_open()) {
-        std::unique_lock lock(cacheMutex_);
+        UniqueLock lock(cacheMutex_);
         json jsonData;
         inputFile >> jsonData;
         for (auto it = jsonData.begin(); it != jsonData.end(); ++it) {
@@ -567,7 +710,7 @@ void ResourceCache<T>::writeToJsonFile(
     const std::string &filePath, const std::function<json(const T &)> &toJson) {
     std::ofstream outputFile(filePath);
     if (outputFile.is_open()) {
-        std::shared_lock lock(cacheMutex_);
+        SharedLock lock(cacheMutex_);
         json jsonData;
         for (const auto &pair : cache_) {
             jsonData[pair.first] = toJson(pair.second.first);
@@ -586,7 +729,7 @@ void ResourceCache<T>::cleanupExpiredEntries() {
 
         // Adjust cleanup interval adaptively based on cache size and expired
         // entry density
-        std::unique_lock lock(cacheMutex_);
+        UniqueLock lock(cacheMutex_);
         if (cache_.size() > 0) {
             auto expiredCount = std::count_if(
                 cache_.begin(), cache_.end(),
@@ -613,7 +756,7 @@ template <Cacheable T>
 void ResourceCache<T>::insertBatch(
     const std::vector<std::pair<std::string, T>> &items,
     std::chrono::seconds expirationTime) {
-    std::unique_lock lock(cacheMutex_);
+    UniqueLock lock(cacheMutex_);
     for (const auto &[key, value] : items) {
         if (cache_.size() >= maxSize_) {
             evict();
@@ -628,7 +771,7 @@ void ResourceCache<T>::insertBatch(
 // New method: Batch remove
 template <Cacheable T>
 void ResourceCache<T>::removeBatch(const std::vector<std::string> &keys) {
-    std::unique_lock lock(cacheMutex_);
+    UniqueLock lock(cacheMutex_);
     for (const auto &key : keys) {
         cache_.erase(key);
         expirationTimes_.erase(key);

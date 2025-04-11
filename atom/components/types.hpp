@@ -28,7 +28,7 @@ enum class ComponentType {
 };
 
 template <>
-struct EnumTraits<ComponentType> {
+struct atom::meta::EnumTraits<ComponentType> {
     static constexpr std::array<ComponentType, 7> VALUES = {
         ComponentType::NONE,
         ComponentType::SHARED,

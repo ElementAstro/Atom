@@ -54,6 +54,50 @@ Description: Useful Macros
 #pragma endregion include_checks
 
 //-------------------------------------------------------------------------------
+// Boost Support Macros
+//-------------------------------------------------------------------------------
+#pragma region boost_support
+
+// Check if Boost is available
+#ifdef ATOM_USE_BOOST
+#if __has_include(<boost/version.hpp>)
+#include <boost/version.hpp>
+#define ATOM_HAS_BOOST
+#define ATOM_BOOST_VERSION BOOST_VERSION
+#endif
+#endif
+
+// Boost Container support
+#ifdef ATOM_USE_BOOST_CONTAINER
+#if __has_include(<boost/container/flat_map.hpp>) && defined(ATOM_HAS_BOOST)
+#define ATOM_HAS_BOOST_CONTAINER
+#endif
+#endif
+
+// Boost Lockfree support
+#ifdef ATOM_USE_BOOST_LOCKFREE
+#if __has_include(<boost/lockfree/queue.hpp>) && defined(ATOM_HAS_BOOST)
+#define ATOM_HAS_BOOST_LOCKFREE
+#endif
+#endif
+
+// Boost Intrusive support
+#ifdef ATOM_USE_BOOST_INTRUSIVE
+#if __has_include(<boost/intrusive/list.hpp>) && defined(ATOM_HAS_BOOST)
+#define ATOM_HAS_BOOST_INTRUSIVE
+#endif
+#endif
+
+// Boost Graph support
+#ifdef ATOM_USE_BOOST_GRAPH
+#if __has_include(<boost/graph/adjacency_list.hpp>) && defined(ATOM_HAS_BOOST)
+#define ATOM_HAS_BOOST_GRAPH
+#endif
+#endif
+
+#pragma endregion boost_support
+
+//-------------------------------------------------------------------------------
 // Compiler and Platform checks
 //-------------------------------------------------------------------------------
 #pragma region compiler_checks
@@ -477,3 +521,45 @@ ATOM_INLINE void unreachable ATOM_NORETURN() {
 #endif
 
 #pragma endregion virtual_macros
+
+//-------------------------------------------------------------------------------
+// Memory Optimization Macros
+//-------------------------------------------------------------------------------
+#pragma region memory_optimization
+
+// Cache line size optimization
+#if defined(_MSC_VER) || defined(__INTEL_COMPILER)
+#define ATOM_CACHE_LINE_SIZE 64
+#elif defined(__powerpc__) || defined(__ppc__) || defined(__PPC__)
+#define ATOM_CACHE_LINE_SIZE 128
+#else
+#define ATOM_CACHE_LINE_SIZE 64
+#endif
+
+// Cache line alignment
+#define ATOM_CACHE_ALIGN ATOM_ALIGNAS(ATOM_CACHE_LINE_SIZE)
+
+// Branch prediction optimization
+#if !defined(ATOM_LIKELY) && (defined(__GNUC__) || defined(__clang__))
+#define ATOM_LIKELY(x) __builtin_expect(!!(x), 1)
+#define ATOM_UNLIKELY(x) __builtin_expect(!!(x), 0)
+#else
+#define ATOM_LIKELY(x) (x)
+#define ATOM_UNLIKELY(x) (x)
+#endif
+
+// Prefetch hints
+#if defined(__GNUC__) || defined(__clang__)
+#define ATOM_PREFETCH(addr) __builtin_prefetch(addr)
+#define ATOM_PREFETCH_READ(addr) __builtin_prefetch(addr, 0)
+#define ATOM_PREFETCH_WRITE(addr) __builtin_prefetch(addr, 1)
+#else
+#define ATOM_PREFETCH(addr)
+#define ATOM_PREFETCH_READ(addr)
+#define ATOM_PREFETCH_WRITE(addr)
+#endif
+
+// Small object optimization threshold
+#define ATOM_SMALL_OBJECT_SIZE 64
+
+#pragma endregion memory_optimization

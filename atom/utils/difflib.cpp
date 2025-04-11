@@ -20,6 +20,216 @@
 
 namespace atom::utils {
 
+// Forward declarations for algorithm implementations
+namespace algorithms {
+// Myers差异算法实现
+class MyersDiff {
+public:
+    MyersDiff(std::string_view a, std::string_view b) : a_(a), b_(b) {}
+
+    auto execute() -> std::vector<std::tuple<std::string, int, int, int, int>> {
+        auto start_time = std::chrono::high_resolution_clock::now();
+
+        auto result = calculateDiff();
+
+        auto end_time = std::chrono::high_resolution_clock::now();
+        stats_.duration = std::chrono::duration_cast<std::chrono::microseconds>(
+            end_time - start_time);
+
+        return result;
+    }
+
+    [[nodiscard]] auto getStats() const -> const DiffStats& { return stats_; }
+
+private:
+    std::string_view a_;
+    std::string_view b_;
+    DiffStats stats_;
+
+    // Myers差异算法的核心实现
+    auto calculateDiff()
+        -> std::vector<std::tuple<std::string, int, int, int, int>> {
+        const int n = static_cast<int>(a_.size());
+        const int m = static_cast<int>(b_.size());
+
+        // 特殊情况处理
+        if (n == 0 && m == 0) {
+            return {};
+        }
+        if (n == 0) {
+            stats_.insertions = m;
+            return {std::make_tuple("insert", 0, 0, 0, m)};
+        }
+        if (m == 0) {
+            stats_.deletions = n;
+            return {std::make_tuple("delete", 0, n, 0, 0)};
+        }
+
+        // 计算编辑图
+        const int max_edit = n + m;  // 最大可能编辑数
+        std::vector<int> v(2 * max_edit + 1, 0);
+        std::vector<std::vector<int>> traces;
+
+        int x, y;
+        for (int d = 0; d <= max_edit; d++) {
+            traces.emplace_back(v);
+
+            for (int k = -d; k <= d; k += 2) {
+                if (k == -d ||
+                    (k != d && v[k - 1 + max_edit] < v[k + 1 + max_edit])) {
+                    x = v[k + 1 + max_edit];
+                } else {
+                    x = v[k - 1 + max_edit] + 1;
+                }
+
+                y = x - k;
+
+                // 沿对角线延伸匹配
+                while (x < n && y < m && a_[x] == b_[y]) {
+                    x++;
+                    y++;
+                }
+
+                v[k + max_edit] = x;
+
+                if (x >= n && y >= m) {
+                    // 回溯路径生成差异
+                    return backtrackPath(traces, n, m, max_edit);
+                }
+            }
+        }
+
+        // 回溯路径以生成差异
+        return backtrackPath(traces, n, m, max_edit);
+    }
+
+    // 从编辑轨迹中回溯路径，生成差异操作
+    auto backtrackPath(const std::vector<std::vector<int>>& traces, int n,
+                       int m, int max_edit)
+        -> std::vector<std::tuple<std::string, int, int, int, int>> {
+        std::vector<std::tuple<std::string, int, int, int, int>> opcodes;
+        int x = n;
+        int y = m;
+
+        // 从后向前遍历每个编辑步骤
+        for (int d = static_cast<int>(traces.size()) - 1; d >= 0; d--) {
+            const auto& v = traces[d];
+            int k = x - y;
+
+            int prev_k, prev_x, prev_y;
+
+            if (k == -d ||
+                (k != d && v[k - 1 + max_edit] < v[k + 1 + max_edit])) {
+                prev_k = k + 1;
+            } else {
+                prev_k = k - 1;
+            }
+
+            prev_x = v[prev_k + max_edit];
+            prev_y = prev_x - prev_k;
+
+            // 处理对角线移动（匹配内容）
+            while (x > prev_x && y > prev_y) {
+                stats_.modifications++;
+                x--;
+                y--;
+            }
+
+            // 处理垂直移动（插入）或水平移动（删除）
+            if (d > 0) {
+                if (prev_x == x) {  // 垂直移动（插入）
+                    stats_.insertions++;
+                    opcodes.emplace_back("insert", x, x, y - 1, y);
+                } else {  // 水平移动（删除）
+                    stats_.deletions++;
+                    opcodes.emplace_back("delete", x - 1, x, y, y);
+                }
+            }
+
+            x = prev_x;
+            y = prev_y;
+        }
+
+        // 计算相似度
+        int total = stats_.insertions + stats_.deletions + stats_.modifications;
+        if (total > 0) {
+            stats_.similarity =
+                static_cast<double>(stats_.modifications) / total;
+        } else {
+            stats_.similarity = 1.0;  // 完全相同
+        }
+
+        // 反转操作码，使它们按正向顺序排列
+        std::reverse(opcodes.begin(), opcodes.end());
+
+        // 合并相邻的相同类型操作
+        if (!opcodes.empty()) {
+            std::vector<std::tuple<std::string, int, int, int, int>> merged;
+            merged.reserve(opcodes.size());
+
+            auto current = opcodes[0];
+            for (size_t i = 1; i < opcodes.size(); ++i) {
+                const auto& op = opcodes[i];
+                if (std::get<0>(current) == std::get<0>(op) &&
+                    std::get<2>(current) == std::get<1>(op) &&
+                    std::get<4>(current) == std::get<3>(op)) {
+                    // 合并连续的相同类型操作
+                    std::get<2>(current) = std::get<2>(op);
+                    std::get<4>(current) = std::get<4>(op);
+                } else {
+                    merged.push_back(current);
+                    current = op;
+                }
+            }
+            merged.push_back(current);
+
+            // 添加等价区域标记
+            auto result = addEqualBlocks(merged, n, m);
+            return result;
+        }
+
+        return {};
+    }
+
+    // 添加等价区域标记，完成完整的差异表示
+    auto addEqualBlocks(
+        const std::vector<std::tuple<std::string, int, int, int, int>>& ops,
+        int n, int m)
+        -> std::vector<std::tuple<std::string, int, int, int, int>> {
+        std::vector<std::tuple<std::string, int, int, int, int>> result;
+        result.reserve(ops.size() * 2);
+
+        int last_a = 0;
+        int last_b = 0;
+
+        for (const auto& op : ops) {
+            const int a_start = std::get<1>(op);
+            const int b_start = std::get<3>(op);
+
+            // 添加等价区域（如果存在）
+            if (a_start > last_a || b_start > last_b) {
+                result.emplace_back("equal", last_a, a_start, last_b, b_start);
+            }
+
+            // 添加当前操作
+            result.push_back(op);
+
+            last_a = std::get<2>(op);
+            last_b = std::get<4>(op);
+        }
+
+        // 检查最后一个等价区域
+        if (last_a < n || last_b < m) {
+            result.emplace_back("equal", last_a, n, last_b, m);
+        }
+
+        return result;
+    }
+};
+class PatienceDiff;
+class HistogramDiff;
+}  // namespace algorithms
+
 static auto joinLines(std::span<const std::string> lines) -> std::string {
     std::string joined;
     joined.reserve(std::accumulate(lines.begin(), lines.end(), size_t{0},
@@ -300,7 +510,7 @@ public:
     auto compareChars(std::string_view str1, std::string_view str2)
         -> std::vector<std::tuple<std::string, std::string>> {
         // 使用Myers差异算法比较字符级别差异
-        auto diff = MyersDiff(str1, str2);
+        auto diff = algorithms::MyersDiff(str1, str2);
         auto opcodes = diff.execute();
 
         std::vector<std::tuple<std::string, std::string>> result;
@@ -314,19 +524,19 @@ public:
             const int j2 = std::get<4>(op);
 
             if (tag == "equal") {
-                result.emplace_back("equal", 
-                    std::string(str1.substr(i1, i2 - i1)));
+                result.emplace_back("equal",
+                                    std::string(str1.substr(i1, i2 - i1)));
             } else if (tag == "delete") {
-                result.emplace_back("delete", 
-                    std::string(str1.substr(i1, i2 - i1)));
+                result.emplace_back("delete",
+                                    std::string(str1.substr(i1, i2 - i1)));
             } else if (tag == "insert") {
-                result.emplace_back("insert", 
-                    std::string(str2.substr(j1, j2 - j1)));
+                result.emplace_back("insert",
+                                    std::string(str2.substr(j1, j2 - j1)));
             } else if (tag == "replace") {
-                result.emplace_back("delete", 
-                    std::string(str1.substr(i1, i2 - i1)));
-                result.emplace_back("insert", 
-                    std::string(str2.substr(j1, j2 - j1)));
+                result.emplace_back("delete",
+                                    std::string(str1.substr(i1, i2 - i1)));
+                result.emplace_back("insert",
+                                    std::string(str2.substr(j1, j2 - j1)));
             }
         }
 
@@ -345,10 +555,10 @@ public:
                 html2 += escapeHtml(content);
             } else if (op == "delete") {
                 html1 += "<span class=\"" + options.removedClass + "\">" +
-                        escapeHtml(content) + "</span>";
+                         escapeHtml(content) + "</span>";
             } else if (op == "insert") {
                 html2 += "<span class=\"" + options.addedClass + "\">" +
-                        escapeHtml(content) + "</span>";
+                         escapeHtml(content) + "</span>";
             }
         }
 
@@ -628,7 +838,8 @@ auto HtmlDiff::makeFile(std::span<const std::string> fromlines,
 auto HtmlDiff::makeFile(std::span<const std::string> fromlines,
                         std::span<const std::string> tolines,
                         std::string_view fromdesc, std::string_view todesc,
-                        const DiffOptions& options) -> DiffResult {
+                        const DiffOptions& options,
+                        const HtmlDiffOptions& htmlOptions) -> DiffResult {
     try {
         std::ostringstream os;
         os << "<!DOCTYPE html>\n<html>\n<head>\n"
@@ -684,13 +895,13 @@ auto HtmlDiff::makeTable(std::span<const std::string> fromlines,
             if (line.size() >= 2) {
                 const std::string content = line.substr(2);
                 if (line[0] == '-') {
-                    os << "<tr><td class=\"" << htmlOptions.removedClass 
+                    os << "<tr><td class=\"" << htmlOptions.removedClass
                        << "\">" << content << "</td><td></td></tr>\n";
                 } else if (line[0] == '+') {
                     os << "<tr><td></td><td class=\"" << htmlOptions.addedClass
                        << "\">" << content << "</td></tr>\n";
                 } else {
-                    os << "<tr><td>" << content << "</td><td>" << content 
+                    os << "<tr><td>" << content << "</td><td>" << content
                        << "</td></tr>\n";
                 }
             }
@@ -707,7 +918,8 @@ auto HtmlDiff::makeTable(std::span<const std::string> fromlines,
 auto HtmlDiff::makeTable(std::span<const std::string> fromlines,
                          std::span<const std::string> tolines,
                          std::string_view fromdesc, std::string_view todesc,
-                         const DiffOptions& options) -> DiffResult {
+                         const DiffOptions& options,
+                         const HtmlDiffOptions& htmlOptions) -> DiffResult {
     try {
         std::ostringstream os;
         os << "<table>\n<tr><th>" << fromdesc << "</th><th>" << todesc
@@ -913,13 +1125,6 @@ DiffOptions DiffLibConfig::default_options_{};
 LogCallback DiffLibConfig::log_callback_{nullptr};
 bool DiffLibConfig::telemetry_enabled_{false};
 
-// Forward declarations for algorithm implementations
-namespace algorithms {
-class MyersDiff;
-class PatienceDiff;
-class HistogramDiff;
-}  // namespace algorithms
-
 // Utility logging function
 namespace detail {
 inline void log(const LogCallback& logger, const std::string& message,
@@ -937,219 +1142,16 @@ struct DiffKeyHasher {
     }
 };
 
-// Global cache for diff operations
-using DiffCache =
-    atom::search::ThreadSafeLRUCache<std::pair<std::string, std::string>,
-             std::vector<std::tuple<std::string, int, int, int, int>>, 100>;
-inline DiffCache g_diff_cache;
+// Global cache for diff operations using the correct template parameters
+using DiffCache = atom::search::ThreadSafeLRUCache<
+    std::pair<std::string, std::string>,
+    std::vector<std::tuple<std::string, int, int, int, int>>>;
+
+// Initialize cache with size 100
+inline DiffCache g_diff_cache(100);
 }  // namespace detail
 
 namespace algorithms {
-
-// Myers差异算法实现
-class MyersDiff {
-public:
-    MyersDiff(std::string_view a, std::string_view b) : a_(a), b_(b) {}
-
-    auto execute() -> std::vector<std::tuple<std::string, int, int, int, int>> {
-        auto start_time = std::chrono::high_resolution_clock::now();
-
-        auto result = calculateDiff();
-
-        auto end_time = std::chrono::high_resolution_clock::now();
-        stats_.duration = std::chrono::duration_cast<std::chrono::microseconds>(
-            end_time - start_time);
-
-        return result;
-    }
-
-    [[nodiscard]] auto getStats() const -> const DiffStats& { return stats_; }
-
-private:
-    std::string_view a_;
-    std::string_view b_;
-    DiffStats stats_;
-
-    // Myers差异算法的核心实现
-    auto calculateDiff()
-        -> std::vector<std::tuple<std::string, int, int, int, int>> {
-        const int n = static_cast<int>(a_.size());
-        const int m = static_cast<int>(b_.size());
-
-        // 特殊情况处理
-        if (n == 0 && m == 0) {
-            return {};
-        }
-        if (n == 0) {
-            stats_.insertions = m;
-            return {std::make_tuple("insert", 0, 0, 0, m)};
-        }
-        if (m == 0) {
-            stats_.deletions = n;
-            return {std::make_tuple("delete", 0, n, 0, 0)};
-        }
-
-        // 计算编辑图
-        const int max_edit = n + m;  // 最大可能编辑数
-        std::vector<int> v(2 * max_edit + 1, 0);
-        std::vector<std::vector<int>> traces;
-
-        int x, y;
-        for (int d = 0; d <= max_edit; d++) {
-            traces.emplace_back(v);
-
-            for (int k = -d; k <= d; k += 2) {
-                if (k == -d ||
-                    (k != d && v[k - 1 + max_edit] < v[k + 1 + max_edit])) {
-                    x = v[k + 1 + max_edit];
-                } else {
-                    x = v[k - 1 + max_edit] + 1;
-                }
-
-                y = x - k;
-
-                // 沿对角线延伸匹配
-                while (x < n && y < m && a_[x] == b_[y]) {
-                    x++;
-                    y++;
-                }
-
-                v[k + max_edit] = x;
-
-                if (x >= n && y >= m) {
-                    // 回溯路径生成差异
-                    return backtrackPath(traces, n, m, max_edit);
-                }
-            }
-        }
-
-        // 回溯路径以生成差异
-        return backtrackPath(traces, n, m, max_edit);
-    }
-
-    // 从编辑轨迹中回溯路径，生成差异操作
-    auto backtrackPath(const std::vector<std::vector<int>>& traces, int n,
-                       int m, int max_edit)
-        -> std::vector<std::tuple<std::string, int, int, int, int>> {
-        std::vector<std::tuple<std::string, int, int, int, int>> opcodes;
-        int x = n;
-        int y = m;
-
-        // 从后向前遍历每个编辑步骤
-        for (int d = static_cast<int>(traces.size()) - 1; d >= 0; d--) {
-            const auto& v = traces[d];
-            int k = x - y;
-
-            int prev_k, prev_x, prev_y;
-
-            if (k == -d ||
-                (k != d && v[k - 1 + max_edit] < v[k + 1 + max_edit])) {
-                prev_k = k + 1;
-            } else {
-                prev_k = k - 1;
-            }
-
-            prev_x = v[prev_k + max_edit];
-            prev_y = prev_x - prev_k;
-
-            // 处理对角线移动（匹配内容）
-            while (x > prev_x && y > prev_y) {
-                stats_.modifications++;
-                x--;
-                y--;
-            }
-
-            // 处理垂直移动（插入）或水平移动（删除）
-            if (d > 0) {
-                if (prev_x == x) {  // 垂直移动（插入）
-                    stats_.insertions++;
-                    opcodes.emplace_back("insert", x, x, y - 1, y);
-                } else {  // 水平移动（删除）
-                    stats_.deletions++;
-                    opcodes.emplace_back("delete", x - 1, x, y, y);
-                }
-            }
-
-            x = prev_x;
-            y = prev_y;
-        }
-
-        // 计算相似度
-        int total = stats_.insertions + stats_.deletions + stats_.modifications;
-        if (total > 0) {
-            stats_.similarity =
-                static_cast<double>(stats_.modifications) / total;
-        } else {
-            stats_.similarity = 1.0;  // 完全相同
-        }
-
-        // 反转操作码，使它们按正向顺序排列
-        std::reverse(opcodes.begin(), opcodes.end());
-
-        // 合并相邻的相同类型操作
-        if (!opcodes.empty()) {
-            std::vector<std::tuple<std::string, int, int, int, int>> merged;
-            merged.reserve(opcodes.size());
-
-            auto current = opcodes[0];
-            for (size_t i = 1; i < opcodes.size(); ++i) {
-                const auto& op = opcodes[i];
-                if (std::get<0>(current) == std::get<0>(op) &&
-                    std::get<2>(current) == std::get<1>(op) &&
-                    std::get<4>(current) == std::get<3>(op)) {
-                    // 合并连续的相同类型操作
-                    std::get<2>(current) = std::get<2>(op);
-                    std::get<4>(current) = std::get<4>(op);
-                } else {
-                    merged.push_back(current);
-                    current = op;
-                }
-            }
-            merged.push_back(current);
-
-            // 添加等价区域标记
-            auto result = addEqualBlocks(merged, n, m);
-            return result;
-        }
-
-        return {};
-    }
-
-    // 添加等价区域标记，完成完整的差异表示
-    auto addEqualBlocks(
-        const std::vector<std::tuple<std::string, int, int, int, int>>& ops,
-        int n, int m)
-        -> std::vector<std::tuple<std::string, int, int, int, int>> {
-        std::vector<std::tuple<std::string, int, int, int, int>> result;
-        result.reserve(ops.size() * 2);
-
-        int last_a = 0;
-        int last_b = 0;
-
-        for (const auto& op : ops) {
-            const int a_start = std::get<1>(op);
-            const int b_start = std::get<3>(op);
-
-            // 添加等价区域（如果存在）
-            if (a_start > last_a || b_start > last_b) {
-                result.emplace_back("equal", last_a, a_start, last_b, b_start);
-            }
-
-            // 添加当前操作
-            result.push_back(op);
-
-            last_a = std::get<2>(op);
-            last_b = std::get<4>(op);
-        }
-
-        // 检查最后一个等价区域
-        if (last_a < n || last_b < m) {
-            result.emplace_back("equal", last_a, n, last_b, m);
-        }
-
-        return result;
-    }
-};
 
 // Patience差异算法实现
 class PatienceDiff {
@@ -1718,25 +1720,6 @@ void Differ::setOptions(const DiffOptions& options) {
 
 [[nodiscard]] auto Differ::getStats() const noexcept -> const DiffStats& {
     return pimpl_->getStats();
-}
-
-// 实现HtmlDiff的静态方法
-auto HtmlDiff::makeFile(std::span<const std::string> fromlines,
-                        std::span<const std::string> tolines,
-                        std::string_view fromdesc, std::string_view todesc,
-                        const DiffOptions& options,
-                        const HtmlDiffOptions& htmlOptions) -> DiffResult {
-    HtmlDiff diff(options);
-    return diff.makeFile(fromlines, tolines, fromdesc, todesc, htmlOptions);
-}
-
-auto HtmlDiff::makeTable(std::span<const std::string> fromlines,
-                         std::span<const std::string> tolines,
-                         std::string_view fromdesc, std::string_view todesc,
-                         const DiffOptions& options,
-                         const HtmlDiffOptions& htmlOptions) -> DiffResult {
-    HtmlDiff diff(options);
-    return diff.makeTable(fromlines, tolines, fromdesc, todesc, htmlOptions);
 }
 
 InlineDiff::InlineDiff(const DiffOptions& options)

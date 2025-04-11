@@ -5,11 +5,17 @@
 #include <cctype>
 #include <cstring>
 #include <fstream>
-#include <future>
 #include <queue>
 #include <regex>
 #include <sstream>
+
+#ifdef ATOM_USE_BOOST
+#include <boost/algorithm/string.hpp>
+#include <boost/bind/bind.hpp>
+#else
+#include <future>
 #include <thread>
+#endif
 
 #include "atom/log/loguru.hpp"
 
@@ -74,7 +80,72 @@ SearchEngine::SearchEngine(unsigned maxThreads)
     : maxThreads_(maxThreads ? maxThreads
                              : std::thread::hardware_concurrency()) {
     LOG_F(INFO, "SearchEngine initialized with max threads: {}", maxThreads_);
+
+#ifdef ATOM_USE_BOOST
+    // Initialize task queue and worker threads
+    taskQueue_ = std::make_unique<threading::lockfree_queue<SearchTask>>(1024);
+    startWorkerThreads();
+    LOG_F(INFO, "Boost lockfree task queue initialized with {} worker threads",
+          maxThreads_);
+#endif
 }
+
+SearchEngine::~SearchEngine() {
+    LOG_F(INFO, "SearchEngine being destroyed");
+
+#ifdef ATOM_USE_BOOST
+    // Clean up thread pool
+    stopWorkerThreads();
+    LOG_F(INFO, "Worker threads stopped and cleaned up");
+#endif
+}
+
+#ifdef ATOM_USE_BOOST
+void SearchEngine::startWorkerThreads() {
+    // Create worker threads
+    shouldStopWorkers_.store(false);
+    workerThreads_.reserve(maxThreads_);
+
+    for (unsigned i = 0; i < maxThreads_; ++i) {
+        workerThreads_.push_back(std::make_unique<threading::thread>(
+            [this]() { workerFunction(); }));
+    }
+    LOG_F(INFO, "Started {} worker threads", maxThreads_);
+}
+
+void SearchEngine::stopWorkerThreads() {
+    LOG_F(INFO, "Stopping worker threads");
+    shouldStopWorkers_.store(true);
+
+    // Wait for all threads to finish
+    for (auto& thread : workerThreads_) {
+        if (thread && thread->joinable()) {
+            thread->join();
+        }
+    }
+
+    workerThreads_.clear();
+    LOG_F(INFO, "All worker threads stopped");
+}
+
+void SearchEngine::workerFunction() {
+    SearchTask task;
+
+    while (!shouldStopWorkers_.load()) {
+        if (taskQueue_->pop(task)) {
+            try {
+                // Execute the task
+                task.callback(task.words);
+            } catch (const std::exception& e) {
+                LOG_F(ERROR, "Error in worker thread: {}", e.what());
+            }
+        } else {
+            // Sleep briefly to avoid busy waiting
+            boost::this_thread::sleep_for(boost::chrono::milliseconds(1));
+        }
+    }
+}
+#endif
 
 void SearchEngine::addDocument(const Document& doc) {
     try {
@@ -303,10 +374,17 @@ std::vector<std::shared_ptr<Document>> SearchEngine::fuzzySearchByTag(
     std::unordered_set<std::string> processedDocIds;
 
     try {
-        std::shared_lock lock(indexMutex_);
+        threading::shared_lock lock(indexMutex_);
 
         // Divide work among threads
-        std::vector<std::future<std::vector<std::string>>> futures;
+#ifdef ATOM_USE_BOOST
+        // Use Boost thread group and futures
+        threading::thread_group threadGroup;
+        std::vector<threading::shared_future<std::vector<std::string>>> futures;
+#else
+        // Use STL futures
+        std::vector<threading::future<std::vector<std::string>>> futures;
+#endif
         std::vector<std::string> tagKeys;
 
         // Get all tag keys
@@ -320,6 +398,31 @@ std::vector<std::shared_ptr<Document>> SearchEngine::fuzzySearchByTag(
         // Launch worker threads
         for (size_t i = 0; i < tagKeys.size(); i += chunkSize) {
             size_t end = std::min(i + chunkSize, tagKeys.size());
+
+#ifdef ATOM_USE_BOOST
+            threading::promise<std::vector<std::string>> promise;
+            threading::shared_future<std::vector<std::string>> future =
+                promise.get_future();
+            futures.push_back(future);
+
+            threadGroup.create_thread([this, &tag, tolerance, &tagKeys, i, end,
+                                       promise = std::move(promise)]() mutable {
+                std::vector<std::string> matchedDocIds;
+
+                for (size_t j = i; j < end; j++) {
+                    const auto& key = tagKeys[j];
+                    if (levenshteinDistanceSIMD(tag, key) <= tolerance) {
+                        // Add all document IDs for this tag
+                        const auto& docIds = tagIndex_.at(key);
+                        matchedDocIds.insert(matchedDocIds.end(),
+                                             docIds.begin(), docIds.end());
+                        LOG_F(INFO, "Tag '{}' matched with '{}'", key, tag);
+                    }
+                }
+
+                promise.set_value(std::move(matchedDocIds));
+            });
+#else
             futures.push_back(std::async(
                 std::launch::async,
                 [this, &tag, tolerance, &tagKeys, i, end]() {
@@ -338,9 +441,13 @@ std::vector<std::shared_ptr<Document>> SearchEngine::fuzzySearchByTag(
 
                     return matchedDocIds;
                 }));
+#endif
         }
 
         // Collect results
+#ifdef ATOM_USE_BOOST
+        threadGroup.join_all();
+#endif
         for (auto& future : futures) {
             auto docIds = future.get();
             for (const auto& docId : docIds) {
@@ -406,7 +513,7 @@ void SearchEngine::searchByContentWorker(
     std::unordered_map<std::string, double> localScores;
 
     for (const auto& word : wordChunk) {
-        std::shared_lock lock(indexMutex_);
+        threading::shared_lock lock(indexMutex_);
 
         auto it = contentIndex_.find(word);
         if (it != contentIndex_.end()) {
@@ -422,7 +529,7 @@ void SearchEngine::searchByContentWorker(
     }
 
     // Merge results with main scores map
-    std::lock_guard<std::mutex> lock(scoresMutex);
+    threading::unique_lock lock(scoresMutex);
     for (const auto& [docId, score] : localScores) {
         scoresMap[docId] += score;
     }
@@ -444,7 +551,7 @@ std::vector<std::shared_ptr<Document>> SearchEngine::searchByContent(
     }
 
     std::unordered_map<std::string, double> scores;
-    std::mutex scoresMutex;
+    threading::mutex scoresMutex;
 
     try {
         // If we have few words, no need for parallel processing
@@ -452,7 +559,47 @@ std::vector<std::shared_ptr<Document>> SearchEngine::searchByContent(
             searchByContentWorker(words, scores, scoresMutex);
         } else {
             // Parallel processing with thread pool
-            std::vector<std::future<void>> futures;
+#ifdef ATOM_USE_BOOST
+            // Use Boost thread group and futures
+            threading::thread_group threadGroup;
+            std::vector<threading::shared_future<void>> futures;
+
+            // Calculate chunk size
+            size_t chunkSize = std::max(size_t(1), words.size() / maxThreads_);
+
+            // Launch worker threads
+            for (size_t i = 0; i < words.size(); i += chunkSize) {
+                size_t end = std::min(i + chunkSize, words.size());
+                std::vector<std::string> wordChunk(words.begin() + i,
+                                                   words.begin() + end);
+
+                threading::promise<void> promise;
+                threading::shared_future<void> future = promise.get_future();
+                futures.push_back(future);
+
+                threadGroup.create_thread(
+                    [this, wordChunk, &scores, &scoresMutex,
+                     promise = std::move(promise)]() mutable {
+                        try {
+                            searchByContentWorker(wordChunk, scores,
+                                                  scoresMutex);
+                            promise.set_value();
+                        } catch (...) {
+                            promise.set_exception(std::current_exception());
+                        }
+                    });
+            }
+
+            // Wait for all threads to complete
+            threadGroup.join_all();
+
+            // Check for exceptions
+            for (auto& future : futures) {
+                future.get();  // Will rethrow any exceptions
+            }
+#else
+            // Use STL futures
+            std::vector<threading::future<void>> futures;
 
             // Calculate chunk size
             size_t chunkSize = std::max(size_t(1), words.size() / maxThreads_);
@@ -472,6 +619,7 @@ std::vector<std::shared_ptr<Document>> SearchEngine::searchByContent(
             for (auto& future : futures) {
                 future.get();
             }
+#endif
         }
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Error during content search: {}", e.what());

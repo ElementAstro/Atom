@@ -7,6 +7,7 @@
 #include <exception>
 #include <fstream>
 #include <functional>
+#include <future>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -18,7 +19,122 @@
 #include <utility>
 #include <vector>
 
+// Boost support
+#if defined(ATOM_USE_BOOST_THREAD) || defined(ATOM_USE_BOOST_LOCKFREE)
+  #include <boost/config.hpp>
+#endif
+
+#ifdef ATOM_USE_BOOST_THREAD
+  #include <boost/thread.hpp>
+  #include <boost/thread/mutex.hpp>
+  #include <boost/thread/shared_mutex.hpp>
+  #include <boost/thread/lock_types.hpp>
+  #include <boost/thread/future.hpp>
+#endif
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+  #include <boost/atomic.hpp>
+  #include <boost/lockfree/queue.hpp>
+  #include <boost/lockfree/spsc_queue.hpp>
+#endif
+
 namespace atom::search {
+
+// Define aliases based on whether we're using Boost or STL
+#if defined(ATOM_USE_BOOST_THREAD)
+  template <typename T>
+  using shared_mutex = boost::shared_mutex;
+  
+  template <typename T>
+  using shared_lock = boost::shared_lock<T>;
+  
+  template <typename T>
+  using unique_lock = boost::unique_lock<T>;
+  
+  template <typename... Args>
+  using future = boost::future<Args...>;
+  
+  template <typename... Args>
+  using promise = boost::promise<Args...>;
+#else
+  template <typename T>
+  using shared_mutex = std::shared_mutex;
+  
+  template <typename T>
+  using shared_lock = std::shared_lock<T>;
+  
+  template <typename T>
+  using unique_lock = std::unique_lock<T>;
+  
+  template <typename... Args>
+  using future = std::future<Args...>;
+  
+  template <typename... Args>
+  using promise = std::promise<Args...>;
+#endif
+
+#if defined(ATOM_USE_BOOST_LOCKFREE)
+  template <typename T>
+  using atomic = boost::atomic<T>;
+  
+  template <typename T>
+  struct lockfree_queue {
+    boost::lockfree::queue<T> queue;
+    
+    lockfree_queue(size_t capacity) : queue(capacity) {}
+    
+    bool push(const T& item) {
+      return queue.push(item);
+    }
+    
+    bool pop(T& item) {
+      return queue.pop(item);
+    }
+    
+    bool empty() const {
+      return queue.empty();
+    }
+  };
+#else
+  template <typename T>
+  using atomic = std::atomic<T>;
+  
+  // Fallback implementation using std containers when Boost.lockfree is not available
+  template <typename T>
+  struct lockfree_queue {
+    std::mutex mutex;
+    std::vector<T> items;
+    size_t capacity;
+    
+    lockfree_queue(size_t capacity) : capacity(capacity) {
+      items.reserve(capacity);
+    }
+    
+    bool push(const T& item) {
+      std::lock_guard<std::mutex> lock(mutex);
+      if (items.size() >= capacity) {
+        return false;
+      }
+      items.push_back(item);
+      return true;
+    }
+    
+    bool pop(T& item) {
+      std::lock_guard<std::mutex> lock(mutex);
+      if (items.empty()) {
+        return false;
+      }
+      item = items.front();
+      items.erase(items.begin());
+      return true;
+    }
+    
+    bool empty() {
+      std::lock_guard<std::mutex> lock(mutex);
+      return items.empty();
+    }
+  };
+#endif
 
 /**
  * @brief Custom exceptions for ThreadSafeLRUCache
@@ -296,14 +412,14 @@ public:
                     std::optional<std::chrono::seconds> ttl = std::nullopt);
 
 private:
-    mutable std::shared_mutex mutex_;  ///< Mutex for protecting shared data.
+    mutable shared_mutex<std::shared_mutex> mutex_;  ///< Mutex for protecting shared data.
     std::list<KeyValuePair>
         cache_items_list_;  ///< List for maintaining item order.
     std::unordered_map<Key, CacheItem>
         cache_items_map_;  ///< Map for fast key lookups.
     size_t max_size_;      ///< Maximum number of items in the cache.
-    std::atomic<size_t> hit_count_{0};   ///< Number of cache hits.
-    std::atomic<size_t> miss_count_{0};  ///< Number of cache misses.
+    atomic<size_t> hit_count_{0};   ///< Number of cache hits.
+    atomic<size_t> miss_count_{0};  ///< Number of cache misses.
 
     std::function<void(const Key&, const Value&)>
         on_insert_;  ///< Callback for item insertion.
@@ -334,7 +450,7 @@ private:
      */
     [[nodiscard]] auto acquireReadLock(std::chrono::milliseconds timeout_ms =
                                            std::chrono::milliseconds(100)) const
-        -> std::optional<std::shared_lock<std::shared_mutex>>;
+        -> std::optional<shared_lock<std::shared_mutex>>;
 
     /**
      * @brief Helper method to acquire a write lock with timeout.
@@ -344,7 +460,7 @@ private:
      */
     [[nodiscard]] auto acquireWriteLock(
         std::chrono::milliseconds timeout_ms = std::chrono::milliseconds(100))
-        -> std::optional<std::unique_lock<std::shared_mutex>>;
+        -> std::optional<unique_lock<std::shared_mutex>>;
 };
 
 template <typename Key, typename Value>
@@ -1045,8 +1161,8 @@ auto ThreadSafeLRUCache<Key, Value>::removeLRUItem() noexcept
 template <typename Key, typename Value>
 auto ThreadSafeLRUCache<Key, Value>::acquireReadLock(
     std::chrono::milliseconds timeout_ms) const
-    -> std::optional<std::shared_lock<std::shared_mutex>> {
-    std::shared_lock<std::shared_mutex> lock(mutex_, std::defer_lock);
+    -> std::optional<shared_lock<std::shared_mutex>> {
+    shared_lock<std::shared_mutex> lock(mutex_, std::defer_lock);
     if (lock.try_lock_for(timeout_ms)) {
         return lock;
     }
@@ -1056,8 +1172,8 @@ auto ThreadSafeLRUCache<Key, Value>::acquireReadLock(
 template <typename Key, typename Value>
 auto ThreadSafeLRUCache<Key, Value>::acquireWriteLock(
     std::chrono::milliseconds timeout_ms)
-    -> std::optional<std::unique_lock<std::shared_mutex>> {
-    std::unique_lock<std::shared_mutex> lock(mutex_, std::defer_lock);
+    -> std::optional<unique_lock<std::shared_mutex>> {
+    unique_lock<std::shared_mutex> lock(mutex_, std::defer_lock);
     if (lock.try_lock_for(timeout_ms)) {
         return lock;
     }
