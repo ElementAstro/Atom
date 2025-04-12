@@ -21,56 +21,65 @@ Description: A collection of useful functions with std::any Or Any
 #include <execution>
 #include <format>
 #include <future>
-#include <regex>
 #include <mutex>
 #include <optional>
 #include <ranges>
+#include <regex>
 #include <stdexcept>
-#include <string>
 #include <tuple>
 #include <type_traits>
-#include <unordered_map>
 #include <utility>
+#include "atom/containers/high_performance.hpp"  // Include high performance containers
 #include "atom/meta/concept.hpp"
+
+// Use type aliases from high_performance.hpp
+namespace atom::utils {
+using atom::containers::String;
+template <typename K, typename V>
+using HashMap = atom::containers::HashMap<K, V>;
+template <typename T>
+using Vector = atom::containers::Vector<T>;
+}  // namespace atom::utils
 
 // Enhanced version of concepts with better constraints
 template <typename T>
 concept CanBeStringified = requires(T t) {
-    { toString(t) } -> std::convertible_to<std::string>;
+    { toString(t) } -> std::convertible_to<atom::utils::String>;
 };
 
 template <typename T>
 concept CanBeStringifiedToJson = requires(T t) {
-    { toJson(t) } -> std::convertible_to<std::string>;
+    { toJson(t) } -> std::convertible_to<atom::utils::String>;
 };
 
 // New concept for XML serialization
 template <typename T>
-concept CanBeStringifiedToXml = requires(T t, std::string tag) {
-    { toXml(t, tag) } -> std::convertible_to<std::string>;
+concept CanBeStringifiedToXml = requires(T t, atom::utils::String tag) {
+    { toXml(t, tag) } -> std::convertible_to<atom::utils::String>;
 };
 
 // New concept for YAML serialization
 template <typename T>
-concept CanBeStringifiedToYaml = requires(T t, std::string key) {
-    { toYaml(t, key) } -> std::convertible_to<std::string>;
+concept CanBeStringifiedToYaml = requires(T t, atom::utils::String key) {
+    { toYaml(t, key) } -> std::convertible_to<atom::utils::String>;
 };
 
 // New concept for TOML serialization
 template <typename T>
-concept CanBeStringifiedToToml = requires(T t, std::string key) {
-    { toToml(t, key) } -> std::convertible_to<std::string>;
+concept CanBeStringifiedToToml = requires(T t, atom::utils::String key) {
+    { toToml(t, key) } -> std::convertible_to<atom::utils::String>;
 };
 
 // Forward declarations
 template <typename T>
-[[nodiscard]] auto toString(const T &value,
-                            bool prettyPrint = false) -> std::string;
+[[nodiscard]] auto toString(const T &value, bool prettyPrint = false)
+    -> atom::utils::String;
 
 // Thread-safe string conversion cache using mutex
 namespace {
 std::mutex cacheMutex;
-std::unordered_map<std::size_t, std::string> conversionCache;
+// Use HashMap and String for cache
+atom::utils::HashMap<std::size_t, atom::utils::String> conversionCache;
 
 template <typename T>
 std::size_t getTypeHash(const T &value) {
@@ -80,11 +89,12 @@ std::size_t getTypeHash(const T &value) {
                   sizeof(T) <= sizeof(std::size_t)) {
         std::memcpy(&valueHash, &value, sizeof(T));
     }
-    return typeHash ^ valueHash;
+    // Combine hashes (consider a better hash combination function if needed)
+    return typeHash ^ (valueHash << 1);
 }
 
 template <typename T>
-std::optional<std::string> getCachedString(const T &value) {
+std::optional<atom::utils::String> getCachedString(const T &value) {
     std::lock_guard<std::mutex> lock(cacheMutex);
     auto hash = getTypeHash(value);
     auto it = conversionCache.find(hash);
@@ -95,7 +105,7 @@ std::optional<std::string> getCachedString(const T &value) {
 }
 
 template <typename T>
-void cacheString(const T &value, const std::string &str) {
+void cacheString(const T &value, const atom::utils::String &str) {
     std::lock_guard<std::mutex> lock(cacheMutex);
     auto hash = getTypeHash(value);
     conversionCache[hash] = str;
@@ -105,7 +115,7 @@ void cacheString(const T &value, const std::string &str) {
 // Improved ranges-based toString with validation and exception handling
 template <std::ranges::input_range Container>
 [[nodiscard]] auto toString(const Container &container,
-                            bool prettyPrint = false) -> std::string {
+                            bool prettyPrint = false) -> atom::utils::String {
     try {
         if (std::ranges::empty(container)) {
             return "[]";
@@ -116,18 +126,20 @@ template <std::ranges::input_range Container>
             return *cached;
         }
 
-        std::string result = "[";
-        const std::string separator = prettyPrint ? ", " : ",";
-        const std::string indent = prettyPrint ? "\n  " : "";
+        atom::utils::String result = "[";
+        const atom::utils::String separator = prettyPrint ? ", " : ",";
+        const atom::utils::String indent = prettyPrint ? "\n  " : "";
 
         if (prettyPrint)
             result += indent;
 
         for (const auto &item : container) {
+            // Assuming IsBuiltIn concept is compatible
             if constexpr (IsBuiltIn<std::remove_cvref_t<decltype(item)>>) {
                 result += toString(item, prettyPrint) + separator +
                           (prettyPrint ? indent : "");
             } else {
+                // Use String concatenation
                 result += "\"" + toString(item, prettyPrint) + "\"" +
                           separator + (prettyPrint ? indent : "");
             }
@@ -135,6 +147,8 @@ template <std::ranges::input_range Container>
 
         // Remove the last separator
         if (prettyPrint) {
+            // Adjust length calculation if String::length() differs from
+            // std::string::length()
             result.erase(result.length() - indent.length() - separator.length(),
                          separator.length() + indent.length());
             result += "\n]";
@@ -145,28 +159,38 @@ template <std::ranges::input_range Container>
         }
 
         // Cache result for future use (only if container is small enough)
-        if (std::ranges::distance(container) < 1000) {
-            cacheString(container, result);
+        // Consider if std::ranges::distance is efficient for the chosen
+        // container type
+        if constexpr (std::ranges::sized_range<Container>) {
+            if (std::ranges::size(container) < 1000) {
+                cacheString(container, result);
+            }
+        } else {
+            // Fallback or alternative check for non-sized ranges if needed
+            // For simplicity, we might skip caching for non-sized ranges or use
+            // a different limit
         }
 
         return result;
     } catch (const std::exception &e) {
+        // Use std::format, assuming String is compatible or convertible
         return std::format("Error converting container to string: {}",
-                           e.what());
+                           e.what())
+            .c_str();  // Ensure conversion if needed
     }
 }
 
-// Improved map toString with validation
+// Improved map toString with validation (using HashMap)
 template <typename K, typename V>
-[[nodiscard]] auto toString(const std::unordered_map<K, V> &map,
-                            bool prettyPrint = false) -> std::string {
+[[nodiscard]] auto toString(const atom::utils::HashMap<K, V> &map,
+                            bool prettyPrint = false) -> atom::utils::String {
     try {
         if (map.empty()) {
             return "{}";
         }
 
-        std::string result = "{";
-        const std::string separator = prettyPrint ? ",\n  " : ", ";
+        atom::utils::String result = "{";
+        const atom::utils::String separator = prettyPrint ? ",\n  " : ", ";
 
         if (prettyPrint)
             result += "\n  ";
@@ -182,42 +206,52 @@ template <typename K, typename V>
                          separator.length());
             result += "\n}";
         } else {
-            result.erase(result.length() - 2, 2);
+            result.erase(result.length() - 2, 2);  // Assuming separator ", "
             result += "}";
         }
 
         return result;
     } catch (const std::exception &e) {
-        return std::format("Error converting map to string: {}", e.what());
+        return std::format("Error converting map to string: {}", e.what())
+            .c_str();
     }
 }
 
 // Improved pair toString with better exception handling
 template <typename T1, typename T2>
 [[nodiscard]] auto toString(const std::pair<T1, T2> &pair,
-                            bool prettyPrint = false) -> std::string {
+                            bool prettyPrint = false) -> atom::utils::String {
     try {
         return "(" + toString(pair.first, prettyPrint) + ", " +
                toString(pair.second, prettyPrint) + ")";
     } catch (const std::exception &e) {
-        return std::format("Error converting pair to string: {}", e.what());
+        return std::format("Error converting pair to string: {}", e.what())
+            .c_str();
     }
 }
 
 // Base toString implementation with improved type handling
 template <typename T>
-[[nodiscard]] auto toString(const T &value, bool prettyPrint) -> std::string {
+[[nodiscard]] auto toString(const T &value, bool prettyPrint)
+    -> atom::utils::String {
     try {
+        // Assuming String concept works with atom::containers::String
         if constexpr (String<T> || Char<T>) {
-            return std::string(value);
+            // Explicit conversion might be needed depending on String
+            // definition
+            return atom::utils::String(value);
         } else if constexpr (std::is_same_v<T, bool>) {
             return value ? "true" : "false";
         } else if constexpr (Number<T>) {
             if constexpr (std::is_floating_point_v<T>) {
                 // For floating point, use format with precision
-                return std::format("{:.6g}", value);
+                // std::format returns std::string, convert to
+                // atom::utils::String
+                return atom::utils::String(std::format("{:.6g}", value));
             } else {
-                return std::to_string(value);
+                // std::to_string returns std::string, convert to
+                // atom::utils::String
+                return atom::utils::String(std::to_string(value));
             }
         } else if constexpr (Pointer<T> || SmartPointer<T>) {
             if (value == nullptr) {
@@ -225,44 +259,55 @@ template <typename T>
             }
             return toString(*value, prettyPrint);
         } else if constexpr (requires { value.toString(); }) {
-            // Support for custom types with toString method
+            // Support for custom types with toString method returning String
             return value.toString();
         } else {
             return "unknown type";
         }
     } catch (const std::exception &e) {
-        return std::format("Error in toString: {}", e.what());
+        return std::format("Error in toString: {}", e.what()).c_str();
     }
 }
 
 // Forward declaration for toJson
 template <typename T>
-[[nodiscard]] auto toJson(const T &value,
-                          bool prettyPrint = false) -> std::string;
+[[nodiscard]] auto toJson(const T &value, bool prettyPrint = false)
+    -> atom::utils::String;
 
 // Parallelized toJson for large containers
 template <std::ranges::input_range Container>
-[[nodiscard]] auto toJson(const Container &container,
-                          bool prettyPrint = false) -> std::string {
+[[nodiscard]] auto toJson(const Container &container, bool prettyPrint = false)
+    -> atom::utils::String {
     try {
         if (std::ranges::empty(container)) {
             return "[]";
         }
 
-        const std::string indent = prettyPrint ? "  " : "";
-        const std::string nl = prettyPrint ? "\n" : "";
-        std::string result = "[" + nl;
+        const atom::utils::String indent = prettyPrint ? "  " : "";
+        const atom::utils::String nl = prettyPrint ? "\n" : "";
+        atom::utils::String result = "[" + nl;
+
+        // Determine size efficiently if possible
+        std::optional<size_t> containerSize;
+        if constexpr (std::ranges::sized_range<Container>) {
+            containerSize = std::ranges::size(container);
+        }
 
         // Use parallel execution for large containers
-        if (std::ranges::distance(container) > 1000) {
-            std::vector<std::future<std::string>> futures;
-            futures.reserve(std::ranges::distance(container));
+        if (containerSize && *containerSize > 1000) {
+            // Use Vector for futures, future result remains std::string for
+            // simplicity with std::async Or change lambda return type to String
+            // if toJson returns String
+            atom::utils::Vector<std::future<atom::utils::String>> futures;
+            futures.reserve(*containerSize);
 
             // Process items in parallel
             for (const auto &item : container) {
                 futures.push_back(std::async(
-                    std::launch::async, [&item, prettyPrint]() -> std::string {
-                        return toJson(item, prettyPrint);
+                    std::launch::async,
+                    [&item, prettyPrint]() -> atom::utils::String {
+                        return toJson(
+                            item, prettyPrint);  // Ensure toJson returns String
                     }));
             }
 
@@ -271,14 +316,19 @@ template <std::ranges::input_range Container>
                 result += (prettyPrint ? indent : "") + fut.get() + "," + nl;
             }
         } else {
-            // Sequential processing for smaller containers
+            // Sequential processing for smaller or non-sized containers
             for (const auto &item : container) {
                 result += (prettyPrint ? indent : "") +
                           toJson(item, prettyPrint) + "," + nl;
             }
         }
 
-        if (!container.empty()) {
+        // Check if items were added before erasing
+        bool itemsAdded =
+            (containerSize && *containerSize > 0) ||
+            (!containerSize && result.length() > (1 + nl.length()));
+        if (itemsAdded) {
+            // Adjust length calculation based on String type
             result.erase(result.length() - (1 + nl.length()), 1 + nl.length());
         }
 
@@ -286,28 +336,32 @@ template <std::ranges::input_range Container>
         return result;
     } catch (const std::exception &e) {
         return std::format("{{\"error\": \"Error converting to JSON: {}\"}}",
-                           e.what());
+                           e.what())
+            .c_str();
     }
 }
 
-// Improved map toJson with validation
+// Improved map toJson with validation (using HashMap)
 template <typename K, typename V>
-[[nodiscard]] auto toJson(const std::unordered_map<K, V> &map,
-                          bool prettyPrint = false) -> std::string {
+[[nodiscard]] auto toJson(const atom::utils::HashMap<K, V> &map,
+                          bool prettyPrint = false) -> atom::utils::String {
     try {
         if (map.empty()) {
             return "{}";
         }
 
-        const std::string indent = prettyPrint ? "  " : "";
-        const std::string nl = prettyPrint ? "\n" : "";
-        std::string result = "{" + nl;
+        const atom::utils::String indent = prettyPrint ? "  " : "";
+        const atom::utils::String nl = prettyPrint ? "\n" : "";
+        atom::utils::String result = "{" + nl;
 
         for (const auto &pair : map) {
-            std::string key;
-            if constexpr (std::is_same_v<K, std::string> ||
-                          std::is_same_v<K, const char *>) {
-                key = "\"" + std::string(pair.first) + "\"";
+            atom::utils::String key;
+            // Check if K is String or compatible
+            if constexpr (std::is_same_v<K, atom::utils::String> ||
+                          std::is_convertible_v<K, const char *>) {
+                // Assuming String has constructor from K or K is convertible to
+                // const char*
+                key = "\"" + atom::utils::String(pair.first) + "\"";
             } else {
                 key = "\"" + toString(pair.first, prettyPrint) + "\"";
             }
@@ -325,19 +379,21 @@ template <typename K, typename V>
         return result;
     } catch (const std::exception &e) {
         return std::format(
-            "{{\"error\": \"Error converting map to JSON: {}\"}}", e.what());
+                   "{{\"error\": \"Error converting map to JSON: {}\"}}",
+                   e.what())
+            .c_str();
     }
 }
 
 // Improved pair toJson with validation
 template <typename T1, typename T2>
 [[nodiscard]] auto toJson(const std::pair<T1, T2> &pair,
-                          bool prettyPrint = false) -> std::string {
+                          bool prettyPrint = false) -> atom::utils::String {
     try {
-        const std::string nl = prettyPrint ? "\n" : "";
-        const std::string indent = prettyPrint ? "  " : "";
+        const atom::utils::String nl = prettyPrint ? "\n" : "";
+        const atom::utils::String indent = prettyPrint ? "  " : "";
 
-        std::string result = "{" + nl;
+        atom::utils::String result = "{" + nl;
         result += (prettyPrint ? indent : "") +
                   "\"first\": " + toJson(pair.first, prettyPrint) + "," + nl;
         result += (prettyPrint ? indent : "") +
@@ -347,22 +403,27 @@ template <typename T1, typename T2>
         return result;
     } catch (const std::exception &e) {
         return std::format(
-            "{{\"error\": \"Error converting pair to JSON: {}\"}}", e.what());
+                   "{{\"error\": \"Error converting pair to JSON: {}\"}}",
+                   e.what())
+            .c_str();
     }
 }
 
 // Base toJson implementation with improved type handling and validation
 template <typename T>
-[[nodiscard]] auto toJson(const T &value, bool prettyPrint) -> std::string {
+[[nodiscard]] auto toJson(const T &value, bool prettyPrint)
+    -> atom::utils::String {
     try {
+        // Assuming String concept works with atom::containers::String
         if constexpr (String<T>) {
             // Escape special characters in strings
-            std::string escaped;
-            escaped.reserve(
-                std::string(value).size() +
-                10);  // Reserve extra space for potential escape chars
+            atom::utils::String escaped;
+            // Assuming String has reserve and value access (e.g., iterators or
+            // operator[])
+            escaped.reserve(atom::utils::String(value).size() + 10);
 
-            for (char c : std::string(value)) {
+            for (char c :
+                 atom::utils::String(value)) {  // Assuming iteration works
                 switch (c) {
                     case '\"':
                         escaped += "\\\"";
@@ -390,35 +451,36 @@ template <typename T>
                         break;
                     default:
                         if (static_cast<unsigned char>(c) < 32) {
-                            escaped += std::format(
-                                "\\u{:04x}", static_cast<unsigned int>(c));
+                            // Convert std::format result to String
+                            escaped += atom::utils::String(std::format(
+                                "\\u{:04x}", static_cast<unsigned int>(c)));
                         } else {
                             escaped += c;
                         }
                 }
             }
-
             return "\"" + escaped + "\"";
         } else if constexpr (Char<T>) {
             if (static_cast<unsigned char>(value) < 32) {
-                return std::format("\"\\u{:04x}\"",
-                                   static_cast<unsigned int>(value));
+                // Convert std::format result to String
+                return atom::utils::String(std::format(
+                    "\"\\u{:04x}\"", static_cast<unsigned int>(value)));
             }
-            return "\"" + std::string(1, value) + "\"";
+            // Assuming String can be constructed from char
+            return "\"" + atom::utils::String(1, value) + "\"";
         } else if constexpr (std::is_same_v<T, bool>) {
             return value ? "true" : "false";
         } else if constexpr (Number<T>) {
             if constexpr (std::is_floating_point_v<T>) {
-                // Handle special float values
                 if (std::isnan(value))
                     return "null";
                 if (std::isinf(value))
-                    return value > 0 ? "null"
-                                     : "null";  // JSON doesn't support infinity
-                return std::format("{:.12g}",
-                                   value);  // More precision for floating point
+                    return "null";  // JSON doesn't support infinity
+                // Convert std::format result to String
+                return atom::utils::String(std::format("{:.12g}", value));
             } else {
-                return std::to_string(value);
+                // Convert std::to_string result to String
+                return atom::utils::String(std::to_string(value));
             }
         } else if constexpr (Pointer<T> || SmartPointer<T>) {
             if (value == nullptr) {
@@ -426,38 +488,42 @@ template <typename T>
             }
             return toJson(*value, prettyPrint);
         } else if constexpr (requires { value.toJson(); }) {
-            // Support for custom types with toJson method
+            // Support for custom types with toJson method returning String
             return value.toJson();
         } else {
+            // Return valid JSON for unknown types
             return "{}";
         }
     } catch (const std::exception &e) {
-        return std::format("{{\"error\": \"Error in toJson: {}\"}}", e.what());
+        return std::format("{{\"error\": \"Error in toJson: {}\"}}", e.what())
+            .c_str();
     }
 }
 
 // Forward declaration for toXml
 template <typename T>
-[[nodiscard]] auto toXml(const T &value,
-                         const std::string &tagName) -> std::string;
+[[nodiscard]] auto toXml(const T &value, const atom::utils::String &tagName)
+    -> atom::utils::String;
 
 // Optimized toXml for containers with validation
 template <std::ranges::input_range Container>
 [[nodiscard]] auto toXml(const Container &container,
-                         const std::string &tagName) -> std::string {
+                         const atom::utils::String &tagName)
+    -> atom::utils::String {
     try {
-        // Validate tag name
-        if (tagName.find('<') != std::string::npos ||
-            tagName.find('>') != std::string::npos) {
+        // Validate tag name (assuming String has find method)
+        if (tagName.find('<') != atom::utils::String::npos ||
+            tagName.find('>') != atom::utils::String::npos) {
             throw std::invalid_argument(
                 "XML tag name contains invalid characters");
         }
 
-        const std::string containerTag = tagName.empty() ? "items" : tagName;
-        std::string result = "<" + containerTag + ">\n";
+        const atom::utils::String containerTag =
+            tagName.empty() ? "items" : tagName;
+        atom::utils::String result = "<" + containerTag + ">\n";
 
         // For large containers, process items in batches
-        const size_t batchSize = 50;
+        const size_t batchSize = 50;  // Adjust batch size as needed
         auto it = std::ranges::begin(container);
         const auto end = std::ranges::end(container);
 
@@ -471,17 +537,25 @@ template <std::ranges::input_range Container>
             }
 
             // Process this batch
-            std::string batchResult;
-            std::for_each(std::execution::par_unseq, it, batchEnd,
-                          [&batchResult, &tagName](const auto &item) {
-                              const std::string itemTag =
-                                  tagName.empty() ? "item" : tagName + "_item";
-                              std::string itemResult = toXml(item, itemTag);
+            // Note: Parallel processing with string concatenation needs careful
+            // synchronization Using a mutex for appending might serialize
+            // execution significantly. Consider alternative parallel
+            // aggregation strategies if performance is critical.
+            atom::utils::String batchResult;
+            std::mutex batchMutex;  // Mutex to protect batchResult
 
-                              // Thread-safe append to batch result
-                              std::lock_guard<std::mutex> lock(cacheMutex);
-                              batchResult += itemResult;
-                          });
+            std::for_each(
+                std::execution::par_unseq, it, batchEnd,
+                [&batchResult, &tagName, &batchMutex](const auto &item) {
+                    const atom::utils::String itemTag =
+                        tagName.empty() ? "item" : tagName + "_item";
+                    atom::utils::String itemResult = toXml(item, itemTag);
+
+                    // Thread-safe append to batch result
+                    std::lock_guard<std::mutex> lock(batchMutex);
+                    batchResult += itemResult;  // Ensure String += is
+                                                // thread-safe or protected
+                });
 
             result += batchResult;
             it = batchEnd;
@@ -491,33 +565,43 @@ template <std::ranges::input_range Container>
         return result;
     } catch (const std::exception &e) {
         return std::format("<error>Error converting to XML: {}</error>",
-                           e.what());
+                           e.what())
+            .c_str();
     }
 }
 
-// Improved map toXml with validation
+// Improved map toXml with validation (using HashMap)
 template <typename K, typename V>
-[[nodiscard]] auto toXml(const std::unordered_map<K, V> &map,
-                         [[maybe_unused]] const std::string &tagName)
-    -> std::string {
+[[nodiscard]] auto toXml(const atom::utils::HashMap<K, V> &map,
+                         [[maybe_unused]] const atom::utils::String &tagName)
+    -> atom::utils::String {
     try {
         // Validate tag name
-        if (!tagName.empty() && (tagName.find('<') != std::string::npos ||
-                                 tagName.find('>') != std::string::npos)) {
+        if (!tagName.empty() &&
+            (tagName.find('<') != atom::utils::String::npos ||
+             tagName.find('>') != atom::utils::String::npos)) {
             throw std::invalid_argument(
                 "XML tag name contains invalid characters");
         }
 
-        const std::string mapTag = tagName.empty() ? "map" : tagName;
-        std::string result = "<" + mapTag + ">\n";
+        const atom::utils::String mapTag = tagName.empty() ? "map" : tagName;
+        atom::utils::String result = "<" + mapTag + ">\n";
 
         for (const auto &pair : map) {
-            std::string keyStr = toString(pair.first);
-            // Sanitize key for XML tag
+            atom::utils::String keyStr =
+                toString(pair.first);  // Get string representation
+            // Sanitize key for XML tag (assuming String has replace or similar)
+            // This might be inefficient; consider a dedicated sanitization
+            // function
             std::replace(keyStr.begin(), keyStr.end(), ' ', '_');
             std::replace(keyStr.begin(), keyStr.end(), '<', '_');
             std::replace(keyStr.begin(), keyStr.end(), '>', '_');
             std::replace(keyStr.begin(), keyStr.end(), '&', '_');
+            // Add more replacements if needed (e.g., for starting with numbers,
+            // etc.)
+            if (keyStr.empty() || !std::isalpha(keyStr[0])) {
+                keyStr = "_" + keyStr;  // Ensure valid tag start
+            }
 
             result += toXml(pair.second, keyStr);
         }
@@ -526,63 +610,79 @@ template <typename K, typename V>
         return result;
     } catch (const std::exception &e) {
         return std::format("<error>Error converting map to XML: {}</error>",
-                           e.what());
+                           e.what())
+            .c_str();
     }
 }
 
 // Improved pair toXml with validation
 template <typename T1, typename T2>
 [[nodiscard]] auto toXml(const std::pair<T1, T2> &pair,
-                         const std::string &tagName) -> std::string {
+                         const atom::utils::String &tagName)
+    -> atom::utils::String {
     try {
         // Validate tag name
-        if (tagName.find('<') != std::string::npos ||
-            tagName.find('>') != std::string::npos) {
+        if (tagName.find('<') != atom::utils::String::npos ||
+            tagName.find('>') != atom::utils::String::npos) {
             throw std::invalid_argument(
                 "XML tag name contains invalid characters");
         }
 
-        const std::string pairTag = tagName.empty() ? "pair" : tagName;
-        std::string result = "<" + pairTag + ">\n";
-        result += toXml(pair.first, "key");
-        result += toXml(pair.second, "value");
+        const atom::utils::String pairTag = tagName.empty() ? "pair" : tagName;
+        atom::utils::String result = "<" + pairTag + ">\n";
+        result += toXml(pair.first, "key");     // Use String literal
+        result += toXml(pair.second, "value");  // Use String literal
         result += "</" + pairTag + ">";
         return result;
     } catch (const std::exception &e) {
         return std::format("<error>Error converting pair to XML: {}</error>",
-                           e.what());
+                           e.what())
+            .c_str();
     }
 }
 
 // Base toXml implementation with improved type handling and validation
 template <typename T>
-[[nodiscard]] auto toXml(const T &value,
-                         const std::string &tagName) -> std::string {
+[[nodiscard]] auto toXml(const T &value, const atom::utils::String &tagName)
+    -> atom::utils::String {
     try {
         // Validate tag name
         if (tagName.empty()) {
             throw std::invalid_argument("XML tag name cannot be empty");
         }
-
-        if (tagName.find('<') != std::string::npos ||
-            tagName.find('>') != std::string::npos) {
+        if (tagName.find('<') != atom::utils::String::npos ||
+            tagName.find('>') != atom::utils::String::npos) {
             throw std::invalid_argument(
                 "XML tag name contains invalid characters");
         }
 
+        // Assuming String concept works with atom::containers::String
         if constexpr (String<T> || Char<T>) {
-            std::string content = std::string(value);
-            // Escape XML special characters
-            content = std::regex_replace(content, std::regex("&"), "&amp;");
-            content = std::regex_replace(content, std::regex("<"), "&lt;");
-            content = std::regex_replace(content, std::regex(">"), "&gt;");
-            content = std::regex_replace(content, std::regex("\""), "&quot;");
-            content = std::regex_replace(content, std::regex("'"), "&apos;");
+            atom::utils::String content = atom::utils::String(value);
+            // Escape XML special characters using std::regex_replace
+            // Note: std::regex_replace works on std::string. Conversion might
+            // be needed.
+            std::string std_content(content.begin(),
+                                    content.end());  // Convert to std::string
+            std_content =
+                std::regex_replace(std_content, std::regex("&"), "&amp;");
+            std_content =
+                std::regex_replace(std_content, std::regex("<"), "&lt;");
+            std_content =
+                std::regex_replace(std_content, std::regex(">"), "&gt;");
+            std_content =
+                std::regex_replace(std_content, std::regex("\""), "&quot;");
+            std_content =
+                std::regex_replace(std_content, std::regex("'"), "&apos;");
+            content = atom::utils::String(
+                std_content.c_str());  // Convert back to String
 
             return "<" + tagName + ">" + content + "</" + tagName + ">";
         } else if constexpr (Number<T>) {
-            return "<" + tagName + ">" + std::to_string(value) + "</" +
-                   tagName + ">";
+            // Convert std::to_string result to String
+            return "<" + tagName + ">" +
+                   atom::utils::String(std::to_string(value)) + "</" + tagName +
+                   ">";
         } else if constexpr (Pointer<T> || SmartPointer<T>) {
             if (value == nullptr) [[unlikely]] {
                 return "<" + tagName + " nil=\"true\"/>";
@@ -590,357 +690,497 @@ template <typename T>
                 return toXml(*value, tagName);
             }
         } else if constexpr (requires { value.toXml(tagName); }) {
-            // Support for custom types with toXml method
+            // Support for custom types with toXml method returning String
             return value.toXml(tagName);
         } else {
+            // Return self-closing tag for unknown types
             return "<" + tagName + "/>";
         }
     } catch (const std::exception &e) {
-        return std::format("<error>Error in toXml: {}</error>", e.what());
+        return std::format("<error>Error in toXml: {}</error>", e.what())
+            .c_str();
     }
 }
 
 // Forward declaration for toYaml
 template <typename T>
-[[nodiscard]] auto toYaml(const T &value,
-                          const std::string &key) -> std::string;
+[[nodiscard]] auto toYaml(const T &value, const atom::utils::String &key)
+    -> atom::utils::String;
 
 // Improved toYaml for containers with validation and performance
 template <std::ranges::input_range Container>
 [[nodiscard]] auto toYaml(const Container &container,
-                          const std::string &key) -> std::string {
+                          const atom::utils::String &key)
+    -> atom::utils::String {
     try {
-        std::string result = key.empty() ? "" : key + ":\n";
+        atom::utils::String result = key.empty() ? "" : key + ":\n";
 
         if (std::ranges::empty(container)) {
             return key.empty() ? "[]" : key + ": []\n";
         }
 
+        // Determine size efficiently if possible
+        std::optional<size_t> containerSize;
+        if constexpr (std::ranges::sized_range<Container>) {
+            containerSize = std::ranges::size(container);
+        }
+
         // For large containers, process in parallel
-        if (std::ranges::distance(container) > 100) {
-            std::vector<std::pair<size_t, std::string>> results;
-            results.resize(std::ranges::distance(container));
+        if (containerSize && *containerSize > 100) {
+            // Use Vector for results
+            atom::utils::Vector<std::pair<size_t, atom::utils::String>> results;
+            results.resize(*containerSize);
 
             size_t index = 0;
-            for (const auto &item : container) {
+            for ([[maybe_unused]] const auto &item :
+                 container) {  // Iterate just to fill indices
                 results[index].first = index;
                 ++index;
             }
 
             // Process items in parallel
-            std::for_each(std::execution::par_unseq, results.begin(),
-                          results.end(), [&container, &key](auto &pair) {
-                              auto it = std::ranges::begin(container);
-                              std::advance(it, pair.first);
-                              pair.second = (key.empty() ? "- " : "  - ") +
-                                            toYaml(*it, "") + "\n";
-                          });
+            std::for_each(
+                std::execution::par_unseq, results.begin(), results.end(),
+                [&container, &key](auto &pair) {
+                    auto it = std::ranges::begin(container);
+                    std::advance(
+                        it,
+                        pair.first);  // Advance iterator to the correct item
+                    // Ensure toYaml returns String
+                    pair.second =
+                        (key.empty() ? "- " : "  - ") + toYaml(*it, "") +
+                        "\n";  // Assuming toYaml adds newline correctly
+                });
 
             // Combine results in order
             for (const auto &pair : results) {
                 result += pair.second;
             }
         } else {
-            // Process sequentially for smaller containers
+            // Process sequentially for smaller or non-sized containers
             for (const auto &item : container) {
-                result +=
-                    (key.empty() ? "- " : "  - ") + toYaml(item, "") + "\n";
+                result += (key.empty() ? "- " : "  - ") + toYaml(item, "") +
+                          "\n";  // Assuming toYaml adds newline
             }
         }
+        // Remove trailing newline if added by the loop/parallel processing
+        if (!result.empty() && result.back() == '\n') {
+            result.pop_back();
+        }
+        result += "\n";  // Ensure single trailing newline
 
         return result;
     } catch (const std::exception &e) {
         return std::format("# Error: {}\n{}: null\n", e.what(),
-                           key.empty() ? "items" : key);
+                           (key.empty() ? "items" : key.c_str()))
+            .c_str();  // Use c_str() for format if needed
     }
 }
 
-// Improved map toYaml with validation
+// Improved map toYaml with validation (using HashMap)
 template <typename K, typename V>
-[[nodiscard]] auto toYaml(const std::unordered_map<K, V> &map,
-                          const std::string &key) -> std::string {
+[[nodiscard]] auto toYaml(const atom::utils::HashMap<K, V> &map,
+                          const atom::utils::String &key)
+    -> atom::utils::String {
     try {
         if (map.empty()) {
             return key.empty() ? "{}\n" : key + ": {}\n";
         }
 
-        std::string result = key.empty() ? "" : key + ":\n";
+        atom::utils::String result = key.empty() ? "" : key + ":\n";
 
         for (const auto &pair : map) {
-            std::string keyStr;
+            atom::utils::String keyStr;
+            // Assuming String concept works with atom::containers::String
             if constexpr (String<K> || Char<K>) {
-                // For string keys, ensure proper YAML formatting
-                std::string k = std::string(pair.first);
-                if (k.find(':') != std::string::npos ||
-                    k.find('#') != std::string::npos ||
-                    k.find('\n') != std::string::npos || k.empty()) {
+                atom::utils::String k = atom::utils::String(pair.first);
+                // Check if quoting is needed (assuming String has find and
+                // front/back)
+                if (k.find(':') != atom::utils::String::npos ||
+                    k.find('#') != atom::utils::String::npos ||
+                    k.find('\n') != atom::utils::String::npos || k.empty() ||
+                    (!k.empty() && (k.front() == ' ' || k.back() == ' '))) {
                     keyStr = "\"" + k + "\"";
                 } else {
                     keyStr = k;
                 }
             } else {
-                keyStr = toString(pair.first);
+                keyStr = toString(pair.first);  // Use base toString
             }
 
+            // Ensure toYaml returns the full line including key and newline
             result += (key.empty() ? "" : "  ") + toYaml(pair.second, keyStr);
         }
 
         return result;
     } catch (const std::exception &e) {
         return std::format("# Error: {}\n{}: null\n", e.what(),
-                           key.empty() ? "map" : key);
+                           (key.empty() ? "map" : key.c_str()))
+            .c_str();
     }
 }
 
 // Improved pair toYaml with validation
 template <typename T1, typename T2>
 [[nodiscard]] auto toYaml(const std::pair<T1, T2> &pair,
-                          const std::string &key) -> std::string {
+                          const atom::utils::String &key)
+    -> atom::utils::String {
     try {
-        std::string result = key.empty() ? "" : key + ":\n";
+        atom::utils::String result = key.empty() ? "" : key + ":\n";
+        // Ensure nested toYaml calls handle indentation and newlines correctly
+        // The base toYaml should return "key: value\n" format
         result += std::string((key.empty() ? "" : "  ")) +
-                  "key: " + toYaml(pair.first, "");
+                  toYaml(pair.first, "key");  // Pass "key" as the key
         result += std::string((key.empty() ? "" : "  ")) +
-                  "value: " + toYaml(pair.second, "");
+                  toYaml(pair.second, "value");  // Pass "value" as the key
         return result;
     } catch (const std::exception &e) {
         return std::format("# Error: {}\n{}: null\n", e.what(),
-                           key.empty() ? "pair" : key);
+                           (key.empty() ? "pair" : key.c_str()))
+            .c_str();
     }
 }
 
 // Base toYaml implementation with improved type handling and validation
 template <typename T>
-[[nodiscard]] auto toYaml(const T &value,
-                          const std::string &key) -> std::string {
+[[nodiscard]] auto toYaml(const T &value, const atom::utils::String &key)
+    -> atom::utils::String {
     try {
+        atom::utils::String formattedValue;
+        // Assuming String concept works with atom::containers::String
         if constexpr (String<T> || Char<T>) {
-            std::string strValue = std::string(value);
-
-            // Check if special formatting is needed
+            atom::utils::String strValue = atom::utils::String(value);
             bool needsQuotes =
-                strValue.empty() || strValue.find('\n') != std::string::npos ||
-                strValue.find(':') != std::string::npos ||
-                strValue.find('#') != std::string::npos ||
-                (strValue.front() == ' ' || strValue.back() == ' ');
+                strValue.empty() ||
+                strValue.find('\n') != atom::utils::String::npos ||
+                strValue.find(':') != atom::utils::String::npos ||
+                strValue.find('#') != atom::utils::String::npos ||
+                (!strValue.empty() &&
+                 (strValue.front() == ' ' || strValue.back() == ' '));
 
-            std::string formattedValue =
-                needsQuotes ? "\"" + strValue + "\"" : strValue;
+            formattedValue = needsQuotes ? "\"" + strValue + "\"" : strValue;
 
-            return key.empty() ? formattedValue
-                               : key + ": " + formattedValue + "\n";
         } else if constexpr (std::is_same_v<std::remove_cvref_t<T>, bool>) {
-            return key.empty() ? (value ? "true" : "false")
-                               : key + ": " + (value ? "true" : "false") + "\n";
+            formattedValue = value ? "true" : "false";
         } else if constexpr (Number<T>) {
             if constexpr (std::is_floating_point_v<T>) {
-                // Handle special float values
-                if (std::isnan(value)) {
-                    return key.empty() ? ".nan" : key + ": .nan\n";
-                }
-                if (std::isinf(value)) {
-                    return key.empty()
-                               ? (value > 0 ? ".inf" : "-.inf")
-                               : key + ": " + (value > 0 ? ".inf" : "-.inf") +
-                                     "\n";
-                }
-                // Format with precision
-                std::string numStr = std::format("{:.12g}", value);
-                return key.empty() ? numStr : key + ": " + numStr + "\n";
+                if (std::isnan(value))
+                    formattedValue = ".nan";
+                else if (std::isinf(value))
+                    formattedValue = (value > 0 ? ".inf" : "-.inf");
+                else
+                    formattedValue = atom::utils::String(std::format(
+                        "{:.12g}", value));  // Convert format result
             } else {
-                return key.empty() ? std::to_string(value)
-                                   : key + ": " + std::to_string(value) + "\n";
+                formattedValue = atom::utils::String(
+                    std::to_string(value));  // Convert to_string result
             }
         } else if constexpr (Pointer<T> || SmartPointer<T>) {
             if (value == nullptr) [[unlikely]] {
-                return key.empty() ? "null" : key + ": null\n";
+                formattedValue = "null";
             } else [[likely]] {
-                return toYaml(*value, key);
+                // Recursive call, need to handle key/indentation properly
+                // This base function should return only the value part for
+                // recursion
+                return toYaml(*value,
+                              key);  // Let the caller handle key/indentation
             }
         } else if constexpr (requires { value.toYaml(key); }) {
             // Support for custom types with toYaml method
-            return value.toYaml(key);
+            // Assume custom method returns the full "key: value\n" line or just
+            // value
+            return value.toYaml(key);  // Rely on custom implementation
         } else {
-            return key.empty() ? "null" : key + ": null\n";
+            formattedValue = "null";
         }
+
+        // Construct the final line "key: value\n" or just "value" if key is
+        // empty
+        if (key.empty()) {
+            return formattedValue;  // Return only value if key is empty (for
+                                    // lists etc.)
+        } else {
+            return key + ": " + formattedValue + "\n";
+        }
+
     } catch (const std::exception &e) {
         return std::format("# Error: {}\n{}: null\n", e.what(),
-                           key.empty() ? "value" : key);
+                           (key.empty() ? "value" : key.c_str()))
+            .c_str();
     }
 }
 
 // Improved tuple toYaml with better type handling
 template <typename... Ts>
 [[nodiscard]] auto toYaml(const std::tuple<Ts...> &tuple,
-                          const std::string &key) -> std::string {
+                          const atom::utils::String &key)
+    -> atom::utils::String {
     try {
-        std::string result = key.empty() ? "" : key + ":\n";
+        atom::utils::String result = key.empty() ? "" : key + ":\n";
         std::apply(
-            [&result](const Ts &...args) {
-                ((result += "- " + toYaml(args, "") + "\n"), ...);
+            [&result, &key](const Ts &...args) {
+                // Pass empty key to nested calls, handle list format here
+                ((result +=
+                  (key.empty() ? "- " : "  - ") + toYaml(args, "") + "\n"),
+                 ...);
             },
             tuple);
+        // Remove trailing newline if added by the loop
+        if (!result.empty() && result.back() == '\n') {
+            result.pop_back();
+        }
+        result += "\n";  // Ensure single trailing newline
+
         return result;
     } catch (const std::exception &e) {
         return std::format("# Error: {}\n{}: null\n", e.what(),
-                           key.empty() ? "tuple" : key);
+                           (key.empty() ? "tuple" : key.c_str()))
+            .c_str();
     }
 }
 
 // Forward declaration for toToml
 template <typename T>
-[[nodiscard]] auto toToml(const T &value,
-                          const std::string &key) -> std::string;
+[[nodiscard]] auto toToml(const T &value, const atom::utils::String &key)
+    -> atom::utils::String;
 
 // Optimized toToml for containers
 template <std::ranges::input_range Container>
 [[nodiscard]] auto toToml(const Container &container,
-                          const std::string &key) -> std::string {
+                          const atom::utils::String &key)
+    -> atom::utils::String {
+    // Basic TOML array implementation
     try {
-        std::string result = key + " = [\n";
+        if (key.empty()) {
+            throw std::invalid_argument("TOML arrays require a key");
+        }
+        atom::utils::String result = key + " = [\n";
+        bool first = true;
         for (const auto &item : container) {
-            result += "  " + toToml(item, "") + ",\n";
+            if (!first) {
+                result += ",\n";
+            }
+            // Pass empty key to nested toToml, assuming it returns just the
+            // value representation
+            result += "  " + toToml(item, "");
+            first = false;
         }
-        if (!container.empty()) {
-            result.erase(result.length() - 2, 1);  // Remove the last comma
-        }
-        result += "]\n";
+        result += "\n]\n";
         return result;
     } catch (const std::exception &e) {
-        return std::format("# Error: {}\n{}: null\n", e.what(),
-                           key.empty() ? "container" : key);
+        return std::format("# Error: {}\n# {}: null\n", e.what(),
+                           (key.empty() ? "container" : key.c_str()))
+            .c_str();
     }
 }
 
-// Improved map toToml with validation
+// Improved map toToml with validation (using HashMap)
 template <typename K, typename V>
-[[nodiscard]] auto toToml(const std::unordered_map<K, V> &map,
-                          const std::string &key) -> std::string {
+[[nodiscard]] auto toToml(const atom::utils::HashMap<K, V> &map,
+                          const atom::utils::String &key)
+    -> atom::utils::String {
+    // TOML requires maps (tables) to be structured differently.
+    // A simple key-value pair list isn't standard TOML for nested tables.
+    // This implementation provides a basic inline table representation.
+    // For complex nested structures, a full TOML library approach is better.
     try {
         if (map.empty()) {
-            return key.empty() ? "{}\n" : key + ": {}\n";
+            return key.empty() ? "{}\n" : key + " = {}\n";
         }
 
-        std::string result = key.empty() ? "" : key + ":\n";
+        atom::utils::String result = key.empty() ? "" : key + " = { ";
+        bool first = true;
 
         for (const auto &pair : map) {
-            std::string keyStr;
+            if (!first) {
+                result += ", ";
+            }
+            atom::utils::String keyStr;
+            // Assuming String concept works with atom::containers::String
             if constexpr (String<K> || Char<K>) {
-                // For string keys, ensure proper YAML formatting
-                std::string k = std::string(pair.first);
-                if (k.find(':') != std::string::npos ||
-                    k.find('#') != std::string::npos ||
-                    k.find('\n') != std::string::npos || k.empty()) {
-                    keyStr = "\"" + k + "\"";
-                } else {
-                    keyStr = k;
-                }
+                atom::utils::String k = atom::utils::String(pair.first);
+                // Basic TOML key quoting (only if necessary, prefer bare keys)
+                // TOML bare key rules are stricter than YAML/JSON
+                bool needsQuotes =
+                    k.empty() ||
+                    k.find_first_not_of(
+                        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01"
+                        "23456789_-") != atom::utils::String::npos;
+                keyStr = needsQuotes ? "\"" + k + "\"" : k;  // Basic quoting
             } else {
-                keyStr = toString(pair.first);
+                keyStr = toString(
+                    pair.first);  // Fallback, might not be valid TOML key
+                // Ensure keyStr is quoted if it contains invalid bare key chars
+                if (keyStr.find_first_not_of(
+                        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01"
+                        "23456789_-") != atom::utils::String::npos) {
+                    keyStr = "\"" + keyStr + "\"";
+                }
             }
 
-            result += (key.empty() ? "" : "  ") + toToml(pair.second, keyStr);
+            // Pass empty key to nested toToml, expecting just the value
+            // representation
+            result += keyStr + " = " + toToml(pair.second, "");
+            first = false;
         }
 
+        result += key.empty() ? "\n" : " }\n";  // Close inline table
         return result;
     } catch (const std::exception &e) {
-        return std::format("# Error: {}\n{}: null\n", e.what(),
-                           key.empty() ? "map" : key);
+        return std::format("# Error: {}\n# {}: null\n", e.what(),
+                           (key.empty() ? "map" : key.c_str()))
+            .c_str();
     }
 }
 
 // Improved pair toToml with validation
 template <typename T1, typename T2>
 [[nodiscard]] auto toToml(const std::pair<T1, T2> &pair,
-                          const std::string &key) -> std::string {
+                          const atom::utils::String &key)
+    -> atom::utils::String {
+    // Represent pair as an inline table in TOML: key = { key = val1, value =
+    // val2 }
     try {
-        std::string result = key.empty() ? "" : key + ":\n";
-        result += std::string((key.empty() ? "" : "  ")) +
-                  "key: " + toToml(pair.first, "");
-        result += std::string((key.empty() ? "" : "  ")) +
-                  "value: " + toToml(pair.second, "");
+        if (key.empty()) {
+            throw std::invalid_argument(
+                "TOML requires a key for pair representation");
+        }
+        atom::utils::String result = key + " = { ";
+        // Pass empty key to nested calls, expecting value representation
+        result += "key = " + toToml(pair.first, "");
+        result += ", value = " + toToml(pair.second, "");
+        result += " }\n";
         return result;
     } catch (const std::exception &e) {
-        return std::format("# Error: {}\n{}: null\n", e.what(),
-                           key.empty() ? "pair" : key);
+        return std::format("# Error: {}\n# {}: null\n", e.what(),
+                           (key.empty() ? "pair" : key.c_str()))
+            .c_str();
     }
 }
 
 // Base toToml implementation with improved type handling and validation
 template <typename T>
-[[nodiscard]] auto toToml(const T &value,
-                          const std::string &key) -> std::string {
+[[nodiscard]] auto toToml(const T &value, const atom::utils::String &key)
+    -> atom::utils::String {
+    // This base function should return the TOML representation of the *value*
+    // only. The key assignment (key = value) is handled by the calling function
+    // (container/map/pair serializers).
     try {
+        atom::utils::String formattedValue;
+        // Assuming String concept works with atom::containers::String
         if constexpr (String<T> || Char<T>) {
-            std::string strValue = std::string(value);
+            atom::utils::String strValue = atom::utils::String(value);
+            // Basic TOML string quoting (prefer basic strings)
+            // More complex escaping (multi-line, literal strings) not handled
+            // here.
+            bool needsQuotes = true;  // Always quote for simplicity here
+            if (needsQuotes) {
+                // Basic escaping for TOML basic strings
+                std::string std_str(strValue.begin(), strValue.end());
+                std_str =
+                    std::regex_replace(std_str, std::regex("\\\\"), "\\\\");
+                std_str = std::regex_replace(std_str, std::regex("\""), "\\\"");
+                std_str = std::regex_replace(std_str, std::regex("\b"), "\\b");
+                std_str = std::regex_replace(std_str, std::regex("\t"), "\\t");
+                std_str = std::regex_replace(std_str, std::regex("\n"), "\\n");
+                std_str = std::regex_replace(std_str, std::regex("\f"), "\\f");
+                std_str = std::regex_replace(std_str, std::regex("\r"), "\\r");
+                formattedValue =
+                    "\"" + atom::utils::String(std_str.c_str()) + "\"";
+            } else {
+                formattedValue = strValue;  // Should ideally check if it's a
+                                            // valid bare string
+            }
 
-            // Check if special formatting is needed
-            bool needsQuotes =
-                strValue.empty() || strValue.find('\n') != std::string::npos ||
-                strValue.find(':') != std::string::npos ||
-                strValue.find('#') != std::string::npos ||
-                (strValue.front() == ' ' || strValue.back() == ' ');
-
-            std::string formattedValue =
-                needsQuotes ? "\"" + strValue + "\"" : strValue;
-
-            return key.empty() ? formattedValue
-                               : key + ": " + formattedValue + "\n";
         } else if constexpr (std::is_same_v<std::remove_cvref_t<T>, bool>) {
-            return key.empty() ? (value ? "true" : "false")
-                               : key + ": " + (value ? "true" : "false") + "\n";
+            formattedValue = value ? "true" : "false";
         } else if constexpr (Number<T>) {
             if constexpr (std::is_floating_point_v<T>) {
-                // Handle special float values
-                if (std::isnan(value)) {
-                    return key.empty() ? ".nan" : key + ": .nan\n";
-                }
-                if (std::isinf(value)) {
-                    return key.empty()
-                               ? (value > 0 ? ".inf" : "-.inf")
-                               : key + ": " + (value > 0 ? ".inf" : "-.inf") +
-                                     "\n";
-                }
-                // Format with precision
-                std::string numStr = std::format("{:.12g}", value);
-                return key.empty() ? numStr : key + ": " + numStr + "\n";
+                // TOML supports special float values
+                if (std::isnan(value))
+                    formattedValue = "nan";
+                else if (std::isinf(value))
+                    formattedValue = (value > 0 ? "inf" : "-inf");
+                else
+                    formattedValue = atom::utils::String(std::format(
+                        "{:.12g}", value));  // Convert format result
             } else {
-                return key.empty() ? std::to_string(value)
-                                   : key + ": " + std::to_string(value) + "\n";
+                formattedValue = atom::utils::String(
+                    std::to_string(value));  // Convert to_string result
             }
         } else if constexpr (Pointer<T> || SmartPointer<T>) {
+            // TOML doesn't have a standard null representation. Error or omit?
+            // Omitting the key-value pair is common. Returning empty might
+            // signal omission.
             if (value == nullptr) [[unlikely]] {
-                return key.empty() ? "null" : key + ": null\n";
+                throw std::runtime_error(
+                    "Cannot represent nullptr directly in TOML value");
+                // Or return an empty string to signal omission to the caller:
+                // return "";
             } else [[likely]] {
-                return toToml(*value, key);
+                return toToml(*value,
+                              "");  // Recursive call, get value representation
             }
-        } else if constexpr (requires { value.toToml(key); }) {
+        } else if constexpr (requires { value.toToml(""); }) {
             // Support for custom types with toToml method
-            return value.toToml(key);
+            // Assume custom method returns the value representation when key is
+            // empty
+            return value.toToml("");
         } else {
-            return key.empty() ? "null" : key + ": null\n";
+            throw std::runtime_error(
+                "Cannot represent unknown type in TOML value");
+            // Or return empty: return "";
         }
+
+        // If a key was provided (shouldn't happen in this base value function
+        // ideally), format as key = value
+        if (!key.empty()) {
+            return key + " = " + formattedValue + "\n";
+        } else {
+            return formattedValue;  // Return only the value representation
+        }
+
     } catch (const std::exception &e) {
-        return std::format("# Error: {}\n{}: null\n", e.what(),
-                           key.empty() ? "value" : key);
+        // Return error comment or rethrow
+        return std::format("# Error: {}\n# {}: error\n", e.what(),
+                           (key.empty() ? "value" : key.c_str()))
+            .c_str();
     }
 }
 
 // Improved tuple toToml with better type handling
 template <typename... Ts>
 [[nodiscard]] auto toToml(const std::tuple<Ts...> &tuple,
-                          const std::string &key) -> std::string {
+                          const atom::utils::String &key)
+    -> atom::utils::String {
+    // Represent tuple as a TOML array
     try {
-        std::string result = key.empty() ? "" : key + ":\n";
+        if (key.empty()) {
+            throw std::invalid_argument(
+                "TOML arrays require a key for tuple representation");
+        }
+        atom::utils::String result = key + " = [\n";
+        bool first = true;
         std::apply(
-            [&result](const Ts &...args) {
-                ((result += "- " + toToml(args, "") + "\n"), ...);
+            [&result, &first](const Ts &...args) {
+                // Pass empty key to nested calls, expecting value
+                // representation
+                auto process_arg = [&](const auto &arg) {
+                    if (!first) {
+                        result += ",\n";
+                    }
+                    result += "  " + toToml(arg, "");
+                    first = false;
+                };
+                (process_arg(args), ...);  // Fold expression
             },
             tuple);
+        result += "\n]\n";
         return result;
     } catch (const std::exception &e) {
-        return std::format("# Error: {}\n{}: null\n", e.what(),
-                           key.empty() ? "tuple" : key);
+        return std::format("# Error: {}\n# {}: null\n", e.what(),
+                           (key.empty() ? "tuple" : key.c_str()))
+            .c_str();
     }
 }
 

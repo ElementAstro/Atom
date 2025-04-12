@@ -17,180 +17,191 @@ Description: Compressor using ZLib and MiniZip-ng
 
 #include <future>
 #include <optional>
-#include <string>
-#include <string_view>
-#include <vector>
+#include <string_view>  // Keep for function parameters
+// #include <string> // Replaced by high_performance.hpp
+// #include <vector> // Replaced by high_performance.hpp
+#include <ranges>  // For concepts
+#include <thread>  // For hardware_concurrency
+
+#include "atom/containers/high_performance.hpp"  // Include high performance containers
 
 namespace atom::io {
 
-// 前向声明压缩选项结构体
+// Use type aliases from high_performance.hpp
+using atom::containers::String;
+template <typename T>
+using Vector = atom::containers::Vector<T>;
+
+// Forward declaration of compression options struct
 struct CompressionOptions;
 struct DecompressionOptions;
 
-// 压缩状态和结果结构
+// Compression status and result struct
 struct CompressionResult {
     bool success{false};
-    std::string error_message;
+    String error_message;  // Use String
     size_t original_size{0};
     size_t compressed_size{0};
     double compression_ratio{0.0};
 };
 
-// 基本的压缩选项
+// Basic compression options
 struct CompressionOptions {
-    int level{-1};             // 压缩级别 (-1 = 默认, 0-9)
-    size_t chunk_size{16384};  // 处理块大小
-    bool use_parallel{true};   // 是否使用并行处理
-    size_t num_threads{std::thread::hardware_concurrency()};  // 并行线程数
-    bool create_backup{false};  // 是否创建备份
-    std::string password;       // 加密密码(可选)
+    int level{-1};             // Compression level (-1 = default, 0-9)
+    size_t chunk_size{16384};  // Processing chunk size
+    bool use_parallel{true};   // Whether to use parallel processing
+    size_t num_threads{
+        std::thread::hardware_concurrency()};  // Number of parallel threads
+    bool create_backup{false};                 // Whether to create a backup
+    String password;  // Encryption password (optional) - Use String
 };
 
-// 基本的解压选项
+// Basic decompression options
 struct DecompressionOptions {
-    size_t chunk_size{16384};  // 处理块大小
-    bool use_parallel{true};   // 是否使用并行处理
-    size_t num_threads{std::thread::hardware_concurrency()};  // 并行线程数
-    bool verify_checksum{true};  // 是否验证校验和
-    std::string password;        // 解密密码(如果需要)
+    size_t chunk_size{16384};  // Processing chunk size
+    bool use_parallel{true};   // Whether to use parallel processing
+    size_t num_threads{
+        std::thread::hardware_concurrency()};  // Number of parallel threads
+    bool verify_checksum{true};                // Whether to verify checksum
+    String password;  // Decryption password (if needed) - Use String
 };
 
 /**
- * @brief 压缩单个文件
- * @param file_path 要压缩的文件路径
- * @param output_folder 输出文件夹
- * @param options 压缩选项
- * @return 压缩结果
+ * @brief Compresses a single file
+ * @param file_path Path of the file to compress
+ * @param output_folder Output folder
+ * @param options Compression options
+ * @return Compression result
  */
 CompressionResult compressFile(
     std::string_view file_path, std::string_view output_folder,
     const CompressionOptions& options = CompressionOptions{});
 
 /**
- * @brief 解压单个文件
- * @param file_path 要解压的文件路径
- * @param output_folder 输出文件夹
- * @param options 解压选项
- * @return 操作结果
+ * @brief Decompresses a single file
+ * @param file_path Path of the file to decompress
+ * @param output_folder Output folder
+ * @param options Decompression options
+ * @return Operation result
  */
 CompressionResult decompressFile(
     std::string_view file_path, std::string_view output_folder,
     const DecompressionOptions& options = DecompressionOptions{});
 
 /**
- * @brief 压缩整个文件夹
- * @param folder_path 要压缩的文件夹路径
- * @param output_path 输出文件路径
- * @param options 压缩选项
- * @return 压缩结果
+ * @brief Compresses an entire folder
+ * @param folder_path Path of the folder to compress
+ * @param output_path Output file path
+ * @param options Compression options
+ * @return Compression result
  */
 CompressionResult compressFolder(
     std::string_view folder_path, std::string_view output_path,
     const CompressionOptions& options = CompressionOptions{});
 
 /**
- * @brief 解压ZIP文件
- * @param zip_path ZIP文件路径
- * @param output_folder 输出文件夹
- * @param options 解压选项
- * @return 操作结果
+ * @brief Extracts a ZIP file
+ * @param zip_path Path of the ZIP file
+ * @param output_folder Output folder
+ * @param options Decompression options
+ * @return Operation result
  */
 CompressionResult extractZip(
     std::string_view zip_path, std::string_view output_folder,
     const DecompressionOptions& options = DecompressionOptions{});
 
 /**
- * @brief 创建ZIP文件
- * @param source_path 源文件夹或文件路径
- * @param zip_path 目标ZIP文件路径
- * @param options 压缩选项
- * @return 操作结果
+ * @brief Creates a ZIP file
+ * @param source_path Source folder or file path
+ * @param zip_path Target ZIP file path
+ * @param options Compression options
+ * @return Operation result
  */
 CompressionResult createZip(
     std::string_view source_path, std::string_view zip_path,
     const CompressionOptions& options = CompressionOptions{});
 
-// ZIP文件信息结构
+// ZIP file information struct
 struct ZipFileInfo {
-    std::string name;
+    String name;  // Use String
     size_t size;
     size_t compressed_size;
-    std::string datetime;
+    String datetime;  // Use String
     bool is_directory;
     bool is_encrypted;
     uint32_t crc;
 };
 
 /**
- * @brief 列出ZIP文件中的内容
- * @param zip_path ZIP文件路径
- * @return 文件信息列表
+ * @brief Lists the contents of a ZIP file
+ * @param zip_path Path of the ZIP file
+ * @return List of file information - Use Vector
  */
-std::vector<ZipFileInfo> listZipContents(std::string_view zip_path);
+Vector<ZipFileInfo> listZipContents(std::string_view zip_path);
 
 /**
- * @brief 检查文件在ZIP中是否存在
- * @param zip_path ZIP文件路径
- * @param file_path 要检查的文件路径
- * @return 是否存在
+ * @brief Checks if a file exists in the ZIP archive
+ * @param zip_path Path of the ZIP file
+ * @param file_path Path of the file to check
+ * @return True if the file exists, false otherwise
  */
 bool fileExistsInZip(std::string_view zip_path, std::string_view file_path);
 
 /**
- * @brief 从ZIP文件移除指定文件
- * @param zip_path ZIP文件路径
- * @param file_path 要移除的文件路径
- * @return 操作结果
+ * @brief Removes a specified file from the ZIP archive
+ * @param zip_path Path of the ZIP file
+ * @param file_path Path of the file to remove
+ * @return Operation result
  */
 CompressionResult removeFromZip(std::string_view zip_path,
                                 std::string_view file_path);
 
 /**
- * @brief 获取ZIP文件大小
- * @param zip_path ZIP文件路径
- * @return 文件大小(字节)
+ * @brief Gets the size of the ZIP file
+ * @param zip_path Path of the ZIP file
+ * @return File size in bytes
  */
 std::optional<size_t> getZipSize(std::string_view zip_path);
 
 /**
- * @brief 分片压缩大文件
- * @param file_path 要压缩的文件路径
- * @param slice_size 分片大小(字节)
- * @param options 压缩选项
- * @return 操作结果
+ * @brief Compresses a large file in slices
+ * @param file_path Path of the file to compress
+ * @param slice_size Size of each slice in bytes
+ * @param options Compression options
+ * @return Operation result
  */
 CompressionResult compressFileInSlices(
     std::string_view file_path, size_t slice_size,
     const CompressionOptions& options = CompressionOptions{});
 
 /**
- * @brief 合并压缩分片
- * @param slice_files 分片文件路径列表
- * @param output_path 输出文件路径
- * @param options 解压选项
- * @return 操作结果
+ * @brief Merges compressed slices
+ * @param slice_files List of slice file paths - Use Vector<String>
+ * @param output_path Output file path
+ * @param options Decompression options
+ * @return Operation result
  */
 CompressionResult mergeCompressedSlices(
-    const std::vector<std::string>& slice_files, std::string_view output_path,
+    const Vector<String>& slice_files, std::string_view output_path,
     const DecompressionOptions& options = DecompressionOptions{});
 
 /**
- * @brief 异步处理多个文件
- * @param file_paths 文件路径列表
- * @param options 压缩选项
- * @return future
+ * @brief Processes multiple files asynchronously
+ * @param file_paths List of file paths - Use Vector<String>
+ * @param options Compression options
+ * @return future - Use Vector<CompressionResult>
  */
-std::future<std::vector<CompressionResult>> processFilesAsync(
-    const std::vector<std::string>& file_paths,
+std::future<Vector<CompressionResult>> processFilesAsync(
+    const Vector<String>& file_paths,
     const CompressionOptions& options = CompressionOptions{});
 
 /**
- * @brief 创建文件备份(可选压缩)
- * @param source_path 源文件路径
- * @param backup_path 备份文件路径
- * @param compress 是否压缩
- * @param options 压缩选项
- * @return 操作结果
+ * @brief Creates a file backup (optional compression)
+ * @param source_path Source file path
+ * @param backup_path Backup file path
+ * @param compress Whether to compress the backup
+ * @param options Compression options
+ * @return Operation result
  */
 CompressionResult createBackup(
     std::string_view source_path, std::string_view backup_path,
@@ -198,12 +209,12 @@ CompressionResult createBackup(
     const CompressionOptions& options = CompressionOptions{});
 
 /**
- * @brief 从备份恢复文件
- * @param backup_path 备份文件路径
- * @param restore_path 恢复文件路径
- * @param compressed 备份是否压缩
- * @param options 解压选项
- * @return 操作结果
+ * @brief Restores a file from backup
+ * @param backup_path Backup file path
+ * @param restore_path Restore file path
+ * @param compressed Whether the backup is compressed
+ * @param options Decompression options
+ * @return Operation result
  */
 CompressionResult restoreFromBackup(
     std::string_view backup_path, std::string_view restore_path,
@@ -211,39 +222,40 @@ CompressionResult restoreFromBackup(
     const DecompressionOptions& options = DecompressionOptions{});
 
 /**
- * @brief 通用数据压缩模板
- * @tparam T 输入数据类型
- * @param data 要压缩的数据
- * @param options 压缩选项
- * @return 压缩结果和数据
+ * @brief Generic data compression template
+ * @tparam T Input data type
+ * @param data Data to compress
+ * @param options Compression options
+ * @return Compression result and compressed data - Use Vector<unsigned char>
  */
 template <typename T>
     requires std::ranges::contiguous_range<T>
-std::pair<CompressionResult, std::vector<unsigned char>> compressData(
+std::pair<CompressionResult, Vector<unsigned char>> compressData(
     const T& data, const CompressionOptions& options = CompressionOptions{});
 
 /**
- * @brief 通用数据解压模板
- * @tparam T 输入数据类型
- * @param compressed_data 压缩数据
- * @param expected_size 预期解压大小(可选)
- * @param options 解压选项
- * @return 解压结果和数据
+ * @brief Generic data decompression template
+ * @tparam T Input data type
+ * @param compressed_data Compressed data
+ * @param expected_size Expected decompressed size (optional)
+ * @param options Decompression options
+ * @return Decompression result and decompressed data - Use Vector<unsigned
+ * char>
  */
 template <typename T>
     requires std::ranges::contiguous_range<T>
-std::pair<CompressionResult, std::vector<unsigned char>> decompressData(
+std::pair<CompressionResult, Vector<unsigned char>> decompressData(
     const T& compressed_data, size_t expected_size = 0,
     const DecompressionOptions& options = DecompressionOptions{});
 
-// 显式模板实例化声明
-extern template std::pair<CompressionResult, std::vector<unsigned char>>
-compressData<std::vector<unsigned char>>(const std::vector<unsigned char>&,
-                                         const CompressionOptions&);
+// Explicit template instantiation declarations - Use Vector<unsigned char>
+extern template std::pair<CompressionResult, Vector<unsigned char>>
+compressData<Vector<unsigned char>>(const Vector<unsigned char>&,
+                                    const CompressionOptions&);
 
-extern template std::pair<CompressionResult, std::vector<unsigned char>>
-decompressData<std::vector<unsigned char>>(const std::vector<unsigned char>&,
-                                           size_t, const DecompressionOptions&);
+extern template std::pair<CompressionResult, Vector<unsigned char>>
+decompressData<Vector<unsigned char>>(const Vector<unsigned char>&, size_t,
+                                      const DecompressionOptions&);
 
 }  // namespace atom::io
 

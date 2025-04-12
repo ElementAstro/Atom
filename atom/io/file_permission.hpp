@@ -7,6 +7,8 @@
 #include <string>
 #include <string_view>
 
+#include "atom/containers/high_performance.hpp"
+
 namespace atom::io {
 
 // Concept for filesystem path types
@@ -31,6 +33,17 @@ std::string getFilePermissions(const std::string &filePath) noexcept;
 
 // Get self permissions string
 std::string getSelfPermissions() noexcept;
+
+/**
+ * @brief Changes the permissions of a file.
+ *
+ * @param filePath The path to the file.
+ * @param permissions The new permissions string (e.g., "rwxr-xr-x").
+ * @throws std::runtime_error if the permissions cannot be changed.
+ */
+void changeFilePermissions(
+    const std::filesystem::path &filePath,
+    const atom::containers::String &permissions);  // Use String alias
 
 }  // namespace atom::io
 

@@ -14,10 +14,12 @@
 #include <optional>
 #include <shared_mutex>
 #include <source_location>
-#include <string>
+// #include <string> // Replaced by high_performance.hpp
 #include <typeinfo>
-#include <unordered_map>
-#include <vector>
+// #include <unordered_map> // Replaced by high_performance.hpp
+// #include <vector> // Replaced by high_performance.hpp
+
+#include "atom/containers/high_performance.hpp"  // Include high performance containers
 
 // Platform-specific includes
 #ifdef _MSC_VER
@@ -33,12 +35,17 @@
 
 // Debugging support
 #if defined(ENABLE_DEBUG) || defined(ATOM_META_ENABLE_VISUALIZATION)
-#include <iostream>
+#include <iostream>  // Keep for std::cout if visualization prints directly
 #include <regex>
-#include <sstream>
+#include <sstream>  // Keep for potential string stream usage in visualization
 #endif
 
 namespace atom::meta {
+
+// Use type aliases from high_performance.hpp
+using atom::containers::HashMap;
+using atom::containers::String;
+using atom::containers::Vector;
 
 /**
  * @brief Configuration options for the ABI utilities
@@ -59,8 +66,10 @@ struct AbiConfig {
  */
 class AbiException : public std::runtime_error {
 public:
-    explicit AbiException(const std::string& message)
-        : std::runtime_error(message) {}
+    // Use String for the message internally if desired, but std::runtime_error
+    // expects const char* or std::string
+    explicit AbiException(const String& message)
+        : std::runtime_error(message.c_str()) {}
 };
 
 /**
@@ -74,7 +83,7 @@ public:
      * @return A human-readable string representation of the type
      */
     template <typename T>
-    static auto demangleType() -> std::string {
+    static auto demangleType() -> String {  // Return String
         return demangleInternal(typeid(T).name());
     }
 
@@ -85,7 +94,7 @@ public:
      * @return A human-readable string representation of the type
      */
     template <typename T>
-    static auto demangleType(const T& instance) -> std::string {
+    static auto demangleType(const T& instance) -> String {  // Return String
         return demangleInternal(typeid(instance).name());
     }
 
@@ -97,22 +106,28 @@ public:
      */
     static auto demangle(std::string_view mangled_name,
                          const std::optional<std::source_location>& location =
-                             std::nullopt) -> std::string {
+                             std::nullopt) -> String {  // Return String
         try {
-            std::string demangled = demangleInternal(mangled_name);
+            String demangled = demangleInternal(mangled_name);  // Use String
 
             if (location) {
+                // Assuming String supports operator+= and
+                // construction/conversion from std::string/char*
                 demangled += " (";
                 demangled += location->file_name();
                 demangled += ":";
-                demangled += std::to_string(location->line());
+                // std::to_string returns std::string, convert to String if
+                // necessary
+                demangled += String(std::to_string(location->line()));
                 demangled += ")";
             }
 
             return demangled;
         } catch (const std::exception& e) {
-            throw AbiException(std::string("Failed to demangle: ") +
-                               std::string(mangled_name) + " - " + e.what());
+            // Construct AbiException message using String concatenation if
+            // needed
+            throw AbiException(String("Failed to demangle: ") +
+                               String(mangled_name) + " - " + e.what());
         }
     }
 
@@ -123,10 +138,10 @@ public:
      * @return A vector of demangled names
      */
     static auto demangleMany(
-        const std::vector<std::string_view>& mangled_names,
+        const Vector<std::string_view>& mangled_names,  // Use Vector
         const std::optional<std::source_location>& location = std::nullopt)
-        -> std::vector<std::string> {
-        std::vector<std::string> demangledNames;
+        -> Vector<String> {             // Return Vector<String>
+        Vector<String> demangledNames;  // Use Vector<String>
         demangledNames.reserve(mangled_names.size());
 
         for (const auto& name : mangled_names) {
@@ -167,7 +182,8 @@ public:
      * @param demangled_name The demangled type name to visualize
      * @return A string containing the hierarchical visualization
      */
-    static auto visualize(const std::string& demangled_name) -> std::string {
+    static auto visualize(const String& demangled_name)
+        -> String {  // Param and return String
         return visualizeType(demangled_name);
     }
 
@@ -177,7 +193,7 @@ public:
      * @return A string containing the hierarchical visualization
      */
     template <typename T>
-    static auto visualizeType() -> std::string {
+    static auto visualizeType() -> String {  // Return String
         return visualize(demangleType<T>());
     }
 
@@ -187,7 +203,7 @@ public:
      * @return A string containing the hierarchical visualization
      */
     template <typename T>
-    static auto visualizeObject(const T& obj) -> std::string {
+    static auto visualizeObject(const T& obj) -> String {  // Return String
         return visualize(demangleType(obj));
     }
 #endif
@@ -199,8 +215,10 @@ public:
      */
     template <typename T>
     static constexpr bool isTemplateSpecialization() {
-        std::string_view name = demangleType<T>();
-        return name.find('<') != std::string_view::npos;
+        // Demangle and check the resulting String
+        String name = demangleType<T>();
+        // Assuming String has find method similar to std::string
+        return name.find('<') != String::npos;
     }
 
     /**
@@ -208,9 +226,10 @@ public:
      * @param demangled_name The demangled type name to check
      * @return true if the name represents a template type
      */
-    static bool isTemplateType(const std::string& demangled_name) {
-        return demangled_name.find('<') != std::string::npos &&
-               demangled_name.find('>') != std::string::npos;
+    static bool isTemplateType(const String& demangled_name) {  // Param String
+        // Assuming String has find method similar to std::string
+        return demangled_name.find('<') != String::npos &&
+               demangled_name.find('>') != String::npos;
     }
 
 private:
@@ -219,27 +238,29 @@ private:
      * @param mangled_name The mangled name to demangle
      * @return The demangled name
      */
-    static auto demangleInternal(std::string_view mangled_name) -> std::string {
+    static auto demangleInternal(std::string_view mangled_name)
+        -> String {  // Return String
+        // Convert string_view to String for cache lookup/insertion key
+        String cacheKey(mangled_name);
+
         // Check cache first
         if constexpr (AbiConfig::thread_safe_cache) {
             // With thread safety
             {
                 std::shared_lock readLock(cacheMutex_);
-                if (auto it = cache_.find(std::string(mangled_name));
-                    it != cache_.end()) {
+                if (auto it = cache_.find(cacheKey); it != cache_.end()) {
                     return it->second;
                 }
             }
         } else {
             // Without thread safety
-            if (auto it = cache_.find(std::string(mangled_name));
-                it != cache_.end()) {
+            if (auto it = cache_.find(cacheKey); it != cache_.end()) {
                 return it->second;
             }
         }
 
         // Not in cache, perform demangling
-        std::string demangled;
+        String demangled;  // Use String
 
 #ifdef _MSC_VER
         // MSVC demangling
@@ -249,14 +270,15 @@ private:
                                             UNDNAME_COMPLETE);
 
         if (length > 0) {
-            demangled = std::string(buffer.data(), length);
+            // Construct String from char buffer
+            demangled = String(buffer.data(), length);
         } else {
             DWORD error = GetLastError();
             if (error == ERROR_INSUFFICIENT_BUFFER) {
                 throw AbiException("Buffer too small for demangling");
             }
             // Fall back to the mangled name if demangling fails
-            demangled = std::string(mangled_name);
+            demangled = String(mangled_name);
         }
 #else
         // GCC/Clang demangling
@@ -266,7 +288,8 @@ private:
             std::free);
 
         if (status == 0 && demangledName) {
-            demangled = demangledName.get();
+            // Construct String from char*
+            demangled = String(demangledName.get());
         } else {
             // Provide more detailed error information
             switch (status) {
@@ -276,12 +299,12 @@ private:
                 case -2:
                     // This is common for built-in types, so we just use the
                     // mangled name
-                    demangled = std::string(mangled_name);
+                    demangled = String(mangled_name);
                     break;
                 case -3:
                     throw AbiException("Invalid mangled name");
                 default:
-                    demangled = std::string(mangled_name);
+                    demangled = String(mangled_name);
             }
         }
 #endif
@@ -293,25 +316,27 @@ private:
             if (cache_.size() >= AbiConfig::max_cache_size) {
                 // Simple strategy: clear half the cache when full
                 auto it = cache_.begin();
-                for (size_t i = 0;
-                     i < AbiConfig::max_cache_size / 2 && it != cache_.end();
-                     ++i) {
+                std::size_t count = 0;
+                const std::size_t limit = AbiConfig::max_cache_size / 2;
+                while (count < limit && it != cache_.end()) {
                     it = cache_.erase(it);
+                    ++count;
                 }
             }
-            cache_[std::string(mangled_name)] = demangled;
+            cache_[cacheKey] = demangled;  // Use cacheKey (String)
         } else {
             // Check cache size limit
             if (cache_.size() >= AbiConfig::max_cache_size) {
                 // Simple strategy: clear half the cache when full
                 auto it = cache_.begin();
-                for (size_t i = 0;
-                     i < AbiConfig::max_cache_size / 2 && it != cache_.end();
-                     ++i) {
+                std::size_t count = 0;
+                const std::size_t limit = AbiConfig::max_cache_size / 2;
+                while (count < limit && it != cache_.end()) {
                     it = cache_.erase(it);
+                    ++count;
                 }
             }
-            cache_[std::string(mangled_name)] = demangled;
+            cache_[cacheKey] = demangled;  // Use cacheKey (String)
         }
 
         return demangled;
@@ -324,57 +349,87 @@ private:
      * @param indent_level Indentation level for visualization
      * @return A string containing the hierarchical visualization
      */
-    static auto visualizeType(const std::string& type_name,
-                              int indent_level = 0) -> std::string {
-        std::string indent(indent_level * 4, ' ');  // 4 spaces per indent level
-        std::string result;
+    static auto visualizeType(const String& type_name,  // Param String
+                              int indent_level = 0)
+        -> String {  // Return String
+        String indent(indent_level * 4,
+                      ' ');  // Assuming String constructor from size and char
+        String result;       // Use String
 
-        // Regular expressions for parsing
+        // Regular expressions for parsing - std::regex works on char sequences
+        // Need to convert type_name to std::string or char* if regex doesn't
+        // accept String directly Assuming String has a .c_str() or similar
+        // method, or can be implicitly converted
+        std::string type_name_std = std::string(
+            type_name.begin(),
+            type_name.end());  // Convert String to std::string for regex
+
         static const std::regex templateRegex(R"((\w+)<(.*)>)");
-        static const std::regex functionRegex(R"($(.*)$\s*->\s*(.*))");
+        static const std::regex functionRegex(
+            R"((.*)\s*->\s*(.*))");  // Adjusted function regex
         static const std::regex ptrRegex(R"((.+)\s*\*\s*)");
         static const std::regex refRegex(R"((.+)\s*&\s*)");
         static const std::regex constRegex(R"((const\s+)(.+))");
-        static const std::regex arrayRegex(R"((.+)\s*$$
- (\d+)
- $$)");
+        static const std::regex arrayRegex(
+            R"((.+)\[(\d*)\])");  // Adjusted array regex
         static const std::regex namespaceRegex(R"((\w+)::(.+))");
         std::smatch match;
 
-        if (std::regex_match(type_name, match, templateRegex)) {
+        if (std::regex_match(type_name_std, match, templateRegex)) {
             // Template type
-            result += indent + "`-- " + match[1].str() + " [template]\n";
-            std::string params = match[2].str();
+            result += indent + "`-- " + String(match[1].str()) +
+                      " [template]\n";  // Convert submatch to String
+            String params =
+                String(match[2].str());  // Convert submatch to String
             result += visualizeTemplateParams(params, indent_level + 1);
-        } else if (std::regex_match(type_name, match, functionRegex)) {
-            // Function type
+        } else if (std::regex_match(type_name_std, match, functionRegex)) {
+            // Function type - Needs careful parsing of parameters vs return
+            // type This regex might be too simple. Assuming a basic structure
+            // for now.
             result += indent + "`-- function\n";
-            std::string params = match[1].str();
-            std::string returnType = match[2].str();
-            result += visualizeFunctionParams(params, indent_level + 1);
-            result += indent + "    `-- return: " +
-                      visualizeType(returnType, indent_level + 2)
-                          .substr((indent_level + 1) * 4);
-        } else if (std::regex_match(type_name, match, ptrRegex)) {
+            String params =
+                String(match[1].str());  // Potential parameters part
+            String returnType = String(match[2].str());  // Return type part
+            // Need a robust way to parse function signature parameters
+            // result += visualizeFunctionParams(params, indent_level + 1);
+            result += indent + "    `-- return: ";
+            result +=
+                visualizeType(returnType, indent_level + 1)
+                    .substr((indent_level + 1) * 4);  // Assuming substr works
+
+        } else if (std::regex_match(type_name_std, match, ptrRegex)) {
             // Pointer type
             result += indent + "`-- pointer to\n";
-            result += visualizeType(match[1].str(), indent_level + 1);
-        } else if (std::regex_match(type_name, match, refRegex)) {
+            result +=
+                visualizeType(String(match[1].str()),
+                              indent_level + 1);  // Convert submatch to String
+        } else if (std::regex_match(type_name_std, match, refRegex)) {
             // Reference type
             result += indent + "`-- reference to\n";
-            result += visualizeType(match[1].str(), indent_level + 1);
-        } else if (std::regex_match(type_name, match, constRegex)) {
+            result +=
+                visualizeType(String(match[1].str()),
+                              indent_level + 1);  // Convert submatch to String
+        } else if (std::regex_match(type_name_std, match, constRegex)) {
             // Const type
             result += indent + "`-- const\n";
-            result += visualizeType(match[2].str(), indent_level + 1);
-        } else if (std::regex_match(type_name, match, arrayRegex)) {
+            result +=
+                visualizeType(String(match[2].str()),
+                              indent_level + 1);  // Convert submatch to String
+        } else if (std::regex_match(type_name_std, match, arrayRegex)) {
             // Array type
-            result += indent + "`-- array [size=" + match[2].str() + "]\n";
-            result += visualizeType(match[1].str(), indent_level + 1);
-        } else if (std::regex_match(type_name, match, namespaceRegex)) {
+            String sizeStr =
+                match[2].matched ? String(match[2].str()) : String("unknown");
+            result += indent + "`-- array [size=" + sizeStr + "]\n";
+            result +=
+                visualizeType(String(match[1].str()),
+                              indent_level + 1);  // Convert submatch to String
+        } else if (std::regex_match(type_name_std, match, namespaceRegex)) {
             // Namespaced type
-            result += indent + "`-- namespace " + match[1].str() + "\n";
-            result += visualizeType(match[2].str(), indent_level + 1);
+            result += indent + "`-- namespace " + String(match[1].str()) +
+                      "\n";  // Convert submatch to String
+            result +=
+                visualizeType(String(match[2].str()),
+                              indent_level + 1);  // Convert submatch to String
         } else {
             // Simple type
             result += indent + "`-- " + type_name + "\n";
@@ -389,10 +444,11 @@ private:
      * @param indent_level Indentation level
      * @return A visualization of the template parameters
      */
-    static auto visualizeTemplateParams(const std::string& params,
-                                        int indent_level) -> std::string {
-        std::string indent(indent_level * 4, ' ');
-        std::string result;
+    static auto visualizeTemplateParams(const String& params,  // Param String
+                                        int indent_level)
+        -> String {                            // Return String
+        String indent(indent_level * 4, ' ');  // Use String
+        String result;                         // Use String
         int paramIndex = 0;
 
         size_t start = 0;
@@ -400,8 +456,9 @@ private:
         int parentheses = 0;
         bool inQuotes = false;
 
+        // Assuming String supports iteration, size(), operator[], substr
         for (size_t i = 0; i < params.size(); ++i) {
-            char c = params[i];
+            char c = params[i];  // Assuming operator[] returns char or similar
 
             // Update bracket counters
             if (c == '"' && (i == 0 || params[i - 1] != '\\')) {
@@ -421,28 +478,45 @@ private:
 
             if (c == ',' && angleBrackets == 0 && parentheses == 0 &&
                 !inQuotes) {
-                std::string prefix =
-                    (paramIndex < params.size() - 1) ? "├── " : "└── ";
-                result += indent + prefix + std::to_string(paramIndex++) + ": ";
-                std::string paramType = params.substr(start, i - start);
-                // Trim whitespace
-                paramType.erase(0, paramType.find_first_not_of(" \t\n\r\f\v"));
-                paramType.erase(paramType.find_last_not_of(" \t\n\r\f\v") + 1);
-                result += visualizeType(paramType, indent_level + 1)
-                              .substr(indent.length() + 4);
+                String prefix = String("├── ");  // Use String
+                result += indent + prefix +
+                          String(std::to_string(paramIndex++)) +
+                          ": ";  // Convert index to String
+                String paramType =
+                    params.substr(start, i - start);  // Assuming substr exists
+                // Trim whitespace (assuming String has methods similar to
+                // std::string or requires manual trim) Manual trim example
+                // (needs String methods like find_first_not_of,
+                // find_last_not_of) size_t first =
+                // paramType.find_first_not_of(" \t\n\r\f\v"); if (String::npos
+                // != first) {
+                //     size_t last = paramType.find_last_not_of(" \t\n\r\f\v");
+                //     paramType = paramType.substr(first, (last - first + 1));
+                // } else {
+                //     paramType.clear();
+                // }
+                result +=
+                    visualizeType(paramType, indent_level + 1)
+                        .substr(indent.length() + 4);  // Assuming substr exists
                 start = i + 1;
             }
         }
 
         // Add the last parameter
-        std::string prefix = "└── ";
-        result += indent + prefix + std::to_string(paramIndex) + ": ";
-        std::string paramType = params.substr(start);
-        // Trim whitespace
-        paramType.erase(0, paramType.find_first_not_of(" \t\n\r\f\v"));
-        paramType.erase(paramType.find_last_not_of(" \t\n\r\f\v") + 1);
+        String prefix = String("└── ");  // Use String
+        result += indent + prefix + String(std::to_string(paramIndex)) +
+                  ": ";                           // Convert index to String
+        String paramType = params.substr(start);  // Assuming substr exists
+        // Trim whitespace (similar to above)
+        // size_t first = paramType.find_first_not_of(" \t\n\r\f\v");
+        // if (String::npos != first) {
+        //     size_t last = paramType.find_last_not_of(" \t\n\r\f\v");
+        //     paramType = paramType.substr(first, (last - first + 1));
+        // } else {
+        //     paramType.clear();
+        // }
         result += visualizeType(paramType, indent_level + 1)
-                      .substr(indent.length() + 4);
+                      .substr(indent.length() + 4);  // Assuming substr exists
 
         return result;
     }
@@ -453,14 +527,16 @@ private:
      * @param indent_level Indentation level
      * @return A visualization of the function parameters
      */
-    static auto visualizeFunctionParams(const std::string& params,
-                                        int indent_level) -> std::string {
-        if (params.empty()) {
-            return std::string(indent_level * 4, ' ') + "    (no parameters)\n";
+    static auto visualizeFunctionParams(const String& params,  // Param String
+                                        int indent_level)
+        -> String {            // Return String
+        if (params.empty()) {  // Assuming empty() exists
+            return String(indent_level * 4, ' ') +
+                   "    (no parameters)\n";  // Use String
         }
 
-        std::string indent(indent_level * 4, ' ');
-        std::string result;
+        String indent(indent_level * 4, ' ');  // Use String
+        String result;                         // Use String
         int paramIndex = 0;
 
         size_t start = 0;
@@ -468,8 +544,9 @@ private:
         int parentheses = 0;
         bool inQuotes = false;
 
+        // Assuming String supports iteration, size(), operator[], substr
         for (size_t i = 0; i < params.size(); ++i) {
-            char c = params[i];
+            char c = params[i];  // Assuming operator[] returns char or similar
 
             // Update bracket counters
             if (c == '"' && (i == 0 || params[i - 1] != '\\')) {
@@ -489,30 +566,31 @@ private:
 
             if (c == ',' && angleBrackets == 0 && parentheses == 0 &&
                 !inQuotes) {
-                std::string prefix = (i < params.size() - 1) ? "├── " : "└── ";
+                String prefix = String("├── ");  // Use String
                 result += indent + prefix + "param " +
-                          std::to_string(paramIndex++) + ": ";
-                std::string paramType = params.substr(start, i - start);
-                // Trim whitespace
-                paramType.erase(0, paramType.find_first_not_of(" \t\n\r\f\v"));
-                paramType.erase(paramType.find_last_not_of(" \t\n\r\f\v") + 1);
-                result += visualizeType(paramType, indent_level + 1)
-                              .substr(indent.length() + 4);
+                          String(std::to_string(paramIndex++)) +
+                          ": ";  // Convert index to String
+                String paramType =
+                    params.substr(start, i - start);  // Assuming substr exists
+                // Trim whitespace (as in visualizeTemplateParams)
+                result +=
+                    visualizeType(paramType, indent_level + 1)
+                        .substr(indent.length() + 4);  // Assuming substr exists
                 start = i + 1;
             }
         }
 
         // Add the last parameter
-        if (!params.empty()) {
-            std::string prefix = "└── ";
+        if (!params.empty()) {               // Assuming empty() exists
+            String prefix = String("└── ");  // Use String
+            result += indent + prefix + "param " +
+                      String(std::to_string(paramIndex)) +
+                      ": ";                           // Convert index to String
+            String paramType = params.substr(start);  // Assuming substr exists
+            // Trim whitespace (as in visualizeTemplateParams)
             result +=
-                indent + prefix + "param " + std::to_string(paramIndex) + ": ";
-            std::string paramType = params.substr(start);
-            // Trim whitespace
-            paramType.erase(0, paramType.find_first_not_of(" \t\n\r\f\v"));
-            paramType.erase(paramType.find_last_not_of(" \t\n\r\f\v") + 1);
-            result += visualizeType(paramType, indent_level + 1)
-                          .substr(indent.length() + 4);
+                visualizeType(paramType, indent_level + 1)
+                    .substr(indent.length() + 4);  // Assuming substr exists
         }
 
         return result;
@@ -520,8 +598,9 @@ private:
 #endif
 
 private:
-    // Thread-safe cache implementation
-    static inline std::unordered_map<std::string, std::string> cache_;
+    // Thread-safe cache implementation using HashMap and String
+    static inline HashMap<String, String>
+        cache_;  // Use HashMap<String, String>
 
     // Mutex for cache access (only used when thread safety is enabled)
     static inline std::shared_mutex cacheMutex_;

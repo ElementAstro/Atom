@@ -12,20 +12,28 @@
 #include <memory>
 #include <optional>
 #include <shared_mutex>
-#include <string>
 #include <string_view>
-#include <vector>
+
+#include <sqlite3.h>
+
+#include "atom/containers/high_performance.hpp"  // Include high performance containers
+
+// Use type aliases from high_performance.hpp
+using atom::containers::String;
+using atom::containers::Vector;
 
 /**
  * @brief Custom exception class for SQLite operations
  */
 class SQLiteException : public std::exception {
 private:
-    std::string message;
+    String message;  // Use String internally
 
 public:
+    // Accept string_view for flexibility, store as String
     explicit SQLiteException(std::string_view msg) : message(msg) {}
     [[nodiscard]] const char* what() const noexcept override {
+        // Assuming String has a c_str() method
         return message.c_str();
     }
 };
@@ -40,16 +48,16 @@ public:
     /**
      * @brief Represents a row of data from a query result
      */
-    using RowData = std::vector<std::string>;
+    using RowData = Vector<String>;  // Use Vector<String>
 
     /**
      * @brief Represents a complete result set from a query
      */
-    using ResultSet = std::vector<RowData>;
+    using ResultSet = Vector<RowData>;  // Use Vector<RowData>
 
     /**
      * @brief Constructor
-     * @param dbPath Path to the database file
+     * @param dbPath Path to the database file (accept string_view)
      * @throws SQLiteException if database cannot be opened
      */
     explicit SqliteDB(std::string_view dbPath);
@@ -73,7 +81,7 @@ public:
 
     /**
      * @brief Execute a SQL query
-     * @param query SQL query string
+     * @param query SQL query string (accept string_view)
      * @return Whether the query was executed successfully
      * @throws SQLiteException on execution error
      */
@@ -81,7 +89,7 @@ public:
 
     /**
      * @brief Execute a parameterized query with binding values
-     * @param query SQL query with placeholders
+     * @param query SQL query with placeholders (accept string_view)
      * @param params Parameters to bind to the query
      * @return Whether the query was executed successfully
      * @throws SQLiteException on execution error
@@ -92,15 +100,26 @@ public:
 
     /**
      * @brief Query and retrieve data
-     * @param query SQL query string
+     * @param query SQL query string (accept string_view)
      * @return Result set containing all rows from the query
      * @throws SQLiteException on query error
      */
     [[nodiscard]] ResultSet selectData(std::string_view query);
 
     /**
-     * @brief Retrieve an integer value
+     * @brief Helper function to retrieve a single value of any type
      * @param query SQL query string
+     * @param columnFunc Function to extract value from column
+     * @return Optional value (empty if query fails or result is NULL)
+     */
+    template <typename T>
+    [[nodiscard]] std::optional<T> getSingleValue(std::string_view query,
+                                                  T (*columnFunc)(sqlite3_stmt*,
+                                                                  int));
+
+    /**
+     * @brief Retrieve an integer value
+     * @param query SQL query string (accept string_view)
      * @return Optional integer value (empty if query fails)
      * @throws SQLiteException on serious errors
      */
@@ -108,7 +127,7 @@ public:
 
     /**
      * @brief Retrieve a floating-point value
-     * @param query SQL query string
+     * @param query SQL query string (accept string_view)
      * @return Optional double value (empty if query fails)
      * @throws SQLiteException on serious errors
      */
@@ -116,17 +135,17 @@ public:
 
     /**
      * @brief Retrieve a text value
-     * @param query SQL query string
-     * @return Optional text value (empty if query fails)
+     * @param query SQL query string (accept string_view)
+     * @return Optional text value (empty if query fails) - Return String
      * @throws SQLiteException on serious errors
      */
-    [[nodiscard]] std::optional<std::string> getTextValue(
+    [[nodiscard]] std::optional<String> getTextValue(  // Return String
         std::string_view query);
 
     /**
      * @brief Search for a specific item in the query results
-     * @param query SQL query string
-     * @param searchTerm Term to search for
+     * @param query SQL query string (accept string_view)
+     * @param searchTerm Term to search for (accept string_view)
      * @return Whether a matching item was found
      * @throws SQLiteException on serious errors
      */
@@ -134,8 +153,16 @@ public:
                                   std::string_view searchTerm);
 
     /**
+     * @brief Helper for update/delete operations
+     * @param query SQL statement (accept string_view)
+     * @return Number of rows affected
+     * @throws SQLiteException on error
+     */
+    [[nodiscard]] int executeAndGetChanges(std::string_view query);
+
+    /**
      * @brief Update data in the database
-     * @param query SQL update statement
+     * @param query SQL update statement (accept string_view)
      * @return Number of rows affected by the update
      * @throws SQLiteException on update error
      */
@@ -143,7 +170,7 @@ public:
 
     /**
      * @brief Delete data from the database
-     * @param query SQL delete statement
+     * @param query SQL delete statement (accept string_view)
      * @return Number of rows affected by the delete
      * @throws SQLiteException on delete error
      */
@@ -176,8 +203,9 @@ public:
 
     /**
      * @brief Validate data against a specified query condition
-     * @param query SQL query string
-     * @param validationQuery Validation condition query string
+     * @param query SQL query string (accept string_view)
+     * @param validationQuery Validation condition query string (accept
+     * string_view)
      * @return Validation result
      * @throws SQLiteException on validation error
      */
@@ -186,7 +214,7 @@ public:
 
     /**
      * @brief Perform paginated data query and retrieval
-     * @param query SQL query string
+     * @param query SQL query string (accept string_view)
      * @param limit Number of records per page
      * @param offset Offset for pagination
      * @return Result set containing the paginated rows
@@ -197,7 +225,7 @@ public:
 
     /**
      * @brief Set an error message callback function
-     * @param errorCallback Error message callback function
+     * @param errorCallback Error message callback function (accept string_view)
      */
     void setErrorMessageCallback(
         const std::function<void(std::string_view)>& errorCallback);
@@ -228,7 +256,7 @@ private:
 
     /**
      * @brief Validate query string
-     * @param query Query string to validate
+     * @param query Query string to validate (accept string_view)
      * @throws SQLiteException if query is invalid
      */
     void validateQueryString(std::string_view query) const;

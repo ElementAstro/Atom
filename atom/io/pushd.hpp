@@ -6,12 +6,15 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
-#include <string>
 #include <system_error>
 #include <utility>
-#include <vector>
 
 #include <asio.hpp>
+#include "atom/containers/high_performance.hpp"
+
+// Use type aliases from high_performance.hpp
+using atom::containers::String;
+using atom::containers::Vector;
 
 namespace atom::io {
 
@@ -87,12 +90,25 @@ public:
                     return std::move(coro.promise().result_);
                 }
                 void await_suspend(std::coroutine_handle<> h) const {
-                    coro.resume();
-                    h.resume();
+                    // Resume the coroutine first, then the awaiting handle
+                    // This ensures the result/exception is ready before
+                    // await_resume is called
+                    auto resume_coro =
+                        coro;  // Copy handle before potential move
+                    auto resume_awaiting = h;
+                    asio::post(coro.promise().get_executor(),
+                               [resume_coro, resume_awaiting]() mutable {
+                                   resume_coro.resume();
+                                   resume_awaiting.resume();
+                               });
                 }
             };
             return Awaiter{coro_};
         }
+
+        // Helper to get executor from promise (assuming promise_type has it)
+        // Add this if needed by await_suspend logic
+        // auto get_executor() { return coro_.promise().get_executor(); }
 
     private:
         std::coroutine_handle<promise_type> coro_;
@@ -133,22 +149,23 @@ public:
     /**
      * @brief Push the current directory onto the stack and change to the
      * specified directory asynchronously.
-     * @param new_dir The directory to change to.
+     * @param new_dir The directory to change to. Must satisfy PathLike concept.
      * @param handler The completion handler to be called when the operation
      * completes.
      * @throws std::invalid_argument if the path is invalid
      */
-    void asyncPushd(const std::filesystem::path& new_dir,
+    template <PathLike P>
+    void asyncPushd(const P& new_dir,
                     const std::function<void(const std::error_code&)>& handler);
 
     /**
      * @brief Push the current directory onto the stack and change to the
      * specified directory using C++20 coroutines.
-     * @param new_dir The directory to change to.
+     * @param new_dir The directory to change to. Must satisfy PathLike concept.
      * @return A task that completes when the operation is done
      */
-    [[nodiscard]] auto pushd(const std::filesystem::path& new_dir)
-        -> Task<void>;
+    template <PathLike P>
+    [[nodiscard]] auto pushd(const P& new_dir) -> Task<void>;
 
     /**
      * @brief Pop the directory from the stack and change back to it
@@ -174,10 +191,10 @@ public:
 
     /**
      * @brief Display the current stack of directories.
-     * @return A vector of directory paths in the stack.
+     * @return A vector of directory paths in the stack. Use Vector.
      */
     [[nodiscard]] auto dirs() const noexcept
-        -> std::vector<std::filesystem::path>;
+        -> Vector<std::filesystem::path>;  // Use Vector
 
     /**
      * @brief Clear the directory stack.
@@ -220,38 +237,38 @@ public:
 
     /**
      * @brief Save the directory stack to a file asynchronously.
-     * @param filename The name of the file to save the stack to.
+     * @param filename The name of the file to save the stack to. Use String.
      * @param handler The completion handler to be called when the operation
      * completes.
      */
     void asyncSaveStackToFile(
-        const std::string& filename,
+        const String& filename,  // Use String
         const std::function<void(const std::error_code&)>& handler);
 
     /**
      * @brief Save the stack to file using C++20 coroutines
-     * @param filename The name of the file to save to
+     * @param filename The name of the file to save to. Use String.
      * @return A task that completes when the operation is done
      */
-    [[nodiscard]] auto saveStackToFile(const std::string& filename)
+    [[nodiscard]] auto saveStackToFile(const String& filename)  // Use String
         -> Task<void>;
 
     /**
      * @brief Load the directory stack from a file asynchronously.
-     * @param filename The name of the file to load the stack from.
+     * @param filename The name of the file to load the stack from. Use String.
      * @param handler The completion handler to be called when the operation
      * completes.
      */
     void asyncLoadStackFromFile(
-        const std::string& filename,
+        const String& filename,  // Use String
         const std::function<void(const std::error_code&)>& handler);
 
     /**
      * @brief Load the stack from file using C++20 coroutines
-     * @param filename The name of the file to load from
+     * @param filename The name of the file to load from. Use String.
      * @return A task that completes when the operation is done
      */
-    [[nodiscard]] auto loadStackFromFile(const std::string& filename)
+    [[nodiscard]] auto loadStackFromFile(const String& filename)  // Use String
         -> Task<void>;
 
     /**
@@ -272,7 +289,8 @@ public:
      * directory path.
      */
     void asyncGetCurrentDirectory(
-        const std::function<void(const std::filesystem::path&)>& handler) const;
+        const std::function<void(const std::filesystem::path&,
+                                 const std::error_code&)>& handler) const;
 
     /**
      * @brief Get the current directory path using C++20 coroutines
@@ -286,7 +304,6 @@ private:
         impl_;  ///< Pointer to the implementation.
 };
 
-// 在类外定义 void 特化
 template <>
 class DirectoryStack::Task<void> {
 public:
@@ -334,8 +351,20 @@ public:
                 }
             }
             void await_suspend(std::coroutine_handle<> h) const {
-                coro.resume();
-                h.resume();
+                // Resume the coroutine first, then the awaiting handle
+                auto resume_coro = coro;
+                auto resume_awaiting = h;
+                // Assuming promise_type provides get_executor() or executor is
+                // accessible Example: Post both resumes to the associated
+                // executor asio::post(coro.promise().get_executor(),
+                // [resume_coro, resume_awaiting]() mutable {
+                //     resume_coro.resume();
+                //     resume_awaiting.resume();
+                // });
+                // Simplified version if executor context is implicitly handled
+                // or not required:
+                resume_coro.resume();
+                resume_awaiting.resume();
             }
         };
         return Awaiter{coro_};
@@ -344,7 +373,6 @@ public:
 private:
     std::coroutine_handle<promise_type> coro_;
 };
-
 }  // namespace atom::io
 
 #endif  // ATOM_IO_PUSHD_HPP

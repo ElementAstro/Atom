@@ -16,9 +16,14 @@ Description: Optimized Custom Logger Manager
 #define ATOM_LOG_LOGGER_HPP
 
 #include <memory>
-#include <string>
-#include <vector>
+#include <string_view>
+
+#include "atom/containers/high_performance.hpp"
 #include "atom/macro.hpp"
+
+// Use type aliases from high_performance.hpp
+using atom::containers::String;
+using atom::containers::Vector;
 
 namespace lithium {
 
@@ -26,11 +31,11 @@ namespace lithium {
  * @brief Struct representing a log entry.
  */
 struct LogEntry {
-    std::string
+    String
         fileName;    ///< The name of the file where the log entry was recorded.
     int lineNumber;  ///< The line number in the file where the log entry was
                      ///< recorded.
-    std::string message;  ///< The log message.
+    String message;  ///< The log message.
 } ATOM_ALIGNAS(128);
 
 /**
@@ -52,20 +57,21 @@ public:
      * @brief Scans the specified folder for log files.
      * @param folderPath The path to the folder containing log files.
      */
-    void scanLogsFolder(const std::string &folderPath);
+    void scanLogsFolder(const String &folderPath);  // Use String
 
     /**
      * @brief Searches the logs for entries containing the specified keyword.
      * @param keyword The keyword to search for.
      * @return A vector of log entries containing the keyword.
      */
-    std::vector<LogEntry> searchLogs(std::string_view keyword);
+    Vector<LogEntry> searchLogs(
+        std::string_view keyword);  // Return Vector, keep string_view for input
 
     /**
      * @brief Uploads the specified log file.
      * @param filePath The path to the log file to upload.
      */
-    void uploadFile(const std::string &filePath);
+    void uploadFile(const String &filePath);  // Use String
 
     /**
      * @brief Analyzes the collected log files.

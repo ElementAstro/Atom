@@ -12,15 +12,18 @@
 #include <ranges>
 #include <shared_mutex>
 #include <span>
-#include <string>
-#include <string_view>
+// #include <string> // Replaced by high_performance.hpp
+#include <string_view>  // Keep for string_view concept and temporary views
 #include <thread>
-#include <unordered_map>
+// #include <unordered_map> // Replaced by high_performance.hpp
 #include <variant>
-#include <vector>
+// #include <vector> // Replaced by high_performance.hpp
+#include <tuple>  // Needed for std::apply
 
 #include "atom/async/pool.hpp"
-#include "atom/type/robin_hood.hpp"
+#include "atom/containers/high_performance.hpp"  // Include high performance containers
+// #include "atom/type/robin_hood.hpp" // Seems unused, consider removing if
+// confirmed
 
 #ifdef __cpp_lib_simd
 #include <simd>
@@ -41,6 +44,13 @@
 #include "atom/type/noncopyable.hpp"
 
 namespace atom::utils {
+
+// Use type aliases from high_performance.hpp
+using atom::containers::String;
+template <typename K, typename V>
+using HashMap = atom::containers::HashMap<K, V>;
+template <typename T>
+using Vector = atom::containers::Vector<T>;
 
 /**
  * @brief Concept for valid case key types that can be used with StringSwitch
@@ -80,11 +90,12 @@ public:
     template <typename... RetTypes>
     using CustomReturnType = std::variant<std::monostate, RetTypes...>;
 
-    using ReturnType = CustomReturnType<int, std::string>;
+    // Use String from high_performance.hpp in the default return types
+    using ReturnType = CustomReturnType<int, String>;
     using Func = std::function<ReturnType(Args...)>;
 
     // 返回类型特征
-    using DefaultReturnTypes = std::tuple<int, std::string>;
+    using DefaultReturnTypes = std::tuple<int, String>;
 
     /**
      * @brief Type alias for the default function.
@@ -108,7 +119,8 @@ public:
      */
     template <CaseKeyType KeyType, SwitchCallable<Args...> CallableType>
     void registerCase(KeyType&& str, CallableType&& func) {
-        std::string key{std::forward<KeyType>(str)};
+        // Construct String from the input key type
+        String key{std::string_view(std::forward<KeyType>(str))};
         if (key.empty()) {
             throw std::invalid_argument("Empty key is not allowed");
         }
@@ -130,7 +142,8 @@ public:
      */
     template <CaseKeyType KeyType>
     bool unregisterCase(KeyType&& str) {
-        std::string key{std::forward<KeyType>(str)};
+        // Construct String from the input key type
+        String key{std::string_view(std::forward<KeyType>(str))};
 
         if constexpr (ThreadSafe) {
             std::unique_lock lock(mutex_);
@@ -147,8 +160,11 @@ public:
         if constexpr (ThreadSafe) {
             std::unique_lock lock(mutex_);
             cases_.clear();
+            // Also clear cache when clearing cases
+            clearCache();
         } else {
             cases_.clear();
+            clearCache();
         }
     }
 
@@ -163,14 +179,19 @@ public:
     template <CaseKeyType KeyType>
     auto match(KeyType&& str, Args... args) -> std::optional<ReturnType> {
         try {
-            std::string_view key{std::forward<KeyType>(str)};
+            // Use std::string_view for initial lookup efficiency
+            std::string_view keyView{std::forward<KeyType>(str)};
 
             if constexpr (ThreadSafe) {
                 std::shared_lock lock(mutex_);
+                // No lock needed for matchImpl as it handles cache locking
+                // internally
             }
-            return matchImpl(key, args...);
+            // Pass string_view to matchImpl
+            return matchImpl(keyView, args...);
         } catch (const std::exception& e) {
             // Log the exception or handle it appropriately
+            metrics_.errorCount.fetch_add(1, std::memory_order_relaxed);
             return std::nullopt;
         }
     }
@@ -193,10 +214,10 @@ public:
     /**
      * @brief Get a vector of all registered cases.
      *
-     * @return std::vector<std::string> A vector containing all registered
+     * @return Vector<String> A vector containing all registered
      * string keys.
      */
-    ATOM_NODISCARD auto getCases() const -> std::vector<std::string> {
+    ATOM_NODISCARD auto getCases() const -> Vector<String> {
         if constexpr (ThreadSafe) {
             std::shared_lock lock(mutex_);
             return getCasesImpl();
@@ -211,19 +232,21 @@ public:
      * @param initList An initializer list of pairs containing string keys and
      * functions.
      */
-    StringSwitch(std::initializer_list<std::pair<std::string, Func>> initList) {
+    // Use String in initializer list
+    StringSwitch(std::initializer_list<std::pair<String, Func>> initList) {
         try {
             for (auto&& [str, func] : initList) {
                 if (str.empty()) {
                     throw std::invalid_argument(
                         "Empty key is not allowed in initializer");
                 }
+                // No need to construct String again, it's already String
                 registerCase(str, std::move(func));
             }
         } catch (const std::exception& e) {
             // Clean up any registered cases and rethrow
             clearCases();
-            throw;
+            throw;  // Rethrow the original exception
         }
     }
 
@@ -240,16 +263,19 @@ public:
     auto matchWithSpan(KeyType&& str, std::span<const std::tuple<Args...>> args)
         -> std::optional<ReturnType> {
         try {
-            std::string_view key{std::forward<KeyType>(str)};
+            // Use std::string_view for initial lookup efficiency
+            std::string_view keyView{std::forward<KeyType>(str)};
 
             if constexpr (ThreadSafe) {
                 std::shared_lock lock(mutex_);
-                return matchWithSpanImpl(key, args);
-            } else {
-                return matchWithSpanImpl(key, args);
+                // No lock needed for matchWithSpanImpl as it handles cache
+                // locking internally
             }
+            // Pass string_view to matchWithSpanImpl
+            return matchWithSpanImpl(keyView, args);
         } catch (const std::exception& e) {
             // Log the exception or handle it appropriately
+            metrics_.errorCount.fetch_add(1, std::memory_order_relaxed);
             return std::nullopt;
         }
     }
@@ -259,53 +285,59 @@ public:
      *
      * @param keys Range of keys to match
      * @param args Arguments to pass to each matched function
-     * @return std::vector<std::optional<ReturnType>> Results for each key
+     * @return Vector<std::optional<ReturnType>> Results for each key
      */
     template <std::ranges::range KeyRange>
         requires std::convertible_to<std::ranges::range_value_t<KeyRange>,
                                      std::string_view>
     auto matchParallel(const KeyRange& keys, Args... args)
-        -> std::vector<std::optional<ReturnType>> {
+        -> Vector<std::optional<ReturnType>> {
         auto keyCount = std::ranges::distance(keys);
-        std::vector<std::optional<ReturnType>> results;
+        Vector<std::optional<ReturnType>> results;
         results.reserve(keyCount);
 
         // 使用自适应线程池大小
-        const size_t threadCount =
-            std::min(static_cast<size_t>(std::thread::hardware_concurrency()),
-                     static_cast<size_t>(keyCount));
+        const size_t threadCount = std::min(
+            {static_cast<size_t>(std::thread::hardware_concurrency()),
+             static_cast<size_t>(keyCount)});  // Consider pool max threads
 
         // Create local copies of necessary data to avoid race conditions
-        std::unordered_map<std::string, Func> cases_copy;
+        HashMap<String, Func> cases_copy;
         DefaultFunc defaultFunc_copy;
 
         {
+            // Use shared lock for reading cases_ and defaultFunc_
             std::shared_lock lock(mutex_);
             cases_copy = cases_;
             defaultFunc_copy = defaultFunc_;
         }
 
-        std::vector<std::future<std::optional<ReturnType>>> futures;
+        Vector<std::future<std::optional<ReturnType>>> futures;
         futures.reserve(keyCount);
 
         // 创建线程池进行任务分配
         async::ThreadPool pool(threadCount);
 
         // 使用线程池并行处理任务
-        for (const auto& key : keys) {
-            futures.push_back(
-                pool.enqueue([cases_copy, defaultFunc_copy, key, args...]() {
-                    std::string_view keyView{key};
+        for (const auto& key_like : keys) {
+            // Capture key_like by value for the lambda
+            futures.push_back(pool.enqueue(
+                [&cases_copy, &defaultFunc_copy, key_like, args...]() {
+                    // Convert key_like to String inside the thread task
+                    String key{std::string_view(key_like)};
                     try {
-                        if (cases_copy.contains(std::string{keyView})) {
-                            return std::optional<ReturnType>{std::invoke(
-                                cases_copy.at(std::string{keyView}), args...)};
+                        // Use the copied map
+                        if (cases_copy.contains(key)) {
+                            return std::optional<ReturnType>{
+                                std::invoke(cases_copy.at(key), args...)};
                         } else if (defaultFunc_copy) {
+                            // Use the copied default function
                             return std::optional<ReturnType>{
                                 std::invoke(*defaultFunc_copy, args...)};
                         }
                     } catch (...) {
-                        // Suppress exceptions inside thread
+                        // Suppress exceptions inside thread, maybe log?
+                        // Consider adding error tracking per future if needed
                     }
                     return std::optional<ReturnType>{std::nullopt};
                 }));
@@ -327,13 +359,14 @@ public:
      */
     template <CaseKeyType KeyType>
     bool hasCase(KeyType&& str) const {
-        std::string_view key{std::forward<KeyType>(str)};
+        // Construct String for lookup
+        String key{std::string_view(std::forward<KeyType>(str))};
 
         if constexpr (ThreadSafe) {
             std::shared_lock lock(mutex_);
-            return cases_.contains(std::string{key});
+            return cases_.contains(key);
         } else {
-            return cases_.contains(std::string{key});
+            return cases_.contains(key);
         }
     }
 
@@ -341,36 +374,78 @@ public:
      * @brief 性能监控结构体
      */
     struct Stats {
-        size_t totalCalls{0};
-        size_t cacheHits{0};
-        size_t cacheMisses{0};
-        double hitRatio{0.0};
-        double avgResponseTime{0.0};
-        size_t errorCount{0};
-        size_t totalCases{0};
+        std::atomic<size_t> totalCalls{
+            0};  // Use atomic for thread-safe reading if needed elsewhere
+        std::atomic<size_t> cacheHits{0};
+        std::atomic<size_t> cacheMisses{0};
+        double hitRatio{0.0};  // Calculated, not atomic
+        std::atomic<double> avgResponseTime{
+            0.0};  // Use atomic double if available/needed, otherwise handle
+                   // carefully
+        std::atomic<size_t> errorCount{0};
+        size_t totalCases{0};  // Read under lock, not atomic
+
+        // Provide a method to get non-atomic values safely
+        auto getSnapshot() const {
+            struct Snapshot {
+                size_t totalCalls;
+                size_t cacheHits;
+                size_t cacheMisses;
+                double hitRatio;
+                double avgResponseTime;
+                size_t errorCount;
+                size_t totalCases;
+            };
+            Snapshot s;
+            s.totalCalls = totalCalls.load(std::memory_order_relaxed);
+            s.cacheHits = cacheHits.load(std::memory_order_relaxed);
+            s.cacheMisses = cacheMisses.load(std::memory_order_relaxed);
+            s.hitRatio = (s.totalCalls > 0)
+                             ? static_cast<double>(s.cacheHits) / s.totalCalls
+                             : 0.0;
+            // For atomic double, load directly. If not atomic, needs careful
+            // handling or locking. Assuming metrics_.avgResponseTime is
+            // atomic<double> or similar.
+            s.avgResponseTime = avgResponseTime.load(std::memory_order_relaxed);
+            s.errorCount = errorCount.load(std::memory_order_relaxed);
+            s.totalCases = totalCases;  // Already read under lock in getStats
+            return s;
+        }
     };
 
     /**
      * @brief 获取性能统计信息
      */
     ATOM_NODISCARD auto getStats() const -> Stats {
-        Stats stats{};
+        Stats stats{};  // Create non-atomic struct
 
-        const auto& m = metrics_;  // 避免多次成员访问
-        stats.totalCalls = m.totalCalls.load(std::memory_order_relaxed);
-        stats.cacheHits = m.cacheHits.load(std::memory_order_relaxed);
-        stats.cacheMisses = m.cacheMisses.load(std::memory_order_relaxed);
-        stats.hitRatio =
-            stats.totalCalls > 0
-                ? static_cast<double>(stats.cacheHits) / stats.totalCalls
-                : 0.0;
-        stats.avgResponseTime =
-            m.avgResponseTime.load(std::memory_order_relaxed);
-        stats.errorCount = m.errorCount.load(std::memory_order_relaxed);
+        // Load atomic values into the non-atomic struct
+        stats.totalCalls.store(
+            metrics_.totalCalls.load(std::memory_order_relaxed),
+            std::memory_order_relaxed);
+        stats.cacheHits.store(
+            metrics_.cacheHits.load(std::memory_order_relaxed),
+            std::memory_order_relaxed);
+        stats.cacheMisses.store(
+            metrics_.cacheMisses.load(std::memory_order_relaxed),
+            std::memory_order_relaxed);
+        stats.avgResponseTime.store(
+            metrics_.avgResponseTime.load(std::memory_order_relaxed),
+            std::memory_order_relaxed);
+        stats.errorCount.store(
+            metrics_.errorCount.load(std::memory_order_relaxed),
+            std::memory_order_relaxed);
 
+        // Calculate hit ratio based on loaded values
+        size_t total = stats.totalCalls.load(std::memory_order_relaxed);
+        stats.hitRatio = (total > 0) ? static_cast<double>(stats.cacheHits.load(
+                                           std::memory_order_relaxed)) /
+                                           total
+                                     : 0.0;
+
+        // Read totalCases under lock
         if constexpr (ThreadSafe) {
             std::shared_lock lock(mutex_);
-            stats.totalCases = cases_.size();
             stats.totalCases = cases_.size();
         } else {
             stats.totalCases = cases_.size();
@@ -403,11 +478,15 @@ public:
     }
 
 private:
+    // Internal Metrics struct using atomics
     struct Metrics {
         std::atomic<size_t> totalCalls{0};
         std::atomic<size_t> cacheHits{0};
         std::atomic<size_t> cacheMisses{0};
         std::atomic<size_t> errorCount{0};
+        // std::atomic<double> is C++20, use custom implementation or lock if
+        // needed for pre-C++20 Assuming std::atomic<double> is available or a
+        // suitable replacement exists
         std::atomic<double> avgResponseTime{0.0};
 
         void reset() noexcept {
@@ -418,16 +497,26 @@ private:
             avgResponseTime.store(0.0, std::memory_order_relaxed);
         }
 
+        // Exponential Moving Average for response time
         void updateResponseTime(double newTime) noexcept {
-            auto current = avgResponseTime.load(std::memory_order_relaxed);
-            auto count = totalCalls.load(std::memory_order_relaxed);
-            if (count > 1) {
-                static constexpr double alpha = 0.1;
-                avgResponseTime.store((1.0 - alpha) * current + alpha * newTime,
-                                      std::memory_order_relaxed);
-            } else {
-                avgResponseTime.store(newTime, std::memory_order_relaxed);
-            }
+            auto currentAvg = avgResponseTime.load(std::memory_order_relaxed);
+            // Use fetch_add to safely increment count and get previous value
+            auto count = totalCalls.fetch_add(
+                0, std::memory_order_relaxed);  // Read current count
+
+            // Use compare-exchange loop for robust atomic update of double
+            double newAvg;
+            do {
+                if (count > 1) {
+                    // Simple EMA calculation
+                    static constexpr double alpha = 0.1;  // Smoothing factor
+                    newAvg = (1.0 - alpha) * currentAvg + alpha * newTime;
+                } else {
+                    newAvg = newTime;  // First measurement
+                }
+            } while (!avgResponseTime.compare_exchange_weak(
+                currentAvg, newAvg, std::memory_order_relaxed,
+                std::memory_order_relaxed));
         }
     };
 
@@ -435,190 +524,212 @@ private:
 
 private:
     template <typename CallableType>
-    void registerCaseImpl(const std::string& key, CallableType&& func) {
+    // Accept String by const reference
+    void registerCaseImpl(const String& key, CallableType&& func) {
         if (cases_.contains(key)) {
-            THROW_OBJ_ALREADY_EXIST("Case already registered: " + key);
+            // Use String in exception message
+            THROW_OBJ_ALREADY_EXIST("Case already registered: " + String(key));
         }
+        // Emplace with the String key
         cases_.emplace(key, std::forward<CallableType>(func));
     }
 
-    bool unregisterCaseImpl(const std::string& key) {
-        return cases_.erase(key) > 0;
-    }
+    // Accept String by const reference
+    bool unregisterCaseImpl(const String& key) { return cases_.erase(key) > 0; }
 
-    auto matchImpl(std::string_view key, Args... args)
+    // Accept std::string_view for lookup efficiency
+    auto matchImpl(std::string_view keyView, Args... args)
         -> std::optional<ReturnType> {
-        std::string keyStr{key};
-
         const auto startTime = std::chrono::steady_clock::now();
-
-        // 更新性能计数
         metrics_.totalCalls.fetch_add(1, std::memory_order_relaxed);
-        if (auto cachedResult = checkCache(keyStr)) {
+
+        // Check cache using string_view
+        if (auto cachedResult = checkCache(keyView)) {
             metrics_.cacheHits.fetch_add(1, std::memory_order_relaxed);
             try {
                 auto result = std::invoke(*cachedResult, args...);
-                metrics_.updateResponseTime(
+                // Calculate duration and update response time
+                auto duration =
                     std::chrono::duration<double>(
                         std::chrono::steady_clock::now() - startTime)
-                        .count());
+                        .count();
+                metrics_.updateResponseTime(duration);
                 return result;
             } catch (...) {
-                // 缓存调用失败，继续常规查找
                 metrics_.errorCount.fetch_add(1, std::memory_order_relaxed);
+                // Fall through to regular lookup if cache call fails
             }
         }
+
         metrics_.cacheMisses.fetch_add(1, std::memory_order_relaxed);
 
-        // 常规查找
-        if (cases_.contains(keyStr)) {
-            const auto& func = cases_.at(keyStr);
-            updateCache(keyStr, func);  // 更新缓存
-            auto result = std::invoke(func, args...);
-            metrics_.updateResponseTime(
-                std::chrono::duration<double>(std::chrono::steady_clock::now() -
-                                              startTime)
-                    .count());
-            return result;
+        // Regular lookup requires constructing String
+        String keyStr{keyView};
+        auto it = cases_.find(keyStr);
+        if (it != cases_.end()) {
+            const auto& func = it->second;
+            updateCache(keyStr, func);  // Update cache with String key
+            try {
+                auto result = std::invoke(func, args...);
+                // Calculate duration and update response time
+                auto duration =
+                    std::chrono::duration<double>(
+                        std::chrono::steady_clock::now() - startTime)
+                        .count();
+                metrics_.updateResponseTime(duration);
+                return result;
+            } catch (...) {
+                metrics_.errorCount.fetch_add(1, std::memory_order_relaxed);
+                // Fall through to default if case function throws
+            }
         }
 
+        // Try default function
         if (defaultFunc_) {
             try {
                 auto result = std::invoke(*defaultFunc_, args...);
-                metrics_.updateResponseTime(
+                // Calculate duration and update response time
+                auto duration =
                     std::chrono::duration<double>(
                         std::chrono::steady_clock::now() - startTime)
-                        .count());
+                        .count();
+                metrics_.updateResponseTime(duration);
                 return result;
             } catch (...) {
-                // 记录异常并更新计数
                 metrics_.errorCount.fetch_add(1, std::memory_order_relaxed);
-                return std::nullopt;
+                return std::nullopt;  // Default function failed
             }
         }
 
-        return std::nullopt;
+        return std::nullopt;  // No match and no default (or default failed)
     }
 
-    // 优化的缓存查找
-    std::optional<Func> checkCache(const std::string& key) const {
-        if constexpr (ThreadSafe) {
-            std::shared_lock lock(cacheMutex_);
-            for (const auto& entry : cache_) {
-                if (entry.first == key) {
-                    return entry.second;
-                }
-            }
-        } else {
-            for (const auto& entry : cache_) {
-                if (entry.first == key) {
-                    return entry.second;
-                }
+    // Optimized cache lookup using string_view
+    std::optional<Func> checkCache(std::string_view key) const {
+        // Use shared lock for reading cache
+        std::shared_lock lock(cacheMutex_);
+        // Iterate through the cache array
+        for (const auto& entry : cache_) {
+            // Compare string_view directly with cached String
+            // Assuming String is comparable with std::string_view
+            if (entry.first == key) {
+                return entry.second;  // Return function if found
             }
         }
-        return std::nullopt;
+        return std::nullopt;  // Not found in cache
     }
 
-    // 缓存更新策略
-    void updateCache(const std::string& key, const Func& func) {
+    // Cache update strategy (LRU-like via simple round-robin index)
+    // Accept String by const reference
+    void updateCache(const String& key, const Func& func) {
+        // Use unique lock for writing to cache
+        std::unique_lock lock(cacheMutex_);
+        // Overwrite the entry at the current index
+        cache_[cacheIndex_] = {key, func};
+        // Move to the next index, wrapping around
+        cacheIndex_ = (cacheIndex_ + 1) % CACHE_SIZE;
+    }
+
+    // Clear the cache (called when cases are cleared)
+    void clearCache() {
         if constexpr (ThreadSafe) {
             std::unique_lock lock(cacheMutex_);
-            cache_[cacheIndex_] = {key, func};
-            cacheIndex_ = (cacheIndex_ + 1) % CACHE_SIZE;
+            // Reset cache entries (optional, depending on desired behavior)
+            for (auto& entry : cache_) {
+                entry =
+                    {};  // Reset pair to default (empty string, default Func)
+            }
+            cacheIndex_ = 0;
         } else {
-            cache_[cacheIndex_] = {key, func};
-            cacheIndex_ = (cacheIndex_ + 1) % CACHE_SIZE;
+            for (auto& entry : cache_) {
+                entry = {};
+            }
+            cacheIndex_ = 0;
         }
     }
 
-    auto matchWithSpanImpl(std::string_view key,
+    // Accept std::string_view for lookup efficiency
+    auto matchWithSpanImpl(std::string_view keyView,
                            std::span<const std::tuple<Args...>> args)
         -> std::optional<ReturnType> {
-        std::string keyStr{key};
-        if (cases_.contains(keyStr)) {
+        // Construct String only if needed for map lookup
+        String keyStr{keyView};
+        auto it = cases_.find(keyStr);
+        if (it != cases_.end()) {
             try {
+                // Apply the first tuple in the span to the function
                 return std::apply(
                     [&](const auto&... tuple_args) {
-                        return std::invoke(cases_.at(keyStr), tuple_args...);
+                        return std::invoke(it->second, tuple_args...);
                     },
                     args[0]);
             } catch (...) {
-                if (defaultFunc_) {
-                    try {
-                        return std::apply(
-                            [&](const auto&... tuple_args) {
-                                return std::invoke(*defaultFunc_,
-                                                   tuple_args...);
-                            },
-                            args[0]);
-                    } catch (...) {
-                        return std::nullopt;
-                    }
-                }
-                return std::nullopt;
+                metrics_.errorCount.fetch_add(1, std::memory_order_relaxed);
+                // Fall through to default if case function throws
             }
         }
 
         if (defaultFunc_) {
             try {
+                // Apply the first tuple in the span to the default function
                 return std::apply(
                     [&](const auto&... tuple_args) {
                         return std::invoke(*defaultFunc_, tuple_args...);
                     },
                     args[0]);
             } catch (...) {
-                return std::nullopt;
+                metrics_.errorCount.fetch_add(1, std::memory_order_relaxed);
+                return std::nullopt;  // Default function failed
             }
         }
 
-        return std::nullopt;
+        return std::nullopt;  // No match and no default (or default failed)
     }
 
-    auto getCasesImpl() const -> std::vector<std::string> {
-        std::vector<std::string> caseList;
+    auto getCasesImpl() const -> Vector<String> {
+        Vector<String> caseList;
         caseList.reserve(cases_.size());
 
-        // Use C++20 ranges when available
-        if constexpr (std::ranges::range<decltype(cases_)>) {
-            auto keysView = cases_ | std::views::keys;
-            std::ranges::copy(keysView, std::back_inserter(caseList));
-        } else {
-            for (const auto& [key, _] : cases_) {
-                caseList.push_back(key);
-            }
+        // Use C++20 ranges if HashMap supports it, otherwise iterate
+        // Assuming HashMap provides iterators like std::unordered_map
+        for (const auto& [key, _] : cases_) {
+            caseList.push_back(key);
         }
+        // TODO: If HashMap supports ranges directly:
+        // if constexpr (std::ranges::range<decltype(cases_)>) {
+        //     auto keysView = cases_ | std::views::keys;
+        //     std::ranges::copy(keysView, std::back_inserter(caseList));
+        // } else { ... }
 
         return caseList;
     }
 
-    // 使用优化的哈希表实现
-    atom::utils::unordered_flat_map<std::string, Func> cases_;
+    // Use HashMap from high_performance.hpp
+    HashMap<String, Func> cases_;
 
     DefaultFunc defaultFunc_;  ///< The default function to be called if no
                                ///< match is found.
 
-    // LRU缓存配置
-    static constexpr size_t CACHE_SIZE = 16;
-    mutable std::array<std::pair<std::string, Func>, CACHE_SIZE> cache_;
+    // LRU-like cache configuration
+    static constexpr size_t CACHE_SIZE = 16;  // Keep cache size reasonable
+    // Use String in cache pair
+    mutable std::array<std::pair<String, Func>, CACHE_SIZE> cache_;
     mutable size_t cacheIndex_ = 0;
-    mutable std::shared_mutex cacheMutex_;  // 缓存同步
+    // Mutex for synchronizing cache access (read/write)
+    mutable std::shared_mutex cacheMutex_;
 
-    // 性能统计计数器
-    mutable std::atomic<size_t> totalCalls_{0};
-    mutable std::atomic<size_t> cacheHits_{0};
-    mutable std::atomic<size_t> cacheMisses_{0};
-    mutable std::atomic<size_t> errorCount_{0};
-    mutable std::atomic<double> avgResponseTime_{0.0};
-
-    // Thread synchronization (only used if ThreadSafe is true)
+    // Thread synchronization for cases_ and defaultFunc_ (only used if
+    // ThreadSafe is true)
     mutable std::shared_mutex mutex_;
 };
 
 // Deduction guide for ThreadSafe parameter
+// Update deduction guide to use String
 template <typename... Args>
-StringSwitch(std::initializer_list<std::pair<
-                 std::string, std::function<std::variant<
-                                  std::monostate, int, std::string>(Args...)>>>)
+StringSwitch(
+    std::initializer_list<std::pair<
+        String,
+        std::function<std::variant<std::monostate, int, String>(Args...)>>>)
     -> StringSwitch<false, Args...>;
 
 }  // namespace atom::utils

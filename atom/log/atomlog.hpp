@@ -19,11 +19,15 @@ Description: Enhanced Logger for Atom with C++20 Features
 #include <filesystem>
 #include <format>
 #include <memory>
-#include <string>
+
+#include "atom/containers/high_performance.hpp"
 
 namespace fs = std::filesystem;
 
 namespace atom::log {
+
+// Use type aliases from high_performance.hpp
+using atom::containers::String;
 
 /**
  * @brief Enum class representing the log levels.
@@ -43,7 +47,7 @@ enum class LogLevel {
  * @brief Structure representing a custom log level.
  */
 struct CustomLogLevel {
-    std::string name;
+    String name;  // Use String
     int severity;
 };
 
@@ -79,8 +83,11 @@ public:
      * @param args The arguments to format.
      */
     template <typename... Args>
-    void trace(const std::string& format, Args&&... args) {
-        log(LogLevel::TRACE, std::format(format, std::forward<Args>(args)...));
+    void trace(const String& format, Args&&... args) {  // Use String for format
+        // Use format.c_str() for std::format compatibility if String !=
+        // std::string
+        log(LogLevel::TRACE,
+            std::format(format.c_str(), std::forward<Args>(args)...));
     }
 
     /**
@@ -90,8 +97,9 @@ public:
      * @param args The arguments to format.
      */
     template <typename... Args>
-    void debug(const std::string& format, Args&&... args) {
-        log(LogLevel::DEBUG, std::format(format, std::forward<Args>(args)...));
+    void debug(const String& format, Args&&... args) {  // Use String for format
+        log(LogLevel::DEBUG,
+            std::format(format.c_str(), std::forward<Args>(args)...));
     }
 
     /**
@@ -101,8 +109,9 @@ public:
      * @param args The arguments to format.
      */
     template <typename... Args>
-    void info(const std::string& format, Args&&... args) {
-        log(LogLevel::INFO, std::format(format, std::forward<Args>(args)...));
+    void info(const String& format, Args&&... args) {  // Use String for format
+        log(LogLevel::INFO,
+            std::format(format.c_str(), std::forward<Args>(args)...));
     }
 
     /**
@@ -112,8 +121,9 @@ public:
      * @param args The arguments to format.
      */
     template <typename... Args>
-    void warn(const std::string& format, Args&&... args) {
-        log(LogLevel::WARN, std::format(format, std::forward<Args>(args)...));
+    void warn(const String& format, Args&&... args) {  // Use String for format
+        log(LogLevel::WARN,
+            std::format(format.c_str(), std::forward<Args>(args)...));
     }
 
     /**
@@ -123,8 +133,9 @@ public:
      * @param args The arguments to format.
      */
     template <typename... Args>
-    void error(const std::string& format, Args&&... args) {
-        log(LogLevel::ERROR, std::format(format, std::forward<Args>(args)...));
+    void error(const String& format, Args&&... args) {  // Use String for format
+        log(LogLevel::ERROR,
+            std::format(format.c_str(), std::forward<Args>(args)...));
     }
 
     /**
@@ -134,9 +145,10 @@ public:
      * @param args The arguments to format.
      */
     template <typename... Args>
-    void critical(const std::string& format, Args&&... args) {
+    void critical(const String& format,
+                  Args&&... args) {  // Use String for format
         log(LogLevel::CRITICAL,
-            std::format(format, std::forward<Args>(args)...));
+            std::format(format.c_str(), std::forward<Args>(args)...));
     }
 
     /**
@@ -149,13 +161,13 @@ public:
      * @brief Sets the logging pattern.
      * @param pattern The pattern to set.
      */
-    void setPattern(const std::string& pattern);
+    void setPattern(const String& pattern);  // Use String
 
     /**
      * @brief Sets the thread name for logging.
      * @param name The thread name to set.
      */
-    void setThreadName(const std::string& name);
+    void setThreadName(const String& name);  // Use String
 
     /**
      * @brief Registers a sink logger.
@@ -185,7 +197,8 @@ public:
      * @param name The name of the custom log level.
      * @param severity The severity of the custom log level.
      */
-    void registerCustomLogLevel(const std::string& name, int severity);
+    void registerCustomLogLevel(const String& name,
+                                int severity);  // Use String
 
 private:
     class LoggerImpl;  // Forward declaration
@@ -195,8 +208,9 @@ private:
     /**
      * @brief Logs a message with a specified log level.
      * @param level The log level.
-     * @param msg The message to log.
+     * @param msg The message to log (std::format produces std::string).
      */
+    // Keep std::string here as std::format returns std::string
     void log(LogLevel level, const std::string& msg);
 };
 
