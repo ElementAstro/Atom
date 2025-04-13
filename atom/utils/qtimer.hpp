@@ -1,10 +1,15 @@
 #ifndef ATOM_UTILS_QTIMER_HPP
 #define ATOM_UTILS_QTIMER_HPP
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <functional>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <stdexcept>
+#include <thread>
 #include <type_traits>
 
 namespace atom::utils {
@@ -181,6 +186,177 @@ public:
 
 private:
     std::optional<Clock::time_point> start_time_;  ///< Start time of the timer.
+};
+
+/**
+ * @brief Timer exception class for specific timer-related errors.
+ *
+ * This class provides more specific error information for timer-related exceptions.
+ */
+class TimerException : public std::runtime_error {
+public:
+    enum class ErrorCode {
+        INVALID_INTERVAL,
+        TIMER_ALREADY_ACTIVE,
+        TIMER_NOT_ACTIVE,
+        CALLBACK_EXECUTION_ERROR,
+        THREAD_CREATION_ERROR
+    };
+
+    TimerException(ErrorCode code, const std::string& message)
+        : std::runtime_error(message), error_code_(code) {}
+
+    [[nodiscard]] auto errorCode() const noexcept -> ErrorCode { return error_code_; }
+
+private:
+    ErrorCode error_code_;
+};
+
+/**
+ * @brief Modern C++ timer class inspired by Qt's QTimer but with modern C++ features.
+ * 
+ * This class provides timer functionality similar to Qt's QTimer but uses modern C++
+ * features like std::function for callbacks, std::thread for timing, and strong
+ * exception safety guarantees.
+ */
+class Timer {
+public:
+    using Clock = std::chrono::steady_clock;
+    using TimePoint = Clock::time_point;
+    using Callback = std::function<void()>;
+    
+    /**
+     * @brief Timer precision modes
+     */
+    enum class PrecisionMode {
+        PRECISE,  ///< More CPU intensive but more precise timing
+        COARSE    ///< Less CPU intensive but less precise timing
+    };
+    
+    /**
+     * @brief Default constructor
+     */
+    Timer() = default;
+    
+    /**
+     * @brief Constructor with callback
+     * @param callback Function to call when timer expires
+     */
+    explicit Timer(Callback callback);
+    
+    /**
+     * @brief Destructor
+     * 
+     * Ensures the timer thread is stopped properly
+     */
+    ~Timer();
+    
+    // Disable copy to avoid thread safety issues
+    Timer(const Timer&) = delete;
+    Timer& operator=(const Timer&) = delete;
+    
+    // Allow move operations
+    Timer(Timer&& other) noexcept;
+    Timer& operator=(Timer&& other) noexcept;
+    
+    /**
+     * @brief Sets the callback function
+     * @param callback Function to call when timer expires
+     */
+    void setCallback(Callback callback);
+    
+    /**
+     * @brief Sets the interval between timeouts
+     * @param milliseconds Interval in milliseconds (must be positive)
+     * @throws TimerException if milliseconds is not positive
+     */
+    void setInterval(int64_t milliseconds);
+    
+    /**
+     * @brief Gets the current interval
+     * @return Current interval in milliseconds
+     */
+    [[nodiscard]] auto interval() const noexcept -> int64_t;
+    
+    /**
+     * @brief Sets the precision mode
+     * @param mode Precision mode (PRECISE or COARSE)
+     */
+    void setPrecisionMode(PrecisionMode mode) noexcept;
+    
+    /**
+     * @brief Gets the current precision mode
+     * @return Current precision mode
+     */
+    [[nodiscard]] auto precisionMode() const noexcept -> PrecisionMode;
+    
+    /**
+     * @brief Sets whether the timer is a single-shot timer
+     * @param singleShot If true, timer fires only once
+     */
+    void setSingleShot(bool singleShot) noexcept;
+    
+    /**
+     * @brief Checks if timer is set to single-shot mode
+     * @return True if timer is in single-shot mode
+     */
+    [[nodiscard]] auto isSingleShot() const noexcept -> bool;
+    
+    /**
+     * @brief Checks if timer is currently active
+     * @return True if timer is active
+     */
+    [[nodiscard]] auto isActive() const noexcept -> bool;
+    
+    /**
+     * @brief Starts or restarts the timer
+     * @throws TimerException if callback is not set or on thread creation failure
+     */
+    void start();
+    
+    /**
+     * @brief Starts or restarts the timer with a specified interval
+     * @param milliseconds Interval in milliseconds
+     * @throws TimerException if milliseconds is not positive or on thread creation failure
+     */
+    void start(int64_t milliseconds);
+    
+    /**
+     * @brief Stops the timer
+     */
+    void stop();
+    
+    /**
+     * @brief Creates a single-shot timer that calls the provided callback after the specified interval
+     * @param milliseconds Interval in milliseconds
+     * @param callback Function to call when timer expires
+     * @param mode Precision mode
+     * @return Shared pointer to the created timer
+     * @throws TimerException if milliseconds is not positive
+     */
+    static auto singleShot(int64_t milliseconds, Callback callback, 
+                          PrecisionMode mode = PrecisionMode::PRECISE) 
+        -> std::shared_ptr<Timer>;
+
+    /**
+     * @brief Gets the time remaining before the next timeout
+     * @return Remaining time in milliseconds, 0 if timer is not active
+     */
+    [[nodiscard]] auto remainingTime() const -> int64_t;
+
+private:
+    void timerLoop();
+    
+    Callback callback_;
+    std::atomic<int64_t> interval_{0};
+    std::atomic<bool> is_active_{false};
+    std::atomic<bool> is_single_shot_{false};
+    std::atomic<PrecisionMode> precision_mode_{PrecisionMode::PRECISE};
+    
+    mutable std::mutex timer_mutex_;
+    std::thread timer_thread_;
+    std::atomic<bool> should_stop_{false};
+    std::optional<TimePoint> next_timeout_;
 };
 
 }  // namespace atom::utils

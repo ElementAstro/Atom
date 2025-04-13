@@ -65,17 +65,35 @@ public:
     ~Impl();
 
     void setWorkingDirectory(std::string_view dir);
+    [[nodiscard]] auto workingDirectory() const -> std::optional<std::string>;
     void setEnvironment(std::vector<std::string>&& env);
+    [[nodiscard]] auto environment() const -> std::vector<std::string>;
 
     void start(std::string&& program, std::vector<std::string>&& args);
+    bool startDetached(std::string&& program, std::vector<std::string>&& args);
     auto waitForStarted(int timeoutMs) -> bool;
     auto waitForFinished(int timeoutMs) -> bool;
     [[nodiscard]] auto isRunning() const -> bool;
 
     void write(std::string_view data);
+    void closeWriteChannel();
     auto readAllStandardOutput() -> std::string;
     auto readAllStandardError() -> std::string;
     void terminate() noexcept;
+    void kill() noexcept;
+
+    [[nodiscard]] auto state() const noexcept -> QProcess::ProcessState;
+    [[nodiscard]] auto error() const noexcept -> QProcess::ProcessError;
+    [[nodiscard]] auto exitCode() const noexcept -> int;
+    [[nodiscard]] auto exitStatus() const noexcept -> QProcess::ExitStatus;
+
+    void setStartedCallback(QProcess::StartedCallback callback);
+    void setFinishedCallback(QProcess::FinishedCallback callback);
+    void setErrorCallback(QProcess::ErrorCallback callback);
+    void setReadyReadStandardOutputCallback(
+        QProcess::ReadyReadStandardOutputCallback callback);
+    void setReadyReadStandardErrorCallback(
+        QProcess::ReadyReadStandardErrorCallback callback);
 
 private:
     void startWindowsProcess();
@@ -89,12 +107,39 @@ private:
     void startAsyncReaders();
     void stopAsyncReaders() noexcept;
 
+    // Helper methods for callbacks
+    void emitStarted();
+    void emitFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    void emitError(QProcess::ProcessError error);
+    void checkProcessStatus();
+
     std::atomic<bool> running_{false};
     std::atomic<bool> processStarted_{false};
     std::string program_;
     std::vector<std::string> args_;
     std::optional<std::string> workingDirectory_;
     std::vector<std::string> environment_;
+
+    // Process state tracking
+    std::atomic<QProcess::ProcessState> state_{
+        QProcess::ProcessState::NotRunning};
+    std::atomic<QProcess::ProcessError> lastError_{
+        QProcess::ProcessError::NoError};
+    std::atomic<QProcess::ExitStatus> exitStatus_{
+        QProcess::ExitStatus::NormalExit};
+    std::atomic<int> exitCode_{-1};
+
+    // Callbacks
+    QProcess::StartedCallback startedCallback_;
+    QProcess::FinishedCallback finishedCallback_;
+    QProcess::ErrorCallback errorCallback_;
+    QProcess::ReadyReadStandardOutputCallback readyReadStdoutCallback_;
+    QProcess::ReadyReadStandardErrorCallback readyReadStderrCallback_;
+    std::mutex callbackMutex_;
+
+    // Status monitoring
+    std::atomic<bool> statusMonitorRunning_{false};
+    std::future<void> statusMonitorFuture_;
 
     mutable std::mutex mutex_;
     std::condition_variable cv_;
@@ -109,6 +154,7 @@ private:
     std::mutex stderrMutex_;
     std::string stdoutBuffer_;
     std::string stderrBuffer_;
+    std::atomic<bool> writeChannelClosed_{false};
 
 #ifdef _WIN32
     PROCESS_INFORMATION procInfo_{};
@@ -290,6 +336,110 @@ void QProcess::terminate() noexcept {
     }
 }
 
+void QProcess::kill() noexcept {
+    try {
+        LOG_F(INFO, "QProcess::kill called");
+        impl_->kill();
+    } catch (...) {
+        LOG_F(ERROR, "Exception caught in kill");
+    }
+}
+
+void QProcess::closeWriteChannel() {
+    LOG_F(INFO, "QProcess::closeWriteChannel called");
+    try {
+        impl_->closeWriteChannel();
+    } catch (const std::exception& e) {
+        LOG_F(ERROR, "Failed to close write channel: {}", e.what());
+        throw std::runtime_error(
+            std::string("Failed to close write channel: ") + e.what());
+    }
+}
+
+auto QProcess::state() const noexcept -> ProcessState {
+    try {
+        return impl_->state();
+    } catch (...) {
+        LOG_F(ERROR, "Exception caught in state()");
+        return ProcessState::NotRunning;
+    }
+}
+
+auto QProcess::error() const noexcept -> ProcessError {
+    try {
+        return impl_->error();
+    } catch (...) {
+        LOG_F(ERROR, "Exception caught in error()");
+        return ProcessError::UnknownError;
+    }
+}
+
+auto QProcess::exitCode() const noexcept -> int {
+    try {
+        return impl_->exitCode();
+    } catch (...) {
+        LOG_F(ERROR, "Exception caught in exitCode()");
+        return -1;
+    }
+}
+
+auto QProcess::exitStatus() const noexcept -> ExitStatus {
+    try {
+        return impl_->exitStatus();
+    } catch (...) {
+        LOG_F(ERROR, "Exception caught in exitStatus()");
+        return ExitStatus::NormalExit;
+    }
+}
+
+auto QProcess::workingDirectory() const -> std::optional<std::string> {
+    LOG_F(INFO, "QProcess::workingDirectory called");
+    return impl_->workingDirectory();
+}
+
+auto QProcess::environment() const -> std::vector<std::string> {
+    LOG_F(INFO, "QProcess::environment called");
+    return impl_->environment();
+}
+
+void QProcess::setStartedCallback(StartedCallback callback) {
+    LOG_F(INFO, "QProcess::setStartedCallback called");
+    impl_->setStartedCallback(std::move(callback));
+}
+
+void QProcess::setFinishedCallback(FinishedCallback callback) {
+    LOG_F(INFO, "QProcess::setFinishedCallback called");
+    impl_->setFinishedCallback(std::move(callback));
+}
+
+void QProcess::setErrorCallback(ErrorCallback callback) {
+    LOG_F(INFO, "QProcess::setErrorCallback called");
+    impl_->setErrorCallback(std::move(callback));
+}
+
+void QProcess::setReadyReadStandardOutputCallback(
+    ReadyReadStandardOutputCallback callback) {
+    LOG_F(INFO, "QProcess::setReadyReadStandardOutputCallback called");
+    impl_->setReadyReadStandardOutputCallback(std::move(callback));
+}
+
+void QProcess::setReadyReadStandardErrorCallback(
+    ReadyReadStandardErrorCallback callback) {
+    LOG_F(INFO, "QProcess::setReadyReadStandardErrorCallback called");
+    impl_->setReadyReadStandardErrorCallback(std::move(callback));
+}
+
+bool QProcess::startDetachedImpl(std::string&& program,
+                                 std::vector<std::string>&& args) {
+    LOG_F(INFO, "QProcess::startDetached called with program: {}", program);
+    try {
+        return impl_->startDetached(std::move(program), std::move(args));
+    } catch (const std::exception& e) {
+        LOG_F(ERROR, "Failed to start detached process: {}", e.what());
+        return false;
+    }
+}
+
 // Implementation details of QProcess::Impl
 QProcess::Impl::~Impl() {
     try {
@@ -319,25 +469,53 @@ void QProcess::Impl::start(std::string&& program,
     LOG_F(INFO, "QProcess::Impl::start called with program: {}", program);
     if (running_) {
         LOG_F(ERROR, "Process already running");
+        emitError(QProcess::ProcessError::FailedToStart);
         THROW_RUNTIME_ERROR("Process already running");
     }
+
+    // Update state
+    state_ = QProcess::ProcessState::Starting;
+    lastError_ = QProcess::ProcessError::NoError;
+    exitCode_ = -1;
+    exitStatus_ = QProcess::ExitStatus::NormalExit;
 
     this->program_ = std::move(program);
     this->args_ = std::move(args);
 
+    try {
 #ifdef _WIN32
-    startWindowsProcess();
+        startWindowsProcess();
 #else
-    startPosixProcess();
+        startPosixProcess();
 #endif
 
-    running_ = true;
-    {
-        std::lock_guard lock(mutex_);
-        processStarted_ = true;
+        running_ = true;
+        {
+            std::lock_guard lock(mutex_);
+            processStarted_ = true;
+        }
+        cv_.notify_all();
+
+        // Start status monitor if not already running
+        if (!statusMonitorRunning_) {
+            statusMonitorRunning_ = true;
+            statusMonitorFuture_ = std::async(std::launch::async, [this]() {
+                while (statusMonitorRunning_) {
+                    checkProcessStatus();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+            });
+        }
+
+        // Emit started callback
+        emitStarted();
+
+        LOG_F(INFO, "QProcess::Impl::start completed");
+    } catch (const std::exception& e) {
+        LOG_F(ERROR, "Failed to start process: {}", e.what());
+        emitError(QProcess::ProcessError::FailedToStart);
+        throw;
     }
-    cv_.notify_all();
-    LOG_F(INFO, "QProcess::Impl::start completed");
 }
 
 auto QProcess::Impl::waitForStarted(int timeoutMs) -> bool {
@@ -975,6 +1153,339 @@ void QProcess::Impl::write(std::string_view data) {
 #endif
 
     LOG_F(INFO, "QProcess::Impl::write completed");
+}
+
+auto QProcess::Impl::state() const noexcept -> QProcess::ProcessState {
+    return state_.load();
+}
+
+auto QProcess::Impl::error() const noexcept -> QProcess::ProcessError {
+    return lastError_.load();
+}
+
+auto QProcess::Impl::exitCode() const noexcept -> int {
+    if (state() == QProcess::ProcessState::Running) {
+        return -1;
+    }
+
+#ifdef _WIN32
+    if (procInfo_.hProcess) {
+        DWORD code;
+        if (GetExitCodeProcess(procInfo_.hProcess, &code)) {
+            return static_cast<int>(code);
+        }
+    }
+#else
+    if (childPid_ > 0) {
+        int status;
+        if (waitpid(childPid_, &status, WNOHANG) > 0) {
+            if (WIFEXITED(status)) {
+                return WEXITSTATUS(status);
+            }
+        }
+    }
+#endif
+    return exitCode_.load();
+}
+
+auto QProcess::Impl::exitStatus() const noexcept -> QProcess::ExitStatus {
+    return exitStatus_.load();
+}
+
+auto QProcess::Impl::workingDirectory() const -> std::optional<std::string> {
+    return workingDirectory_;
+}
+
+auto QProcess::Impl::environment() const -> std::vector<std::string> {
+    return environment_;
+}
+
+void QProcess::Impl::setStartedCallback(QProcess::StartedCallback callback) {
+    std::lock_guard<std::mutex> lock(callbackMutex_);
+    startedCallback_ = std::move(callback);
+}
+
+void QProcess::Impl::setFinishedCallback(QProcess::FinishedCallback callback) {
+    std::lock_guard<std::mutex> lock(callbackMutex_);
+    finishedCallback_ = std::move(callback);
+}
+
+void QProcess::Impl::setErrorCallback(QProcess::ErrorCallback callback) {
+    std::lock_guard<std::mutex> lock(callbackMutex_);
+    errorCallback_ = std::move(callback);
+}
+
+void QProcess::Impl::setReadyReadStandardOutputCallback(
+    QProcess::ReadyReadStandardOutputCallback callback) {
+    std::lock_guard<std::mutex> lock(callbackMutex_);
+    readyReadStdoutCallback_ = std::move(callback);
+}
+
+void QProcess::Impl::setReadyReadStandardErrorCallback(
+    QProcess::ReadyReadStandardErrorCallback callback) {
+    std::lock_guard<std::mutex> lock(callbackMutex_);
+    readyReadStderrCallback_ = std::move(callback);
+}
+
+void QProcess::Impl::closeWriteChannel() {
+    LOG_F(INFO, "QProcess::Impl::closeWriteChannel called");
+
+    if (writeChannelClosed_) {
+        return;
+    }
+
+    writeChannelClosed_ = true;
+
+#ifdef _WIN32
+    if (childStdinWrite_ != nullptr) {
+        CloseHandle(childStdinWrite_);
+        childStdinWrite_ = nullptr;
+    }
+#else
+    if (childStdin_ != -1) {
+        close(childStdin_);
+        childStdin_ = -1;
+    }
+#endif
+
+    LOG_F(INFO, "QProcess::Impl::closeWriteChannel completed");
+}
+
+void QProcess::Impl::kill() noexcept {
+    LOG_F(INFO, "QProcess::Impl::kill called");
+    if (running_) {
+#ifdef _WIN32
+        // More forceful than terminate
+        TerminateProcess(procInfo_.hProcess, 9);
+        CloseHandle(procInfo_.hProcess);
+        CloseHandle(procInfo_.hThread);
+#else
+        ::kill(childPid_, SIGKILL);  // SIGKILL is more forceful than SIGTERM
+#endif
+        running_ = false;
+        state_ = QProcess::ProcessState::NotRunning;
+        exitStatus_ = QProcess::ExitStatus::CrashExit;
+        exitCode_ = 9;  // Default kill exit code
+    }
+    LOG_F(INFO, "QProcess::Impl::kill completed");
+}
+
+bool QProcess::Impl::startDetached(std::string&& program,
+                                   std::vector<std::string>&& args) {
+    LOG_F(INFO, "QProcess::Impl::startDetached called with program: {}",
+          program);
+
+#ifdef _WIN32
+    STARTUPINFO siStartInfo;
+    PROCESS_INFORMATION piProcInfo;
+
+    ZeroMemory(&siStartInfo, sizeof(STARTUPINFO));
+    siStartInfo.cb = sizeof(STARTUPINFO);
+    ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
+
+    // Build command line using proper quoting for spaces
+    std::string cmdLine = program;
+    for (const auto& arg : args) {
+        // Add proper quoting for arguments with spaces
+        if (arg.find(' ') != std::string::npos) {
+            cmdLine += " \"" + arg + "\"";
+        } else {
+            cmdLine += " " + arg;
+        }
+    }
+
+    // Prepare environment block if needed
+    std::vector<char> envBlock;
+    if (!environment_.empty()) {
+        std::string tempBlock;
+        for (const auto& envVar : environment_) {
+            tempBlock += envVar + '\0';
+        }
+        tempBlock += '\0';
+        envBlock.assign(tempBlock.begin(), tempBlock.end());
+    }
+
+    // Start the child process
+    if (!CreateProcess(nullptr, cmdLine.data(), nullptr, nullptr, FALSE,
+                       DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+                       envBlock.empty() ? nullptr : envBlock.data(),
+                       workingDirectory_ ? workingDirectory_->c_str() : nullptr,
+                       &siStartInfo, &piProcInfo)) {
+        LOG_F(ERROR, "Failed to start detached process: {}", GetLastError());
+        return false;
+    }
+
+    // Close process and thread handles as we're detaching
+    CloseHandle(piProcInfo.hProcess);
+    CloseHandle(piProcInfo.hThread);
+
+    return true;
+#else
+    pid_t pid = fork();
+
+    if (pid == -1) {
+        // Fork failed
+        LOG_F(ERROR, "Failed to fork process: {}", strerror(errno));
+        return false;
+    }
+
+    if (pid == 0) {
+        // Child process
+
+        // Create a new session to detach from parent terminal
+        if (setsid() == -1) {
+            LOG_F(ERROR, "Failed to create new session: {}", strerror(errno));
+            exit(1);
+        }
+
+        // Close all open file descriptors
+        for (int i = 0; i < sysconf(_SC_OPEN_MAX); i++) {
+            close(i);
+        }
+
+        // Open /dev/null for stdin, stdout, stderr
+        int nullfd = open("/dev/null", O_RDWR);
+        if (nullfd == -1) {
+            exit(1);
+        }
+
+        // Duplicate to stdin, stdout, stderr
+        dup2(nullfd, STDIN_FILENO);
+        dup2(nullfd, STDOUT_FILENO);
+        dup2(nullfd, STDERR_FILENO);
+
+        if (nullfd > 2) {
+            close(nullfd);
+        }
+
+        // Change directory if set
+        if (workingDirectory_ && !workingDirectory_->empty()) {
+            if (chdir(workingDirectory_->c_str()) != 0) {
+                exit(1);
+            }
+        }
+
+        // Set environment variables
+        if (!environment_.empty()) {
+            for (const auto& envVar : environment_) {
+                putenv(const_cast<char*>(envVar.c_str()));
+            }
+        }
+
+        // Build exec argument list
+        std::vector<char*> execArgs;
+        execArgs.reserve(args.size() + 2);  // +1 for program, +1 for nullptr
+        execArgs.push_back(const_cast<char*>(program.c_str()));
+
+        for (const auto& arg : args) {
+            execArgs.push_back(const_cast<char*>(arg.c_str()));
+        }
+        execArgs.push_back(nullptr);
+
+        // Execute the program
+        execvp(execArgs[0], execArgs.data());
+
+        // If we get here, exec failed
+        exit(1);
+    }
+
+    // Parent process - return success
+    return true;
+#endif
+}
+
+void QProcess::Impl::emitStarted() {
+    std::lock_guard<std::mutex> lock(callbackMutex_);
+    state_ = QProcess::ProcessState::Running;
+    if (startedCallback_) {
+        try {
+            startedCallback_();
+        } catch (const std::exception& e) {
+            LOG_F(ERROR, "Exception in started callback: {}", e.what());
+        }
+    }
+}
+
+void QProcess::Impl::emitFinished(int exitCode,
+                                  QProcess::ExitStatus exitStatus) {
+    std::lock_guard<std::mutex> lock(callbackMutex_);
+    state_ = QProcess::ProcessState::NotRunning;
+    exitCode_ = exitCode;
+    exitStatus_ = exitStatus;
+    if (finishedCallback_) {
+        try {
+            finishedCallback_(exitCode, exitStatus);
+        } catch (const std::exception& e) {
+            LOG_F(ERROR, "Exception in finished callback: {}", e.what());
+        }
+    }
+}
+
+void QProcess::Impl::emitError(QProcess::ProcessError error) {
+    std::lock_guard<std::mutex> lock(callbackMutex_);
+    lastError_ = error;
+    if (errorCallback_) {
+        try {
+            errorCallback_(error);
+        } catch (const std::exception& e) {
+            LOG_F(ERROR, "Exception in error callback: {}", e.what());
+        }
+    }
+}
+
+void QProcess::Impl::checkProcessStatus() {
+    // This method should be called periodically to check the process status
+    // and emit appropriate signals
+    bool isRunning = false;
+    int exitCode = -1;
+
+#ifdef _WIN32
+    if (procInfo_.hProcess) {
+        DWORD code;
+        if (GetExitCodeProcess(procInfo_.hProcess, &code)) {
+            isRunning = (code == STILL_ACTIVE);
+            if (!isRunning) {
+                exitCode = static_cast<int>(code);
+            }
+        }
+    }
+#else
+    if (childPid_ > 0) {
+        int status;
+        pid_t result = waitpid(childPid_, &status, WNOHANG);
+        if (result == 0) {
+            // Process still running
+            isRunning = true;
+        } else if (result > 0) {
+            // Process finished
+            isRunning = false;
+            if (WIFEXITED(status)) {
+                exitCode = WEXITSTATUS(status);
+                exitStatus_ = QProcess::ExitStatus::NormalExit;
+            } else if (WIFSIGNALED(status)) {
+                exitCode = WTERMSIG(status);
+                exitStatus_ = QProcess::ExitStatus::CrashExit;
+            }
+        } else {
+            // Error occurred
+            LOG_F(ERROR, "waitpid failed: {}", strerror(errno));
+            isRunning = false;
+            emitError(QProcess::ProcessError::UnknownError);
+        }
+    }
+#endif
+
+    if (running_ && !isRunning) {
+        // Process just finished
+        running_ = false;
+        emitFinished(exitCode, exitStatus_);
+    } else if (!running_ && isRunning) {
+        // Process just started (shouldn't happen, but handle it anyway)
+        running_ = true;
+        processStarted_ = true;
+        state_ = QProcess::ProcessState::Running;
+        emitStarted();
+    }
 }
 
 }  // namespace atom::utils
