@@ -1,7 +1,7 @@
 #include "serial_port.hpp"
 
 #if defined(_WIN32)
-#include "SerialPortWin.hpp"
+#include "serial_port_win.hpp"
 #elif defined(__unix__) || defined(__APPLE__)
 #include "serial_port_unix.hpp"
 #else
@@ -44,9 +44,121 @@ std::vector<uint8_t> SerialPort::readExactly(
     return impl_->readExactly(bytes, timeout);
 }
 
+std::string SerialPort::readUntil(char terminator,
+                                  std::chrono::milliseconds timeout,
+                                  bool includeTerminator) {
+    std::string result;
+    auto startTime = std::chrono::steady_clock::now();
+
+    while (true) {
+        // 检查是否超时
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - startTime);
+        if (elapsed >= timeout) {
+            throw SerialTimeoutException("等待终止符超时");
+        }
+
+        // 计算剩余超时时间
+        auto remainingTime = timeout - elapsed;
+
+        // 读取一个字节
+        auto buffer = impl_->readExactly(1, remainingTime);
+        if (buffer.empty()) {
+            continue;
+        }
+
+        char c = static_cast<char>(buffer[0]);
+        if (c == terminator) {
+            if (includeTerminator) {
+                result.push_back(c);
+            }
+            break;
+        }
+
+        result.push_back(c);
+    }
+
+    return result;
+}
+
+std::vector<uint8_t> SerialPort::readUntilSequence(
+    std::span<const uint8_t> sequence, std::chrono::milliseconds timeout,
+    bool includeSequence) {
+    if (sequence.empty()) {
+        return {};
+    }
+
+    std::vector<uint8_t> result;
+    std::vector<uint8_t> buffer;
+    buffer.reserve(sequence.size());
+
+    auto startTime = std::chrono::steady_clock::now();
+
+    while (true) {
+        // 检查是否超时
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - startTime);
+        if (elapsed >= timeout) {
+            throw SerialTimeoutException("等待终止序列超时");
+        }
+
+        // 计算剩余超时时间
+        auto remainingTime = timeout - elapsed;
+
+        // 读取一个字节
+        auto chunk = impl_->readExactly(1, remainingTime);
+        if (chunk.empty()) {
+            continue;
+        }
+
+        uint8_t byte = chunk[0];
+        result.push_back(byte);
+
+        // 更新缓冲区
+        buffer.push_back(byte);
+        if (buffer.size() > sequence.size()) {
+            buffer.erase(buffer.begin());
+        }
+
+        // 检查是否匹配
+        if (buffer.size() == sequence.size()) {
+            bool match = true;
+            for (size_t i = 0; i < sequence.size(); ++i) {
+                if (buffer[i] != sequence[i]) {
+                    match = false;
+                    break;
+                }
+            }
+
+            if (match) {
+                if (!includeSequence) {
+                    // 从结果中删除序列
+                    result.erase(result.end() - sequence.size(), result.end());
+                }
+                break;
+            }
+        }
+    }
+
+    return result;
+}
+
 void SerialPort::asyncRead(size_t maxBytes,
                            std::function<void(std::vector<uint8_t>)> callback) {
     impl_->asyncRead(maxBytes, std::move(callback));
+}
+
+std::future<std::vector<uint8_t>> SerialPort::asyncReadFuture(size_t maxBytes) {
+    auto promise = std::make_shared<std::promise<std::vector<uint8_t>>>();
+    std::future<std::vector<uint8_t>> future = promise->get_future();
+
+    impl_->asyncRead(maxBytes, [promise](std::vector<uint8_t> data) {
+        promise->set_value(std::move(data));
+    });
+
+    return future;
 }
 
 std::vector<uint8_t> SerialPort::readAvailable() {

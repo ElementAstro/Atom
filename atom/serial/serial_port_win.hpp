@@ -1,3 +1,5 @@
+#pragma once
+
 #ifdef _WIN32
 
 #include <Strsafe.h>
@@ -6,39 +8,42 @@
 #include <initguid.h>
 #include <setupapi.h>
 #include <atomic>
+#include <condition_variable>
 #include <mutex>
-#include <regex>
+#include <shared_mutex>
 #include <thread>
-#include "SerialPort.h"
+#include "serial_port.hpp"
+
+#ifdef _MSC_VER
 #pragma comment(lib, "setupapi.lib")
+#endif
 
 namespace serial {
 
 /**
- * @brief Implementation class for SerialPort handling Windows-specific
- * functionality
+ * @brief Windows平台的串口实现类
  *
- * This class provides the platform-specific implementation for serial port
- * communications on Windows systems using the Win32 API.
+ * 该类提供了Windows平台上串口通信的特定实现，使用Win32 API。
  */
 class SerialPortImpl {
 public:
     /**
-     * @brief Default constructor
+     * @brief 默认构造函数
      *
-     * Initializes a new instance with invalid handle and default settings.
+     * 使用无效句柄和默认设置初始化一个新实例。
      */
     SerialPortImpl()
         : handle_(INVALID_HANDLE_VALUE),
           config_{},
-          portName_(""),
+          portName_(),
           asyncReadThread_(),
-          stopAsyncRead_(false) {}
+          stopAsyncRead_(false),
+          asyncReadActive_(false) {}
 
     /**
-     * @brief Destructor
+     * @brief 析构函数
      *
-     * Stops any asynchronous read operations and closes the port if open.
+     * 停止所有异步读取操作并关闭已打开的端口。
      */
     ~SerialPortImpl() {
         stopAsyncWorker();
@@ -46,50 +51,58 @@ public:
     }
 
     /**
-     * @brief Opens a serial port with the specified configuration
+     * @brief 打开具有指定配置的串口
      *
-     * @param portName The name of the serial port (e.g., "COM1")
-     * @param config The serial port configuration
-     * @throws SerialException If the port cannot be opened
+     * @param portName 串口名称（如"COM1"）
+     * @param config 串口配置
+     * @throws SerialException 无法打开或配置端口时抛出
      */
-    void open(const std::string& portName, const SerialConfig& config) {
-        std::lock_guard<std::mutex> lock(mutex_);
+    void open(std::string_view portName, const SerialConfig& config) {
+        std::unique_lock<std::shared_mutex> lock(mutex_);
 
         if (isOpen())
             close();
 
-        // Windows requires \\.\\ prefix
-        std::string fullPortName = portName;
-        if (portName.substr(0, 4) != "\\\\.\\") {
-            fullPortName = "\\\\.\\" + portName;
+        // Windows 需要 \\.\\ 前缀
+        std::string fullPortName = std::string(portName);
+        if (fullPortName.substr(0, 4) != "\\\\.\\") {
+            fullPortName = "\\\\.\\" + fullPortName;
         }
 
         handle_ =
             CreateFileA(fullPortName.c_str(), GENERIC_READ | GENERIC_WRITE,
-                        0,                      // No sharing
-                        nullptr,                // Default security attributes
-                        OPEN_EXISTING,          // Serial port must exist
-                        FILE_ATTRIBUTE_NORMAL,  // Normal file attributes
-                        nullptr                 // No template
+                        0,                      // 不共享
+                        nullptr,                // 默认安全属性
+                        OPEN_EXISTING,          // 串口必须存在
+                        FILE_ATTRIBUTE_NORMAL,  // 正常文件属性
+                        nullptr                 // 无模板
             );
 
         if (handle_ == INVALID_HANDLE_VALUE) {
             DWORD error = GetLastError();
             std::string errorMsg = getLastErrorAsString(error);
-            throw SerialException("Cannot open serial port: " + portName +
-                                  " (Error: " + errorMsg + ")");
+            throw SerialException("无法打开串口: " + std::string(portName) +
+                                  " (错误: " + errorMsg + ")");
         }
 
         portName_ = portName;
         config_ = config;
-        applyConfig();
+
+        try {
+            applyConfig();
+        } catch (...) {
+            // 如果配置失败，确保端口已关闭
+            CloseHandle(handle_);
+            handle_ = INVALID_HANDLE_VALUE;
+            throw;
+        }
     }
 
     /**
-     * @brief Closes the serial port if open
+     * @brief 关闭已打开的串口
      */
     void close() {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::shared_mutex> lock(mutex_);
 
         if (handle_ != INVALID_HANDLE_VALUE) {
             CloseHandle(handle_);
@@ -99,27 +112,28 @@ public:
     }
 
     /**
-     * @brief Checks if the serial port is currently open
+     * @brief 检查串口当前是否打开
      *
-     * @return true if the port is open, false otherwise
+     * @return true 如果端口已打开，否则false
      */
-    bool isOpen() const { return handle_ != INVALID_HANDLE_VALUE; }
+    [[nodiscard]] bool isOpen() const {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
+        return handle_ != INVALID_HANDLE_VALUE;
+    }
 
     /**
-     * @brief Reads data from the serial port
+     * @brief 从串口读取数据
      *
-     * @param maxBytes Maximum number of bytes to read
-     * @return Vector of bytes read from the port
-     * @throws SerialPortNotOpenException If the port is not open
-     * @throws SerialTimeoutException If a read timeout occurs
-     * @throws SerialIOException If a read error occurs
+     * @param maxBytes 最大读取字节数
+     * @return 从端口读取的字节向量
+     * @throws SerialPortNotOpenException 如果端口未打开
+     * @throws SerialTimeoutException 如果读取超时
+     * @throws SerialIOException 如果读取错误
      */
     std::vector<uint8_t> read(size_t maxBytes) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::shared_mutex> lock(mutex_);
 
-        if (!isOpen()) {
-            throw SerialPortNotOpenException();
-        }
+        checkPortOpen();
 
         if (maxBytes == 0) {
             return {};
@@ -134,7 +148,7 @@ public:
             if (error == ERROR_TIMEOUT) {
                 throw SerialTimeoutException();
             } else {
-                throw SerialIOException("Read error: " +
+                throw SerialIOException("读取错误: " +
                                         getLastErrorAsString(error));
             }
         }
@@ -144,20 +158,17 @@ public:
     }
 
     /**
-     * @brief Reads exactly the specified number of bytes with timeout
+     * @brief 精确读取指定数量的字节，带超时
      *
-     * @param bytes Number of bytes to read
-     * @param timeout Maximum time to wait for the requested bytes
-     * @return Vector containing the requested number of bytes
-     * @throws SerialPortNotOpenException If the port is not open
-     * @throws SerialTimeoutException If the timeout expires before all bytes
-     * are read
+     * @param bytes 要读取的字节数
+     * @param timeout 等待请求字节的最长时间
+     * @return 包含请求字节数的向量
+     * @throws SerialPortNotOpenException 如果端口未打开
+     * @throws SerialTimeoutException 如果在读取所有字节之前超时
      */
     std::vector<uint8_t> readExactly(size_t bytes,
                                      std::chrono::milliseconds timeout) {
-        if (!isOpen()) {
-            throw SerialPortNotOpenException();
-        }
+        checkPortOpen();
 
         if (bytes == 0) {
             return {};
@@ -175,16 +186,18 @@ public:
                     now - startTime);
 
             if (elapsed >= timeout) {
-                throw SerialTimeoutException();
+                throw SerialTimeoutException(
+                    "读取" + std::to_string(bytes) + "字节超时，仅读取了" +
+                    std::to_string(result.size()) + "字节");
             }
 
             auto remainingTimeout = timeout - elapsed;
 
-            // Save original timeout settings
+            // 保存原始超时设置
             COMMTIMEOUTS originalTimeouts;
             GetCommTimeouts(handle_, &originalTimeouts);
 
-            // Set temporary timeout
+            // 设置临时超时
             COMMTIMEOUTS tempTimeouts{};
             tempTimeouts.ReadIntervalTimeout = MAXDWORD;
             tempTimeouts.ReadTotalTimeoutMultiplier = MAXDWORD;
@@ -193,21 +206,21 @@ public:
             SetCommTimeouts(handle_, &tempTimeouts);
 
             try {
+                std::unique_lock<std::shared_mutex> lock(mutex_);
                 auto chunk = read(bytes - result.size());
                 if (!chunk.empty()) {
                     result.insert(result.end(), chunk.begin(), chunk.end());
                 }
 
-                // Restore original timeout settings
+                // 恢复原始超时设置
                 SetCommTimeouts(handle_, &originalTimeouts);
             } catch (...) {
-                // Restore original timeout settings and rethrow exception
+                // 恢复原始超时设置并重新抛出异常
                 SetCommTimeouts(handle_, &originalTimeouts);
                 throw;
             }
 
-            // If we haven't read all the requested data, sleep briefly to avoid
-            // high CPU usage
+            // 如果没有读取所有请求的数据，短暂休眠以避免CPU使用率过高
             if (result.size() < bytes) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(5));
             }
@@ -217,64 +230,67 @@ public:
     }
 
     /**
-     * @brief Sets up asynchronous reading of data from the serial port
+     * @brief 设置串口异步读取
      *
-     * @param maxBytes Maximum number of bytes to read in each operation
-     * @param callback Function to call with the read data
-     * @throws SerialPortNotOpenException If the port is not open
+     * @param maxBytes 每次操作读取的最大字节数
+     * @param callback 用读取数据调用的函数
+     * @throws SerialPortNotOpenException 如果端口未打开
      */
     void asyncRead(size_t maxBytes,
                    std::function<void(std::vector<uint8_t>)> callback) {
-        if (!isOpen()) {
-            throw SerialPortNotOpenException();
-        }
-
+        checkPortOpen();
         stopAsyncWorker();
 
         stopAsyncRead_ = false;
-        asyncReadThread_ = std::thread([this, maxBytes, callback]() {
-            while (!stopAsyncRead_) {
-                try {
-                    auto data = read(maxBytes);
-                    if (!data.empty() && !stopAsyncRead_) {
-                        callback(std::move(data));
+        asyncReadActive_ = true;
+        asyncReadThread_ = std::thread([this, maxBytes,
+                                        callback = std::move(callback)]() {
+            try {
+                while (!stopAsyncRead_) {
+                    try {
+                        auto data = read(maxBytes);
+                        if (!data.empty() && !stopAsyncRead_) {
+                            callback(std::move(data));
+                        }
+                    } catch (const SerialTimeoutException&) {
+                        // 超时正常，继续
+                    } catch (const std::exception& e) {
+                        if (!stopAsyncRead_) {
+                            break;
+                        }
                     }
-                } catch (const SerialTimeoutException&) {
-                    // Timeout is normal, continue
-                } catch (const std::exception& e) {
-                    if (!stopAsyncRead_) {
-                        // Pass error information or handle here
-                        std::cerr
-                            << "Serial port async read error: " << e.what()
-                            << std::endl;
-                        break;
-                    }
-                }
 
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                }
+            } catch (...) {
+                // 捕获所有异常，确保asyncReadActive_被设置为false
+            }
+
+            {
+                std::unique_lock<std::mutex> lock(asyncMutex_);
+                asyncReadActive_ = false;
+                asyncCv_.notify_all();
             }
         });
     }
 
     /**
-     * @brief Reads all available data from the serial port
+     * @brief 读取串口的所有可用数据
      *
-     * @return Vector containing all available bytes
-     * @throws SerialPortNotOpenException If the port is not open
-     * @throws SerialIOException If there's an error getting port status
+     * @return 包含所有可用字节的向量
+     * @throws SerialPortNotOpenException 如果端口未打开
+     * @throws SerialIOException 如果获取端口状态错误
      */
     std::vector<uint8_t> readAvailable() {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::shared_mutex> lock(mutex_);
 
-        if (!isOpen()) {
-            throw SerialPortNotOpenException();
-        }
+        checkPortOpen();
 
         DWORD errors;
         COMSTAT comStat;
 
         if (!ClearCommError(handle_, &errors, &comStat)) {
-            throw SerialIOException("Unable to get serial port status: " +
+            throw SerialIOException("无法获取串口状态: " +
                                     getLastErrorAsString(GetLastError()));
         }
 
@@ -286,20 +302,18 @@ public:
     }
 
     /**
-     * @brief Writes data to the serial port
+     * @brief 向串口写入数据
      *
-     * @param data Data to write to the port
-     * @return Number of bytes actually written
-     * @throws SerialPortNotOpenException If the port is not open
-     * @throws SerialTimeoutException If a write timeout occurs
-     * @throws SerialIOException If a write error occurs
+     * @param data 要写入端口的数据
+     * @return 实际写入的字节数
+     * @throws SerialPortNotOpenException 如果端口未打开
+     * @throws SerialTimeoutException 如果写入超时
+     * @throws SerialIOException 如果写入错误
      */
     size_t write(std::span<const uint8_t> data) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::shared_mutex> lock(mutex_);
 
-        if (!isOpen()) {
-            throw SerialPortNotOpenException();
-        }
+        checkPortOpen();
 
         if (data.empty()) {
             return 0;
@@ -312,7 +326,7 @@ public:
             if (error == ERROR_TIMEOUT) {
                 throw SerialTimeoutException();
             } else {
-                throw SerialIOException("Write error: " +
+                throw SerialIOException("写入错误: " +
                                         getLastErrorAsString(error));
             }
         }
@@ -321,63 +335,57 @@ public:
     }
 
     /**
-     * @brief Flushes both input and output buffers
+     * @brief 清空输入和输出缓冲区
      *
-     * @throws SerialPortNotOpenException If the port is not open
-     * @throws SerialIOException If the flush operation fails
+     * @throws SerialPortNotOpenException 如果端口未打开
+     * @throws SerialIOException 如果清空操作失败
      */
     void flush() {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::shared_mutex> lock(mutex_);
 
-        if (!isOpen()) {
-            throw SerialPortNotOpenException();
-        }
+        checkPortOpen();
 
         if (!PurgeComm(handle_, PURGE_RXCLEAR | PURGE_TXCLEAR)) {
-            throw SerialIOException("Unable to flush serial port buffers: " +
+            throw SerialIOException("无法清空串口缓冲区: " +
                                     getLastErrorAsString(GetLastError()));
         }
     }
 
     /**
-     * @brief Waits for all transmitted data to be sent
+     * @brief 等待所有传输的数据发送完成
      *
-     * @throws SerialPortNotOpenException If the port is not open
-     * @throws SerialIOException If the drain operation fails
+     * @throws SerialPortNotOpenException 如果端口未打开
+     * @throws SerialIOException 如果排空操作失败
      */
     void drain() {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::shared_mutex> lock(mutex_);
 
-        if (!isOpen()) {
-            throw SerialPortNotOpenException();
-        }
+        checkPortOpen();
 
-        // In Windows, FlushFileBuffers is equivalent to a drain operation
+        // 在Windows中，FlushFileBuffers相当于排空操作
         if (!FlushFileBuffers(handle_)) {
-            throw SerialIOException("Unable to complete buffer write: " +
+            throw SerialIOException("无法完成缓冲区写入: " +
                                     getLastErrorAsString(GetLastError()));
         }
     }
 
     /**
-     * @brief Gets the number of bytes available to read
+     * @brief 获取可读取的字节数
      *
-     * @return Number of bytes in the input buffer
-     * @throws SerialPortNotOpenException If the port is not open
-     * @throws SerialIOException If there's an error getting port status
+     * @return 输入缓冲区中的字节数
+     * @throws SerialPortNotOpenException 如果端口未打开
+     * @throws SerialIOException 如果获取端口状态错误
      */
-    size_t available() const {
-        std::lock_guard<std::mutex> lock(mutex_);
+    [[nodiscard]] size_t available() const {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
 
-        if (!isOpen()) {
-            throw SerialPortNotOpenException();
-        }
+        checkPortOpen();
 
         DWORD errors;
         COMSTAT comStat;
 
         if (!ClearCommError(handle_, &errors, &comStat)) {
-            throw SerialIOException("Unable to get serial port status: " +
+            throw SerialIOException("无法获取串口状态: " +
                                     getLastErrorAsString(GetLastError()));
         }
 
@@ -385,126 +393,125 @@ public:
     }
 
     /**
-     * @brief Sets the serial port configuration
+     * @brief 设置串口配置
      *
-     * @param config New configuration to apply
-     * @throws SerialPortNotOpenException If the port is not open
+     * @param config 要应用的新配置
+     * @throws SerialPortNotOpenException 如果端口未打开
      */
     void setConfig(const SerialConfig& config) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::shared_mutex> lock(mutex_);
 
-        if (!isOpen()) {
-            throw SerialPortNotOpenException();
-        }
+        checkPortOpen();
 
         config_ = config;
-        applyConfig();
+        applyConfigInternal();
     }
 
     /**
-     * @brief Gets the current serial port configuration
+     * @brief 获取当前串口配置
      *
-     * @return Current serial port configuration
+     * @return 当前串口配置
      */
-    SerialConfig getConfig() const { return config_; }
+    [[nodiscard]] SerialConfig getConfig() const {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
+        return config_;
+    }
 
     /**
-     * @brief Sets the Data Terminal Ready (DTR) signal
+     * @brief 设置DTR（数据终端就绪）信号
      *
-     * @param value True to assert DTR, false to clear it
-     * @throws SerialPortNotOpenException If the port is not open
-     * @throws SerialIOException If the operation fails
+     * @param value True表示断言DTR，False表示清除
+     * @throws SerialPortNotOpenException 如果端口未打开
+     * @throws SerialIOException 如果操作失败
      */
     void setDTR(bool value) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::shared_mutex> lock(mutex_);
 
-        if (!isOpen()) {
-            throw SerialPortNotOpenException();
-        }
+        checkPortOpen();
 
         DWORD func = value ? SETDTR : CLRDTR;
         if (!EscapeCommFunction(handle_, func)) {
-            throw SerialIOException("Unable to set DTR signal: " +
+            throw SerialIOException("无法设置DTR信号: " +
                                     getLastErrorAsString(GetLastError()));
         }
     }
 
     /**
-     * @brief Sets the Request To Send (RTS) signal
+     * @brief 设置RTS（请求发送）信号
      *
-     * @param value True to assert RTS, false to clear it
-     * @throws SerialPortNotOpenException If the port is not open
-     * @throws SerialIOException If the operation fails
+     * @param value True表示断言RTS，False表示清除
+     * @throws SerialPortNotOpenException 如果端口未打开
+     * @throws SerialIOException 如果操作失败
      */
     void setRTS(bool value) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::shared_mutex> lock(mutex_);
 
-        if (!isOpen()) {
-            throw SerialPortNotOpenException();
-        }
+        checkPortOpen();
 
         DWORD func = value ? SETRTS : CLRRTS;
         if (!EscapeCommFunction(handle_, func)) {
-            throw SerialIOException("Unable to set RTS signal: " +
+            throw SerialIOException("无法设置RTS信号: " +
                                     getLastErrorAsString(GetLastError()));
         }
     }
 
     /**
-     * @brief Gets the Clear To Send (CTS) signal state
+     * @brief 获取CTS（清除发送）信号状态
      *
-     * @return True if CTS is asserted, false otherwise
-     * @throws SerialPortNotOpenException If the port is not open
-     * @throws SerialIOException If the operation fails
+     * @return True表示CTS被断言，否则False
+     * @throws SerialPortNotOpenException 如果端口未打开
+     * @throws SerialIOException 如果操作失败
      */
-    bool getCTS() const { return getModemStatus(MS_CTS_ON); }
+    [[nodiscard]] bool getCTS() const { return getModemStatus(MS_CTS_ON); }
 
     /**
-     * @brief Gets the Data Set Ready (DSR) signal state
+     * @brief 获取DSR（数据设备就绪）信号状态
      *
-     * @return True if DSR is asserted, false otherwise
-     * @throws SerialPortNotOpenException If the port is not open
-     * @throws SerialIOException If the operation fails
+     * @return True表示DSR被断言，否则False
+     * @throws SerialPortNotOpenException 如果端口未打开
+     * @throws SerialIOException 如果操作失败
      */
-    bool getDSR() const { return getModemStatus(MS_DSR_ON); }
+    [[nodiscard]] bool getDSR() const { return getModemStatus(MS_DSR_ON); }
 
     /**
-     * @brief Gets the Ring Indicator (RI) signal state
+     * @brief 获取RI（振铃指示器）信号状态
      *
-     * @return True if RI is asserted, false otherwise
-     * @throws SerialPortNotOpenException If the port is not open
-     * @throws SerialIOException If the operation fails
+     * @return True表示RI被断言，否则False
+     * @throws SerialPortNotOpenException 如果端口未打开
+     * @throws SerialIOException 如果操作失败
      */
-    bool getRI() const { return getModemStatus(MS_RING_ON); }
+    [[nodiscard]] bool getRI() const { return getModemStatus(MS_RING_ON); }
 
     /**
-     * @brief Gets the Carrier Detect (CD) signal state
+     * @brief 获取CD（载波检测）信号状态
      *
-     * @return True if CD is asserted, false otherwise
-     * @throws SerialPortNotOpenException If the port is not open
-     * @throws SerialIOException If the operation fails
+     * @return True表示CD被断言，否则False
+     * @throws SerialPortNotOpenException 如果端口未打开
+     * @throws SerialIOException 如果操作失败
      */
-    bool getCD() const {
-        return getModemStatus(
-            MS_RLSD_ON);  // RLSD = Receive Line Signal Detect = CD
+    [[nodiscard]] bool getCD() const {
+        return getModemStatus(MS_RLSD_ON);  // RLSD = 接收线路信号检测 = CD
     }
 
     /**
-     * @brief Gets the port name
+     * @brief 获取端口名称
      *
-     * @return The name of the port
+     * @return 端口名称
      */
-    std::string getPortName() const { return portName_; }
+    [[nodiscard]] std::string getPortName() const {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
+        return portName_;
+    }
 
     /**
-     * @brief Gets a list of available serial ports on the system
+     * @brief 获取系统上可用的串口列表
      *
-     * @return Vector of available port names
+     * @return 可用端口名称向量
      */
     static std::vector<std::string> getAvailablePorts() {
         std::vector<std::string> ports;
 
-        // Use SetupDi API to get serial port list
+        // 使用SetupDi API获取串口列表
         HDEVINFO deviceInfoSet =
             SetupDiGetClassDevs(&GUID_DEVINTERFACE_COMPORT, nullptr, nullptr,
                                 DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
@@ -546,20 +553,44 @@ public:
     }
 
 private:
-    HANDLE handle_;                    ///< Windows handle to the serial port
-    SerialConfig config_;              ///< Current port configuration
-    std::string portName_;             ///< Name of the currently open port
-    mutable std::mutex mutex_;         ///< Mutex for thread safety
-    std::thread asyncReadThread_;      ///< Thread for asynchronous reading
-    std::atomic<bool> stopAsyncRead_;  ///< Flag to stop asynchronous reading
+    HANDLE handle_;                      ///< Windows串口句柄
+    SerialConfig config_;                ///< 当前端口配置
+    std::string portName_;               ///< 当前打开端口的名称
+    mutable std::shared_mutex mutex_;    ///< 线程安全的互斥锁
+    std::thread asyncReadThread_;        ///< 异步读取线程
+    std::atomic<bool> stopAsyncRead_;    ///< 停止异步读取的标志
+    std::atomic<bool> asyncReadActive_;  ///< 异步读取活动标志
+    std::mutex asyncMutex_;              ///< 异步操作互斥锁
+    std::condition_variable asyncCv_;    ///< 用于异步操作的条件变量
 
     /**
-     * @brief Applies the current configuration to the serial port
+     * @brief 将当前配置应用于串口
      *
-     * @throws SerialIOException If unable to configure the port
+     * @throws SerialIOException 无法配置端口时抛出
      */
     void applyConfig() {
+        std::unique_lock<std::shared_mutex> lock(mutex_);
+        applyConfigInternal();
+    }
+
+    /**
+     * @brief 检查端口是否打开
+     *
+     * @throws SerialPortNotOpenException 如果端口未打开
+     */
+    void checkPortOpen() const {
         if (!isOpen()) {
+            throw SerialPortNotOpenException();
+        }
+    }
+
+    /**
+     * @brief 应用配置的内部方法（无锁）
+     *
+     * @throws SerialIOException 无法配置端口时抛出
+     */
+    void applyConfigInternal() {
+        if (handle_ == INVALID_HANDLE_VALUE) {
             return;
         }
 
@@ -567,19 +598,18 @@ private:
         dcb.DCBlength = sizeof(DCB);
 
         if (!GetCommState(handle_, &dcb)) {
-            throw SerialIOException(
-                "Unable to get serial port configuration: " +
-                getLastErrorAsString(GetLastError()));
+            throw SerialIOException("无法获取串口配置: " +
+                                    getLastErrorAsString(GetLastError()));
         }
 
-        // Baud rate
-        dcb.BaudRate = config_.baudRate;
+        // 波特率
+        dcb.BaudRate = config_.getBaudRate();
 
-        // Data bits
-        dcb.ByteSize = config_.dataBits;
+        // 数据位
+        dcb.ByteSize = config_.getDataBits();
 
-        // Parity
-        switch (config_.parity) {
+        // 奇偶校验
+        switch (config_.getParity()) {
             case SerialConfig::Parity::None:
                 dcb.Parity = NOPARITY;
                 break;
@@ -597,8 +627,8 @@ private:
                 break;
         }
 
-        // Stop bits
-        switch (config_.stopBits) {
+        // 停止位
+        switch (config_.getStopBits()) {
             case SerialConfig::StopBits::One:
                 dcb.StopBits = ONESTOPBIT;
                 break;
@@ -610,8 +640,8 @@ private:
                 break;
         }
 
-        // Flow control
-        switch (config_.flowControl) {
+        // 流控制
+        switch (config_.getFlowControl()) {
             case SerialConfig::FlowControl::None:
                 dcb.fOutxCtsFlow = FALSE;
                 dcb.fOutxDsrFlow = FALSE;
@@ -642,50 +672,47 @@ private:
                 break;
         }
 
-        // Other settings
-        dcb.fBinary = TRUE;  // Binary mode
+        // 其他设置
+        dcb.fBinary = TRUE;  // 二进制模式
         dcb.fErrorChar = FALSE;
         dcb.fNull = FALSE;
         dcb.fAbortOnError = FALSE;
 
         if (!SetCommState(handle_, &dcb)) {
-            throw SerialIOException(
-                "Unable to set serial port configuration: " +
-                getLastErrorAsString(GetLastError()));
+            throw SerialIOException("无法设置串口配置: " +
+                                    getLastErrorAsString(GetLastError()));
         }
 
-        // Set timeouts
+        // 设置超时
         COMMTIMEOUTS timeouts{};
         timeouts.ReadIntervalTimeout = MAXDWORD;
         timeouts.ReadTotalTimeoutMultiplier = MAXDWORD;
-        timeouts.ReadTotalTimeoutConstant = config_.readTimeout.count();
+        timeouts.ReadTotalTimeoutConstant = config_.getReadTimeout().count();
         timeouts.WriteTotalTimeoutMultiplier = 0;
-        timeouts.WriteTotalTimeoutConstant = config_.writeTimeout.count();
+        timeouts.WriteTotalTimeoutConstant = config_.getWriteTimeout().count();
 
         if (!SetCommTimeouts(handle_, &timeouts)) {
-            throw SerialIOException("Unable to set serial port timeouts: " +
+            throw SerialIOException("无法设置串口超时: " +
                                     getLastErrorAsString(GetLastError()));
         }
     }
 
     /**
-     * @brief Gets modem status flags
+     * @brief 获取调制解调器状态标志
      *
-     * @param flag The modem status flag to check
-     * @return True if the flag is set, false otherwise
-     * @throws SerialPortNotOpenException If the port is not open
-     * @throws SerialIOException If unable to get modem status
+     * @param flag 要检查的调制解调器状态标志
+     * @return True表示标志已设置，否则False
+     * @throws SerialPortNotOpenException 如果端口未打开
+     * @throws SerialIOException 无法获取调制解调器状态时抛出
      */
-    bool getModemStatus(DWORD flag) const {
-        std::lock_guard<std::mutex> lock(mutex_);
+    [[nodiscard]] bool getModemStatus(DWORD flag) const {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
 
-        if (!isOpen()) {
-            throw SerialPortNotOpenException();
-        }
+        checkPortOpen();
 
         DWORD status = 0;
         if (!GetCommModemStatus(handle_, &status)) {
-            throw SerialIOException("Unable to get Modem status: " +
+            throw SerialIOException("无法获取调制解调器状态: " +
                                     getLastErrorAsString(GetLastError()));
         }
 
@@ -693,24 +720,33 @@ private:
     }
 
     /**
-     * @brief Stops the asynchronous read worker thread
+     * @brief 停止异步读取工作线程
      */
     void stopAsyncWorker() {
         if (asyncReadThread_.joinable()) {
             stopAsyncRead_ = true;
+
+            {
+                std::unique_lock<std::mutex> lock(asyncMutex_);
+                // 等待异步读取线程真正结束
+                if (asyncReadActive_) {
+                    asyncCv_.wait(lock, [this]() { return !asyncReadActive_; });
+                }
+            }
+
             asyncReadThread_.join();
         }
     }
 
     /**
-     * @brief Converts a Windows error code to a human-readable string
+     * @brief 将Windows错误代码转换为可读字符串
      *
-     * @param errorCode The Windows error code to convert
-     * @return String description of the error
+     * @param errorCode 要转换的Windows错误代码
+     * @return 错误描述字符串
      */
     static std::string getLastErrorAsString(DWORD errorCode) {
         if (errorCode == 0) {
-            return "No error";
+            return "无错误";
         }
 
         LPSTR messageBuffer = nullptr;
