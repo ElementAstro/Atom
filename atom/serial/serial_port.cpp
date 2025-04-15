@@ -27,7 +27,8 @@ SerialPort& SerialPort::operator=(SerialPort&& other) noexcept {
     return *this;
 }
 
-void SerialPort::open(const std::string& portName, const SerialConfig& config) {
+// 修改为匹配头文件声明的参数类型
+void SerialPort::open(std::string_view portName, const SerialConfig& config) {
     impl_->open(portName, config);
 }
 
@@ -165,13 +166,14 @@ std::vector<uint8_t> SerialPort::readAvailable() {
     return impl_->readAvailable();
 }
 
-size_t SerialPort::write(std::span<const uint8_t> data) {
-    return impl_->write(data);
-}
-
-size_t SerialPort::write(const std::string& data) {
+// 修改为匹配头文件声明的参数类型
+size_t SerialPort::write(std::string_view data) {
     return impl_->write(std::span<const uint8_t>(
         reinterpret_cast<const uint8_t*>(data.data()), data.size()));
+}
+
+size_t SerialPort::write(std::span<const uint8_t> data) {
+    return impl_->write(data);
 }
 
 void SerialPort::flush() { impl_->flush(); }
