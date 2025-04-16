@@ -1,5 +1,5 @@
-#ifndef WS_CLIENT_HPP
-#define WS_CLIENT_HPP
+#ifndef ATOM_EXTRA_BEAST_WS_HPP
+#define ATOM_EXTRA_BEAST_WS_HPP
 
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
@@ -14,10 +14,7 @@
 #include <nlohmann/json.hpp>
 #include <string>
 #include <string_view>
-// 移除未使用的头文件
-// #include <stdexcept>
 
-// 添加日志头文件（基于上下文中的错误，似乎使用了loguru）
 #include "atom/log/loguru.hpp"
 
 namespace beast = boost::beast;
@@ -416,4 +413,4 @@ void WSClient::handleConnectError(beast::error_code ec,
     }
 }
 
-#endif  // WS_CLIENT_HPP
+#endif  // ATOM_EXTRA_BEAST_WS_HPP

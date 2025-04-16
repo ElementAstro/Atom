@@ -1,5 +1,5 @@
-#ifndef HTTP_CLIENT_HPP
-#define HTTP_CLIENT_HPP
+#ifndef ATOM_EXTRA_BEAST_HTTP_HPP
+#define ATOM_EXTRA_BEAST_HTTP_HPP
 
 #include <atomic>
 #include <boost/asio/io_context.hpp>
@@ -22,11 +22,6 @@
 #include <tuple>
 #include <unordered_map>
 #include <vector>
-
-// 移除未使用的头文件
-// #include <filesystem>
-// #include <optional>
-// #include <span>
 
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -580,4 +575,4 @@ void HttpClient::asyncDownloadFile(std::string_view host, std::string_view port,
         });
 }
 
-#endif  // HTTP_CLIENT_HPP
+#endif  // ATOM_EXTRA_BEAST_HTTP_HPP
