@@ -13,11 +13,17 @@ project(atom-tests VERSION 1.0.0 LANGUAGES C CXX)
 set(SOURCES
     benchmark.cpp
     fuzz.cpp
+    perf.cpp
 )
 
 set(HEADERS
     benchmark.hpp
     fuzz.hpp
+    perf.hpp
+    test_cli.hpp
+    test_registry.hpp
+    test_reporter.hpp
+    test_runner.hpp
     test.hpp
 )
 

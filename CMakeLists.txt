@@ -25,6 +25,7 @@ option(ATOM_USE_BOOST_LOCKFREE "Enable Boost lockfree data structures" OFF)
 option(ATOM_USE_BOOST_CONTAINER "Enable Boost container library" OFF)
 option(ATOM_USE_BOOST_GRAPH "Enable Boost graph library" OFF)
 option(ATOM_USE_BOOST_INTRUSIVE "Enable Boost intrusive containers" OFF)
+option(ATOM_USE_PYBIND11 "Enable pybind11 support" ON)
 
 # Append module paths
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
