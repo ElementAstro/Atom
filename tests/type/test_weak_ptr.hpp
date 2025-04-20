@@ -341,7 +341,7 @@ TEST_F(EnhancedWeakPtrTest, Cast) {
     EnhancedWeakPtr<Base> baseWeak(std::static_pointer_cast<Base>(shared));
 
     // Cast from Base to Derived
-    auto derivedWeak = baseWeak.cast<Derived>();
+    auto derivedWeak = baseWeak.staticCast<Derived>();
     auto derivedShared = derivedWeak.lock();
 
     EXPECT_TRUE(derivedShared);
@@ -350,7 +350,7 @@ TEST_F(EnhancedWeakPtrTest, Cast) {
 
     // Expired pointer should still cast but result in expired pointer
     shared.reset();
-    auto derivedWeak2 = baseWeak.cast<Derived>();
+    auto derivedWeak2 = baseWeak.staticCast<Derived>();
     EXPECT_TRUE(derivedWeak2.expired());
 }
 
@@ -518,3 +518,360 @@ TEST_F(EnhancedWeakPtrVoidTest, Validate) {
 #endif
 
 }  // namespace
+TEST_F(EnhancedWeakPtrTest, Map) {
+    auto shared = std::make_shared<int>(42);
+    EnhancedWeakPtr<int> weak(shared);
+
+    // Test map functionality with valid pointer
+    auto doubled = weak.map([](const int& v) { return v * 2; });
+    EXPECT_TRUE(doubled.has_value());
+    EXPECT_EQ(*doubled, 84);
+
+    // Test with transformations
+    auto asString = weak.map([](const int& v) { return std::to_string(v); });
+    EXPECT_TRUE(asString.has_value());
+    EXPECT_EQ(*asString, "42");
+
+    // Test with expired pointer
+    shared.reset();
+    auto result = weak.map([](const int& v) { return v + 10; });
+    EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(EnhancedWeakPtrTest, Filter) {
+    auto shared = std::make_shared<int>(42);
+    EnhancedWeakPtr<int> weak(shared);
+
+    // Test filter with condition that passes
+    auto filtered = weak.filter([](const int& v) { return v > 40; });
+    EXPECT_FALSE(filtered.expired());
+
+    // Test filter with condition that fails
+    filtered = weak.filter([](const int& v) { return v > 100; });
+    EXPECT_TRUE(filtered.expired());
+
+    // Test with expired pointer
+    shared.reset();
+    filtered = weak.filter([](const int& v) { return v > 0; });
+    EXPECT_TRUE(filtered.expired());
+}
+
+TEST_F(EnhancedWeakPtrTest, TypeChecking) {
+    struct Base {
+        virtual ~Base() = default;
+    };
+    struct Derived : public Base {
+        int value = 42;
+    };
+    struct Unrelated {};
+
+    auto derived = std::make_shared<Derived>();
+    auto baseWeak = EnhancedWeakPtr<Base>(derived);
+
+    // Test isType with correct type
+    EXPECT_TRUE(baseWeak.isType<Derived>());
+
+    // Test isType with base type
+    EXPECT_TRUE(baseWeak.isType<Base>());
+
+    // Test isType with unrelated type
+    EXPECT_FALSE(baseWeak.isType<Unrelated>());
+
+    // Test with expired pointer
+    derived.reset();
+    EXPECT_FALSE(baseWeak.isType<Derived>());
+}
+
+TEST_F(EnhancedWeakPtrTest, DynamicCast) {
+    struct Base {
+        virtual ~Base() = default;
+    };
+    struct Derived : public Base {
+        int value = 42;
+    };
+    struct OtherDerived : public Base {
+        double value = 3.14;
+    };
+
+    auto derived = std::make_shared<Derived>();
+    EnhancedWeakPtr<Base> baseWeak(derived);
+
+    // Test successful cast
+    auto derivedWeak = baseWeak.dynamicCast<Derived>();
+    EXPECT_FALSE(derivedWeak.expired());
+    auto locked = derivedWeak.lock();
+    EXPECT_EQ(locked->value, 42);
+
+    // Test failed cast
+    auto otherDerivedWeak = baseWeak.dynamicCast<OtherDerived>();
+    EXPECT_TRUE(otherDerivedWeak.expired());
+
+    // Test with expired pointer
+    derived.reset();
+    derivedWeak = baseWeak.dynamicCast<Derived>();
+    EXPECT_TRUE(derivedWeak.expired());
+}
+
+TEST_F(EnhancedWeakPtrTest, StaticCast) {
+    struct Base {
+        virtual ~Base() = default;
+    };
+    struct Derived : public Base {
+        int value = 42;
+    };
+
+    std::shared_ptr<Base> base = std::make_shared<Derived>();
+    EnhancedWeakPtr<Base> baseWeak(base);
+
+    // Test static cast
+    auto derivedWeak = baseWeak.staticCast<Derived>();
+    EXPECT_FALSE(derivedWeak.expired());
+    auto locked = derivedWeak.lock();
+    EXPECT_EQ(locked->value, 42);
+
+    // Test with expired pointer
+    base.reset();
+    derivedWeak = baseWeak.staticCast<Derived>();
+    EXPECT_TRUE(derivedWeak.expired());
+}
+
+TEST_F(EnhancedWeakPtrTest, FilterWeakPtrs) {
+    std::vector<std::shared_ptr<int>> sharedPtrs = {
+        std::make_shared<int>(1), std::make_shared<int>(10),
+        std::make_shared<int>(20), std::make_shared<int>(30)};
+
+    auto weakPtrs = createWeakPtrGroup(sharedPtrs);
+
+    // Test filtering with predicate
+    auto filtered =
+        filterWeakPtrs(weakPtrs, [](const int& v) { return v > 15; });
+    EXPECT_EQ(filtered.size(), 2);
+
+    // Verify contents of filtered pointers
+    EXPECT_EQ(*filtered[0].lock(), 20);
+    EXPECT_EQ(*filtered[1].lock(), 30);
+
+    // Test with some expired pointers
+    sharedPtrs[1].reset();
+    sharedPtrs[2].reset();
+
+    filtered = filterWeakPtrs(weakPtrs, [](const int& v) { return v > 0; });
+    EXPECT_EQ(filtered.size(),
+              2);  // Only the non-expired ones that match predicate
+}
+
+TEST_F(EnhancedWeakPtrTest, RetryPolicy) {
+    // Test exponential backoff policy
+    auto policy = RetryPolicy::exponentialBackoff(
+        3, std::chrono::milliseconds(5), std::chrono::milliseconds(100));
+
+    EXPECT_EQ(policy.maxAttempts(), 3);
+    EXPECT_EQ(policy.interval(), std::chrono::milliseconds(5));
+    EXPECT_EQ(policy.maxDuration(), std::chrono::milliseconds(100));
+
+    // Test none policy
+    auto nonePolicy = RetryPolicy::none();
+    EXPECT_EQ(nonePolicy.maxAttempts(), 1);
+    EXPECT_EQ(nonePolicy.interval(),
+              std::chrono::steady_clock::duration::zero());
+    EXPECT_EQ(nonePolicy.maxDuration(),
+              std::chrono::steady_clock::duration::zero());
+
+    // Test builder pattern
+    auto customPolicy = RetryPolicy()
+                            .withMaxAttempts(5)
+                            .withInterval(std::chrono::milliseconds(10))
+                            .withMaxDuration(std::chrono::seconds(2));
+
+    EXPECT_EQ(customPolicy.maxAttempts(), 5);
+    EXPECT_EQ(customPolicy.interval(), std::chrono::milliseconds(10));
+    EXPECT_EQ(customPolicy.maxDuration(), std::chrono::seconds(2));
+}
+
+TEST_F(EnhancedWeakPtrTest, NotifyAll) {
+    auto shared = std::make_shared<int>(42);
+    EnhancedWeakPtr<int> weak;
+
+    std::atomic<bool> threadStarted{false};
+    std::atomic<bool> threadFinished{false};
+
+    // Start a thread that waits on the condition variable
+    std::thread t([&]() {
+        threadStarted = true;
+
+        // Wait with timeout to avoid hanging if notification doesn't work
+        bool result = weak.waitFor(std::chrono::milliseconds(500));
+
+        // Should succeed because notifyAll is called
+        EXPECT_TRUE(result);
+        EXPECT_FALSE(weak.expired());
+        threadFinished = true;
+    });
+
+    // Wait for thread to start and begin waiting
+    while (!threadStarted) {
+        std::this_thread::yield();
+    }
+
+    // Short sleep to ensure thread is in wait state
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+    // Assign value and notify
+    weak = EnhancedWeakPtr<int>(shared);
+    weak.notifyAll();
+
+    t.join();
+    EXPECT_TRUE(threadFinished);
+}
+
+#if HAS_EXPECTED
+TEST_F(EnhancedWeakPtrTest, LockExpected) {
+    auto shared = std::make_shared<int>(42);
+    EnhancedWeakPtr<int> weak(shared);
+
+    // Test with valid pointer
+    auto expected = weak.lockExpected();
+    EXPECT_TRUE(expected.has_value());
+    EXPECT_EQ(*expected.value(), 42);
+
+    // Test with expired pointer
+    shared.reset();
+    expected = weak.lockExpected();
+    EXPECT_FALSE(expected.has_value());
+    EXPECT_EQ(expected.error().type(), WeakPtrErrorType::Expired);
+    EXPECT_FALSE(expected.error().message().empty());
+}
+#endif
+
+TEST_F(EnhancedWeakPtrVoidTest, DynamicCastAndStatic) {
+    struct Base {
+        virtual ~Base() = default;
+        int value = 42;
+    };
+
+    auto base = std::make_shared<Base>();
+    auto voidShared = std::static_pointer_cast<void>(base);
+
+    EnhancedWeakPtr<void> weak(voidShared);
+
+    // Test cast to concrete type
+    auto baseWeak = weak.cast<Base>();
+    EXPECT_FALSE(baseWeak.expired());
+
+    auto locked = baseWeak.lock();
+    EXPECT_EQ(locked->value, 42);
+
+    // Test with expired pointer
+    base.reset();
+    voidShared.reset();
+
+    baseWeak = weak.cast<Base>();
+    EXPECT_TRUE(baseWeak.expired());
+}
+
+TEST_F(EnhancedWeakPtrVoidTest, WaitUntil) {
+    auto concrete = std::make_shared<int>(42);
+    auto voidShared = std::static_pointer_cast<void>(concrete);
+
+    EnhancedWeakPtr<void> weak(voidShared);
+
+    std::atomic<bool> flag{false};
+
+    std::thread t([&flag]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        flag = true;
+    });
+
+    // Test waiting for predicate
+    bool result = weak.waitUntil([&flag]() { return flag.load(); });
+    EXPECT_TRUE(result);
+
+    // Test with already satisfied predicate
+    result = weak.waitUntil([]() { return true; });
+    EXPECT_TRUE(result);
+
+    // Test with expired pointer
+    concrete.reset();
+    voidShared.reset();
+
+    flag = false;
+    result = weak.waitUntil([&flag]() { return flag.load(); });
+    EXPECT_FALSE(result);
+
+    t.join();
+}
+
+TEST_F(EnhancedWeakPtrTest, StatCounters) {
+    size_t initialTotalLockAttempts =
+        EnhancedWeakPtr<int>::getTotalSuccessfulLocks() +
+        EnhancedWeakPtr<int>::getTotalFailedLocks();
+
+    auto shared = std::make_shared<int>(42);
+    EnhancedWeakPtr<int> weak(shared);
+
+    // Make some successful locks
+    for (int i = 0; i < 5; i++) {
+        weak.lock();
+    }
+
+    // Verify successful lock count increased
+    EXPECT_EQ(EnhancedWeakPtr<int>::getTotalSuccessfulLocks() +
+                  EnhancedWeakPtr<int>::getTotalFailedLocks(),
+              initialTotalLockAttempts + 5);
+
+    // Reset the pointer and make failed lock attempts
+    shared.reset();
+    for (int i = 0; i < 3; i++) {
+        weak.lock();
+    }
+
+    // Verify failed lock count increased
+    EXPECT_EQ(EnhancedWeakPtr<int>::getTotalSuccessfulLocks() +
+                  EnhancedWeakPtr<int>::getTotalFailedLocks(),
+              initialTotalLockAttempts + 8);
+
+    // Test reset stats
+    EnhancedWeakPtr<int>::resetStats();
+    EXPECT_EQ(EnhancedWeakPtr<int>::getTotalSuccessfulLocks(), 0);
+    EXPECT_EQ(EnhancedWeakPtr<int>::getTotalFailedLocks(), 0);
+    EXPECT_GT(EnhancedWeakPtr<int>::getTotalInstances(),
+              0);  // Instances not reset
+}
+
+// Test for edge cases
+TEST_F(EnhancedWeakPtrTest, EdgeCases) {
+    // Test locking expired pointer with retry that has zero duration
+    EnhancedWeakPtr<int> weak;
+    auto result = weak.tryLockWithRetry(RetryPolicy::none());
+    EXPECT_EQ(result, nullptr);
+
+    // Test with large pointer
+    struct LargeObject {
+        std::array<char, 1024 * 1024> data;  // 1MB object
+        int value = 42;
+    };
+
+    auto large = std::make_shared<LargeObject>();
+    EnhancedWeakPtr<LargeObject> largeWeak(large);
+
+    // Lock and access the large object
+    auto locked = largeWeak.lock();
+    EXPECT_EQ(locked->value, 42);
+
+    // Test self-reference cycle
+    struct Node {
+        EnhancedWeakPtr<Node> weakSelf;
+        int value = 0;
+    };
+
+    auto node = std::make_shared<Node>();
+    node->weakSelf = EnhancedWeakPtr<Node>(node);
+
+    // Verify self-reference works
+    auto self = node->weakSelf.lock();
+    EXPECT_EQ(self, node);
+
+    // Break cycle and test
+    node.reset();
+    EXPECT_TRUE(self->weakSelf.expired());
+}

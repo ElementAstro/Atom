@@ -20,7 +20,6 @@ Description: Trackable Object (Optimized with C++20 features)
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <type_traits>
 #include <utility>
 #include <vector>
 

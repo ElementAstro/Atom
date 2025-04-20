@@ -1,12 +1,14 @@
 /**
  * @file simd_wrapper.hpp
- * @brief 跨平台SIMD操作封装库
+ * @brief Cross-platform SIMD operations wrapper library
  *
- * 提供统一的接口封装不同平台的SIMD指令集:
+ * Provides a unified interface encapsulating different platforms' SIMD
+ * instruction sets:
  * - x86/x64: SSE, AVX, AVX2, AVX-512
  * - ARM: NEON, SVE
  *
- * 支持多种数据类型和操作，实现代码可移植性与高性能。
+ * Supports various data types and operations, enabling code portability with
+ * high performance.
  */
 
 #ifndef SIMD_WRAPPER_HPP
