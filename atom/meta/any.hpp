@@ -252,6 +252,11 @@ public:
         }
     }
 
+    /*!
+     * \brief Destructor.
+     */
+    ~BoxedValue() = default;
+
     template <typename T>
     auto isType() const -> bool {
         std::shared_lock lock(m_mutex_);
@@ -367,8 +372,8 @@ public:
      * \param value The value of the attribute.
      * \return Reference to this BoxedValue.
      */
-    auto setAttr(const std::string& name,
-                 const BoxedValue& value) -> BoxedValue& {
+    auto setAttr(const std::string& name, const BoxedValue& value)
+        -> BoxedValue& {
         std::unique_lock lock(m_mutex_);
         if (!m_data_->mAttrs) {
             m_data_->mAttrs = std::make_shared<
@@ -529,9 +534,239 @@ public:
     }
 
     /*!
-     * \brief Destructor.
+     * \brief Visit the value in BoxedValue with a visitor
+     * \tparam Visitor The type of visitor
+     * \param visitor The visitor function object
+     * \return The return value of the visitor
+     *
+     * The visitor should be a callable object that accepts arguments of any
+     * type and returns a consistent type. If BoxedValue is empty or cannot be
+     * converted to the required type, the visitor's fallback will be called.
      */
-    ~BoxedValue() = default;
+    template <typename Visitor>
+    auto visit(Visitor&& visitor) const {
+        using result_type =
+            std::invoke_result_t<Visitor,
+                                 int&>;  // Example type, actual call depends on
+                                         // content
+
+        std::shared_lock lock(m_mutex_);
+        if (isUndef() || isNull()) {
+            if constexpr (requires { visitor.fallback(); }) {
+                return visitor.fallback();
+            } else if constexpr (std::is_default_constructible_v<result_type>) {
+                return result_type{};
+            } else {
+                throw std::bad_any_cast();
+            }
+        }
+
+        // Try to call the visitor using type information
+        return visitImpl(std::forward<Visitor>(visitor));
+    }
+
+    /*!
+     * \brief Visit and possibly modify the value in BoxedValue with a visitor
+     * \tparam Visitor The type of visitor
+     * \param visitor The visitor function object
+     * \return The return value of the visitor
+     *
+     * Non-const version, allows modification of internal value
+     */
+    template <typename Visitor>
+    auto visit(Visitor&& visitor) {
+        using result_type = std::invoke_result_t<Visitor, int&>;
+
+        std::unique_lock lock(m_mutex_);
+        if (isUndef() || isNull() || isReadonly()) {
+            if constexpr (requires { visitor.fallback(); }) {
+                return visitor.fallback();
+            } else if constexpr (std::is_default_constructible_v<result_type>) {
+                return result_type{};
+            } else {
+                throw std::bad_any_cast();
+            }
+        }
+
+        auto result = visitImpl(std::forward<Visitor>(visitor));
+        m_data_->mModificationTime = std::chrono::system_clock::now();
+        return result;
+    }
+
+private:
+    using MapStringInt = std::map<std::string, int>;
+    using MapStringDouble = std::map<std::string, double>;
+    using MapStringString = std::map<std::string, std::string>;
+    using UMapStringInt = std::unordered_map<std::string, int>;
+    using UMapStringDouble = std::unordered_map<std::string, double>;
+    using UMapStringString = std::unordered_map<std::string, std::string>;
+    using PairIntInt = std::pair<int, int>;
+    using PairIntString = std::pair<int, std::string>;
+    using PairStringString = std::pair<std::string, std::string>;
+    using TupleInt = std::tuple<int>;
+    using TupleIntInt = std::tuple<int, int>;
+    using TupleIntString = std::tuple<int, std::string>;
+    using TupleStringString = std::tuple<std::string, std::string>;
+    using VariantTypes = std::variant<int, double, std::string>;
+
+    template <typename Visitor>
+    auto visitImpl(Visitor&& visitor) const {
+        using result_type = std::invoke_result_t<Visitor, int&>;
+
+#define VISIT_TYPE(Type)                                                \
+    if (m_data_->mObj.type() == typeid(Type)) {                         \
+        if (isConst() || isReadonly()) {                                \
+            return visitor(*std::any_cast<const Type>(&m_data_->mObj)); \
+        } else {                                                        \
+            return visitor(*std::any_cast<Type>(&m_data_->mObj));       \
+        }                                                               \
+    }
+
+        VISIT_TYPE(int)
+        VISIT_TYPE(unsigned int)
+        VISIT_TYPE(long)
+        VISIT_TYPE(unsigned long)
+        VISIT_TYPE(long long)
+        VISIT_TYPE(unsigned long long)
+        VISIT_TYPE(short)
+        VISIT_TYPE(unsigned short)
+        VISIT_TYPE(char)
+        VISIT_TYPE(unsigned char)
+        VISIT_TYPE(signed char)
+        VISIT_TYPE(wchar_t)
+        VISIT_TYPE(char16_t)
+        VISIT_TYPE(char32_t)
+        VISIT_TYPE(float)
+        VISIT_TYPE(double)
+        VISIT_TYPE(long double)
+        VISIT_TYPE(bool)
+
+        VISIT_TYPE(std::string)
+        VISIT_TYPE(std::wstring)
+        VISIT_TYPE(std::u16string)
+        VISIT_TYPE(std::u32string)
+        VISIT_TYPE(std::string_view)
+        VISIT_TYPE(std::wstring_view)
+        VISIT_TYPE(std::u16string_view)
+        VISIT_TYPE(std::u32string_view)
+
+        VISIT_TYPE(std::vector<int>)
+        VISIT_TYPE(std::vector<double>)
+        VISIT_TYPE(std::vector<std::string>)
+        VISIT_TYPE(std::vector<bool>)
+        VISIT_TYPE(std::list<int>)
+        VISIT_TYPE(std::list<double>)
+        VISIT_TYPE(std::list<std::string>)
+
+        VISIT_TYPE(MapStringInt)
+        VISIT_TYPE(MapStringDouble)
+        VISIT_TYPE(MapStringString)
+        VISIT_TYPE(UMapStringInt)
+        VISIT_TYPE(UMapStringDouble)
+        VISIT_TYPE(UMapStringString)
+        VISIT_TYPE(std::set<int>)
+        VISIT_TYPE(std::set<double>)
+        VISIT_TYPE(std::set<std::string>)
+        VISIT_TYPE(std::unordered_set<int>)
+        VISIT_TYPE(std::unordered_set<double>)
+        VISIT_TYPE(std::unordered_set<std::string>)
+
+        VISIT_TYPE(std::shared_ptr<int>)
+        VISIT_TYPE(std::shared_ptr<double>)
+        VISIT_TYPE(std::shared_ptr<std::string>)
+        VISIT_TYPE(std::unique_ptr<int>)
+        VISIT_TYPE(std::unique_ptr<double>)
+        VISIT_TYPE(std::unique_ptr<std::string>)
+
+        VISIT_TYPE(std::chrono::seconds)
+        VISIT_TYPE(std::chrono::milliseconds)
+        VISIT_TYPE(std::chrono::microseconds)
+        VISIT_TYPE(std::chrono::nanoseconds)
+        VISIT_TYPE(std::chrono::minutes)
+        VISIT_TYPE(std::chrono::hours)
+        VISIT_TYPE(std::chrono::system_clock::time_point)
+        VISIT_TYPE(std::chrono::steady_clock::time_point)
+        VISIT_TYPE(std::chrono::high_resolution_clock::time_point)
+
+        VISIT_TYPE(std::optional<int>)
+        VISIT_TYPE(std::optional<double>)
+        VISIT_TYPE(std::optional<std::string>)
+
+        VISIT_TYPE(PairIntInt)
+        VISIT_TYPE(PairIntString)
+        VISIT_TYPE(PairStringString)
+        VISIT_TYPE(TupleInt)
+        VISIT_TYPE(TupleIntInt)
+        VISIT_TYPE(TupleIntString)
+        VISIT_TYPE(TupleStringString)
+
+        // 变体类型
+        VISIT_TYPE(VariantTypes)
+
+#define VISIT_REF_TYPE(Type)                                                   \
+    if (m_data_->mObj.type() == typeid(std::reference_wrapper<Type>)) {        \
+        return visitor(                                                        \
+            std::any_cast<std::reference_wrapper<Type>>(m_data_->mObj).get()); \
+    }                                                                          \
+    if (m_data_->mObj.type() == typeid(std::reference_wrapper<const Type>)) {  \
+        return visitor(                                                        \
+            std::any_cast<std::reference_wrapper<const Type>>(m_data_->mObj)   \
+                .get());                                                       \
+    }
+
+        // 基本数值类型引用
+        VISIT_REF_TYPE(int)
+        VISIT_REF_TYPE(unsigned int)
+        VISIT_REF_TYPE(long)
+        VISIT_REF_TYPE(unsigned long)
+        VISIT_REF_TYPE(long long)
+        VISIT_REF_TYPE(unsigned long long)
+        VISIT_REF_TYPE(short)
+        VISIT_REF_TYPE(unsigned short)
+        VISIT_REF_TYPE(char)
+        VISIT_REF_TYPE(unsigned char)
+        VISIT_REF_TYPE(signed char)
+        VISIT_REF_TYPE(wchar_t)
+        VISIT_REF_TYPE(char16_t)
+        VISIT_REF_TYPE(char32_t)
+        VISIT_REF_TYPE(float)
+        VISIT_REF_TYPE(double)
+        VISIT_REF_TYPE(long double)
+        VISIT_REF_TYPE(bool)
+
+        // 字符串类型引用
+        VISIT_REF_TYPE(std::string)
+        VISIT_REF_TYPE(std::wstring)
+        VISIT_REF_TYPE(std::u16string)
+        VISIT_REF_TYPE(std::u32string)
+        VISIT_REF_TYPE(std::string_view)
+        VISIT_REF_TYPE(std::wstring_view)
+        VISIT_REF_TYPE(std::u16string_view)
+        VISIT_REF_TYPE(std::u32string_view)
+
+        // 常用容器类型引用
+        VISIT_REF_TYPE(std::vector<int>)
+        VISIT_REF_TYPE(std::vector<double>)
+        VISIT_REF_TYPE(std::vector<std::string>)
+
+        // 使用类型别名
+        VISIT_REF_TYPE(MapStringInt)
+        VISIT_REF_TYPE(MapStringString)
+        VISIT_REF_TYPE(UMapStringInt)
+        VISIT_REF_TYPE(UMapStringString)
+
+#undef VISIT_TYPE
+#undef VISIT_REF_TYPE
+
+        // 处理未能匹配到的类型
+        if constexpr (requires { visitor.fallback(); }) {
+            return visitor.fallback();
+        } else if constexpr (std::is_default_constructible_v<result_type>) {
+            return result_type{};
+        } else {
+            throw std::bad_any_cast();
+        }
+    }
 };
 
 /*!
@@ -569,7 +804,7 @@ inline auto voidVar() -> BoxedValue { return {}; }
 template <typename T>
 auto varWithDesc(T&& value, std::string_view description) -> BoxedValue {
     auto result = var(std::forward<T>(value));
-    result.setAttr("description", BoxedValue(description));
+    result.setAttr("description", BoxedValue(std::string(description)));
     return result;
 }
 

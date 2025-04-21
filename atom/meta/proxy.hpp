@@ -24,10 +24,10 @@
 #endif
 
 #include "atom/algorithm/hash.hpp"
+#include "atom/macro.hpp"
 #include "atom/meta/abi.hpp"
 #include "atom/meta/func_traits.hpp"
 #include "atom/meta/proxy_params.hpp"
-#include "atom/macro.hpp"
 
 namespace atom::meta {
 
@@ -776,14 +776,34 @@ public:
         info_.setName("composed_" + info1.getName() + "_" + info2.getName());
         info_.setReturnType(info2.getReturnType());
 
-        // 添加第一个函数的参数类型
         for (const auto& argType : info1.getArgumentTypes()) {
             info_.addArgumentType(argType);
         }
 
-        // 计算组合后的哈希值
         std::string hash = info1.getHash() + "_" + info2.getHash();
         info_.setHash(hash);
+    }
+
+    ComposedProxy(const ComposedProxy& other)
+        : first_(other.first_), second_(other.second_) {}
+
+    ComposedProxy(ComposedProxy&& other) noexcept
+        : first_(std::move(other.first_)), second_(std::move(other.second_)) {}
+
+    ComposedProxy& operator=(const ComposedProxy& other) {
+        if (this != &other) {
+            first_ = other.first_;
+            second_ = other.second_;
+        }
+        return *this;
+    }
+
+    ComposedProxy& operator=(ComposedProxy&& other) noexcept {
+        if (this != &other) {
+            first_ = std::move(other.first_);
+            second_ = std::move(other.second_);
+        }
+        return *this;
     }
 
     [[nodiscard]] auto getFunctionInfo() const -> FunctionInfo {
@@ -818,8 +838,8 @@ template <typename Func>
 AsyncProxyFunction(Func) -> AsyncProxyFunction<Func>;
 
 template <typename Func>
-AsyncProxyFunction(Func&&,
-                   FunctionInfo&) -> AsyncProxyFunction<std::decay_t<Func>>;
+AsyncProxyFunction(Func&&, FunctionInfo&)
+    -> AsyncProxyFunction<std::decay_t<Func>>;
 
 // 工厂函数，用于创建代理
 template <typename Func>
