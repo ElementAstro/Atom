@@ -6,18 +6,65 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <functional>
+#include <system_error>
 
 #include "hdu.hpp"
+
+/**
+ * @enum FITSErrorCode
+ * @brief Error codes for FITS file operations.
+ */
+enum class FITSErrorCode {
+    Success = 0,
+    FileNotExist,
+    FileNotAccessible,
+    InvalidFormat,
+    ReadError,
+    WriteError,
+    MemoryError,
+    CompressionError,
+    CorruptedData,
+    UnsupportedFeature,
+    InternalError
+};
+
+/**
+ * @brief Creates an error code object from a FITSErrorCode.
+ */
+std::error_code make_error_code(FITSErrorCode);
+
+/**
+ * @brief Error category for FITS errors.
+ */
+class FITSErrorCategory : public std::error_category {
+public:
+    [[nodiscard]] const char* name() const noexcept override;
+    [[nodiscard]] std::string message(int ev) const override;
+    [[nodiscard]] static const FITSErrorCategory& instance() noexcept;
+};
 
 /**
  * @class FITSFileException
  * @brief Exception class for FITS file operations.
  */
-class FITSFileException : public std::runtime_error {
+class FITSFileException : public std::system_error {
 public:
+    explicit FITSFileException(FITSErrorCode code, const std::string& message = "")
+        : std::system_error(make_error_code(code), message) {}
+    
     explicit FITSFileException(const std::string& message)
-        : std::runtime_error(message) {}
+        : std::system_error(make_error_code(FITSErrorCode::InternalError), message) {}
+        
+    [[nodiscard]] FITSErrorCode errorCode() const noexcept {
+        return static_cast<FITSErrorCode>(code().value());
+    }
 };
+
+/**
+ * @brief Callback type for progress reporting.
+ */
+using ProgressCallback = std::function<void(float progress, const std::string& status)>;
 
 /**
  * @class FITSFile
@@ -162,9 +209,52 @@ public:
      */
     ImageHDU& createImageHDU(int width, int height, int channels = 1);
 
+    /**
+     * @brief Sets a callback function for progress reporting.
+     * @param callback The callback function to set.
+     */
+    void setProgressCallback(ProgressCallback callback) noexcept;
+    
+    /**
+     * @brief Reads a FITS file from the specified filename with options.
+     * @param filename The name of the file to read.
+     * @param useMmap Whether to use memory-mapped I/O for large files.
+     * @param validateData Whether to validate data after reading.
+     * @throws FITSFileException if file cannot be opened or read
+     */
+    void readFITS(const std::string& filename, bool useMmap = false, 
+                  bool validateData = true);
+
+    /**
+     * @brief Reads a FITS file asynchronously with options.
+     * @param filename The name of the file to read.
+     * @param useMmap Whether to use memory-mapped I/O for large files.
+     * @param validateData Whether to validate data after reading.
+     * @return A future that can be waited on for completion.
+     */
+    [[nodiscard]] std::future<void> readFITSAsync(const std::string& filename, 
+                                                 bool useMmap = false,
+                                                 bool validateData = true);
+
 private:
     std::vector<std::unique_ptr<HDU>>
         hdus;  ///< Vector of unique pointers to HDUs.
+    ProgressCallback progressCallback;       ///< Callback for progress reporting.
+    
+    /**
+     * @brief Reports progress to the registered callback, if any.
+     * @param progress Progress value (0.0 to 1.0).
+     * @param status Status message.
+     */
+    void reportProgress(float progress, const std::string& status) const;
+    
+    /**
+     * @brief Reads a FITS file using memory-mapped I/O.
+     * @param filename The name of the file to read.
+     * @param validateData Whether to validate data after reading.
+     * @throws FITSFileException if file cannot be memory-mapped or read
+     */
+    void readFITSWithMmap(const std::string& filename, bool validateData);
 };
 
 // Template implementations

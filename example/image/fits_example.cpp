@@ -1,98 +1,122 @@
-#include <iomanip>
 #include <iostream>
-#include "atom/image/fits_file.hpp"
+#include <string>
+#include "atom/image/fits_utils.hpp"
 
-int main() {
-    try {
-        FITSFile fitsFile;
+using namespace atom::image;
 
-        // 创建一个简单的 10x10 彩色图像
-        auto imageHDU = std::make_unique<ImageHDU>();
-        imageHDU->setImageSize(10, 10, 3);  // 3 channels for RGB
-        imageHDU->setHeaderKeyword("SIMPLE", "T");
-        imageHDU->setHeaderKeyword("BITPIX", "16");
-        imageHDU->setHeaderKeyword("NAXIS", "3");
-        imageHDU->setHeaderKeyword("EXTEND", "T");
-
-        // 用渐变填充图像
-        for (int y = 0; y < 10; ++y) {
-            for (int x = 0; x < 10; ++x) {
-                imageHDU->setPixel<int16_t>(x, y,
-                                            static_cast<int16_t>(x * 1000 / 9),
-                                            0);  // Red channel
-                imageHDU->setPixel<int16_t>(x, y,
-                                            static_cast<int16_t>(y * 1000 / 9),
-                                            1);  // Green channel
-                imageHDU->setPixel<int16_t>(
-                    x, y, static_cast<int16_t>((x + y) * 500 / 9),
-                    2);  // Blue channel
-            }
-        }
-
-        fitsFile.addHDU(std::move(imageHDU));
-
-        // 写入文件
-        fitsFile.writeFITS("test_color.fits");
-
-        // 读取文件
-        FITSFile readFile;
-        readFile.readFITS("test_color.fits");
-
-        // 验证图像内容
-        const auto& readHDU = dynamic_cast<const ImageHDU&>(readFile.getHDU(0));
-        auto [width, height, channels] = readHDU.getImageSize();
-        std::cout << "Image size: " << width << "x" << height << "x" << channels
+// 这个示例展示了如何使用简化的FITS API进行常见图像处理操作
+int main(int argc, char** argv) {
+    // 检查命令行参数
+    if (argc < 3) {
+        std::cerr << "用法: " << argv[0] << " <输入FITS文件> <输出FITS文件>"
                   << std::endl;
-
-        // 显示每个通道的第一行
-        for (int c = 0; c < channels; ++c) {
-            std::cout << "Channel " << c << ", first row:" << std::endl;
-            for (int x = 0; x < width; ++x) {
-                std::cout << std::setw(5) << readHDU.getPixel<int16_t>(x, 0, c)
-                          << " ";
-            }
-            std::cout << std::endl;
-        }
-
-        // 计算每个通道的图像统计信息
-        for (int c = 0; c < channels; ++c) {
-            auto stats = readHDU.computeImageStats<int16_t>(c);
-            std::cout << "\nImage statistics for channel " << c << ":"
-                      << std::endl;
-            std::cout << "Min: " << stats.min << std::endl;
-            std::cout << "Max: " << stats.max << std::endl;
-            std::cout << "Mean: " << stats.mean << std::endl;
-            std::cout << "StdDev: " << stats.stddev << std::endl;
-        }
-
-        // 应用高斯模糊滤波器到绿色通道
-        std::vector<std::vector<double>> gaussianKernel = {
-            {1 / 16.0, 1 / 8.0, 1 / 16.0},
-            {1 / 8.0, 1 / 4.0, 1 / 8.0},
-            {1 / 16.0, 1 / 8.0, 1 / 16.0}};
-
-        auto& editableHDU = dynamic_cast<ImageHDU&>(readFile.getHDU(0));
-        editableHDU.applyFilter<int16_t>(gaussianKernel,
-                                         1);  // Apply to green channel only
-
-        std::cout << "\nAfter applying Gaussian blur to green channel:"
-                  << std::endl;
-        for (int c = 0; c < channels; ++c) {
-            std::cout << "Channel " << c << ", first row:" << std::endl;
-            for (int x = 0; x < width; ++x) {
-                std::cout << std::setw(5)
-                          << editableHDU.getPixel<int16_t>(x, 0, c) << " ";
-            }
-            std::cout << std::endl;
-        }
-
-        // 将修改后的图像保存到新文件
-        readFile.writeFITS("test_color_blurred.fits");
-
-    } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
 
-    return 0;
+    std::string inputFilename = argv[1];
+    std::string outputFilename = argv[2];
+
+    try {
+        // 检查文件是否有效
+        if (!isValidFits(inputFilename)) {
+            std::cerr << "无效的FITS文件: " << inputFilename << std::endl;
+            return 1;
+        }
+
+        // 获取FITS文件基本信息
+        auto imageInfo = getFitsImageInfo(inputFilename);
+        if (!imageInfo) {
+            std::cerr << "无法获取FITS文件信息: " << inputFilename << std::endl;
+            return 1;
+        }
+
+        auto [width, height, channels] = *imageInfo;
+        std::cout << "FITS图像信息:\n";
+        std::cout << "  宽度: " << width << "\n";
+        std::cout << "  高度: " << height << "\n";
+        std::cout << "  通道数: " << channels << "\n";
+
+        // 加载图像
+        auto image = loadFitsImage(inputFilename);
+        std::cout << "成功加载FITS图像\n";
+
+        // 图像处理操作示例
+
+        // 1. 自动调整色阶增强对比度
+        std::cout << "应用自动色阶调整...\n";
+        image->autoLevels(0.01, 0.99);
+
+        // 2. 应用高斯滤镜平滑图像
+        std::cout << "应用高斯滤镜...\n";
+        image->applyFilter(FilterType::GAUSSIAN, 3);
+
+        // 3. 生成缩略图
+        std::cout << "创建缩略图...\n";
+        auto thumbnail = image->createThumbnail(256);
+
+        // 4. 提取感兴趣区域
+        int roiX = width / 4;
+        int roiY = height / 4;
+        int roiWidth = width / 2;
+        int roiHeight = height / 2;
+        std::cout << "提取中心区域 (" << roiX << "," << roiY << "," << roiWidth
+                  << "," << roiHeight << ")...\n";
+        auto roi = image->extractROI(roiX, roiY, roiWidth, roiHeight);
+
+        // 5. 边缘检测
+        std::cout << "应用边缘检测...\n";
+        roi->detectEdges(FilterType::SOBEL);
+
+        // 保存处理后的图像和缩略图
+        std::cout << "保存处理后的图像: " << outputFilename << std::endl;
+        image->save(outputFilename);
+
+        std::string thumbnailFilename =
+            outputFilename.substr(0, outputFilename.find_last_of(".")) +
+            "_thumb.fits";
+        std::cout << "保存缩略图: " << thumbnailFilename << std::endl;
+        thumbnail->save(thumbnailFilename);
+
+        std::string roiFilename =
+            outputFilename.substr(0, outputFilename.find_last_of(".")) +
+            "_roi.fits";
+        std::cout << "保存ROI: " << roiFilename << std::endl;
+        roi->save(roiFilename);
+
+#ifdef ATOM_ENABLE_OPENCV
+        // 如果启用了OpenCV支持，展示OpenCV特定功能
+        std::cout << "\nOpenCV功能示例:\n";
+
+        // 1. 转换为OpenCV Mat处理
+        std::cout << "将FITS转换为OpenCV Mat...\n";
+        cv::Mat cvImage = image->toMat();
+
+        // 2. 应用特定OpenCV函数
+        std::cout << "应用OpenCV特定的处理...\n";
+        image->processWithOpenCV("GaussianBlur",
+                                 {{"ksize", 5}, {"sigma", 1.5}});
+
+        // 3. 自定义OpenCV滤镜
+        std::cout << "应用自定义OpenCV滤镜...\n";
+        image->applyOpenCVFilter([](const cv::Mat& src) {
+            cv::Mat dst;
+            cv::medianBlur(src, dst, 3);
+            cv::Laplacian(dst, dst, -1, 3);
+            return dst;
+        });
+
+        // 保存OpenCV处理后的图像
+        std::string opencvFilename =
+            outputFilename.substr(0, outputFilename.find_last_of(".")) +
+            "_opencv.fits";
+        std::cout << "保存OpenCV处理的图像: " << opencvFilename << std::endl;
+        image->save(opencvFilename);
+#endif
+
+        std::cout << "所有处理完成！\n";
+        return 0;
+    } catch (const std::exception& e) {
+        std::cerr << "错误: " << e.what() << std::endl;
+        return 1;
+    }
 }

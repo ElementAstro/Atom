@@ -28,7 +28,9 @@ bool ImageHDU::validateCoordinates(int x, int y, int channel) const noexcept {
            channel < channels;
 }
 
-void ImageHDU::readHDU(std::ifstream& file) {
+void ImageHDU::readHDU(
+    std::ifstream& file,
+    std::function<void(float, const std::string&)> progressCallback) {
     if (!file || !file.good()) {
         throw FileOperationException("Invalid file stream for reading HDU");
     }
@@ -1117,3 +1119,803 @@ template std::vector<float> ImageHDU::decompressRLE<float>(
     const std::vector<unsigned char>&, size_t) const;
 template std::vector<double> ImageHDU::decompressRLE<double>(
     const std::vector<unsigned char>&, size_t) const;
+
+template <FitsNumeric T>
+std::vector<double> ImageHDU::computeHistogram(int numBins, int channel) const {
+    if (numBins <= 0) {
+        throw std::invalid_argument("Number of bins must be positive");
+    }
+
+    if (channel < 0 || channel >= channels) {
+        throw std::out_of_range("Channel index out of range");
+    }
+
+    if (!data) {
+        throw HDUException("Image data not initialized");
+    }
+
+    try {
+        const auto& typedData = dynamic_cast<const TypedFITSData<T>&>(*data);
+        const auto& pixelData = typedData.getData();
+
+        // 计算该通道的最小值和最大值
+        auto stats = computeImageStats<T>(channel);
+        T minVal = stats.min;
+        T maxVal = stats.max;
+
+        // 如果最小值和最大值相等，则返回单值直方图
+        if (minVal == maxVal) {
+            std::vector<double> histogram(numBins, 0.0);
+            histogram[0] = width * height;  // 所有像素都在第一个bin
+            return histogram;
+        }
+
+        double range = static_cast<double>(maxVal - minVal);
+        double binWidth = range / numBins;
+
+        // 初始化直方图
+        std::vector<double> histogram(numBins, 0.0);
+
+        // 填充直方图
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                T pixelValue = pixelData[(y * width + x) * channels + channel];
+                // 计算该像素值应该位于哪个bin
+                int binIndex =
+                    static_cast<int>((pixelValue - minVal) / binWidth);
+
+                // 确保bin索引在有效范围内
+                binIndex = std::min(binIndex, numBins - 1);
+                binIndex = std::max(binIndex, 0);
+
+                histogram[binIndex] += 1.0;
+            }
+        }
+
+        return histogram;
+    } catch (const std::bad_cast& e) {
+        throw HDUException("Data type mismatch in computeHistogram");
+    }
+}
+
+template <FitsNumeric T>
+void ImageHDU::equalizeHistogram(int channel) {
+    if (!data) {
+        throw HDUException("Image data not initialized");
+    }
+
+    // 处理所有通道或指定通道
+    for (int c = 0; c < channels; ++c) {
+        if (channel != -1 && c != channel) {
+            continue;
+        }
+
+        try {
+            auto& typedData = dynamic_cast<TypedFITSData<T>&>(*data);
+            auto& pixelData = typedData.getData();
+
+            // 计算该通道的最小值、最大值和直方图
+            auto stats = computeImageStats<T>(c);
+            T minVal = stats.min;
+            T maxVal = stats.max;
+
+            // 如果图像没有值域变化，则不需要处理
+            if (minVal == maxVal) {
+                continue;
+            }
+
+            // 计算256个bin的直方图（通常用于均衡化）
+            const int histogramBins = 256;
+            std::vector<double> histogram =
+                computeHistogram<T>(histogramBins, c);
+
+            // 计算累积分布函数(CDF)
+            std::vector<double> cdf(histogramBins, 0.0);
+            cdf[0] = histogram[0];
+            for (int i = 1; i < histogramBins; ++i) {
+                cdf[i] = cdf[i - 1] + histogram[i];
+            }
+
+            // 归一化CDF (0-1范围)
+            double totalPixels = width * height;
+            for (int i = 0; i < histogramBins; ++i) {
+                cdf[i] /= totalPixels;
+            }
+
+            // 创建映射表 (查找表)
+            std::vector<T> lookupTable(histogramBins);
+            for (int i = 0; i < histogramBins; ++i) {
+                // 将新值映射到原始类型的值域范围内
+                lookupTable[i] =
+                    static_cast<T>(minVal + cdf[i] * (maxVal - minVal));
+            }
+
+            // 应用直方图均衡化
+            for (int y = 0; y < height; ++y) {
+                for (int x = 0; x < width; ++x) {
+                    size_t pixelIndex = (y * width + x) * channels + c;
+                    T originalValue = pixelData[pixelIndex];
+
+                    // 将原始值映射到直方图bin
+                    int binIndex = static_cast<int>((originalValue - minVal) *
+                                                    (histogramBins - 1) /
+                                                    (maxVal - minVal));
+                    binIndex = std::min(binIndex, histogramBins - 1);
+                    binIndex = std::max(binIndex, 0);
+
+                    // 使用查找表获取新值
+                    pixelData[pixelIndex] = lookupTable[binIndex];
+                }
+            }
+        } catch (const std::bad_cast& e) {
+            throw HDUException("Data type mismatch in equalizeHistogram");
+        }
+    }
+}
+
+template <FitsNumeric T>
+void ImageHDU::autoLevels(double blackPoint, double whitePoint, int channel) {
+    if (blackPoint < 0.0 || blackPoint > 1.0 || whitePoint < 0.0 ||
+        whitePoint > 1.0 || blackPoint >= whitePoint) {
+        throw std::invalid_argument(
+            "Invalid percentile values: blackPoint must be less than "
+            "whitePoint, both in range [0,1]");
+    }
+
+    if (!data) {
+        throw HDUException("Image data not initialized");
+    }
+
+    // 处理所有通道或指定通道
+    for (int c = 0; c < channels; ++c) {
+        if (channel != -1 && c != channel) {
+            continue;
+        }
+
+        try {
+            auto& typedData = dynamic_cast<TypedFITSData<T>&>(*data);
+            auto& pixelData = typedData.getData();
+
+            // 提取通道数据
+            std::vector<T> channelData;
+            channelData.reserve(width * height);
+            for (int y = 0; y < height; ++y) {
+                for (int x = 0; x < width; ++x) {
+                    channelData.push_back(
+                        pixelData[(y * width + x) * channels + c]);
+                }
+            }
+
+            // 排序以找到百分位数
+            std::sort(channelData.begin(), channelData.end());
+
+            // 计算黑点和白点对应的索引
+            size_t blackIndex =
+                static_cast<size_t>(blackPoint * channelData.size());
+            size_t whiteIndex =
+                static_cast<size_t>(whitePoint * channelData.size());
+
+            // 边界检查
+            blackIndex = std::min(blackIndex, channelData.size() - 1);
+            whiteIndex = std::min(whiteIndex, channelData.size() - 1);
+
+            if (blackIndex >= whiteIndex) {
+                blackIndex = 0;
+                whiteIndex = channelData.size() - 1;
+            }
+
+            // 获取对应的像素值
+            T blackValue = channelData[blackIndex];
+            T whiteValue = channelData[whiteIndex];
+
+            // 如果黑点和白点值相同，不需要处理
+            if (blackValue == whiteValue) {
+                continue;
+            }
+
+            // 应用级别调整：将[blackValue, whiteValue]范围拉伸到[minVal,
+            // maxVal]
+            T minVal = std::numeric_limits<T>::lowest();
+            T maxVal = std::numeric_limits<T>::max();
+
+            for (int y = 0; y < height; ++y) {
+                for (int x = 0; x < width; ++x) {
+                    size_t pixelIndex = (y * width + x) * channels + c;
+                    T& pixelValue = pixelData[pixelIndex];
+
+                    // 限制值到黑点和白点
+                    if (pixelValue <= blackValue) {
+                        pixelValue = minVal;
+                    } else if (pixelValue >= whiteValue) {
+                        pixelValue = maxVal;
+                    } else {
+                        // 线性映射
+                        double normalizedValue =
+                            static_cast<double>(pixelValue - blackValue) /
+                            (whiteValue - blackValue);
+                        pixelValue = static_cast<T>(
+                            minVal + normalizedValue * (maxVal - minVal));
+                    }
+                }
+            }
+        } catch (const std::bad_cast& e) {
+            throw HDUException("Data type mismatch in autoLevels");
+        }
+    }
+}
+
+double ImageHDU::computeCompressionRatio() const noexcept {
+    if (!data || !compressed) {
+        return 1.0;  // 未压缩或没有数据
+    }
+
+    // 计算原始大小
+    int bitpix = 0;
+    try {
+        std::string bitpixStr = header.getKeywordValue("BITPIX");
+        bitpix = bitpixStr.empty() ? 0 : std::stoi(bitpixStr);
+    } catch (...) {
+        return 1.0;  // 无法确定位深度
+    }
+
+    if (bitpix == 0) {
+        return 1.0;
+    }
+
+    // 原始数据大小（字节）
+    size_t originalSize =
+        static_cast<size_t>(width) * height * channels * std::abs(bitpix) / 8;
+
+    // 获取压缩后数据大小
+    size_t compressedSize = data->getCompressedSize();
+
+    if (compressedSize == 0) {
+        return 1.0;
+    }
+
+    return static_cast<double>(originalSize) / compressedSize;
+}
+
+template <FitsNumeric T>
+void ImageHDU::detectEdges(const std::string& method, int channel) {
+    if (!data) {
+        throw HDUException("Image data not initialized");
+    }
+
+    // 创建适当的边缘检测滤波器
+    std::vector<std::vector<double>> kernel;
+
+    if (method == "sobel_x") {
+        kernel = {{-1, 0, 1}, {-2, 0, 2}, {-1, 0, 1}};
+    } else if (method == "sobel_y") {
+        kernel = {{-1, -2, -1}, {0, 0, 0}, {1, 2, 1}};
+    } else if (method == "sobel") {
+        // 计算水平和垂直Sobel滤波器的组合结果
+        std::vector<std::vector<double>> kernelX = {
+            {-1, 0, 1}, {-2, 0, 2}, {-1, 0, 1}};
+        std::vector<std::vector<double>> kernelY = {
+            {-1, -2, -1}, {0, 0, 0}, {1, 2, 1}};
+
+        try {
+            auto& typedData = dynamic_cast<TypedFITSData<T>&>(*data);
+            auto& pixelData = typedData.getData();
+            auto originalData = pixelData;  // 创建原始数据的副本
+
+            // 处理所有通道或指定通道
+            for (int c = 0; c < channels; ++c) {
+                if (channel != -1 && c != channel) {
+                    continue;
+                }
+
+                std::vector<double> gradientX(width * height, 0.0);
+                std::vector<double> gradientY(width * height, 0.0);
+
+                // 计算X和Y方向的梯度
+                for (int y = 1; y < height - 1; ++y) {
+                    for (int x = 1; x < width - 1; ++x) {
+                        double sumX = 0.0, sumY = 0.0;
+
+                        for (int ky = -1; ky <= 1; ++ky) {
+                            for (int kx = -1; kx <= 1; ++kx) {
+                                int imgY = y + ky;
+                                int imgX = x + kx;
+
+                                sumX += kernelX[ky + 1][kx + 1] *
+                                        originalData[(imgY * width + imgX) *
+                                                         channels +
+                                                     c];
+                                sumY += kernelY[ky + 1][kx + 1] *
+                                        originalData[(imgY * width + imgX) *
+                                                         channels +
+                                                     c];
+                            }
+                        }
+
+                        gradientX[(y * width + x)] = sumX;
+                        gradientY[(y * width + x)] = sumY;
+                    }
+                }
+
+                // 计算梯度幅度
+                for (int y = 0; y < height; ++y) {
+                    for (int x = 0; x < width; ++x) {
+                        double magnitude =
+                            std::sqrt(gradientX[y * width + x] *
+                                          gradientX[y * width + x] +
+                                      gradientY[y * width + x] *
+                                          gradientY[y * width + x]);
+
+                        // 裁剪到类型范围
+                        pixelData[(y * width + x) * channels + c] =
+                            static_cast<T>(std::min(
+                                static_cast<double>(
+                                    std::numeric_limits<T>::max()),
+                                std::max(static_cast<double>(
+                                             std::numeric_limits<T>::lowest()),
+                                         magnitude)));
+                    }
+                }
+            }
+            return;
+
+        } catch (const std::bad_cast& e) {
+            throw HDUException("Data type mismatch in detectEdges");
+        }
+    } else if (method == "laplacian") {
+        kernel = {{0, 1, 0}, {1, -4, 1}, {0, 1, 0}};
+    } else if (method == "prewitt_x") {
+        kernel = {{-1, 0, 1}, {-1, 0, 1}, {-1, 0, 1}};
+    } else if (method == "prewitt_y") {
+        kernel = {{-1, -1, -1}, {0, 0, 0}, {1, 1, 1}};
+    } else if (method == "prewitt") {
+        // 计算水平和垂直Prewitt滤波器的组合结果
+        std::vector<std::vector<double>> kernelX = {
+            {-1, 0, 1}, {-1, 0, 1}, {-1, 0, 1}};
+        std::vector<std::vector<double>> kernelY = {
+            {-1, -1, -1}, {0, 0, 0}, {1, 1, 1}};
+
+        try {
+            auto& typedData = dynamic_cast<TypedFITSData<T>&>(*data);
+            auto& pixelData = typedData.getData();
+            auto originalData = pixelData;
+
+            // 处理所有通道或指定通道
+            for (int c = 0; c < channels; ++c) {
+                if (channel != -1 && c != channel) {
+                    continue;
+                }
+
+                std::vector<double> gradientX(width * height, 0.0);
+                std::vector<double> gradientY(width * height, 0.0);
+
+                // 计算X和Y方向的梯度
+                for (int y = 1; y < height - 1; ++y) {
+                    for (int x = 1; x < width - 1; ++x) {
+                        double sumX = 0.0, sumY = 0.0;
+
+                        for (int ky = -1; ky <= 1; ++ky) {
+                            for (int kx = -1; kx <= 1; ++kx) {
+                                int imgY = y + ky;
+                                int imgX = x + kx;
+
+                                sumX += kernelX[ky + 1][kx + 1] *
+                                        originalData[(imgY * width + imgX) *
+                                                         channels +
+                                                     c];
+                                sumY += kernelY[ky + 1][kx + 1] *
+                                        originalData[(imgY * width + imgX) *
+                                                         channels +
+                                                     c];
+                            }
+                        }
+
+                        gradientX[(y * width + x)] = sumX;
+                        gradientY[(y * width + x)] = sumY;
+                    }
+                }
+
+                // 计算梯度幅度
+                for (int y = 0; y < height; ++y) {
+                    for (int x = 0; x < width; ++x) {
+                        double magnitude =
+                            std::sqrt(gradientX[y * width + x] *
+                                          gradientX[y * width + x] +
+                                      gradientY[y * width + x] *
+                                          gradientY[y * width + x]);
+
+                        pixelData[(y * width + x) * channels + c] =
+                            static_cast<T>(std::min(
+                                static_cast<double>(
+                                    std::numeric_limits<T>::max()),
+                                std::max(static_cast<double>(
+                                             std::numeric_limits<T>::lowest()),
+                                         magnitude)));
+                    }
+                }
+            }
+            return;
+
+        } catch (const std::bad_cast& e) {
+            throw HDUException("Data type mismatch in detectEdges");
+        }
+    } else {
+        throw std::invalid_argument("Unsupported edge detection method: " +
+                                    method);
+    }
+
+    // 将二维向量转换为span
+    std::vector<std::span<const double>> kernelSpan;
+    for (const auto& row : kernel) {
+        kernelSpan.push_back(std::span<const double>(row));
+    }
+
+    // 应用滤波器
+    applyFilter<T>(kernelSpan, channel);
+}
+
+template <FitsNumeric T>
+void ImageHDU::applyMorphology(const std::string& operation, int kernelSize,
+                               int channel) {
+    if (kernelSize <= 0 || kernelSize % 2 == 0) {
+        throw std::invalid_argument(
+            "Kernel size must be a positive odd number");
+    }
+
+    if (!data) {
+        throw HDUException("Image data not initialized");
+    }
+
+    // 确定形态学操作类型
+    MorphologicalOperation op;
+    if (operation == "dilate" || operation == "dilation") {
+        op = MorphologicalOperation::DILATE;
+    } else if (operation == "erode" || operation == "erosion") {
+        op = MorphologicalOperation::ERODE;
+    } else if (operation == "open" || operation == "opening") {
+        op = MorphologicalOperation::OPEN;
+    } else if (operation == "close" || operation == "closing") {
+        op = MorphologicalOperation::CLOSE;
+    } else if (operation == "tophat") {
+        op = MorphologicalOperation::TOPHAT;
+    } else if (operation == "blackhat") {
+        op = MorphologicalOperation::BLACKHAT;
+    } else {
+        throw std::invalid_argument("Unsupported morphological operation: " +
+                                    operation);
+    }
+
+    try {
+        auto& typedData = dynamic_cast<TypedFITSData<T>&>(*data);
+        auto& pixelData = typedData.getData();
+        auto originalData = pixelData;  // 保存原始数据的副本
+
+        // 创建结构元素 (kernel)
+        int radius = kernelSize / 2;
+
+        // 进行形态学操作
+        for (int c = 0; c < channels; ++c) {
+            if (channel != -1 && c != channel) {
+                continue;
+            }
+
+            // 对于复合操作，我们需要临时结果
+            std::vector<T> tempResult;
+
+            // 根据操作类型执行不同的形态学变换
+            switch (op) {
+                case MorphologicalOperation::DILATE: {
+                    // 膨胀：取邻域内的最大值
+                    for (int y = 0; y < height; ++y) {
+                        for (int x = 0; x < width; ++x) {
+                            T maxVal = std::numeric_limits<T>::lowest();
+
+                            for (int ky = -radius; ky <= radius; ++ky) {
+                                for (int kx = -radius; kx <= radius; ++kx) {
+                                    int ny = y + ky;
+                                    int nx = x + kx;
+
+                                    if (ny >= 0 && ny < height && nx >= 0 &&
+                                        nx < width) {
+                                        maxVal = std::max(
+                                            maxVal,
+                                            originalData[(ny * width + nx) *
+                                                             channels +
+                                                         c]);
+                                    }
+                                }
+                            }
+
+                            pixelData[(y * width + x) * channels + c] = maxVal;
+                        }
+                    }
+                    break;
+                }
+
+                case MorphologicalOperation::ERODE: {
+                    // 腐蚀：取邻域内的最小值
+                    for (int y = 0; y < height; ++y) {
+                        for (int x = 0; x < width; ++x) {
+                            T minVal = std::numeric_limits<T>::max();
+
+                            for (int ky = -radius; ky <= radius; ++ky) {
+                                for (int kx = -radius; kx <= radius; ++kx) {
+                                    int ny = y + ky;
+                                    int nx = x + kx;
+
+                                    if (ny >= 0 && ny < height && nx >= 0 &&
+                                        nx < width) {
+                                        minVal = std::min(
+                                            minVal,
+                                            originalData[(ny * width + nx) *
+                                                             channels +
+                                                         c]);
+                                    }
+                                }
+                            }
+
+                            pixelData[(y * width + x) * channels + c] = minVal;
+                        }
+                    }
+                    break;
+                }
+
+                case MorphologicalOperation::OPEN: {
+                    // 开：先腐蚀后膨胀
+                    tempResult.resize(pixelData.size());
+
+                    // 先腐蚀
+                    for (int y = 0; y < height; ++y) {
+                        for (int x = 0; x < width; ++x) {
+                            T minVal = std::numeric_limits<T>::max();
+
+                            for (int ky = -radius; ky <= radius; ++ky) {
+                                for (int kx = -radius; kx <= radius; ++kx) {
+                                    int ny = y + ky;
+                                    int nx = x + kx;
+
+                                    if (ny >= 0 && ny < height && nx >= 0 &&
+                                        nx < width) {
+                                        minVal = std::min(
+                                            minVal,
+                                            originalData[(ny * width + nx) *
+                                                             channels +
+                                                         c]);
+                                    }
+                                }
+                            }
+
+                            tempResult[(y * width + x) * channels + c] = minVal;
+                        }
+                    }
+
+                    // 再膨胀
+                    for (int y = 0; y < height; ++y) {
+                        for (int x = 0; x < width; ++x) {
+                            T maxVal = std::numeric_limits<T>::lowest();
+
+                            for (int ky = -radius; ky <= radius; ++ky) {
+                                for (int kx = -radius; kx <= radius; ++kx) {
+                                    int ny = y + ky;
+                                    int nx = x + kx;
+
+                                    if (ny >= 0 && ny < height && nx >= 0 &&
+                                        nx < width) {
+                                        maxVal = std::max(
+                                            maxVal,
+                                            tempResult[(ny * width + nx) *
+                                                           channels +
+                                                       c]);
+                                    }
+                                }
+                            }
+
+                            pixelData[(y * width + x) * channels + c] = maxVal;
+                        }
+                    }
+                    break;
+                }
+
+                case MorphologicalOperation::CLOSE: {
+                    // 闭：先膨胀后腐蚀
+                    tempResult.resize(pixelData.size());
+
+                    // 先膨胀
+                    for (int y = 0; y < height; ++y) {
+                        for (int x = 0; x < width; ++x) {
+                            T maxVal = std::numeric_limits<T>::lowest();
+
+                            for (int ky = -radius; ky <= radius; ++ky) {
+                                for (int kx = -radius; kx <= radius; ++kx) {
+                                    int ny = y + ky;
+                                    int nx = x + kx;
+
+                                    if (ny >= 0 && ny < height && nx >= 0 &&
+                                        nx < width) {
+                                        maxVal = std::max(
+                                            maxVal,
+                                            originalData[(ny * width + nx) *
+                                                             channels +
+                                                         c]);
+                                    }
+                                }
+                            }
+
+                            tempResult[(y * width + x) * channels + c] = maxVal;
+                        }
+                    }
+
+                    // 再腐蚀
+                    for (int y = 0; y < height; ++y) {
+                        for (int x = 0; x < width; ++x) {
+                            T minVal = std::numeric_limits<T>::max();
+
+                            for (int ky = -radius; ky <= radius; ++ky) {
+                                for (int kx = -radius; kx <= radius; ++kx) {
+                                    int ny = y + ky;
+                                    int nx = x + kx;
+
+                                    if (ny >= 0 && ny < height && nx >= 0 &&
+                                        nx < width) {
+                                        minVal = std::min(
+                                            minVal,
+                                            tempResult[(ny * width + nx) *
+                                                           channels +
+                                                       c]);
+                                    }
+                                }
+                            }
+
+                            pixelData[(y * width + x) * channels + c] = minVal;
+                        }
+                    }
+                    break;
+                }
+
+                case MorphologicalOperation::TOPHAT: {
+                    // 顶帽：原图 - 开运算
+                    tempResult.resize(pixelData.size());
+                    std::vector<T> opening(pixelData.size());
+
+                    // 先腐蚀
+                    for (int y = 0; y < height; ++y) {
+                        for (int x = 0; x < width; ++x) {
+                            T minVal = std::numeric_limits<T>::max();
+
+                            for (int ky = -radius; ky <= radius; ++ky) {
+                                for (int kx = -radius; kx <= radius; ++kx) {
+                                    int ny = y + ky;
+                                    int nx = x + kx;
+
+                                    if (ny >= 0 && ny < height && nx >= 0 &&
+                                        nx < width) {
+                                        minVal = std::min(
+                                            minVal,
+                                            originalData[(ny * width + nx) *
+                                                             channels +
+                                                         c]);
+                                    }
+                                }
+                            }
+
+                            tempResult[(y * width + x) * channels + c] = minVal;
+                        }
+                    }
+
+                    // 再膨胀
+                    for (int y = 0; y < height; ++y) {
+                        for (int x = 0; x < width; ++x) {
+                            T maxVal = std::numeric_limits<T>::lowest();
+
+                            for (int ky = -radius; ky <= radius; ++ky) {
+                                for (int kx = -radius; kx <= radius; ++kx) {
+                                    int ny = y + ky;
+                                    int nx = x + kx;
+
+                                    if (ny >= 0 && ny < height && nx >= 0 &&
+                                        nx < width) {
+                                        maxVal = std::max(
+                                            maxVal,
+                                            tempResult[(ny * width + nx) *
+                                                           channels +
+                                                       c]);
+                                    }
+                                }
+                            }
+
+                            opening[(y * width + x) * channels + c] = maxVal;
+                        }
+                    }
+
+                    // 原图 - 开运算
+                    for (int y = 0; y < height; ++y) {
+                        for (int x = 0; x < width; ++x) {
+                            size_t idx = (y * width + x) * channels + c;
+                            pixelData[idx] = static_cast<T>(std::max(
+                                static_cast<double>(
+                                    std::numeric_limits<T>::lowest()),
+                                std::min(
+                                    static_cast<double>(
+                                        std::numeric_limits<T>::max()),
+                                    static_cast<double>(originalData[idx]) -
+                                        opening[idx])));
+                        }
+                    }
+                    break;
+                }
+
+                case MorphologicalOperation::BLACKHAT: {
+                    // 黑帽：闭运算 - 原图
+                    tempResult.resize(pixelData.size());
+                    std::vector<T> closing(pixelData.size());
+
+                    // 先膨胀
+                    for (int y = 0; y < height; ++y) {
+                        for (int x = 0; x < width; ++x) {
+                            T maxVal = std::numeric_limits<T>::lowest();
+
+                            for (int ky = -radius; ky <= radius; ++ky) {
+                                for (int kx = -radius; kx <= radius; ++kx) {
+                                    int ny = y + ky;
+                                    int nx = x + kx;
+
+                                    if (ny >= 0 && ny < height && nx >= 0 &&
+                                        nx < width) {
+                                        maxVal = std::max(
+                                            maxVal,
+                                            originalData[(ny * width + nx) *
+                                                             channels +
+                                                         c]);
+                                    }
+                                }
+                            }
+
+                            tempResult[(y * width + x) * channels + c] = maxVal;
+                        }
+                    }
+
+                    // 再腐蚀
+                    for (int y = 0; y < height; ++y) {
+                        for (int x = 0; x < width; ++x) {
+                            T minVal = std::numeric_limits<T>::max();
+
+                            for (int ky = -radius; ky <= radius; ++ky) {
+                                for (int kx = -radius; kx <= radius; ++kx) {
+                                    int ny = y + ky;
+                                    int nx = x + kx;
+
+                                    if (ny >= 0 && ny < height && nx >= 0 &&
+                                        nx < width) {
+                                        minVal = std::min(
+                                            minVal,
+                                            tempResult[(ny * width + nx) *
+                                                           channels +
+                                                       c]);
+                                    }
+                                }
+                            }
+
+                            closing[(y * width + x) * channels + c] = minVal;
+                        }
+                    }
+
+                    // 闭运算 - 原图
+                    for (int y = 0; y < height; ++y) {
+                        for (int x = 0; x < width; ++x) {
+                            size_t idx = (y * width + x) * channels + c;
+                            pixelData[idx] = static_cast<T>(std::max(
+                                static_cast<double>(
+                                    std::numeric_limits<T>::lowest()),
+                                std::min(static_cast<double>(
+                                             std::numeric_limits<T>::max()),
+                                         static_cast<double>(closing[idx]) -
+                                             originalData[idx])));
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    } catch (const std::bad_cast& e) {
+        throw HDUException("Data type mismatch in applyMorphology");
+    }
+}
