@@ -97,6 +97,13 @@ public:
      * @param args Arguments to initialize the distribution.
      */
     template <typename... Args>
+        requires(!std::is_same_v<std::tuple<ResultType, ResultType>,
+                                 std::tuple<std::decay_t<Args>...>> &&
+                 !(sizeof...(Args) == 1 &&
+                   std::is_convertible_v<
+                       std::tuple_element_t<0,
+                                            std::tuple<std::decay_t<Args>...>>,
+                       ResultType>))
     explicit Random(
         typename EngineType::result_type seed,
         Args&&... args) noexcept(std::

@@ -18,29 +18,26 @@ Description: System Information Module - Disk
 #include <array>
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <cstring>
 #include <filesystem>
-#include <fstream>
 #include <mutex>
-#include <ranges>
 #include <regex>
-#include <span>
-#include <sstream>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
 
 #ifdef _WIN32
-//clang-format off
+// clang-format off
 #include <windows.h>
 #include <devguid.h>
 #include <setupapi.h>
 #include <winioctl.h>
 #include <cfgmgr32.h>
+// clang-format on
+#ifdef _MSV_VER
 #pragma comment(lib, "setupapi.lib")
 #pragma comment(lib, "cfgmgr32.lib")
-// clang-format on
+#endif  // _MSV_VER
 #elif __linux__
 #include <blkid/blkid.h>
 #include <dirent.h>
@@ -147,7 +144,7 @@ DiskInfo getDiskInfoCached(const std::string& path) {
         info.model = getDriveModel(volumeName);
     }
 #elif __linux__
-    struct statfs stats {};
+    struct statfs stats{};
     if (statfs(path.c_str(), &stats) == 0) {
         info.totalSpace = static_cast<uint64_t>(stats.f_blocks) * stats.f_bsize;
         info.freeSpace = static_cast<uint64_t>(stats.f_bfree) * stats.f_bsize;
@@ -184,7 +181,7 @@ DiskInfo getDiskInfoCached(const std::string& path) {
         info.model = getDriveModel(info.devicePath);
     }
 #elif __APPLE__
-    struct statfs stats {};
+    struct statfs stats{};
     if (statfs(path.c_str(), &stats) == 0) {
         info.totalSpace = static_cast<uint64_t>(stats.f_blocks) * stats.f_bsize;
         info.freeSpace = static_cast<uint64_t>(stats.f_bfree) * stats.f_bsize;
@@ -216,7 +213,7 @@ DiskInfo getDiskInfoCached(const std::string& path) {
         }
     }
 #elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-    struct statfs stats {};
+    struct statfs stats{};
     if (statfs(path.c_str(), &stats) == 0) {
         info.totalSpace = static_cast<uint64_t>(stats.f_blocks) * stats.f_bsize;
         info.freeSpace = static_cast<uint64_t>(stats.f_bfree) * stats.f_bsize;

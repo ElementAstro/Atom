@@ -29,7 +29,7 @@ std::vector<std::vector<int>> numpy_to_vector(py::array_t<int> array) {
 
 py::array_t<int> vector_to_numpy(const std::vector<std::vector<int>> &vec) {
     if (vec.empty())
-        return py::array_t<int>({0, 0});
+        return py::array_t<int>(std::vector<ssize_t>{0, 0});
 
     ssize_t rows = vec.size();
     ssize_t cols = vec[0].size();

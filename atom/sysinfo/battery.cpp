@@ -420,8 +420,8 @@ PowerPlan PowerPlanManager::getCurrentPowerPlan() {
     }
 
     typedef DWORD(WINAPI * PFN_PowerGetActiveScheme)(HKEY, GUID**);
-    auto pGetActiveScheme = reinterpret_cast<PFN_PowerGetActiveScheme>(
-        GetProcAddress(hPowrProf, "PowerGetActiveScheme"));
+    auto pGetActiveScheme = (PFN_PowerGetActiveScheme)(GetProcAddress(
+        hPowrProf, "PowerGetActiveScheme"));
 
     if (!pGetActiveScheme) {
         LOG_F(ERROR, "Failed to get PowerGetActiveScheme function");

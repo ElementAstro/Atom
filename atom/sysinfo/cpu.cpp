@@ -13,16 +13,13 @@ Description: System Information Module - Enhanced CPU
 **************************************************/
 
 #include "atom/sysinfo/cpu.hpp"
-#include "os.hpp"
 
 #include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
-#include <fstream>
 #include <mutex>
 #include <regex>
-#include <set>
 #include <sstream>
 #include <thread>
 #include <vector>
@@ -37,9 +34,13 @@ Description: System Information Module - Enhanced CPU
 #include <powrprof.h>
 #include <tlhelp32.h>
 #include <wincon.h>
+#include <comutil.h>
+#include <wbemidl.h>
 // clang-format on
+#ifdef _MSC_VER
 #pragma comment(lib, "pdh.lib")
 #pragma comment(lib, "PowrProf.lib")
+#endif
 #elif defined(__linux__) || defined(__ANDROID__)
 #include <dirent.h>
 #include <limits.h>
@@ -86,7 +87,7 @@ CpuInfo g_cpuInfoCache;
  * @param str String like "8K" or "4M"
  * @return Size in bytes
  */
-size_t stringToBytes(const std::string& str) {
+[[maybe_unused]] size_t stringToBytes(const std::string& str) {
     std::regex re("(\\d+)\\s*([KkMmGgTt]?)");
     std::smatch match;
 
@@ -157,13 +158,209 @@ bool needsCacheRefresh() {
  * @brief Execute WMI query
  * @param query WMI query string
  * @param property Property to retrieve
- * @return Result string
+ * @return Result string, or empty string on failure or if property not found.
  */
 std::string executeWmiQuery(const std::string& query,
                             const std::string& property) {
-    // This would be implemented using COM/WMI interface
-    // Example stub implementation
-    return "";
+    HRESULT hres;
+    std::string resultStr;
+
+    // Step 1: Initialize COM.
+    hres = CoInitializeEx(0, COINIT_MULTITHREADED);
+    if (FAILED(hres)) {
+        LOG_F(ERROR, "Failed to initialize COM library. Error code = 0x%lx",
+              hres);
+        return "";
+    }
+
+    // Step 2: Set general COM security levels
+    hres = CoInitializeSecurity(
+        NULL,
+        -1,                           // COM authentication
+        NULL,                         // Authentication services
+        NULL,                         // Reserved
+        RPC_C_AUTHN_LEVEL_DEFAULT,    // Default authentication
+        RPC_C_IMP_LEVEL_IMPERSONATE,  // Default Impersonation
+        NULL,                         // Authentication info
+        EOAC_NONE,                    // Additional capabilities
+        NULL                          // Reserved
+    );
+
+    // It's possible security is already initialized, so we check for specific
+    // error
+    if (FAILED(hres) && hres != RPC_E_TOO_LATE) {
+        LOG_F(ERROR, "Failed to initialize security. Error code = 0x%lx", hres);
+        CoUninitialize();
+        return "";
+    }
+
+    // Step 3: Obtain the initial locator to WMI
+    IWbemLocator* pLoc = NULL;
+    hres = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER,
+                            IID_IWbemLocator, (LPVOID*)&pLoc);
+
+    if (FAILED(hres)) {
+        LOG_F(ERROR, "Failed to create IWbemLocator object. Err code = 0x%lx",
+              hres);
+        CoUninitialize();
+        return "";
+    }
+
+    // Step 4: Connect to WMI through the IWbemLocator::ConnectServer method
+    IWbemServices* pSvc = NULL;
+    hres = pLoc->ConnectServer(
+        _bstr_t(L"ROOT\\CIMV2"),  // Object path of WMI namespace
+        NULL,                     // User name. NULL = current user
+        NULL,                     // User password. NULL = current
+        0,                        // Locale. NULL indicates current
+        NULL,                     // Security flags.
+        0,                        // Authority (e.g. Kerberos)
+        0,                        // Context object
+        &pSvc                     // pointer to IWbemServices proxy
+    );
+
+    if (FAILED(hres)) {
+        LOG_F(ERROR, "Could not connect to WMI namespace. Error code = 0x%lx",
+              hres);
+        pLoc->Release();
+        CoUninitialize();
+        return "";
+    }
+
+    // Step 5: Set security levels on the proxy
+    hres =
+        CoSetProxyBlanket(pSvc,                    // Indicates the proxy to set
+                          RPC_C_AUTHN_WINNT,       // RPC_C_AUTHN_xxx
+                          RPC_C_AUTHZ_NONE,        // RPC_C_AUTHZ_xxx
+                          NULL,                    // Server principal name
+                          RPC_C_AUTHN_LEVEL_CALL,  // RPC_C_AUTHN_LEVEL_xxx
+                          RPC_C_IMP_LEVEL_IMPERSONATE,  // RPC_C_IMP_LEVEL_xxx
+                          NULL,                         // client identity
+                          EOAC_NONE                     // proxy capabilities
+        );
+
+    if (FAILED(hres)) {
+        LOG_F(ERROR, "Could not set proxy blanket. Error code = 0x%lx", hres);
+        pSvc->Release();
+        pLoc->Release();
+        CoUninitialize();
+        return "";
+    }
+
+    // Step 6: Use the IWbemServices pointer to make requests of WMI
+    IEnumWbemClassObject* pEnumerator = NULL;
+    std::wstring wQuery = std::wstring(query.begin(), query.end());
+    hres =
+        pSvc->ExecQuery(bstr_t("WQL"), bstr_t(wQuery.c_str()),
+                        WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+                        NULL, &pEnumerator);
+
+    if (FAILED(hres)) {
+        LOG_F(ERROR, "WMI query failed. Error code = 0x%lx. Query: %s", hres,
+              query.c_str());
+        pSvc->Release();
+        pLoc->Release();
+        CoUninitialize();
+        return "";
+    }
+
+    // Step 7: Get the data from the query
+    IWbemClassObject* pclsObj = NULL;
+    ULONG uReturn = 0;
+
+    // If a property is specified, retrieve the first instance's property value
+    if (!property.empty()) {
+        HRESULT hr = pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
+
+        if (SUCCEEDED(hr) && uReturn != 0) {
+            VARIANT vtProp;
+            VariantInit(&vtProp);
+
+            // Get the value of the specified property
+            std::wstring wProperty =
+                std::wstring(property.begin(), property.end());
+            hr = pclsObj->Get(wProperty.c_str(), 0, &vtProp, 0, 0);
+
+            if (SUCCEEDED(hr)) {
+                switch (vtProp.vt) {
+                    case VT_BSTR:
+                        resultStr =
+                            _com_util::ConvertBSTRToString(vtProp.bstrVal);
+                        break;
+                    case VT_I4:
+                        resultStr = std::to_string(vtProp.lVal);
+                        break;
+                    case VT_UI4:
+                        resultStr = std::to_string(vtProp.ulVal);
+                        break;
+                    case VT_R4:
+                        resultStr = std::to_string(vtProp.fltVal);
+                        break;
+                    case VT_R8:
+                        resultStr = std::to_string(vtProp.dblVal);
+                        break;
+                    case VT_UI1:  // BYTE
+                        resultStr = std::to_string(vtProp.bVal);
+                        break;
+                    case VT_I2:  // SHORT
+                        resultStr = std::to_string(vtProp.iVal);
+                        break;
+                    case VT_UI2:  // USHORT
+                        resultStr = std::to_string(vtProp.uiVal);
+                        break;
+                    case VT_BOOL:
+                        resultStr =
+                            (vtProp.boolVal == VARIANT_TRUE) ? "true" : "false";
+                        break;
+                    case VT_NULL:
+                    case VT_EMPTY:
+                        resultStr = "";  // Represent null/empty as empty string
+                        break;
+                    default:
+                        LOG_F(WARNING,
+                              "WMI property '%s' has unhandled type: %d",
+                              property.c_str(), vtProp.vt);
+                        break;
+                }
+            } else {
+                LOG_F(ERROR,
+                      "Failed to get WMI property '%s'. Error code = 0x%lx",
+                      property.c_str(), hr);
+            }
+
+            VariantClear(&vtProp);
+            pclsObj->Release();
+        } else if (FAILED(hr)) {
+            LOG_F(ERROR, "Failed to get next WMI object. Error code = 0x%lx",
+                  hr);
+        }
+    } else {
+        // If no property is specified, count the number of results (e.g., for
+        // COUNT queries)
+        ULONG count = 0;
+        while (pEnumerator) {
+            [[maybe_unused]] HRESULT hr =
+                pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
+            if (0 == uReturn) {
+                break;
+            }
+            count++;
+            pclsObj->Release();
+            pclsObj = NULL;
+        }
+        resultStr = std::to_string(count);
+    }
+
+    // Cleanup
+    pSvc->Release();
+    pLoc->Release();
+    if (pEnumerator)
+        pEnumerator->Release();
+    // Do not call CoUninitialize here if COM was already initialized by another
+    // part of the application CoUninitialize(); // Consider managing COM
+    // initialization/uninitialization globally
+
+    return resultStr;
 }
 #endif
 }  // anonymous namespace
@@ -171,8 +368,10 @@ std::string executeWmiQuery(const std::string& query,
 auto getCurrentCpuUsage() -> float {
     LOG_F(INFO, "Starting getCurrentCpuUsage function");
     static std::mutex mutex;
-    static unsigned long long lastTotalUser = 0, lastTotalUserLow = 0;
-    static unsigned long long lastTotalSys = 0, lastTotalIdle = 0;
+    [[maybe_unused]] static unsigned long long lastTotalUser = 0,
+                                               lastTotalUserLow = 0;
+    [[maybe_unused]] static unsigned long long lastTotalSys = 0,
+                                               lastTotalIdle = 0;
 
     float cpuUsage = 0.0;
 

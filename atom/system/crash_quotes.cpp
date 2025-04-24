@@ -154,7 +154,7 @@ void QuoteManager::displayQuotes() const {
 void QuoteManager::shuffleQuotes() {
     LOG_F(INFO, "Shuffling quotes");
     atom::utils::Random<std::mt19937, std::uniform_int_distribution<>> random(
-        std::random_device{}());
+        0, std::numeric_limits<int>::max(), std::random_device{}());
     std::shuffle(quotes_.begin(), quotes_.end(), random.engine());
     LOG_F(INFO, "Quotes shuffled successfully");
 }

@@ -539,15 +539,6 @@ ATOM_INLINE void unreachable ATOM_NORETURN() {
 // Cache line alignment
 #define ATOM_CACHE_ALIGN ATOM_ALIGNAS(ATOM_CACHE_LINE_SIZE)
 
-// Branch prediction optimization
-#if !defined(ATOM_LIKELY) && (defined(__GNUC__) || defined(__clang__))
-#define ATOM_LIKELY(x) __builtin_expect(!!(x), 1)
-#define ATOM_UNLIKELY(x) __builtin_expect(!!(x), 0)
-#else
-#define ATOM_LIKELY(x) (x)
-#define ATOM_UNLIKELY(x) (x)
-#endif
-
 // Prefetch hints
 #if defined(__GNUC__) || defined(__clang__)
 #define ATOM_PREFETCH(addr) __builtin_prefetch(addr)

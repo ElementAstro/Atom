@@ -21,119 +21,114 @@
 
 // Boost support
 #if defined(ATOM_USE_BOOST_THREAD) || defined(ATOM_USE_BOOST_LOCKFREE)
-  #include <boost/config.hpp>
+#include <boost/config.hpp>
 #endif
 
 #ifdef ATOM_USE_BOOST_THREAD
-  #include <boost/thread.hpp>
-  #include <boost/thread/mutex.hpp>
-  #include <boost/thread/shared_mutex.hpp>
-  #include <boost/thread/lock_types.hpp>
-  #include <boost/thread/future.hpp>
+#include <boost/thread.hpp>
+#include <boost/thread/future.hpp>
+#include <boost/thread/lock_types.hpp>
+#include <boost/thread/mutex.hpp>
+#include <boost/thread/shared_mutex.hpp>
 #endif
 
 #ifdef ATOM_USE_BOOST_LOCKFREE
-  #include <boost/atomic.hpp>
-  #include <boost/lockfree/queue.hpp>
-  #include <boost/lockfree/spsc_queue.hpp>
+#include <boost/atomic.hpp>
+#include <boost/lockfree/queue.hpp>
+#include <boost/lockfree/spsc_queue.hpp>
 #endif
 
 namespace atom::search {
 
 // Define aliases based on whether we're using Boost or STL
 #if defined(ATOM_USE_BOOST_THREAD)
-  template <typename T>
-  using shared_mutex = boost::shared_mutex;
-  
-  template <typename T>
-  using shared_lock = boost::shared_lock<T>;
-  
-  template <typename T>
-  using unique_lock = boost::unique_lock<T>;
-  
-  template <typename... Args>
-  using future = boost::future<Args...>;
-  
-  template <typename... Args>
-  using promise = boost::promise<Args...>;
+template <typename T>
+using shared_mutex = boost::shared_mutex;
+
+template <typename T>
+using shared_lock = boost::shared_lock<T>;
+
+template <typename T>
+using unique_lock = boost::unique_lock<T>;
+
+template <typename... Args>
+using future = boost::future<Args...>;
+
+template <typename... Args>
+using promise = boost::promise<Args...>;
 #else
-  template <typename T>
-  using shared_mutex = std::shared_mutex;
-  
-  template <typename T>
-  using shared_lock = std::shared_lock<T>;
-  
-  template <typename T>
-  using unique_lock = std::unique_lock<T>;
-  
-  template <typename... Args>
-  using future = std::future<Args...>;
-  
-  template <typename... Args>
-  using promise = std::promise<Args...>;
+template <typename T>
+using shared_mutex = std::shared_mutex;
+
+template <typename T>
+using shared_lock = std::shared_lock<T>;
+
+template <typename T>
+using unique_lock = std::unique_lock<T>;
+
+template <typename... Args>
+using future = std::future<Args...>;
+
+template <typename... Args>
+using promise = std::promise<Args...>;
 #endif
 
 #if defined(ATOM_USE_BOOST_LOCKFREE)
-  template <typename T>
-  using atomic = boost::atomic<T>;
-  
-  template <typename T>
-  struct lockfree_queue {
+template <typename T>
+using atomic = boost::atomic<T>;
+
+template <typename T>
+struct lockfree_queue {
     boost::lockfree::queue<T> queue;
-    
+
     lockfree_queue(size_t capacity) : queue(capacity) {}
-    
-    bool push(const T& item) {
-      return queue.push(item);
-    }
-    
-    bool pop(T& item) {
-      return queue.pop(item);
-    }
-    
-    bool empty() const {
-      return queue.empty();
-    }
-  };
+
+    bool push(const T& item) { return queue.push(item); }
+
+    bool pop(T& item) { return queue.pop(item); }
+
+    bool empty() const { return queue.empty(); }
+};
 #else
-  template <typename T>
-  using atomic = std::atomic<T>;
-  
-  // Fallback implementation using std containers when Boost.lockfree is not available
-  template <typename T>
-  struct lockfree_queue {
+template <typename T>
+using atomic = std::atomic<T>;
+
+// Fallback implementation using std containers when Boost.lockfree is not
+// available
+template <typename T>
+struct lockfree_queue {
     std::mutex mutex;
     std::vector<T> items;
     size_t capacity;
-    
+
     lockfree_queue(size_t capacity) : capacity(capacity) {
-      items.reserve(capacity);
+        items.reserve(capacity);
     }
-    
+
     bool push(const T& item) {
-      std::lock_guard<std::mutex> lock(mutex);
-      if (items.size() >= capacity) {
-        return false;
-      }
-      items.push_back(item);
-      return true;
+        std::lock_guard<std::mutex> lock(mutex);
+        if (items.size() >= capacity) {
+            return false;
+        }
+        items.push_back(item);
+        return true;
     }
-    
+
     bool pop(T& item) {
-      std::lock_guard<std::mutex> lock(mutex);
-      if (items.empty()) {
-        return false;
-      }
-      item = items.front();
-      items.erase(items.begin());
-      return true;
+        std::lock_guard<std::mutex> lock(mutex);
+        if (items.empty()) {
+            return false;
+        }
+        item = items.front();
+        items.erase(items.begin());
+        return true;
     }
-    
+
     bool empty() {
-      std::lock_guard<std::mutex> lock(mutex);
-      return items.empty();
+        std::lock_guard<std::mutex> lock(mutex);
+        return items.empty();
     }
-  };
+};
 #endif
 
 /**
@@ -412,12 +407,13 @@ public:
                     std::optional<std::chrono::seconds> ttl = std::nullopt);
 
 private:
-    mutable shared_mutex<std::shared_mutex> mutex_;  ///< Mutex for protecting shared data.
+    mutable shared_mutex<std::shared_mutex>
+        mutex_;  ///< Mutex for protecting shared data.
     std::list<KeyValuePair>
         cache_items_list_;  ///< List for maintaining item order.
+    size_t max_size_;       ///< Maximum number of items in the cache.
     std::unordered_map<Key, CacheItem>
-        cache_items_map_;  ///< Map for fast key lookups.
-    size_t max_size_;      ///< Maximum number of items in the cache.
+        cache_items_map_;           ///< Map for fast key lookups.
     atomic<size_t> hit_count_{0};   ///< Number of cache hits.
     atomic<size_t> miss_count_{0};  ///< Number of cache misses.
 
@@ -465,7 +461,7 @@ private:
 
 template <typename Key, typename Value>
 ThreadSafeLRUCache<Key, Value>::ThreadSafeLRUCache(size_t max_size)
-    : max_size_(max_size) {
+    : max_size_(max_size), cache_items_map_() {
     if (max_size == 0) {
         throw std::invalid_argument("Cache max size must be greater than zero");
     }

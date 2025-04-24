@@ -518,29 +518,30 @@ CompressionResult compressFolder(std::string_view folder_path_sv,
                 options.password.empty() ? nullptr : options.password.c_str();
             int zip64 = 1;  // Enable Zip64 for large files
 
-            // Cast zip_file.get() to zipFile explicitly if needed, though void*
-            // should work
-            if (zipOpenNewFileInZip4_64(
-                    (zipFile)zip_file.get(),              // Explicit cast
-                    entry_name.c_str(), &zi, nullptr, 0,  // extra field
-                    nullptr, 0,                           // comment
-                    Z_DEFLATED,                           // method
-                    options.level,                        // level
-                    0,                                    // raw
-                    -MAX_WBITS,     // windowBits (negative for raw deflate)
-                    DEF_MEM_LEVEL,  // memLevel
-                    Z_DEFAULT_STRATEGY,  // strategy
-                    password_cstr,       // password
-                    0,                   // crcForCrypting (deprecated)
-                    0,                   // versionMadeBy
-                        // (根据minizip-ng文档，这是操作系统标识符)
-                    20,    // versionNeeded (这是所需的ZIP格式版本)
-                    0,     // flagBase
-                    zip64  // zip64
-                    ) != ZIP_OK) {
+            // Open a new file entry in the ZIP archive with appropriate
+            // compression settings
+            int result_code = zipOpenNewFileInZip3_64(
+                zip_file.get(),      // ZIP file handle
+                entry_name.c_str(),  // Entry name within ZIP
+                &zi,                 // File information (timestamps, etc.)
+                nullptr, 0,          // No local extra field
+                nullptr, 0,          // No global extra field
+                nullptr,             // No comment
+                Z_DEFLATED,          // Use DEFLATE compression method
+                options.level,       // Compression level from options
+                0,                   // Raw flag (0 = not raw)
+                -MAX_WBITS,  // Window bits for zlib (negative for raw deflate)
+                DEF_MEM_LEVEL,       // Memory level for zlib
+                Z_DEFAULT_STRATEGY,  // Compression strategy
+                password_cstr,       // Password (null if none)
+                0,                   // CRC value (0 = auto-compute)
+                zip64                // Enable ZIP64 extensions if needed
+            );
+
+            if (result_code != ZIP_OK) {
                 result.error_message =
                     String("Failed to add file to ZIP: ") + entry_name;
-                return result;
+                return result;  // zip_file guard will close the main zip
             }
 
             // Open input file and write its content to ZIP
@@ -871,11 +872,25 @@ CompressionResult createZip(std::string_view source_path_sv,
             int zip64 = 1;
 
             // Cast zip_file.get() to zipFile explicitly if needed
-            if (zipOpenNewFileInZip4_64(
-                    (zipFile)zip_file.get(), entry_name.c_str(), &zi, nullptr,
-                    0, nullptr, 0, Z_DEFLATED, options.level, 0, -MAX_WBITS,
-                    DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY, password_cstr, 0, 0, 0,
-                    zip64) != ZIP_OK) {
+            int result_code = zipOpenNewFileInZip3_64(
+                zip_file.get(),      // ZIP file handle
+                entry_name.c_str(),  // Entry name within ZIP
+                &zi,                 // File information (timestamps, etc.)
+                nullptr, 0,          // No local extra field
+                nullptr, 0,          // No global extra field
+                nullptr,             // No comment
+                Z_DEFLATED,          // Use DEFLATE compression method
+                options.level,       // Compression level from options
+                0,                   // Raw flag (0 = not raw)
+                -MAX_WBITS,  // Window bits for zlib (negative for raw deflate)
+                DEF_MEM_LEVEL,       // Memory level for zlib
+                Z_DEFAULT_STRATEGY,  // Compression strategy
+                password_cstr,       // Password (null if none)
+                0,                   // CRC value (0 = auto-compute)
+                zip64                // Enable ZIP64 extensions if needed
+            );
+
+            if (result_code != ZIP_OK) {
                 result.error_message =
                     String("Failed to add file to ZIP: ") + entry_name;
                 return result;  // zip_file guard handles closing
@@ -2315,7 +2330,6 @@ template std::pair<CompressionResult, Vector<unsigned char>>
 compressData<String>(const String&, const CompressionOptions&);
 // Instantiation for std::span might require C++20
 #if __cplusplus >= 202002L
-#include <span>  // Move include here
 template std::pair<CompressionResult, Vector<unsigned char>>
 compressData<std::span<const unsigned char>>(
     const std::span<const unsigned char>&, const CompressionOptions&);

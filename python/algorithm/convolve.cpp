@@ -30,7 +30,7 @@ std::vector<std::vector<double>> numpy_to_vector2d(py::array_t<double> array) {
 py::array_t<double> vector2d_to_numpy(
     const std::vector<std::vector<double>>& vec) {
     if (vec.empty())
-        return py::array_t<double>({0, 0});
+        return py::array_t<double>(std::vector<ssize_t>{0, 0});
 
     py::array_t<double> result({static_cast<ssize_t>(vec.size()),
                                 static_cast<ssize_t>(vec[0].size())});
@@ -49,7 +49,7 @@ py::array_t<double> vector2d_to_numpy(
 py::array_t<std::complex<double>> complex_vector2d_to_numpy(
     const std::vector<std::vector<std::complex<double>>>& vec) {
     if (vec.empty())
-        return py::array_t<std::complex<double>>({0, 0});
+        return py::array_t<std::complex<double>>(std::vector<ssize_t>{0, 0});
 
     py::array_t<std::complex<double>> result(
         {static_cast<ssize_t>(vec.size()),

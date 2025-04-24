@@ -5,16 +5,12 @@
 #include <execution>
 #include <format>
 #include <future>
-#include <latch>
-#include <list>
 #include <mutex>
 #include <numeric>
-#include <shared_mutex>
 #include <sstream>
 #include <stdexcept>
 #include <thread>
 #include <unordered_map>
-#include <unordered_set>
 
 #include "atom/search/lru.hpp"
 
@@ -646,11 +642,13 @@ auto Differ::compare(std::span<const std::string> vec1,
     result.reserve(vec1.size() + vec2.size());  // Pre-allocate for efficiency
 
     try {
-        SequenceMatcher matcher("", "");
+        SequenceMatcher matcher(
+            "", "", options);  // 传递 options 参数给 SequenceMatcher
         const std::string joined1 = joinLines(vec1);
         const std::string joined2 = joinLines(vec2);
         matcher.setSeqs(joined1, joined2);
 
+        // 其余代码保持不变
         auto opcodes = matcher.getOpcodes();
 
         for (const auto& opcode : opcodes) {
@@ -723,7 +721,8 @@ auto Differ::unifiedDiff(std::span<const std::string> vec1,
                  3);  // Reserve space for header and content
 
     try {
-        SequenceMatcher matcher("", "");
+        SequenceMatcher matcher(
+            "", "", options);
         matcher.setSeqs(joinLines(vec1), joinLines(vec2));
         auto opcodes = matcher.getOpcodes();
 
@@ -846,24 +845,46 @@ auto HtmlDiff::makeFile(std::span<const std::string> fromlines,
            << "<meta charset=\"utf-8\">\n"
            << "<title>Diff</title>\n"
            << "<style>\n"
-           << "  .diff-add { background-color: #aaffaa; }\n"
-           << "  .diff-remove { background-color: #ffaaaa; }\n"
+           << "  ." << htmlOptions.addedClass
+           << " { background-color: #aaffaa; }\n"
+           << "  ." << htmlOptions.removedClass
+           << " { background-color: #ffaaaa; }\n"
+           << "  ." << htmlOptions.changedClass
+           << " { background-color: #ffff77; }\n"
            << "  table { border-collapse: collapse; width: 100%; }\n"
            << "  th, td { border: 1px solid #ddd; padding: 8px; }\n"
-           << "  th { background-color: #f2f2f2; }\n"
-           << "</style>\n"
+           << "  th { background-color: #f2f2f2; }\n";
+        // 添加用户自定义选项
+        if (htmlOptions.showLineNumbers) {
+            os << "  .line-number { color: #999; user-select: none; }\n";
+        }
+        if (htmlOptions.collapsableUnchanged) {
+            os << "  .collapsible { cursor: pointer; }\n"
+               << "  .hidden { display: none; }\n";
+        }
+        os << "</style>\n"
            << "</head>\n<body>\n"
            << "<h2>Differences</h2>\n";
 
-        // Get table content
-        auto table_result =
-            makeTable(fromlines, tolines, fromdesc, todesc, options);
-        if (!table_result) {
-            // TODO: Fix error handling
-            // return type::unexpected(table_result.error());
+        // 显示统计信息（如果启用）
+        if (htmlOptions.showStatistics) {
+            auto table_result = makeTable(fromlines, tolines, fromdesc, todesc,
+                                          options, htmlOptions);
+            if (!table_result) {
+                return type::unexpected(table_result.error().error());
+            }
+            os << table_result.value();
+        } else {
+            // 获取表格内容但不显示统计信息
+            auto table_result = makeTable(fromlines, tolines, fromdesc, todesc,
+                                          options, htmlOptions);
+            if (!table_result) {
+                return type::unexpected(table_result.error().error());
+            }
+            os << table_result.value();
         }
 
-        os << table_result.value() << "</body>\n</html>";
+        os << "</body>\n</html>";
 
         return os.str();
     } catch (const std::exception& e) {
@@ -876,45 +897,11 @@ auto HtmlDiff::makeTable(std::span<const std::string> fromlines,
                          std::span<const std::string> tolines,
                          std::string_view fromdesc, std::string_view todesc,
                          const HtmlDiffOptions& htmlOptions) -> DiffResult {
-    try {
-        std::ostringstream os;
-        os << "<table>\n<tr><th>" << fromdesc << "</th><th>" << todesc
-           << "</th></tr>\n";
-
-        // 使用InlineDiff进行字符级比较
-        InlineDiff inlineDiff;
-        Differ differ;
-
-        auto diffs = differ.compare(fromlines, tolines);
-        for (const auto& line : diffs) {
-            if (line.empty()) {
-                os << "<tr><td>&nbsp;</td><td>&nbsp;</td></tr>\n";
-                continue;
-            }
-
-            if (line.size() >= 2) {
-                const std::string content = line.substr(2);
-                if (line[0] == '-') {
-                    os << "<tr><td class=\"" << htmlOptions.removedClass
-                       << "\">" << content << "</td><td></td></tr>\n";
-                } else if (line[0] == '+') {
-                    os << "<tr><td></td><td class=\"" << htmlOptions.addedClass
-                       << "\">" << content << "</td></tr>\n";
-                } else {
-                    os << "<tr><td>" << content << "</td><td>" << content
-                       << "</td></tr>\n";
-                }
-            }
-        }
-
-        os << "</table>\n";
-        return os.str();
-    } catch (const std::exception& e) {
-        return type::unexpected(
-            std::format("Error generating HTML table: {}", e.what()));
-    }
+    return makeTable(fromlines, tolines, fromdesc, todesc,
+                     DiffLibConfig::getDefaultOptions(), htmlOptions);
 }
 
+// 修复 HtmlDiff::makeTable 方法中未使用的 htmlOptions 参数
 auto HtmlDiff::makeTable(std::span<const std::string> fromlines,
                          std::span<const std::string> tolines,
                          std::string_view fromdesc, std::string_view todesc,
@@ -958,7 +945,15 @@ auto HtmlDiff::makeTable(std::span<const std::string> fromlines,
                 std::format("Failed to compare lines: {}", e.what()));
         }
 
-        // Process each line in the diff
+        // 适用自定义CSS类
+        const std::string& addedClass = htmlOptions.addedClass;
+        const std::string& removedClass = htmlOptions.removedClass;
+
+        // 对内联差异进行细粒度处理
+        InlineDiff inlineDiff(options);
+
+        // 处理每一行差异
+        int lineNum = 1;
         for (const auto& line : diffs) {
             if (line.empty()) {
                 os << "<tr><td>&nbsp;</td><td>&nbsp;</td></tr>\n";
@@ -967,20 +962,41 @@ auto HtmlDiff::makeTable(std::span<const std::string> fromlines,
 
             if (line.size() >= 2) {
                 const std::string content = escape_html(line.substr(2));
+
+                // 添加行号（如果启用）
+                std::string lineNumHtml = htmlOptions.showLineNumbers
+                                              ? "<span class=\"line-number\">" +
+                                                    std::to_string(lineNum++) +
+                                                    "</span> "
+                                              : "";
+
                 if (line[0] == '-') {
-                    os << "<tr><td class=\"diff-remove\">" << content
-                       << "</td><td></td></tr>\n";
+                    os << "<tr><td class=\"" << removedClass << "\">"
+                       << lineNumHtml << content << "</td><td></td></tr>\n";
                 } else if (line[0] == '+') {
-                    os << "<tr><td></td><td class=\"diff-add\">" << content
-                       << "</td></tr>\n";
+                    os << "<tr><td></td><td class=\"" << addedClass << "\">"
+                       << lineNumHtml << content << "</td></tr>\n";
                 } else {
-                    os << "<tr><td>" << content << "</td><td>" << content
+                    // 处理可折叠的未更改区域（如果启用）
+                    std::string cellClass = htmlOptions.collapsableUnchanged
+                                                ? " class=\"collapsible\""
+                                                : "";
+                    os << "<tr" << cellClass << "><td>" << lineNumHtml
+                       << content << "</td><td>" << lineNumHtml << content
                        << "</td></tr>\n";
                 }
             }
         }
 
         os << "</table>\n";
+
+        // 添加统计信息（如果启用）
+        if (htmlOptions.showStatistics) {
+            os << "<div class=\"diff-stats\">\n"
+               << "  <p>Context lines: " << htmlOptions.contextLines << "</p>\n"
+               << "</div>\n";
+        }
+
         return os.str();
     } catch (const std::exception& e) {
         return type::unexpected(

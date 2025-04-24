@@ -1,20 +1,17 @@
 #include "udpserver.hpp"
 
-#include <algorithm>
-#include <array>
 #include <atomic>
 #include <format>
 #include <mutex>
-#include <optional>
-#include <ranges>
-#include <span>
 #include <thread>
 #include <vector>
 
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#ifdef _MSC_VER
 #pragma comment(lib, "Ws2_32.lib")
+#endif
 #else
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -29,8 +26,15 @@
 namespace atom::connection {
 
 namespace {
+// Platform-specific socket type
+#ifdef _WIN32
+using SocketType = SOCKET;
+#else
+using SocketType = int;
+#endif
+
 // Constants for socket operations
-constexpr int INVALID_SOCKET_VALUE =
+constexpr SocketType INVALID_SOCKET_VALUE =
 #ifdef _WIN32
     INVALID_SOCKET
 #else
