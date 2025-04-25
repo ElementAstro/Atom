@@ -1,7 +1,9 @@
 #include "signal.hpp"
+
 #include <algorithm>
 #include <csignal>
 #include <future>
+#include <optional>
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
@@ -15,7 +17,7 @@ constexpr size_t DEFAULT_QUEUE_SIZE = 1000;
 constexpr int SLEEP_DURATION_MS = 10;
 
 auto SignalHandlerWithPriority::operator<(
-    const SignalHandlerWithPriority& other) const -> bool {
+    const SignalHandlerWithPriority& other) const noexcept -> bool {
     return priority > other.priority;  // Higher priority handlers run first
 }
 
@@ -27,16 +29,14 @@ auto SignalHandlerRegistry::getInstance() -> SignalHandlerRegistry& {
 int SignalHandlerRegistry::setSignalHandler(SignalID signal,
                                             const SignalHandler& handler,
                                             int priority,
-                                            const std::string& handlerName) {
-    std::lock_guard lock(mutex_);
+                                            std::string_view handlerName) {
+    std::unique_lock lock(mutex_);
     int handlerId = nextHandlerId_++;
     handlers_[signal].emplace(handler, priority, handlerName);
     handlerRegistry_[handlerId] = {signal, handler};
 
-    // Update statistics
-    if (signalStats_.find(signal) == signalStats_.end()) {
-        signalStats_.try_emplace(signal);
-    }
+    // Update statistics - 使用插入或赋值确保始终存在，避免竞争条件
+    signalStats_.try_emplace(signal);
 
     auto previousHandler = std::signal(signal, signalDispatcher);
     if (previousHandler == SIG_ERR) {
@@ -47,7 +47,7 @@ int SignalHandlerRegistry::setSignalHandler(SignalID signal,
 }
 
 bool SignalHandlerRegistry::removeSignalHandlerById(int handlerId) {
-    std::lock_guard lock(mutex_);
+    std::unique_lock lock(mutex_);
     auto it = handlerRegistry_.find(handlerId);
     if (it == handlerRegistry_.end()) {
         return false;
@@ -87,7 +87,7 @@ bool SignalHandlerRegistry::removeSignalHandlerById(int handlerId) {
 
 bool SignalHandlerRegistry::removeSignalHandler(SignalID signal,
                                                 const SignalHandler& handler) {
-    std::lock_guard lock(mutex_);
+    std::unique_lock lock(mutex_);
     auto handlerIterator = handlers_.find(signal);
     if (handlerIterator != handlers_.end()) {
         auto handlerWithPriority = std::find_if(
@@ -125,9 +125,11 @@ bool SignalHandlerRegistry::removeSignalHandler(SignalID signal,
 }
 
 std::vector<int> SignalHandlerRegistry::setStandardCrashHandlerSignals(
-    const SignalHandler& handler, int priority,
-    const std::string& handlerName) {
+    const SignalHandler& handler, int priority, std::string_view handlerName) {
     std::vector<int> handlerIds;
+    handlerIds.reserve(
+        getStandardCrashSignals().size());  // 预分配内存避免重新分配
+
     for (SignalID signal : getStandardCrashSignals()) {
         handlerIds.push_back(
             setSignalHandler(signal, handler, priority, handlerName));
@@ -161,25 +163,31 @@ int SignalHandlerRegistry::processAllPendingSignals(
                     if (executeHandlerWithTimeout(handler.handler, signal)) {
                         processed++;
                         // Update statistics
-                        if (signalStats_.find(signal) != signalStats_.end()) {
-                            signalStats_[signal].processed++;
-                            signalStats_[signal].lastProcessed =
+                        auto it = signalStats_.find(signal);
+                        if (it != signalStats_.end()) {
+                            it->second.processed.fetch_add(
+                                1, std::memory_order_relaxed);
+                            it->second.lastProcessed =
                                 std::chrono::steady_clock::now();
                         }
                     } else {
                         LOG_F(WARNING,
                               "Handler timed out while processing signal {}",
                               signal);
-                        if (signalStats_.find(signal) != signalStats_.end()) {
-                            signalStats_[signal].handlerErrors++;
+                        auto it = signalStats_.find(signal);
+                        if (it != signalStats_.end()) {
+                            it->second.handlerErrors.fetch_add(
+                                1, std::memory_order_relaxed);
                         }
                     }
                 }
             } catch (const std::exception& e) {
                 LOG_F(ERROR, "Exception in signal handler for signal {}: {}",
                       signal, e.what());
-                if (signalStats_.find(signal) != signalStats_.end()) {
-                    signalStats_[signal].handlerErrors++;
+                auto it = signalStats_.find(signal);
+                if (it != signalStats_.end()) {
+                    it->second.handlerErrors.fetch_add(
+                        1, std::memory_order_relaxed);
                 }
             }
         }
@@ -189,14 +197,15 @@ int SignalHandlerRegistry::processAllPendingSignals(
 }
 
 bool SignalHandlerRegistry::hasHandlersForSignal(SignalID signal) {
-    std::lock_guard lock(mutex_);
+    std::shared_lock lock(mutex_);  // 使用共享锁提高并发性能
     auto it = handlers_.find(signal);
     return it != handlers_.end() && !it->second.empty();
 }
 
-const SignalStats& SignalHandlerRegistry::getSignalStats(SignalID signal) {
-    std::lock_guard lock(mutex_);
-    static SignalStats emptyStats;
+const SignalStats& SignalHandlerRegistry::getSignalStats(
+    SignalID signal) const {
+    std::shared_lock lock(mutex_);  // 使用共享锁提高读取性能
+    static const SignalStats emptyStats;
     auto it = signalStats_.find(signal);
     if (it != signalStats_.end()) {
         return it->second;
@@ -205,11 +214,11 @@ const SignalStats& SignalHandlerRegistry::getSignalStats(SignalID signal) {
 }
 
 void SignalHandlerRegistry::resetStats(SignalID signal) {
-    std::lock_guard lock(mutex_);
+    std::unique_lock lock(mutex_);
     if (signal == -1) {
         // Reset all stats
         for (auto& [sig, stats] : signalStats_) {
-            signalStats_.try_emplace(sig);
+            signalStats_.try_emplace(sig);  // 用新统计信息替换现有统计信息
         }
     } else {
         // Reset specific signal stats
@@ -219,7 +228,7 @@ void SignalHandlerRegistry::resetStats(SignalID signal) {
 
 void SignalHandlerRegistry::setHandlerTimeout(
     std::chrono::milliseconds timeout) {
-    std::lock_guard lock(mutex_);
+    std::unique_lock lock(mutex_);
     handlerTimeout_ = timeout;
 }
 
@@ -231,12 +240,12 @@ bool SignalHandlerRegistry::executeHandlerWithTimeout(
         return true;
     }
 
-    // Use std::async with timeout
-    auto future = std::async(std::launch::async,
-                             [&handler, signal]() { handler(signal); });
+    // 使用std::shared_future以便可以安全地从多个线程访问
+    auto futureTask = std::async(std::launch::async,
+                                 [&handler, signal]() { handler(signal); });
 
     // Wait for the future with timeout
-    auto status = future.wait_for(handlerTimeout_);
+    auto status = futureTask.wait_for(handlerTimeout_);
     return status == std::future_status::ready;
 }
 
@@ -249,41 +258,49 @@ void SignalHandlerRegistry::signalDispatcher(int signal) {
 
     // Just record signal received, will be processed by separate thread in
     // SafeSignalManager
-    if (registry.signalStats_.find(signal) != registry.signalStats_.end()) {
-        registry.signalStats_[signal].received++;
-        registry.signalStats_[signal].lastReceived =
-            std::chrono::steady_clock::now();
-    } else {
-        std::lock_guard lock(registry.mutex_);
-        registry.signalStats_.try_emplace(signal);
-        auto& stats = registry.signalStats_[signal];
-        stats.received = 1;
-        stats.lastReceived = std::chrono::steady_clock::now();
+    {
+        std::shared_lock lock(registry.mutex_);  // 使用共享锁提高并发性能
+        auto it = registry.signalStats_.find(signal);
+        if (it != registry.signalStats_.end()) {
+            it->second.received.fetch_add(1, std::memory_order_relaxed);
+            it->second.lastReceived = std::chrono::steady_clock::now();
+        } else {
+            // 需要升级锁才能修改集合
+            lock.unlock();
+            std::unique_lock writeLock(registry.mutex_);
+            auto& stats = registry.signalStats_[signal];
+            stats.received.store(1, std::memory_order_relaxed);
+            stats.lastReceived = std::chrono::steady_clock::now();
+        }
     }
 
     // Forward to safe manager if available
     SafeSignalManager::safeSignalDispatcher(signal);
 
     // Immediate handling for critical signals
-    std::lock_guard lock(registry.mutex_);
+    std::shared_lock lock(registry.mutex_);  // 使用共享锁提高并发性能
     auto handlerIterator = registry.handlers_.find(signal);
     if (handlerIterator != registry.handlers_.end()) {
         for (const auto& handler : handlerIterator->second) {
             try {
                 handler.handler(signal);
-                if (registry.signalStats_.find(signal) !=
-                    registry.signalStats_.end()) {
-                    registry.signalStats_[signal].processed++;
-                    registry.signalStats_[signal].lastProcessed =
+
+                auto statsIt = registry.signalStats_.find(signal);
+                if (statsIt != registry.signalStats_.end()) {
+                    statsIt->second.processed.fetch_add(
+                        1, std::memory_order_relaxed);
+                    statsIt->second.lastProcessed =
                         std::chrono::steady_clock::now();
                 }
             } catch (const std::exception& e) {
                 LOG_F(ERROR,
                       "Exception in direct signal handler for signal {}: {}",
                       signal, e.what());
-                if (registry.signalStats_.find(signal) !=
-                    registry.signalStats_.end()) {
-                    registry.signalStats_[signal].handlerErrors++;
+
+                auto statsIt = registry.signalStats_.find(signal);
+                if (statsIt != registry.signalStats_.end()) {
+                    statsIt->second.handlerErrors.fetch_add(
+                        1, std::memory_order_relaxed);
                 }
             }
         }
@@ -300,9 +317,19 @@ auto SignalHandlerRegistry::getStandardCrashSignals() -> std::set<SignalID> {
 
 SafeSignalManager::SafeSignalManager(size_t threadCount, size_t queueSize)
     : maxQueueSize_(queueSize) {
-    // Start worker threads
+    // 启动工作线程前先配置队列大小
+#ifdef ATOM_USE_BOOST
+    // 使用Boost的无锁队列不需要额外操作
+#else
+    // signalQueue_.reserve(queueSize); // 预分配内存避免重新分配
+#endif
+
+    // 启动工作线程
+    workerThreads_.reserve(threadCount);  // 预分配内存避免重新分配
     for (size_t i = 0; i < threadCount; ++i) {
-        workerThreads_.emplace_back([this]() { processSignals(); });
+        workerThreads_.emplace_back([this](std::stop_token stopToken) {
+            this->processSignals(stopToken);
+        });
     }
 
     LOG_F(INFO,
@@ -315,27 +342,26 @@ SafeSignalManager::~SafeSignalManager() {
     keepRunning_ = false;
     clearSignalQueue();  // Clear queue to avoid deadlocks
 
-    // Wake up any sleeping threads
+    // Wake up any sleeping threads - C++20 jthread自动处理停止和join
+#ifndef ATOM_USE_BOOST
     queueCondition_.notify_all();
+#endif
 
-    // Worker threads will join automatically (std::jthread)
     LOG_F(INFO, "SafeSignalManager shutting down");
 }
 
 int SafeSignalManager::addSafeSignalHandler(SignalID signal,
                                             const SignalHandler& handler,
                                             int priority,
-                                            const std::string& handlerName) {
-    std::lock_guard lock(queueMutex_);
+                                            std::string_view handlerName) {
+    std::unique_lock lock(queueMutex_);
     int handlerId = nextHandlerId_++;
     safeHandlers_[signal].emplace(handler, priority, handlerName);
     handlerRegistry_[handlerId] = {signal, handler};
 
     // Update statistics
-    std::lock_guard statsLock(statsMutex_);
-    if (signalStats_.find(signal) == signalStats_.end()) {
-        signalStats_.try_emplace(signal, SignalStats{});
-    }
+    std::unique_lock statsLock(statsMutex_);
+    signalStats_.try_emplace(signal, SignalStats{});
 
     LOG_F(INFO,
           "Added safe signal handler for signal {} with priority {} and ID {}",
@@ -345,7 +371,7 @@ int SafeSignalManager::addSafeSignalHandler(SignalID signal,
 }
 
 bool SafeSignalManager::removeSafeSignalHandlerById(int handlerId) {
-    std::lock_guard lock(queueMutex_);
+    std::unique_lock lock(queueMutex_);
     auto it = handlerRegistry_.find(handlerId);
     if (it == handlerRegistry_.end()) {
         return false;
@@ -382,7 +408,7 @@ bool SafeSignalManager::removeSafeSignalHandlerById(int handlerId) {
 
 bool SafeSignalManager::removeSafeSignalHandler(SignalID signal,
                                                 const SignalHandler& handler) {
-    std::lock_guard lock(queueMutex_);
+    std::unique_lock lock(queueMutex_);
     auto handlerIterator = safeHandlers_.find(signal);
     if (handlerIterator != safeHandlers_.end()) {
         auto handlerWithPriority = std::find_if(
@@ -427,41 +453,82 @@ auto SafeSignalManager::getInstance() -> SafeSignalManager& {
 }
 
 bool SafeSignalManager::queueSignal(SignalID signal) {
-    std::lock_guard lock(queueMutex_);
-
-    // Update statistics
+#ifdef ATOM_USE_BOOST
+    // 更新统计信息
     {
-        std::lock_guard statsLock(statsMutex_);
-        if (signalStats_.find(signal) == signalStats_.end()) {
-            signalStats_.try_emplace(signal, SignalStats{});
+        std::shared_lock statsLock(statsMutex_);
+        auto it = signalStats_.find(signal);
+        if (it != signalStats_.end()) {
+            it->second.received.fetch_add(1, std::memory_order_relaxed);
+            it->second.lastReceived = std::chrono::steady_clock::now();
+        } else {
+            // 需要升级锁才能修改集合
+            statsLock.unlock();
+            std::unique_lock writeLock(statsMutex_);
+            auto& stats = signalStats_[signal];
+            stats.received.store(1, std::memory_order_relaxed);
+            stats.lastReceived = std::chrono::steady_clock::now();
         }
-        signalStats_[signal].received++;
-        signalStats_[signal].lastReceived = std::chrono::steady_clock::now();
     }
 
-    // Check if queue is full
+    // Boost无锁队列，如果队列已满，push会返回false
+    bool pushed = signalQueue_.push(signal);
+    if (!pushed) {
+        std::unique_lock statsLock(statsMutex_);
+        signalStats_[signal].dropped.fetch_add(1, std::memory_order_relaxed);
+        LOG_F(WARNING, "Signal queue full, dropping signal {}", signal);
+    }
+    return pushed;
+#else
+    std::unique_lock lock(queueMutex_);
+
+    // 更新统计信息
+    {
+        std::shared_lock statsLock(statsMutex_);
+        auto it = signalStats_.find(signal);
+        if (it != signalStats_.end()) {
+            it->second.received.fetch_add(1, std::memory_order_relaxed);
+            it->second.lastReceived = std::chrono::steady_clock::now();
+        } else {
+            // 需要升级锁才能修改集合
+            statsLock.unlock();
+            std::unique_lock writeLock(statsMutex_);
+            signalStats_.try_emplace(signal, SignalStats{});
+            auto& stats = signalStats_[signal];
+            stats.received.store(1, std::memory_order_relaxed);
+            stats.lastReceived = std::chrono::steady_clock::now();
+        }
+    }
+
+    // 检查队列是否已满
     if (signalQueue_.size() >= maxQueueSize_) {
-        // Update dropped count
-        std::lock_guard statsLock(statsMutex_);
-        signalStats_[signal].dropped++;
+        // 更新丢弃计数
+        std::unique_lock statsLock(statsMutex_);
+        signalStats_[signal].dropped.fetch_add(1, std::memory_order_relaxed);
         LOG_F(WARNING, "Signal queue full, dropping signal {}", signal);
         return false;
     }
 
-    // Add signal to queue
+    // 添加信号到队列
     signalQueue_.push_back(signal);
-    queueCondition_.notify_one();  // Wake up a worker thread
+    queueCondition_.notify_one();  // 唤醒一个工作线程
     return true;
+#endif
 }
 
 size_t SafeSignalManager::getQueueSize() const {
-    std::lock_guard lock(queueMutex_);
+#ifdef ATOM_USE_BOOST
+    // Boost无锁队列没有直接的size()方法，但可以用read_available()代替
+    return signalQueue_.read_available();
+#else
+    std::shared_lock lock(queueMutex_);
     return signalQueue_.size();
+#endif
 }
 
 const SignalStats& SafeSignalManager::getSignalStats(SignalID signal) const {
-    std::lock_guard lock(statsMutex_);
-    static SignalStats emptyStats;
+    std::shared_lock lock(statsMutex_);
+    static const SignalStats emptyStats;
     auto it = signalStats_.find(signal);
     if (it != signalStats_.end()) {
         return it->second;
@@ -470,7 +537,7 @@ const SignalStats& SafeSignalManager::getSignalStats(SignalID signal) const {
 }
 
 void SafeSignalManager::resetStats(SignalID signal) {
-    std::lock_guard lock(statsMutex_);
+    std::unique_lock lock(statsMutex_);
     if (signal == -1) {
         // Reset all stats
         for (auto& [sig, stats] : signalStats_) {
@@ -483,20 +550,25 @@ void SafeSignalManager::resetStats(SignalID signal) {
 }
 
 bool SafeSignalManager::setWorkerThreadCount(size_t threadCount) {
-    // Can't change thread count while running
+    // 不能在运行时更改线程数量
     if (!keepRunning_) {
         return false;
     }
 
-    // Stop current threads
+    // 停止当前线程
     keepRunning_ = false;
+#ifndef ATOM_USE_BOOST
     queueCondition_.notify_all();
-    workerThreads_.clear();  // Join all threads
+#endif
+    workerThreads_.clear();  // jthread会在这里自动join
 
-    // Start new threads
+    // 启动新线程
     keepRunning_ = true;
+    workerThreads_.reserve(threadCount);  // 预分配内存
     for (size_t i = 0; i < threadCount; ++i) {
-        workerThreads_.emplace_back([this]() { processSignals(); });
+        workerThreads_.emplace_back([this](std::stop_token stopToken) {
+            this->processSignals(stopToken);
+        });
     }
 
     LOG_F(INFO, "Changed worker thread count to {}", threadCount);
@@ -504,30 +576,63 @@ bool SafeSignalManager::setWorkerThreadCount(size_t threadCount) {
 }
 
 void SafeSignalManager::setMaxQueueSize(size_t size) {
-    std::lock_guard lock(queueMutex_);
+#ifdef ATOM_USE_BOOST
+    // Boost的无锁队列在构造时固定大小，无法更改
+    LOG_F(WARNING, "Cannot change queue size for Boost lockfree queue");
+#else
+    std::unique_lock lock(queueMutex_);
     maxQueueSize_ = size;
     LOG_F(INFO, "Changed maximum queue size to {}", size);
+#endif
 }
 
 int SafeSignalManager::clearSignalQueue() {
-    std::lock_guard lock(queueMutex_);
+#ifdef ATOM_USE_BOOST
+    // 清空Boost无锁队列
+    int cleared = 0;
+    int signal;
+    while (signalQueue_.pop(signal)) {
+        cleared++;
+    }
+    LOG_F(INFO, "Cleared signal queue, removed approximately {} signals",
+          cleared);
+    return cleared;
+#else
+    std::unique_lock lock(queueMutex_);
     int cleared = static_cast<int>(signalQueue_.size());
     signalQueue_.clear();
     LOG_F(INFO, "Cleared signal queue, removed {} signals", cleared);
     return cleared;
+#endif
 }
 
-void SafeSignalManager::processSignals() {
-    while (keepRunning_) {
-        int signal = 0;
+// 更新处理信号方法以支持C++20的stop_token参数
+void SafeSignalManager::processSignals(std::stop_token stopToken) {
+    while (!stopToken.stop_requested() && keepRunning_) {
+        std::optional<int> signal;
+
+#ifdef ATOM_USE_BOOST
+        // 从Boost无锁队列获取信号
+        int signalValue;
+        if (signalQueue_.pop(signalValue)) {
+            signal = signalValue;
+        } else {
+            // 无信号可处理，短暂休眠
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(SLEEP_DURATION_MS));
+            continue;
+        }
+#else
+        // 从标准队列获取信号
         {
             std::unique_lock lock(queueMutex_);
-            // Wait for a signal or until shutdown
-            queueCondition_.wait(lock, [this] {
-                return !signalQueue_.empty() || !keepRunning_;
+            // 等待信号或直到停止
+            queueCondition_.wait(lock, [this, &stopToken] {
+                return !signalQueue_.empty() || stopToken.stop_requested() ||
+                       !keepRunning_;
             });
 
-            if (!keepRunning_) {
+            if (stopToken.stop_requested() || !keepRunning_) {
                 break;
             }
 
@@ -536,103 +641,120 @@ void SafeSignalManager::processSignals() {
                 signalQueue_.pop_front();
             }
         }
+#endif
 
-        if (signal != 0) {
-            std::lock_guard lock(queueMutex_);
-            auto handlerIterator = safeHandlers_.find(signal);
+        if (signal) {
+            std::shared_lock lock(queueMutex_);  // 使用共享锁提高并发性能
+            auto handlerIterator = safeHandlers_.find(signal.value());
             if (handlerIterator != safeHandlers_.end()) {
                 for (const auto& handler : handlerIterator->second) {
                     try {
                         LOG_F(INFO, "Processing signal {} with handler {}",
-                              signal,
+                              signal.value(),
                               handler.name.empty() ? "unnamed" : handler.name);
-                        handler.handler(signal);
+                        handler.handler(signal.value());
 
-                        // Update statistics
-                        std::lock_guard statsLock(statsMutex_);
-                        signalStats_[signal].processed++;
-                        signalStats_[signal].lastProcessed =
-                            std::chrono::steady_clock::now();
+                        // 更新统计信息
+                        std::shared_lock statsLock(statsMutex_);
+                        auto statsIt = signalStats_.find(signal.value());
+                        if (statsIt != signalStats_.end()) {
+                            statsIt->second.processed.fetch_add(
+                                1, std::memory_order_relaxed);
+                            statsIt->second.lastProcessed =
+                                std::chrono::steady_clock::now();
+                        }
                     } catch (const std::exception& e) {
                         LOG_F(ERROR,
                               "Exception in safe signal handler for signal {}: "
                               "{}",
-                              signal, e.what());
+                              signal.value(), e.what());
 
-                        // Update error statistics
-                        std::lock_guard statsLock(statsMutex_);
-                        signalStats_[signal].handlerErrors++;
+                        // 更新错误统计
+                        std::shared_lock statsLock(statsMutex_);
+                        auto statsIt = signalStats_.find(signal.value());
+                        if (statsIt != signalStats_.end()) {
+                            statsIt->second.handlerErrors.fetch_add(
+                                1, std::memory_order_relaxed);
+                        }
                     }
                 }
             }
         } else {
-            // No signal to process, sleep a bit
+            // 无信号处理，休眠一下
             std::this_thread::sleep_for(
                 std::chrono::milliseconds(SLEEP_DURATION_MS));
         }
     }
 }
 
-// Cross-platform signal installation for safe handling
+// 跨平台信号安装，用于安全处理
 void installPlatformSpecificHandlers() {
 #if defined(_WIN32) || defined(_WIN64)
-    // Windows-specific signal handling
-    SignalHandlerRegistry::getInstance().setStandardCrashHandlerSignals(
-        [](int signal) { LOG_F(ERROR, "Caught signal {} on Windows", signal); },
-        100, "PlatformCrashHandler-Windows");
+    // Windows特定信号处理
+    [[maybe_unused]] auto windowsHandlerIds =
+        SignalHandlerRegistry::getInstance().setStandardCrashHandlerSignals(
+            [](int signal) {
+                LOG_F(ERROR, "Caught signal {} on Windows", signal);
+            },
+            100, "PlatformCrashHandler-Windows");
 
-    // Add specific Windows exception handling
-    SafeSignalManager::getInstance().addSafeSignalHandler(
-        SIGBREAK,
-        []([[maybe_unused]] int signal) {
-            LOG_F(WARNING, "Caught SIGBREAK on Windows");
-        },
-        90, "Windows-SIGBREAK-Handler");
+    // 添加特定Windows异常处理
+    [[maybe_unused]] auto sigbreakHandlerId =
+        SafeSignalManager::getInstance().addSafeSignalHandler(
+            SIGBREAK,
+            []([[maybe_unused]] int signal) {
+                LOG_F(WARNING, "Caught SIGBREAK on Windows");
+            },
+            90, "Windows-SIGBREAK-Handler");
 
 #else
-    // POSIX (Linux, macOS) specific signals
-    SignalHandlerRegistry::getInstance().setStandardCrashHandlerSignals(
-        [](int signal) {
-            LOG_F(ERROR, "Caught signal {} on POSIX system", signal);
-        },
-        100, "PlatformCrashHandler-POSIX");
+    // POSIX (Linux, macOS) 特定信号
+    [[maybe_unused]] auto posixHandlerIds =
+        SignalHandlerRegistry::getInstance().setStandardCrashHandlerSignals(
+            [](int signal) {
+                LOG_F(ERROR, "Caught signal {} on POSIX system", signal);
+            },
+            100, "PlatformCrashHandler-POSIX");
 
-    // Add POSIX-specific signal handlers
-    SafeSignalManager::getInstance().addSafeSignalHandler(
-        SIGHUP,
-        [](int signal) {
-            LOG_F(INFO, "Caught SIGHUP - reloading configuration");
-        },
-        80, "POSIX-SIGHUP-Handler");
+    // 添加POSIX特定信号处理器
+    [[maybe_unused]] auto sighupHandlerId =
+        SafeSignalManager::getInstance().addSafeSignalHandler(
+            SIGHUP,
+            [](int signal) {
+                LOG_F(INFO, "Caught SIGHUP - reloading configuration");
+            },
+            80, "POSIX-SIGHUP-Handler");
 
-    SafeSignalManager::getInstance().addSafeSignalHandler(
-        SIGUSR1,
-        [](int signal) { LOG_F(INFO, "Caught SIGUSR1 - custom action"); }, 80,
-        "POSIX-SIGUSR1-Handler");
+    [[maybe_unused]] auto sigusr1HandlerId =
+        SafeSignalManager::getInstance().addSafeSignalHandler(
+            SIGUSR1,
+            [](int signal) { LOG_F(INFO, "Caught SIGUSR1 - custom action"); },
+            80, "POSIX-SIGUSR1-Handler");
 #endif
 
-    // Common handlers for both platforms
-    SafeSignalManager::getInstance().addSafeSignalHandler(
-        SIGTERM,
-        []([[maybe_unused]] int signal) {
-            LOG_F(WARNING, "Caught SIGTERM - preparing for shutdown");
-        },
-        100, "Common-SIGTERM-Handler");
+    // 两个平台共用的处理器
+    [[maybe_unused]] auto sigtermHandlerId =
+        SafeSignalManager::getInstance().addSafeSignalHandler(
+            SIGTERM,
+            []([[maybe_unused]] int signal) {
+                LOG_F(WARNING, "Caught SIGTERM - preparing for shutdown");
+            },
+            100, "Common-SIGTERM-Handler");
 }
 
 void initializeSignalSystem(size_t workerThreadCount, size_t queueSize) {
-    // Initialize the safe signal manager with specified parameters
+    // 使用指定参数初始化安全信号管理器
     auto& manager = SafeSignalManager::getInstance();
 
-    // Configure worker threads and queue size
+    // 配置工作线程和队列大小
     manager.setWorkerThreadCount(workerThreadCount);
     manager.setMaxQueueSize(queueSize);
 
-    // Set handler timeout in registry
+    // 在注册表中设置处理器超时
     SignalHandlerRegistry::getInstance().setHandlerTimeout(
         std::chrono::milliseconds(2000));
 
-    // Install platform-specific handlers
+    // 安装平台特定处理器
     installPlatformSpecificHandlers();
 
     LOG_F(INFO,

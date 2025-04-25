@@ -6,10 +6,15 @@
 #include <functional>
 #include <map>
 #include <mutex>
+#include <shared_mutex>
 #include <thread>
 #include <vector>
 
 #include "signal.hpp"
+
+#ifdef ATOM_USE_BOOST
+#include <boost/container/flat_map.hpp>
+#endif
 
 /**
  * @brief Callback for signal monitoring events
@@ -26,7 +31,7 @@ public:
      *
      * @return SignalMonitor& Reference to the singleton instance
      */
-    static SignalMonitor& getInstance() {
+    [[nodiscard]] static SignalMonitor& getInstance() noexcept {
         static SignalMonitor instance;
         return instance;
     }
@@ -40,28 +45,35 @@ public:
      */
     void start(std::chrono::milliseconds monitorInterval =
                    std::chrono::milliseconds(1000),
-               const std::vector<SignalID>& signalsToMonitor = {}) {
-        std::lock_guard lock(mutex_);
+               std::span<const SignalID> signalsToMonitor = {}) {
+        std::unique_lock lock(mutex_);
 
         if (isRunning_) {
             return;
         }
 
         monitorInterval_ = monitorInterval;
-        signalsToMonitor_ = signalsToMonitor;
+        signalsToMonitor_.assign(signalsToMonitor.begin(),
+                                 signalsToMonitor.end());
         isRunning_ = true;
 
-        // Start the monitoring thread
+        // C++20 jthread会在析构时自动join
         monitorThread_ = std::jthread([this](std::stop_token stopToken) {
             this->monitorLoop(stopToken);
         });
     }
 
+    // 兼容C++17使用向量形式的参数
+    void start(std::chrono::milliseconds monitorInterval,
+               const std::vector<SignalID>& signalsToMonitor) {
+        start(monitorInterval, std::span<const SignalID>(signalsToMonitor));
+    }
+
     /**
      * @brief Stop monitoring signals
      */
-    void stop() {
-        std::lock_guard lock(mutex_);
+    void stop() noexcept {
+        std::unique_lock lock(mutex_);
 
         if (!isRunning_) {
             return;
@@ -70,8 +82,8 @@ public:
         isRunning_ = false;
         if (monitorThread_.joinable()) {
             monitorThread_.request_stop();
-            monitorThread_.join();
         }
+        // jthread会在析构时自动join，不需要显式调用
     }
 
     /**
@@ -85,10 +97,10 @@ public:
      * @param callback The callback function to execute
      * @return int ID of the registered callback
      */
-    int addThresholdCallback(SignalID signal, uint64_t receivedThreshold,
-                             uint64_t errorThreshold,
-                             const SignalMonitorCallback& callback) {
-        std::lock_guard lock(mutex_);
+    [[nodiscard]] int addThresholdCallback(
+        SignalID signal, uint64_t receivedThreshold, uint64_t errorThreshold,
+        const SignalMonitorCallback& callback) {
+        std::unique_lock lock(mutex_);
 
         int callbackId = nextCallbackId_++;
         thresholdCallbacks_[callbackId] = {
@@ -113,10 +125,10 @@ public:
      * @param callback The callback function to execute
      * @return int ID of the registered callback
      */
-    int addInactivityCallback(SignalID signal,
-                              std::chrono::milliseconds inactivityPeriod,
-                              const SignalMonitorCallback& callback) {
-        std::lock_guard lock(mutex_);
+    [[nodiscard]] int addInactivityCallback(
+        SignalID signal, std::chrono::milliseconds inactivityPeriod,
+        const SignalMonitorCallback& callback) {
+        std::unique_lock lock(mutex_);
 
         int callbackId = nextCallbackId_++;
         inactivityCallbacks_[callbackId] = {signal, inactivityPeriod, callback,
@@ -138,8 +150,8 @@ public:
      * @param callbackId ID of the callback to remove
      * @return true if callback was successfully removed
      */
-    bool removeCallback(int callbackId) {
-        std::lock_guard lock(mutex_);
+    bool removeCallback(int callbackId) noexcept {
+        std::unique_lock lock(mutex_);
 
         if (thresholdCallbacks_.erase(callbackId) > 0) {
             return true;
@@ -158,8 +170,12 @@ public:
      * @return std::map<SignalID, SignalStats> Map of signal IDs to their
      * statistics
      */
-    std::map<SignalID, SignalStats> getStatSnapshot() const {
+    [[nodiscard]] std::map<SignalID, SignalStats> getStatSnapshot() const {
+#ifdef ATOM_USE_BOOST
+        boost::container::flat_map<SignalID, SignalStats> stats;
+#else
         std::map<SignalID, SignalStats> stats;
+#endif
 
         // Get stats from registry
         for (const auto& signal : getMonitoredSignals()) {
@@ -176,10 +192,14 @@ public:
                 SafeSignalManager::getInstance().getSignalStats(signal);
 
             // Merge the stats - using load() to get values from atomics
-            stats[signal].received += safeStats.received.load();
-            stats[signal].processed += safeStats.processed.load();
-            stats[signal].dropped += safeStats.dropped.load();
-            stats[signal].handlerErrors += safeStats.handlerErrors.load();
+            stats[signal].received +=
+                safeStats.received.load(std::memory_order_acquire);
+            stats[signal].processed +=
+                safeStats.processed.load(std::memory_order_acquire);
+            stats[signal].dropped +=
+                safeStats.dropped.load(std::memory_order_acquire);
+            stats[signal].handlerErrors +=
+                safeStats.handlerErrors.load(std::memory_order_acquire);
 
             // Take the most recent timestamps
             if (safeStats.lastReceived > stats[signal].lastReceived) {
@@ -199,15 +219,15 @@ public:
      *
      * @return std::vector<SignalID> List of monitored signal IDs
      */
-    std::vector<SignalID> getMonitoredSignals() const {
-        std::lock_guard lock(mutex_);
+    [[nodiscard]] std::vector<SignalID> getMonitoredSignals() const {
+        std::shared_lock lock(mutex_);
 
         if (signalsToMonitor_.empty()) {
             // If no specific signals are specified, get all registered signals
             std::vector<SignalID> allSignals;
 
             // Get signals from registry
-            const auto& registryStats = SignalHandlerRegistry::getInstance();
+            auto& registryStats = SignalHandlerRegistry::getInstance();
             for (int i = 1; i < 32; ++i) {  // Common signal range
                 if (registryStats.hasHandlersForSignal(i)) {
                     allSignals.push_back(i);
@@ -228,7 +248,7 @@ public:
         SafeSignalManager::getInstance().resetStats();
 
         // Reset callback state
-        std::lock_guard lock(mutex_);
+        std::unique_lock lock(mutex_);
         for (auto& [id, callback] : thresholdCallbacks_) {
             callback.lastReceivedCount = 0;
             callback.lastErrorCount = 0;
@@ -246,9 +266,11 @@ private:
     // Destructor
     ~SignalMonitor() { stop(); }
 
-    // Prevent copying
+    // Prevent copying and moving
     SignalMonitor(const SignalMonitor&) = delete;
     SignalMonitor& operator=(const SignalMonitor&) = delete;
+    SignalMonitor(SignalMonitor&&) = delete;
+    SignalMonitor& operator=(SignalMonitor&&) = delete;
 
     // Threshold callback information
     struct ThresholdCallback {
@@ -286,7 +308,7 @@ private:
     void checkThresholds() {
         auto stats = getStatSnapshot();
 
-        std::lock_guard lock(mutex_);
+        std::shared_lock lock(mutex_);  // 使用共享锁来增加并发性能
         for (auto& [id, callback] : thresholdCallbacks_) {
             const auto& signalStats = stats[callback.signal];
 
@@ -294,7 +316,12 @@ private:
             if (callback.receivedThreshold > 0 &&
                 signalStats.received >
                     callback.lastReceivedCount + callback.receivedThreshold) {
+                // 释放锁在回调期间以避免死锁 - 仅当回调需要长时间运行时
+                lock.unlock();
                 callback.callback(callback.signal, signalStats);
+
+                // 重新获取锁以更新状态
+                lock.lock();
                 callback.lastReceivedCount = signalStats.received;
             }
 
@@ -302,7 +329,12 @@ private:
             if (callback.errorThreshold > 0 &&
                 signalStats.handlerErrors >
                     callback.lastErrorCount + callback.errorThreshold) {
+                // 释放锁在回调期间以避免死锁
+                lock.unlock();
                 callback.callback(callback.signal, signalStats);
+
+                // 重新获取锁以更新状态
+                lock.lock();
                 callback.lastErrorCount = signalStats.handlerErrors;
             }
         }
@@ -313,7 +345,7 @@ private:
         auto stats = getStatSnapshot();
         auto now = std::chrono::steady_clock::now();
 
-        std::lock_guard lock(mutex_);
+        std::shared_lock lock(mutex_);  // 使用共享锁增加并发性能
         for (auto& [id, callback] : inactivityCallbacks_) {
             const auto& signalStats = stats[callback.signal];
 
@@ -326,7 +358,12 @@ private:
             // Check if inactive for too long
             auto elapsed = now - callback.lastActivity;
             if (elapsed > callback.inactivityPeriod) {
+                // 释放锁在回调期间以避免死锁
+                lock.unlock();
                 callback.callback(callback.signal, signalStats);
+
+                // 重新获取锁以更新状态
+                lock.lock();
                 callback.lastActivity =
                     now;  // Reset to avoid repeated callbacks
             }
@@ -337,10 +374,19 @@ private:
     std::chrono::milliseconds monitorInterval_;
     std::vector<SignalID> signalsToMonitor_;
     std::jthread monitorThread_;
-    mutable std::mutex mutex_;
-    int nextCallbackId_;
-    std::map<int, ThresholdCallback> thresholdCallbacks_;
-    std::map<int, InactivityCallback> inactivityCallbacks_;
+    mutable std::shared_mutex mutex_;     // 使用读写锁提高并发性
+    std::atomic<int> nextCallbackId_{1};  // 使用原子变量避免互斥锁
+
+#ifdef ATOM_USE_PMR
+    std::pmr::synchronized_pool_resource callbackPoolResource_{};  // PMR池资源
+    std::pmr::map<int, ThresholdCallback> thresholdCallbacks_{
+        &callbackPoolResource_};
+    std::pmr::map<int, InactivityCallback> inactivityCallbacks_{
+        &callbackPoolResource_};
+#else
+    std::unordered_map<int, ThresholdCallback> thresholdCallbacks_;
+    std::unordered_map<int, InactivityCallback> inactivityCallbacks_;
+#endif
 };
 
 #endif  // ATOM_SYSTEM_SIGNAL_MONITOR_HPP

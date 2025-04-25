@@ -3,11 +3,12 @@
 
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <functional>
 #include <map>
 #include <mutex>
 #include <set>
+#include <shared_mutex>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -20,6 +21,12 @@
 #include <windows.h>
 #else
 #include <csignal>
+#endif
+
+// 可选的Boost支持
+#ifdef ATOM_USE_BOOST
+#include <boost/container/small_vector.hpp>
+#include <boost/lockfree/queue.hpp>
 #endif
 
 /**
@@ -49,8 +56,17 @@ struct SignalHandlerWithPriority {
      * @param p The priority value
      * @param n Optional name for the handler
      */
-    SignalHandlerWithPriority(const SignalHandler& h, int p, std::string n = "")
-        : handler(h), priority(p), name(std::move(n)) {}
+    SignalHandlerWithPriority(const SignalHandler& h, int p,
+                              std::string_view n = "")
+        : handler(h), priority(p), name(n) {}
+
+    /**
+     * @brief Move constructor for efficient resource management
+     */
+    SignalHandlerWithPriority(SignalHandlerWithPriority&& other) noexcept
+        : handler(std::move(other.handler)),
+          priority(other.priority),
+          name(std::move(other.name)) {}
 
     /**
      * @brief Compare two `SignalHandlerWithPriority` objects based on priority.
@@ -60,7 +76,8 @@ struct SignalHandlerWithPriority {
      * @return `true` if this object's priority is greater than the other's;
      * `false` otherwise.
      */
-    auto operator<(const SignalHandlerWithPriority& other) const -> bool;
+    [[nodiscard]] auto operator<(
+        const SignalHandlerWithPriority& other) const noexcept -> bool;
 };
 
 /**
@@ -79,18 +96,22 @@ struct SignalStats {
     SignalStats() = default;
 
     SignalStats(const SignalStats& other)
-        : received(other.received.load()),
-          processed(other.processed.load()),
-          dropped(other.dropped.load()),
-          handlerErrors(other.handlerErrors.load()),
+        : received(other.received.load(std::memory_order_relaxed)),
+          processed(other.processed.load(std::memory_order_relaxed)),
+          dropped(other.dropped.load(std::memory_order_relaxed)),
+          handlerErrors(other.handlerErrors.load(std::memory_order_relaxed)),
           lastReceived(other.lastReceived),
           lastProcessed(other.lastProcessed) {}
 
     SignalStats& operator=(const SignalStats& other) {
-        received.store(other.received.load());
-        processed.store(other.processed.load());
-        dropped.store(other.dropped.load());
-        handlerErrors.store(other.handlerErrors.load());
+        received.store(other.received.load(std::memory_order_relaxed),
+                       std::memory_order_relaxed);
+        processed.store(other.processed.load(std::memory_order_relaxed),
+                        std::memory_order_relaxed);
+        dropped.store(other.dropped.load(std::memory_order_relaxed),
+                      std::memory_order_relaxed);
+        handlerErrors.store(other.handlerErrors.load(std::memory_order_relaxed),
+                            std::memory_order_relaxed);
         lastReceived = other.lastReceived;
         lastProcessed = other.lastProcessed;
         return *this;
@@ -111,7 +132,7 @@ public:
      *
      * @return A reference to the singleton `SignalHandlerRegistry` instance.
      */
-    static auto getInstance() -> SignalHandlerRegistry&;
+    [[nodiscard]] static auto getInstance() -> SignalHandlerRegistry&;
 
     /**
      * @brief Set a signal handler for a specific signal with an optional
@@ -123,8 +144,10 @@ public:
      * @param handlerName Optional name for the handler for debugging purposes.
      * @return A unique identifier for this handler registration.
      */
-    int setSignalHandler(SignalID signal, const SignalHandler& handler,
-                         int priority = 0, const std::string& handlerName = "");
+    [[nodiscard]] int setSignalHandler(SignalID signal,
+                                       const SignalHandler& handler,
+                                       int priority = 0,
+                                       std::string_view handlerName = "");
 
     /**
      * @brief Remove a specific signal handler by its identifier.
@@ -151,9 +174,9 @@ public:
      * @param handlerName Optional name for the handler for debugging purposes.
      * @return Vector of handler IDs created for each signal
      */
-    std::vector<int> setStandardCrashHandlerSignals(
+    [[nodiscard]] std::vector<int> setStandardCrashHandlerSignals(
         const SignalHandler& handler, int priority = 0,
-        const std::string& handlerName = "");
+        std::string_view handlerName = "");
 
     /**
      * @brief Process all pending signals synchronously
@@ -162,7 +185,7 @@ public:
      * limit)
      * @return Number of signals processed
      */
-    int processAllPendingSignals(
+    [[nodiscard]] int processAllPendingSignals(
         std::chrono::milliseconds timeout = std::chrono::milliseconds(0));
 
     /**
@@ -171,7 +194,7 @@ public:
      * @param signal The signal ID to check
      * @return true if the signal has registered handlers
      */
-    bool hasHandlersForSignal(SignalID signal);
+    [[nodiscard]] bool hasHandlersForSignal(SignalID signal);
 
     /**
      * @brief Get statistics for a specific signal
@@ -179,7 +202,7 @@ public:
      * @param signal The signal to get stats for
      * @return const SignalStats& Reference to the stats for the signal
      */
-    const SignalStats& getSignalStats(SignalID signal);
+    [[nodiscard]] const SignalStats& getSignalStats(SignalID signal) const;
 
     /**
      * @brief Reset statistics for all or a specific signal
@@ -210,16 +233,34 @@ private:
     SignalHandlerRegistry();
     ~SignalHandlerRegistry();
 
+    // Prevent copying and moving
+    SignalHandlerRegistry(const SignalHandlerRegistry&) = delete;
+    SignalHandlerRegistry& operator=(const SignalHandlerRegistry&) = delete;
+    SignalHandlerRegistry(SignalHandlerRegistry&&) = delete;
+    SignalHandlerRegistry& operator=(SignalHandlerRegistry&&) = delete;
+
     static void signalDispatcher(int signal);
 
-    static auto getStandardCrashSignals() -> std::set<SignalID>;
+    [[nodiscard]] static auto getStandardCrashSignals() -> std::set<SignalID>;
 
-    int nextHandlerId_ = 1;  ///< Counter for generating unique handler IDs
+    std::atomic<int> nextHandlerId_{
+        1};  ///< Counter for generating unique handler IDs
+
+    // 使用PMR内存资源优化内存分配
+#ifdef ATOM_USE_PMR
+    std::pmr::monotonic_buffer_resource memResource_{1024 *
+                                                     1024};  // 1MB buffer
+    std::pmr::unordered_map<int, std::pair<SignalID, SignalHandler>>
+        handlerRegistry_{
+            &memResource_};  ///< Map of handler IDs to signal/handler
+#else
     std::unordered_map<int, std::pair<SignalID, SignalHandler>>
         handlerRegistry_;  ///< Map of handler IDs to signal/handler
-    std::map<SignalID, std::set<SignalHandlerWithPriority>>
-        handlers_;      ///< Map of signal IDs to handlers with priorities
-    std::mutex mutex_;  ///< Mutex for synchronizing access to the handlers
+#endif
+
+    // 使用读写锁优化并发访问，多个读取器可以同时访问
+    mutable std::shared_mutex mutex_;
+    std::map<SignalID, std::set<SignalHandlerWithPriority>> handlers_;
     std::unordered_map<SignalID, SignalStats>
         signalStats_;  ///< Statistics for each signal
     std::chrono::milliseconds handlerTimeout_{
@@ -260,6 +301,12 @@ public:
      */
     ~SafeSignalManager();
 
+    // 阻止复制和移动
+    SafeSignalManager(const SafeSignalManager&) = delete;
+    SafeSignalManager& operator=(const SafeSignalManager&) = delete;
+    SafeSignalManager(SafeSignalManager&&) = delete;
+    SafeSignalManager& operator=(SafeSignalManager&&) = delete;
+
     /**
      * @brief Add a signal handler for a specific signal with an optional
      * priority.
@@ -270,9 +317,10 @@ public:
      * @param handlerName Optional name for the handler for debugging purposes.
      * @return A unique identifier for this handler registration.
      */
-    int addSafeSignalHandler(SignalID signal, const SignalHandler& handler,
-                             int priority = 0,
-                             const std::string& handlerName = "");
+    [[nodiscard]] int addSafeSignalHandler(SignalID signal,
+                                           const SignalHandler& handler,
+                                           int priority = 0,
+                                           std::string_view handlerName = "");
 
     /**
      * @brief Remove a specific signal handler by its identifier.
@@ -313,7 +361,7 @@ public:
      *
      * @return A reference to the singleton `SafeSignalManager` instance.
      */
-    static auto getInstance() -> SafeSignalManager&;
+    [[nodiscard]] static auto getInstance() -> SafeSignalManager&;
 
     /**
      * @brief Manually queue a signal for processing
@@ -328,7 +376,7 @@ public:
      *
      * @return Current number of signals in the queue
      */
-    size_t getQueueSize() const;
+    [[nodiscard]] size_t getQueueSize() const;
 
     /**
      * @brief Get statistics for a specific signal
@@ -336,7 +384,7 @@ public:
      * @param signal The signal to get stats for
      * @return const SignalStats& Reference to the stats for the signal
      */
-    const SignalStats& getSignalStats(SignalID signal) const;
+    [[nodiscard]] const SignalStats& getSignalStats(SignalID signal) const;
 
     /**
      * @brief Reset statistics for all or a specific signal
@@ -364,28 +412,45 @@ private:
     /**
      * @brief Process signals from the queue in a separate thread.
      */
-    void processSignals();
+    void processSignals(std::stop_token stopToken);
 
     std::atomic<bool> keepRunning_{
         true};  ///< Flag to control the running state
     std::atomic<int> nextHandlerId_{
         1};  ///< Counter for generating unique handler IDs
+
+#ifdef ATOM_USE_PMR
+    std::pmr::monotonic_buffer_resource handlerMemResource_{
+        1024 * 1024};  // 1MB buffer
+    std::pmr::unordered_map<int, std::pair<SignalID, SignalHandler>>
+        handlerRegistry_{&handlerMemResource_};
+#else
     std::unordered_map<int, std::pair<SignalID, SignalHandler>>
         handlerRegistry_;  ///< Map of handler IDs to signal/handler
+#endif
+
     std::map<SignalID, std::set<SignalHandlerWithPriority>>
-        safeHandlers_;             ///< Map of signal IDs to handlers
+        safeHandlers_;  ///< Map of signal IDs to handlers
+
+    // 可选使用Boost无锁队列
+#ifdef ATOM_USE_BOOST
+    boost::lockfree::queue<int> signalQueue_{1024};
+    size_t maxQueueSize_{1024};
+#else
     std::deque<int> signalQueue_;  ///< Queue of signals to be processed
     size_t maxQueueSize_;          ///< Maximum size of the signal queue
     std::mutex
         queueMutex_;  ///< Mutex for synchronizing access to the signal queue
     std::condition_variable
         queueCondition_;  ///< Condition variable for signaling queue changes
+#endif
+
     std::vector<std::jthread>
         workerThreads_;  ///< Threads for processing signals
+
     std::unordered_map<SignalID, SignalStats>
-        signalStats_;  ///< Statistics for each signal
-    mutable std::mutex
-        statsMutex_;  ///< Mutex for synchronizing access to stats
+        signalStats_;                       ///< Statistics for each signal
+    mutable std::shared_mutex statsMutex_;  ///< 使用共享锁优化读取统计信息
 };
 
 /**

@@ -40,6 +40,14 @@
 
 namespace atom::search {
 
+struct PairStringHash {
+    size_t operator()(const std::pair<std::string, std::string>& p) const {
+        size_t h1 = std::hash<std::string>()(p.first);
+        size_t h2 = std::hash<std::string>()(p.second);
+        return h1 ^ (h2 << 1);
+    }
+};
+
 // Define aliases based on whether we're using Boost or STL
 #if defined(ATOM_USE_BOOST_THREAD)
 template <typename T>
@@ -412,7 +420,8 @@ private:
     std::list<KeyValuePair>
         cache_items_list_;  ///< List for maintaining item order.
     size_t max_size_;       ///< Maximum number of items in the cache.
-    std::unordered_map<Key, CacheItem>
+    std::unordered_map<std::pair<std::string, std::string>, CacheItem,
+                       PairStringHash>
         cache_items_map_;           ///< Map for fast key lookups.
     atomic<size_t> hit_count_{0};   ///< Number of cache hits.
     atomic<size_t> miss_count_{0};  ///< Number of cache misses.

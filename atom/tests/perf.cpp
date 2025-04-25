@@ -502,7 +502,8 @@ void writeCsvData(std::ostream& csv, const Perf::PerfGather& gatherer,
     auto min_duration_ns =
         static_cast<uint64_t>(config.minimumDuration.count());
 
-    std::lock_guard guard(gatherer.lock);
+    // TODO: Fix this lock, it should be a scoped lock
+    std::scoped_lock guard(gatherer.lock);
     for (const auto& entry : gatherer.table) {
         auto duration = entry.t1 - entry.t0;
         if (duration < min_duration_ns) {
@@ -527,7 +528,7 @@ void writeFlamegraphData(std::ostream& folded, const Perf::PerfGather& gatherer,
     auto min_duration_ns =
         static_cast<uint64_t>(config.minimumDuration.count());
 
-    std::lock_guard guard(gatherer.lock);
+    std::scoped_lock guard(gatherer.lock);
     for (const auto& entry : gatherer.table) {
         auto duration = entry.t1 - entry.t0;
         if (duration < min_duration_ns) {

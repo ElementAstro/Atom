@@ -51,16 +51,16 @@ Examples:
         R"(Represents a 2D grid map with obstacles for pathfinding.)")
         .def(py::init<int, int>(), py::arg("width"), py::arg("height"),
              "Constructs an empty GridMap with specified width and height.")
-        // Fixed: Handle vector<bool> specially since it doesn't have contiguous
-        // storage
+        // 修复：改用 vector<uint8_t> 而不是 vector<bool>
         .def(py::init([](const std::vector<bool>& obstacles, int width,
                          int height) {
-                 // Convert to vector<uint8_t> first
+                 // 将 vector<bool> 转换为 vector<uint8_t>
                  std::vector<uint8_t> temp_obstacles;
                  temp_obstacles.reserve(obstacles.size());
-                 for (bool b : obstacles) {
-                     temp_obstacles.push_back(b ? 1 : 0);
+                 for (bool val : obstacles) {
+                     temp_obstacles.push_back(val ? 1 : 0);
                  }
+                 // 使用 span<const uint8_t> 构造函数
                  return atom::algorithm::GridMap(
                      std::span<const uint8_t>(temp_obstacles), width, height);
              }),
@@ -243,7 +243,7 @@ Examples:
             int height = obstacles.size();
             int width = obstacles[0].size();
 
-            // Convert to vector<uint8_t> for proper span conversion
+            // 修复：使用 vector<uint8_t> 替代 vector<char>
             std::vector<uint8_t> flat_obstacles;
             flat_obstacles.reserve(width * height);
 
@@ -252,12 +252,12 @@ Examples:
                     throw std::invalid_argument(
                         "All rows must have the same width");
                 }
-                for (bool b : row) {
-                    flat_obstacles.push_back(b ? 1 : 0);
+                for (bool val : row) {
+                    flat_obstacles.push_back(val ? 1 : 0);
                 }
             }
 
-            // Create span from uint8_t vector
+            // 创建GridMap使用span<const uint8_t>构造函数
             atom::algorithm::GridMap map(
                 std::span<const uint8_t>(flat_obstacles), width, height);
 

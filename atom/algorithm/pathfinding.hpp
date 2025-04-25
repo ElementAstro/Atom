@@ -119,6 +119,14 @@ public:
      */
     GridMap(std::span<const bool> obstacles, int width, int height);
 
+    /**
+     * @brief Construct a grid map with obstacles from uint8_t values
+     * @param obstacles Array of obstacles (non-zero = obstacle, 0 = free)
+     * @param width Width of the grid
+     * @param height Height of the grid
+     */
+    GridMap(std::span<const uint8_t> obstacles, int width, int height);
+
     // IGraph implementation
     std::vector<Point> neighbors(const Point& p) const override;
     float cost(const Point& from, const Point& to) const override;

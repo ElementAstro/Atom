@@ -66,6 +66,19 @@ GridMap::GridMap(std::span<const bool> obstacles, int width, int height)
     }
 }
 
+GridMap::GridMap(std::span<const uint8_t> obstacles, int width, int height)
+    : width_(width),
+      height_(height),
+      obstacles_(width * height, false),
+      terrain_(width * height, TerrainType::Open) {
+    for (size_t i = 0; i < obstacles_.size(); ++i) {
+        if (obstacles[i] != 0) {
+            obstacles_[i] = true;
+            terrain_[i] = TerrainType::Obstacle;
+        }
+    }
+}
+
 std::vector<Point> GridMap::neighbors(const Point& p) const {
     std::vector<Point> result;
     result.reserve(8);

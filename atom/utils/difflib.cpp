@@ -721,8 +721,7 @@ auto Differ::unifiedDiff(std::span<const std::string> vec1,
                  3);  // Reserve space for header and content
 
     try {
-        SequenceMatcher matcher(
-            "", "", options);
+        SequenceMatcher matcher("", "", options);
         matcher.setSeqs(joinLines(vec1), joinLines(vec2));
         auto opcodes = matcher.getOpcodes();
 
@@ -1412,6 +1411,16 @@ private:
             last_b = j1 + size;
         }
 
+        if (last_a < n || last_b < m) {
+            if (last_a < n && last_b < m) {
+                opcodes.emplace_back("replace", last_a, n, last_b, m);
+            } else if (last_a < n) {
+                opcodes.emplace_back("delete", last_a, n, last_b, last_b);
+            } else if (last_b < m) {
+                opcodes.emplace_back("insert", last_a, last_a, last_b, m);
+            }
+        }
+
         return opcodes;
     }
 
@@ -1603,7 +1612,6 @@ private:
         return selected;
     }
 
-    // 生成差异操作码
     auto generateOpcodes(const std::vector<std::tuple<int, int, int>>& blocks,
                          int n, int m)
         -> std::vector<std::tuple<std::string, int, int, int, int>> {
@@ -1637,10 +1645,19 @@ private:
             last_b = j1 + size;
         }
 
+        if (last_a < n || last_b < m) {
+            if (last_a < n && last_b < m) {
+                opcodes.emplace_back("replace", last_a, n, last_b, m);
+            } else if (last_a < n) {
+                opcodes.emplace_back("delete", last_a, n, last_b, last_b);
+            } else if (last_b < m) {
+                opcodes.emplace_back("insert", last_a, last_a, last_b, m);
+            }
+        }
+
         return opcodes;
     }
 
-    // 更新差异统计信息
     void updateStats(
         const std::vector<std::tuple<std::string, int, int, int, int>>&
             opcodes) {
