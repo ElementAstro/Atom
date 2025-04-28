@@ -236,7 +236,7 @@ public:
         void exportToJSON(const std::string& filename);
         void generateThreadReport();
 
-        std::mutex lock;
+        mutable std::mutex lock;
         std::vector<PerfTableEntry> table;
         std::string output_path;
         const char* output;

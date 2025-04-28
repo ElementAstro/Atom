@@ -10,7 +10,6 @@
 #include <map>
 #include <mutex>
 #include <optional>
-#include <regex>
 #include <thread>
 #include <unordered_map>
 
@@ -24,7 +23,9 @@
 #include <pdh.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#ifdef _MSC_VER
 #pragma comment(lib, "pdh.lib")
+#endif
 // clang-format on
 #elif defined(__linux__) || defined(__ANDROID__)
 #include <dirent.h>
@@ -1304,7 +1305,7 @@ auto setProcessPriority(int pid, ProcessPriority priority) -> bool {
     CloseHandle(hProcess);
 
     if (!result) {
-        LOG_F(ERROR, "设置进程优先级失败: PID={}, 错误码={}", pid,
+        LOG_F(ERROR, "SetPriorityClass failed: PID={}, error code={}", pid,
               GetLastError());
         return false;
     }
@@ -1351,7 +1352,7 @@ auto getProcessPriority(int pid) -> std::optional<ProcessPriority> {
 #ifdef _WIN32
     HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
     if (hProcess == NULL) {
-        LOG_F(ERROR, "无法打开进程: PID={}", pid);
+        LOG_F(ERROR, "Failed to open process: PID={}", pid);
         return std::nullopt;
     }
 
@@ -1359,8 +1360,8 @@ auto getProcessPriority(int pid) -> std::optional<ProcessPriority> {
     CloseHandle(hProcess);
 
     if (priorityClass == 0) {
-        LOG_F(ERROR, "获取进程优先级失败: PID={}, 错误码={}", pid,
-              GetLastError());
+        LOG_F(ERROR, "Failed to get process priority: PID={}, error code={}",
+              pid, GetLastError());
         return std::nullopt;
     }
 
@@ -1384,7 +1385,7 @@ auto getProcessPriority(int pid) -> std::optional<ProcessPriority> {
     int prio = getpriority(which, pid);
 
     if (errno != 0) {
-        LOG_F(ERROR, "获取进程优先级失败: PID={}, 错误={}", pid,
+        LOG_F(ERROR, "Failed to get process priority: PID={}, error={}", pid,
               strerror(errno));
         return std::nullopt;
     }
@@ -1410,7 +1411,8 @@ auto getChildProcesses(int pid) -> std::vector<int> {
 #ifdef _WIN32
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnap == INVALID_HANDLE_VALUE) {
-        LOG_F(ERROR, "无法创建进程快照: 错误码={}", GetLastError());
+        LOG_F(ERROR, "Failed to create process snapshot: error code={}",
+              GetLastError());
         return children;
     }
 
@@ -1418,7 +1420,8 @@ auto getChildProcesses(int pid) -> std::vector<int> {
     pe32.dwSize = sizeof(PROCESSENTRY32);
 
     if (!Process32First(hSnap, &pe32)) {
-        LOG_F(ERROR, "无法获取第一个进程: 错误码={}", GetLastError());
+        LOG_F(ERROR, "Failed to get first process: error code={}",
+              GetLastError());
         CloseHandle(hSnap);
         return children;
     }
@@ -1431,16 +1434,14 @@ auto getChildProcesses(int pid) -> std::vector<int> {
 
     CloseHandle(hSnap);
 #elif defined(__linux__)
-    // Linux下通过/proc文件系统获取子进程
     DIR *procDir = opendir("/proc");
     if (procDir == nullptr) {
-        LOG_F(ERROR, "无法打开/proc目录");
+        LOG_F(ERROR, "Failed to open /proc directory");
         return children;
     }
 
     struct dirent *entry;
     while ((entry = readdir(procDir)) != nullptr) {
-        // 检查目录名是否为纯数字(PID)
         if (entry->d_type == DT_DIR) {
             bool isPid = true;
             for (const char *p = entry->d_name; *p; ++p) {
@@ -1460,7 +1461,6 @@ auto getChildProcesses(int pid) -> std::vector<int> {
                     std::string line;
                     std::getline(statFile, line);
 
-                    // 解析stat文件，PPID是第4个字段
                     std::istringstream iss(line);
                     std::string field;
                     int fieldCount = 0;
@@ -1483,12 +1483,12 @@ auto getChildProcesses(int pid) -> std::vector<int> {
 
     closedir(procDir);
 #elif defined(__APPLE__)
-    // macOS上使用sysctl获取进程树
     int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
     std::size_t size;
 
     if (sysctl(mib, 4, nullptr, &size, nullptr, 0) < 0) {
-        LOG_F(ERROR, "获取进程列表大小失败: 错误={}", strerror(errno));
+        LOG_F(ERROR, "Failed to get process list size: error={}",
+              strerror(errno));
         return children;
     }
 
@@ -1496,7 +1496,7 @@ auto getChildProcesses(int pid) -> std::vector<int> {
                                                sizeof(struct kinfo_proc));
 
     if (sysctl(mib, 4, processList.data(), &size, nullptr, 0) < 0) {
-        LOG_F(ERROR, "获取进程列表失败: 错误={}", strerror(errno));
+        LOG_F(ERROR, "Failed to get process list: error={}", strerror(errno));
         return children;
     }
 
@@ -1515,13 +1515,13 @@ auto getProcessStartTime(int pid)
 #ifdef _WIN32
     HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
     if (hProcess == NULL) {
-        LOG_F(ERROR, "无法打开进程: PID={}", pid);
+        LOG_F(ERROR, "Failed to open process: PID={}", pid);
         return std::nullopt;
     }
 
     FILETIME ftCreate, ftExit, ftKernel, ftUser;
     if (!GetProcessTimes(hProcess, &ftCreate, &ftExit, &ftKernel, &ftUser)) {
-        LOG_F(ERROR, "获取进程时间失败: PID={}, 错误码={}", pid,
+        LOG_F(ERROR, "Failed to get process times: PID={}, error code={}", pid,
               GetLastError());
         CloseHandle(hProcess);
         return std::nullopt;
@@ -1529,13 +1529,10 @@ auto getProcessStartTime(int pid)
 
     CloseHandle(hProcess);
 
-    // 将FILETIME转换为system_clock::time_point
     ULARGE_INTEGER uli;
     uli.LowPart = ftCreate.dwLowDateTime;
     uli.HighPart = ftCreate.dwHighDateTime;
 
-    // Windows FILETIME是从1601年1月1日开始的100纳秒间隔
-    // 需要转换为Unix时间戳(从1970年1月1日开始的秒数)
     const ULONGLONG WINDOWS_TICK = 10000000ULL;
     const ULONGLONG SEC_TO_UNIX_EPOCH = 11644473600ULL;
     ULONGLONG unixTime = uli.QuadPart / WINDOWS_TICK - SEC_TO_UNIX_EPOCH;
@@ -1547,7 +1544,7 @@ auto getProcessStartTime(int pid)
     std::string statPath = "/proc/" + std::to_string(pid) + "/stat";
     std::ifstream statFile(statPath);
     if (!statFile) {
-        LOG_F(ERROR, "无法打开进程状态文件: {}", statPath);
+        LOG_F(ERROR, "Failed to open process stat file: {}", statPath);
         return std::nullopt;
     }
 
@@ -1555,7 +1552,6 @@ auto getProcessStartTime(int pid)
     std::getline(statFile, line);
     std::istringstream iss(line);
 
-    // stat文件的第22个字段是进程启动时间(以jiffies为单位, 从系统启动开始)
     std::string field;
     for (int i = 0; i < 21; ++i) {
         iss >> field;
@@ -1564,17 +1560,15 @@ auto getProcessStartTime(int pid)
     unsigned long long startTimeJiffies;
     iss >> startTimeJiffies;
 
-    // 获取系统启动时间
     std::ifstream uptimeFile("/proc/uptime");
     if (!uptimeFile) {
-        LOG_F(ERROR, "无法打开系统运行时间文件");
+        LOG_F(ERROR, "Failed to open system uptime file");
         return std::nullopt;
     }
 
     double uptime;
     uptimeFile >> uptime;
 
-    // 计算进程启动的绝对时间
     time_t now = std::time(nullptr);
     time_t bootTime = now - static_cast<time_t>(uptime);
     long clkTck = sysconf(_SC_CLK_TCK);
@@ -1587,11 +1581,10 @@ auto getProcessStartTime(int pid)
     size_t len = sizeof(kp);
 
     if (sysctl(mib, 4, &kp, &len, nullptr, 0) < 0) {
-        LOG_F(ERROR, "sysctl失败: 错误={}", strerror(errno));
+        LOG_F(ERROR, "sysctl failed: error={}", strerror(errno));
         return std::nullopt;
     }
 
-    // macOS上, p_starttime是一个timeval结构
     time_t startTime = kp.kp_proc.p_starttime.tv_sec;
     return std::chrono::system_clock::from_time_t(startTime);
 #else
@@ -1619,12 +1612,9 @@ auto monitorProcess(int pid,
 }
 
 auto stopMonitoring(int monitorId) -> bool {
-    // 根据monitorId停止不同类型的监控
     if (monitorId >= 1000) {
-        // 资源监控任务
         return ResourceMonitorManager::getInstance().stopMonitoring(monitorId);
     } else {
-        // 普通进程监控任务
         return ProcessMonitorManager::getInstance().stopMonitoring(monitorId);
     }
 }
@@ -1636,7 +1626,7 @@ auto getProcessCommandLine(int pid) -> std::vector<std::string> {
     HANDLE hProcess =
         OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
     if (hProcess == nullptr) {
-        LOG_F(ERROR, "无法打开进程: PID={}", pid);
+        LOG_F(ERROR, "Failed to open process: PID={}", pid);
         return cmdline;
     }
 
@@ -1646,8 +1636,6 @@ auto getProcessCommandLine(int pid) -> std::vector<std::string> {
     }
 
     CloseHandle(hProcess);
-
-    // Windows不易直接获取命令行参数，这只返回可执行文件路径
 #elif defined(__linux__)
     std::string cmdlinePath = "/proc/" + std::to_string(pid) + "/cmdline";
     std::ifstream cmdlineFile(cmdlinePath);
@@ -1656,7 +1644,6 @@ auto getProcessCommandLine(int pid) -> std::vector<std::string> {
         std::string content((std::istreambuf_iterator<char>(cmdlineFile)),
                             std::istreambuf_iterator<char>());
 
-        // cmdline文件以null字符分隔参数
         size_t pos = 0;
         while (pos < content.size()) {
             std::string token;
@@ -1666,41 +1653,37 @@ auto getProcessCommandLine(int pid) -> std::vector<std::string> {
             if (!token.empty()) {
                 cmdline.push_back(token);
             }
-            pos++;  // 跳过null字符
+            pos++;
         }
     }
 #elif defined(__APPLE__)
     int mib[3] = {CTL_KERN, KERN_PROCARGS2, pid};
     size_t size = 0;
 
-    // 获取所需大小
     if (sysctl(mib, 3, nullptr, &size, nullptr, 0) < 0) {
-        LOG_F(ERROR, "sysctl获取大小失败: {}", strerror(errno));
+        LOG_F(ERROR, "sysctl size retrieval failed: {}", strerror(errno));
         return cmdline;
     }
 
     std::vector<char> procargs(size);
     if (sysctl(mib, 3, procargs.data(), &size, nullptr, 0) < 0) {
-        LOG_F(ERROR, "sysctl获取进程参数失败: {}", strerror(errno));
+        LOG_F(ERROR, "sysctl process args retrieval failed: {}",
+              strerror(errno));
         return cmdline;
     }
 
-    // 解析参数
     int argc = *reinterpret_cast<int *>(procargs.data());
     char *cp = procargs.data() + sizeof(int);
 
-    // 跳过exec_path
     while (*cp != '\0') {
         cp++;
     }
     cp++;
 
-    // 跳过padding
     while (*cp == '\0') {
         cp++;
     }
 
-    // 现在cp指向参数
     for (int i = 0; i < argc && cp < procargs.data() + size; i++) {
         std::string arg = cp;
         cmdline.push_back(arg);
@@ -1711,25 +1694,25 @@ auto getProcessCommandLine(int pid) -> std::vector<std::string> {
     return cmdline;
 }
 
-auto getProcessEnvironment(int pid)
+auto getProcessEnvironment([[maybe_unused]] int pid)
     -> std::unordered_map<std::string, std::string> {
     std::unordered_map<std::string, std::string> env;
 
 #ifdef _WIN32
-    // Windows不容易获取其他进程的环境变量
-    LOG_F(WARNING, "Windows不支持获取其他进程的环境变量");
+    LOG_F(WARNING,
+          "Windows does not support getting environment variables from other "
+          "processes");
 #elif defined(__linux__)
     std::string envPath = "/proc/" + std::to_string(pid) + "/environ";
     std::ifstream envFile(envPath);
     if (!envFile) {
-        LOG_F(ERROR, "无法打开环境变量文件: {}", envPath);
+        LOG_F(ERROR, "Failed to open environment file: {}", envPath);
         return env;
     }
 
     std::string content((std::istreambuf_iterator<char>(envFile)),
                         std::istreambuf_iterator<char>());
 
-    // 环境变量以null字符分隔
     size_t pos = 0;
     while (pos < content.size()) {
         std::string entry;
@@ -1737,7 +1720,6 @@ auto getProcessEnvironment(int pid)
             entry += content[pos++];
         }
 
-        // 解析KEY=VALUE格式
         size_t equalsPos = entry.find('=');
         if (equalsPos != std::string::npos) {
             std::string key = entry.substr(0, equalsPos);
@@ -1745,11 +1727,12 @@ auto getProcessEnvironment(int pid)
             env[key] = value;
         }
 
-        pos++;  // 跳过null字符
+        pos++;
     }
 #elif defined(__APPLE__)
-    // macOS不支持直接获取其他进程的环境变量
-    LOG_F(WARNING, "macOS不支持获取其他进程的环境变量");
+    LOG_F(WARNING,
+          "macOS does not support getting environment variables from other "
+          "processes");
 #endif
 
     return env;
@@ -1763,9 +1746,10 @@ auto suspendProcess(int pid) -> bool {
         return false;
     }
 
-    typedef LONG(NTAPI * NtSuspendProcess)(HANDLE ProcessHandle);
-    NtSuspendProcess pfnNtSuspendProcess = reinterpret_cast<NtSuspendProcess>(
-        GetProcAddress(GetModuleHandleA("ntdll.dll"), "NtSuspendProcess"));
+    using NtSuspendProcess = LONG(NTAPI *)(HANDLE ProcessHandle);
+    FARPROC procAddr =
+        GetProcAddress(GetModuleHandleA("ntdll.dll"), "NtSuspendProcess");
+    auto pfnNtSuspendProcess = (NtSuspendProcess)(procAddr);
 
     if (!pfnNtSuspendProcess) {
         LOG_F(ERROR, "无法获取NtSuspendProcess函数");
@@ -1805,16 +1789,17 @@ auto resumeProcess(int pid) -> bool {
 #ifdef _WIN32
     HANDLE hProcess = OpenProcess(PROCESS_SUSPEND_RESUME, FALSE, pid);
     if (hProcess == nullptr) {
-        LOG_F(ERROR, "无法打开进程: PID={}", pid);
+        LOG_F(ERROR, "Unable to open process: PID={}", pid);
         return false;
     }
 
-    typedef LONG(NTAPI * NtResumeProcess)(HANDLE ProcessHandle);
-    NtResumeProcess pfnNtResumeProcess = reinterpret_cast<NtResumeProcess>(
-        GetProcAddress(GetModuleHandleA("ntdll.dll"), "NtResumeProcess"));
+    using NtResumeProcess = LONG(NTAPI *)(HANDLE ProcessHandle);
+    FARPROC procAddr =
+        GetProcAddress(GetModuleHandleA("ntdll.dll"), "NtResumeProcess");
+    auto pfnNtResumeProcess = (NtResumeProcess)(procAddr);
 
     if (!pfnNtResumeProcess) {
-        LOG_F(ERROR, "无法获取NtResumeProcess函数");
+        LOG_F(ERROR, "Failed to get NtResumeProcess function");
         CloseHandle(hProcess);
         return false;
     }
@@ -1823,15 +1808,16 @@ auto resumeProcess(int pid) -> bool {
     CloseHandle(hProcess);
 
     if (status != 0) {
-        LOG_F(ERROR, "恢复进程失败: PID={}, 状态={}", pid, status);
+        LOG_F(ERROR, "Failed to resume process: PID={}, status={}", pid,
+              status);
         return false;
     }
 
     return true;
 #elif defined(__linux__) || defined(__APPLE__)
-    // 在Linux/macOS上使用SIGCONT信号继续运行进程
     if (kill(pid, SIGCONT) != 0) {
-        LOG_F(ERROR, "恢复进程失败: PID={}, 错误={}", pid, strerror(errno));
+        LOG_F(ERROR, "Failed to resume process: PID={}, error={}", pid,
+              strerror(errno));
         return false;
     }
     return true;
@@ -1842,20 +1828,20 @@ auto resumeProcess(int pid) -> bool {
 
 auto setProcessAffinity(int pid, const std::vector<int> &cpuIndices) -> bool {
     if (cpuIndices.empty()) {
-        LOG_F(ERROR, "CPU核心索引列表为空");
+        LOG_F(ERROR, "CPU core index list is empty");
         return false;
     }
 
 #ifdef _WIN32
     HANDLE hProcess = OpenProcess(PROCESS_SET_INFORMATION, FALSE, pid);
     if (hProcess == nullptr) {
-        LOG_F(ERROR, "无法打开进程: PID={}", pid);
+        LOG_F(ERROR, "Failed to open process: PID={}", pid);
         return false;
     }
 
     DWORD_PTR affinityMask = 0;
     for (int index : cpuIndices) {
-        if (index >= 0 && index < 64) {  // Windows支持最多64个处理器
+        if (index >= 0 && index < 64) {
             affinityMask |= (static_cast<DWORD_PTR>(1) << index);
         }
     }
@@ -1864,7 +1850,8 @@ auto setProcessAffinity(int pid, const std::vector<int> &cpuIndices) -> bool {
     CloseHandle(hProcess);
 
     if (!result) {
-        LOG_F(ERROR, "设置进程CPU亲和性失败: PID={}, 错误码={}", pid,
+        LOG_F(ERROR,
+              "Failed to set process CPU affinity: PID={}, error code={}", pid,
               GetLastError());
         return false;
     }
@@ -1880,14 +1867,13 @@ auto setProcessAffinity(int pid, const std::vector<int> &cpuIndices) -> bool {
     }
 
     if (sched_setaffinity(pid, sizeof(cpu_set_t), &cpuset) != 0) {
-        LOG_F(ERROR, "设置进程CPU亲和性失败: PID={}, 错误={}", pid,
-              strerror(errno));
+        LOG_F(ERROR, "Failed to set process CPU affinity: PID={}, error={}",
+              pid, strerror(errno));
         return false;
     }
     return true;
 #elif defined(__APPLE__)
-    // macOS不支持设置CPU亲和性
-    LOG_F(WARNING, "macOS不支持设置CPU亲和性");
+    LOG_F(WARNING, "macOS does not support setting CPU affinity");
     return false;
 #else
     return false;
@@ -1900,19 +1886,20 @@ auto getProcessAffinity(int pid) -> std::vector<int> {
 #ifdef _WIN32
     HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
     if (hProcess == nullptr) {
-        LOG_F(ERROR, "无法打开进程: PID={}", pid);
+        LOG_F(ERROR, "Failed to open process: PID={}", pid);
         return cpuIndices;
     }
 
     DWORD_PTR processAffinity, systemAffinity;
     if (GetProcessAffinityMask(hProcess, &processAffinity, &systemAffinity)) {
-        for (int i = 0; i < 64; i++) {  // 最多64个处理器
+        for (int i = 0; i < 64; i++) {
             if (processAffinity & (static_cast<DWORD_PTR>(1) << i)) {
                 cpuIndices.push_back(i);
             }
         }
     } else {
-        LOG_F(ERROR, "获取进程CPU亲和性失败: PID={}, 错误码={}", pid,
+        LOG_F(ERROR,
+              "Failed to get process CPU affinity: PID={}, error code={}", pid,
               GetLastError());
     }
 
@@ -1928,12 +1915,11 @@ auto getProcessAffinity(int pid) -> std::vector<int> {
             }
         }
     } else {
-        LOG_F(ERROR, "获取进程CPU亲和性失败: PID={}, 错误={}", pid,
-              strerror(errno));
+        LOG_F(ERROR, "Failed to get process CPU affinity: PID={}, error={}",
+              pid, strerror(errno));
     }
 #elif defined(__APPLE__)
-    // macOS不支持获取CPU亲和性
-    LOG_F(WARNING, "macOS不支持获取CPU亲和性");
+    LOG_F(WARNING, "macOS does not support getting CPU affinity");
 #endif
 
     return cpuIndices;
@@ -1943,7 +1929,7 @@ auto setProcessMemoryLimit(int pid, std::size_t limitBytes) -> bool {
 #ifdef _WIN32
     HANDLE hProcess = OpenProcess(PROCESS_SET_QUOTA, FALSE, pid);
     if (hProcess == nullptr) {
-        LOG_F(ERROR, "无法打开进程: PID={}", pid);
+        LOG_F(ERROR, "Failed to open process: PID={}", pid);
         return false;
     }
 
@@ -1953,56 +1939,52 @@ auto setProcessMemoryLimit(int pid, std::size_t limitBytes) -> bool {
 
     HANDLE hJob = CreateJobObject(nullptr, nullptr);
     if (hJob == nullptr) {
-        LOG_F(ERROR, "创建作业对象失败: 错误码={}", GetLastError());
+        LOG_F(ERROR, "Failed to create job object: error code={}",
+              GetLastError());
         CloseHandle(hProcess);
         return false;
     }
 
     if (!SetInformationJobObject(hJob, JobObjectExtendedLimitInformation,
                                  &jobInfo, sizeof(jobInfo))) {
-        LOG_F(ERROR, "设置作业对象信息失败: 错误码={}", GetLastError());
+        LOG_F(ERROR, "Failed to set job object information: error code={}",
+              GetLastError());
         CloseHandle(hJob);
         CloseHandle(hProcess);
         return false;
     }
 
     if (!AssignProcessToJobObject(hJob, hProcess)) {
-        LOG_F(ERROR, "将进程分配到作业对象失败: 错误码={}", GetLastError());
+        LOG_F(ERROR, "Failed to assign process to job object: error code={}",
+              GetLastError());
         CloseHandle(hJob);
         CloseHandle(hProcess);
         return false;
     }
 
     CloseHandle(hProcess);
-    // 注意：不要关闭作业对象句柄，否则限制将被解除
-    // CloseHandle(hJob);
-
     return true;
 #elif defined(__linux__)
-    // 在Linux上使用cgroups设置内存限制
     std::string cgroupPath = "/sys/fs/cgroup/memory/";
     std::string processGroup = "process_" + std::to_string(pid);
     std::string fullPath = cgroupPath + processGroup;
 
-    // 创建cgroup
     if (mkdir(fullPath.c_str(), 0755) != 0 && errno != EEXIST) {
-        LOG_F(ERROR, "创建cgroup失败: {}", strerror(errno));
+        LOG_F(ERROR, "Failed to create cgroup: {}", strerror(errno));
         return false;
     }
 
-    // 设置内存限制
     std::ofstream limitFile(fullPath + "/memory.limit_in_bytes");
     if (!limitFile) {
-        LOG_F(ERROR, "打开内存限制文件失败");
+        LOG_F(ERROR, "Failed to open memory limit file");
         return false;
     }
     limitFile << limitBytes;
     limitFile.close();
 
-    // 添加进程到cgroup
     std::ofstream tasksFile(fullPath + "/tasks");
     if (!tasksFile) {
-        LOG_F(ERROR, "打开任务文件失败");
+        LOG_F(ERROR, "Failed to open tasks file");
         return false;
     }
     tasksFile << pid;
@@ -2010,7 +1992,8 @@ auto setProcessMemoryLimit(int pid, std::size_t limitBytes) -> bool {
 
     return true;
 #else
-    LOG_F(WARNING, "当前平台不支持设置进程内存限制");
+    LOG_F(WARNING,
+          "Current platform does not support setting process memory limits");
     return false;
 #endif
 }
@@ -2020,7 +2003,7 @@ auto getProcessPath(int pid) -> std::string {
     HANDLE hProcess =
         OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
     if (hProcess == nullptr) {
-        LOG_F(ERROR, "无法打开进程: PID={}", pid);
+        LOG_F(ERROR, "Failed to open process: PID={}", pid);
         return "";
     }
 
@@ -2029,7 +2012,7 @@ auto getProcessPath(int pid) -> std::string {
     CloseHandle(hProcess);
 
     if (length == 0) {
-        LOG_F(ERROR, "获取进程路径失败: PID={}, 错误码={}", pid,
+        LOG_F(ERROR, "Failed to get process path: PID={}, error code={}", pid,
               GetLastError());
         return "";
     }
@@ -2041,7 +2024,8 @@ auto getProcessPath(int pid) -> std::string {
     ssize_t length = readlink(procPath.c_str(), path, PATH_MAX - 1);
 
     if (length == -1) {
-        LOG_F(ERROR, "获取进程路径失败: PID={}, 错误={}", pid, strerror(errno));
+        LOG_F(ERROR, "Failed to get process path: PID={}, error={}", pid,
+              strerror(errno));
         return "";
     }
 
@@ -2052,7 +2036,8 @@ auto getProcessPath(int pid) -> std::string {
     int ret = proc_pidpath(pid, pathbuf, sizeof(pathbuf));
 
     if (ret <= 0) {
-        LOG_F(ERROR, "获取进程路径失败: PID={}, 错误={}", pid, strerror(errno));
+        LOG_F(ERROR, "Failed to get process path: PID={}, error={}", pid,
+              strerror(errno));
         return "";
     }
 
@@ -2070,22 +2055,19 @@ auto monitorProcessResource(
         pid, resourceType, threshold, callback, intervalMs);
 }
 
-auto getProcessSyscalls(int pid)
+auto getProcessSyscalls([[maybe_unused]] int pid)
     -> std::unordered_map<std::string, unsigned long> {
     std::unordered_map<std::string, unsigned long> syscalls;
 
 #ifdef __linux__
-    // Linux上可以通过/proc/[pid]/syscall查看当前系统调用
-    // 或者通过strace工具统计系统调用
     std::string cmd = "strace -c -p " + std::to_string(pid) + " 2>&1";
     auto [output, status] = executeCommandWithStatus(cmd);
 
     if (status != 0) {
-        LOG_F(ERROR, "执行strace命令失败: {}", output);
+        LOG_F(ERROR, "Failed to execute strace command: {}", output);
         return syscalls;
     }
 
-    // 解析strace输出
     std::istringstream iss(output);
     std::string line;
     bool foundHeader = false;
@@ -2102,12 +2084,10 @@ auto getProcessSyscalls(int pid)
             std::string syscallName;
             unsigned long callCount;
 
-            // 跳过百分比和其他字段
             std::string dummy;
-            lineStream >> dummy;      // 百分比
-            lineStream >> callCount;  // 调用次数
+            lineStream >> dummy;
+            lineStream >> callCount;
 
-            // 跳过多个字段，直到系统调用名称
             for (int i = 0; i < 4; i++) {
                 lineStream >> dummy;
             }
@@ -2119,7 +2099,7 @@ auto getProcessSyscalls(int pid)
         }
     }
 #else
-    LOG_F(WARNING, "当前平台不支持获取系统调用统计");
+    LOG_F(WARNING, "Current platform does not support syscall statistics");
 #endif
 
     return syscalls;
@@ -2129,18 +2109,16 @@ auto getProcessNetworkConnections(int pid) -> std::vector<NetworkConnection> {
     std::vector<NetworkConnection> connections;
 
 #ifdef _WIN32
-    // 使用Windows API获取网络连接
     MIB_TCPTABLE_OWNER_PID *pTcpTable = nullptr;
     DWORD dwSize = 0;
     DWORD dwRetVal = 0;
 
-    // 获取TCP表所需大小
     dwRetVal = GetExtendedTcpTable(nullptr, &dwSize, TRUE, AF_INET,
                                    TCP_TABLE_OWNER_PID_ALL, 0);
     if (dwRetVal == ERROR_INSUFFICIENT_BUFFER) {
         pTcpTable = (MIB_TCPTABLE_OWNER_PID *)malloc(dwSize);
         if (pTcpTable == nullptr) {
-            LOG_F(ERROR, "内存分配失败");
+            LOG_F(ERROR, "Memory allocation failed");
             return connections;
         }
 
@@ -2153,28 +2131,24 @@ auto getProcessNetworkConnections(int pid) -> std::vector<NetworkConnection> {
                     NetworkConnection conn;
                     conn.protocol = "TCP";
 
-                    // 获取本地地址
                     struct in_addr localAddr;
                     localAddr.s_addr = pTcpTable->table[i].dwLocalAddr;
-                    char localAddrStr[16];  // Buffer size sufficient for IPv4
-                                            // (xxx.xxx.xxx.xxx)
+                    char localAddrStr[16];
                     InetNtopA(AF_INET, &localAddr, localAddrStr,
                               sizeof(localAddrStr));
                     conn.localAddress = localAddrStr;
                     conn.localPort =
                         ntohs((u_short)pTcpTable->table[i].dwLocalPort);
 
-                    // 获取远程地址
                     struct in_addr remoteAddr;
                     remoteAddr.s_addr = pTcpTable->table[i].dwRemoteAddr;
-                    char remoteAddrStr[16];  // Buffer size sufficient for IPv4
-                                             // (xxx.xxx.xxx.xxx)
+                    char remoteAddrStr[16];
                     InetNtopA(AF_INET, &remoteAddr, remoteAddrStr,
                               sizeof(remoteAddrStr));
                     conn.remoteAddress = remoteAddrStr;
                     conn.remotePort =
                         ntohs((u_short)pTcpTable->table[i].dwRemotePort);
-                    // 获取连接状态
+
                     switch (pTcpTable->table[i].dwState) {
                         case MIB_TCP_STATE_CLOSED:
                             conn.status = "CLOSED";
@@ -2196,7 +2170,6 @@ auto getProcessNetworkConnections(int pid) -> std::vector<NetworkConnection> {
         free(pTcpTable);
     }
 #elif defined(__linux__)
-    // 读取/proc/[pid]/net/tcp和/proc/[pid]/net/udp文件
     std::vector<std::string> protocols = {"tcp", "udp"};
 
     for (const auto &proto : protocols) {
@@ -2208,7 +2181,6 @@ auto getProcessNetworkConnections(int pid) -> std::vector<NetworkConnection> {
         }
 
         std::string line;
-        // 跳过标题行
         std::getline(netFile, line);
 
         while (std::getline(netFile, line)) {
@@ -2220,13 +2192,11 @@ auto getProcessNetworkConnections(int pid) -> std::vector<NetworkConnection> {
 
             iss >> sl >> localAddr >> remoteAddr >> status >> other;
 
-            // 解析本地地址和端口
             size_t colonPos = localAddr.find(':');
             if (colonPos != std::string::npos) {
                 std::string addrHex = localAddr.substr(0, colonPos);
                 std::string portHex = localAddr.substr(colonPos + 1);
 
-                // 转换十六进制地址为IP地址
                 unsigned int addr;
                 std::stringstream ss;
                 ss << std::hex << addrHex;
@@ -2245,19 +2215,16 @@ auto getProcessNetworkConnections(int pid) -> std::vector<NetworkConnection> {
                            << static_cast<int>(bytes[0]);
                 conn.localAddress = addrStream.str();
 
-                // 转换十六进制端口
                 std::stringstream portStream;
                 portStream << std::hex << portHex;
                 portStream >> conn.localPort;
             }
 
-            // 解析远程地址和端口
             colonPos = remoteAddr.find(':');
             if (colonPos != std::string::npos) {
                 std::string addrHex = remoteAddr.substr(0, colonPos);
                 std::string portHex = remoteAddr.substr(colonPos + 1);
 
-                // 转换十六进制地址为IP地址
                 unsigned int addr;
                 std::stringstream ss;
                 ss << std::hex << addrHex;
@@ -2276,15 +2243,12 @@ auto getProcessNetworkConnections(int pid) -> std::vector<NetworkConnection> {
                            << static_cast<int>(bytes[0]);
                 conn.remoteAddress = addrStream.str();
 
-                // 转换十六进制端口
                 std::stringstream portStream;
                 portStream << std::hex << portHex;
                 portStream >> conn.remotePort;
             }
 
-            // 转换状态码
             if (proto == "tcp") {
-                // 将状态代码转换为可读形式
                 switch (std::stoi(status, nullptr, 16)) {
                     case 1:
                         conn.status = "ESTABLISHED";
@@ -2320,7 +2284,6 @@ auto getProcessNetworkConnections(int pid) -> std::vector<NetworkConnection> {
                         conn.status = "UNKNOWN";
                 }
             } else {
-                // UDP没有状态，设为空
                 conn.status = "";
             }
 
@@ -2328,12 +2291,11 @@ auto getProcessNetworkConnections(int pid) -> std::vector<NetworkConnection> {
         }
     }
 #elif defined(__APPLE__)
-    // 使用lsof命令获取网络连接信息
     std::string cmd = "lsof -i -n -P -p " + std::to_string(pid);
     auto [output, status] = executeCommandWithStatus(cmd);
 
     if (status != 0) {
-        LOG_F(ERROR, "执行lsof命令失败: {}", output);
+        LOG_F(ERROR, "Failed to execute lsof command: {}", output);
         return connections;
     }
 
@@ -2352,9 +2314,8 @@ auto getProcessNetworkConnections(int pid) -> std::vector<NetworkConnection> {
 
         lineStream >> command >> pid >> user >> fd >> type >> device >>
             sizeOff >> node;
-        std::getline(lineStream, name);  // 剩余部分为name
+        std::getline(lineStream, name);
 
-        // 只处理网络连接
         if (type != "IPv4" && type != "IPv6") {
             continue;
         }
@@ -2362,13 +2323,9 @@ auto getProcessNetworkConnections(int pid) -> std::vector<NetworkConnection> {
         NetworkConnection conn;
         conn.protocol = (name.find("UDP") != std::string::npos) ? "UDP" : "TCP";
 
-        // 解析地址和端口信息，格式如： TCP 127.0.0.1:8080->127.0.0.1:12345
-        // (ESTABLISHED)
         auto addrInfo = name;
-        addrInfo =
-            addrInfo.substr(addrInfo.find_first_not_of(' '));  // 去除前导空格
+        addrInfo = addrInfo.substr(addrInfo.find_first_not_of(' '));
 
-        // 提取状态信息
         size_t statusPos = addrInfo.find('(');
         if (statusPos != std::string::npos) {
             conn.status = addrInfo.substr(statusPos + 1);
@@ -2376,10 +2333,8 @@ auto getProcessNetworkConnections(int pid) -> std::vector<NetworkConnection> {
             addrInfo = addrInfo.substr(0, statusPos);
         }
 
-        // 解析本地和远程地址
         size_t arrowPos = addrInfo.find("->");
         if (arrowPos != std::string::npos) {
-            // 有远程连接
             std::string localPart = addrInfo.substr(0, arrowPos);
             std::string remotePart = addrInfo.substr(arrowPos + 2);
 
@@ -2395,7 +2350,6 @@ auto getProcessNetworkConnections(int pid) -> std::vector<NetworkConnection> {
                 conn.remotePort = std::stoi(remotePart.substr(colonPos + 1));
             }
         } else {
-            // 只有本地监听
             size_t colonPos = addrInfo.find(':');
             if (colonPos != std::string::npos) {
                 conn.localAddress = addrInfo.substr(0, colonPos);
@@ -2412,19 +2366,19 @@ auto getProcessNetworkConnections(int pid) -> std::vector<NetworkConnection> {
     return connections;
 }
 
-auto getProcessFileDescriptors(int pid) -> std::vector<FileDescriptor> {
+auto getProcessFileDescriptors([[maybe_unused]] int pid)
+    -> std::vector<FileDescriptor> {
     std::vector<FileDescriptor> fds;
 
 #ifdef _WIN32
-    // Windows上获取打开的句柄信息比较复杂，这里简化处理
-    LOG_F(WARNING, "Windows平台上获取文件句柄列表功能尚未实现");
+    LOG_F(WARNING,
+          "File handle listing on Windows platform is not implemented");
 #elif defined(__linux__)
     std::string fdPath = "/proc/" + std::to_string(pid) + "/fd";
     DIR *dir = opendir(fdPath.c_str());
     if (dir != nullptr) {
         struct dirent *entry;
         while ((entry = readdir(dir)) != nullptr) {
-            // 跳过.和..
             if (strcmp(entry->d_name, ".") == 0 ||
                 strcmp(entry->d_name, "..") == 0) {
                 continue;
@@ -2441,7 +2395,6 @@ auto getProcessFileDescriptors(int pid) -> std::vector<FileDescriptor> {
                 fdInfo.fd = fd;
                 fdInfo.path = target;
 
-                // 确定文件类型
                 if (strncmp(target, "socket:", 7) == 0) {
                     fdInfo.type = "socket";
                 } else if (strncmp(target, "pipe:", 5) == 0) {
@@ -2452,7 +2405,6 @@ auto getProcessFileDescriptors(int pid) -> std::vector<FileDescriptor> {
                     fdInfo.type = "regular";
                 }
 
-                // 获取访问模式（这是个近似值，精确值需要更复杂的处理）
                 std::string fdInfoPath =
                     "/proc/" + std::to_string(pid) + "/fdinfo/" + entry->d_name;
                 std::ifstream fdInfoFile(fdInfoPath);
@@ -2482,12 +2434,11 @@ auto getProcessFileDescriptors(int pid) -> std::vector<FileDescriptor> {
         closedir(dir);
     }
 #elif defined(__APPLE__)
-    // 在macOS上使用lsof命令获取文件描述符信息
     std::string cmd = "lsof -p " + std::to_string(pid);
     auto [output, status] = executeCommandWithStatus(cmd);
 
     if (status != 0) {
-        LOG_F(ERROR, "执行lsof命令失败: {}", output);
+        LOG_F(ERROR, "Failed to execute lsof command: {}", output);
         return fds;
     }
 
@@ -2506,7 +2457,6 @@ auto getProcessFileDescriptors(int pid) -> std::vector<FileDescriptor> {
 
         lineStream >> command >> pid >> user >> fd;
 
-        // 提取文件描述符编号
         int fdNum = -1;
         if (fd.find('r') != std::string::npos ||
             fd.find('w') != std::string::npos) {
@@ -2522,7 +2472,7 @@ auto getProcessFileDescriptors(int pid) -> std::vector<FileDescriptor> {
             try {
                 fdNum = std::stoi(fd);
             } catch (...) {
-                continue;  // 跳过无法解析的行
+                continue;
             }
         }
 
@@ -2531,14 +2481,13 @@ auto getProcessFileDescriptors(int pid) -> std::vector<FileDescriptor> {
         }
 
         lineStream >> type >> device >> sizeOff >> node;
-        std::getline(lineStream, name);  // 剩余部分为路径
+        std::getline(lineStream, name);
 
         FileDescriptor fdInfo;
         fdInfo.fd = fdNum;
         fdInfo.path = name;
         fdInfo.type = type;
 
-        // 确定访问模式
         if (fd.find('r') != std::string::npos &&
             fd.find('w') != std::string::npos) {
             fdInfo.mode = "rw";
@@ -2563,44 +2512,41 @@ auto getProcessPerformanceHistory(int pid, std::chrono::seconds duration,
     return PerformanceHistoryManager::getInstance().collectHistory(
         pid, duration, intervalMs);
 }
-
-auto setProcessIOPriority(int pid, int priority) -> bool {
+auto setProcessIOPriority([[maybe_unused]] int pid, int priority) -> bool {
     if (priority < 0 || priority > 7) {
-        LOG_F(ERROR, "IO优先级必须在0-7范围内");
+        LOG_F(ERROR, "IO priority must be in range 0-7");
         return false;
     }
 
 #ifdef __linux__
-    // Linux使用ioprio_set系统调用
-    // 由于这是一个不常用的系统调用，需要直接使用syscall
-    long ioprio = (4 << 13) | priority;  // 4是IOPRIO_CLASS_BE (best effort)
-    int ret = syscall(SYS_ioprio_set, 1, pid, ioprio);  // 1是IOPRIO_WHO_PROCESS
+    long ioprio = (4 << 13) | priority;
+    int ret = syscall(SYS_ioprio_set, 1, pid, ioprio);
 
     if (ret == -1) {
-        LOG_F(ERROR, "设置IO优先级失败: PID={}, 错误={}", pid, strerror(errno));
+        LOG_F(ERROR, "Failed to set IO priority: PID={}, error={}", pid,
+              strerror(errno));
         return false;
     }
     return true;
 #else
-    LOG_F(WARNING, "当前平台不支持设置IO优先级");
+    LOG_F(WARNING, "Current platform does not support setting IO priority");
     return false;
 #endif
 }
 
-auto getProcessIOPriority(int pid) -> int {
+auto getProcessIOPriority([[maybe_unused]] int pid) -> int {
 #ifdef __linux__
-    // Linux使用ioprio_get系统调用
-    long ioprio = syscall(SYS_ioprio_get, 1, pid);  // 1是IOPRIO_WHO_PROCESS
+    long ioprio = syscall(SYS_ioprio_get, 1, pid);
 
     if (ioprio == -1) {
-        LOG_F(ERROR, "获取IO优先级失败: PID={}, 错误={}", pid, strerror(errno));
+        LOG_F(ERROR, "Failed to get IO priority: PID={}, error={}", pid,
+              strerror(errno));
         return -1;
     }
 
-    // 提取优先级值
     return ioprio & 0xFF;
 #else
-    LOG_F(WARNING, "当前平台不支持获取IO优先级");
+    LOG_F(WARNING, "Current platform does not support getting IO priority");
     return -1;
 #endif
 }
@@ -2610,7 +2556,7 @@ auto sendSignalToProcess(int pid, int signal) -> bool {
     if (signal == SIGTERM) {
         HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
         if (hProcess == nullptr) {
-            LOG_F(ERROR, "无法打开进程: PID={}", pid);
+            LOG_F(ERROR, "Cannot open process: PID={}", pid);
             return false;
         }
 
@@ -2618,28 +2564,26 @@ auto sendSignalToProcess(int pid, int signal) -> bool {
         CloseHandle(hProcess);
 
         if (!result) {
-            LOG_F(ERROR, "终止进程失败: PID={}, 错误码={}", pid,
-                  GetLastError());
+            LOG_F(ERROR, "Failed to terminate process: PID={}, error code={}",
+                  pid, GetLastError());
             return false;
         }
         return true;
     } else if (signal == SIGINT) {
-        // 发送Ctrl+C事件
         if (!GenerateConsoleCtrlEvent(CTRL_C_EVENT, pid)) {
-            LOG_F(ERROR, "发送Ctrl+C事件失败: PID={}, 错误码={}", pid,
-                  GetLastError());
+            LOG_F(ERROR, "Failed to send Ctrl+C event: PID={}, error code={}",
+                  pid, GetLastError());
             return false;
         }
         return true;
     } else {
-        LOG_F(ERROR, "Windows平台不支持信号: {}", signal);
+        LOG_F(ERROR, "Windows platform does not support signal: {}", signal);
         return false;
     }
 #else
-    // POSIX系统使用kill发送信号
     if (kill(pid, signal) != 0) {
-        LOG_F(ERROR, "发送信号失败: PID={}, 信号={}, 错误={}", pid, signal,
-              strerror(errno));
+        LOG_F(ERROR, "Failed to send signal: PID={}, signal={}, error={}", pid,
+              signal, strerror(errno));
         return false;
     }
     return true;
@@ -2658,7 +2602,8 @@ auto findProcesses(std::function<bool(const Process &)> predicate)
                 matchingPids.push_back(pid);
             }
         } catch (const std::exception &e) {
-            LOG_F(WARNING, "获取进程{}信息时出错: {}", pid, e.what());
+            LOG_F(WARNING, "Error getting process {} information: {}", pid,
+                  e.what());
         }
     }
 
@@ -2667,7 +2612,7 @@ auto findProcesses(std::function<bool(const Process &)> predicate)
 
 auto ctermid() -> std::string {
 #if defined(_WIN32)
-    return "CON";  // Windows控制台
+    return "CON";
 #else
     char term[L_ctermid];
     return ::ctermid(term);

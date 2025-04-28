@@ -337,9 +337,18 @@ auto bytesToHex(const std::array<uint8_t, N>& bytes) noexcept -> std::string {
 }
 
 template <>
-auto bytesToHex<SHA1::DIGEST_SIZE>(const std::array<uint8_t, SHA1::DIGEST_SIZE>&
-                                       bytes) noexcept -> std::string {
-    return bytesToHex<SHA1::DIGEST_SIZE>(bytes);
+auto bytesToHex<SHA1::DIGEST_SIZE>(
+    const std::array<uint8_t, SHA1::DIGEST_SIZE>& bytes) noexcept
+    -> std::string {
+    static constexpr char HEX_CHARS[] = "0123456789abcdef";
+    std::string result(SHA1::DIGEST_SIZE * 2, ' ');
+
+    for (size_t i = 0; i < SHA1::DIGEST_SIZE; ++i) {
+        result[i * 2] = HEX_CHARS[(bytes[i] >> 4) & 0xF];
+        result[i * 2 + 1] = HEX_CHARS[bytes[i] & 0xF];
+    }
+
+    return result;
 }
 
 template <ByteContainer... Containers>

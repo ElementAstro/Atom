@@ -244,10 +244,10 @@ auto xteaEncrypt(uint32_t& value0, uint32_t& value1,
 
         uint32_t sum = 0;
         for (int i = 0; i < NUM_ROUNDS; ++i) {
-            value0 += ((value1 << SHIFT_4) ^ (value1 >> SHIFT_5)) + value1 ^
+            value0 += (((value1 << SHIFT_4) ^ (value1 >> SHIFT_5)) + value1) ^
                       (sum + key[sum & KEY_MASK]);
             sum += DELTA;
-            value1 += ((value0 << SHIFT_4) ^ (value0 >> SHIFT_5)) + value0 ^
+            value1 += (((value0 << SHIFT_4) ^ (value0 >> SHIFT_5)) + value0) ^
                       (sum + key[(sum >> SHIFT_11) & KEY_MASK]);
         }
     } catch (const TEAException&) {
@@ -267,10 +267,10 @@ auto xteaDecrypt(uint32_t& value0, uint32_t& value1,
 
         uint32_t sum = DELTA * NUM_ROUNDS;
         for (int i = 0; i < NUM_ROUNDS; ++i) {
-            value1 -= ((value0 << SHIFT_4) ^ (value0 >> SHIFT_5)) + value0 ^
+            value1 -= (((value0 << SHIFT_4) ^ (value0 >> SHIFT_5)) + value0) ^
                       (sum + key[(sum >> SHIFT_11) & KEY_MASK]);
             sum -= DELTA;
-            value0 -= ((value1 << SHIFT_4) ^ (value1 >> SHIFT_5)) + value1 ^
+            value0 -= (((value1 << SHIFT_4) ^ (value1 >> SHIFT_5)) + value1) ^
                       (sum + key[sum & KEY_MASK]);
         }
     } catch (const TEAException&) {
@@ -392,13 +392,13 @@ template auto xxteaDecrypt<std::vector<uint32_t>>(
 
 template auto xxteaEncryptParallel<std::vector<uint32_t>>(
     const std::vector<uint32_t>& inputData,
-    std::span<const uint32_t, 4> inputKey,
-    size_t numThreads) -> std::vector<uint32_t>;
+    std::span<const uint32_t, 4> inputKey, size_t numThreads)
+    -> std::vector<uint32_t>;
 
 template auto xxteaDecryptParallel<std::vector<uint32_t>>(
     const std::vector<uint32_t>& inputData,
-    std::span<const uint32_t, 4> inputKey,
-    size_t numThreads) -> std::vector<uint32_t>;
+    std::span<const uint32_t, 4> inputKey, size_t numThreads)
+    -> std::vector<uint32_t>;
 
 template auto toUint32Vector<std::vector<uint8_t>>(
     const std::vector<uint8_t>& data) -> std::vector<uint32_t>;

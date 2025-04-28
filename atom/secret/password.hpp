@@ -1,21 +1,34 @@
 #ifndef ATOM_SECRET_PASSWORD_HPP
 #define ATOM_SECRET_PASSWORD_HPP
 
+#include <openssl/err.h>
+#include <atomic>
 #include <chrono>
+#include <filesystem>
 #include <functional>
 #include <map>
+#include <optional>
+#include <shared_mutex>
 #include <string>
+#include <string_view>
+#include <variant>
 #include <vector>
+
+// Optional Boost support
+#ifdef ATOM_USE_BOOST
+#include <boost/container/flat_map.hpp>
+#include <boost/lockfree/queue.hpp>
+#endif
 
 namespace atom::secret {
 
 /**
- * @brief 密码强度等级
+ * @brief Password strength levels.
  */
 enum class PasswordStrength { VeryWeak, Weak, Medium, Strong, VeryStrong };
 
 /**
- * @brief 密码类别
+ * @brief Password categories.
  */
 enum class PasswordCategory {
     General,
@@ -28,402 +41,662 @@ enum class PasswordCategory {
 };
 
 /**
- * @brief 密码项结构
+ * @brief Structure representing a password entry.
  */
 struct PasswordEntry {
-    std::string password;                            ///< 存储的密码
-    std::string username;                            ///< 关联的用户名
-    std::string url;                                 ///< 关联的URL
-    std::string notes;                               ///< 附加说明
-    PasswordCategory category;                       ///< 密码类别
-    std::chrono::system_clock::time_point created;   ///< 创建时间
-    std::chrono::system_clock::time_point modified;  ///< 最后修改时间
-    std::vector<std::string> previousPasswords;      ///< 历史密码
+    std::string password;  ///< The stored password.
+    std::string username;  ///< Associated username.
+    std::string url;       ///< Associated URL.
+    std::string notes;     ///< Additional notes.
+    PasswordCategory category{
+        PasswordCategory::General};                 ///< Password category.
+    std::chrono::system_clock::time_point created;  ///< Creation timestamp.
+    std::chrono::system_clock::time_point
+        modified;  ///< Last modification timestamp.
+    std::vector<std::string> previousPasswords;  ///< Password history.
+
+    // Move constructor and assignment support
+    PasswordEntry() = default;
+    PasswordEntry(const PasswordEntry&) = default;
+    PasswordEntry& operator=(const PasswordEntry&) = default;
+    PasswordEntry(PasswordEntry&&) noexcept = default;
+    PasswordEntry& operator=(PasswordEntry&&) noexcept = default;
+
+    /**
+     * @brief Checks if the entry is empty.
+     * @return True if the entry is empty, false otherwise.
+     */
+    bool isEmpty() const noexcept {
+        return password.empty() && username.empty() && url.empty() &&
+               notes.empty() && previousPasswords.empty();
+    }
 };
 
 /**
- * @brief 加密选项结构
+ * @brief Structure for encryption options.
  */
 struct EncryptionOptions {
-    bool useHardwareAcceleration = true;  ///< 是否使用硬件加速
-    int keyIterations = 10000;            ///< PBKDF2迭代次数
-    int encryptionMethod =
-        0;  ///< 加密方法(0=AES-GCM, 1=AES-CBC, 2=ChaCha20-Poly1305)
+    bool useHardwareAcceleration =
+        true;                    ///< Whether to use hardware acceleration.
+    int keyIterations = 100000;  ///< PBKDF2 iteration count, increased default.
+
+    /**
+     * @brief Encryption method enumeration.
+     */
+    enum class Method : uint8_t {
+        AES_GCM = 0,           ///< AES-GCM (Default, AEAD encryption).
+        AES_CBC = 1,           ///< AES-CBC.
+        CHACHA20_POLY1305 = 2  ///< ChaCha20-Poly1305.
+    };
+
+    Method encryptionMethod{
+        Method::AES_GCM};  ///< The encryption method to use.
 };
 
 /**
- * @brief 密码管理器设置
+ * @brief Settings for the Password Manager.
  */
 struct PasswordManagerSettings {
-    int autoLockTimeoutSeconds = 300;     ///< 自动锁定超时(秒)
-    bool notifyOnPasswordExpiry = true;   ///< 密码过期提醒
-    int passwordExpiryDays = 90;          ///< 密码有效期(天)
-    int minPasswordLength = 12;           ///< 最小密码长度
-    bool requireSpecialChars = true;      ///< 是否要求特殊字符
-    bool requireNumbers = true;           ///< 是否要求数字
-    bool requireMixedCase = true;         ///< 是否要求大小写混合
-    EncryptionOptions encryptionOptions;  ///< 加密选项
+    int autoLockTimeoutSeconds = 300;  ///< Auto-lock timeout in seconds.
+    bool notifyOnPasswordExpiry =
+        true;                     ///< Enable password expiry notifications.
+    int passwordExpiryDays = 90;  ///< Password validity period in days.
+    int minPasswordLength = 12;   ///< Minimum password length requirement.
+    bool requireSpecialChars =
+        true;                      ///< Require special characters in passwords.
+    bool requireNumbers = true;    ///< Require numbers in passwords.
+    bool requireMixedCase = true;  ///< Require mixed case letters in passwords.
+    EncryptionOptions encryptionOptions;  ///< Encryption options.
 };
 
 /**
- * @brief 用于安全管理密码的类。
- *
- * PasswordManager类提供了使用平台特定的凭据存储机制
- * 安全地存储、检索和删除密码的方法。
+ * @brief Template for operation results, alternative to exceptions.
+ * @tparam T The type of the successful result value.
  */
-class PasswordManager {
+template <typename T>
+class Result {
 private:
-    std::vector<unsigned char> masterKey;  ///< 主密钥，用于派生AES加密密钥
-    bool isInitialized = false;            ///< 是否已初始化
-    bool isUnlocked = false;               ///< 是否已解锁
-    std::chrono::system_clock::time_point lastActivity;  ///< 最后活动时间
-    PasswordManagerSettings settings;                    ///< 管理器设置
-
-    // 缓存的密码数据，解锁状态下可用
-    std::map<std::string, PasswordEntry> cachedPasswords;
+    std::variant<T, std::string>
+        data;  ///< Holds either the success value or an error string.
 
 public:
     /**
-     * @brief 构造一个PasswordManager对象。
+     * @brief Constructs a Result with a success value (copy).
+     * @param value The success value.
+     */
+    explicit Result(const T& value) : data(value) {}
+
+    /**
+     * @brief Constructs a Result with a success value (move).
+     * @param value The success value (rvalue).
+     */
+    explicit Result(T&& value) noexcept : data(std::move(value)) {}
+
+    /**
+     * @brief Constructs a Result with an error message.
+     * @param error The error message string.
+     */
+    explicit Result(const std::string& error) : data(error) {}
+
+    /**
+     * @brief Checks if the result represents success.
+     * @return True if successful, false otherwise.
+     */
+    bool isSuccess() const noexcept { return std::holds_alternative<T>(data); }
+
+    /**
+     * @brief Checks if the result represents an error.
+     * @return True if it's an error, false otherwise.
+     */
+    bool isError() const noexcept {
+        return std::holds_alternative<std::string>(data);
+    }
+
+    /**
+     * @brief Gets the success value (const lvalue ref).
+     * @return A const reference to the success value.
+     * @throws std::runtime_error if the result is an error.
+     */
+    const T& value() const& {
+        if (isError())
+            throw std::runtime_error(
+                "Attempted to access value of an error Result: " +
+                std::get<std::string>(data));
+        return std::get<T>(data);
+    }
+
+    /**
+     * @brief Gets the success value (rvalue ref).
+     * @return An rvalue reference to the success value.
+     * @throws std::runtime_error if the result is an error.
+     */
+    T&& value() && {
+        if (isError())
+            throw std::runtime_error(
+                "Attempted to access value of an error Result: " +
+                std::get<std::string>(data));
+        return std::move(std::get<T>(data));
+    }
+
+    /**
+     * @brief Gets the error message.
+     * @return A const reference to the error message string.
+     * @throws std::runtime_error if the result is successful.
+     */
+    const std::string& error() const {
+        if (isSuccess())
+            throw std::runtime_error(
+                "Attempted to access error of a success Result.");
+        return std::get<std::string>(data);
+    }
+};
+
+// Forward declaration for OpenSSL context
+typedef struct evp_cipher_ctx_st EVP_CIPHER_CTX;
+
+/**
+ * @brief RAII wrapper for OpenSSL EVP_CIPHER_CTX.
+ * Ensures the context is properly freed.
+ */
+class SslCipherContext {
+private:
+    EVP_CIPHER_CTX* ctx;  ///< Pointer to the OpenSSL cipher context.
+
+public:
+    /**
+     * @brief Constructs an SslCipherContext, creating a new EVP_CIPHER_CTX.
+     * @throws std::runtime_error if context creation fails.
+     */
+    SslCipherContext();
+
+    /**
+     * @brief Destroys the SslCipherContext, freeing the EVP_CIPHER_CTX.
+     */
+    ~SslCipherContext();
+
+    // Disable copy construction and assignment
+    SslCipherContext(const SslCipherContext&) = delete;
+    SslCipherContext& operator=(const SslCipherContext&) = delete;
+
+    // Enable move construction and assignment
+    SslCipherContext(SslCipherContext&& other) noexcept;
+    SslCipherContext& operator=(SslCipherContext&& other) noexcept;
+
+    /**
+     * @brief Gets the raw pointer to the EVP_CIPHER_CTX.
+     * @return The raw EVP_CIPHER_CTX pointer.
+     */
+    EVP_CIPHER_CTX* get() const noexcept { return ctx; }
+
+    /**
+     * @brief Implicit conversion to the raw EVP_CIPHER_CTX pointer.
+     * @return The raw EVP_CIPHER_CTX pointer.
+     */
+    operator EVP_CIPHER_CTX*() const noexcept { return ctx; }
+};
+
+/**
+ * @brief Class for securely managing passwords.
+ *
+ * The PasswordManager class provides methods to securely store, retrieve,
+ * and delete passwords using platform-specific credential storage mechanisms
+ * or an encrypted file fallback.
+ */
+class PasswordManager {
+private:
+    std::vector<unsigned char>
+        masterKey;  ///< Derived master key for encryption operations.
+    std::atomic<bool> isInitialized{
+        false};  ///< Flag indicating if the manager is initialized.
+    std::atomic<bool> isUnlocked{
+        false};  ///< Flag indicating if the manager is unlocked.
+    std::chrono::system_clock::time_point
+        lastActivity;                  ///< Timestamp of the last user activity.
+    PasswordManagerSettings settings;  ///< Manager configuration settings.
+
+    // Thread safety protection
+    mutable std::shared_mutex
+        mutex;  ///< Read-write lock protecting cache access.
+
+    // Cached password data, available when unlocked
+#ifdef ATOM_USE_BOOST
+    boost::container::flat_map<std::string, PasswordEntry>
+        cachedPasswords;  ///< Password cache (Boost flat_map).
+#else
+    std::map<std::string, PasswordEntry>
+        cachedPasswords;  ///< Password cache (std::map).
+#endif
+
+    // Activity callback function
+    std::function<void()>
+        activityCallback;  ///< Callback function invoked on activity.
+
+public:
+    /**
+     * @brief Constructs a PasswordManager object.
+     * Initializes OpenSSL.
      */
     PasswordManager();
 
     /**
-     * @brief 析构函数，确保安全清理内存
+     * @brief Destructor. Ensures secure cleanup of sensitive data and OpenSSL.
      */
     ~PasswordManager();
 
+    // Disable copy construction and assignment
+    PasswordManager(const PasswordManager&) = delete;
+    PasswordManager& operator=(const PasswordManager&) = delete;
+
+    // Enable move construction and assignment
+    PasswordManager(PasswordManager&& other) noexcept;
+    PasswordManager& operator=(PasswordManager&& other) noexcept;
+
     /**
-     * @brief 使用主密码初始化密码管理器
-     *
-     * @param masterPassword 用于派生加密密钥的主密码
-     * @param settings 可选的密码管理器设置
-     * @return 初始化是否成功
+     * @brief Initializes the password manager with a master password.
+     * Derives the master key and prepares the manager for use.
+     * @param masterPassword The master password used to derive the encryption
+     * key.
+     * @param settings Optional settings for the password manager.
+     * @return True if initialization was successful, false otherwise.
      */
-    bool initialize(
-        const std::string& masterPassword,
+    [[nodiscard]] bool initialize(
+        std::string_view masterPassword,
         const PasswordManagerSettings& settings = PasswordManagerSettings());
 
     /**
-     * @brief 使用主密码解锁密码管理器
-     *
-     * @param masterPassword 主密码
-     * @return 解锁是否成功
+     * @brief Unlocks the password manager using the master password.
+     * Verifies the password and loads necessary data.
+     * @param masterPassword The master password.
+     * @return True if unlocking was successful, false otherwise.
      */
-    bool unlock(const std::string& masterPassword);
+    [[nodiscard]] bool unlock(std::string_view masterPassword);
 
     /**
-     * @brief 锁定密码管理器，清除内存中的敏感数据
+     * @brief Locks the password manager.
+     * Clears sensitive data (like the master key and cache) from memory.
      */
-    void lock();
+    void lock() noexcept;
 
     /**
-     * @brief 更改主密码
-     *
-     * @param currentPassword 当前主密码
-     * @param newPassword 新主密码
-     * @return 更改是否成功
+     * @brief Changes the master password.
+     * Requires the current password for verification.
+     * @param currentPassword The current master password.
+     * @param newPassword The new master password.
+     * @return True if the password change was successful, false otherwise.
      */
-    bool changeMasterPassword(const std::string& currentPassword,
-                              const std::string& newPassword);
-
-    void loadAllPasswords();
+    [[nodiscard]] bool changeMasterPassword(std::string_view currentPassword,
+                                            std::string_view newPassword);
 
     /**
-     * @brief 存储密码条目
-     *
-     * @param platformKey 与平台相关的键
-     * @param entry 密码条目信息
-     * @return 存储是否成功
+     * @brief Loads all stored passwords into the cache.
+     * Requires the manager to be unlocked.
+     * @return True if loading was successful, false otherwise.
      */
-    bool storePassword(const std::string& platformKey,
-                       const PasswordEntry& entry);
+    [[nodiscard]] bool loadAllPasswords();
 
     /**
-     * @brief 检索密码条目
-     *
-     * @param platformKey 与平台相关的键
-     * @return 检索到的密码条目
+     * @brief Stores a password entry.
+     * Encrypts the entry and saves it using the platform storage or file
+     * fallback.
+     * @param platformKey A unique key identifying the password entry (e.g.,
+     * URL, service name).
+     * @param entry The PasswordEntry object to store (copied).
+     * @return True if storage was successful, false otherwise.
      */
-    PasswordEntry retrievePassword(const std::string& platformKey);
+    [[nodiscard]] bool storePassword(std::string_view platformKey,
+                                     const PasswordEntry& entry);
 
     /**
-     * @brief 删除密码
-     *
-     * @param platformKey 与平台相关的键
-     * @return 删除是否成功
+     * @brief Stores a password entry (move version).
+     * Encrypts the entry and saves it using the platform storage or file
+     * fallback.
+     * @param platformKey A unique key identifying the password entry.
+     * @param entry The PasswordEntry object to store (moved).
+     * @return True if storage was successful, false otherwise.
      */
-    bool deletePassword(const std::string& platformKey);
+    [[nodiscard]] bool storePassword(std::string_view platformKey,
+                                     PasswordEntry&& entry);
 
     /**
-     * @brief 获取所有平台键的列表
-     *
-     * @return 所有平台键的列表
+     * @brief Retrieves a password entry.
+     * Fetches the encrypted data, decrypts it, and returns the entry. Checks
+     * cache first.
+     * @param platformKey The unique key identifying the password entry.
+     * @return An std::optional containing the PasswordEntry if found, otherwise
+     * std::nullopt.
      */
-    std::vector<std::string> getAllPlatformKeys();
+    [[nodiscard]] std::optional<PasswordEntry> retrievePassword(
+        std::string_view platformKey);
 
     /**
-     * @brief 搜索密码条目
-     *
-     * @param query 搜索关键字
-     * @return 匹配的平台键列表
+     * @brief Deletes a password entry.
+     * Removes the entry from the platform storage or file fallback and the
+     * cache.
+     * @param platformKey The unique key identifying the password entry.
+     * @return True if deletion was successful, false otherwise.
      */
-    std::vector<std::string> searchPasswords(const std::string& query);
+    [[nodiscard]] bool deletePassword(std::string_view platformKey);
 
     /**
-     * @brief 按类别过滤密码
-     *
-     * @param category 密码类别
-     * @return 属于该类别的平台键列表
+     * @brief Gets a list of all stored platform keys.
+     * @return A vector of strings containing all platform keys.
      */
-    std::vector<std::string> filterByCategory(PasswordCategory category);
+    [[nodiscard]] std::vector<std::string> getAllPlatformKeys() const;
 
     /**
-     * @brief 生成强密码
-     *
-     * @param length 密码长度
-     * @param includeSpecial 是否包含特殊字符
-     * @param includeNumbers 是否包含数字
-     * @param includeMixedCase 是否包含大小写字母
-     * @return 生成的密码
+     * @brief Searches for password entries based on a query.
+     * The search logic depends on the implementation (e.g., matching keys,
+     * usernames, URLs).
+     * @param query The search query string.
+     * @return A vector of platform keys matching the query.
      */
-    std::string generatePassword(int length = 16, bool includeSpecial = true,
-                                 bool includeNumbers = true,
-                                 bool includeMixedCase = true);
+    [[nodiscard]] std::vector<std::string> searchPasswords(
+        std::string_view query);
 
     /**
-     * @brief 评估密码强度
-     *
-     * @param password 需评估的密码
-     * @return 密码强度级别
+     * @brief Filters password entries by category.
+     * @param category The PasswordCategory to filter by.
+     * @return A vector of platform keys belonging to the specified category.
      */
-    PasswordStrength evaluatePasswordStrength(const std::string& password);
+    [[nodiscard]] std::vector<std::string> filterByCategory(
+        PasswordCategory category);
 
     /**
-     * @brief 导出所有密码数据（加密状态）
-     *
-     * @param filePath 导出文件路径
-     * @param password 额外的加密密码
-     * @return 导出是否成功
+     * @brief Generates a strong random password.
+     * @param length The desired length of the password (default 16).
+     * @param includeSpecial Include special characters (default true).
+     * @param includeNumbers Include numbers (default true).
+     * @param includeMixedCase Include mixed-case letters (default true).
+     * @return The generated password string.
+     * @throws std::invalid_argument if length is too small.
      */
-    bool exportPasswords(const std::string& filePath,
-                         const std::string& password);
+    [[nodiscard]] std::string generatePassword(int length = 16,
+                                               bool includeSpecial = true,
+                                               bool includeNumbers = true,
+                                               bool includeMixedCase = true);
 
     /**
-     * @brief 从备份文件导入密码数据
-     *
-     * @param filePath 备份文件路径
-     * @param password 解密密码
-     * @return 导入是否成功
+     * @brief Evaluates the strength of a given password.
+     * @param password The password string to evaluate.
+     * @return The evaluated PasswordStrength level.
      */
-    bool importPasswords(const std::string& filePath,
-                         const std::string& password);
+    [[nodiscard]] PasswordStrength evaluatePasswordStrength(
+        std::string_view password) const;
 
     /**
-     * @brief 更新密码管理器设置
-     *
-     * @param newSettings 新设置
+     * @brief Exports all password data to an encrypted file.
+     * The export format should be documented (e.g., encrypted JSON).
+     * @param filePath The path to the file where the export will be saved.
+     * @param password An additional password to encrypt the export file.
+     * @return True if export was successful, false otherwise.
+     */
+    [[nodiscard]] bool exportPasswords(const std::filesystem::path& filePath,
+                                       std::string_view password);
+
+    /**
+     * @brief Imports password data from an encrypted backup file.
+     * Merges imported data with existing data (handling conflicts might be
+     * needed).
+     * @param filePath The path to the backup file to import.
+     * @param password The password required to decrypt the backup file.
+     * @return True if import was successful, false otherwise.
+     */
+    [[nodiscard]] bool importPasswords(const std::filesystem::path& filePath,
+                                       std::string_view password);
+
+    /**
+     * @brief Updates the password manager settings.
+     * @param newSettings The new PasswordManagerSettings object.
      */
     void updateSettings(const PasswordManagerSettings& newSettings);
 
     /**
-     * @brief 获取当前设置
-     *
-     * @return 当前设置
+     * @brief Gets the current password manager settings.
+     * @return A copy of the current PasswordManagerSettings.
      */
-    PasswordManagerSettings getSettings() const;
+    [[nodiscard]] PasswordManagerSettings getSettings() const noexcept;
 
     /**
-     * @brief 检查是否有过期密码
-     *
-     * @return 过期密码的平台键列表
+     * @brief Checks for passwords that have expired based on settings.
+     * Requires the manager to be unlocked.
+     * @return A vector of platform keys for expired passwords. Returns empty if
+     * notifications are disabled.
      */
-    std::vector<std::string> checkExpiredPasswords();
+    [[nodiscard]] std::vector<std::string> checkExpiredPasswords();
 
     /**
-     * @brief 设置活动更新回调
-     *
-     * @param callback 当活动发生时调用的函数
+     * @brief Sets a callback function to be invoked on user activity.
+     * Useful for resetting auto-lock timers in a GUI application.
+     * @param callback The function to call on activity.
      */
     void setActivityCallback(std::function<void()> callback);
 
-private:
-    std::function<void()> activityCallback;  ///< 活动回调函数
+    /**
+     * @brief Checks if the password manager is currently locked.
+     * @return True if locked, false otherwise.
+     */
+    [[nodiscard]] bool isLocked() const noexcept {
+        return !isUnlocked.load(std::memory_order_acquire);
+    }
 
     /**
-     * @brief 更新最后活动时间
+     * @brief Checks if the password manager has been initialized.
+     * @return True if initialized, false otherwise.
+     */
+    [[nodiscard]] bool isReady() const noexcept {
+        return isInitialized.load(std::memory_order_acquire);
+    }
+
+private:
+    /**
+     * @brief Updates the last activity timestamp and potentially triggers the
+     * callback and auto-lock check.
      */
     void updateActivity();
 
     /**
-     * @brief 从主密码派生加密密钥
-     *
-     * @param masterPassword 主密码
-     * @param salt 盐值
-     * @param iterations 迭代次数
-     * @return 派生的密钥
+     * @brief Derives an encryption key from the master password using PBKDF2.
+     * @param masterPassword The master password.
+     * @param salt The salt value to use.
+     * @param iterations The number of PBKDF2 iterations (default from settings
+     * or constant).
+     * @return The derived key as a vector of bytes.
+     * @throws std::runtime_error on PBKDF2 failure.
      */
-    std::vector<unsigned char> deriveKey(const std::string& masterPassword,
-                                         const std::vector<unsigned char>& salt,
-                                         int iterations = 10000);
+    [[nodiscard]] std::vector<unsigned char> deriveKey(
+        std::string_view masterPassword, std::span<const unsigned char> salt,
+        int iterations = 100000) const;  // Default iterations match constant
 
     /**
-     * @brief 安全清除内存中的敏感数据
-     *
-     * @param data 待清除的数据
+     * @brief Securely wipes sensitive data from memory.
+     * Overwrites the memory region before deallocation/clearing.
+     * @tparam T The type of the data container (e.g., std::vector,
+     * std::string).
+     * @param data The data container to wipe.
      */
     template <typename T>
-    void secureWipe(T& data);
+    static void secureWipe(T& data) noexcept;
 
     /**
-     * @brief 加密密码条目
-     *
-     * @param entry 密码条目
-     * @param key 加密密钥
-     * @return 加密后的数据
+     * @brief Encrypts a PasswordEntry using the derived master key.
+     * Serializes the entry (e.g., to JSON), then encrypts using AES-GCM (or
+     * configured method).
+     * @param entry The PasswordEntry to encrypt.
+     * @param key The encryption key (derived from masterKey).
+     * @return The encrypted data as a string (likely Base64 encoded JSON
+     * containing IV, tag, ciphertext).
+     * @throws std::runtime_error on serialization or encryption failure.
      */
-    std::string encryptEntry(const PasswordEntry& entry,
-                             const std::vector<unsigned char>& key);
+    [[nodiscard]] std::string encryptEntry(
+        const PasswordEntry& entry, std::span<const unsigned char> key) const;
 
     /**
-     * @brief 解密密码条目
-     *
-     * @param encryptedData 加密数据
-     * @param key 解密密钥
-     * @return 解密后的密码条目
+     * @brief Decrypts data back into a PasswordEntry using the derived master
+     * key. Parses the encrypted string, decrypts using AES-GCM (or configured
+     * method), and deserializes.
+     * @param encryptedData The encrypted data string.
+     * @param key The decryption key (derived from masterKey).
+     * @return The decrypted PasswordEntry.
+     * @throws std::runtime_error on parsing, decryption, or deserialization
+     * failure.
      */
-    PasswordEntry decryptEntry(const std::string& encryptedData,
-                               const std::vector<unsigned char>& key);
+    [[nodiscard]] PasswordEntry decryptEntry(
+        std::string_view encryptedData,
+        std::span<const unsigned char> key) const;
 
+// Platform-specific storage methods
 #if defined(_WIN32)
     /**
-     * @brief 将加密的密码存储到Windows凭据管理器中。
-     *
-     * @param target 凭据的目标名称
-     * @param encryptedData 要存储的加密数据
-     * @return 存储是否成功
+     * @brief Stores encrypted data in the Windows Credential Manager.
+     * @param target The target name for the credential.
+     * @param encryptedData The data to store.
+     * @return True on success, false on failure.
      */
-    bool storeToWindowsCredentialManager(const std::string& target,
-                                         const std::string& encryptedData);
+    [[nodiscard]] bool storeToWindowsCredentialManager(
+        std::string_view target, std::string_view encryptedData) const;
 
     /**
-     * @brief 从Windows凭据管理器中检索加密的密码。
-     *
-     * @param target 凭据的目标名称
-     * @return 检索到的加密密码
+     * @brief Retrieves encrypted data from the Windows Credential Manager.
+     * @param target The target name of the credential.
+     * @return The retrieved data string, or an empty string on failure/not
+     * found.
      */
-    std::string retrieveFromWindowsCredentialManager(const std::string& target);
+    [[nodiscard]] std::string retrieveFromWindowsCredentialManager(
+        std::string_view target) const;
 
     /**
-     * @brief 从Windows凭据管理器中删除密码。
-     *
-     * @param target 凭据的目标名称
-     * @return 删除是否成功
+     * @brief Deletes a credential from the Windows Credential Manager.
+     * @param target The target name of the credential.
+     * @return True on success, false on failure.
      */
-    bool deleteFromWindowsCredentialManager(const std::string& target);
+    [[nodiscard]] bool deleteFromWindowsCredentialManager(
+        std::string_view target) const;
 
     /**
-     * @brief 获取Windows凭据管理器中所有条目
-     *
-     * @return 所有条目的目标名称列表
+     * @brief Gets all credential target names associated with this application
+     * from Windows Credential Manager.
+     * @return A vector of target name strings.
      */
-    std::vector<std::string> getAllWindowsCredentials();
+    [[nodiscard]] std::vector<std::string> getAllWindowsCredentials() const;
 
 #elif defined(__APPLE__)
     /**
-     * @brief 将加密的密码存储到macOS钥匙串中。
-     *
-     * @param service 钥匙串项的服务名称
-     * @param account 钥匙串项的账户名称
-     * @param encryptedData 要存储的加密数据
-     * @return 存储是否成功
+     * @brief Stores encrypted data in the macOS Keychain.
+     * @param service The service name for the keychain item.
+     * @param account The account name for the keychain item.
+     * @param encryptedData The data to store.
+     * @return True on success, false on failure.
      */
-    bool storeToMacKeychain(const std::string& service,
-                            const std::string& account,
-                            const std::string& encryptedData);
+    [[nodiscard]] bool storeToMacKeychain(std::string_view service,
+                                          std::string_view account,
+                                          std::string_view encryptedData) const;
 
     /**
-     * @brief 从macOS钥匙串中检索加密的密码。
-     *
-     * @param service 钥匙串项的服务名称
-     * @param account 钥匙串项的账户名称
-     * @return 检索到的加密密码
+     * @brief Retrieves encrypted data from the macOS Keychain.
+     * @param service The service name of the keychain item.
+     * @param account The account name of the keychain item.
+     * @return The retrieved data string, or an empty string on failure/not
+     * found.
      */
-    std::string retrieveFromMacKeychain(const std::string& service,
-                                        const std::string& account);
+    [[nodiscard]] std::string retrieveFromMacKeychain(
+        std::string_view service, std::string_view account) const;
 
     /**
-     * @brief 从macOS钥匙串中删除密码。
-     *
-     * @param service 钥匙串项的服务名称
-     * @param account 钥匙串项的账户名称
-     * @return 删除是否成功
+     * @brief Deletes an item from the macOS Keychain.
+     * @param service The service name of the keychain item.
+     * @param account The account name of the keychain item.
+     * @return True on success, false on failure.
      */
-    bool deleteFromMacKeychain(const std::string& service,
-                               const std::string& account);
+    [[nodiscard]] bool deleteFromMacKeychain(std::string_view service,
+                                             std::string_view account) const;
 
     /**
-     * @brief 获取macOS钥匙串中所有条目
-     *
-     * @param service 服务名称
-     * @return 所有条目的账户名称列表
+     * @brief Gets all account names for a given service from the macOS
+     * Keychain.
+     * @param service The service name to query.
+     * @return A vector of account name strings.
      */
-    std::vector<std::string> getAllMacKeychainItems(const std::string& service);
+    [[nodiscard]] std::vector<std::string> getAllMacKeychainItems(
+        std::string_view service) const;
 
 #elif defined(__linux__)
     /**
-     * @brief 将加密的密码存储到Linux密钥环中。
-     *
-     * @param schema_name 密钥环项的模式名称
-     * @param attribute_name 密钥环项的属性名称
-     * @param encryptedData 要存储的加密数据
-     * @return 存储是否成功
+     * @brief Stores encrypted data in the Linux Keyring (using libsecret or
+     * fallback).
+     * @param schema_name The schema name (used by libsecret).
+     * @param attribute_name The attribute name (used as identifier).
+     * @param encryptedData The data to store.
+     * @return True on success, false on failure.
      */
-    bool storeToLinuxKeyring(const std::string& schema_name,
-                             const std::string& attribute_name,
-                             const std::string& encryptedData);
+    [[nodiscard]] bool storeToLinuxKeyring(
+        std::string_view schema_name, std::string_view attribute_name,
+        std::string_view encryptedData) const;
 
     /**
-     * @brief 从Linux密钥环中检索加密的密码。
-     *
-     * @param schema_name 密钥环项的模式名称
-     * @param attribute_name 密钥环项的属性名称
-     * @return 检索到的加密密码
+     * @brief Retrieves encrypted data from the Linux Keyring.
+     * @param schema_name The schema name.
+     * @param attribute_name The attribute name.
+     * @return The retrieved data string, or an empty string on failure/not
+     * found.
      */
-    std::string retrieveFromLinuxKeyring(const std::string& schema_name,
-                                         const std::string& attribute_name);
+    [[nodiscard]] std::string retrieveFromLinuxKeyring(
+        std::string_view schema_name, std::string_view attribute_name) const;
 
     /**
-     * @brief 从Linux密钥环中删除密码。
-     *
-     * @param schema_name 密钥环项的模式名称
-     * @param attribute_name 密钥环项的属性名称
-     * @return 删除是否成功
+     * @brief Deletes an item from the Linux Keyring.
+     * @param schema_name The schema name.
+     * @param attribute_name The attribute name.
+     * @return True on success, false on failure.
      */
-    bool deleteFromLinuxKeyring(const std::string& schema_name,
-                                const std::string& attribute_name);
+    [[nodiscard]] bool deleteFromLinuxKeyring(
+        std::string_view schema_name, std::string_view attribute_name) const;
 
     /**
-     * @brief 获取Linux密钥环中所有条目
-     *
-     * @param schema_name 模式名称
-     * @return 所有条目的属性名称列表
+     * @brief Gets all attribute names for a given schema from the Linux
+     * Keyring. Note: Enumeration might be limited depending on the backend
+     * (e.g., libsecret).
+     * @param schema_name The schema name to query.
+     * @return A vector of attribute name strings.
      */
-    std::vector<std::string> getAllLinuxKeyringItems(
-        const std::string& schema_name);
-    /**
-     * @brief 文件存储后备方案的实现
-     */
-    bool storeToEncryptedFile(const std::string& identifier,
-                              const std::string& encryptedData);
-
-    std::string retrieveFromEncryptedFile(const std::string& identifier);
-
-    bool deleteFromEncryptedFile(const std::string& identifier);
-
-    std::vector<std::string> getAllEncryptedFileItems();
+    [[nodiscard]] std::vector<std::string> getAllLinuxKeyringItems(
+        std::string_view schema_name) const;
 #endif
+
+    /**
+     * @brief Fallback: Stores encrypted data in a file within a secure
+     * directory. Used when platform-specific storage is unavailable or fails.
+     * @param identifier A unique identifier used as the filename (sanitized).
+     * @param encryptedData The data to store.
+     * @return True on success, false on failure.
+     */
+    [[nodiscard]] bool storeToEncryptedFile(
+        std::string_view identifier, std::string_view encryptedData) const;
+
+    /**
+     * @brief Fallback: Retrieves encrypted data from a file.
+     * @param identifier The identifier used as the filename.
+     * @return The retrieved data string, or an empty string on failure/not
+     * found.
+     */
+    [[nodiscard]] std::string retrieveFromEncryptedFile(
+        std::string_view identifier) const;
+
+    /**
+     * @brief Fallback: Deletes an encrypted data file.
+     * @param identifier The identifier used as the filename.
+     * @return True on success, false on failure.
+     */
+    [[nodiscard]] bool deleteFromEncryptedFile(
+        std::string_view identifier) const;
+
+    /**
+     * @brief Fallback: Gets all identifiers (filenames) from the encrypted file
+     * storage directory.
+     * @return A vector of identifier strings.
+     */
+    [[nodiscard]] std::vector<std::string> getAllEncryptedFileItems() const;
 };
+
 }  // namespace atom::secret
 
 #endif  // ATOM_SECRET_PASSWORD_HPP

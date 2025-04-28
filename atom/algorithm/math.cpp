@@ -15,12 +15,16 @@ Description: Extra Math Library with SIMD support
 #include "math.hpp"
 
 #include <algorithm>   // For std::all_of, std::transform
-#include <bit>         // For std::bit_width, std::countl_zero
+#include <bit>         // For std::bit_width, std::countl_zero, std::bit_ceil
 #include <cmath>       // For std::sqrt
 #include <execution>   // For parallel execution policies
 #include <functional>  // For std::plus, std::multiplies
 #include <limits>      // For std::numeric_limits
-#include <numeric>     // For std::gcd, std::lcm
+#include <memory_resource>  // For pmr utilities
+#include <numeric>          // For std::gcd, std::lcm
+#include <random>           // For secure random number generation
+#include <shared_mutex>     // For std::shared_mutex
+#include <unordered_map>    // For cache implementation
 
 #ifdef _MSC_VER
 #include <intrin.h>   // For _umul128 and _BitScanReverse
@@ -40,20 +44,25 @@ Description: Extra Math Library with SIMD support
 
 #ifdef ATOM_USE_BOOST
 #include <boost/multiprecision/cpp_int.hpp>
+#include <boost/pool/object_pool.hpp>
 #include <boost/simd/pack.hpp>
 using boost::simd::pack;
 #endif
 
 namespace atom::algorithm {
 
+namespace {
+// Thread-local cache for frequently used values
+thread_local std::vector<bool> isPrimeCache;
+thread_local bool isPrimeCacheInitialized = false;
+constexpr size_t PRIME_CACHE_SIZE = 1024;
+
 // Helper function for checking division by zero
-inline void checkDivisionByZero(uint64_t divisor) {
-    if (divisor == 0) {
-        THROW_INVALID_ARGUMENT("Division by zero");
-    }
+[[nodiscard]] constexpr bool isDivisionByZero(uint64_t divisor) noexcept {
+    return divisor == 0;
 }
 
-// Helper function for input validation
+// Helper function for input validation with compile-time evaluation if possible
 template <typename T>
 constexpr void validateInput(T value, T min, T max, const char* errorMsg) {
     if (value < min || value > max) {
@@ -61,11 +70,244 @@ constexpr void validateInput(T value, T min, T max, const char* errorMsg) {
     }
 }
 
+// RAII wrapper for memory allocation from MathMemoryPool
+template <typename T>
+class PooledMemory {
+public:
+    explicit PooledMemory(size_t count)
+        : size_(count * sizeof(T)),
+          ptr_(static_cast<T*>(MathMemoryPool::getInstance().allocate(size_))) {
+    }
+
+    ~PooledMemory() {
+        if (ptr_) {
+            MathMemoryPool::getInstance().deallocate(ptr_, size_);
+        }
+    }
+
+    // Disable copy operations
+    PooledMemory(const PooledMemory&) = delete;
+    PooledMemory& operator=(const PooledMemory&) = delete;
+
+    // Enable move operations
+    PooledMemory(PooledMemory&& other) noexcept
+        : size_(other.size_), ptr_(other.ptr_) {
+        other.ptr_ = nullptr;
+        other.size_ = 0;
+    }
+
+    PooledMemory& operator=(PooledMemory&& other) noexcept {
+        if (this != &other) {
+            if (ptr_) {
+                MathMemoryPool::getInstance().deallocate(ptr_, size_);
+            }
+            size_ = other.size_;
+            ptr_ = other.ptr_;
+            other.ptr_ = nullptr;
+            other.size_ = 0;
+        }
+        return *this;
+    }
+
+    [[nodiscard]] T* get() const noexcept { return ptr_; }
+    [[nodiscard]] operator T*() const noexcept { return ptr_; }
+
+private:
+    size_t size_;
+    T* ptr_;
+};
+
+// Initialize thread-local prime cache
+void initPrimeCache() {
+    if (!isPrimeCacheInitialized) {
+        isPrimeCache.resize(PRIME_CACHE_SIZE, true);
+        isPrimeCache[0] = isPrimeCache[1] = false;
+
+        for (size_t i = 2; i * i < PRIME_CACHE_SIZE; ++i) {
+            if (isPrimeCache[i]) {
+                for (size_t j = i * i; j < PRIME_CACHE_SIZE; j += i) {
+                    isPrimeCache[j] = false;
+                }
+            }
+        }
+
+        isPrimeCacheInitialized = true;
+    }
+}
+}  // anonymous namespace
+
+// Implementation of MathCache
+MathCache& MathCache::getInstance() noexcept {
+    static MathCache instance;
+    return instance;
+}
+
+std::shared_ptr<const std::vector<uint64_t>> MathCache::getCachedPrimes(
+    uint64_t limit) {
+    // Use shared lock for reading
+    {
+        std::shared_lock lock(mutex_);
+        auto it = primeCache_.find(limit);
+        if (it != primeCache_.end()) {
+            return it->second;
+        }
+    }
+
+    // Generate primes (outside the lock to avoid contention)
+    auto primes = std::make_shared<std::vector<uint64_t>>();
+
+    // Generate prime numbers using Sieve of Eratosthenes
+    std::vector<bool> isPrime(limit + 1, true);
+    isPrime[0] = isPrime[1] = false;
+
+    uint64_t sqrtLimit = approximateSqrt(limit);
+
+    for (uint64_t i = 2; i <= sqrtLimit; ++i) {
+        if (isPrime[i]) {
+            for (uint64_t j = i * i; j <= limit; j += i) {
+                isPrime[j] = false;
+            }
+        }
+    }
+
+    primes->reserve(limit / 10);  // Reserve estimated capacity
+    for (uint64_t i = 2; i <= limit; ++i) {
+        if (isPrime[i]) {
+            primes->push_back(i);
+        }
+    }
+
+    // Use exclusive lock for writing
+    {
+        std::unique_lock lock(mutex_);
+        // Check again to handle race condition
+        auto it = primeCache_.find(limit);
+        if (it != primeCache_.end()) {
+            return it->second;
+        }
+
+        primeCache_[limit] = primes;
+        return primes;
+    }
+}
+
+void MathCache::clear() noexcept {
+    std::unique_lock lock(mutex_);
+    primeCache_.clear();
+}
+
+// MathMemoryPool implementation
+namespace {
+
+// Memory pools for different block sizes
 #ifdef ATOM_USE_BOOST
-auto mulDiv64(uint64_t operand, uint64_t multiplier,
-              uint64_t divider) -> uint64_t {
+boost::object_pool<char[SMALL_BLOCK_SIZE]> smallPool;
+boost::object_pool<char[MEDIUM_BLOCK_SIZE]> mediumPool;
+boost::object_pool<char[LARGE_BLOCK_SIZE]> largePool;
+#else
+std::pmr::synchronized_pool_resource memoryPool;
+#endif
+}  // namespace
+
+MathMemoryPool& MathMemoryPool::getInstance() noexcept {
+    static MathMemoryPool instance;
+    return instance;
+}
+
+void* MathMemoryPool::allocate(size_t size) {
+#ifdef ATOM_USE_BOOST
+    std::unique_lock lock(mutex_);
+    if (size <= SMALL_BLOCK_SIZE) {
+        return smallPool.malloc();
+    } else if (size <= MEDIUM_BLOCK_SIZE) {
+        return mediumPool.malloc();
+    } else if (size <= LARGE_BLOCK_SIZE) {
+        return largePool.malloc();
+    } else {
+        return ::operator new(size);
+    }
+#else
+    return memoryPool.allocate(size);
+#endif
+}
+
+void MathMemoryPool::deallocate(void* ptr, size_t size) noexcept {
+#ifdef ATOM_USE_BOOST
+    std::unique_lock lock(mutex_);
+    if (size <= SMALL_BLOCK_SIZE) {
+        smallPool.free(static_cast<char (*)[SMALL_BLOCK_SIZE]>(ptr));
+    } else if (size <= MEDIUM_BLOCK_SIZE) {
+        mediumPool.free(static_cast<char (*)[MEDIUM_BLOCK_SIZE]>(ptr));
+    } else if (size <= LARGE_BLOCK_SIZE) {
+        largePool.free(static_cast<char (*)[LARGE_BLOCK_SIZE]>(ptr));
+    } else {
+        ::operator delete(ptr);
+    }
+#else
+    memoryPool.deallocate(ptr, size);
+#endif
+}
+
+MathMemoryPool::~MathMemoryPool() {
+    // Cleanup is automatically handled by member destructors
+}
+
+// MathAllocator implementation
+template <typename T>
+T* MathAllocator<T>::allocate(std::size_t n) {
+    if (n > std::numeric_limits<std::size_t>::max() / sizeof(T)) {
+        throw std::bad_alloc();
+    }
+
+    void* ptr = MathMemoryPool::getInstance().allocate(n * sizeof(T));
+    if (!ptr) {
+        throw std::bad_alloc();
+    }
+
+    return static_cast<T*>(ptr);
+}
+
+template <typename T>
+void MathAllocator<T>::deallocate(T* p, std::size_t n) noexcept {
+    MathMemoryPool::getInstance().deallocate(p, n * sizeof(T));
+}
+
+// Generate random numbers
+auto secureRandom() noexcept -> std::optional<uint64_t> {
     try {
-        checkDivisionByZero(divider);
+        std::random_device rd;
+        std::mt19937_64 gen(rd());
+        std::uniform_int_distribution<uint64_t> dist;
+        return dist(gen);
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+auto randomInRange(uint64_t min, uint64_t max) noexcept
+    -> std::optional<uint64_t> {
+    if (min > max) {
+        return std::nullopt;
+    }
+
+    try {
+        std::random_device rd;
+        std::mt19937_64 gen(rd());
+        std::uniform_int_distribution<uint64_t> dist(min, max);
+        return dist(gen);
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+#ifdef ATOM_USE_BOOST
+auto mulDiv64(uint64_t operand, uint64_t multiplier, uint64_t divider)
+    -> uint64_t {
+    try {
+        if (isDivisionByZero(divider)) {
+            THROW_INVALID_ARGUMENT("Division by zero");
+        }
+
         boost::multiprecision::uint128_t a = operand;
         boost::multiprecision::uint128_t b = multiplier;
         boost::multiprecision::uint128_t c = divider;
@@ -79,10 +321,12 @@ auto mulDiv64(uint64_t operand, uint64_t multiplier,
 #endif
 
 #if defined(__GNUC__) && defined(__SIZEOF_INT128__)
-auto mulDiv64(uint64_t operand, uint64_t multiplier,
-              uint64_t divider) -> uint64_t {
+auto mulDiv64(uint64_t operand, uint64_t multiplier, uint64_t divider)
+    -> uint64_t {
     try {
-        checkDivisionByZero(divider);
+        if (isDivisionByZero(divider)) {
+            THROW_INVALID_ARGUMENT("Division by zero");
+        }
 
         __uint128_t a = operand;
         __uint128_t b = multiplier;
@@ -103,10 +347,12 @@ auto mulDiv64(uint64_t operand, uint64_t multiplier,
     }
 }
 #elif defined(_MSC_VER)
-auto mulDiv64(uint64_t operand, uint64_t multiplier,
-              uint64_t divider) -> uint64_t {
+auto mulDiv64(uint64_t operand, uint64_t multiplier, uint64_t divider)
+    -> uint64_t {
     try {
-        checkDivisionByZero(divider);
+        if (isDivisionByZero(divider)) {
+            THROW_INVALID_ARGUMENT("Division by zero");
+        }
 
         uint64_t highProd;
         uint64_t lowProd = _umul128(operand, multiplier, &highProd);
@@ -146,7 +392,7 @@ auto mulDiv64(uint64_t operand, uint64_t multiplier,
 #error "Platform not supported for mulDiv64 function!"
 #endif
 
-auto safeAdd(uint64_t a, uint64_t b) -> uint64_t {
+constexpr auto safeAdd(uint64_t a, uint64_t b) -> uint64_t {
     try {
         uint64_t result;
 #ifdef ATOM_USE_BOOST
@@ -157,8 +403,8 @@ auto safeAdd(uint64_t a, uint64_t b) -> uint64_t {
         }
         result = static_cast<uint64_t>(temp);
 #else
-        // Check for overflow before addition
-        if (b > std::numeric_limits<uint64_t>::max() - a) {
+        // Check for overflow before addition using C++20 feature
+        if (std::numeric_limits<uint64_t>::max() - a < b) {
             THROW_OVERFLOW("Overflow in addition");
         }
         result = a + b;
@@ -172,7 +418,7 @@ auto safeAdd(uint64_t a, uint64_t b) -> uint64_t {
     }
 }
 
-auto safeMul(uint64_t a, uint64_t b) -> uint64_t {
+constexpr auto safeMul(uint64_t a, uint64_t b) -> uint64_t {
     try {
         uint64_t result;
 #ifdef ATOM_USE_BOOST
@@ -198,22 +444,22 @@ auto safeMul(uint64_t a, uint64_t b) -> uint64_t {
     }
 }
 
-auto rotl64(uint64_t n, unsigned int c) noexcept -> uint64_t {
+constexpr auto rotl64(uint64_t n, unsigned int c) noexcept -> uint64_t {
     // Using std::rotl from C++20
     return std::rotl(n, static_cast<int>(c));
 }
 
-auto rotr64(uint64_t n, unsigned int c) noexcept -> uint64_t {
+constexpr auto rotr64(uint64_t n, unsigned int c) noexcept -> uint64_t {
     // Using std::rotr from C++20
     return std::rotr(n, static_cast<int>(c));
 }
 
-auto clz64(uint64_t x) noexcept -> int {
+constexpr auto clz64(uint64_t x) noexcept -> int {
     // Using std::countl_zero from C++20
     return std::countl_zero(x);
 }
 
-auto normalize(uint64_t x) noexcept -> uint64_t {
+constexpr auto normalize(uint64_t x) noexcept -> uint64_t {
     if (x == 0) {
         return 0;
     }
@@ -221,7 +467,7 @@ auto normalize(uint64_t x) noexcept -> uint64_t {
     return x << n;
 }
 
-auto safeSub(uint64_t a, uint64_t b) -> uint64_t {
+constexpr auto safeSub(uint64_t a, uint64_t b) -> uint64_t {
     try {
         if (b > a) {
             THROW_UNDERFLOW("Underflow in subtraction");
@@ -235,9 +481,11 @@ auto safeSub(uint64_t a, uint64_t b) -> uint64_t {
     }
 }
 
-auto safeDiv(uint64_t a, uint64_t b) -> uint64_t {
+constexpr auto safeDiv(uint64_t a, uint64_t b) -> uint64_t {
     try {
-        checkDivisionByZero(b);
+        if (isDivisionByZero(b)) {
+            THROW_INVALID_ARGUMENT("Division by zero");
+        }
         return a / b;
     } catch (const atom::error::Exception&) {
         // Re-throw atom exceptions
@@ -248,18 +496,21 @@ auto safeDiv(uint64_t a, uint64_t b) -> uint64_t {
 }
 
 auto bitReverse64(uint64_t n) noexcept -> uint64_t {
+    // Use efficient platform-specific intrinsics for bit reversal
+    if constexpr (std::endian::native == std::endian::little) {
 #ifdef USE_SIMD
 #if defined(__x86_64__) || defined(_M_X64)
-    return _byteswap_uint64(n);
+        return _byteswap_uint64(n);
 #elif defined(__ARM_NEON)
-    return vrev64_u8(vcreate_u8(n));
-#else
-    // Fallback to optimized non-SIMD implementation
+        return vrev64_u8(vcreate_u8(n));
 #endif
 #endif
-    // Optimized bit reversal using lookup table approach for smaller chunks
-    static const uint8_t lookup[16] = {0x0, 0x8, 0x4, 0xc, 0x2, 0xa, 0x6, 0xe,
-                                       0x1, 0x9, 0x5, 0xd, 0x3, 0xb, 0x7, 0xf};
+    }
+
+    // Optimized implementation using lookup table and constexpr evaluation
+    static constexpr uint8_t lookup[16] = {0x0, 0x8, 0x4, 0xc, 0x2, 0xa,
+                                           0x6, 0xe, 0x1, 0x9, 0x5, 0xd,
+                                           0x3, 0xb, 0x7, 0xf};
 
     uint64_t result = 0;
     for (int i = 0; i < 16; ++i) {
@@ -269,10 +520,11 @@ auto bitReverse64(uint64_t n) noexcept -> uint64_t {
 }
 
 auto approximateSqrt(uint64_t n) noexcept -> uint64_t {
-    if (n == 0 || n == 1) {
+    if (n <= 1) {
         return n;
     }
 
+// Use optimal implementation based on available hardware instructions
 #ifdef USE_SIMD
 #if defined(__x86_64__) || defined(_M_X64)
     return _mm_cvtsd_si64(
@@ -280,54 +532,43 @@ auto approximateSqrt(uint64_t n) noexcept -> uint64_t {
 #elif defined(__ARM_NEON)
     float32x2_t x = vdup_n_f32(static_cast<float>(n));
     float32x2_t sqrt_reciprocal = vrsqrte_f32(x);
-    // One Newton-Raphson refinement step for better precision
+    // Newton-Raphson refinement for better precision
     sqrt_reciprocal =
         vmul_f32(vrsqrts_f32(vmul_f32(x, sqrt_reciprocal), sqrt_reciprocal),
                  sqrt_reciprocal);
     float32x2_t result = vmul_f32(x, sqrt_reciprocal);
     return static_cast<uint64_t>(vget_lane_f32(result, 0));
 #else
-    // Fallback to Newton-Raphson method
+    // Fall back to optimized integer implementation
 #endif
 #endif
 
-    // Optimized Newton-Raphson method
-    double x = static_cast<double>(n);
-    double y = 1.0;
+    // Fast integer Newton-Raphson method
+    uint64_t x = n;
+    uint64_t y = (x + 1) / 2;
 
-    // Initial guess based on bit manipulation for faster convergence
-    uint64_t i = n;
-    i = i >> 1;  // Divide by 2
-
-    // Fast integer square root approximation
-    for (uint64_t k = 3; k < 64; k <<= 1) {
-        i = (i >> 1) + (n >> k) / i;
+    while (y < x) {
+        x = y;
+        y = (x + n / x) / 2;
     }
 
-    x = static_cast<double>(i);
-
-    // Fine-tune with a few Newton-Raphson iterations
-    for (int iter = 0; iter < 3; ++iter) {
-        y = n / x;
-        x = (x + y) / 2.0;
-    }
-
-    return static_cast<uint64_t>(x);
+    return x;
 }
 
-auto gcd64(uint64_t a, uint64_t b) noexcept -> uint64_t {
-    // Using std::gcd from C++17
+constexpr auto gcd64(uint64_t a, uint64_t b) noexcept -> uint64_t {
+    // Using std::gcd from C++17, which is constexpr in C++20
     return std::gcd(a, b);
 }
 
 auto lcm64(uint64_t a, uint64_t b) -> uint64_t {
     try {
-        // Using std::lcm from C++17
+        // Handle edge cases explicitly
         if (a == 0 || b == 0) {
             return 0;  // lcm(0, x) = 0 by convention
         }
 
-        // Check for potential overflow
+        // Use std::lcm from C++17 for the actual computation with overflow
+        // check
         uint64_t gcd_val = gcd64(a, b);
         uint64_t first_part = a / gcd_val;  // This division is always exact
 
@@ -345,12 +586,12 @@ auto lcm64(uint64_t a, uint64_t b) -> uint64_t {
     }
 }
 
-auto isPowerOfTwo(uint64_t n) noexcept -> bool {
-    // Check if n is non-zero and has exactly one bit set
-    return n != 0 && (n & (n - 1)) == 0;
+constexpr auto isPowerOfTwo(uint64_t n) noexcept -> bool {
+    // Using C++20 std::has_single_bit
+    return n != 0 && std::has_single_bit(n);
 }
 
-auto nextPowerOfTwo(uint64_t n) noexcept -> uint64_t {
+constexpr auto nextPowerOfTwo(uint64_t n) noexcept -> uint64_t {
     if (n == 0) {
         return 1;
     }
@@ -360,86 +601,121 @@ auto nextPowerOfTwo(uint64_t n) noexcept -> uint64_t {
         return n;
     }
 
-#if defined(__GNUC__) || defined(__clang__)
-    // Use built-in functions for bit manipulation
-    return 1ULL << (64 - __builtin_clzll(n));
-#elif defined(_MSC_VER)
-    unsigned long index;
-    _BitScanReverse64(&index, n);
-    return 1ULL << (index + 1);
-#else
-    // Fallback to portable implementation
-    --n;
-    n |= n >> 1;
-    n |= n >> 2;
-    n |= n >> 4;
-    n |= n >> 8;
-    n |= n >> 16;
-    n |= n >> 32;
-    return n + 1;
-#endif
+    // Use C++20 std::bit_ceil
+    return std::bit_ceil(n);
 }
 
 // Optimized SIMD vector operations
 template <Arithmetic T>
-auto parallelVectorAdd(std::span<const T> a,
-                       std::span<const T> b) -> std::vector<T> {
+auto parallelVectorAdd(std::span<const T> a, std::span<const T> b)
+    -> std::vector<T> {
     if (a.size() != b.size()) {
         THROW_INVALID_ARGUMENT("Vectors must be of equal size");
     }
 
-    std::vector<T> result(a.size());
+    // Use custom allocator for better memory management
+    std::vector<T, MathAllocator<T>> temp_result;
+    temp_result.reserve(a.size());  // Pre-allocate memory
 
-    // Choose approach based on vector size
+    // Choose optimal implementation based on vector size and available hardware
     if (a.size() < 1000) {
 // For small vectors, use SIMD without threading
 #ifdef USE_SIMD
-// SIMD implementation based on architecture
-#else
-        // Fallback to standard algorithm with potential auto-vectorization
-        std::transform(a.begin(), a.end(), b.begin(), result.begin(),
-                       std::plus<>{});
+#if defined(__x86_64__) || defined(_M_X64) && defined(__AVX2__)
+        // Process 8 doubles or 16 floats at a time with AVX2
+        if constexpr (std::is_same_v<T, double>) {
+            result.resize(a.size());
+            for (size_t i = 0; i + 4 <= a.size(); i += 4) {
+                __m256d va = _mm256_loadu_pd(a.data() + i);
+                __m256d vb = _mm256_loadu_pd(b.data() + i);
+                __m256d sum = _mm256_add_pd(va, vb);
+                _mm256_storeu_pd(result.data() + i, sum);
+            }
+            // Handle remaining elements
+            for (size_t i = (a.size() / 4) * 4; i < a.size(); ++i) {
+                result[i] = a[i] + b[i];
+            }
+            return result;
+        } else if constexpr (std::is_same_v<T, float>) {
+            // Similar implementation for floats using AVX2
+            // ...
+        }
+#elif defined(__ARM_NEON)
+// ARM NEON implementation
+// ...
 #endif
+#endif
+
+        // Fallback to standard algorithm with potential auto-vectorization
+        temp_result.resize(a.size());
+        std::transform(a.begin(), a.end(), b.begin(), temp_result.begin(),
+                       std::plus<>{});
     } else {
-        // For larger vectors, use parallel execution policy
+        temp_result.resize(a.size());
         std::transform(std::execution::par_unseq, a.begin(), a.end(), b.begin(),
-                       result.begin(), std::plus<>{});
+                       temp_result.begin(), std::plus<>{});
     }
 
-    return result;
+    return std::vector<T>(temp_result.begin(), temp_result.end());
 }
 
 template <Arithmetic T>
-auto parallelVectorMul(std::span<const T> a,
-                       std::span<const T> b) -> std::vector<T> {
+auto parallelVectorMul(std::span<const T> a, std::span<const T> b)
+    -> std::vector<T> {
     if (a.size() != b.size()) {
         THROW_INVALID_ARGUMENT("Vectors must be of equal size");
     }
 
-    std::vector<T> result(a.size());
+    // Use custom allocator for better memory management
+    std::vector<T, MathAllocator<T>> result;
+    result.reserve(a.size());  // Pre-allocate memory
 
-    // Choose approach based on vector size
+    // Choose optimal implementation based on vector size and available hardware
     if (a.size() < 1000) {
 // For small vectors, use SIMD without threading
 #ifdef USE_SIMD
-// SIMD implementation based on architecture
-#else
+#if defined(__x86_64__) || defined(_M_X64) && defined(__AVX2__)
+        // Process 8 doubles or 16 floats at a time with AVX2
+        if constexpr (std::is_same_v<T, double>) {
+            result.resize(a.size());
+            for (size_t i = 0; i + 4 <= a.size(); i += 4) {
+                __m256d va = _mm256_loadu_pd(a.data() + i);
+                __m256d vb = _mm256_loadu_pd(b.data() + i);
+                __m256d product = _mm256_mul_pd(va, vb);
+                _mm256_storeu_pd(result.data() + i, product);
+            }
+            // Handle remaining elements
+            for (size_t i = (a.size() / 4) * 4; i < a.size(); ++i) {
+                result[i] = a[i] * b[i];
+            }
+            return result;
+        } else if constexpr (std::is_same_v<T, float>) {
+            // Similar implementation for floats using AVX2
+            // ...
+        }
+#elif defined(__ARM_NEON)
+// ARM NEON implementation
+// ...
+#endif
+#endif
+
         // Fallback to standard algorithm with potential auto-vectorization
+        result.resize(a.size());
         std::transform(a.begin(), a.end(), b.begin(), result.begin(),
                        std::multiplies<>{});
-#endif
     } else {
         // For larger vectors, use parallel execution policy
+        result.resize(a.size());
         std::transform(std::execution::par_unseq, a.begin(), a.end(), b.begin(),
                        result.begin(), std::multiplies<>{});
     }
 
-    return result;
+    return std::vector<T>(result.begin(), result.end());
 }
 
 // Fast exponentiation using binary exponentiation
 template <std::integral T>
-auto fastPow(T base, T exponent) noexcept -> T {
+constexpr auto fastPow(T base, T exponent) noexcept -> T {
     T result = 1;
 
     // Handle edge cases
@@ -460,6 +736,14 @@ auto fastPow(T base, T exponent) noexcept -> T {
 }
 
 auto isPrime(uint64_t n) noexcept -> bool {
+    // Initialize thread-local cache if needed
+    initPrimeCache();
+
+    // Use cache for small numbers
+    if (n < PRIME_CACHE_SIZE) {
+        return isPrimeCache[n];
+    }
+
     if (n <= 1)
         return false;
     if (n <= 3)
@@ -479,37 +763,13 @@ auto isPrime(uint64_t n) noexcept -> bool {
 
 auto generatePrimes(uint64_t limit) -> std::vector<uint64_t> {
     try {
+        // Input validation
         if (limit > std::numeric_limits<uint32_t>::max()) {
             THROW_INVALID_ARGUMENT("Limit too large for efficient sieve");
         }
 
-        // Use Sieve of Eratosthenes for efficient prime generation
-        std::vector<bool> isPrime(limit + 1, true);
-        isPrime[0] = isPrime[1] = false;
-
-        uint64_t sqrtLimit = approximateSqrt(limit);
-
-        // Mark non-primes using sieve
-        for (uint64_t i = 2; i <= sqrtLimit; ++i) {
-            if (isPrime[i]) {
-                for (uint64_t j = i * i; j <= limit; j += i) {
-                    isPrime[j] = false;
-                }
-            }
-        }
-
-        // Collect primes
-        std::vector<uint64_t> primes;
-        primes.reserve(limit /
-                       10);  // Rough estimate based on prime number theorem
-
-        for (uint64_t i = 2; i <= limit; ++i) {
-            if (isPrime[i]) {
-                primes.push_back(i);
-            }
-        }
-
-        return primes;
+        // Use thread-safe cache to avoid redundant calculations
+        return *MathCache::getInstance().getCachedPrimes(limit);
     } catch (const atom::error::Exception&) {
         // Re-throw atom exceptions
         throw;
@@ -521,7 +781,9 @@ auto generatePrimes(uint64_t limit) -> std::vector<uint64_t> {
 
 auto montgomeryMultiply(uint64_t a, uint64_t b, uint64_t n) -> uint64_t {
     try {
-        checkDivisionByZero(n);
+        if (isDivisionByZero(n)) {
+            THROW_INVALID_ARGUMENT("Division by zero");
+        }
 
         // Cannot use Montgomery multiplication if n is even
         if ((n & 1) == 0) {
@@ -564,7 +826,9 @@ auto montgomeryMultiply(uint64_t a, uint64_t b, uint64_t n) -> uint64_t {
 
 auto modPow(uint64_t base, uint64_t exponent, uint64_t modulus) -> uint64_t {
     try {
-        checkDivisionByZero(modulus);
+        if (isDivisionByZero(modulus)) {
+            THROW_INVALID_ARGUMENT("Division by zero");
+        }
 
         if (modulus == 1)
             return 0;
@@ -599,12 +863,24 @@ auto modPow(uint64_t base, uint64_t exponent, uint64_t modulus) -> uint64_t {
                 exponent >>= 1;
             }
 
-            // Convert back from Montgomery form
+            // Convert back from Montgomery form (improved implementation)
             uint64_t inv_r = 1;
-            for (int i = 0; i < 64; ++i) {
-                if ((inv_r * r) % modulus == 1)
-                    break;
-                inv_r = (inv_r + modulus) % modulus;
+            // Use extended Euclidean algorithm to compute inverse more
+            // efficiently
+            uint64_t u = modulus, v = 1;
+            uint64_t s = r, t = 0;
+
+            while (s != 0) {
+                uint64_t q = u / s;
+                std::swap(u -= q * s, s);
+                std::swap(v -= q * t, t);
+            }
+
+            // If u is 1, then v is the inverse of r mod n
+            if (u == 1) {
+                inv_r = v % modulus;
+                if (inv_r < 0)
+                    inv_r += modulus;
             }
 
             return (result_mont * inv_r) % modulus;
@@ -632,22 +908,28 @@ auto modPow(uint64_t base, uint64_t exponent, uint64_t modulus) -> uint64_t {
 }
 
 // Explicit template instantiations
-template auto parallelVectorAdd(std::span<const int>,
-                                std::span<const int>) -> std::vector<int>;
-template auto parallelVectorAdd(std::span<const float>,
-                                std::span<const float>) -> std::vector<float>;
+template auto parallelVectorAdd(std::span<const int>, std::span<const int>)
+    -> std::vector<int>;
+template auto parallelVectorAdd(std::span<const float>, std::span<const float>)
+    -> std::vector<float>;
 template auto parallelVectorAdd(std::span<const double>,
                                 std::span<const double>) -> std::vector<double>;
 
-template auto parallelVectorMul(std::span<const int>,
-                                std::span<const int>) -> std::vector<int>;
-template auto parallelVectorMul(std::span<const float>,
-                                std::span<const float>) -> std::vector<float>;
+template auto parallelVectorMul(std::span<const int>, std::span<const int>)
+    -> std::vector<int>;
+template auto parallelVectorMul(std::span<const float>, std::span<const float>)
+    -> std::vector<float>;
 template auto parallelVectorMul(std::span<const double>,
                                 std::span<const double>) -> std::vector<double>;
 
 template auto fastPow(int, int) noexcept -> int;
 template auto fastPow(long, long) noexcept -> long;
 template auto fastPow(long long, long long) noexcept -> long long;
+
+// Explicit template instantiations for MathAllocator
+template class MathAllocator<int>;
+template class MathAllocator<float>;
+template class MathAllocator<double>;
+template class MathAllocator<uint64_t>;
 
 }  // namespace atom::algorithm

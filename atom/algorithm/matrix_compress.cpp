@@ -216,7 +216,7 @@ auto MatrixCompressor::decompress(const CompressedData& compressed, int rows,
         return matrix;
 #endif
     } catch (const std::exception& e) {
-        THROW_NESTED_MATRIX_DECOMPRESS_EXCEPTION(
+        THROW_MATRIX_DECOMPRESS_EXCEPTION(
             "Error during matrix decompression: " + std::string(e.what()));
     }
 }
@@ -322,7 +322,7 @@ auto MatrixCompressor::decompressParallel(const CompressedData& compressed,
 
         return result;
     } catch (const std::exception& e) {
-        THROW_NESTED_MATRIX_DECOMPRESS_EXCEPTION(
+        THROW_MATRIX_DECOMPRESS_EXCEPTION(
             "Error during parallel matrix decompression: " +
             std::string(e.what()));
     }

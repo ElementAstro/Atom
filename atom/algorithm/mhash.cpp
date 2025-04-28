@@ -15,11 +15,13 @@ Description: Implementation of murmur3 hash and quick hash
 
 #include "mhash.hpp"
 
+#include <algorithm>
 #include <bit>
 #include <charconv>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <memory_resource>
 #include <random>
 #include <stdexcept>
 #include <system_error>
@@ -33,6 +35,7 @@ Description: Implementation of murmur3 hash and quick hash
 
 #ifdef ATOM_USE_BOOST
 #include <boost/exception/all.hpp>
+#include <boost/scope_exit.hpp>
 #endif
 
 namespace atom::algorithm {
@@ -66,6 +69,9 @@ constexpr std::array<std::array<size_t, K_STATE_SIZE>, K_STATE_SIZE>
 // Keccak state as 5x5 matrix of 64-bit integers
 using StateArray = std::array<std::array<uint64_t, K_STATE_SIZE>, K_STATE_SIZE>;
 
+// PMR内存资源池，用于管理小型内存分配
+thread_local std::pmr::synchronized_pool_resource tls_memory_pool{};
+
 namespace {
 #if USE_OPENCL
 // 使用模板字符串简化OpenCL内核代码
@@ -98,6 +104,92 @@ __kernel void minhash_kernel(
 #endif
 }  // anonymous namespace
 
+// RAII包装器，用于管理OpenSSL上下文
+struct HashContext::ContextImpl {
+    EVP_MD_CTX *ctx{nullptr};
+    bool initialized{false};
+
+    ContextImpl() noexcept : ctx(EVP_MD_CTX_new()) {}
+
+    ~ContextImpl() noexcept {
+        if (ctx) {
+            EVP_MD_CTX_free(ctx);
+        }
+    }
+
+    // 禁用拷贝操作
+    ContextImpl(const ContextImpl &) = delete;
+    ContextImpl &operator=(const ContextImpl &) = delete;
+
+    // 实现移动操作
+    ContextImpl(ContextImpl &&other) noexcept
+        : ctx(std::exchange(other.ctx, nullptr)),
+          initialized(other.initialized) {
+        other.initialized = false;
+    }
+
+    ContextImpl &operator=(ContextImpl &&other) noexcept {
+        if (this != &other) {
+            if (ctx) {
+                EVP_MD_CTX_free(ctx);
+            }
+            ctx = std::exchange(other.ctx, nullptr);
+            initialized = other.initialized;
+            other.initialized = false;
+        }
+        return *this;
+    }
+
+    bool init() noexcept {
+        if (!ctx)
+            return false;
+
+        initialized = EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr) == 1;
+        return initialized;
+    }
+};
+
+HashContext::HashContext() noexcept : impl_(std::make_unique<ContextImpl>()) {
+    if (impl_) {
+        impl_->init();
+    }
+}
+
+HashContext::~HashContext() noexcept = default;
+
+HashContext::HashContext(HashContext &&other) noexcept = default;
+HashContext &HashContext::operator=(HashContext &&other) noexcept = default;
+
+bool HashContext::update(const void *data, size_t length) noexcept {
+    if (!impl_ || !impl_->initialized || !data)
+        return false;
+    return EVP_DigestUpdate(impl_->ctx, data, length) == 1;
+}
+
+bool HashContext::update(std::string_view data) noexcept {
+    return update(data.data(), data.size());
+}
+
+bool HashContext::update(std::span<const std::byte> data) noexcept {
+    return update(data.data(), data.size_bytes());
+}
+
+std::optional<std::array<uint8_t, K_HASH_SIZE>>
+HashContext::finalize() noexcept {
+    if (!impl_ || !impl_->initialized)
+        return std::nullopt;
+
+    std::array<uint8_t, K_HASH_SIZE> result{};
+    unsigned int resultLen = 0;
+
+    if (EVP_DigestFinal_ex(impl_->ctx, result.data(), &resultLen) != 1 ||
+        resultLen != K_HASH_SIZE) {
+        return std::nullopt;
+    }
+
+    return result;
+}
+
 MinHash::MinHash(size_t num_hashes) noexcept(false)
 #if USE_OPENCL
     : opencl_available_(false)
@@ -123,10 +215,7 @@ MinHash::MinHash(size_t num_hashes) noexcept(false)
 #endif
 }
 
-MinHash::~MinHash() noexcept {
-    // 使用智能指针自动管理OpenCL资源
-    // 无需显式调用cleanupOpenCL
-}
+MinHash::~MinHash() noexcept = default;
 
 #if USE_OPENCL
 void MinHash::initializeOpenCL() noexcept {
@@ -198,11 +287,11 @@ void MinHash::initializeOpenCL() noexcept {
         opencl_resources_->minhash_kernel =
             clCreateKernel(opencl_resources_->program, "minhash_kernel", &err);
         if (err == CL_SUCCESS) {
-            opencl_available_ = true;
+            opencl_available_.store(true, std::memory_order_release);
         }
     } catch (...) {
         // 确保任何异常不会传播出这个函数
-        opencl_available_ = false;
+        opencl_available_.store(false, std::memory_order_release);
         opencl_resources_.reset();
     }
 }
@@ -219,7 +308,7 @@ auto MinHash::generateHashFunction() noexcept -> HashFunction {
     uint64_t a = rand();
     uint64_t b = rand();
 
-    // 生成一个闭包来实现哈希函数
+    // 生成一个闭包来实现哈希函数 - 使用按值捕获，提高缓存局部性
     return [a, b](size_t x) -> size_t {
         return static_cast<size_t>((a * static_cast<uint64_t>(x) + b) %
                                    LARGE_PRIME);
@@ -241,10 +330,23 @@ auto MinHash::jaccardIndex(std::span<const size_t> sig1,
     // 使用并行算法计算相等元素数量
     const size_t totalSize = sig1.size();
 
+    // 使用SSE/AVX友好的数据访问模式
+    constexpr size_t VECTOR_SIZE = 16;  // 适合SSE寄存器
+    const size_t alignedSize = totalSize - (totalSize % VECTOR_SIZE);
+
     size_t equalCount = 0;
 
-    // 使用SIMD友好的方式遍历，以便编译器可以自动向量化
-    for (size_t i = 0; i < totalSize; ++i) {
+    // 向量化主循环，允许编译器使用SIMD指令
+    for (size_t i = 0; i < alignedSize; i += VECTOR_SIZE) {
+        size_t localCount = 0;
+        for (size_t j = 0; j < VECTOR_SIZE; ++j) {
+            localCount += (sig1[i + j] == sig2[i + j]) ? 1 : 0;
+        }
+        equalCount += localCount;
+    }
+
+    // 处理剩余元素
+    for (size_t i = alignedSize; i < totalSize; ++i) {
         equalCount += (sig1[i] == sig2[i]) ? 1 : 0;
     }
 
@@ -253,7 +355,9 @@ auto MinHash::jaccardIndex(std::span<const size_t> sig1,
 
 auto hexstringFromData(std::string_view data) noexcept(false) -> std::string {
     const char *hexChars = "0123456789ABCDEF";
-    std::string output;
+
+    // 使用PMR内存资源创建字符串，减少内存分配
+    std::pmr::string output(&tls_memory_pool);
 
     try {
         output.reserve(data.size() * 2);  // 预留足够空间
@@ -264,11 +368,16 @@ auto hexstringFromData(std::string_view data) noexcept(false) -> std::string {
             output.push_back(hexChars[byte & 0x0F]);
         }
     } catch (const std::exception &e) {
+#ifdef ATOM_USE_BOOST
+        throw boost::enable_error_info(std::runtime_error(
+            std::string("Failed to convert to hex: ") + e.what()));
+#else
         throw std::runtime_error(std::string("Failed to convert to hex: ") +
                                  e.what());
+#endif
     }
 
-    return output;
+    return std::string(output);
 }
 
 auto dataFromHexstring(std::string_view data) noexcept(false) -> std::string {
@@ -278,48 +387,79 @@ auto dataFromHexstring(std::string_view data) noexcept(false) -> std::string {
 
     if (data.size() % 2 != 0) {
 #ifdef ATOM_USE_BOOST
-        throw boost::enable_error_info(InvalidArgumentException())
-            << boost::errinfo_api_function("Hex string length must be even");
+        throw boost::enable_error_info(
+            std::invalid_argument("Hex string length must be even"));
 #else
         throw std::invalid_argument("Hex string length must be even");
 #endif
     }
 
-    std::string result;
+    // 使用内存资源池提高小型分配性能
+    std::pmr::string result(&tls_memory_pool);
 
     try {
         result.resize(data.size() / 2);
 
         // 并行处理转换，提高性能
         const size_t length = data.size() / 2;
-        for (size_t i = 0; i < length; ++i) {
-            const size_t pos = i * 2;
-            uint8_t byte = 0;
 
-            auto [ptr, ec] = std::from_chars(data.data() + pos,
-                                             data.data() + pos + 2, byte, 16);
+        // 使用分块处理，增强数据局部性
+        constexpr size_t BLOCK_SIZE = 64;
+        const size_t numBlocks = (length + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
-            if (ec != std::errc{}) {
+        for (size_t block = 0; block < numBlocks; ++block) {
+            const size_t blockStart = block * BLOCK_SIZE;
+            const size_t blockEnd = std::min(blockStart + BLOCK_SIZE, length);
+
+            for (size_t i = blockStart; i < blockEnd; ++i) {
+                const size_t pos = i * 2;
+                uint8_t byte = 0;
+
+                // 使用C++17 from_chars，不依赖errno
+                auto [ptr, ec] = std::from_chars(
+                    data.data() + pos, data.data() + pos + 2, byte, 16);
+
+                if (ec != std::errc{}) {
 #ifdef ATOM_USE_BOOST
-                throw boost::enable_error_info(InvalidArgumentException())
-                    << boost::errinfo_api_function("Invalid hex character");
+                    BOOST_SCOPE_EXIT_ALL(&){
+                        // 清理资源
+                    };
+                    throw boost::enable_error_info(std::invalid_argument(
+                        "Invalid hex character at position " +
+                        std::to_string(pos)));
 #else
-                throw std::invalid_argument(
-                    "Invalid hex character at position " + std::to_string(pos));
+                    throw std::invalid_argument(
+                        "Invalid hex character at position " +
+                        std::to_string(pos));
 #endif
-            }
+                }
 
-            result[i] = static_cast<char>(byte);
+                result[i] = static_cast<char>(byte);
+            }
         }
     } catch (const std::exception &e) {
         if (dynamic_cast<const std::invalid_argument *>(&e)) {
             throw;  // 重新抛出原始异常
         }
+#ifdef ATOM_USE_BOOST
+        throw boost::enable_error_info(std::runtime_error(
+            std::string("Failed to convert from hex: ") + e.what()));
+#else
         throw std::runtime_error(std::string("Failed to convert from hex: ") +
                                  e.what());
+#endif
     }
 
-    return result;
+    return std::string(result);
+}
+
+bool supportsHexStringConversion(std::string_view str) noexcept {
+    if (str.empty()) {
+        return false;
+    }
+
+    return std::all_of(str.begin(), str.end(),
+                       [](unsigned char c) { return std::isxdigit(c); });
 }
 
 // Keccak辅助函数 - 使用C++20特性优化
@@ -372,7 +512,11 @@ inline void pi(StateArray &stateArray) noexcept {
 // χ step: Non-linear step XORs data across rows, producing diffusion
 inline void chi(StateArray &stateArray) noexcept {
     for (size_t rowIndex = 0; rowIndex < K_STATE_SIZE; ++rowIndex) {
-        std::array<uint64_t, K_STATE_SIZE> temp = stateArray[rowIndex];
+        std::array<uint64_t, K_STATE_SIZE> temp = {};
+        for (size_t colIndex = 0; colIndex < K_STATE_SIZE; ++colIndex) {
+            temp[colIndex] = stateArray[colIndex][rowIndex];
+        }
+
         for (size_t colIndex = 0; colIndex < K_STATE_SIZE; ++colIndex) {
             stateArray[colIndex][rowIndex] ^=
                 (~temp[(colIndex + 1) % K_STATE_SIZE] &
@@ -398,78 +542,93 @@ inline void keccakP(StateArray &stateArray) noexcept {
 }
 
 // Absorb phase: XOR input into the state and permute
-void absorb(StateArray &state, const uint8_t *input, size_t length) noexcept {
+void absorb(StateArray &state, std::span<const uint8_t> input) noexcept {
+    size_t length = input.size();
+    const uint8_t *data = input.data();
+
     while (length >= K_RATE_IN_BYTES) {
         for (size_t i = 0; i < K_RATE_IN_BYTES / 8; ++i) {
-#ifdef ATOM_USE_BOOST
+            // 使用std::bit_cast代替布尔表达式，避免未定义行为
+            std::array<uint8_t, 8> bytes;
+            std::copy_n(data + i * 8, 8, bytes.begin());
             state[i % K_STATE_SIZE][i / K_STATE_SIZE] ^=
-                boost::bit_cast<uint64_t>(input + i * 8);
-#else
-            state[i % K_STATE_SIZE][i / K_STATE_SIZE] ^=
-                std::bit_cast<uint64_t>(input + i * 8);
-#endif
+                std::bit_cast<uint64_t>(bytes);
         }
         keccakP(state);
-        input += K_RATE_IN_BYTES;
+        data += K_RATE_IN_BYTES;
         length -= K_RATE_IN_BYTES;
     }
-}
 
-// Padding and absorbing the last block
-void padAndAbsorb(StateArray &state, const uint8_t *input,
-                  size_t length) noexcept {
-    std::array<uint8_t, K_RATE_IN_BYTES> paddedBlock = {};
-    std::memcpy(paddedBlock.data(), input, length);
-    paddedBlock[length] = K_PADDING_BYTE;       // Keccak padding
-    paddedBlock.back() |= K_PADDING_LAST_BYTE;  // Set last bit to 1
-    absorb(state, paddedBlock.data(), paddedBlock.size());
+    // 处理最后一个不完整的块
+    if (length > 0) {
+        std::array<uint8_t, K_RATE_IN_BYTES> paddedBlock = {};
+        std::copy_n(data, length, paddedBlock.begin());
+        paddedBlock[length] = K_PADDING_BYTE;
+        paddedBlock.back() |= K_PADDING_LAST_BYTE;
+
+        for (size_t i = 0; i < K_RATE_IN_BYTES / 8; ++i) {
+            std::array<uint8_t, 8> bytes;
+            std::copy_n(paddedBlock.data() + i * 8, 8, bytes.begin());
+            state[i % K_STATE_SIZE][i / K_STATE_SIZE] ^=
+                std::bit_cast<uint64_t>(bytes);
+        }
+        keccakP(state);
+    }
 }
 
 // Squeeze phase: Extract output from the state
-void squeeze(StateArray &state, uint8_t *output, size_t outputLength) noexcept {
+void squeeze(StateArray &state, std::span<uint8_t> output) noexcept {
+    size_t outputLength = output.size();
+    uint8_t *data = output.data();
+
     while (outputLength >= K_RATE_IN_BYTES) {
         for (size_t i = 0; i < K_RATE_IN_BYTES / 8; ++i) {
-#ifdef ATOM_USE_BOOST
-            std::memcpy(output + i * 8,
-                        &state[i % K_STATE_SIZE][i / K_STATE_SIZE], 8);
-#else
-            std::memcpy(output + i * 8,
-                        &state[i % K_STATE_SIZE][i / K_STATE_SIZE], 8);
-#endif
+            const uint64_t value = state[i % K_STATE_SIZE][i / K_STATE_SIZE];
+            const auto bytes = std::bit_cast<std::array<uint8_t, 8>>(value);
+            std::copy_n(bytes.begin(), 8, data + i * 8);
         }
         keccakP(state);
-        output += K_RATE_IN_BYTES;
+        data += K_RATE_IN_BYTES;
         outputLength -= K_RATE_IN_BYTES;
     }
-    for (size_t i = 0; i < outputLength / 8; ++i) {
-        std::memcpy(output + i * 8, &state[i % K_STATE_SIZE][i / K_STATE_SIZE],
-                    8);
-    }
-}
 
-// Keccak-256 hashing function
-auto keccak256(const uint8_t *input,
-               size_t length) -> std::array<uint8_t, K_HASH_SIZE> {
-    StateArray state = {};
-    padAndAbsorb(state, input, length);
+    if (outputLength > 0) {
+        for (size_t i = 0; i < outputLength / 8; ++i) {
+            const uint64_t value = state[i % K_STATE_SIZE][i / K_STATE_SIZE];
+            const auto bytes = std::bit_cast<std::array<uint8_t, 8>>(value);
+            std::copy_n(bytes.begin(), 8, data + i * 8);
+        }
 
-    std::array<uint8_t, K_HASH_SIZE> hash = {};
-    squeeze(state, hash.data(), hash.size());
-    return hash;
-}
-
-bool supportsHexStringConversion(const std::string &str) {
-    if (str.empty()) {
-        return false;
-    }
-
-    for (char c : str) {
-        if (!std::isxdigit(c)) {
-            return false;
+        // 处理剩余的不完整字节
+        const size_t remainingBytes = outputLength % 8;
+        if (remainingBytes > 0) {
+            const size_t fullWords = outputLength / 8;
+            const uint64_t value =
+                state[fullWords % K_STATE_SIZE][fullWords / K_STATE_SIZE];
+            const auto bytes = std::bit_cast<std::array<uint8_t, 8>>(value);
+            std::copy_n(bytes.begin(), remainingBytes, data + fullWords * 8);
         }
     }
+}
 
-    return true;
+// Keccak-256 hashing function - 使用span接口
+auto keccak256(std::span<const uint8_t> input)
+    -> std::array<uint8_t, K_HASH_SIZE> {
+    StateArray state = {};
+
+    // 处理输入数据
+    absorb(state, input);
+
+    // 如果最后未提供数据，需要进行填充
+    if (input.empty() || input.size() % K_RATE_IN_BYTES == 0) {
+        std::array<uint8_t, 1> padBlock = {K_PADDING_BYTE};
+        absorb(state, std::span<const uint8_t>(padBlock));
+    }
+
+    // 提取结果
+    std::array<uint8_t, K_HASH_SIZE> hash = {};
+    squeeze(state, std::span<uint8_t>(hash));
+    return hash;
 }
 
 }  // namespace atom::algorithm
