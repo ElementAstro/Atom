@@ -98,7 +98,7 @@ PYBIND11_MODULE(annealing, m) {
              "Create a TSP instance with a list of city coordinates")
         .def("energy", &TSP::energy, py::arg("solution"),
              "Calculate the total distance of a tour")
-        .def("neighbor", &TSP::neighbor, py::arg("solution"),
+        .def_static("neighbor", &TSP::neighbor, py::arg("solution"),
              "Generate a neighboring solution by swapping two cities")
         .def("random_solution", &TSP::randomSolution,
              "Generate a random tour visiting all cities once")

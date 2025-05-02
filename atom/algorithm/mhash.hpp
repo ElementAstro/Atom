@@ -47,7 +47,7 @@ Description: Implementation of murmur3 hash and quick hash
 
 namespace atom::algorithm {
 
-// 使用C++20 concepts定义可哈希类型
+// Use C++20 concepts to define hashable types
 template <typename T>
 concept Hashable = requires(T a) {
     { std::hash<T>{}(a) } -> std::convertible_to<std::size_t>;
@@ -56,20 +56,21 @@ concept Hashable = requires(T a) {
 inline constexpr size_t K_HASH_SIZE = 32;
 
 #ifdef ATOM_USE_BOOST
-// Boost小型向量类型，适用于短哈希值存储，避免堆分配
+// Boost small_vector type, suitable for short hash value storage, avoids heap
+// allocation
 template <typename T, size_t N>
 using SmallVector = boost::container::small_vector<T, N>;
 
-// 使用Boost的共享互斥锁类型
+// Use Boost's shared mutex type
 using SharedMutex = boost::shared_mutex;
 using SharedLock = boost::shared_lock<SharedMutex>;
 using UniqueLock = boost::unique_lock<SharedMutex>;
 #else
-// 标准库小型向量替代，使用PMR实现紧凑内存布局
+// Standard library small_vector alternative, uses PMR for compact memory layout
 template <typename T, size_t N>
 using SmallVector = std::vector<T, std::pmr::polymorphic_allocator<T>>;
 
-// 使用标准库的共享互斥锁类型
+// Use standard library's shared mutex type
 using SharedMutex = std::shared_mutex;
 using SharedLock = std::shared_lock<SharedMutex>;
 using UniqueLock = std::unique_lock<SharedMutex>;
@@ -80,7 +81,7 @@ using UniqueLock = std::unique_lock<SharedMutex>;
  *
  * @param data The input string.
  * @return std::string The hexadecimal string representation.
- * @throws std::bad_alloc 如果内存分配失败
+ * @throws std::bad_alloc If memory allocation fails
  */
 ATOM_NODISCARD auto hexstringFromData(std::string_view data) noexcept(false)
     -> std::string;
@@ -92,16 +93,16 @@ ATOM_NODISCARD auto hexstringFromData(std::string_view data) noexcept(false)
  * @return std::string The binary data.
  * @throws std::invalid_argument If the input hexstring is not a valid
  * hexadecimal string.
- * @throws std::bad_alloc 如果内存分配失败
+ * @throws std::bad_alloc If memory allocation fails
  */
 ATOM_NODISCARD auto dataFromHexstring(std::string_view data) noexcept(false)
     -> std::string;
 
 /**
- * @brief 检查字符串是否可以转换为十六进制
+ * @brief Checks if a string can be converted to hexadecimal.
  *
- * @param str 待检查的字符串
- * @return bool 若可以转换为十六进制返回true，否则返回false
+ * @param str The string to check.
+ * @return bool True if convertible to hexadecimal, false otherwise.
  */
 [[nodiscard]] bool supportsHexStringConversion(std::string_view str) noexcept;
 
@@ -128,8 +129,8 @@ public:
      * functions.
      *
      * @param num_hashes The number of hash functions to use for MinHash.
-     * @throws std::bad_alloc 如果内存分配失败
-     * @throws std::invalid_argument 如果num_hashes为0
+     * @throws std::bad_alloc If memory allocation fails
+     * @throws std::invalid_argument If num_hashes is 0
      */
     explicit MinHash(size_t num_hashes) noexcept(false);
 
@@ -152,7 +153,7 @@ public:
      * range with hashable elements
      * @param set The set for which to compute the MinHash signature.
      * @return HashSignature MinHash signature (hash values) for the set.
-     * @throws std::bad_alloc 如果内存分配失败
+     * @throws std::bad_alloc If memory allocation fails
      */
     template <std::ranges::range Range>
         requires Hashable<std::ranges::range_value_t<Range>>
@@ -169,7 +170,7 @@ public:
             try {
                 computeSignatureOpenCL(set, signature);
             } catch (...) {
-                // 如果OpenCL执行失败，回退到CPU实现
+                // If OpenCL execution fails, fall back to CPU implementation
                 computeSignatureCPU(set, signature);
             }
         } else {
@@ -188,27 +189,27 @@ public:
      * @param sig1 MinHash signature of the first set.
      * @param sig2 MinHash signature of the second set.
      * @return double Estimated Jaccard index between the two sets.
-     * @throws std::invalid_argument 如果签名长度不一致
+     * @throws std::invalid_argument If signature lengths do not match
      */
     [[nodiscard]] static auto jaccardIndex(
         std::span<const size_t> sig1,
         std::span<const size_t> sig2) noexcept(false) -> double;
 
     /**
-     * @brief 获取哈希函数数量
+     * @brief Gets the number of hash functions.
      *
-     * @return size_t 哈希函数数量
+     * @return size_t The number of hash functions.
      */
     [[nodiscard]] size_t getHashFunctionCount() const noexcept {
-        // 使用共享锁保护读取操作
+        // Use shared lock to protect read operations
         SharedLock lock(mutex_);
         return hash_functions_.size();
     }
 
     /**
-     * @brief 检查是否支持OpenCL加速
+     * @brief Checks if OpenCL acceleration is supported.
      *
-     * @return bool 是否支持OpenCL
+     * @return bool True if OpenCL is supported, false otherwise.
      */
     [[nodiscard]] bool supportsOpenCL() const noexcept {
 #if USE_OPENCL
@@ -225,14 +226,17 @@ private:
     std::vector<HashFunction> hash_functions_;
 
     /**
-     * @brief 共享互斥锁保护哈希函数的并发访问
+     * @brief Shared mutex to protect concurrent access to hash functions.
      */
     mutable SharedMutex mutex_;
 
     /**
-     * @brief 线程本地存储缓存，提高性能
+     * @brief Thread-local storage buffer for performance improvement.
      */
-    static inline thread_local std::vector<size_t> tls_buffer_{};
+    inline static std::vector<size_t>& get_tls_buffer() {
+        static thread_local std::vector<size_t> tls_buffer_{};
+        return tls_buffer_;
+    }
 
     /**
      * @brief Generates a hash function suitable for MinHash.
@@ -253,30 +257,33 @@ private:
                              HashSignature& signature) const noexcept {
         using ValueType = std::ranges::range_value_t<Range>;
 
-        // 获取共享读锁
+        // Acquire shared read lock
         SharedLock lock(mutex_);
 
-        // 优化1: 使用线程本地存储提前计算哈希值
-        const auto setSize = std::ranges::distance(set);
-        if (tls_buffer_.capacity() < setSize) {
-            tls_buffer_.reserve(setSize);
-        }
-        tls_buffer_.clear();
+        auto& tls_buffer = get_tls_buffer();
 
-        // 使用std::ranges进行遍历并预先计算哈希值
+        // Optimization 1: Use thread-local storage to precompute hash values
+        const auto setSize = static_cast<size_t>(std::ranges::distance(set));
+        if (tls_buffer.capacity() < setSize) {
+            tls_buffer.reserve(setSize);
+        }
+        tls_buffer.clear();
+
+        // Use std::ranges to iterate and precompute hash values
         for (const auto& element : set) {
-            tls_buffer_.push_back(std::hash<ValueType>{}(element));
+            tls_buffer.push_back(std::hash<ValueType>{}(element));
         }
 
-        // 优化2: 循环展开以利用SIMD和指令级并行
+        // Optimization 2: Loop unrolling to leverage SIMD and instruction-level
+        // parallelism
         constexpr size_t UNROLL_FACTOR = 4;
         const size_t hash_count = hash_functions_.size();
         const size_t hash_count_aligned =
             hash_count - (hash_count % UNROLL_FACTOR);
 
-        // 使用范围for循环遍历预计算的哈希值
-        for (const auto element_hash : tls_buffer_) {
-            // 主循环，每次处理UNROLL_FACTOR个哈希函数
+        // Use range-based for loop to iterate over precomputed hash values
+        for (const auto element_hash : tls_buffer) {
+            // Main loop, processing UNROLL_FACTOR hash functions per iteration
             for (size_t i = 0; i < hash_count_aligned; i += UNROLL_FACTOR) {
                 for (size_t j = 0; j < UNROLL_FACTOR; ++j) {
                     signature[i + j] = std::min(
@@ -284,7 +291,7 @@ private:
                 }
             }
 
-            // 处理剩余的哈希函数
+            // Process remaining hash functions
             for (size_t i = hash_count_aligned; i < hash_count; ++i) {
                 signature[i] =
                     std::min(signature[i], hash_functions_[i](element_hash));
@@ -318,7 +325,7 @@ private:
     std::atomic<bool> opencl_available_{false};
 
     /**
-     * @brief OpenCL内存缓冲区的RAII包装
+     * @brief RAII wrapper for OpenCL memory buffers.
      */
     class CLMemWrapper {
     public:
@@ -337,11 +344,11 @@ private:
                 clReleaseMemObject(mem_);
         }
 
-        // 禁用拷贝
+        // Disable copy
         CLMemWrapper(const CLMemWrapper&) = delete;
         CLMemWrapper& operator=(const CLMemWrapper&) = delete;
 
-        // 启用移动
+        // Enable move
         CLMemWrapper(CLMemWrapper&& other) noexcept
             : context_(other.context_), mem_(other.mem_) {
             other.mem_ = nullptr;
@@ -377,7 +384,7 @@ private:
      * @tparam Range Type of the range representing the set elements.
      * @param set The set for which to compute the MinHash signature.
      * @param signature The vector to store the computed signature.
-     * @throws std::runtime_error 如果OpenCL操作失败
+     * @throws std::runtime_error If an OpenCL operation fails
      */
     template <std::ranges::range Range>
         requires Hashable<std::ranges::range_value_t<Range>>
@@ -390,44 +397,47 @@ private:
 
         cl_int err;
 
-        // 获取共享读锁
+        // Acquire shared read lock
         SharedLock lock(mutex_);
 
         size_t numHashes = hash_functions_.size();
         size_t numElements = std::ranges::distance(set);
 
         if (numElements == 0) {
-            return;  // 空集合，保持signature不变
+            return;  // Empty set, keep signature unchanged
         }
 
         using ValueType = std::ranges::range_value_t<Range>;
 
-        // 优化: 使用线程本地存储预先计算哈希值
-        if (tls_buffer_.capacity() < numElements) {
-            tls_buffer_.reserve(numElements);
+        // Optimization: Use thread-local storage to precompute hash values
+        auto& tls_buffer = get_tls_buffer();  // Use the member function
+        if (tls_buffer.capacity() < numElements) {
+            tls_buffer.reserve(numElements);
         }
-        tls_buffer_.clear();
+        tls_buffer.clear();
 
-        // 使用C++20 ranges预先计算所有hash值
+        // Use C++20 ranges to precompute all hash values
         for (const auto& element : set) {
-            tls_buffer_.push_back(std::hash<ValueType>{}(element));
+            tls_buffer.push_back(std::hash<ValueType>{}(element));
         }
 
         std::vector<size_t> aValues(numHashes);
         std::vector<size_t> bValues(numHashes);
-        // 提取hash函数的参数
+        // Extract hash function parameters
         for (size_t i = 0; i < numHashes; ++i) {
-            // 实现a和b参数的提取逻辑
-            aValues[i] = i + 1;      // 临时示例值
-            bValues[i] = i * 2 + 1;  // 临时示例值
+            // Implement logic to extract a and b parameters
+            // TODO: Replace with actual parameter extraction from
+            // hash_functions_
+            aValues[i] = i + 1;      // Temporary example value
+            bValues[i] = i * 2 + 1;  // Temporary example value
         }
 
         try {
-            // 创建内存缓冲区
+            // Create memory buffers
             CLMemWrapper hashesBuffer(opencl_resources_->context,
                                       CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                                       numElements * sizeof(size_t),
-                                      tls_buffer_.data());
+                                      tls_buffer.data());
 
             CLMemWrapper signatureBuffer(opencl_resources_->context,
                                          CL_MEM_WRITE_ONLY,
@@ -445,7 +455,7 @@ private:
 
             size_t p = std::numeric_limits<size_t>::max();
 
-            // 设置内核参数
+            // Set kernel arguments
             err = clSetKernelArg(opencl_resources_->minhash_kernel, 0,
                                  sizeof(cl_mem), &hashesBuffer.get());
             if (err != CL_SUCCESS)
@@ -481,7 +491,8 @@ private:
             if (err != CL_SUCCESS)
                 throw std::runtime_error("Failed to set kernel arg 6");
 
-            // 优化: 使用多维工作组结构以提高并行度
+            // Optimization: Use multi-dimensional work-group structure for
+            // better parallelism
             constexpr size_t WORK_GROUP_SIZE = 256;
             size_t globalWorkSize = (numHashes + WORK_GROUP_SIZE - 1) /
                                     WORK_GROUP_SIZE * WORK_GROUP_SIZE;
@@ -493,7 +504,7 @@ private:
             if (err != CL_SUCCESS)
                 throw std::runtime_error("Failed to enqueue kernel");
 
-            // 读取结果
+            // Read results
             err = clEnqueueReadBuffer(opencl_resources_->queue,
                                       signatureBuffer.get(), CL_TRUE, 0,
                                       numHashes * sizeof(size_t),
@@ -511,10 +522,9 @@ private:
 /**
  * @brief Computes the Keccak-256 hash of the input data
  *
- * @param input Pointer to input data
- * @param length Length of input data
+ * @param input Span of input data
  * @return std::array<uint8_t, K_HASH_SIZE> The computed hash
- * @throws std::bad_alloc 如果内存分配失败
+ * @throws std::bad_alloc If memory allocation fails
  */
 [[nodiscard]] auto keccak256(std::span<const uint8_t> input) noexcept(false)
     -> std::array<uint8_t, K_HASH_SIZE>;
@@ -524,7 +534,7 @@ private:
  *
  * @param input Input string
  * @return std::array<uint8_t, K_HASH_SIZE> The computed hash
- * @throws std::bad_alloc 如果内存分配失败
+ * @throws std::bad_alloc If memory allocation fails
  */
 [[nodiscard]] inline auto keccak256(std::string_view input) noexcept(false)
     -> std::array<uint8_t, K_HASH_SIZE> {
@@ -533,64 +543,65 @@ private:
 }
 
 /**
- * @brief 哈希计算的上下文管理类
+ * @brief Context management class for hash computation.
  *
- * 提供RAII式的哈希计算上下文管理，简化哈希计算过程
+ * Provides RAII-style context management for hash computation, simplifying the
+ * process.
  */
 class HashContext {
 public:
     /**
-     * @brief 构造一个新的哈希上下文
+     * @brief Constructs a new hash context.
      */
     HashContext() noexcept;
 
     /**
-     * @brief 析构函数，自动清理资源
+     * @brief Destructor, automatically cleans up resources.
      */
     ~HashContext() noexcept;
 
     /**
-     * @brief 禁用拷贝操作
+     * @brief Disable copy operations.
      */
     HashContext(const HashContext&) = delete;
     HashContext& operator=(const HashContext&) = delete;
 
     /**
-     * @brief 启用移动操作
+     * @brief Enable move operations.
      */
     HashContext(HashContext&&) noexcept;
     HashContext& operator=(HashContext&&) noexcept;
 
     /**
-     * @brief 更新哈希计算的数据
+     * @brief Updates the hash computation with data.
      *
-     * @param data 数据指针
-     * @param length 数据长度
-     * @return bool 操作是否成功
+     * @param data Pointer to the data.
+     * @param length Length of the data.
+     * @return bool True if the operation was successful, false otherwise.
      */
     bool update(const void* data, size_t length) noexcept;
 
     /**
-     * @brief 使用字符串视图更新哈希计算的数据
+     * @brief Updates the hash computation with data from a string view.
      *
-     * @param data 输入字符串
-     * @return bool 操作是否成功
+     * @param data Input string view.
+     * @return bool True if the operation was successful, false otherwise.
      */
     bool update(std::string_view data) noexcept;
 
     /**
-     * @brief 使用span更新哈希计算的数据
+     * @brief Updates the hash computation with data from a span.
      *
-     * @param data 输入数据span
-     * @return bool 操作是否成功
+     * @param data Input data span.
+     * @return bool True if the operation was successful, false otherwise.
      */
     bool update(std::span<const std::byte> data) noexcept;
 
     /**
-     * @brief 完成哈希计算并获取结果
+     * @brief Finalizes the hash computation and retrieves the result.
      *
-     * @return std::optional<std::array<uint8_t, K_HASH_SIZE>>
-     * 哈希结果，失败时返回std::nullopt
+     * @return std::optional<std::array<uint8_t, K_HASH_SIZE>> The hash result,
+     * or std::nullopt on failure.
      */
     [[nodiscard]] std::optional<std::array<uint8_t, K_HASH_SIZE>>
     finalize() noexcept;

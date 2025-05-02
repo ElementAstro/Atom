@@ -484,7 +484,9 @@ bool PasswordManager::unlock(std::string_view masterPassword) {
     std::vector<unsigned char> salt, iv, tag, encryptedDataBytes;
     int iterations = DEFAULT_PBKDF2_ITERATIONS;  // Default if not found
     try {
-        json initData = json::parse(serializedData);
+        // Use fully qualified name for json
+        nlohmann::json_abi_v3_11_3::json initData =
+            nlohmann::json_abi_v3_11_3::json::parse(serializedData);
 
         // Check version compatibility if needed
         if (initData.contains("version")) {
@@ -494,30 +496,39 @@ bool PasswordManager::unlock(std::string_view masterPassword) {
         }
 
         if (initData.contains("iterations")) {
-            iterations = initData["iterations"].get<int>();
+            iterations = initData["iterations"].template get<int>();
         } else {
             LOG_F(WARNING,
                   "Iterations not found in init data, using default: {}",
                   DEFAULT_PBKDF2_ITERATIONS);
         }
 
-        auto saltResult =
-            algorithm::base64Decode(initData.at("salt").get<std::string>());
-        auto ivResult =
-            algorithm::base64Decode(initData.at("iv").get<std::string>());
-        auto tagResult =
-            algorithm::base64Decode(initData.at("tag").get<std::string>());
-        auto dataResult =
-            algorithm::base64Decode(initData.at("data").get<std::string>());
+        auto saltResult = algorithm::base64Decode(
+            initData.at("salt").template get<std::string>());
+        auto ivResult = algorithm::base64Decode(
+            initData.at("iv").template get<std::string>());
+        auto tagResult = algorithm::base64Decode(
+            initData.at("tag").template get<std::string>());
+        auto dataResult = algorithm::base64Decode(
+            initData.at("data").template get<std::string>());
 
         if (!saltResult || !ivResult || !tagResult || !dataResult) {
             throw std::runtime_error(
                 "Failed to decode base64 components from init data.");
         }
-        salt = std::move(*saltResult);
-        iv = std::move(*ivResult);
-        tag = std::move(*tagResult);
-        encryptedDataBytes = std::move(*dataResult);
+
+        // Handle expected<T> return values correctly - check if they contain a
+        // value
+        if (saltResult.has_value() && ivResult.has_value() &&
+            tagResult.has_value() && dataResult.has_value()) {
+            salt = std::move(saltResult.value());
+            iv = std::move(ivResult.value());
+            tag = std::move(tagResult.value());
+            encryptedDataBytes = std::move(dataResult.value());
+        } else {
+            throw std::runtime_error(
+                "One or more base64 decode operations returned an error.");
+        }
 
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Failed to parse initialization data: {}", e.what());
@@ -698,13 +709,15 @@ bool PasswordManager::changeMasterPassword(std::string_view currentPassword,
         return false;
     }
 
-    auto encodeAndConvert = [](const auto& data) -> std::string {
-        auto result = algorithm::base64Encode(data);
+    auto encodeAndConvert =
+        [](const std::vector<unsigned char>& data) -> std::string {
+        auto result = algorithm::base64Encode(
+            std::span<const unsigned char>(data.data(), data.size()));
         if (!result) {
             throw std::runtime_error("Failed to base64 encode: " +
                                      result.error());
         }
-        return result.value();
+        return std::string(result.value().begin(), result.value().end());
     };
 
     // 5. Re-encrypt verification data with the new key/salt
@@ -765,9 +778,9 @@ bool PasswordManager::changeMasterPassword(std::string_view currentPassword,
     newInitData["version"] = ATOM_PM_VERSION;
     newInitData["iterations"] = settings.encryptionOptions.keyIterations;
 
-    std::string saltB64 = encodeAndConvert(salt);
-    std::string ivB64 = encodeAndConvert(iv);
-    std::string tagB64 = encodeAndConvert(tag);
+    std::string saltB64 = encodeAndConvert(newSalt);
+    std::string ivB64 = encodeAndConvert(newIv);
+    std::string tagB64 = encodeAndConvert(newTag);
 
     newInitData["salt"] = std::string(saltB64.begin(), saltB64.end());
     newInitData["iv"] = std::string(ivB64.begin(), ivB64.end());
@@ -1026,9 +1039,9 @@ std::optional<PasswordEntry> PasswordManager::retrievePassword(
         if (it != cachedPasswords.end()) {
             LOG_F(INFO, "Password retrieved from cache for platform key: {}",
                   keyStr.c_str());
-            updateActivity();  // Update activity time (requires promoting lock
-                               // or separate logic) For simplicity, update
-                               // activity only on storage access below.
+            updateActivity();   // Update activity time (requires promoting lock
+                                // or separate logic) For simplicity, update
+                                // activity only on storage access below.
             return it->second;  // Return a copy
         }
     }  // Shared lock released

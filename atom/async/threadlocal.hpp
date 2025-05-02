@@ -32,8 +32,7 @@ namespace atom::async {
 // Concept for types that can be stored in ThreadLocal
 template <typename T>
 concept ThreadLocalStorable =
-    std::default_initializable<T> && std::copy_constructible<T> &&
-    std::move_constructible<T>;
+    std::default_initializable<T> && std::move_constructible<T>;
 
 /**
  * @brief A thread-local storage class template that provides thread-specific

@@ -5,7 +5,6 @@
 #include <chrono>
 #include <functional>
 #include <map>
-#include <mutex>
 #include <set>
 #include <shared_mutex>
 #include <string_view>
@@ -432,16 +431,15 @@ private:
     std::map<SignalID, std::set<SignalHandlerWithPriority>>
         safeHandlers_;  ///< Map of signal IDs to handlers
 
-    // 可选使用Boost无锁队列
 #ifdef ATOM_USE_BOOST
     boost::lockfree::queue<int> signalQueue_{1024};
     size_t maxQueueSize_{1024};
 #else
     std::deque<int> signalQueue_;  ///< Queue of signals to be processed
     size_t maxQueueSize_;          ///< Maximum size of the signal queue
-    std::mutex
+    mutable std::shared_mutex
         queueMutex_;  ///< Mutex for synchronizing access to the signal queue
-    std::condition_variable
+    std::condition_variable_any
         queueCondition_;  ///< Condition variable for signaling queue changes
 #endif
 
@@ -450,7 +448,7 @@ private:
 
     std::unordered_map<SignalID, SignalStats>
         signalStats_;                       ///< Statistics for each signal
-    mutable std::shared_mutex statsMutex_;  ///< 使用共享锁优化读取统计信息
+    mutable std::shared_mutex statsMutex_;  ///< Mutex for signal stats
 };
 
 /**

@@ -3,30 +3,25 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
-#include <iomanip>
 #include <random>
 #include <regex>
-#include <sstream>
-#include <stdexcept>
-#include <system_error>
 
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/kdf.h>
 #include <openssl/rand.h>
 
-#include "atom/algorithm/base.hpp"  // 用于base64编码/解码
-#include "atom/error/exception.hpp"
+#include "atom/algorithm/base.hpp"
 #include "atom/log/loguru.hpp"
+#include "atom/secret/encryption.hpp"
 #include "atom/type/json.hpp"
 
-// 常量定义
 namespace {
 constexpr std::string_view PM_VERSION = "1.0.0";
 constexpr std::string_view PM_SERVICE_NAME = "AtomPasswordManager";
 constexpr size_t PM_SALT_SIZE = 16;
-constexpr size_t PM_IV_SIZE = 12;   // AES-GCM标准IV大小
-constexpr size_t PM_TAG_SIZE = 16;  // AES-GCM标准标签大小
+constexpr size_t PM_IV_SIZE = 12; 
+constexpr size_t PM_TAG_SIZE = 16; 
 constexpr int DEFAULT_PBKDF2_ITERATIONS = 100000;
 constexpr std::string_view VERIFICATION_PREFIX = "ATOM_PM_VERIFICATION_";
 }  // namespace
@@ -54,8 +49,7 @@ std::vector<std::string> PasswordManager::searchPasswords(std::string_view query
     updateActivity();
 
     try {
-        // 确保缓存已加载
-        bool loadResult = loadAllPasswords(); // 处理返回值
+        bool loadResult = loadAllPasswords();
         if (!loadResult) {
             LOG_F(ERROR, "Failed to load passwords for search");
             return {};
@@ -67,12 +61,10 @@ std::vector<std::string> PasswordManager::searchPasswords(std::string_view query
                       [](unsigned char c) { return std::tolower(c); });
 
         for (const auto& [key, entry] : cachedPasswords) {
-            // 转换为小写进行不区分大小写的搜索
             std::string lowerKey = key;
             std::transform(lowerKey.begin(), lowerKey.end(), lowerKey.begin(),
                           [](unsigned char c) { return std::tolower(c); });
             
-            // 搜索标题、用户名、网址和标签
             std::string lowerTitle = entry.username;
             std::string lowerUsername = entry.username;
             std::string lowerUrl = entry.url;
@@ -92,7 +84,6 @@ std::vector<std::string> PasswordManager::searchPasswords(std::string_view query
                 continue;
             }
             
-            // 搜索标签
             for (const auto& tag : entry.tags) {
                 std::string lowerTag = tag;
                 std::transform(lowerTag.begin(), lowerTag.end(), lowerTag.begin(),
@@ -112,7 +103,6 @@ std::vector<std::string> PasswordManager::searchPasswords(std::string_view query
     }
 }
 
-// 补充filterByCategory中的循环实现
 std::vector<std::string> PasswordManager::filterByCategory(PasswordCategory category) {
     std::unique_lock lock(mutex);
 
@@ -124,8 +114,7 @@ std::vector<std::string> PasswordManager::filterByCategory(PasswordCategory cate
     updateActivity();
 
     try {
-        // 确保缓存已加载
-        bool loadResult = loadAllPasswords(); // 处理返回值
+        bool loadResult = loadAllPasswords();
         if (!loadResult) {
             LOG_F(ERROR, "Failed to load passwords for category filtering");
             return {};
@@ -147,12 +136,9 @@ std::vector<std::string> PasswordManager::filterByCategory(PasswordCategory cate
     }
 }
 
-// 实现生成密码的方法
 std::string PasswordManager::generatePassword(int length, bool includeSpecial,
                                              bool includeNumbers,
                                              bool includeMixedCase) {
-    // 无需锁定用于生成，但updateActivity需要锁定
-    // 先调用updateActivity
     {
         std::unique_lock lock(mutex);
         if (!isUnlocked.load(std::memory_order_relaxed)) {
@@ -172,7 +158,6 @@ std::string PasswordManager::generatePassword(int length, bool includeSpecial,
         return "";
     }
 
-    // 字符集
     const std::string lower = "abcdefghijklmnopqrstuvwxyz";
     const std::string upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     const std::string digits = "0123456789";
@@ -182,21 +167,21 @@ std::string PasswordManager::generatePassword(int length, bool includeSpecial,
     std::vector<char> requiredChars;
 
     charPool += lower;
-    requiredChars.push_back(lower[0]);  // 临时占位，稍后会替换为随机字符
+    requiredChars.push_back(lower[0]);
     
     if (includeMixedCase || settings.requireMixedCase) {
         charPool += upper;
-        requiredChars.push_back(upper[0]);  // 临时占位
+        requiredChars.push_back(upper[0]);
     }
     
     if (includeNumbers || settings.requireNumbers) {
         charPool += digits;
-        requiredChars.push_back(digits[0]);  // 临时占位
+        requiredChars.push_back(digits[0]);
     }
     
     if (includeSpecial || settings.requireSpecialChars) {
         charPool += special;
-        requiredChars.push_back(special[0]);  // 临时占位
+        requiredChars.push_back(special[0]);
     }
 
     if (charPool.empty()) {
@@ -204,7 +189,6 @@ std::string PasswordManager::generatePassword(int length, bool includeSpecial,
         return "";
     }
 
-    // 使用C++随机引擎来获得更好的可移植性和控制
     std::random_device rd;
     std::mt19937 generator(rd());
     std::uniform_int_distribution<size_t> pool_dist(0, charPool.length() - 1);
@@ -216,7 +200,6 @@ std::string PasswordManager::generatePassword(int length, bool includeSpecial,
     std::string password(length, ' ');
     size_t requiredCount = requiredChars.size();
 
-    // 首先填充必需的字符
     requiredChars[0] = lower[lower_dist(generator)];
     size_t reqIdx = 1;
     
@@ -238,12 +221,10 @@ std::string PasswordManager::generatePassword(int length, bool includeSpecial,
         }
     }
 
-    // 填充密码的剩余长度
     for (int i = 0; i < length; ++i) {
         password[i] = charPool[pool_dist(generator)];
     }
 
-    // 将必需的字符随机放入密码中
     std::vector<size_t> positions(length);
     std::iota(positions.begin(), positions.end(), 0);
     std::shuffle(positions.begin(), positions.end(), generator);
@@ -252,160 +233,85 @@ std::string PasswordManager::generatePassword(int length, bool includeSpecial,
         password[positions[i]] = requiredChars[i];
     }
 
-    // 最后再次打乱整个密码
     std::shuffle(password.begin(), password.end(), generator);
 
     LOG_F(INFO, "Generated password of length {}", length);
     return password;
 }
 
-// 实现密码强度评估
 PasswordStrength PasswordManager::evaluatePasswordStrength(std::string_view password) const {
-    // 无需锁定进行评估，这是一个const方法
-    // updateActivity(); // 读取强度可能不算作活动
-
     const size_t len = password.length();
     if (len == 0) {
         return PasswordStrength::VeryWeak;
     }
 
     int score = 0;
-    bool hasLower = false;
-    bool hasUpper = false;
-    bool hasDigit = false;
-    bool hasSpecial = false;
+    // Assign points based on length
+    score += (len >= 8) + (len >= 12) + (len >= 16);
 
-    // 熵近似评分（非常粗略）
-    if (len >= 8) {
-        score += 1;
-    }
+    // Check character types in a single pass
+    int lowerCount = 0, upperCount = 0, digitCount = 0, specialCount = 0;
+    std::array<int, 256> charFrequency{};
 
-    if (len >= 12) {
-        score += 1;
-    }
-
-    if (len >= 16) {
-        score += 1;
-    }
-
-    // 检查字符类型
-    for (char c : password) {
-        if (!hasLower && std::islower(static_cast<unsigned char>(c))) {
-            hasLower = true;
-        } else if (!hasUpper && std::isupper(static_cast<unsigned char>(c))) {
-            hasUpper = true;
-        } else if (!hasDigit && std::isdigit(static_cast<unsigned char>(c))) {
-            hasDigit = true;
-        } else if (!hasSpecial && !std::isalnum(static_cast<unsigned char>(c))) {
-            hasSpecial = true;
-        }
+    for (unsigned char c : password) {
+        charFrequency[c]++;
         
-        // 如果已找到所有类型，可以提前结束循环
-        if (hasLower && hasUpper && hasDigit && hasSpecial) {
-            break;
-        }
+        if (std::islower(c)) lowerCount++;
+        else if (std::isupper(c)) upperCount++;
+        else if (std::isdigit(c)) digitCount++;
+        else if (!std::isalnum(c)) specialCount++;
     }
 
-    int charTypes = 0;
-    if (hasLower) {
-        charTypes++;
-    }
+    // Count character types and add points
+    int charTypes = (lowerCount > 0) + (upperCount > 0) + (digitCount > 0) + (specialCount > 0);
+    score += (charTypes >= 2) + (charTypes >= 3) + (charTypes >= 4);
 
-    if (hasUpper) {
-        charTypes++;
-    }
-
-    if (hasDigit) {
-        charTypes++;
-    }
-
-    if (hasSpecial) {
-        charTypes++;
-    }
-
-    // 根据字符类型加分
-    if (charTypes >= 2) {
-        score += 1;
-    }
-
-    if (charTypes >= 3) {
-        score += 1;
-    }
-
-    if (charTypes >= 4) {
-        score += 1;
-    }
-
-    // 对常见模式的惩罚（简单检查）
     try {
-        // 检查是否全是数字
-        if (std::regex_match(std::string(password), std::regex("^\\d+$"))) {
-            score -= 1;
+        // Deduct points for all-digits or all-letters
+        if (digitCount == static_cast<int>(len)) {
+            score--;
+        } else if (lowerCount + upperCount == static_cast<int>(len)) {
+            score--;
         }
         
-        // 检查是否全是字母
-        if (std::regex_match(std::string(password), std::regex("^[a-zA-Z]+$"))) {
-            score -= 1;
-        }
-        
-        // 检查重复字符（如果超过25%的字符是相同的）
-        std::map<char, int> charCount;
-        for (char c : password) {
-            charCount[c]++;
-        }
-        
-        for (const auto& [_, count] : charCount) {
-            if (static_cast<double>(count) / len > 0.25) {
-                score -= 1;
+        // Check for character frequency (repeated characters)
+        for (int count : charFrequency) {
+            if (count > 0 && static_cast<double>(count) / len > 0.25) {
+                score--;
                 break;
             }
         }
         
-        // 检查键盘顺序（简单版本）
-        const std::string qwertyRows[] = {
+        // Check for keyboard sequences
+        const std::array<std::string_view, 3> qwertyRows = {
             "qwertyuiop", "asdfghjkl", "zxcvbnm"
         };
         
-        std::string lowerPass = std::string(password);
+        std::string lowerPass(password);
         std::transform(lowerPass.begin(), lowerPass.end(), lowerPass.begin(),
                       [](unsigned char c) { return std::tolower(c); });
         
         for (const auto& row : qwertyRows) {
-            for (size_t i = 0; i <= row.length() - 3; ++i) {
-                std::string pattern = row.substr(i, 3);
-                if (lowerPass.find(pattern) != std::string::npos) {
-                    score -= 1;
-                    break;
+            bool sequenceFound = false;
+            for (size_t i = 0; i <= row.length() - 3 && !sequenceFound; ++i) {
+                if (lowerPass.find(row.substr(i, 3)) != std::string::npos) {
+                    score--;
+                    sequenceFound = true;
                 }
             }
         }
     } catch (const std::regex_error& e) {
         LOG_F(ERROR, "Regex error in password strength evaluation: {}", e.what());
-        // 不要因为正则表达式错误而使整个评估失败
     }
 
-    // 将分数映射到强度等级
-    if (score <= 1) {
-        return PasswordStrength::VeryWeak;
-    }
-
-    if (score == 2) {
-        return PasswordStrength::Weak;
-    }
-
-    if (score == 3) {
-        return PasswordStrength::Medium;
-    }
-
-    if (score == 4) {
-        return PasswordStrength::Strong;
-    }
-
-    // score >= 5
-    return PasswordStrength::VeryStrong;
+    // Map score to strength rating
+    if (score <= 1) return PasswordStrength::VeryWeak;
+    if (score == 2) return PasswordStrength::Weak;
+    if (score == 3) return PasswordStrength::Medium;
+    if (score == 4) return PasswordStrength::Strong;
+    return PasswordStrength::VeryStrong; // score >= 5
 }
 
-// 实现密码导出功能
 bool PasswordManager::exportPasswords(const std::filesystem::path& filePath,
                                      std::string_view password) {
     std::unique_lock lock(mutex);
@@ -421,25 +327,22 @@ bool PasswordManager::exportPasswords(const std::filesystem::path& filePath,
     updateActivity();
 
     try {
-        // 确保缓存已完全加载
-        bool loadResult = loadAllPasswords(); // 处理返回值
+        bool loadResult = loadAllPasswords();
         if (!loadResult) {
             LOG_F(ERROR, "Failed to load passwords for export");
             return false;
         }
         
-        // 准备导出数据
         nlohmann::json exportData;
         exportData["version"] = PM_VERSION;
         exportData["entries"] = nlohmann::json::array();
         
-        // 添加所有密码条目
         for (const auto& [key, entry] : cachedPasswords) {
             nlohmann::json entryJson;
             entryJson["platform_key"] = key;
             entryJson["title"] = entry.title;
             entryJson["username"] = entry.username;
-            entryJson["password"] = entry.password; // 未加密状态下的密码
+            entryJson["password"] = entry.password;
             entryJson["url"] = entry.url;
             entryJson["notes"] = entry.notes;
             entryJson["category"] = static_cast<int>(entry.category);
@@ -448,52 +351,51 @@ bool PasswordManager::exportPasswords(const std::filesystem::path& filePath,
             entryJson["modified"] = std::chrono::system_clock::to_time_t(entry.modified);
             entryJson["expires"] = std::chrono::system_clock::to_time_t(entry.expires);
             
-            // 添加前一个密码版本的历史记录
             nlohmann::json previousJson = nlohmann::json::array();
             for (const auto& prevPwd : entry.previousPasswords) {
                 nlohmann::json pwdJson;
-                pwdJson["password"] = prevPwd.password;
-                pwdJson["changed"] = std::chrono::system_clock::to_time_t(prevPwd.changed);
+                pwdJson["password"] = prevPwd;
                 previousJson.push_back(pwdJson);
             }
             entryJson["previous_passwords"] = previousJson;
             
-            // 添加到导出数据中
             exportData["entries"].push_back(entryJson);
         }
         
-        // 序列化导出数据
-        std::string serializedData = exportData.dump(2); // 使用2空格缩进
+        std::string serializedData = exportData.dump(2);
 
-        // 生成盐和IV
-        std::vector<unsigned char> salt(PM_SALT_SIZE);
-        std::vector<unsigned char> iv(PM_IV_SIZE);
+        std::string salt(PM_SALT_SIZE, '\0');
+        std::string iv(PM_IV_SIZE, '\0');
         
-        if (RAND_bytes(salt.data(), salt.size()) != 1 ||
-            RAND_bytes(iv.data(), iv.size()) != 1) {
+        if (RAND_bytes(reinterpret_cast<unsigned char*>(salt.data()), salt.size()) != 1 ||
+            RAND_bytes(reinterpret_cast<unsigned char*>(iv.data()), iv.size()) != 1) {
             LOG_F(ERROR, "Failed to generate random data for export encryption");
             return false;
         }
         
-        // 从导出密码派生密钥
-        std::vector<unsigned char> exportKey = deriveKey(password, salt, DEFAULT_PBKDF2_ITERATIONS);
+        std::string exportKey = deriveKey(password, 
+                                          std::span<const unsigned char>(
+                                              reinterpret_cast<const unsigned char*>(salt.data()), 
+                                              salt.size()), 
+                                          DEFAULT_PBKDF2_ITERATIONS);
         
-        // 使用AES-GCM加密序列化数据
-        std::vector<unsigned char> encryptedData;
-        std::vector<unsigned char> tag(PM_TAG_SIZE);
+        std::string encryptedData(serializedData.size() + EVP_MAX_BLOCK_LENGTH, '\0');
+        std::string tag(PM_TAG_SIZE, '\0');
         
         SslCipherContext ctx;
         if (EVP_EncryptInit_ex(ctx.get(), EVP_aes_256_gcm(), nullptr, 
-                              exportKey.data(), iv.data()) != 1) {
+                              reinterpret_cast<const unsigned char*>(exportKey.data()), 
+                              reinterpret_cast<const unsigned char*>(iv.data())) != 1) {
             LOG_F(ERROR, "Failed to initialize encryption for export: OpenSSL error");
             secureWipe(exportKey);
             return false;
         }
         
-        encryptedData.resize(serializedData.size() + EVP_MAX_BLOCK_LENGTH);
         int outLen = 0;
         
-        if (EVP_EncryptUpdate(ctx.get(), encryptedData.data(), &outLen,
+        if (EVP_EncryptUpdate(ctx.get(), 
+                             reinterpret_cast<unsigned char*>(encryptedData.data()), 
+                             &outLen,
                              reinterpret_cast<const unsigned char*>(serializedData.data()),
                              serializedData.size()) != 1) {
             LOG_F(ERROR, "Failed to encrypt data for export: OpenSSL error");
@@ -502,7 +404,9 @@ bool PasswordManager::exportPasswords(const std::filesystem::path& filePath,
         }
         
         int finalLen = 0;
-        if (EVP_EncryptFinal_ex(ctx.get(), encryptedData.data() + outLen, &finalLen) != 1) {
+        if (EVP_EncryptFinal_ex(ctx.get(), 
+                               reinterpret_cast<unsigned char*>(encryptedData.data() + outLen), 
+                               &finalLen) != 1) {
             LOG_F(ERROR, "Failed to finalize encryption for export: OpenSSL error");
             secureWipe(exportKey);
             return false;
@@ -511,13 +415,13 @@ bool PasswordManager::exportPasswords(const std::filesystem::path& filePath,
         outLen += finalLen;
         encryptedData.resize(outLen);
         
-        if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_GET_TAG, tag.size(), tag.data()) != 1) {
+        if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_GET_TAG, tag.size(), 
+                               reinterpret_cast<void*>(tag.data())) != 1) {
             LOG_F(ERROR, "Failed to get authentication tag for export: OpenSSL error");
             secureWipe(exportKey);
             return false;
         }
         
-        // 构建最终的导出文件结构
         nlohmann::json exportFile;
         exportFile["format"] = "ATOM_PASSWORD_EXPORT";
         exportFile["version"] = PM_VERSION;
@@ -527,7 +431,6 @@ bool PasswordManager::exportPasswords(const std::filesystem::path& filePath,
         exportFile["iterations"] = DEFAULT_PBKDF2_ITERATIONS;
         exportFile["data"] = algorithm::base64Encode(encryptedData)->to_string();
         
-        // 写入导出文件
         std::ofstream outFile(filePath, std::ios::out | std::ios::binary);
         if (!outFile) {
             LOG_F(ERROR, "Failed to open export file for writing: {}", filePath.string());
@@ -1788,17 +1691,17 @@ std::string PasswordManager::generatePassword(int length, bool includeSpecial,
     
     if (includeMixedCase || settings.requireMixedCase) {
         charPool += upper;
-        requiredChars.push_back(upper[0]);  // 临时占位
+        requiredChars.push_back(upper[0]);
     }
     
     if (includeNumbers || settings.requireNumbers) {
         charPool += digits;
-        requiredChars.push_back(digits[0]);  // 临时占位
+        requiredChars.push_back(digits[0]);
     }
     
     if (includeSpecial || settings.requireSpecialChars) {
         charPool += special;
-        requiredChars.push_back(special[0]);  // 临时占位
+        requiredChars.push_back(special[0]);
     }
 
     if (charPool.empty()) {
@@ -3400,17 +3303,17 @@ std::string PasswordManager::generatePassword(int length, bool includeSpecial,
     
     if (includeMixedCase || settings.requireMixedCase) {
         charPool += upper;
-        requiredChars.push_back(upper[0]);  // 临时占位
+        requiredChars.push_back(upper[0]);
     }
     
     if (includeNumbers || settings.requireNumbers) {
         charPool += digits;
-        requiredChars.push_back(digits[0]);  // 临时占位
+        requiredChars.push_back(digits[0]);
     }
     
     if (includeSpecial || settings.requireSpecialChars) {
         charPool += special;
-        requiredChars.push_back(special[0]);  // 临时占位
+        requiredChars.push_back(special[0]);
     }
 
     if (charPool.empty()) {
@@ -4946,17 +4849,17 @@ std::string PasswordManager::generatePassword(int length, bool includeSpecial,
     
     if (includeMixedCase || settings.requireMixedCase) {
         charPool += upper;
-        requiredChars.push_back(upper[0]);  // 临时占位
+        requiredChars.push_back(upper[0]);
     }
     
     if (includeNumbers || settings.requireNumbers) {
         charPool += digits;
-        requiredChars.push_back(digits[0]);  // 临时占位
+        requiredChars.push_back(digits[0]);
     }
     
     if (includeSpecial || settings.requireSpecialChars) {
         charPool += special;
-        requiredChars.push_back(special[0]);  // 临时占位
+        requiredChars.push_back(special[0]);
     }
 
     if (charPool.empty()) {

@@ -36,11 +36,15 @@ public:
     virtual ~NonCopyable() = default;
 
 #ifndef ATOM_USE_BOOST
+    // Prevent copying
     NonCopyable(const NonCopyable&) = delete;
     auto operator=(const NonCopyable&) -> NonCopyable& = delete;
 
-    NonCopyable(NonCopyable&&) = delete;
-    auto operator=(NonCopyable&&) -> NonCopyable& = delete;
+    // Allow moving: Moving is permitted to enable efficient resource transfers,
+    // while copying is disallowed to prevent unintended duplications of
+    // resources.
+    NonCopyable(NonCopyable&&) noexcept = default;
+    auto operator=(NonCopyable&&) noexcept -> NonCopyable& = default;
 #endif
 };
 

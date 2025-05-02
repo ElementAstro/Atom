@@ -631,4 +631,6 @@ auto keccak256(std::span<const uint8_t> input)
     return hash;
 }
 
+thread_local std::vector<size_t> tls_buffer_{};
+
 }  // namespace atom::algorithm

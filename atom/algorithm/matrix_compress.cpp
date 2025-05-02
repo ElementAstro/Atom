@@ -1,17 +1,14 @@
 #include "matrix_compress.hpp"
 
 #include <algorithm>
-#include <execution>
 #include <fstream>
 #include <future>
 #include <iostream>
 #include <random>
-#include <ranges>
 #include <thread>
 
 #include "atom/error/exception.hpp"
 
-// 检测可用的SIMD指令集
 #ifdef __AVX2__
 #define USE_SIMD 2  // AVX2
 #include <immintrin.h>
@@ -19,7 +16,7 @@
 #define USE_SIMD 1  // SSE4.1
 #include <smmintrin.h>
 #else
-#define USE_SIMD 0  // 无SIMD
+#define USE_SIMD 0
 #endif
 
 #ifdef ATOM_USE_BOOST
@@ -72,35 +69,30 @@ auto MatrixCompressor::compress(const Matrix& matrix) -> CompressedData {
         return compressed;
 #endif
     } catch (const std::exception& e) {
-        THROW_NESTED_MATRIX_COMPRESS_EXCEPTION(
-            "Error during matrix compression: " + std::string(e.what()));
+        THROW_MATRIX_COMPRESS_EXCEPTION("Error during matrix compression: " +
+                                        std::string(e.what()));
     }
 }
 
-auto MatrixCompressor::compressParallel(const Matrix& matrix,
-                                        int thread_count) -> CompressedData {
-    // 输入验证
+auto MatrixCompressor::compressParallel(const Matrix& matrix, int thread_count)
+    -> CompressedData {
     if (matrix.empty() || matrix[0].empty()) {
         return {};
     }
 
-    // 确定线程数
     size_t num_threads = thread_count > 0 ? static_cast<size_t>(thread_count)
                                           : getDefaultThreadCount();
 
-    // 如果矩阵太小，使用单线程版本
     if (matrix.size() < num_threads ||
         matrix.size() * matrix[0].size() < 10000) {
         return compress(matrix);
     }
 
     try {
-        // 将矩阵划分为多个子矩阵处理
         size_t rows_per_thread = matrix.size() / num_threads;
         std::vector<std::future<CompressedData>> futures;
         futures.reserve(num_threads);
 
-        // 并行处理每个子矩阵
         for (size_t t = 0; t < num_threads; ++t) {
             size_t start_row = t * rows_per_thread;
             size_t end_row = (t == num_threads - 1) ? matrix.size()
@@ -135,14 +127,12 @@ auto MatrixCompressor::compressParallel(const Matrix& matrix,
                 }));
         }
 
-        // 合并所有子结果
         CompressedData result;
         for (auto& future : futures) {
             auto partial = future.get();
             if (result.empty()) {
                 result = std::move(partial);
             } else if (!partial.empty()) {
-                // 处理分界点的合并问题
                 if (result.back().first == partial.front().first) {
                     result.back().second += partial.front().second;
                     result.insert(result.end(), std::next(partial.begin()),
@@ -155,7 +145,7 @@ auto MatrixCompressor::compressParallel(const Matrix& matrix,
 
         return result;
     } catch (const std::exception& e) {
-        THROW_NESTED_MATRIX_COMPRESS_EXCEPTION(
+        THROW_MATRIX_COMPRESS_EXCEPTION(
             "Error during parallel matrix compression: " +
             std::string(e.what()));
     }
@@ -163,7 +153,6 @@ auto MatrixCompressor::compressParallel(const Matrix& matrix,
 
 auto MatrixCompressor::decompress(const CompressedData& compressed, int rows,
                                   int cols) -> Matrix {
-    // 输入验证
     if (rows <= 0 || cols <= 0) {
         THROW_MATRIX_DECOMPRESS_EXCEPTION(
             "Invalid dimensions: rows and cols must be positive");
@@ -174,7 +163,6 @@ auto MatrixCompressor::decompress(const CompressedData& compressed, int rows,
     }
 
     try {
-        // 如果支持SIMD，使用SIMD优化版本
 #if USE_SIMD > 0
         return decompressWithSIMD(compressed, rows, cols);
 #else
@@ -183,7 +171,6 @@ auto MatrixCompressor::decompress(const CompressedData& compressed, int rows,
         int totalElements = rows * cols;
         size_t elementCount = 0;
 
-        // 预先计算总元素数，确保与预期匹配
         for (const auto& [ch, count] : compressed) {
             elementCount += count;
         }
@@ -200,7 +187,6 @@ auto MatrixCompressor::decompress(const CompressedData& compressed, int rows,
                 int row = index / cols;
                 int col = index % cols;
 
-                // 额外的边界检查
                 if (row >= rows || col >= cols) {
                     THROW_MATRIX_DECOMPRESS_EXCEPTION(
                         "Decompression error: Index out of bounds at " +
@@ -222,9 +208,8 @@ auto MatrixCompressor::decompress(const CompressedData& compressed, int rows,
 }
 
 auto MatrixCompressor::decompressParallel(const CompressedData& compressed,
-                                          int rows, int cols,
-                                          int thread_count) -> Matrix {
-    // 输入验证
+                                          int rows, int cols, int thread_count)
+    -> Matrix {
     if (rows <= 0 || cols <= 0) {
         THROW_MATRIX_DECOMPRESS_EXCEPTION(
             "Invalid dimensions: rows and cols must be positive");
@@ -234,29 +219,24 @@ auto MatrixCompressor::decompressParallel(const CompressedData& compressed,
         return Matrix(rows, std::vector<char>(cols, 0));
     }
 
-    // 对于小型矩阵，使用单线程版本
     if (rows * cols < 10000) {
         return decompress(compressed, rows, cols);
     }
 
     try {
-        // 确定线程数
         size_t num_threads = thread_count > 0
                                  ? static_cast<size_t>(thread_count)
                                  : getDefaultThreadCount();
         num_threads = std::min(num_threads, static_cast<size_t>(rows));
 
-        // 创建结果矩阵
         Matrix result(rows, std::vector<char>(cols));
 
-        // 预计算每个线程处理的行范围和对应的元素范围
         std::vector<std::pair<size_t, size_t>> row_ranges;
         std::vector<std::pair<size_t, size_t>> element_ranges;
 
         size_t rows_per_thread = rows / num_threads;
         size_t elements_per_row = cols;
 
-        // 计算每个线程处理的行范围
         for (size_t t = 0; t < num_threads; ++t) {
             size_t start_row = t * rows_per_thread;
             size_t end_row =
@@ -268,20 +248,17 @@ auto MatrixCompressor::decompressParallel(const CompressedData& compressed,
             element_ranges.emplace_back(start_element, end_element);
         }
 
-        // 计算每个压缩块对应的元素范围
         std::vector<size_t> element_offsets = {0};
         for (const auto& [ch, count] : compressed) {
             element_offsets.push_back(element_offsets.back() + count);
         }
 
-        // 启动线程并行解压
         std::vector<std::future<void>> futures;
         for (size_t t = 0; t < num_threads; ++t) {
             futures.push_back(std::async(std::launch::async, [&, t]() {
                 size_t start_element = element_ranges[t].first;
                 size_t end_element = element_ranges[t].second;
 
-                // 找到开始的压缩块
                 size_t block_index = 0;
                 while (block_index < element_offsets.size() - 1 &&
                        element_offsets[block_index + 1] <= start_element) {
@@ -295,12 +272,10 @@ auto MatrixCompressor::decompressParallel(const CompressedData& compressed,
                     size_t block_start = element_offsets[block_index];
                     size_t block_end = element_offsets[block_index + 1];
 
-                    // 计算在当前块中可以处理的元素数
                     size_t process_start =
                         std::max(current_element, block_start);
                     size_t process_end = std::min(end_element, block_end);
 
-                    // 直接使用计算的范围填充矩阵
                     for (size_t i = process_start; i < process_end; ++i) {
                         int row = static_cast<int>(i / cols);
                         int col = static_cast<int>(i % cols);
@@ -315,7 +290,6 @@ auto MatrixCompressor::decompressParallel(const CompressedData& compressed,
             }));
         }
 
-        // 等待所有线程完成
         for (auto& future : futures) {
             future.get();
         }
@@ -341,7 +315,6 @@ auto MatrixCompressor::compressWithSIMD(const Matrix& matrix)
     for (const auto& row : matrix) {
         size_t i = 0;
         for (; i + 32 <= row.size(); i += 32) {
-            // 使用更安全的SIMD加载方式
             __m256i chars1 =
                 _mm256_load_si256(reinterpret_cast<const __m256i*>(&row[i]));
             __m256i chars2 = _mm256_load_si256(
@@ -370,7 +343,6 @@ auto MatrixCompressor::compressWithSIMD(const Matrix& matrix)
             }
         }
 
-        // 处理剩余元素
         for (; i < row.size(); ++i) {
             char ch = row[i];
             if (ch == currentChar) {
@@ -382,11 +354,10 @@ auto MatrixCompressor::compressWithSIMD(const Matrix& matrix)
             }
         }
     }
-#elif USE_SIMD == 1  // SSE4.1
+#elif USE_SIMD == 1
     for (const auto& row : matrix) {
         size_t i = 0;
         for (; i + 16 <= row.size(); i += 16) {
-            // 使用更安全的SIMD加载方式
             __m128i chars =
                 _mm_load_si128(reinterpret_cast<const __m128i*>(&row[i]));
 
@@ -402,7 +373,6 @@ auto MatrixCompressor::compressWithSIMD(const Matrix& matrix)
             }
         }
 
-        // 处理剩余元素
         for (; i < row.size(); ++i) {
             char ch = row[i];
             if (ch == currentChar) {
@@ -415,7 +385,6 @@ auto MatrixCompressor::compressWithSIMD(const Matrix& matrix)
         }
     }
 #else
-    // 使用标准压缩实现
     for (const auto& row : matrix) {
         for (char ch : row) {
             if (ch == currentChar) {
@@ -442,7 +411,6 @@ auto MatrixCompressor::decompressWithSIMD(const CompressedData& compressed,
     int index = 0;
     int total_elements = rows * cols;
 
-    // 预先计算总元素数，确保与预期匹配
     size_t elementCount = 0;
     for (const auto& [ch, count] : compressed) {
         elementCount += count;
@@ -494,7 +462,6 @@ auto MatrixCompressor::decompressWithSIMD(const CompressedData& compressed,
         }
     }
 #else
-    // 使用标准解压实现
     for (const auto& [ch, count] : compressed) {
         for (int i = 0; i < count; ++i) {
             int row = index / cols;
@@ -514,8 +481,9 @@ auto MatrixCompressor::decompressWithSIMD(const CompressedData& compressed,
     return matrix;
 }
 
-auto MatrixCompressor::generateRandomMatrix(
-    int rows, int cols, std::string_view charset) -> Matrix {
+auto MatrixCompressor::generateRandomMatrix(int rows, int cols,
+                                            std::string_view charset)
+    -> Matrix {
     std::random_device randomDevice;
     std::mt19937 generator(randomDevice());
     std::uniform_int_distribution<int> distribution(

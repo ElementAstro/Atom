@@ -15,6 +15,20 @@ Description: A simple but useful async worker manager
 #ifndef ATOM_ASYNC_ASYNC_HPP
 #define ATOM_ASYNC_ASYNC_HPP
 
+// Platform detection
+#if defined(_WIN32) || defined(_WIN64)
+#define ATOM_PLATFORM_WINDOWS
+#include <windows.h>
+#elif defined(__APPLE__)
+#define ATOM_PLATFORM_MACOS
+#include <mach/thread_policy.h>
+#include <pthread.h>
+#else
+#define ATOM_PLATFORM_LINUX
+#include <pthread.h>
+#include <sched.h>
+#endif
+
 #include <chrono>
 #include <cmath>
 #include <concepts>
@@ -44,6 +58,154 @@ public:
     throw TimeoutException(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, \
                            __VA_ARGS__);
 
+// Platform-specific threading utilities
+namespace atom::platform {
+
+// Priority ranges for different platforms
+struct Priority {
+#ifdef ATOM_PLATFORM_WINDOWS
+    static constexpr int LOW = THREAD_PRIORITY_BELOW_NORMAL;
+    static constexpr int NORMAL = THREAD_PRIORITY_NORMAL;
+    static constexpr int HIGH = THREAD_PRIORITY_ABOVE_NORMAL;
+    static constexpr int CRITICAL = THREAD_PRIORITY_HIGHEST;
+#elif defined(ATOM_PLATFORM_MACOS)
+    static constexpr int LOW = 15;
+    static constexpr int NORMAL = 31;
+    static constexpr int HIGH = 47;
+    static constexpr int CRITICAL = 63;
+#else  // Linux
+    static constexpr int LOW = 1;
+    static constexpr int NORMAL = 50;
+    static constexpr int HIGH = 75;
+    static constexpr int CRITICAL = 99;
+#endif
+};
+
+namespace detail {
+
+#ifdef ATOM_PLATFORM_WINDOWS
+inline bool setPriorityImpl(std::thread::native_handle_type handle,
+                            int priority) noexcept {
+    return ::SetThreadPriority(reinterpret_cast<HANDLE>(handle), priority) != 0;
+}
+
+inline int getCurrentPriorityImpl(
+    std::thread::native_handle_type handle) noexcept {
+    return ::GetThreadPriority(reinterpret_cast<HANDLE>(handle));
+}
+
+inline bool setAffinityImpl(std::thread::native_handle_type handle,
+                            size_t cpu) noexcept {
+    const DWORD_PTR mask = static_cast<DWORD_PTR>(1ull << cpu);
+    return ::SetThreadAffinityMask(reinterpret_cast<HANDLE>(handle), mask) != 0;
+}
+
+#elif defined(ATOM_PLATFORM_MACOS)
+bool setPriorityImpl(std::thread::native_handle_type handle,
+                     int priority) noexcept {
+    sched_param param{};
+    param.sched_priority = priority;
+    return pthread_setschedparam(handle, SCHED_FIFO, &param) == 0;
+}
+
+int getCurrentPriorityImpl(std::thread::native_handle_type handle) noexcept {
+    sched_param param{};
+    int policy;
+    if (pthread_getschedparam(handle, &policy, &param) == 0) {
+        return param.sched_priority;
+    }
+    return Priority::NORMAL;
+}
+
+bool setAffinityImpl(std::thread::native_handle_type handle,
+                     size_t cpu) noexcept {
+    thread_affinity_policy_data_t policy{static_cast<integer_t>(cpu)};
+    return thread_policy_set(pthread_mach_thread_np(handle),
+                             THREAD_AFFINITY_POLICY,
+                             reinterpret_cast<thread_policy_t>(&policy),
+                             THREAD_AFFINITY_POLICY_COUNT) == KERN_SUCCESS;
+}
+
+#else  // Linux
+bool setPriorityImpl(std::thread::native_handle_type handle,
+                     int priority) noexcept {
+    sched_param param{};
+    param.sched_priority = priority;
+    return pthread_setschedparam(handle, SCHED_FIFO, &param) == 0;
+}
+
+int getCurrentPriorityImpl(std::thread::native_handle_type handle) noexcept {
+    sched_param param{};
+    int policy;
+    if (pthread_getschedparam(handle, &policy, &param) == 0) {
+        return param.sched_priority;
+    }
+    return Priority::NORMAL;
+}
+
+bool setAffinityImpl(std::thread::native_handle_type handle,
+                     size_t cpu) noexcept {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(cpu, &cpuset);
+    return pthread_setaffinity_np(handle, sizeof(cpu_set_t), &cpuset) == 0;
+}
+#endif
+
+}  // namespace detail
+
+}  // namespace atom::platform
+
+namespace atom::platform {
+inline bool setPriority(std::thread::native_handle_type handle,
+                        int priority) noexcept {
+    return detail::setPriorityImpl(handle, priority);
+}
+
+inline int getCurrentPriority(std::thread::native_handle_type handle) noexcept {
+    return detail::getCurrentPriorityImpl(handle);
+}
+
+inline bool setAffinity(std::thread::native_handle_type handle,
+                        size_t cpu) noexcept {
+    return detail::setAffinityImpl(handle, cpu);
+}
+
+// RAII thread priority guard
+class [[nodiscard]] ThreadPriorityGuard {
+public:
+    explicit ThreadPriorityGuard(std::thread::native_handle_type handle,
+                                 int priority)
+        : handle_(handle) {
+        original_priority_ = getCurrentPriority(handle_);
+        setPriority(handle_, priority);
+    }
+
+    ~ThreadPriorityGuard() noexcept {
+        try {
+            setPriority(handle_, original_priority_);
+        } catch (...) {
+        }  // Best-effort restore
+    }
+
+    ThreadPriorityGuard(const ThreadPriorityGuard&) = delete;
+    ThreadPriorityGuard& operator=(const ThreadPriorityGuard&) = delete;
+    ThreadPriorityGuard(ThreadPriorityGuard&&) = delete;
+    ThreadPriorityGuard& operator=(ThreadPriorityGuard&&) = delete;
+
+private:
+    std::thread::native_handle_type handle_;
+    int original_priority_;
+};
+
+// Thread scheduling utilities
+inline void yieldThread() noexcept { std::this_thread::yield(); }
+
+inline void sleepFor(std::chrono::nanoseconds duration) noexcept {
+    std::this_thread::sleep_for(duration);
+}
+}  // namespace atom::platform
+
 namespace atom::async {
 
 // C++20 concepts for improved type safety
@@ -70,17 +232,252 @@ concept NonVoidType = !std::is_void_v<T>;
  *
  * @tparam ResultType The type of the result returned by the task.
  */
+// Forward declaration
+template <typename T>
+class WorkerContainer;
+
+// Forward declaration of the primary template
+template <typename ResultType>
+class AsyncWorker;
+
+// Specialization for void
+template <>
+class AsyncWorker<void> {
+    friend class WorkerContainer<void>;
+
+private:
+    // Task state
+    enum class State : uint8_t {
+        INITIAL,    // Task not started
+        RUNNING,    // Task is executing
+        CANCELLED,  // Task was cancelled
+        COMPLETED,  // Task completed successfully
+        FAILED      // Task encountered an error
+    };
+
+    // Task management
+    std::atomic<State> state_{State::INITIAL};
+    std::future<void> task_;
+    std::function<void()> callback_;
+    std::chrono::seconds timeout_{0};
+
+    // Thread configuration
+    int desired_priority_{static_cast<int>(platform::Priority::NORMAL)};
+    size_t preferred_cpu_{std::numeric_limits<size_t>::max()};
+    std::unique_ptr<platform::ThreadPriorityGuard> priority_guard_;
+
+    // Helper to get current thread native handle
+    static auto getCurrentThreadHandle() noexcept {
+        return
+#ifdef ATOM_PLATFORM_WINDOWS
+            GetCurrentThread();
+#else
+            pthread_self();
+#endif
+    }
+
+public:
+    // Task priority levels
+    enum class Priority {
+        LOW = platform::Priority::LOW,
+        NORMAL = platform::Priority::NORMAL,
+        HIGH = platform::Priority::HIGH,
+        CRITICAL = platform::Priority::CRITICAL
+    };
+
+    AsyncWorker() noexcept = default;
+    ~AsyncWorker() noexcept {
+        if (state_.load(std::memory_order_acquire) != State::COMPLETED) {
+            cancel();
+        }
+    }
+
+    // Rule of five - prevent copy, allow move
+    AsyncWorker(const AsyncWorker&) = delete;
+    AsyncWorker& operator=(const AsyncWorker&) = delete;
+
+    /**
+     * @brief Sets the thread priority for this worker
+     * @param priority The priority level
+     */
+    void setPriority(Priority priority) noexcept {
+        desired_priority_ = static_cast<int>(priority);
+    }
+
+    /**
+     * @brief Sets the preferred CPU core for this worker
+     * @param cpu_id The CPU core ID
+     */
+    void setPreferredCPU(size_t cpu_id) noexcept { preferred_cpu_ = cpu_id; }
+
+    /**
+     * @brief Checks if the task has been requested to cancel
+     * @return True if cancellation was requested
+     */
+    [[nodiscard]] bool isCancellationRequested() const noexcept {
+        return state_.load(std::memory_order_acquire) == State::CANCELLED;
+    }
+
+    /**
+     * @brief Starts the task asynchronously.
+     *
+     * @tparam Func The type of the function to be executed asynchronously.
+     * @tparam Args The types of the arguments to be passed to the function.
+     * @param func The function to be executed asynchronously.
+     * @param args The arguments to be passed to the function.
+     * @throws std::invalid_argument If func is null or invalid.
+     */
+    template <typename Func, typename... Args>
+        requires InvocableWithArgs<Func, Args...> &&
+                 std::is_same_v<std::invoke_result_t<Func, Args...>, void>
+    void startAsync(Func&& func, Args&&... args);
+
+    /**
+     * @brief Gets the result of the task (void version).
+     *
+     * @param timeout Optional timeout duration (0 means no timeout).
+     * @throws std::invalid_argument if the task is not valid.
+     * @throws TimeoutException if the timeout is reached.
+     */
+    void getResult(
+        std::chrono::milliseconds timeout = std::chrono::milliseconds(0));
+
+    /**
+     * @brief Cancels the task.
+     *
+     * If the task is valid, this function waits for the task to complete.
+     */
+    void cancel() noexcept;
+
+    /**
+     * @brief Checks if the task is done.
+     *
+     * @return True if the task is done, false otherwise.
+     */
+    [[nodiscard]] auto isDone() const noexcept -> bool;
+
+    /**
+     * @brief Checks if the task is active.
+     *
+     * @return True if the task is active, false otherwise.
+     */
+    [[nodiscard]] auto isActive() const noexcept -> bool;
+
+    /**
+     * @brief Validates the completion of the task (void version).
+     *
+     * @param validator The function to call to validate completion.
+     * @return True if valid, false otherwise.
+     */
+    auto validate(std::function<bool()> validator) noexcept -> bool;
+
+    /**
+     * @brief Sets a callback function to be called when the task is done.
+     *
+     * @param callback The callback function to be set.
+     * @throws std::invalid_argument if callback is empty.
+     */
+    void setCallback(std::function<void()> callback);
+
+    /**
+     * @brief Sets a timeout for the task.
+     *
+     * @param timeout The timeout duration.
+     * @throws std::invalid_argument if timeout is negative.
+     */
+    void setTimeout(std::chrono::seconds timeout);
+
+    /**
+     * @brief Waits for the task to complete.
+     *
+     * If a timeout is set, this function waits until the task is done or the
+     * timeout is reached. If a callback function is set and the task is done,
+     * the callback function is called.
+     *
+     * @throws TimeoutException if the timeout is reached.
+     */
+    void waitForCompletion();
+};
+
+// Primary template for non-void types
 template <typename ResultType>
 class AsyncWorker {
+    friend class WorkerContainer<ResultType>;
+
+private:
+    // Task state
+    enum class State : uint8_t {
+        INITIAL,    // Task not started
+        RUNNING,    // Task is executing
+        CANCELLED,  // Task was cancelled
+        COMPLETED,  // Task completed successfully
+        FAILED      // Task encountered an error
+    };
+
+    // Task management
+    std::atomic<State> state_{State::INITIAL};
+    std::future<ResultType> task_;
+    std::function<void(ResultType)> callback_;
+    std::chrono::seconds timeout_{0};
+
+    // Thread configuration
+    int desired_priority_{static_cast<int>(platform::Priority::NORMAL)};
+    size_t preferred_cpu_{std::numeric_limits<size_t>::max()};
+    std::unique_ptr<platform::ThreadPriorityGuard> priority_guard_;
+
+    // Helper to get current thread native handle
+    static auto getCurrentThreadHandle() noexcept {
+        return
+#ifdef ATOM_PLATFORM_WINDOWS
+            GetCurrentThread();
+#else
+            pthread_self();
+#endif
+    }
+
 public:
+    // Task priority levels
+    enum class Priority {
+        LOW = platform::Priority::LOW,
+        NORMAL = platform::Priority::NORMAL,
+        HIGH = platform::Priority::HIGH,
+        CRITICAL = platform::Priority::CRITICAL
+    };
+
     AsyncWorker() noexcept = default;
-    ~AsyncWorker() noexcept = default;
+    ~AsyncWorker() noexcept {
+        if (state_.load(std::memory_order_acquire) != State::COMPLETED) {
+            cancel();
+        }
+    }
 
     // Rule of five - prevent copy, allow move
     AsyncWorker(const AsyncWorker&) = delete;
     AsyncWorker& operator=(const AsyncWorker&) = delete;
     AsyncWorker(AsyncWorker&&) noexcept = default;
     AsyncWorker& operator=(AsyncWorker&&) noexcept = default;
+
+    /**
+     * @brief Sets the thread priority for this worker
+     * @param priority The priority level
+     */
+    void setPriority(Priority priority) noexcept {
+        desired_priority_ = static_cast<int>(priority);
+    }
+
+    /**
+     * @brief Sets the preferred CPU core for this worker
+     * @param cpu_id The CPU core ID
+     */
+    void setPreferredCPU(size_t cpu_id) noexcept { preferred_cpu_ = cpu_id; }
+
+    /**
+     * @brief Checks if the task has been requested to cancel
+     * @return True if cancellation was requested
+     */
+    [[nodiscard]] bool isCancellationRequested() const noexcept {
+        return state_.load(std::memory_order_acquire) == State::CANCELLED;
+    }
 
     /**
      * @brief Starts the task asynchronously.
@@ -163,11 +560,6 @@ public:
      * @throws TimeoutException if the timeout is reached.
      */
     void waitForCompletion();
-
-private:
-    std::future<ResultType> task_;
-    std::function<void(ResultType)> callback_;
-    std::chrono::seconds timeout_{0};
 };
 
 #ifdef ATOM_USE_BOOST_LOCKFREE
@@ -810,14 +1202,51 @@ template <typename Func, typename... Args>
              std::is_same_v<std::invoke_result_t<Func, Args...>, ResultType>
 void AsyncWorker<ResultType>::startAsync(Func&& func, Args&&... args) {
     if constexpr (std::is_pointer_v<std::decay_t<Func>>) {
-        if (!func)
+        if (!func) {
             throw std::invalid_argument("Function cannot be null");
+        }
+    }
+
+    State expected = State::INITIAL;
+    if (!state_.compare_exchange_strong(expected, State::RUNNING,
+                                        std::memory_order_release,
+                                        std::memory_order_relaxed)) {
+        throw std::runtime_error("Task already started");
     }
 
     try {
-        task_ = std::async(std::launch::async, std::forward<Func>(func),
-                           std::forward<Args>(args)...);
+        auto wrapped_func =
+            [this, f = std::forward<Func>(func),
+             ... args = std::forward<Args>(args)]() mutable -> ResultType {
+            // Set thread priority and CPU affinity at the start of the thread
+            auto thread_handle = getCurrentThreadHandle();
+            priority_guard_ = std::make_unique<platform::ThreadPriorityGuard>(
+                thread_handle, desired_priority_);
+
+            if (preferred_cpu_ != std::numeric_limits<size_t>::max()) {
+                platform::setAffinity(thread_handle, preferred_cpu_);
+            }
+
+            try {
+                if constexpr (std::is_same_v<ResultType, void>) {
+                    std::invoke(std::forward<Func>(f),
+                                std::forward<Args>(args)...);
+                    state_.store(State::COMPLETED, std::memory_order_release);
+                } else {
+                    auto result = std::invoke(std::forward<Func>(f),
+                                              std::forward<Args>(args)...);
+                    state_.store(State::COMPLETED, std::memory_order_release);
+                    return result;
+                }
+            } catch (...) {
+                state_.store(State::FAILED, std::memory_order_release);
+                throw;
+            }
+        };
+
+        task_ = std::async(std::launch::async, std::move(wrapped_func));
     } catch (const std::exception& e) {
+        state_.store(State::FAILED, std::memory_order_release);
         throw std::runtime_error(std::string("Failed to start async task: ") +
                                  e.what());
     }

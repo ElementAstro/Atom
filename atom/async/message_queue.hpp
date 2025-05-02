@@ -21,14 +21,59 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <source_location>
+#include <span>
 #include <string>
 #include <string_view>
+#include <syncstream>
 #include <thread>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
 #include <asio.hpp>
+
+#if defined(_WIN32) || defined(_WIN64)
+#include <windows.h>
+#define ATOM_PLATFORM_WINDOWS 1
+#elif defined(__APPLE__)
+#include <TargetConditionals.h>
+#define ATOM_PLATFORM_MACOS 1
+#elif defined(__linux__)
+#define ATOM_PLATFORM_LINUX 1
+#endif
+
+#if defined(__GNUC__) || defined(__clang__)
+#define ATOM_LIKELY(x) __builtin_expect(!!(x), 1)
+#define ATOM_UNLIKELY(x) __builtin_expect(!!(x), 0)
+#define ATOM_FORCE_INLINE __attribute__((always_inline)) inline
+#define ATOM_NO_INLINE __attribute__((noinline))
+#define ATOM_RESTRICT __restrict__
+#elif defined(_MSC_VER)
+#define ATOM_LIKELY(x) (x)
+#define ATOM_UNLIKELY(x) (x)
+#define ATOM_FORCE_INLINE __forceinline
+#define ATOM_NO_INLINE __declspec(noinline)
+#define ATOM_RESTRICT __restrict
+#else
+#define ATOM_LIKELY(x) (x)
+#define ATOM_UNLIKELY(x) (x)
+#define ATOM_FORCE_INLINE inline
+#define ATOM_NO_INLINE
+#define ATOM_RESTRICT
+#endif
+
+#ifndef ATOM_CACHE_LINE_SIZE
+#if defined(ATOM_PLATFORM_WINDOWS)
+#define ATOM_CACHE_LINE_SIZE 64
+#elif defined(ATOM_PLATFORM_MACOS)
+#define ATOM_CACHE_LINE_SIZE 128
+#else
+#define ATOM_CACHE_LINE_SIZE 64
+#endif
+#endif
+
+#define ATOM_CACHELINE_ALIGN alignas(ATOM_CACHE_LINE_SIZE)
 
 // Add boost lockfree support
 #ifdef ATOM_USE_LOCKFREE_QUEUE
@@ -41,28 +86,93 @@ namespace atom::async {
 // Custom exception classes for message queue operations
 class MessageQueueException : public std::runtime_error {
 public:
-    explicit MessageQueueException(const std::string& message)
-        : std::runtime_error(message) {}
+    explicit MessageQueueException(
+        const std::string& message,
+        const std::source_location& location = std::source_location::current())
+        : std::runtime_error(message + " at " + location.file_name() + ":" +
+                             std::to_string(location.line()) + " in " +
+                             location.function_name()) {}
 };
 
 class SubscriberException : public MessageQueueException {
 public:
-    explicit SubscriberException(const std::string& message)
-        : MessageQueueException(message) {}
+    explicit SubscriberException(
+        const std::string& message,
+        const std::source_location& location = std::source_location::current())
+        : MessageQueueException(message, location) {}
 };
 
 class TimeoutException : public MessageQueueException {
 public:
-    explicit TimeoutException(const std::string& message)
-        : MessageQueueException(message) {}
+    explicit TimeoutException(
+        const std::string& message,
+        const std::source_location& location = std::source_location::current())
+        : MessageQueueException(message, location) {}
 };
 
-// Concept to ensure message type has basic requirements
+// Concept to ensure message type has basic requirements - 增强版本
 template <typename T>
-concept MessageType = requires(T a) {
-    { a } -> std::copy_constructible;
-    { std::is_move_constructible_v<T> } -> std::convertible_to<bool>;
-    { std::is_copy_assignable_v<T> } -> std::convertible_to<bool>;
+concept MessageType =
+    std::copy_constructible<T> && std::move_constructible<T> &&
+    std::is_copy_assignable_v<T> && requires(T a) {
+        {
+            std::hash<std::remove_cvref_t<T>>{}(a)
+        } -> std::convertible_to<std::size_t>;
+    };
+
+// 前向声明
+template <MessageType T>
+class MessageQueue;
+
+// C++20 协程特性: 为消息队列提供协程接口
+template <MessageType T>
+class MessageAwaiter {
+public:
+    bool await_ready() const noexcept { return false; }
+
+    void await_suspend(std::coroutine_handle<> h) {
+        m_handle = h;
+        // 订阅消息，收到后恢复协程
+        m_queue.subscribe(
+            [this](const T& msg) {
+                if (!m_cancelled) {
+                    m_message = msg;
+                    m_handle.resume();
+                }
+            },
+            "coroutine_awaiter", m_priority, m_filter, m_timeout);
+    }
+
+    T await_resume() {
+        m_cancelled = true;
+        if (!m_message) {
+            throw MessageQueueException(
+                "No message received in coroutine awaiter");
+        }
+        return std::move(*m_message);
+    }
+
+    ~MessageAwaiter() { m_cancelled = true; }
+
+private:
+    MessageQueue<T>& m_queue;
+    std::coroutine_handle<> m_handle;
+    std::function<bool(const T&)> m_filter;
+    std::optional<T> m_message;
+    std::atomic<bool> m_cancelled{false};
+    int m_priority{0};
+    std::chrono::milliseconds m_timeout{std::chrono::milliseconds::zero()};
+
+    friend class MessageQueue<T>;
+
+    explicit MessageAwaiter(
+        MessageQueue<T>& queue, std::function<bool(const T&)> filter = nullptr,
+        int priority = 0,
+        std::chrono::milliseconds timeout = std::chrono::milliseconds::zero())
+        : m_queue(queue),
+          m_filter(std::move(filter)),
+          m_priority(priority),
+          m_timeout(timeout) {}
 };
 
 /**
@@ -95,6 +205,9 @@ public:
 #endif
 #endif
     {
+        // 预先分配内存以减少运行时分配
+        m_subscribers_.reserve(16);
+        m_messages_.reserve(capacity);
     }
 
     // Rule of five implementation

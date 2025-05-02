@@ -7,12 +7,30 @@
 #include <concepts>
 #include <coroutine>
 #include <deque>
+#include <format>
 #include <mutex>
 #include <optional>
+#include <ranges>
 #include <shared_mutex>
+#include <source_location>
+#include <span>
 #include <stdexcept>
+#include <stop_token>
 #include <thread>
 #include <unordered_map>
+
+// 平台特定优化
+#if defined(_WIN32) || defined(_WIN64)
+#define ATOM_PLATFORM_WINDOWS
+#include <windows.h>
+#elif defined(__APPLE__)
+#define ATOM_PLATFORM_MACOS
+#include <dispatch/dispatch.h>
+#elif defined(__linux__)
+#define ATOM_PLATFORM_LINUX
+#include <pthread.h>
+#include <semaphore.h>
+#endif
 
 #ifdef ATOM_USE_BOOST_LOCKFREE
 #include <boost/lockfree/queue.hpp>
@@ -22,20 +40,33 @@
 namespace atom::async {
 
 /**
- * 自定义异常类型
+ * 自定义异常类型，使用source_location支持更好的错误追踪
  */
 class RateLimitExceededException : public std::runtime_error {
 public:
-    explicit RateLimitExceededException(const std::string& message)
-        : std::runtime_error(message) {}
+    explicit RateLimitExceededException(
+        const std::string& message,
+        std::source_location location = std::source_location::current())
+        : std::runtime_error(std::format("{}:{} in {}: {}", 
+                           location.file_name(), 
+                           location.line(), 
+                           location.function_name(), 
+                           message)) {}
 };
 
 /**
- * 函数概念：定义可调用对象
+ * 函数概念：定义无参可调用对象
  */
 template <typename F>
-concept Callable = requires(F f) {
-    { f() } -> std::same_as<void>;
+concept Callable = std::invocable<F> && 
+                  std::same_as<std::invoke_result_t<F>, void>;
+
+/**
+ * 函数概念：可以取消的可调用对象
+ */
+template <typename F>
+concept CancellableCallable = Callable<F> && requires(F f) {
+    { f.cancel() } -> std::same_as<void>;
 };
 
 /**
@@ -125,6 +156,24 @@ public:
     [[nodiscard]] Awaiter acquire(std::string_view function_name);
 
     /**
+     * @brief 批量获取限流器，用于同时限制多个函数 (C++20 range)
+     * @param function_names 函数名称列表
+     * @return 多个Awaiter对象
+     */
+    template<std::ranges::range R>
+        requires std::convertible_to<std::ranges::range_value_t<R>, std::string_view>
+    [[nodiscard]] auto acquireBatch(R&& function_names) {
+        std::vector<Awaiter> awaiters;
+        awaiters.reserve(std::ranges::distance(function_names));
+        
+        for (const auto& name : function_names) {
+            awaiters.emplace_back(acquire(name));
+        }
+        
+        return awaiters;
+    }
+
+    /**
      * @brief Sets the rate limit for a specific function.
      * @param function_name Name of the function to be rate-limited.
      * @param max_requests Maximum number of requests allowed.
@@ -133,6 +182,12 @@ public:
      */
     void setFunctionLimit(std::string_view function_name, size_t max_requests,
                           std::chrono::seconds time_window);
+
+    /**
+     * @brief 使用C++20 span批量设置多个函数的限流参数
+     * @param settings 函数名和限流设置的列表
+     */
+    void setFunctionLimits(std::span<const std::pair<std::string_view, Settings>> settings);
 
     /**
      * @brief Pauses the rate limiter.
@@ -157,6 +212,17 @@ public:
     [[nodiscard]] auto getRejectedRequests(
         std::string_view function_name) const noexcept -> size_t;
 
+    /**
+     * @brief 重置特定函数的限流计数器 (C++20 改进)
+     * @param function_name 函数名
+     */
+    void resetFunction(std::string_view function_name);
+
+    /**
+     * @brief 重置所有限流计数器
+     */
+    void resetAll() noexcept;
+
 #if !defined(TEST_F) && !defined(TEST)
 private:
 #endif
@@ -172,6 +238,17 @@ private:
      * @brief Processes waiting coroutines.
      */
     void processWaiters();
+
+#ifdef ATOM_PLATFORM_WINDOWS
+    // Windows平台特定实现
+    void optimizedProcessWaiters();
+#elif defined(ATOM_PLATFORM_MACOS)
+    // macOS平台特定实现
+    void optimizedProcessWaiters();
+#elif defined(ATOM_PLATFORM_LINUX)
+    // Linux平台特定实现
+    void optimizedProcessWaiters();
+#endif
 
 #ifdef ATOM_USE_BOOST_LOCKFREE
     /**
@@ -290,6 +367,15 @@ private:
     std::unordered_map<std::string, std::atomic<size_t>> rejected_requests_;
     std::atomic<bool> paused_ = false;
     mutable std::shared_mutex mutex_;  // 使用读写锁提高并发性能
+
+    // 平台特定优化
+#ifdef ATOM_PLATFORM_WINDOWS
+    CONDITION_VARIABLE resumeCondition_{};
+    CRITICAL_SECTION resumeLock_{};
+#elif defined(ATOM_PLATFORM_LINUX)
+    std::atomic<int> waitersReady_{0};
+    sem_t resumeSemaphore_{};
+#endif
 };
 
 /**
@@ -432,6 +518,97 @@ private:
         maxWait_;  ///< Optional maximum wait time before invocation.
     std::atomic<size_t> call_count_{
         0};  ///< Counter to keep track of function call invocations.
+};
+
+/**
+ * @class ThrottleFactory
+ * @brief 工厂类，用于创建具有相同配置的多个 Throttle 实例
+ */
+class ThrottleFactory {
+public:
+    /**
+     * @brief 构造函数
+     * @param interval 默认的最小调用间隔
+     * @param leading 是否在第一次调用时立即执行
+     * @param maxWait 可选的最大等待时间
+     */
+    explicit ThrottleFactory(
+        std::chrono::milliseconds interval, 
+        bool leading = false,
+        std::optional<std::chrono::milliseconds> maxWait = std::nullopt)
+        : interval_(interval), leading_(leading), maxWait_(maxWait) {}
+    
+    /**
+     * @brief 创建新的 Throttle 实例
+     * @param func 要被限流的函数
+     * @return 配置好的 Throttle 实例
+     */
+    template <Callable F>
+    [[nodiscard]] auto create(F&& func) {
+        return Throttle<std::decay_t<F>>(
+            std::forward<F>(func), interval_, leading_, maxWait_);
+    }
+    
+private:
+    std::chrono::milliseconds interval_;
+    bool leading_;
+    std::optional<std::chrono::milliseconds> maxWait_;
+};
+
+/**
+ * @class DebounceFactory
+ * @brief 工厂类，用于创建具有相同配置的多个 Debounce 实例
+ */
+class DebounceFactory {
+public:
+    /**
+     * @brief 构造函数
+     * @param delay 延迟时间
+     * @param leading 是否在第一次调用时立即执行
+     * @param maxWait 可选的最大等待时间
+     */
+    explicit DebounceFactory(
+        std::chrono::milliseconds delay, 
+        bool leading = false,
+        std::optional<std::chrono::milliseconds> maxWait = std::nullopt)
+        : delay_(delay), leading_(leading), maxWait_(maxWait) {}
+    
+    /**
+     * @brief 创建新的 Debounce 实例
+     * @param func 要被去抖动的函数
+     * @return 配置好的 Debounce 实例
+     */
+    template <Callable F>
+    [[nodiscard]] auto create(F&& func) {
+        return Debounce<std::decay_t<F>>(
+            std::forward<F>(func), delay_, leading_, maxWait_);
+    }
+    
+private:
+    std::chrono::milliseconds delay_;
+    bool leading_;
+    std::optional<std::chrono::milliseconds> maxWait_;
+};
+
+/**
+ * @class RateLimiterSingleton
+ * @brief 单例模式的限流器，提供全局访问点
+ */
+class RateLimiterSingleton {
+public:
+    /**
+     * @brief 获取单例实例
+     * @return RateLimiter 引用
+     */
+    static RateLimiter& instance() {
+        static RateLimiter limiter;
+        return limiter;
+    }
+    
+    // 禁止构造和拷贝
+    RateLimiterSingleton() = delete;
+    RateLimiterSingleton(const RateLimiterSingleton&) = delete;
+    RateLimiterSingleton& operator=(const RateLimiterSingleton&) = delete;
 };
 
 // 实现模板类方法

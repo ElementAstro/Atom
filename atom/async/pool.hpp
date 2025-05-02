@@ -1,40 +1,38 @@
-/*
- * pool.hpp
- *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
- */
+#ifndef ATOM_ASYNC_THREADPOOL_HPP
+#define ATOM_ASYNC_THREADPOOL_HPP
 
-/*************************************************
-
-Date: 2024-2-13
-
-Description: A very simple thread pool for preload
-
-**************************************************/
-
-#ifndef ATOM_ASYNC_POOL_HPP
-#define ATOM_ASYNC_POOL_HPP
-
-#include <algorithm>
 #include <atomic>
 #include <concepts>
+#include <condition_variable>
 #include <deque>
-#include <exception>
 #include <functional>
 #include <future>
 #include <limits>
+#include <memory>
 #include <mutex>
 #include <optional>
-#include <semaphore>
 #include <stdexcept>
 #include <thread>
 #include <type_traits>
-#include <utility>
-#include "atom/macro.hpp"
-#ifdef __has_include
-#if __has_include(<version>)
-#include <version>
-#endif
+#include <vector>
+
+// Platform-specific optimizations
+#if defined(_WIN32) || defined(_WIN64)
+#define ATOM_PLATFORM_WINDOWS
+// clang-format off
+#include <windows.h>
+#include <processthreadsapi.h>
+// clang-format on
+#elif defined(__APPLE__)
+#define ATOM_PLATFORM_MACOS
+#include <dispatch/dispatch.h>
+#include <mach/thread_policy.h>
+#include <pthread.h>
+#elif defined(__linux__)
+#define ATOM_PLATFORM_LINUX
+#include <pthread.h>
+#include <sched.h>
+#include <sys/sysinfo.h>
 #endif
 
 #ifdef ATOM_USE_BOOST_LOCKFREE
@@ -42,9 +40,14 @@ Description: A very simple thread pool for preload
 #include <boost/lockfree/stack.hpp>
 #endif
 
+#include "atom/async/future.hpp"
+#include "atom/async/promise.hpp"
+
 namespace atom::async {
 
-/// @brief 异常类：线程池错误
+/**
+ * @brief Exception class for thread pool errors
+ */
 class ThreadPoolError : public std::runtime_error {
 public:
     explicit ThreadPoolError(const std::string& msg)
@@ -53,10 +56,8 @@ public:
 };
 
 /**
- * @brief Improved concept for defining lockable types
- * @details Based on the Lockable and BasicLockable concepts from the C++
- * standard
- * @see https://en.cppreference.com/w/cpp/named_req/Lockable
+ * @brief Concept for defining lockable types
+ * @details Based on Lockable and BasicLockable concepts from C++ standard
  */
 template <typename Lock>
 concept is_lockable = requires(Lock lock) {
@@ -70,10 +71,6 @@ concept is_lockable = requires(Lock lock) {
  * environments
  * @tparam T Type of elements stored in the queue
  * @tparam Lock Lock type, defaults to std::mutex
- *
- * @details This class provides a thread-safe wrapper around std::deque with
- * comprehensive exception handling and support for various queue operations.
- * All operations are protected by mutex locks to ensure thread safety.
  */
 template <typename T, typename Lock = std::mutex>
     requires is_lockable<Lock>
@@ -97,9 +94,6 @@ public:
      * @brief Copy constructor
      * @param other The queue to copy from
      * @throws ThreadPoolError If copying fails due to any exception
-     *
-     * @details Creates a deep copy of the other queue while maintaining thread
-     * safety by locking the source queue during the copy operation.
      */
     ThreadSafeQueue(const ThreadSafeQueue& other) {
         try {
@@ -116,10 +110,6 @@ public:
      * @param other The queue to copy from
      * @return Reference to this queue after the copy
      * @throws ThreadPoolError If copying fails due to any exception
-     *
-     * @details Performs a deep copy of the other queue while maintaining thread
-     * safety by locking both queues during the copy operation to prevent
-     * deadlocks.
      */
     auto operator=(const ThreadSafeQueue& other) -> ThreadSafeQueue& {
         if (this != &other) {
@@ -139,19 +129,13 @@ public:
     /**
      * @brief Move constructor
      * @param other The queue to move from
-     *
-     * @details Moves the contents of the other queue while maintaining thread
-     * safety by locking the source queue during the move operation. Provides
-     * strong exception guarantee to ensure the object remains valid even in
-     * case of exceptions.
      */
     ThreadSafeQueue(ThreadSafeQueue&& other) noexcept {
         try {
             std::scoped_lock lock(other.mutex_);
             data_ = std::move(other.data_);
         } catch (...) {
-            // Maintain strong exception safety, ensuring the object is valid
-            // even in case of exceptions
+            // Maintain strong exception safety
         }
     }
 
@@ -159,10 +143,6 @@ public:
      * @brief Move assignment operator
      * @param other The queue to move from
      * @return Reference to this queue after the move
-     *
-     * @details Moves the contents of the other queue while maintaining thread
-     * safety by locking both queues during the move operation to prevent
-     * deadlocks. Provides strong exception guarantee.
      */
     auto operator=(ThreadSafeQueue&& other) noexcept -> ThreadSafeQueue& {
         if (this != &other) {
@@ -183,9 +163,6 @@ public:
      * @param value The element to add (rvalue reference)
      * @throws ThreadPoolError If the queue is full or if the add operation
      * fails
-     *
-     * @details Locks the queue, checks if there's space available, and adds the
-     * element to the back of the underlying container using perfect forwarding.
      */
     void pushBack(T&& value) {
         std::scoped_lock lock(mutex_);
@@ -204,10 +181,6 @@ public:
      * @param value The element to add (rvalue reference)
      * @throws ThreadPoolError If the queue is full or if the add operation
      * fails
-     *
-     * @details Locks the queue, checks if there's space available, and adds the
-     * element to the front of the underlying container using perfect
-     * forwarding.
      */
     void pushFront(T&& value) {
         std::scoped_lock lock(mutex_);
@@ -225,9 +198,6 @@ public:
     /**
      * @brief Checks if the queue is empty
      * @return true if the queue is empty, false otherwise
-     *
-     * @details Thread-safe check for queue emptiness. Returns true in case of
-     * any exceptions as a conservative approach.
      */
     [[nodiscard]] auto empty() const noexcept -> bool {
         try {
@@ -241,9 +211,6 @@ public:
     /**
      * @brief Gets the number of elements in the queue
      * @return The number of elements in the queue
-     *
-     * @details Thread-safe method to get the current size. Returns 0 in case of
-     * any exceptions as a conservative approach.
      */
     [[nodiscard]] auto size() const noexcept -> size_type {
         try {
@@ -258,10 +225,6 @@ public:
      * @brief Removes and returns the front element from the queue
      * @return An optional containing the front element if the queue is not
      * empty; std::nullopt otherwise
-     *
-     * @details Thread-safe method that removes the front element from the
-     * queue. Returns std::nullopt if the queue is empty or if an exception
-     * occurs.
      */
     [[nodiscard]] auto popFront() noexcept -> std::optional<T> {
         try {
@@ -282,9 +245,6 @@ public:
      * @brief Removes and returns the back element from the queue
      * @return An optional containing the back element if the queue is not
      * empty; std::nullopt otherwise
-     *
-     * @details Thread-safe method that removes the back element from the queue.
-     * Returns std::nullopt if the queue is empty or if an exception occurs.
      */
     [[nodiscard]] auto popBack() noexcept -> std::optional<T> {
         try {
@@ -306,10 +266,6 @@ public:
      * work-stealing schedulers)
      * @return An optional containing the back element if the queue is not
      * empty; std::nullopt otherwise
-     *
-     * @details Thread-safe method that removes and returns the back element
-     * from the queue. This is semantically identical to popBack() but named
-     * differently to indicate its intended use in work-stealing scenarios.
      */
     [[nodiscard]] auto steal() noexcept -> std::optional<T> {
         try {
@@ -329,11 +285,6 @@ public:
     /**
      * @brief Moves a specified item to the front of the queue
      * @param item The item to be moved to the front
-     *
-     * @details Thread-safe method that searches for the item in the queue using
-     * C++20 ranges. If found, it removes the item from its current position and
-     * adds it to the front of the queue. If not found, it simply adds the item
-     * to the front.
      */
     void rotateToFront(const T& item) noexcept {
         try {
@@ -347,7 +298,7 @@ public:
 
             data_.push_front(item);
         } catch (...) {
-            // Maintain atomicity of the operation, ensuring no data corruption
+            // Maintain atomicity of the operation
         }
     }
 
@@ -355,10 +306,6 @@ public:
      * @brief Copies the front element and moves it to the back of the queue
      * @return An optional containing a copy of the front element if the queue
      * is not empty; std::nullopt otherwise
-     *
-     * @details Thread-safe method that removes the front element, adds a copy
-     * to the back of the queue, and returns a copy of the element. Returns
-     * std::nullopt if the queue is empty or if an exception occurs.
      */
     [[nodiscard]] auto copyFrontAndRotateToBack() noexcept -> std::optional<T> {
         try {
@@ -381,10 +328,6 @@ public:
 
     /**
      * @brief Clears all elements from the queue
-     *
-     * @details Thread-safe method that removes all elements from the underlying
-     * container. Any exceptions that occur during the clear operation are
-     * caught and ignored to maintain the noexcept guarantee.
      */
     void clear() noexcept {
         try {
@@ -461,15 +404,11 @@ public:
     }
 
     /**
-     * @brief Push an element to the front of the queue (not efficient in
-     * lockfree queue)
+     * @brief Push an element to the front of the queue
      * @param value Element to push
-     * @throws ThreadPoolError Always throws as front operations aren't
-     * efficient in lockfree queue
+     * @throws ThreadPoolError if operation fails
      */
     void pushFront(T&& value) {
-        // For lockfree queue, pushing to front isn't efficient
-        // We use a stack as temporary storage and re-push everything
         try {
             boost::lockfree::stack<T, boost::lockfree::capacity<Capacity>>
                 temp_stack;
@@ -527,13 +466,10 @@ public:
     }
 
     /**
-     * @brief Pop an element from the back of the queue (not efficient in
-     * lockfree queue)
+     * @brief Pop an element from the back of the queue
      * @return The back element if queue is not empty, std::nullopt otherwise
      */
     [[nodiscard]] auto popBack() noexcept -> std::optional<T> {
-        // This operation is expensive with a lockfree queue
-        // as we need to pop everything and push back all but the last item
         try {
             if (queue_.empty()) {
                 return std::nullopt;
@@ -572,12 +508,12 @@ public:
      * @return An element if queue is not empty, std::nullopt otherwise
      */
     [[nodiscard]] auto steal() noexcept -> std::optional<T> {
-        // In lockfree queue, stealing is the same as popFront
-        return popFront();
+        return popFront();  // For lockfree queue, stealing is the same as
+                            // popFront
     }
 
     /**
-     * @brief Rotate specified item to front (not efficient)
+     * @brief Rotate specified item to front
      * @param item Item to rotate
      */
     void rotateToFront(const T& item) noexcept {
@@ -677,14 +613,6 @@ private:
 };
 #endif  // ATOM_USE_BOOST_LOCKFREE
 
-namespace details {
-#ifdef __cpp_lib_move_only_function
-using default_function_type = std::move_only_function<void()>;
-#else
-using default_function_type = std::function<void()>;
-#endif
-}  // namespace details
-
 #ifdef ATOM_USE_BOOST_LOCKFREE
 #ifdef ATOM_LOCKFREE_FIXED_CAPACITY
 template <typename T>
@@ -699,176 +627,314 @@ using DefaultQueueType = ThreadSafeQueue<T>;
 #endif
 
 /**
- * @brief Enhanced thread pool implementation with work stealing and priority
- * scheduling
- * @tparam FunctionType Task function type
- * @tparam ThreadType Thread type, defaults to std::jthread
+ * @class ThreadPool
+ * @brief High-performance thread pool implementation with modern C++20 features
+ * and platform-specific optimizations
  */
-template <typename FunctionType = details::default_function_type,
-          typename ThreadType = std::jthread,
-          template <typename> typename QueueType = DefaultQueueType>
-    requires std::invocable<FunctionType> &&
-             std::is_same_v<void, std::invoke_result_t<FunctionType>>
 class ThreadPool {
 public:
     /**
+     * @brief Thread pool configuration options
+     */
+    struct Options {
+        enum class ThreadPriority {
+            Lowest,
+            BelowNormal,
+            Normal,
+            AboveNormal,
+            Highest,
+            TimeCritical
+        };
+
+        enum class CpuAffinityMode {
+            None,        // No CPU affinity settings
+            Sequential,  // Threads assigned to cores sequentially
+            Spread,      // Threads spread across different cores
+            CorePinned,  // Threads pinned to specified cores
+            Automatic    // Automatically adjust (requires hardware support)
+        };
+
+        size_t initialThreadCount = 0;  // 0 means use hardware thread count
+        size_t maxThreadCount = 0;      // 0 means unlimited
+        size_t maxQueueSize = 0;        // 0 means unlimited
+        std::chrono::milliseconds threadIdleTimeout{
+            5000};                      // Idle thread timeout
+        bool allowThreadGrowth = true;  // Allow dynamic thread creation
+        bool allowThreadShrink = true;  // Allow dynamic thread reduction
+        ThreadPriority threadPriority = ThreadPriority::Normal;
+        CpuAffinityMode cpuAffinityMode = CpuAffinityMode::None;
+        std::vector<int> pinnedCores;  // Used for CorePinned mode
+        bool useWorkStealing =
+            true;  // Enable work stealing for better performance
+        bool setStackSize = false;  // Whether to set custom stack size
+        size_t stackSize = 0;       // Custom thread stack size, 0 means default
+
+        static Options createDefault() { return {}; }
+
+        static Options createHighPerformance() {
+            Options opts;
+            opts.initialThreadCount = std::thread::hardware_concurrency();
+            opts.maxThreadCount = opts.initialThreadCount * 2;
+            opts.threadPriority = ThreadPriority::AboveNormal;
+            opts.cpuAffinityMode = CpuAffinityMode::Spread;
+            opts.useWorkStealing = true;
+            return opts;
+        }
+
+        static Options createLowLatency() {
+            Options opts;
+            opts.initialThreadCount = std::thread::hardware_concurrency();
+            opts.maxThreadCount = opts.initialThreadCount;
+            opts.threadPriority = ThreadPriority::TimeCritical;
+            opts.cpuAffinityMode = CpuAffinityMode::CorePinned;
+            // In a real application, you might need to choose appropriate cores
+            // Here we simply use the first half of available cores
+            for (unsigned i = 0; i < opts.initialThreadCount / 2; ++i) {
+                opts.pinnedCores.push_back(i);
+            }
+            return opts;
+        }
+
+        static Options createEnergyEfficient() {
+            Options opts;
+            opts.initialThreadCount = std::thread::hardware_concurrency() / 2;
+            opts.maxThreadCount = std::thread::hardware_concurrency();
+            opts.threadIdleTimeout = std::chrono::milliseconds(1000);
+            opts.allowThreadShrink = true;
+            opts.threadPriority = ThreadPriority::BelowNormal;
+            return opts;
+        }
+    };
+
+    /**
      * @brief Constructor
-     * @param number_of_threads Number of threads, defaults to system hardware
-     * concurrency
-     * @param init Thread initialization function, executed when each thread
-     * starts
-     * @throws ThreadPoolError If initialization fails
+     * @param options Thread pool options
      */
-    template <
-        typename InitializationFunction = std::function<void(std::size_t)>>
-        requires std::invocable<InitializationFunction, std::size_t> &&
-                 std::is_same_v<void, std::invoke_result_t<
-                                          InitializationFunction, std::size_t>>
-    explicit ThreadPool(
-        const unsigned int& number_of_threads =
-            std::thread::hardware_concurrency(),
-        InitializationFunction init = [](std::size_t) {})
-        : tasks_(validateThreadCount(number_of_threads)) {
-        try {
-            std::size_t currentId = 0;
-            for (std::size_t i = 0; i < tasks_.size(); ++i) {
-                priority_queue_.pushBack(std::move(currentId));
-                try {
-                    threads_.emplace_back(
-                        [this, threadId = currentId, init = std::move(init)](
-                            const std::stop_token& stop_tok) {
-                            threadFunction(threadId, init, stop_tok);
-                        });
-                    ++currentId;
-                } catch (const std::exception& e) {
-                    tasks_.pop_back();
-                    std::ignore = priority_queue_.popBack();
-                    throw ThreadPoolError(
-                        std::string("Failed to create thread: ") + e.what());
-                }
-            }
-        } catch (const std::exception& e) {
-            // 清理已创建的资源
-            shutdown();
-            throw ThreadPoolError(
-                std::string("Thread pool initialization failed: ") + e.what());
+    explicit ThreadPool(Options options = Options::createDefault())
+        : options_(std::move(options)), stop_(false), activeThreads_(0) {
+        // Initialize threads
+        size_t numThreads = options_.initialThreadCount;
+        if (numThreads == 0) {
+            numThreads = std::thread::hardware_concurrency();
+        }
+
+        // Ensure at least one thread
+        numThreads = std::max(size_t(1), numThreads);
+
+        // Create worker threads
+        for (size_t i = 0; i < numThreads; ++i) {
+            createWorkerThread(i);
         }
     }
 
     /**
-     * @brief 析构函数，等待所有任务完成并停止所有线程
+     * @brief Delete copy constructor and assignment
      */
-    ~ThreadPool() noexcept { shutdown(); }
-
-    // 删除复制构造函数和复制赋值运算符
     ThreadPool(const ThreadPool&) = delete;
-    auto operator=(const ThreadPool&) -> ThreadPool& = delete;
-
-    // 定义移动构造函数和移动赋值运算符
-    ThreadPool(ThreadPool&& other) noexcept = default;
-    auto operator=(ThreadPool&& other) noexcept -> ThreadPool& = default;
+    ThreadPool& operator=(const ThreadPool&) = delete;
 
     /**
-     * @brief 向线程池提交任务并返回future以获取结果
-     * @tparam Function 函数类型
-     * @tparam Args 函数参数类型
-     * @tparam ReturnType 函数返回类型
-     * @param func 要执行的函数
-     * @param args 函数参数
-     * @return std::future，用于获取任务结果
-     * @throws ThreadPoolError 如果任务提交失败
+     * @brief Destructor, stops all threads
      */
-    template <typename Function, typename... Args,
-              typename ReturnType = std::invoke_result_t<Function&&, Args&&...>>
-        requires std::invocable<Function, Args...>
-    [[nodiscard]] auto enqueue(Function func, Args... args)
-        -> std::future<ReturnType> {
-        if (is_shutdown_.load(std::memory_order_acquire)) {
-            throw ThreadPoolError(
-                "Cannot enqueue task: Thread pool is shutting down");
+    ~ThreadPool() { shutdown(); }
+
+    /**
+     * @brief Submit a task to the thread pool
+     * @tparam F Function type
+     * @tparam Args Argument types
+     * @param f Function to execute
+     * @param args Function arguments
+     * @return EnhancedFuture containing the task result
+     */
+    template <typename F, typename... Args>
+        requires std::invocable<F, Args...>
+    auto submit(F&& f, Args&&... args) {
+        using ResultType = std::invoke_result_t<F, Args...>;
+        using TaskType = std::packaged_task<ResultType()>;
+
+        // Create task encapsulating function and arguments
+        auto task = std::make_shared<TaskType>(
+            [func = std::forward<F>(f),
+             ... largs = std::forward<Args>(args)]() mutable {
+                return std::invoke(std::forward<F>(func),
+                                   std::forward<Args>(largs)...);
+            });
+
+        // Get task's future
+        auto future = task->get_future();
+
+        // Queue the task
+        {
+            std::unique_lock lock(queueMutex_);
+
+            // Check if we need to increase thread count
+            if (options_.allowThreadGrowth && tasks_.size() >= activeThreads_ &&
+                workers_.size() < options_.maxThreadCount) {
+                createWorkerThread(workers_.size());
+            }
+
+            // Check if queue is full
+            if (options_.maxQueueSize > 0 &&
+                tasks_.size() >= options_.maxQueueSize) {
+                throw std::runtime_error("Thread pool task queue is full");
+            }
+
+            // Add task
+            tasks_.emplace_back([task]() { (*task)(); });
         }
 
-#ifdef __cpp_lib_move_only_function
-        std::promise<ReturnType> promise;
-        auto future = promise.get_future();
-        auto task = [func = std::move(func), ... largs = std::move(args),
-                     promise = std::move(promise)]() mutable {
-            try {
-                if constexpr (std::is_same_v<ReturnType, void>) {
-                    std::invoke(func, largs...);
-                    promise.set_value();
-                } else {
-                    promise.set_value(std::invoke(func, largs...));
-                }
-            } catch (...) {
-                promise.set_exception(std::current_exception());
-            }
-        };
-        try {
-            enqueueTask(std::move(task));
-        } catch (const std::exception& e) {
-            throw ThreadPoolError(std::string("Failed to enqueue task: ") +
-                                  e.what());
-        }
-        return future;
-#else
-        auto shared_promise = std::make_shared<std::promise<ReturnType>>();
-        auto task = [func = std::move(func), ... largs = std::move(args),
-                     promise = shared_promise]() {
-            try {
-                if constexpr (std::is_same_v<ReturnType, void>) {
-                    std::invoke(func, largs...);
-                    promise->set_value();
-                } else {
-                    promise->set_value(std::invoke(func, largs...));
-                }
-            } catch (...) {
-                promise->set_exception(std::current_exception());
-            }
-        };
+        // Notify a waiting thread
+        condition_.notify_one();
 
-        auto future = shared_promise->get_future();
-        try {
-            enqueueTask(std::move(task));
-        } catch (const std::exception& e) {
-            throw ThreadPoolError(std::string("Failed to enqueue task: ") +
-                                  e.what());
-        }
-        return future;
-#endif
+        // Return enhanced future
+        return EnhancedFuture<ResultType>(future.share());
     }
 
     /**
-     * @brief 提交任务但不返回future（不关心结果）
-     * @tparam Function 函数类型
-     * @tparam Args 函数参数类型
-     * @param func 要执行的函数
-     * @param args 函数参数
-     * @throws ThreadPoolError 如果任务提交失败
+     * @brief Submit multiple tasks and wait for all to complete
+     * @tparam InputIt Input iterator type
+     * @tparam F Function type
+     * @param first Start of input range
+     * @param last End of input range
+     * @param f Function to execute for each element
+     * @return Vector of task results
+     */
+    template <std::input_iterator InputIt, typename F>
+        requires std::invocable<
+            F, typename std::iterator_traits<InputIt>::value_type>
+    auto submitBatch(InputIt first, InputIt last, F&& f) {
+        using InputType = typename std::iterator_traits<InputIt>::value_type;
+        using ResultType = std::invoke_result_t<F, InputType>;
+
+        std::vector<EnhancedFuture<ResultType>> futures;
+        futures.reserve(std::distance(first, last));
+
+        for (auto it = first; it != last; ++it) {
+            futures.push_back(submit(f, *it));
+        }
+
+        return futures;
+    }
+
+    /**
+     * @brief Submit a task with a Promise
+     * @tparam F Function type
+     * @tparam Args Argument types
+     * @param f Function to execute
+     * @param args Function arguments
+     * @return Promise object
+     */
+    template <typename F, typename... Args>
+        requires std::invocable<F, Args...>
+    auto submitWithPromise(F&& f, Args&&... args) {
+        using ResultType = std::invoke_result_t<F, Args...>;
+
+        // Create Promise
+        Promise<ResultType> promise;
+
+        // Create task
+        auto task = [promise, func = std::forward<F>(f),
+                     ... largs = std::forward<Args>(args)]() mutable {
+            try {
+                if constexpr (std::is_void_v<ResultType>) {
+                    std::invoke(std::forward<F>(func),
+                                std::forward<Args>(largs)...);
+                    promise.setValue();
+                } else {
+                    promise.setValue(std::invoke(std::forward<F>(func),
+                                                 std::forward<Args>(largs)...));
+                }
+            } catch (...) {
+                promise.setException(std::current_exception());
+            }
+        };
+
+        // Queue the task
+        {
+            std::unique_lock lock(queueMutex_);
+
+            // Check if we need to increase thread count
+            if (options_.allowThreadGrowth && tasks_.size() >= activeThreads_ &&
+                workers_.size() < options_.maxThreadCount) {
+                createWorkerThread(workers_.size());
+            }
+
+            // Check if queue is full
+            if (options_.maxQueueSize > 0 &&
+                tasks_.size() >= options_.maxQueueSize) {
+                throw std::runtime_error("Thread pool task queue is full");
+            }
+
+            // Add task
+            tasks_.emplace_back(std::move(task));
+        }
+
+        // Notify a waiting thread
+        condition_.notify_one();
+
+        return promise;
+    }
+
+    /**
+     * @brief Submit a task with ASIO-style execution
+     * @tparam F Function type
+     * @param f Function to execute
+     */
+    template <typename F>
+        requires std::invocable<F>
+    void execute(F&& f) {
+        {
+            std::unique_lock lock(queueMutex_);
+            tasks_.emplace_back(std::forward<F>(f));
+        }
+        condition_.notify_one();
+    }
+
+    /**
+     * @brief Submit a task without waiting for result
+     * @tparam Function Function type
+     * @tparam Args Argument types
+     * @param func Function to execute
+     * @param args Function arguments
+     * @throws ThreadPoolError If task submission fails
      */
     template <typename Function, typename... Args>
         requires std::invocable<Function, Args...>
     void enqueueDetach(Function&& func, Args&&... args) {
-        if (is_shutdown_.load(std::memory_order_acquire)) {
+        if (stop_.load(std::memory_order_acquire)) {
             throw ThreadPoolError(
                 "Cannot enqueue detached task: Thread pool is shutting down");
         }
 
         try {
-            enqueueTask([func = std::forward<Function>(func),
-                         ... largs = std::forward<Args>(args)]() mutable {
-                try {
-                    if constexpr (std::is_same_v<
-                                      void, std::invoke_result_t<Function&&,
-                                                                 Args&&...>>) {
-                        std::invoke(func, largs...);
-                    } else {
-                        std::ignore = std::invoke(func, largs...);
-                    }
-                } catch (...) {
-                    // 捕获并记录异常（在生产环境中可能会记录到日志）
+            {
+                std::unique_lock lock(queueMutex_);
+
+                // Check if queue is full
+                if (options_.maxQueueSize > 0 &&
+                    tasks_.size() >= options_.maxQueueSize) {
+                    throw ThreadPoolError("Thread pool task queue is full");
                 }
-            });
+
+                // Add task
+                tasks_.emplace_back([func = std::forward<Function>(func),
+                                     ... largs =
+                                         std::forward<Args>(args)]() mutable {
+                    try {
+                        if constexpr (std::is_same_v<
+                                          void, std::invoke_result_t<
+                                                    Function&&, Args&&...>>) {
+                            std::invoke(func, largs...);
+                        } else {
+                            std::ignore = std::invoke(func, largs...);
+                        }
+                    } catch (...) {
+                        // Catch and log exception (in production, might log to
+                        // a logging system)
+                    }
+                });
+            }
+            condition_.notify_one();
         } catch (const std::exception& e) {
             throw ThreadPoolError(
                 std::string("Failed to enqueue detached task: ") + e.what());
@@ -876,275 +942,524 @@ public:
     }
 
     /**
-     * @brief 获取线程池中的线程数
-     * @return 线程数
+     * @brief Get current queue size
+     * @return Task queue size
      */
-    [[nodiscard]] auto size() const noexcept -> std::size_t {
-        return threads_.size();
+    [[nodiscard]] size_t getQueueSize() const {
+        std::unique_lock lock(queueMutex_);
+        return tasks_.size();
     }
 
     /**
-     * @brief 等待所有任务完成
-     * @param timeout_ms 等待超时时间（毫秒），0表示一直等待
-     * @return 如果所有任务完成返回true，如果超时返回false
+     * @brief Get worker thread count
+     * @return Thread count
      */
-    bool waitForTasks(std::size_t timeout_ms = 0) noexcept {
-        try {
-            if (in_flight_tasks_.load(std::memory_order_acquire) > 0) {
-                if (timeout_ms == 0) {
-                    threads_complete_signal_.wait(false);
-                    return true;
-                } else {
-                    // 使用超时版本的wait
-                    auto deadline = std::chrono::steady_clock::now() +
-                                    std::chrono::milliseconds(timeout_ms);
-                    while (!threads_complete_signal_.load(
-                               std::memory_order_acquire) &&
-                           std::chrono::steady_clock::now() < deadline) {
-                        std::this_thread::sleep_for(
-                            std::chrono::milliseconds(1));
-                    }
-                    return threads_complete_signal_.load(
-                        std::memory_order_acquire);
-                }
+    [[nodiscard]] size_t getThreadCount() const {
+        std::unique_lock lock(queueMutex_);
+        return workers_.size();
+    }
+
+    /**
+     * @brief Get active thread count
+     * @return Active thread count
+     */
+    [[nodiscard]] size_t getActiveThreadCount() const { return activeThreads_; }
+
+    /**
+     * @brief Resize the thread pool
+     * @param newSize New thread count
+     */
+    void resize(size_t newSize) {
+        if (newSize == 0) {
+            throw std::invalid_argument("Thread pool size cannot be zero");
+        }
+
+        std::unique_lock lock(queueMutex_);
+
+        size_t currentSize = workers_.size();
+
+        if (newSize > currentSize) {
+            // Increase threads
+            if (!options_.allowThreadGrowth) {
+                throw std::runtime_error(
+                    "Thread growth is disabled in this pool");
             }
-            return true;
-        } catch (...) {
-            return false;
+
+            if (options_.maxThreadCount > 0 &&
+                newSize > options_.maxThreadCount) {
+                newSize = options_.maxThreadCount;
+            }
+
+            for (size_t i = currentSize; i < newSize; ++i) {
+                createWorkerThread(i);
+            }
+        } else if (newSize < currentSize) {
+            // Decrease threads
+            if (!options_.allowThreadShrink) {
+                throw std::runtime_error(
+                    "Thread shrinking is disabled in this pool");
+            }
+
+            // Mark excess threads for termination
+            for (size_t i = newSize; i < currentSize; ++i) {
+                terminationFlags_[i] = true;
+            }
+
+            // Unlock mutex to avoid deadlock
+            lock.unlock();
+
+            // Wake up all threads to check termination flags
+            condition_.notify_all();
         }
     }
 
     /**
-     * @brief 批量提交任务并等待所有任务完成
-     * @tparam Iterator 迭代器类型
-     * @param begin 任务范围起始迭代器
-     * @param end 任务范围结束迭代器
-     * @return 是否所有任务都成功提交并完成
+     * @brief Shutdown the thread pool, wait for all tasks to complete
      */
-    template <typename Iterator>
-    bool submitBatch(Iterator begin, Iterator end) {
-        try {
-            std::vector<std::future<void>> futures;
-            futures.reserve(std::distance(begin, end));
+    void shutdown() {
+        {
+            std::unique_lock lock(queueMutex_);
+            stop_ = true;
+        }
 
-            for (auto it = begin; it != end; ++it) {
-                futures.push_back(enqueue(*it));
+        // Notify all threads
+        condition_.notify_all();
+
+        // Wait for all threads to finish
+        for (auto& worker : workers_) {
+            if (worker.joinable()) {
+                worker.join();
             }
-
-            for (auto& future : futures) {
-                future.wait();
-            }
-
-            return true;
-        } catch (const std::exception&) {
-            return false;
         }
     }
 
     /**
-     * @brief 获取当前活跃的任务数
-     * @return 活跃任务数
+     * @brief Immediately stop the thread pool, discard unfinished tasks
      */
-    [[nodiscard]] auto activeTaskCount() const noexcept -> std::size_t {
-        return in_flight_tasks_.load(std::memory_order_acquire);
+    void shutdownNow() {
+        {
+            std::unique_lock lock(queueMutex_);
+            stop_ = true;
+            tasks_.clear();
+        }
+
+        // Notify all threads
+        condition_.notify_all();
+
+        // Wait for all threads to finish
+        for (auto& worker : workers_) {
+            if (worker.joinable()) {
+                worker.join();
+            }
+        }
     }
 
     /**
-     * @brief 检查线程池是否正在关闭
-     * @return 如果线程池正在关闭返回true
+     * @brief Wait for all current tasks to complete
      */
-    [[nodiscard]] bool isShuttingDown() const noexcept {
-        return is_shutdown_.load(std::memory_order_acquire);
+    void waitForTasks() {
+        std::unique_lock lock(queueMutex_);
+        waitEmpty_.wait(
+            lock, [this] { return tasks_.empty() && activeThreads_ == 0; });
     }
+
+    /**
+     * @brief Wait for an available thread
+     */
+    void waitForAvailableThread() {
+        std::unique_lock lock(queueMutex_);
+        waitAvailable_.wait(
+            lock, [this] { return activeThreads_ < workers_.size() || stop_; });
+    }
+
+    /**
+     * @brief Get thread pool options
+     * @return Const reference to options
+     */
+    [[nodiscard]] const Options& getOptions() const { return options_; }
 
 private:
     /**
-     * @brief Validate and return valid thread count
-     * @param thread_count Requested thread count
-     * @return Valid thread count
+     * @brief Create a worker thread
+     * @param id Thread ID
      */
-    static unsigned int validateThreadCount(unsigned int thread_count) {
-        const unsigned int min_threads = 1;
-        const unsigned int max_threads = 256;  // 设置一个合理的上限
-        const unsigned int default_threads =
-            std::thread::hardware_concurrency();
-
-        if (thread_count < min_threads) {
-            return min_threads;
-        } else if (thread_count > max_threads) {
-            return max_threads;
-        } else if (thread_count == 0) {
-            return default_threads > 0 ? default_threads : min_threads;
+    void createWorkerThread(size_t id) {
+        // Don't create if we've reached max thread count
+        if (options_.maxThreadCount > 0 &&
+            workers_.size() >= options_.maxThreadCount) {
+            return;
         }
 
-        return thread_count;
-    }
+        // Initialize termination flag
+        if (id >= terminationFlags_.size()) {
+            terminationFlags_.resize(id + 1, false);
+        }
 
-    /**
-     * @brief 关闭线程池，等待任务完成并停止所有线程
-     */
-    void shutdown() noexcept {
-        is_shutdown_.store(true, std::memory_order_release);
+        // Create worker thread
+        workers_.emplace_back([this, id]() {
+        // Set thread name (if platform supports it)
+#if defined(ATOM_PLATFORM_LINUX) || defined(ATOM_PLATFORM_MACOS)
+            {
+                char threadName[16];
+                snprintf(threadName, sizeof(threadName), "Worker-%zu", id);
+                pthread_setname_np(pthread_self(), threadName);
+            }
+#elif defined(ATOM_PLATFORM_WINDOWS) && \
+    _WIN32_WINNT >= 0x0602  // Windows 8 and higher
+            {
+                wchar_t threadName[16];
+                swprintf(threadName, sizeof(threadName) / sizeof(wchar_t),
+                         L"Worker-%zu", id);
+                SetThreadDescription(GetCurrentThread(), threadName);
+            }
+#endif
 
-        try {
-            waitForTasks();
+            // Set thread priority
+            setPriority(options_.threadPriority);
 
-            for (auto& thread : threads_) {
-                if (thread.joinable()) {
-                    thread.request_stop();
+            // Set CPU affinity
+            setCpuAffinity(id);
+
+            // Thread main loop
+            while (true) {
+                std::function<void()> task;
+
+                {
+                    std::unique_lock lock(queueMutex_);
+
+                    // Wait for task or stop signal
+                    auto waitResult = condition_.wait_for(
+                        lock, options_.threadIdleTimeout, [this, id] {
+                            return stop_ || !tasks_.empty() ||
+                                   terminationFlags_[id];
+                        });
+
+                    // If timeout and thread shrinking allowed, check if we
+                    // should terminate
+                    if (!waitResult && options_.allowThreadShrink &&
+                        workers_.size() > options_.initialThreadCount) {
+                        // If idle time exceeds threshold and current thread
+                        // count exceeds initial count
+                        terminationFlags_[id] = true;
+                    }
+
+                    // Check if thread should terminate
+                    if ((stop_ || terminationFlags_[id]) && tasks_.empty()) {
+                        // Clear termination flag
+                        if (id < terminationFlags_.size()) {
+                            terminationFlags_[id] = false;
+                        }
+                        return;
+                    }
+
+                    // If no tasks, continue waiting
+                    if (tasks_.empty()) {
+                        continue;
+                    }
+
+                    // Get task
+                    task = std::move(tasks_.front());
+                    tasks_.pop_front();
+
+                    // Notify potential waiting submitters
+                    waitAvailable_.notify_one();
                 }
-            }
 
-            for (auto& task : tasks_) {
-                task.signal.release();
-            }
+                // Execute task
+                activeThreads_++;
 
-            for (auto& thread : threads_) {
-                if (thread.joinable()) {
-                    thread.join();
-                }
-            }
-        } catch (...) {
-            // 处理关闭过程中的异常
-        }
-    }
-
-    /**
-     * @brief 线程工作函数
-     * @param threadId 线程ID
-     * @param init 初始化函数
-     * @param stop_tok 停止令牌
-     */
-    template <typename InitFunc>
-    void threadFunction(std::size_t threadId, InitFunc& init,
-                        const std::stop_token& stop_tok) noexcept {
-        try {
-            std::invoke(init, threadId);
-        } catch (...) {
-            // 初始化失败但继续执行
-        }
-
-        do {
-            tasks_[threadId].signal.acquire();
-
-            do {
-                processTasksFromQueue(threadId);
-                stealAndProcessTasks(threadId);
-            } while (unassigned_tasks_.load(std::memory_order_acquire) > 0);
-
-            priority_queue_.rotateToFront(threadId);
-
-            if (in_flight_tasks_.load(std::memory_order_acquire) == 0) {
-                threads_complete_signal_.store(true, std::memory_order_release);
-                threads_complete_signal_.notify_one();
-            }
-
-        } while (!stop_tok.stop_requested() &&
-                 !is_shutdown_.load(std::memory_order_acquire));
-    }
-
-    /**
-     * @brief 处理线程自己队列中的任务
-     * @param threadId 线程ID
-     */
-    void processTasksFromQueue(std::size_t threadId) noexcept {
-        while (auto task = tasks_[threadId].tasks.popFront()) {
-            unassigned_tasks_.fetch_sub(1, std::memory_order_release);
-            try {
-                std::invoke(std::move(task.value()));
-            } catch (...) {
-                // 捕获任务执行异常
-            }
-            in_flight_tasks_.fetch_sub(1, std::memory_order_release);
-        }
-    }
-
-    /**
-     * @brief 从其他线程队列窃取并执行任务
-     * @param threadId 当前线程ID
-     */
-    void stealAndProcessTasks(std::size_t threadId) noexcept {
-        for (std::size_t j = 1; j < tasks_.size(); ++j) {
-            const std::size_t INDEX = (threadId + j) % tasks_.size();
-            if (auto task = tasks_[INDEX].tasks.steal()) {
-                unassigned_tasks_.fetch_sub(1, std::memory_order_release);
                 try {
-                    std::invoke(std::move(task.value()));
+                    task();
                 } catch (...) {
-                    // 捕获任务执行异常
+                    // Ignore exceptions in task execution
                 }
-                in_flight_tasks_.fetch_sub(1, std::memory_order_release);
-                break;
+
+                // Decrease active thread count
+                activeThreads_--;
+
+                // If no active threads and task queue is empty, notify waiters
+                {
+                    std::unique_lock lock(queueMutex_);
+                    if (activeThreads_ == 0 && tasks_.empty()) {
+                        waitEmpty_.notify_all();
+                    }
+                }
+
+                // Work stealing implementation - if local queue is empty, try
+                // to steal tasks from other threads
+                if (options_.useWorkStealing) {
+                    tryStealTasks();
+                }
             }
+        });
+
+        // Set custom stack size if needed
+#ifdef ATOM_PLATFORM_WINDOWS
+        if (options_.setStackSize && options_.stackSize > 0) {
+            // In Windows, can't directly change stack size of already created
+            // thread This would only log a message in a real implementation
+        }
+#endif
+    }
+
+    /**
+     * @brief Try to steal tasks from other threads
+     */
+    void tryStealTasks() {
+        // Simple implementation: each thread checks global queue when idle
+        std::unique_lock lock(queueMutex_, std::try_to_lock);
+        if (lock.owns_lock() && !tasks_.empty()) {
+            std::function<void()> task = std::move(tasks_.front());
+            tasks_.pop_front();
+
+            // Release lock before executing task
+            lock.unlock();
+
+            activeThreads_++;
+            try {
+                task();
+            } catch (...) {
+                // Ignore exceptions in task execution
+            }
+            activeThreads_--;
         }
     }
 
     /**
-     * @brief 将任务放入队列中
-     * @tparam Function 任务函数类型
-     * @param func 任务函数
-     * @throws ThreadPoolError 如果无法提交任务
+     * @brief Set thread priority
+     * @param priority Priority level
      */
-    template <typename Function>
-    void enqueueTask(Function&& func) {
-        if (is_shutdown_.load(std::memory_order_acquire)) {
-            throw ThreadPoolError("Thread pool is shutting down");
+    void setPriority(Options::ThreadPriority priority) {
+#if defined(ATOM_PLATFORM_WINDOWS)
+        int winPriority;
+        switch (priority) {
+            case Options::ThreadPriority::Lowest:
+                winPriority = THREAD_PRIORITY_LOWEST;
+                break;
+            case Options::ThreadPriority::BelowNormal:
+                winPriority = THREAD_PRIORITY_BELOW_NORMAL;
+                break;
+            case Options::ThreadPriority::Normal:
+                winPriority = THREAD_PRIORITY_NORMAL;
+                break;
+            case Options::ThreadPriority::AboveNormal:
+                winPriority = THREAD_PRIORITY_ABOVE_NORMAL;
+                break;
+            case Options::ThreadPriority::Highest:
+                winPriority = THREAD_PRIORITY_HIGHEST;
+                break;
+            case Options::ThreadPriority::TimeCritical:
+                winPriority = THREAD_PRIORITY_TIME_CRITICAL;
+                break;
+            default:
+                winPriority = THREAD_PRIORITY_NORMAL;
+        }
+        SetThreadPriority(GetCurrentThread(), winPriority);
+#elif defined(ATOM_PLATFORM_LINUX) || defined(ATOM_PLATFORM_MACOS)
+        int policy;
+        struct sched_param param;
+        pthread_getschedparam(pthread_self(), &policy, &param);
+
+        switch (priority) {
+            case Options::ThreadPriority::Lowest:
+                param.sched_priority = sched_get_priority_min(policy);
+                break;
+            case Options::ThreadPriority::BelowNormal:
+                param.sched_priority = sched_get_priority_min(policy) +
+                                       (sched_get_priority_max(policy) -
+                                        sched_get_priority_min(policy)) /
+                                           4;
+                break;
+            case Options::ThreadPriority::Normal:
+                param.sched_priority = sched_get_priority_min(policy) +
+                                       (sched_get_priority_max(policy) -
+                                        sched_get_priority_min(policy)) /
+                                           2;
+                break;
+            case Options::ThreadPriority::AboveNormal:
+                param.sched_priority = sched_get_priority_max(policy) -
+                                       (sched_get_priority_max(policy) -
+                                        sched_get_priority_min(policy)) /
+                                           4;
+                break;
+            case Options::ThreadPriority::Highest:
+            case Options::ThreadPriority::TimeCritical:
+                param.sched_priority = sched_get_priority_max(policy);
+                break;
+            default:
+                param.sched_priority = sched_get_priority_min(policy) +
+                                       (sched_get_priority_max(policy) -
+                                        sched_get_priority_min(policy)) /
+                                           2;
         }
 
-        auto iOpt = priority_queue_.copyFrontAndRotateToBack();
-        if (!iOpt.has_value()) {
-            throw ThreadPoolError(
-                "Failed to get thread index from priority queue");
-        }
-        auto index = *(iOpt);
-
-        unassigned_tasks_.fetch_add(1, std::memory_order_release);
-        const auto PREV_IN_FLIGHT =
-            in_flight_tasks_.fetch_add(1, std::memory_order_release);
-
-        if (PREV_IN_FLIGHT == 0) {
-            threads_complete_signal_.store(false, std::memory_order_release);
-        }
-
-        try {
-            tasks_[index].tasks.pushBack(std::forward<Function>(func));
-            tasks_[index].signal.release();
-        } catch (...) {
-            unassigned_tasks_.fetch_sub(1, std::memory_order_release);
-            in_flight_tasks_.fetch_sub(1, std::memory_order_release);
-            throw ThreadPoolError("Failed to enqueue task");
-        }
+        pthread_setschedparam(pthread_self(), policy, &param);
+#endif
     }
 
-#ifdef ATOM_USE_BOOST_LOCKFREE
-    // Use lockfree queue when the macro is defined
-    struct TaskItem {
-#ifdef ATOM_LOCKFREE_FIXED_CAPACITY
-        // Use a fixed capacity if specified
-        atom::async::BoostLockFreeQueue<FunctionType,
-                                        ATOM_LOCKFREE_FIXED_CAPACITY>
-            tasks{};
-#else
-        // Default capacity
-        atom::async::BoostLockFreeQueue<FunctionType> tasks{};
-#endif
-        std::binary_semaphore signal{0};
-    } ATOM_ALIGNAS(128);
-#else
-    // Use the original implementation
-    struct TaskItem {
-        atom::async::ThreadSafeQueue<FunctionType> tasks{};
-        std::binary_semaphore signal{0};
-    } ATOM_ALIGNAS(128);
-#endif
+    /**
+     * @brief Set CPU affinity
+     * @param threadId Thread ID
+     */
+    void setCpuAffinity(size_t threadId) {
+        if (options_.cpuAffinityMode == Options::CpuAffinityMode::None) {
+            return;
+        }
 
-    std::vector<ThreadType> threads_;
-    std::deque<TaskItem> tasks_;
-    atom::async::ThreadSafeQueue<std::size_t> priority_queue_;
-    std::atomic_int_fast64_t unassigned_tasks_{0}, in_flight_tasks_{0};
-    std::atomic_bool threads_complete_signal_{false};
-    std::atomic_bool is_shutdown_{false};
+        const unsigned int numCores = std::thread::hardware_concurrency();
+        if (numCores <= 1) {
+            return;  // No need for affinity on single-core systems
+        }
+
+        unsigned int coreId = 0;
+
+        switch (options_.cpuAffinityMode) {
+            case Options::CpuAffinityMode::Sequential:
+                coreId = threadId % numCores;
+                break;
+
+            case Options::CpuAffinityMode::Spread:
+                // Try to spread threads across different physical cores
+                coreId = (threadId * 2) % numCores;
+                break;
+
+            case Options::CpuAffinityMode::CorePinned:
+                if (!options_.pinnedCores.empty()) {
+                    coreId = options_.pinnedCores[threadId %
+                                                  options_.pinnedCores.size()];
+                } else {
+                    coreId = threadId % numCores;
+                }
+                break;
+
+            case Options::CpuAffinityMode::Automatic:
+                // Automatic mode relies on OS scheduling
+                return;
+
+            default:
+                return;
+        }
+
+            // Set CPU affinity
+#if defined(ATOM_PLATFORM_WINDOWS)
+        DWORD_PTR mask = (static_cast<DWORD_PTR>(1) << coreId);
+        SetThreadAffinityMask(GetCurrentThread(), mask);
+#elif defined(ATOM_PLATFORM_LINUX)
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(coreId, &cpuset);
+        pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+#elif defined(ATOM_PLATFORM_MACOS)
+        // macOS only supports soft affinity through thread policy
+        thread_affinity_policy_data_t policy = {static_cast<integer_t>(coreId)};
+        thread_policy_set(pthread_mach_thread_np(pthread_self()),
+                          THREAD_AFFINITY_POLICY, (thread_policy_t)&policy,
+                          THREAD_AFFINITY_POLICY_COUNT);
+#endif
+    }
+
+private:
+    Options options_;                          // Thread pool configuration
+    std::atomic<bool> stop_;                   // Stop flag
+    std::vector<std::thread> workers_;         // Worker threads
+    std::deque<std::function<void()>> tasks_;  // Task queue
+    std::vector<bool> terminationFlags_;       // Thread termination flags
+
+    mutable std::mutex queueMutex_;  // Mutex protecting task queue
+    std::condition_variable
+        condition_;  // Condition variable for thread waiting
+    std::condition_variable
+        waitEmpty_;  // Condition variable for waiting for empty queue
+    std::condition_variable
+        waitAvailable_;  // Condition variable for waiting for available thread
+
+    std::atomic<size_t> activeThreads_;  // Current active thread count
 };
+
+// Global thread pool singleton
+inline ThreadPool& globalThreadPool() {
+    static ThreadPool instance(ThreadPool::Options::createDefault());
+    return instance;
+}
+
+// High performance thread pool singleton
+inline ThreadPool& highPerformanceThreadPool() {
+    static ThreadPool instance(ThreadPool::Options::createHighPerformance());
+    return instance;
+}
+
+// Low latency thread pool singleton
+inline ThreadPool& lowLatencyThreadPool() {
+    static ThreadPool instance(ThreadPool::Options::createLowLatency());
+    return instance;
+}
+
+// Energy efficient thread pool singleton
+inline ThreadPool& energyEfficientThreadPool() {
+    static ThreadPool instance(ThreadPool::Options::createEnergyEfficient());
+    return instance;
+}
+
+/**
+ * @brief Asynchronously execute a task in the global thread pool
+ * @tparam F Function type
+ * @tparam Args Argument types
+ * @param f Function to execute
+ * @param args Function arguments
+ * @return EnhancedFuture containing the task result
+ */
+template <typename F, typename... Args>
+    requires std::invocable<F, Args...>
+auto async(F&& f, Args&&... args) {
+    return globalThreadPool().submit(std::forward<F>(f),
+                                     std::forward<Args>(args)...);
+}
+
+/**
+ * @brief Asynchronously execute a task in the high performance thread pool
+ * @tparam F Function type
+ * @tparam Args Argument types
+ * @param f Function to execute
+ * @param args Function arguments
+ * @return EnhancedFuture containing the task result
+ */
+template <typename F, typename... Args>
+    requires std::invocable<F, Args...>
+auto asyncHighPerformance(F&& f, Args&&... args) {
+    return highPerformanceThreadPool().submit(std::forward<F>(f),
+                                              std::forward<Args>(args)...);
+}
+
+/**
+ * @brief Asynchronously execute a task in the low latency thread pool
+ * @tparam F Function type
+ * @tparam Args Argument types
+ * @param f Function to execute
+ * @param args Function arguments
+ * @return EnhancedFuture containing the task result
+ */
+template <typename F, typename... Args>
+    requires std::invocable<F, Args...>
+auto asyncLowLatency(F&& f, Args&&... args) {
+    return lowLatencyThreadPool().submit(std::forward<F>(f),
+                                         std::forward<Args>(args)...);
+}
+
+/**
+ * @brief Asynchronously execute a task in the energy efficient thread pool
+ * @tparam F Function type
+ * @tparam Args Argument types
+ * @param f Function to execute
+ * @param args Function arguments
+ * @return EnhancedFuture containing the task result
+ */
+template <typename F, typename... Args>
+    requires std::invocable<F, Args...>
+auto asyncEnergyEfficient(F&& f, Args&&... args) {
+    return energyEfficientThreadPool().submit(std::forward<F>(f),
+                                              std::forward<Args>(args)...);
+}
+
 }  // namespace atom::async
 
-#endif  // ATOM_ASYNC_POOL_HPP
+#endif  // ATOM_ASYNC_THREADPOOL_HPP

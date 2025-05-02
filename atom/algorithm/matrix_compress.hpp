@@ -1,5 +1,15 @@
-#ifndef MATRIX_COMPRESS_HPP
-#define MATRIX_COMPRESS_HPP
+/*
+ * matrix_compress.hpp
+ *
+ * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ *
+ * This file defines the MatrixCompressor class for compressing and
+ * decompressing matrices using run-length encoding, with support for
+ * parallel processing and SIMD optimizations.
+ */
+
+#ifndef ATOM_MATRIX_COMPRESS_HPP
+#define ATOM_MATRIX_COMPRESS_HPP
 
 #include <concepts>
 #include <iostream>
@@ -69,8 +79,8 @@ public:
      * @return 压缩后的数据
      * @throws MatrixCompressException 如果压缩失败
      */
-    static auto compressParallel(const Matrix& matrix,
-                                 int thread_count = 0) -> CompressedData;
+    static auto compressParallel(const Matrix& matrix, int thread_count = 0)
+        -> CompressedData;
 
     /**
      * @brief Decompresses data into a matrix.
@@ -80,8 +90,8 @@ public:
      * @return The decompressed matrix.
      * @throws MatrixDecompressException if decompression fails.
      */
-    static auto decompress(const CompressedData& compressed, int rows,
-                           int cols) -> Matrix;
+    static auto decompress(const CompressedData& compressed, int rows, int cols)
+        -> Matrix;
 
     /**
      * @brief 使用多线程解压缩大型矩阵
@@ -110,8 +120,9 @@ public:
      * @return The generated random matrix.
      * @throws std::invalid_argument if rows or cols are not positive.
      */
-    static auto generateRandomMatrix(
-        int rows, int cols, std::string_view charset = "ABCD") -> Matrix;
+    static auto generateRandomMatrix(int rows, int cols,
+                                     std::string_view charset = "ABCD")
+        -> Matrix;
 
     /**
      * @brief Saves the compressed data to a file.
@@ -284,8 +295,8 @@ auto MatrixCompressor::upsample(const M& matrix, int factor) -> Matrix {
 template <MatrixLike M1, MatrixLike M2>
     requires std::same_as<std::decay_t<decltype(std::declval<M1>()[0][0])>,
                           std::decay_t<decltype(std::declval<M2>()[0][0])>>
-auto MatrixCompressor::calculateMSE(const M1& matrix1,
-                                    const M2& matrix2) -> double {
+auto MatrixCompressor::calculateMSE(const M1& matrix1, const M2& matrix2)
+    -> double {
     if (matrix1.empty() || matrix2.empty() ||
         matrix1.size() != matrix2.size() ||
         matrix1[0].size() != matrix2[0].size()) {
@@ -326,4 +337,4 @@ void performanceTest(int rows, int cols, bool runParallel = true);
 
 }  // namespace atom::algorithm
 
-#endif  // MATRIX_COMPRESS_HPP
+#endif  // ATOM_MATRIX_COMPRESS_HPP

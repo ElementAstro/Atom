@@ -19,7 +19,6 @@ Description: A thread-safe stack data structure for managing events.
 #include <atomic>
 #include <concepts>
 #include <exception>
-#include <functional>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
@@ -30,7 +29,6 @@ Description: A thread-safe stack data structure for managing events.
 #include <vector>
 
 #if __has_include(<execution>)
-#include <execution>
 #define HAS_EXECUTION_HEADER 1
 #else
 #define HAS_EXECUTION_HEADER 0
@@ -42,6 +40,9 @@ Description: A thread-safe stack data structure for managing events.
 #else
 #define ATOM_ASYNC_USE_LOCKFREE 0
 #endif
+
+// 引入并行处理组件
+#include "parallel.hpp"
 
 namespace atom::async {
 
@@ -66,10 +67,9 @@ public:
 
 // Concept for serializable types
 template <typename T>
-concept Serializable = requires(T a, std::string& s) {
+concept Serializable = requires(T a) {
     { std::to_string(a) } -> std::convertible_to<std::string>;
-    // Or alternatively check for serialization methods if they exist
-};
+} || std::same_as<T, std::string>;  // Special case for strings
 
 // Concept for comparable types
 template <typename T>
@@ -547,19 +547,15 @@ template <typename T>
 void EventStack<T>::filterEvents(Func&& filterFunc) {
     try {
 #if ATOM_ASYNC_USE_LOCKFREE
-        // Get all elements, filter, and refill stack
         std::vector<T> elements = drainStack();
-        auto newEnd = std::remove_if(
-            elements.begin(), elements.end(),
-            [&](const T& event) { return !std::invoke(filterFunc, event); });
-        elements.erase(newEnd, elements.end());
+        elements = Parallel::filter(elements.begin(), elements.end(),
+                                    std::forward<Func>(filterFunc));
         refillStack(elements);
 #else
         std::unique_lock lock(mtx_);
-        auto newEnd = std::remove_if(
-            events_.begin(), events_.end(),
-            [&](const T& event) { return !std::invoke(filterFunc, event); });
-        events_.erase(newEnd, events_.end());
+        auto filtered = Parallel::filter(events_.begin(), events_.end(),
+                                         std::forward<Func>(filterFunc));
+        events_ = std::move(filtered);
         eventCount_.store(events_.size(), std::memory_order_relaxed);
 #endif
     } catch (const std::exception& e) {
@@ -583,7 +579,11 @@ template <typename T>
         serializedStack.reserve(estimatedSize);
 
         for (const T& event : events_) {
-            serializedStack += std::to_string(event) + ";";
+            if constexpr (std::same_as<T, std::string>) {
+                serializedStack += event + ";";
+            } else {
+                serializedStack += std::to_string(event) + ";";
+            }
         }
         return serializedStack;
     } catch (const std::exception& e) {
@@ -613,8 +613,13 @@ template <typename T>
             if (nextPos > pos) {  // Skip empty entries
                 std::string token(serializedData.substr(pos, nextPos - pos));
                 // Conversion from string to T requires custom implementation
-                // This is a simplistic approach and might need customization
-                T event = token;  // Assuming T can be constructed from string
+                // Handle string type differently from other types
+                T event;
+                if constexpr (std::same_as<T, std::string>) {
+                    event = token;
+                } else {
+                    event = T{std::stoll(token)};  // Convert string to number type
+                }
                 events_.push_back(std::move(event));
             }
             pos = nextPos + 1;
@@ -633,11 +638,7 @@ template <typename T>
     try {
         std::unique_lock lock(mtx_);
 
-#if HAS_EXECUTION_HEADER
-        std::sort(std::execution::par_unseq, events_.begin(), events_.end());
-#else
-        std::sort(events_.begin(), events_.end());
-#endif
+        Parallel::sort(events_.begin(), events_.end());
 
         auto newEnd = std::unique(events_.begin(), events_.end());
         events_.erase(newEnd, events_.end());
@@ -659,13 +660,8 @@ void EventStack<T>::sortEvents(Func&& compareFunc) {
     try {
         std::unique_lock lock(mtx_);
 
-#if HAS_EXECUTION_HEADER
-        std::sort(std::execution::par_unseq, events_.begin(), events_.end(),
-                  std::forward<Func>(compareFunc));
-#else
-        std::sort(events_.begin(), events_.end(),
-                  std::forward<Func>(compareFunc));
-#endif
+        Parallel::sort(events_.begin(), events_.end(),
+                       std::forward<Func>(compareFunc));
 
     } catch (const std::exception& e) {
         throw EventStackException(std::string("Failed to sort events: ") +
@@ -690,13 +686,15 @@ auto EventStack<T>::countEvents(Func&& predicate) const -> size_t {
     try {
         std::shared_lock lock(mtx_);
 
-#if HAS_EXECUTION_HEADER
-        return std::count_if(std::execution::par_unseq, events_.begin(),
-                             events_.end(), std::forward<Func>(predicate));
-#else
-        return std::count_if(events_.begin(), events_.end(),
-                             std::forward<Func>(predicate));
-#endif
+        size_t count = 0;
+        auto countPredicate = [&predicate, &count](const T& item) {
+            if (predicate(item)) {
+                ++count;
+            }
+        };
+
+        Parallel::for_each(events_.begin(), events_.end(), countPredicate);
+        return count;
 
     } catch (const std::exception& e) {
         throw EventStackException(std::string("Failed to count events: ") +
@@ -735,13 +733,15 @@ auto EventStack<T>::anyEvent(Func&& predicate) const -> bool {
     try {
         std::shared_lock lock(mtx_);
 
-#if HAS_EXECUTION_HEADER
-        return std::any_of(std::execution::par_unseq, events_.begin(),
-                           events_.end(), std::forward<Func>(predicate));
-#else
-        return std::any_of(events_.begin(), events_.end(),
-                           std::forward<Func>(predicate));
-#endif
+        std::atomic<bool> result{false};
+        auto checkPredicate = [&result, &predicate](const T& item) {
+            if (predicate(item) && !result.load(std::memory_order_relaxed)) {
+                result.store(true, std::memory_order_relaxed);
+            }
+        };
+
+        Parallel::for_each(events_.begin(), events_.end(), checkPredicate);
+        return result.load(std::memory_order_relaxed);
 
     } catch (const std::exception& e) {
         throw EventStackException(std::string("Failed to check any event: ") +
@@ -759,13 +759,15 @@ auto EventStack<T>::allEvents(Func&& predicate) const -> bool {
     try {
         std::shared_lock lock(mtx_);
 
-#if HAS_EXECUTION_HEADER
-        return std::all_of(std::execution::par_unseq, events_.begin(),
-                           events_.end(), std::forward<Func>(predicate));
-#else
-        return std::all_of(events_.begin(), events_.end(),
-                           std::forward<Func>(predicate));
-#endif
+        std::atomic<bool> allMatch{true};
+        auto checkPredicate = [&allMatch, &predicate](const T& item) {
+            if (!predicate(item) && allMatch.load(std::memory_order_relaxed)) {
+                allMatch.store(false, std::memory_order_relaxed);
+            }
+        };
+
+        Parallel::for_each(events_.begin(), events_.end(), checkPredicate);
+        return allMatch.load(std::memory_order_relaxed);
 
     } catch (const std::exception& e) {
         throw EventStackException(std::string("Failed to check all events: ") +
@@ -788,12 +790,8 @@ void EventStack<T>::forEach(Func&& func) const {
     try {
         std::shared_lock lock(mtx_);
 
-#if HAS_EXECUTION_HEADER
-        std::for_each(std::execution::par_unseq, events_.begin(), events_.end(),
-                      std::forward<Func>(func));
-#else
-        std::for_each(events_.begin(), events_.end(), std::forward<Func>(func));
-#endif
+        Parallel::for_each(events_.begin(), events_.end(),
+                           std::forward<Func>(func));
 
     } catch (const std::exception& e) {
         throw EventStackException(
@@ -809,13 +807,8 @@ void EventStack<T>::transformEvents(Func&& transformFunc) {
     try {
         std::unique_lock lock(mtx_);
 
-#if HAS_EXECUTION_HEADER
-        std::for_each(std::execution::par_unseq, events_.begin(), events_.end(),
-                      std::forward<Func>(transformFunc));
-#else
-        std::for_each(events_.begin(), events_.end(),
-                      std::forward<Func>(transformFunc));
-#endif
+        Parallel::for_each(events_.begin(), events_.end(),
+                           std::forward<Func>(transformFunc));
 
     } catch (const std::exception& e) {
         throw EventStackException(std::string("Failed to transform events: ") +

@@ -1,45 +1,64 @@
+#include <iostream>
+#include <vector>
+#include <thread>
+#include <chrono>
+#include <signal.h>
+#include <functional>
+#include <stdexcept>
+#include <cstdlib>
+
 #include "atom/async/daemon.hpp"
 
-#include <iostream>
-#include <thread>
+// 为示例代码定义一个命名空间
+namespace examples {
 
-using namespace atom::async;
-
-// Example main callback function to be executed in the child process
-int exampleMainCallback(int argc, char** argv) {
-    std::cout << "Daemon process started with arguments: ";
+// 简单的任务回调函数 - 传统方式
+int simpleTask(int argc, char** argv) {
+    std::cout << "简单任务开始执行" << std::endl;
+    std::cout << "参数数量: " << argc << std::endl;
+    
     for (int i = 0; i < argc; ++i) {
-        std::cout << argv[i] << " ";
+        std::cout << "参数[" << i << "]: " << (argv[i] ? argv[i] : "nullptr") << std::endl;
     }
-    std::cout << std::endl;
-
-    // Simulate some work in the daemon process
-    std::this_thread::sleep_for(std::chrono::seconds(10));
-    std::cout << "Daemon process finished work." << std::endl;
-
+    
+    // 模拟工作
+    std::cout << "任务正在执行..." << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::cout << "简单任务执行完成" << std::endl;
+    
     return 0;
 }
 
-int main(int argc, char** argv) {
-    // Create a DaemonGuard object
-    DaemonGuard daemonGuard;
+// 简单的任务回调函数 - 现代方式 (使用 std::span// filepath: examples/daemon_examples.cpp
+#include <iostream>
+#include <vector>
+#include <thread>
+#include <chrono>
+#include <signal.h>
+#include <functional>
+#include <stdexcept>
+#include <cstdlib>
 
-    // Check if the process ID file exists
-    if (checkPidFile()) {
-        std::cerr << "Daemon is already running." << std::endl;
-        return 1;
+#include "atom/async/daemon.hpp"
+
+// 为示例代码定义一个命名空间
+namespace examples {
+
+// 简单的任务回调函数 - 传统方式
+int simpleTask(int argc, char** argv) {
+    std::cout << "简单任务开始执行" << std::endl;
+    std::cout << "参数数量: " << argc << std::endl;
+    
+    for (int i = 0; i < argc; ++i) {
+        std::cout << "参数[" << i << "]: " << (argv[i] ? argv[i] : "nullptr") << std::endl;
     }
-
-    // Write the process ID to a file
-    writePidFile();
-
-    // Start the daemon process
-    bool isDaemon = true;
-    int result =
-        daemonGuard.startDaemon(argc, argv, exampleMainCallback, isDaemon);
-
-    // Print the process information
-    std::cout << "Process information: " << daemonGuard.toString() << std::endl;
-
-    return result;
+    
+    // 模拟工作
+    std::cout << "任务正在执行..." << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::cout << "简单任务执行完成" << std::endl;
+    
+    return 0;
 }
+
+// 简单的任务回调函数 - 现代方式 (使用 std::span

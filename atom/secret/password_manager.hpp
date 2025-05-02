@@ -2,7 +2,6 @@
 #define ATOM_SECRET_PASSWORD_MANAGER_HPP
 
 #include "common.hpp"
-#include "encryption.hpp"
 #include "password_entry.hpp"
 #include "storage.hpp"
 

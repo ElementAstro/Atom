@@ -504,9 +504,11 @@ void BaseDecompressor::doRead() {
     LOG_F(INFO, "BaseDecompressor::doRead called");
 
     try {
-        std::size_t bytesTransferred =
+        int read_result =
             gzread(in_file_, in_buffer_.data(), in_buffer_.size());
-        if (bytesTransferred > 0) {
+        if (read_result > 0) {
+            std::size_t bytesTransferred =
+                static_cast<std::size_t>(read_result);
             LOG_F(INFO, "Read {} bytes from compressed file", bytesTransferred);
 
             // Use std::shared_ptr for self-reference to prevent premature
@@ -534,7 +536,7 @@ void BaseDecompressor::doRead() {
                     }
                 });
         } else {
-            if (bytesTransferred < 0) {
+            if (read_result < 0) {
                 LOG_F(ERROR, "Error during file read");
             }
             gzclose(in_file_);

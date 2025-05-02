@@ -33,8 +33,8 @@ const std::string& getDefaultCharset() {
 }
 }  // namespace
 
-auto generateRandomString(int length,
-                          const std::string& charset) -> std::string {
+auto generateRandomString(int length, const std::string& charset)
+    -> std::string {
     if (length <= 0) {
         throw std::invalid_argument("Length must be a positive integer.");
     }
@@ -63,14 +63,12 @@ auto generateSecureRandomString(int length) -> std::string {
 
     std::string result(length, '\0');
     std::random_device& rd = getRandomDevice();
-
-    std::independent_bits_engine<std::random_device, 8, unsigned char> engine(
-        rd);
     const std::string& chars = getDefaultCharset();
 
+    std::independent_bits_engine<std::random_device, CHAR_BIT, uint32_t> engine(
+        rd);
     for (int i = 0; i < length; ++i) {
-        unsigned char random_byte = engine();
-        result[i] = chars[random_byte % chars.size()];
+        result[i] = chars[engine() % chars.size()];
     }
 
     return result;

@@ -1,6 +1,7 @@
 #ifndef ATOM_ASYNC_FUTURE_HPP
 #define ATOM_ASYNC_FUTURE_HPP
 
+#include <atomic>
 #include <concepts>
 #include <coroutine>
 #include <functional>
@@ -11,6 +12,17 @@
 #include <thread>
 #include <type_traits>
 #include <vector>
+
+#if defined(_WIN32) || defined(_WIN64)
+#define ATOM_PLATFORM_WINDOWS
+#include <windows.h>
+#elif defined(__APPLE__)
+#define ATOM_PLATFORM_MACOS
+#include <dispatch/dispatch.h>
+#elif defined(__linux__)
+#define ATOM_PLATFORM_LINUX
+#include <sys/sysinfo.h>
+#endif
 
 #ifdef ATOM_USE_BOOST_LOCKFREE
 #include <boost/lockfree/queue.hpp>
@@ -56,6 +68,124 @@ concept FutureCompatible = std::is_object_v<T> || std::is_void_v<T>;
 template <typename F, typename... Args>
 concept ValidCallable = requires(F&& f, Args&&... args) {
     { std::invoke(std::forward<F>(f), std::forward<Args>(args)...) };
+};
+
+// 新增：协程等待对象辅助类
+template <typename T>
+class [[nodiscard]] AwaitableEnhancedFuture {
+public:
+    explicit AwaitableEnhancedFuture(std::shared_future<T> future)
+        : future_(std::move(future)) {}
+
+    bool await_ready() const noexcept {
+        return future_.wait_for(std::chrono::seconds(0)) ==
+               std::future_status::ready;
+    }
+
+    template <typename Promise>
+    void await_suspend(std::coroutine_handle<Promise> handle) const {
+#if defined(ATOM_PLATFORM_WINDOWS)
+        // Windows 线程池优化
+        auto thread = [](void* data) -> unsigned long {
+            auto* params = static_cast<
+                std::pair<std::shared_future<T>, std::coroutine_handle<>>*>(
+                data);
+            params->first.wait();
+            params->second.resume();
+            delete params;
+            return 0;
+        };
+
+        auto* params =
+            new std::pair<std::shared_future<T>, std::coroutine_handle<>>(
+                future_, handle);
+        HANDLE threadHandle =
+            CreateThread(nullptr, 0, thread, params, 0, nullptr);
+        if (threadHandle)
+            CloseHandle(threadHandle);
+#elif defined(ATOM_PLATFORM_MACOS)
+        auto* params =
+            new std::pair<std::shared_future<T>, std::coroutine_handle<>>(
+                future_, handle);
+        dispatch_async_f(
+            dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
+            params, [](void* ctx) {
+                auto* p = static_cast<
+                    std::pair<std::shared_future<T>, std::coroutine_handle<>>*>(
+                    ctx);
+                p->first.wait();
+                p->second.resume();
+                delete p;
+            });
+#else
+        std::jthread([future = future_, h = handle]() mutable {
+            future.wait();
+            h.resume();
+        }).detach();
+#endif
+    }
+
+    T await_resume() const { return future_.get(); }
+
+private:
+    std::shared_future<T> future_;
+};
+template <>
+class [[nodiscard]] AwaitableEnhancedFuture<void> {
+public:
+    explicit AwaitableEnhancedFuture(std::shared_future<void> future)
+        : future_(std::move(future)) {}
+
+    bool await_ready() const noexcept {
+        return future_.wait_for(std::chrono::seconds(0)) ==
+               std::future_status::ready;
+    }
+
+    template <typename Promise>
+    void await_suspend(std::coroutine_handle<Promise> handle) const {
+#if defined(ATOM_PLATFORM_WINDOWS)
+        auto thread = [](void* data) -> unsigned long {
+            auto* params = static_cast<
+                std::pair<std::shared_future<void>, std::coroutine_handle<>>*>(
+                data);
+            params->first.wait();
+            params->second.resume();
+            delete params;
+            return 0;
+        };
+
+        auto* params =
+            new std::pair<std::shared_future<void>, std::coroutine_handle<>>(
+                future_, handle);
+        HANDLE threadHandle =
+            CreateThread(nullptr, 0, thread, params, 0, nullptr);
+        if (threadHandle)
+            CloseHandle(threadHandle);
+#elif defined(ATOM_PLATFORM_MACOS)
+        auto* params =
+            new std::pair<std::shared_future<void>, std::coroutine_handle<>>(
+                future_, handle);
+        dispatch_async_f(
+            dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
+            params, [](void* ctx) {
+                auto* p = static_cast<std::pair<std::shared_future<void>,
+                                                std::coroutine_handle<>>*>(ctx);
+                p->first.wait();
+                p->second.resume();
+                delete p;
+            });
+#else
+        std::jthread([future = future_, h = handle]() mutable {
+            future.wait();
+            h.resume();
+        }).detach();
+#endif
+    }
+
+    void await_resume() const { future_.get(); }
+
+private:
+    std::shared_future<void> future_;
 };
 
 /**
@@ -215,6 +345,33 @@ public:
             }
         }
         cancel();
+        return std::nullopt;
+    }
+
+    /**
+     * @brief Enhanced timeout wait with custom cancellation policy
+     * @param timeout The timeout duration
+     * @param cancelPolicy The cancellation policy function
+     * @return Optional value, empty if timed out
+     */
+    template <typename Rep, typename Period,
+              typename CancelFunc = std::function<void()>>
+    auto waitFor(
+        std::chrono::duration<Rep, Period> timeout,
+        CancelFunc&& cancelPolicy = []() {}) noexcept -> std::optional<T> {
+        if (future_.wait_for(timeout) == std::future_status::ready &&
+            !*cancelled_) {
+            try {
+                return future_.get();
+            } catch (...) {
+                return std::nullopt;
+            }
+        }
+
+        cancel();
+        if constexpr (!std::is_same_v<CancelFunc, std::function<void()>>) {
+            std::invoke(std::forward<CancelFunc>(cancelPolicy));
+        }
         return std::nullopt;
     }
 
@@ -443,6 +600,14 @@ public:
             promise.set_exception(std::current_exception());
         }
     };
+
+    /**
+     * @brief Creates a coroutine awaiter for this future.
+     * @return A coroutine awaiter object.
+     */
+    [[nodiscard]] auto operator co_await() const noexcept {
+        return AwaitableEnhancedFuture<T>(future_);
+    }
 
 protected:
     std::shared_future<T> future_;  ///< The underlying shared future.
@@ -751,6 +916,14 @@ public:
         }
     };
 
+    /**
+     * @brief Creates a coroutine awaiter for this future.
+     * @return A coroutine awaiter object.
+     */
+    [[nodiscard]] auto operator co_await() const noexcept {
+        return AwaitableEnhancedFuture<void>(future_);
+    }
+
 protected:
     std::shared_future<void> future_;  ///< The underlying shared future.
     std::shared_ptr<std::atomic<bool>>
@@ -902,40 +1075,47 @@ auto parallelProcess(Range&& range, Func&& func, size_t chunkSize = 0) {
     using ValueType = std::ranges::range_value_t<Range>;
     using ResultType = std::invoke_result_t<Func, ValueType>;
 
-    // Determine chunk size based on hardware if not specified
+    // 根据平台自动确定最佳线程数和任务调度
+#if defined(ATOM_PLATFORM_WINDOWS)
+    if (chunkSize == 0) {
+        SYSTEM_INFO sysInfo;
+        GetSystemInfo(&sysInfo);
+        chunkSize = sysInfo.dwNumberOfProcessors;
+    }
+#elif defined(ATOM_PLATFORM_LINUX)
+    if (chunkSize == 0) {
+        chunkSize = get_nprocs();
+    }
+#else
+    // 默认方法
     if (chunkSize == 0) {
         chunkSize =
             std::max(size_t(1),
                      static_cast<size_t>(std::thread::hardware_concurrency()));
     }
+#endif
 
     std::vector<EnhancedFuture<ResultType>> futures;
     auto begin = std::ranges::begin(range);
     auto end = std::ranges::end(range);
 
-    // Process data in chunks to reduce overhead
     while (begin != end) {
         auto chunkEnd = begin;
         size_t distance = 0;
 
-        // Calculate chunk end
         while (chunkEnd != end && distance < chunkSize) {
             ++chunkEnd;
             ++distance;
         }
 
-        // Create a future for this chunk
         futures.push_back(EnhancedFuture<ResultType>(
             std::async(std::launch::async,
                        [func = func, chunk = std::vector<ValueType>(
                                          begin, chunkEnd)]() -> ResultType {
-                           // Process the chunk
+                           // 处理分块
                            if (chunk.size() == 1) {
                                return func(chunk[0]);
                            } else {
-                               // Process multiple items and combine results
-                               // This is where SIMD could be applied for
-                               // numeric types
                                ResultType result{};
                                for (const auto& item : chunk) {
                                    result = func(item);
@@ -949,6 +1129,84 @@ auto parallelProcess(Range&& range, Func&& func, size_t chunkSize = 0) {
     }
 
     return futures;
+}
+
+/**
+ * @brief Create a thread pool optimized EnhancedFuture
+ * @tparam F Function type
+ * @tparam Args Parameter types
+ * @param f Function to be called
+ * @param args Parameters to pass to the function
+ * @return EnhancedFuture of the function result
+ */
+template <typename F, typename... Args>
+    requires ValidCallable<F, Args...>
+auto makeOptimizedFuture(F&& f, Args&&... args) {
+    using result_type = std::invoke_result_t<F, Args...>;
+
+    // Use platform-specific thread pool optimization
+#if defined(ATOM_PLATFORM_WINDOWS)
+    // Windows thread pool implementation
+    // This is just an example, actual projects may need a more complete
+    // implementation
+    return EnhancedFuture<result_type>(std::async(std::launch::async,
+                                                  std::forward<F>(f),
+                                                  std::forward<Args>(args)...)
+                                           .share());
+#elif defined(ATOM_PLATFORM_MACOS)
+    // macOS uses GCD
+    std::promise<result_type> promise;
+    auto future = promise.get_future();
+
+    // Create data structure to store function and parameters
+    struct CallData {
+        std::promise<result_type> promise;
+        std::tuple<std::decay_t<F>, std::decay_t<Args>...> func_and_args;
+
+        CallData(std::promise<result_type>&& p, F&& f, Args&&... args)
+            : promise(std::move(p)),
+              func_and_args(std::forward<F>(f), std::forward<Args>(args)...) {}
+
+        static void execute(void* context) {
+            auto* data = static_cast<CallData*>(context);
+            try {
+                if constexpr (std::is_void_v<result_type>) {
+                    std::apply(
+                        [](auto&&... args) {
+                            std::invoke(std::forward<decltype(args)>(args)...);
+                        },
+                        data->func_and_args);
+                    data->promise.set_value();
+                } else {
+                    data->promise.set_value(std::apply(
+                        [](auto&&... args) {
+                            return std::invoke(
+                                std::forward<decltype(args)>(args)...);
+                        },
+                        data->func_and_args));
+                }
+            } catch (...) {
+                data->promise.set_exception(std::current_exception());
+            }
+            delete data;
+        }
+    };
+
+    auto* callData = new CallData(std::move(promise), std::forward<F>(f),
+                                  std::forward<Args>(args)...);
+
+    dispatch_async_f(
+        dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), callData,
+        &CallData::execute);
+
+    return EnhancedFuture<result_type>(future.share());
+#else
+    // Default standard implementation
+    return EnhancedFuture<result_type>(std::async(std::launch::async,
+                                                  std::forward<F>(f),
+                                                  std::forward<Args>(args)...)
+                                           .share());
+#endif
 }
 
 }  // namespace atom::async

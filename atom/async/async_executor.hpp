@@ -15,633 +15,649 @@ Description: Advanced async task executor with thread pooling
 #ifndef ATOM_ASYNC_ASYNC_EXECUTOR_HPP
 #define ATOM_ASYNC_ASYNC_EXECUTOR_HPP
 
+#include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <concepts>
 #include <condition_variable>
+#include <coroutine>
+#include <exception>
 #include <functional>
 #include <future>
 #include <memory>
 #include <mutex>
+#include <queue>
+#include <semaphore>
+#include <source_location>
+#include <stdexcept>
+#include <stop_token>
+#include <string>
 #include <thread>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
-#ifdef ATOM_USE_BOOST_LOCKFREE
-#include <boost/lockfree/queue.hpp>
+// 平台特定优化
+#if defined(_WIN32) || defined(_WIN64)
+#include <windows.h>
+#define ATOM_PLATFORM_WINDOWS 1
+#define WIN32_LEAN_AND_MEAN
+#elif defined(__APPLE__)
+#include <dispatch/dispatch.h>
+#include <mach/thread_policy.h>
+#include <pthread.h>
+#define ATOM_PLATFORM_MACOS 1
+#elif defined(__linux__)
+#include <pthread.h>
+#include <sched.h>
+#define ATOM_PLATFORM_LINUX 1
 #endif
+
+// 添加编译器特定优化
+#if defined(__GNUC__) || defined(__clang__)
+#define ATOM_LIKELY(x) __builtin_expect(!!(x), 1)
+#define ATOM_UNLIKELY(x) __builtin_expect(!!(x), 0)
+#define ATOM_FORCE_INLINE __attribute__((always_inline)) inline
+#define ATOM_NO_INLINE __attribute__((noinline))
+#elif defined(_MSC_VER)
+#define ATOM_LIKELY(x) (x)
+#define ATOM_UNLIKELY(x) (x)
+#define ATOM_FORCE_INLINE __forceinline
+#define ATOM_NO_INLINE __declspec(noinline)
+#else
+#define ATOM_LIKELY(x) (x)
+#define ATOM_UNLIKELY(x) (x)
+#define ATOM_FORCE_INLINE inline
+#define ATOM_NO_INLINE
+#endif
+
+// 缓存行大小定义 - 用于避免假共享
+#ifndef ATOM_CACHE_LINE_SIZE
+#if defined(ATOM_PLATFORM_WINDOWS)
+#define ATOM_CACHE_LINE_SIZE 64
+#elif defined(ATOM_PLATFORM_MACOS)
+#define ATOM_CACHE_LINE_SIZE 128
+#else
+#define ATOM_CACHE_LINE_SIZE 64
+#endif
+#endif
+
+// 对齐到缓存行的宏
+#define ATOM_CACHELINE_ALIGN alignas(ATOM_CACHE_LINE_SIZE)
 
 namespace atom::async {
 
-/**
- * @brief Class that represents a task with priority.
- * 
- * ExecutorTask encapsulates a function to be executed with its priority level.
- * Higher priority tasks are executed before lower priority ones.
- */
-class ExecutorTask {
+// 前置声明
+class AsyncExecutor;
+
+// C++20异常类增强版本，带源码位置信息
+class ExecutorException : public std::runtime_error {
 public:
-    enum class Priority {
-        LOW = 0,
-        NORMAL = 1,
-        HIGH = 2,
-        CRITICAL = 3
+    explicit ExecutorException(
+        const std::string& msg,
+        const std::source_location& loc = std::source_location::current())
+        : std::runtime_error(msg + " at " + loc.file_name() + ":" +
+                             std::to_string(loc.line()) + " in " +
+                             loc.function_name()) {}
+};
+
+// 任务异常处理机制增强
+class TaskException : public ExecutorException {
+public:
+    explicit TaskException(
+        const std::string& msg,
+        const std::source_location& loc = std::source_location::current())
+        : ExecutorException(msg, loc) {}
+};
+
+// C++20 协程任务类型，包含续体（continuation）和错误处理
+template <typename R>
+class Task;
+
+// Task<void> specialization for coroutines
+template <>
+class Task<void> {
+public:
+    struct promise_type {
+        std::suspend_never initial_suspend() noexcept { return {}; }
+        std::suspend_always final_suspend() noexcept { return {}; }
+        void unhandled_exception() { exception_ = std::current_exception(); }
+        void return_void() {}
+        
+        Task<void> get_return_object() {
+            return Task<void>{std::coroutine_handle<promise_type>::from_promise(*this)};
+        }
+
+        std::exception_ptr exception_{};
     };
 
-    template <typename F, typename... Args>
-        requires std::invocable<F, Args...>
-    ExecutorTask(F&& func, Priority prio, Args&&... args)
-        : priority_(prio),
-          function_(std::bind(std::forward<F>(func), std::forward<Args>(args)...)) {}
+    using handle_type = std::coroutine_handle<promise_type>;
 
-    void execute() {
-        if (function_) {
-            function_();
+    Task(handle_type h) : handle_(h) {}
+    ~Task() {
+        if (handle_ && handle_.done()) {
+            handle_.destroy();
         }
     }
 
-    [[nodiscard]] Priority getPriority() const noexcept {
-        return priority_;
+    Task(Task&& other) noexcept : handle_(other.handle_) {
+        other.handle_ = nullptr;
     }
 
+    Task& operator=(Task&& other) noexcept {
+        if (this != &other) {
+            if (handle_)
+                handle_.destroy();
+            handle_ = other.handle_;
+            other.handle_ = nullptr;
+        }
+        return *this;
+    }
+
+    Task(const Task&) = delete;
+    Task& operator=(const Task&) = delete;
+
+    bool is_ready() const noexcept { return handle_.done(); }
+
+    void get() {
+        handle_.resume();
+        if (handle_.promise().exception_) {
+            std::rethrow_exception(handle_.promise().exception_);
+        }
+    }
+
+    struct Awaiter {
+        handle_type handle;
+        bool await_ready() const noexcept { return handle.done(); }
+        void await_suspend(std::coroutine_handle<> h) noexcept { h.resume(); }
+        void await_resume() {
+            if (handle.promise().exception_) {
+                std::rethrow_exception(handle.promise().exception_);
+            }
+        }
+    };
+
+    auto operator co_await() noexcept { return Awaiter{handle_}; }
+
 private:
-    Priority priority_;
-    std::function<void()> function_;
+    handle_type handle_{};
+        std::exception_ptr exception_{};
+    };
+    
+    using handle_type = std::coroutine_handle<promise_type>;
+    
+    Task(handle_type h) : handle_(h) {}
+    ~Task() {
+        if (handle_ && handle_.done()) {
+            handle_.destroy();
+        }
+    }
+    
+    Task(Task&& other) noexcept : handle_(other.handle_) {
+        other.handle_ = nullptr;
+    }
+    
+    Task& operator=(Task&& other) noexcept {
+        if (this != &other) {
+            if (handle_)
+                handle_.destroy();
+            handle_ = other.handle_;
+            other.handle_ = nullptr;
+        }
+        return *this;
+    }
+    
+    Task(const Task&) = delete;
+    Task& operator=(const Task&) = delete;
+    
+    bool is_ready() const noexcept { return handle_.done(); }
+    
+    void get_result() {
+        if (handle_.promise().exception_) {
+            std::rethrow_exception(handle_.promise().exception_);
+        }
+    }
+    
+    struct Awaiter {
+        handle_type handle;
+        
+        bool await_ready() const noexcept { return handle.done(); }
+        
+        std::coroutine_handle<> await_suspend(
+            std::coroutine_handle<> h) noexcept {
+            continuation = h;
+            return handle;
+        }
+        
+        void await_resume() {
+            if (handle.promise().exception_) {
+                std::rethrow_exception(handle.promise().exception_);
+            }
+        }
+        
+        std::coroutine_handle<> continuation = nullptr;
+    };
+    
+    Awaiter operator co_await() noexcept { return Awaiter{handle_}; }
+    
+private:
+    handle_type handle_{};
 };
 
-/**
- * @brief Comparison operator for ExecutorTask objects based on priority
- */
-inline bool operator<(const ExecutorTask& lhs, const ExecutorTask& rhs) {
-    return static_cast<int>(lhs.getPriority()) < static_cast<int>(rhs.getPriority());
-}
-
-#ifdef ATOM_USE_BOOST_LOCKFREE
-/**
- * @brief Container to wrap ExecutorTask in boost::lockfree::queue
- */
-class ExecutorTaskContainer {
+// Generic type implementation
+template <typename R>
+class Task {
 public:
-    /**
-     * @brief Constructs a lockfree task container with specified capacity
-     * 
-     * @param capacity Initial capacity of the queue
-     */
-    explicit ExecutorTaskContainer(size_t capacity = 128)
-        : task_queue_(capacity) {}
-    
-    /**
-     * @brief Adds a task to the queue
-     * 
-     * @param task The ExecutorTask to be added
-     * @return true if task was successfully added, false otherwise
-     */
-    bool push(ExecutorTask* task) {
-        return task_queue_.push(task);
+    struct promise_type;
+    using handle_type = std::coroutine_handle<promise_type>;
+
+    struct promise_type {
+        std::suspend_never initial_suspend() noexcept { return {}; }
+        std::suspend_always final_suspend() noexcept { return {}; }
+        void unhandled_exception() { exception_ = std::current_exception(); }
+
+        template <typename T>
+            requires std::convertible_to<T, R>
+        void return_value(T&& value) {
+            result_ = std::forward<T>(value);
+        }
+
+        Task get_return_object() {
+            return Task{handle_type::from_promise(*this)};
+        }
+
+        R result_{};
+        std::exception_ptr exception_{};
+    };
+
+    Task(handle_type h) : handle_(h) {}
+    ~Task() {
+        if (handle_ && handle_.done()) {
+            handle_.destroy();
+        }
     }
-    
-    /**
-     * @brief Retrieves the next task from the queue
-     * 
-     * @param task Output parameter to store the retrieved task
-     * @return true if a task was successfully retrieved, false if queue is empty
-     */
-    bool pop(ExecutorTask*& task) {
-        return task_queue_.pop(task);
+
+    Task(Task&& other) noexcept : handle_(other.handle_) {
+        other.handle_ = nullptr;
     }
-    
-    /**
-     * @brief Checks if the queue is empty
-     * 
-     * @return true if queue is empty, false otherwise
-     */
-    bool empty() const {
-        return task_queue_.empty();
+
+    Task& operator=(Task&& other) noexcept {
+        if (this != &other) {
+            if (handle_)
+                handle_.destroy();
+            handle_ = other.handle_;
+            other.handle_ = nullptr;
+        }
+        return *this;
     }
-    
-    /**
-     * @brief Returns the approximate size of the queue
-     * 
-     * @return Approximate number of elements in the queue
-     */
-    size_t size_approx() const {
-        return task_queue_.read_available();
+
+    Task(const Task&) = delete;
+    Task& operator=(const Task&) = delete;
+
+    bool is_ready() const noexcept { return handle_.done(); }
+
+    R get_result() {
+        if (handle_.promise().exception_) {
+            std::rethrow_exception(handle_.promise().exception_);
+        }
+        return std::move(handle_.promise().result_);
     }
+
+    // 协程等待器支持
+    struct Awaiter {
+        handle_type handle;
+
+        bool await_ready() const noexcept { return handle.done(); }
+
+        std::coroutine_handle<> await_suspend(
+            std::coroutine_handle<> h) noexcept {
+            // 存储续体
+            continuation = h;
+            return handle;
+        }
+
+        R await_resume() {
+            if (handle.promise().exception_) {
+                std::rethrow_exception(handle.promise().exception_);
+            }
+            return std::move(handle.promise().result_);
+        }
+
+        std::coroutine_handle<> continuation = nullptr;
+    };
+
+    Awaiter operator co_await() noexcept { return Awaiter{handle_}; }
 
 private:
-    boost::lockfree::queue<ExecutorTask*> task_queue_;
-};
-#endif
-
-/**
- * @brief ThreadPool implementation with priority-based task execution.
- * 
- * Features:
- * - Dynamic resizing of thread pool
- * - Priority-based task scheduling
- * - Work stealing for load balancing
- * - Task cancellation support
- */
-class ThreadPool {
-public:
-    /**
-     * @brief Constructs a thread pool with a specified number of threads
-     * 
-     * @param numThreads Number of threads in the pool
-     * @throws std::invalid_argument if numThreads is 0
-     */
-    explicit ThreadPool(size_t numThreads = std::thread::hardware_concurrency())
-        : stop_(false), active_tasks_(0)
-#ifdef ATOM_USE_BOOST_LOCKFREE
-        , task_container_(256) // Initialize with larger capacity for high concurrency
-#endif
-    {
-        if (numThreads == 0) {
-            throw std::invalid_argument("Thread pool size cannot be zero");
-        }
-        
-        try {
-            threads_.reserve(numThreads);
-            for (size_t i = 0; i < numThreads; ++i) {
-                threads_.emplace_back([this] { workerThread(); });
-            }
-        } catch (...) {
-            stop_ = true;
-            condition_.notify_all();
-            throw;
-        }
-    }
-
-    /**
-     * @brief Destructor that cleans up threads
-     */
-    ~ThreadPool() {
-        {
-            std::unique_lock<std::mutex> lock(queue_mutex_);
-            stop_ = true;
-        }
-        condition_.notify_all();
-        for (auto& thread : threads_) {
-            if (thread.joinable()) {
-                thread.join();
-            }
-        }
-
-#ifdef ATOM_USE_BOOST_LOCKFREE
-        // Clean up any tasks that were queued but not executed
-        ExecutorTask* task = nullptr;
-        while (task_container_.pop(task)) {
-            if (task) {
-                delete task;
-            }
-        }
-#endif
-    }
-
-    // Rule of five - prevent copy, allow move
-    ThreadPool(const ThreadPool&) = delete;
-    ThreadPool& operator=(const ThreadPool&) = delete;
-    ThreadPool(ThreadPool&&) = delete;
-    ThreadPool& operator=(ThreadPool&&) = delete;
-
-    /**
-     * @brief Enqueues a task with a specified priority
-     * 
-     * @tparam F Function type
-     * @tparam Args Argument types
-     * @param func Function to execute
-     * @param priority Task priority
-     * @param args Function arguments
-     * @return Future with the result of the function
-     */
-    template<typename F, typename... Args>
-        requires std::invocable<F, Args...>
-    auto enqueue(F&& func, ExecutorTask::Priority priority, Args&&... args) 
-        -> std::future<std::invoke_result_t<F, Args...>> {
-        
-        using return_type = std::invoke_result_t<F, Args...>;
-        auto task = std::make_shared<std::packaged_task<return_type()>>(
-            [f = std::forward<F>(func), ... args = std::forward<Args>(args)]() mutable {
-                return std::invoke(std::forward<F>(f), std::forward<Args>(args)...);
-            }
-        );
-        
-        std::future<return_type> result = task->get_future();
-        
-#ifdef ATOM_USE_BOOST_LOCKFREE
-        auto* executor_task = new ExecutorTask(
-            [task]() { (*task)(); },
-            priority
-        );
-        
-        bool pushed = false;
-        // Try to push the task, with exponential backoff
-        for (int retry = 0; retry < 5; ++retry) {
-            if (stop_) {
-                delete executor_task;
-                throw std::runtime_error("Cannot enqueue task on stopped ThreadPool");
-            }
-            
-            pushed = task_container_.push(executor_task);
-            if (pushed) break;
-            
-            // Backoff on contention
-            std::this_thread::yield();
-            if (retry > 0) {
-                std::this_thread::sleep_for(std::chrono::microseconds(1 << retry));
-            }
-        }
-        
-        if (!pushed) {
-            delete executor_task;
-            throw std::runtime_error("Failed to enqueue task: queue is full");
-        }
-        
-        condition_.notify_one();
-#else
-        {
-            std::unique_lock<std::mutex> lock(queue_mutex_);
-            
-            if (stop_) {
-                throw std::runtime_error("Cannot enqueue task on stopped ThreadPool");
-            }
-            
-            tasks_.emplace_back(
-                [task]() { (*task)(); },
-                priority
-            );
-        }
-        
-        condition_.notify_one();
-#endif
-        return result;
-    }
-
-    /**
-     * @brief Gets the number of tasks waiting in the queue
-     * 
-     * @return Size of the task queue
-     */
-    [[nodiscard]] size_t queueSize() const {
-#ifdef ATOM_USE_BOOST_LOCKFREE
-        return task_container_.size_approx();
-#else
-        std::unique_lock<std::mutex> lock(queue_mutex_);
-        return tasks_.size();
-#endif
-    }
-
-    /**
-     * @brief Gets the number of active tasks currently being processed
-     * 
-     * @return Number of active tasks
-     */
-    [[nodiscard]] size_t activeTaskCount() const {
-        return active_tasks_.load();
-    }
-
-    /**
-     * @brief Gets the number of threads in the pool
-     * 
-     * @return Size of the thread pool
-     */
-    [[nodiscard]] size_t size() const {
-        std::unique_lock<std::mutex> lock(queue_mutex_);
-        return threads_.size();
-    }
-
-    /**
-     * @brief Resizes the thread pool
-     * 
-     * @param numThreads New thread pool size
-     * @throws std::invalid_argument if numThreads is 0
-     */
-    void resize(size_t numThreads) {
-        if (numThreads == 0) {
-            throw std::invalid_argument("Thread pool size cannot be zero");
-        }
-        
-        std::unique_lock<std::mutex> lock(queue_mutex_);
-        
-        size_t oldSize = threads_.size();
-        
-        if (numThreads > oldSize) {
-            // Add new threads
-            threads_.reserve(numThreads);
-            try {
-                for (size_t i = oldSize; i < numThreads; ++i) {
-                    threads_.emplace_back([this] { workerThread(); });
-                }
-            } catch (...) {
-                // If an exception occurs, ensure consistency
-                stop_ = true;
-                lock.unlock();
-                condition_.notify_all();
-                throw;
-            }
-        } else if (numThreads < oldSize) {
-            // Request threads to stop
-            size_t diff = oldSize - numThreads;
-            threads_to_stop_ = diff;
-            
-            lock.unlock();
-            condition_.notify_all();
-            
-            // Wait for excess threads to finish
-            for (size_t i = 0; i < diff; ++i) {
-                if (i < threads_.size() && threads_[i].joinable()) {
-                    threads_[i].join();
-                }
-            }
-            
-            // Remove joined threads
-            lock.lock();
-            threads_.erase(
-                std::remove_if(
-                    threads_.begin(), threads_.end(),
-                    [](const std::thread& t) { return !t.joinable(); }
-                ),
-                threads_.end()
-            );
-        }
-    }
-
-    /**
-     * @brief Clears all pending tasks from the queue
-     * 
-     * @return Number of tasks removed
-     */
-    size_t clearQueue() {
-#ifdef ATOM_USE_BOOST_LOCKFREE
-        size_t removed = 0;
-        ExecutorTask* task = nullptr;
-        while (task_container_.pop(task)) {
-            if (task) {
-                delete task;
-                removed++;
-            }
-        }
-        return removed;
-#else
-        std::unique_lock<std::mutex> lock(queue_mutex_);
-        size_t count = tasks_.size();
-        tasks_.clear();
-        return count;
-#endif
-    }
-
-    /**
-     * @brief Waits for all tasks to complete
-     */
-    void waitForAll() {
-        std::unique_lock<std::mutex> lock(queue_mutex_);
-        
-        done_condition_.wait(lock, [this]{
-#ifdef ATOM_USE_BOOST_LOCKFREE
-            return (task_container_.empty() && active_tasks_.load() == 0) || stop_;
-#else
-            return (tasks_.empty() && active_tasks_.load() == 0) || stop_;
-#endif
-        });
-    }
-
-private:
-    // Worker thread function
-    void workerThread() {
-        while (true) {
-#ifdef ATOM_USE_BOOST_LOCKFREE
-            // Lockfree implementation
-            if (threads_to_stop_ > 0) {
-                // Use atomic decrement to avoid race conditions
-                if (threads_to_stop_.fetch_sub(1, std::memory_order_acq_rel) > 0) {
-                    break;
-                }
-                // If we didn't actually need to stop (counter went negative), restore it
-                threads_to_stop_.fetch_add(1, std::memory_order_acq_rel);
-            }
-            
-            if (stop_) {
-                break;
-            }
-            
-            ExecutorTask* task = nullptr;
-            bool dequeued = task_container_.pop(task);
-            
-            if (dequeued && task) {
-                active_tasks_++;
-                task->execute();
-                delete task;
-                active_tasks_--;
-                
-                if (task_container_.empty() && active_tasks_.load() == 0) {
-                    done_condition_.notify_all();
-                }
-            } else {
-                // If no tasks, wait for notification
-                std::unique_lock<std::mutex> lock(queue_mutex_);
-                condition_.wait_for(lock, std::chrono::milliseconds(10), [this] {
-                    return stop_ || !task_container_.empty() || threads_to_stop_ > 0;
-                });
-            }
-#else
-            // Original implementation
-            std::optional<ExecutorTask> task;
-            
-            {
-                std::unique_lock<std::mutex> lock(queue_mutex_);
-                
-                // Check if this thread should stop
-                if (threads_to_stop_ > 0) {
-                    --threads_to_stop_;
-                    break;
-                }
-                
-                condition_.wait(lock, [this] {
-                    return stop_ || !tasks_.empty() || threads_to_stop_ > 0;
-                });
-                
-                if (stop_ && tasks_.empty()) {
-                    break;
-                }
-                
-                if (!tasks_.empty()) {
-                    // Find highest priority task
-                    auto highestPrioIt = std::max_element(tasks_.begin(), tasks_.end());
-                    task = std::move(*highestPrioIt);
-                    tasks_.erase(highestPrioIt);
-                }
-            }
-            
-            if (task) {
-                active_tasks_++;
-                task->execute();
-                active_tasks_--;
-                
-                if (tasks_.empty() && active_tasks_.load() == 0) {
-                    done_condition_.notify_all();
-                }
-            }
-#endif
-        }
-    }
-
-    std::vector<std::thread> threads_;
-#ifndef ATOM_USE_BOOST_LOCKFREE
-    std::vector<ExecutorTask> tasks_;
-#endif
-    
-    mutable std::mutex queue_mutex_;
-    std::condition_variable condition_;
-    std::condition_variable done_condition_;
-    
-    bool stop_;
-    std::atomic<size_t> active_tasks_;
-#ifdef ATOM_USE_BOOST_LOCKFREE
-    std::atomic<size_t> threads_to_stop_{0};
-    ExecutorTaskContainer task_container_;
-#else
-    size_t threads_to_stop_{0};
-#endif
+    handle_type handle_{};
 };
 
 /**
- * @brief High-level executor for asynchronous tasks with various execution strategies.
- * 
- * AsyncExecutor provides a convenient interface for executing tasks asynchronously
- * with different execution strategies like immediate, deferred, or scheduled.
+ * @brief 异步执行器 - 高性能线程池实现
+ *
+ * 实现高效的任务调度和执行，支持任务优先级，协程和未来/承诺
  */
 class AsyncExecutor {
 public:
-    /**
-     * @brief Execution strategy for tasks.
-     */
-    enum class ExecutionStrategy {
-        IMMEDIATE,  // Execute immediately in the thread pool
-        DEFERRED,   // Execute when explicitly requested
-        SCHEDULED   // Execute at a specified time
+    // 任务优先级
+    enum class Priority { Low = 0, Normal = 50, High = 100, Critical = 200 };
+
+    // 线程池配置选项
+    struct Configuration {
+        size_t minThreads = 4;            // 最小线程数
+        size_t maxThreads = 16;           // 最大线程数
+        size_t queueSizePerThread = 128;  // 每线程队列大小
+        std::chrono::milliseconds threadIdleTimeout =
+            std::chrono::seconds(30);  // 空闲线程超时
+        bool setPriority = false;      // 是否设置线程优先级
+        int threadPriority = 0;        // 线程优先级，依赖于平台
+        bool pinThreads = false;       // 是否绑定线程到CPU核心
+        bool useWorkStealing = true;   // 是否启用工作窃取算法
+        std::chrono::milliseconds statInterval =
+            std::chrono::seconds(10);  // 统计信息收集间隔
     };
-    
+
     /**
-     * @brief Constructs an AsyncExecutor with a specified thread pool size.
-     * 
-     * @param poolSize Size of the underlying thread pool
+     * @brief 创建具有指定配置的异步执行器
+     * @param config 线程池配置
      */
-    explicit AsyncExecutor(size_t poolSize = std::thread::hardware_concurrency())
-        : pool_(poolSize) {}
-    
+    explicit AsyncExecutor(Configuration config);
+
     /**
-     * @brief Schedules a task for execution with the specified strategy.
-     * 
-     * @tparam F Function type
-     * @tparam Args Argument types
-     * @param strategy Execution strategy
-     * @param priority Task priority
-     * @param func Function to execute
-     * @param args Function arguments
-     * @return Future with the task result
+     * @brief 禁止拷贝构造
      */
-    template <typename F, typename... Args>
-        requires std::invocable<F, Args...>
-    auto schedule(ExecutionStrategy strategy, 
-                 ExecutorTask::Priority priority,
-                 F&& func, 
-                 Args&&... args) -> std::future<std::invoke_result_t<F, Args...>> {
-        
-        using ReturnType = std::invoke_result_t<F, Args...>;
-        
-        switch (strategy) {
-            case ExecutionStrategy::IMMEDIATE:
-                return pool_.enqueue(std::forward<F>(func), 
-                                    priority, 
-                                    std::forward<Args>(args)...);
-                
-            case ExecutionStrategy::DEFERRED: {
-                std::packaged_task<ReturnType()> task(
-                    [f = std::forward<F>(func), ... args = std::forward<Args>(args)]() mutable {
-                        return std::invoke(std::forward<F>(f), std::forward<Args>(args)...);
-                    }
-                );
-                std::future<ReturnType> future = task.get_future();
-                {
-                    std::lock_guard<std::mutex> lock(deferred_mutex_);
-                    deferred_tasks_.emplace_back(
-                        [t = std::move(task)]() mutable { t(); },
-                        priority
-                    );
+    AsyncExecutor(const AsyncExecutor&) = delete;
+    AsyncExecutor& operator=(const AsyncExecutor&) = delete;
+
+    /**
+     * @brief 支持移动构造
+     */
+    AsyncExecutor(AsyncExecutor&& other) noexcept;
+    AsyncExecutor& operator=(AsyncExecutor&& other) noexcept;
+
+    /**
+     * @brief 析构函数 - 停止所有线程
+     */
+    ~AsyncExecutor();
+
+    /**
+     * @brief 启动线程池
+     */
+    void start();
+
+    /**
+     * @brief 停止线程池
+     */
+    void stop();
+
+    /**
+     * @brief 检查线程池是否正在运行
+     */
+    [[nodiscard]] bool isRunning() const noexcept {
+        return m_isRunning.load(std::memory_order_acquire);
+    }
+
+    /**
+     * @brief 获取活动线程数量
+     */
+    [[nodiscard]] size_t getActiveThreadCount() const noexcept {
+        return m_activeThreads.load(std::memory_order_relaxed);
+    }
+
+    /**
+     * @brief 获取当前等待中的任务数量
+     */
+    [[nodiscard]] size_t getPendingTaskCount() const noexcept {
+        return m_pendingTasks.load(std::memory_order_relaxed);
+    }
+
+    /**
+     * @brief 获取已完成任务数量
+     */
+    [[nodiscard]] size_t getCompletedTaskCount() const noexcept {
+        return m_completedTasks.load(std::memory_order_relaxed);
+    }
+
+    /**
+     * @brief 在后台执行任意可调用对象，无返回值版本
+     *
+     * @param func 可调用对象
+     * @param priority 任务优先级
+     */
+    template <typename Func>
+        requires std::invocable<Func> &&
+                 std::same_as<void, std::invoke_result_t<Func>>
+    void execute(Func&& func, Priority priority = Priority::Normal) {
+        if (!isRunning()) {
+            throw ExecutorException("Executor is not running");
+        }
+
+        enqueueTask(createWrappedTask(std::forward<Func>(func)),
+                    static_cast<int>(priority));
+    }
+
+    /**
+     * @brief 在后台执行任意可调用对象，有返回值版本，使用std::future
+     *
+     * @param func 可调用对象
+     * @param priority 任务优先级
+     * @return std::future<ResultT> 异步结果
+     */
+    template <typename Func>
+        requires std::invocable<Func> &&
+                 (!std::same_as<void, std::invoke_result_t<Func>>)
+    auto execute(Func&& func, Priority priority = Priority::Normal)
+        -> std::future<std::invoke_result_t<Func>> {
+        if (!isRunning()) {
+            throw ExecutorException("Executor is not running");
+        }
+
+        using ResultT = std::invoke_result_t<Func>;
+        auto promise = std::make_shared<std::promise<ResultT>>();
+        auto future = promise->get_future();
+
+        auto wrappedTask = [func = std::forward<Func>(func),
+                            promise = std::move(promise)]() mutable {
+            try {
+                if constexpr (std::is_same_v<ResultT, void>) {
+                    func();
+                    promise->set_value();
+                } else {
+                    promise->set_value(func());
                 }
-                return future;
+            } catch (...) {
+                promise->set_exception(std::current_exception());
             }
-                
-            case ExecutionStrategy::SCHEDULED:
-                // This would normally involve setting up a timer
-                // For simplicity, we just use immediate execution
-                return pool_.enqueue(std::forward<F>(func), 
-                                   priority, 
-                                   std::forward<Args>(args)...);
-                
-            default:
-                throw std::invalid_argument("Unknown execution strategy");
+        };
+
+        enqueueTask(std::move(wrappedTask), static_cast<int>(priority));
+
+        return future;
+    }
+
+    /**
+     * @brief 使用C++20协程执行异步任务
+     *
+     * @param func 可调用对象
+     * @param priority 任务优先级
+     * @return Task<ResultT> 协程任务对象
+     */
+    template <typename Func>
+        requires std::invocable<Func>
+    auto executeAsTask(Func&& func, Priority priority = Priority::Normal) {
+        using ResultT = std::invoke_result_t<Func>;
+        using TaskType = Task<ResultT>;
+
+        struct Awaitable {
+            std::future<ResultT> future;
+            bool await_ready() const noexcept { return false; }
+            void await_suspend(std::coroutine_handle<> h) noexcept { }
+            ResultT await_resume() { return future.get(); }
+        };
+
+        if constexpr (std::is_same_v<ResultT, void>) {
+            co_await Awaitable{this->execute(std::forward<Func>(func), priority)};
+            co_return;
+        } else {
+            co_return co_await Awaitable{this->execute(std::forward<Func>(func), priority)};
+        }
+                co_await std::suspend_always{};
+                co_return future.get();  // 获取结果或传播异常
+            }();
         }
     }
-    
+
     /**
-     * @brief Executes all deferred tasks.
+     * @brief 将任务提交到全局线程池实例
+     *
+     * @param func 可调用对象
+     * @param priority 任务优先级
+     * @return 任务结果的future
      */
-    void executeDeferredTasks() {
-        std::vector<ExecutorTask> tasks;
-        {
-            std::lock_guard<std::mutex> lock(deferred_mutex_);
-            tasks.swap(deferred_tasks_);
-        }
-        
-        for (auto& task : tasks) {
-            pool_.enqueue([task = std::move(task)]() mutable {
-                task.execute();
-                return true;
-            }, task.getPriority());
-        }
+    template <typename Func>
+    static auto submit(Func&& func, Priority priority = Priority::Normal) {
+        return getInstance().execute(std::forward<Func>(func), priority);
     }
-    
+
     /**
-     * @brief Waits for all tasks to complete.
+     * @brief 获取全局线程池实例的引用
+     * @return AsyncExecutor& 全局线程池引用
      */
-    void waitForAll() {
-        executeDeferredTasks();
-        pool_.waitForAll();
+    static AsyncExecutor& getInstance() {
+        static AsyncExecutor instance{Configuration{}};
+        return instance;
     }
-    
-    /**
-     * @brief Gets the number of tasks waiting in the queue.
-     * 
-     * @return Size of the task queue
-     */
-    [[nodiscard]] size_t queueSize() const {
-        return pool_.queueSize();
-    }
-    
-    /**
-     * @brief Gets the number of active tasks currently being processed.
-     * 
-     * @return Number of active tasks
-     */
-    [[nodiscard]] size_t activeTaskCount() const {
-        return pool_.activeTaskCount();
-    }
-    
-    /**
-     * @brief Resizes the thread pool.
-     * 
-     * @param poolSize New thread pool size
-     */
-    void resize(size_t poolSize) {
-        pool_.resize(poolSize);
-    }
-    
+
 private:
-    ThreadPool pool_;
-    std::vector<ExecutorTask> deferred_tasks_;
-    std::mutex deferred_mutex_;
+    // 线程池配置
+    Configuration m_config;
+
+    // 原子状态变量
+    ATOM_CACHELINE_ALIGN std::atomic<bool> m_isRunning{false};
+    ATOM_CACHELINE_ALIGN std::atomic<size_t> m_activeThreads{0};
+    ATOM_CACHELINE_ALIGN std::atomic<size_t> m_pendingTasks{0};
+    ATOM_CACHELINE_ALIGN std::atomic<size_t> m_completedTasks{0};
+
+    // 任务计数信号量 - C++20新特性
+    std::counting_semaphore<> m_taskSemaphore{0};
+
+    // 任务类型
+    struct Task {
+        std::function<void()> func;
+        int priority;
+
+        bool operator<(const Task& other) const {
+            // 越高优先级的任务在队列中排序越靠前
+            return priority < other.priority;
+        }
+    };
+
+    // 任务队列 - 优先级队列
+    std::mutex m_queueMutex;
+    std::priority_queue<Task> m_taskQueue;
+    std::condition_variable m_condition;
+
+    // 工作线程
+    std::vector<std::jthread> m_threads;
+
+    // 统计信息线程
+    std::jthread m_statsThread;
+
+    // 使用工作窃取队列优化
+    struct WorkStealingQueue {
+        std::mutex mutex;
+        std::deque<Task> tasks;
+    };
+    std::vector<std::unique_ptr<WorkStealingQueue>> m_perThreadQueues;
+
+    /**
+     * @brief 线程工作循环
+     * @param threadId 线程ID
+     * @param stoken 停止令牌
+     */
+    void workerLoop(size_t threadId, std::stop_token stoken);
+
+    /**
+     * @brief 设置线程亲和性
+     * @param threadId 线程ID
+     */
+    void setThreadAffinity(size_t threadId);
+
+    /**
+     * @brief 设置线程优先级
+     * @param threadId 线程ID
+     */
+    void setThreadPriority(std::thread::native_handle_type handle);
+
+    /**
+     * @brief 从队列获取任务
+     * @param threadId 当前线程ID
+     * @return std::optional<Task> 可选任务
+     */
+    std::optional<Task> dequeueTask(size_t threadId);
+
+    /**
+     * @brief 尝试从其他线程窃取任务
+     * @param currentId 当前线程ID
+     * @return std::optional<Task> 可选任务
+     */
+    std::optional<Task> stealTask(size_t currentId);
+
+    /**
+     * @brief 将任务添加到队列
+     * @param task 任务函数
+     * @param priority 优先级
+     */
+    void enqueueTask(std::function<void()> task, int priority);
+
+    /**
+     * @brief 包装任务以添加异常处理和性能统计
+     * @param func 原始函数
+     * @return std::function<void()> 包装后的任务
+     */
+    template <typename Func>
+    auto createWrappedTask(Func&& func) {
+        return [this, func = std::forward<Func>(func)]() {
+            // 增加活动线程计数
+            m_activeThreads.fetch_add(1, std::memory_order_relaxed);
+
+            // 捕获任务开始时间 - 用于性能监控
+            auto startTime = std::chrono::high_resolution_clock::now();
+
+            try {
+                // 执行实际任务
+                func();
+
+                // 更新完成任务计数
+                m_completedTasks.fetch_add(1, std::memory_order_relaxed);
+            } catch (...) {
+                // 处理任务异常 - 在实际应用中可能需要日志记录
+                m_completedTasks.fetch_add(1, std::memory_order_relaxed);
+
+                // 重新抛出异常或记录
+                // throw TaskException("Task execution failed with exception");
+            }
+
+            // 计算任务执行时间
+            auto endTime = std::chrono::high_resolution_clock::now();
+            auto duration =
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    endTime - startTime);
+
+            // 在实际应用中这里可以记录任务执行时间用于性能分析
+
+            // 减少活动线程计数
+            m_activeThreads.fetch_sub(1, std::memory_order_relaxed);
+        };
+    }
+
+    /**
+     * @brief 统计信息收集线程
+     * @param stoken 停止令牌
+     */
+    void statsLoop(std::stop_token stoken);
 };
 
-} // namespace atom::async
+}  // namespace atom::async
 
-#endif // ATOM_ASYNC_ASYNC_EXECUTOR_HPP
+#endif  // ATOM_ASYNC_ASYNC_EXECUTOR_HPP

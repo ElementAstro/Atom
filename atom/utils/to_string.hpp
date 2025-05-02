@@ -226,6 +226,16 @@ auto toString(const T& ptr) -> std::string {
 }
 
 /**
+ * @brief Specialized implementation for std::string type
+ *
+ * @param value The input std::string value to be converted.
+ * @return The input string itself.
+ */
+inline auto toString(const std::string& value) -> std::string {
+    return value;  // Simply return the string itself
+}
+
+/**
  * @brief Converts a container type to std::string with specified separator.
  *
  * @tparam T The type of the input container.

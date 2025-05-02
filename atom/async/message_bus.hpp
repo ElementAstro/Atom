@@ -33,6 +33,11 @@ Description: Main Message Bus with Asio support and additional features
 #include <unordered_set>
 #include <vector>
 
+#if __cpp_impl_coroutine >= 201902L
+#include <coroutine>
+#define ATOM_COROUTINE_SUPPORT
+#endif
+
 #include "atom/macro.hpp"
 
 #ifdef ATOM_USE_LOCKFREE_QUEUE
@@ -91,9 +96,25 @@ public:
 
     // Different message queue types based on configuration
     using MessageQueue =
-        std::conditional_t<(defined ATOM_USE_SPSC_QUEUE),
+        std::conditional_t<defined(ATOM_USE_SPSC_QUEUE),
                            boost::lockfree::spsc_queue<PendingMessage>,
                            boost::lockfree::queue<PendingMessage>>;
+#endif
+
+// 平台特定优化
+#if defined(ATOM_PLATFORM_WINDOWS)
+    // Windows特定优化
+    static constexpr bool USE_SLIM_RW_LOCKS = true;
+    static constexpr bool USE_WAITABLE_TIMERS = true;
+#elif defined(ATOM_PLATFORM_APPLE)
+    // macOS特定优化
+    static constexpr bool USE_DISPATCH_QUEUES = true;
+    static constexpr bool USE_SLIM_RW_LOCKS = false;
+    static constexpr bool USE_WAITABLE_TIMERS = false;
+#else
+    // Linux/其他平台优化
+    static constexpr bool USE_SLIM_RW_LOCKS = false;
+    static constexpr bool USE_WAITABLE_TIMERS = false;
 #endif
 
     /**
@@ -409,6 +430,66 @@ public:
         return token;
     }
 
+#ifdef ATOM_COROUTINE_SUPPORT
+    /**
+     * @brief Awaitable version of subscribe for use with C++20 coroutines
+     * @tparam MessageType The type of the message
+     */
+    template <MessageConcept MessageType>
+    struct [[nodiscard]] MessageAwaitable {
+        MessageBus& bus_;
+        std::string_view name_;
+        Token token_{0};
+        std::optional<MessageType> message_;
+        bool done_{false};
+
+        explicit MessageAwaitable(MessageBus& bus, std::string_view name)
+            : bus_(bus), name_(name) {}
+
+        bool await_ready() const noexcept { return false; }
+
+        void await_suspend(std::coroutine_handle<> handle) {
+            token_ = bus_.subscribe<MessageType>(
+                name_,
+                [this, handle](const MessageType& msg) mutable {
+                    message_.emplace(msg);
+                    done_ = true;
+                    handle.resume();
+                },
+                true, true);
+        }
+
+        MessageType await_resume() {
+            if (!message_.has_value()) {
+                throw MessageBusException("No message received in coroutine");
+            }
+            return std::move(message_.value());
+        }
+
+        ~MessageAwaitable() {
+            if (token_ != 0) {
+                try {
+                    bus_.unsubscribe<MessageType>(token_);
+                } catch (...) {
+                    // Ignore exceptions in destructor
+                }
+            }
+        }
+    };
+
+    /**
+     * @brief Creates an awaitable for receiving a message in a coroutine
+     * @tparam MessageType The type of the message
+     * @param name The message name to wait for
+     * @return An awaitable object for use with co_await
+     */
+    template <MessageConcept MessageType>
+    [[nodiscard]] auto receiveAsync(std::string_view name)
+        -> MessageAwaitable<MessageType> {
+        return MessageAwaitable<MessageType>(*this, name);
+    }
+#endif  // ATOM_COROUTINE_SUPPORT
+
     /**
      * @brief Unsubscribes from a message using the given token.
      * @tparam MessageType The type of the message.
@@ -595,6 +676,49 @@ public:
         }
     }
 
+    /**
+     * @brief Checks if the message bus is currently processing messages
+     * @return True if active, false otherwise
+     */
+    [[nodiscard]] bool isActive() const noexcept {
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+        return processingActive_;
+#else
+        return true;  // 同步模式下总是活跃
+#endif
+    }
+
+    /**
+     * @brief Gets the current statistics for the message bus
+     * @return A structure containing statistics
+     */
+    [[nodiscard]] auto getStatistics() const noexcept {
+        std::shared_lock lock(mutex_);
+        struct Statistics {
+            size_t subscriberCount{0};
+            size_t typeCount{0};
+            size_t namespaceCount{0};
+            size_t historySize{0};
+        } stats;
+
+        stats.namespaceCount = namespaces_.size();
+        stats.typeCount = subscribers_.size();
+
+        for (const auto& [_, typeMap] : subscribers_) {
+            for (const auto& [__, subscribers] : typeMap) {
+                stats.subscriberCount += subscribers.size();
+            }
+        }
+
+        for (const auto& [_, nameMap] : messageHistory_) {
+            for (const auto& [__, history] : nameMap) {
+                stats.historySize += history.size();
+            }
+        }
+
+        return stats;
+    }
+
 private:
     struct Subscriber {
         std::function<void(const std::any&)>
@@ -602,8 +726,8 @@ private:
         bool async;   ///< Whether to call the handler asynchronously.
         bool once;    ///< Whether to unsubscribe after the first message.
         std::function<bool(const std::any&)> filter;  ///< The filter function.
-        Token token;  ///< The subscription token.
-    } ATOM_ALIGNAS(64);
+        Token token;     ///< The subscription token.
+    } ATOM_ALIGNAS(64);  // 缓存行对齐提升性能
 
     /**
      * @brief Publishes a message to the subscribers.
@@ -666,13 +790,13 @@ private:
             // Remove the one-time subscribers
             if (!tokensToRemove.empty()) {
                 subscribersList.erase(
-                    std::remove_if(
-                        subscribersList.begin(), subscribersList.end(),
-                        [&](const Subscriber& sub) {
-                            return std::find(tokensToRemove.begin(),
-                                             tokensToRemove.end(),
-                                             sub.token) != tokensToRemove.end();
-                        }),
+                    std::remove_if(subscribersList.begin(),
+                                   subscribersList.end(),
+                                   [&](const Subscriber& sub) {
+                                       return std::ranges::find(tokensToRemove,
+                                                                sub.token) !=
+                                              tokensToRemove.end();
+                                   }),
                     subscribersList.end());
             }
         };
@@ -687,7 +811,7 @@ private:
      */
     static void removeSubscription(std::vector<Subscriber>& subscribersList,
                                    Token token) noexcept {
-        // Use C++20 erase/remove idiom
+        // 使用 C++20 std::erase_if
         std::erase_if(subscribersList, [token](const Subscriber& sub) {
             return sub.token == token;
         });

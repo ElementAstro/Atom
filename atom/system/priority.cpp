@@ -136,7 +136,8 @@ auto PriorityManager::getThreadPriority(std::thread::native_handle_type thread)
 }
 
 void PriorityManager::setThreadSchedulingPolicy(
-    SchedulingPolicy policy, std::thread::native_handle_type thread) {
+    SchedulingPolicy policy,
+    [[maybe_unused]] std::thread::native_handle_type thread) {
     LOG_F(INFO, "Setting thread scheduling policy to {}",
           static_cast<int>(policy));
 #ifdef _WIN32

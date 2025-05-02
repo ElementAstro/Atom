@@ -1165,23 +1165,43 @@ auto ThreadSafeLRUCache<Key, Value>::removeLRUItem() noexcept
 
 template <typename Key, typename Value>
 auto ThreadSafeLRUCache<Key, Value>::acquireReadLock(
-    std::chrono::milliseconds timeout_ms) const
+    [[maybe_unused]] std::chrono::milliseconds timeout_ms) const
     -> std::optional<shared_lock<std::shared_mutex>> {
     shared_lock<std::shared_mutex> lock(mutex_, std::defer_lock);
+
+#if defined(ATOM_USE_BOOST_THREAD)
     if (lock.try_lock_for(timeout_ms)) {
         return lock;
     }
+#else
+    // Standard library doesn't have try_lock_for, use a simple try_lock instead
+    if (lock.try_lock()) {
+        return lock;
+    }
+    // Could implement a timed retry loop here if needed
+#endif
+
     return std::nullopt;
 }
 
 template <typename Key, typename Value>
 auto ThreadSafeLRUCache<Key, Value>::acquireWriteLock(
-    std::chrono::milliseconds timeout_ms)
+    [[maybe_unused]] std::chrono::milliseconds timeout_ms)
     -> std::optional<unique_lock<std::shared_mutex>> {
     unique_lock<std::shared_mutex> lock(mutex_, std::defer_lock);
+
+#if defined(ATOM_USE_BOOST_THREAD)
     if (lock.try_lock_for(timeout_ms)) {
         return lock;
     }
+#else
+    // Standard library doesn't have try_lock_for, use a simple try_lock instead
+    if (lock.try_lock()) {
+        return lock;
+    }
+    // Could implement a timed retry loop here if needed
+#endif
+
     return std::nullopt;
 }
 

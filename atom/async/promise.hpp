@@ -9,7 +9,25 @@
 #include <future>
 #include <mutex>
 #include <shared_mutex>
+#include <source_location>
+#include <stop_token>
 #include <vector>
+
+// Platform-specific optimizations
+#if defined(_WIN32) || defined(_WIN64)
+#define ATOM_PLATFORM_WINDOWS
+#include <windows.h>
+#elif defined(__APPLE__)
+#define ATOM_PLATFORM_MACOS
+#include <dispatch/dispatch.h>
+#elif defined(__linux__)
+#define ATOM_PLATFORM_LINUX
+#include <pthread.h>
+#endif
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+#include <boost/lockfree/queue.hpp>
+#endif
 
 #include "atom/async/future.hpp"
 
@@ -28,9 +46,12 @@ public:
     PromiseCancelledException& operator=(PromiseCancelledException&&) noexcept =
         default;
 
-    // 添加字符串构造函数
-    explicit PromiseCancelledException(const char* message)
-        : atom::error::RuntimeError(__FILE__, __LINE__, __func__, message) {}
+    // Add string constructor, supporting C++20 source_location
+    explicit PromiseCancelledException(
+        const char* message,
+        std::source_location location = std::source_location::current())
+        : atom::error::RuntimeError(location.file_name(), location.line(),
+                                    location.function_name(), message) {}
 };
 
 /**
@@ -63,6 +84,10 @@ concept VoidCallbackInvocable = requires(F f) {
     { f() } -> std::same_as<void>;
 };
 
+// New: Promise aware of C++20 coroutine state
+template <typename T>
+class PromiseAwaiter;
+
 /**
  * @class Promise
  * @brief A template class that extends the standard promise with additional
@@ -72,6 +97,9 @@ concept VoidCallbackInvocable = requires(F f) {
 template <typename T>
 class Promise {
 public:
+    // Support coroutines
+    using awaiter_type = PromiseAwaiter<T>;
+
     /**
      * @brief Constructor that initializes the promise and shared future.
      */
@@ -82,7 +110,8 @@ public:
     Promise(const Promise&) = delete;
     Promise& operator=(const Promise&) = delete;
 
-    // 实现自定义的移动构造函数和移动赋值运算符，而不是默认
+    // Implement custom move constructor and move assignment operator instead of
+    // default
     Promise(Promise&& other) noexcept;
     Promise& operator=(Promise&& other) noexcept;
 
@@ -118,6 +147,12 @@ public:
     void onComplete(F&& func);
 
     /**
+     * @brief Use C++20 stop_token to support cancellable operations
+     * @param stopToken The stop_token used to cancel the operation
+     */
+    void setCancellable(std::stop_token stopToken);
+
+    /**
      * @brief Cancels the promise.
      * @return true if this call performed the cancellation, false if it was
      * already cancelled
@@ -142,6 +177,24 @@ public:
      */
     [[nodiscard]] auto operator co_await() const noexcept;
 
+    /**
+     * @brief Creates a PromiseAwaiter for this promise.
+     * @return A PromiseAwaiter object.
+     */
+    [[nodiscard]] auto getAwaiter() noexcept -> PromiseAwaiter<T>;
+
+    /**
+     * @brief Perform asynchronous operations using platform-specific optimized
+     * threads
+     * @tparam F Function type
+     * @tparam Args Argument types
+     * @param func The function to execute
+     * @param args Function arguments
+     */
+    template <typename F, typename... Args>
+        requires std::invocable<F, Args...>
+    void runAsync(F&& func, Args&&... args);
+
 private:
     /**
      * @brief Runs all the registered callbacks.
@@ -149,19 +202,37 @@ private:
      */
     void runCallbacks() noexcept;
 
+    // Use C++20 jthread for thread management
+    void setupCancellationHandler(std::stop_token token);
+
     std::promise<T> promise_;  ///< The underlying promise object.
     std::shared_future<T>
         future_;  ///< The shared future associated with the promise.
 
     // Use a mutex to protect callbacks for thread safety
     mutable std::shared_mutex mutex_;
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    // Use lock-free queue to optimize callback performance
+    struct CallbackWrapper {
+        std::function<void(T)> callback;
+        CallbackWrapper() = default;
+        explicit CallbackWrapper(std::function<void(T)> cb)
+            : callback(std::move(cb)) {}
+    };
+
+    boost::lockfree::queue<CallbackWrapper*> callbacks_{
+        128};  ///< Lock-free callback queue
+#else
     std::vector<std::function<void(T)>>
         callbacks_;  ///< List of callbacks to be called on completion.
+#endif
 
     std::atomic<bool> cancelled_{
         false};  ///< Flag indicating if the promise has been cancelled.
     std::atomic<bool> completed_{
         false};  ///< Flag indicating if the promise has been completed.
+
+    std::optional<std::jthread> cancellationThread_;
 };
 
 /**
@@ -171,6 +242,9 @@ private:
 template <>
 class Promise<void> {
 public:
+    // Support coroutines
+    using awaiter_type = PromiseAwaiter<void>;
+
     /**
      * @brief Constructor that initializes the promise and shared future.
      */
@@ -181,7 +255,8 @@ public:
     Promise(const Promise&) = delete;
     Promise& operator=(const Promise&) = delete;
 
-    // 实现自定义的移动构造函数和移动赋值运算符，而不是默认
+    // Implement custom move constructor and move assignment operator instead of
+    // default
     Promise(Promise&& other) noexcept;
     Promise& operator=(Promise&& other) noexcept;
 
@@ -214,6 +289,12 @@ public:
     void onComplete(F&& func);
 
     /**
+     * @brief Use C++20 stop_token to support cancellable operations
+     * @param stopToken The stop_token used to cancel the operation
+     */
+    void setCancellable(std::stop_token stopToken);
+
+    /**
      * @brief Cancels the promise.
      * @return true if this call performed the cancellation, false if it was
      * already cancelled
@@ -238,6 +319,24 @@ public:
      */
     [[nodiscard]] auto operator co_await() const noexcept;
 
+    /**
+     * @brief Creates a PromiseAwaiter for this promise.
+     * @return A PromiseAwaiter object.
+     */
+    [[nodiscard]] auto getAwaiter() noexcept -> PromiseAwaiter<void>;
+
+    /**
+     * @brief Perform asynchronous operations using platform-specific optimized
+     * threads
+     * @tparam F Function type
+     * @tparam Args Argument types
+     * @param func The function to execute
+     * @param args Function arguments
+     */
+    template <typename F, typename... Args>
+        requires std::invocable<F, Args...>
+    void runAsync(F&& func, Args&&... args);
+
 private:
     /**
      * @brief Runs all the registered callbacks.
@@ -245,54 +344,279 @@ private:
      */
     void runCallbacks() noexcept;
 
+    // Use C++20 jthread for thread management
+    void setupCancellationHandler(std::stop_token token);
+
     std::promise<void> promise_;  ///< The underlying promise object.
     std::shared_future<void>
         future_;  ///< The shared future associated with the promise.
 
     // Use a mutex to protect callbacks for thread safety
     mutable std::shared_mutex mutex_;
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    // Use lock-free queue to optimize callback performance
+    struct CallbackWrapper {
+        std::function<void()> callback;
+        CallbackWrapper() = default;
+        explicit CallbackWrapper(std::function<void()> cb)
+            : callback(std::move(cb)) {}
+    };
+
+    boost::lockfree::queue<CallbackWrapper*> callbacks_{
+        128};  ///< Lock-free callback queue
+#else
     std::vector<std::function<void()>>
         callbacks_;  ///< List of callbacks to be called on completion.
+#endif
 
     std::atomic<bool> cancelled_{
         false};  ///< Flag indicating if the promise has been cancelled.
     std::atomic<bool> completed_{
         false};  ///< Flag indicating if the promise has been completed.
+
+    // C++20 jthread support
+    std::optional<std::jthread> cancellationThread_;
+};
+
+// New: Coroutine awaiter implementation for Promise
+template <typename T>
+class PromiseAwaiter {
+public:
+    explicit PromiseAwaiter(std::shared_future<T> future) noexcept
+        : future_(std::move(future)) {}
+
+    bool await_ready() const noexcept {
+        return future_.wait_for(std::chrono::seconds(0)) ==
+               std::future_status::ready;
+    }
+
+    void await_suspend(std::coroutine_handle<> handle) const {
+        // Platform-specific optimized implementation
+#if defined(ATOM_PLATFORM_WINDOWS)
+        // Windows optimized version
+        auto thread = [](void* data) -> unsigned long {
+            auto* params = static_cast<
+                std::pair<std::shared_future<T>, std::coroutine_handle<>>*>(
+                data);
+            params->first.wait();
+            params->second.resume();
+            delete params;
+            return 0;
+        };
+
+        auto* params =
+            new std::pair<std::shared_future<T>, std::coroutine_handle<>>(
+                future_, handle);
+        HANDLE threadHandle =
+            CreateThread(nullptr, 0, thread, params, 0, nullptr);
+        if (threadHandle)
+            CloseHandle(threadHandle);
+#elif defined(ATOM_PLATFORM_MACOS)
+        // macOS GCD optimized version
+        auto* params =
+            new std::pair<std::shared_future<T>, std::coroutine_handle<>>(
+                future_, handle);
+        dispatch_async_f(
+            dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
+            params, [](void* ctx) {
+                auto* p = static_cast<
+                    std::pair<std::shared_future<T>, std::coroutine_handle<>>*>(
+                    ctx);
+                p->first.wait();
+                p->second.resume();
+                delete p;
+            });
+#elif defined(ATOM_PLATFORM_LINUX)
+        // Linux optimized version
+        pthread_t thread;
+        auto* params =
+            new std::pair<std::shared_future<T>, std::coroutine_handle<>>(
+                future_, handle);
+        pthread_create(
+            &thread, nullptr,
+            [](void* data) -> void* {
+                auto* p = static_cast<
+                    std::pair<std::shared_future<T>, std::coroutine_handle<>>*>(
+                    data);
+                p->first.wait();
+                p->second.resume();
+                delete p;
+                return nullptr;
+            },
+            params);
+        pthread_detach(thread);
+#else
+        // Standard C++20 version
+        std::jthread([future = future_, h = handle]() mutable {
+            future.wait();
+            h.resume();
+        }).detach();
+#endif
+    }
+
+    T await_resume() const { return future_.get(); }
+
+private:
+    std::shared_future<T> future_;
+};
+
+// void specialization
+template <>
+class PromiseAwaiter<void> {
+public:
+    explicit PromiseAwaiter(std::shared_future<void> future) noexcept
+        : future_(std::move(future)) {}
+
+    bool await_ready() const noexcept {
+        return future_.wait_for(std::chrono::seconds(0)) ==
+               std::future_status::ready;
+    }
+
+    void await_suspend(std::coroutine_handle<> handle) const {
+        // Platform-specific implementation similar to non-void version, omitted
+#if defined(ATOM_PLATFORM_WINDOWS)
+        auto thread = [](void* data) -> unsigned long {
+            auto* params = static_cast<
+                std::pair<std::shared_future<void>, std::coroutine_handle<>>*>(
+                data);
+            params->first.wait();
+            params->second.resume();
+            delete params;
+            return 0;
+        };
+
+        auto* params =
+            new std::pair<std::shared_future<void>, std::coroutine_handle<>>(
+                future_, handle);
+        HANDLE threadHandle =
+            CreateThread(nullptr, 0, thread, params, 0, nullptr);
+        if (threadHandle)
+            CloseHandle(threadHandle);
+#elif defined(ATOM_PLATFORM_MACOS)
+        auto* params =
+            new std::pair<std::shared_future<void>, std::coroutine_handle<>>(
+                future_, handle);
+        dispatch_async_f(
+            dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
+            params, [](void* ctx) {
+                auto* p = static_cast<std::pair<std::shared_future<void>,
+                                                std::coroutine_handle<>>*>(ctx);
+                p->first.wait();
+                p->second.resume();
+                delete p;
+            });
+#elif defined(ATOM_PLATFORM_LINUX)
+        pthread_t thread;
+        auto* params =
+            new std::pair<std::shared_future<void>, std::coroutine_handle<>>(
+                future_, handle);
+        pthread_create(
+            &thread, nullptr,
+            [](void* data) -> void* {
+                auto* p =
+                    static_cast<std::pair<std::shared_future<void>,
+                                          std::coroutine_handle<>>*>(data);
+                p->first.wait();
+                p->second.resume();
+                delete p;
+                return nullptr;
+            },
+            params);
+        pthread_detach(thread);
+#else
+        std::jthread([future = future_, h = handle]() mutable {
+            future.wait();
+            h.resume();
+        }).detach();
+#endif
+    }
+
+    void await_resume() const { future_.get(); }
+
+private:
+    std::shared_future<void> future_;
 };
 
 template <typename T>
 Promise<T>::Promise() noexcept : future_(promise_.get_future().share()) {}
 
-// 实现移动构造函数
+// Implement move constructor
 template <typename T>
 Promise<T>::Promise(Promise&& other) noexcept
     : promise_(std::move(other.promise_)), future_(std::move(other.future_)) {
-    // 锁住 other 的互斥锁，确保安全移动
+    // Lock other's mutex to ensure safe move
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    // Special handling for lock-free queue
+    // Lock-free queue cannot be moved directly, need to transfer elements one
+    // by one
+    CallbackWrapper* wrapper = nullptr;
+    while (other.callbacks_.pop(wrapper)) {
+        if (wrapper) {
+            callbacks_.push(wrapper);
+        }
+    }
+#else
     std::unique_lock lock(other.mutex_);
     callbacks_ = std::move(other.callbacks_);
+#endif
     cancelled_.store(other.cancelled_.load());
     completed_.store(other.completed_.load());
-    // 移动后清除 other 的状态
+
+    // Handle cancellation thread
+    if (other.cancellationThread_.has_value()) {
+        cancellationThread_ = std::move(other.cancellationThread_);
+        other.cancellationThread_.reset();
+    }
+
+    // Clear other's state after move
+#ifndef ATOM_USE_BOOST_LOCKFREE
     other.callbacks_.clear();
+#endif
     other.cancelled_.store(false);
     other.completed_.store(false);
 }
 
-// 实现移动赋值运算符
+// Implement move assignment operator
 template <typename T>
 Promise<T>& Promise<T>::operator=(Promise&& other) noexcept {
     if (this != &other) {
         promise_ = std::move(other.promise_);
         future_ = std::move(other.future_);
 
-        // 锁住双方互斥锁，确保安全移动
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        // Clean up current queue
+        CallbackWrapper* wrapper = nullptr;
+        while (callbacks_.pop(wrapper)) {
+            delete wrapper;
+        }
+
+        // Transfer elements
+        while (other.callbacks_.pop(wrapper)) {
+            if (wrapper) {
+                callbacks_.push(wrapper);
+            }
+        }
+#else
+        // Lock both mutexes to ensure safe move
         std::scoped_lock lock(mutex_, other.mutex_);
         callbacks_ = std::move(other.callbacks_);
+#endif
         cancelled_.store(other.cancelled_.load());
         completed_.store(other.completed_.load());
 
-        // 移动后清除 other 的状态
+        // Handle cancellation thread
+        if (cancellationThread_.has_value()) {
+            cancellationThread_->request_stop();
+        }
+        if (other.cancellationThread_.has_value()) {
+            cancellationThread_ = std::move(other.cancellationThread_);
+            other.cancellationThread_.reset();
+        }
+
+        // Clear other's state after move
+#ifndef ATOM_USE_BOOST_LOCKFREE
         other.callbacks_.clear();
+#endif
         other.cancelled_.store(false);
         other.completed_.store(false);
     }
@@ -371,6 +695,16 @@ void Promise<T>::onComplete(F&& func) {
 
     bool shouldRunCallback = false;
     {
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        // Lock-free queue implementation
+        auto* wrapper = new CallbackWrapper(std::forward<F>(func));
+        callbacks_.push(wrapper);
+
+        // Check if the callback should be run immediately
+        shouldRunCallback =
+            future_.valid() && future_.wait_for(std::chrono::seconds(0)) ==
+                                   std::future_status::ready;
+#else
         std::unique_lock lock(mutex_);
         if (isCancelled()) {
             return;  // Double-check after acquiring the lock
@@ -383,17 +717,54 @@ void Promise<T>::onComplete(F&& func) {
         shouldRunCallback =
             future_.valid() && future_.wait_for(std::chrono::seconds(0)) ==
                                    std::future_status::ready;
+#endif
     }
 
     // Run callback outside the lock if needed
     if (shouldRunCallback) {
         try {
             T value = future_.get();
+#ifdef ATOM_USE_BOOST_LOCKFREE
+            // For lock-free queue, we need to handle callback execution
+            // manually
+            CallbackWrapper* wrapper = nullptr;
+            while (callbacks_.pop(wrapper)) {
+                if (wrapper && wrapper->callback) {
+                    try {
+                        wrapper->callback(value);
+                    } catch (...) {
+                        // Ignore exceptions in callbacks
+                    }
+                    delete wrapper;
+                }
+            }
+#else
             func(value);
+#endif
         } catch (...) {
             // Ignore exceptions from callback execution after the fact
         }
     }
+}
+
+template <typename T>
+void Promise<T>::setCancellable(std::stop_token stopToken) {
+    if (stopToken.stop_possible()) {
+        setupCancellationHandler(stopToken);
+    }
+}
+
+template <typename T>
+void Promise<T>::setupCancellationHandler(std::stop_token token) {
+    // Use jthread to automatically manage the cancellation handler
+    cancellationThread_.emplace([this, token](std::stop_token localToken) {
+        std::stop_callback callback(token, [this]() { cancel(); });
+
+        // Wait until the local token is stopped or the promise is completed
+        while (!localToken.stop_requested() && !completed_.load()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    });
 }
 
 template <typename T>
@@ -405,7 +776,7 @@ template <typename T>
     if (wasCancelled) {
         // Only try to set exception if we were the ones who cancelled it
         try {
-            // 修复：使用字符串构造 PromiseCancelledException
+            // Fix: Use string to construct PromiseCancelledException
             promise_.set_exception(std::make_exception_ptr(
                 PromiseCancelledException("Promise was explicitly cancelled")));
         } catch (...) {
@@ -413,8 +784,16 @@ template <typename T>
         }
 
         // Clear any pending callbacks
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        // Clean up lock-free queue
+        CallbackWrapper* wrapper = nullptr;
+        while (callbacks_.pop(wrapper)) {
+            delete wrapper;
+        }
+#else
         std::unique_lock lock(mutex_);
         callbacks_.clear();
+#endif
     }
 
     return wasCancelled;
@@ -437,6 +816,36 @@ void Promise<T>::runCallbacks() noexcept {
         return;
     }
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    // Lock-free queue version
+    if (callbacks_.empty())
+        return;
+
+    if (future_.valid() && future_.wait_for(std::chrono::seconds(0)) ==
+                               std::future_status::ready) {
+        try {
+            T value = future_.get();  // Get the value
+            CallbackWrapper* wrapper = nullptr;
+            while (callbacks_.pop(wrapper)) {
+                if (wrapper && wrapper->callback) {
+                    try {
+                        wrapper->callback(value);
+                    } catch (...) {
+                        // Ignore exceptions in callbacks
+                    }
+                    delete wrapper;
+                }
+            }
+        } catch (...) {
+            // Handle the case where the future contains an exception
+            // Clean up callbacks but do not execute
+            CallbackWrapper* wrapper = nullptr;
+            while (callbacks_.pop(wrapper)) {
+                delete wrapper;
+            }
+        }
+    }
+#else
     // Make a local copy of callbacks to avoid holding the lock while executing
     // them
     std::vector<std::function<void(T)>> localCallbacks;
@@ -466,244 +875,388 @@ void Promise<T>::runCallbacks() noexcept {
             // We don't invoke callbacks in this case.
         }
     }
+#endif
 }
 
 template <typename T>
 [[nodiscard]] auto Promise<T>::operator co_await() const noexcept {
-    struct Awaiter {
-        std::shared_future<T> future;
-
-        bool await_ready() const noexcept {
-            return future.wait_for(std::chrono::seconds(0)) ==
-                   std::future_status::ready;
-        }
-
-        void await_suspend(std::coroutine_handle<> h) const {
-            // Use std::thread to not block the coroutine
-            std::thread([this, h]() mutable {
-                future.wait();
-                h.resume();
-            }).detach();
-        }
-
-        T await_resume() const { return future.get(); }
-    };
-
-    return Awaiter{future_};
+    return PromiseAwaiter<T>(future_);
 }
 
-// Implementation for void specialization
-Promise<void>::Promise() noexcept : future_(promise_.get_future().share()) {}
-
-// 实现void特化的移动构造函数
-Promise<void>::Promise(Promise&& other) noexcept
-    : promise_(std::move(other.promise_)), future_(std::move(other.future_)) {
-    std::unique_lock lock(other.mutex_);
-    callbacks_ = std::move(other.callbacks_);
-    cancelled_.store(other.cancelled_.load());
-    completed_.store(other.completed_.load());
-    other.callbacks_.clear();
-    other.cancelled_.store(false);
-    other.completed_.store(false);
+template <typename T>
+[[nodiscard]] auto Promise<T>::getAwaiter() noexcept -> PromiseAwaiter<T> {
+    return PromiseAwaiter<T>(future_);
 }
 
-// 实现void特化的移动赋值运算符
-Promise<void>& Promise<void>::operator=(Promise&& other) noexcept {
-    if (this != &other) {
-        promise_ = std::move(other.promise_);
-        future_ = std::move(other.future_);
-
-        std::scoped_lock lock(mutex_, other.mutex_);
-        callbacks_ = std::move(other.callbacks_);
-        cancelled_.store(other.cancelled_.load());
-        completed_.store(other.completed_.load());
-
-        other.callbacks_.clear();
-        other.cancelled_.store(false);
-        other.completed_.store(false);
-    }
-    return *this;
-}
-
-[[nodiscard]] auto Promise<void>::getEnhancedFuture() noexcept
-    -> EnhancedFuture<void> {
-    return EnhancedFuture<void>(future_);
-}
-
-void Promise<void>::setValue() {
-    if (isCancelled()) {
-        THROW_PROMISE_CANCELLED_EXCEPTION(
-            "Cannot set value, promise was cancelled.");
-    }
-
-    if (completed_.exchange(true)) {
-        THROW_PROMISE_CANCELLED_EXCEPTION(
-            "Cannot set value, promise was already completed.");
-    }
-
-    try {
-        promise_.set_value();
-        runCallbacks();  // Execute callbacks
-    } catch (const std::exception& e) {
-        // If we can't set the value due to a system exception, capture it
-        try {
-            promise_.set_exception(std::current_exception());
-        } catch (...) {
-            // Promise might already be satisfied or broken, ignore this
-        }
-        throw;  // Rethrow the original exception
-    }
-}
-
-void Promise<void>::setException(std::exception_ptr exception) noexcept(false) {
-    if (isCancelled()) {
-        THROW_PROMISE_CANCELLED_EXCEPTION(
-            "Cannot set exception, promise was cancelled.");
-    }
-
-    if (completed_.exchange(true)) {
-        THROW_PROMISE_CANCELLED_EXCEPTION(
-            "Cannot set exception, promise was already completed.");
-    }
-
-    if (!exception) {
-        exception = std::make_exception_ptr(std::invalid_argument(
-            "Null exception pointer passed to setException"));
-    }
-
-    try {
-        promise_.set_exception(exception);
-        runCallbacks();  // Execute callbacks
-    } catch (const std::exception&) {
-        // Promise might already be satisfied or broken
-        throw;  // Propagate the exception
-    }
-}
-
-template <typename F>
-    requires VoidCallbackInvocable<F>
-void Promise<void>::onComplete(F&& func) {
-    // First check if cancelled without acquiring the lock for better
-    // performance
-    if (isCancelled()) {
-        return;  // No callbacks should be added if the promise is cancelled
-    }
-
-    bool shouldRunCallback = false;
-    {
-        std::unique_lock lock(mutex_);
-        if (isCancelled()) {
-            return;  // Double-check after acquiring the lock
-        }
-
-        // Store callback
-        callbacks_.emplace_back(std::forward<F>(func));
-
-        // Check if we should run the callback immediately
-        shouldRunCallback =
-            future_.valid() && future_.wait_for(std::chrono::seconds(0)) ==
-                                   std::future_status::ready;
-    }
-
-    // Run callback outside the lock if needed
-    if (shouldRunCallback) {
-        try {
-            future_.get();
-            func();
-        } catch (...) {
-            // Ignore exceptions from callback execution after the fact
-        }
-    }
-}
-
-[[nodiscard]] bool Promise<void>::cancel() noexcept {
-    bool expectedValue = false;
-    const bool wasCancelled =
-        cancelled_.compare_exchange_strong(expectedValue, true);
-
-    if (wasCancelled) {
-        // Only try to set exception if we were the ones who cancelled it
-        try {
-            // 修复：使用字符串构造 PromiseCancelledException
-            promise_.set_exception(std::make_exception_ptr(
-                PromiseCancelledException("Promise was explicitly cancelled")));
-        } catch (...) {
-            // Promise might already have a value or exception, ignore this
-        }
-
-        // Clear any pending callbacks
-        std::unique_lock lock(mutex_);
-        callbacks_.clear();
-    }
-
-    return wasCancelled;
-}
-
-[[nodiscard]] auto Promise<void>::isCancelled() const noexcept -> bool {
-    return cancelled_.load(std::memory_order_acquire);
-}
-
-[[nodiscard]] auto Promise<void>::getFuture() const noexcept
-    -> std::shared_future<void> {
-    return future_;
-}
-
-[[nodiscard]] auto Promise<void>::operator co_await() const noexcept {
-    struct Awaiter {
-        std::shared_future<void> future;
-
-        bool await_ready() const noexcept {
-            return future.wait_for(std::chrono::seconds(0)) ==
-                   std::future_status::ready;
-        }
-
-        void await_suspend(std::coroutine_handle<> h) const {
-            // Use std::thread to not block the coroutine
-            std::thread([this, h]() mutable {
-                future.wait();
-                h.resume();
-            }).detach();
-        }
-
-        void await_resume() const { future.get(); }
-    };
-
-    return Awaiter{future_};
-}
-
-void Promise<void>::runCallbacks() noexcept {
+template <typename T>
+template <typename F, typename... Args>
+    requires std::invocable<F, Args...>
+void Promise<T>::runAsync(F&& func, Args&&... args) {
     if (isCancelled()) {
         return;
     }
 
-    // Make a local copy of callbacks to avoid holding the lock while executing
-    // them
-    std::vector<std::function<void()>> localCallbacks;
-    {
-        std::shared_lock lock(mutex_);
-        if (callbacks_.empty())
-            return;
-        localCallbacks = std::move(callbacks_);
-        callbacks_.clear();
-    }
+    // Use platform-specific thread optimization for asynchronous execution
+#if defined(ATOM_PLATFORM_WINDOWS)
+    // Windows thread pool optimization
+    struct ThreadData {
+        Promise<T>* promise;
+        std::tuple<std::decay_t<F>, std::decay_t<Args>...> func_and_args;
 
-    if (future_.valid() && future_.wait_for(std::chrono::seconds(0)) ==
-                               std::future_status::ready) {
+        ThreadData(Promise<T>* p, F&& f, Args&&... a)
+            : promise(p),
+              func_and_args(std::forward<F>(f), std::forward<Args>(a)...) {}
+
+        static unsigned long WINAPI ThreadProc(void* param) {
+            auto* data = static_cast<ThreadData*>(param);
+            try {
+                if constexpr (std::is_void_v<
+                                  std::invoke_result_t<F, Args...>>) {
+                    // Handle void return function
+                    std::apply(
+                        [](auto&&... args) {
+                            std::invoke(std::forward<decltype(args)>(args)...);
+                        },
+                        data->func_and_args);
+
+                    // For void return type functions, need special handling for
+                    // Promise<T> type
+                    if constexpr (std::is_void_v<T>) {
+                        data->promise->setValue();
+                    } else {
+                        // This case is actually a type mismatch, should cause
+                        // compile error Handle runtime case here only
+                    }
+                } else {
+                    // Handle function with return value
+                    auto result = std::apply(
+                        [](auto&&... args) {
+                            return std::invoke(
+                                std::forward<decltype(args)>(args)...);
+                        },
+                        data->func_and_args);
+
+                    if constexpr (std::is_convertible_v<
+                                      std::invoke_result_t<F, Args...>, T>) {
+                        data->promise->setValue(std::move(result));
+                    }
+                }
+            } catch (...) {
+                data->promise->setException(std::current_exception());
+            }
+            delete data;
+            return 0;
+        }
+    };
+
+    auto* threadData = new ThreadData(this, std::forward<F>(func),
+                                      std::forward<Args>(args)...);
+    HANDLE threadHandle = CreateThread(nullptr, 0, ThreadData::ThreadProc,
+                                       threadData, 0, nullptr);
+    if (threadHandle) {
+        CloseHandle(threadHandle);
+    } else {
+        // Failed to create thread, clean up resources
+        delete threadData;
+        setException(std::make_exception_ptr(
+            std::runtime_error("Failed to create thread")));
+    }
+#elif defined(ATOM_PLATFORM_MACOS)
+    // macOS GCD optimization
+    struct DispatchData {
+        Promise<T>* promise;
+        std::tuple<std::decay_t<F>, std::decay_t<Args>...> func_and_args;
+
+        DispatchData(Promise<T>* p, F&& f, Args&&... a)
+            : promise(p),
+              func_and_args(std::forward<F>(f), std::forward<Args>(a)...) {}
+
+        static void Execute(void* context) {
+            auto* data = static_cast<DispatchData*>(context);
+            try {
+                if constexpr (std::is_void_v<
+                                  std::invoke_result_t<F, Args...>>) {
+                    std::apply(
+                        [](auto&&... args) {
+                            std::invoke(std::forward<decltype(args)>(args)...);
+                        },
+                        data->func_and_args);
+
+                    if constexpr (std::is_void_v<T>) {
+                        data->promise->setValue();
+                    }
+                } else {
+                    auto result = std::apply(
+                        [](auto&&... args) {
+                            return std::invoke(
+                                std::forward<decltype(args)>(args)...);
+                        },
+                        data->func_and_args);
+
+                    if constexpr (std::is_convertible_v<
+                                      std::invoke_result_t<F, Args...>, T>) {
+                        data->promise->setValue(std::move(result));
+                    }
+                }
+            } catch (...) {
+                data->promise->setException(std::current_exception());
+            }
+            delete data;
+        }
+    };
+
+    auto* dispatchData = new DispatchData(this, std::forward<F>(func),
+                                          std::forward<Args>(args)...);
+    dispatch_async_f(
+        dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
+        dispatchData, DispatchData::Execute);
+#else
+    // Standard C++20 implementation
+    std::jthread([this, func = std::forward<F>(func),
+                  ... args = std::forward<Args>(args)]() mutable {
         try {
-            future_.get();  // Check for exceptions
-            for (auto& callback : localCallbacks) {
-                try {
-                    callback();
-                } catch (...) {
-                    // Ignore exceptions from callbacks
-                    // In a production system, you might want to log these
+            if constexpr (std::is_void_v<std::invoke_result_t<F, Args...>>) {
+                std::invoke(func, args...);
+
+                if constexpr (std::is_void_v<T>) {
+                    this->setValue();
+                }
+            } else {
+                auto result = std::invoke(func, args...);
+
+                if constexpr (std::is_convertible_v<
+                                  std::invoke_result_t<F, Args...>, T>) {
+                    this->setValue(std::move(result));
                 }
             }
         } catch (...) {
-            // Handle the case where the future contains an exception.
-            // We don't invoke callbacks in this case.
+            this->setException(std::current_exception());
         }
+    }).detach();
+#endif
+}
+
+template <typename F, typename... Args>
+    requires std::invocable<F, Args...>
+void Promise<void>::runAsync(F&& func, Args&&... args) {
+    if (isCancelled()) {
+        return;
     }
+
+    // Use platform-specific thread optimization for asynchronous execution,
+    // similar to non-void version
+#if defined(ATOM_PLATFORM_WINDOWS)
+    struct ThreadData {
+        Promise<void>* promise;
+        std::tuple<std::decay_t<F>, std::decay_t<Args>...> func_and_args;
+
+        ThreadData(Promise<void>* p, F&& f, Args&&... a)
+            : promise(p),
+              func_and_args(std::forward<F>(f), std::forward<Args>(a)...) {}
+
+        static unsigned long WINAPI ThreadProc(void* param) {
+            auto* data = static_cast<ThreadData*>(param);
+            try {
+                std::apply(
+                    [](auto&&... args) {
+                        std::invoke(std::forward<decltype(args)>(args)...);
+                    },
+                    data->func_and_args);
+                data->promise->setValue();
+            } catch (...) {
+                data->promise->setException(std::current_exception());
+            }
+            delete data;
+            return 0;
+        }
+    };
+
+    auto* threadData = new ThreadData(this, std::forward<F>(func),
+                                      std::forward<Args>(args)...);
+    HANDLE threadHandle = CreateThread(nullptr, 0, ThreadData::ThreadProc,
+                                       threadData, 0, nullptr);
+    if (threadHandle) {
+        CloseHandle(threadHandle);
+    } else {
+        delete threadData;
+        setException(std::make_exception_ptr(
+            std::runtime_error("Failed to create thread")));
+    }
+#elif defined(ATOM_PLATFORM_MACOS)
+    struct DispatchData {
+        Promise<void>* promise;
+        std::tuple<std::decay_t<F>, std::decay_t<Args>...> func_and_args;
+
+        DispatchData(Promise<void>* p, F&& f, Args&&... a)
+            : promise(p),
+              func_and_args(std::forward<F>(f), std::forward<Args>(a)...) {}
+
+        static void Execute(void* context) {
+            auto* data = static_cast<DispatchData*>(context);
+            try {
+                std::apply(
+                    [](auto&&... args) {
+                        std::invoke(std::forward<decltype(args)>(args)...);
+                    },
+                    data->func_and_args);
+                data->promise->setValue();
+            } catch (...) {
+                data->promise->setException(std::current_exception());
+            }
+            delete data;
+        }
+    };
+
+    auto* dispatchData = new DispatchData(this, std::forward<F>(func),
+                                          std::forward<Args>(args)...);
+    dispatch_async_f(
+        dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
+        dispatchData, DispatchData::Execute);
+#else
+    std::jthread([this, func = std::forward<F>(func),
+                  ... args = std::forward<Args>(args)]() mutable {
+        try {
+            std::invoke(func, args...);
+            this->setValue();
+        } catch (...) {
+            this->setException(std::current_exception());
+        }
+    }).detach();
+#endif
+}
+
+// New: Helper function to create a completed Promise
+template <typename T>
+auto makeReadyPromise(T value) {
+    Promise<T> promise;
+    promise.setValue(std::move(value));
+    return promise;
+}
+
+// void specialization
+inline auto makeReadyPromise() {
+    Promise<void> promise;
+    promise.setValue();
+    return promise;
+}
+
+// New: Create a cancelled Promise
+template <typename T>
+auto makeCancelledPromise() {
+    Promise<T> promise;
+    promise.cancel();
+    return promise;
+}
+
+// New: Create an asynchronously executed Promise from a function
+template <typename F, typename... Args>
+    requires std::invocable<F, Args...>
+auto makePromiseFromFunction(F&& func, Args&&... args) {
+    using ResultType = std::invoke_result_t<F, Args...>;
+
+    if constexpr (std::is_void_v<ResultType>) {
+        Promise<void> promise;
+        promise.runAsync(std::forward<F>(func), std::forward<Args>(args)...);
+        return promise;
+    } else {
+        Promise<ResultType> promise;
+        promise.runAsync(std::forward<F>(func), std::forward<Args>(args)...);
+        return promise;
+    }
+}
+
+// New: Combine multiple Promises, return result array when all Promises
+// complete
+template <typename T>
+auto whenAll(std::vector<Promise<T>>& promises) {
+    Promise<std::vector<T>> resultPromise;
+
+    if (promises.empty()) {
+        resultPromise.setValue({});
+        return resultPromise;
+    }
+
+    // Create shared state to track completion status
+    struct SharedState {
+        std::mutex mutex;
+        std::vector<T> results;
+        size_t completedCount = 0;
+        size_t totalCount;
+        Promise<std::vector<T>> resultPromise;
+        std::vector<std::exception_ptr> exceptions;
+
+        explicit SharedState(size_t count, Promise<std::vector<T>> promise)
+            : totalCount(count), resultPromise(std::move(promise)) {
+            results.resize(count);
+        }
+    };
+
+    auto state = std::make_shared<SharedState>(promises.size(), resultPromise);
+
+    // Set callback for each promise
+    for (size_t i = 0; i < promises.size(); ++i) {
+        promises[i].onComplete([state, i](T value) {
+            std::unique_lock lock(state->mutex);
+            state->results[i] = std::move(value);
+            state->completedCount++;
+
+            if (state->completedCount == state->totalCount) {
+                if (state->exceptions.empty()) {
+                    state->resultPromise.setValue(std::move(state->results));
+                } else {
+                    // If there are any exceptions, propagate the first one to
+                    // the result Promise
+                    state->resultPromise.setException(state->exceptions[0]);
+                }
+            }
+        });
+    }
+
+    return resultPromise;
+}
+
+// void specialization
+inline auto whenAll(std::vector<Promise<void>>& promises) {
+    Promise<void> resultPromise;
+
+    if (promises.empty()) {
+        resultPromise.setValue();
+        return resultPromise;
+    }
+
+    // Create shared state to track completion status
+    struct SharedState {
+        std::mutex mutex;
+        size_t completedCount = 0;
+        size_t totalCount;
+        Promise<void> resultPromise;
+        std::vector<std::exception_ptr> exceptions;
+
+        explicit SharedState(size_t count, Promise<void> promise)
+            : totalCount(count), resultPromise(std::move(promise)) {}
+    };
+
+    auto state = std::make_shared<SharedState>(promises.size(), resultPromise);
+
+    // Set callback for each promise
+    for (size_t i = 0; i < promises.size(); ++i) {
+        promises[i].onComplete([state]() {
+            std::unique_lock lock(state->mutex);
+            state->completedCount++;
+
+            if (state->completedCount == state->totalCount) {
+                if (state->exceptions.empty()) {
+                    state->resultPromise.setValue();
+                } else {
+                    // If there are any exceptions, propagate the first one to
+                    // the result Promise
+                    state->resultPromise.setException(state->exceptions[0]);
+                }
+            }
+        });
+    }
+
+    return resultPromise;
 }
 
 }  // namespace atom::async

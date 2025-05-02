@@ -659,10 +659,11 @@ Task<AsyncResult<std::string>> AsyncFile::readFile(PathString auto&& filename) {
     std::promise<AsyncResult<std::string>> promise;
     auto future = promise.get_future();
 
-    asyncRead(file_path, [promise = std::move(promise)](
-                             AsyncResult<std::string> result) mutable {
-        promise.set_value(std::move(result));
-    });
+    asyncRead(file_path,
+              [promise = std::make_shared<decltype(promise)>(std::move(
+                   promise))](AsyncResult<std::string> result) mutable {
+                  promise->set_value(std::move(result));
+              });
 
     co_return future.get();
 }
@@ -684,11 +685,11 @@ Task<AsyncResult<void>> AsyncFile::writeFile(PathString auto&& filename,
     std::promise<AsyncResult<void>> promise;
     auto future = promise.get_future();
 
-    asyncWrite(
-        file_path, content,
-        [promise = std::move(promise)](AsyncResult<void> result) mutable {
-            promise.set_value(std::move(result));
-        });
+    asyncWrite(file_path, content,
+               [promise = std::make_shared<decltype(promise)>(
+                    std::move(promise))](AsyncResult<void> result) mutable {
+                   promise->set_value(std::move(result));
+               });
 
     co_return future.get();
 }
@@ -954,9 +955,9 @@ AsyncDirectory::listContents(PathString auto&& path) {
 
     asyncListContents(
         dir_path,
-        [promise = std::move(promise)](
+        [promise = std::make_shared<decltype(promise)>(std::move(promise))](
             AsyncResult<std::vector<std::filesystem::path>> result) mutable {
-            promise.set_value(std::move(result));
+            promise->set_value(std::move(result));
         });
 
     co_return future.get();
