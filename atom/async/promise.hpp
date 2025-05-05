@@ -286,7 +286,66 @@ public:
      */
     template <typename F>
         requires VoidCallbackInvocable<F>
-    void onComplete(F&& func);
+    void onComplete(F&& func) {
+        // First check if cancelled without acquiring the lock for better
+        // performance
+        if (isCancelled()) {
+            return;  // No callbacks should be added if the promise is cancelled
+        }
+
+        bool shouldRunCallback = false;
+        {
+#ifdef ATOM_USE_BOOST_LOCKFREE
+            // Lock-free queue implementation
+            auto* wrapper = new CallbackWrapper(std::forward<F>(func));
+            callbacks_.push(wrapper);
+
+            // Check if the callback should be run immediately
+            shouldRunCallback =
+                future_.valid() && future_.wait_for(std::chrono::seconds(0)) ==
+                                       std::future_status::ready;
+#else
+            std::unique_lock lock(mutex_);
+            if (isCancelled()) {
+                return;  // Double-check after acquiring the lock
+            }
+
+            // Store callback
+            callbacks_.emplace_back(std::forward<F>(func));
+
+            // Check if we should run the callback immediately
+            shouldRunCallback =
+                future_.valid() && future_.wait_for(std::chrono::seconds(0)) ==
+                                       std::future_status::ready;
+#endif
+        }
+
+        // Run callback outside the lock if needed
+        if (shouldRunCallback) {
+            try {
+                future_.get();  // Get the value (void)
+#ifdef ATOM_USE_BOOST_LOCKFREE
+                // For lock-free queue, we need to handle callback execution
+                // manually
+                CallbackWrapper* wrapper = nullptr;
+                while (callbacks_.pop(wrapper)) {
+                    if (wrapper && wrapper->callback) {
+                        try {
+                            wrapper->callback();
+                        } catch (...) {
+                            // Ignore exceptions in callbacks
+                        }
+                        delete wrapper;
+                    }
+                }
+#else
+                func();
+#endif
+            } catch (...) {
+                // Ignore exceptions from callback execution after the fact
+            }
+        }
+    }
 
     /**
      * @brief Use C++20 stop_token to support cancellable operations
@@ -1172,7 +1231,7 @@ auto whenAll(std::vector<Promise<T>>& promises) {
     Promise<std::vector<T>> resultPromise;
 
     if (promises.empty()) {
-        resultPromise.setValue({});
+        resultPromise.setValue(std::vector<T>{});
         return resultPromise;
     }
 

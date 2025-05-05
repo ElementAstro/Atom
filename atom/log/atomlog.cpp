@@ -16,36 +16,48 @@ Description: Enhanced Logger Implementation for Atom with C++20 Features
 #include "atomlog.hpp"
 
 #include <algorithm>
-// #include <chrono> // Removed unused include
 #include <condition_variable>
-#include <format>  // Keep for std::format and std::vformat
+#include <format>  // 用于std::format和std::vformat
 #include <fstream>
 #include <memory>
 #include <mutex>
 #include <queue>
 #include <shared_mutex>
-// #include <sstream> // Removed unused include
-#include <stop_token>  // Include stop_token header
+#include <stop_token>  // 用于std::stop_token
+#include <syncstream>  // 添加std::osyncstream支持
 #include <thread>
 #include <unordered_map>
-#include <utility>  // For std::move
+#include <utility>  // 用于std::move
 
+// 平台特定头文件
 #ifdef _WIN32
 #include <windows.h>
 #undef ERROR
-#elif defined(__linux__) || defined(__APPLE__)
+#elif defined(__linux__)
 #include <syslog.h>
-#include <sstream>  // Needed for getThreadName fallback
+#include <systemd/sd-journal.h>  // 添加systemd journal支持
+#include <sstream>               // getThreadName回退需要
+#elif defined(__APPLE__)
+#include <os/log.h>  // 添加macOS os_log支持
+#include <syslog.h>
+#include <sstream>  // getThreadName回退需要
 #elif defined(__ANDROID__)
 #include <android/log.h>
-#include <sstream>  // Needed for getThreadName fallback
+#include <sstream>  // getThreadName回退需要
 #else
-#include <sstream>  // Needed for getThreadName fallback
+#include <sstream>  // getThreadName回退需要
 #endif
 
 #include "atom/utils/time.hpp"
 
 namespace atom::log {
+
+// 定义一个帮助函数，用于从std::source_location创建位置字符串
+[[nodiscard]] constexpr std::string formatSourceLocation(
+    const std::source_location& location) {
+    return std::format("{}:{}:{}", location.file_name(), location.line(),
+                       location.function_name());
+}
 
 class Logger::LoggerImpl : public std::enable_shared_from_this<LoggerImpl> {
 public:
@@ -55,30 +67,42 @@ public:
           max_file_size_(max_file_size),
           max_files_(max_files),
           min_level_(min_level),
-          system_logging_enabled_(false) {
+          system_logging_enabled_(false),
+          batch_size_(64) {  // 添加批处理大小参数
         rotateLogFile();
+        // 使用std::jthread和C++20 stop_token
         worker_ = std::jthread([this](std::stop_token st) { this->run(st); });
+#ifdef __APPLE__
+        // 初始化macOS os_log
+        os_log_handle_ = os_log_create("com.lightapt.atomlogger", "main");
+#endif
     }
 
     ~LoggerImpl() {
-        // Request stop and wait for worker thread to finish processing queue
+        // 请求停止并等待worker线程完成队列处理
         worker_.request_stop();
         {
             std::lock_guard lock(queue_mutex_);
-            finished_ = true;  // Signal that no more items will be added
+            finished_ = true;  // 标记不再添加项目
         }
-        cv_.notify_one();  // Wake up worker if waiting
-        // jthread destructor automatically joins
+        cv_.notify_one();  // 如果正在等待则唤醒worker
+
+        // jthread析构函数自动join
 
         if (log_file_.is_open()) {
             log_file_.close();
         }
 
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__)
         if (system_logging_enabled_) {
             closelog();
         }
-#elif defined(_WIN32)  // Ensure h_event_log_ is handled on Windows
+#elif defined(__APPLE__)
+        if (system_logging_enabled_) {
+            closelog();
+            // os_log不需要显式关闭
+        }
+#elif defined(_WIN32)  // 确保Windows上处理h_event_log_
         if (h_event_log_) {
             DeregisterEventSource(h_event_log_);
             h_event_log_ = nullptr;
@@ -86,11 +110,11 @@ public:
 #endif
     }
 
-    // Prevent copying
+    // 防止复制
     LoggerImpl(const LoggerImpl&) = delete;
     LoggerImpl& operator=(const LoggerImpl&) = delete;
 
-    // Manually defined move constructor
+    // 手动定义移动构造函数
     LoggerImpl(LoggerImpl&& other) noexcept
         : file_name_(std::move(other.file_name_)),
           log_file_(std::move(other.log_file_)),  // ofstream is movable
@@ -106,8 +130,11 @@ public:
           sinks_(std::move(other.sinks_)),
           system_logging_enabled_(other.system_logging_enabled_),
 #ifdef _WIN32
-          h_event_log_(other.h_event_log_),
+          batch_size_(other.batch_size_),
+#elif defined(__APPLE__)
+          os_log_handle_(other.os_log_handle_),
 #endif
+          h_event_log_(other.h_event_log_),
           custom_levels_(std::move(other.custom_levels_)) {
         // Lock the source's mutex to safely move the queue contents
         // This is complex because the source worker might still be running.
@@ -126,7 +153,7 @@ public:
         // Consider stopping the worker in the source before move if needed.
     }
 
-    // Manually defined move assignment operator
+    // 手动定义移动赋值运算符
     LoggerImpl& operator=(LoggerImpl&& other) noexcept {
         if (this == &other) {
             return *this;
@@ -163,8 +190,11 @@ public:
 #ifdef _WIN32
         h_event_log_ = other.h_event_log_;
         other.h_event_log_ = nullptr;  // Prevent double DeregisterEventSource
+#elif defined(__APPLE__)
+        os_log_handle_ = other.os_log_handle_;
 #endif
         custom_levels_ = std::move(other.custom_levels_);
+        batch_size_ = other.batch_size_;
 
         other.finished_ = true;  // Mark source as finished
 
@@ -186,13 +216,19 @@ public:
         pattern_ = pattern;
     }
 
+    // 设置批处理大小
+    void setBatchSize(size_t size) {
+        std::lock_guard lock(queue_mutex_);
+        batch_size_ = size;
+    }
+
     void registerSink(const std::shared_ptr<LoggerImpl>& logger) {
-        if (!logger || logger.get() == this) {  // Add null check
-            // Prevent registering null or self
+        if (!logger || logger.get() == this) {  // 添加空检查
+            // 防止注册空指针或自身
             return;
         }
         std::lock_guard lock(sinks_mutex_);
-        // Avoid duplicates
+        // 避免重复
         if (std::find(sinks_.begin(), sinks_.end(), logger) == sinks_.end()) {
             sinks_.emplace_back(logger);
         }
@@ -200,7 +236,7 @@ public:
 
     void removeSink(const std::shared_ptr<LoggerImpl>& logger) {
         if (!logger)
-            return;  // Add null check
+            return;  // 添加空检查
         std::lock_guard lock(sinks_mutex_);
         sinks_.erase(std::remove(sinks_.begin(), sinks_.end(), logger),
                      sinks_.end());
@@ -214,19 +250,18 @@ public:
     void enableSystemLogging(bool enable) {
         std::lock_guard lock(system_log_mutex_);
         if (system_logging_enabled_ == enable)
-            return;  // Avoid redundant calls
+            return;  // 避免重复调用
 
         system_logging_enabled_ = enable;
 
 #ifdef _WIN32
         if (system_logging_enabled_) {
-            if (!h_event_log_) {  // Check if already registered
+            if (!h_event_log_) {  // 检查是否已注册
                 h_event_log_ = RegisterEventSourceW(nullptr, L"AtomLogger");
                 if (!h_event_log_) {
-                    // Log error or throw? For now, just disable system logging
-                    // again.
+                    // 日志错误或抛出？现在只是再次禁用系统日志记录。
                     system_logging_enabled_ = false;
-                    // Consider logging this failure to the file logger itself
+                    // 考虑将此失败记录到文件日志记录器本身
                     log(LogLevel::ERROR,
                         "Failed to register Windows Event Source.");
                 }
@@ -235,15 +270,16 @@ public:
             DeregisterEventSource(h_event_log_);
             h_event_log_ = nullptr;
         }
-#elif defined(__linux__) || defined(__APPLE__)
+#elif defined(__linux__)
         if (system_logging_enabled_) {
-            // openlog can be called multiple times, subsequent calls change
-            // identity
+            // openlog可以多次调用，后续调用会更改标识
             openlog("AtomLogger", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL1);
-        } else {
-            // closelog should only be called when completely done, typically in
-            // destructor If disabling temporarily, maybe just skip syslog
-            // calls? For simplicity, we keep closelog in destructor only.
+        }
+#elif defined(__APPLE__)
+        if (system_logging_enabled_) {
+            // macOS既使用传统syslog也使用新的os_log
+            openlog("AtomLogger", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL1);
+            // os_log_handle_已在构造函数中初始化
         }
 #endif
     }
@@ -253,70 +289,87 @@ public:
         custom_levels_[name] = severity;
     }
 
-    // Changed msg parameter to std::string_view for efficiency
-    void log(LogLevel level, std::string_view msg) {
-        // Check level early
-        // Use relaxed atomic load if min_level_ becomes atomic later
+    // 使用std::string_view提高效率
+    void log(LogLevel level, std::string_view msg,
+             const std::source_location& location =
+                 std::source_location::current()) {
+        // 早期检查日志级别
         std::shared_lock levelLock(level_mutex_);
         if (static_cast<int>(level) < static_cast<int>(min_level_)) {
-            levelLock.unlock();  // Unlock early if not logging
+            levelLock.unlock();  // 如果不记录则提前解锁
             return;
         }
-        levelLock.unlock();  // Unlock after check
+        levelLock.unlock();  // 检查后解锁
 
-        // Format message outside the queue lock
-        auto formattedMsg = formatMessage(level, msg);
+        // 在队列锁外格式化消息
+        auto formattedMsg = formatMessage(level, msg, location);
 
         {
             std::lock_guard lock(queue_mutex_);
             if (finished_)
-                return;  // Don't enqueue if logger is shutting down
-            // Consider checking queue size if limiting is needed
-            log_queue_.push(std::move(formattedMsg));  // Move formatted message
-        }
-        cv_.notify_one();
+                return;  // 如果记录器正在关闭，则不入队
 
-        // Check system logging enablement outside queue lock
+            log_queue_.push(std::move(formattedMsg));  // 移动格式化消息
+
+            // 如果队列大小超过批处理阈值，唤醒worker线程进行处理
+            if (log_queue_.size() >= batch_size_) {
+                cv_.notify_one();
+            }
+        }
+
+        // 非批处理大小触发时也要通知，确保低延迟日志
+        if (batch_size_ > 1) {
+            cv_.notify_one();
+        }
+
+        // 在队列锁外检查系统日志启用
         std::shared_lock sysLogLock(system_log_mutex_);
         bool sysLogEnabled = system_logging_enabled_;
         sysLogLock.unlock();
 
         if (sysLogEnabled) {
-            // Pass the already formatted message if system log doesn't need
-            // reformatting Assuming logToSystem wants the fully formatted
-            // message
-            logToSystem(level, formattedMsg);  // Pass formatted message
+            logToSystem(level, formattedMsg, location);  // 传递格式化消息
         }
 
-        // Dispatch to sinks outside queue lock
-        dispatchToSinks(level, msg);  // Pass original message
+        // 在队列锁外调度到接收器
+        dispatchToSinks(level, msg, location);  // 传递原始消息
+    }
+
+    void flush() {
+        std::lock_guard lock(queue_mutex_);
+        if (log_file_.is_open()) {
+            log_file_.flush();
+        }
     }
 
 private:
     fs::path file_name_;
     std::ofstream log_file_;
     std::queue<std::string> log_queue_;
-    std::mutex queue_mutex_;  // Protects log_queue_ and finished_ flag
+    std::mutex queue_mutex_;  // 保护log_queue_和finished_标志
     std::condition_variable_any
-        cv_;  // Use condition_variable_any for stop_token support
-    bool finished_ = false;  // Protected by queue_mutex_
+        cv_;                 // 使用condition_variable_any支持stop_token
+    bool finished_ = false;  // 受queue_mutex_保护
     std::jthread worker_;
     size_t max_file_size_;
     int max_files_;
-    LogLevel min_level_;  // Protected by level_mutex_
+    LogLevel min_level_;  // 受level_mutex_保护
     std::unordered_map<std::thread::id, std::string>
-        thread_names_;                         // Protected by thread_mutex_
-    std::string pattern_ = "[{}][{}][{}] {}";  // Protected by pattern_mutex_
-    std::vector<std::shared_ptr<LoggerImpl>>
-        sinks_;                            // Protected by sinks_mutex_
-    bool system_logging_enabled_ = false;  // Protected by system_log_mutex_
+        thread_names_;  // 受thread_mutex_保护
+    std::string pattern_ =
+        "[{}][{}][{}] {} {}";  // 修改默认模式包含位置信息，受pattern_mutex_保护
+    std::vector<std::shared_ptr<LoggerImpl>> sinks_;  // 受sinks_mutex_保护
+    bool system_logging_enabled_ = false;             // 受system_log_mutex_保护
+    size_t batch_size_;  // 批处理大小，受queue_mutex_保护
 
 #ifdef _WIN32
-    HANDLE h_event_log_ = nullptr;  // Protected indirectly by system_log_mutex_
-                                    // during enable/disable
+    HANDLE h_event_log_ =
+        nullptr;  // 在启用/禁用期间由system_log_mutex_间接保护
+#elif defined(__APPLE__)
+    os_log_t os_log_handle_ = nullptr;  // macOS os_log句柄
 #endif
 
-    // Mutexes for thread-safe access to members
+    // 互斥锁，用于线程安全访问成员
     mutable std::shared_mutex thread_mutex_;
     mutable std::shared_mutex pattern_mutex_;
     mutable std::shared_mutex sinks_mutex_;
@@ -324,7 +377,7 @@ private:
     mutable std::shared_mutex level_mutex_;
     mutable std::shared_mutex custom_level_mutex_;
     std::unordered_map<std::string, int>
-        custom_levels_;  // Protected by custom_level_mutex_
+        custom_levels_;  // 受custom_level_mutex_保护
 
     void rotateLogFile() {
         // This function modifies log_file_ and interacts with the filesystem.
@@ -437,28 +490,22 @@ private:
     }
 
     auto getThreadName() -> std::string {
-        // Use shared lock for reading thread_names_
+        // 使用共享锁读取thread_names_
         std::shared_lock lock(thread_mutex_);
         auto thread_id = std::this_thread::get_id();
         auto it = thread_names_.find(thread_id);
         if (it != thread_names_.end()) {
             return it->second;
         }
-        lock.unlock();  // Unlock before potential formatting/hashing
+        lock.unlock();  // 格式化/散列前解锁
 
-        // Format thread ID if name not found
-        // Use std::format for consistency if available and suitable
-        // std::hash might not be stable across runs, consider alternative ID
-        // representation if needed return std::format("{}",
-        // std::hash<std::thread::id>{}(thread_id)); Using ostringstream as a
-        // portable way to format thread::id
+        // 如果未找到名称，则格式化线程ID
         std::ostringstream oss;
         oss << thread_id;
         return oss.str();
     }
 
-    static auto logLevelToString(LogLevel level)
-        -> std::string_view {  // Return string_view
+    static auto logLevelToString(LogLevel level) -> std::string_view {
         using enum LogLevel;
         switch (level) {
             case TRACE:
@@ -473,113 +520,112 @@ private:
                 return "ERROR";
             case CRITICAL:
                 return "CRITICAL";
+            case OFF:
+                return "OFF";
             default:
                 return "UNKNOWN";
         }
     }
 
-    // Changed msg parameter to std::string_view
-    auto formatMessage(LogLevel level, std::string_view msg) -> std::string {
+    // 添加source_location支持
+    auto formatMessage(LogLevel level, std::string_view msg,
+                       const std::source_location& location) -> std::string {
         auto currentTime =
-            utils::getChinaTimestampString();  // Assuming this returns
-                                               // std::string
-        auto threadName = getThreadName();  // Assuming this returns std::string
-        auto levelStr = logLevelToString(level);  // Returns std::string_view
+            utils::getChinaTimestampString();     // 假设这返回std::string
+        auto threadName = getThreadName();        // 假设这返回std::string
+        auto levelStr = logLevelToString(level);  // 返回std::string_view
 
-        // Use shared lock for reading pattern_
+        // 格式化源位置信息
+        std::string locationInfo =
+            std::format("{}:{}:{}", location.file_name(), location.line(),
+                        location.function_name());
+
+        // 使用共享锁读取pattern_
         std::shared_lock patternLock(pattern_mutex_);
-        // Ensure pattern_ is treated as a runtime format string if needed
-        // return std::format(pattern_, currentTime, levelStr, threadName, msg);
-        // // If pattern_ is simple
 
-        // Use vformat for runtime format string
-        // Need to ensure arguments are correctly passed to make_format_args
-        // Arguments must match the placeholders in pattern_
-        // Assuming pattern_ is like "[{}] [{}] [{}] {}"
-        // Ensure all arguments are convertible for std::make_format_args
-        // std::string_view is convertible.
+        // 使用string_view和format_to减少分配和复制
+        std::string result;
+        // 预分配足够的空间，避免重新分配
+        result.reserve(currentTime.size() + levelStr.size() +
+                       threadName.size() + msg.size() + locationInfo.size() +
+                       20);
+
+        // 使用vformat将参数传递给运行时format字符串
         return std::vformat(
-            pattern_,
-            std::make_format_args(currentTime, levelStr, threadName, msg));
+            pattern_, std::make_format_args(currentTime, levelStr, threadName,
+                                            msg, locationInfo));
     }
 
     void run(std::stop_token stop_token) {
+        std::vector<std::string> batch;  // 用于批量处理的消息缓冲区
+        batch.reserve(batch_size_);      // 预分配空间
+
         while (true) {
-            std::string msg;
-            bool should_rotate = false;
             {
                 std::unique_lock lock(queue_mutex_);
-                // Wait using condition_variable_any with stop_token
+                // 使用condition_variable_any和stop_token等待
                 if (!cv_.wait(lock, stop_token, [this] {
                         return !log_queue_.empty() || finished_;
                     })) {
-                    // Wait was cancelled by stop_token
-                    // Process remaining messages if any, then exit
+                    // 等待被stop_token取消
+                    // 如果有的话，处理剩余消息，然后退出
                     if (log_queue_.empty())
                         break;
                 }
 
-                // Check finished condition (might be set after stop_token)
+                // 检查完成条件（可能在stop_token之后设置）
                 if (finished_ && log_queue_.empty()) {
-                    break;  // Exit if finished and queue is empty
+                    break;  // 如果完成且队列为空则退出
                 }
 
-                // If we woke up and queue is not empty
-                if (!log_queue_.empty()) {
-                    msg = std::move(log_queue_.front());  // Move message
+                // 批量处理：将消息从队列移动到批处理缓冲区
+                while (!log_queue_.empty() && batch.size() < batch_size_) {
+                    batch.push_back(std::move(log_queue_.front()));
                     log_queue_.pop();
-                } else {
-                    // Spurious wake or finished_ is true but queue became empty
-                    // between predicate check and now. Loop again.
-                    continue;
                 }
 
-            }  // Mutex unlocked here
+                // 队列仍有消息但达到批处理大小，通知其他线程可能正在等待
+                if (!log_queue_.empty()) {
+                    cv_.notify_one();
+                }
+            }  // 在此处解锁互斥锁
 
-            // Perform file I/O outside the lock
-            if (log_file_.is_open()) {
-                log_file_ << msg << std::endl;
-                // Flush frequently for visibility, maybe less often for
-                // performance
+            // 在锁外进行文件I/O
+            if (log_file_.is_open() && !batch.empty()) {
+                // 使用osyncstream进行线程安全的文件写入
+                {
+                    // 使用同步流，无需手动缓冲区同步
+                    std::osyncstream synced_stream(log_file_);
+                    for (const auto& msg : batch) {
+                        synced_stream << msg << '\n';
+                    }
+                    // 析构函数自动刷新和同步
+                }
+
+                // 刷新主流以确保写入磁盘
                 log_file_.flush();
 
-                // Check file size for rotation
-                // Use try-catch for tellp in case of stream errors
+                // 检查文件大小以进行轮替
                 try {
-                    // Check file size only after writing
                     if (max_file_size_ > 0) {
-                        // Get current position which is approx file size after
-                        // write+flush
                         std::streampos current_pos = log_file_.tellp();
                         if (current_pos != static_cast<std::streampos>(-1) &&
                             current_pos >=
                                 static_cast<std::streampos>(max_file_size_)) {
-                            should_rotate = true;
+                            rotateLogFile();
                         }
                     }
                 } catch (const std::ios_base::failure& e) {
-                    // Handle stream error, maybe log to stderr
                     fprintf(stderr, "Error checking log file size: %s\n",
                             e.what());
                 }
-            } else {
-                // Handle case where log file is not open (e.g., initial open
-                // failed)
-                fprintf(stderr, "Log file is not open. Message lost: %s\n",
-                        msg.c_str());
+
+                // 清空批处理缓冲区，但保留容量
+                batch.clear();
             }
 
-            if (should_rotate) {
-                // Rotation must be done carefully.
-                // No lock needed here if rotateLogFile handles its own safety
-                // or if only this thread modifies the file stream state.
-                rotateLogFile();
-            }
-
-            // Check stop token again after processing message, before
-            // potentially waiting again
-            if (stop_token.stop_requested() && log_queue_.empty()) {
-                // Check queue one last time under lock before exiting loop
+            // 再次检查stop token，如果请求停止并且队列为空则退出循环
+            if (stop_token.stop_requested()) {
                 std::lock_guard lock(queue_mutex_);
                 if (log_queue_.empty())
                     break;
@@ -587,10 +633,9 @@ private:
         }
     }
 
-    // Changed msg parameter to std::string_view
-    void logToSystem(LogLevel level, std::string_view msg) const {
-        // No need for system_log_mutex_ here if system_logging_enabled_ check
-        // happens before calling
+    // 更新系统日志功能以支持更多平台特性
+    void logToSystem(LogLevel level, std::string_view msg,
+                     const std::source_location& location) const {
 #ifdef _WIN32
         if (h_event_log_) {
             using enum LogLevel;
@@ -598,7 +643,7 @@ private:
             switch (level) {
                 case CRITICAL:
                     eventType = EVENTLOG_ERROR_TYPE;
-                    break;  // Treat critical as error
+                    break;
                 case ERROR:
                     eventType = EVENTLOG_ERROR_TYPE;
                     break;
@@ -610,70 +655,173 @@ private:
                     break;
                 case DEBUG:
                     eventType = EVENTLOG_INFORMATION_TYPE;
-                    break;  // Treat debug as info
+                    break;
                 case TRACE:
                     eventType = EVENTLOG_INFORMATION_TYPE;
-                    break;  // Treat trace as info
+                    break;
                 default:
                     eventType = EVENTLOG_INFORMATION_TYPE;
                     break;
             }
 
-            // Convert UTF-8 string_view to wide string for Windows API
-            int wide_len =
-                MultiByteToWideChar(CP_UTF8, 0, msg.data(),
-                                    static_cast<int>(msg.length()), nullptr, 0);
+            // 将带位置信息的消息转为Windows需要的宽字符串
+            std::string fullMsg = std::format(
+                "{}:{} - {}", location.file_name(), location.line(), msg);
+
+            int wide_len = MultiByteToWideChar(
+                CP_UTF8, 0, fullMsg.data(), static_cast<int>(fullMsg.length()),
+                nullptr, 0);
             if (wide_len > 0) {
                 std::wstring wideMsg(wide_len, 0);
-                MultiByteToWideChar(CP_UTF8, 0, msg.data(),
-                                    static_cast<int>(msg.length()), &wideMsg[0],
-                                    wide_len);
+                MultiByteToWideChar(CP_UTF8, 0, fullMsg.data(),
+                                    static_cast<int>(fullMsg.length()),
+                                    &wideMsg[0], wide_len);
                 LPCWSTR messages[] = {wideMsg.c_str()};
                 ReportEventW(h_event_log_, eventType, 0, 0, nullptr, 1, 0,
                              messages, nullptr);
             } else {
-                // Log conversion error?
                 fprintf(stderr,
                         "Failed to convert log message to wide string for "
                         "Windows Event Log.\n");
             }
         }
-#elif defined(__linux__) || defined(__APPLE__)
-        // system_logging_enabled_ check should happen before calling this
-        // function if (system_logging_enabled_) { // Redundant check?
+#elif defined(__linux__)
+        // system_logging_enabled_检查应在调用此函数之前发生
         using enum LogLevel;
-        int priority;
-        switch (level) {
-            case CRITICAL:
-                priority = LOG_CRIT;
-                break;
-            case ERROR:
-                priority = LOG_ERR;
-                break;
-            case WARN:
-                priority = LOG_WARNING;
-                break;
-            case INFO:
-                priority = LOG_INFO;
-                break;
-            case DEBUG:
-                priority = LOG_DEBUG;
-                break;
-            case TRACE:
-                priority = LOG_DEBUG;
-                break;  // Map TRACE to DEBUG for syslog
-            default:
-                priority = LOG_NOTICE;
-                break;  // Default mapping
+
+        // 优先使用systemd journal（如果可用）
+        if (sd_journal_is_running() > 0) {
+            int priority;
+            switch (level) {
+                case CRITICAL:
+                    priority = LOG_CRIT;
+                    break;
+                case ERROR:
+                    priority = LOG_ERR;
+                    break;
+                case WARN:
+                    priority = LOG_WARNING;
+                    break;
+                case INFO:
+                    priority = LOG_INFO;
+                    break;
+                case DEBUG:
+                    priority = LOG_DEBUG;
+                    break;
+                case TRACE:
+                    priority = LOG_DEBUG;
+                    break;
+                default:
+                    priority = LOG_NOTICE;
+                    break;
+            }
+
+            // 使用结构化日志记录，包括位置信息作为元数据
+            sd_journal_send(
+                "MESSAGE=%s", std::string(msg).c_str(), "PRIORITY=%i", priority,
+                "CODE_FILE=%s", location.file_name(), "CODE_LINE=%d",
+                location.line(), "CODE_FUNC=%s", location.function_name(),
+                "SYSLOG_IDENTIFIER=AtomLogger", NULL);
         }
-        // syslog expects a null-terminated C string. Create one temporarily if
-        // msg is not null-terminated. Since msg is now string_view, we need to
-        // copy it.
-        std::string msg_str(msg);
-        syslog(priority, "%s", msg_str.c_str());
-        // }
+        // 回退到传统syslog
+        else {
+            int priority;
+            switch (level) {
+                case CRITICAL:
+                    priority = LOG_CRIT;
+                    break;
+                case ERROR:
+                    priority = LOG_ERR;
+                    break;
+                case WARN:
+                    priority = LOG_WARNING;
+                    break;
+                case INFO:
+                    priority = LOG_INFO;
+                    break;
+                case DEBUG:
+                    priority = LOG_DEBUG;
+                    break;
+                case TRACE:
+                    priority = LOG_DEBUG;
+                    break;
+                default:
+                    priority = LOG_NOTICE;
+                    break;
+            }
+            // 将位置信息添加到消息中
+            std::string fullMsg = std::format(
+                "{}:{} - {}", location.file_name(), location.line(), msg);
+            syslog(priority, "%s", fullMsg.c_str());
+        }
+#elif defined(__APPLE__)
+        // 使用macOS的os_log API
+        if (os_log_handle_) {
+            using enum LogLevel;
+            os_log_type_t type;
+            switch (level) {
+                case CRITICAL:
+                    type = OS_LOG_TYPE_FAULT;
+                    break;
+                case ERROR:
+                    type = OS_LOG_TYPE_ERROR;
+                    break;
+                case WARN:
+                    type = OS_LOG_TYPE_DEFAULT;
+                    break;
+                case INFO:
+                    type = OS_LOG_TYPE_INFO;
+                    break;
+                case DEBUG:
+                    type = OS_LOG_TYPE_DEBUG;
+                    break;
+                case TRACE:
+                    type = OS_LOG_TYPE_DEBUG;
+                    break;
+                default:
+                    type = OS_LOG_TYPE_DEFAULT;
+                    break;
+            }
+
+            // 格式化包含位置信息的消息
+            std::string fullMsg = std::format(
+                "{}:{} - {}", location.file_name(), location.line(), msg);
+
+            os_log_with_type(os_log_handle_, type, "%{public}s",
+                             fullMsg.c_str());
+        }
+        // 回退到传统syslog
+        else {
+            int priority;
+            switch (level) {
+                case CRITICAL:
+                    priority = LOG_CRIT;
+                    break;
+                case ERROR:
+                    priority = LOG_ERR;
+                    break;
+                case WARN:
+                    priority = LOG_WARNING;
+                    break;
+                case INFO:
+                    priority = LOG_INFO;
+                    break;
+                case DEBUG:
+                    priority = LOG_DEBUG;
+                    break;
+                case TRACE:
+                    priority = LOG_DEBUG;
+                    break;
+                default:
+                    priority = LOG_NOTICE;
+                    break;
+            }
+            // 将位置信息添加到消息中
+            std::string fullMsg = std::format(
+                "{}:{} - {}", location.file_name(), location.line(), msg);
+            syslog(priority, "%s", fullMsg.c_str());
+        }
 #elif defined(__ANDROID__)
-        // if (system_logging_enabled_) { // Redundant check?
         using enum LogLevel;
         android_LogPriority priority;
         switch (level) {
@@ -694,86 +842,76 @@ private:
                 break;
             case TRACE:
                 priority = ANDROID_LOG_VERBOSE;
-                break;  // Map TRACE to VERBOSE
+                break;
             default:
                 priority = ANDROID_LOG_DEFAULT;
                 break;
         }
-        // __android_log_print also expects a null-terminated C string.
-        std::string msg_str(msg);
-        __android_log_print(priority, "AtomLogger", "%s", msg_str.c_str());
-        // }
+
+        // 格式化包含位置信息的消息
+        std::string fullMsg = std::format("{}:{} - {}", location.file_name(),
+                                          location.line(), msg);
+
+        __android_log_print(priority, "AtomLogger", "%s", fullMsg.c_str());
 #else
-        // Suppress unused variable warning if no system logging is implemented
+        // 抑制未使用变量警告
         (void)level;
         (void)msg;
+        (void)location;
 #endif
     }
 
-    // Changed msg parameter to std::string_view
-    void dispatchToSinks(LogLevel level, std::string_view msg) {
-        // Use shared lock for reading sinks_
+    // 更新以支持source_location
+    void dispatchToSinks(LogLevel level, std::string_view msg,
+                         const std::source_location& location) {
+        // 使用共享锁读取sinks_
         std::shared_lock lock(sinks_mutex_);
         if (sinks_.empty()) {
-            return;  // Avoid iterating if no sinks
+            return;  // 如果没有接收器则避免迭代
         }
-        // Create a copy of the sink pointers to avoid holding the lock
-        // while calling potentially long-running sink->log methods.
+        // 创建接收器指针的副本，以避免持有锁
+        // 同时调用可能长时间运行的sink->log方法。
         auto sinks_copy = sinks_;
         lock.unlock();
 
-        // Convert string_view to std::string as sink->log expects std::string
-        // Do this only once before the loop
+        // 在循环前将string_view转换为std::string，因为sink->log期望std::string
         std::string msg_str(msg);
 
         for (const auto& sink : sinks_copy) {
-            if (sink) {  // Check if sink pointer is valid
-                // Pass the original message string
-                sink->log(level, msg_str);  // Pass std::string copy
+            if (sink) {  // 检查接收器指针是否有效
+                // 传递原始消息字符串和位置信息
+                sink->log(level, msg_str, location);
             }
         }
     }
-
-    // This function seems unused based on the provided code.
-    // If used, ensure thread safety with custom_level_mutex_.
-    /*
-    auto getCustomLogLevel(const std::string& name) -> LogLevel {
-        std::shared_lock lock(custom_level_mutex_);
-        auto it = custom_levels_.find(name);
-        if (it != custom_levels_.end()) {
-            return static_cast<LogLevel>(it->second);
-        }
-        return LogLevel::INFO; // Default or throw?
-    }
-    */
 };
 
-// `Logger` 类的方法实现
+// `Logger` 类方法实现
 
 Logger::Logger(const fs::path& file_name, LogLevel min_level,
                size_t max_file_size, int max_files)
     : impl_(std::make_shared<LoggerImpl>(file_name, min_level, max_file_size,
                                          max_files)) {}
 
-// Define destructor body (even if empty) because LoggerImpl is forward-declared
+// 定义析构函数体（即使为空），因为LoggerImpl是前向声明
 Logger::~Logger() = default;
 
-// Use String consistently as declared in the header
+// 一致使用String
 void Logger::setThreadName(const String& name) {
-    // Pass String directly, LoggerImpl expects std::string
+    // 直接传递String，LoggerImpl期望std::string
     impl_->setThreadName(name);
 }
 
 void Logger::setLevel(LogLevel level) { impl_->setLevel(level); }
 
-// Use String consistently
+// 一致使用String
 void Logger::setPattern(const String& pattern) {
-    // Pass String directly, LoggerImpl expects std::string
+    // 直接传递String，LoggerImpl期望std::string
     impl_->setPattern(pattern);
 }
 
 void Logger::registerSink(const std::shared_ptr<Logger>& logger) {
-    if (logger && logger.get() != this) {  // Prevent self-sink
+    if (logger && logger.get() != this) {  // 防止自我接收
         impl_->registerSink(logger->impl_);
     }
 }
@@ -790,16 +928,21 @@ void Logger::enableSystemLogging(bool enable) {
     impl_->enableSystemLogging(enable);
 }
 
-// Use String consistently
+// 一致使用String
 void Logger::registerCustomLogLevel(const String& name, int severity) {
-    // Pass String directly, LoggerImpl expects std::string
+    // 直接传递String，LoggerImpl期望std::string
     impl_->registerCustomLogLevel(name, severity);
 }
 
-// Keep std::string here as std::format returns std::string
-void Logger::log(LogLevel level, const std::string& msg) {
-    // Pass as string_view for efficiency
-    impl_->log(level, std::string_view(msg));
+// 添加source_location支持
+void Logger::log(LogLevel level, const std::string& msg,
+                 const std::source_location& location) {
+    // 为效率传递为string_view
+    impl_->log(level, std::string_view(msg), location);
+}
+
+void Logger::flush() {
+    impl_->flush();
 }
 
 }  // namespace atom::log

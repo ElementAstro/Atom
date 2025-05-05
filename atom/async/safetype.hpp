@@ -19,9 +19,7 @@ namespace atom::async {
 
 // Concept for types that can be used in lock-free data structures
 template <typename T>
-concept LockFreeSafe = std::is_nothrow_move_constructible_v<T> &&
-                       std::is_nothrow_destructible_v<T> &&
-                       std::is_nothrow_copy_constructible_v<T>;
+concept LockFreeSafe = std::is_nothrow_destructible_v<T>;
 
 /**
  * @brief A lock-free stack implementation suitable for concurrent use.

@@ -1,387 +1,497 @@
-#include <cassert>
+#include <chrono>
+#include <functional>
 #include <iostream>
+#include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
+
+// Define necessary feature flags
+#define ATOM_USE_BOOST_LOCKFREE
+#define ATOM_USE_BOOST_LOCKS
 
 #include "atom/async/generator.hpp"
 
-template <typename T>
-void print_generator(const std::string& description,
-                     atom::async::Generator<T>& gen) {
-    std::cout << description << ": ";
+using namespace atom::async;
+using namespace std::chrono_literals;
+
+void printSeparator(const std::string& title) {
+    std::cout << "\n===== " << title << " =====\n" << std::endl;
+}
+
+// ===== Basic Usage Examples =====
+
+// Simple integer generator
+Generator<int> simpleNumberGenerator(int start, int end) {
+    std::cout << "Generator started with range " << start << " to " << end
+              << std::endl;
+    for (int i = start; i <= end; ++i) {
+        std::cout << "Yielding: " << i << std::endl;
+        co_yield i;
+    }
+    std::cout << "Generator completed" << std::endl;
+}
+
+// Demonstrates basic usage of a generator
+void basicUsageExample() {
+    printSeparator("Basic Generator Usage");
+
+    std::cout << "Creating generator for numbers 1 to 5..." << std::endl;
+    Generator<int> gen = simpleNumberGenerator(1, 5);
+
+    std::cout << "Consuming values using range-based for loop:" << std::endl;
     for (const auto& value : gen) {
-        std::cout << value << " ";
+        std::cout << "Received: " << value << std::endl;
+    }
+}
+
+// Generator with complex type
+Generator<std::string> stringGenerator() {
+    co_yield "Hello";
+    co_yield "World";
+    co_yield "C++20";
+    co_yield "Coroutines";
+}
+
+// Demonstrates using generators with different types
+void differentTypesExample() {
+    printSeparator("Different Return Types");
+
+    // String generator
+    std::cout << "String generator example:" << std::endl;
+    Generator<std::string> strGen = stringGenerator();
+    for (const auto& str : strGen) {
+        std::cout << "String: " << str << std::endl;
+    }
+
+    // From range helper function
+    std::cout << "\nFrom range example:" << std::endl;
+    std::vector<double> values = {3.14, 2.71, 1.618, 1.414};
+    auto rangeGen = from_range(values);
+    for (const auto& val : rangeGen) {
+        std::cout << "Value: " << val << std::endl;
+    }
+
+    // Range generator helper
+    std::cout << "\nRange helper example (0 to 4 step 1):" << std::endl;
+    for (const auto& num : range(0, 5)) {
+        std::cout << num << " ";
+    }
+    std::cout << std::endl;
+
+    // Range with custom step
+    std::cout << "\nRange with step example (0 to 10 step 2):" << std::endl;
+    for (const auto& num : range(0, 11, 2)) {
+        std::cout << num << " ";
     }
     std::cout << std::endl;
 }
 
-// 1. 基本 Generator 使用示例
-void basic_generator_examples() {
-    std::cout << "\n=== 基本 Generator 示例 ===\n";
+// ===== Edge Cases and Boundary Values =====
 
-    // 简单的整数生成器
-    auto int_generator = []() -> atom::async::Generator<int> {
-        for (int i = 1; i <= 5; ++i) {
-            co_yield i;
-        }
-    };
-
-    auto gen = int_generator();
-    print_generator("整数生成器", gen);
-
-    // 字符串生成器
-    auto string_generator = []() -> atom::async::Generator<std::string> {
-        co_yield "Hello";
-        co_yield "World";
-        co_yield "C++20";
-        co_yield "Coroutines";
-    };
-
-    auto str_gen = string_generator();
-    print_generator("字符串生成器", str_gen);
-
-    // 使用 range 辅助函数
-    auto range_gen = atom::async::range(1, 6);
-    print_generator("range(1, 6)", range_gen);
-
-    // 使用不同步长
-    auto step_gen = atom::async::range(0, 10, 2);
-    print_generator("range(0, 10, 2)", step_gen);
-
-    // 从现有容器创建生成器
-    std::vector<double> values = {1.1, 2.2, 3.3, 4.4, 5.5};
-    auto from_range_gen = atom::async::from_range(values);
-    print_generator("from_range(vector)", from_range_gen);
+// Empty generator
+Generator<int> emptyGenerator() {
+    if (false) {
+        co_yield 42;  // Never reached
+    }
 }
 
-// 2. infinite_range 示例（带有有界限制）
-void infinite_range_examples() {
-    std::cout << "\n=== infinite_range 示例 ===\n";
+// Infinite generator
+Generator<int> infiniteGenerator(int start = 0) {
+    int current = start;
+    while (true) {
+        co_yield current++;
+    }
+    // Note: This line is never reached
+}
 
-    // 创建无限生成器但限制迭代次数
-    auto inf_gen = atom::async::infinite_range(1);
+// Generator with a single value
+Generator<int> singleValueGenerator(int value) { co_yield value; }
 
-    std::cout << "infinite_range(1) 的前 10 个元素: ";
+void edgeCasesExample() {
+    printSeparator("Edge Cases");
+
+    // Empty generator
+    std::cout << "Empty generator example:" << std::endl;
+    Generator<int> emptyGen = emptyGenerator();
+    bool hasValue = false;
+    for (const auto& val : emptyGen) {
+        std::cout << "Value: " << val << std::endl;
+        hasValue = true;
+    }
+    std::cout << "Generator had values: " << (hasValue ? "yes" : "no")
+              << std::endl;
+
+    // Single value generator
+    std::cout << "\nSingle value generator example:" << std::endl;
+    Generator<int> singleGen = singleValueGenerator(42);
+    for (const auto& val : singleGen) {
+        std::cout << "Value: " << val << std::endl;
+    }
+
+    // Infinite generator (limited by user intervention)
+    std::cout << "\nInfinite generator example (limited to 5 values):"
+              << std::endl;
+    Generator<int> infGen = infiniteGenerator(10);
     int count = 0;
-    for (const auto& value : inf_gen) {
-        std::cout << value << " ";
-        if (++count >= 10)
-            break;  // 避免无限循环
+    for (const auto& val : infGen) {
+        std::cout << "Value: " << val << std::endl;
+        if (++count >= 5) {
+            std::cout << "Breaking out of infinite generator after 5 values"
+                      << std::endl;
+            break;
+        }
     }
-    std::cout << std::endl;
 
-    // 带步长的无限生成器
-    auto step_inf_gen = atom::async::infinite_range(0, 5);
-
-    std::cout << "infinite_range(0, 5) 的前 8 个元素: ";
+    // Using the infinite_range helper
+    std::cout << "\nInfinite range helper (limited to 5 values):" << std::endl;
     count = 0;
-    for (const auto& value : step_inf_gen) {
-        std::cout << value << " ";
-        if (++count >= 8)
+    for (const auto& val : infinite_range(100)) {
+        std::cout << "Value: " << val << std::endl;
+        if (++count >= 5) {
+            std::cout << "Breaking out after 5 values" << std::endl;
             break;
+        }
+    }
+}
+
+// ===== Error Handling Examples =====
+
+// Generator that throws an exception
+Generator<int> exceptionGenerator() {
+    std::cout << "Starting exception generator" << std::endl;
+    co_yield 1;
+    co_yield 2;
+    throw std::runtime_error("Generator error occurred!");
+    co_yield 3;  // Never reached
+}
+
+void errorHandlingExample() {
+    printSeparator("Error Handling");
+
+    // Handling exceptions from a generator
+    std::cout << "Exception handling example:" << std::endl;
+    Generator<int> exGen = exceptionGenerator();
+
+    try {
+        for (const auto& val : exGen) {
+            std::cout << "Value before exception: " << val << std::endl;
+        }
+    } catch (const std::exception& e) {
+        std::cout << "Caught exception: " << e.what() << std::endl;
+    }
+
+    // Manual error handling with iterator
+    std::cout << "\nError handling with iterators:" << std::endl;
+    Generator<int> exGen2 = exceptionGenerator();
+    auto it = exGen2.begin();
+
+    try {
+        while (it != exGen2.end()) {
+            std::cout << "Value: " << *it << std::endl;
+            ++it;
+        }
+    } catch (const std::exception& e) {
+        std::cout << "Caught exception: " << e.what() << std::endl;
+    }
+}
+
+// ===== Two-Way Generator Examples =====
+
+// Simple two-way generator that echoes with modification
+TwoWayGenerator<int, int> echoGenerator() {
+    int received = 0;
+    while (true) {
+        received = co_yield received * 2;
+    }
+}
+
+// Two-way generator with void receive
+TwoWayGenerator<std::string, void> messageGenerator() {
+    co_yield "Hello";
+    co_yield "World";
+    co_yield "C++20";
+    co_yield "Coroutines";
+}
+
+void twoWayGeneratorExample() {
+    printSeparator("Two-Way Generator Examples");
+
+    // Echo generator example
+    std::cout << "Echo generator example:" << std::endl;
+    auto echo = echoGenerator();
+
+    for (int i = 1; i <= 5; ++i) {
+        std::cout << "Sending: " << i << std::endl;
+        int response = echo.next(i);
+        std::cout << "Received: " << response << std::endl;
+    }
+
+    // Generator without receive type
+    std::cout << "\nMessage generator example:" << std::endl;
+    auto messages = messageGenerator();
+
+    try {
+        while (!messages.done()) {
+            std::cout << "Message: " << messages.next() << std::endl;
+        }
+    } catch (const std::logic_error& e) {
+        std::cout << "Generator finished: " << e.what() << std::endl;
+    }
+}
+
+// ===== Advanced Examples =====
+
+// Generator that produces a Fibonacci sequence
+Generator<unsigned long long> fibonacciGenerator(int limit) {
+    if (limit <= 0) {
+        co_return;
+    }
+
+    unsigned long long a = 0, b = 1;
+    co_yield a;
+
+    if (limit == 1) {
+        co_return;
+    }
+
+    co_yield b;
+    int count = 2;
+
+    while (count < limit) {
+        unsigned long long next = a + b;
+        co_yield next;
+        a = b;
+        b = next;
+        ++count;
+    }
+}
+
+// Generator that lazily processes data
+Generator<std::string> lazyTransform(
+    const std::vector<int>& data, std::function<std::string(int)> transformer) {
+    for (const auto& item : data) {
+        // Simulate expensive operation
+        std::this_thread::sleep_for(50ms);
+        co_yield transformer(item);
+    }
+}
+
+void advancedExamples() {
+    printSeparator("Advanced Generator Examples");
+
+    // Fibonacci sequence
+    std::cout << "Fibonacci sequence (first 10 numbers):" << std::endl;
+    auto fib = fibonacciGenerator(10);
+    for (const auto& num : fib) {
+        std::cout << num << " ";
     }
     std::cout << std::endl;
-}
 
-// 3. TwoWayGenerator 示例
-void two_way_generator_examples() {
-    std::cout << "\n=== TwoWayGenerator 示例 ===\n";
+    // Lazy transformation pipeline
+    std::cout << "\nLazy transformation example:" << std::endl;
+    std::vector<int> data = {1, 2, 3, 4, 5};
 
-    // 创建一个双向通信生成器（计算发送值的平方）
-    auto square_generator = []() -> atom::async::TwoWayGenerator<int, int> {
-        int received = 0;
-        while (true) {
-            received = co_yield received * received;
-        }
-    };
+    auto start = std::chrono::high_resolution_clock::now();
 
-    auto two_way_gen = square_generator();
+    auto transformed = lazyTransform(data, [](int n) {
+        return "Processed item: " + std::to_string(n * 10);
+    });
 
-    // 发送值到生成器并获取结果
-    try {
-        std::cout << "双向生成器示例 (计算平方):" << std::endl;
-        std::cout << "发送 5，接收: " << two_way_gen.next(5)
-                  << std::endl;  // 初始值为0，返回0
-        std::cout << "发送 3，接收: " << two_way_gen.next(3)
-                  << std::endl;  // 返回5²=25
-        std::cout << "发送 7，接收: " << two_way_gen.next(7)
-                  << std::endl;  // 返回3²=9
-        std::cout << "发送 10，接收: " << two_way_gen.next(10)
-                  << std::endl;  // 返回7²=49
-    } catch (const std::exception& e) {
-        std::cerr << "错误: " << e.what() << std::endl;
+    std::cout << "Generator created (lazy, no processing done yet)"
+              << std::endl;
+
+    // Consuming the transformed data (this is where the actual work happens)
+    for (const auto& result : transformed) {
+        std::cout << result << std::endl;
     }
 
-    // 不接收值的 TwoWayGenerator 示例
-    auto counter_generator = []() -> atom::async::TwoWayGenerator<int, void> {
-        int count = 0;
-        while (true) {
-            co_yield count++;
-        }
-    };
-
-    auto counter_gen = counter_generator();
-
-    std::cout << "\n计数生成器示例:" << std::endl;
-    for (int i = 0; i < 5; ++i) {
-        std::cout << "next() 返回: " << counter_gen.next() << std::endl;
-    }
-}
-
-// 4. 错误处理示例
-void error_handling_examples() {
-    std::cout << "\n=== 错误处理示例 ===\n";
-
-    // 生成器抛出异常示例
-    auto throwing_generator = []() -> atom::async::Generator<int> {
-        co_yield 1;
-        co_yield 2;
-        throw std::runtime_error("生成器异常示例");
-        co_yield 3;  // 不会执行到这里
-    };
-
-    std::cout << "处理生成器异常:" << std::endl;
-    try {
-        auto gen = throwing_generator();
-        for (const auto& value : gen) {
-            std::cout << "值: " << value << std::endl;
-        }
-    } catch (const std::exception& e) {
-        std::cout << "捕获异常: " << e.what() << std::endl;
-    }
-
-    // TwoWayGenerator 耗尽后的错误
-    auto finite_two_way_gen = []() -> atom::async::TwoWayGenerator<int, int> {
-        co_yield 1;
-        co_yield 2;
-        // 结束协程
-    };
-
-    std::cout << "\n双向生成器耗尽示例:" << std::endl;
-    try {
-        auto gen = finite_two_way_gen();
-        std::cout << "第一个值: " << gen.next(0) << std::endl;
-        std::cout << "第二个值: " << gen.next(0) << std::endl;
-        std::cout << "尝试获取更多值..." << std::endl;
-        std::cout << "第三个值: " << gen.next(0) << std::endl;  // 会抛出异常
-    } catch (const std::exception& e) {
-        std::cout << "捕获异常: " << e.what() << std::endl;
-    }
-}
-
-// 5. 边界情况示例
-void edge_cases_examples() {
-    std::cout << "\n=== 边界情况示例 ===\n";
-
-    // 空生成器
-    auto empty_generator = []() -> atom::async::Generator<int> {
-        // 不生成任何值
-    };
-
-    std::cout << "空生成器示例:" << std::endl;
-    auto empty_gen = empty_generator();
-    bool is_empty = true;
-    for (const auto& value : empty_gen) {
-        std::cout << value << " ";
-        is_empty = false;
-    }
-    std::cout << (is_empty ? "生成器为空" : "生成器不为空") << std::endl;
-
-    // 只生成一个值的生成器
-    auto single_value_generator = []() -> atom::async::Generator<std::string> {
-        co_yield "单值";
-    };
-
-    std::cout << "\n单值生成器: ";
-    auto single_gen = single_value_generator();
-    int count = 0;
-    for (const auto& value : single_gen) {
-        std::cout << value << " ";
-        count++;
-    }
-    std::cout << "(总数: " << count << ")" << std::endl;
-
-    // 使用特殊值的 range
-    std::cout << "\n边界范围值:" << std::endl;
-    auto zero_range = atom::async::range(0, 0);
-    print_generator("range(0, 0)", zero_range);
-
-    auto negative_range = atom::async::range(-5, -1);
-    print_generator("range(-5, -1)", negative_range);
-
-    auto reverse_range = atom::async::range(5, 1, -1);
-    print_generator("range(5, 1, -1)", reverse_range);
-}
-
-// 6. 复杂使用示例 - 斐波那契数列生成器
-void fibonacci_generator_example() {
-    std::cout << "\n=== 斐波那契数列生成器 ===\n";
-
-    auto fibonacci = []() -> atom::async::Generator<uint64_t> {
-        uint64_t a = 0, b = 1;
-        while (true) {  // 无限生成斐波那契数列
-            co_yield a;
-            uint64_t next = a + b;
-            a = b;
-            b = next;
-
-            // 为了安全，防止溢出
-            if (b < a) {
-                co_yield b;  // 最后一个可以表示的值
-                break;
-            }
-        }
-    };
-
-    std::cout << "斐波那契数列的前 20 个数：" << std::endl;
-    auto fib_gen = fibonacci();
-    int count = 0;
-    for (const auto& value : fib_gen) {
-        std::cout << value << " ";
-        if (++count >= 20)
-            break;
-    }
-    std::cout << std::endl;
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cout << "Transformation took " << duration.count() << "ms"
+              << std::endl;
 }
 
 #ifdef ATOM_USE_BOOST_LOCKS
-// 7. 线程安全生成器示例（仅当 ATOM_USE_BOOST_LOCKS 定义时可用）
-void thread_safe_generator_examples() {
-    std::cout << "\n=== 线程安全生成器示例 ===\n";
+void threadSafeGeneratorExample() {
+    printSeparator("Thread-Safe Generator Example");
 
-    auto counter = []() -> atom::async::ThreadSafeGenerator<int> {
-        for (int i = 0; i < 100; ++i) {
+    // Create a thread-safe generator function
+    auto threadSafeGen = []() -> ThreadSafeGenerator<int> {
+        for (int i = 0; i < 10; ++i) {
             co_yield i;
         }
     };
 
-    auto gen = counter();
+    ThreadSafeGenerator<int> gen = threadSafeGen();
 
-    // 创建多个线程从同一个生成器消费值
+    // Simulate multiple threads consuming the generator
     std::vector<std::thread> threads;
-    std::mutex cout_mutex;
+    std::mutex outputMutex;
 
-    for (int i = 0; i < 3; ++i) {
-        threads.emplace_back([&gen, i, &cout_mutex]() {
-            int count = 0;
-            for (const auto& value : gen) {
-                {
-                    std::lock_guard<std::mutex> lock(cout_mutex);
-                    std::cout << "线程 " << i << " 获得值: " << value
-                              << std::endl;
-                }
-                count++;
-                if (count >= 10)
-                    break;  // 每个线程只消费10个值
-                std::this_thread::sleep_for(std::chrono::milliseconds(5));
-            }
-        });
-    }
-
-    for (auto& t : threads) {
-        t.join();
-    }
-}
-#endif
-
-#ifdef ATOM_USE_BOOST_LOCKFREE
-// 8. 无锁并发生成器示例（仅当 ATOM_USE_BOOST_LOCKFREE 定义时可用）
-void lock_free_generator_examples() {
-    std::cout << "\n=== 无锁并发生成器示例 ===\n";
-
-    // 创建一个生成整数的函数
-    auto producer = []() -> atom::async::Generator<int> {
-        for (int i = 0; i < 100; ++i) {
-            co_yield i;
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-    };
-
-    // 创建并发生成器
-    auto concurrent_gen = atom::async::make_concurrent_generator(producer);
-
-    // 创建多个消费者线程
-    std::vector<std::thread> consumers;
-    std::mutex cout_mutex;
-
-    for (int i = 0; i < 3; ++i) {
-        consumers.emplace_back([&concurrent_gen, i, &cout_mutex]() {
+    for (int t = 0; t < 3; ++t) {
+        threads.emplace_back([&gen, t, &outputMutex]() {
             try {
-                for (int j = 0; j < 10; ++j) {
-                    int value;
-                    while (!concurrent_gen.try_next(value) &&
-                           !concurrent_gen.done()) {
-                        std::this_thread::yield();
-                    }
-
-                    if (concurrent_gen.done())
-                        break;
-
+                // Each thread will try to consume some values
+                for (const auto& val : gen) {
                     {
-                        std::lock_guard<std::mutex> lock(cout_mutex);
-                        std::cout << "消费者 " << i << " 接收到值: " << value
+                        std::lock_guard<std::mutex> lock(outputMutex);
+                        std::cout << "Thread " << t << " got value: " << val
                                   << std::endl;
                     }
-
-                    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                    std::this_thread::sleep_for(10ms);  // Simulate work
                 }
             } catch (const std::exception& e) {
-                std::lock_guard<std::mutex> lock(cout_mutex);
-                std::cout << "消费者 " << i << " 错误: " << e.what()
+                std::lock_guard<std::mutex> lock(outputMutex);
+                std::cout << "Thread " << t << " caught exception: " << e.what()
                           << std::endl;
             }
         });
     }
 
-    for (auto& c : consumers) {
-        c.join();
-    }
-
-    // 无锁双向生成器示例
-    auto calculator = []() -> atom::async::TwoWayGenerator<std::string, int> {
-        int value;
-        while (true) {
-            value = co_yield "结果: " + std::to_string(value * value);
-        }
-    };
-
-    atom::async::LockFreeTwoWayGenerator<std::string, int> two_way_gen(
-        calculator);
-
-    std::cout << "\n无锁双向生成器示例:" << std::endl;
-    for (int i = 1; i <= 5; ++i) {
-        std::string result = two_way_gen.send(i);
-        std::cout << "发送 " << i << ", 收到: " << result << std::endl;
+    // Wait for all threads to complete
+    for (auto& thread : threads) {
+        thread.join();
     }
 }
 #endif
 
-int main() {
-    std::cout << "===== atom::async::generator.hpp 使用示例 =====" << std::endl;
-
-    // 运行所有示例
-    basic_generator_examples();
-    infinite_range_examples();
-    two_way_generator_examples();
-    error_handling_examples();
-    edge_cases_examples();
-    fibonacci_generator_example();
-
-#ifdef ATOM_USE_BOOST_LOCKS
-    thread_safe_generator_examples();
-#else
-    std::cout << "\n注意: 线程安全生成器示例需要定义 ATOM_USE_BOOST_LOCKS "
-                 "并链接 Boost.Thread 库"
-              << std::endl;
-#endif
-
 #ifdef ATOM_USE_BOOST_LOCKFREE
-    lock_free_generator_examples();
-#else
-    std::cout << "\n注意: 无锁生成器示例需要定义 ATOM_USE_BOOST_LOCKFREE "
-                 "并链接 Boost.Lockfree 库"
-              << std::endl;
+void concurrentGeneratorExample() {
+    printSeparator("Concurrent Generator Example");
+
+    // Create a concurrent generator from a regular generator function
+    auto genFunc = []() -> Generator<int> {
+        for (int i = 0; i < 20; ++i) {
+            co_yield i;
+            // Simulate varying processing times
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(10 + (i % 5) * 10));
+        }
+    };
+
+    ConcurrentGenerator<int> concurrentGen(genFunc);
+
+    // Multiple consumer threads
+    std::vector<std::thread> consumerThreads;
+    std::mutex outputMutex;
+
+    for (int t = 0; t < 4; ++t) {
+        consumerThreads.emplace_back([&concurrentGen, t, &outputMutex]() {
+            try {
+                while (!concurrentGen.done()) {
+                    int value;
+                    if (concurrentGen.try_next(value)) {
+                        {
+                            std::lock_guard<std::mutex> lock(outputMutex);
+                            std::cout << "Consumer " << t
+                                      << " received: " << value << std::endl;
+                        }
+                        std::this_thread::sleep_for(
+                            std::chrono::milliseconds(15 + t * 5));
+                    }
+                }
+            } catch (const std::exception& e) {
+                std::lock_guard<std::mutex> lock(outputMutex);
+                std::cout << "Consumer " << t << " error: " << e.what()
+                          << std::endl;
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(outputMutex);
+                std::cout << "Consumer " << t << " finished" << std::endl;
+            }
+        });
+    }
+
+    // Wait for consumers to finish
+    for (auto& thread : consumerThreads) {
+        thread.join();
+    }
+
+    std::cout << "All consumers finished" << std::endl;
+}
+
+void lockFreeTwoWayGeneratorExample() {
+    printSeparator("Lock-Free Two-Way Generator Example");
+
+    // Create a two-way generator that echoes input with transformation
+    auto twoWayFunc = []() -> TwoWayGenerator<std::string, int> {
+        int value = 0;
+        while (true) {
+            value = co_yield "Received: " + std::to_string(value) +
+                    ", squared: " + std::to_string(value * value);
+        }
+    };
+
+    LockFreeTwoWayGenerator<std::string, int> twoWayGen(twoWayFunc);
+
+    // Producer thread sending values
+    std::thread producerThread([&twoWayGen]() {
+        for (int i = 1; i <= 10; ++i) {
+            try {
+                std::string response = twoWayGen.send(i);
+                std::cout << "Producer sent: " << i << ", got: " << response
+                          << std::endl;
+                std::this_thread::sleep_for(50ms);
+            } catch (const std::exception& e) {
+                std::cout << "Producer error: " << e.what() << std::endl;
+                break;
+            }
+        }
+    });
+
+    producerThread.join();
+}
 #endif
+
+// Main function running all examples
+int main() {
+    try {
+        std::cout << "C++20 Generator Examples" << std::endl;
+
+        // Basic examples
+        basicUsageExample();
+        differentTypesExample();
+
+        // Edge cases
+        edgeCasesExample();
+
+        // Error handling
+        errorHandlingExample();
+
+        // Two-way generators
+        twoWayGeneratorExample();
+
+        // Advanced examples
+        advancedExamples();
+
+        // Thread-safe generators (if ATOM_USE_BOOST_LOCKS is defined)
+#ifdef ATOM_USE_BOOST_LOCKS
+        threadSafeGeneratorExample();
+#else
+        std::cout << "\n===== Thread-Safe Generator Example =====\n"
+                  << std::endl;
+        std::cout << "Skipped: ATOM_USE_BOOST_LOCKS not defined" << std::endl;
+#endif
+
+        // Concurrent generators (if ATOM_USE_BOOST_LOCKFREE is defined)
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        concurrentGeneratorExample();
+        lockFreeTwoWayGeneratorExample();
+#else
+        std::cout << "\n===== Concurrent Generator Example =====\n"
+                  << std::endl;
+        std::cout << "Skipped: ATOM_USE_BOOST_LOCKFREE not defined"
+                  << std::endl;
+#endif
+
+        std::cout << "\nAll examples completed successfully!" << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Unhandled exception: " << e.what() << std::endl;
+        return 1;
+    }
 
     return 0;
 }

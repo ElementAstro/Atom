@@ -5,91 +5,92 @@
 #include <thread>
 #include <vector>
 
-// 如果需要使用 Boost 锁定功能，取消下面的注释
+// Uncomment below to use Boost locks functionality
 // #define ATOM_USE_BOOST_LOCKS
 
-// 如果需要使用 Boost 无锁队列功能，取消下面的注释
+// Uncomment below to use Boost lockfree queue functionality
 // #define ATOM_USE_BOOST_LOCKFREE
 
 #include "atom/async/trigger.hpp"
 
-// 辅助宏，用于格式化输出
+// Helper macros for formatted output
 #define SECTION(name) std::cout << "\n=== " << name << " ===\n"
 #define LOG(msg) std::cout << "[" << __LINE__ << "] " << msg << std::endl
 
-// 简单事件数据结构
+// Simple event data structure
 struct EventData {
     std::string message;
     int value;
 
-    // 支持复制构造和赋值
+    // Support copy construction and assignment
     EventData(const std::string& msg = "", int val = 0)
         : message(msg), value(val) {}
 };
 
-// 打印事件数据
+// Print event data
 void printEventData(const EventData& data) {
-    std::cout << "  消息: \"" << data.message << "\", 值: " << data.value
+    std::cout << "  Message: \"" << data.message << "\", Value: " << data.value
               << std::endl;
 }
 
 int main() {
     using namespace std::chrono_literals;
 
-    std::cout << "===== atom::async::Trigger 使用示例 =====\n\n";
+    std::cout << "===== atom::async::Trigger Usage Examples =====\n\n";
 
     //==============================================================
-    // 1. 基本用法
+    // 1. Basic Usage
     //==============================================================
-    SECTION("1. 基本用法");
+    SECTION("1. Basic Usage");
     {
-        // 创建一个使用 EventData 类型参数的触发器
+        // Create a trigger using EventData type parameter
         atom::async::Trigger<EventData> trigger;
 
-        // 注册一个基本回调函数
+        // Register a basic callback function
         auto callbackId =
             trigger.registerCallback("basic_event", [](const EventData& data) {
-                std::cout << "收到基本事件: ";
+                std::cout << "Received basic event: ";
                 printEventData(data);
             });
 
-        LOG("注册了回调ID: " + std::to_string(callbackId));
+        LOG("Registered callback ID: " + std::to_string(callbackId));
 
-        // 触发事件
-        EventData basicData{"这是基本事件", 42};
+        // Trigger the event
+        EventData basicData{"This is a basic event", 42};
         size_t count = trigger.trigger("basic_event", basicData);
-        LOG("触发的回调数量: " + std::to_string(count));
+        LOG("Number of triggered callbacks: " + std::to_string(count));
 
-        // 检查回调计数
-        LOG("事件有回调: " +
-            std::string(trigger.hasCallbacks("basic_event") ? "是" : "否"));
-        LOG("回调数量: " +
+        // Check callback count
+        LOG("Event has callbacks: " +
+            std::string(trigger.hasCallbacks("basic_event") ? "Yes" : "No"));
+        LOG("Callback count: " +
             std::to_string(trigger.callbackCount("basic_event")));
 
-        // 注销回调
+        // Unregister callback
         bool unregistered =
             trigger.unregisterCallback("basic_event", callbackId);
-        LOG("注销成功: " + std::string(unregistered ? "是" : "否"));
-        LOG("注销后回调数量: " +
+        LOG("Unregistration successful: " +
+            std::string(unregistered ? "Yes" : "No"));
+        LOG("Callback count after unregistration: " +
             std::to_string(trigger.callbackCount("basic_event")));
 
-        // 再次触发，应该没有回调被执行
+        // Trigger again, no callbacks should be executed
         count = trigger.trigger("basic_event", basicData);
-        LOG("再次触发的回调数量: " + std::to_string(count));
+        LOG("Number of callbacks triggered again: " + std::to_string(count));
     }
 
     //==============================================================
-    // 2. 带优先级的回调
+    // 2. Callbacks with Priority
     //==============================================================
-    SECTION("2. 带优先级的回调");
+    SECTION("2. Callbacks with Priority");
     {
         atom::async::Trigger<EventData> trigger;
 
-        // 注册不同优先级的回调
+        // Register callbacks with different priorities
         [[maybe_unused]] auto lowId = trigger.registerCallback(
             "priority_event",
             [](const EventData& data) {
-                std::cout << "  低优先级回调: ";
+                std::cout << "  Low priority callback: ";
                 printEventData(data);
             },
             atom::async::Trigger<EventData>::CallbackPriority::Low);
@@ -97,7 +98,7 @@ int main() {
         [[maybe_unused]] auto normalId = trigger.registerCallback(
             "priority_event",
             [](const EventData& data) {
-                std::cout << "  普通优先级回调: ";
+                std::cout << "  Normal priority callback: ";
                 printEventData(data);
             },
             atom::async::Trigger<EventData>::CallbackPriority::Normal);
@@ -105,257 +106,265 @@ int main() {
         [[maybe_unused]] auto highId = trigger.registerCallback(
             "priority_event",
             [](const EventData& data) {
-                std::cout << "  高优先级回调: ";
+                std::cout << "  High priority callback: ";
                 printEventData(data);
             },
             atom::async::Trigger<EventData>::CallbackPriority::High);
 
-        // 触发事件，应该按优先级执行回调（高 -> 普通 -> 低）
-        LOG("触发具有不同优先级的回调：");
-        EventData data{"优先级测试", 100};
+        // Trigger event, callbacks should be executed in priority order (high
+        // -> normal -> low)
+        LOG("Triggering callbacks with different priorities:");
+        EventData data{"Priority test", 100};
         trigger.trigger("priority_event", data);
     }
 
     //==============================================================
-    // 3. 延时触发
+    // 3. Delayed Triggering
     //==============================================================
-    SECTION("3. 延时触发");
+    SECTION("3. Delayed Triggering");
     {
         atom::async::Trigger<EventData> trigger;
 
-        // 注册回调
+        // Register callback
         [[maybe_unused]] auto callbackId = trigger.registerCallback(
             "delayed_event", [](const EventData& data) {
-                std::cout << "  收到延时事件: ";
+                std::cout << "  Received delayed event: ";
                 printEventData(data);
-                std::cout << "  接收时间: "
+                std::cout << "  Receive time: "
                           << std::chrono::system_clock::now()
                                  .time_since_epoch()
                                  .count()
                           << std::endl;
             });
 
-        EventData delayData{"延时500毫秒", 500};
+        EventData delayData{"Delayed by 500 milliseconds", 500};
 
-        // 记录当前时间
+        // Record current time
         auto now = std::chrono::system_clock::now();
-        std::cout << "  触发时间: " << now.time_since_epoch().count()
+        std::cout << "  Trigger time: " << now.time_since_epoch().count()
                   << std::endl;
 
-        // 计划500毫秒后触发
+        // Schedule to trigger after 500ms
         auto cancelFlag =
             trigger.scheduleTrigger("delayed_event", delayData, 500ms);
-        LOG("安排了延时触发，等待...");
+        LOG("Scheduled delayed trigger, waiting...");
 
-        // 等待触发完成
+        // Wait for trigger to complete
         std::this_thread::sleep_for(600ms);
 
-        // 再次计划，但这次立即取消
-        LOG("安排另一个延时触发，但立即取消");
+        // Schedule again, but cancel immediately this time
+        LOG("Scheduling another delayed trigger, but canceling immediately");
         auto cancelFlag2 = trigger.scheduleTrigger(
-            "delayed_event", EventData{"这不应被触发", 999}, 300ms);
-        *cancelFlag2 = true;  // 直接设置取消标志
+            "delayed_event", EventData{"This should not be triggered", 999},
+            300ms);
+        *cancelFlag2 = true;  // Directly set cancel flag
 
-        // 确保没有被触发
+        // Ensure it wasn't triggered
         std::this_thread::sleep_for(400ms);
-        LOG("取消的触发器不应该执行");
+        LOG("Canceled trigger should not have executed");
     }
 
     //==============================================================
-    // 4. 异步触发
+    // 4. Asynchronous Triggering
     //==============================================================
-    SECTION("4. 异步触发");
+    SECTION("4. Asynchronous Triggering");
     {
         atom::async::Trigger<EventData> trigger;
 
-        // 注册几个回调
+        // Register several callbacks
         for (int i = 1; i <= 3; ++i) {
             [[maybe_unused]] auto callbackId = trigger.registerCallback(
                 "async_event", [i](const EventData& data) {
-                    std::cout << "  异步回调 #" << i << ": ";
+                    std::cout << "  Async callback #" << i << ": ";
                     printEventData(data);
                 });
         }
 
-        // 异步触发
-        LOG("开始异步触发");
-        auto future = trigger.scheduleAsyncTrigger("async_event",
-                                                   EventData{"异步执行", 42});
+        // Trigger asynchronously
+        LOG("Starting async trigger");
+        auto future = trigger.scheduleAsyncTrigger(
+            "async_event", EventData{"Async execution", 42});
 
-        // 获取结果
-        auto count = future.get();  // 等待异步操作完成
-        LOG("异步触发完成，执行的回调数量: " + std::to_string(count));
+        // Get result
+        auto count = future.get();  // Wait for async operation to complete
+        LOG("Async trigger completed, number of executed callbacks: " +
+            std::to_string(count));
     }
 
     //==============================================================
-    // 5. 取消触发
+    // 5. Canceling Triggers
     //==============================================================
-    SECTION("5. 取消触发");
+    SECTION("5. Canceling Triggers");
     {
         atom::async::Trigger<EventData> trigger;
 
-        // 注册回调
+        // Register callback
         [[maybe_unused]] auto callbackId =
             trigger.registerCallback("cancel_event", [](const EventData& data) {
-                std::cout << "  取消事件回调: ";
+                std::cout << "  Cancel event callback: ";
                 printEventData(data);
             });
 
-        // 安排多个延时触发
-        LOG("安排多个延时触发");
+        // Schedule multiple delayed triggers
+        LOG("Scheduling multiple delayed triggers");
         auto flag1 = trigger.scheduleTrigger("cancel_event",
-                                             EventData{"延时1", 1}, 500ms);
+                                             EventData{"Delay 1", 1}, 500ms);
         auto flag2 = trigger.scheduleTrigger("cancel_event",
-                                             EventData{"延时2", 2}, 700ms);
+                                             EventData{"Delay 2", 2}, 700ms);
         auto flag3 = trigger.scheduleTrigger("cancel_event",
-                                             EventData{"延时3", 3}, 900ms);
+                                             EventData{"Delay 3", 3}, 900ms);
 
-        // 取消特定事件的所有触发
+        // Cancel all triggers for specific event
         size_t canceled = trigger.cancelTrigger("cancel_event");
-        LOG("取消的触发器数量: " + std::to_string(canceled));
+        LOG("Number of canceled triggers: " + std::to_string(canceled));
 
-        // 等待足够长的时间，确保触发器不会执行
+        // Wait long enough to ensure triggers won't execute
         std::this_thread::sleep_for(1000ms);
-        LOG("等待后，所有触发器应该已被取消");
+        LOG("After waiting, all triggers should be canceled");
 
-        // 安排另一组触发器
-        LOG("安排另一组触发器");
+        // Schedule another set of triggers
+        LOG("Scheduling another set of triggers");
         auto eventFlag1 =
-            trigger.scheduleTrigger("event1", EventData{"事件1", 1}, 300ms);
+            trigger.scheduleTrigger("event1", EventData{"Event 1", 1}, 300ms);
         auto eventFlag2 =
-            trigger.scheduleTrigger("event2", EventData{"事件2", 2}, 300ms);
+            trigger.scheduleTrigger("event2", EventData{"Event 2", 2}, 300ms);
 
-        // 取消所有触发器
+        // Cancel all triggers
         canceled = trigger.cancelAllTriggers();
-        LOG("取消所有触发器，取消数量: " + std::to_string(canceled));
+        LOG("Canceled all triggers, count: " + std::to_string(canceled));
 
-        // 等待，确保没有触发器执行
+        // Wait to ensure no triggers execute
         std::this_thread::sleep_for(500ms);
     }
 
     //==============================================================
-    // 6. 多事件触发
+    // 6. Multi-Event Triggering
     //==============================================================
-    SECTION("6. 多事件触发");
+    SECTION("6. Multi-Event Triggering");
     {
         atom::async::Trigger<EventData> trigger;
 
-        // 为多个事件注册回调
+        // Register callbacks for multiple events
         [[maybe_unused]] auto callbackA =
             trigger.registerCallback("event_a", [](const EventData& data) {
-                std::cout << "  事件A回调: ";
+                std::cout << "  Event A callback: ";
                 printEventData(data);
             });
 
         [[maybe_unused]] auto callbackB =
             trigger.registerCallback("event_b", [](const EventData& data) {
-                std::cout << "  事件B回调: ";
+                std::cout << "  Event B callback: ";
                 printEventData(data);
             });
 
         [[maybe_unused]] auto callbackC =
             trigger.registerCallback("event_c", [](const EventData& data) {
-                std::cout << "  事件C回调: ";
+                std::cout << "  Event C callback: ";
                 printEventData(data);
             });
 
-        // 触发多个不同的事件
-        LOG("触发多个不同的事件");
-        trigger.trigger("event_a", EventData{"来自事件A", 10});
-        trigger.trigger("event_b", EventData{"来自事件B", 20});
-        trigger.trigger("event_c", EventData{"来自事件C", 30});
+        // Trigger multiple different events
+        LOG("Triggering multiple different events");
+        trigger.trigger("event_a", EventData{"From Event A", 10});
+        trigger.trigger("event_b", EventData{"From Event B", 20});
+        trigger.trigger("event_c", EventData{"From Event C", 30});
     }
 
     //==============================================================
-    // 7. 错误处理
+    // 7. Error Handling
     //==============================================================
-    SECTION("7. 错误处理");
+    SECTION("7. Error Handling");
     {
         atom::async::Trigger<EventData> trigger;
 
-        // 注册一个会抛出异常的回调
+        // Register a callback that throws an exception
         [[maybe_unused]] auto errorCallbackId = trigger.registerCallback(
             "error_event", [](const EventData& /* data */) {
-                std::cout << "  尝试抛出异常的回调" << std::endl;
-                throw std::runtime_error("这个错误应该被捕获");
+                std::cout << "  Callback attempting to throw exception"
+                          << std::endl;
+                throw std::runtime_error("This error should be caught");
             });
 
-        // 注册一个正常的回调，应该在异常之后仍然执行
+        // Register a normal callback that should still execute after exception
         [[maybe_unused]] auto normalCallbackId =
-            trigger.registerCallback("error_event", [](const EventData& data) {
-                std::cout << "  正常回调应该在异常之后执行: ";
-                printEventData(data);
-            });
+            trigger.registerCallback(
+                "error_event", [](const EventData& data) {
+                    std::cout
+                        << "  Normal callback should execute after exception: ";
+                    printEventData(data);
+                });
 
-        // 触发事件
-        LOG("触发可能抛出异常的事件");
+        // Trigger the event
+        LOG("Triggering event that may throw exception");
         try {
-            size_t count =
-                trigger.trigger("error_event", EventData{"错误处理", 500});
-            LOG("成功执行的回调数量: " + std::to_string(count) +
-                " (异常被内部捕获)");
+            size_t count = trigger.trigger("error_event",
+                                           EventData{"Error handling", 500});
+            LOG("Successfully executed callback count: " +
+                std::to_string(count) + " (exception was caught internally)");
         } catch (const std::exception& e) {
-            LOG("捕获了异常: " + std::string(e.what()) + " (不应该发生)");
+            LOG("Caught exception: " + std::string(e.what()) +
+                " (should not happen)");
         }
 
-        // 尝试注册空回调函数
-        LOG("尝试注册空回调函数");
+        // Try registering a null callback function
+        LOG("Trying to register null callback function");
         try {
             [[maybe_unused]] auto id =
                 trigger.registerCallback("empty_callback", nullptr);
         } catch (const atom::async::TriggerException& e) {
-            LOG("捕获了预期的异常: " + std::string(e.what()));
+            LOG("Caught expected exception: " + std::string(e.what()));
         }
 
-        // 尝试注册到空事件名
-        LOG("尝试注册到空事件名");
+        // Try registering to empty event name
+        LOG("Trying to register to empty event name");
         try {
             [[maybe_unused]] auto id =
                 trigger.registerCallback("", [](const EventData&) {});
         } catch (const atom::async::TriggerException& e) {
-            LOG("捕获了预期的异常: " + std::string(e.what()));
+            LOG("Caught expected exception: " + std::string(e.what()));
         }
 
-        // 尝试使用负延时触发
-        LOG("尝试使用负延时触发");
+        // Try triggering with negative delay
+        LOG("Trying to trigger with negative delay");
         try {
             [[maybe_unused]] auto flag =
                 trigger.scheduleTrigger("negative_delay", EventData{}, -100ms);
         } catch (const atom::async::TriggerException& e) {
-            LOG("捕获了预期的异常: " + std::string(e.what()));
+            LOG("Caught expected exception: " + std::string(e.what()));
         }
     }
 
     //==============================================================
-    // 8. 边界情况
+    // 8. Edge Cases
     //==============================================================
-    SECTION("8. 边界情况");
+    SECTION("8. Edge Cases");
     {
         atom::async::Trigger<EventData> trigger;
 
-        // 测试触发不存在的事件
-        LOG("触发不存在的事件");
+        // Test triggering non-existent event
+        LOG("Triggering non-existent event");
         size_t count = trigger.trigger("nonexistent_event", EventData{});
-        LOG("执行的回调数量: " + std::to_string(count) + " (应该为0)");
+        LOG("Number of executed callbacks: " + std::to_string(count) +
+            " (should be 0)");
 
-        // 测试注销不存在的回调
-        LOG("注销不存在的回调");
+        // Test unregistering non-existent callback
+        LOG("Unregistering non-existent callback");
         bool result = trigger.unregisterCallback("nonexistent_event", 999);
-        LOG("注销结果: " + std::string(result ? "成功" : "失败") +
-            " (应该失败)");
+        LOG("Unregistration result: " +
+            std::string(result ? "Success" : "Failure") + " (should fail)");
 
-        // 测试使用零延时触发
-        LOG("使用零延时触发");
-        auto zeroDelayFlag =
-            trigger.scheduleTrigger("zero_delay", EventData{"零延时", 0}, 0ms);
+        // Test triggering with zero delay
+        LOG("Triggering with zero delay");
+        auto zeroDelayFlag = trigger.scheduleTrigger(
+            "zero_delay", EventData{"Zero delay", 0}, 0ms);
         std::this_thread::sleep_for(100ms);
-        LOG("零延时触发应该立即执行");
+        LOG("Zero delay trigger should execute immediately");
 
-        // 测试空参数
-        LOG("空参数测试");
+        // Test empty parameters
+        LOG("Empty parameters test");
         [[maybe_unused]] auto emptyParamId =
             trigger.registerCallback("empty_param", [](const EventData& data) {
-                std::cout << "  收到空参数事件: ";
+                std::cout << "  Received empty param event: ";
                 printEventData(data);
             });
         trigger.trigger("empty_param", EventData{});
@@ -363,115 +372,121 @@ int main() {
 
 #ifdef ATOM_USE_BOOST_LOCKFREE
     //==============================================================
-    // 9. 无锁队列功能 (仅在ATOM_USE_BOOST_LOCKFREE定义时可用)
+    // 9. Lockfree Queue Functionality (only available when
+    // ATOM_USE_BOOST_LOCKFREE is defined)
     //==============================================================
-    SECTION("9. 无锁队列功能");
+    SECTION("9. Lockfree Queue Functionality");
     {
         atom::async::Trigger<EventData> trigger;
 
-        // 为测试事件注册回调
+        // Register callback for test event
         [[maybe_unused]] auto lockfreeCallbackId = trigger.registerCallback(
             "lockfree_event", [](const EventData& data) {
-                std::cout << "  无锁队列事件回调: ";
+                std::cout << "  Lockfree queue event callback: ";
                 printEventData(data);
             });
 
-        // 创建无锁触发队列
-        LOG("创建无锁触发队列");
+        // Create lockfree trigger queue
+        LOG("Creating lockfree trigger queue");
         auto queue = trigger.createLockFreeTriggerQueue(100);
 
-        // 添加事件到队列
-        bool pushed =
-            queue->push({"lockfree_event", EventData{"无锁队列消息", 42}});
-        LOG("添加到队列: " + std::string(pushed ? "成功" : "失败"));
+        // Add event to queue
+        bool pushed = queue->push(
+            {"lockfree_event", EventData{"Lockfree queue message", 42}});
+        LOG("Added to queue: " + std::string(pushed ? "Success" : "Failure"));
 
-        // 处理队列中的事件
-        LOG("处理队列中的事件");
+        // Process events in queue
+        LOG("Processing events in queue");
         size_t processed = trigger.processLockFreeTriggers(*queue);
-        LOG("处理的事件数量: " + std::to_string(processed));
+        LOG("Number of processed events: " + std::to_string(processed));
 
-        // 添加多个事件
-        LOG("添加多个事件到队列");
-        queue->push({"lockfree_event", EventData{"批处理1", 1}});
-        queue->push({"lockfree_event", EventData{"批处理2", 2}});
-        queue->push({"lockfree_event", EventData{"批处理3", 3}});
+        // Add multiple events
+        LOG("Adding multiple events to queue");
+        queue->push({"lockfree_event", EventData{"Batch 1", 1}});
+        queue->push({"lockfree_event", EventData{"Batch 2", 2}});
+        queue->push({"lockfree_event", EventData{"Batch 3", 3}});
 
-        // 使用maxEvents参数处理部分事件
-        LOG("处理部分事件 (maxEvents=2)");
+        // Process partial events with maxEvents param
+        LOG("Processing partial events (maxEvents=2)");
         processed = trigger.processLockFreeTriggers(*queue, 2);
-        LOG("处理的事件数量: " + std::to_string(processed) + " (应该为2)");
+        LOG("Number of processed events: " + std::to_string(processed) +
+            " (should be 2)");
 
-        // 处理剩余事件
-        LOG("处理剩余事件");
+        // Process remaining events
+        LOG("Processing remaining events");
         processed = trigger.processLockFreeTriggers(*queue);
-        LOG("处理的事件数量: " + std::to_string(processed) + " (应该为1)");
+        LOG("Number of processed events: " + std::to_string(processed) +
+            " (should be 1)");
     }
 #endif
 
     //==============================================================
-    // 10. 复杂场景：多线程处理
+    // 10. Complex Scenario: Multi-threading
     //==============================================================
-    SECTION("10. 复杂场景：多线程处理");
+    SECTION("10. Complex Scenario: Multi-threading");
     {
         atom::async::Trigger<EventData> trigger;
 
-        // 注册多个回调
+        // Register multiple callbacks
         for (int i = 1; i <= 5; ++i) {
             [[maybe_unused]] auto threadCallbackId = trigger.registerCallback(
                 "thread_event", [i](const EventData& data) {
-                    std::cout << "  线程 " << std::this_thread::get_id()
-                              << " 处理回调 #" << i << ": " << data.message
-                              << ", 值: " << data.value << std::endl;
-                    // 模拟处理时间
+                    std::cout << "  Thread " << std::this_thread::get_id()
+                              << " processing callback #" << i << ": "
+                              << data.message << ", Value: " << data.value
+                              << std::endl;
+                    // Simulate processing time
                     std::this_thread::sleep_for(50ms);
                 });
         }
 
-        LOG("从多个线程触发事件");
+        LOG("Triggering events from multiple threads");
 
-        // 创建多个线程，同时触发事件
+        // Create multiple threads to trigger events simultaneously
         std::vector<std::thread> threads;
         for (int i = 1; i <= 3; ++i) {
             threads.emplace_back([&trigger, i]() {
-                EventData data{"线程" + std::to_string(i), i * 100};
+                EventData data{"Thread" + std::to_string(i), i * 100};
                 size_t count = trigger.trigger("thread_event", data);
-                std::cout << "  线程 " << std::this_thread::get_id()
-                          << " 触发了 " << count << " 个回调" << std::endl;
+                std::cout << "  Thread " << std::this_thread::get_id()
+                          << " triggered " << count << " callbacks"
+                          << std::endl;
             });
         }
 
-        // 等待所有线程完成
+        // Wait for all threads to complete
         for (auto& t : threads) {
             t.join();
         }
 
-        LOG("多线程触发完成");
+        LOG("Multi-thread triggering complete");
     }
 
     //==============================================================
-    // 11. 使用自定义类型的Trigger
+    // 11. Using Trigger with Custom Types
     //==============================================================
-    SECTION("11. 使用自定义类型的Trigger");
+    SECTION("11. Using Trigger with Custom Types");
     {
-        // 使用简单类型的触发器
+        // Using trigger with simple type
         atom::async::Trigger<int> intTrigger;
         [[maybe_unused]] auto intCallbackId =
             intTrigger.registerCallback("int_event", [](int value) {
-                std::cout << "  Int触发器收到值: " << value << std::endl;
+                std::cout << "  Int trigger received value: " << value
+                          << std::endl;
             });
 
         intTrigger.trigger("int_event", 42);
 
-        // 使用字符串的触发器
+        // Using trigger with string
         atom::async::Trigger<std::string> stringTrigger;
         [[maybe_unused]] auto stringCallbackId = stringTrigger.registerCallback(
             "string_event", [](const std::string& msg) {
-                std::cout << "  String触发器收到: " << msg << std::endl;
+                std::cout << "  String trigger received: " << msg << std::endl;
             });
 
         stringTrigger.trigger("string_event", "Hello, World!");
     }
 
-    std::cout << "\n===== 示例完成 =====\n";
+    std::cout << "\n===== Examples Complete =====\n";
     return 0;
 }

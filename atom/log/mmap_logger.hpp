@@ -1,81 +1,62 @@
-// atomlog.hpp
+// mmap_logger.hpp
 /*
- * atomlog.hpp
+ * mmap_logger.hpp
  *
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
 /*************************************************
 
-Date: 2023-11-10
+Date: 2025-5-4
 
-Description: Enhanced Logger for Atom with C++20 Features
+Description: Memory-mapped File Logger for Atom with C++20 Features
 
 **************************************************/
 
-#ifndef ATOM_LOG_ATOMLOG_HPP
-#define ATOM_LOG_ATOMLOG_HPP
+#ifndef ATOM_LOG_MMAP_LOGGER_HPP
+#define ATOM_LOG_MMAP_LOGGER_HPP
+
+#include "atomlog.hpp"
 
 #include <filesystem>
-#include <format>
 #include <memory>
 #include <source_location>
-
-#include "atom/containers/high_performance.hpp"
 
 namespace fs = std::filesystem;
 
 namespace atom::log {
 
-// Use type aliases from high_performance.hpp
-using atom::containers::String;
-
 /**
- * @brief Enum class representing the log levels.
- * Extended to support custom log levels.
+ * @brief Memory-mapped Logger class for high-performance logging.
+ *
+ * This class extends the standard Logger with memory-mapped file support
+ * for improved I/O performance, especially for high-frequency logging.
  */
-enum class LogLevel {
-    TRACE = 0,  ///< Trace level logging.
-    DEBUG,      ///< Debug level logging.
-    INFO,       ///< Info level logging.
-    WARN,       ///< Warn level logging.
-    ERROR,      ///< Error level logging.
-    CRITICAL,   ///< Critical level logging.
-    OFF         ///< Used to disable logging.
-};
-
-/**
- * @brief Structure representing a custom log level.
- */
-struct CustomLogLevel {
-    String name;  // Use String
-    int severity;
-};
-
-/**
- * @brief Logger class for logging messages with different severity levels.
- */
-class Logger {
+class MmapLogger {
 public:
     /**
-     * @brief Constructs a Logger object.
+     * @brief Constructs a MmapLogger object.
      * @param file_name The name of the log file.
      * @param min_level The minimum log level to log.
-     * @param max_file_size The maximum size of the log file in bytes.
+     * @param buffer_size The size of the memory-mapped buffer in bytes.
      * @param max_files The maximum number of log files to keep.
      */
-    explicit Logger(const fs::path& file_name,
-                    LogLevel min_level = LogLevel::TRACE,
-                    size_t max_file_size = 1048576, int max_files = 10);
+    explicit MmapLogger(const fs::path& file_name,
+                        LogLevel min_level = LogLevel::TRACE,
+                        size_t buffer_size = 1048576, int max_files = 10);
 
     /**
-     * @brief Destructor for the Logger object.
+     * @brief Destructor for the MmapLogger object.
      */
-    ~Logger();
+    ~MmapLogger();
 
     // Delete copy constructor and copy assignment operator
-    Logger(const Logger&) = delete;
-    auto operator=(const Logger&) -> Logger& = delete;
+    MmapLogger(const MmapLogger&) = delete;
+    auto operator=(const MmapLogger&) -> MmapLogger& = delete;
+
+    // Move constructor and move assignment operator
+    MmapLogger(MmapLogger&&) noexcept;
+    auto operator=(MmapLogger&&) noexcept -> MmapLogger&;
 
     /**
      * @brief Logs a trace level message with source location information.
@@ -174,38 +155,10 @@ public:
     void setLevel(LogLevel level);
 
     /**
-     * @brief Sets the logging pattern.
-     * @param pattern The pattern to set.
-     */
-    void setPattern(const String& pattern);  // Use String
-
-    /**
      * @brief Sets the thread name for logging.
      * @param name The thread name to set.
      */
-    void setThreadName(const String& name);  // Use String
-
-    /**
-     * @brief Registers a sink logger.
-     * @param logger The logger to register as a sink.
-     */
-    void registerSink(const std::shared_ptr<Logger>& logger);
-
-    /**
-     * @brief Removes a sink logger.
-     * @param logger The logger to remove as a sink.
-     */
-    void removeSink(const std::shared_ptr<Logger>& logger);
-
-    /**
-     * @brief Clears all registered sink loggers.
-     */
-    void clearSinks();
-
-    /**
-     * @brief Flushes any buffered log messages to disk.
-     */
-    void flush();
+    void setThreadName(const String& name);
 
     /**
      * @brief Enables or disables system logging.
@@ -214,30 +167,25 @@ public:
     void enableSystemLogging(bool enable);
 
     /**
-     * @brief Registers a custom log level.
-     * @param name The name of the custom log level.
-     * @param severity The severity of the custom log level.
+     * @brief Forces log buffer flush to disk.
      */
-    void registerCustomLogLevel(const String& name,
-                                int severity);  // Use String
+    void flush();
 
 private:
-    class LoggerImpl;  // Forward declaration
-    std::shared_ptr<LoggerImpl>
-        impl_;  ///< Pointer to the Logger implementation.
+    class MmapLoggerImpl;  // Forward declaration
+    std::unique_ptr<MmapLoggerImpl> impl_;
 
     /**
      * @brief Logs a message with a specified log level.
      * @param level The log level.
-     * @param msg The message to log (std::format produces std::string).
+     * @param msg The message to log.
      * @param location The source location information.
      */
-    // Keep std::string here as std::format returns std::string
     void log(
-        LogLevel level, const std::string& msg,
+        LogLevel level, std::string_view msg,
         const std::source_location& location = std::source_location::current());
 };
 
 }  // namespace atom::log
 
-#endif  // ATOM_LOG_ATOMLOG_HPP
+#endif  // ATOM_LOG_MMAP_LOGGER_HPP

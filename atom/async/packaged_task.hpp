@@ -476,12 +476,75 @@ private:
 #endif
 };
 
-template <typename F, typename... Args>
-    requires std::invocable<F, Args...>
+// Helper function to create an EnhancedPackagedTask from a callable
+template <typename Signature, typename F>
 [[nodiscard]] auto make_enhanced_task(F&& f) {
-    using ResultType = std::invoke_result_t<F, Args...>;
-    return EnhancedPackagedTask<ResultType, Args...>(std::forward<F>(f));
+    return EnhancedPackagedTask<Signature>(std::forward<F>(f));
 }
+
+// Overload for lambda and callable objects with automatic signature deduction
+template <typename F>
+[[nodiscard]] auto make_enhanced_task(F&& f) {
+    return make_enhanced_task_impl(std::forward<F>(f),
+                                   &std::decay_t<F>::operator());
+}
+
+template <typename F, typename Ret, typename... Args>
+[[nodiscard]] auto make_enhanced_task_impl(F&& f, Ret (F::*)(Args...) const) {
+    return EnhancedPackagedTask<Ret(Args...)>(std::forward<F>(f));
+}
+
+template <typename Lambda, typename Ret, typename... Args>
+[[nodiscard]] auto make_enhanced_task(Lambda&& lambda) {
+    return EnhancedPackagedTask<Ret(Args...)>(std::forward<Lambda>(lambda));
+}
+
+/* Usage examples:
+
+Example 1: Simple task with return value
+----------------------------------------
+auto multiplyTask = atom::async::make_enhanced_task<int(int, int)>(
+    [](int a, int b) {
+        return a * b;
+    }
+);
+
+auto future = multiplyTask.getEnhancedFuture();
+std::thread t1([&multiplyTask](){ multiplyTask(6, 7); });
+int result = future.get();  // result = 42
+t1.join();
+
+Example 2: Task with void return type
+------------------------------------
+auto printTask = atom::async::make_enhanced_task<void(std::string)>(
+    [](std::string message) {
+        std::cout << "Message: " << message << std::endl;
+    }
+);
+
+auto future = printTask.getEnhancedFuture();
+std::thread t2([&printTask](){ printTask("Hello, World!"); });
+future.wait();  // Wait for task to complete
+t2.join();
+
+Example 3: Task with complex return type
+---------------------------------------
+auto vectorTask = atom::async::make_enhanced_task<std::vector<int>(int, int)>(
+    [](int start, int count) {
+        std::vector<int> result;
+        for (int i = 0; i < count; ++i) {
+            result.push_back(start + i);
+        }
+        return result;
+    }
+);
+
+auto future = vectorTask.getEnhancedFuture();
+std::thread t3([&vectorTask](){ vectorTask(10, 5); });
+std::vector<int> result = future.get();  // result = {10, 11, 12, 13, 14}
+t3.join();
+
+*/
 
 }  // namespace atom::async
 

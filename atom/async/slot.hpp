@@ -11,16 +11,11 @@
 #include <map>
 #include <memory>
 #include <mutex>
-// 移除未使用的头文件
-// #include <ranges>
 #include <shared_mutex>
-// #include <span>
-// #include <type_traits>
 #include <vector>
 
 namespace atom::async {
 
-// Exception types for signal-slot operations
 class SlotConnectionError : public std::runtime_error {
 public:
     explicit SlotConnectionError(const std::string& message)
@@ -33,7 +28,6 @@ public:
         : std::runtime_error(message) {}
 };
 
-// Concept for validating callable types that can be used as slots
 template <typename T, typename... Args>
 concept SlotInvocable = std::invocable<T, Args...>;
 
