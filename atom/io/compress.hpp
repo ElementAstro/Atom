@@ -17,13 +17,11 @@ Description: Compressor using ZLib and MiniZip-ng
 
 #include <future>
 #include <optional>
-#include <string_view>  // Keep for function parameters
-// #include <string> // Replaced by high_performance.hpp
-// #include <vector> // Replaced by high_performance.hpp
-#include <ranges>  // For concepts
-#include <thread>  // For hardware_concurrency
+#include <ranges>
+#include <string_view>
+#include <thread>
 
-#include "atom/containers/high_performance.hpp"  // Include high performance containers
+#include "atom/containers/high_performance.hpp"
 
 namespace atom::io {
 
@@ -32,38 +30,45 @@ using atom::containers::String;
 template <typename T>
 using Vector = atom::containers::Vector<T>;
 
-// Forward declaration of compression options struct
+/// @brief Forward declaration of compression options struct
 struct CompressionOptions;
+/// @brief Forward declaration of decompression options struct
 struct DecompressionOptions;
 
-// Compression status and result struct
+/**
+ * @brief Compression status and result struct
+ */
 struct CompressionResult {
-    bool success{false};
-    String error_message;  // Use String
-    size_t original_size{0};
-    size_t compressed_size{0};
-    double compression_ratio{0.0};
+    bool success{false};            ///< Whether the compression was successful
+    String error_message;           ///< Error message if compression failed
+    size_t original_size{0};        ///< Size of original data
+    size_t compressed_size{0};      ///< Size after compression
+    double compression_ratio{0.0};  ///< Compression ratio achieved
 };
 
-// Basic compression options
+/**
+ * @brief Basic compression options
+ */
 struct CompressionOptions {
-    int level{-1};             // Compression level (-1 = default, 0-9)
-    size_t chunk_size{16384};  // Processing chunk size
-    bool use_parallel{true};   // Whether to use parallel processing
+    int level{-1};             ///< Compression level (-1 = default, 0-9)
+    size_t chunk_size{16384};  ///< Processing chunk size
+    bool use_parallel{true};   ///< Whether to use parallel processing
     size_t num_threads{
-        std::thread::hardware_concurrency()};  // Number of parallel threads
-    bool create_backup{false};                 // Whether to create a backup
-    String password;  // Encryption password (optional) - Use String
+        std::thread::hardware_concurrency()};  ///< Number of parallel threads
+    bool create_backup{false};                 ///< Whether to create a backup
+    String password;  ///< Encryption password (optional)
 };
 
-// Basic decompression options
+/**
+ * @brief Basic decompression options
+ */
 struct DecompressionOptions {
-    size_t chunk_size{16384};  // Processing chunk size
-    bool use_parallel{true};   // Whether to use parallel processing
+    size_t chunk_size{16384};  ///< Processing chunk size
+    bool use_parallel{true};   ///< Whether to use parallel processing
     size_t num_threads{
-        std::thread::hardware_concurrency()};  // Number of parallel threads
-    bool verify_checksum{true};                // Whether to verify checksum
-    String password;  // Decryption password (if needed) - Use String
+        std::thread::hardware_concurrency()};  ///< Number of parallel threads
+    bool verify_checksum{true};                ///< Whether to verify checksum
+    String password;  ///< Decryption password (if needed)
 };
 
 /**
@@ -121,21 +126,23 @@ CompressionResult createZip(
     std::string_view source_path, std::string_view zip_path,
     const CompressionOptions& options = CompressionOptions{});
 
-// ZIP file information struct
+/**
+ * @brief ZIP file information struct
+ */
 struct ZipFileInfo {
-    String name;  // Use String
-    size_t size;
-    size_t compressed_size;
-    String datetime;  // Use String
-    bool is_directory;
-    bool is_encrypted;
-    uint32_t crc;
+    String name;             ///< File name
+    size_t size;             ///< Uncompressed size
+    size_t compressed_size;  ///< Compressed size
+    String datetime;         ///< Date and time information
+    bool is_directory;       ///< Whether the entry is a directory
+    bool is_encrypted;       ///< Whether the entry is encrypted
+    uint32_t crc;            ///< CRC checksum
 };
 
 /**
  * @brief Lists the contents of a ZIP file
  * @param zip_path Path of the ZIP file
- * @return List of file information - Use Vector
+ * @return List of file information
  */
 Vector<ZipFileInfo> listZipContents(std::string_view zip_path);
 
@@ -176,7 +183,7 @@ CompressionResult compressFileInSlices(
 
 /**
  * @brief Merges compressed slices
- * @param slice_files List of slice file paths - Use Vector<String>
+ * @param slice_files List of slice file paths
  * @param output_path Output file path
  * @param options Decompression options
  * @return Operation result
@@ -187,9 +194,9 @@ CompressionResult mergeCompressedSlices(
 
 /**
  * @brief Processes multiple files asynchronously
- * @param file_paths List of file paths - Use Vector<String>
+ * @param file_paths List of file paths
  * @param options Compression options
- * @return future - Use Vector<CompressionResult>
+ * @return Future containing vector of compression results
  */
 std::future<Vector<CompressionResult>> processFilesAsync(
     const Vector<String>& file_paths,
@@ -223,10 +230,10 @@ CompressionResult restoreFromBackup(
 
 /**
  * @brief Generic data compression template
- * @tparam T Input data type
+ * @tparam T Input data type (must be a contiguous range)
  * @param data Data to compress
  * @param options Compression options
- * @return Compression result and compressed data - Use Vector<unsigned char>
+ * @return Pair containing compression result and compressed data
  */
 template <typename T>
     requires std::ranges::contiguous_range<T>
@@ -235,12 +242,11 @@ std::pair<CompressionResult, Vector<unsigned char>> compressData(
 
 /**
  * @brief Generic data decompression template
- * @tparam T Input data type
+ * @tparam T Input data type (must be a contiguous range)
  * @param compressed_data Compressed data
  * @param expected_size Expected decompressed size (optional)
  * @param options Decompression options
- * @return Decompression result and decompressed data - Use Vector<unsigned
- * char>
+ * @return Pair containing decompression result and decompressed data
  */
 template <typename T>
     requires std::ranges::contiguous_range<T>
@@ -248,7 +254,8 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
     const T& compressed_data, size_t expected_size = 0,
     const DecompressionOptions& options = DecompressionOptions{});
 
-// Explicit template instantiation declarations - Use Vector<unsigned char>
+/// @cond TEMPLATE_IMPL
+// Explicit template instantiation declarations
 extern template std::pair<CompressionResult, Vector<unsigned char>>
 compressData<Vector<unsigned char>>(const Vector<unsigned char>&,
                                     const CompressionOptions&);
@@ -256,6 +263,7 @@ compressData<Vector<unsigned char>>(const Vector<unsigned char>&,
 extern template std::pair<CompressionResult, Vector<unsigned char>>
 decompressData<Vector<unsigned char>>(const Vector<unsigned char>&, size_t,
                                       const DecompressionOptions&);
+/// @endcond
 
 }  // namespace atom::io
 

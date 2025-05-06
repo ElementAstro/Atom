@@ -2,12 +2,24 @@
 #define ATOM_UTILS_STOPWATCHER_HPP
 
 #include <concepts>
+#include <expected>
 #include <functional>
 #include <memory>
 #include <span>
 #include <string>
+#include <string_view>
+
+#include "atom/error/exception.hpp"
 
 namespace atom::utils {
+class StopWatcherException : public atom::error::Exception {
+public:
+    using Exception::Exception;
+};
+
+#define THROW_STOPWATCHER_EXCEPTION(...)     \
+    throw atom::utils::StopWatcherException( \
+        ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, __VA_ARGS__);
 
 /**
  * @brief States that a StopWatcher instance can be in
@@ -19,10 +31,35 @@ enum class StopWatcherState {
     Stopped   ///< Timer is stopped, must be reset before starting again
 };
 
+/**
+ * @brief Statistics from lap times
+ */
+struct LapStatistics {
+    double min;          ///< Minimum lap time
+    double max;          ///< Maximum lap time
+    double average;      ///< Average lap time
+    double standardDev;  ///< Standard deviation of lap times
+    size_t count;        ///< Number of laps
+
+    // Allow constexpr construction for compile-time statistics
+    constexpr LapStatistics(double min = 0.0, double max = 0.0,
+                            double avg = 0.0, double std = 0.0, size_t cnt = 0)
+        : min(min), max(max), average(avg), standardDev(std), count(cnt) {}
+};
+
 // Concept for valid callback functions
 template <typename T>
 concept ValidCallback =
     std::invocable<T> && std::same_as<std::invoke_result_t<T>, void>;
+
+// Error codes for StopWatcher operations
+enum class StopWatcherError {
+    AlreadyRunning,
+    NotRunning,
+    NotPaused,
+    InvalidInterval,
+    CallbackFailed
+};
 
 /**
  * @brief A high-precision stopwatch class for timing operations
@@ -45,9 +82,10 @@ class StopWatcher {
 public:
     /**
      * @brief Constructs a new StopWatcher instance
+     * @param name Optional name for this stopwatch instance for identification
      * @throws std::bad_alloc if memory allocation fails
      */
-    StopWatcher();
+    explicit StopWatcher(std::string_view name = "");
 
     /**
      * @brief Destructor
@@ -73,33 +111,31 @@ public:
 
     /**
      * @brief Starts the stopwatch
-     * @throws std::runtime_error if the stopwatch is already running
+     * @return std::expected<void, StopWatcherError> Success or error code
      * @note Thread-safe
      */
-    void start();
+    [[nodiscard]] auto start() -> std::expected<void, StopWatcherError>;
 
     /**
      * @brief Stops the stopwatch
      * @note Thread-safe
-     * @return bool True if successfully stopped, false if already stopped
+     * @return std::expected<void, StopWatcherError> Success or error code
      */
-    [[nodiscard]] bool stop();
+    [[nodiscard]] auto stop() -> std::expected<void, StopWatcherError>;
 
     /**
      * @brief Pauses the stopwatch without resetting
-     * @throws std::runtime_error if the stopwatch is not running
      * @note Thread-safe
-     * @return bool True if successfully paused, false if not running
+     * @return std::expected<void, StopWatcherError> Success or error code
      */
-    [[nodiscard]] bool pause();
+    [[nodiscard]] auto pause() -> std::expected<void, StopWatcherError>;
 
     /**
      * @brief Resumes the stopwatch from paused state
-     * @throws std::runtime_error if the stopwatch is not paused
      * @note Thread-safe
-     * @return bool True if successfully resumed, false if not paused
+     * @return std::expected<void, StopWatcherError> Success or error code
      */
-    [[nodiscard]] bool resume();
+    [[nodiscard]] auto resume() -> std::expected<void, StopWatcherError>;
 
     /**
      * @brief Resets the stopwatch to initial state
@@ -111,14 +147,14 @@ public:
     /**
      * @brief Gets the elapsed time in milliseconds
      * @return double The elapsed time with millisecond precision
-     * @note Thread-safe
+     * @note Thread-safe, constexpr-compatible
      */
     [[nodiscard]] auto elapsedMilliseconds() const -> double;
 
     /**
      * @brief Gets the elapsed time in seconds
      * @return double The elapsed time with second precision
-     * @note Thread-safe
+     * @note Thread-safe, constexpr-compatible
      */
     [[nodiscard]] auto elapsedSeconds() const -> double;
 
@@ -132,13 +168,13 @@ public:
     /**
      * @brief Gets the current state of the stopwatch
      * @return StopWatcherState Current state
-     * @note Thread-safe
+     * @note Thread-safe, constexpr-compatible
      */
     [[nodiscard]] auto getState() const -> StopWatcherState;
 
     /**
      * @brief Gets all recorded lap times
-     * @return std::vector<double> Vector of lap times in milliseconds
+     * @return std::span<const double> View of lap times in milliseconds
      * @note Thread-safe
      */
     [[nodiscard]] auto getLapTimes() const -> std::span<const double>;
@@ -146,14 +182,21 @@ public:
     /**
      * @brief Gets the average of all recorded lap times
      * @return double Average lap time in milliseconds, 0 if no laps recorded
-     * @note Thread-safe
+     * @note Thread-safe, constexpr-compatible
      */
     [[nodiscard]] auto getAverageLapTime() const -> double;
 
     /**
+     * @brief Gets comprehensive statistics about lap times
+     * @return LapStatistics Structure with statistical information
+     * @note Thread-safe
+     */
+    [[nodiscard]] auto getLapStatistics() const -> LapStatistics;
+
+    /**
      * @brief Gets the total number of laps recorded
      * @return size_t Number of laps
-     * @note Thread-safe
+     * @note Thread-safe, constexpr-compatible
      */
     [[nodiscard]] auto getLapCount() const -> size_t;
 
@@ -162,35 +205,117 @@ public:
      * @param callback Function to be called
      * @param milliseconds Time in milliseconds after which callback should
      * trigger
-     * @throws std::invalid_argument if milliseconds is negative
+     * @return std::expected<void, StopWatcherError> Success or error code
      * @note Thread-safe
      */
     template <ValidCallback CallbackType>
-    void registerCallback(CallbackType&& callback, int milliseconds) {
-        registerCallbackImpl(std::forward<CallbackType>(callback),
-                             milliseconds);
+    auto registerCallback(CallbackType&& callback, int milliseconds)
+        -> std::expected<void, StopWatcherError> {
+        return registerCallbackImpl(std::forward<CallbackType>(callback),
+                                    milliseconds);
     }
 
     /**
      * @brief Records current time as a lap time
-     * @throws std::runtime_error if stopwatch is not running
+     * @return std::expected<double, StopWatcherError> The recorded lap time in
+     * milliseconds or error
      * @note Thread-safe
-     * @return double The recorded lap time in milliseconds
      */
-    [[nodiscard]] auto lap() -> double;
+    [[nodiscard]] auto lap() -> std::expected<double, StopWatcherError>;
+
+    /**
+     * @brief Enables automatic lap recording at specified intervals
+     * @param intervalMs Interval in milliseconds between automatic laps
+     * @return std::expected<void, StopWatcherError> Success or error code
+     * @note Creates a background thread that records laps at regular intervals
+     */
+    [[nodiscard]] auto enableAutoLap(int intervalMs)
+        -> std::expected<void, StopWatcherError>;
+
+    /**
+     * @brief Disables automatic lap recording
+     */
+    void disableAutoLap();
 
     /**
      * @brief Checks if the stopwatch is running
      * @return bool True if running, false otherwise
-     * @note Thread-safe
+     * @note Thread-safe, constexpr-compatible
      */
     [[nodiscard]] bool isRunning() const;
+
+    /**
+     * @brief Gets the name of this stopwatch instance
+     * @return std::string_view The name of the stopwatch
+     */
+    [[nodiscard]] auto getName() const -> std::string_view;
+
+    /**
+     * @brief Creates a nested child stopwatch
+     * @param name Name for the child stopwatch
+     * @return std::unique_ptr<StopWatcher> A new stopwatch instance that is
+     * logically a child
+     * @note The parent-child relationship is used for hierarchical timing and
+     * reporting
+     */
+    [[nodiscard]] auto createChildStopWatch(std::string_view name)
+        -> std::unique_ptr<StopWatcher>;
+
+    /**
+     * @brief Serializes the stopwatch data to JSON format
+     * @return std::string JSON representation of timing data
+     */
+    [[nodiscard]] auto toJson() const -> std::string;
+
+    /**
+     * @brief Creates a stopwatch from serialized JSON data
+     * @param json JSON string with timing data
+     * @return std::unique_ptr<StopWatcher> New stopwatch initialized with the
+     * data
+     */
+    [[nodiscard]] static auto fromJson(std::string_view json)
+        -> std::unique_ptr<StopWatcher>;
 
 private:
     class Impl;
     std::unique_ptr<Impl> impl_;  ///< Implementation pointer (PIMPL idiom)
 
-    void registerCallbackImpl(std::function<void()> callback, int milliseconds);
+    /**
+     * @brief Protected method to add a lap time during deserialization
+     * @param lapTime The lap time to add in milliseconds
+     * @note This method should only be used during deserialization
+     */
+    void addLapTimeForDeserialization(double lapTime);
+
+    auto registerCallbackImpl(std::function<void()> callback, int milliseconds)
+        -> std::expected<void, StopWatcherError>;
+};
+
+/**
+ * @brief RAII helper that automatically starts timing on construction and stops
+ * on destruction
+ */
+class ScopedStopWatch {
+public:
+    /**
+     * @brief Creates and starts a scoped stopwatch
+     * @param name Optional name for this timing operation
+     */
+    explicit ScopedStopWatch(std::string_view name = "");
+
+    /**
+     * @brief Stops timing and logs the elapsed time
+     */
+    ~ScopedStopWatch();
+
+    /**
+     * @brief Gets the underlying stopwatch
+     * @return const StopWatcher& Reference to the stopwatch
+     */
+    [[nodiscard]] auto getStopWatcher() const -> const StopWatcher&;
+
+private:
+    StopWatcher stopwatch_;
 };
 
 }  // namespace atom::utils

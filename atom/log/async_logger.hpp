@@ -7,9 +7,9 @@
 
 /*************************************************
 
-Date: 2025-5-4
+Date: 2025-5-6
 
-Description: Asynchronous Logger using C++20 Coroutines
+Description: Enhanced Asynchronous Logger using C++20/23 Coroutines
 
 **************************************************/
 
@@ -18,17 +18,61 @@ Description: Asynchronous Logger using C++20 Coroutines
 
 #include "atomlog.hpp"
 
+#include <concepts>
 #include <coroutine>
+#include <expected>
 #include <filesystem>
 #include <format>
 #include <memory>
 #include <source_location>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace fs = std::filesystem;
 
 namespace atom::log {
+
+/**
+ * @brief Logging error codes for std::expected return types
+ */
+enum class LogErrorCode {
+    Success,
+    QueueFull,
+    ShuttingDown,
+    InvalidLogger,
+    TaskTimeout,
+    InternalError
+};
+
+/**
+ * @brief Base exception class for AsyncLogger errors
+ */
+class AsyncLoggerException : public std::exception {
+public:
+    explicit AsyncLoggerException(std::string_view message)
+        : message_(message) {}
+    [[nodiscard]] const char* what() const noexcept override {
+        return message_.c_str();
+    }
+
+private:
+    std::string message_;
+};
+
+/**
+ * @brief Exception thrown when queue limit is exceeded
+ */
+class QueueFullException : public AsyncLoggerException {
+    using AsyncLoggerException::AsyncLoggerException;
+};
+
+/**
+ * @brief Exception thrown when logger is already shutting down
+ */
+class ShutdownException : public AsyncLoggerException {
+    using AsyncLoggerException::AsyncLoggerException;
+};
 
 // Forward declaration for the specialization
 struct TaskPromiseTypeVoid;
@@ -39,7 +83,7 @@ class Task {
 public:
     // Promise type that satisfies C++20 coroutine promise concept
     struct promise_type {
-        T result;
+        std::expected<T, LogErrorCode> result{T{}, LogErrorCode::Success};
 
         Task get_return_object() {
             return Task(
@@ -51,7 +95,21 @@ public:
 
         void return_value(T value) { result = std::move(value); }
 
-        void unhandled_exception() { std::terminate(); }
+        void return_value(std::expected<T, LogErrorCode> value) {
+            result = std::move(value);
+        }
+
+        void unhandled_exception() {
+            try {
+                std::rethrow_exception(std::current_exception());
+            } catch (const QueueFullException&) {
+                result = std::unexpected(LogErrorCode::QueueFull);
+            } catch (const ShutdownException&) {
+                result = std::unexpected(LogErrorCode::ShuttingDown);
+            } catch (...) {
+                result = std::unexpected(LogErrorCode::InternalError);
+            }
+        }
     };
 
     // Constructor and destructor
@@ -74,6 +132,10 @@ public:
         return *this;
     }
 
+    // Delete copy operations
+    Task(const Task&) = delete;
+    Task& operator=(const Task&) = delete;
+
     // Coroutine synchronization wait
     bool await_ready() const noexcept { return false; }
     void await_suspend(
@@ -82,7 +144,9 @@ public:
         handle_.resume();
     }
 
-    T await_resume() const noexcept { return handle_.promise().result; }
+    std::expected<T, LogErrorCode> await_resume() const noexcept {
+        return handle_.promise().result;
+    }
 
 private:
     std::coroutine_handle<promise_type> handle_ = nullptr;
@@ -91,6 +155,8 @@ private:
 // Specialization for promise_type<void>
 template <>
 struct Task<void>::promise_type {
+    std::expected<void, LogErrorCode> result{};
+
     Task<void> get_return_object() {
         return Task<void>(
             std::coroutine_handle<promise_type>::from_promise(*this));
@@ -99,16 +165,49 @@ struct Task<void>::promise_type {
     std::suspend_never initial_suspend() noexcept { return {}; }
     std::suspend_never final_suspend() noexcept { return {}; }
 
-    void return_void() {}
+    void return_void() {
+        result = std::expected<void, LogErrorCode>{};
+    }
 
-    void unhandled_exception() { std::terminate(); }
+    void unhandled_exception() {
+        try {
+            std::rethrow_exception(std::current_exception());
+        } catch (const QueueFullException&) {
+            result = std::unexpected(LogErrorCode::QueueFull);
+        } catch (const ShutdownException&) {
+            result = std::unexpected(LogErrorCode::ShuttingDown);
+        } catch (...) {
+            result = std::unexpected(LogErrorCode::InternalError);
+        }
+    }
 };
 
 // Specialization for Task<void>::await_resume
 template <>
-inline void Task<void>::await_resume() const noexcept {
-    // No return value for void specialization
+inline std::expected<void, LogErrorCode> Task<void>::await_resume()
+    const noexcept {
+    return handle_.promise().result;
 }
+
+// Define a concept for types that can be logged
+template <typename T>
+concept Loggable = requires(T t) {
+    { std::format("{}", t) } -> std::convertible_to<std::string>;
+};
+
+/**
+ * @brief Configuration for AsyncLogger
+ */
+struct AsyncLoggerConfig {
+    fs::path file_name;
+    LogLevel min_level = LogLevel::TRACE;
+    size_t max_file_size = 1048576;
+    int max_files = 10;
+    size_t thread_pool_size = 1;
+    size_t queue_capacity = 10000;
+    bool use_system_logging = false;
+    std::chrono::milliseconds flush_interval{1000};  // Auto-flush interval
+};
 
 /**
  * @brief Asynchronous logger class implementing non-blocking logging with C++20
@@ -120,6 +219,12 @@ inline void Task<void>::await_resume() const noexcept {
  */
 class AsyncLogger {
 public:
+    /**
+     * @brief Constructs an AsyncLogger object with configuration struct.
+     * @param config Logger configuration options
+     */
+    explicit AsyncLogger(const AsyncLoggerConfig& config);
+
     /**
      * @brief Constructs an AsyncLogger object.
      * @param file_name Log file name.
@@ -143,6 +248,10 @@ public:
     AsyncLogger(const AsyncLogger&) = delete;
     auto operator=(const AsyncLogger&) -> AsyncLogger& = delete;
 
+    // Enable move operations
+    AsyncLogger(AsyncLogger&&) noexcept;
+    auto operator=(AsyncLogger&&) noexcept -> AsyncLogger&;
+
     /**
      * @brief Asynchronously logs a TRACE level message.
      * @tparam Args Format parameter types.
@@ -152,12 +261,18 @@ public:
      * captured).
      * @return Task<void> Coroutine task that can be awaited or ignored.
      */
-    template <typename... Args>
+    template <Loggable... Args>
     [[nodiscard]] Task<void> trace(const String& format, Args&&... args,
                                    const std::source_location& location =
                                        std::source_location::current()) {
-        auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
-        co_await logAsync(LogLevel::TRACE, std::move(msg), location);
+        if constexpr (sizeof...(args) > 0) {
+            auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
+            co_return co_await logAsync(LogLevel::TRACE, std::move(msg),
+                                        location);
+        } else {
+            co_return co_await logAsync(LogLevel::TRACE, std::string(format),
+                                        location);
+        }
     }
 
     /**
@@ -169,12 +284,18 @@ public:
      * captured).
      * @return Task<void> Coroutine task that can be awaited or ignored.
      */
-    template <typename... Args>
+    template <Loggable... Args>
     [[nodiscard]] Task<void> debug(const String& format, Args&&... args,
                                    const std::source_location& location =
                                        std::source_location::current()) {
-        auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
-        co_await logAsync(LogLevel::DEBUG, std::move(msg), location);
+        if constexpr (sizeof...(args) > 0) {
+            auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
+            co_return co_await logAsync(LogLevel::DEBUG, std::move(msg),
+                                        location);
+        } else {
+            co_return co_await logAsync(LogLevel::DEBUG, std::string(format),
+                                        location);
+        }
     }
 
     /**
@@ -186,12 +307,18 @@ public:
      * captured).
      * @return Task<void> Coroutine task that can be awaited or ignored.
      */
-    template <typename... Args>
+    template <Loggable... Args>
     [[nodiscard]] Task<void> info(const String& format, Args&&... args,
                                   const std::source_location& location =
                                       std::source_location::current()) {
-        auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
-        co_await logAsync(LogLevel::INFO, std::move(msg), location);
+        if constexpr (sizeof...(args) > 0) {
+            auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
+            co_return co_await logAsync(LogLevel::INFO, std::move(msg),
+                                        location);
+        } else {
+            co_return co_await logAsync(LogLevel::INFO, std::string(format),
+                                        location);
+        }
     }
 
     /**
@@ -203,12 +330,18 @@ public:
      * captured).
      * @return Task<void> Coroutine task that can be awaited or ignored.
      */
-    template <typename... Args>
+    template <Loggable... Args>
     [[nodiscard]] Task<void> warn(const String& format, Args&&... args,
                                   const std::source_location& location =
                                       std::source_location::current()) {
-        auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
-        co_await logAsync(LogLevel::WARN, std::move(msg), location);
+        if constexpr (sizeof...(args) > 0) {
+            auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
+            co_return co_await logAsync(LogLevel::WARN, std::move(msg),
+                                        location);
+        } else {
+            co_return co_await logAsync(LogLevel::WARN, std::string(format),
+                                        location);
+        }
     }
 
     /**
@@ -220,12 +353,18 @@ public:
      * captured).
      * @return Task<void> Coroutine task that can be awaited or ignored.
      */
-    template <typename... Args>
+    template <Loggable... Args>
     [[nodiscard]] Task<void> error(const String& format, Args&&... args,
                                    const std::source_location& location =
                                        std::source_location::current()) {
-        auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
-        co_await logAsync(LogLevel::ERROR, std::move(msg), location);
+        if constexpr (sizeof...(args) > 0) {
+            auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
+            co_return co_await logAsync(LogLevel::ERROR, std::move(msg),
+                                        location);
+        } else {
+            co_return co_await logAsync(LogLevel::ERROR, std::string(format),
+                                        location);
+        }
     }
 
     /**
@@ -237,12 +376,18 @@ public:
      * captured).
      * @return Task<void> Coroutine task that can be awaited or ignored.
      */
-    template <typename... Args>
+    template <Loggable... Args>
     [[nodiscard]] Task<void> critical(const String& format, Args&&... args,
                                       const std::source_location& location =
                                           std::source_location::current()) {
-        auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
-        co_await logAsync(LogLevel::CRITICAL, std::move(msg), location);
+        if constexpr (sizeof...(args) > 0) {
+            auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
+            co_return co_await logAsync(LogLevel::CRITICAL, std::move(msg),
+                                        location);
+        } else {
+            co_return co_await logAsync(LogLevel::CRITICAL, std::string(format),
+                                        location);
+        }
     }
 
     /**
@@ -275,6 +420,32 @@ public:
      * @param enable True to enable system logging, false to disable.
      */
     void enableSystemLogging(bool enable);
+
+    /**
+     * @brief Sets the auto-flush interval for log messages
+     * @param interval Time between automatic flushes (in milliseconds)
+     */
+    void setAutoFlushInterval(std::chrono::milliseconds interval);
+
+    /**
+     * @brief Sets the queue capacity
+     * @param capacity Maximum number of messages in queue
+     */
+    void setQueueCapacity(size_t capacity);
+
+    /**
+     * @brief Gets logging statistics
+     * @return JSON formatted statistics string
+     */
+    [[nodiscard]] std::string getStatistics() const noexcept;
+
+    /**
+     * @brief Wait for all logs to be processed with timeout
+     * @param timeout Maximum duration to wait
+     * @return true if all logs processed, false if timeout occurred
+     */
+    [[nodiscard]] bool waitForCompletion(
+        std::chrono::milliseconds timeout = std::chrono::seconds(5)) noexcept;
 
 private:
     class AsyncLoggerImpl;  // Forward declaration

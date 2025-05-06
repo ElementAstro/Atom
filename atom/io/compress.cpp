@@ -13,8 +13,6 @@ Description: Compressor using ZLib and MiniZip-ng
 **************************************************/
 
 #include "compress.hpp"
-#include "atom/log/loguru.hpp"
-#include "atom/type/json.hpp"  // Assuming nlohmann::json works with atom::containers::String or requires .c_str()
 
 #include <minizip-ng/mz.h>
 #include <minizip-ng/mz_compat.h>
@@ -23,11 +21,8 @@ Description: Compressor using ZLib and MiniZip-ng
 #include <minizip-ng/mz_zip_rw.h>
 #include <zlib.h>
 
-using json = nlohmann::json;
-
-// #include <algorithm> // Included header algorithm is not used directly
 #include <array>
-#include <atomic>  // For std::atomic
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -37,48 +32,19 @@ using json = nlohmann::json;
 #ifdef __cpp_lib_format
 #include <format>
 #else
-#include <fmt/format.h>  // Assuming fmt::format works with atom::containers::String or requires .c_str()
+#include <fmt/format.h>
 #endif
 
-// #include "atom/error/exception.hpp" // Included header exception.hpp is not
-// used directly
-#include "atom/containers/high_performance.hpp"  // Ensure this is included
+#include "atom/containers/high_performance.hpp"
+#include "atom/log/loguru.hpp"
+#include "atom/type/json.hpp"
 
 namespace fs = std::filesystem;
+using json = nlohmann::json;
 
 namespace {
-
-// Constant definition
 constexpr size_t DEFAULT_CHUNK_SIZE = 16384;
 
-// Thread-safe logger wrapper
-class ThreadSafeLogger {
-    std::mutex mutex_;
-
-public:
-    // Assuming LOG_F can handle const char* from String::c_str()
-    template <typename... Args>
-    void info(const char* format, Args&&... args) {
-        std::lock_guard lock(mutex_);
-        LOG_F(INFO, format, std::forward<Args>(args)...);
-    }
-
-    template <typename... Args>
-    void error(const char* format, Args&&... args) {
-        std::lock_guard lock(mutex_);
-        LOG_F(ERROR, format, std::forward<Args>(args)...);
-    }
-
-    template <typename... Args>
-    void warning(const char* format, Args&&... args) {
-        std::lock_guard lock(mutex_);
-        LOG_F(WARNING, format, std::forward<Args>(args)...);
-    }
-};
-
-ThreadSafeLogger g_logger;
-
-// ZStream guard (no changes needed)
 class ZStreamGuard {
     z_stream stream_;
     bool initialized_{false};
@@ -92,15 +58,6 @@ public:
 
     ~ZStreamGuard() {
         if (initialized_) {
-            // Use deflateEnd for compression stream guard
-            // Use inflateEnd for decompression stream guard
-            // This guard seems intended for deflate, adjust if needed
-            // Assuming it might be used for inflate too, check initialization
-            // type For now, let's assume it's only used for deflate based on
-            // the name If used for inflate, the destructor needs adjustment or
-            // separate guards. Let's assume it's only used where deflateEnd is
-            // appropriate. If inflate is used with this guard, it's a bug in
-            // usage.
             deflateEnd(&stream_);
         }
     }
@@ -293,21 +250,19 @@ CompressionResult compressFile(std::string_view file_path_sv,
                 static_cast<double>(result.compressed_size) /
                 static_cast<double>(result.original_size);
         } else {
-            result.compression_ratio = 0.0;  // Avoid division by zero
+            result.compression_ratio = 0.0;
         }
         result.success = true;
 
-        // Use .c_str() for logging String objects if needed by the logger
-        g_logger.info(
-            "Successfully compressed %s -> %s (ratio: %.2f%%)",
-            input_path.string().c_str(), output_path.string().c_str(),
-            (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
-                                      : 0.0));
+        LOG_F(INFO, "{} -> {} (ratio: {:.2f}%)", input_path.string(),
+              output_path.string(),
+              (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
+                                        : 0.0));
 
     } catch (const std::exception& e) {
-        result.error_message = String("Exception during compression: ") +
-                               e.what();  // Construct String
-        g_logger.error("%s", result.error_message.c_str());
+        result.error_message =
+            String("Exception during compression: ") + e.what();
+        LOG_F(ERROR, "{}", result.error_message);
     }
 
     return result;
@@ -319,7 +274,6 @@ CompressionResult decompressFile(
         options) {  // Mark options as potentially unused if diagnostic persists
     CompressionResult result;
     try {
-        // Input validation
         if (file_path_sv.empty() || output_folder_sv.empty()) {
             result.error_message = "Empty file path or output folder";
             return result;
@@ -340,12 +294,7 @@ CompressionResult decompressFile(
             }
         }
 
-        // Prepare output file path (remove .gz extension if present)
         fs::path output_path = output_dir / input_path.stem();
-        // If the original extension was something else before .gz, stem() might
-        // not be enough. A more robust way might be needed if complex
-        // extensions are expected. Example: file.tar.gz -> stem() is file.tar.
-        // Correct. Example: file.gz -> stem() is file. Correct.
 
         // Get compressed file size
         result.compressed_size = fs::file_size(input_path);
@@ -405,16 +354,15 @@ CompressionResult decompressFile(
         }
         result.success = true;
 
-        g_logger.info(
-            "Successfully decompressed %s -> %s (ratio: %.2f%%)",
-            input_path.string().c_str(), output_path.string().c_str(),
-            (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
-                                      : 0.0));
+        LOG_F(INFO, "Successfully decompressed {} -> {} (ratio: {:.2f}%)",
+              input_path.string(), output_path.string(),
+              (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
+                                        : 0.0));
 
     } catch (const std::exception& e) {
         result.error_message =
             String("Exception during decompression: ") + e.what();
-        g_logger.error("%s", result.error_message.c_str());
+        LOG_F(ERROR, "{}", result.error_message);
     }
 
     return result;
@@ -484,7 +432,6 @@ CompressionResult compressFolder(std::string_view folder_path_sv,
             // Get file modification time
             zip_fileinfo zi = {};
             auto ftime = fs::last_write_time(file_path);
-            // Convert file_time_type to time_t, then to tm
             try {
                 auto sctp = std::chrono::time_point_cast<
                     std::chrono::system_clock::duration>(
@@ -493,23 +440,16 @@ CompressionResult compressFolder(std::string_view folder_path_sv,
                 std::time_t tt = std::chrono::system_clock::to_time_t(sctp);
                 std::tm* tm_local = std::localtime(&tt);
                 if (tm_local) {
-                    zi.tmz_date.tm_year =
-                        tm_local->tm_year;  // Years since 1900
-                    zi.tmz_date.tm_mon =
-                        tm_local->tm_mon;  // Months since January [0-11]
-                    zi.tmz_date.tm_mday =
-                        tm_local->tm_mday;  // Day of the month [1-31]
-                    zi.tmz_date.tm_hour =
-                        tm_local->tm_hour;  // Hours since midnight [0-23]
-                    zi.tmz_date.tm_min =
-                        tm_local->tm_min;  // Minutes after the hour [0-59]
-                    zi.tmz_date.tm_sec =
-                        tm_local->tm_sec;  // Seconds after the minute [0-60]
+                    zi.tmz_date.tm_year = tm_local->tm_year;
+                    zi.tmz_date.tm_mon = tm_local->tm_mon;
+                    zi.tmz_date.tm_mday = tm_local->tm_mday;
+                    zi.tmz_date.tm_hour = tm_local->tm_hour;
+                    zi.tmz_date.tm_min = tm_local->tm_min;
+                    zi.tmz_date.tm_sec = tm_local->tm_sec;
                 }
             } catch (...) {
-                // Handle potential exceptions during time conversion
-                g_logger.warning("Could not get valid timestamp for file: %s",
-                                 file_path.string().c_str());
+                LOG_F(WARNING, "Could not get valid timestamp for file: {}",
+                      file_path.string());
             }
 
             // Add file entry to ZIP
@@ -611,17 +551,15 @@ CompressionResult compressFolder(std::string_view folder_path_sv,
         }
         result.success = true;
 
-        g_logger.info(
-            "Successfully compressed folder %s -> %s (ratio: %.2f%%)",
-            input_dir.string().c_str(), zip_fs_path.string().c_str(),
-            (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
-                                      : 0.0));
+        LOG_F(INFO, "Successfully compressed folder {} -> {} (ratio: {:.2f}%)",
+              input_dir.string(), zip_fs_path.string(),
+              (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
+                                        : 0.0));
 
     } catch (const std::exception& e) {
         result.error_message =
             String("Exception during folder compression: ") + e.what();
-        g_logger.error("%s", result.error_message.c_str());
-        // zip_file unique_ptr handles closing if zip_file_handle was opened
+        LOG_F(ERROR, "{}", result.error_message);
     }
 
     return result;
@@ -678,8 +616,7 @@ CompressionResult extractZip(std::string_view zip_path_sv,
             // Handle case where zip might be empty but not necessarily an error
             if (gi.number_entry == 0) {
                 result.success = true;
-                g_logger.info("ZIP file is empty: %s",
-                              zip_fs_path.string().c_str());
+                LOG_F(INFO, "ZIP file is empty: {}", zip_fs_path.string());
                 return result;  // unz_guard handles closing
             }
             result.error_message = "Failed to go to first file in ZIP";
@@ -774,8 +711,8 @@ CompressionResult extractZip(std::string_view zip_path_sv,
 
             // Close current file in ZIP
             if (unzCloseCurrentFile(unz) != UNZ_OK) {
-                g_logger.warning("Failed to close current file in ZIP: %s",
-                                 filename.c_str());
+                LOG_F(WARNING, "Failed to close current file in ZIP: {}",
+                      filename);
                 // Continue to next file? Or treat as error? Let's log and
                 // continue for now.
             }
@@ -784,7 +721,7 @@ CompressionResult extractZip(std::string_view zip_path_sv,
             // This requires converting unz_file_info64 time to
             // fs::file_time_type
 
-            g_logger.info("Extracted: %s", filename.c_str());
+            LOG_F(INFO, "Extracted: {}", filename);
 
         } while (unzGoToNextFile(unz) == UNZ_OK);
 
@@ -801,14 +738,13 @@ CompressionResult extractZip(std::string_view zip_path_sv,
             result.compression_ratio = 0.0;
         }
 
-        g_logger.info("Successfully extracted %llu files from %s -> %s",
-                      gi.number_entry, zip_fs_path.string().c_str(),
-                      output_dir.string().c_str());
+        LOG_F(INFO, "Successfully extracted {} files from {} -> {}",
+              gi.number_entry, zip_fs_path.string(), output_dir.string());
 
     } catch (const std::exception& e) {
         result.error_message =
             String("Exception during extraction: ") + e.what();
-        g_logger.error("%s", result.error_message.c_str());
+        LOG_F(ERROR, "{}", result.error_message);
         // unz_guard handles closing if unz was opened
     }
 
@@ -863,8 +799,8 @@ CompressionResult createZip(std::string_view source_path_sv,
                     zi.tmz_date.tm_sec = tm_local->tm_sec;
                 }
             } catch (...) {
-                g_logger.warning("Could not get valid timestamp for file: %s",
-                                 source_path.string().c_str());
+                LOG_F(WARNING, "Could not get valid timestamp for file: {}",
+                      source_path.string());
             }
 
             const char* password_cstr =
@@ -952,15 +888,14 @@ CompressionResult createZip(std::string_view source_path_sv,
                 result.compression_ratio = 0.0;
             }
             result.success = true;
-            g_logger.info("Successfully created ZIP %s from file %s",
-                          zip_fs_path.string().c_str(),
-                          source_path.string().c_str());
+            LOG_F(INFO, "Successfully created ZIP {} from file {}",
+                  zip_fs_path.string(), source_path.string());
 
         } catch (const std::exception& e) {
             result.error_message =
                 String("Exception during single file zip creation: ") +
                 e.what();
-            g_logger.error("%s", result.error_message.c_str());
+            LOG_F(ERROR, "{}", result.error_message);
             // zip_file unique_ptr handles closing if zip_file_handle was opened
         }
         return result;
@@ -972,15 +907,14 @@ CompressionResult createZip(std::string_view source_path_sv,
 }
 
 Vector<ZipFileInfo> listZipContents(std::string_view zip_path_sv) {
-    Vector<ZipFileInfo> result_vec;  // Use Vector
-    unzFile unz = nullptr;           // Use raw handle for RAII
+    Vector<ZipFileInfo> result_vec;
+    unzFile unz = nullptr;
     try {
         fs::path zip_fs_path(zip_path_sv);
         // Open ZIP file
         unz = unzOpen64(zip_fs_path.string().c_str());
         if (!unz) {
-            g_logger.error("Failed to open ZIP file: %s",
-                           zip_fs_path.string().c_str());
+            LOG_F(ERROR, "Failed to open ZIP file: {}", zip_fs_path.string());
             return result_vec;
         }
         std::unique_ptr<void, UnzipCloser> unz_guard(unz);
@@ -988,9 +922,9 @@ Vector<ZipFileInfo> listZipContents(std::string_view zip_path_sv) {
         // Get global info
         unz_global_info64 gi;
         if (unzGetGlobalInfo64(unz, &gi) != UNZ_OK) {
-            g_logger.error("Failed to get ZIP file info for %s",
-                           zip_fs_path.string().c_str());
-            return result_vec;  // unz_guard handles closing
+            LOG_F(ERROR, "Failed to get ZIP file info for {}",
+                  zip_fs_path.string());
+            return result_vec;
         }
 
         // Preallocate space if possible (Vector might have reserve)
@@ -1000,8 +934,8 @@ Vector<ZipFileInfo> listZipContents(std::string_view zip_path_sv) {
         if (unzGoToFirstFile(unz) != UNZ_OK) {
             if (gi.number_entry == 0)
                 return result_vec;  // Empty zip is ok
-            g_logger.error("Failed to go to first file in ZIP: %s",
-                           zip_fs_path.string().c_str());
+            LOG_F(ERROR, "Failed to go to first file in ZIP: {}",
+                  zip_fs_path.string());
             return result_vec;  // unz_guard handles closing
         }
 
@@ -1013,8 +947,8 @@ Vector<ZipFileInfo> listZipContents(std::string_view zip_path_sv) {
             if (unzGetCurrentFileInfo64(unz, &file_info, filename_c,
                                         sizeof(filename_c), nullptr, 0, nullptr,
                                         0) != UNZ_OK) {
-                g_logger.error("Failed to get file info in ZIP: %s",
-                               zip_fs_path.string().c_str());
+                LOG_F(ERROR, "Failed to get file info in ZIP: {}",
+                      zip_fs_path.string());
                 continue;  // Skip this entry
             }
 
@@ -1046,11 +980,11 @@ Vector<ZipFileInfo> listZipContents(std::string_view zip_path_sv) {
 
         } while (unzGoToNextFile(unz) == UNZ_OK);
 
-        g_logger.info("Listed %zu files in ZIP: %s", result_vec.size(),
-                      zip_fs_path.string().c_str());
+        LOG_F(INFO, "Listed {} files in ZIP: {}", result_vec.size(),
+              zip_fs_path.string());
 
     } catch (const std::exception& e) {
-        g_logger.error("Exception in listZipContents: %s", e.what());
+        LOG_F(ERROR, "Exception in listZipContents: {}", e.what());
         result_vec.clear();  // Clear results on exception
         // unz_guard handles closing if unz was opened
     }
@@ -1066,8 +1000,7 @@ bool fileExistsInZip(std::string_view zip_path_sv,
         // Open ZIP file
         unz = unzOpen64(zip_fs_path.string().c_str());
         if (!unz) {
-            g_logger.error("Failed to open ZIP file: %s",
-                           zip_fs_path.string().c_str());
+            LOG_F(ERROR, "Failed to open ZIP file: {}", zip_fs_path.string());
             return false;
         }
         std::unique_ptr<void, UnzipCloser> unz_guard(unz);
@@ -1078,7 +1011,7 @@ bool fileExistsInZip(std::string_view zip_path_sv,
         // docs)
         if (unzLocateFile(unz, file_path_sv.data(), 2) != UNZ_OK) {
             // File not found is not necessarily an error, just return false
-            // g_logger.info("File not found in ZIP: %s", file_path_sv.data());
+            // LOG_F(INFO, "File not found in ZIP: {}", file_path_sv.data());
             return false;  // unz_guard handles closing
         }
 
@@ -1086,7 +1019,7 @@ bool fileExistsInZip(std::string_view zip_path_sv,
         return true;  // unz_guard handles closing
 
     } catch (const std::exception& e) {
-        g_logger.error("Exception in fileExistsInZip: %s", e.what());
+        LOG_F(ERROR, "Exception in fileExistsInZip: {}", e.what());
         // unz_guard handles closing if unz was opened
         return false;
     }
@@ -1174,8 +1107,8 @@ CompressionResult removeFromZip(std::string_view zip_path_sv,
             // Skip the file to be removed
             // Need exact match, consider case sensitivity and path separators
             if (current_filename == String(file_path_to_remove_sv)) {
-                g_logger.info("Skipping file for removal: %s",
-                              current_filename.c_str());
+                LOG_F(INFO, "Skipping file for removal: {}",
+                      current_filename.c_str());
                 continue;
             }
 
@@ -1272,9 +1205,8 @@ CompressionResult removeFromZip(std::string_view zip_path_sv,
 
             // Close current file entries
             if (unzCloseCurrentFile(src_zip_handle) != UNZ_OK) {
-                g_logger.warning(
-                    "Failed to close current file in source ZIP: %s",
-                    current_filename.c_str());
+                LOG_F(WARNING, "Failed to close current file in source ZIP: {}",
+                      current_filename.c_str());
                 // Continue?
             }
             if (zipCloseFileInZip(dst_zip_handle) != ZIP_OK) {
@@ -1295,13 +1227,13 @@ CompressionResult removeFromZip(std::string_view zip_path_sv,
         fs::rename(temp_zip_fs_path, zip_fs_path);  // Rename temp to original
 
         result.success = true;
-        g_logger.info("Successfully removed %s from ZIP file %s",
-                      file_path_to_remove_sv.data(), zip_path_sv.data());
+        LOG_F(INFO, "Successfully removed {} from ZIP file {}",
+              file_path_to_remove_sv.data(), zip_path_sv.data());
 
     } catch (const std::exception& e) {
         result.error_message =
             String("Exception during file removal from ZIP: ") + e.what();
-        g_logger.error("%s", result.error_message.c_str());
+        LOG_F(ERROR, "{}", result.error_message.c_str());
         // Guards handle closing
         // Clean up temp file if it exists
         if (fs::exists(temp_zip_fs_path)) {
@@ -1315,7 +1247,7 @@ CompressionResult removeFromZip(std::string_view zip_path_sv,
 std::optional<size_t> getZipSize(std::string_view zip_path_sv) {
     try {
         if (zip_path_sv.empty()) {
-            g_logger.error("Empty ZIP path provided to getZipSize");
+            LOG_F(ERROR, "Empty ZIP path provided to getZipSize");
             return std::nullopt;
         }
 
@@ -1330,17 +1262,17 @@ std::optional<size_t> getZipSize(std::string_view zip_path_sv) {
         std::error_code ec;
         size_t size = fs::file_size(zip_fs_path, ec);
         if (ec) {
-            g_logger.error("Failed to get file size for %s: %s",
-                           zip_fs_path.string().c_str(), ec.message().c_str());
+            LOG_F(ERROR, "Failed to get file size for {}: {}",
+                  zip_fs_path.string().c_str(), ec.message().c_str());
             return std::nullopt;
         }
-        // g_logger.info("ZIP file size: %zu bytes", size); // Optional logging
+        // LOG_F(INFO, "ZIP file size: {} bytes", size); // Optional logging
         return size;
 
     } catch (const std::exception& e) {
         // Catch potential filesystem exceptions
-        g_logger.error("Exception in getZipSize for %s: %s", zip_path_sv.data(),
-                       e.what());
+        LOG_F(ERROR, "Exception in getZipSize for {}: {}", zip_path_sv.data(),
+              e.what());
         return std::nullopt;
     }
 }
@@ -1600,16 +1532,15 @@ CompressionResult compressFileInSlices(std::string_view file_path_sv,
         manifest_file.close();
 
         result.success = true;
-        g_logger.info(
-            "Successfully created %zu slices for %s (ratio: %.2f%%)",
-            num_slices, file_path_sv.data(),
-            (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
-                                      : 0.0));
+        LOG_F(INFO, "Successfully created {} slices for {} (ratio: {:.2f}%)",
+              num_slices, file_path_sv.data(),
+              (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
+                                        : 0.0));
 
     } catch (const std::exception& e) {
         result.error_message =
             String("Exception in slice compression: ") + e.what();
-        g_logger.error("%s", result.error_message.c_str());
+        LOG_F(ERROR, "{}", result.error_message.c_str());
         // Consider cleanup
     }
 
@@ -1819,16 +1750,15 @@ CompressionResult mergeCompressedSlices(
         }
         result.success = true;
 
-        g_logger.info(
-            "Successfully merged %zu slices into %s (ratio: %.2f%%)",
-            slice_files.size(), output_path_sv.data(),
-            (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
-                                      : 0.0));
+        LOG_F(INFO, "Successfully merged {} slices into {} (ratio: {:.2f}%)",
+              slice_files.size(), output_path_sv.data(),
+              (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
+                                        : 0.0));
 
     } catch (const std::exception& e) {
         result.error_message =
             String("Exception in slice merging: ") + e.what();
-        g_logger.error("%s", result.error_message.c_str());
+        LOG_F(ERROR, "{}", result.error_message.c_str());
         // Clean up output file?
         try {
             fs::remove(fs::path(output_path_sv));
@@ -1962,9 +1892,9 @@ CompressionResult createBackup(std::string_view source_path_sv,
                 result.compressed_size =
                     result.original_size;  // No compression
                 result.compression_ratio = 1.0;
-                g_logger.info(
-                    "Successfully created uncompressed backup: %s -> %s",
-                    source_path_sv.data(), backup_path_sv.data());
+                LOG_F(INFO,
+                      "Successfully created uncompressed backup: {} -> {}",
+                      source_path_sv.data(), backup_path_sv.data());
             }
         }
 
@@ -1972,7 +1902,7 @@ CompressionResult createBackup(std::string_view source_path_sv,
         result.success = false;
         result.error_message =
             String("Exception during backup creation: ") + e.what();
-        g_logger.error("%s", result.error_message.c_str());
+        LOG_F(ERROR, "{}", result.error_message.c_str());
     }
     return result;
 }
@@ -2057,8 +1987,9 @@ CompressionResult restoreFromBackup(
                 result.original_size =
                     result.compressed_size;  // No compression
                 result.compression_ratio = 1.0;
-                g_logger.info(
-                    "Successfully restored from uncompressed backup: %s -> %s",
+                LOG_F(
+                    INFO,
+                    "Successfully restored from uncompressed backup: {} -> {}",
                     backup_path_sv.data(), restore_path_sv.data());
             }
         }
@@ -2067,7 +1998,7 @@ CompressionResult restoreFromBackup(
         result.success = false;
         result.error_message =
             String("Exception during backup restoration: ") + e.what();
-        g_logger.error("%s", result.error_message.c_str());
+        LOG_F(ERROR, "{}", result.error_message.c_str());
     }
     return result;
 }
@@ -2138,17 +2069,17 @@ std::pair<CompressionResult, Vector<unsigned char>> compressData(
 
         compression_result.success = true;
 
-        g_logger.info(
-            "Successfully compressed %zu bytes to %zu bytes (ratio: %.2f%%)",
-            compression_result.original_size, actual_compressed_size,
-            (compression_result.original_size > 0
-                 ? (1.0 - compression_result.compression_ratio) * 100
-                 : 0.0));
+        LOG_F(INFO,
+              "Successfully compressed {} bytes to {} bytes (ratio: {:.2f}%)",
+              compression_result.original_size, actual_compressed_size,
+              (compression_result.original_size > 0
+                   ? (1.0 - compression_result.compression_ratio) * 100
+                   : 0.0));
 
     } catch (const std::exception& e) {
         compression_result.error_message =
             String("Exception during data compression: ") + e.what();
-        g_logger.error("%s", compression_result.error_message.c_str());
+        LOG_F(ERROR, "{}", compression_result.error_message.c_str());
         compressed_data.clear();  // Ensure data is cleared on exception
     }
 
@@ -2281,8 +2212,9 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
             // ok if the buffer was just right, but often indicates truncated
             // data if the original size wasn't known. Let's consider it
             // successful if input is consumed and no error occurred.
-            g_logger.warning(
-                "Decompression finished with code %d (Z_STREAM_END is %d), but "
+            LOG_F(
+                WARNING,
+                "Decompression finished with code {} (Z_STREAM_END is {}), but "
                 "all input consumed.",
                 inflate_ret, Z_STREAM_END);
         }
@@ -2302,17 +2234,17 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
 
         compression_result.success = true;
 
-        g_logger.info(
-            "Successfully decompressed %zu bytes to %zu bytes (ratio: %.2f%%)",
-            compression_result.compressed_size, actual_decompressed_size,
-            (compression_result.original_size > 0
-                 ? (1.0 - compression_result.compression_ratio) * 100
-                 : 0.0));
+        LOG_F(INFO,
+              "Successfully decompressed {} bytes to {} bytes (ratio: {:.2f}%)",
+              compression_result.compressed_size, actual_decompressed_size,
+              (compression_result.original_size > 0
+                   ? (1.0 - compression_result.compression_ratio) * 100
+                   : 0.0));
 
     } catch (const std::exception& e) {
         compression_result.error_message =
             String("Exception during data decompression: ") + e.what();
-        g_logger.error("%s", compression_result.error_message.c_str());
+        LOG_F(ERROR, "{}", compression_result.error_message.c_str());
         decompressed_data.clear();
     }
 
