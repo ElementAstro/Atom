@@ -50,7 +50,9 @@
 #include "atom/algorithm/base.hpp"  // Assuming this contains base64
 #include "atom/error/exception.hpp"  // Assuming THROW_RUNTIME_ERROR is defined here
 #include "atom/log/loguru.hpp"
-#include "atom/type/json.hpp"  // Assuming nlohmann::json
+#include "atom/type/json.hpp"
+
+using json = nlohmann::json;
 
 // --- Constants ---
 namespace {
@@ -390,18 +392,18 @@ bool PasswordManager::initialize(std::string_view masterPassword,
     initData["iterations"] =
         settings.encryptionOptions.keyIterations;  // Store iterations used
 
-    auto saltB64 = algorithm::base64Encode(salt);
-    auto ivB64 = algorithm::base64Encode(iv);
-    auto tagB64 = algorithm::base64Encode(tag);
+    auto saltB64 = algorithm::base64Encode(std::string(salt.begin(), salt.end()));
+    auto ivB64 = algorithm::base64Encode(std::string(iv.begin(), iv.end()));
+    auto tagB64 = algorithm::base64Encode(std::string(tag.begin(), tag.end()));
 
     if (!saltB64 || !ivB64 || !tagB64) {
         throw std::runtime_error(
             "Failed to base64 encode initialization components.");
     }
 
-    initData["salt"] = std::string(saltB64->begin(), saltB64->end());
-    initData["iv"] = std::string(ivB64->begin(), ivB64->end());
-    initData["tag"] = std::string(tagB64->begin(), tagB64->end());
+    initData["salt"] = *saltB64;
+    initData["iv"] = *ivB64;
+    initData["tag"] = *tagB64;
     initData["data"] = encryptedVerificationData;  // Already base64 encoded
 
     std::string serializedData = initData.dump();
@@ -503,32 +505,20 @@ bool PasswordManager::unlock(std::string_view masterPassword) {
                   DEFAULT_PBKDF2_ITERATIONS);
         }
 
-        auto saltResult = algorithm::base64Decode(
-            initData.at("salt").template get<std::string>());
-        auto ivResult = algorithm::base64Decode(
-            initData.at("iv").template get<std::string>());
-        auto tagResult = algorithm::base64Decode(
-            initData.at("tag").template get<std::string>());
-        auto dataResult = algorithm::base64Decode(
-            initData.at("data").template get<std::string>());
+        auto saltResult = algorithm::base64Decode(initData.at("salt").get<std::string>());
+        auto ivResult = algorithm::base64Decode(initData.at("iv").get<std::string>());
+        auto tagResult = algorithm::base64Decode(initData.at("tag").get<std::string>());
+        auto dataResult = algorithm::base64Decode(initData.at("data").get<std::string>());
 
         if (!saltResult || !ivResult || !tagResult || !dataResult) {
             throw std::runtime_error(
                 "Failed to decode base64 components from init data.");
         }
 
-        // Handle expected<T> return values correctly - check if they contain a
-        // value
-        if (saltResult.has_value() && ivResult.has_value() &&
-            tagResult.has_value() && dataResult.has_value()) {
-            salt = std::move(saltResult.value());
-            iv = std::move(ivResult.value());
-            tag = std::move(tagResult.value());
-            encryptedDataBytes = std::move(dataResult.value());
-        } else {
-            throw std::runtime_error(
-                "One or more base64 decode operations returned an error.");
-        }
+        salt = std::vector<unsigned char>(saltResult->begin(), saltResult->end());
+        iv = std::vector<unsigned char>(ivResult->begin(), ivResult->end());
+        tag = std::vector<unsigned char>(tagResult->begin(), tagResult->end());
+        encryptedDataBytes = std::vector<unsigned char>(dataResult->begin(), dataResult->end());
 
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Failed to parse initialization data: {}", e.what());
@@ -1184,7 +1174,7 @@ std::vector<std::string> PasswordManager::getAllPlatformKeys() const {
     // lock update
 
     try {
-        return getAllPlatformKeysInternal();
+        return getAllPlatformKeysInternal();  // This is correct, issue was in the error line
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Get all platform keys error: {}", e.what());
         return {};
@@ -1455,6 +1445,18 @@ PasswordStrength PasswordManager::evaluatePasswordStrength(
         charTypes++;
     if (hasDigit)
         charTypes++;
+    if (hasSpecial)
+        charTypes++;
+
+    if (charTypes >= 2)
+        score += 1;
+    if (charTypes >= 3)
+        score += 1;
+    if (charTypes >= 4)
+        score += 1;
+
+    // Penalties for common patterns (simple checks)
+    try {
     if (hasSpecial)
         charTypes++;
 

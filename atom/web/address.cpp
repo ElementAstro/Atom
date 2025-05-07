@@ -7,14 +7,13 @@
 #include <arpa/inet.h>
 #endif
 
-#include <immintrin.h>  // For SIMD instructions
+#include <immintrin.h>
 #include <algorithm>
 #include <bitset>
-#include <charconv>  // For std::from_chars
+#include <charconv>
 #include <cstring>
 #include <future>
 #include <iomanip>
-#include <mutex>
 #include <regex>
 #include <sstream>
 #include <string>
@@ -28,7 +27,8 @@ constexpr int IPV4_BIT_LENGTH = 32;
 constexpr int IPV6_SEGMENT_COUNT = 8;
 constexpr int IPV6_SEGMENT_BIT_LENGTH = 16;
 #ifdef _WIN32
-constexpr int UNIX_DOMAIN_PATH_MAX_LENGTH = MAX_PATH;  // Windows最大路径长度
+[[maybe_unused]] constexpr int UNIX_DOMAIN_PATH_MAX_LENGTH =
+    MAX_PATH;
 #else
 constexpr int UNIX_DOMAIN_PATH_MAX_LENGTH = 108;
 #endif

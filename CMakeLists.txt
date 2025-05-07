@@ -18,8 +18,11 @@ add_custom_target(AtomCmakeAdditionalFiles
     ${CMAKE_CURRENT_SOURCE_DIR}/cmake/compiler_options.cmake
 )
 
+# 全局构建选项
 option(ATOM_BUILD_EXAMPLES "Build the examples" OFF)
 option(ATOM_BUILD_TESTS "Build the tests" OFF)
+
+# Boost 相关选项
 option(ATOM_USE_BOOST "Enable Boost high-performance data structures" OFF)
 option(ATOM_USE_BOOST_LOCKFREE "Enable Boost lockfree data structures" OFF)
 option(ATOM_USE_BOOST_CONTAINER "Enable Boost container library" OFF)
@@ -27,12 +30,35 @@ option(ATOM_USE_BOOST_GRAPH "Enable Boost graph library" OFF)
 option(ATOM_USE_BOOST_INTRUSIVE "Enable Boost intrusive containers" OFF)
 option(ATOM_USE_PYBIND11 "Enable pybind11 support" ON)
 
+# 模块构建选项
+option(ATOM_BUILD_ALL "Build all Atom modules" ON)
+option(ATOM_BUILD_ALGORITHM "Build the algorithm module" ${ATOM_BUILD_ALL})
+option(ATOM_BUILD_ASYNC "Build the async module" ${ATOM_BUILD_ALL})
+option(ATOM_BUILD_COMPONENTS "Build the components module" ${ATOM_BUILD_ALL})
+option(ATOM_BUILD_CONNECTION "Build the connection module" ${ATOM_BUILD_ALL})
+option(ATOM_BUILD_ERROR "Build the error module" ${ATOM_BUILD_ALL})
+option(ATOM_BUILD_IO "Build the io module" ${ATOM_BUILD_ALL})
+option(ATOM_BUILD_LOG "Build the log module" ${ATOM_BUILD_ALL})
+option(ATOM_BUILD_META "Build the meta module" ${ATOM_BUILD_ALL})
+option(ATOM_BUILD_SEARCH "Build the search module" ${ATOM_BUILD_ALL})
+option(ATOM_BUILD_SECRET "Build the secret module" ${ATOM_BUILD_ALL})
+option(ATOM_BUILD_SYSINFO "Build the sysinfo module" ${ATOM_BUILD_ALL})
+option(ATOM_BUILD_SYSTEM "Build the system module" ${ATOM_BUILD_ALL})
+option(ATOM_BUILD_UTILS "Build the utils module" ${ATOM_BUILD_ALL})
+option(ATOM_BUILD_WEB "Build the web module" ${ATOM_BUILD_ALL})
+
 # Append module paths
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/")
 
 # Include compiler options
 include(cmake/compiler_options.cmake)
+
+# 添加模块依赖关系配置文件
+include(cmake/module_dependencies.cmake)
+
+# 处理模块依赖关系
+include(cmake/ScanModule.cmake)
 
 # Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/extra)

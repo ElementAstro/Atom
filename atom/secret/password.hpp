@@ -495,6 +495,12 @@ private:
     void updateActivity();
 
     /**
+     * @brief Internal implementation to get all platform keys without locking.
+     * @return Vector of platform key strings.
+     */
+    [[nodiscard]] std::vector<std::string> getAllPlatformKeysInternal() const;
+
+    /**
      * @brief Derives an encryption key from the master password using PBKDF2.
      * @param masterPassword The master password.
      * @param salt The salt value to use.
