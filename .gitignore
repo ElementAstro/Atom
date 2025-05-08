@@ -54,3 +54,4 @@ test
 cmake-build-debug/
 
 .venv/
+.mypy_cache/

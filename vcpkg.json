@@ -1,0 +1,66 @@
+{
+    "name": "atom",
+    "version": "1.0.0",
+    "description": "The foundational library for all elemental astro projects",
+    "homepage": "https://github.com/ElementAstro/Atom",
+    "dependencies": [
+        "openssl",
+        "zlib",
+        "sqlite3",
+        "fmt",
+        "readline",
+        "pybind11",
+        {
+            "name": "boost",
+            "default-features": false,
+            "features": [
+                "container"
+            ]
+        }
+    ],
+    "features": {
+        "boost-lockfree": {
+            "description": "Enable Boost lockfree data structures",
+            "dependencies": [
+                {
+                    "name": "boost",
+                    "default-features": false,
+                    "features": [
+                        "atomic",
+                        "thread"
+                    ]
+                }
+            ]
+        },
+        "boost-graph": {
+            "description": "Enable Boost graph library",
+            "dependencies": [
+                {
+                    "name": "boost",
+                    "default-features": false,
+                    "features": [
+                        "graph"
+                    ]
+                }
+            ]
+        },
+        "boost-intrusive": {
+            "description": "Enable Boost intrusive containers",
+            "dependencies": [
+                {
+                    "name": "boost",
+                    "default-features": false
+                }
+            ]
+        },
+        "examples": {
+            "description": "Build example applications"
+        },
+        "tests": {
+            "description": "Build test applications",
+            "dependencies": [
+                "gtest"
+            ]
+        }
+    }
+}

@@ -7,12 +7,50 @@
     },
     "configurePresets": [
         {
-            "name": "base",
+            "name": "base-ninja",
             "hidden": true,
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "base-makefile",
+            "hidden": true,
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "base-mingw",
+            "hidden": true,
+            "generator": "MinGW Makefiles",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "base",
+            "hidden": true,
+            "inherits": "base-ninja",
+            "condition": {
+                "type": "notEquals",
+                "lhs": "$env{MSYSTEM}",
+                "rhs": "MINGW64"
+            }
+        },
+        {
+            "name": "base-msys2",
+            "hidden": true,
+            "inherits": "base-mingw",
+            "condition": {
+                "type": "matches",
+                "string": "$env{PATH}",
+                "regex": ".*msys64.*|.*msys2.*"
             }
         },
         {
@@ -40,6 +78,58 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo"
             }
+        },
+        {
+            "name": "debug-msys2",
+            "displayName": "Debug (MSYS2)",
+            "inherits": "base-msys2",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_CXX_FLAGS": "-Wall -Wextra -Wpedantic"
+            }
+        },
+        {
+            "name": "release-msys2",
+            "displayName": "Release (MSYS2)",
+            "inherits": "base-msys2",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CXX_FLAGS": "-O3"
+            }
+        },
+        {
+            "name": "relwithdebinfo-msys2",
+            "displayName": "RelWithDebInfo (MSYS2)",
+            "inherits": "base-msys2",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "debug-make",
+            "displayName": "Debug (Makefile)",
+            "inherits": "base-makefile",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_CXX_FLAGS": "-Wall -Wextra -Wpedantic"
+            }
+        },
+        {
+            "name": "release-make",
+            "displayName": "Release (Makefile)",
+            "inherits": "base-makefile",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CXX_FLAGS": "-O3"
+            }
+        },
+        {
+            "name": "relwithdebinfo-make",
+            "displayName": "RelWithDebInfo (Makefile)",
+            "inherits": "base-makefile",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
         }
     ],
     "buildPresets": [
@@ -56,6 +146,36 @@
         {
             "name": "relwithdebinfo",
             "configurePreset": "relwithdebinfo",
+            "jobs": 8
+        },
+        {
+            "name": "debug-msys2",
+            "configurePreset": "debug-msys2",
+            "jobs": 8
+        },
+        {
+            "name": "release-msys2",
+            "configurePreset": "release-msys2",
+            "jobs": 8
+        },
+        {
+            "name": "relwithdebinfo-msys2",
+            "configurePreset": "relwithdebinfo-msys2",
+            "jobs": 8
+        },
+        {
+            "name": "debug-make",
+            "configurePreset": "debug-make",
+            "jobs": 8
+        },
+        {
+            "name": "release-make",
+            "configurePreset": "release-make",
+            "jobs": 8
+        },
+        {
+            "name": "relwithdebinfo-make",
+            "configurePreset": "relwithdebinfo-make",
             "jobs": 8
         }
     ],
