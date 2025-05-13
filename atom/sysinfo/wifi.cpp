@@ -555,11 +555,19 @@ auto getInterfaceNames() -> std::vector<std::string> {
 
 #if defined(_WIN32) || defined(__USE_W32_SOCKETS)
     for (auto adapter = allAddrs; adapter != nullptr; adapter = adapter->Next) {
-        std::string interfaceName =
-            adapter->FriendlyName
-                ? std::wstring_convert<std::codecvt_utf8<wchar_t>>().to_bytes(
-                      adapter->FriendlyName)
-                : "";
+        std::string interfaceName;
+        if (adapter->FriendlyName) {
+            // Convert wide string to UTF-8 without using deprecated
+            // wstring_convert
+            int size_needed = WideCharToMultiByte(
+                CP_UTF8, 0, adapter->FriendlyName, -1, NULL, 0, NULL, NULL);
+            if (size_needed > 0) {
+                std::vector<char> buffer(size_needed);
+                WideCharToMultiByte(CP_UTF8, 0, adapter->FriendlyName, -1,
+                                    buffer.data(), size_needed, NULL, NULL);
+                interfaceName = buffer.data();
+            }
+        }
         if (!interfaceName.empty()) {
             interfaceNames.push_back(interfaceName);
             LOG_F(INFO, "Found interface: {}", interfaceName);

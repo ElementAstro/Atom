@@ -3,6 +3,11 @@
 
 #include "config.hpp"
 
+#include <atomic>
+#include <shared_mutex>
+#include <span>
+#include <string_view>
+
 #if ENABLE_FASTHASH
 #include "emhash/hash_set8.hpp"
 #include "emhash/hash_table8.hpp"
@@ -48,7 +53,11 @@ public:
 // -------------------------------------------------------------------
 
 /**
- * @brief Manages and dispatches commands.
+ * @brief Manages and dispatches commands with thread-safety.
+ *
+ * CommandDispatcher provides a thread-safe registry for commands that can be
+ * executed with different parameter sets, with support for timeouts,
+ * preconditions, and postconditions.
  */
 class CommandDispatcher {
 public:
@@ -57,7 +66,7 @@ public:
      * @param typeCaster A weak pointer to a TypeCaster.
      */
     explicit CommandDispatcher(std::weak_ptr<atom::meta::TypeCaster> typeCaster)
-        : typeCaster_(std::move(typeCaster)) {}
+        : typeCaster_(std::move(typeCaster)), isShuttingDown_(false) {}
 
     /**
      * @brief Defines a command.
@@ -70,41 +79,58 @@ public:
      * @param precondition An optional precondition function.
      * @param postcondition An optional postcondition function.
      * @param arg_info Information about the arguments.
+     * @return True if command was registered successfully, false if already
+     * exists.
+     *
+     * @note Thread-safe.
      */
     template <typename Ret, typename... Args>
-    void def(const std::string& name, const std::string& group,
-             const std::string& description, std::function<Ret(Args...)> func,
-             std::optional<std::function<bool()>> precondition = std::nullopt,
-             std::optional<std::function<void()>> postcondition = std::nullopt,
-             std::vector<atom::meta::Arg> arg_info = {});
+    [[nodiscard]] bool def(
+        std::string_view name, std::string_view group,
+        std::string_view description, std::function<Ret(Args...)> func,
+        std::optional<std::function<bool()>> precondition = std::nullopt,
+        std::optional<std::function<void()>> postcondition = std::nullopt,
+        std::vector<atom::meta::Arg> arg_info = {});
 
     /**
      * @brief Checks if a command exists.
      * @param name The name of the command.
      * @return True if the command exists, false otherwise.
+     *
+     * @note Thread-safe.
      */
-    [[nodiscard]] auto has(const std::string& name) -> bool;
+    [[nodiscard]] bool has(std::string_view name) const noexcept;
 
     /**
      * @brief Adds an alias for a command.
      * @param name The name of the command.
      * @param alias The alias for the command.
+     * @return True if alias was added successfully, false otherwise.
+     *
+     * @note Thread-safe.
      */
-    void addAlias(const std::string& name, const std::string& alias);
+    [[nodiscard]] bool addAlias(std::string_view name, std::string_view alias);
 
     /**
      * @brief Adds a command to a group.
      * @param name The name of the command.
      * @param group The group of the command.
+     * @return True if the command was added to the group, false otherwise.
+     *
+     * @note Thread-safe.
      */
-    void addGroup(const std::string& name, const std::string& group);
+    [[nodiscard]] bool addGroup(std::string_view name, std::string_view group);
 
     /**
      * @brief Sets a timeout for a command.
      * @param name The name of the command.
      * @param timeout The timeout duration.
+     * @return True if timeout was set, false if command doesn't exist.
+     *
+     * @note Thread-safe.
      */
-    void setTimeout(const std::string& name, std::chrono::milliseconds timeout);
+    [[nodiscard]] bool setTimeout(std::string_view name,
+                                  std::chrono::milliseconds timeout);
 
     /**
      * @brief Dispatches a command with arguments.
@@ -112,49 +138,80 @@ public:
      * @param name The name of the command.
      * @param args The arguments for the command.
      * @return The result of the command execution.
+     * @throws DispatchException If command execution fails.
+     * @throws DispatchTimeout If command execution times out.
+     *
+     * @note Thread-safe.
      */
     template <typename... Args>
-    auto dispatch(const std::string& name, Args&&... args) -> std::any;
+    std::any dispatch(std::string_view name, Args&&... args);
 
     /**
      * @brief Dispatches a command with a vector of arguments.
      * @param name The name of the command.
      * @param args The arguments for the command.
      * @return The result of the command execution.
+     * @throws DispatchException If command execution fails.
+     * @throws DispatchTimeout If command execution times out.
+     *
+     * @note Thread-safe.
      */
-    auto dispatch(const std::string& name,
-                  const std::vector<std::any>& args) -> std::any;
+    std::any dispatch(std::string_view name, std::span<const std::any> args);
+
+    /**
+     * @brief Dispatches a command with a vector of arguments (legacy version).
+     * @param name The name of the command.
+     * @param args The arguments for the command.
+     * @return The result of the command execution.
+     */
+    std::any dispatch(std::string_view name, const std::vector<std::any>& args);
 
     /**
      * @brief Dispatches a command with function parameters.
      * @param name The name of the command.
      * @param params The function parameters.
      * @return The result of the command execution.
+     * @throws DispatchException If command execution fails.
+     * @throws DispatchTimeout If command execution times out.
+     *
+     * @note Thread-safe.
      */
-    auto dispatch(const std::string& name,
-                  const atom::meta::FunctionParams& params) -> std::any;
+    std::any dispatch(std::string_view name,
+                      const atom::meta::FunctionParams& params);
 
     /**
      * @brief Removes a command.
      * @param name The name of the command.
+     * @return True if the command was successfully removed, false if it didn't
+     * exist.
+     *
+     * @note Thread-safe.
      */
-    void removeCommand(const std::string& name);
+    bool removeCommand(std::string_view name);
+
+    /**
+     * @brief Prepares for shutdown, prevents new dispatches.
+     * @note Thread-safe.
+     */
+    void prepareForShutdown() noexcept {
+        isShuttingDown_.store(true, std::memory_order_release);
+    }
 
     /**
      * @brief Gets the commands in a group.
      * @param group The group name.
      * @return A vector of command names in the group.
      */
-    [[nodiscard]] auto getCommandsInGroup(const std::string& group) const
-        -> std::vector<std::string>;
+    [[nodiscard]] std::vector<std::string> getCommandsInGroup(
+        std::string_view group) const;
 
     /**
      * @brief Gets the description of a command.
      * @param name The name of the command.
      * @return The description of the command.
      */
-    [[nodiscard]] auto getCommandDescription(const std::string& name) const
-        -> std::string;
+    [[nodiscard]] std::string getCommandDescription(
+        std::string_view name) const;
 
 #if ATOM_USE_BOOST_CONTAINERS
     using StringSet = atom::container::string_hash_set;
@@ -168,22 +225,38 @@ public:
      * @brief Gets the aliases of a command.
      * @param name The name of the command.
      * @return A set of aliases for the command.
+     *
+     * @note Thread-safe.
      */
-    [[nodiscard]] auto getCommandAliases(const std::string& name) const -> StringSet;
+    [[nodiscard]] StringSet getCommandAliases(std::string_view name) const;
 
     /**
      * @brief Gets all commands.
      * @return A vector of all command names.
      */
-    [[nodiscard]] auto getAllCommands() const -> std::vector<std::string>;
+    [[nodiscard]] std::vector<std::string> getAllCommands() const;
 
+    /**
+     * @brief Structure containing command argument and return type information.
+     */
     struct CommandArgRet {
         std::vector<atom::meta::Arg> argTypes;
         std::string returnType;
+
+        // Add comparison operators for easier testing and sorting
+        bool operator==(const CommandArgRet&) const = default;
     } ATOM_ALIGNAS(64);
 
-    [[nodiscard]] auto getCommandArgAndReturnType(const std::string& name)
-        -> std::vector<CommandArgRet>;
+    /**
+     * @brief Gets information about the arguments and return types of a
+     * command.
+     * @param name The name of the command.
+     * @return A vector of CommandArgRet structures, one for each overload.
+     *
+     * @note Thread-safe.
+     */
+    [[nodiscard]] std::vector<CommandArgRet> getCommandArgAndReturnType(
+        std::string_view name) const;
 
     struct Command {
         std::function<std::any(const std::vector<std::any>&)> func;
@@ -205,8 +278,8 @@ private:
      * @return The result of the command execution.
      */
     template <typename ArgsType>
-    auto dispatchHelper(const std::string& name,
-                        const ArgsType& args) -> std::any;
+    auto dispatchHelper(const std::string& name, const ArgsType& args)
+        -> std::any;
 
     auto dispatchHelper(const std::string& name,
                         const std::vector<std::any>& args) -> std::any;
@@ -237,8 +310,8 @@ private:
      * @return A vector of completed arguments.
      */
     template <typename ArgsType>
-    auto completeArgs(const Command& cmd,
-                      const ArgsType& args) -> std::vector<std::any>;
+    auto completeArgs(const Command& cmd, const ArgsType& args)
+        -> std::vector<std::any>;
 
     /**
      * @brief Checks the precondition of a command.
@@ -284,9 +357,10 @@ private:
      * @param args The arguments for the command.
      * @return The result of the command execution.
      */
-    static auto executeWithoutTimeout(
-        const Command& cmd, const std::string& name,
-        const std::vector<std::any>& args) -> std::any;
+    static auto executeWithoutTimeout(const Command& cmd,
+                                      const std::string& name,
+                                      const std::vector<std::any>& args)
+        -> std::any;
 
     /**
      * @brief Executes the functions of a command.
@@ -307,24 +381,32 @@ private:
 
     // 使用高性能数据结构来存储命令和相关信息
 #if ATOM_USE_BOOST_CONTAINERS
-    using CommandMap = atom::container::unordered_map<std::string, std::unordered_map<std::string, Command>>;
+    using CommandMap = atom::container::unordered_map<
+        std::string, std::unordered_map<std::string, Command>>;
     using GroupMap = atom::container::unordered_map<std::string, std::string>;
-    using TimeoutMap = atom::container::unordered_map<std::string, std::chrono::milliseconds>;
-    
+    using TimeoutMap =
+        atom::container::unordered_map<std::string, std::chrono::milliseconds>;
+
     CommandMap commands_;
     GroupMap groupMap_;
     TimeoutMap timeoutMap_;
 #elif ENABLE_FASTHASH
-    emhash8::HashMap<std::string, std::unordered_map<std::string, Command>> commands_;
+    emhash8::HashMap<std::string, std::unordered_map<std::string, Command>>
+        commands_;
     emhash8::HashMap<std::string, std::string> groupMap_;
     emhash8::HashMap<std::string, std::chrono::milliseconds> timeoutMap_;
 #else
-    std::unordered_map<std::string, std::unordered_map<std::string, Command>> commands_;
+    std::unordered_map<std::string, std::unordered_map<std::string, Command>>
+        commands_;
     std::unordered_map<std::string, std::string> groupMap_;
     std::unordered_map<std::string, std::chrono::milliseconds> timeoutMap_;
 #endif
 
     std::weak_ptr<atom::meta::TypeCaster> typeCaster_;
+
+    // Thread safety
+    mutable std::shared_mutex mutex_;   // Reader-writer lock for thread safety
+    std::atomic<bool> isShuttingDown_;  // Flag for safe shutdown
 };
 
 inline void to_json(json& j, const CommandDispatcher::Command& cmd) {
@@ -369,6 +451,10 @@ inline void from_json(const json& j, CommandDispatcher::Command& cmd) {
 
 ATOM_INLINE auto CommandDispatcher::findCommand(const std::string& name,
                                                 const std::string& signature) {
+    // Note: This method should be called with appropriate locks held
+    // We don't add locks here to avoid recursive locking
+
+    // First try direct lookup for best performance
     auto it = commands_.find(name);
     if (it != commands_.end()) {
         auto cmdIt = it->second.find(signature);
@@ -376,6 +462,8 @@ ATOM_INLINE auto CommandDispatcher::findCommand(const std::string& name,
             return cmdIt;
         }
     }
+
+    // Check aliases if direct lookup failed
     for (const auto& [cmdName, cmdMap] : commands_) {
         for (const auto& [sig, cmd] : cmdMap) {
             if (std::ranges::find(cmd.aliases.begin(), cmd.aliases.end(),
@@ -384,30 +472,42 @@ ATOM_INLINE auto CommandDispatcher::findCommand(const std::string& name,
                 std::cout << "Command '" << name
                           << "' not found, did you mean '" << cmdName << "'?\n";
 #endif
-                return commands_.find(cmdName)->second.find(sig);
+                auto mainCmdIt = commands_.find(cmdName);
+                if (mainCmdIt != commands_.end()) {
+                    return mainCmdIt->second.find(sig);
+                }
             }
         }
     }
-    return commands_.end()->second.end();
+
+    // Return end() iterator if not found
+    return commands_.empty() ? decltype(commands_.begin()->second.begin())()
+                             : commands_.begin()->second.end();
 }
 
 template <typename Ret, typename... Args>
-void CommandDispatcher::def(const std::string& name, const std::string& group,
-                            const std::string& description,
-                            std::function<Ret(Args...)> func,
-                            std::optional<std::function<bool()>> precondition,
-                            std::optional<std::function<void()>> postcondition,
-                            std::vector<atom::meta::Arg> arg_info) {
+[[nodiscard]] bool CommandDispatcher::def(
+    std::string_view name, std::string_view group, std::string_view description,
+    std::function<Ret(Args...)> func,
+    std::optional<std::function<bool()>> precondition,
+    std::optional<std::function<void()>> postcondition,
+    std::vector<atom::meta::Arg> arg_info) {
+    // Convert string_view to string for storage
+    const std::string nameStr(name);
+    const std::string groupStr(group);
+    const std::string descStr(description);
+
     std::function<std::any(const std::vector<std::any>&)> wrappedFunc;
     atom::meta::FunctionInfo info;
     Command cmd{{atom::meta::ProxyFunction(std::move(func), info)},
                 {info.getReturnType()},
                 arg_info,
                 {info.getHash()},
-                description,
+                descStr,
                 {},
                 std::move(precondition),
                 std::move(postcondition)};
+
     std::string signature = info.getReturnType() + "(";
     for (const auto& arg : arg_info) {
         signature +=
@@ -417,16 +517,36 @@ void CommandDispatcher::def(const std::string& name, const std::string& group,
         signature.pop_back();
     }
     signature += ")";
-    commands_[name][signature] = std::move(cmd);
-    groupMap_[name] = group;
+
+    // Thread-safe operation
+    {
+        std::unique_lock lock(mutex_);
+
+        // Check if command with same name and signature already exists
+        auto cmdIt = commands_.find(nameStr);
+        if (cmdIt != commands_.end()) {
+            auto sigIt = cmdIt->second.find(signature);
+            if (sigIt != cmdIt->second.end()) {
+                return false;  // Command already exists
+            }
+        }
+
+        commands_[nameStr][signature] = std::move(cmd);
+        groupMap_[nameStr] = groupStr;
+    }
+
+    return true;
 }
 
 template <typename... Args>
-auto CommandDispatcher::dispatch(const std::string& name,
-                                 Args&&... args) -> std::any {
+std::any CommandDispatcher::dispatch(std::string_view name, Args&&... args) {
+    if (isShuttingDown_.load(std::memory_order_acquire)) {
+        THROW_DISPATCH_EXCEPTION("CommandDispatcher is shutting down");
+    }
+
     auto argsTuple = std::make_tuple(std::forward<Args>(args)...);
     auto argsVec = convertToArgsVector(std::move(argsTuple));
-    return dispatchHelper(name, argsVec);
+    return dispatchHelper(std::string(name), argsVec);
 }
 
 template <typename... Args>
@@ -445,6 +565,7 @@ auto CommandDispatcher::convertToArgsVector(std::tuple<Args...>&& tuple)
 template <typename ArgsType>
 auto CommandDispatcher::dispatchHelper(const std::string& name,
                                        const ArgsType& args) -> std::any {
+    // Compute function signature for lookup
     std::string signature = "(";
     for (const auto& arg : args) {
         signature += std::string(arg.type().name()) + ",";
@@ -453,26 +574,41 @@ auto CommandDispatcher::dispatchHelper(const std::string& name,
         signature.pop_back();
     }
     signature += ")";
+
+    // Lock for thread safety during command lookup
+    std::shared_lock lock(mutex_);
+
+    // Find the command
     auto it = findCommand(name, signature);
-    if (it == commands_.end()->second.end()) {
+    if (it == (commands_.empty() ? decltype(it)()
+                                 : commands_.begin()->second.end())) {
         THROW_INVALID_ARGUMENT("Unknown command: " + name);
     }
 
-    const auto& cmd = it->second;
-    std::vector<std::any> fullArgs;
-    fullArgs = completeArgs(cmd, args);
+    // Make a local copy of the command to avoid holding lock during execution
+    const Command cmd = it->second;
 
+    // Release lock before execution
+    lock.unlock();
+
+    // Complete arguments
+    std::vector<std::any> fullArgs = completeArgs(cmd, args);
+
+    // Validate arguments if this is a vector of anys
     if constexpr (std::is_same_v<ArgsType, std::vector<std::any>>) {
-        auto it1 = args.begin();
-        auto it2 = cmd.argTypes.begin();
-        for (; it1 != args.end() && it2 != cmd.argTypes.end(); ++it1, ++it2) {
+        // Basic validation of argument count - further type checking would
+        // require enhancement of the Arg class with type compatibility checking
+        if (args.size() > cmd.argTypes.size()) {
+            THROW_INVALID_ARGUMENT(
+                "Too many arguments for command {}: expected at most {}, got "
+                "{}",
+                name, cmd.argTypes.size(), args.size());
         }
     }
 
+    // Check precondition, execute command, check postcondition
     checkPrecondition(cmd, name);
-
     auto result = executeCommand(cmd, name, fullArgs);
-
     checkPostcondition(cmd, name);
 
     return result;
@@ -481,15 +617,23 @@ auto CommandDispatcher::dispatchHelper(const std::string& name,
 template <typename ArgsType>
 auto CommandDispatcher::completeArgs(const Command& cmd, const ArgsType& args)
     -> std::vector<std::any> {
-    std::vector<std::any> fullArgs(args.begin(), args.end());
+    // Pre-allocate the vector to avoid reallocations
+    std::vector<std::any> fullArgs;
+    fullArgs.reserve(cmd.argTypes.size());
+
+    // Copy provided arguments
+    fullArgs.insert(fullArgs.end(), args.begin(), args.end());
+
+    // Add default values for missing arguments
     for (size_t i = args.size(); i < cmd.argTypes.size(); ++i) {
         if (cmd.argTypes[i].getDefaultValue()) {
             fullArgs.push_back(cmd.argTypes[i].getDefaultValue().value());
         } else {
-            THROW_INVALID_ARGUMENT("Missing argument: " +
+            THROW_INVALID_ARGUMENT("Missing required argument '{}' for command",
                                    cmd.argTypes[i].getName());
         }
     }
+
     return fullArgs;
 }
 

@@ -1291,11 +1291,12 @@ inline auto whenAll(std::vector<Promise<void>>& promises) {
         Promise<void> resultPromise;
         std::vector<std::exception_ptr> exceptions;
 
-        explicit SharedState(size_t count, Promise<void> promise)
+        explicit SharedState(size_t count, Promise<void>&& promise)
             : totalCount(count), resultPromise(std::move(promise)) {}
     };
 
-    auto state = std::make_shared<SharedState>(promises.size(), resultPromise);
+    auto state = std::shared_ptr<SharedState>(
+        new SharedState(promises.size(), std::move(resultPromise)));
 
     // Set callback for each promise
     for (size_t i = 0; i < promises.size(); ++i) {

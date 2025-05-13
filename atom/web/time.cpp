@@ -987,20 +987,28 @@ private:
 
         bool isValid() const {
 #ifdef _WIN32
-            return fd_ != static_cast<int>(INVALID_SOCKET);
+            return fd_ != INVALID_SOCKET;
 #else
             return fd_ >= 0;
 #endif
         }
 
+#ifdef _WIN32
+        SOCKET getFd() const { return fd_; }
+#else
         int getFd() const { return fd_; }
+#endif
 
         // 禁止复制
         SocketHandler(const SocketHandler&) = delete;
         SocketHandler& operator=(const SocketHandler&) = delete;
 
     private:
+#ifdef _WIN32
+        SOCKET fd_;
+#else
         int fd_;
+#endif
     };
 
     void updateTimeCache() {

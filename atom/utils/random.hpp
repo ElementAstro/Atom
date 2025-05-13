@@ -68,6 +68,16 @@ public:
         typename DistributionType::param_type;  ///< Parameter type for the
                                                 ///< distribution.
 
+    template <typename T, typename = void>
+    struct is_seedable : std::false_type {};
+
+    template <typename T>
+    struct is_seedable<T, std::void_t<decltype(std::declval<T>().seed(0))>>
+        : std::true_type {};
+
+    template <typename T>
+    static constexpr bool is_seedable_v = is_seedable<T>::value;
+
 private:
     EngineType engine_;              ///< Instance of the engine.
     DistributionType distribution_;  ///< Instance of the distribution.
@@ -82,10 +92,15 @@ public:
      * @throws InvalidArgumentException if min > max
      */
     Random(ResultType min, ResultType max)
-        : engine_(std::random_device{}()), distribution_(min, max) {
+        : engine_(), distribution_(min, max) {
         if (min > max) {
             THROW_INVALID_ARGUMENT(
                 "Minimum value must be less than or equal to maximum value.");
+        }
+
+        if constexpr (is_seedable_v<Engine>) {
+            std::random_device rd;
+            engine_.seed(rd());
         }
     }
 
@@ -248,15 +263,6 @@ public:
 [[nodiscard]] auto generateRandomString(int length,
                                         const std::string& charset = "")
     -> std::string;
-
-/**
- * @brief Generate a cryptographically secure random string
- *
- * @param length Length of the string to generate
- * @return std::string Secure random string
- * @throws InvalidArgumentException if length is invalid
- */
-[[nodiscard]] auto generateSecureRandomString(int length) -> std::string;
 
 /**
  * @brief Shuffle elements in a container using a secure random generator

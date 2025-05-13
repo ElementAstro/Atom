@@ -11,11 +11,15 @@ project(atom-secret VERSION 1.0.0 LANGUAGES C CXX)
 
 # Sources and Headers
 set(SOURCES
-    password.cpp
+    encryption.cpp
+    storage.cpp
 )
 
 set(HEADERS
-    password.hpp
+    common.hpp
+    encryption.hpp
+    password_entry.hpp
+    storage.hpp
 )
 
 set(LIBS

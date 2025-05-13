@@ -49,7 +49,7 @@ private:
     T mae_ = 0.0;  // Mean Absolute Error
 
     std::mutex metrics_mutex_;
-    std::unique_ptr<atom::async::ThreadPool<>> thread_pool_;
+    std::unique_ptr<atom::async::ThreadPool> thread_pool_;
 
     // 使用更高效的内存池
     static constexpr size_t MAX_CACHE_SIZE = 10000;
@@ -73,10 +73,12 @@ private:
      */
     void initThreadPool() {
         if (!thread_pool_) {
-            const unsigned int num_threads = std::min(
-                std::thread::hardware_concurrency(), 8u);  // 限制最大线程数
-            thread_pool_ =
-                std::make_unique<atom::async::ThreadPool<>>(num_threads);
+            const unsigned int num_threads =
+                std::min(std::thread::hardware_concurrency(), 8u);
+            // Option 2: If Options has a constructor taking thread count
+            thread_pool_ = std::make_unique<atom::async::ThreadPool>(
+                atom::async::ThreadPool::Options(num_threads));
+
             LOG_F(INFO, "Thread pool initialized with {} threads", num_threads);
         }
     }

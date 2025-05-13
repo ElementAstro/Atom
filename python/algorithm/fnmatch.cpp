@@ -172,19 +172,6 @@ PYBIND11_MODULE(fnmatch, m) {
             Expected object containing regex string or FnmatchError
     )pbdoc");
 
-    // CompiledPattern class for optimized matching
-    py::class_<atom::algorithm::detail::CompiledPattern>(m, "CompiledPattern",
-                                                         R"pbdoc(
-        Pre-compiled pattern for efficient repeated matching.
-        
-        This class allows you to compile a pattern once and use it multiple times
-        for better performance when matching the same pattern against many strings.
-    )pbdoc")
-        .def(py::init<std::string_view, int>(), py::arg("pattern"),
-             py::arg("flags") = 0, "Compile a pattern with optional flags")
-        .def("match", &atom::algorithm::detail::CompiledPattern::match,
-             py::arg("string"), "Match a string against the compiled pattern");
-
     // Add version information
     m.attr("__version__") = "1.0.0";
 }

@@ -127,22 +127,23 @@ struct ValidationResult {
     std::vector<BracketInfo> invalidBrackets;
     std::vector<std::string> errorMessages;
     std::optional<std::source_location> sourceLocation;  // Track error source
-
-    ValidationResult() noexcept : isValid{true} {}
-
-    // Use std::format to format error messages
+    // Use std::vformat for runtime format strings
     template <typename... Args>
     void addError(const BracketInfo& info, std::string_view fmt,
                   Args&&... args) {
         isValid = false;
         invalidBrackets.push_back(info);
-        errorMessages.push_back(std::format(fmt, std::forward<Args>(args)...));
+        std::format_args args_store =
+            std::make_format_args(std::forward<Args>(args)...);
+        errorMessages.push_back(std::vformat(fmt, args_store));
     }
 
     template <typename... Args>
     void addError(std::string_view fmt, Args&&... args) {
         isValid = false;
-        errorMessages.push_back(std::format(fmt, std::forward<Args>(args)...));
+        std::format_args args_store =
+            std::make_format_args(std::forward<Args>(args)...);
+        errorMessages.push_back(std::vformat(fmt, args_store));
     }
 
     // Add error with source code location
@@ -151,7 +152,9 @@ struct ValidationResult {
                               std::string_view fmt, Args&&... args) {
         isValid = false;
         sourceLocation = loc;
-        errorMessages.push_back(std::format(fmt, std::forward<Args>(args)...));
+        std::format_args args_store =
+            std::make_format_args(std::forward<Args>(args)...);
+        errorMessages.push_back(std::vformat(fmt, args_store));
     }
 
     // Merge validation results
@@ -171,7 +174,7 @@ struct ValidationResult {
 } ATOM_ALIGNAS(64);
 
 // Extended exception hierarchy with multiple validation exception types
-class ValidationException : public std::runtime_error {
+class ATOM_ALIGNAS(64) ValidationException : public std::runtime_error {
 public:
     explicit ValidationException(
         std::string_view message,

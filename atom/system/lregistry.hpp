@@ -15,11 +15,13 @@ Description: A self-contained registry manager.
 #ifndef ATOM_SYSTEM_REGISTRY_HPP
 #define ATOM_SYSTEM_REGISTRY_HPP
 
+#include <ctime>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
+
 #include "atom/macro.hpp"
 
 namespace atom::system {

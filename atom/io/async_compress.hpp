@@ -341,7 +341,7 @@ private:
     asio::io_context& io_context_;       ///< The ASIO I/O context.
     std::string zip_file_;               ///< The path to the ZIP file.
     std::vector<std::string> fileList_;  ///< List of files in the ZIP archive.
-    std::mutex fileListMutex_;  ///< Mutex for thread-safe access to fileList_
+    mutable std::mutex fileListMutex_;  ///< Mutex for thread-safe access to fileList_
 };
 
 /**

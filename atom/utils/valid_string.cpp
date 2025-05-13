@@ -182,7 +182,8 @@ auto parallelValidation(T&& str, const ValidationOptions& options)
         finalResult.isValid = true;
 
         for (auto& result : results) {
-            if (!result) {
+            // Check if result has an error (doesn't have a value)
+            if (!result.has_value()) {
                 // Handle processing error cases
                 if (finalResult.isValid) {
                     finalResult.isValid = false;
@@ -191,19 +192,24 @@ auto parallelValidation(T&& str, const ValidationOptions& options)
                 continue;
             }
 
-            if (!result->isValid) {
+            // Now we know result has a value, access it safely
+            if (!result.value().isValid) {
                 finalResult.isValid = false;
 
                 // Use move semantics to efficiently merge results
                 finalResult.invalidBrackets.insert(
                     finalResult.invalidBrackets.end(),
-                    std::make_move_iterator(result->invalidBrackets.begin()),
-                    std::make_move_iterator(result->invalidBrackets.end()));
+                    std::make_move_iterator(
+                        result.value().invalidBrackets.begin()),
+                    std::make_move_iterator(
+                        result.value().invalidBrackets.end()));
 
                 finalResult.errorMessages.insert(
                     finalResult.errorMessages.end(),
-                    std::make_move_iterator(result->errorMessages.begin()),
-                    std::make_move_iterator(result->errorMessages.end()));
+                    std::make_move_iterator(
+                        result.value().errorMessages.begin()),
+                    std::make_move_iterator(
+                        result.value().errorMessages.end()));
             }
         }
 
@@ -402,118 +408,6 @@ auto validateImpl(T&& str, const ValidationOptions& options)
     }
 }
 
-// Parallel processing for large strings
-template <StringLike T>
-auto parallelValidation(T&& str, const ValidationOptions& options)
-    -> std::expected<ValidationResult, std::string> {
-    try {
-        auto span = getDataSpan(str);
-        const size_t length = span.size();
-
-        // Only use parallel processing for large strings
-        if (length < 10000) {
-            return validateImpl(std::forward<T>(str), options);
-        }
-
-        // Calculate optimal chunk size
-        const size_t numThreads =
-            std::max(2u, std::thread::hardware_concurrency());
-        const size_t chunkSize = length / numThreads;
-
-        std::vector<std::expected<ValidationResult, std::string>> results(
-            numThreads);
-        std::vector<std::thread> threads;
-        std::latch completion_latch(
-            numThreads);  // C++20 thread synchronization primitive
-
-        // Process each chunk in parallel
-        for (size_t i = 0; i < numThreads; ++i) {
-            size_t start = i * chunkSize;
-            size_t end = (i == numThreads - 1) ? length : (i + 1) * chunkSize;
-
-            threads.emplace_back([&results, &completion_latch, i, &span, start,
-                                  end, &options]() {
-                try {
-                    std::string_view chunk(span.data() + start, end - start);
-                    auto chunkResult = validateImpl(chunk, options);
-
-                    // Adjust positions to be relative to original string if
-                    // successful
-                    if (chunkResult) {
-                        for (auto& info : chunkResult->invalidBrackets) {
-                            info.position += static_cast<int>(start);
-                        }
-                    }
-                    results[i] = std::move(chunkResult);
-                } catch (const std::exception& e) {
-                    results[i] = std::unexpected(
-                        std::format("Error in chunk {}: {}", i, e.what()));
-                } catch (...) {
-                    results[i] = std::unexpected(
-                        std::format("Unknown error in chunk {}", i));
-                }
-                completion_latch.count_down();
-            });
-        }
-
-        // Wait for all threads to complete
-        completion_latch.wait();
-
-        // Ensure all threads are properly joined
-        for (auto& t : threads) {
-            if (t.joinable())
-                t.join();
-        }
-
-        // Merge results
-        ValidationResult finalResult;
-        finalResult.isValid = true;
-
-        for (auto& result : results) {
-            if (!result) {
-                // Handle processing error cases
-                if (finalResult.isValid) {
-                    finalResult.isValid = false;
-                    finalResult.errorMessages.push_back(result.error());
-                }
-                continue;
-            }
-
-            if (!result->isValid) {
-                finalResult.isValid = false;
-
-                // Use move semantics to efficiently merge results
-                finalResult.invalidBrackets.insert(
-                    finalResult.invalidBrackets.end(),
-                    std::make_move_iterator(result->invalidBrackets.begin()),
-                    std::make_move_iterator(result->invalidBrackets.end()));
-
-                finalResult.errorMessages.insert(
-                    finalResult.errorMessages.end(),
-                    std::make_move_iterator(result->errorMessages.begin()),
-                    std::make_move_iterator(result->errorMessages.end()));
-            }
-        }
-
-        // Use parallel algorithm to sort bracket information
-        if (!finalResult.invalidBrackets.empty()) {
-            std::sort(std::execution::par_unseq,
-                      finalResult.invalidBrackets.begin(),
-                      finalResult.invalidBrackets.end(),
-                      [](const BracketInfo& a, const BracketInfo& b) {
-                          return a.position < b.position;
-                      });
-        }
-
-        return finalResult;
-    } catch (const std::exception& e) {
-        return std::unexpected(
-            std::format("Parallel validation error: {}", e.what()));
-    } catch (...) {
-        return std::unexpected("Unknown error in parallel validation");
-    }
-}
-
 // Implement isValidBracket using std::expected for error handling
 template <StringLike T>
 auto isValidBracket(T&& str, const ValidationOptions& options)
@@ -526,11 +420,6 @@ auto isValidBracket(T&& str, const ValidationOptions& options)
             size = std::strlen(str);
         } else {
             size = str.size();
-        }
-
-        // Use parallel processing for large strings
-        if (size >= 10000) {
-            return parallelValidation(std::forward<T>(str), options);
         }
 
         // Use standard processing for small strings
@@ -620,25 +509,6 @@ template auto validateImpl<const std::string_view&>(const std::string_view&,
 template auto validateImpl<const char*>(const char*&&, const ValidationOptions&)
     -> std::expected<ValidationResult, std::string>;
 template auto validateImpl<char*>(char*&&, const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
-
-// Explicit instantiations for parallelValidation
-template auto parallelValidation<std::string>(std::string&&,
-                                              const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
-template auto parallelValidation<const std::string&>(const std::string&,
-                                                     const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
-template auto parallelValidation<std::string_view>(std::string_view&&,
-                                                   const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
-template auto parallelValidation<const std::string_view&>(
-    const std::string_view&, const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
-template auto parallelValidation<const char*>(const char*&&,
-                                              const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
-template auto parallelValidation<char*>(char*&&, const ValidationOptions&)
     -> std::expected<ValidationResult, std::string>;
 
 }  // namespace atom::utils

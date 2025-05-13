@@ -210,10 +210,10 @@ std::string executeWmiQuery(const std::string& query,
     IWbemServices* pSvc = NULL;
     hres = pLoc->ConnectServer(
         _bstr_t(L"ROOT\\CIMV2"),  // Object path of WMI namespace
-        NULL,                     // User name. NULL = current user
-        NULL,                     // User password. NULL = current
+        nullptr,                  // User name. NULL = current user
+        nullptr,                  // User password. NULL = current
         0,                        // Locale. NULL indicates current
-        NULL,                     // Security flags.
+        0,                        // Security flags.
         0,                        // Authority (e.g. Kerberos)
         0,                        // Context object
         &pSvc                     // pointer to IWbemServices proxy
@@ -4367,7 +4367,7 @@ void refreshCpuInfo() {
     }
 
     // Force a refresh by calling getCpuInfo()
-    getCpuInfo();
+    [[maybe_unused]] auto result = getCpuInfo();
     LOG_F(INFO, "CPU info cache refreshed");
 }
 

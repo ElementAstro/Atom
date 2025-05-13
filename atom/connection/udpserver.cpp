@@ -70,7 +70,7 @@ constexpr std::uint16_t MAX_PORT = 65535;
  * @param socket The socket to modify
  * @return true if successful, false otherwise
  */
-[[nodiscard]] bool setNonBlocking(int socket) noexcept {
+[[nodiscard]] bool setNonBlocking(SocketType socket) noexcept {
 #ifdef _WIN32
     u_long mode = 1;
     return ioctlsocket(socket, FIONBIO, &mode) == 0;
@@ -391,7 +391,7 @@ private:
     }
 
     std::atomic<bool> running_;
-    int socket_;
+    SocketType socket_;
     std::jthread receiverThread_;
     std::vector<MessageHandler> handlers_;
     std::mutex handlersMutex_;

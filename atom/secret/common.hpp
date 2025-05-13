@@ -1,7 +1,8 @@
 #ifndef ATOM_SECRET_COMMON_HPP
 #define ATOM_SECRET_COMMON_HPP
-
+#include <chrono>
 #include <cstdint>
+#include <string>
 
 namespace atom::secret {
 
@@ -58,6 +59,14 @@ struct PasswordManagerSettings {
     bool requireNumbers = true;    ///< Require numbers in passwords.
     bool requireMixedCase = true;  ///< Require mixed case letters in passwords.
     EncryptionOptions encryptionOptions;  ///< Encryption options.
+};
+
+/**
+ * @brief Structure representing a previous password entry with change timestamp.
+ */
+struct PreviousPassword {
+    std::string password;  ///< The previous password value
+    std::chrono::system_clock::time_point changed;  ///< When the password was changed
 };
 
 }  // namespace atom::secret

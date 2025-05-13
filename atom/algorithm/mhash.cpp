@@ -1,4 +1,3 @@
-// cpp
 /*
  * mhash.cpp
  *
@@ -69,12 +68,12 @@ constexpr std::array<std::array<size_t, K_STATE_SIZE>, K_STATE_SIZE>
 // Keccak state as 5x5 matrix of 64-bit integers
 using StateArray = std::array<std::array<uint64_t, K_STATE_SIZE>, K_STATE_SIZE>;
 
-// PMR内存资源池，用于管理小型内存分配
+// Thread-local PMR memory resource pool for managing small memory allocations
 thread_local std::pmr::synchronized_pool_resource tls_memory_pool{};
 
 namespace {
 #if USE_OPENCL
-// 使用模板字符串简化OpenCL内核代码
+// Using template string to simplify OpenCL kernel code
 constexpr const char *minhashKernelSource = R"CLC(
 __kernel void minhash_kernel(
     __global const size_t* hashes, 
@@ -91,7 +90,7 @@ __kernel void minhash_kernel(
         size_t a = a_values[gid];
         size_t b = b_values[gid];
         
-        // 批量处理以利用局部性
+        // Batch processing to leverage locality
         for (size_t i = 0; i < num_elements; ++i) {
             size_t h = (a * hashes[i] + b) % p;
             min_hash = (h < min_hash) ? h : min_hash;
@@ -104,7 +103,7 @@ __kernel void minhash_kernel(
 #endif
 }  // anonymous namespace
 
-// RAII包装器，用于管理OpenSSL上下文
+// RAII wrapper for managing OpenSSL contexts
 struct HashContext::ContextImpl {
     EVP_MD_CTX *ctx{nullptr};
     bool initialized{false};
@@ -117,11 +116,11 @@ struct HashContext::ContextImpl {
         }
     }
 
-    // 禁用拷贝操作
+    // Disable copy operations
     ContextImpl(const ContextImpl &) = delete;
     ContextImpl &operator=(const ContextImpl &) = delete;
 
-    // 实现移动操作
+    // Implement move operations
     ContextImpl(ContextImpl &&other) noexcept
         : ctx(std::exchange(other.ctx, nullptr)),
           initialized(other.initialized) {
@@ -224,16 +223,16 @@ void MinHash::initializeOpenCL() noexcept {
         cl_platform_id platform;
         cl_device_id device;
 
-        // 初始化平台
+        // Initialize platform
         err = clGetPlatformIDs(1, &platform, nullptr);
         if (err != CL_SUCCESS) {
             return;
         }
 
-        // 获取设备
+        // Get device
         err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, nullptr);
         if (err != CL_SUCCESS) {
-            // 尝试退回到CPU
+            // Try falling back to CPU
             err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_CPU, 1, &device,
                                  nullptr);
             if (err != CL_SUCCESS) {
@@ -241,35 +240,35 @@ void MinHash::initializeOpenCL() noexcept {
             }
         }
 
-        // 创建OpenCL资源对象
+        // Create OpenCL resource objects
         opencl_resources_ = std::make_unique<OpenCLResources>();
 
-        // 创建上下文
+        // Create context
         opencl_resources_->context =
             clCreateContext(nullptr, 1, &device, nullptr, nullptr, &err);
         if (err != CL_SUCCESS) {
             return;
         }
 
-        // 创建命令队列
+        // Create command queue
         opencl_resources_->queue =
             clCreateCommandQueue(opencl_resources_->context, device, 0, &err);
         if (err != CL_SUCCESS) {
             return;
         }
 
-        // 创建程序
+        // Create program
         opencl_resources_->program = clCreateProgramWithSource(
             opencl_resources_->context, 1, &minhashKernelSource, nullptr, &err);
         if (err != CL_SUCCESS) {
             return;
         }
 
-        // 构建程序
+        // Build program
         err = clBuildProgram(opencl_resources_->program, 1, &device, nullptr,
                              nullptr, nullptr);
         if (err != CL_SUCCESS) {
-            // 获取构建日志以便调试
+            // Get build log for debugging
             size_t log_size;
             clGetProgramBuildInfo(opencl_resources_->program, device,
                                   CL_PROGRAM_BUILD_LOG, 0, nullptr, &log_size);
@@ -278,19 +277,19 @@ void MinHash::initializeOpenCL() noexcept {
                 clGetProgramBuildInfo(opencl_resources_->program, device,
                                       CL_PROGRAM_BUILD_LOG, log_size,
                                       log.data(), nullptr);
-                // 调试日志可以存储或输出
+                // Debug log can be stored or output
             }
             return;
         }
 
-        // 创建内核
+        // Create kernel
         opencl_resources_->minhash_kernel =
             clCreateKernel(opencl_resources_->program, "minhash_kernel", &err);
         if (err == CL_SUCCESS) {
             opencl_available_.store(true, std::memory_order_release);
         }
     } catch (...) {
-        // 确保任何异常不会传播出这个函数
+        // Ensure no exceptions propagate out of this function
         opencl_available_.store(false, std::memory_order_release);
         opencl_resources_.reset();
     }
@@ -302,13 +301,14 @@ auto MinHash::generateHashFunction() noexcept -> HashFunction {
                                       std::uniform_int_distribution<uint64_t>>
         rand(1, std::numeric_limits<uint64_t>::max() - 1);
 
-    // 使用大质数来提高哈希质量
-    constexpr size_t LARGE_PRIME = 0xFFFFFFFFFFFFFFC5ULL;  // 2^64 - 59 (质数)
+    // Use large prime to improve hash quality
+    constexpr size_t LARGE_PRIME = 0xFFFFFFFFFFFFFFC5ULL;  // 2^64 - 59 (prime)
 
     uint64_t a = rand();
     uint64_t b = rand();
 
-    // 生成一个闭包来实现哈希函数 - 使用按值捕获，提高缓存局部性
+    // Generate a closure to implement the hash function - capture by value to
+    // improve cache locality
     return [a, b](size_t x) -> size_t {
         return static_cast<size_t>((a * static_cast<uint64_t>(x) + b) %
                                    LARGE_PRIME);
@@ -318,25 +318,25 @@ auto MinHash::generateHashFunction() noexcept -> HashFunction {
 auto MinHash::jaccardIndex(std::span<const size_t> sig1,
                            std::span<const size_t> sig2) noexcept(false)
     -> double {
-    // 验证输入签名长度相同
+    // Verify input signatures have the same length
     if (sig1.size() != sig2.size()) {
         throw std::invalid_argument("Signatures must have the same length");
     }
 
     if (sig1.empty()) {
-        return 0.0;  // 空签名，相似度为0
+        return 0.0;  // Empty signatures, similarity is 0
     }
 
-    // 使用并行算法计算相等元素数量
+    // Use parallel algorithm to calculate number of equal elements
     const size_t totalSize = sig1.size();
 
-    // 使用SSE/AVX友好的数据访问模式
-    constexpr size_t VECTOR_SIZE = 16;  // 适合SSE寄存器
+    // Use SSE/AVX-friendly data access pattern
+    constexpr size_t VECTOR_SIZE = 16;  // Suitable for SSE registers
     const size_t alignedSize = totalSize - (totalSize % VECTOR_SIZE);
 
     size_t equalCount = 0;
 
-    // 向量化主循环，允许编译器使用SIMD指令
+    // Vectorized main loop, allowing compiler to use SIMD instructions
     for (size_t i = 0; i < alignedSize; i += VECTOR_SIZE) {
         size_t localCount = 0;
         for (size_t j = 0; j < VECTOR_SIZE; ++j) {
@@ -345,7 +345,7 @@ auto MinHash::jaccardIndex(std::span<const size_t> sig1,
         equalCount += localCount;
     }
 
-    // 处理剩余元素
+    // Process remaining elements
     for (size_t i = alignedSize; i < totalSize; ++i) {
         equalCount += (sig1[i] == sig2[i]) ? 1 : 0;
     }
@@ -356,13 +356,13 @@ auto MinHash::jaccardIndex(std::span<const size_t> sig1,
 auto hexstringFromData(std::string_view data) noexcept(false) -> std::string {
     const char *hexChars = "0123456789ABCDEF";
 
-    // 使用PMR内存资源创建字符串，减少内存分配
+    // Create string using PMR memory resource to reduce memory allocations
     std::pmr::string output(&tls_memory_pool);
 
     try {
-        output.reserve(data.size() * 2);  // 预留足够空间
+        output.reserve(data.size() * 2);  // Reserve sufficient space
 
-        // 使用std::transform来转换字节到十六进制
+        // Use std::transform to convert bytes to hexadecimal
         for (unsigned char byte : data) {
             output.push_back(hexChars[(byte >> 4) & 0x0F]);
             output.push_back(hexChars[byte & 0x0F]);
@@ -394,16 +394,16 @@ auto dataFromHexstring(std::string_view data) noexcept(false) -> std::string {
 #endif
     }
 
-    // 使用内存资源池提高小型分配性能
+    // Use memory resource pool to improve small allocation performance
     std::pmr::string result(&tls_memory_pool);
 
     try {
         result.resize(data.size() / 2);
 
-        // 并行处理转换，提高性能
+        // Process conversions in parallel to improve performance
         const size_t length = data.size() / 2;
 
-        // 使用分块处理，增强数据局部性
+        // Use block processing to enhance data locality
         constexpr size_t BLOCK_SIZE = 64;
         const size_t numBlocks = (length + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
@@ -415,14 +415,14 @@ auto dataFromHexstring(std::string_view data) noexcept(false) -> std::string {
                 const size_t pos = i * 2;
                 uint8_t byte = 0;
 
-                // 使用C++17 from_chars，不依赖errno
+                // Use C++17 from_chars, not dependent on errno
                 auto [ptr, ec] = std::from_chars(
                     data.data() + pos, data.data() + pos + 2, byte, 16);
 
                 if (ec != std::errc{}) {
 #ifdef ATOM_USE_BOOST
                     BOOST_SCOPE_EXIT_ALL(&){
-                        // 清理资源
+                        // Clean up resources
                     };
                     throw boost::enable_error_info(std::invalid_argument(
                         "Invalid hex character at position " +
@@ -439,7 +439,7 @@ auto dataFromHexstring(std::string_view data) noexcept(false) -> std::string {
         }
     } catch (const std::exception &e) {
         if (dynamic_cast<const std::invalid_argument *>(&e)) {
-            throw;  // 重新抛出原始异常
+            throw;  // Rethrow original exception
         }
 #ifdef ATOM_USE_BOOST
         throw boost::enable_error_info(std::runtime_error(
@@ -462,12 +462,12 @@ bool supportsHexStringConversion(std::string_view str) noexcept {
                        [](unsigned char c) { return std::isxdigit(c); });
 }
 
-// Keccak辅助函数 - 使用C++20特性优化
+// Keccak helper functions - optimized using C++20 features
 // θ step: XOR each column and then propagate changes across the state
 inline void theta(StateArray &stateArray) noexcept {
     std::array<uint64_t, K_STATE_SIZE> column{}, diff{};
 
-    // 使用显式循环展开以便编译器生成更高效的代码
+    // Use explicit loop unrolling for compiler to generate more efficient code
     for (size_t colIndex = 0; colIndex < K_STATE_SIZE; ++colIndex) {
         column[colIndex] = stateArray[colIndex][0] ^ stateArray[colIndex][1] ^
                            stateArray[colIndex][2] ^ stateArray[colIndex][3] ^
@@ -488,9 +488,9 @@ inline void theta(StateArray &stateArray) noexcept {
 
 // ρ step: Rotate each bit-plane by pre-determined offsets
 inline void rho(StateArray &stateArray) noexcept {
-    // 使用快速位旋转
+    // Use fast bit rotation
     for (size_t colIndex = 0; colIndex < K_STATE_SIZE; ++colIndex) {
-        for (size_t rowIndex = 0; rowIndex < K_STATE_SIZE; ++rowIndex) {
+        for (size_t rowIndex = 0; colIndex < K_STATE_SIZE; ++rowIndex) {
             stateArray[colIndex][rowIndex] = std::rotl(
                 stateArray[colIndex][rowIndex],
                 static_cast<int>(K_ROTATION_CONSTANTS[colIndex][rowIndex]));
@@ -502,7 +502,7 @@ inline void rho(StateArray &stateArray) noexcept {
 inline void pi(StateArray &stateArray) noexcept {
     StateArray temp = stateArray;
     for (size_t colIndex = 0; colIndex < K_STATE_SIZE; ++colIndex) {
-        for (size_t rowIndex = 0; rowIndex < K_STATE_SIZE; ++rowIndex) {
+        for (size_t rowIndex = 0; colIndex < K_STATE_SIZE; ++rowIndex) {
             stateArray[colIndex][rowIndex] =
                 temp[(colIndex + 3 * rowIndex) % K_STATE_SIZE][colIndex];
         }
@@ -548,7 +548,8 @@ void absorb(StateArray &state, std::span<const uint8_t> input) noexcept {
 
     while (length >= K_RATE_IN_BYTES) {
         for (size_t i = 0; i < K_RATE_IN_BYTES / 8; ++i) {
-            // 使用std::bit_cast代替布尔表达式，避免未定义行为
+            // Use std::bit_cast instead of boolean expressions to avoid
+            // undefined behavior
             std::array<uint8_t, 8> bytes;
             std::copy_n(data + i * 8, 8, bytes.begin());
             state[i % K_STATE_SIZE][i / K_STATE_SIZE] ^=
@@ -559,7 +560,7 @@ void absorb(StateArray &state, std::span<const uint8_t> input) noexcept {
         length -= K_RATE_IN_BYTES;
     }
 
-    // 处理最后一个不完整的块
+    // Process the last incomplete block
     if (length > 0) {
         std::array<uint8_t, K_RATE_IN_BYTES> paddedBlock = {};
         std::copy_n(data, length, paddedBlock.begin());
@@ -599,7 +600,7 @@ void squeeze(StateArray &state, std::span<uint8_t> output) noexcept {
             std::copy_n(bytes.begin(), 8, data + i * 8);
         }
 
-        // 处理剩余的不完整字节
+        // Process remaining incomplete bytes
         const size_t remainingBytes = outputLength % 8;
         if (remainingBytes > 0) {
             const size_t fullWords = outputLength / 8;
@@ -611,21 +612,21 @@ void squeeze(StateArray &state, std::span<uint8_t> output) noexcept {
     }
 }
 
-// Keccak-256 hashing function - 使用span接口
+// Keccak-256 hashing function - using span interface
 auto keccak256(std::span<const uint8_t> input)
     -> std::array<uint8_t, K_HASH_SIZE> {
     StateArray state = {};
 
-    // 处理输入数据
+    // Process input data
     absorb(state, input);
 
-    // 如果最后未提供数据，需要进行填充
+    // If no data provided or size is multiple of rate, padding is needed
     if (input.empty() || input.size() % K_RATE_IN_BYTES == 0) {
         std::array<uint8_t, 1> padBlock = {K_PADDING_BYTE};
         absorb(state, std::span<const uint8_t>(padBlock));
     }
 
-    // 提取结果
+    // Extract result
     std::array<uint8_t, K_HASH_SIZE> hash = {};
     squeeze(state, std::span<uint8_t>(hash));
     return hash;

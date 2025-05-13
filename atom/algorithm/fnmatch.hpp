@@ -108,8 +108,8 @@ template <StringLike T1, StringLike T2>
  */
 template <std::ranges::input_range Range, StringLike Pattern>
     requires StringLike<std::ranges::range_value_t<Range>>
-[[nodiscard]] auto filter(const Range& names, Pattern&& pattern,
-                          int flags = 0) -> bool;
+[[nodiscard]] auto filter(const Range& names, Pattern&& pattern, int flags = 0)
+    -> bool;
 
 /**
  * @brief Filters a range of strings based on multiple patterns.
@@ -126,7 +126,7 @@ template <std::ranges::input_range Range, StringLike Pattern>
  */
 template <std::ranges::input_range Range, std::ranges::input_range PatternRange>
     requires StringLike<std::ranges::range_value_t<Range>> &&
-                 StringLike<std::ranges::range_value_t<PatternRange>>
+             StringLike<std::ranges::range_value_t<PatternRange>>
 [[nodiscard]] auto filter(const Range& names, const PatternRange& patterns,
                           int flags = 0, bool use_parallel = true)
     -> std::vector<std::ranges::range_value_t<Range>>;
@@ -142,23 +142,6 @@ template <std::ranges::input_range Range, std::ranges::input_range PatternRange>
 template <StringLike Pattern>
 [[nodiscard]] auto translate(Pattern&& pattern, int flags = 0) noexcept
     -> atom::type::expected<std::string, FnmatchError>;
-
-// Implementation declarations
-namespace detail {
-// Helper for compiled patterns (optimizes repeated matches with the same
-// pattern)
-class CompiledPattern {
-public:
-    explicit CompiledPattern(std::string_view pattern, int flags = 0);
-    [[nodiscard]] bool match(std::string_view string) const noexcept;
-    // Additional implementation details...
-};
-
-// SIMD-accelerated pattern matching when applicable
-[[nodiscard]] bool simd_match_if_available(std::string_view pattern,
-                                           std::string_view string,
-                                           int flags) noexcept;
-}  // namespace detail
 
 }  // namespace atom::algorithm
 

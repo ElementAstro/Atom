@@ -15,6 +15,7 @@ Description: Simple random number generator
 #include "random.hpp"
 #include <execution>  // For parallel algorithms
 #include <random>     // For random number generation
+#include "exception.hpp"
 
 namespace atom::utils {
 
@@ -33,42 +34,36 @@ const std::string& getDefaultCharset() {
 }
 }  // namespace
 
-auto generateRandomString(int length, const std::string& charset)
-    -> std::string {
+auto generateRandomString(int length,
+                          const std::string& charset = std::string(),
+                          bool secure = false) -> std::string {
     if (length <= 0) {
-        throw std::invalid_argument("Length must be a positive integer.");
+        THROW_INVALID_ARGUMENT("Length must be a positive integer.");
     }
 
     const std::string& chars = charset.empty() ? getDefaultCharset() : charset;
 
     if (chars.empty()) {
-        throw std::invalid_argument("Character set cannot be empty.");
-    }
-
-    // 修复: 直接使用随机数生成器而不是 Random 模板类
-    std::mt19937_64 engine(getRandomDevice()());
-    std::uniform_int_distribution<size_t> dist(0, chars.size() - 1);
-
-    std::string randomString(length, '\0');
-    std::generate(std::execution::par_unseq, randomString.begin(),
-                  randomString.end(), [&]() { return chars[dist(engine)]; });
-
-    return randomString;
-}
-
-auto generateSecureRandomString(int length) -> std::string {
-    if (length <= 0) {
-        throw std::invalid_argument("Length must be a positive integer.");
+        THROW_INVALID_ARGUMENT("Character set cannot be empty.");
     }
 
     std::string result(length, '\0');
-    std::random_device& rd = getRandomDevice();
-    const std::string& chars = getDefaultCharset();
 
-    std::independent_bits_engine<std::random_device, CHAR_BIT, uint32_t> engine(
-        rd);
-    for (int i = 0; i < length; ++i) {
-        result[i] = chars[engine() % chars.size()];
+    if (secure) {
+        // Use random_device directly for better entropy in secure mode
+        std::random_device rd;
+        std::uniform_int_distribution<size_t> distribution(0, chars.size() - 1);
+
+        for (int i = 0; i < length; ++i) {
+            result[i] = chars[distribution(rd)];
+        }
+    } else {
+        // Use faster mt19937_64 with parallel execution for non-secure mode
+        std::mt19937_64 engine(getRandomDevice()());
+        std::uniform_int_distribution<size_t> dist(0, chars.size() - 1);
+
+        std::generate(std::execution::par_unseq, result.begin(), result.end(),
+                      [&]() { return chars[dist(engine)]; });
     }
 
     return result;

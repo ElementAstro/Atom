@@ -16,11 +16,9 @@ Description: Some useful string functions
 
 #include <algorithm>
 #include <charconv>
-#include <codecvt>
 #include <execution>
 #include <format>
 #include <iomanip>
-#include <locale>
 #include <ranges>
 #include <sstream>
 #include <stdexcept>
@@ -176,8 +174,8 @@ auto endsWith(std::string_view str, std::string_view suffix) -> bool {
            str.substr(str.size() - suffix.size()) == suffix;
 }
 
-auto splitString(std::string_view str,
-                 char delimiter) -> std::vector<std::string> {
+auto splitString(std::string_view str, char delimiter)
+    -> std::vector<std::string> {
     try {
         if (str.empty()) {
             return {};
@@ -357,29 +355,46 @@ auto stringToWString(std::string_view str) -> std::wstring {
             return {};
         }
 
-        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-        return converter.from_bytes(str.data(), str.data() + str.size());
-    } catch (const std::bad_alloc& e) {
-        throw std::bad_alloc();
-    } catch (const std::range_error& e) {
-        throw std::range_error(
-            std::format("String to WString conversion failed: {}", e.what()));
-    }
-}
+        // Manual UTF-8 to UTF-16 conversion
+        std::wstring result;
+        result.reserve(str.size());  // Reserve at least the same size
 
-auto wstringToString(std::wstring_view wstr) -> std::string {
-    try {
-        if (wstr.empty()) {
-            return {};
+        // Process each byte in the UTF-8 string
+        for (size_t i = 0; i < str.size();) {
+            const unsigned char c = static_cast<unsigned char>(str[i++]);
+
+            // Single-byte character (ASCII)
+            if (c < 0x80) {
+                const unsigned char c2 = static_cast<unsigned char>(str[i++]);
+                const unsigned char c3 = static_cast<unsigned char>(str[i++]);
+                const unsigned char c4 = static_cast<unsigned char>(str[i++]);
+                // Convert to Unicode code point
+                const uint32_t codepoint = ((c & 0x07) << 18) |
+                                           ((c2 & 0x3F) << 12) |
+                                           ((c3 & 0x3F) << 6) | (c4 & 0x3F);
+                // Convert to UTF-16 surrogate pair
+                if (codepoint > 0xFFFF) {
+                    // High surrogate
+                    result.push_back(static_cast<wchar_t>(
+                        0xD800 + ((codepoint - 0x10000) >> 10)));
+                    // Low surrogate
+                    result.push_back(static_cast<wchar_t>(
+                        0xDC00 + ((codepoint - 0x10000) & 0x3FF)));
+                } else {
+                    result.push_back(static_cast<wchar_t>(codepoint));
+                }
+            } else {
+                // Invalid UTF-8 sequence, skip
+                result.push_back(L'?');
+            }
         }
 
-        std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-        return converter.to_bytes(wstr.data(), wstr.data() + wstr.size());
+        return result;
     } catch (const std::bad_alloc& e) {
         throw std::bad_alloc();
-    } catch (const std::range_error& e) {
-        throw std::range_error(
-            std::format("WString to String conversion failed: {}", e.what()));
+    } catch (const std::exception& e) {
+        throw std::runtime_error(
+            std::format("String to WString conversion failed: {}", e.what()));
     }
 }
 
@@ -501,8 +516,8 @@ auto nstrtok(std::string_view& str, const std::string_view& delims)
  * @throws std::bad_alloc if memory allocation fails
  */
 auto parallelReplaceString(std::string_view text, std::string_view oldStr,
-                           std::string_view newStr,
-                           size_t threshold) -> std::string {
+                           std::string_view newStr, size_t threshold)
+    -> std::string {
     try {
         // For small strings or when oldStr is empty, use the regular approach
         if (text.size() < threshold || oldStr.empty()) {
@@ -556,8 +571,8 @@ auto parallelReplaceString(std::string_view text, std::string_view oldStr,
  * @return The converted vector of string
  * @throws std::bad_alloc if memory allocation fails
  */
-auto parallelSVVtoSV(std::span<const std::string_view> svv,
-                     size_t threshold) -> std::vector<std::string> {
+auto parallelSVVtoSV(std::span<const std::string_view> svv, size_t threshold)
+    -> std::vector<std::string> {
     try {
         if (svv.empty()) {
             return {};

@@ -32,11 +32,7 @@ Description: Some useful spinlock implementations
 #ifdef __cpp_lib_atomic_flag_test
 #define ATOM_HAS_ATOMIC_FLAG_TEST
 #endif
-#ifdef __cpp_lib_hardware_interference_size
-#define ATOM_CACHE_LINE_SIZE std::hardware_destructive_interference_size
-#else
 #define ATOM_CACHE_LINE_SIZE 64
-#endif
 
 // Platform-specific includes
 #if defined(_WIN32) || defined(_WIN64)
