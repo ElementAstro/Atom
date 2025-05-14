@@ -3,6 +3,7 @@
     "version": "1.0.0",
     "description": "The foundational library for all elemental astro projects",
     "homepage": "https://github.com/ElementAstro/Atom",
+    "builtin-baseline": "dbe35ceb30c688bf72e952ab23778e009a578f18",
     "dependencies": [
         "openssl",
         "zlib",
@@ -12,10 +13,7 @@
         "pybind11",
         {
             "name": "boost",
-            "default-features": false,
-            "features": [
-                "container"
-            ]
+            "default-features": true
         }
     ],
     "features": {

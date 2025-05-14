@@ -15,10 +15,10 @@ Description: Basic Component Definition
 #ifndef ATOM_COMPONENT_HPP
 #define ATOM_COMPONENT_HPP
 
+#include "config.hpp"
 #include "dispatch.hpp"
 #include "module_macro.hpp"
 #include "var.hpp"
-#include "config.hpp"
 
 #include "atom/log/loguru.hpp"
 #include "atom/meta/concept.hpp"
@@ -30,10 +30,13 @@ Description: Basic Component Definition
 #include "atom/type/pointer.hpp"
 
 #include <chrono>
+#include <concepts>
 #include <memory>
-#include <mutex>
+#include <shared_mutex>
+#include <span>
 
-class ObjectExpiredError : public atom::error::Exception {
+// Component Lifecycle Exception
+class ObjectExpiredError final : public atom::error::Exception {
 public:
     using atom::error::Exception::Exception;
 };
@@ -43,21 +46,26 @@ public:
                              __VA_ARGS__)
 
 /**
- * @brief 组件生命周期状态
+ * @brief Component lifecycle state
  */
-enum class ComponentState {
-    Created,      // 创建但未初始化
-    Initializing, // 正在初始化
-    Active,       // 已初始化且活跃
-    Disabled,     // 已禁用
-    Error,        // 发生错误
-    Destroying    // 正在销毁
+enum class ComponentState : uint8_t {
+    Created,       // Created but not initialized
+    Initializing,  // Initializing
+    Active,        // Initialized and active
+    Disabled,      // Disabled
+    Error,         // Error occurred
+    Destroying     // Destroying
 };
 
 /**
- * @brief 组件基类，提供组件服务的基础结构
- * 
- * Component类是所有组件的基类，提供了组件注册、命令调度、事件处理等功能。
+ * @brief Base class for components, providing the basic infrastructure for
+ * component services.
+ *
+ * The Component class is the base class for all components, providing features
+ * such as component registration, command dispatching, and event handling.
+ *
+ * @note This class uses the CRTP pattern to implement static polymorphism,
+ * improving runtime performance.
  */
 class Component : public std::enable_shared_from_this<Component> {
 public:
@@ -72,21 +80,26 @@ public:
     using CleanupFunc = std::function<void()>;
 
     /**
-     * @brief 性能统计结构
+     * @brief Performance statistics structure
      */
     struct PerformanceStats {
-        std::atomic<uint64_t> commandCallCount{0}; // 命令调用次数
-        std::atomic<uint64_t> commandErrorCount{0}; // 命令错误次数
-        std::atomic<uint64_t> eventCount{0}; // 事件处理次数
-        
+        std::atomic<uint64_t> commandCallCount{0};   // Command call count
+        std::atomic<uint64_t> commandErrorCount{0};  // Command error count
+        std::atomic<uint64_t> eventCount{0};         // Event handling count
+
         struct {
-            std::chrono::microseconds totalExecutionTime{0}; // 总执行时间
-            std::chrono::microseconds maxExecutionTime{0};   // 最长执行时间
-            std::chrono::microseconds minExecutionTime{std::chrono::microseconds::max()}; // 最短执行时间
-            std::chrono::microseconds avgExecutionTime{0};   // 平均执行时间
+            std::chrono::microseconds totalExecutionTime{
+                0};  // Total execution time
+            std::chrono::microseconds maxExecutionTime{
+                0};  // Maximum execution time
+            std::chrono::microseconds minExecutionTime{
+                std::chrono::microseconds::max()};  // Minimum execution time
+            std::chrono::microseconds avgExecutionTime{
+                0};  // Average execution time
         } timing;
-        
-        void reset() {
+
+        // Reset performance counters
+        constexpr void reset() noexcept {
             commandCallCount = 0;
             commandErrorCount = 0;
             eventCount = 0;
@@ -95,35 +108,56 @@ public:
             timing.minExecutionTime = std::chrono::microseconds::max();
             timing.avgExecutionTime = std::chrono::microseconds{0};
         }
-        
-        void updateExecutionTime(std::chrono::microseconds executionTime) {
+
+        // Update execution time statistics
+        void updateExecutionTime(
+            std::chrono::microseconds executionTime) noexcept {
             timing.totalExecutionTime += executionTime;
-            timing.maxExecutionTime = std::max(timing.maxExecutionTime, executionTime);
-            timing.minExecutionTime = std::min(timing.minExecutionTime, executionTime);
+            timing.maxExecutionTime =
+                std::max(timing.maxExecutionTime, executionTime);
+            timing.minExecutionTime =
+                std::min(timing.minExecutionTime, executionTime);
             timing.avgExecutionTime = std::chrono::microseconds{
-                timing.totalExecutionTime.count() / std::max(uint64_t{1}, commandCallCount.load())
-            };
+                timing.totalExecutionTime.count() /
+                std::max(uint64_t{1},
+                         commandCallCount.load(std::memory_order_relaxed))};
         }
     };
 
     /**
      * @brief Constructs a new Component object.
+     * @param name Component name
+     * @throw std::invalid_argument When the name is empty
      */
     explicit Component(std::string name);
 
     /**
      * @brief Destroys the Component object.
      */
-    virtual ~Component() = default;
+    virtual ~Component() noexcept = default;
+
+    // Disable copy and move
+    Component(const Component&) = delete;
+    Component& operator=(const Component&) = delete;
+    Component(Component&&) = delete;
+    Component& operator=(Component&&) = delete;
 
     // -------------------------------------------------------------------
     // Inject methods
     // -------------------------------------------------------------------
 
-    auto getInstance() const -> std::weak_ptr<const Component>;
+    /**
+     * @brief Gets a const weak reference to the component instance.
+     * @return A const weak reference to the component instance.
+     */
+    [[nodiscard]] auto getInstance() const -> std::weak_ptr<const Component>;
 
-    auto getSharedInstance() -> std::shared_ptr<Component> {
-        return shared_from_this();
+    /**
+     * @brief Gets a shared pointer to the component instance.
+     * @return A shared pointer to the component instance.
+     */
+    [[nodiscard]] auto getSharedInstance() -> std::shared_ptr<Component> {
+        return this->shared_from_this();
     }
 
     // -------------------------------------------------------------------
@@ -131,123 +165,115 @@ public:
     // -------------------------------------------------------------------
 
     /**
-     * @brief Initializes the plugin.
+     * @brief Initializes the component.
      *
-     * @return True if the plugin was initialized successfully, false otherwise.
-     * @note This function is called by the server when the plugin is loaded.
-     * @note This function should be overridden by the plugin.
+     * @return Returns true if initialization is successful, false otherwise.
+     * @note Derived classes can override this method to implement custom
+     * initialization logic.
      */
     virtual auto initialize() -> bool;
 
     /**
-     * @brief Destroys the plugin.
+     * @brief Destroys the component.
      *
-     * @return True if the plugin was destroyed successfully, false otherwise.
-     * @note This function is called by the server when the plugin is unloaded.
-     * @note This function should be overridden by the plugin.
-     * @note The plugin should not be used after this function is called.
-     * @note This is for the plugin to release any resources it has allocated.
+     * @return Returns true if destruction is successful, false otherwise.
+     * @note Derived classes can override this method to implement custom
+     * destruction logic.
      */
     virtual auto destroy() -> bool;
 
     /**
-     * @brief Gets the name of the plugin.
-     *
-     * @return The name of the plugin.
+     * @brief Gets the component name.
+     * @return The component name.
      */
-    auto getName() const -> std::string;
+    [[nodiscard]] auto getName() const noexcept -> std::string_view;
 
     /**
-     * @brief Gets the type information of the plugin.
-     *
-     * @return The type information of the plugin.
+     * @brief Gets the component type information.
+     * @return The component type information.
      */
-    auto getTypeInfo() const -> atom::meta::TypeInfo;
+    [[nodiscard]] auto getTypeInfo() const noexcept -> atom::meta::TypeInfo;
 
     /**
-     * @brief Sets the type information of the plugin.
-     *
-     * @param typeInfo The type information of the plugin.
+     * @brief Sets the component type information.
+     * @param typeInfo New type information.
      */
-    void setTypeInfo(atom::meta::TypeInfo typeInfo);
+    void setTypeInfo(atom::meta::TypeInfo typeInfo) noexcept;
 
     /**
-     * @brief 获取组件当前状态
-     * 
-     * @return ComponentState 组件状态
+     * @brief Gets the current state of the component.
+     * @return The component state.
      */
-    [[nodiscard]] auto getState() const -> ComponentState;
-    
-    /**
-     * @brief 设置组件状态
-     * 
-     * @param state 新的组件状态
-     */
-    void setState(ComponentState state);
+    [[nodiscard]] auto getState() const noexcept -> ComponentState;
 
     /**
-     * @brief 获取组件性能统计信息
-     * 
-     * @return const PerformanceStats& 性能统计信息
+     * @brief Sets the component state.
+     * @param state New component state.
      */
-    [[nodiscard]] auto getPerformanceStats() const -> const PerformanceStats&;
-    
+    void setState(ComponentState state) noexcept;
+
     /**
-     * @brief 重置性能统计信息
+     * @brief Gets the component performance statistics.
+     * @return Const reference to performance statistics.
      */
-    void resetPerformanceStats();
+    [[nodiscard]] auto getPerformanceStats() const noexcept
+        -> const PerformanceStats&;
+
+    /**
+     * @brief Resets the performance statistics.
+     */
+    void resetPerformanceStats() noexcept;
 
     // -------------------------------------------------------------------
     // Event Methods (if enabled)
     // -------------------------------------------------------------------
-    
-    #if ENABLE_EVENT_SYSTEM
+
+#if ENABLE_EVENT_SYSTEM
     /**
-     * @brief 发送事件
-     * 
-     * @param eventName 事件名称
-     * @param eventData 事件数据
+     * @brief Emits an event.
+     *
+     * @param eventName Event name.
+     * @param eventData Event data, empty by default.
      */
-    void emitEvent(const std::string& eventName, std::any eventData = {});
-    
+    void emitEvent(std::string_view eventName, std::any eventData = {});
+
     /**
-     * @brief 注册事件处理器
-     * 
-     * @param eventName 事件名称
-     * @param callback 回调函数
-     * @return atom::components::EventCallbackId 回调ID
+     * @brief Registers an event handler.
+     *
+     * @param eventName Event name.
+     * @param callback Callback function.
+     * @return Callback ID.
      */
-    atom::components::EventCallbackId on(
-        const std::string& eventName, 
-        atom::components::EventCallback callback);
-    
+    [[nodiscard]] atom::components::EventCallbackId on(
+        std::string_view eventName, atom::components::EventCallback callback);
+
     /**
-     * @brief 注册一次性事件处理器
-     * 
-     * @param eventName 事件名称
-     * @param callback 回调函数
-     * @return atom::components::EventCallbackId 回调ID
+     * @brief Registers a one-time event handler.
+     *
+     * @param eventName Event name.
+     * @param callback Callback function.
+     * @return Callback ID.
      */
-    atom::components::EventCallbackId once(
-        const std::string& eventName,
-        atom::components::EventCallback callback);
-    
+    [[nodiscard]] atom::components::EventCallbackId once(
+        std::string_view eventName, atom::components::EventCallback callback);
+
     /**
-     * @brief 取消注册事件处理器
-     * 
-     * @param eventName 事件名称
-     * @param callbackId 回调ID
-     * @return bool 是否成功取消
+     * @brief Unregisters an event handler.
+     *
+     * @param eventName Event name.
+     * @param callbackId Callback ID.
+     * @return Whether unregistration was successful.
      */
-    bool off(const std::string& eventName, atom::components::EventCallbackId callbackId);
-    
+    bool off(std::string_view eventName,
+             atom::components::EventCallbackId callbackId);
+
     /**
-     * @brief 处理事件
-     * 
-     * @param event 事件对象
+     * @brief Handles an event.
+     *
+     * @param event Event object.
      */
     virtual void handleEvent(const atom::components::Event& event);
-    #endif
+#endif
 
     // -------------------------------------------------------------------
     // Variable methods
@@ -255,135 +281,182 @@ public:
 
     /**
      * @brief Adds a variable to the component.
-     * @param name The name of the variable.
-     * @param initialValue The initial value of the variable.
-     * @param description The description of the variable.
-     * @param alias The alias of the variable.
-     * @param group The group of the variable.
+     * @tparam T Variable type.
+     * @param name Variable name.
+     * @param initialValue Initial value.
+     * @param description Variable description, empty by default.
+     * @param alias Variable alias, empty by default.
+     * @param group Variable group, empty by default.
+     * @throws std::invalid_argument If the name is empty.
      */
     template <typename T>
-    void addVariable(const std::string& name, T initialValue,
-                     const std::string& description = "",
-                     const std::string& alias = "",
-                     const std::string& group = "") {
-        m_VariableManager_->addVariable(name, initialValue, description, alias,
-                                        group);
+        requires std::is_copy_constructible_v<T>
+    void addVariable(std::string_view name, T initialValue,
+                     std::string_view description = "",
+                     std::string_view alias = "", std::string_view group = "") {
+        m_VariableManager_->addVariable(
+            std::string(name), std::move(initialValue),
+            std::string(description), std::string(alias), std::string(group));
     }
 
     /**
-     * @brief Sets the range of a variable.
-     * @param name The name of the variable.
-     * @param min The minimum value of the variable.
-     * @param max The maximum value of the variable.
+     * @brief Sets the range for a variable.
+     * @tparam T Variable type.
+     * @param name Variable name.
+     * @param min Minimum value.
+     * @param max Maximum value.
+     * @throws std::out_of_range If the variable does not exist.
+     */
+    template <Arithmetic T>
+    void setRange(std::string_view name, T min, T max) {
+        m_VariableManager_->setRange(std::string(name), min, max);
+    }
+
+    /**
+     * @brief Sets the allowed options for a string variable.
+     * @param name Variable name.
+     * @param options List of allowed options.
+     * @throws std::out_of_range If the variable does not exist.
+     */
+    void setStringOptions(std::string_view name,
+                          std::span<const std::string> options) {
+        m_VariableManager_->setStringOptions(std::string(name), options);
+    }
+
+    /**
+     * @brief Gets a variable.
+     * @tparam T Variable type.
+     * @param name Variable name.
+     * @return Shared pointer to the variable.
+     * @throws std::out_of_range If the variable does not exist.
+     * @throws VariableTypeError If the variable type does not match.
      */
     template <typename T>
-    void setRange(const std::string& name, T min, T max) {
-        m_VariableManager_->setRange(name, min, max);
+    [[nodiscard]] auto getVariable(std::string_view name)
+        -> std::shared_ptr<Trackable<T>> {
+        return m_VariableManager_->getVariable<T>(std::string(name));
     }
 
     /**
-     * @brief Sets the options of a variable.
-     * @param name The name of the variable.
-     * @param options The options of the variable.
+     * @brief Checks if a variable exists.
+     * @param name Variable name.
+     * @return Returns true if the variable exists, false otherwise.
      */
-    void setStringOptions(const std::string& name,
-                          const std::vector<std::string>& options) {
-        m_VariableManager_->setStringOptions(name, options);
-    }
-
-    /**
-     * @brief Gets a variable by name.
-     * @param name The name of the variable.
-     * @return A shared pointer to the variable.
-     */
-    template <typename T>
-    auto getVariable(const std::string& name) -> std::shared_ptr<Trackable<T>> {
-        return m_VariableManager_->getVariable<T>(name);
-    }
-
-    /**
-     * @brief Gets a variable by name.
-     * @param name The name of the variable.
-     * @return A shared pointer to the variable.
-     */
-    [[nodiscard]] auto hasVariable(const std::string& name) const -> bool;
+    [[nodiscard]] auto hasVariable(std::string_view name) const noexcept
+        -> bool;
 
     /**
      * @brief Sets the value of a variable.
-     * @param name The name of the variable.
-     * @param newValue The new value of the variable.
-     * @note const char * is not equivalent to std::string, please use
-     * std::string
+     * @tparam T Variable type.
+     * @param name Variable name.
+     * @param newValue New value.
+     * @throws std::out_of_range If the variable does not exist.
+     * @throws VariableTypeError If the variable type does not match.
      */
     template <typename T>
-    void setValue(const std::string& name, T newValue) {
-        m_VariableManager_->setValue(name, newValue);
+    void setValue(std::string_view name, T newValue) {
+        m_VariableManager_->setValue(std::string(name), std::move(newValue));
     }
 
     /**
-     * @brief Gets the value of a variable.
-     * @param name The name of the variable.
-     * @return The value of the variable.
+     * @brief Gets all variable names.
+     * @return List of variable names.
      */
-    auto getVariableNames() const -> std::vector<std::string>;
+    [[nodiscard]] auto getVariableNames() const -> std::vector<std::string>;
 
     /**
-     * @brief Gets the description of a variable.
-     * @param name The name of the variable.
-     * @return The description of the variable.
+     * @brief Gets the variable description.
+     * @param name Variable name.
+     * @return The variable description.
+     * @throws std::out_of_range If the variable does not exist.
      */
-    auto getVariableDescription(const std::string& name) const -> std::string;
+    [[nodiscard]] auto getVariableDescription(std::string_view name) const
+        -> std::string;
 
     /**
-     * @brief Gets the alias of a variable.
-     * @param name The name of the variable.
-     * @return The alias of the variable.
+     * @brief Gets the variable alias.
+     * @param name Variable name.
+     * @return The variable alias.
+     * @throws std::out_of_range If the variable does not exist.
      */
-    auto getVariableAlias(const std::string& name) const -> std::string;
+    [[nodiscard]] auto getVariableAlias(std::string_view name) const
+        -> std::string;
 
     /**
-     * @brief Gets the group of a variable.
-     * @param name The name of the variable.
-     * @return The group of the variable.
+     * @brief Gets the variable group.
+     * @param name Variable name.
+     * @return The variable group.
+     * @throws std::out_of_range If the variable does not exist.
      */
-    auto getVariableGroup(const std::string& name) const -> std::string;
+    [[nodiscard]] auto getVariableGroup(std::string_view name) const
+        -> std::string;
 
     // -------------------------------------------------------------------
     // Function methods
     // -------------------------------------------------------------------
 
-    void doc(const std::string& description);
+    /**
+     * @brief Sets the component documentation.
+     * @param description Documentation description.
+     */
+    void doc(std::string_view description);
 
-    auto getDoc() const -> std::string;
+    /**
+     * @brief Gets the component documentation.
+     * @return The component documentation.
+     */
+    [[nodiscard]] auto getDoc() const noexcept -> std::string_view;
 
     // -------------------------------------------------------------------
     // No Class
     // -------------------------------------------------------------------
 
+    /**
+     * @brief Registers a callable object.
+     * @tparam Callable Callable object type.
+     * @param name Command name.
+     * @param func Callable object.
+     * @param group Command group, empty by default.
+     * @param description Command description, empty by default.
+     */
     template <typename Callable>
-    void def(const std::string& name, Callable&& func,
-             const std::string& group = "",
-             const std::string& description = "");
+    void def(std::string_view name, Callable&& func,
+             std::string_view group = "", std::string_view description = "");
 
+    /**
+     * @brief Registers a function with no arguments.
+     * @tparam Ret Return type.
+     * @param name Command name.
+     * @param func Function pointer.
+     * @param group Command group, empty by default.
+     * @param description Command description, empty by default.
+     */
     template <typename Ret>
-    void def(const std::string& name, Ret (*func)(),
-             const std::string& group = "",
-             const std::string& description = "");
+    void def(std::string_view name, Ret (*func)(), std::string_view group = "",
+             std::string_view description = "");
 
+    /**
+     * @brief Registers a function with arguments.
+     * @tparam Args Argument types.
+     * @tparam Ret Return type.
+     * @param name Command name.
+     * @param func Function pointer.
+     * @param group Command group, empty by default.
+     * @param description Command description, empty by default.
+     */
     template <typename... Args, typename Ret>
-    void def(const std::string& name, Ret (*func)(Args...),
-             const std::string& group = "",
-             const std::string& description = "");
+    void def(std::string_view name, Ret (*func)(Args...),
+             std::string_view group = "", std::string_view description = "");
 
     // -------------------------------------------------------------------
     // Without instance
     // -------------------------------------------------------------------
 
-#define DEF_MEMBER_FUNC(cv_qualifier)                                      \
-    template <typename Class, typename Ret, typename... Args>              \
-    void def(                                                              \
-        const std::string& name, Ret (Class::*func)(Args...) cv_qualifier, \
-        const std::string& group = "", const std::string& description = "");
+// Define member function using macro
+#define DEF_MEMBER_FUNC(cv_qualifier)                                         \
+    template <typename Class, typename Ret, typename... Args>                 \
+    void def(std::string_view name, Ret (Class::*func)(Args...) cv_qualifier, \
+             std::string_view group = "", std::string_view description = "");
 
     DEF_MEMBER_FUNC()                // Non-const, non-volatile
     DEF_MEMBER_FUNC(const)           // Const
@@ -393,31 +466,50 @@ public:
     DEF_MEMBER_FUNC(const noexcept)
     DEF_MEMBER_FUNC(const volatile noexcept)
 
+    /**
+     * @brief Registers a member variable.
+     * @tparam Class Class type.
+     * @tparam VarType Variable type.
+     * @param name Command name.
+     * @param var Pointer to member variable.
+     * @param group Command group, empty by default.
+     * @param description Command description, empty by default.
+     */
     template <typename Class, typename VarType>
-    void def(const std::string& name, VarType Class::* var,
-             const std::string& group = "",
-             const std::string& description = "");
+    void def(std::string_view name, VarType Class::* var,
+             std::string_view group = "", std::string_view description = "");
 
     // -------------------------------------------------------------------
     // With instance
     // -------------------------------------------------------------------
 
+    /**
+     * @brief Registers a member function with an instance and no arguments.
+     * @tparam Ret Return type.
+     * @tparam Class Class type.
+     * @tparam InstanceType Instance type.
+     * @param name Command name.
+     * @param func Member function pointer.
+     * @param instance Class instance.
+     * @param group Command group, empty by default.
+     * @param description Command description, empty by default.
+     */
     template <typename Ret, typename Class, typename InstanceType>
         requires Pointer<InstanceType> || SmartPointer<InstanceType> ||
                  std::is_same_v<InstanceType, PointerSentinel<Class>>
-    void def(const std::string& name, Ret (Class::*func)(),
-             const InstanceType& instance, const std::string& group = "",
-             const std::string& description = "");
+    void def(std::string_view name, Ret (Class::*func)(),
+             const InstanceType& instance, std::string_view group = "",
+             std::string_view description = "");
 
-#define DEF_MEMBER_FUNC_WITH_INSTANCE(cv_qualifier)                       \
-    template <typename... Args, typename Ret, typename Class,             \
-              typename InstanceType>                                      \
-        requires Pointer<InstanceType> || SmartPointer<InstanceType> ||   \
-                 std::is_same_v<InstanceType, PointerSentinel<Class>>     \
-    void def(const std::string& name,                                     \
-             Ret (Class::*func)(Args...) cv_qualifier,                    \
-             const InstanceType& instance, const std::string& group = "", \
-             const std::string& description = "");
+// Define member function with instance using macro
+#define DEF_MEMBER_FUNC_WITH_INSTANCE(cv_qualifier)                           \
+    template <typename... Args, typename Ret, typename Class,                 \
+              typename InstanceType>                                          \
+        requires Pointer<InstanceType> || SmartPointer<InstanceType> ||       \
+                 std::is_same_v<InstanceType, PointerSentinel<Class>>         \
+    void def(std::string_view name, Ret (Class::*func)(Args...) cv_qualifier, \
+             const InstanceType& instance, std::string_view group = "",       \
+             std::string_view description = "");
 
     DEF_MEMBER_FUNC_WITH_INSTANCE()
     DEF_MEMBER_FUNC_WITH_INSTANCE(const)
@@ -427,238 +519,409 @@ public:
     DEF_MEMBER_FUNC_WITH_INSTANCE(const noexcept)
     DEF_MEMBER_FUNC_WITH_INSTANCE(const volatile noexcept)
 
+    /**
+     * @brief Registers a member variable with an instance.
+     * @tparam MemberType Member variable type.
+     * @tparam Class Class type.
+     * @tparam InstanceType Instance type.
+     * @param name Command name.
+     * @param var Member variable pointer.
+     * @param instance Class instance.
+     * @param group Command group, empty by default.
+     * @param description Command description, empty by default.
+     */
     template <typename MemberType, typename Class, typename InstanceType>
         requires Pointer<InstanceType> || SmartPointer<InstanceType> ||
                  std::is_same_v<InstanceType, PointerSentinel<Class>>
-    void def(const std::string& name, MemberType Class::* var,
-             const InstanceType& instance, const std::string& group = "",
-             const std::string& description = "");
+    void def(std::string_view name, MemberType Class::* var,
+             const InstanceType& instance, std::string_view group = "",
+             std::string_view description = "");
 
+    /**
+     * @brief Registers a const member variable with an instance.
+     * @tparam MemberType Member variable type.
+     * @tparam Class Class type.
+     * @tparam InstanceType Instance type.
+     * @param name Command name.
+     * @param var Pointer to const member variable.
+     * @param instance Class instance.
+     * @param group Command group, empty by default.
+     * @param description Command description, empty by default.
+     */
     template <typename MemberType, typename Class, typename InstanceType>
         requires Pointer<InstanceType> || SmartPointer<InstanceType> ||
                  std::is_same_v<InstanceType, PointerSentinel<Class>>
-    void def(const std::string& name, const MemberType Class::* var,
-             const InstanceType& instance, const std::string& group = "",
-             const std::string& description = "");
+    void def(std::string_view name, const MemberType Class::* var,
+             const InstanceType& instance, std::string_view group = "",
+             std::string_view description = "");
 
+    /**
+     * @brief Registers a property with a getter and setter.
+     * @tparam Ret Return type.
+     * @tparam Class Class type.
+     * @tparam InstanceType Instance type.
+     * @param name Command name.
+     * @param getter Getter function pointer.
+     * @param setter Setter function pointer.
+     * @param instance Class instance.
+     * @param group Command group.
+     * @param description Command description.
+     */
     template <typename Ret, typename Class, typename InstanceType>
         requires Pointer<InstanceType> || SmartPointer<InstanceType> ||
                  std::is_same_v<InstanceType, PointerSentinel<Class>>
-    void def(const std::string& name, Ret (Class::*getter)() const,
+    void def(std::string_view name, Ret (Class::*getter)() const,
              void (Class::*setter)(Ret), const InstanceType& instance,
-             const std::string& group, const std::string& description);
+             std::string_view group, std::string_view description);
 
-    // Register a static member variable
+    /**
+     * @brief Registers a static member variable.
+     * @tparam MemberType Member variable type.
+     * @tparam Class Class type.
+     * @param name Command name.
+     * @param var Pointer to static member variable.
+     * @param group Command group, empty by default.
+     * @param description Command description, empty by default.
+     */
     template <typename MemberType, typename Class>
-    void def(const std::string& name, MemberType* var,
-             const std::string& group = "",
-             const std::string& description = "");
+    void def(std::string_view name, MemberType* var,
+             std::string_view group = "", std::string_view description = "");
 
-    // Register a const & static member variable
+    /**
+     * @brief Registers a const static member variable.
+     * @tparam MemberType Member variable type.
+     * @tparam Class Class type.
+     * @param name Command name.
+     * @param var Pointer to const static member variable.
+     * @param group Command group, empty by default.
+     * @param description Command description, empty by default.
+     */
     template <typename MemberType, typename Class>
-    void def(const std::string& name, const MemberType* var,
-             const std::string& group = "",
-             const std::string& description = "");
+    void def(std::string_view name, const MemberType* var,
+             std::string_view group = "", std::string_view description = "");
 
+    /**
+     * @brief Registers a type constructor.
+     * @tparam Class Class type.
+     * @param name Command name.
+     * @param group Command group, empty by default.
+     * @param description Command description, empty by default.
+     */
     template <typename Class>
-    void def(const std::string& name, const std::string& group = "",
-             const std::string& description = "");
+    void def(std::string_view name, std::string_view group = "",
+             std::string_view description = "");
 
+    /**
+     * @brief Registers a type constructor with arguments.
+     * @tparam Class Class type.
+     * @tparam Args Constructor argument types.
+     * @param name Command name.
+     * @param group Command group, empty by default.
+     * @param description Command description, empty by default.
+     */
     template <typename Class, typename... Args>
-    void def(const std::string& name, const std::string& group = "",
-             const std::string& description = "");
+    void def(std::string_view name, std::string_view group = "",
+             std::string_view description = "");
 
+    /**
+     * @brief Registers a constructor.
+     * @tparam Class Class type.
+     * @tparam Args Constructor argument types.
+     * @param name Command name.
+     * @param group Command group, empty by default.
+     * @param description Command description, empty by default.
+     */
     template <typename Class, typename... Args>
-    void defConstructor(const std::string& name, const std::string& group = "",
-                        const std::string& description = "");
+    void defConstructor(std::string_view name, std::string_view group = "",
+                        std::string_view description = "");
 
+    /**
+     * @brief Registers a default constructor.
+     * @tparam Class Class type.
+     * @param name Command name.
+     * @param group Command group, empty by default.
+     * @param description Command description, empty by default.
+     */
     template <typename Class>
-    void defDefaultConstructor(const std::string& name,
-                               const std::string& group = "",
-                               const std::string& description = "");
+    void defDefaultConstructor(std::string_view name,
+                               std::string_view group = "",
+                               std::string_view description = "");
 
+    /**
+     * @brief Registers a type.
+     * @tparam T Type.
+     * @param name Type name.
+     * @param group Type group, empty by default.
+     * @param description Type description, empty by default.
+     */
     template <typename T>
-    void defType(std::string_view name, const std::string& group = "",
-                 const std::string& description = "");
+    void defType(std::string_view name, std::string_view group = "",
+                 std::string_view description = "");
 
+    /**
+     * @brief Registers an enum type.
+     * @tparam EnumType Enum type.
+     * @param name Enum name.
+     * @param enumMap Enum value map.
+     */
     template <typename EnumType>
-    void defEnum(const std::string& name,
+    void defEnum(std::string_view name,
                  const std::unordered_map<std::string, EnumType>& enumMap);
 
+    /**
+     * @brief Registers a type conversion.
+     * @tparam SourceType Source type.
+     * @tparam DestinationType Destination type.
+     * @param func Conversion function.
+     */
     template <typename SourceType, typename DestinationType>
     void defConversion(std::function<std::any(const std::any&)> func);
 
+    /**
+     * @brief Registers a base class.
+     * @tparam Base Base class type.
+     * @tparam Derived Derived class type.
+     */
     template <typename Base, typename Derived>
+        requires std::derived_from<Derived, Base>
     void defBaseClass();
 
+    /**
+     * @brief Registers a type conversion.
+     * @param conversion Type conversion base class.
+     */
     void defClassConversion(
         const std::shared_ptr<atom::meta::TypeConversionBase>& conversion);
 
-    void addAlias(const std::string& name, const std::string& alias) const;
+    /**
+     * @brief Adds a command alias.
+     * @param name Command name.
+     * @param alias Command alias.
+     */
+    void addAlias(std::string_view name, std::string_view alias) const;
 
-    void addGroup(const std::string& name, const std::string& group) const;
+    /**
+     * @brief Adds a command group.
+     * @param name Command name.
+     * @param group Command group.
+     */
+    void addGroup(std::string_view name, std::string_view group) const;
 
-    void setTimeout(const std::string& name,
+    /**
+     * @brief Sets command timeout.
+     * @param name Command name.
+     * @param timeout Timeout duration.
+     */
+    void setTimeout(std::string_view name,
                     std::chrono::milliseconds timeout) const;
 
+    /**
+     * @brief Dispatches a command.
+     * @tparam Args Argument types.
+     * @param name Command name.
+     * @param args Command arguments.
+     * @return Command execution result.
+     * @throws Exceptions during execution.
+     */
     template <typename... Args>
-    auto dispatch(const std::string& name, Args&&... args) -> std::any {
+    auto dispatch(std::string_view name, Args&&... args) -> std::any {
         auto startTime = std::chrono::high_resolution_clock::now();
-        
+
         try {
-            auto result = m_CommandDispatcher_->dispatch(name, std::forward<Args>(args)...);
+            auto result = m_CommandDispatcher_->dispatch(
+                std::string(name), std::forward<Args>(args)...);
             auto endTime = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-                endTime - startTime);
-            
-            // 更新性能统计
-            m_PerformanceStats_.commandCallCount++;
+            auto duration =
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    endTime - startTime);
+
+            // Update performance statistics
+            m_PerformanceStats_.commandCallCount.fetch_add(
+                1, std::memory_order_relaxed);
             m_PerformanceStats_.updateExecutionTime(duration);
-            
+
             return result;
         } catch (const std::exception& e) {
-            m_PerformanceStats_.commandErrorCount++;
-            throw; // 重新抛出异常
+            m_PerformanceStats_.commandErrorCount.fetch_add(
+                1, std::memory_order_relaxed);
+            throw;  // Rethrow exception
         }
     }
 
-    auto dispatch(const std::string& name,
-                  const std::vector<std::any>& args) const -> std::any {
-        auto startTime = std::chrono::high_resolution_clock::now();
-        
-        try {
-            auto result = m_CommandDispatcher_->dispatch(name, args);
-            auto endTime = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-                endTime - startTime);
-            
-            // 更新性能统计
-            auto& stats = const_cast<PerformanceStats&>(m_PerformanceStats_);
-            stats.commandCallCount++;
-            stats.updateExecutionTime(duration);
-            
-            return result;
-        } catch (const std::exception& e) {
-            auto& stats = const_cast<PerformanceStats&>(m_PerformanceStats_);
-            stats.commandErrorCount++;
-            throw; // 重新抛出异常
-        }
-    }
+    /**
+     * @brief Dispatches a command.
+     * @param name Command name.
+     * @param args List of command arguments.
+     * @return Command execution result.
+     * @throws Exceptions during execution.
+     */
+    [[nodiscard]] auto dispatch(std::string_view name,
+                                std::span<const std::any> args) const
+        -> std::any;
 
-    [[nodiscard]] auto has(const std::string& name) const -> bool;
+    /**
+     * @brief Checks if a command exists.
+     * @param name Command name.
+     * @return Returns true if the command exists, false otherwise.
+     */
+    [[nodiscard]] auto has(std::string_view name) const noexcept -> bool;
 
-    [[nodiscard]] auto hasType(std::string_view name) const -> bool;
+    /**
+     * @brief Checks if a type exists.
+     * @param name Type name.
+     * @return Returns true if the type exists, false otherwise.
+     */
+    [[nodiscard]] auto hasType(std::string_view name) const noexcept -> bool;
 
+    /**
+     * @brief Checks if a type conversion exists.
+     * @tparam SourceType Source type.
+     * @tparam DestinationType Destination type.
+     * @return Returns true if the conversion exists, false otherwise.
+     */
     template <typename SourceType, typename DestinationType>
-    [[nodiscard]] auto hasConversion() const -> bool;
+    [[nodiscard]] auto hasConversion() const noexcept -> bool;
 
-    void removeCommand(const std::string& name) const;
+    /**
+     * @brief Removes a command.
+     * @param name Command name.
+     */
+    void removeCommand(std::string_view name) const;
 
-    auto getCommandsInGroup(const std::string& group) const
+    /**
+     * @brief Gets all commands in a specified group.
+     * @param group Command group.
+     * @return List of command names.
+     */
+    [[nodiscard]] auto getCommandsInGroup(std::string_view group) const
         -> std::vector<std::string>;
 
-    auto getCommandDescription(const std::string& name) const -> std::string;
+    /**
+     * @brief Gets the command description.
+     * @param name Command name.
+     * @return The command description.
+     */
+    [[nodiscard]] auto getCommandDescription(std::string_view name) const
+        -> std::string;
 
-    auto getCommandArgAndReturnType(const std::string& name)
-        -> std::vector<CommandDispatcher::CommandArgRet>;
-
+    /**
+     * @brief Gets command aliases.
+     * @param name Command name.
+     * @return Set of command aliases.
+     */
 #if ENABLE_FASTHASH
-    emhash::HashSet<std::string> getCommandAliases(
-        const std::string& name) const;
+    [[nodiscard]] emhash::HashSet<std::string> getCommandAliases(
+        std::string_view name) const;
 #else
-    auto getCommandAliases(const std::string& name) const
+    [[nodiscard]] auto getCommandAliases(std::string_view name) const
         -> std::unordered_set<std::string>;
 #endif
 
-    auto getAllCommands() const -> std::vector<std::string>;
+    /**
+     * @brief Gets command argument and return types.
+     * @param name Command name.
+     * @return List of command argument and return types.
+     */
+    [[nodiscard]] auto getCommandArgAndReturnType(std::string_view name)
+        -> std::vector<CommandDispatcher::CommandArgRet>;
 
-    auto getRegisteredTypes() const -> std::vector<std::string>;
+    /**
+     * @brief Gets all commands.
+     * @return List of command names.
+     */
+    [[nodiscard]] auto getAllCommands() const -> std::vector<std::string>;
+
+    /**
+     * @brief Gets all registered types.
+     * @return List of type names.
+     */
+    [[nodiscard]] auto getRegisteredTypes() const -> std::vector<std::string>;
 
     // -------------------------------------------------------------------
     // Other Components methods
     // -------------------------------------------------------------------
-    /**
-     * @note This method is not thread-safe. And we must make sure the pointer
-     * is valid. The PointerSentinel will help you to avoid this problem. We
-     * will directly get the std::weak_ptr from the pointer.
-     */
 
     /**
-     * @brief 获取依赖的组件名称列表
-     * 
-     * @return std::vector<std::string> 依赖的组件名称
-     * @note This will be called when the component is initialized.
+     * @brief Gets the list of needed component names.
+     * @return List of needed component names.
+     * @note This method will be called during component initialization.
      */
-    static auto getNeededComponents() -> std::vector<std::string>;
+    [[nodiscard]] static auto getNeededComponents() -> std::vector<std::string>;
 
     /**
-     * @brief 添加对其它组件的引用
-     * 
-     * @param name 组件名称
-     * @param component 组件实例
+     * @brief Adds a reference to another component.
+     * @param name Component name.
+     * @param component Component instance.
+     * @throws std::invalid_argument When the name is empty or the component has
+     * expired.
      */
-    void addOtherComponent(const std::string& name,
+    void addOtherComponent(std::string_view name,
                            const std::weak_ptr<Component>& component);
 
     /**
-     * @brief 移除对其它组件的引用
-     * 
-     * @param name 组件名称
+     * @brief Removes a reference to another component.
+     * @param name Component name.
      */
-    void removeOtherComponent(const std::string& name);
+    void removeOtherComponent(std::string_view name) noexcept;
 
     /**
-     * @brief 清空所有组件引用
+     * @brief Clears all component references.
      */
-    void clearOtherComponents();
+    void clearOtherComponents() noexcept;
 
     /**
-     * @brief 获取其它组件实例
-     * 
-     * @param name 组件名称
-     * @return std::weak_ptr<Component> 组件实例的弱引用
+     * @brief Gets another component instance.
+     * @param name Component name.
+     * @return Weak reference to the component instance.
+     * @throws ObjectExpiredError When the component has expired.
      */
-    auto getOtherComponent(const std::string& name) -> std::weak_ptr<Component>;
+    [[nodiscard]] auto getOtherComponent(std::string_view name)
+        -> std::weak_ptr<Component>;
 
     /**
-     * @brief 执行命令
-     * 
-     * 会先在本组件中查找命令，如果找不到，则尝试在依赖组件中查找
-     * 
-     * @param name 命令名称
-     * @param args 命令参数
-     * @return std::any 命令执行结果
+     * @brief Executes a command.
+     *
+     * It first searches for the command in this component. If not found, it
+     * tries to find it in dependent components.
+     *
+     * @param name Command name.
+     * @param args Command arguments.
+     * @return Command execution result.
+     * @throws atom::error::Exception When the command is not found or execution
+     * fails.
      */
-    auto runCommand(const std::string& name, const std::vector<std::any>& args)
-        -> std::any;
+    [[nodiscard]] auto runCommand(std::string_view name,
+                                  std::span<const std::any> args) -> std::any;
 
     /**
-     * @brief 初始化函数，由注册器调用
+     * @brief Initialization function, called by the registrar.
      */
-    InitFunc initFunc; 
-    
+    InitFunc initFunc;
+
     /**
-     * @brief 清理函数，由注册器调用
+     * @brief Cleanup function, called by the registrar.
      */
-    CleanupFunc cleanupFunc; 
+    CleanupFunc cleanupFunc;
 
 private:
-    std::string m_name_;               // 组件名称
-    std::string m_doc_;                // 组件文档
-    std::string m_configPath_;         // 配置路径
-    std::string m_infoPath_;           // 信息路径
+    std::string m_name_;        // Component name
+    std::string m_doc_;         // Component documentation
+    std::string m_configPath_;  // Configuration path
+    std::string m_infoPath_;    // Information path
     atom::meta::TypeInfo m_typeInfo_{atom::meta::userType<Component>()};
     std::unordered_map<std::string_view, atom::meta::TypeInfo> m_classes_;
-    
-    std::atomic<ComponentState> m_state_{ComponentState::Created}; // 组件状态
-    PerformanceStats m_PerformanceStats_; // 性能统计
+
+    std::atomic<ComponentState> m_state_{
+        ComponentState::Created};          // Component state
+    PerformanceStats m_PerformanceStats_;  // Performance statistics
 
     ///< managing commands.
     std::shared_ptr<VariableManager> m_VariableManager_{
-        std::make_shared<VariableManager>()};  ///< 变量管理器
+        std::make_shared<VariableManager>()};  ///< Variable manager
 
     std::unordered_map<std::string, std::weak_ptr<Component>>
-        m_OtherComponents_; // 其他组件引用
+        m_OtherComponents_;                        // Other component references
+    mutable std::shared_mutex m_ComponentsMutex_;  // Component reference mutex
 
     std::shared_ptr<atom::meta::TypeCaster> m_TypeCaster_{
         atom::meta::TypeCaster::createShared()};
@@ -667,88 +930,104 @@ private:
 
     std::shared_ptr<CommandDispatcher> m_CommandDispatcher_{
         std::make_shared<CommandDispatcher>(
-            m_TypeCaster_)};  ///< 命令调度器
-    
-    #if ENABLE_EVENT_SYSTEM
+            m_TypeCaster_)};  ///< Command dispatcher
+
+#if ENABLE_EVENT_SYSTEM
     struct EventHandler {
-        atom::components::EventCallbackId id; // 处理器ID
-        atom::components::EventCallback callback; // 回调函数
-        bool once; // 是否一次性
+        atom::components::EventCallbackId id;      // Handler ID
+        atom::components::EventCallback callback;  // Callback function
+        bool once;  // Whether it's a one-time handler
     };
-    
-    std::unordered_map<std::string, std::vector<EventHandler>> m_EventHandlers_; // 事件处理器
-    std::mutex m_EventMutex_; // 事件处理互斥锁
-    std::atomic<atom::components::EventCallbackId> m_NextEventId_{1}; // 下一个事件ID
-    #endif
+
+    std::unordered_map<std::string, std::vector<EventHandler>>
+        m_EventHandlers_;                     // Event handlers
+    mutable std::shared_mutex m_EventMutex_;  // Event handling mutex
+    std::atomic<atom::components::EventCallbackId> m_NextEventId_{
+        1};  // Next event ID
+#endif
 };
 
-template <typename SourceType, typename DestinationType>
-auto Component::hasConversion() const -> bool {
-    if constexpr (std::is_same_v<SourceType, DestinationType>) {
-        return true;
-    }
-    return m_TypeConverter_->canConvert(
-        atom::meta::userType<SourceType>(),
-        atom::meta::userType<DestinationType>());
-}
-
-template <typename T>
-void Component::defType(std::string_view name,
-                        [[maybe_unused]] const std::string& group,
-                        [[maybe_unused]] const std::string& description) {
-    m_classes_[name] = atom::meta::userType<T>();
-    m_TypeCaster_->registerType<T>(std::string(name));
-}
-
+// Optimized template method implementation
 template <typename SourceType, typename DestinationType>
 void Component::defConversion(std::function<std::any(const std::any&)> func) {
     static_assert(!std::is_same_v<SourceType, DestinationType>,
                   "SourceType and DestinationType must be not the same");
-    m_TypeCaster_->registerConversion<SourceType, DestinationType>(func);
+    if (!func) {
+        throw std::invalid_argument("Conversion function cannot be null");
+    }
+    if (!m_TypeCaster_) {
+        throw std::runtime_error("Type caster not initialized");
+    }
+    m_TypeCaster_->registerConversion<SourceType, DestinationType>(
+        std::move(func));
 }
 
 template <typename Base, typename Derived>
+    requires std::derived_from<Derived, Base>
 void Component::defBaseClass() {
-    static_assert(std::is_base_of_v<Base, Derived>,
-                  "Derived must be derived from Base");
+    if (!m_TypeConverter_) {
+        throw std::runtime_error("Type converter not initialized");
+    }
     m_TypeConverter_->addBaseClass<Base, Derived>();
 }
 
 template <typename Callable>
-void Component::def(const std::string& name, Callable&& func,
-                    const std::string& group, const std::string& description) {
+void Component::def(std::string_view name, Callable&& func,
+                    std::string_view group, std::string_view description) {
     using Traits = atom::meta::FunctionTraits<std::decay_t<Callable>>;
     using ReturnType = typename Traits::return_type;
-    static_assert(Traits::arity <= 8, "Too many arguments");
+
+    if (name.empty()) {
+        throw std::invalid_argument("Command name cannot be empty");
+    }
+
+    static_assert(Traits::arity <= 8,
+                  "Too many arguments in function (maximum is 8)");
+
     // clang-format off
     #include "component.template"
     // clang-format on
 }
 
 template <typename Ret>
-void Component::def(const std::string& name, Ret (*func)(),
-                    const std::string& group, const std::string& description) {
-    m_CommandDispatcher_->def(name, group, description,
-                              std::function<Ret()>(func));
+void Component::def(std::string_view name, Ret (*func)(),
+                    std::string_view group, std::string_view description) {
+    if (!func) {
+        throw std::invalid_argument("Function pointer cannot be null");
+    }
+
+    m_CommandDispatcher_->def(
+        std::string(name), std::string(group), std::string(description),
+        std::function<Ret()>([func]() -> Ret { return func(); }));
 }
 
 template <typename... Args, typename Ret>
-void Component::def(const std::string& name, Ret (*func)(Args...),
-                    const std::string& group, const std::string& description) {
-    m_CommandDispatcher_->def(name, group, description,
-                              std::function<Ret(Args...)>([func](Args... args) {
-                                  return func(std::forward<Args>(args)...);
-                              }));
+void Component::def(std::string_view name, Ret (*func)(Args...),
+                    std::string_view group, std::string_view description) {
+    if (!func) {
+        throw std::invalid_argument("Function pointer cannot be null");
+    }
+
+    m_CommandDispatcher_->def(
+        std::string(name), std::string(group), std::string(description),
+        std::function<Ret(Args...)>([func](Args... args) -> Ret {
+            return func(std::forward<Args>(args)...);
+        }));
 }
 
 #define DEF_MEMBER_FUNC_IMPL(cv_qualifier)                                   \
     template <typename Class, typename Ret, typename... Args>                \
     void Component::def(                                                     \
-        const std::string& name, Ret (Class::*func)(Args...) cv_qualifier,   \
-        const std::string& group, const std::string& description) {          \
+        std::string_view name, Ret (Class::*func)(Args...) cv_qualifier,     \
+        std::string_view group, std::string_view description) {              \
+        if (!func) {                                                         \
+            throw std::invalid_argument(                                     \
+                "Member function pointer cannot be null");                   \
+        }                                                                    \
+                                                                             \
         auto boundFunc = atom::meta::bindMemberFunction(func);               \
         m_CommandDispatcher_->def(                                           \
-            name, group, description,                                        \
+            std::string(name), std::string(group), std::string(description), \
             std::function<Ret(std::reference_wrapper<Class>, Args...)>(      \
                 [boundFunc](std::reference_wrapper<Class> instance,          \
                             Args... args) -> Ret {                           \
@@ -767,11 +1046,22 @@ DEF_MEMBER_FUNC_IMPL(const volatile noexcept)
 template <typename Ret, typename Class, typename InstanceType>
     requires Pointer<InstanceType> || SmartPointer<InstanceType> ||
              std::is_same_v<InstanceType, PointerSentinel<Class>>
-void Component::def(const std::string& name, Ret (Class::*func)(),
-                    const InstanceType& instance, const std::string& group,
-                    const std::string& description) {
-    m_CommandDispatcher_->def(name, group, description,
-                              std::function<Ret()>([instance, func]() {
+void Component::def(std::string_view name, Ret (Class::*func)(),
+                    const InstanceType& instance, std::string_view group,
+                    std::string_view description) {
+    if (!func) {
+        throw std::invalid_argument("Member function pointer cannot be null");
+    }
+
+    if constexpr (SmartPointer<InstanceType>) {
+        if (!instance) {
+            throw std::invalid_argument("Instance pointer cannot be null");
+        }
+    }
+
+    m_CommandDispatcher_->def(std::string(name), std::string(group),
+                              std::string(description),
+                              std::function<Ret()>([instance, func]() -> Ret {
                                   return std::invoke(func, instance.get());
                               }));
 }
@@ -779,201 +1069,103 @@ void Component::def(const std::string& name, Ret (Class::*func)(),
 template <typename... Args, typename Ret, typename Class, typename InstanceType>
     requires Pointer<InstanceType> || SmartPointer<InstanceType> ||
              std::is_same_v<InstanceType, PointerSentinel<Class>>
-void Component::def(const std::string& name, Ret (Class::*func)(Args...),
-                    const InstanceType& instance, const std::string& group,
-                    const std::string& description) {
-    m_CommandDispatcher_->def(
-        name, group, description,
-        std::function<Ret(Args...)>([instance, func](Args... args) {
-            return std::invoke(func, instance.get(),
-                               std::forward<Args>(args)...);
-        }));
-}
-
-template <typename... Args, typename Ret, typename Class, typename InstanceType>
-    requires Pointer<InstanceType> || SmartPointer<InstanceType> ||
-             std::is_same_v<InstanceType, PointerSentinel<Class>>
-void Component::def(const std::string& name, Ret (Class::*func)(Args...) const,
-                    const InstanceType& instance, const std::string& group,
-                    const std::string& description) {
-    if constexpr (std::is_same_v<InstanceType, std::unique_ptr<Class>>) {
-        m_CommandDispatcher_->def(
-            name, group, description,
-            std::function<Ret(Args...)>([&instance, func](Args... args) {
-                return std::invoke(func, instance.get(),
-                                   std::forward<Args>(args)...);
-            }));
-
-    } else if constexpr (SmartPointer<InstanceType> ||
-                         std::is_same_v<InstanceType, PointerSentinel<Class>>) {
-        m_CommandDispatcher_->def(
-            name, group, description,
-            std::function<Ret(Args...)>([instance, func](Args... args) {
-                return std::invoke(func, instance.get(),
-                                   std::forward<Args>(args)...);
-            }));
-    } else {
-        m_CommandDispatcher_->def(
-            name, group, description,
-            std::function<Ret(Args...)>([instance, func](Args... args) {
-                return std::invoke(func, instance, std::forward<Args>(args)...);
-            }));
+void Component::def(std::string_view name, Ret (Class::*func)(Args...),
+                    const InstanceType& instance, std::string_view group,
+                    std::string_view description) {
+    if (!func) {
+        throw std::invalid_argument("Member function pointer cannot be null");
     }
-}
 
-template <typename... Args, typename Ret, typename Class, typename InstanceType>
-    requires Pointer<InstanceType> || SmartPointer<InstanceType> ||
-             std::is_same_v<InstanceType, PointerSentinel<Class>>
-void Component::def(const std::string& name,
-                    Ret (Class::*func)(Args...) noexcept,
-                    const InstanceType& instance, const std::string& group,
-                    const std::string& description) {
+    if constexpr (SmartPointer<InstanceType>) {
+        if (!instance) {
+            throw std::invalid_argument("Instance pointer cannot be null");
+        }
+    }
+
     m_CommandDispatcher_->def(
-        name, group, description,
-        std::function<Ret(Args...)>([instance, func](Args... args) {
+        std::string(name), std::string(group), std::string(description),
+        std::function<Ret(Args...)>([instance, func](Args... args) -> Ret {
             return std::invoke(func, instance.get(),
                                std::forward<Args>(args)...);
         }));
 }
 
-template <typename... Args, typename Ret, typename Class, typename InstanceType>
-    requires Pointer<InstanceType> || SmartPointer<InstanceType> ||
-             std::is_same_v<InstanceType, PointerSentinel<Class>>
-void Component::def(const std::string& name,
-                    Ret (Class::*func)(Args...) const noexcept,
-                    const InstanceType& instance, const std::string& group,
-                    const std::string& description) {
-    m_CommandDispatcher_->def(
-        name, group, description,
-        std::function<Ret(Args...)>([instance, func](Args... args) {
-            return std::invoke(func, instance.get(),
-                               std::forward<Args>(args)...);
-        }));
-}
+template <typename MemberType, typename Class>
+void Component::def(std::string_view name, MemberType* var,
+                    std::string_view group, std::string_view description) {
+    if (!var) {
+        throw std::invalid_argument("Member variable pointer cannot be null");
+    }
 
-template <typename MemberType, typename Class, typename InstanceType>
-    requires Pointer<InstanceType> || SmartPointer<InstanceType> ||
-             std::is_same_v<InstanceType, PointerSentinel<Class>>
-void Component::def(const std::string& name, MemberType Class::* member_var,
-                    const InstanceType& instance, const std::string& group,
-                    const std::string& description) {
     m_CommandDispatcher_->def(
-        "get_" + name, group, "Get " + description,
-        std::function<MemberType()>([instance, member_var]() {
-            return atom::meta::bindMemberVariable(member_var)(*instance);
-        }));
-    m_CommandDispatcher_->def(
-        "set_" + name, group, "Set " + description,
-        std::function<void(MemberType)>(
-            [instance, member_var](MemberType value) {
-                atom::meta::bindMemberVariable(member_var)(*instance) = value;
-            }));
-}
-
-template <typename MemberType, typename Class, typename InstanceType>
-    requires Pointer<InstanceType> || SmartPointer<InstanceType> ||
-             std::is_same_v<InstanceType, PointerSentinel<Class>>
-void Component::def(const std::string& name,
-                    const MemberType Class::* member_var,
-                    const InstanceType& instance, const std::string& group,
-                    const std::string& description) {
-    m_CommandDispatcher_->def(
-        "get_" + name, group, "Get " + description,
-        std::function<MemberType()>([instance, member_var]() {
-            return atom::meta::bindMemberVariable(member_var)(*instance);
-        }));
-}
-
-template <typename Ret, typename Class, typename InstanceType>
-    requires Pointer<InstanceType> || SmartPointer<InstanceType> ||
-             std::is_same_v<InstanceType, PointerSentinel<Class>>
-void Component::def(const std::string& name, Ret (Class::*getter)() const,
-                    void (Class::*setter)(Ret), const InstanceType& instance,
-                    const std::string& group, const std::string& description) {
-    m_CommandDispatcher_->def("get_" + name, group, "Get " + description,
-                              std::function<Ret()>([instance, getter]() {
-                                  return std::invoke(getter, instance.get());
-                              }));
-    m_CommandDispatcher_->def(
-        "set_" + name, group, "Set " + description,
-        std::function<void(Ret)>([instance, setter](Ret value) {
-            std::invoke(setter, instance.get(), value);
-        }));
-}
-
-template <typename MemberType, typename ClassType>
-void Component::def(const std::string& name, MemberType* member_var,
-                    const std::string& group, const std::string& description) {
-    m_CommandDispatcher_->def(
-        name, group, description,
-        std::function<MemberType&()>(
-            [member_var]() -> MemberType& { return *member_var; }));
-}
-
-template <typename MemberType, typename ClassType>
-void Component::def(const std::string& name, const MemberType* member_var,
-                    const std::string& group, const std::string& description) {
-    m_CommandDispatcher_->def(
-        name, group, description,
-        std::function<const MemberType&()>(
-            [member_var]() -> const MemberType& { return *member_var; }));
-}
-
-template <typename Class, typename... Args>
-void Component::defConstructor(const std::string& name,
-                               const std::string& group,
-                               const std::string& description) {
-    m_CommandDispatcher_->def(name, group, description,
-                              std::function<std::shared_ptr<Class>(Args...)>(
-                                  atom::meta::constructor<Class, Args...>()));
+        std::string(name), std::string(group), std::string(description),
+        std::function<MemberType&()>([var]() -> MemberType& { return *var; }));
 }
 
 template <typename EnumType>
 void Component::defEnum(
-    const std::string& name,
+    std::string_view name,
     const std::unordered_map<std::string, EnumType>& enumMap) {
-    m_TypeCaster_->registerType<EnumType>(std::string(name));
-
-    for (const auto& [key, value] : enumMap) {
-        m_TypeCaster_->registerEnumValue<EnumType>(name, key, value);
+    if (name.empty()) {
+        throw std::invalid_argument("Enum name cannot be empty");
     }
 
+    if (enumMap.empty()) {
+        throw std::invalid_argument("Enum map cannot be empty");
+    }
+
+    std::string nameStr(name);
+    m_TypeCaster_->registerType<EnumType>(nameStr);
+
+    for (const auto& [key, value] : enumMap) {
+        m_TypeCaster_->registerEnumValue<EnumType>(nameStr, key, value);
+    }
+
+    // Register conversion from enum to string
     defConversion<EnumType, std::string>(
-        [this, name](const std::any& enumValue) -> std::any {
-            const EnumType& value = std::any_cast<EnumType>(enumValue);
-            return m_TypeCaster_->enumToString<EnumType>(value, name);
+        [this, nameStr](const std::any& enumValue) -> std::any {
+            try {
+                const EnumType& value = std::any_cast<EnumType>(enumValue);
+                return m_TypeCaster_->enumToString<EnumType>(value, nameStr);
+            } catch (const std::bad_any_cast& e) {
+                throw VariableTypeError(
+                    ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME,
+                    "Failed to cast enum value: {}", e.what());
+            }
         });
 
+    // Register conversion from string to enum
     defConversion<std::string, EnumType>(
-        [this, name](const std::any& strValue) -> std::any {
-            const std::string& value = std::any_cast<std::string>(strValue);
-            return m_TypeCaster_->stringToEnum<EnumType>(value, name);
+        [this, nameStr](const std::any& strValue) -> std::any {
+            try {
+                const std::string& value = std::any_cast<std::string>(strValue);
+                return m_TypeCaster_->stringToEnum<EnumType>(value, nameStr);
+            } catch (const std::bad_any_cast& e) {
+                throw VariableTypeError(
+                    ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME,
+                    "Failed to cast string value: {}", e.what());
+            }
         });
 }
 
-template <typename Class>
-void Component::defDefaultConstructor(const std::string& name,
-                                      const std::string& group,
-                                      const std::string& description) {
-    m_CommandDispatcher_->def(
-        name, group, description,
-        std::function<std::shared_ptr<Class>()>([]() -> std::shared_ptr<Class> {
-            return std::make_shared<Class>();
-        }));
+template <typename SourceType, typename DestinationType>
+auto Component::hasConversion() const noexcept -> bool {
+    if constexpr (std::is_same_v<SourceType, DestinationType>) {
+        return true;
+    }
+    return m_TypeConverter_->canConvert(
+        atom::meta::userType<SourceType>(),
+        atom::meta::userType<DestinationType>());
 }
 
-template <typename Class>
-void Component::def(const std::string& name, const std::string& group,
-                    const std::string& description) {
-    auto constructor = atom::meta::defaultConstructor<Class>();
-    def(name, constructor, group, description);
+template <typename T>
+void Component::defType(std::string_view name,
+                        [[maybe_unused]] std::string_view group,
+                        [[maybe_unused]] std::string_view description) {
+    m_classes_[name] = atom::meta::userType<T>();
+    m_TypeCaster_->registerType<T>(std::string(name));
 }
 
-template <typename Class, typename... Args>
-void Component::def(const std::string& name, const std::string& group,
-                    const std::string& description) {
-    auto constructor_ = atom::meta::constructor<Class, Args...>();
-    def(name, constructor_, group, description);
-}
+// Implement template method definitions...
 
-#endif // ATOM_COMPONENT_HPP
+#endif  // ATOM_COMPONENT_HPP

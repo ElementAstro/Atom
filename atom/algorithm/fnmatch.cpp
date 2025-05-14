@@ -181,19 +181,28 @@ auto fnmatch_nothrow(T1&& pattern, T2&& string, int flags) noexcept
         return string_view.empty();  // Empty pattern matches only empty string
     }
 
-    // Try SIMD-accelerated matching if available
-    if (const auto simd_result =
-            detail::simd_match_if_available(pattern_view, string_view, flags);
-        simd_result) {
-        return simd_result;
-    }
-
 #ifdef ATOM_USE_BOOST
     try {
-        // Boost regex implementation (similar to original)
-        // ...existing code...
-        return true;  // Replace with actual result
+        // Boost regex implementation
+        auto translated = translate(pattern_view, flags);
+        if (!translated) {
+            return atom::type::unexpected(translated.error());
+        }
+
+        boost::regex::flag_type regex_flags = boost::regex::ECMAScript;
+        if (flags & flags::CASEFOLD) {
+            regex_flags |= boost::regex::icase;
+        }
+
+        // Use boost regex for matching
+        boost::regex regex(translated.value(), regex_flags);
+        bool result = boost::regex_match(
+            std::string(string_view.begin(), string_view.end()), regex);
+
+        LOG_F(INFO, "Boost regex match result: {}", result ? "True" : "False");
+        return result;
     } catch (...) {
+        LOG_F(ERROR, "Exception in Boost regex implementation");
         return atom::type::unexpected(FnmatchError::InternalError);
     }
 #else
@@ -234,7 +243,7 @@ auto fnmatch_nothrow(T1&& pattern, T2&& string, int flags) noexcept
                         return true;
                     }
 
-                    // 将通配符检查移到独立的函数
+                    // Check for wildcard characters in the remaining pattern
                     auto check_wildcards = [](auto start, auto end) {
                         return std::any_of(start, end, [](char c) {
                             return c == '*' || c == '?' || c == '[';

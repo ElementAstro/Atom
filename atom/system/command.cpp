@@ -584,7 +584,13 @@ auto executeCommandWithTimeout(
 #else
         std::string killCmd = "pkill -f \"" + command + "\"";
 #endif
-        executeCommandSimple(killCmd);
+        auto result = executeCommandSimple(killCmd);
+        if (!result) {
+            LOG_F(ERROR, "Failed to kill process for command '{}'", command);
+        } else {
+            LOG_F(INFO, "Process for command '{}' killed successfully",
+                  command);
+        }
         return std::nullopt;
     }
 

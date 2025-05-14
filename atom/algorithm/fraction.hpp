@@ -16,8 +16,8 @@ Description: Implementation of Fraction class
 #define ATOM_ALGORITHM_FRACTION_HPP
 
 #include <cmath>
-#include <compare>
 #include <iostream>
+#include <numeric>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -53,12 +53,38 @@ private:
      * @param b The second number.
      * @return The GCD of the two numbers.
      */
-    static constexpr int gcd(int a, int b) noexcept;
+    static constexpr int gcd(int a, int b) noexcept {
+        if (a == 0)
+            return std::abs(b);
+        if (b == 0)
+            return std::abs(a);
 
-    /**
-     * @brief Reduces the fraction to its simplest form.
-     */
-    void reduce() noexcept;
+        if (a == std::numeric_limits<int>::min()) {
+            a = std::numeric_limits<int>::min() + 1;
+        }
+        if (b == std::numeric_limits<int>::min()) {
+            b = std::numeric_limits<int>::min() + 1;
+        }
+
+        return std::abs(std::gcd(a, b));
+    }
+
+    constexpr void reduce() noexcept {
+        if (denominator == 0) {
+            return;
+        }
+
+        if (denominator < 0) {
+            numerator = -numerator;
+            denominator = -denominator;
+        }
+
+        int divisor = gcd(numerator, denominator);
+        if (divisor > 1) {
+            numerator /= divisor;
+            denominator /= divisor;
+        }
+    }
 
 public:
     /**

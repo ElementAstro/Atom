@@ -31,6 +31,21 @@
             "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "environment": {
+                "VCPKG_DEFAULT_TRIPLET": "x64-mingw-dynamic",
+                "VCPKG_DEFAULT_HOST_TRIPLET": "x64-mingw-dynamic"
+            }
+        },
+        {
+            "name": "base-vs",
+            "hidden": true,
+            "generator": "Visual Studio 17 2022",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_C_COMPILER": "cl",
+                "CMAKE_CXX_COMPILER": "cl"
             }
         },
         {
@@ -54,82 +69,146 @@
             }
         },
         {
-            "name": "debug",
-            "displayName": "Debug",
-            "inherits": "base",
+            "name": "_common-debug-config",
+            "hidden": true,
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_CXX_FLAGS": "-Wall -Wextra -Wpedantic"
             }
+        },
+        {
+            "name": "_common-release-config",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CXX_FLAGS": "-O3"
+            }
+        },
+        {
+            "name": "_common-relwithdebinfo-config",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "_vs-debug-config",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_CXX_FLAGS": "/W4 /permissive-"
+            }
+        },
+        {
+            "name": "_vs-release-config",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CXX_FLAGS": "/O2 /Ob2 /DNDEBUG"
+            }
+        },
+        {
+            "name": "_vs-relwithdebinfo-config",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "debug",
+            "displayName": "Debug",
+            "inherits": [
+                "base",
+                "_common-debug-config"
+            ]
         },
         {
             "name": "release",
             "displayName": "Release",
-            "inherits": "base",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "CMAKE_CXX_FLAGS": "-O3"
-            }
+            "inherits": [
+                "base",
+                "_common-release-config"
+            ]
         },
         {
             "name": "relwithdebinfo",
             "displayName": "RelWithDebInfo",
-            "inherits": "base",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
-            }
+            "inherits": [
+                "base",
+                "_common-relwithdebinfo-config"
+            ]
         },
         {
             "name": "debug-msys2",
             "displayName": "Debug (MSYS2)",
-            "inherits": "base-msys2",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_CXX_FLAGS": "-Wall -Wextra -Wpedantic"
-            }
+            "inherits": [
+                "base-msys2",
+                "_common-debug-config"
+            ]
         },
         {
             "name": "release-msys2",
             "displayName": "Release (MSYS2)",
-            "inherits": "base-msys2",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "CMAKE_CXX_FLAGS": "-O3"
-            }
+            "inherits": [
+                "base-msys2",
+                "_common-release-config"
+            ]
         },
         {
             "name": "relwithdebinfo-msys2",
             "displayName": "RelWithDebInfo (MSYS2)",
-            "inherits": "base-msys2",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
-            }
+            "inherits": [
+                "base-msys2",
+                "_common-relwithdebinfo-config"
+            ]
         },
         {
             "name": "debug-make",
             "displayName": "Debug (Makefile)",
-            "inherits": "base-makefile",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_CXX_FLAGS": "-Wall -Wextra -Wpedantic"
-            }
+            "inherits": [
+                "base-makefile",
+                "_common-debug-config"
+            ]
         },
         {
             "name": "release-make",
             "displayName": "Release (Makefile)",
-            "inherits": "base-makefile",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "CMAKE_CXX_FLAGS": "-O3"
-            }
+            "inherits": [
+                "base-makefile",
+                "_common-release-config"
+            ]
         },
         {
             "name": "relwithdebinfo-make",
             "displayName": "RelWithDebInfo (Makefile)",
-            "inherits": "base-makefile",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
-            }
+            "inherits": [
+                "base-makefile",
+                "_common-relwithdebinfo-config"
+            ]
+        },
+        {
+            "name": "debug-vs",
+            "displayName": "Debug (Visual Studio)",
+            "inherits": [
+                "base-vs",
+                "_vs-debug-config"
+            ]
+        },
+        {
+            "name": "release-vs",
+            "displayName": "Release (Visual Studio)",
+            "inherits": [
+                "base-vs",
+                "_vs-release-config"
+            ]
+        },
+        {
+            "name": "relwithdebinfo-vs",
+            "displayName": "RelWithDebInfo (Visual Studio)",
+            "inherits": [
+                "base-vs",
+                "_vs-relwithdebinfo-config"
+            ]
         }
     ],
     "buildPresets": [
@@ -177,6 +256,21 @@
             "name": "relwithdebinfo-make",
             "configurePreset": "relwithdebinfo-make",
             "jobs": 8
+        },
+        {
+            "name": "debug-vs",
+            "configurePreset": "debug-vs",
+            "configuration": "Debug"
+        },
+        {
+            "name": "release-vs",
+            "configurePreset": "release-vs",
+            "configuration": "Release"
+        },
+        {
+            "name": "relwithdebinfo-vs",
+            "configurePreset": "relwithdebinfo-vs",
+            "configuration": "RelWithDebInfo"
         }
     ],
     "testPresets": [
