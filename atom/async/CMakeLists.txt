@@ -1,21 +1,11 @@
-# CMakeLists.txt for Atom-Async
-# This project is licensed under the terms of the GPL3 license.
-#
-# Project Name: Atom-Async
-# Description: Async Implementation of Lithium Server and Driver
-# Author: Max Qian
-# License: GPL3
-
 cmake_minimum_required(VERSION 3.20)
-project(atom-async VERSION 1.0.0 LANGUAGES C CXX)
+project(
+  atom-async
+  VERSION 1.0.0
+  LANGUAGES C CXX)
 
 # Sources
-set(SOURCES
-    daemon.cpp
-    limiter.cpp
-    lock.cpp
-    timer.cpp
-)
+set(SOURCES daemon.cpp limiter.cpp lock.cpp timer.cpp)
 
 # Headers
 set(HEADERS
@@ -31,14 +21,9 @@ set(HEADERS
     safetype.hpp
     thread_wrapper.hpp
     timer.hpp
-    trigger.hpp
-)
+    trigger.hpp)
 
-set(LIBS
-    loguru
-    atom-utils
-    ${CMAKE_THREAD_LIBS_INIT}
-)
+set(LIBS loguru atom-utils ${CMAKE_THREAD_LIBS_INIT})
 
 # Build Object Library
 add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
@@ -51,12 +36,10 @@ add_library(${PROJECT_NAME} STATIC)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_object ${LIBS})
 target_include_directories(${PROJECT_NAME} PUBLIC .)
 
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
-    OUTPUT_NAME ${PROJECT_NAME}
-)
+set_target_properties(
+  ${PROJECT_NAME}
+  PROPERTIES VERSION ${PROJECT_VERSION}
+             SOVERSION ${PROJECT_VERSION_MAJOR}
+             OUTPUT_NAME ${PROJECT_NAME})
 
-install(TARGETS ${PROJECT_NAME}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
+install(TARGETS ${PROJECT_NAME} ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})

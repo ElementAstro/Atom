@@ -3,7 +3,7 @@
 #include <pybind11/chrono.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-
+#include <thread>
 
 namespace py = pybind11;
 using namespace atom::system;
@@ -337,23 +337,26 @@ Examples:
     ...     print("Not connected")
 )");
 
-    m.def("format_signal_strength", [](double signal_strength) {
-        std::string quality;
-        if (signal_strength >= -50) {
-            quality = "Excellent";
-        } else if (signal_strength >= -60) {
-            quality = "Good";
-        } else if (signal_strength >= -70) {
-            quality = "Fair";
-        } else if (signal_strength >= -80) {
-            quality = "Poor";
-        } else {
-            quality = "Very poor";
-        }
+    m.def(
+        "format_signal_strength",
+        [](double signal_strength) {
+            std::string quality;
+            if (signal_strength >= -50) {
+                quality = "Excellent";
+            } else if (signal_strength >= -60) {
+                quality = "Good";
+            } else if (signal_strength >= -70) {
+                quality = "Fair";
+            } else if (signal_strength >= -80) {
+                quality = "Poor";
+            } else {
+                quality = "Very poor";
+            }
 
-        return py::make_tuple(quality, signal_strength);
-    }, py::arg("signal_strength"),
-    R"(Format signal strength as a human-readable quality description.
+            return py::make_tuple(quality, signal_strength);
+        },
+        py::arg("signal_strength"),
+        R"(Format signal strength as a human-readable quality description.
 
 Args:
     signal_strength: Signal strength in dBm
@@ -365,64 +368,66 @@ Examples:
     >>> from atom.sysinfo import wifi
     >>> stats = wifi.get_network_stats()
     >>> quality, dbm = wifi.format_signal_strength(stats.signal_strength)
-    >>> print(f"WiFi signal: {quality} ({dbm} dBm)")
+    >>> print(f"WiFi signal: {quality} ({dbm} dBm) ")
 )");
 
-    m.def("get_connection_summary", []() {
-        auto stats = getNetworkStats();
+    m.def(
+        "get_connection_summary",
+        []() {
+            auto stats = getNetworkStats();
 
-        py::dict summary;
-        summary["connection_type"] = [&]() {
-            if (!getCurrentWifi().empty()) {
-                return std::string("WiFi");
-            } else if (!getCurrentWiredNetwork().empty()) {
-                return std::string("Wired");
-            } else if (isHotspotConnected()) {
-                return std::string("Hotspot");
-            } else {
-                return std::string("None");
+            py::dict summary;
+            summary["connection_type"] = [&]() {
+                if (!getCurrentWifi().empty()) {
+                    return std::string("WiFi");
+                } else if (!getCurrentWiredNetwork().empty()) {
+                    return std::string("Wired");
+                } else if (isHotspotConnected()) {
+                    return std::string("Hotspot");
+                } else {
+                    return std::string("None");
+                }
+            }();
+
+            summary["name"] = [&]() {
+                if (!getCurrentWifi().empty()) {
+                    return getCurrentWifi();
+                } else if (!getCurrentWiredNetwork().empty()) {
+                    return getCurrentWiredNetwork();
+                } else {
+                    return std::string("");
+                }
+            }();
+
+            summary["download_speed"] = stats.downloadSpeed;
+            summary["upload_speed"] = stats.uploadSpeed;
+            summary["latency"] = stats.latency;
+            summary["packet_loss"] = stats.packetLoss;
+            summary["signal_strength"] = stats.signalStrength;
+
+            auto ipv4 = getIPv4Addresses();
+            if (!ipv4.empty()) {
+                summary["primary_ip"] = ipv4[0];
             }
-        }();
 
-        summary["name"] = [&]() {
-            if (!getCurrentWifi().empty()) {
-                return getCurrentWifi();
-            } else if (!getCurrentWiredNetwork().empty()) {
-                return getCurrentWiredNetwork();
-            } else {
-                return std::string("");
-            }
-        }();
+            summary["connected_devices"] = stats.connectedDevices;
+            summary["quality"] = [&]() {
+                if (stats.latency < 20 && stats.packetLoss < 1.0) {
+                    return std::string("Excellent");
+                } else if (stats.latency < 50 && stats.packetLoss < 2.0) {
+                    return std::string("Good");
+                } else if (stats.latency < 100 && stats.packetLoss < 5.0) {
+                    return std::string("Fair");
+                } else if (stats.latency < 150 && stats.packetLoss < 10.0) {
+                    return std::string("Poor");
+                } else {
+                    return std::string("Very poor");
+                }
+            }();
 
-        summary["download_speed"] = stats.downloadSpeed;
-        summary["upload_speed"] = stats.uploadSpeed;
-        summary["latency"] = stats.latency;
-        summary["packet_loss"] = stats.packetLoss;
-        summary["signal_strength"] = stats.signalStrength;
-
-        auto ipv4 = getIPv4Addresses();
-        if (!ipv4.empty()) {
-            summary["primary_ip"] = ipv4[0];
-        }
-
-        summary["connected_devices"] = stats.connectedDevices;
-        summary["quality"] = [&]() {
-            if (stats.latency < 20 && stats.packetLoss < 1.0) {
-                return std::string("Excellent");
-            } else if (stats.latency < 50 && stats.packetLoss < 2.0) {
-                return std::string("Good");
-            } else if (stats.latency < 100 && stats.packetLoss < 5.0) {
-                return std::string("Fair");
-            } else if (stats.latency < 150 && stats.packetLoss < 10.0) {
-                return std::string("Poor");
-            } else {
-                return std::string("Very poor");
-            }
-        }();
-
-        return summary;
-    },
-    R"(Get a comprehensive network connection summary.
+            return summary;
+        },
+        R"(Get a comprehensive network connection summary.
 
 Returns:
     Dictionary containing network connection details
@@ -513,7 +518,8 @@ Examples:
             [](py::object& self) {
                 py::object current_time =
                     py::module::import("time").attr("time")();
-                py::object remaining = self.attr("end_time") - current_time;
+                py::object end_time = self.attr("end_time");
+                py::object remaining = end_time - current_time;
                 // Ensure we don't return negative time
                 return py::module::import("builtins")
                     .attr("max")(remaining, py::float_(0.0));
@@ -525,7 +531,7 @@ Examples:
             "History of recorded network statistics")
         .def_property_readonly(
             "average_stats",
-            [](py::object& self) {
+            [](py::object& self) -> py::object {
                 py::list history = self.attr("history");
                 if (py::len(history) == 0) {
                     return py::none();
@@ -561,7 +567,7 @@ Examples:
     // Factory function for network monitor context
     m.def(
         "monitor_network",
-        [](int duration_seconds, int interval_seconds) {
+        [&m](int duration_seconds, int interval_seconds) {
             return m.attr("NetworkMonitorContext")(duration_seconds,
                                                    interval_seconds);
         },
@@ -603,81 +609,86 @@ Examples:
 )");
 
     // Simple ping utility
-    m.def("ping", [](const std::string& host, int count) {
-        // This is a simplified placeholder. In a real implementation,
-        // you would actually ping the host and collect results.
-        NetworkStats stats = getNetworkStats();
+    m.def(
+        "ping",
+        [](const std::string& host, int count) {
+            // This is a simplified placeholder. In a real implementation,
+            // you would actually ping the host and collect results.
+            NetworkStats stats = getNetworkStats();
 
-        // Simulate slight variations in ping
-        auto now = std::chrono::steady_clock::now();
-        auto time_seed = now.time_since_epoch().count();
-        std::srand(static_cast<unsigned int>(time_seed));
+            // Simulate slight variations in ping
+            auto now = std::chrono::steady_clock::now();
+            auto time_seed = now.time_since_epoch().count();
+            std::srand(static_cast<unsigned int>(time_seed));
 
-        py::list results;
-        double base_latency = stats.latency;
-        double packet_loss_rate =
-            stats.packetLoss / 100.0;  // Convert to probability
+            py::list results;
+            double base_latency = stats.latency;
+            double packet_loss_rate =
+                stats.packetLoss / 100.0;  // Convert to probability
 
-        for (int i = 0; i < count; i++) {
-            py::dict ping_result;
+            for (int i = 0; i < count; i++) {
+                py::dict ping_result;
 
-            // Simulate packet loss
-            bool packet_lost = (static_cast<double>(std::rand()) / RAND_MAX) <
-                               packet_loss_rate;
+                // Simulate packet loss
+                bool packet_lost = (static_cast<double>(std::rand()) /
+                                    RAND_MAX) < packet_loss_rate;
 
-            if (packet_lost) {
-                ping_result["success"] = false;
-                ping_result["error"] = "Request timed out";
-            } else {
-                // Vary latency slightly
-                double variation =
-                    (static_cast<double>(std::rand()) / RAND_MAX) * 10.0 - 5.0;
-                double latency = std::max(1.0, base_latency + variation);
+                if (packet_lost) {
+                    ping_result["success"] = false;
+                    ping_result["error"] = "Request timed out";
+                } else {
+                    // Vary latency slightly
+                    double variation =
+                        (static_cast<double>(std::rand()) / RAND_MAX) * 10.0 -
+                        5.0;
+                    double latency = std::max(1.0, base_latency + variation);
 
-                ping_result["success"] = true;
-                ping_result["latency"] = latency;
-                ping_result["ttl"] = 64;
+                    ping_result["success"] = true;
+                    ping_result["latency"] = latency;
+                    ping_result["ttl"] = 64;
+                }
+
+                results.append(ping_result);
+
+                // Actually wait between pings (standard is 1 second)
+                if (i < count - 1) {  // Don't wait after the last ping
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                }
             }
 
-            results.append(ping_result);
+            // Calculate summary statistics
+            int successful = 0;
+            double total_latency = 0.0;
+            double min_latency = std::numeric_limits<double>::max();
+            double max_latency = 0.0;
 
-            // We would normally wait here, but we're just simulating
-            // Simulate some calculation time
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-
-        // Calculate summary statistics
-        int successful = 0;
-        double total_latency = 0.0;
-        double min_latency = std::numeric_limits<double>::max();
-        double max_latency = 0.0;
-
-        for (py::handle result : results) {
-            py::dict result_dict = py::cast<py::dict>(result);
-            if (py::cast<bool>(result_dict["success"])) {
-                double latency = py::cast<double>(result_dict["latency"]);
-                successful++;
-                total_latency += latency;
-                min_latency = std::min(min_latency, latency);
-                max_latency = std::max(max_latency, latency);
+            for (py::handle result : results) {
+                py::dict result_dict = py::cast<py::dict>(result);
+                if (py::cast<bool>(result_dict["success"])) {
+                    double latency = py::cast<double>(result_dict["latency"]);
+                    successful++;
+                    total_latency += latency;
+                    min_latency = std::min(min_latency, latency);
+                    max_latency = std::max(max_latency, latency);
+                }
             }
-        }
 
-        py::dict summary;
-        summary["host"] = host;
-        summary["packets_sent"] = count;
-        summary["packets_received"] = successful;
-        summary["packet_loss"] = 100.0 * (count - successful) / count;
+            py::dict summary;
+            summary["host"] = host;
+            summary["packets_sent"] = count;
+            summary["packets_received"] = successful;
+            summary["packet_loss"] = 100.0 * (count - successful) / count;
 
-        if (successful > 0) {
-            summary["min_latency"] = min_latency;
-            summary["max_latency"] = max_latency;
-            summary["avg_latency"] = total_latency / successful;
-        }
+            if (successful > 0) {
+                summary["min_latency"] = min_latency;
+                summary["max_latency"] = max_latency;
+                summary["avg_latency"] = total_latency / successful;
+            }
 
-        return py::make_tuple(results, summary);
-    }, py::arg("host"), py::arg("count") = 4,
-    R"(Ping a host and measure latency.
+            return py::make_tuple(results, summary);
+        },
+        py::arg("host"), py::arg("count") = 4,
+        R"(Ping a host and measure latency.
 
 This is a simplified ping implementation for network diagnostics.
 
@@ -706,8 +717,8 @@ Examples:
     >>> # Individual results
     >>> for i, result in enumerate(results):
     ...     if result['success']:
-    ...         print(f"Ping {i+1}: {result['latency']:.1f}ms (TTL={result['ttl']})")
+    ...         print(f"Ping {i+1}: {result['latency']:.1f}ms (TTL={result['ttl']}) ")
     ...     else:
-    ...         print(f"Ping {i+1}: {result['error']}")
+    ...         print(f"Ping {i+1}: {result['error']} ")
 )");
 }

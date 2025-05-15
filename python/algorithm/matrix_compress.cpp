@@ -405,7 +405,7 @@ Examples:
     >>> decompressed = decompress_data(compressed, 2, 3)
 )");
 
-    // Helper function to convert a numpy array to matrix format
+    // Improved version with unchecked access for better performance
     m.def(
         "compress_numpy_array",
         [](py::array_t<char, py::array::c_style | py::array::forcecast> array) {
@@ -416,11 +416,13 @@ Examples:
             }
 
             Matrix matrix(buf.shape[0], std::vector<char>(buf.shape[1]));
-            char* ptr = static_cast<char*>(buf.ptr);
 
-            for (size_t i = 0; i < static_cast<size_t>(buf.shape[0]); i++) {
-                for (size_t j = 0; j < static_cast<size_t>(buf.shape[1]); j++) {
-                    matrix[i][j] = ptr[i * buf.shape[1] + j];
+            // Use unchecked access for better performance
+            auto r = array.unchecked<2>();
+
+            for (py::ssize_t i = 0; i < r.shape(0); i++) {
+                for (py::ssize_t j = 0; j < r.shape(1); j++) {
+                    matrix[i][j] = r(i, j);
                 }
             }
 
@@ -442,7 +444,7 @@ Examples:
     >>> compressed = compress_numpy_array(arr)
 )");
 
-    // Helper function to convert compressed data back to numpy array
+    // Improved version with unchecked access for better performance
     m.def(
         "decompress_to_numpy",
         [](const CompressedData& compressed, int rows, int cols) {
@@ -450,12 +452,13 @@ Examples:
                 compressed, rows, cols);
 
             py::array_t<char> result({rows, cols});
-            py::buffer_info buf = result.request();
-            char* ptr = static_cast<char*>(buf.ptr);
 
-            for (int i = 0; i < rows; i++) {
-                for (int j = 0; j < cols; j++) {
-                    ptr[i * cols + j] = matrix[i][j];
+            // Use mutable_unchecked for direct, efficient write access
+            auto r = result.mutable_unchecked<2>();
+
+            for (py::ssize_t i = 0; i < rows; i++) {
+                for (py::ssize_t j = 0; j < cols; j++) {
+                    r(i, j) = matrix[i][j];
                 }
             }
 
@@ -478,5 +481,225 @@ Examples:
     >>> arr = np.array([['A', 'A', 'B'], ['B', 'C', 'C']], dtype='c')
     >>> compressed = compress_numpy_array(arr)
     >>> decompressed = decompress_to_numpy(compressed, 2, 3)
+)");
+
+    // Add a vectorized version of the decompress function for better
+    // performance
+    m.def(
+        "decompress_vectorized",
+        [](const CompressedData& compressed, int rows, int cols) {
+            // A vectorized version that directly outputs to a numpy array
+            py::array_t<char> result({rows, cols});
+            auto r = result.mutable_unchecked<2>();
+
+            size_t idx = 0;
+            for (const auto& pair : compressed) {
+                char value = pair.first;
+                int count = pair.second;
+
+                for (int i = 0; i < count; i++) {
+                    size_t row = idx / cols;
+                    size_t col = idx % cols;
+
+                    if (row < static_cast<size_t>(rows) &&
+                        col < static_cast<size_t>(cols)) {
+                        r(row, col) = value;
+                    }
+
+                    idx++;
+                }
+            }
+
+            return result;
+        },
+        py::arg("compressed"), py::arg("rows"), py::arg("cols"),
+        R"(Vectorized decompression of data into a numpy array.
+
+This function is optimized for performance by directly writing to a numpy array.
+
+Args:
+    compressed: The compressed data (list of (char, count) pairs)
+    rows: The number of rows in the decompressed array
+    cols: The number of columns in the decompressed array
+
+Returns:
+    A 2D numpy array containing the decompressed data
+
+Examples:
+    >>> from atom.algorithm.matrix_compress import compress_matrix, decompress_vectorized
+    >>> matrix = [['A', 'A', 'B'], ['B', 'C', 'C']]
+    >>> compressed = compress_matrix(matrix)
+    >>> decompressed = decompress_vectorized(compressed, 2, 3)
+)");
+
+    // Add a function to convert NumPy arrays to matrices
+    m.def(
+        "numpy_to_matrix",
+        [](py::array_t<char, py::array::c_style | py::array::forcecast> array) {
+            py::buffer_info buf = array.request();
+
+            if (buf.ndim != 2) {
+                throw py::value_error("Input must be a 2D numpy array");
+            }
+
+            Matrix matrix(buf.shape[0], std::vector<char>(buf.shape[1]));
+
+            // Use unchecked access for better performance
+            auto r = array.unchecked<2>();
+
+            for (py::ssize_t i = 0; i < r.shape(0); i++) {
+                for (py::ssize_t j = 0; j < r.shape(1); j++) {
+                    matrix[i][j] = r(i, j);
+                }
+            }
+
+            return matrix;
+        },
+        py::arg("array"),
+        R"(Converts a 2D numpy array to a matrix format.
+
+Args:
+    array: A 2D numpy array of characters
+
+Returns:
+    A matrix (list of lists of characters)
+
+Examples:
+    >>> import numpy as np
+    >>> from atom.algorithm.matrix_compress import numpy_to_matrix
+    >>> arr = np.array([['A', 'A', 'B'], ['B', 'C', 'C']], dtype='c')
+    >>> matrix = numpy_to_matrix(arr)
+)");
+
+    // Add a function to convert matrices to NumPy arrays
+    m.def(
+        "matrix_to_numpy",
+        [](const Matrix& matrix) {
+            if (matrix.empty()) {
+                return py::array_t<char>(std::vector<ssize_t>{0, 0});
+            }
+
+            size_t rows = matrix.size();
+            size_t cols = matrix[0].size();
+
+            py::array_t<char> result({rows, cols});
+            auto r = result.mutable_unchecked<2>();
+
+            for (py::ssize_t i = 0; i < rows; i++) {
+                for (py::ssize_t j = 0; j < cols; j++) {
+                    r(i, j) = matrix[i][j];
+                }
+            }
+
+            return result;
+        },
+        py::arg("matrix"),
+        R"(Converts a matrix to a 2D numpy array.
+
+Args:
+    matrix: A matrix (list of lists of characters)
+
+Returns:
+    A 2D numpy array containing the same data
+
+Examples:
+    >>> from atom.algorithm.matrix_compress import matrix_to_numpy
+    >>> matrix = [['A', 'A', 'B'], ['B', 'C', 'C']]
+    >>> arr = matrix_to_numpy(matrix)
+)");
+
+    // Add a vectorized version that handles both compression methods
+    m.def("vectorized_compress",
+          py::vectorize([](char c1, char c2, char c3) -> py::tuple {
+              std::vector<std::vector<char>> matrix = {{c1, c2, c3}};
+              auto compressed =
+                  atom::algorithm::MatrixCompressor::compress(matrix);
+              return py::make_tuple(compressed.size(), compressed[0].first);
+          }),
+          R"(A vectorized version of compression for element-wise operations.
+
+This demonstrates using py::vectorize for element-wise operations.
+
+Args:
+    c1, c2, c3: Input characters to compress as a row
+
+Returns:
+    A tuple containing (compressed_size, first_character)
+
+Examples:
+    >>> import numpy as np
+    >>> from atom.algorithm.matrix_compress import vectorized_compress
+    >>> a = np.array(['A', 'A', 'B'])
+    >>> b = np.array(['B', 'C', 'C'])
+    >>> c = np.array(['D', 'D', 'D'])
+    >>> vectorized_compress(a, b, c)  # Element-wise operation
+)");
+
+    // Define a class with buffer protocol support for efficient NumPy interop
+    struct CharMatrix {
+        std::vector<char> data;
+        size_t rows, cols;
+
+        CharMatrix(const Matrix& matrix) : rows(matrix.size()), cols(0) {
+            if (rows > 0) {
+                cols = matrix[0].size();
+                data.resize(rows * cols);
+
+                for (size_t i = 0; i < rows; i++) {
+                    for (size_t j = 0; j < cols; j++) {
+                        data[i * cols + j] = matrix[i][j];
+                    }
+                }
+            }
+        }
+    };
+
+    py::class_<CharMatrix>(m, "CharMatrix", py::buffer_protocol())
+        .def(py::init<Matrix>())
+        .def_property_readonly("rows",
+                               [](const CharMatrix& m) { return m.rows; })
+        .def_property_readonly("cols",
+                               [](const CharMatrix& m) { return m.cols; })
+        .def_buffer([](CharMatrix& m) -> py::buffer_info {
+            return py::buffer_info(
+                m.data.data(),                         /* Pointer to buffer */
+                sizeof(char),                          /* Size of one scalar */
+                py::format_descriptor<char>::format(), /* Python struct-style
+                                                          format descriptor */
+                2,                /* Number of dimensions */
+                {m.rows, m.cols}, /* Buffer dimensions */
+                {sizeof(char) * m.cols, sizeof(char)}
+                /* Strides (in bytes) for each index */
+            );
+        });
+
+    m.def(
+        "decompress_to_charmatrix",
+        [](const CompressedData& compressed, int rows, int cols) {
+            Matrix matrix = atom::algorithm::MatrixCompressor::decompress(
+                compressed, rows, cols);
+            return CharMatrix(matrix);
+        },
+        py::arg("compressed"), py::arg("rows"), py::arg("cols"),
+        R"(Decompresses data into a CharMatrix object with buffer protocol support.
+
+The CharMatrix supports the buffer protocol for efficient interfacing with NumPy.
+
+Args:
+    compressed: The compressed data (list of (char, count) pairs)
+    rows: The number of rows in the decompressed matrix
+    cols: The number of columns in the decompressed matrix
+
+Returns:
+    A CharMatrix object containing the decompressed data
+
+Examples:
+    >>> import numpy as np
+    >>> from atom.algorithm.matrix_compress import compress_matrix, decompress_to_charmatrix
+    >>> matrix = [['A', 'A', 'B'], ['B', 'C', 'C']]
+    >>> compressed = compress_matrix(matrix)
+    >>> char_matrix = decompress_to_charmatrix(compressed, 2, 3)
+    >>> # Convert to numpy array efficiently using the buffer protocol
+    >>> np_array = np.array(char_matrix)
 )");
 }

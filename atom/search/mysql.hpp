@@ -81,6 +81,22 @@ private:
 /**
  * @brief Class representing a database result set
  */
+/**
+ * @class ResultSet
+ * @brief Represents the result of a MySQL query, providing an interface to
+ * access the returned rows and fields.
+ *
+ * This class wraps the MYSQL_RES structure and provides methods to navigate
+ * through the result set, retrieve field values, field names, count rows and
+ * columns. It also implements iterator support for modern C++ iteration
+ * patterns.
+ *
+ * The class follows RAII principle, automatically freeing the result set when
+ * destroyed. It is move-constructible and move-assignable, but not
+ * copy-constructible or copy-assignable.
+ *
+ * @note This class is designed to work with MySQL C API.
+ */
 class ResultSet {
 public:
     explicit ResultSet(MYSQL_RES* result);
@@ -114,6 +130,9 @@ public:
         }
         bool operator!=(const iterator& other) const {
             return isEnd != other.isEnd;
+        }
+        bool operator==(const iterator& other) const {
+            return isEnd == other.isEnd;
         }
 
     private:

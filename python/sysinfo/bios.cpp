@@ -4,7 +4,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 using namespace atom::system;
 
@@ -469,7 +468,7 @@ Examples:
 
     // Factory function for BIOS info context
     m.def(
-        "get_bios_info_context", []() { return m.attr("BiosInfoContext")(); },
+        "get_bios_info_context", [&m]() { return m.attr("BiosInfoContext")(); },
         R"(Create a context manager for BIOS information access.
 
 Returns:

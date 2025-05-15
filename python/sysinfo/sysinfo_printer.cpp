@@ -3,6 +3,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <fstream>
+
 namespace py = pybind11;
 using namespace atom::system;
 
@@ -185,9 +187,9 @@ Examples:
     >>> formatted = sysinfo_printer.SystemInfoPrinter.format_os_info(os_info)
     >>> print(formatted)
 )")
-        .def_static(
-            "generate_full_report", &SystemInfoPrinter::generateFullReport,
-            R"(Generate a comprehensive report of all system components.
+        .def_static("generate_full_report",
+                    &SystemInfoPrinter::generateFullReport,
+                    R"(Generate a comprehensive report of all system components.
 
 Creates a detailed report including information about all hardware and
 software components of the system.
@@ -205,9 +207,9 @@ Examples:
     >>> with open('system_report.txt', 'w') as f:
     ...     f.write(report)
 )")
-        .def_static(
-            "generate_simple_report", &SystemInfoPrinter::generateSimpleReport,
-            R"(Generate a simplified overview of key system information.
+        .def_static("generate_simple_report",
+                    &SystemInfoPrinter::generateSimpleReport,
+                    R"(Generate a simplified overview of key system information.
 
 Creates a concise report with the most important system details
 suitable for quick reference.
@@ -498,7 +500,7 @@ Examples:
     // Factory function for report context
     m.def(
         "generate_report",
-        [](const std::string& report_type) {
+        [&m](const std::string& report_type) {
             return m.attr("ReportContext")(report_type);
         },
         py::arg("report_type") = "full",

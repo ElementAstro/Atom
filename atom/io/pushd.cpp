@@ -1337,11 +1337,9 @@ template void DirectoryStack::asyncPushd<fs::path>(
     const fs::path&, const std::function<void(const std::error_code&)>&);
 template void DirectoryStack::asyncPushd<std::string>(
     const std::string&, const std::function<void(const std::error_code&)>&);
-// Add more instantiations as needed...
 
 template auto DirectoryStack::pushd<fs::path>(const fs::path&) -> Task<void>;
 template auto DirectoryStack::pushd<std::string>(const std::string&)
     -> Task<void>;
-// Add more instantiations as needed...
 
 }  // namespace atom::io

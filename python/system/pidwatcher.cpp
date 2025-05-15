@@ -5,7 +5,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(pidwatcher, m) {
@@ -202,11 +201,10 @@ Examples:
     ...     print(f"Process {process_info.name} (PID: {process_info.pid}) exited.")
     >>> watcher.set_exit_callback(on_exit)
 )")
-        .def(
-            "set_monitor_function",
-            &atom::system::PidWatcher::setMonitorFunction, py::arg("callback"),
-            py::arg("interval"),
-            R"(Sets the monitor function to be executed at specified intervals.
+        .def("set_monitor_function",
+             &atom::system::PidWatcher::setMonitorFunction, py::arg("callback"),
+             py::arg("interval"),
+             R"(Sets the monitor function to be executed at specified intervals.
 
 Args:
     callback: The monitor function to set, taking a ProcessInfo parameter.
@@ -316,7 +314,7 @@ Examples:
 )")
         .def(
             "get_process_info",
-            [](const atom::system::PidWatcher& self, pid_t pid) {
+            [](atom::system::PidWatcher& self, pid_t pid) -> py::object {
                 auto info = self.getProcessInfo(pid);
                 if (!info.has_value()) {
                     return py::none();

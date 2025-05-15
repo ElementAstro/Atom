@@ -5,7 +5,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(priority, m) {
@@ -383,7 +382,7 @@ Examples:
     // Factory function for thread priority context
     m.def(
         "thread_priority",
-        [](atom::system::PriorityManager::PriorityLevel level) {
+        [&m](atom::system::PriorityManager::PriorityLevel level) {
             return m.attr("ThreadPriorityContext")(level);
         },
         py::arg("level"),
@@ -445,7 +444,7 @@ Examples:
     // Factory function for process priority context
     m.def(
         "process_priority",
-        [](atom::system::PriorityManager::PriorityLevel level, int pid) {
+        [&m](atom::system::PriorityManager::PriorityLevel level, int pid) {
             return m.attr("ProcessPriorityContext")(level, pid);
         },
         py::arg("level"), py::arg("pid") = 0,

@@ -4,7 +4,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 // Helper function to convert a Python iterable to a vector
@@ -42,8 +41,15 @@ Examples:
             .def(py::init<const std::vector<T>&>(), py::arg("elements"));
 
     // ======== Filters and Reorders ========
-    cls.def("where", &atom::utils::Enumerable<T>::where, py::arg("predicate"),
-            R"(Filters elements based on a predicate function.
+    cls.def(
+        "where",
+        [](const atom::utils::Enumerable<T>& self, py::function predicate) {
+            return self.where([predicate](const T& element) {
+                return predicate(element).template cast<bool>();
+            });
+        },
+        py::arg("predicate"),
+        R"(Filters elements based on a predicate function.
 
 Args:
     predicate: A function that takes an element and returns a boolean.
@@ -56,7 +62,12 @@ Examples:
 )");
 
     cls.def(
-        "where_with_index", &atom::utils::Enumerable<T>::whereI,
+        "where_with_index",
+        [](const atom::utils::Enumerable<T>& self, py::function predicate) {
+            return self.whereI([predicate](const T& element, size_t index) {
+                return predicate(element, index).template cast<bool>();
+            });
+        },
         py::arg("predicate"),
         R"(Filters elements based on a predicate function that includes the element's index.
 
@@ -84,7 +95,12 @@ Examples:
 )");
 
     cls.def(
-        "take_while", &atom::utils::Enumerable<T>::takeWhile,
+        "take_while",
+        [](const atom::utils::Enumerable<T>& self, py::function predicate) {
+            return self.takeWhile([predicate](const T& element) {
+                return predicate(element).template cast<bool>();
+            });
+        },
         py::arg("predicate"),
         R"(Takes elements from the beginning until the predicate returns False.
 
@@ -99,7 +115,12 @@ Examples:
 )");
 
     cls.def(
-        "take_while_with_index", &atom::utils::Enumerable<T>::takeWhileI,
+        "take_while_with_index",
+        [](const atom::utils::Enumerable<T>& self, py::function predicate) {
+            return self.takeWhileI([predicate](const T& element, size_t index) {
+                return predicate(element, index).template cast<bool>();
+            });
+        },
         py::arg("predicate"),
         R"(Takes elements until the predicate function that includes the element's index returns False.
 
@@ -127,7 +148,12 @@ Examples:
 )");
 
     cls.def(
-        "skip_while", &atom::utils::Enumerable<T>::skipWhile,
+        "skip_while",
+        [](const atom::utils::Enumerable<T>& self, py::function predicate) {
+            return self.skipWhile([predicate](const T& element) {
+                return predicate(element).template cast<bool>();
+            });
+        },
         py::arg("predicate"),
         R"(Skips elements from the beginning while the predicate returns True.
 
@@ -142,7 +168,12 @@ Examples:
 )");
 
     cls.def(
-        "skip_while_with_index", &atom::utils::Enumerable<T>::skipWhileI,
+        "skip_while_with_index",
+        [](const atom::utils::Enumerable<T>& self, py::function predicate) {
+            return self.skipWhileI([predicate](const T& element, size_t index) {
+                return predicate(element, index).template cast<bool>();
+            });
+        },
         py::arg("predicate"),
         R"(Skips elements while the predicate function that includes the element's index returns True.
 
@@ -158,7 +189,7 @@ Examples:
 
     cls.def(
         "order_by",
-        py::overload_cast<>(&atom::utils::Enumerable<T>::orderBy, py::const_),
+        [](const atom::utils::Enumerable<T>& self) { return self.orderBy(); },
         R"(Orders elements in ascending order.
 
 Returns:
@@ -168,12 +199,15 @@ Examples:
     >>> data.order_by()
 )");
 
-    cls.def("order_by",
-            py::overload_cast<
-                decltype(std::declval<std::function<auto(const T&)->auto>>())>(
-                &atom::utils::Enumerable<T>::orderBy, py::const_),
-            py::arg("key_selector"),
-            R"(Orders elements by a key selector function.
+    cls.def(
+        "order_by",
+        [](const atom::utils::Enumerable<T>& self, py::function key_selector) {
+            return self.orderBy([key_selector](const T& element) {
+                return key_selector(element);
+            });
+        },
+        py::arg("key_selector"),
+        R"(Orders elements by a key selector function.
 
 Args:
     key_selector: A function that extracts a key from each element for sorting.
@@ -187,7 +221,7 @@ Examples:
 
     cls.def(
         "distinct",
-        py::overload_cast<>(&atom::utils::Enumerable<T>::distinct, py::const_),
+        [](const atom::utils::Enumerable<T>& self) { return self.distinct(); },
         R"(Returns distinct elements from the sequence.
 
 Returns:
@@ -197,12 +231,15 @@ Examples:
     >>> data.distinct()
 )");
 
-    cls.def("distinct",
-            py::overload_cast<
-                decltype(std::declval<std::function<auto(const T&)->auto>>())>(
-                &atom::utils::Enumerable<T>::distinct, py::const_),
-            py::arg("key_selector"),
-            R"(Returns elements with distinct keys from the sequence.
+    cls.def(
+        "distinct",
+        [](const atom::utils::Enumerable<T>& self, py::function key_selector) {
+            return self.distinct([key_selector](const T& element) {
+                return key_selector(element);
+            });
+        },
+        py::arg("key_selector"),
+        R"(Returns elements with distinct keys from the sequence.
 
 Args:
     key_selector: A function that extracts a key from each element for comparison.
@@ -265,7 +302,13 @@ Examples:
 
     // Transformers
     cls.def(
-        "select", &atom::utils::Enumerable<T>::template select<py::object>,
+        "select",
+        [](const atom::utils::Enumerable<T>& self, py::function transformer) {
+            return self.template select<py::object>(
+                [transformer](const T& element) {
+                    return transformer(element);
+                });
+        },
         py::arg("transformer"),
         R"(Projects each element to a new form using a transformer function.
 
@@ -281,7 +324,12 @@ Examples:
 
     cls.def(
         "select_with_index",
-        &atom::utils::Enumerable<T>::template selectI<py::object>,
+        [](const atom::utils::Enumerable<T>& self, py::function transformer) {
+            return self.template selectI<py::object>(
+                [transformer](const T& element, size_t index) {
+                    return transformer(element, index);
+                });
+        },
         py::arg("transformer"),
         R"(Projects each element using a transformer function that includes the element's index.
 
@@ -295,10 +343,16 @@ Examples:
     >>> data.select_with_index(lambda x, i: x * i)
 )");
 
-    cls.def("group_by",
-            &atom::utils::Enumerable<T>::template groupBy<py::object>,
-            py::arg("key_selector"),
-            R"(Groups elements by a key selector function.
+    cls.def(
+        "group_by",
+        [](const atom::utils::Enumerable<T>& self, py::function key_selector) {
+            return self.template groupBy<py::object>(
+                [key_selector](const T& element) {
+                    return key_selector(element);
+                });
+        },
+        py::arg("key_selector"),
+        R"(Groups elements by a key selector function.
 
 Args:
     key_selector: A function that extracts a key from each element for grouping.
@@ -312,7 +366,14 @@ Examples:
 
     cls.def(
         "select_many",
-        &atom::utils::Enumerable<T>::template selectMany<py::object>,
+        [](const atom::utils::Enumerable<T>& self,
+           py::function collection_selector) {
+            return self.template selectMany<py::object>(
+                [collection_selector](const T& element) {
+                    return py_iterable_to_vector<py::object>(
+                        collection_selector(element));
+                });
+        },
         py::arg("collection_selector"),
         R"(Projects each element to a sequence and flattens the resulting sequences.
 
@@ -328,7 +389,12 @@ Examples:
 
     // Aggregators
     cls.def(
-        "all", &atom::utils::Enumerable<T>::all,
+        "all",
+        [](const atom::utils::Enumerable<T>& self, py::function predicate) {
+            return self.all([predicate](const T& element) {
+                return predicate(element).template cast<bool>();
+            });
+        },
         py::arg("predicate") = py::cpp_function([](const T&) { return true; }),
         R"(Determines whether all elements satisfy a condition.
 
@@ -343,7 +409,12 @@ Examples:
 )");
 
     cls.def(
-        "any", &atom::utils::Enumerable<T>::any,
+        "any",
+        [](const atom::utils::Enumerable<T>& self, py::function predicate) {
+            return self.any([predicate](const T& element) {
+                return predicate(element).template cast<bool>();
+            });
+        },
         py::arg("predicate") = py::cpp_function([](const T&) { return true; }),
         R"(Determines whether any element satisfies a condition.
 
@@ -357,9 +428,10 @@ Examples:
     >>> data.any(lambda x: x < 0)  # Check if any elements are negative
 )");
 
-    cls.def("sum",
-            py::overload_cast<>(&atom::utils::Enumerable<T>::sum, py::const_),
-            R"(Computes the sum of the sequence elements.
+    cls.def(
+        "sum",
+        [](const atom::utils::Enumerable<T>& self) { return self.sum(); },
+        R"(Computes the sum of the sequence elements.
 
 Returns:
     The sum of all elements.
@@ -370,9 +442,11 @@ Examples:
 
     cls.def(
         "sum",
-        py::overload_cast<
-            decltype(std::declval<std::function<double(const T&)>>())>(
-            &atom::utils::Enumerable<T>::template sum<double>, py::const_),
+        [](const atom::utils::Enumerable<T>& self, py::function selector) {
+            return self.template sum<double>([selector](const T& element) {
+                return selector(element).template cast<double>();
+            });
+        },
         py::arg("selector"),
         R"(Computes the sum of the sequence elements after applying a selector function.
 
@@ -386,9 +460,10 @@ Examples:
     >>> data.sum(lambda x: x.value)  # Sum the 'value' field of each element
 )");
 
-    cls.def("avg",
-            py::overload_cast<>(&atom::utils::Enumerable<T>::avg, py::const_),
-            R"(Computes the average of the sequence elements.
+    cls.def(
+        "avg",
+        [](const atom::utils::Enumerable<T>& self) { return self.avg(); },
+        R"(Computes the average of the sequence elements.
 
 Returns:
     The average of all elements.
@@ -399,9 +474,11 @@ Examples:
 
     cls.def(
         "avg",
-        py::overload_cast<
-            decltype(std::declval<std::function<double(const T&)>>())>(
-            &atom::utils::Enumerable<T>::template avg<double>, py::const_),
+        [](const atom::utils::Enumerable<T>& self, py::function selector) {
+            return self.template avg<double>([selector](const T& element) {
+                return selector(element).template cast<double>();
+            });
+        },
         py::arg("selector"),
         R"(Computes the average of the sequence elements after applying a selector function.
 
@@ -415,9 +492,10 @@ Examples:
     >>> data.avg(lambda x: x.value)  # Average the 'value' field of each element
 )");
 
-    cls.def("min",
-            py::overload_cast<>(&atom::utils::Enumerable<T>::min, py::const_),
-            R"(Returns the minimum element in the sequence.
+    cls.def(
+        "min",
+        [](const atom::utils::Enumerable<T>& self) { return self.min(); },
+        R"(Returns the minimum element in the sequence.
 
 Returns:
     The minimum element.
@@ -428,9 +506,10 @@ Examples:
 
     cls.def(
         "min",
-        py::overload_cast<
-            decltype(std::declval<std::function<auto(const T&)->auto>>())>(
-            &atom::utils::Enumerable<T>::min, py::const_),
+        [](const atom::utils::Enumerable<T>& self, py::function selector) {
+            return self.min(
+                [selector](const T& element) { return selector(element); });
+        },
         py::arg("selector"),
         R"(Returns the element with the minimum value after applying a selector function.
 
@@ -444,9 +523,10 @@ Examples:
     >>> data.min(lambda x: x.age)  # Find element with minimum age
 )");
 
-    cls.def("max",
-            py::overload_cast<>(&atom::utils::Enumerable<T>::max, py::const_),
-            R"(Returns the maximum element in the sequence.
+    cls.def(
+        "max",
+        [](const atom::utils::Enumerable<T>& self) { return self.max(); },
+        R"(Returns the maximum element in the sequence.
 
 Returns:
     The maximum element.
@@ -457,9 +537,10 @@ Examples:
 
     cls.def(
         "max",
-        py::overload_cast<
-            decltype(std::declval<std::function<auto(const T&)->auto>>())>(
-            &atom::utils::Enumerable<T>::max, py::const_),
+        [](const atom::utils::Enumerable<T>& self, py::function selector) {
+            return self.max(
+                [selector](const T& element) { return selector(element); });
+        },
         py::arg("selector"),
         R"(Returns the element with the maximum value after applying a selector function.
 
@@ -473,9 +554,10 @@ Examples:
     >>> data.max(lambda x: x.score)  # Find element with maximum score
 )");
 
-    cls.def("count",
-            py::overload_cast<>(&atom::utils::Enumerable<T>::count, py::const_),
-            R"(Returns the number of elements in the sequence.
+    cls.def(
+        "count",
+        [](const atom::utils::Enumerable<T>& self) { return self.count(); },
+        R"(Returns the number of elements in the sequence.
 
 Returns:
     The count of elements.
@@ -484,12 +566,15 @@ Examples:
     >>> data.count()
 )");
 
-    cls.def("count",
-            py::overload_cast<
-                decltype(std::declval<std::function<bool(const T&)>>())>(
-                &atom::utils::Enumerable<T>::count, py::const_),
-            py::arg("predicate"),
-            R"(Returns the number of elements that satisfy a condition.
+    cls.def(
+        "count",
+        [](const atom::utils::Enumerable<T>& self, py::function predicate) {
+            return self.count([predicate](const T& element) {
+                return predicate(element).template cast<bool>();
+            });
+        },
+        py::arg("predicate"),
+        R"(Returns the number of elements that satisfy a condition.
 
 Args:
     predicate: A function that tests each element.
@@ -531,9 +616,10 @@ Examples:
     >>> data.element_at(2)  # Get the third element
 )");
 
-    cls.def("first",
-            py::overload_cast<>(&atom::utils::Enumerable<T>::first, py::const_),
-            R"(Returns the first element of the sequence.
+    cls.def(
+        "first",
+        [](const atom::utils::Enumerable<T>& self) { return self.first(); },
+        R"(Returns the first element of the sequence.
 
 Returns:
     The first element.
@@ -545,12 +631,15 @@ Examples:
     >>> data.first()
 )");
 
-    cls.def("first",
-            py::overload_cast<
-                decltype(std::declval<std::function<bool(const T&)>>())>(
-                &atom::utils::Enumerable<T>::first, py::const_),
-            py::arg("predicate"),
-            R"(Returns the first element that satisfies a condition.
+    cls.def(
+        "first",
+        [](const atom::utils::Enumerable<T>& self, py::function predicate) {
+            return self.first([predicate](const T& element) {
+                return predicate(element).template cast<bool>();
+            });
+        },
+        py::arg("predicate"),
+        R"(Returns the first element that satisfies a condition.
 
 Args:
     predicate: A function that tests each element.
@@ -565,10 +654,12 @@ Examples:
     >>> data.first(lambda x: x > 10)  # First element greater than 10
 )");
 
-    cls.def("first_or_default",
-            py::overload_cast<>(&atom::utils::Enumerable<T>::firstOrDefault,
-                                py::const_),
-            R"(Returns the first element or None if the sequence is empty.
+    cls.def(
+        "first_or_default",
+        [](const atom::utils::Enumerable<T>& self) {
+            return self.firstOrDefault();
+        },
+        R"(Returns the first element or None if the sequence is empty.
 
 Returns:
     The first element or None.
@@ -579,9 +670,11 @@ Examples:
 
     cls.def(
         "first_or_default",
-        py::overload_cast<
-            decltype(std::declval<std::function<bool(const T&)>>())>(
-            &atom::utils::Enumerable<T>::firstOrDefault, py::const_),
+        [](const atom::utils::Enumerable<T>& self, py::function predicate) {
+            return self.firstOrDefault([predicate](const T& element) {
+                return predicate(element).template cast<bool>();
+            });
+        },
         py::arg("predicate"),
         R"(Returns the first element that satisfies a condition or None if no such element exists.
 
@@ -595,9 +688,10 @@ Examples:
     >>> data.first_or_default(lambda x: x > 100)
 )");
 
-    cls.def("last",
-            py::overload_cast<>(&atom::utils::Enumerable<T>::last, py::const_),
-            R"(Returns the last element of the sequence.
+    cls.def(
+        "last",
+        [](const atom::utils::Enumerable<T>& self) { return self.last(); },
+        R"(Returns the last element of the sequence.
 
 Returns:
     The last element.
@@ -609,12 +703,15 @@ Examples:
     >>> data.last()
 )");
 
-    cls.def("last",
-            py::overload_cast<
-                decltype(std::declval<std::function<bool(const T&)>>())>(
-                &atom::utils::Enumerable<T>::last, py::const_),
-            py::arg("predicate"),
-            R"(Returns the last element that satisfies a condition.
+    cls.def(
+        "last",
+        [](const atom::utils::Enumerable<T>& self, py::function predicate) {
+            return self.last([predicate](const T& element) {
+                return predicate(element).template cast<bool>();
+            });
+        },
+        py::arg("predicate"),
+        R"(Returns the last element that satisfies a condition.
 
 Args:
     predicate: A function that tests each element.
@@ -629,10 +726,12 @@ Examples:
     >>> data.last(lambda x: x < 20)  # Last element less than 20
 )");
 
-    cls.def("last_or_default",
-            py::overload_cast<>(&atom::utils::Enumerable<T>::lastOrDefault,
-                                py::const_),
-            R"(Returns the last element or None if the sequence is empty.
+    cls.def(
+        "last_or_default",
+        [](const atom::utils::Enumerable<T>& self) {
+            return self.lastOrDefault();
+        },
+        R"(Returns the last element or None if the sequence is empty.
 
 Returns:
     The last element or None.
@@ -643,9 +742,11 @@ Examples:
 
     cls.def(
         "last_or_default",
-        py::overload_cast<
-            decltype(std::declval<std::function<bool(const T&)>>())>(
-            &atom::utils::Enumerable<T>::lastOrDefault, py::const_),
+        [](const atom::utils::Enumerable<T>& self, py::function predicate) {
+            return self.lastOrDefault([predicate](const T& element) {
+                return predicate(element).template cast<bool>();
+            });
+        },
         py::arg("predicate"),
         R"(Returns the last element that satisfies a condition or None if no such element exists.
 
@@ -681,8 +782,10 @@ Examples:
 )");
 
     // Python-specific methods
-    cls.def("__len__", &atom::utils::Enumerable<T>::count,
-            "Support for len() function.");
+    cls.def(
+        "__len__",
+        [](const atom::utils::Enumerable<T>& self) { return self.count(); },
+        "Support for len() function.");
 
     cls.def(
         "__iter__",

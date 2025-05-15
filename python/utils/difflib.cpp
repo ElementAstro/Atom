@@ -86,10 +86,21 @@ Returns:
     - j1, j2: Start and end indices in the second sequence
 )");
 
-    // Differ class binding
-    m.def("compare", &atom::utils::Differ::compare, py::arg("vec1"),
-          py::arg("vec2"),
-          R"(Compare two sequences of strings and return the differences.
+    // Bind Differ class first, then its methods
+    py::class_<atom::utils::Differ>(m, "Differ",
+                                    "Class for comparing sequences of strings")
+        .def(py::init<>(), "Create a new Differ instance");
+
+    // Add the static or free functions properly
+    m.def(
+        "compare",
+        [](const std::vector<std::string>& vec1,
+           const std::vector<std::string>& vec2) {
+            atom::utils::Differ differ;
+            return differ.compare(vec1, vec2);
+        },
+        py::arg("vec1"), py::arg("vec2"),
+        R"(Compare two sequences of strings and return the differences.
 
 Args:
     vec1: The first sequence of strings.
@@ -106,10 +117,17 @@ Examples:
     ['  hello', '- world', '+ there']
 )");
 
-    m.def("unified_diff", &atom::utils::Differ::unifiedDiff, py::arg("vec1"),
-          py::arg("vec2"), py::arg("label1") = "a", py::arg("label2") = "b",
-          py::arg("context") = 3,
-          R"(Generate a unified diff between two sequences.
+    m.def(
+        "unified_diff",
+        [](const std::vector<std::string>& vec1,
+           const std::vector<std::string>& vec2, std::string_view label1,
+           std::string_view label2, int context) {
+            atom::utils::Differ differ;  // Create an instance
+            return differ.unifiedDiff(vec1, vec2, label1, label2, context);
+        },
+        py::arg("vec1"), py::arg("vec2"), py::arg("label1") = "a",
+        py::arg("label2") = "b", py::arg("context") = 3,
+        R"(Generate a unified diff between two sequences.
 
 Args:
     vec1: The first sequence of strings.
@@ -129,18 +147,23 @@ Examples:
     ['--- a', '+++ b', '@@ -1,2 +1,2 @@', ' hello', '-world', '+there']
 )");
 
-    // HtmlDiff functions
+    // Create HtmlDiff class binding first
+    py::class_<atom::utils::HtmlDiff> htmlDiffClass(
+        m, "HtmlDiff", "Class for generating HTML diffs");
+    htmlDiffClass.def(py::init<>(), "Create a new HtmlDiff instance");
+
+    // HtmlDiff functions that correctly create an instance
     m.def(
         "make_file",
         [](std::span<const std::string> fromlines,
            std::span<const std::string> tolines, std::string_view fromdesc,
-           std::string_view todesc) {
-            auto result = atom::utils::HtmlDiff::makeFile(fromlines, tolines,
-                                                          fromdesc, todesc);
+           std::string_view todesc) -> std::string {
+            atom::utils::HtmlDiff differ;  // Create an instance
+            auto result = differ.makeFile(fromlines, tolines, fromdesc, todesc);
             if (result.has_value()) {
                 return result.value();
             } else {
-                throw std::runtime_error(result.error());
+                throw std::runtime_error(result.error().error());
             }
         },
         py::arg("fromlines"), py::arg("tolines"), py::arg("fromdesc") = "",
@@ -171,12 +194,13 @@ Examples:
         [](std::span<const std::string> fromlines,
            std::span<const std::string> tolines, std::string_view fromdesc,
            std::string_view todesc) {
-            auto result = atom::utils::HtmlDiff::makeTable(fromlines, tolines,
-                                                           fromdesc, todesc);
+            atom::utils::HtmlDiff differ;  // Create an instance
+            auto result =
+                differ.makeTable(fromlines, tolines, fromdesc, todesc);
             if (result.has_value()) {
                 return result.value();
             } else {
-                throw std::runtime_error(result.error());
+                throw std::runtime_error(result.error().error());
             }
         },
         py::arg("fromlines"), py::arg("tolines"), py::arg("fromdesc") = "",
@@ -203,10 +227,9 @@ Examples:
 )");
 
     // Get close matches function
-    m.def(
-        "get_close_matches", &atom::utils::getCloseMatches, py::arg("word"),
-        py::arg("possibilities"), py::arg("n") = 3, py::arg("cutoff") = 0.6,
-        R"(Get a list of close matches to a word from a list of possibilities.
+    m.def("get_close_matches", &atom::utils::getCloseMatches, py::arg("word"),
+          py::arg("possibilities"), py::arg("n") = 3, py::arg("cutoff") = 0.6,
+          R"(Get a list of close matches to a word from a list of possibilities.
 
 Args:
     word: The word to match.

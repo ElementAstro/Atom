@@ -4,7 +4,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(process_info, m) {
@@ -169,7 +168,7 @@ Examples:
     >>> fd.path = "/etc/hosts"
     >>> fd.type = "regular"
     >>> fd.mode = "r"
-    >>> print(f"FD {fd.fd}: {fd.path} ({fd.type}, {fd.mode})")
+    >>> print(f"FD {fd.fd}: {fd.path} ({fd.type}, {fd.mode}) ")
 )")
         .def(py::init<>())
         .def_readwrite("fd", &atom::system::FileDescriptor::fd, 
@@ -353,7 +352,8 @@ Examples:
 )");
 
     // Process struct binding
-    py::class_<atom::system::Process>(m, "Process", 
+    py::class_<atom::system::Process>(
+        m, "Process",
         R"(Represents a system process with detailed information.
 
 This structure contains comprehensive information about a system process,
@@ -366,51 +366,50 @@ Examples:
     >>> proc.pid = 1234
     >>> proc.name = "example"
     >>> proc.command = "./example --arg1=value"
-    >>> print(f"Process {proc.name} (PID: {proc.pid})")
+    >>> print(f"Process {proc.name} (PID: {proc.pid}) ")
 )")
         .def(py::init<>())
-        .def_readwrite("pid", &atom::system::Process::pid, 
-                      "Process ID")
-        .def_readwrite("ppid", &atom::system::Process::ppid, 
-                      "Parent process ID")
-        .def_readwrite("name", &atom::system::Process::name, 
-                      "Process name")
-        .def_readwrite("command", &atom::system::Process::command, 
-                      "Command used to start the process")
-        .def_readwrite("output", &atom::system::Process::output, 
-                      "Process output")
-        .def_readwrite("path", &atom::system::Process::path, 
-                      "Path to the process executable")
-        .def_readwrite("status", &atom::system::Process::status, 
-                      "Process status")
-        .def_readwrite("username", &atom::system::Process::username, 
-                      "Username of the process owner")
-        .def_readwrite("priority", &atom::system::Process::priority, 
-                      "Process priority")
-        .def_readwrite("start_time", &atom::system::Process::startTime, 
-                      "Process start time")
-        .def_readwrite("resources", &atom::system::Process::resources, 
-                      "Process resource usage information")
-        .def_readwrite("environment", &atom::system::Process::environment, 
-                      "Process environment variables")
-        .def_readwrite("is_background", &atom::system::Process::isBackground, 
-                      "Whether the process is running in the background")
+        .def_readwrite("pid", &atom::system::Process::pid, "Process ID")
+        .def_readwrite("ppid", &atom::system::Process::ppid,
+                       "Parent process ID")
+        .def_readwrite("name", &atom::system::Process::name, "Process name")
+        .def_readwrite("command", &atom::system::Process::command,
+                       "Command used to start the process")
+        .def_readwrite("output", &atom::system::Process::output,
+                       "Process output")
+        .def_readwrite("path", &atom::system::Process::path,
+                       "Path to the process executable")
+        .def_readwrite("status", &atom::system::Process::status,
+                       "Process status")
+        .def_readwrite("username", &atom::system::Process::username,
+                       "Username of the process owner")
+        .def_readwrite("priority", &atom::system::Process::priority,
+                       "Process priority")
+        .def_readwrite("start_time", &atom::system::Process::startTime,
+                       "Process start time")
+        .def_readwrite("resources", &atom::system::Process::resources,
+                       "Process resource usage information")
+        .def_readwrite("environment", &atom::system::Process::environment,
+                       "Process environment variables")
+        .def_readwrite("is_background", &atom::system::Process::isBackground,
+                       "Whether the process is running in the background")
 #ifdef _WIN32
-        .def_property("handle",
-                      [](const atom::system::Process& proc) {
-        return reinterpret_cast<intptr_t>(proc.handle);
-                      },
-                      [](atom::system::Process& proc, intptr_t handle) {
-        proc.handle = reinterpret_cast<void*>(handle);
-                      },
-                      "Handle to the process (Windows only)")
-        .def_readwrite("modules", &atom::system::Process::modules, 
+        .def_property(
+            "handle",
+            [](const atom::system::Process& proc) {
+                return reinterpret_cast<intptr_t>(proc.handle);
+            },
+            [](atom::system::Process& proc, intptr_t handle) {
+                proc.handle = reinterpret_cast<void*>(handle);
+            },
+            "Handle to the process (Windows only)")
+        .def_readwrite("modules", &atom::system::Process::modules,
                        "List of loaded modules")
 #endif
         .def("__repr__", [](const atom::system::Process& proc) {
-        return "<Process pid=" + std::to_string(proc.pid) + " name=\"" +
-               proc.name + "\" status=\"" + proc.status + "\" username=\"" +
-               proc.username + "\">";
+            return "<Process pid=" + std::to_string(proc.pid) + " name=\"" +
+                   proc.name + "\" status=\"" + proc.status + "\" username=\"" +
+                   proc.username + "\">";
         });
 
     // Helper functions
@@ -451,29 +450,29 @@ Examples:
 )");
 
     m.def(
-         "format_cpu_usage",
-         [](double cpu_usage) {
-             std::string result;
-             if (cpu_usage < 0.1) {
-                 result = "Idle";
-             } else if (cpu_usage < 5.0) {
-                 result = "Low";
-             } else if (cpu_usage < 30.0) {
-                 result = "Moderate";
-             } else if (cpu_usage < 70.0) {
-                 result = "High";
-             } else {
-                 result = "Very High";
-             }
+        "format_cpu_usage",
+        [](double cpu_usage) {
+            std::string result;
+            if (cpu_usage < 0.1) {
+                result = "Idle";
+            } else if (cpu_usage < 5.0) {
+                result = "Low";
+            } else if (cpu_usage < 30.0) {
+                result = "Moderate";
+            } else if (cpu_usage < 70.0) {
+                result = "High";
+            } else {
+                result = "Very High";
+            }
 
-             char buffer[32];
-             snprintf(buffer, sizeof(buffer), " (%.1f%%)", cpu_usage);
-             result += buffer;
+            char buffer[32];
+            snprintf(buffer, sizeof(buffer), " (%.1f%%)", cpu_usage);
+            result += buffer;
 
-             return result;
-         },
-         py::arg("cpu_usage"),
-         R"(Format CPU usage percentage into a descriptive category.
+            return result;
+        },
+        py::arg("cpu_usage"),
+        R"(Format CPU usage percentage into a descriptive category.
 
 Args:
     cpu_usage: CPU usage percentage (0-100)
@@ -484,33 +483,33 @@ Returns:
 Examples:
     >>> from atom.system import process_info
     >>> description = process_info.format_cpu_usage(45.2)
-    >>> print(description)  # "High (45.2%)") ");
+    >>> print(description)  # "High (45.2%) ")");
 
-        m.def(
-            "format_memory_usage",
-            [](std::size_t memory_bytes) {
-                const char* units[] = {"B", "KB", "MB", "GB", "TB"};
-                int unit_index = 0;
-                double size = static_cast<double>(memory_bytes);
+    m.def(
+        "format_memory_usage",
+        [](std::size_t memory_bytes) {
+            const char* units[] = {"B", "KB", "MB", "GB", "TB"};
+            int unit_index = 0;
+            double size = static_cast<double>(memory_bytes);
 
-                while (size >= 1024.0 && unit_index < 4) {
-                    size /= 1024.0;
-                    unit_index++;
-                }
+            while (size >= 1024.0 && unit_index < 4) {
+                size /= 1024.0;
+                unit_index++;
+            }
 
-                char buffer[32];
-                if (unit_index == 0) {
-                    snprintf(buffer, sizeof(buffer), "%zu %s",
-                             static_cast<std::size_t>(size), units[unit_index]);
-                } else {
-                    snprintf(buffer, sizeof(buffer), "%.2f %s", size,
-                             units[unit_index]);
-                }
+            char buffer[32];
+            if (unit_index == 0) {
+                snprintf(buffer, sizeof(buffer), "%zu %s",
+                         static_cast<std::size_t>(size), units[unit_index]);
+            } else {
+                snprintf(buffer, sizeof(buffer), "%.2f %s", size,
+                         units[unit_index]);
+            }
 
-                return std::string(buffer);
-            },
-            py::arg("memory_bytes"),
-            R"(Format memory usage in bytes to a human-readable string.
+            return std::string(buffer);
+        },
+        py::arg("memory_bytes"),
+        R"(Format memory usage in bytes to a human-readable string.
 
 Args:
     memory_bytes: Memory usage in bytes
@@ -558,36 +557,38 @@ Examples:
 )");
 
     // Create and return a Process object filled with sample data
-    m.def("create_sample_process", []() {
-        atom::system::Process proc;
-        proc.pid = 12345;
-        proc.ppid = 1;
-        proc.name = "sample_process";
-        proc.command = "./sample_process --arg=value";
-        proc.output = "Sample output";
-        proc.path = fs::path("/usr/bin/sample_process");
-        proc.status = "Running";
-        proc.username = "user";
-        proc.priority = 0;
-        proc.startTime =
-            std::chrono::system_clock::now() - std::chrono::hours(1);
+    m.def(
+        "create_sample_process",
+        []() {
+            atom::system::Process proc;
+            proc.pid = 12345;
+            proc.ppid = 1;
+            proc.name = "sample_process";
+            proc.command = "./sample_process --arg=value";
+            proc.output = "Sample output";
+            proc.path = fs::path("/usr/bin/sample_process");
+            proc.status = "Running";
+            proc.username = "user";
+            proc.priority = 0;
+            proc.startTime =
+                std::chrono::system_clock::now() - std::chrono::hours(1);
 
-        proc.resources.cpuUsage = 5.2;
-        proc.resources.memUsage = 104857600;  // 100 MB
-        proc.resources.vmUsage = 209715200;   // 200 MB
-        proc.resources.ioRead = 1048576;      // 1 MB
-        proc.resources.ioWrite = 524288;      // 512 KB
-        proc.resources.threadCount = 4;
-        proc.resources.openFiles = 12;
+            proc.resources.cpuUsage = 5.2;
+            proc.resources.memUsage = 104857600;  // 100 MB
+            proc.resources.vmUsage = 209715200;   // 200 MB
+            proc.resources.ioRead = 1048576;      // 1 MB
+            proc.resources.ioWrite = 524288;      // 512 KB
+            proc.resources.threadCount = 4;
+            proc.resources.openFiles = 12;
 
-        proc.environment["PATH"] = "/usr/bin:/usr/local/bin";
-        proc.environment["HOME"] = "/home/user";
+            proc.environment["PATH"] = "/usr/bin:/usr/local/bin";
+            proc.environment["HOME"] = "/home/user";
 
-        proc.isBackground = false;
+            proc.isBackground = false;
 
-        return proc;
-    },
-    R"(Create a sample Process object with predefined values for testing.
+            return proc;
+        },
+        R"(Create a sample Process object with predefined values for testing.
 
 Returns:
     A Process object filled with sample data.
@@ -596,7 +597,7 @@ Examples:
     >>> from atom.system import process_info
     >>> # Get a sample process for testing
     >>> sample = process_info.create_sample_process()
-    >>> print(f"Sample process: {sample.name} (PID: {sample.pid})")
+    >>> print(f"Sample process: {sample.name} (PID: {sample.pid}) ")
     >>> print(f"CPU: {sample.resources.cpu_usage}%, Memory: {sample.resources.mem_usage / 1024 / 1024} MB")
 )");
 }

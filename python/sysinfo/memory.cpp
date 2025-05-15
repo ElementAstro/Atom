@@ -4,7 +4,7 @@
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-
+#include <thread>
 
 namespace py = pybind11;
 using namespace atom::system;
@@ -571,7 +571,7 @@ Examples:
     // Factory function for memory monitor context
     m.def(
         "monitor_memory",
-        [](py::function callback) {
+        [&m](py::function callback) {
             return m.attr("MemoryMonitorContext")(callback);
         },
         py::arg("callback"),
@@ -647,33 +647,38 @@ Examples:
 )");
 
     // Get memory summary function
-    m.def("get_memory_summary", []() {
-        auto stats = getDetailedMemoryStats();
+    m.def(
+        "get_memory_summary",
+        []() {
+            auto stats = getDetailedMemoryStats();
 
-        py::dict summary;
-        summary["total_gb"] = static_cast<double>(stats.totalPhysicalMemory) /
-                              (1024 * 1024 * 1024);
-        summary["available_gb"] =
-            static_cast<double>(stats.availablePhysicalMemory) /
-            (1024 * 1024 * 1024);
-        summary["used_gb"] =
-            static_cast<double>(stats.totalPhysicalMemory -
-                                stats.availablePhysicalMemory) /
-            (1024 * 1024 * 1024);
-        summary["usage_percent"] = stats.memoryLoadPercentage;
-        summary["swap_total_gb"] =
-            static_cast<double>(stats.swapMemoryTotal) / (1024 * 1024 * 1024);
-        summary["swap_used_gb"] =
-            static_cast<double>(stats.swapMemoryUsed) / (1024 * 1024 * 1024);
-        summary["swap_usage_percent"] =
-            (stats.swapMemoryTotal > 0)
-                ? (100.0 * stats.swapMemoryUsed / stats.swapMemoryTotal)
-                : 0.0;
-        summary["page_faults"] = stats.pageFaultCount;
+            py::dict summary;
+            summary["total_gb"] =
+                static_cast<double>(stats.totalPhysicalMemory) /
+                (1024 * 1024 * 1024);
+            summary["available_gb"] =
+                static_cast<double>(stats.availablePhysicalMemory) /
+                (1024 * 1024 * 1024);
+            summary["used_gb"] =
+                static_cast<double>(stats.totalPhysicalMemory -
+                                    stats.availablePhysicalMemory) /
+                (1024 * 1024 * 1024);
+            summary["usage_percent"] = stats.memoryLoadPercentage;
+            summary["swap_total_gb"] =
+                static_cast<double>(stats.swapMemoryTotal) /
+                (1024 * 1024 * 1024);
+            summary["swap_used_gb"] =
+                static_cast<double>(stats.swapMemoryUsed) /
+                (1024 * 1024 * 1024);
+            summary["swap_usage_percent"] =
+                (stats.swapMemoryTotal > 0)
+                    ? (100.0 * stats.swapMemoryUsed / stats.swapMemoryTotal)
+                    : 0.0;
+            summary["page_faults"] = stats.pageFaultCount;
 
-        return summary;
-    },
-    R"(Get a summary of memory information in an easy-to-use format.
+            return summary;
+        },
+        R"(Get a summary of memory information in an easy-to-use format.
 
 Returns:
     Dictionary containing memory information with pre-calculated values in GB
@@ -682,16 +687,19 @@ Examples:
     >>> from atom.sysinfo import memory
     >>> # Get memory summary
     >>> summary = memory.get_memory_summary()
-    >>> print(f"RAM: {summary['used_gb']:.1f} GB used of {summary['total_gb']:.1f} GB ({summary['usage_percent']:.1f}%)")
-    >>> print(f"Swap: {summary['swap_used_gb']:.1f} GB used of {summary['swap_total_gb']:.1f} GB ({summary['swap_usage_percent']:.1f}%)")
+    >>> print(f"RAM: {summary['used_gb']:.1f} GB used of {summary['total_gb']:.1f} GB ({summary['usage_percent']:.1f}%) ")
+    >>> print(f"Swap: {summary['swap_used_gb']:.1f} GB used of {summary['swap_total_gb']:.1f} GB ({summary['swap_usage_percent']:.1f}%) ")
 )");
 
     // Check if memory is low
-    m.def("is_memory_low", [](float threshold_percent) {
-        float usage = getMemoryUsage();
-        return usage > (100.0f - threshold_percent);
-    }, py::arg("threshold_percent") = 10.0f,
-    R"(Check if available memory is below a certain threshold.
+    m.def(
+        "is_memory_low",
+        [](float threshold_percent) {
+            float usage = getMemoryUsage();
+            return usage > (100.0f - threshold_percent);
+        },
+        py::arg("threshold_percent") = 10.0f,
+        R"(Check if available memory is below a certain threshold.
 
 Args:
     threshold_percent: Available memory threshold percentage (default: 10.0)

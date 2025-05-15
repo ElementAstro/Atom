@@ -5,7 +5,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 using namespace atom::system;
 
@@ -186,8 +185,9 @@ Examples:
     >>> print(f"Drive model: {model}")
 )");
 
-    m.def("get_storage_devices", &getStorageDevices, py::arg("include_removable") = true,
-        R"(Retrieves information about all connected storage devices.
+    m.def("get_storage_devices", &getStorageDevices,
+          py::arg("include_removable") = true,
+          R"(Retrieves information about all connected storage devices.
 
 Args:
     include_removable: Whether to include removable storage devices (default: True)
@@ -200,14 +200,14 @@ Examples:
     >>> # Get all storage devices
     >>> devices = disk.get_storage_devices()
     >>> for device in devices:
-    ...     print(f"{device.model} ({device.size_bytes / (1024**3):.1f} GB)")
+    ...     print(f"{device.model} ({device.size_bytes / (1024**3):.1f} GB)
     >>> 
     >>> # Get only fixed storage devices (exclude removable)
     >>> fixed_devices = disk.get_storage_devices(include_removable=False)
 )");
 
     m.def("get_storage_device_models", &getStorageDeviceModels,
-        R"(Legacy function that returns pairs of device paths and models.
+          R"(Legacy function that returns pairs of device paths and models.
 
 Returns:
     List of (device_path, model) tuples for each storage device
@@ -530,7 +530,7 @@ Examples:
     // Factory function for device monitor context
     m.def(
         "monitor_devices",
-        [](py::function callback, SecurityPolicy policy) {
+        [&m](py::function callback, SecurityPolicy policy) {
             return m.attr("DeviceMonitorContext")(callback, policy);
         },
         py::arg("callback"),
@@ -554,11 +554,12 @@ Examples:
     >>> 
     >>> # Define a callback function
     >>> def on_device_inserted(device):
-    ...     print(f"New device: {device.model} ({device.size_bytes / (1024**3):.1f} GB)")... >>>
-        #Use as a context manager >>>
-        with disk.monitor_devices(on_device_inserted,
-                                  disk.SecurityPolicy.READ_ONLY)
-        : ... print("Monitoring for devices. Insert a USB drive...")... try:
+    ...     print(f"New device: {device.model} ({device.size_bytes / (1024**3):.1f} GB)  
+    >>> # Use as a context manager 
+    >>> with disk.monitor_devices(on_device_inserted,
+                                  disk.SecurityPolicy.READ_ONLY):
+    ...     print("Monitoring for devices. Insert a USB drive...")
+    ...     try:
     ...         time.sleep(30)  # Monitor for 30 seconds
     ...     except KeyboardInterrupt:
     ...         print("Monitoring stopped by user")
@@ -567,7 +568,9 @@ Examples:
 )");
 
     // Additional utility functions
-    m.def("format_size", [](uint64_t size_bytes) {
+    m.def(
+        "format_size",
+        [](uint64_t size_bytes) {
             const char* units[] = {"B", "KB", "MB", "GB", "TB", "PB"};
             int unit_index = 0;
             double size = static_cast<double>(size_bytes);
@@ -587,8 +590,9 @@ Examples:
             }
 
             return std::string(buffer);
-    }, py::arg("size_bytes"),
-    R"(Format a size in bytes to a human-readable string.
+        },
+        py::arg("size_bytes"),
+        R"(Format a size in bytes to a human-readable string.
 
 Args:
     size_bytes: Size in bytes
@@ -606,32 +610,34 @@ Examples:
     >>> print(disk.format_size(1099511627776))   # "1.00 TB"
 )");
 
-    m.def("get_disk_summary", []() {
-        auto disks = getDiskInfo();
+    m.def(
+        "get_disk_summary",
+        []() {
+            auto disks = getDiskInfo();
 
-        py::list result;
-        for (const auto& disk : disks) {
-            py::dict disk_info;
-            disk_info["path"] = disk.path;
-            disk_info["device_path"] = disk.devicePath;
-            disk_info["model"] = disk.model;
-            disk_info["fs_type"] = disk.fsType;
-            disk_info["total_gb"] =
-                static_cast<double>(disk.totalSpace) / (1024 * 1024 * 1024);
-            disk_info["free_gb"] =
-                static_cast<double>(disk.freeSpace) / (1024 * 1024 * 1024);
-            disk_info["used_gb"] =
-                static_cast<double>(disk.totalSpace - disk.freeSpace) /
-                (1024 * 1024 * 1024);
-            disk_info["usage_percent"] = disk.usagePercent;
-            disk_info["is_removable"] = disk.isRemovable;
+            py::list result;
+            for (const auto& disk : disks) {
+                py::dict disk_info;
+                disk_info["path"] = disk.path;
+                disk_info["device_path"] = disk.devicePath;
+                disk_info["model"] = disk.model;
+                disk_info["fs_type"] = disk.fsType;
+                disk_info["total_gb"] =
+                    static_cast<double>(disk.totalSpace) / (1024 * 1024 * 1024);
+                disk_info["free_gb"] =
+                    static_cast<double>(disk.freeSpace) / (1024 * 1024 * 1024);
+                disk_info["used_gb"] =
+                    static_cast<double>(disk.totalSpace - disk.freeSpace) /
+                    (1024 * 1024 * 1024);
+                disk_info["usage_percent"] = disk.usagePercent;
+                disk_info["is_removable"] = disk.isRemovable;
 
-            result.append(disk_info);
-        }
+                result.append(disk_info);
+            }
 
-        return result;
-    },
-    R"(Get a summary of all disks in an easy-to-use format.
+            return result;
+        },
+        R"(Get a summary of all disks in an easy-to-use format.
 
 Returns:
     List of dictionaries containing disk information with pre-calculated values in GB
@@ -642,21 +648,24 @@ Examples:
     >>> # Get disk summary
     >>> summary = disk.get_disk_summary()
     >>> for disk_info in summary:
-    ...     print(f"{disk_info['path']} ({disk_info['model']})")
+    ...     print(f"{disk_info['path']} ({disk_info['model']})
     ...     print(f"  {disk_info['used_gb']:.1f} GB used of {disk_info['total_gb']:.1f} GB")
     ...     print(f"  {disk_info['usage_percent']:.1f}% full")
 )");
 
-    m.def("is_disk_low_space", [](const std::string& path, float threshold_percent) {
-        auto disks = getDiskInfo();
-        for (const auto& disk : disks) {
-            if (disk.path == path) {
-                return disk.usagePercent > (100.0f - threshold_percent);
+    m.def(
+        "is_disk_low_space",
+        [](const std::string& path, float threshold_percent) {
+            auto disks = getDiskInfo();
+            for (const auto& disk : disks) {
+                if (disk.path == path) {
+                    return disk.usagePercent > (100.0f - threshold_percent);
+                }
             }
-        }
-        return false;
-    }, py::arg("path"), py::arg("threshold_percent") = 10.0f,
-    R"(Check if a disk is running low on space.
+            return false;
+        },
+        py::arg("path"), py::arg("threshold_percent") = 10.0f,
+        R"(Check if a disk is running low on space.
 
 Args:
     path: Path to the disk or mount point
@@ -702,22 +711,24 @@ Examples:
     ...     print("Not enough disk space")
 )");
 
-    m.def("get_largest_disk", []() {
-        auto disks = getDiskInfo();
-        if (disks.empty()) {
-            return py::none();
-        }
-
-        const DiskInfo* largest = &disks[0];
-        for (const auto& disk : disks) {
-            if (disk.totalSpace > largest->totalSpace) {
-                largest = &disk;
+    m.def(
+        "get_largest_disk",
+        []() -> py::object {
+            auto disks = getDiskInfo();
+            if (disks.empty()) {
+                return py::none();
             }
-        }
 
-        return py::cast(*largest);
-    },
-    R"(Get the largest disk available on the system.
+            const DiskInfo* largest = &disks[0];
+            for (const auto& disk : disks) {
+                if (disk.totalSpace > largest->totalSpace) {
+                    largest = &disk;
+                }
+            }
+
+            return py::cast(*largest);
+        },
+        R"(Get the largest disk available on the system.
 
 Returns:
     DiskInfo object for the largest disk, or None if no disks are available
@@ -727,25 +738,27 @@ Examples:
     >>> # Get the largest disk
     >>> largest = disk.get_largest_disk()
     >>> if largest:
-    ...     print(f"Largest disk: {largest.path} ({largest.total_space / (1024**3):.1f} GB)")
+    ...     print(f"Largest disk: {largest.path} ({largest.total_space / (1024**3):.1f} GB)
 )");
 
-    m.def("get_most_free_disk", []() {
-        auto disks = getDiskInfo();
-        if (disks.empty()) {
-            return py::none();
-        }
-
-        const DiskInfo* most_free = &disks[0];
-        for (const auto& disk : disks) {
-            if (disk.freeSpace > most_free->freeSpace) {
-                most_free = &disk;
+    m.def(
+        "get_most_free_disk",
+        []() -> py::object {
+            auto disks = getDiskInfo();
+            if (disks.empty()) {
+                return py::none();
             }
-        }
 
-        return py::cast(*most_free);
-    },
-    R"(Get the disk with the most free space.
+            const DiskInfo* most_free = &disks[0];
+            for (const auto& disk : disks) {
+                if (disk.freeSpace > most_free->freeSpace) {
+                    most_free = &disk;
+                }
+            }
+
+            return py::cast(*most_free);
+        },
+        R"(Get the disk with the most free space.
 
 Returns:
     DiskInfo object for the disk with the most free space, or None if no disks are available
@@ -755,6 +768,6 @@ Examples:
     >>> # Get the disk with the most free space
     >>> most_free = disk.get_most_free_disk()
     >>> if most_free:
-    ...     print(f"Most free space: {most_free.path} ({most_free.free_space / (1024**3):.1f} GB free)")
+    ...     print(f"Most free space: {most_free.path} ({most_free.free_space / (1024**3):.1f} GB free)
 )");
 }

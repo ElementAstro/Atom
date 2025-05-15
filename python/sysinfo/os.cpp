@@ -4,7 +4,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 using namespace atom::system;
 
@@ -381,7 +380,7 @@ Examples:
 
     // Factory function for update check context
     m.def(
-        "check_updates", []() { return m.attr("UpdateCheckContext")(); },
+        "check_updates", [&m]() { return m.attr("UpdateCheckContext")(); },
         R"(Create a context manager for checking OS updates.
 
 Returns:

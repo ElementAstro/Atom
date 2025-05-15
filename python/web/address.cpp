@@ -170,9 +170,8 @@ Examples:
         .def(py::init<>(), "Create an uninitialized IPv4 address.")
         .def("parse", &atom::web::IPv4::parse, py::arg("address"),
              "Parse an IPv4 address string.")
-        .def(
-            "parse_cidr", &atom::web::IPv4::parseCIDR, py::arg("cidr"),
-            R"(Parse an IPv4 address in CIDR notation (e.g., '192.168.1.0/24').
+        .def("parse_cidr", &atom::web::IPv4::parseCIDR, py::arg("cidr"),
+             R"(Parse an IPv4 address in CIDR notation (e.g., '192.168.1.0/24').
 
 Args:
     cidr: The CIDR notation string.
@@ -192,16 +191,6 @@ Args:
 
 Returns:
     Optional[int]: The prefix length, or None if invalid.
-)")
-        .def_static("is_valid_ipv4", &atom::web::IPv4::isValidIPv4,
-                    py::arg("address"),
-                    R"(Validate an IPv4 address string.
-
-Args:
-    address: The IPv4 address string.
-
-Returns:
-    bool: True if the address is valid.
 )");
 
     // IPv6 类绑定

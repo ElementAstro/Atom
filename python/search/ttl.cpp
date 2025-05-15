@@ -5,7 +5,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(ttl, m) {
@@ -93,7 +92,14 @@ Returns:
 )")
         .def(
             "get_shared",
-            &atom::search::TTLCache<std::string, std::string>::get_shared,
+            [](atom::search::TTLCache<std::string, std::string>& self,
+               const std::string& key) -> py::object {
+                auto value_ptr = self.get_shared(key);
+                if (value_ptr) {
+                    return py::cast(*value_ptr);
+                }
+                return py::none();
+            },
             py::arg("key"),
             R"(Retrieves the value as a shared pointer, avoiding copies for large objects.
 

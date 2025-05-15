@@ -5,7 +5,6 @@
 #include <pybind11/stl.h>
 #include <filesystem>
 
-
 namespace py = pybind11;
 namespace fs = std::filesystem;
 
@@ -23,10 +22,6 @@ PYBIND11_MODULE(dirstack, m) {
             PyErr_SetString(PyExc_RuntimeError, e.what());
         } catch (const std::out_of_range& e) {
             PyErr_SetString(PyExc_IndexError, e.what());
-        } catch (const fs::filesystem_error& e) {
-            PyErr_SetString(PyExc_OSError, e.what());
-        } catch (const std::system_error& e) {
-            PyErr_SetString(PyExc_OSError, e.what());
         } catch (const std::exception& e) {
             PyErr_SetString(PyExc_Exception, e.what());
         }
@@ -182,7 +177,8 @@ Examples:
     >>> dirstack.async_pushd("/tmp", on_push)
 )")
         .def(
-            "pushd", &atom::io::DirectoryStack::pushd, py::arg("new_dir"),
+            "pushd", &atom::io::DirectoryStack::pushd<std::string>,
+            py::arg("new_dir"),
             R"(Push the current directory onto the stack and change to a new one.
 
 This method returns a coroutine-compatible Task object.
@@ -457,10 +453,16 @@ Examples:
         .def(
             "async_get_current_directory",
             [](atom::io::DirectoryStack& self, py::function callback) {
-                self.asyncGetCurrentDirectory([callback](const fs::path& path) {
-                    py::gil_scoped_acquire acquire;
-                    callback(path);
-                });
+                self.asyncGetCurrentDirectory(
+                    [callback](const fs::path& path,
+                               const std::error_code& ec) {
+                        py::gil_scoped_acquire acquire;
+                        if (!ec) {
+                            callback(path);
+                        } else {
+                            callback(py::none(), ec);
+                        }
+                    });
             },
             py::arg("callback"),
             R"(Get the current directory path.

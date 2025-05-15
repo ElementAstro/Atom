@@ -2,8 +2,8 @@
 
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
+#include <pybind11/pytypes.h>
 #include <pybind11/stl.h>
-
 
 namespace py = pybind11;
 
@@ -110,9 +110,8 @@ Returns:
 Args:
     key: The key name.
 )")
-        .def(
-            "del_multiple", &atom::utils::Env::delMultiple, py::arg("keys"),
-            R"(Deletes multiple key-value pairs from the environment variables.
+        .def("del_multiple", &atom::utils::Env::delMultiple, py::arg("keys"),
+             R"(Deletes multiple key-value pairs from the environment variables.
 
 Args:
     keys: The list of key names to delete.
@@ -174,12 +173,17 @@ Examples:
                py::object type_hint) {
                 // Use type_hint to determine what type we should return
                 if (py::isinstance<py::type>(type_hint)) {
-                    if (type_hint.is(py::type::of<int>()))
+                    if (type_hint.is(py::int_()))
                         return py::cast(self.getOptional<int>(key));
-                    else if (type_hint.is(py::type::of<double>()))
+                    else if (type_hint.is(py::float_()))
                         return py::cast(self.getOptional<double>(key));
-                    else if (type_hint.is(py::type::of<bool>()))
+                    else if (type_hint.is(py::bool_()))
                         return py::cast(self.getOptional<bool>(key));
+                    else if (type_hint.is(py::str()))
+                        return py::cast(self.getOptional<std::string>(key));
+                    else
+                        throw std::invalid_argument(
+                            "Unsupported type hint provided.");
                 }
                 // Default to string
                 return py::cast(self.getOptional<std::string>(key));

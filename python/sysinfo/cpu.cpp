@@ -2,9 +2,11 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <thread>
 
 namespace py = pybind11;
 using namespace atom::system;
+using namespace pybind11::literals;
 
 PYBIND11_MODULE(cpu, m) {
     m.doc() = "CPU information and monitoring module for the atom package";
@@ -526,9 +528,8 @@ Examples:
     >>> print(f"CPU socket type: {socket}")
 )");
 
-    m.def(
-        "get_cpu_scaling_governor", &getCpuScalingGovernor,
-        R"(Get the CPU scaling governor (Linux) or power mode (Windows/macOS).
+    m.def("get_cpu_scaling_governor", &getCpuScalingGovernor,
+          R"(Get the CPU scaling governor (Linux) or power mode (Windows/macOS).
 
 Returns:
     String representing the current CPU scaling governor or power mode.
@@ -763,9 +764,9 @@ Examples:
                  };
 
                  // Create and start the thread
-                 self.attr("thread") = threading.attr("Thread")(
-                     py::kwargs("target"_a = monitor_func,
-                                "args"_a = py::make_tuple(self)));
+                 auto kwargs = py::dict("target"_a = monitor_func,
+                                        "args"_a = py::make_tuple(self));
+                 self.attr("thread") = threading.attr("Thread")(**kwargs);
                  self.attr("thread").attr("daemon") = py::bool_(true);
                  self.attr("thread").attr("start")();
 
@@ -791,7 +792,7 @@ Examples:
     // Factory function for CPU monitor context
     m.def(
         "monitor_cpu",
-        [](double interval_sec, py::function callback) {
+        [&m](double interval_sec, py::function callback) {
             return m.attr("CpuMonitorContext")(interval_sec, callback);
         },
         py::arg("interval_sec") = 1.0, py::arg("callback"),

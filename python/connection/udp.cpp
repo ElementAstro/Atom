@@ -1,10 +1,9 @@
-#include "atom/connection/async_udpclient.hpp"
+#include "atom/connection/udpclient.hpp"
 
 #include <pybind11/chrono.h>
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-
 
 namespace py = pybind11;
 
@@ -25,523 +24,549 @@ PYBIND11_MODULE(udp, m) {
         }
     });
 
-    // Socket option enum
-    py::enum_<atom::async::connection::UdpClient::SocketOption>(
-        m, "SocketOption", "Socket configuration options")
-        .value("BROADCAST",
-               atom::async::connection::UdpClient::SocketOption::Broadcast,
-               "Option to enable/disable broadcast")
-        .value("REUSE_ADDRESS",
-               atom::async::connection::UdpClient::SocketOption::ReuseAddress,
-               "Option to enable/disable address reuse")
-        .value(
-            "RECEIVE_BUFFER_SIZE",
-            atom::async::connection::UdpClient::SocketOption::ReceiveBufferSize,
-            "Option to set receive buffer size")
-        .value("SEND_BUFFER_SIZE",
-               atom::async::connection::UdpClient::SocketOption::SendBufferSize,
-               "Option to set send buffer size")
-        .value("RECEIVE_TIMEOUT",
-               atom::async::connection::UdpClient::SocketOption::ReceiveTimeout,
-               "Option to set receive timeout")
-        .value("SEND_TIMEOUT",
-               atom::async::connection::UdpClient::SocketOption::SendTimeout,
-               "Option to set send timeout")
+    // Register UdpError enum
+    py::enum_<atom::connection::UdpError>(m, "UdpError", "UDP error codes")
+        .value("NONE", atom::connection::UdpError::None, "No error")
+        .value("SOCKET_CREATION_FAILED",
+               atom::connection::UdpError::SocketCreationFailed,
+               "Socket creation failed")
+        .value("BIND_FAILED", atom::connection::UdpError::BindFailed,
+               "Binding to port failed")
+        .value("SEND_FAILED", atom::connection::UdpError::SendFailed,
+               "Send operation failed")
+        .value("RECEIVE_FAILED", atom::connection::UdpError::ReceiveFailed,
+               "Receive operation failed")
+        .value("HOST_NOT_FOUND", atom::connection::UdpError::HostNotFound,
+               "Host not found")
+        .value("TIMEOUT", atom::connection::UdpError::Timeout,
+               "Operation timed out")
+        .value("INVALID_PARAMETER",
+               atom::connection::UdpError::InvalidParameter,
+               "Invalid parameter")
+        .value("INTERNAL_ERROR", atom::connection::UdpError::InternalError,
+               "Internal error")
+        .value("MULTICAST_ERROR", atom::connection::UdpError::MulticastError,
+               "Multicast operation failed")
+        .value("BROADCAST_ERROR", atom::connection::UdpError::BroadcastError,
+               "Broadcast operation failed")
+        .value("NOT_INITIALIZED", atom::connection::UdpError::NotInitialized,
+               "Client not initialized")
+        .value("NOT_SUPPORTED", atom::connection::UdpError::NotSupported,
+               "Operation not supported")
         .export_values();
 
-    // Statistics structure
-    py::class_<atom::async::connection::UdpClient::Statistics>(
-        m, "Statistics", "UDP client statistics")
+    // RemoteEndpoint structure
+    py::class_<atom::connection::RemoteEndpoint>(m, "RemoteEndpoint",
+                                                 "UDP remote endpoint")
         .def(py::init<>())
-        .def_readonly(
-            "packets_sent",
-            &atom::async::connection::UdpClient::Statistics::packets_sent,
-            "Number of packets sent")
-        .def_readonly(
-            "packets_received",
-            &atom::async::connection::UdpClient::Statistics::packets_received,
-            "Number of packets received")
-        .def_readonly(
-            "bytes_sent",
-            &atom::async::connection::UdpClient::Statistics::bytes_sent,
-            "Number of bytes sent")
-        .def_readonly(
-            "bytes_received",
-            &atom::async::connection::UdpClient::Statistics::bytes_received,
-            "Number of bytes received")
-        .def_readonly(
-            "start_time",
-            &atom::async::connection::UdpClient::Statistics::start_time,
-            "Time when statistics tracking started")
-        .def("reset", &atom::async::connection::UdpClient::Statistics::reset,
+        .def(py::init<std::string, uint16_t>(), py::arg("host"),
+             py::arg("port"))
+        .def_readwrite("host", &atom::connection::RemoteEndpoint::host,
+                       "Remote host address")
+        .def_readwrite("port", &atom::connection::RemoteEndpoint::port,
+                       "Remote port number")
+        .def("__eq__", [](const atom::connection::RemoteEndpoint& self,
+                          const atom::connection::RemoteEndpoint& other) {
+            return self == other;
+        });
+
+    // SocketOptions structure
+    py::class_<atom::connection::SocketOptions>(
+        m, "SocketOptions", "UDP socket configuration options")
+        .def(py::init<>())
+        .def_readwrite("reuse_address",
+                       &atom::connection::SocketOptions::reuseAddress,
+                       "Enable address reuse")
+        .def_readwrite("reuse_port",
+                       &atom::connection::SocketOptions::reusePort,
+                       "Enable port reuse")
+        .def_readwrite("broadcast", &atom::connection::SocketOptions::broadcast,
+                       "Enable broadcast")
+        .def_readwrite("send_buffer_size",
+                       &atom::connection::SocketOptions::sendBufferSize,
+                       "Send buffer size (0 = system default)")
+        .def_readwrite("receive_buffer_size",
+                       &atom::connection::SocketOptions::receiveBufferSize,
+                       "Receive buffer size (0 = system default)")
+        .def_readwrite("ttl", &atom::connection::SocketOptions::ttl,
+                       "Time-to-live value (0 = system default)")
+        .def_readwrite("non_blocking",
+                       &atom::connection::SocketOptions::nonBlocking,
+                       "Use non-blocking sockets")
+        .def_readwrite("send_timeout",
+                       &atom::connection::SocketOptions::sendTimeout,
+                       "Send timeout (0 = no timeout)")
+        .def_readwrite("receive_timeout",
+                       &atom::connection::SocketOptions::receiveTimeout,
+                       "Receive timeout (0 = no timeout)");
+
+    // Statistics structure
+    py::class_<atom::connection::UdpStatistics>(m, "UdpStatistics",
+                                                "UDP client statistics")
+        .def(py::init<>())
+        .def_readonly("packets_received",
+                      &atom::connection::UdpStatistics::packetsReceived,
+                      "Number of packets received")
+        .def_readonly("packets_sent",
+                      &atom::connection::UdpStatistics::packetsSent,
+                      "Number of packets sent")
+        .def_readonly("bytes_received",
+                      &atom::connection::UdpStatistics::bytesReceived,
+                      "Number of bytes received")
+        .def_readonly("bytes_sent", &atom::connection::UdpStatistics::bytesSent,
+                      "Number of bytes sent")
+        .def_readonly("receive_errors",
+                      &atom::connection::UdpStatistics::receiveErrors,
+                      "Number of receive errors")
+        .def_readonly("send_errors",
+                      &atom::connection::UdpStatistics::sendErrors,
+                      "Number of send errors")
+        .def_readonly("last_activity",
+                      &atom::connection::UdpStatistics::lastActivity,
+                      "Time of last activity")
+        .def("reset", &atom::connection::UdpStatistics::reset,
              "Reset all statistics to zero");
 
     // UdpClient class binding
-    py::class_<atom::async::connection::UdpClient>(
+    py::class_<atom::connection::UdpClient>(
         m, "UdpClient",
-        R"(A UDP client for sending and receiving datagrams.
+        R"(A modern UDP client for sending and receiving datagrams.
 
 This class provides methods for UDP socket communication, including sending 
-and receiving datagrams, multicast support, and asynchronous operations.
-
-Args:
-    use_ipv6: Whether to use IPv6 (True) or IPv4 (False). Default is IPv4.
+and receiving datagrams, multicast support, broadcast support, and asynchronous operations.
 
 Examples:
     >>> from atom.connection.udp import UdpClient
-    >>> client = UdpClient()
-    >>> client.bind(8000)  # Bind to port 8000 on all interfaces
-    >>> client.send("127.0.0.1", 9000, "Hello, UDP!")
+    >>> client = UdpClient()  # Create client with ephemeral port
+    >>> client.bind(8000)     # Or bind to specific port
+    >>> client.send(RemoteEndpoint("127.0.0.1", 9000), "Hello, UDP!")
 )")
-        .def(py::init<>(), "Constructs a new UDP client using IPv4.")
-        .def(py::init<bool>(), py::arg("use_ipv6"),
-             "Constructs a new UDP client with specified IP version.")
-        .def("bind", &atom::async::connection::UdpClient::bind, 
-             py::arg("port"), py::arg("address") = "",
-             R"(Binds the socket to a specific port.
+        .def(py::init<>(), "Constructs a new UDP client with ephemeral port.")
+        .def(py::init<uint16_t>(), py::arg("port"),
+             "Constructs a new UDP client bound to a specific port.")
+        .def(py::init<uint16_t, const atom::connection::SocketOptions&>(),
+             py::arg("port"), py::arg("options"),
+             "Constructs a new UDP client with specific port and socket "
+             "options.")
+        .def(
+            "bind",
+            [](atom::connection::UdpClient& self, uint16_t port) {
+                auto result = self.bind(port);
+                if (!result.has_value()) {
+                    throw std::runtime_error("Failed to bind: " +
+                                             std::to_string(static_cast<int>(
+                                                 result.error().error())));
+                }
+                return result.value();
+            },
+            py::arg("port"),
+            R"(Binds the socket to a specific port.
 
 Args:
     port: The port to bind to
-    address: Optional address to bind to (default: any)
 
 Returns:
-    True if successful, False otherwise
+    True if successful
+
+Raises:
+    RuntimeError: If binding fails
 )")
-        .def("send", py::overload_cast<const std::string&, int, const std::vector<char>&>(
-                 &atom::async::connection::UdpClient::send),
-             py::arg("host"), py::arg("port"), py::arg("data"),
-             R"(Sends binary data to a specified host and port.
+        .def(
+            "send",
+            [](atom::connection::UdpClient& self,
+               const atom::connection::RemoteEndpoint& endpoint,
+               const std::string& data) {
+                auto result = self.send(endpoint, data);
+                if (!result.has_value()) {
+                    throw std::runtime_error("Failed to send: " +
+                                             std::to_string(static_cast<int>(
+                                                 result.error().error())));
+                }
+                return result.value();
+            },
+            py::arg("endpoint"), py::arg("data"),
+            R"(Sends data to a specified endpoint.
+
+Args:
+    endpoint: The target endpoint (host and port)
+    data: The data to send (string or bytes)
+
+Returns:
+    Number of bytes sent
+
+Raises:
+    RuntimeError: If sending fails
+)")
+        .def(
+            "send",
+            [](atom::connection::UdpClient& self, const std::string& host,
+               uint16_t port, const std::string& data) {
+                atom::connection::RemoteEndpoint endpoint{host, port};
+                auto result = self.send(endpoint, data);
+                if (!result.has_value()) {
+                    throw std::runtime_error("Failed to send: " +
+                                             std::to_string(static_cast<int>(
+                                                 result.error().error())));
+                }
+                return result.value();
+            },
+            py::arg("host"), py::arg("port"), py::arg("data"),
+            R"(Sends data to a specified host and port.
 
 Args:
     host: The target host
     port: The target port
-    data: The binary data to send as bytes
+    data: The data to send (string or bytes)
 
 Returns:
-    True if successful, False otherwise
+    Number of bytes sent
+
+Raises:
+    RuntimeError: If sending fails
 )")
-        .def("send", py::overload_cast<const std::string&, int, const std::string&>(
-                 &atom::async::connection::UdpClient::send),
-             py::arg("host"), py::arg("port"), py::arg("data"),
-             R"(Sends string data to a specified host and port.
+        .def(
+            "send_broadcast",
+            [](atom::connection::UdpClient& self, uint16_t port,
+               const std::string& data) {
+                auto result = self.sendBroadcast(port, data);
+                if (!result.has_value()) {
+                    throw std::runtime_error("Failed to broadcast: " +
+                                             std::to_string(static_cast<int>(
+                                                 result.error().error())));
+                }
+                return result.value();
+            },
+            py::arg("port"), py::arg("data"),
+            R"(Sends a broadcast message to all hosts on the network.
 
 Args:
-    host: The target host
     port: The target port
-    data: The string data to send
+    data: The data to broadcast
 
 Returns:
-    True if successful, False otherwise
+    Number of bytes sent
 
-Examples:
-    >>> client.send("127.0.0.1", 9000, "Hello, UDP!")
+Raises:
+    RuntimeError: If broadcasting fails
 )")
-        .def("send_with_timeout", &atom::async::connection::UdpClient::sendWithTimeout,
-             py::arg("host"), py::arg("port"), py::arg("data"), py::arg("timeout"),
-             R"(Sends data with timeout.
+        .def(
+            "send_multiple",
+            [](atom::connection::UdpClient& self,
+               const std::vector<atom::connection::RemoteEndpoint>& endpoints,
+               const std::string& data) {
+                auto result = self.sendMultiple(
+                    endpoints, std::span(data.data(), data.size()));
+                if (!result.has_value()) {
+                    throw std::runtime_error("Failed to send multiple: " +
+                                             std::to_string(static_cast<int>(
+                                                 result.error().error())));
+                }
+                return result.value();
+            },
+            py::arg("endpoints"), py::arg("data"),
+            R"(Sends data to multiple destinations at once.
 
 Args:
-    host: The target host
-    port: The target port
-    data: The data to send
-    timeout: Timeout duration in milliseconds
-
-Returns:
-    True if successful, False otherwise
-
-Examples:
-    >>> import time
-    >>> from atom.connection.udp import UdpClient
-    >>> client = UdpClient()
-    >>> client.send_with_timeout("127.0.0.1", 9000, b"Hello", 500)  # 500ms timeout
-)")
-        .def("batch_send", &atom::async::connection::UdpClient::batchSend,
-             py::arg("destinations"), py::arg("data"),
-             R"(Batch sends data to multiple destinations.
-
-Args:
-    destinations: List of (host, port) pairs
+    endpoints: List of destination endpoints
     data: The data to send
 
 Returns:
     Number of successful transmissions
 
-Examples:
-    >>> destinations = [("192.168.1.100", 9000), ("192.168.1.101", 9000)]
-    >>> client.batch_send(destinations, b"Hello to all")
+Raises:
+    RuntimeError: If the operation fails completely
 )")
-        .def("receive", [](atom::async::connection::UdpClient& self, 
-                          size_t size, 
-                          std::chrono::milliseconds timeout) {
-        std::string remoteHost;
-        int remotePort;
-        std::vector<char> data =
-            self.receive(size, remoteHost, remotePort, timeout);
-        return py::make_tuple(py::bytes(data.data(), data.size()), remoteHost,
-                              remotePort);
-         }, py::arg("size"), py::arg("timeout") = std::chrono::milliseconds::zero(),
-         R"(Receives data synchronously.
+        .def(
+            "receive",
+            [](atom::connection::UdpClient& self, size_t maxSize,
+               const std::chrono::milliseconds& timeout) {
+                auto result = self.receive(maxSize, timeout);
+                if (!result.has_value()) {
+                    throw std::runtime_error("Failed to receive: " +
+                                             std::to_string(static_cast<int>(
+                                                 result.error().error())));
+                }
+                auto [data, endpoint] = result.value();
+                return py::make_tuple(py::bytes(data.data(), data.size()),
+                                      endpoint);
+            },
+            py::arg("max_size"),
+            py::arg("timeout") = std::chrono::milliseconds::zero(),
+            R"(Receives data synchronously.
 
 Args:
-    size: Buffer size for received data
+    max_size: Maximum buffer size for received data
     timeout: Optional timeout in milliseconds (zero means no timeout)
 
 Returns:
-    Tuple of (data, sender_host, sender_port)
+    Tuple of (data as bytes, sender endpoint)
 
-Examples:
-    >>> data, host, port = client.receive(4096, 1000)  # 1 second timeout
-    >>> print(f"Received {len(data)} bytes from {host}:{port}")
+Raises:
+    RuntimeError: If receiving fails
 )")
-        .def("set_on_data_received_callback", &atom::async::connection::UdpClient::setOnDataReceivedCallback,
-             py::arg("callback"),
-             R"(Sets callback for data reception.
+        .def(
+            "join_multicast_group",
+            [](atom::connection::UdpClient& self,
+               const std::string& groupAddress) {
+                auto result = self.joinMulticastGroup(groupAddress);
+                if (!result.has_value()) {
+                    throw std::runtime_error(
+                        "Failed to join multicast group: " +
+                        std::to_string(
+                            static_cast<int>(result.error().error())));
+                }
+                return result.value();
+            },
+            py::arg("group_address"),
+            R"(Joins a multicast group to receive multicasted messages.
 
 Args:
-    callback: Function that takes (data, host, port) parameters
+    group_address: The multicast group address (e.g., "224.0.0.1")
+
+Returns:
+    True if successful
+
+Raises:
+    RuntimeError: If joining fails
+)")
+        .def(
+            "leave_multicast_group",
+            [](atom::connection::UdpClient& self,
+               const std::string& groupAddress) {
+                auto result = self.leaveMulticastGroup(groupAddress);
+                if (!result.has_value()) {
+                    throw std::runtime_error(
+                        "Failed to leave multicast group: " +
+                        std::to_string(
+                            static_cast<int>(result.error().error())));
+                }
+                return result.value();
+            },
+            py::arg("group_address"),
+            R"(Leaves a previously joined multicast group.
+
+Args:
+    group_address: The multicast group address
+
+Returns:
+    True if successful
+
+Raises:
+    RuntimeError: If leaving fails
+)")
+        .def(
+            "send_to_multicast_group",
+            [](atom::connection::UdpClient& self,
+               const std::string& groupAddress, uint16_t port,
+               const std::string& data) {
+                auto result = self.sendToMulticastGroup(
+                    groupAddress, port, std::span(data.data(), data.size()));
+                if (!result.has_value()) {
+                    throw std::runtime_error(
+                        "Failed to send to multicast group: " +
+                        std::to_string(
+                            static_cast<int>(result.error().error())));
+                }
+                return result.value();
+            },
+            py::arg("group_address"), py::arg("port"), py::arg("data"),
+            R"(Sends data to a multicast group.
+
+Args:
+    group_address: The multicast group address
+    port: The target port
+    data: The data to send
+
+Returns:
+    Number of bytes sent
+
+Raises:
+    RuntimeError: If sending fails
+)")
+        .def(
+            "set_on_data_received_callback",
+            [](atom::connection::UdpClient& self, py::function callback) {
+                self.setOnDataReceivedCallback(
+                    [callback = std::move(callback)](
+                        std::span<const char> data,
+                        const atom::connection::RemoteEndpoint& endpoint) {
+                        py::gil_scoped_acquire
+                            gil;  // Acquire GIL before calling Python code
+                        try {
+                            callback(py::bytes(data.data(), data.size()),
+                                     endpoint);
+                        } catch (const py::error_already_set& e) {
+                            // Log Python exception
+                            PyErr_Print();
+                        }
+                    });
+            },
+            py::arg("callback"),
+            R"(Sets callback for data reception.
+
+Args:
+    callback: Function that takes (data, endpoint) parameters
 
 Examples:
-    >>> def on_data(data, host, port):
-    ...     print(f"Received {len(data)} bytes from {host}:{port}")
+    >>> def on_data(data, endpoint):
+    ...     print(f"Received {len(data)} bytes from {endpoint.host}:{endpoint.port}")
     ...
     >>> client.set_on_data_received_callback(on_data)
 )")
-        .def("set_on_error_callback", &atom::async::connection::UdpClient::setOnErrorCallback,
-             py::arg("callback"),
-             R"(Sets callback for errors.
+        .def(
+            "set_on_error_callback",
+            [](atom::connection::UdpClient& self, py::function callback) {
+                self.setOnErrorCallback([callback = std::move(callback)](
+                                            atom::connection::UdpError error,
+                                            const std::string& message) {
+                    py::gil_scoped_acquire
+                        gil;  // Acquire GIL before calling Python code
+                    try {
+                        callback(error, message);
+                    } catch (const py::error_already_set& e) {
+                        // Log Python exception
+                        PyErr_Print();
+                    }
+                });
+            },
+            py::arg("callback"),
+            R"(Sets callback for errors.
 
 Args:
-    callback: Function that takes (error_message, error_code) parameters
+    callback: Function that takes (error_code, error_message) parameters
 
 Examples:
-    >>> def on_error(message, code):
-    ...     print(f"Error {code}: {message}")
+    >>> def on_error(error, message):
+    ...     print(f"Error {error}: {message}")
     ...
     >>> client.set_on_error_callback(on_error)
 )")
-        .def("set_on_status_callback", &atom::async::connection::UdpClient::setOnStatusCallback,
-             py::arg("callback"),
-             R"(Sets callback for status updates.
+        .def(
+            "set_on_status_change_callback",
+            [](atom::connection::UdpClient& self, py::function callback) {
+                self.setOnStatusChangeCallback(
+                    [callback = std::move(callback)](bool status) {
+                        py::gil_scoped_acquire
+                            gil;  // Acquire GIL before calling Python code
+                        try {
+                            callback(status);
+                        } catch (const py::error_already_set& e) {
+                            // Log Python exception
+                            PyErr_Print();
+                        }
+                    });
+            },
+            py::arg("callback"),
+            R"(Sets callback for status changes.
 
 Args:
-    callback: Function that takes (status_message) parameter
+    callback: Function that takes (status) parameter where status is a boolean
 
 Examples:
     >>> def on_status(status):
-    ...     print(f"Status: {status}")
+    ...     print(f"Connection status: {'active' if status else 'inactive'}")
     ...
-    >>> client.set_on_status_callback(on_status)
+    >>> client.set_on_status_change_callback(on_status)
 )")
-        .def("start_receiving", &atom::async::connection::UdpClient::startReceiving,
-             py::arg("buffer_size") = 4096,
-             R"(Starts asynchronous data reception.
+        .def(
+            "start_receiving",
+            [](atom::connection::UdpClient& self, size_t bufferSize) {
+                auto result = self.startReceiving(bufferSize);
+                if (!result.has_value()) {
+                    throw std::runtime_error("Failed to start receiving: " +
+                                             std::to_string(static_cast<int>(
+                                                 result.error().error())));
+                }
+                return result.value();
+            },
+            py::arg("buffer_size") = 8192,
+            R"(Starts asynchronous data reception.
 
 Args:
-    buffer_size: Size of the receive buffer (default: 4096)
+    buffer_size: Size of the receive buffer (default: 8192)
 
-Examples:
-    >>> client.bind(8000)
-    >>> client.set_on_data_received_callback(lambda data, host, port: print(f"Got {len(data)} bytes"))
-    >>> client.start_receiving()
-    >>> # The callback will be executed when data is received
+Returns:
+    True if background receiving started successfully
+
+Raises:
+    RuntimeError: If starting receiver fails
 )")
-        .def("stop_receiving", &atom::async::connection::UdpClient::stopReceiving,
+        .def("stop_receiving", &atom::connection::UdpClient::stopReceiving,
              R"(Stops asynchronous data reception.
 
 Examples:
     >>> client.stop_receiving()
 )")
-        .def("set_socket_option", &atom::async::connection::UdpClient::setSocketOption,
-             py::arg("option"), py::arg("value"),
-             R"(Sets a socket option.
-
-Args:
-    option: The option to set (from SocketOption enum)
-    value: The option value
+        .def("is_receiving", &atom::connection::UdpClient::isReceiving,
+             R"(Check if the client is currently receiving data asynchronously.
 
 Returns:
-    True if successful, False otherwise
-
-Examples:
-    >>> from atom.connection.udp import UdpClient, SocketOption
-    >>> client = UdpClient()
-    >>> client.set_socket_option(SocketOption.BROADCAST, 1)  # Enable broadcasting
+    True if receiving, False otherwise
 )")
-        .def("set_ttl", &atom::async::connection::UdpClient::setTTL,
-             py::arg// filepath: d:\msys64\home\qwdma\Atom\python\connection\udp.cpp
-#include "atom/connection/async_udpclient.hpp"
-
-#include <pybind11/chrono.h>
-#include <pybind11/functional.h>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-
-
-namespace py = pybind11;
-
-PYBIND11_MODULE(udp, m) {
-        m.doc() = "UDP client module for the atom package";
-
-        // Register exception translations
-        py::register_exception_translator([](std::exception_ptr p) {
-            try {
-                if (p)
-                    std::rethrow_exception(p);
-            } catch (const std::invalid_argument& e) {
-                PyErr_SetString(PyExc_ValueError, e.what());
-            } catch (const std::runtime_error& e) {
-                PyErr_SetString(PyExc_RuntimeError, e.what());
-            } catch (const std::exception& e) {
-                PyErr_SetString(PyExc_Exception, e.what());
-            }
-        });
-
-        // Socket option enum
-        py::enum_<atom::async::connection::UdpClient::SocketOption>(
-            m, "SocketOption", "Socket configuration options")
-            .value("BROADCAST",
-                   atom::async::connection::UdpClient::SocketOption::Broadcast,
-                   "Option to enable/disable broadcast")
-            .value(
-                "REUSE_ADDRESS",
-                atom::async::connection::UdpClient::SocketOption::ReuseAddress,
-                "Option to enable/disable address reuse")
-            .value("RECEIVE_BUFFER_SIZE",
-                   atom::async::connection::UdpClient::SocketOption::
-                       ReceiveBufferSize,
-                   "Option to set receive buffer size")
-            .value("SEND_BUFFER_SIZE",
-                   atom::async::connection::UdpClient::SocketOption::
-                       SendBufferSize,
-                   "Option to set send buffer size")
-            .value("RECEIVE_TIMEOUT",
-                   atom::async::connection::UdpClient::SocketOption::
-                       ReceiveTimeout,
-                   "Option to set receive timeout")
-            .value(
-                "SEND_TIMEOUT",
-                atom::async::connection::UdpClient::SocketOption::SendTimeout,
-                "Option to set send timeout")
-            .export_values();
-
-        // Statistics structure
-        py::class_<atom::async::connection::UdpClient::Statistics>(
-            m, "Statistics", "UDP client statistics")
-            .def(py::init<>())
-            .def_readonly(
-                "packets_sent",
-                &atom::async::connection::UdpClient::Statistics::packets_sent,
-                "Number of packets sent")
-            .def_readonly("packets_received",
-                          &atom::async::connection::UdpClient::Statistics::
-                              packets_received,
-                          "Number of packets received")
-            .def_readonly(
-                "bytes_sent",
-                &atom::async::connection::UdpClient::Statistics::bytes_sent,
-                "Number of bytes sent")
-            .def_readonly(
-                "bytes_received",
-                &atom::async::connection::UdpClient::Statistics::bytes_received,
-                "Number of bytes received")
-            .def_readonly(
-                "start_time",
-                &atom::async::connection::UdpClient::Statistics::start_time,
-                "Time when statistics tracking started")
-            .def("reset",
-                 &atom::async::connection::UdpClient::Statistics::reset,
-                 "Reset all statistics to zero");
-
-    // UdpClient class binding
-    py::class_<atom::async::connection::UdpClient>(
-        m, "UdpClient",
-        R"(A UDP client for sending and receiving datagrams.
-
-This class provides methods for UDP socket communication, including sending 
-and receiving datagrams, multicast support, and asynchronous operations.
-
-Args:
-    use_ipv6: Whether to use IPv6 (True) or IPv4 (False). Default is IPv4.
-
-Examples:
-    >>> from atom.connection.udp import UdpClient
-    >>> client = UdpClient()
-    >>> client.bind(8000)  # Bind to port 8000 on all interfaces
-    >>> client.send("127.0.0.1", 9000, "Hello, UDP!")
-)")
-        .def(py::init<>(), "Constructs a new UDP client using IPv4.")
-        .def(py::init<bool>(), py::arg("use_ipv6"),
-             "Constructs a new UDP client with specified IP version.")
-        .def("bind", &atom::async::connection::UdpClient::bind, 
-             py::arg("port"), py::arg("address") = "",
-             R"(Binds the socket to a specific port.
-
-Args:
-    port: The port to bind to
-    address: Optional address to bind to (default: any)
+        .def("get_statistics", &atom::connection::UdpClient::getStatistics,
+             R"(Get socket statistics.
 
 Returns:
-    True if successful, False otherwise
+    UdpStatistics object with current statistics
 )")
-        .def("send", py::overload_cast<const std::string&, int, const std::vector<char>&>(
-                 &atom::async::connection::UdpClient::send),
-             py::arg("host"), py::arg("port"), py::arg("data"),
-             R"(Sends binary data to a specified host and port.
+        .def("reset_statistics", &atom::connection::UdpClient::resetStatistics,
+             R"(Reset socket statistics to zero.)")
+        .def(
+            "set_socket_options",
+            [](atom::connection::UdpClient& self,
+               const atom::connection::SocketOptions& options) {
+                auto result = self.setSocketOptions(options);
+                if (!result.has_value()) {
+                    throw std::runtime_error("Failed to set socket options: " +
+                                             std::to_string(static_cast<int>(
+                                                 result.error().error())));
+                }
+                return result.value();
+            },
+            py::arg("options"),
+            R"(Configure socket options.
 
 Args:
-    host: The target host
-    port: The target port
-    data: The binary data to send as bytes
+    options: SocketOptions object with desired configuration
 
 Returns:
-    True if successful, False otherwise
-)")
-        .def("send", py::overload_cast<const std::string&, int, const std::string&>(
-                 &atom::async::connection::UdpClient::send),
-             py::arg("host"), py::arg("port"), py::arg("data"),
-             R"(Sends string data to a specified host and port.
+    True if options were set successfully
 
-Args:
-    host: The target host
-    port: The target port
-    data: The string data to send
+Raises:
+    RuntimeError: If setting options fails
+)")
+        .def("close", &atom::connection::UdpClient::close,
+             R"(Close the socket and clean up resources.)")
+        .def("is_bound", &atom::connection::UdpClient::isBound,
+             R"(Check if socket is bound to a port.
 
 Returns:
-    True if successful, False otherwise
-
-Examples:
-    >>> client.send("127.0.0.1", 9000, "Hello, UDP!")
+    True if socket is bound, False otherwise
 )")
-        .def("send_with_timeout", &atom::async::connection::UdpClient::sendWithTimeout,
-             py::arg("host"), py::arg("port"), py::arg("data"), py::arg("timeout"),
-             R"(Sends data with timeout.
-
-Args:
-    host: The target host
-    port: The target port
-    data: The data to send
-    timeout: Timeout duration in milliseconds
+        .def(
+            "get_local_port",
+            [](atom::connection::UdpClient& self) {
+                auto result = self.getLocalPort();
+                if (!result.has_value()) {
+                    throw std::runtime_error("Failed to get local port: " +
+                                             std::to_string(static_cast<int>(
+                                                 result.error().error())));
+                }
+                return result.value();
+            },
+            R"(Get the local port the socket is bound to.
 
 Returns:
-    True if successful, False otherwise
+    The local port number
 
-Examples:
-    >>> import time
-    >>> from atom.connection.udp import UdpClient
-    >>> client = UdpClient()
-    >>> client.send_with_timeout("127.0.0.1", 9000, b"Hello", 500)  # 500ms timeout
+Raises:
+    RuntimeError: If getting the port fails
 )")
-        .def("batch_send", &atom::async::connection::UdpClient::batchSend,
-             py::arg("destinations"), py::arg("data"),
-             R"(Batch sends data to multiple destinations.
-
-Args:
-    destinations: List of (host, port) pairs
-    data: The data to send
+        .def_static("is_ipv6_supported",
+                    &atom::connection::UdpClient::isIPv6Supported,
+                    R"(Check if IPv6 is supported on this system.
 
 Returns:
-    Number of successful transmissions
-
-Examples:
-    >>> destinations = [("192.168.1.100", 9000), ("192.168.1.101", 9000)]
-    >>> client.batch_send(destinations, b"Hello to all")
-)")
-        .def("receive", [](atom::async::connection::UdpClient& self, 
-                          size_t size, 
-                          std::chrono::milliseconds timeout) {
-            std::string remoteHost;
-            int remotePort;
-            std::vector<char> data =
-                self.receive(size, remoteHost, remotePort, timeout);
-            return py::make_tuple(py::bytes(data.data(), data.size()),
-                                  remoteHost, remotePort);
-         }, py::arg("size"), py::arg("timeout") = std::chrono::milliseconds::zero(),
-         R"(Receives data synchronously.
-
-Args:
-    size: Buffer size for received data
-    timeout: Optional timeout in milliseconds (zero means no timeout)
-
-Returns:
-    Tuple of (data, sender_host, sender_port)
-
-Examples:
-    >>> data, host, port = client.receive(4096, 1000)  # 1 second timeout
-    >>> print(f"Received {len(data)} bytes from {host}:{port}")
-)")
-        .def("set_on_data_received_callback", &atom::async::connection::UdpClient::setOnDataReceivedCallback,
-             py::arg("callback"),
-             R"(Sets callback for data reception.
-
-Args:
-    callback: Function that takes (data, host, port) parameters
-
-Examples:
-    >>> def on_data(data, host, port):
-    ...     print(f"Received {len(data)} bytes from {host}:{port}")
-    ...
-    >>> client.set_on_data_received_callback(on_data)
-)")
-        .def("set_on_error_callback", &atom::async::connection::UdpClient::setOnErrorCallback,
-             py::arg("callback"),
-             R"(Sets callback for errors.
-
-Args:
-    callback: Function that takes (error_message, error_code) parameters
-
-Examples:
-    >>> def on_error(message, code):
-    ...     print(f"Error {code}: {message}")
-    ...
-    >>> client.set_on_error_callback(on_error)
-)")
-        .def("set_on_status_callback", &atom::async::connection::UdpClient::setOnStatusCallback,
-             py::arg("callback"),
-             R"(Sets callback for status updates.
-
-Args:
-    callback: Function that takes (status_message) parameter
-
-Examples:
-    >>> def on_status(status):
-    ...     print(f"Status: {status}")
-    ...
-    >>> client.set_on_status_callback(on_status)
-)")
-        .def("start_receiving", &atom::async::connection::UdpClient::startReceiving,
-             py::arg("buffer_size") = 4096,
-             R"(Starts asynchronous data reception.
-
-Args:
-    buffer_size: Size of the receive buffer (default: 4096)
-
-Examples:
-    >>> client.bind(8000)
-    >>> client.set_on_data_received_callback(lambda data, host, port: print(f"Got {len(data)} bytes"))
-    >>> client.start_receiving()
-    >>> # The callback will be executed when data is received
-)")
-        .def("stop_receiving", &atom::async::connection::UdpClient::stopReceiving,
-             R"(Stops asynchronous data reception.
-
-Examples:
-    >>> client.stop_receiving()
-)")
-        .def("set_socket_option", &atom::async::connection::UdpClient::setSocketOption,
-             py::arg("option"), py::arg("value"),
-             R"(Sets a socket option.
-
-Args:
-    option: The option to set (from SocketOption enum)
-    value: The option value
-
-Returns:
-    True if successful, False otherwise
-
-Examples:
-    >>> from atom.connection.udp import UdpClient, SocketOption
-    >>> client = UdpClient()
-    >>> client.set_socket_option(SocketOption.BROADCAST, 1)  # Enable broadcasting
-)")
-        .def("set_ttl", &atom::async::connection::UdpClient::setTTL,
-             py::arg
+    True if IPv6 is supported, False otherwise
+)");
+}

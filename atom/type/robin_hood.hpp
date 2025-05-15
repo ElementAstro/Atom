@@ -10,7 +10,6 @@
 #include <utility>
 #include <vector>
 
-
 namespace atom::utils {
 
 template <typename Key, typename Value, typename Hash = std::hash<Key>,
@@ -46,6 +45,17 @@ private:
         template <typename K, typename V>
         Entry(size_t d, K&& k, V&& v)
             : dist(d), data(std::forward<K>(k), std::forward<V>(v)) {}
+
+        // 添加默认构造函数
+        Entry() : dist(0), data(Key(), Value()) {}
+
+        // 添加交换函数
+        void swap(Entry& other) {
+            std::swap(dist, other.dist);
+            std::swap(const_cast<Key&>(data.first),
+                      const_cast<Key&>(other.data.first));
+            std::swap(data.second, other.data.second);
+        }
     };
 
     using Storage =
@@ -218,7 +228,8 @@ public:
 
         while (true) {
             if (table_[idx].dist < entry.dist) {
-                std::swap(entry, table_[idx]);
+                // 使用Entry的swap方法而不是std::swap
+                entry.swap(table_[idx]);
                 if (entry.dist == 0) {
                     ++size_;
                     return {iterator(table_.begin() + idx), true};
@@ -226,6 +237,49 @@ public:
             }
             idx = (idx + 1) & mask;
             ++entry.dist;
+        }
+    }
+
+    // 实现find方法
+    iterator find(const Key& key) {
+        if (table_.empty())
+            return end();
+
+        size_t mask = table_.size() - 1;
+        size_t idx = hasher_(key) & mask;
+        size_t dist = 0;
+
+        while (true) {
+            if (table_[idx].dist < dist) {
+                return end();  // 找不到元素
+            }
+            if (table_[idx].dist == dist &&
+                key_equal_(table_[idx].data.first, key)) {
+                return iterator(table_.begin() + idx);
+            }
+            idx = (idx + 1) & mask;
+            ++dist;
+        }
+    }
+
+    const_iterator find(const Key& key) const {
+        if (table_.empty())
+            return end();
+
+        size_t mask = table_.size() - 1;
+        size_t idx = hasher_(key) & mask;
+        size_t dist = 0;
+
+        while (true) {
+            if (table_[idx].dist < dist) {
+                return end();  // 找不到元素
+            }
+            if (table_[idx].dist == dist &&
+                key_equal_(table_[idx].data.first, key)) {
+                return const_iterator(table_.begin() + idx);
+            }
+            idx = (idx + 1) & mask;
+            ++dist;
         }
     }
 
@@ -278,7 +332,8 @@ private:
 
                 while (true) {
                     if (new_table[idx].dist < dist) {
-                        std::swap(entry, new_table[idx]);
+                        // 使用Entry的swap方法而不是std::swap
+                        entry.swap(new_table[idx]);
                         if (entry.dist == 0)
                             break;
                     }

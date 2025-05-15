@@ -3,7 +3,7 @@
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-
+#include <type_traits>
 
 namespace py = pybind11;
 
@@ -77,8 +77,8 @@ py::class_<atom::type::expected<T, E>> declare_expected(
         .def(
             "map",
             [](const ExpectedType& exp, py::function func) {
-                using ReturnType =
-                    decltype(func(std::declval<T>()).cast<py::object>());
+                using ReturnType = decltype(func(std::declval<T>())
+                                                .template cast<py::object>());
                 if (exp.has_value()) {
                     try {
                         py::object result = func(exp.value());
@@ -150,9 +150,15 @@ py::class_<atom::type::expected<T, E>> declare_expected(
             "__repr__",
             [](const ExpectedType& exp) {
                 if (exp.has_value()) {
-                    return std::string("Expected(") +
-                           py::str(py::cast(exp.value())).cast<std::string>() +
-                           ")";
+                    if constexpr (std::is_same_v<T, py::object>) {
+                        return std::string("Expected(") +
+                               py::str(exp.value()).cast<std::string>() + ")";
+                    } else {
+                        return std::string("Expected(") +
+                               py::str(py::cast(exp.value()))
+                                   .cast<std::string>() +
+                               ")";
+                    }
                 } else {
                     return std::string("Expected(Error(") +
                            py::str(py::cast(exp.error().error()))

@@ -40,6 +40,7 @@
 
 namespace atom::search {
 
+// 修改 PairStringHash 使其成为更通用的哈希类
 struct PairStringHash {
     size_t operator()(const std::pair<std::string, std::string>& p) const {
         size_t h1 = std::hash<std::string>()(p.first);
@@ -420,8 +421,13 @@ private:
     std::list<KeyValuePair>
         cache_items_list_;  ///< List for maintaining item order.
     size_t max_size_;       ///< Maximum number of items in the cache.
-    std::unordered_map<std::pair<std::string, std::string>, CacheItem,
-                       PairStringHash>
+
+    std::unordered_map<
+        Key, CacheItem,
+        std::conditional_t<
+            std::is_same_v<Key, std::pair<std::string, std::string>>,
+            PairStringHash,
+            std::hash<Key>>>
         cache_items_map_;           ///< Map for fast key lookups.
     atomic<size_t> hit_count_{0};   ///< Number of cache hits.
     atomic<size_t> miss_count_{0};  ///< Number of cache misses.
@@ -759,7 +765,7 @@ auto ThreadSafeLRUCache<Key, Value>::popLru() noexcept
         cache_items_list_.pop_back();
 
         if (on_erase_) {
-            on_erase_(last->first);
+            on_erase_(keyValuePair.first);
         }
 
         return keyValuePair;

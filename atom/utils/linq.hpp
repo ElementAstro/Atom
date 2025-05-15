@@ -188,7 +188,12 @@ public:
 #else
         atom::containers::HashSet<
             std::invoke_result_t<decltype(transformer), T>>
-            set;
+            set(/*bucket_count=*/16,
+                /*hash=*/
+                std::hash<std::invoke_result_t<decltype(transformer), T>>(),
+                /*equal=*/
+                std::equal_to<
+                    std::invoke_result_t<decltype(transformer), T>>());
         for (const auto& element : elements_) {
             auto transformed = transformer(element);
             if (set.insert(transformed).second) {
@@ -279,7 +284,12 @@ public:
 
     template <typename U>
     [[nodiscard]] auto groupBy(auto transformer) const -> Enumerable<U> {
-        atom::containers::HashMap<U, atom::containers::Vector<T>> groups;
+        // Initialize the hash map with default values to support
+        // non-default-constructible keys like pybind11::object
+        atom::containers::HashMap<U, atom::containers::Vector<T>> groups(
+            /*bucket_count=*/16,
+            /*hash=*/std::hash<U>(),
+            /*equal=*/std::equal_to<U>());
 #ifdef ATOM_USE_BOOST
         boost::for_each(elements_, [&](const T& element) {
             groups[transformer(element)].push_back(element);
@@ -356,9 +366,15 @@ public:
     }
 
     [[nodiscard]] auto avg() const -> double {
-        return elements_.empty()
-                   ? 0.0
-                   : static_cast<double>(sum()) / elements_.size();
+        if (elements_.empty())
+            return 0.0;
+
+        if constexpr (std::is_arithmetic_v<T>) {
+            return static_cast<double>(sum()) / elements_.size();
+        } else {
+            // For non-numeric types, return count as double
+            return static_cast<double>(elements_.size());
+        }
     }
 
     template <typename U>

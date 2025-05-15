@@ -38,7 +38,7 @@ public:
 };
 
 HttpHeaderParser::HttpHeaderParser()
-    : impl_(std::make_unique<HttpHeaderParser::HttpHeaderParserImpl>()) {
+    : impl_(std::make_shared<HttpHeaderParser::HttpHeaderParserImpl>()) {
     LOG_F(INFO, "HttpHeaderParser constructor called");
 }
 

@@ -333,7 +333,7 @@ public:
 
 private:
     class HttpHeaderParserImpl;
-    std::unique_ptr<HttpHeaderParserImpl> impl_;  // Pointer to implementation
+    std::shared_ptr<HttpHeaderParserImpl> impl_;  // Pointer to implementation
 };
 }  // namespace atom::web
 

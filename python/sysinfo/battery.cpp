@@ -5,7 +5,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 using namespace atom::system;
 
@@ -573,13 +572,16 @@ Examples:
     ...     print("No battery detected")
 )");
 
-    m.def("get_estimated_runtime", []() {
-        BatteryInfo info = getBatteryInfo();
-        if (!info.isBatteryPresent || info.isCharging) {
-            return -1.0f;
-        }
-        return info.getEstimatedTimeRemaining();
-    }, R"(Get estimated remaining battery runtime in hours.
+    m.def(
+        "get_estimated_runtime",
+        []() {
+            BatteryInfo info = getBatteryInfo();
+            if (!info.isBatteryPresent || info.isCharging) {
+                return -1.0f;
+            }
+            return info.getEstimatedTimeRemaining();
+        },
+        R"(Get estimated remaining battery runtime in hours.
 
 Returns:
     Estimated runtime in hours, or -1 if battery is charging or not present.
@@ -590,12 +592,13 @@ Examples:
     >>> if runtime > 0:
     ...     print(f"Estimated runtime: {runtime:.1f} hours")
     ... else:
-    ...     print("Cannot estimate runtime (battery charging or not present)")
+    ...     print("Cannot estimate runtime (battery charging or not present) ")
 )");
 
-    m.def("is_battery_present", []() {
-        return getBatteryInfo().isBatteryPresent;
-    }, R"(Check if a battery is present in the system.
+    m.def(
+        "is_battery_present",
+        []() { return getBatteryInfo().isBatteryPresent; },
+        R"(Check if a battery is present in the system.
 
 Returns:
     Boolean indicating whether a battery is present.
@@ -605,16 +608,19 @@ Examples:
     >>> if battery.is_battery_present():
     ...     print("Battery is present")
     ... else:
-    ...     print("No battery detected (desktop system)")
+    ...     print("No battery detected (desktop system) ")
 )");
 
-    m.def("get_battery_health", []() {
-        BatteryInfo info = getDetailedBatteryInfo();
-        if (!info.isBatteryPresent) {
-            return -1.0f;
-        }
-        return info.getBatteryHealth();
-    }, R"(Get battery health percentage.
+    m.def(
+        "get_battery_health",
+        []() {
+            BatteryInfo info = getDetailedBatteryInfo();
+            if (!info.isBatteryPresent) {
+                return -1.0f;
+            }
+            return info.getBatteryHealth();
+        },
+        R"(Get battery health percentage.
 
 Returns:
     Battery health as percentage (0-100), or -1 if no battery is present.
@@ -666,7 +672,7 @@ Examples:
     // Factory function for battery monitor context
     m.def(
         "monitor_battery",
-        [](py::function callback, unsigned int interval_ms) {
+        [&m](py::function callback, unsigned int interval_ms) {
             return m.attr("BatteryMonitorContext")(callback, interval_ms);
         },
         py::arg("callback"), py::arg("interval_ms") = 1000,

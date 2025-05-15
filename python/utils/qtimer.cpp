@@ -3,7 +3,7 @@
 #include <pybind11/chrono.h>
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
-
+#include <chrono>
 
 namespace py = pybind11;
 
@@ -65,7 +65,8 @@ Examples:
              "Get elapsed time in minutes.")
         .def("elapsed_hrs", &atom::utils::ElapsedTimer::elapsedHrs,
              "Get elapsed time in hours.")
-        .def("elapsed", &atom::utils::ElapsedTimer::elapsed,
+        .def("elapsed",
+             &atom::utils::ElapsedTimer::elapsed<std::chrono::milliseconds>,
              "Get elapsed time in milliseconds.")
         .def("has_expired", &atom::utils::ElapsedTimer::hasExpired,
              py::arg("ms"),
