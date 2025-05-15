@@ -202,8 +202,10 @@ BiosHealthStatus BiosInfo::checkHealth() const {
         for (const auto& cmd : checkItems) {
             std::array<char, 4096> buffer;
             std::string result;
-            std::unique_ptr<FILE, decltype(&pclose)> pipe(
-                popen(cmd.c_str(), "r"), pclose);
+            struct PCloseDeleter {
+                void operator()(FILE* fp) const { pclose(fp); }
+            };
+            std::unique_ptr<FILE, PCloseDeleter> pipe(popen(cmd.c_str(), "r"));
 
             if (!pipe) {
                 throw std::runtime_error("popen() failed for command: " + cmd);
@@ -227,7 +229,7 @@ BiosHealthStatus BiosInfo::checkHealth() const {
         {
             std::array<char, 4096> buffer;
             std::string result;
-            std::unique_ptr<FILE, decltype(&pclose)> pipe(
+            std::unique_ptr<FILE, int (*)(FILE*)> pipe(
                 popen("journalctl -b | grep -i 'bios\\|firmware\\|uefi' | grep "
                       "-i 'error\\|fail\\|warning'",
                       "r"),
@@ -248,7 +250,6 @@ BiosHealthStatus BiosInfo::checkHealth() const {
                     int count = 0;
 
                     while (std::getline(iss, line) && count < 5) {
-                        status.logMessages.push_back(line);
                         count++;
                     }
                 }
@@ -438,7 +439,7 @@ bool BiosInfo::setSecureBoot(bool enable) {
 
         // Create backup of current value
         std::string backupCmd = "cp " + secureBootVar + " /tmp/SecureBoot.bak";
-        if (system(backupCmd.c_str()) != 0) {
+        if (std::system(backupCmd.c_str()) != 0) {
             LOG_F(ERROR, "Failed to backup current Secure Boot state");
             return false;
         }

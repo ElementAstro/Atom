@@ -31,27 +31,36 @@
 *.out
 *.app
 
+# Build artifacts
+build/
+cmake-build-debug/
+.xmake/
+.cache/
 
-build
-.vscode
-node_modules
-src/pyutils/__pycache__/astrometry.cpython-310.pyc
+# IDE and editor specific
+.idea/ # Added for IntelliJ based IDEs
+
+# Language specific
+node_modules/
+src/pyutils/__pycache__/
+.venv/
+.mypy_cache/
+
+# Test files and outputs
 src/pyutils/test.jpg
 test.cpp
+module_test/
+test/
 
-module_test
-
+# Configuration files
 libexample.json
 
-test
-
+# Log and report files
 *.log
 *.xml
 
-.xmake
-.cache
+# Temporary or cache files
+.roo/
 
-cmake-build-debug/
-
-.venv/
-.mypy_cache/
+# Python bytecode
+*.pyc

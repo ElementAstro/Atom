@@ -1,0 +1,10 @@
+{
+    "recommendations": [
+        "llvm-vs-code-extensions.vscode-clangd",
+        "xaver.clang-format",
+        "ms-vscode.cmake-tools",
+        "vadimcn.vscode-lldb",
+        "danielpinto8zz6.c-cpp-compile-run",
+        "usernamehw.errorlens"
+    ]
+}
