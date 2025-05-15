@@ -5,6 +5,7 @@
 #include <exception>
 #include <filesystem>
 #include <optional>
+#include <string_view>
 
 #ifdef ATOM_USE_BOOST
 #include <boost/filesystem.hpp>
@@ -29,7 +30,7 @@ namespace atom::io {
 // anonymous namespace removed as logError is no longer needed
 
 #ifdef ATOM_USE_BOOST
-std::string getFilePermissions(const std::string& filePath) noexcept {
+std::string getFilePermissions(std::string_view filePath) noexcept {
     if (filePath.empty()) {
         LOG_F(ERROR, "Empty file path provided");
         return {};
@@ -120,7 +121,7 @@ std::string getSelfPermissions() noexcept {
 #else  // Standard C++ implementation
 
 #ifdef _WIN32
-std::string getFilePermissions(const std::string& filePath) noexcept {
+std::string getFilePermissions(std::string_view filePath) noexcept {
     if (filePath.empty()) {
         LOG_F(ERROR, "Empty file path provided");
         return {};
@@ -239,7 +240,7 @@ std::string getSelfPermissions() noexcept {
     }
 }
 #else   // POSIX systems
-std::string getFilePermissions(const std::string& filePath) noexcept {
+std::string getFilePermissions(std::string_view filePath) noexcept {
     if (filePath.empty()) {
         LOG_F(ERROR, "Empty file path provided");
         return {};
@@ -247,7 +248,7 @@ std::string getFilePermissions(const std::string& filePath) noexcept {
 
     try {
         struct stat fileStat{};
-        if (stat(filePath, &fileStat) < 0) {
+        if (stat(filePath.data(), &fileStat) < 0) {
             // Use {} for strerror result
             LOG_F(ERROR, "stat error for '{}': {}", filePath, strerror(errno));
             return {};
@@ -311,7 +312,7 @@ std::string getSelfPermissions() noexcept {
 #endif  // ATOM_USE_BOOST
 
 std::optional<bool> compareFileAndSelfPermissions(
-    const std::string& filePath) noexcept {
+    std::string_view filePath) noexcept {
     if (filePath.empty()) {
         LOG_F(ERROR, "Empty file path provided for comparison");
         return std::nullopt;

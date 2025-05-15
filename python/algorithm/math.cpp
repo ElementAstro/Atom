@@ -4,6 +4,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <cstdint>
 
 namespace py = pybind11;
 
@@ -455,11 +456,11 @@ PYBIND11_MODULE(math, m) {
     // Function to compute binomial coefficient efficiently
     m.def(
         "binomial_coefficient",
-        [](uint64_t n, uint64_t k) {
+        [](uint64_t n, uint64_t k) -> uint64_t {
             if (k > n)
-                return 0ULL;
+                return 0;
             if (k == 0 || k == n)
-                return 1ULL;
+                return 1;
 
             // Optimize by using symmetry
             if (k > n - k)
@@ -497,7 +498,7 @@ PYBIND11_MODULE(math, m) {
     // Function to compute factorial efficiently
     m.def(
         "factorial",
-        [](uint64_t n) {
+        [](uint64_t n) -> uint64_t {
             if (n <= 1)
                 return 1ULL;
 
@@ -705,7 +706,7 @@ PYBIND11_MODULE(math, m) {
     // Function to compute Euler's totient function (phi)
     m.def(
         "euler_totient",
-        [](uint64_t n) {
+        [](uint64_t n) -> uint64_t {
             if (n == 0)
                 return 0ULL;
 

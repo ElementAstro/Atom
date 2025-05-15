@@ -47,11 +47,6 @@ enum class FifoError {
 };
 
 /**
- * @brief Enum representing different log levels for the client
- */
-enum class LogLevel { Debug, Info, Warning, Error, None };
-
-/**
  * @brief Enum representing message priority levels
  */
 enum class MessagePriority { Low, Normal, High, Critical };
@@ -101,9 +96,6 @@ struct ClientConfig {
 
     // Enable data encryption
     bool enable_encryption = false;
-
-    // Log level
-    LogLevel log_level = LogLevel::Info;
 };
 
 /**
@@ -389,13 +381,6 @@ public:
      * @brief Resets client statistics.
      */
     void resetStatistics();
-
-    /**
-     * @brief Sets the log level for the client.
-     *
-     * @param level New log level
-     */
-    void setLogLevel(LogLevel level);
 
     /**
      * @brief Cancels an ongoing asynchronous operation.

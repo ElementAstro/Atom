@@ -236,7 +236,7 @@ public:
      * @param pid The process ID.
      * @return Process information or nullopt if not found.
      */
-    [[nodiscard]] auto getProcessInfo(pid_t pid) const
+    [[nodiscard]] auto getProcessInfo(pid_t pid)
         -> std::optional<ProcessInfo>;
 
     /**
@@ -244,7 +244,7 @@ public:
      *
      * @return Vector of ProcessInfo for all running processes.
      */
-    [[nodiscard]] auto getAllProcesses() const -> std::vector<ProcessInfo>;
+    [[nodiscard]] auto getAllProcesses() -> std::vector<ProcessInfo>;
 
     /**
      * @brief Get child processes of a specific process.
@@ -365,7 +365,7 @@ public:
      * @param pid The process ID.
      * @return ProcessIOStats structure with I/O information.
      */
-    [[nodiscard]] ProcessIOStats getProcessIOStats(pid_t pid) const;
+    [[nodiscard]] ProcessIOStats getProcessIOStats(pid_t pid);
 
     /**
      * @brief Gets the process status.

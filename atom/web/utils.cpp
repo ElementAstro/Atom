@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <chrono>
 #include <cstring>
 #include <format>
@@ -228,7 +227,7 @@ auto getLocalIPAddresses() -> std::vector<std::string> {
             throw std::runtime_error("Failed to get interface addresses");
         }
 
-        auto cleanup = [&ifAddrStruct]() {
+        auto cleanup = [&ifAddrStruct](void*) {
             if (ifAddrStruct) {
                 freeifaddrs(ifAddrStruct);
             }
@@ -271,7 +270,13 @@ auto createSocket() -> int {
 #ifdef _WIN32
             strerror_s(buf.data(), buf.size(), errno);
 #else
-            strerror_r(errno, buf.data(), buf.size());
+            char* err_str = strerror_r(errno, buf.data(), buf.size());
+            if (err_str != buf.data()) {
+                // In GNU version, strerror_r might return a pointer to a static
+                // string that is different from the buffer we provided
+                strncpy(buf.data(), err_str, buf.size() - 1);
+                buf[buf.size() - 1] = '\0';
+            }
 #endif
             throw std::runtime_error(
                 std::format("Socket creation failed: {}", buf.data()));

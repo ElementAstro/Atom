@@ -608,7 +608,7 @@ void QProcess::Impl::terminate() noexcept {
         CloseHandle(procInfo_.hProcess);
         CloseHandle(procInfo_.hThread);
 #else
-        kill(childPid_, SIGTERM);
+        ::kill(childPid_, SIGTERM);
 #endif
         running_ = false;
     }

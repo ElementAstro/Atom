@@ -1,6 +1,7 @@
 #ifndef ATOM_UTILS_VALID_STRING_HPP
 #define ATOM_UTILS_VALID_STRING_HPP
 
+#include <algorithm>
 #include <array>
 #include <concepts>
 #include <expected>  // C++23 for error handling with result types
@@ -61,7 +62,7 @@ concept UnicodeStringLike = StringLike<T> && requires(T s) {
 };
 
 // Bracket type definition enum for extensibility
-enum class BracketType : uint8_t {
+enum class BracketType {
     Round,   // ()
     Square,  // []
     Curly,   // {}
@@ -255,20 +256,6 @@ private:
 template <StringLike T>
 auto isValidBracket(T&& str, const ValidationOptions& options = {})
     -> std::expected<ValidationResult, std::string>;
-
-// Extended compile-time validation
-template <StringLike T>
-auto validateBracketsWithExceptions(T&& str,
-                                    const ValidationOptions& options = {})
-    -> void {
-    auto result = isValidBracket(std::forward<T>(str), options);
-    if (!result) {
-        throw ValidationException(result.error());
-    }
-    if (!result->isValid) {
-        throw ValidationException(std::move(result.value()));
-    }
-}
 
 // Enhanced compile-time bracket validator
 template <std::size_t N>

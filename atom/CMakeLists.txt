@@ -26,6 +26,13 @@ if(ATOM_BUILD_PYTHON)
     endif()
 endif()
 
+if (LINUX)
+pkg_check_modules(SYSTEMD REQUIRED libsystemd)
+if(SYSTEMD_FOUND)
+    message(STATUS "Found libsystemd: ${SYSTEMD_VERSION}")
+endif()
+endif()
+
 # 需要构建的子目录列表
 set(SUBDIRECTORIES)
 

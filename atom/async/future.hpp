@@ -851,11 +851,8 @@ public:
         try {
             future_.get();
         } catch (const std::exception& e) {
-            THROW_NESTED_INVALID_FUTURE_EXCEPTION(
+            THROW_INVALID_FUTURE_EXCEPTION(
                 "Exception while waiting for future: ", e.what());
-        } catch (...) {
-            THROW_NESTED_INVALID_FUTURE_EXCEPTION(
-                "Unknown exception while waiting for future");
         }
     }
 

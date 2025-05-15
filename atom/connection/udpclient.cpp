@@ -40,7 +40,7 @@ Description: UDP Client Class
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#define CLOSE_SOCKET(s) close(s)
+#define CLOSE_SOCKET(s) ::close(s)
 #endif
 
 namespace {
@@ -178,7 +178,7 @@ public:
 
 #ifdef __linux__
         if (epoll_fd_ >= 0) {
-            close(epoll_fd_);
+            ::close(epoll_fd_);
             epoll_fd_ = -1;
         }
 #endif

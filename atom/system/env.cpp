@@ -176,7 +176,7 @@ void Env::add(const String& key, const String& val) {
 
 // Use HashMap<String, String> for parameter
 void Env::addMultiple(const HashMap<String, String>& vars) {
-    LOG_F(INFO, "Env::addMultiple called with %zu variables", vars.size());
+    LOG_F(INFO, "Env::addMultiple called with {} variables", vars.size());
     std::unique_lock lock(impl_->mMutex);
     for (const auto& [key, val] : vars) {
         // Use contains or find
@@ -195,13 +195,13 @@ bool Env::has(const String& key) {
     LOG_F(INFO, "Env::has called with key: {}", key);
     std::shared_lock lock(impl_->mMutex);
     bool result = impl_->mArgs.contains(key);  // Assumes HashMap has contains()
-    LOG_F(INFO, "Env::has returning: %d", result);
+    LOG_F(INFO, "Env::has returning: {}", result);
     return result;
 }
 
 // Use Vector<String> for parameter
 bool Env::hasAll(const Vector<String>& keys) {
-    LOG_F(INFO, "Env::hasAll called with %zu keys", keys.size());
+    LOG_F(INFO, "Env::hasAll called with {} keys", keys.size());
     std::shared_lock lock(impl_->mMutex);
     for (const auto& key : keys) {
         if (!impl_->mArgs.contains(key)) {
@@ -215,7 +215,7 @@ bool Env::hasAll(const Vector<String>& keys) {
 
 // Use Vector<String> for parameter
 bool Env::hasAny(const Vector<String>& keys) {
-    LOG_F(INFO, "Env::hasAny called with %zu keys", keys.size());
+    LOG_F(INFO, "Env::hasAny called with {} keys", keys.size());
     std::shared_lock lock(impl_->mMutex);
     for (const auto& key : keys) {
         if (impl_->mArgs.contains(key)) {
@@ -237,7 +237,7 @@ void Env::del(const String& key) {
 
 // Use Vector<String> for parameter
 void Env::delMultiple(const Vector<String>& keys) {
-    LOG_F(INFO, "Env::delMultiple called with %zu keys", keys.size());
+    LOG_F(INFO, "Env::delMultiple called with {} keys", keys.size());
     std::unique_lock lock(impl_->mMutex);
     for (const auto& key : keys) {
         impl_->mArgs.erase(key);
@@ -272,15 +272,15 @@ auto Env::setEnv(const String& key, const String& val) -> bool {
     // Or stick to SetEnvironmentVariableA if String guarantees null termination
     bool result = SetEnvironmentVariableA(key.c_str(), val.c_str()) != 0;
 #else
-    bool result = ::setenv(key, val, 1) == 0;  // Use ::setenv
+    bool result = ::setenv(key.c_str(), val.c_str(), 1) == 0;
 #endif
-    LOG_F(INFO, "Env::setEnv returning: %d", result);
+    LOG_F(INFO, "Env::setEnv returning: {}", result);
     return result;
 }
 
 // Use HashMap<String, String> for parameter, use  for C API calls
 auto Env::setEnvMultiple(const HashMap<String, String>& vars) -> bool {
-    LOG_F(INFO, "Env::setEnvMultiple called with %zu variables", vars.size());
+    LOG_F(INFO, "Env::setEnvMultiple called with {} variables", vars.size());
     bool allSuccess = true;
     for (const auto& [key, val] : vars) {
         DLOG_F(INFO, "Env::setEnvMultiple: Setting key: {} with value: {}", key,
@@ -288,14 +288,14 @@ auto Env::setEnvMultiple(const HashMap<String, String>& vars) -> bool {
 #ifdef _WIN32
         bool result = SetEnvironmentVariableA(key.c_str(), val.c_str()) != 0;
 #else
-        bool result = ::setenv(key, val, 1) == 0;
+        bool result = ::setenv(key.c_str(), val.c_str(), 1) == 0;
 #endif
         if (!result) {
             LOG_F(ERROR, "Env::setEnvMultiple: Failed to set key: {}", key);
             allSuccess = false;
         }
     }
-    LOG_F(INFO, "Env::setEnvMultiple returning: %d", allSuccess);
+    LOG_F(INFO, "Env::setEnvMultiple returning: {}", allSuccess);
     return allSuccess;
 }
 
@@ -339,7 +339,7 @@ auto Env::getEnv(const String& key, const String& default_value) -> String {
     return value;
 
 #else
-    const char* v = ::getenv(key);  // Use ::getenv
+    const char* v = ::getenv(key.c_str());
     if (v == nullptr) {
         DLOG_F(INFO, "Env::getEnv: Key: {} not found, returning default", key);
         return default_value;
@@ -399,7 +399,7 @@ auto Env::Environ() -> HashMap<String, String> {
     }
 #endif
 
-    LOG_F(INFO, "Env::Environ returning environment map with %zu entries",
+    LOG_F(INFO, "Env::Environ returning environment map with {} entries",
           envMap.size());
     return envMap;
 }
@@ -420,11 +420,11 @@ void Env::unsetEnv(const String& name) {
         }
     }
 #else
-    if (::unsetenv(name) != 0) {  // Use ::unsetenv
+    if (::unsetenv(name.c_str()) != 0) {
         // errno might be set, e.g., EINVAL if name is invalid
         // Don't log error if it simply didn't exist, check getenv first if
         // needed
-        LOG_F(ERROR, "Failed to unset environment variable: {}, errno: %d",
+        LOG_F(ERROR, "Failed to unset environment variable: {}, errno: {}",
               name, errno);
     }
 #endif
@@ -432,7 +432,7 @@ void Env::unsetEnv(const String& name) {
 
 // Use Vector<String> for parameter, use  for C API calls
 void Env::unsetEnvMultiple(const Vector<String>& names) {
-    LOG_F(INFO, "Env::unsetEnvMultiple called with %zu names", names.size());
+    LOG_F(INFO, "Env::unsetEnvMultiple called with {} names", names.size());
     for (const auto& name : names) {
         DLOG_F(INFO, "Env::unsetEnvMultiple: Unsetting variable: {}", name);
         unsetEnv(name);  // Call the single unset function
@@ -463,7 +463,7 @@ auto Env::listVariables() -> Vector<String> {
     }
 #endif
 
-    LOG_F(INFO, "Env::listVariables returning %zu variables", vars.size());
+    LOG_F(INFO, "Env::listVariables returning {} variables", vars.size());
     return vars;
 }
 
@@ -483,7 +483,7 @@ auto Env::filterVariables(
         }
     }
 
-    LOG_F(INFO, "Env::filterVariables returning %zu filtered variables",
+    LOG_F(INFO, "Env::filterVariables returning {} filtered variables",
           filteredVars.size());
     return filteredVars;
 }
@@ -532,7 +532,7 @@ auto Env::saveToFile(const std::filesystem::path& filePath,
         }
 
         file.close();
-        LOG_F(INFO, "Env::saveToFile: Successfully saved %zu variables to {}",
+        LOG_F(INFO, "Env::saveToFile: Successfully saved {} variables to {}",
               varsToSave.size(), filePath.string());
         return true;
     } catch (const std::exception& e) {
@@ -544,7 +544,7 @@ auto Env::saveToFile(const std::filesystem::path& filePath,
 // Use String internally, HashMap<String, String> for loaded vars
 auto Env::loadFromFile(const std::filesystem::path& filePath, bool overwrite)
     -> bool {
-    LOG_F(INFO, "Env::loadFromFile called with filePath: {}, overwrite: %d",
+    LOG_F(INFO, "Env::loadFromFile called with filePath: {}, overwrite: {}",
           filePath.string(), overwrite);
 
     try {
@@ -611,7 +611,7 @@ auto Env::loadFromFile(const std::filesystem::path& filePath, bool overwrite)
         }
 
         LOG_F(INFO,
-              "Env::loadFromFile: Successfully processed %zu variables from {}",
+              "Env::loadFromFile: Successfully processed {} variables from {}",
               loadedVars.size(), filePath.string());
         return true;
     } catch (const std::exception& e) {

@@ -12,9 +12,7 @@
 #include <type_traits>
 #include <variant>
 
-#ifdef _WIN32
 #undef NAN
-#endif
 
 namespace atom::algorithm {
 using i8 = std::int8_t;

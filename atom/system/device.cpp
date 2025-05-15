@@ -235,8 +235,14 @@ auto enumerateSerialPorts() -> std::vector<DeviceInfo> {
     LOG_F(INFO, "enumerate_serial_ports called");
     std::vector<DeviceInfo> devices;
 
-    auto dp =
-        std::unique_ptr<DIR, decltype(&closedir)>(opendir("/dev"), closedir);
+    struct DirCloser {
+        void operator()(DIR *dir) const {
+            if (dir)
+                closedir(dir);
+        }
+    };
+
+    auto dp = std::unique_ptr<DIR, DirCloser>(opendir("/dev"));
     if (!dp) {
         LOG_F(ERROR, "Failed to open /dev directory");
         return devices;

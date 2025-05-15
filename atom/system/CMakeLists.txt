@@ -9,6 +9,14 @@
 cmake_minimum_required(VERSION 3.20)
 project(atom-system VERSION 1.0.0 LANGUAGES C CXX)
 
+find_package(PkgConfig REQUIRED)
+
+pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+
+if(LIBUSB_FOUND)
+    message(STATUS "Found libusb-1.0: ${LIBUSB_VERSION}")
+endif()
+
 # Sources and Headers
 set(SOURCES
     command.cpp
@@ -55,6 +63,7 @@ set(LIBS
     ${CMAKE_THREAD_LIBS_INIT}
     atom-sysinfo
     atom-meta
+    ${LIBUSB_LIBRARIES}
 )
 
 # Build Object Library

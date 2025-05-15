@@ -51,6 +51,7 @@ Description: System Information Module - Disk
 #include <unistd.h>
 #include <csignal>
 #include <cstdlib>
+#include <fstream>
 #elif __APPLE__
 #include <CoreFoundation/CoreFoundation.h>
 #include <DiskArbitration/DiskArbitration.h>

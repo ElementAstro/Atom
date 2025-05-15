@@ -14,7 +14,6 @@ Description: System Information Module - Wifi Information
 
 #include "atom/sysinfo/wifi.hpp"
 
-#include <codecvt>
 #include <memory>
 #include <string>
 #include <vector>
@@ -43,14 +42,12 @@ Description: System Information Module - Wifi Information
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <netinet/in.h>
-#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <iterator>
 #include <memory>
 #include <sstream>
-#include <thread>
 #elif defined(__APPLE__)
 #include <CoreFoundation/CoreFoundation.h>
 #include <SystemConfiguration/CaptiveNetwork.h>
@@ -777,7 +774,7 @@ auto getNetworkStats() -> NetworkStats {
         char buffer[128];
         while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
             if (strstr(buffer, "Signal level") != nullptr) {
-                sscanf(buffer, "%*[^=]=%d", &stats.signalStrength);
+                sscanf(buffer, "%*[^=]=%le", &stats.signalStrength);
                 break;
             }
         }

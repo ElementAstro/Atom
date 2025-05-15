@@ -17,6 +17,7 @@ Description: PID Watcher
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -45,6 +46,9 @@ Description: PID Watcher
 #endif
 
 #include "atom/log/loguru.hpp"
+#include "atom/utils/string.hpp"
+
+namespace fs = std::filesystem;
 
 namespace atom::system {
 PidWatcher::PidWatcher()
@@ -196,7 +200,7 @@ auto PidWatcher::getPidByName(const std::string& name) const -> pid_t {
         std::string proc_name =
             (pos != std::string::npos) ? cmdline.substr(pos + 1) : cmdline;
         // Trim whitespace
-        proc_name = trim(proc_name);
+        proc_name = atom::utils::trim(proc_name);
 
         if (proc_name == name) {
             closedir(dir);
@@ -279,7 +283,7 @@ auto PidWatcher::getPidsByName(const std::string& name) const
         std::string proc_name =
             (pos != std::string::npos) ? cmdline.substr(pos + 1) : cmdline;
         // Trim whitespace
-        proc_name = trim(proc_name);
+        proc_name = atom::utils::trim(proc_name);
 
         if (proc_name == name) {
             pid_t found_pid = std::stoi(entry->d_name);
@@ -294,7 +298,7 @@ auto PidWatcher::getPidsByName(const std::string& name) const
     return results;
 }
 
-auto PidWatcher::getProcessInfo(pid_t pid) const -> std::optional<ProcessInfo> {
+auto PidWatcher::getProcessInfo(pid_t pid) -> std::optional<ProcessInfo> {
     std::lock_guard lock(mutex_);
 
     auto it = monitored_processes_.find(pid);
@@ -438,7 +442,7 @@ auto PidWatcher::getProcessInfo(pid_t pid) const -> std::optional<ProcessInfo> {
         size_t pos = display_cmdline.find_last_of('/');
         info.name = (pos != std::string::npos) ? display_cmdline.substr(pos + 1)
                                                : display_cmdline;
-        info.name = trim(info.name);
+        info.name = atom::utils::trim(info.name);
     }
 
     // Get process status, parent PID and other details
@@ -544,7 +548,7 @@ auto PidWatcher::getProcessInfo(pid_t pid) const -> std::optional<ProcessInfo> {
     return info;
 }
 
-auto PidWatcher::getAllProcesses() const -> std::vector<ProcessInfo> {
+auto PidWatcher::getAllProcesses() -> std::vector<ProcessInfo> {
     std::vector<ProcessInfo> result;
 
 #ifdef _WIN32
@@ -1345,7 +1349,7 @@ unsigned int PidWatcher::getProcessThreadCount(pid_t pid) const {
 #endif
 }
 
-ProcessIOStats PidWatcher::getProcessIOStats(pid_t pid) const {
+ProcessIOStats PidWatcher::getProcessIOStats(pid_t pid) {
     ProcessIOStats stats;
     std::lock_guard lock(mutex_);
 

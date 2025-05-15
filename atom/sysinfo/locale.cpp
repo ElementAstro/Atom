@@ -159,7 +159,8 @@ LocaleInfo getSystemLanguageInfo() {
     localeInfo.characterEncoding =
         std::string(nl_langinfo(CODESET));  // Character encoding
     localeInfo.isRTL = false;               // Needs specific language check
-    localeInfo.numberFormat = std::string(nl_langinfo(NUMERIC_FMT));
+    // TODO: Fix this problem, NUMERIC_FMT is not existed
+    // localeInfo.numberFormat = std::string(nl_langinfo(NUMERIC_FMT));
     localeInfo.measurementSystem = "metric";  // Most Unix systems use metric
     localeInfo.paperSize = "A4";              // Default A4
 #endif

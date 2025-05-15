@@ -131,10 +131,10 @@ public:
           system_logging_enabled_(other.system_logging_enabled_),
 #ifdef _WIN32
           batch_size_(other.batch_size_),
+          h_event_log_(other.h_event_log_),
 #elif defined(__APPLE__)
           os_log_handle_(other.os_log_handle_),
 #endif
-          h_event_log_(other.h_event_log_),
           custom_levels_(std::move(other.custom_levels_)) {
         // Lock the source's mutex to safely move the queue contents
         // This is complex because the source worker might still be running.
@@ -272,14 +272,11 @@ public:
         }
 #elif defined(__linux__)
         if (system_logging_enabled_) {
-            // openlog可以多次调用，后续调用会更改标识
             openlog("AtomLogger", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL1);
         }
 #elif defined(__APPLE__)
         if (system_logging_enabled_) {
-            // macOS既使用传统syslog也使用新的os_log
             openlog("AtomLogger", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL1);
-            // os_log_handle_已在构造函数中初始化
         }
 #endif
     }
@@ -363,10 +360,9 @@ private:
     size_t batch_size_;  // 批处理大小，受queue_mutex_保护
 
 #ifdef _WIN32
-    HANDLE h_event_log_ =
-        nullptr;  // 在启用/禁用期间由system_log_mutex_间接保护
+    HANDLE h_event_log_ = nullptr;
 #elif defined(__APPLE__)
-    os_log_t os_log_handle_ = nullptr;  // macOS os_log句柄
+    os_log_t os_log_handle_ = nullptr;
 #endif
 
     // 互斥锁，用于线程安全访问成员
@@ -633,7 +629,6 @@ private:
         }
     }
 
-    // 更新系统日志功能以支持更多平台特性
     void logToSystem(LogLevel level, std::string_view msg,
                      const std::source_location& location) const {
 #ifdef _WIN32
@@ -689,8 +684,12 @@ private:
         // system_logging_enabled_检查应在调用此函数之前发生
         using enum LogLevel;
 
-        // 优先使用systemd journal（如果可用）
-        if (sd_journal_is_running() > 0) {
+        sd_journal* journal;
+        int ret;
+
+        // 打开日志
+        ret = sd_journal_open(&journal, SD_JOURNAL_LOCAL_ONLY);
+        if (ret < 0) {
             int priority;
             switch (level) {
                 case CRITICAL:
@@ -941,8 +940,6 @@ void Logger::log(LogLevel level, const std::string& msg,
     impl_->log(level, std::string_view(msg), location);
 }
 
-void Logger::flush() {
-    impl_->flush();
-}
+void Logger::flush() { impl_->flush(); }
 
 }  // namespace atom::log

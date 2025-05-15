@@ -24,10 +24,6 @@ public:
     throw ParserException(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, \
                           __VA_ARGS__)
 
-#define THROW_NESTED_PARSER_ERROR(...)                             \
-    ParserException::rethrowNested(ATOM_FILE_NAME, ATOM_FILE_LINE, \
-                                   ATOM_FUNC_NAME, __VA_ARGS__)
-
 // Numeric concept for type constraints
 template <typename T>
 concept Numeric = std::integral<T> || std::floating_point<T>;

@@ -34,9 +34,7 @@ auto stringToTimePoint(const std::string& timeStr)
     return std::chrono::system_clock::from_time_t(time);
 }
 
-auto CronJob::getId() const -> std::string {
-    return time_ + "_" + command_;
-}
+auto CronJob::getId() const -> std::string { return time_ + "_" + command_; }
 
 auto CronJob::toJson() const -> json {
     std::string createdAtStr = timePointToString(created_at_);
@@ -228,8 +226,8 @@ auto CronManager::listCronJobs() -> std::vector<CronJob> {
     std::array<char, 128> buffer;
     std::string result;
 
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"),
-                                                  pclose);
+    using pclose_t = int (*)(FILE*);
+    std::unique_ptr<FILE, pclose_t> pipe(popen(cmd.c_str(), "r"), pclose);
     if (!pipe) {
         LOG_F(ERROR, "Failed to list Cron jobs.");
         return currentJobs;
@@ -483,8 +481,8 @@ auto CronManager::disableCronJob(const std::string& command) -> bool {
     return false;
 }
 
-auto CronManager::setJobEnabledById(const std::string& id,
-                                    bool enabled) -> bool {
+auto CronManager::setJobEnabledById(const std::string& id, bool enabled)
+    -> bool {
     auto it = jobIndex_.find(id);
     if (it != jobIndex_.end()) {
         jobs_[it->second].enabled_ = enabled;

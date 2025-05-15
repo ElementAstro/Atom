@@ -81,7 +81,8 @@ namespace atom::async {
 #elif defined(__powerpc__) || defined(__ppc__) || defined(__PPC__)
 #define cpu_relax() asm volatile("or 27,27,27\n" : : : "memory")
 #else
-#define cpu_relax() std::this_thread::yield()  // Fallback for unknown architectures
+#define cpu_relax() \
+    std::this_thread::yield()  // Fallback for unknown architectures
 #endif
 
 /**
@@ -160,13 +161,15 @@ public:
 
     /**
      * @brief Acquires the lock
-     * @throws std::system_error if the current thread already owns the lock (in debug mode)
+     * @throws std::system_error if the current thread already owns the lock (in
+     * debug mode)
      */
     void lock();
 
     /**
      * @brief Releases the lock
-     * @throws std::system_error if the current thread does not own the lock (in debug mode)
+     * @throws std::system_error if the current thread does not own the lock (in
+     * debug mode)
      */
     void unlock() noexcept;
 
@@ -213,7 +216,8 @@ public:
 
     /**
      * @brief Gets the thread ID currently owning the lock (debug mode only)
-     * @return Thread ID or default value if no thread owns the lock or not in debug mode
+     * @return Thread ID or default value if no thread owns the lock or not in
+     * debug mode
      */
     [[nodiscard]] std::thread::id owner() const noexcept {
 #ifdef ATOM_DEBUG
@@ -293,7 +297,8 @@ public:
     /**
      * @brief Releases the lock using a specific ticket number
      * @param ticket The ticket number to release
-     * @throws std::invalid_argument if the ticket does not match the current serving number
+     * @throws std::invalid_argument if the ticket does not match the current
+     * serving number
      */
     void unlock(uint64_t ticket);
 
@@ -311,7 +316,8 @@ public:
     }
 
     /**
-     * @brief Returns the number of threads currently waiting to acquire the lock
+     * @brief Returns the number of threads currently waiting to acquire the
+     * lock
      * @return The number of waiting threads
      */
     [[nodiscard]] auto waitingThreads() const noexcept -> uint64_t {
@@ -374,9 +380,13 @@ public:
     /**
      * @brief Destructs the scoped lock and releases the lock if still held
      */
-    ~ScopedLock() noexcept(noexcept(std::declval<Mutex>().unlock())) {
+    ~ScopedLock() noexcept {
         if (locked_) {
-            mutex_.unlock();
+            try {
+                mutex_.unlock();
+            } catch (...) {
+                // Prevent exceptions from escaping destructor
+            }
         }
     }
 
@@ -402,7 +412,8 @@ public:
 using ScopedTicketLock = TicketSpinlock::LockGuard;
 
 /**
- * @brief Adaptive mutex that spins for short waits and blocks for longer waits to reduce CPU usage
+ * @brief Adaptive mutex that spins for short waits and blocks for longer waits
+ * to reduce CPU usage
  */
 class AdaptiveSpinlock : public NonCopyable {
     alignas(ATOM_CACHE_LINE_SIZE) std::atomic_flag flag_ = ATOMIC_FLAG_INIT;
@@ -677,7 +688,8 @@ public:
  * @brief Lock optimized for high contention scenarios using boost::atomic
  *
  * This lock uses boost::atomic operations and memory order optimizations
- * along with exponential backoff to reduce contention in high-throughput scenarios.
+ * along with exponential backoff to reduce contention in high-throughput
+ * scenarios.
  */
 class BoostSpinlock : public NonCopyable {
     alignas(ATOM_CACHE_LINE_SIZE) boost::atomic<bool> flag_{false};
@@ -733,8 +745,8 @@ public:
 /**
  * @brief Wrapper around boost::shared_mutex
  *
- * Provides exclusive and shared locking capabilities using the Boost implementation,
- * which might offer better performance on some platforms.
+ * Provides exclusive and shared locking capabilities using the Boost
+ * implementation, which might offer better performance on some platforms.
  */
 class BoostSharedMutex : public NonCopyable {
     boost::shared_mutex mutex_;
@@ -783,7 +795,8 @@ public:
 /**
  * @brief Wrapper around boost::recursive_mutex
  *
- * Allows the same thread to acquire the mutex multiple times without deadlocking.
+ * Allows the same thread to acquire the mutex multiple times without
+ * deadlocking.
  */
 class BoostRecursiveMutex : public NonCopyable {
     boost::recursive_mutex mutex_;
@@ -967,4 +980,4 @@ public:
 
 }  // namespace atom::async
 
-#endif // ATOM_ASYNC_LOCK_HPP
+#endif  // ATOM_ASYNC_LOCK_HPP

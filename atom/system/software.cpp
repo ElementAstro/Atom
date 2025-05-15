@@ -295,8 +295,9 @@ auto getAppPath(const std::string& software_name) -> fs::path {
     std::string command = "which " + software_name;
     std::array<char, 128> buffer;
     std::string result;
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.c_str(), "r"),
-                                                  pclose);
+    using PcloseDeleter = int (*)(FILE*);
+    std::unique_ptr<FILE, PcloseDeleter> pipe(popen(command.c_str(), "r"),
+                                              pclose);
     if (!pipe) {
         LOG_F(ERROR, "Failed to execute command: {}", command);
         return "";
@@ -360,25 +361,39 @@ auto checkSoftwareInstalled(const std::string& software_name) -> bool {
         RegCloseKey(hKey);
     }
 
-#elif defined(__APPLE__)
     std::string command =
         "mdfind \"kMDItemKind == 'Application' && kMDItemFSName == '*" +
         software_name + "*.app'\"";
     std::array<char, 128> buffer;
     std::string result;
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.c_str(), "r"),
+    using PcloseDeleter = int (*)(FILE*);
+    std::unique_ptr<FILE, PcloseDeleter> pipe(popen(command.c_str(), "r"),
+                                              pclose);
                                                   pclose);
-    if (pipe) {
-        while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
-            result += buffer.data();
-        }
-        isInstalled = !result.empty();
-        if (isInstalled) {
-            LOG_F(INFO, "Software {} is installed", software_name);
-        } else {
-            LOG_F(WARNING, "Software {} is not installed", software_name);
-        }
-    }
+                                                  if (pipe) {
+                                                      while (
+                                                          fgets(buffer.data(),
+                                                                buffer.size(),
+                                                                pipe.get()) !=
+                                                          nullptr) {
+                                                          result +=
+                                                              buffer.data();
+                                                      }
+                                                      isInstalled =
+                                                          !result.empty();
+                                                      if (isInstalled) {
+                                                          LOG_F(INFO,
+                                                                "Software {} "
+                                                                "is installed",
+                                                                software_name);
+                                                      } else {
+                                                          LOG_F(
+                                                              WARNING,
+                                                              "Software {} is "
+                                                              "not installed",
+                                                              software_name);
+                                                      }
+                                                  }
 
 #elif defined(__linux__)
     std::string command = "which " + software_name + " > /dev/null 2>&1";
@@ -392,7 +407,7 @@ auto checkSoftwareInstalled(const std::string& software_name) -> bool {
 
 #endif
 
-    return isInstalled;
+                                                  return isInstalled;
 }
 
 auto getProcessInfo(const std::string& software_name)
@@ -801,18 +816,17 @@ auto checkSoftwareUpdates(const std::string& software_name,
         return "96.0.4664.110";
     }
 #elif defined(__APPLE__)
-    // 对于macOS，可以考虑使用SparkleAppcast或类似服务
     if (software_name == "Safari") {
         return "15.2";
     } else if (software_name == "Final Cut Pro") {
         return "10.6.1";
     }
-#elif defined(__linux__)
-    // 对于Linux，可能需要查询包管理器
     std::string cmd = "apt-cache policy " + software_name +
                       " | grep Candidate | awk '{print $2}'";
     std::array<char, 128> buffer;
     std::string result;
+    using PcloseDeleter = int (*)(FILE*);
+    std::unique_ptr<FILE, PcloseDeleter> pipe(popen(cmd.c_str(), "r"), pclose);
     std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"),
                                                   pclose);
 

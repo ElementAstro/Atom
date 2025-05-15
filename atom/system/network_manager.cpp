@@ -26,6 +26,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include <cstring>
+#include <fstream>
 #endif
 
 #include "atom/error/exception.hpp"

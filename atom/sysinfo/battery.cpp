@@ -395,7 +395,7 @@ bool PowerPlanManager::setPowerPlan(PowerPlan plan) {
             return false;
     }
 
-    int result = system(cmd.c_str());
+    int result = std::system(cmd.c_str());
     if (result != 0) {
         LOG_F(ERROR, "Failed to set power plan: command returned %d", result);
         return false;

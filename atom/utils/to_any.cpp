@@ -67,8 +67,8 @@ private:
     template <typename K, typename V>
     auto parseMapOf(std::string_view str) -> std::optional<std::map<K, V>>;
 
-    static auto split(std::string_view str,
-                      char delimiter) -> std::vector<std::string>;
+    static auto split(std::string_view str, char delimiter)
+        -> std::vector<std::string>;
     static auto parseDateTime(std::string_view str)
         -> std::optional<std::chrono::system_clock::time_point>;
 
@@ -95,7 +95,7 @@ auto Parser::parseLiteral(std::string_view input) -> std::optional<std::any> {
         return result;
     } catch (...) {
         isProcessing_ = false;
-        THROW_NESTED_PARSER_ERROR("Failed to parse literal");
+        THROW_PARSER_ERROR("Failed to parse literal");
     }
     return {};
 }
@@ -416,8 +416,8 @@ auto Parser::Impl::parseMapOf(std::string_view str)
     return result;
 }
 
-auto Parser::Impl::split(std::string_view str,
-                         char delimiter) -> std::vector<std::string> {
+auto Parser::Impl::split(std::string_view str, char delimiter)
+    -> std::vector<std::string> {
     std::vector<std::string> result;
     if (str.empty()) {
         return result;

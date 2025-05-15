@@ -18,10 +18,8 @@ Description: FIFO Client
 #include <atomic>
 #include <condition_variable>
 #include <ctime>
-#include <format>
 #include <functional>
 #include <future>
-#include <iostream>
 #include <mutex>
 #include <system_error>
 #include <thread>
@@ -36,6 +34,7 @@ Description: FIFO Client
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <cstring>
 #endif
 
 #ifdef ENABLE_COMPRESSION
@@ -46,6 +45,8 @@ Description: FIFO Client
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #endif
+
+#include "atom/log/loguru.hpp"
 
 namespace atom::connection {
 
@@ -94,79 +95,6 @@ const FifoErrorCategory theFifoErrorCategory{};
     return {static_cast<int>(e), theFifoErrorCategory};
 }
 
-// Helper class for logging
-class Logger {
-public:
-    explicit Logger(LogLevel level) : level_(level) {}
-
-    template <typename... Args>
-    void debug(std::format_string<Args...> fmt, Args&&... args) const {
-        log(LogLevel::Debug, fmt, std::forward<Args>(args)...);
-    }
-
-    template <typename... Args>
-    void info(std::format_string<Args...> fmt, Args&&... args) const {
-        log(LogLevel::Info, fmt, std::forward<Args>(args)...);
-    }
-
-    template <typename... Args>
-    void warning(std::format_string<Args...> fmt, Args&&... args) const {
-        log(LogLevel::Warning, fmt, std::forward<Args>(args)...);
-    }
-
-    template <typename... Args>
-    void error(std::format_string<Args...> fmt, Args&&... args) const {
-        log(LogLevel::Error, fmt, std::forward<Args>(args)...);
-    }
-
-    void setLevel(LogLevel level) { level_ = level; }
-
-private:
-    template <typename... Args>
-    void log(LogLevel msg_level, std::format_string<Args...> fmt,
-             Args&&... args) const {
-        if (msg_level >= level_) {
-            auto timestamp = getCurrentTimeString();
-            auto level_str = levelToString(msg_level);
-            auto message = std::format(fmt, std::forward<Args>(args)...);
-
-            std::cerr << std::format("[{}] FIFO Client {} - {}\n", timestamp,
-                                     level_str, message);
-        }
-    }
-
-    std::string getCurrentTimeString() const {
-        auto now = std::chrono::system_clock::now();
-        auto time_t_now = std::chrono::system_clock::to_time_t(now);
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                      now.time_since_epoch()) %
-                  1000;
-
-        std::array<char, 24> buffer{};
-        std::strftime(buffer.data(), buffer.size(), "%Y-%m-%d %H:%M:%S",
-                      std::localtime(&time_t_now));
-
-        return std::format("{}.{:03d}", buffer.data(), ms.count());
-    }
-
-    const char* levelToString(LogLevel level) const {
-        switch (level) {
-            case LogLevel::Debug:
-                return "DEBUG";
-            case LogLevel::Info:
-                return "INFO";
-            case LogLevel::Warning:
-                return "WARNING";
-            case LogLevel::Error:
-                return "ERROR";
-            default:
-                return "UNKNOWN";
-        }
-    }
-
-    LogLevel level_;
-};
-
 // Structure to track async operations
 struct AsyncOperation {
     enum class Type { Read, Write };
@@ -195,7 +123,6 @@ struct FifoClient::Impl {
     std::string fifoPath;
     ClientConfig config;
     ClientStats stats;
-    Logger logger;
 
     // Thread-safety
     mutable std::mutex operationMutex;  // Mutex for synchronous operations
@@ -218,7 +145,7 @@ struct FifoClient::Impl {
     std::unordered_map<int, ConnectionCallback> connectionCallbacks;
 
     explicit Impl(std::string_view path, const ClientConfig& clientConfig = {})
-        : fifoPath(path), config(clientConfig), logger(clientConfig.log_level) {
+        : fifoPath(path), config(clientConfig) {
         try {
             // Initialize statistics
             stats = ClientStats{};
@@ -264,7 +191,7 @@ struct FifoClient::Impl {
                     false, std::error_code(error, std::system_category()));
             }
 
-            logger.error("Failed to open FIFO pipe: {}", error);
+            LOG_F(ERROR, "Failed to open FIFO pipe: {}", error);
             throw std::system_error(error, std::system_category(),
                                     "Failed to open FIFO pipe: " + fifoPath);
         }
@@ -273,19 +200,19 @@ struct FifoClient::Impl {
         struct stat st;
         if (stat(fifoPath.c_str(), &st) == -1) {
             if (mkfifo(fifoPath.c_str(), 0666) == -1 && errno != EEXIST) {
-                logger.error("Failed to create FIFO pipe: {}", strerror(errno));
+                LOG_F(ERROR, "Failed to create FIFO pipe: {}", strerror(errno));
                 throw std::system_error(
                     errno, std::system_category(),
                     "Failed to create FIFO pipe: " + fifoPath);
             }
         } else if (!S_ISFIFO(st.st_mode)) {
-            logger.error("Path exists but is not a FIFO: {}", fifoPath);
+            LOG_F(ERROR, "Path exists but is not a FIFO: {}", fifoPath);
             throw std::system_error(
                 ENOTSUP, std::system_category(),
                 "Path exists but is not a FIFO: " + fifoPath);
         }
 
-        fifoFd = open(fifoPath.c_str(), O_RDWR | O_NONBLOCK);
+        fifoFd = ::open(fifoPath.c_str(), O_RDWR | O_NONBLOCK);
         if (fifoFd == -1) {
             auto error = errno;
             if (isConnected) {
@@ -294,7 +221,7 @@ struct FifoClient::Impl {
                     false, std::error_code(error, std::system_category()));
             }
 
-            logger.error("Failed to open FIFO pipe: {}", strerror(error));
+            LOG_F(ERROR, "Failed to open FIFO pipe: {}", strerror(error));
             throw std::system_error(error, std::system_category(),
                                     "Failed to open FIFO pipe: " + fifoPath);
         }
@@ -304,7 +231,7 @@ struct FifoClient::Impl {
             isConnected = true;
             reconnectAttempts = 0;
             notifyConnectionChange(true, {});
-            logger.info("Successfully connected to FIFO pipe: {}", fifoPath);
+            LOG_F(INFO, "Successfully connected to FIFO pipe: {}", fifoPath);
         }
     }
 
@@ -325,13 +252,13 @@ struct FifoClient::Impl {
             CancelIo(fifoHandle);
             CloseHandle(fifoHandle);
             fifoHandle = INVALID_HANDLE_VALUE;
-            logger.info("Closed FIFO pipe: {}", fifoPath);
+            LOG_F(INFO, "Closed FIFO pipe: {}", fifoPath);
         }
 #else
         if (fifoFd != -1) {
             ::close(fifoFd);
             fifoFd = -1;
-            logger.info("Closed FIFO pipe: {}", fifoPath);
+            LOG_F(INFO, "Closed FIFO pipe: {}", fifoPath);
         }
 #endif
 
@@ -349,8 +276,8 @@ struct FifoClient::Impl {
                         op.callback(false, make_error_code(FifoError::NotOpen),
                                     0);
                     } catch (const std::exception& e) {
-                        logger.error("Exception in async callback: {}",
-                                     e.what());
+                        LOG_F(ERROR, "Exception in async callback: {}",
+                              e.what());
                     }
                 }
             }
@@ -365,14 +292,13 @@ struct FifoClient::Impl {
         }
 
         if (reconnectAttempts >= config.max_reconnect_attempts) {
-            logger.error("Maximum reconnection attempts reached ({}).",
-                         config.max_reconnect_attempts);
+            LOG_F(ERROR, "Maximum reconnection attempts reached ({}).",
+                  config.max_reconnect_attempts);
             return type::unexpected(make_error_code(FifoError::ConnectionLost));
         }
 
-        logger.info("Attempting to reconnect (attempt {}/{})...",
-                    reconnectAttempts.load() + 1,
-                    config.max_reconnect_attempts);
+        LOG_F(INFO, "Attempting to reconnect (attempt {}/{})...",
+              reconnectAttempts.load() + 1, config.max_reconnect_attempts);
 
         // Close the current connection if it's open
         if (isOpen()) {
@@ -391,7 +317,8 @@ struct FifoClient::Impl {
                 if (*timeout < delay) {
                     // If timeout is less than the reconnect delay, use timeout
                     delay = *timeout;
-                    logger.warning(
+                    LOG_F(
+                        WARNING,
                         "Using shorter timeout value ({} ms) for reconnection "
                         "instead of configured delay",
                         delay.count());
@@ -411,7 +338,7 @@ struct FifoClient::Impl {
 
             // Check if we've exhausted the timeout
             if (timeout && timeout->count() <= 0) {
-                logger.error("Reconnection timed out");
+                LOG_F(ERROR, "Reconnection timed out");
                 return type::unexpected(make_error_code(FifoError::Timeout));
             }
 
@@ -420,10 +347,10 @@ struct FifoClient::Impl {
 
             // If we get here, the reconnection was successful
             stats.successful_reconnects++;
-            logger.info("Reconnection successful.");
+            LOG_F(INFO, "Reconnection successful.");
             return {};
         } catch (const std::exception& e) {
-            logger.error("Reconnection failed: {}", e.what());
+            LOG_F(ERROR, "Reconnection failed: {}", e.what());
             return type::unexpected(make_error_code(FifoError::ConnectionLost));
         }
     }
@@ -443,14 +370,14 @@ struct FifoClient::Impl {
 
         // Check message size limit
         if (data.size() > config.max_message_size) {
-            logger.error("Message size exceeds limit ({} > {})", data.size(),
-                         config.max_message_size);
+            LOG_F(ERROR, "Message size exceeds limit ({} > {})", data.size(),
+                  config.max_message_size);
             return type::unexpected(
                 make_error_code(FifoError::MessageTooLarge));
         }
 
         if (!isOpen()) {
-            logger.warning("Attempted to write to closed FIFO pipe");
+            LOG_F(WARNING, "Attempted to write to closed FIFO pipe");
 
             // Try to reconnect if configured to do so
             if (config.auto_reconnect) {
@@ -512,8 +439,8 @@ struct FifoClient::Impl {
             overlapped.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
             if (overlapped.hEvent == NULL) {
                 auto error = GetLastError();
-                logger.error("Failed to create event for FIFO write: {}",
-                             error);
+                LOG_F(ERROR, "Failed to create event for FIFO write: {}",
+                      error);
                 return type::unexpected(
                     std::error_code(error, std::system_category()));
             }
@@ -533,14 +460,14 @@ struct FifoClient::Impl {
                 if (waitResult == WAIT_TIMEOUT) {
                     CancelIo(fifoHandle);
                     CloseHandle(overlapped.hEvent);
-                    logger.warning("Write operation timed out after {} ms",
-                                   timeout ? timeout->count() : 0);
+                    LOG_F(WARNING, "Write operation timed out after {} ms",
+                          timeout ? timeout->count() : 0);
                     return type::unexpected(
                         make_error_code(FifoError::Timeout));
                 } else if (waitResult != WAIT_OBJECT_0) {
                     auto error = GetLastError();
                     CloseHandle(overlapped.hEvent);
-                    logger.error("Write operation failed: {}", error);
+                    LOG_F(ERROR, "Write operation failed: {}", error);
                     return type::unexpected(
                         std::error_code(error, std::system_category()));
                 }
@@ -557,8 +484,8 @@ struct FifoClient::Impl {
                         notifyConnectionChange(
                             false,
                             std::error_code(error, std::system_category()));
-                        logger.warning(
-                            "Connection lost during write operation");
+                        LOG_F(WARNING,
+                              "Connection lost during write operation");
 
                         // Try to reconnect if configured to do so
                         if (config.auto_reconnect) {
@@ -574,7 +501,7 @@ struct FifoClient::Impl {
                             make_error_code(FifoError::ConnectionLost));
                     }
 
-                    logger.error("Failed to get overlapped result: {}", error);
+                    LOG_F(ERROR, "Failed to get overlapped result: {}", error);
                     return type::unexpected(
                         std::error_code(error, std::system_category()));
                 }
@@ -587,7 +514,7 @@ struct FifoClient::Impl {
                     isConnected = false;
                     notifyConnectionChange(
                         false, std::error_code(error, std::system_category()));
-                    logger.warning("Connection lost during write operation");
+                    LOG_F(WARNING, "Connection lost during write operation");
 
                     // Try to reconnect if configured to do so
                     if (config.auto_reconnect) {
@@ -602,7 +529,7 @@ struct FifoClient::Impl {
                         make_error_code(FifoError::ConnectionLost));
                 }
 
-                logger.error("Write operation failed: {}", error);
+                LOG_F(ERROR, "Write operation failed: {}", error);
                 return type::unexpected(
                     std::error_code(error, std::system_category()));
             }
@@ -623,13 +550,13 @@ struct FifoClient::Impl {
                     poll(&pfd, 1, static_cast<int>(timeout->count()));
 
                 if (pollResult == 0) {
-                    logger.warning("Write operation timed out after {} ms",
-                                   timeout->count());
+                    LOG_F(WARNING, "Write operation timed out after {} ms",
+                          timeout->count());
                     return type::unexpected(
                         make_error_code(FifoError::Timeout));
                 } else if (pollResult < 0) {
                     auto error = errno;
-                    logger.error("Poll operation failed: {}", strerror(error));
+                    LOG_F(ERROR, "Poll operation failed: {}", strerror(error));
 
                     // Check if this is a connection-related error
                     if (error == EPIPE || error == ECONNRESET ||
@@ -638,7 +565,7 @@ struct FifoClient::Impl {
                         notifyConnectionChange(
                             false,
                             std::error_code(error, std::system_category()));
-                        logger.warning("Connection lost during poll operation");
+                        LOG_F(WARNING, "Connection lost during poll operation");
 
                         // Try to reconnect if configured to do so
                         if (config.auto_reconnect) {
@@ -658,7 +585,7 @@ struct FifoClient::Impl {
                 }
 
                 if (!(pfd.revents & POLLOUT)) {
-                    logger.error("File descriptor not ready for writing");
+                    LOG_F(ERROR, "File descriptor not ready for writing");
                     return type::unexpected(
                         make_error_code(FifoError::WriteFailed));
                 }
@@ -669,14 +596,14 @@ struct FifoClient::Impl {
 
             if (bytesWritten == -1) {
                 auto error = errno;
-                logger.error("Write operation failed: {}", strerror(error));
+                LOG_F(ERROR, "Write operation failed: {}", strerror(error));
 
                 // Check if this is a connection-related error
                 if (error == EPIPE || error == ECONNRESET) {
                     isConnected = false;
                     notifyConnectionChange(
                         false, std::error_code(error, std::system_category()));
-                    logger.warning("Connection lost during write operation");
+                    LOG_F(WARNING, "Connection lost during write operation");
 
                     // Try to reconnect if configured to do so
                     if (config.auto_reconnect) {
@@ -701,7 +628,7 @@ struct FifoClient::Impl {
             return static_cast<std::size_t>(bytesWritten);
 #endif
         } catch (const std::exception& e) {
-            logger.error("Exception during write operation: {}", e.what());
+            LOG_F(ERROR, "Exception during write operation: {}", e.what());
             stats.messages_failed++;
             return type::unexpected(make_error_code(FifoError::WriteFailed));
         }
@@ -716,8 +643,8 @@ struct FifoClient::Impl {
 
         // Check if we're connected
         if (!isOpen()) {
-            logger.warning(
-                "Attempted to write multiple messages to closed FIFO pipe");
+            LOG_F(WARNING,
+                  "Attempted to write multiple messages to closed FIFO pipe");
 
             // Try to reconnect if configured to do so
             if (config.auto_reconnect) {
@@ -740,10 +667,10 @@ struct FifoClient::Impl {
                 // If we've written some messages successfully, return partial
                 // success
                 if (totalBytesWritten > 0) {
-                    logger.warning(
-                        "Partial success writing multiple messages: {} of {} "
-                        "sent",
-                        totalBytesWritten, messages.size());
+                    LOG_F(WARNING,
+                          "Partial success writing multiple messages: {} of {} "
+                          "sent",
+                          totalBytesWritten, messages.size());
                     return totalBytesWritten;
                 }
 
@@ -812,8 +739,8 @@ struct FifoClient::Impl {
                         }
                     }
                 } catch (const std::exception& e) {
-                    logger.error("Exception in async write callback: {}",
-                                 e.what());
+                    LOG_F(ERROR, "Exception in async write callback: {}",
+                          e.what());
                 }
             }
         }).detach();
@@ -860,7 +787,7 @@ struct FifoClient::Impl {
         }
 
         if (!isOpen()) {
-            logger.warning("Attempted to read from closed FIFO pipe");
+            LOG_F(WARNING, "Attempted to read from closed FIFO pipe");
 
             // Try to reconnect if configured to do so
             if (config.auto_reconnect) {
@@ -889,7 +816,7 @@ struct FifoClient::Impl {
             overlapped.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
             if (overlapped.hEvent == NULL) {
                 auto error = GetLastError();
-                logger.error("Failed to create event for FIFO read: {}", error);
+                LOG_F(ERROR, "Failed to create event for FIFO read: {}", error);
                 return type::unexpected(
                     std::error_code(error, std::system_category()));
             }
@@ -909,14 +836,14 @@ struct FifoClient::Impl {
                 if (waitResult == WAIT_TIMEOUT) {
                     CancelIo(fifoHandle);
                     CloseHandle(overlapped.hEvent);
-                    logger.warning("Read operation timed out after {} ms",
-                                   timeout ? timeout->count() : 0);
+                    LOG_F(WARNING, "Read operation timed out after {} ms",
+                          timeout ? timeout->count() : 0);
                     return type::unexpected(
                         make_error_code(FifoError::Timeout));
                 } else if (waitResult != WAIT_OBJECT_0) {
                     auto error = GetLastError();
                     CloseHandle(overlapped.hEvent);
-                    logger.error("Wait for read operation failed: {}", error);
+                    LOG_F(ERROR, "Wait for read operation failed: {}", error);
                     return type::unexpected(
                         std::error_code(error, std::system_category()));
                 }
@@ -933,7 +860,7 @@ struct FifoClient::Impl {
                         notifyConnectionChange(
                             false,
                             std::error_code(error, std::system_category()));
-                        logger.warning("Connection lost during read operation");
+                        LOG_F(WARNING, "Connection lost during read operation");
 
                         // Try to reconnect if configured to do so
                         if (config.auto_reconnect) {
@@ -949,8 +876,8 @@ struct FifoClient::Impl {
                             make_error_code(FifoError::ConnectionLost));
                     }
 
-                    logger.error("Failed to get overlapped result for read: {}",
-                                 error);
+                    LOG_F(ERROR, "Failed to get overlapped result for read: {}",
+                          error);
                     return type::unexpected(
                         std::error_code(error, std::system_category()));
                 }
@@ -963,7 +890,7 @@ struct FifoClient::Impl {
                     isConnected = false;
                     notifyConnectionChange(
                         false, std::error_code(error, std::system_category()));
-                    logger.warning("Connection lost during read operation");
+                    LOG_F(WARNING, "Connection lost during read operation");
 
                     // Try to reconnect if configured to do so
                     if (config.auto_reconnect) {
@@ -978,7 +905,7 @@ struct FifoClient::Impl {
                         make_error_code(FifoError::ConnectionLost));
                 }
 
-                logger.error("Read operation failed: {}", error);
+                LOG_F(ERROR, "Read operation failed: {}", error);
                 return type::unexpected(
                     std::error_code(error, std::system_category()));
             }
@@ -996,7 +923,7 @@ struct FifoClient::Impl {
                     try {
                         result = decryptData(result);
                     } catch (const std::exception& e) {
-                        logger.error("Failed to decrypt data: {}", e.what());
+                        LOG_F(ERROR, "Failed to decrypt data: {}", e.what());
                         return type::unexpected(
                             make_error_code(FifoError::DecryptionFailed));
                     }
@@ -1007,7 +934,7 @@ struct FifoClient::Impl {
                     try {
                         result = decompressData(result.substr(2));
                     } catch (const std::exception& e) {
-                        logger.error("Failed to decompress data: {}", e.what());
+                        LOG_F(ERROR, "Failed to decompress data: {}", e.what());
                         return type::unexpected(
                             make_error_code(FifoError::CompressionFailed));
                     }
@@ -1040,13 +967,13 @@ struct FifoClient::Impl {
                     poll(&pfd, 1, static_cast<int>(timeout->count()));
 
                 if (pollResult == 0) {
-                    logger.warning("Read operation timed out after {} ms",
-                                   timeout->count());
+                    LOG_F(WARNING, "Read operation timed out after {} ms",
+                          timeout->count());
                     return type::unexpected(
                         make_error_code(FifoError::Timeout));
                 } else if (pollResult < 0) {
                     auto error = errno;
-                    logger.error("Poll operation failed: {}", strerror(error));
+                    LOG_F(ERROR, "Poll operation failed: {}", strerror(error));
 
                     // Check if this is a connection-related error
                     if (error == EPIPE || error == ECONNRESET ||
@@ -1055,7 +982,7 @@ struct FifoClient::Impl {
                         notifyConnectionChange(
                             false,
                             std::error_code(error, std::system_category()));
-                        logger.warning("Connection lost during poll operation");
+                        LOG_F(WARNING, "Connection lost during poll operation");
 
                         // Try to reconnect if configured to do so
                         if (config.auto_reconnect) {
@@ -1075,7 +1002,7 @@ struct FifoClient::Impl {
                 }
 
                 if (!(pfd.revents & POLLIN)) {
-                    logger.error("File descriptor not ready for reading");
+                    LOG_F(ERROR, "File descriptor not ready for reading");
                     return type::unexpected(
                         make_error_code(FifoError::ReadFailed));
                 }
@@ -1085,14 +1012,14 @@ struct FifoClient::Impl {
 
             if (bytesRead == -1) {
                 auto error = errno;
-                logger.error("Read operation failed: {}", strerror(error));
+                LOG_F(ERROR, "Read operation failed: {}", strerror(error));
 
                 // Check if this is a connection-related error
                 if (error == EPIPE || error == ECONNRESET) {
                     isConnected = false;
                     notifyConnectionChange(
                         false, std::error_code(error, std::system_category()));
-                    logger.warning("Connection lost during read operation");
+                    LOG_F(WARNING, "Connection lost during read operation");
 
                     // Try to reconnect if configured to do so
                     if (config.auto_reconnect) {
@@ -1122,7 +1049,7 @@ struct FifoClient::Impl {
                     try {
                         result = decryptData(result);
                     } catch (const std::exception& e) {
-                        logger.error("Failed to decrypt data: {}", e.what());
+                        LOG_F(ERROR, "Failed to decrypt data: {}", e.what());
                         return type::unexpected(
                             make_error_code(FifoError::DecryptionFailed));
                     }
@@ -1133,7 +1060,7 @@ struct FifoClient::Impl {
                     try {
                         result = decompressData(result.substr(2));
                     } catch (const std::exception& e) {
-                        logger.error("Failed to decompress data: {}", e.what());
+                        LOG_F(ERROR, "Failed to decompress data: {}", e.what());
                         return type::unexpected(
                             make_error_code(FifoError::CompressionFailed));
                     }
@@ -1158,7 +1085,7 @@ struct FifoClient::Impl {
             }
 #endif
         } catch (const std::exception& e) {
-            logger.error("Exception during read operation: {}", e.what());
+            LOG_F(ERROR, "Exception during read operation: {}", e.what());
             return type::unexpected(make_error_code(FifoError::ReadFailed));
         }
     }
@@ -1210,8 +1137,8 @@ struct FifoClient::Impl {
                         callbackCopy(false, result.error().error(), 0);
                     }
                 } catch (const std::exception& e) {
-                    logger.error("Exception in async read callback: {}",
-                                 e.what());
+                    LOG_F(ERROR, "Exception in async read callback: {}",
+                          e.what());
                 }
             }
         }).detach();
@@ -1242,7 +1169,7 @@ struct FifoClient::Impl {
         auto it = pendingOperations.find(id);
         if (it != pendingOperations.end()) {
             it->second.canceled = true;
-            logger.info("Operation {} canceled", id);
+            LOG_F(INFO, "Operation {} canceled", id);
             return true;
         }
         return false;
@@ -1250,7 +1177,7 @@ struct FifoClient::Impl {
 
     int registerConnectionCallback(ConnectionCallback callback) {
         if (!callback) {
-            logger.warning("Attempted to register null connection callback");
+            LOG_F(WARNING, "Attempted to register null connection callback");
             return -1;
         }
 
@@ -1263,7 +1190,7 @@ struct FifoClient::Impl {
             try {
                 connectionCallbacks[id](true, {});
             } catch (const std::exception& e) {
-                logger.error("Exception in connection callback: {}", e.what());
+                LOG_F(ERROR, "Exception in connection callback: {}", e.what());
             }
         }
 
@@ -1282,8 +1209,8 @@ struct FifoClient::Impl {
                 try {
                     callback(connected, ec);
                 } catch (const std::exception& e) {
-                    logger.error("Exception in connection callback: {}",
-                                 e.what());
+                    LOG_F(ERROR, "Exception in connection callback: {}",
+                          e.what());
                 }
             }
         }
@@ -1362,7 +1289,7 @@ struct FifoClient::Impl {
 
         z_stream zs{};
         if (deflateInit(&zs, Z_DEFAULT_COMPRESSION) != Z_OK) {
-            logger.error("Failed to initialize zlib");
+            LOG_F(ERROR, "Failed to initialize zlib");
             return "NC:" + data;  // Return uncompressed with marker
         }
 
@@ -1380,7 +1307,7 @@ struct FifoClient::Impl {
         deflateEnd(&zs);
 
         if (result != Z_STREAM_END) {
-            logger.error("Error during compression: {}", result);
+            LOG_F(ERROR, "Error during compression: {}", result);
             return "NC:" + data;  // Return uncompressed with marker
         }
 
@@ -1399,7 +1326,7 @@ struct FifoClient::Impl {
 #ifdef ENABLE_COMPRESSION
         z_stream zs{};
         if (inflateInit(&zs) != Z_OK) {
-            logger.error("Failed to initialize zlib for decompression");
+            LOG_F(ERROR, "Failed to initialize zlib for decompression");
             throw std::runtime_error("Failed to initialize zlib");
         }
 
@@ -1434,7 +1361,7 @@ struct FifoClient::Impl {
         inflateEnd(&zs);
 
         if (result != Z_STREAM_END) {
-            logger.error("Error during decompression: {}", result);
+            LOG_F(ERROR, "Error during decompression: {}", result);
             throw std::runtime_error("Error during decompression");
         }
 
@@ -1480,7 +1407,7 @@ struct FifoClient::Impl {
 
         // Extract the key (fixed size of 16 bytes)
         if (data.size() < 18) {  // 2 for "E:" + 16 for key
-            logger.error("Encrypted data too short");
+            LOG_F(ERROR, "Encrypted data too short");
             throw std::runtime_error("Encrypted data too short");
         }
 
@@ -1497,8 +1424,8 @@ struct FifoClient::Impl {
 #else
         // Check if data appears to be encrypted
         if (data.substr(0, 2) == "E:") {
-            logger.error(
-                "Received encrypted data but encryption is not enabled");
+            LOG_F(ERROR,
+                  "Received encrypted data but encryption is not enabled");
             throw std::runtime_error("Cannot decrypt: encryption not enabled");
         }
 
@@ -1510,8 +1437,6 @@ struct FifoClient::Impl {
     void startAsyncThread() {
         stopAsyncThread = false;
         asyncThread = std::jthread([this](std::stop_token stop_token) {
-            logger.debug("Async operation thread started");
-
             while (!stop_token.stop_requested() && !stopAsyncThread) {
                 // Check for timed-out operations
                 std::vector<int> timedOutOps;
@@ -1527,7 +1452,8 @@ struct FifoClient::Impl {
                             if (elapsed > *op.timeout) {
                                 // Operation timed out
                                 timedOutOps.push_back(id);
-                                logger.warning(
+                                LOG_F(
+                                    WARNING,
                                     "Async operation {} timed out after {} ms",
                                     id, elapsed.count());
                             }
@@ -1545,9 +1471,9 @@ struct FifoClient::Impl {
                                         false,
                                         make_error_code(FifoError::Timeout), 0);
                                 } catch (const std::exception& e) {
-                                    logger.error(
-                                        "Exception in timeout callback: {}",
-                                        e.what());
+                                    LOG_F(ERROR,
+                                          "Exception in timeout callback: {}",
+                                          e.what());
                                 }
                             }
 
@@ -1560,8 +1486,6 @@ struct FifoClient::Impl {
                 // Sleep for a short time to avoid busy waiting
                 std::this_thread::sleep_for(std::chrono::milliseconds(50));
             }
-
-            logger.debug("Async operation thread stopped");
         });
     }
 
@@ -1579,18 +1503,12 @@ struct FifoClient::Impl {
         config.default_timeout = newConfig.default_timeout;
         config.compression_threshold = newConfig.compression_threshold;
 
-        // Update log level
-        if (config.log_level != newConfig.log_level) {
-            config.log_level = newConfig.log_level;
-            logger.setLevel(newConfig.log_level);
-        }
-
         // Encryption and compression may require reinitialization in a real
         // implementation
         config.enable_compression = newConfig.enable_compression;
         config.enable_encryption = newConfig.enable_encryption;
 
-        logger.info("Client configuration updated");
+        LOG_F(INFO, "Client configuration updated");
         return true;
     }
 
@@ -1602,7 +1520,7 @@ struct FifoClient::Impl {
     void resetStatistics() {
         std::lock_guard<std::mutex> lock(operationMutex);
         stats = ClientStats{};
-        logger.info("Client statistics reset");
+        LOG_F(INFO, "Client statistics reset");
     }
 };
 
@@ -1737,9 +1655,8 @@ auto FifoClient::open(std::optional<std::chrono::milliseconds> timeout)
 
                     if (elapsed >= *timeout) {
                         // Timeout reached
-                        m_impl->logger.warning(
-                            "Open operation timed out after {} ms",
-                            timeout->count());
+                        LOG_F(WARNING, "Open operation timed out after {} ms",
+                              timeout->count());
                         return type::unexpected(
                             make_error_code(FifoError::Timeout));
                     }
@@ -1819,16 +1736,6 @@ ClientStats FifoClient::getStatistics() const {
 void FifoClient::resetStatistics() {
     if (m_impl) {
         m_impl->resetStatistics();
-    }
-}
-
-void FifoClient::setLogLevel(LogLevel level) {
-    if (m_impl) {
-        m_impl->logger.setLevel(level);
-        if (auto config = m_impl->getConfig(); config.log_level != level) {
-            config.log_level = level;
-            m_impl->updateConfig(config);
-        }
     }
 }
 

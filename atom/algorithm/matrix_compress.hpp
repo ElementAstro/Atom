@@ -27,10 +27,6 @@ public:
     throw MatrixCompressException(ATOM_FILE_NAME, ATOM_FILE_LINE, \
                                   ATOM_FUNC_NAME, __VA_ARGS__);
 
-#define THROW_NESTED_MATRIX_COMPRESS_EXCEPTION(...)                        \
-    MatrixCompressException::rethrowNested(ATOM_FILE_NAME, ATOM_FILE_LINE, \
-                                           ATOM_FUNC_NAME, __VA_ARGS__);
-
 class MatrixDecompressException : public atom::error::Exception {
 public:
     using atom::error::Exception::Exception;
@@ -253,7 +249,7 @@ auto MatrixCompressor::downsample(const M& matrix, int factor) -> Matrix {
             }
         }
     } catch (const std::exception& e) {
-        THROW_NESTED_MATRIX_COMPRESS_EXCEPTION(
+        THROW_MATRIX_COMPRESS_EXCEPTION(
             "Error during matrix downsampling: " + std::string(e.what()));
     }
 
@@ -285,7 +281,7 @@ auto MatrixCompressor::upsample(const M& matrix, int factor) -> Matrix {
             }
         }
     } catch (const std::exception& e) {
-        THROW_NESTED_MATRIX_COMPRESS_EXCEPTION(
+        THROW_MATRIX_COMPRESS_EXCEPTION(
             "Error during matrix upsampling: " + std::string(e.what()));
     }
 
@@ -318,7 +314,7 @@ auto MatrixCompressor::calculateMSE(const M1& matrix1, const M2& matrix2)
             }
         }
     } catch (const std::exception& e) {
-        THROW_NESTED_MATRIX_COMPRESS_EXCEPTION("Error calculating MSE: " +
+        THROW_MATRIX_COMPRESS_EXCEPTION("Error calculating MSE: " +
                                                std::string(e.what()));
     }
 

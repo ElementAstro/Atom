@@ -39,6 +39,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include <regex>
 #if __has_include(<sys/capability.h>)
 #include <sys/capability.h>
 #endif
@@ -56,7 +57,6 @@
 #endif
 
 #include "atom/log/loguru.hpp"
-#include "atom/utils/convert.hpp"
 
 namespace atom::system {
 

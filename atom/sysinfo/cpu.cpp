@@ -50,6 +50,8 @@ Description: System Information Module - Enhanced CPU
 #include <sys/utsname.h>
 #include <unistd.h>
 #include <csignal>
+#include <fstream>
+#include <set>
 #elif defined(__APPLE__)
 #include <IOKit/IOKitLib.h>
 #include <IOKit/ps/IOPSKeys.h>
@@ -66,6 +68,7 @@ Description: System Information Module - Enhanced CPU
 #endif
 
 #include "atom/log/loguru.hpp"
+#include "atom/sysinfo/os.hpp"
 
 namespace atom::system {
 

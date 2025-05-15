@@ -14,10 +14,9 @@ Description: Some system functions to get user information.
 
 #include "user.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdlib>
-#include <memory>
-#include "atom/utils/string.hpp"
 
 #ifdef _WIN32
 // clang-format off
@@ -40,7 +39,6 @@ Description: Some system functions to get user information.
 #include <utmp.h>
 #include <climits>
 #include <codecvt>
-#include <fstream>
 #include <locale>
 #endif
 
