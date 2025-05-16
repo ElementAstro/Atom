@@ -6,11 +6,46 @@
 #include <pybind11/stl.h>
 
 namespace py = pybind11;
+std::shared_ptr<atom::utils::Env> create_env_shared_wrapper(
+    int argc, py::list argv_list) {
+    // 将Python列表转换为char**
+    std::vector<std::string> argv_strings;
+    std::vector<char*> argv_ptrs;
+
+    for (auto item : argv_list) {
+        std::string str = item.cast<std::string>();
+        argv_strings.push_back(str);
+    }
+
+    for (auto& s : argv_strings) {
+        argv_ptrs.push_back(&s[0]);
+    }
+    argv_ptrs.push_back(nullptr);  // 结尾需要NULL
+
+    return atom::utils::Env::createShared(argc, argv_ptrs.data());
+}
+
+atom::utils::Env* create_env_wrapper(int argc, py::list argv_list) {
+    std::vector<std::string> argv_strings;
+    std::vector<char*> argv_ptrs;
+
+    for (auto item : argv_list) {
+        std::string str = item.cast<std::string>();
+        argv_strings.push_back(str);
+    }
+
+    for (auto& s : argv_strings) {
+        argv_ptrs.push_back(&s[0]);
+    }
+    argv_ptrs.push_back(nullptr);
+
+    return new atom::utils::Env(argc, argv_ptrs.data());
+}
 
 PYBIND11_MODULE(env, m) {
     m.doc() = "Environment variable management module for the atom package";
 
-    // Register exception translations
+    // 注册异常转换
     py::register_exception_translator([](std::exception_ptr p) {
         try {
             if (p)
@@ -24,7 +59,7 @@ PYBIND11_MODULE(env, m) {
         }
     });
 
-    // Env class binding
+    // Env 类绑定
     py::class_<atom::utils::Env, std::shared_ptr<atom::utils::Env>>(
         m, "Env",
         R"(Environment variable class for managing program environment variables,
@@ -43,11 +78,11 @@ Examples:
         .def(py::init<>(),
              "Default constructor that initializes environment variable "
              "information.")
-        .def(py::init<int, char**>(), py::arg("argc"), py::arg("argv"),
+        .def(py::init(&create_env_wrapper), py::arg("argc"), py::arg("argv"),
              "Constructor that initializes environment variable information "
              "with command-line arguments.")
         .def_static(
-            "create_shared", &atom::utils::Env::createShared, py::arg("argc"),
+            "create_shared", &create_env_shared_wrapper, py::arg("argc"),
             py::arg("argv"),
             R"(Static method to create a shared pointer to an Env object.
 
@@ -118,7 +153,7 @@ Args:
 )")
         .def(
             "get", &atom::utils::Env::get, py::arg("key"),
-            py::arg("default_value") = "",
+            py::arg("default_value") = std::string(""),
             R"(Gets the value associated with a key, or returns a default value if the key does not exist.
 
 Args:
@@ -132,8 +167,6 @@ Returns:
             "get_as",
             [](atom::utils::Env& self, const std::string& key,
                py::object default_value) {
-                // Check the type of default_value to determine what type we
-                // should return
                 if (py::isinstance<py::int_>(default_value))
                     return py::cast(
                         self.getAs<int>(key, default_value.cast<int>()));
@@ -171,7 +204,6 @@ Examples:
             "get_optional",
             [](atom::utils::Env& self, const std::string& key,
                py::object type_hint) {
-                // Use type_hint to determine what type we should return
                 if (py::isinstance<py::type>(type_hint)) {
                     if (type_hint.is(py::int_()))
                         return py::cast(self.getOptional<int>(key));
@@ -182,13 +214,11 @@ Examples:
                     else if (type_hint.is(py::str()))
                         return py::cast(self.getOptional<std::string>(key));
                     else
-                        throw std::invalid_argument(
-                            "Unsupported type hint provided.");
+                        throw py::type_error("Unsupported type hint");
                 }
-                // Default to string
                 return py::cast(self.getOptional<std::string>(key));
             },
-            py::arg("key"), py::arg("type_hint") = py::type::of<std::string>(),
+            py::arg("key"), py::arg("type_hint") = py::type::of<py::str>(),
             R"(Gets the value associated with a key as an optional type.
 
 Args:
@@ -230,7 +260,7 @@ Returns:
 )")
         .def(
             "get_env", &atom::utils::Env::getEnv, py::arg("key"),
-            py::arg("default_value") = "",
+            py::arg("default_value") = std::string(""),
             R"(Gets the value of an environment variable, or returns a default value if the variable does not exist.
 
 Args:
@@ -253,9 +283,11 @@ Returns:
                 else if (py::isinstance<py::bool_>(default_value))
                     return py::cast(
                         self.getEnvAs<bool>(key, default_value.cast<bool>()));
-                else
+                else if (py::isinstance<py::str>(default_value))
                     return py::cast(
                         self.getEnv(key, default_value.cast<std::string>()));
+                else
+                    throw py::type_error("Unsupported type hint");
             },
             py::arg("key"), py::arg("default_value") = py::none(),
             R"(Gets the value of an environment variable and converts it to the specified type.
@@ -287,9 +319,19 @@ Args:
 Returns:
     A list of environment variable names.
 )")
-        .def_static("filter_variables", &atom::utils::Env::filterVariables,
-                    py::arg("predicate"),
-                    R"(Filters environment variables based on a predicate.
+        .def_static(
+            "filter_variables",
+            [](const py::function& py_predicate) {
+                // 创建一个lambda来包装Python谓词函数
+                auto cpp_predicate = [&py_predicate](const std::string& key,
+                                                     const std::string& val) {
+                    py::gil_scoped_acquire gil;
+                    return py_predicate(key, val).cast<bool>();
+                };
+                return atom::utils::Env::filterVariables(cpp_predicate);
+            },
+            py::arg("predicate"),
+            R"(Filters environment variables based on a predicate.
 
 Args:
     predicate: The predicate function that takes a key-value pair and returns a boolean.
@@ -319,7 +361,12 @@ Examples:
     >>> path_vars = env.Env.get_variables_with_prefix("PATH")
 )")
         .def_static(
-            "save_to_file", &atom::utils::Env::saveToFile, py::arg("file_path"),
+            "save_to_file",
+            [](const std::filesystem::path& file_path,
+               const std::unordered_map<std::string, std::string>& vars) {
+                return atom::utils::Env::saveToFile(file_path, vars);
+            },
+            py::arg("file_path"),
             py::arg("vars") = std::unordered_map<std::string, std::string>{},
             R"(Saves environment variables to a file.
 
@@ -371,21 +418,25 @@ Returns:
         .def("print_all_args", &atom::utils::Env::printAllArgs,
              "Prints all command-line arguments.")
 #endif
-        .def("__getitem__", &atom::utils::Env::get, py::arg("key"),
-             "Support for dictionary-like access: env[key]")
+        .def(
+            "__getitem__",
+            [](atom::utils::Env& self, const std::string& key) {
+                return self.get(key, "");
+            },
+            py::arg("key"), "Support for dictionary-like access: env[key]")
         .def("__setitem__", &atom::utils::Env::add, py::arg("key"),
              py::arg("val"),
              "Support for dictionary-like assignment: env[key] = val")
         .def("__contains__", &atom::utils::Env::has, py::arg("key"),
              "Support for the 'in' operator: key in env");
 
-    // Additional utility functions at module level
+    // 额外的模块级别工具函数
     m.def(
         "get_env",
         [](const std::string& key, const std::string& default_value) {
             return atom::utils::Env().getEnv(key, default_value);
         },
-        py::arg("key"), py::arg("default_value") = "",
+        py::arg("key"), py::arg("default_value") = std::string(""),
         R"(Gets the value of an environment variable.
 
 Args:

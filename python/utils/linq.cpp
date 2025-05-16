@@ -3,6 +3,7 @@
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include "pybind11_hash.hpp"  // 添加我们的哈希特化实现
 
 namespace py = pybind11;
 

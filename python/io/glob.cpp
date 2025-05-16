@@ -6,7 +6,6 @@
 #include <pybind11/stl.h>
 #include <filesystem>
 
-
 namespace py = pybind11;
 namespace fs = std::filesystem;
 
@@ -20,12 +19,12 @@ PYBIND11_MODULE(glob, m) {
                 std::rethrow_exception(p);
         } catch (const std::invalid_argument& e) {
             PyErr_SetString(PyExc_ValueError, e.what());
-        } catch (const std::runtime_error& e) {
-            PyErr_SetString(PyExc_RuntimeError, e.what());
         } catch (const std::filesystem::filesystem_error& e) {
             PyErr_SetString(PyExc_OSError, e.what());
         } catch (const std::regex_error& e) {
             PyErr_SetString(PyExc_ValueError, e.what());
+        } catch (const std::runtime_error& e) {
+            PyErr_SetString(PyExc_RuntimeError, e.what());
         } catch (const atom::error::Exception& e) {
             PyErr_SetString(PyExc_RuntimeError, e.what());
         } catch (const std::exception& e) {

@@ -6,7 +6,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(process, m) {
@@ -26,19 +25,19 @@ PYBIND11_MODULE(process, m) {
         }
     });
 
-    // ProcessPriority enum binding
+    // ProcessPriority enum binding - 修正枚举值名称
     py::enum_<atom::system::ProcessPriority>(m, "ProcessPriority",
                                              "Process priority levels")
-        .value("IDLE", atom::system::ProcessPriority::Idle,
+        .value("IDLE", atom::system::ProcessPriority::IDLE,
                "Idle priority (lowest)")
-        .value("BELOW_NORMAL", atom::system::ProcessPriority::BelowNormal,
+        .value("BELOW_NORMAL", atom::system::ProcessPriority::LOW,
                "Below normal priority")
-        .value("NORMAL", atom::system::ProcessPriority::Normal,
+        .value("NORMAL", atom::system::ProcessPriority::NORMAL,
                "Normal priority")
-        .value("ABOVE_NORMAL", atom::system::ProcessPriority::AboveNormal,
+        .value("ABOVE_NORMAL", atom::system::ProcessPriority::HIGH,
                "Above normal priority")
-        .value("HIGH", atom::system::ProcessPriority::High, "High priority")
-        .value("REALTIME", atom::system::ProcessPriority::Realtime,
+        .value("HIGH", atom::system::ProcessPriority::HIGH, "High priority")
+        .value("REALTIME", atom::system::ProcessPriority::REALTIME,
                "Realtime priority (highest)")
         .export_values();
 
@@ -60,7 +59,7 @@ PYBIND11_MODULE(process, m) {
                    fd.path + "' type='" + fd.type + "'>";
         });
 
-    // NetworkConnection struct binding
+    // NetworkConnection struct binding - 修正 state -> status
     py::class_<atom::system::NetworkConnection>(
         m, "NetworkConnection", "Information about a network connection")
         .def(py::init<>())
@@ -78,31 +77,44 @@ PYBIND11_MODULE(process, m) {
         .def_readwrite("remote_port",
                        &atom::system::NetworkConnection::remotePort,
                        "Remote port")
-        .def_readwrite("state", &atom::system::NetworkConnection::state,
-                       "Connection state")
+        .def_readwrite("status", &atom::system::NetworkConnection::status,
+                       "Connection status")
         .def("__repr__", [](const atom::system::NetworkConnection& conn) {
             return "<NetworkConnection " + conn.protocol + " " +
                    conn.localAddress + ":" + std::to_string(conn.localPort) +
                    " -> " + conn.remoteAddress + ":" +
-                   std::to_string(conn.remotePort) + " " + conn.state + ">";
+                   std::to_string(conn.remotePort) + " " + conn.status + ">";
         });
 
-    // PerformanceHistory struct binding
+    // PerformanceHistory struct binding - 修正成员变量名称
     py::class_<atom::system::PerformanceHistory>(
         m, "PerformanceHistory", "Process performance history data")
         .def(py::init<>())
-        .def_readwrite("timestamps",
-                       &atom::system::PerformanceHistory::timestamps,
-                       "Timestamps for each data point")
-        .def_readwrite("cpu_usage", &atom::system::PerformanceHistory::cpuUsage,
-                       "CPU usage percentages over time")
+        .def_readwrite("pid", &atom::system::PerformanceHistory::pid,
+                       "Process ID")
+        .def_readwrite("data_points",
+                       &atom::system::PerformanceHistory::dataPoints,
+                       "Performance data points over time");
+
+    // 添加PerformanceDataPoint结构体的绑定
+    py::class_<atom::system::PerformanceDataPoint>(
+        m, "PerformanceDataPoint", "Point-in-time performance data")
+        .def(py::init<>())
+        .def_readwrite("timestamp",
+                       &atom::system::PerformanceDataPoint::timestamp,
+                       "Timestamp for this data point")
+        .def_readwrite("cpu_usage",
+                       &atom::system::PerformanceDataPoint::cpuUsage,
+                       "CPU usage percentage")
         .def_readwrite("memory_usage",
-                       &atom::system::PerformanceHistory::memoryUsage,
-                       "Memory usage values over time")
-        .def_readwrite("io_read", &atom::system::PerformanceHistory::ioRead,
-                       "IO read bytes over time")
-        .def_readwrite("io_write", &atom::system::PerformanceHistory::ioWrite,
-                       "IO write bytes over time");
+                       &atom::system::PerformanceDataPoint::memoryUsage,
+                       "Memory usage in bytes")
+        .def_readwrite("io_read_bytes",
+                       &atom::system::PerformanceDataPoint::ioReadBytes,
+                       "IO read bytes")
+        .def_readwrite("io_write_bytes",
+                       &atom::system::PerformanceDataPoint::ioWriteBytes,
+                       "IO write bytes");
 
 // PrivilegesInfo struct binding for Windows
 #ifdef _WIN32
@@ -133,35 +145,30 @@ PYBIND11_MODULE(process, m) {
         });
 #endif
 
-    // ProcessResource struct binding
+    // ProcessResource struct binding - 修正成员变量名称
     py::class_<atom::system::ProcessResource>(
         m, "ProcessResource", "Process resource usage information")
         .def(py::init<>())
-        .def_readwrite("cpu_time", &atom::system::ProcessResource::cpuTime,
-                       "CPU time in seconds")
-        .def_readwrite("user_time", &atom::system::ProcessResource::userTime,
-                       "User mode CPU time in seconds")
-        .def_readwrite("system_time",
-                       &atom::system::ProcessResource::systemTime,
-                       "Kernel mode CPU time in seconds")
-        .def_readwrite("io_read_bytes",
-                       &atom::system::ProcessResource::ioReadBytes,
+        .def_readwrite("cpu_usage", &atom::system::ProcessResource::cpuUsage,
+                       "CPU usage percentage")
+        .def_readwrite("memory_usage", &atom::system::ProcessResource::memUsage,
+                       "Memory usage in bytes")
+        .def_readwrite("vm_usage", &atom::system::ProcessResource::vmUsage,
+                       "Virtual memory usage in bytes")
+        .def_readwrite("io_read", &atom::system::ProcessResource::ioRead,
                        "Total bytes read from storage")
-        .def_readwrite("io_write_bytes",
-                       &atom::system::ProcessResource::ioWriteBytes,
+        .def_readwrite("io_write", &atom::system::ProcessResource::ioWrite,
                        "Total bytes written to storage")
-        .def_readwrite("page_faults",
-                       &atom::system::ProcessResource::pageFaults,
-                       "Number of page faults")
-        .def_readwrite("peak_memory",
-                       &atom::system::ProcessResource::peakMemory,
-                       "Peak memory usage in bytes")
-        .def_readwrite("threads", &atom::system::ProcessResource::threads,
+        .def_readwrite("thread_count",
+                       &atom::system::ProcessResource::threadCount,
                        "Number of threads")
+        .def_readwrite("open_files", &atom::system::ProcessResource::openFiles,
+                       "Number of open files")
         .def("__repr__", [](const atom::system::ProcessResource& res) {
-            return "<ProcessResource cpu_time=" + std::to_string(res.cpuTime) +
-                   " memory=" + std::to_string(res.peakMemory / 1024) + "KB" +
-                   " threads=" + std::to_string(res.threads) + ">";
+            return "<ProcessResource cpu_usage=" +
+                   std::to_string(res.cpuUsage) +
+                   " memory=" + std::to_string(res.memUsage / 1024) + "KB" +
+                   " threads=" + std::to_string(res.threadCount) + ">";
         });
 
     // Process struct binding
@@ -174,26 +181,24 @@ PYBIND11_MODULE(process, m) {
         .def_readwrite("name", &atom::system::Process::name, "Process name")
         .def_readwrite("path", &atom::system::Process::path,
                        "Full path to executable")
-        .def_readwrite("command_line", &atom::system::Process::commandLine,
+        .def_readwrite("command", &atom::system::Process::command,
                        "Full command line")
         .def_readwrite("status", &atom::system::Process::status,
                        "Process status")
-        .def_readwrite("user", &atom::system::Process::user,
+        .def_readwrite("username", &atom::system::Process::username,
                        "Username that owns the process")
         .def_readwrite("start_time", &atom::system::Process::startTime,
                        "Process start time")
-        .def_readwrite("cpu_usage", &atom::system::Process::cpuUsage,
-                       "CPU usage percentage")
-        .def_readwrite("memory_usage", &atom::system::Process::memoryUsage,
-                       "Memory usage in bytes")
-        .def_readwrite("thread_count", &atom::system::Process::threadCount,
-                       "Number of threads")
+        .def_readwrite("resources", &atom::system::Process::resources,
+                       "Resource usage information")
         .def_readwrite("priority", &atom::system::Process::priority,
                        "Process priority")
         .def("__repr__", [](const atom::system::Process& proc) {
             return "<Process pid=" + std::to_string(proc.pid) + " name='" +
-                   proc.name + "' cpu=" + std::to_string(proc.cpuUsage) +
-                   "% mem=" + std::to_string(proc.memoryUsage / (1024 * 1024)) +
+                   proc.name +
+                   "' cpu=" + std::to_string(proc.resources.cpuUsage) +
+                   "% mem=" +
+                   std::to_string(proc.resources.memUsage / (1024 * 1024)) +
                    "MB>";
         });
 
@@ -208,10 +213,11 @@ Examples:
     >>> from atom.system import process
     >>> all_procs = process.get_all_processes()
     >>> for pid, name in all_procs:
-    ...     print(f"Process: {name} (PID: {pid})")
+    ...     print(f"Process: {name} (PID: {pid}) ")
 )");
 
-    m.def("get_process_info_by_pid", &atom::system::getProcessInfoByPid, py::arg("pid"),
+    m.def("get_process_info_by_pid", &atom::system::getProcessInfoByPid,
+          py::arg("pid"),
           R"(Gets information about a process by its PID.
 
 Args:
@@ -223,7 +229,7 @@ Returns:
 Examples:
     >>> from atom.system import process
     >>> proc_info = process.get_process_info_by_pid(1234)
-    >>> print(f"Process: {proc_info.name}, CPU: {proc_info.cpu_usage}%")
+    >>> print(f"Process: {proc_info.name}, CPU: {proc_info.resources.cpu_usage}%")
 )");
 
     m.def("get_self_process_info", &atom::system::getSelfProcessInfo,
@@ -235,7 +241,7 @@ Returns:
 Examples:
     >>> from atom.system import process
     >>> my_proc = process.get_self_process_info()
-    >>> print(f"Current process: {my_proc.name} (PID: {my_proc.pid})")
+    >>> print(f"Current process: {my_proc.name} (PID: {my_proc.pid}) ")
 )");
 
     m.def("ctermid", &atom::system::ctermid,
@@ -463,10 +469,9 @@ Examples:
     ...     print(f"Process uptime: {hours}h {minutes}m {seconds}s")
 )");
 
-    m.def(
-        "monitor_process", &atom::system::monitorProcess, py::arg("pid"),
-        py::arg("callback"), py::arg("interval_ms") = 1000,
-        R"(Monitors a process and executes a callback when its status changes.
+    m.def("monitor_process", &atom::system::monitorProcess, py::arg("pid"),
+          py::arg("callback"), py::arg("interval_ms") = 1000,
+          R"(Monitors a process and executes a callback when its status changes.
 
 Args:
     pid: Process ID.
@@ -555,8 +560,8 @@ Examples:
     >>> from atom.system import process
     >>> pid = 1234
     >>> resources = process.get_process_resources(pid)
-    >>> print(f"Process {pid} CPU time: {resources.cpu_time}s")
-    >>> print(f"Peak memory: {resources.peak_memory / (1024*1024):.2f} MB")
+    >>> print(f"Process {pid} CPU usage: {resources.cpu_usage}%")
+    >>> print(f"Memory usage: {resources.memory_usage / (1024*1024):.2f} MB")
 )");
 
 #ifdef _WIN32
@@ -793,7 +798,7 @@ Examples:
     >>> print(f"Process {pid} has {len(connections)} network connections")
     >>> for conn in connections:
     ...     print(f"{conn.protocol}: {conn.local_address}:{conn.local_port} -> "
-    ...           f"{conn.remote_address}:{conn.remote_port} ({conn.state})")
+    ...           f"{conn.remote_address}:{conn.remote_port} ({conn.status}) ")
 )");
 
     m.def("get_process_file_descriptors", &atom::system::getProcessFileDescriptors, py::arg("pid"),
@@ -811,7 +816,7 @@ Examples:
     >>> fds = process.get_process_file_descriptors(pid)
     >>> print(f"Process {pid} has {len(fds)} open file descriptors")
     >>> for fd in fds:
-    ...     print(f"{fd.fd}: {fd.path} ({fd.type}, {fd.mode})")
+    ...     print(f"{fd.fd}: {fd.path} ({fd.type}, {fd.mode}) ")
 )");
 
     m.def("get_process_performance_history", &atom::system::getProcessPerformanceHistory,
@@ -833,9 +838,9 @@ Examples:
     >>> # Collect 1 minute of data
     >>> duration = datetime.timedelta(minutes=1)
     >>> history = process.get_process_performance_history(pid, duration, 500)
-    >>> print(f"Collected {len(history.timestamps)} data points")
+    >>> print(f"Collected {len(history.data_points)} data points")
     >>> # Calculate average CPU usage
-    >>> avg_cpu = sum(history.cpu_usage) / len(history.cpu_usage) if history.cpu_usage else 0
+    >>> avg_cpu = sum(dp.cpu_usage for dp in history.data_points) / len(history.data_points) if history.data_points else 0
     >>> print(f"Average CPU usage: {avg_cpu:.2f}%")
 )");
 
@@ -909,7 +914,7 @@ Examples:
     >>> from atom.system import process
     >>> # Find all processes using more than 100MB of memory
     >>> def high_memory(proc):
-    ...     return proc.memory_usage > 100 * 1024 * 1024
+    ...     return proc.resources.mem_usage > 100 * 1024 * 1024
     ...
     >>> high_mem_pids = process.find_processes(high_memory)
     >>> print(f"Found {len(high_mem_pids)} processes using >100MB memory")
@@ -984,7 +989,7 @@ Examples:
             std::sort(processes.begin(), processes.end(),
                       [](const atom::system::Process& a,
                          const atom::system::Process& b) {
-                          return a.cpuUsage > b.cpuUsage;
+                          return a.resources.cpuUsage > b.resources.cpuUsage;
                       });
 
             // Take top N
@@ -1007,7 +1012,7 @@ Examples:
     >>> from atom.system import process
     >>> top_cpu = process.list_top_cpu_processes(10)
     >>> for i, proc in enumerate(top_cpu):
-    ...     print(f"{i+1}. {proc.name} (PID: {proc.pid}): {proc.cpu_usage:.2f}%")
+    ...     print(f"{i+1}. {proc.name} (PID: {proc.pid}): {proc.resources.cpu_usage:.2f}%")
 )");
 
     m.def(
@@ -1029,7 +1034,7 @@ Examples:
             std::sort(processes.begin(), processes.end(),
                       [](const atom::system::Process& a,
                          const atom::system::Process& b) {
-                          return a.memoryUsage > b.memoryUsage;
+                          return a.resources.memUsage > b.resources.memUsage;
                       });
 
             // Take top N
@@ -1052,7 +1057,7 @@ Examples:
     >>> from atom.system import process
     >>> top_mem = process.list_top_memory_processes(10)
     >>> for i, proc in enumerate(top_mem):
-    ...     mem_mb = proc.memory_usage / (1024 * 1024)
+    ...     mem_mb = proc.resources.mem_usage / (1024 * 1024)
     ...     print(f"{i+1}. {proc.name} (PID: {proc.pid}): {mem_mb:.2f} MB")
 )");
 
@@ -1095,7 +1100,7 @@ Examples:
     >>> tree = process.get_process_tree(pid)
     >>> def print_tree(pid, tree, indent=0):
     ...     proc = process.get_process_info_by_pid(pid)
-    ...     print(" " * indent + f"{proc.name} (PID: {pid})")
+    ...     print(" " * indent + f"{proc.name} (PID: {pid}) ")
     ...     for child in tree.get(pid, []):
     ...         print_tree(child, tree, indent + 2)
     ...
@@ -1105,19 +1110,30 @@ Examples:
     // Define a helper class for process monitoring context manager
     py::class_<py::object>(m, "ProcessMonitor", "Process monitoring context manager")
         .def(py::init([](int pid, std::function<void(int, const std::string&)> callback, 
-                        unsigned int interval_ms) {
+                        unsigned int interval_ms = 1000) {
         return py::object();  // Placeholder, actual impl in __enter__
         }), py::arg("pid"), py::arg("callback"), py::arg("interval_ms") = 1000,
             "Initialize a process monitor context manager")
-        .def("__enter__", [](py::object& self, int pid, 
-                             std::function<void(int, const std::string&)> callback, 
-                             unsigned int interval_ms) {
-        int monitor_id =
-            atom::system::monitorProcess(pid, callback, interval_ms);
-        self.attr("monitor_id") = py::int_(monitor_id);
+        .def("__enter__", [](py::object& self, py::object exc_type, 
+                            py::object exc_value, py::object traceback) {
+        // Here we capture self and extract the monitor parameters
+        if (py::hasattr(self, "pid") && py::hasattr(self, "callback") &&
+            py::hasattr(self, "interval_ms")) {
+            int pid = py::cast<int>(self.attr("pid"));
+            auto callback =
+                py::cast<std::function<void(int, const std::string&)>>(
+                    self.attr("callback"));
+            unsigned int interval_ms =
+                py::cast<unsigned int>(self.attr("interval_ms"));
+
+            int monitor_id =
+                atom::system::monitorProcess(pid, callback, interval_ms);
+            self.attr("monitor_id") = py::int_(monitor_id);
+        }
         return self;
         })
-        .def("__exit__", [](py::object& self, py::object, py::object, py::object) {
+        .def("__exit__", [](py::object& self, py::object exc_type, py::object exc_value, 
+                           py::object traceback) {
         if (py::hasattr(self, "monitor_id")) {
             int monitor_id = py::cast<int>(self.attr("monitor_id"));
             atom::system::stopMonitoring(monitor_id);
@@ -1128,9 +1144,13 @@ Examples:
     // Context manager factory function
     m.def(
         "monitor",
-        [](int pid, std::function<void(int, const std::string&)> callback,
+        [&m](int pid, std::function<void(int, const std::string&)> callback,
            unsigned int interval_ms = 1000) {
-            return m.attr("ProcessMonitor")(pid, callback, interval_ms);
+            auto obj = m.attr("ProcessMonitor")(pid, callback, interval_ms);
+            obj.attr("pid") = py::int_(pid);
+            obj.attr("callback") = py::cast(callback);
+            obj.attr("interval_ms") = py::int_(interval_ms);
+            return obj;
         },
         py::arg("pid"), py::arg("callback"), py::arg("interval_ms") = 1000,
         R"(Create a context manager for process monitoring.

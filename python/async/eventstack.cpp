@@ -101,7 +101,7 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
             [](EventStackType& self, py::function predicate) {
                 self.filterEvents([predicate](const T& event) -> bool {
                     py::gil_scoped_acquire acquire;
-                    return predicate(event).cast<bool>();
+                    return predicate(event).template cast<bool>();
                 });
             },
             py::arg("predicate"),
@@ -121,7 +121,7 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
             [](const EventStackType& self, py::function predicate) {
                 return self.findEvent([predicate](const T& event) -> bool {
                     py::gil_scoped_acquire acquire;
-                    return predicate(event).cast<bool>();
+                    return predicate(event).template cast<bool>();
                 });
             },
             py::arg("predicate"),
@@ -145,7 +145,7 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
             [](const EventStackType& self, py::function predicate) {
                 return self.countEvents([predicate](const T& event) -> bool {
                     py::gil_scoped_acquire acquire;
-                    return predicate(event).cast<bool>();
+                    return predicate(event).template cast<bool>();
                 });
             },
             py::arg("predicate"),
@@ -167,7 +167,7 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
             [](const EventStackType& self, py::function predicate) {
                 return self.anyEvent([predicate](const T& event) -> bool {
                     py::gil_scoped_acquire acquire;
-                    return predicate(event).cast<bool>();
+                    return predicate(event).template cast<bool>();
                 });
             },
             py::arg("predicate"),
@@ -185,7 +185,7 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
             [](const EventStackType& self, py::function predicate) {
                 return self.allEvents([predicate](const T& event) -> bool {
                     py::gil_scoped_acquire acquire;
-                    return predicate(event).cast<bool>();
+                    return predicate(event).template cast<bool>();
                 });
             },
             py::arg("predicate"),
@@ -227,7 +227,7 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
             [](EventStackType& self, py::function compare_func) {
                 self.sortEvents([compare_func](const T& a, const T& b) -> bool {
                     py::gil_scoped_acquire acquire;
-                    return compare_func(a, b).cast<bool>();
+                    return compare_func(a, b).template cast<bool>();
                 });
             },
             py::arg("compare_func"),

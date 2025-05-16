@@ -543,7 +543,11 @@ private:
         std::string edgePath = std::string(GPIO_PATH) + "/gpio" + pin + "/edge";
         int edgeFd = open(edgePath.c_str(), O_WRONLY);
         if (edgeFd >= 0) {
-            write(edgeFd, "both", 4);
+            ssize_t res = write(edgeFd, "both", 4);
+            if (res != 4) {
+                LOG_F(WARNING, "Failed to set edge to 'both' for GPIO %s",
+                      pin.c_str());
+            }
             close(edgeFd);
         }
 
@@ -561,7 +565,11 @@ private:
         // Initial read to clear any pending interrupts
         char buffer[2];
         lseek(fd, 0, SEEK_SET);
-        read(fd, buffer, sizeof(buffer));
+        ssize_t res = read(fd, buffer, sizeof(buffer));
+        if (res < 0) {
+            LOG_F(WARNING, "Failed to read initial GPIO value: %s",
+                  strerror(errno));
+        }
 
         fdMap_[pin] = fd;
     }

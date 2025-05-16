@@ -5,7 +5,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 namespace fs = std::filesystem;
 
@@ -23,8 +22,6 @@ PYBIND11_MODULE(compress, m) {
             PyErr_SetString(PyExc_ValueError, e.what());
         } catch (const std::runtime_error& e) {
             PyErr_SetString(PyExc_RuntimeError, e.what());
-        } catch (const fs::filesystem_error& e) {
-            PyErr_SetString(PyExc_OSError, e.what());
         } catch (const std::exception& e) {
             PyErr_SetString(PyExc_Exception, e.what());
         }

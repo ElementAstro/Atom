@@ -5,7 +5,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(lru, m) {
@@ -105,23 +104,43 @@ Returns:
 Raises:
     RuntimeError: If a deadlock is detected
 )")
-        .def("get_shared",
-             &atom::search::ThreadSafeLRUCache<std::string,
-                                               std::string>::getShared,
-             py::arg("key"),
-             R"(Retrieves a value as a shared pointer from the cache.
+        .def(
+            "get_shared",
+            [](atom::search::ThreadSafeLRUCache<std::string, std::string>& self,
+               const std::string& key) {
+                auto ptr = self.getShared(key);
+                if (ptr) {
+                    return *ptr;
+                }
+                return std::string();
+            },
+            py::arg("key"),
+            R"(Retrieves a value from the cache as a copy.
 
 Args:
     key: The key of the item to retrieve
 
 Returns:
-    A shared pointer to the value if found and not expired, None otherwise
+    The value if found and not expired, empty string otherwise
 )")
-        .def("get_batch",
-             &atom::search::ThreadSafeLRUCache<std::string,
-                                               std::string>::getBatch,
-             py::arg("keys"),
-             R"(Batch retrieval of multiple values from the cache.
+        .def(
+            "get_batch",
+            [](atom::search::ThreadSafeLRUCache<std::string, std::string>& self,
+               const std::vector<std::string>& keys) {
+                auto result = self.getBatch(keys);
+                std::vector<std::optional<std::string>> pythonResult;
+                pythonResult.reserve(result.size());
+                for (const auto& ptr : result) {
+                    if (ptr) {
+                        pythonResult.push_back(*ptr);
+                    } else {
+                        pythonResult.push_back(std::nullopt);
+                    }
+                }
+                return pythonResult;
+            },
+            py::arg("keys"),
+            R"(Batch retrieval of multiple values from the cache.
 
 Args:
     keys: List of keys to retrieve
@@ -393,12 +412,34 @@ Examples:
         .def(py::init<size_t>(), py::arg("max_size"))
         .def("get", &atom::search::ThreadSafeLRUCache<std::string, int>::get,
              py::arg("key"))
-        .def("get_shared",
-             &atom::search::ThreadSafeLRUCache<std::string, int>::getShared,
-             py::arg("key"))
-        .def("get_batch",
-             &atom::search::ThreadSafeLRUCache<std::string, int>::getBatch,
-             py::arg("keys"))
+        .def(
+            "get_shared",
+            [](atom::search::ThreadSafeLRUCache<std::string, int>& self,
+               const std::string& key) -> std::optional<int> {
+                auto ptr = self.getShared(key);
+                if (ptr) {
+                    return *ptr;
+                }
+                return std::nullopt;
+            },
+            py::arg("key"))
+        .def(
+            "get_batch",
+            [](atom::search::ThreadSafeLRUCache<std::string, int>& self,
+               const std::vector<std::string>& keys) {
+                auto result = self.getBatch(keys);
+                std::vector<std::optional<int>> pythonResult;
+                pythonResult.reserve(result.size());
+                for (const auto& ptr : result) {
+                    if (ptr) {
+                        pythonResult.push_back(*ptr);
+                    } else {
+                        pythonResult.push_back(std::nullopt);
+                    }
+                }
+                return pythonResult;
+            },
+            py::arg("keys"))
         .def("contains",
              &atom::search::ThreadSafeLRUCache<std::string, int>::contains,
              py::arg("key"))
@@ -461,12 +502,34 @@ Examples:
         .def(py::init<size_t>(), py::arg("max_size"))
         .def("get", &atom::search::ThreadSafeLRUCache<std::string, double>::get,
              py::arg("key"))
-        .def("get_shared",
-             &atom::search::ThreadSafeLRUCache<std::string, double>::getShared,
-             py::arg("key"))
-        .def("get_batch",
-             &atom::search::ThreadSafeLRUCache<std::string, double>::getBatch,
-             py::arg("keys"))
+        .def(
+            "get_shared",
+            [](atom::search::ThreadSafeLRUCache<std::string, double>& self,
+               const std::string& key) -> std::optional<double> {
+                auto ptr = self.getShared(key);
+                if (ptr) {
+                    return *ptr;
+                }
+                return std::nullopt;
+            },
+            py::arg("key"))
+        .def(
+            "get_batch",
+            [](atom::search::ThreadSafeLRUCache<std::string, double>& self,
+               const std::vector<std::string>& keys) {
+                auto result = self.getBatch(keys);
+                std::vector<std::optional<double>> pythonResult;
+                pythonResult.reserve(result.size());
+                for (const auto& ptr : result) {
+                    if (ptr) {
+                        pythonResult.push_back(*ptr);
+                    } else {
+                        pythonResult.push_back(std::nullopt);
+                    }
+                }
+                return pythonResult;
+            },
+            py::arg("keys"))
         .def("contains",
              &atom::search::ThreadSafeLRUCache<std::string, double>::contains,
              py::arg("key"))

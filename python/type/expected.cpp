@@ -13,13 +13,11 @@ public:
     explicit ExpectedError(const std::string& msg) : std::runtime_error(msg) {}
 };
 
-// 错误类型转换的辅助函数
 template <typename T>
 py::object error_to_py(const T& error) {
     return py::str(error);
 }
 
-// 实现一个可被Python访问的Expected类模板
 template <typename T, typename E = std::string>
 py::class_<atom::type::expected<T, E>> declare_expected(
     py::module& m, const std::string& name) {
@@ -39,15 +37,15 @@ py::class_<atom::type::expected<T, E>> declare_expected(
              "Constructs an Expected object with a default value.")
         .def(py::init<const T&>(), py::arg("value"),
              "Constructs an Expected object with the given value.")
-        .def(py::init<T&&>(), py::arg("value"),
+        .def(py::init<T>(), py::arg("value"),
              "Constructs an Expected object with the given value (move).")
         .def(py::init<const ErrorType&>(), py::arg("error"),
              "Constructs an Expected object with the given error.")
-        .def(py::init<ErrorType&&>(), py::arg("error"),
+        .def(py::init<ErrorType>(), py::arg("error"),
              "Constructs an Expected object with the given error (move).")
         .def(py::init<const UnexpectedType&>(), py::arg("unexpected"),
              "Constructs an Expected object with the given unexpected value.")
-        .def(py::init<UnexpectedType&&>(), py::arg("unexpected"),
+        .def(py::init<UnexpectedType>(), py::arg("unexpected"),
              "Constructs an Expected object with the given unexpected value "
              "(move).")
         .def("has_value", &ExpectedType::has_value,
@@ -186,12 +184,12 @@ py::class_<atom::type::expected<void, std::string>> declare_expected_void(
              "Constructs an ExpectedVoid object in success state.")
         .def(py::init<const ErrorType&>(), py::arg("error"),
              "Constructs an ExpectedVoid object with the given error.")
-        .def(py::init<ErrorType&&>(), py::arg("error"),
+        .def(py::init<ErrorType>(), py::arg("error"),
              "Constructs an ExpectedVoid object with the given error (move).")
         .def(py::init<const UnexpectedType&>(), py::arg("unexpected"),
              "Constructs an ExpectedVoid object with the given unexpected "
              "value.")
-        .def(py::init<UnexpectedType&&>(), py::arg("unexpected"),
+        .def(py::init<UnexpectedType>(), py::arg("unexpected"),
              "Constructs an ExpectedVoid object with the given unexpected "
              "value (move).")
         .def("has_value", &ExpectedType::has_value,

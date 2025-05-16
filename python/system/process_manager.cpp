@@ -5,7 +5,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(process_manager, m) {
@@ -32,8 +31,9 @@ PYBIND11_MODULE(process_manager, m) {
         m, "ProcessException", PyExc_RuntimeError);
 
     // ProcessManager class binding
-    py::class_<atom::system::ProcessManager, std::shared_ptr<atom::system::ProcessManager>>(
-        m, "ProcessManager", 
+    py::class_<atom::system::ProcessManager,
+               std::shared_ptr<atom::system::ProcessManager>>(
+        m, "ProcessManager",
         R"(Manages system processes with enhanced functionalities.
 
 This class provides methods to create, monitor, and terminate processes,
@@ -54,8 +54,10 @@ Examples:
 )")
         .def(py::init<int>(), py::arg("max_process") = 20,
              "Constructs a ProcessManager with a maximum number of processes.")
-        .def_static("create_shared", &atom::system::ProcessManager::createShared, py::arg("max_process") = 20,
-             R"(Creates a shared pointer to a ProcessManager.
+        .def_static("create_shared",
+                    &atom::system::ProcessManager::createShared,
+                    py::arg("max_process") = 20,
+                    R"(Creates a shared pointer to a ProcessManager.
 
 Args:
     max_process: The maximum number of processes to manage (default: 20).
@@ -67,8 +69,9 @@ Examples:
     >>> from atom.system import process_manager
     >>> pm = process_manager.ProcessManager.create_shared(10)
 )")
-        .def("create_process", &atom::system::ProcessManager::createProcess, 
-             py::arg("command"), py::arg("identifier"), py::arg("is_background") = false,
+        .def("create_process", &atom::system::ProcessManager::createProcess,
+             py::arg("command"), py::arg("identifier"),
+             py::arg("is_background") = false,
              R"(Creates a new process.
 
 Args:
@@ -90,8 +93,9 @@ Examples:
     >>> # Run a long process in the background
     >>> pm.create_process("sleep 10", "background_sleep", True)
 )")
-        .def("terminate_process", &atom::system::ProcessManager::terminateProcess, 
-             py::arg("pid"), py::arg("signal") = 15,
+        .def("terminate_process",
+             &atom::system::ProcessManager::terminateProcess, py::arg("pid"),
+             py::arg("signal") = 15,
              R"(Terminates a process by its PID.
 
 Args:
@@ -112,7 +116,8 @@ Examples:
     >>> # Forcefully kill with SIGKILL (9)
     >>> pm.terminate_process(1234, 9)
 )")
-        .def("terminate_process_by_name", &atom::system::ProcessManager::terminateProcessByName, 
+        .def("terminate_process_by_name",
+             &atom::system::ProcessManager::terminateProcessByName,
              py::arg("name"), py::arg("signal") = 15,
              R"(Terminates a process by its name.
 
@@ -132,7 +137,8 @@ Examples:
     >>> # Terminate all processes named "sleep"
     >>> pm.terminate_process_by_name("sleep")
 )")
-        .def("has_process", &atom::system::ProcessManager::hasProcess, py::arg("identifier"),
+        .def("has_process", &atom::system::ProcessManager::hasProcess,
+             py::arg("identifier"),
              R"(Checks if a process with the given identifier exists.
 
 Args:
@@ -148,7 +154,8 @@ Examples:
     >>> pm.has_process("greeting")
     True
 )")
-        .def("get_running_processes", &atom::system::ProcessManager::getRunningProcesses,
+        .def("get_running_processes",
+             &atom::system::ProcessManager::getRunningProcesses,
              R"(Gets a list of running processes.
 
 Returns:
@@ -159,9 +166,11 @@ Examples:
     >>> pm = process_manager.ProcessManager()
     >>> processes = pm.get_running_processes()
     >>> for proc in processes:
-    ...     print(f"{proc.name} (PID: {proc.pid})")
+    ...     print(f"{proc.name} (PID: {proc.pid}) ")
 )")
-        .def("get_process_output", &atom::system::ProcessManager::getProcessOutput, py::arg("identifier"),
+        .def("get_process_output",
+             &atom::system::ProcessManager::getProcessOutput,
+             py::arg("identifier"),
              R"(Gets the output of a process by its identifier.
 
 Args:
@@ -178,7 +187,8 @@ Examples:
     >>> for line in output:
     ...     print(line)
 )")
-        .def("wait_for_completion", &atom::system::ProcessManager::waitForCompletion,
+        .def("wait_for_completion",
+             &atom::system::ProcessManager::waitForCompletion,
              R"(Waits for all managed processes to complete.
 
 Examples:
@@ -191,7 +201,8 @@ Examples:
     >>> print("All processes completed")
 )")
         .def("run_script", &atom::system::ProcessManager::runScript,
-             py::arg("script"), py::arg("identifier"), py::arg("is_background") = false,
+             py::arg("script"), py::arg("identifier"),
+             py::arg("is_background") = false,
              R"(Runs a script as a new process.
 
 Args:
@@ -211,7 +222,8 @@ Examples:
     >>> script = "#!/bin/bash\necho 'Running script'\nsleep 2\necho 'Done'"
     >>> pm.run_script(script, "test_script")
 )")
-        .def("monitor_processes", &atom::system::ProcessManager::monitorProcesses,
+        .def("monitor_processes",
+             &atom::system::ProcessManager::monitorProcesses,
              R"(Monitors the managed processes and updates their statuses.
 
 Returns:
@@ -226,7 +238,8 @@ Examples:
     >>> # Monitor their status
     >>> pm.monitor_processes()
 )")
-        .def("get_process_info", &atom::system::ProcessManager::getProcessInfo, py::arg("pid"),
+        .def("get_process_info", &atom::system::ProcessManager::getProcessInfo,
+             py::arg("pid"),
              R"(Retrieves detailed information about a specific process.
 
 Args:
@@ -427,8 +440,8 @@ Examples:
     // Module-level method to use the context manager
     m.def(
         "with_process",
-        [](const std::string& command, const std::string& identifier,
-           bool wait_for_completion) {
+        [&m](const std::string& command, const std::string& identifier,
+             bool wait_for_completion) {
             return m.attr("ProcessContext")(command, identifier,
                                             wait_for_completion);
         },

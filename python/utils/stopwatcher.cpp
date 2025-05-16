@@ -4,7 +4,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(stopwatcher, m) {
@@ -179,7 +178,12 @@ Returns:
         .def(
             "__enter__",
             [](atom::utils::StopWatcher& self) {
-                self.start();
+                auto result = self.start();
+                if (!result) {
+                    throw std::runtime_error(
+                        "Failed to start stopwatch: " +
+                        std::to_string(static_cast<int>(result.error())));
+                }
                 return &self;
             },
             R"(Enables use of StopWatcher in 'with' statements.
@@ -193,8 +197,9 @@ Returns:
             "__exit__",
             [](atom::utils::StopWatcher& self, py::object exc_type,
                py::object exc_value, py::object traceback) {
-                self.stop();
-                return false;  // Don't suppress exceptions
+                auto result = self.stop();  // Store the return value
+                (void)result;               // Explicitly ignore the value
+                return false;               // Don't suppress exceptions
             },
             R"(Handles exiting a 'with' context.
 
@@ -233,9 +238,15 @@ When exiting a context started with 'with StopWatcher() as sw:', the stopwatch s
         "timed_execution",
         [](py::function func) {
             atom::utils::StopWatcher sw;
-            sw.start();
+            auto start_result = sw.start();
+            if (!start_result) {
+                throw std::runtime_error(
+                    "Failed to start stopwatch: " +
+                    std::to_string(static_cast<int>(start_result.error())));
+            }
             py::object result = func();
-            sw.stop();
+            auto stop_result = sw.stop();  // Store the return value
+            (void)stop_result;             // Explicitly acknowledge it
             return py::make_tuple(result, sw.elapsedMilliseconds());
         },
         py::arg("function"),

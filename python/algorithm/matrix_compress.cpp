@@ -6,8 +6,15 @@
 
 namespace py = pybind11;
 
+struct CompressionResult {
+    int size;
+    int first_char;
+};
+
 PYBIND11_MODULE(matrix_compress, m) {
     m.doc() = "Matrix compression module for the atom package";
+
+    PYBIND11_NUMPY_DTYPE(CompressionResult, size, first_char);
 
     // Register exception translations
     py::register_exception_translator([](std::exception_ptr p) {
@@ -610,11 +617,12 @@ Examples:
 
     // Add a vectorized version that handles both compression methods
     m.def("vectorized_compress",
-          py::vectorize([](char c1, char c2, char c3) -> py::tuple {
+          py::vectorize([](char c1, char c2, char c3) -> CompressionResult {
               std::vector<std::vector<char>> matrix = {{c1, c2, c3}};
               auto compressed =
                   atom::algorithm::MatrixCompressor::compress(matrix);
-              return py::make_tuple(compressed.size(), compressed[0].first);
+              return {static_cast<int>(compressed.size()),
+                      static_cast<int>(compressed[0].first)};
           }),
           R"(A vectorized version of compression for element-wise operations.
 

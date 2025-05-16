@@ -423,7 +423,7 @@ bool BiosInfo::setSecureBoot(bool enable) {
         // Check if efivarfs is mounted
         std::array<char, 128> buffer;
         std::string result;
-        std::unique_ptr<FILE, decltype(&pclose)> mountCheck(
+        std::unique_ptr<FILE, int (*)(FILE*)> mountCheck(
             popen("mount | grep efivarfs", "r"), pclose);
 
         if (!mountCheck ||
@@ -752,8 +752,8 @@ BiosInfoData BiosInfo::fetchBiosInfo() {
         for (const auto& cmd : commands) {
             std::array<char, 128> buffer;
             std::string result;
-            std::unique_ptr<FILE, decltype(&pclose)> pipe(
-                popen(cmd.c_str(), "r"), pclose);
+            std::unique_ptr<FILE, int (*)(FILE*)> pipe(popen(cmd.c_str(), "r"),
+                                                       pclose);
 
             if (!pipe) {
                 LOG_F(ERROR, "popen() failed!");

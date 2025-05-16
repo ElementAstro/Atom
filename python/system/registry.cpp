@@ -4,7 +4,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(registry, m) {
@@ -197,7 +196,7 @@ Returns:
         .def(
             "get_value",
             [](atom::system::Registry& self, const std::string& keyPath,
-               const std::string& valueName) {
+               const std::string& valueName) -> py::object {
                 auto value = self.getValue(keyPath, valueName);
                 if (value.has_value()) {
                     return py::cast(value.value());
@@ -270,7 +269,7 @@ Returns:
         .def(
             "get_value_info",
             [](atom::system::Registry& self, const std::string& keyPath,
-               const std::string& valueName) {
+               const std::string& valueName) -> py::object {
                 auto info = self.getValueInfo(keyPath, valueName);
                 if (info.has_value()) {
                     return py::cast(info.value());

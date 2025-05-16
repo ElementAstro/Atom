@@ -7,10 +7,70 @@
 
 namespace py = pybind11;
 
+template <typename ValueType>
+void define_cache_class(py::module& m, const char* class_name,
+                        const char* doc_string) {
+    py::class_<atom::search::TTLCache<std::string, ValueType>>(m, class_name,
+                                                               doc_string)
+        .def(py::init<std::chrono::milliseconds, size_t,
+                      std::optional<std::chrono::milliseconds>>(),
+             py::arg("ttl"), py::arg("max_capacity"),
+             py::arg("cleanup_interval") =
+                 std::optional<std::chrono::milliseconds>())
+        .def("put",
+             py::overload_cast<const std::string&, const ValueType&>(
+                 &atom::search::TTLCache<std::string, ValueType>::put),
+             py::arg("key"), py::arg("value"))
+        .def("batch_put",
+             &atom::search::TTLCache<std::string, ValueType>::batch_put,
+             py::arg("items"))
+        .def("get", &atom::search::TTLCache<std::string, ValueType>::get,
+             py::arg("key"))
+        .def(
+            "get_shared",
+            [](atom::search::TTLCache<std::string, ValueType>& self,
+               const std::string& key) -> py::object {
+                auto value_ptr = self.get_shared(key);
+                if (value_ptr) {
+                    return py::cast(*value_ptr);
+                }
+                return py::none();
+            },
+            py::arg("key"))
+        .def("batch_get",
+             &atom::search::TTLCache<std::string, ValueType>::batch_get,
+             py::arg("keys"))
+        .def("remove", &atom::search::TTLCache<std::string, ValueType>::remove,
+             py::arg("key"))
+        .def("contains",
+             &atom::search::TTLCache<std::string, ValueType>::contains,
+             py::arg("key"))
+        .def("cleanup",
+             &atom::search::TTLCache<std::string, ValueType>::cleanup)
+        .def("force_cleanup",
+             &atom::search::TTLCache<std::string, ValueType>::force_cleanup)
+        .def("hit_rate",
+             &atom::search::TTLCache<std::string, ValueType>::hitRate)
+        .def("size", &atom::search::TTLCache<std::string, ValueType>::size)
+        .def("capacity",
+             &atom::search::TTLCache<std::string, ValueType>::capacity)
+        .def("ttl", &atom::search::TTLCache<std::string, ValueType>::ttl)
+        .def("clear", &atom::search::TTLCache<std::string, ValueType>::clear)
+        .def("resize", &atom::search::TTLCache<std::string, ValueType>::resize,
+             py::arg("new_capacity"))
+        .def("__contains__",
+             &atom::search::TTLCache<std::string, ValueType>::contains)
+        .def("__len__", &atom::search::TTLCache<std::string, ValueType>::size)
+        .def("__bool__",
+             [](const atom::search::TTLCache<std::string, ValueType>& cache) {
+                 return cache.size() > 0;
+             });
+}
+
 PYBIND11_MODULE(ttl, m) {
     m.doc() = "Time-to-Live (TTL) cache module for the atom package";
 
-    // Register exception translations
+    // 注册异常转换
     py::register_exception_translator([](std::exception_ptr p) {
         try {
             if (p)
@@ -26,8 +86,8 @@ PYBIND11_MODULE(ttl, m) {
         }
     });
 
-    // String TTLCache binding
-    py::class_<atom::search::TTLCache<std::string, std::string>>(
+    // 定义字符串缓存
+    define_cache_class<std::string>(
         m, "StringCache",
         R"(A Time-to-Live (TTL) Cache with string keys and string values.
 
@@ -46,164 +106,10 @@ Examples:
     >>> cache.put("key1", "value1")
     >>> cache.get("key1")
     'value1'
-)")
-        .def(py::init<std::chrono::milliseconds, size_t,
-                      std::optional<std::chrono::milliseconds>>(),
-             py::arg("ttl"), py::arg("max_capacity"),
-             py::arg("cleanup_interval") =
-                 std::optional<std::chrono::milliseconds>(),
-             "Constructs a TTLCache with the specified TTL and maximum "
-             "capacity.")
-        .def(
-            "put",
-            py::overload_cast<const std::string&, const std::string&>(
-                &atom::search::TTLCache<std::string, std::string>::put),
-            py::arg("key"), py::arg("value"),
-            R"(Inserts a new key-value pair into the cache or updates an existing key.
+)");
 
-Args:
-    key: The key to insert or update
-    value: The value associated with the key
-
-Raises:
-    RuntimeError: If there's an error inserting the item
-)")
-        .def("batch_put",
-             &atom::search::TTLCache<std::string, std::string>::batch_put,
-             py::arg("items"),
-             R"(Batch insertion of multiple key-value pairs.
-
-Args:
-    items: List of key-value pairs to insert
-
-Raises:
-    RuntimeError: If there's an error inserting the items
-)")
-        .def(
-            "get", &atom::search::TTLCache<std::string, std::string>::get,
-            py::arg("key"),
-            R"(Retrieves the value associated with the given key from the cache.
-
-Args:
-    key: The key whose associated value is to be retrieved
-
-Returns:
-    The value if found and not expired; otherwise, None
-)")
-        .def(
-            "get_shared",
-            [](atom::search::TTLCache<std::string, std::string>& self,
-               const std::string& key) -> py::object {
-                auto value_ptr = self.get_shared(key);
-                if (value_ptr) {
-                    return py::cast(*value_ptr);
-                }
-                return py::none();
-            },
-            py::arg("key"),
-            R"(Retrieves the value as a shared pointer, avoiding copies for large objects.
-
-Args:
-    key: The key whose associated value is to be retrieved
-
-Returns:
-    Shared pointer to the value if found and not expired; otherwise, None
-)")
-        .def("batch_get",
-             &atom::search::TTLCache<std::string, std::string>::batch_get,
-             py::arg("keys"),
-             R"(Batch retrieval of multiple values by keys.
-
-Args:
-    keys: List of keys to retrieve
-
-Returns:
-    List of values corresponding to the keys (None for missing or expired items)
-)")
-        .def("remove",
-             &atom::search::TTLCache<std::string, std::string>::remove,
-             py::arg("key"),
-             R"(Removes an item from the cache.
-
-Args:
-    key: The key to remove
-
-Returns:
-    True if the item was found and removed, False otherwise
-)")
-        .def("contains",
-             &atom::search::TTLCache<std::string, std::string>::contains,
-             py::arg("key"),
-             R"(Checks if a key exists in the cache and has not expired.
-
-Args:
-    key: The key to check
-
-Returns:
-    True if the key exists and has not expired, False otherwise
-)")
-        .def("cleanup",
-             &atom::search::TTLCache<std::string, std::string>::cleanup,
-             "Performs cache cleanup by removing expired items.")
-        .def("force_cleanup",
-             &atom::search::TTLCache<std::string, std::string>::force_cleanup,
-             "Manually trigger a cleanup operation.")
-        .def("hit_rate",
-             &atom::search::TTLCache<std::string, std::string>::hitRate,
-             R"(Gets the cache hit rate.
-
-Returns:
-    The ratio of cache hits to total accesses (between 0.0 and 1.0)
-)")
-        .def("size", &atom::search::TTLCache<std::string, std::string>::size,
-             R"(Gets the current number of items in the cache.
-
-Returns:
-    The number of items in the cache
-)")
-        .def("capacity",
-             &atom::search::TTLCache<std::string, std::string>::capacity,
-             R"(Gets the maximum capacity of the cache.
-
-Returns:
-    The maximum capacity of the cache
-)")
-        .def("ttl", &atom::search::TTLCache<std::string, std::string>::ttl,
-             R"(Gets the TTL duration of the cache.
-
-Returns:
-    The TTL duration in milliseconds
-)")
-        .def("clear", &atom::search::TTLCache<std::string, std::string>::clear,
-             "Clears all items from the cache and resets hit/miss counts.")
-        .def("resize",
-             &atom::search::TTLCache<std::string, std::string>::resize,
-             py::arg("new_capacity"),
-             R"(Resizes the cache to a new maximum capacity.
-
-If the new capacity is smaller than the current size,
-the least recently used items will be evicted.
-
-Args:
-    new_capacity: The new maximum capacity
-
-Raises:
-    RuntimeError: If new_capacity is zero
-)")
-        .def("__contains__",
-             &atom::search::TTLCache<std::string, std::string>::contains,
-             "Support for 'in' operator to check if key exists.")
-        .def("__len__", &atom::search::TTLCache<std::string, std::string>::size,
-             "Support for len() function to get cache size.")
-        .def(
-            "__bool__",
-            [](const atom::search::TTLCache<std::string, std::string>& cache) {
-                return cache.size() > 0;
-            },
-            "Support for boolean evaluation.");
-
-    // Integer TTLCache binding
-    py::class_<atom::search::TTLCache<std::string, int>>(
+    // 定义整数缓存
+    define_cache_class<int>(
         m, "IntCache",
         R"(A Time-to-Live (TTL) Cache with string keys and integer values.
 
@@ -215,49 +121,10 @@ Examples:
     >>> cache.put("user_id", 12345)
     >>> cache.get("user_id")
     12345
-)")
-        .def(py::init<std::chrono::milliseconds, size_t,
-                      std::optional<std::chrono::milliseconds>>(),
-             py::arg("ttl"), py::arg("max_capacity"),
-             py::arg("cleanup_interval") =
-                 std::optional<std::chrono::milliseconds>())
-        .def("put",
-             py::overload_cast<const std::string&, const int&>(
-                 &atom::search::TTLCache<std::string, int>::put),
-             py::arg("key"), py::arg("value"))
-        .def("batch_put", &atom::search::TTLCache<std::string, int>::batch_put,
-             py::arg("items"))
-        .def("get", &atom::search::TTLCache<std::string, int>::get,
-             py::arg("key"))
-        .def("get_shared",
-             &atom::search::TTLCache<std::string, int>::get_shared,
-             py::arg("key"))
-        .def("batch_get", &atom::search::TTLCache<std::string, int>::batch_get,
-             py::arg("keys"))
-        .def("remove", &atom::search::TTLCache<std::string, int>::remove,
-             py::arg("key"))
-        .def("contains", &atom::search::TTLCache<std::string, int>::contains,
-             py::arg("key"))
-        .def("cleanup", &atom::search::TTLCache<std::string, int>::cleanup)
-        .def("force_cleanup",
-             &atom::search::TTLCache<std::string, int>::force_cleanup)
-        .def("hit_rate", &atom::search::TTLCache<std::string, int>::hitRate)
-        .def("size", &atom::search::TTLCache<std::string, int>::size)
-        .def("capacity", &atom::search::TTLCache<std::string, int>::capacity)
-        .def("ttl", &atom::search::TTLCache<std::string, int>::ttl)
-        .def("clear", &atom::search::TTLCache<std::string, int>::clear)
-        .def("resize", &atom::search::TTLCache<std::string, int>::resize,
-             py::arg("new_capacity"))
-        .def("__contains__",
-             &atom::search::TTLCache<std::string, int>::contains)
-        .def("__len__", &atom::search::TTLCache<std::string, int>::size)
-        .def("__bool__",
-             [](const atom::search::TTLCache<std::string, int>& cache) {
-                 return cache.size() > 0;
-             });
+)");
 
-    // Float TTLCache binding
-    py::class_<atom::search::TTLCache<std::string, double>>(
+    // 定义浮点数缓存
+    define_cache_class<double>(
         m, "FloatCache",
         R"(A Time-to-Live (TTL) Cache with string keys and floating-point values.
 
@@ -269,50 +136,9 @@ Examples:
     >>> cache.put("pi", 3.14159)
     >>> cache.get("pi")
     3.14159
-)")
-        .def(py::init<std::chrono::milliseconds, size_t,
-                      std::optional<std::chrono::milliseconds>>(),
-             py::arg("ttl"), py::arg("max_capacity"),
-             py::arg("cleanup_interval") =
-                 std::optional<std::chrono::milliseconds>())
-        .def("put",
-             py::overload_cast<const std::string&, const double&>(
-                 &atom::search::TTLCache<std::string, double>::put),
-             py::arg("key"), py::arg("value"))
-        .def("batch_put",
-             &atom::search::TTLCache<std::string, double>::batch_put,
-             py::arg("items"))
-        .def("get", &atom::search::TTLCache<std::string, double>::get,
-             py::arg("key"))
-        .def("get_shared",
-             &atom::search::TTLCache<std::string, double>::get_shared,
-             py::arg("key"))
-        .def("batch_get",
-             &atom::search::TTLCache<std::string, double>::batch_get,
-             py::arg("keys"))
-        .def("remove", &atom::search::TTLCache<std::string, double>::remove,
-             py::arg("key"))
-        .def("contains", &atom::search::TTLCache<std::string, double>::contains,
-             py::arg("key"))
-        .def("cleanup", &atom::search::TTLCache<std::string, double>::cleanup)
-        .def("force_cleanup",
-             &atom::search::TTLCache<std::string, double>::force_cleanup)
-        .def("hit_rate", &atom::search::TTLCache<std::string, double>::hitRate)
-        .def("size", &atom::search::TTLCache<std::string, double>::size)
-        .def("capacity", &atom::search::TTLCache<std::string, double>::capacity)
-        .def("ttl", &atom::search::TTLCache<std::string, double>::ttl)
-        .def("clear", &atom::search::TTLCache<std::string, double>::clear)
-        .def("resize", &atom::search::TTLCache<std::string, double>::resize,
-             py::arg("new_capacity"))
-        .def("__contains__",
-             &atom::search::TTLCache<std::string, double>::contains)
-        .def("__len__", &atom::search::TTLCache<std::string, double>::size)
-        .def("__bool__",
-             [](const atom::search::TTLCache<std::string, double>& cache) {
-                 return cache.size() > 0;
-             });
+)");
 
-    // Factory functions to create caches with optimal parameters
+    // 工厂函数，创建缓存并使用最优参数
     m.def(
         "create_string_cache",
         [](double ttl_seconds, size_t max_capacity) {

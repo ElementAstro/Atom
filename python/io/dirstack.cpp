@@ -32,47 +32,51 @@ PYBIND11_MODULE(dirstack, m) {
         m, "TaskVoid",
         "Represents an asynchronous directory operation with no return value")
         .def("__await__", [](atom::io::DirectoryStack::Task<void>& task) {
-            // Create a Python awaitable that bridges to the C++ co_await
-            return py::make_iterator(
-                py::cpp_function([&]() -> py::object {
+            struct Awaitable {
+                atom::io::DirectoryStack::Task<void> task;
+
+                Awaitable(atom::io::DirectoryStack::Task<void>&& t)
+                    : task(std::move(t)) {}
+
+                py::object next() {
                     try {
-                        // Use a shared_ptr to allow the Task to survive the
-                        // awaitable's lifetime
-                        auto* ptr = new atom::io::DirectoryStack::Task<void>(
+                        auto shared_task = std::make_shared<
+                            atom::io::DirectoryStack::Task<void>>(
                             std::move(task));
-                        auto deleter =
-                            [](atom::io::DirectoryStack::Task<void>* p) {
-                                delete p;
-                            };
-                        auto shared_task = std::shared_ptr<
-                            atom::io::DirectoryStack::Task<void>>(ptr, deleter);
 
-                        // Register a callback to be invoked when the operation
-                        // completes
-                        std::promise<void> promise;
-                        auto future = promise.get_future();
+                        auto promise = std::make_shared<std::promise<void>>();
+                        auto future = promise->get_future();
 
-                        // Schedule the co_await on a separate thread
-                        std::thread([shared_task,
-                                     p = std::move(promise)]() mutable {
+                        std::thread([shared_task, promise]() mutable {
                             try {
-                                // This is where the actual C++ co_await would
-                                // happen But we can't directly co_await from
-                                // Python, so we simulate it
-                                p.set_value();
+                                // *shared_task 目前只是模拟成功
+                                promise->set_value();
                             } catch (...) {
-                                p.set_exception(std::current_exception());
+                                promise->set_exception(
+                                    std::current_exception());
                             }
                         }).detach();
 
-                        // Wait for the operation to complete
                         future.get();
-                        return py::none();
+
+                        throw py::stop_iteration();
+                    } catch (const py::stop_iteration&) {
+                        throw;
                     } catch (const std::exception& e) {
                         throw py::error_already_set();
                     }
-                }),
-                py::cpp_function([]() { return false; }));  // StopIteration
+
+                    return py::none();
+                }
+            };
+
+            py::object awaitable = py::cast(Awaitable(std::move(task)));
+            awaitable.attr("__iter__") =
+                py::cpp_function([awaitable]() { return awaitable; });
+            awaitable.attr("__next__") = py::cpp_function(
+                [awaitable]() mutable { return awaitable.attr("next")(); });
+
+            return awaitable;
         });
 
     // Define the Task<fs::path> wrapper class
@@ -80,20 +84,22 @@ PYBIND11_MODULE(dirstack, m) {
         m, "TaskPath",
         "Represents an asynchronous directory operation that returns a path")
         .def("__await__", [](atom::io::DirectoryStack::Task<fs::path>& task) {
-            // Similar implementation as above, but returns a path
-            return py::make_iterator(
-                py::cpp_function([&]() -> py::object {
+            struct Awaitable {
+                atom::io::DirectoryStack::Task<fs::path> task;
+                bool done = false;
+
+                Awaitable(atom::io::DirectoryStack::Task<fs::path>&& t)
+                    : task(std::move(t)) {}
+
+                py::object next() {
+                    if (done) {
+                        throw py::stop_iteration();
+                    }
+
                     try {
-                        auto* ptr =
-                            new atom::io::DirectoryStack::Task<fs::path>(
-                                std::move(task));
-                        auto deleter =
-                            [](atom::io::DirectoryStack::Task<fs::path>* p) {
-                                delete p;
-                            };
-                        auto shared_task = std::shared_ptr<
-                            atom::io::DirectoryStack::Task<fs::path>>(ptr,
-                                                                      deleter);
+                        auto shared_task = std::make_shared<
+                            atom::io::DirectoryStack::Task<fs::path>>(
+                            std::move(task));
 
                         std::promise<fs::path> promise;
                         auto future = promise.get_future();
@@ -102,22 +108,28 @@ PYBIND11_MODULE(dirstack, m) {
                                      p = std::move(promise)]() mutable {
                             try {
                                 // Simulate co_await
-                                p.set_value(
-                                    fs::path("/"));  // Placeholder, actual
-                                                     // implementation would
-                                                     // wait for result
+                                p.set_value(fs::path("/"));  // Placeholder
                             } catch (...) {
                                 p.set_exception(std::current_exception());
                             }
                         }).detach();
 
                         fs::path result = future.get();
+                        done = true;
                         return py::cast(result);
                     } catch (const std::exception& e) {
                         throw py::error_already_set();
                     }
-                }),
-                py::cpp_function([]() { return false; }));  // StopIteration
+                }
+            };
+
+            py::object awaitable = py::cast(Awaitable(std::move(task)));
+            awaitable.attr("__iter__") =
+                py::cpp_function([awaitable]() { return awaitable; });
+            awaitable.attr("__next__") = py::cpp_function(
+                [awaitable]() mutable { return awaitable.attr("next")(); });
+
+            return awaitable;
         });
 
     // DirectoryStack class binding

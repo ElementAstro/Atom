@@ -17,7 +17,6 @@ Description: Trackable Object (Optimized with C++20 features)
 
 #include <exception>
 #include <functional>
-#include <memory>
 #include <mutex>
 #include <optional>
 #include <utility>
@@ -181,10 +180,36 @@ public:
     /**
      * @brief A scope-based notification deferrer.
      */
+    class ScopedDefer {
+    public:
+        explicit ScopedDefer(Trackable* parent) : parent_(parent) {}
+        ~ScopedDefer() { parent_->deferNotifications(false); }
+
+        // Non-copyable
+        ScopedDefer(const ScopedDefer&) = delete;
+        ScopedDefer& operator=(const ScopedDefer&) = delete;
+
+        // Movable
+        ScopedDefer(ScopedDefer&& other) noexcept : parent_(other.parent_) {
+            other.parent_ = nullptr;
+        }
+        ScopedDefer& operator=(ScopedDefer&& other) noexcept {
+            if (this != &other) {
+                if (parent_)
+                    parent_->deferNotifications(false);
+                parent_ = other.parent_;
+                other.parent_ = nullptr;
+            }
+            return *this;
+        }
+
+    private:
+        Trackable* parent_;
+    };
+
     [[nodiscard]] auto deferScoped() {
         deferNotifications(true);
-        return std::shared_ptr<void>(
-            nullptr, [this](auto...) { this->deferNotifications(false); });
+        return ScopedDefer(this);
     }
 
 private:

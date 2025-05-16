@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.14)
 project(atom_python_bindings)
 
 # Set C++ standard
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
@@ -103,8 +103,9 @@ foreach(type ${MODULE_TYPES})
       atom_${type} PRIVATE ${CMAKE_SOURCE_DIR}/.. # Atom root directory
     )
 
-    # Link corresponding Atom library
-    target_link_libraries(atom_${type} PRIVATE atom-${type})
+    if(TARGET atom-${type})
+      target_link_libraries(atom_${type} PRIVATE atom-${type})
+    endif()
 
     # Set output name
     set_target_properties(

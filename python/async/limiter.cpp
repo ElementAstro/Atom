@@ -155,11 +155,13 @@ Returns:
                 }
             };
 
-            // 返回Debounce对象
-            auto debouncer = create_debounce(lambda, delay, leading, maxWait);
+            // 使用共享指针存储Debounce对象，避免复制
+            using DebouncerType = atom::async::Debounce<decltype(lambda)>;
+            auto debouncer_ptr = std::make_shared<DebouncerType>(
+                lambda, delay, leading, maxWait);
 
-            // 返回一个Python callable对象
-            return py::cpp_function([debouncer]() mutable { debouncer(); });
+            // 返回一个Python callable对象，通过指针捕获
+            return py::cpp_function([debouncer_ptr]() { (*debouncer_ptr)(); });
         },
         py::arg("func"), py::arg("delay"), py::arg("leading") = false,
         py::arg("max_wait") = py::none(),
@@ -204,12 +206,13 @@ Examples:
                 }
             };
 
-            // 返回Throttle对象
-            auto throttler =
-                create_throttle(lambda, interval, leading, maxWait);
+            // 使用共享指针存储Throttle对象，避免复制
+            using ThrottlerType = atom::async::Throttle<decltype(lambda)>;
+            auto throttler_ptr = std::make_shared<ThrottlerType>(
+                lambda, interval, leading, maxWait);
 
-            // 返回一个Python callable对象
-            return py::cpp_function([throttler]() mutable { throttler(); });
+            // 返回一个Python callable对象，通过指针捕获
+            return py::cpp_function([throttler_ptr]() { (*throttler_ptr)(); });
         },
         py::arg("func"), py::arg("interval"), py::arg("leading") = false,
         py::arg("max_wait") = py::none(),
