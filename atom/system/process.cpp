@@ -23,6 +23,7 @@
 #include <psapi.h>
 #include <pdh.h>
 #include <ws2tcpip.h>
+#include "atom/utils/convert.hpp"
 #ifdef _MSC_VER
 #pragma comment(lib, "pdh.lib")
 #endif

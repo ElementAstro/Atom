@@ -369,31 +369,23 @@ auto checkSoftwareInstalled(const std::string& software_name) -> bool {
     using PcloseDeleter = int (*)(FILE*);
     std::unique_ptr<FILE, PcloseDeleter> pipe(popen(command.c_str(), "r"),
                                               pclose);
-                                                  pclose);
-                                                  if (pipe) {
-                                                      while (
-                                                          fgets(buffer.data(),
-                                                                buffer.size(),
-                                                                pipe.get()) !=
-                                                          nullptr) {
-                                                          result +=
-                                                              buffer.data();
-                                                      }
-                                                      isInstalled =
-                                                          !result.empty();
-                                                      if (isInstalled) {
-                                                          LOG_F(INFO,
-                                                                "Software {} "
-                                                                "is installed",
-                                                                software_name);
-                                                      } else {
-                                                          LOG_F(
-                                                              WARNING,
-                                                              "Software {} is "
-                                                              "not installed",
-                                                              software_name);
-                                                      }
-                                                  }
+    if (pipe) {
+        while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+            result += buffer.data();
+        }
+        isInstalled = !result.empty();
+        if (isInstalled) {
+            LOG_F(INFO,
+                  "Software {} "
+                  "is installed",
+                  software_name);
+        } else {
+            LOG_F(WARNING,
+                  "Software {} is "
+                  "not installed",
+                  software_name);
+        }
+    }
 
 #elif defined(__linux__)
     std::string command = "which " + software_name + " > /dev/null 2>&1";
@@ -407,7 +399,7 @@ auto checkSoftwareInstalled(const std::string& software_name) -> bool {
 
 #endif
 
-                                                  return isInstalled;
+    return isInstalled;
 }
 
 auto getProcessInfo(const std::string& software_name)

@@ -17,6 +17,7 @@ set(SOURCES
     curl.cpp
     downloader.cpp
     httpparser.cpp
+    minetype.cpp
     utils.cpp
     time.cpp
 )
@@ -27,6 +28,7 @@ set(HEADERS
     curl.hpp
     downloader.hpp
     httpparser.hpp
+    minetype.hpp
     utils.hpp
     time.hpp
 )
@@ -35,7 +37,12 @@ set(HEADERS
 set(LIBS
     loguru
     ${CMAKE_THREAD_LIBS_INIT}
+    ${CURL_LIBRARIES}
 )
+
+if(WIN32)
+   list(APPEND LIBS wsock32 ws2_32)
+endif()
 
 # Build Object Library
 add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
@@ -47,11 +54,6 @@ target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
 add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
 target_include_directories(${PROJECT_NAME} PUBLIC .)
-
-# Platform-specific libraries
-if(WIN32)
-    target_link_libraries(${PROJECT_NAME}_object PRIVATE wsock32 ws2_32)
-endif()
 
 # Set library properties
 set_target_properties(${PROJECT_NAME} PROPERTIES

@@ -979,16 +979,13 @@ auto asyncRetryImpl(Func&& func, int attemptsLeft,
     try {
         if constexpr (std::is_same_v<ReturnType, void>) {
             attempt.get();
-            callback();
+            callback(nullptr);  // Pass nullptr if callback expects an argument
             completeHandler();
             return;
         } else {
             auto result = attempt.get();
-            if constexpr (std::is_same_v<ReturnType, void>) {
-                callback();
-            } else {
-                callback(result);
-            }
+            // Simplified callback invocation for non-void types
+            callback(result);
             completeHandler();
             return result;
         }
@@ -1224,7 +1221,10 @@ void AsyncWorker<ResultType>::startAsync(Func&& func, Args&&... args) {
                 thread_handle, desired_priority_);
 
             if (preferred_cpu_ != std::numeric_limits<size_t>::max()) {
-                platform::setAffinity(thread_handle, preferred_cpu_);
+                platform::setAffinity(
+                    reinterpret_cast<std::thread::native_handle_type>(
+                        thread_handle),
+                    preferred_cpu_);
             }
 
             try {

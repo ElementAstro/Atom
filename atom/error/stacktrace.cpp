@@ -4,7 +4,6 @@
 #include <iomanip>
 #include <regex>
 #include <sstream>
-#include <string_view>
 
 #ifdef _WIN32
 // clang-format off

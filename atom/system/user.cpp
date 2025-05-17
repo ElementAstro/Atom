@@ -26,6 +26,8 @@ Description: Some system functions to get user information.
 #include <userenv.h>
 #include <wtsapi32.h>
 #include <lm.h>
+#include <memory>
+#include "atom/utils/string.hpp"
 // clang-format on
 #ifdef _MSC_VER
 #pragma comment(lib, "wtsapi32.lib")

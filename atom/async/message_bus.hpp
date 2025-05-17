@@ -322,8 +322,9 @@ public:
                 // Record the message in history (with locking)
                 {
                     std::unique_lock lock(mutex_);
-                    recordMessageHistory<MessageType>(std::string(name),
-                                                      message);
+                    recordMessageHistory<MessageType>(
+                        std::string(name),  // Ensure name is a std::string here
+                        message);
                 }
             };
 
@@ -351,6 +352,80 @@ public:
                 std::string("Failed to publish message: ") + ex.what());
         }
     }
+#else   // ATOM_USE_LOCKFREE_QUEUE is not defined
+    /**
+     * @brief Publishes a message to all relevant subscribers.
+     * Synchronous version when lockfree queue is not used.
+     * @tparam MessageType The type of the message.
+     * @param name The name of the message.
+     * @param message The message to publish.
+     * @param delay Optional delay before publishing.
+     */
+    template <MessageConcept MessageType>
+    void publish(
+        std::string_view name_sv, const MessageType& message,
+        std::optional<std::chrono::milliseconds> delay = std::nullopt) {
+        try {
+            if (name_sv.empty()) {
+                throw MessageBusException("Message name cannot be empty");
+            }
+
+            std::string name_str(name_sv);  // Convert to string for capture
+
+            auto publishTask = [this, name_str, message]() {
+                std::unique_lock lock(
+                    mutex_);  // Acquire unique lock for all operations
+                std::unordered_set<Token> calledSubscribers;
+
+                // 1. Publish to directly matching subscribers for the specific
+                // name `name_str`
+                publishToSubscribers<MessageType>(name_str, message,
+                                                  calledSubscribers);
+
+                // 2. Publish to namespace matching subscribers
+                // Iterate all registered namespaces. If `name_str`
+                // ("foo.bar.baz") starts with `a_namespace + "."` ("foo."),
+                // then deliver to subscribers of `a_namespace` ("foo").
+                for (const auto& registered_ns_key : namespaces_) {
+                    if (name_str.rfind(registered_ns_key + ".", 0) == 0) {
+                        // Ensure we don't call for the exact same name if
+                        // name_str itself is a registered_ns_key, as it's
+                        // already handled by the direct match above. The
+                        // calledSubscribers set will prevent actual duplicate
+                        // delivery.
+                        if (name_str != registered_ns_key) {
+                            publishToSubscribers<MessageType>(
+                                registered_ns_key, message, calledSubscribers);
+                        }
+                    }
+                }
+                recordMessageHistory<MessageType>(name_str, message);
+            };
+
+            if (delay) {
+                auto timer =
+                    std::make_shared<asio::steady_timer>(io_context_, *delay);
+                timer->async_wait([timer, publishTask, name_str](
+                                      const asio::error_code& errorCode) {
+                    if (!errorCode) {
+                        publishTask();
+                    } else {
+                        std::cerr << "[MessageBus] Timer error for message '"
+                                  << name_str << "': " << errorCode.message()
+                                  << std::endl;
+                    }
+                });
+            } else {
+                publishTask();
+            }
+        } catch (const std::exception& ex) {
+            std::cerr << "[MessageBus] Error in synchronous publish: "
+                      << ex.what() << std::endl;
+            throw MessageBusException(
+                std::string("Failed to publish message synchronously: ") +
+                ex.what());
+        }
+    }
 #endif  // ATOM_USE_LOCKFREE_QUEUE
 
     /**
@@ -361,13 +436,22 @@ public:
     template <MessageConcept MessageType>
     void publishGlobal(const MessageType& message) noexcept {
         try {
-            std::shared_lock lock(mutex_);
-            auto typeIter =
-                subscribers_.find(std::type_index(typeid(MessageType)));
-            if (typeIter != subscribers_.end()) {
-                for (const auto& [name, _] : typeIter->second) {
-                    publish<MessageType>(name, message);
+            std::vector<std::string> names_to_publish;
+            {  // Scope for shared_lock
+                std::shared_lock lock(mutex_);
+                auto typeIter =
+                    subscribers_.find(std::type_index(typeid(MessageType)));
+                if (typeIter != subscribers_.end()) {
+                    names_to_publish.reserve(typeIter->second.size());
+                    for (const auto& [name, _] : typeIter->second) {
+                        names_to_publish.push_back(name);
+                    }
                 }
+            }  // shared_lock released
+
+            for (const auto& name : names_to_publish) {
+                // Use this-> to ensure correct member template lookup
+                this->publish<MessageType>(name, message);
             }
         } catch (const std::exception& ex) {
             std::cerr << "[MessageBus] Error in publishGlobal: " << ex.what()

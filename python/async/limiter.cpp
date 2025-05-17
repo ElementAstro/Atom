@@ -241,29 +241,52 @@ Examples:
     >>> throttled2()  # Executes immediately
 )");
 
-    // 添加RateLimiter的Awaiter对象，用于异步Python代码
     py::class_<atom::async::RateLimiter::Awaiter>(
         m, "RateLimiterAwaiter",
         "Internal awaiter class for RateLimiter in coroutines")
         .def("__await__", [](atom::async::RateLimiter::Awaiter& awaiter) {
-            return py::make_iterator(
-                py::cpp_function([&awaiter]() {
+            // 创建一个自定义迭代器类，用于支持Python await协议
+            struct AwaiterIterator {
+                atom::async::RateLimiter::Awaiter& awaiter;
+                bool done = false;
+
+                AwaiterIterator(atom::async::RateLimiter::Awaiter& a)
+                    : awaiter(a) {}
+
+                // 迭代器需要支持以下操作
+                void operator++() {
+                    done = true;
+                }  // 迭代到下一状态（在这里只有一步）
+                bool operator==(const AwaiterIterator& other) const {
+                    return done == other.done;
+                }
+                bool operator!=(const AwaiterIterator& other) const {
+                    return !(*this == other);
+                }
+
+                py::object operator*() {
                     if (awaiter.await_ready()) {
-                        return py::object(py::cast(false));
+                        done = true;
+                        return py::cast(false);
                     }
-                    // 模拟协程暂停/继续
+
                     try {
                         awaiter.await_resume();
-                        return py::object(py::cast(true));
+                        return py::cast(true);
                     } catch (const atom::async::RateLimitExceededException& e) {
                         throw py::error_already_set();
                     }
-                }),
-                py::cpp_function([&awaiter]() { return py::none(); }),
-                py::return_value_policy::reference_internal);
+                }
+            };
+
+            AwaiterIterator begin(awaiter);
+            AwaiterIterator end(awaiter);
+            end.done = true;
+
+            return py::make_iterator(
+                begin, end, py::return_value_policy::reference_internal);
         });
 
-    // 添加RateLimiter的acquire方法，返回Awaiter
     m.attr("RateLimiter").attr("acquire") = py::cpp_function(
         [](atom::async::RateLimiter& limiter, std::string_view function_name) {
             return limiter.acquire(function_name);

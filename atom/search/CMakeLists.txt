@@ -11,7 +11,7 @@ set(SOURCES search.cpp sqlite.cpp)
 set(HEADERS cache.hpp search.hpp sqlite.hpp)
 
 # Dependencies
-set(LIBS loguru ${CMAKE_THREAD_LIBS_INIT})
+set(LIBS loguru ${CMAKE_THREAD_LIBS_INIT} ${SQLite3_LIBRARIES})
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(MARIADB libmariadb)

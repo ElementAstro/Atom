@@ -54,7 +54,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC .)
 
 # Platform-specific libraries
 if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE pdh wlanapi)
+    target_link_libraries(${PROJECT_NAME} PRIVATE pdh wlanapi ws2_32 setupapi)
 endif()
 
 # Set library properties

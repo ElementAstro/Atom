@@ -11,6 +11,12 @@ project(atom-connection VERSION 1.0.0 LANGUAGES C CXX)
 
 # Sources
 set(SOURCES
+    async_fifoclient.cpp
+    async_fifoserver.cpp
+    async_sockethub.cpp
+    async_tcpclient.cpp
+    async_udpclient.cpp
+    async_udpserver.cpp
     fifoclient.cpp
     fifoserver.cpp
     sockethub.cpp
@@ -21,6 +27,12 @@ set(SOURCES
 
 # Headers
 set(HEADERS
+    async_fifoclient.hpp
+    async_fifoserver.hpp
+    async_sockethub.hpp
+    async_tcpclient.hpp
+    async_udpclient.hpp
+    async_udpserver.hpp
     fifoclient.hpp
     fifoserver.hpp
     sockethub.hpp

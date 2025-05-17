@@ -22,10 +22,8 @@
 #include <mutex>
 #include <optional>
 #include <source_location>
-#include <span>
 #include <string>
 #include <string_view>
-#include <syncstream>
 #include <thread>
 #include <type_traits>
 #include <utility>
@@ -207,7 +205,6 @@ public:
     {
         // 预先分配内存以减少运行时分配
         m_subscribers_.reserve(16);
-        m_messages_.reserve(capacity);
     }
 
     // Rule of five implementation
@@ -570,7 +567,7 @@ private:
             for (const auto& subscriber : subscribersCopy) {
                 try {
                     if (applyFilter(subscriber, message.data)) {
-                        handleTimeout(subscriber, message.data);
+                        (void)handleTimeout(subscriber, message.data);
                     }
                 } catch (const std::exception&) {
                     // Handle exceptions but continue processing for other
@@ -587,7 +584,7 @@ private:
             }
 
             // Sort messages by priority
-            std::ranges::sort(m_messages_);
+            std::sort(m_messages_.begin(), m_messages_.end());
 
             // Process the highest priority message
             message = std::move(m_messages_.front());
@@ -609,7 +606,7 @@ private:
             for (const auto& subscriber : subscribersCopy) {
                 try {
                     if (applyFilter(subscriber, message.data)) {
-                        handleTimeout(subscriber, message.data);
+                        (void)handleTimeout(subscriber, message.data);
                     }
                 } catch (const std::exception&) {
                     // Handle exceptions but continue processing for other
@@ -737,7 +734,7 @@ void MessageQueue<T>::startProcessing() {
 
                 if (!m_messages_.empty()) {
                     // Sort messages by priority
-                    std::ranges::sort(m_messages_);
+                    std::sort(m_messages_.begin(), m_messages_.end());
 
                     // Process all available messages
                     while (!m_messages_.empty()) {
@@ -758,7 +755,8 @@ void MessageQueue<T>::startProcessing() {
                         for (const auto& subscriber : subscribersCopy) {
                             try {
                                 if (applyFilter(subscriber, message.data)) {
-                                    handleTimeout(subscriber, message.data);
+                                    (void)handleTimeout(subscriber,
+                                                        message.data);
                                 }
                             } catch (const TimeoutException& e) {
                                 // Log timeout but continue with other
@@ -863,7 +861,7 @@ void MessageQueue<T>::processMessages() {
     }
 
     // Sort messages by priority
-    std::ranges::sort(m_messages_);
+    std::sort(m_messages_.begin(), m_messages_.end());
 
     // Process the highest priority message
     auto message = std::move(m_messages_.front());
@@ -884,7 +882,7 @@ void MessageQueue<T>::processMessages() {
     for (const auto& subscriber : subscribersCopy) {
         try {
             if (applyFilter(subscriber, message.data)) {
-                handleTimeout(subscriber, message.data);
+                (void)handleTimeout(subscriber, message.data);
             }
         } catch (const std::exception&) {
             // Handle exceptions but continue processing for other subscribers
@@ -960,7 +958,7 @@ bool MessageQueue<T>::handleTimeout(const Subscriber& subscriber,
 
 template <MessageType T>
 void MessageQueue<T>::sortSubscribers() noexcept {
-    std::ranges::sort(m_subscribers_);
+    std::sort(m_subscribers_.begin(), m_subscribers_.end());
 }
 
 }  // namespace atom::async

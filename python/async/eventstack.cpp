@@ -276,7 +276,10 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
              [](const EventStackType& self) { return !self.isEmpty(); })
         .def("__iter__", [](const EventStackType& self) {
             auto stack_copy = self.copyStack();
-            return py::make_iterator(stack_copy);
+            auto stack_data = stack_copy.getEventsView();
+            return py::make_iterator(
+                stack_data.begin(), stack_data.end(),
+                py::return_value_policy::reference_internal);
         });
 }
 
@@ -338,8 +341,6 @@ PYBIND11_MODULE(eventstack, m) {
         try {
             if (p)
                 std::rethrow_exception(p);
-        } catch (const atom::async::EventStackException& e) {
-            PyErr_SetString(PyExc_RuntimeError, e.what());
         } catch (const atom::async::EventStackEmptyException& e) {
             PyErr_SetString(PyExc_IndexError, e.what());
         } catch (const atom::async::EventStackSerializationException& e) {

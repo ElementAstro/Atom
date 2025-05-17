@@ -268,7 +268,10 @@ auto createSocket() -> int {
         if (sockfd < 0) {
             std::array<char, 256> buf{};
 #ifdef _WIN32
-            strerror_s(buf.data(), buf.size(), errno);
+            int error = WSAGetLastError();
+            FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, error,
+                         MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                         buf.data(), buf.size(), NULL);
 #else
             char* err_str = strerror_r(errno, buf.data(), buf.size());
             if (err_str != buf.data()) {
@@ -302,15 +305,22 @@ auto bindSocket(int sockfd, uint16_t port) -> bool {
         if (bind(sockfd, reinterpret_cast<struct sockaddr*>(&addr),
                  sizeof(addr)) != 0) {
             std::array<char, 256> buf{};
+#ifdef _WIN32
+            int error = WSAGetLastError();
+            if (error == WSAEADDRINUSE) {
+                DLOG_F(WARNING, "Port {} is already in use", port);
+                return false;
+            }
+            FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, error,
+                         MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                         buf.data(), buf.size(), NULL);
+            throw std::runtime_error(
+                std::format("Socket bind failed: {}", buf.data()));
+#else
             if (errno == EADDRINUSE) {
                 DLOG_F(WARNING, "Port {} is already in use", port);
                 return false;
             }
-#ifdef _WIN32
-            strerror_s(buf.data(), buf.size(), errno);
-            throw std::runtime_error(
-                std::format("Socket bind failed: {}", buf.data()));
-#else
             throw std::runtime_error(
                 std::format("Socket bind failed: {}", strerror(errno)));
 #endif

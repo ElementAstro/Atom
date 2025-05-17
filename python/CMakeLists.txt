@@ -106,6 +106,7 @@ foreach(type ${MODULE_TYPES})
     if(TARGET atom-${type})
       target_link_libraries(atom_${type} PRIVATE atom-${type})
     endif()
+    target_link_libraries(atom_${type} PRIVATE loguru atom-error)
 
     # Set output name
     set_target_properties(

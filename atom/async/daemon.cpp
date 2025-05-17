@@ -58,12 +58,19 @@ public:
         std::lock_guard<std::mutex> lock(s_mutex);
         for (const auto& path : s_pidFiles) {
             try {
-                if (std::filesystem::exists(path)) {
+                if (std::filesystem::exists(
+                        path)) {  // Check if file exists before removing
                     std::filesystem::remove(path);
-                    LOG_F(INFO, "PID file removed: {}", path.string());
+                    LOG_F(INFO, "PID file {} removed during cleanup.",
+                          path.string());
                 }
+            } catch (const std::filesystem::filesystem_error& e) {
+                LOG_F(ERROR, "Error removing PID file {} during cleanup: {}",
+                      path.string(), e.what());
             } catch (...) {
-                // Don't throw exceptions in destructors
+                LOG_F(ERROR,
+                      "Unknown error removing PID file {} during cleanup.",
+                      path.string());
             }
         }
         s_pidFiles.clear();
@@ -86,6 +93,8 @@ std::vector<std::filesystem::path> ProcessCleanupManager::s_pidFiles;
     try {
         HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
         if (hSnapshot == INVALID_HANDLE_VALUE) {
+            LOG_F(ERROR, "CreateToolhelp32Snapshot failed with error: {}",
+                  GetLastError());
             return std::nullopt;
         }
 
@@ -93,6 +102,8 @@ std::vector<std::filesystem::path> ProcessCleanupManager::s_pidFiles;
         pe32.dwSize = sizeof(PROCESSENTRY32);
 
         if (!Process32First(hSnapshot, &pe32)) {
+            LOG_F(ERROR, "Process32First failed with error: {}",
+                  GetLastError());
             CloseHandle(hSnapshot);
             return std::nullopt;
         }
@@ -100,29 +111,39 @@ std::vector<std::filesystem::path> ProcessCleanupManager::s_pidFiles;
         do {
             if (pe32.th32ProcessID == pid) {
                 CloseHandle(hSnapshot);
-
-                // Get command line
-                HANDLE hProcess = OpenProcess(
-                    PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
-                if (hProcess) {
-                    std::string result(MAX_PATH, '\0');
-                    // Removed unused variable 'size'
-
-                    // Try to get command line
-                    // In a real implementation, this part would be more
-                    // complex, requiring WMI or PEB methods Simplified handling
-                    // here, only returning the process name
-                    result = pe32.szExeFile;
-                    CloseHandle(hProcess);
-                    return result;
-                }
-                break;
+// Return executable file path as an approximation of command line.
+// Full command line retrieval is more complex.
+#ifdef UNICODE
+                std::wstring wstr(pe32.szExeFile);
+                if (wstr.empty())
+                    return std::nullopt;
+                int size_needed =
+                    WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(),
+                                        NULL, 0, NULL, NULL);
+                if (size_needed == 0)
+                    return std::nullopt;
+                std::string strTo(size_needed, 0);
+                WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(),
+                                    &strTo[0], size_needed, NULL, NULL);
+                return strTo;
+#else
+                return std::string(pe32.szExeFile);
+#endif
             }
         } while (Process32Next(hSnapshot, &pe32));
 
         CloseHandle(hSnapshot);
+        LOG_F(WARNING,
+              "Process with PID {} not found for getProcessCommandLine.", pid);
+    } catch (const std::exception& e) {
+        LOG_F(ERROR,
+              "Exception in getProcessCommandLine (Windows) for PID {}: {}",
+              pid, e.what());
     } catch (...) {
-        // Catch all exceptions
+        LOG_F(
+            ERROR,
+            "Unknown exception in getProcessCommandLine (Windows) for PID {}.",
+            pid);
     }
     return std::nullopt;
 }
@@ -131,14 +152,24 @@ std::vector<std::filesystem::path> ProcessCleanupManager::s_pidFiles;
 [[maybe_unused]] auto getProcessCommandLine(pid_t pid)
     -> std::optional<std::string> {
     try {
-        char pathBuffer[PROC_PIDPATHINFO_MAXSIZE];  // Using C-style array
-                                                    // instead of std::array
+        char pathBuffer[PROC_PIDPATHINFO_MAXSIZE];
         if (proc_pidpath(pid, pathBuffer, sizeof(pathBuffer)) <= 0) {
+            LOG_F(ERROR, "proc_pidpath failed for PID {}: {}", pid,
+                  strerror(errno));
             return std::nullopt;
         }
+        // proc_pidpath gets the executable path. For full command line,
+        // KERN_PROCARGS2 is needed but complex. Returning path as per original
+        // simplified logic.
         return std::string(pathBuffer);
+    } catch (const std::exception& e) {
+        LOG_F(ERROR,
+              "Exception in getProcessCommandLine (macOS) for PID {}: {}", pid,
+              e.what());
     } catch (...) {
-        // Catch all exceptions
+        LOG_F(ERROR,
+              "Unknown exception in getProcessCommandLine (macOS) for PID {}.",
+              pid);
     }
     return std::nullopt;
 }
@@ -150,26 +181,64 @@ std::vector<std::filesystem::path> ProcessCleanupManager::s_pidFiles;
         std::filesystem::path cmdlinePath =
             std::format("/proc/{}/cmdline", pid);
         if (!std::filesystem::exists(cmdlinePath)) {
+            LOG_F(WARNING, "cmdline file not found for PID {}: {}", pid,
+                  cmdlinePath.string());
             return std::nullopt;
         }
 
-        std::ifstream ifs(cmdlinePath);
+        std::ifstream ifs(cmdlinePath,
+                          std::ios::binary);  // Open in binary mode
         if (!ifs) {
+            LOG_F(ERROR, "Failed to open cmdline file for PID {}: {}", pid,
+                  cmdlinePath.string());
             return std::nullopt;
         }
 
-        std::string cmdline;
-        std::getline(ifs, cmdline);
+        std::string cmdline_content((std::istreambuf_iterator<char>(ifs)),
+                                    std::istreambuf_iterator<char>());
 
-        // Handle null characters in cmdline
-        for (auto& c : cmdline) {
-            if (c == '\0')
-                c = ' ';
+        if (cmdline_content.empty()) {
+            return std::nullopt;
         }
 
-        return cmdline;
+        // Replace null characters (except the last one if it's a double null)
+        // with spaces
+        std::string result_cmdline;
+        for (size_t i = 0; i < cmdline_content.length(); ++i) {
+            if (cmdline_content[i] == '\\0') {
+                // If it's the last char or the next one is also null, stop
+                // (common for end of cmdline)
+                if (i == cmdline_content.length() - 1 ||
+                    (i < cmdline_content.length() - 1 &&
+                     cmdline_content[i + 1] == '\\0')) {
+                    if (!result_cmdline.empty() && result_cmdline.back() == ' ')
+                        result_cmdline.pop_back();  // remove trailing space
+                    break;
+                }
+                result_cmdline += ' ';
+            } else {
+                result_cmdline += cmdline_content[i];
+            }
+        }
+        // Trim trailing space if any from the loop logic
+        if (!result_cmdline.empty() && result_cmdline.back() == ' ') {
+            result_cmdline.pop_back();
+        }
+        return result_cmdline;
+
+    } catch (const std::filesystem::filesystem_error& e) {
+        LOG_F(
+            ERROR,
+            "Filesystem error in getProcessCommandLine (Linux) for PID {}: {}",
+            pid, e.what());
+    } catch (const std::exception& e) {
+        LOG_F(ERROR,
+              "Exception in getProcessCommandLine (Linux) for PID {}: {}", pid,
+              e.what());
     } catch (...) {
-        // Catch all exceptions
+        LOG_F(ERROR,
+              "Unknown exception in getProcessCommandLine (Linux) for PID {}.",
+              pid);
     }
     return std::nullopt;
 }
@@ -183,12 +252,28 @@ namespace atom::async {
 DaemonGuard::~DaemonGuard() noexcept {
     if (m_pidFilePath.has_value()) {
         try {
+            // The actual removal of PID file is handled by
+            // ProcessCleanupManager::cleanup() at exit. This destructor might
+            // be called in the parent process after forking, where it shouldn't
+            // remove a PID file owned by the child. Logging existence for
+            // debugging purposes.
             if (std::filesystem::exists(*m_pidFilePath)) {
-                std::filesystem::remove(*m_pidFilePath);
-                LOG_F(INFO, "Removed PID file: {}", m_pidFilePath->string());
+                LOG_F(INFO,
+                      "DaemonGuard destructor: PID file {} exists. Cleanup is "
+                      "deferred to ProcessCleanupManager.",
+                      m_pidFilePath->string());
             }
+        } catch (const std::filesystem::filesystem_error& e) {
+            // Log errors if std::filesystem::exists throws, though it's usually
+            // noexcept.
+            LOG_F(ERROR,
+                  "Filesystem error in ~DaemonGuard() checking PID file {}: {}",
+                  m_pidFilePath->string(), e.what());
         } catch (...) {
-            // Don't throw exceptions in destructors
+            // Catch any other unexpected exceptions.
+            LOG_F(ERROR,
+                  "Unknown error in ~DaemonGuard() checking PID file {}.",
+                  m_pidFilePath->string());
         }
     }
 }
@@ -222,11 +307,14 @@ auto DaemonGuard::realStart(int argc, char** argv, const Callback& mainCb)
 
         if (m_pidFilePath.has_value()) {
             try {
-                writePidFile(*m_pidFilePath);
-                ProcessCleanupManager::registerPidFile(*m_pidFilePath);
+                writePidFile(*m_pidFilePath);  // Non-daemon process might also
+                                               // want a PID file
+                // ProcessCleanupManager::registerPidFile(*m_pidFilePath); //
+                // Already done in writePidFile
             } catch (const std::exception& e) {
-                LOG_F(ERROR, "Failed to write PID file: {}", e.what());
-                // Continue execution, don't terminate due to PID file failure
+                LOG_F(ERROR, "Failed to write PID file {} in realStart: {}",
+                      m_pidFilePath->string(), e.what());
+                // Decide if this is fatal. For now, log and continue.
             }
         }
 
@@ -245,17 +333,26 @@ template <ModernProcessCallback Callback>
 auto DaemonGuard::realStartModern(std::span<char*> args, const Callback& mainCb)
     -> int {
     try {
+        if (args.empty() || args[0] == nullptr) {
+            throw DaemonException(
+                "args must not be empty and args[0] not null in "
+                "realStartModern");
+        }
         // Get current process ID
         m_mainId = ProcessId::current();
         m_mainStartTime = time(nullptr);
 
         if (m_pidFilePath.has_value()) {
             try {
-                writePidFile(*m_pidFilePath);
-                ProcessCleanupManager::registerPidFile(*m_pidFilePath);
+                writePidFile(*m_pidFilePath);  // Non-daemon process might also
+                                               // want a PID file
+                // ProcessCleanupManager::registerPidFile(*m_pidFilePath); //
+                // Already done in writePidFile
             } catch (const std::exception& e) {
-                LOG_F(ERROR, "Failed to write PID file: {}", e.what());
-                // Continue execution, don't terminate due to PID file failure
+                LOG_F(ERROR,
+                      "Failed to write PID file {} in realStartModern: {}",
+                      m_pidFilePath->string(), e.what());
+                // Decide if this is fatal. For now, log and continue.
             }
         }
 
@@ -270,310 +367,168 @@ auto DaemonGuard::realStartModern(std::span<char*> args, const Callback& mainCb)
 }
 
 template <ProcessCallback Callback>
-auto DaemonGuard::realDaemon([[maybe_unused]] int argc, char** argv,
-                             [[maybe_unused]] const Callback& __unused_mainCb)
+auto DaemonGuard::realDaemon(
+    [[maybe_unused]] int argc, char** argv,
+    [[maybe_unused]] const Callback& mainCb)  // mainCb used by child
     -> int {
     try {
         if (argv == nullptr) {
             throw DaemonException("Invalid argument vector (nullptr)");
         }
+        LOG_F(INFO, "Attempting to start daemon process...");
+        m_parentId = ProcessId::current();
+        m_parentStartTime = time(nullptr);
 
 #ifdef _WIN32
-        // Simulate daemon process on Windows platform
-        if (!FreeConsole()) {
-            LOG_F(WARNING, "Failed to free console, error: {}", GetLastError());
+        // Windows daemonization: launch a new detached process.
+        // The parent process (this one) will exit after launching.
+        // The child process re-runs the executable. The child needs logic to
+        // detect it's the daemon worker (e.g., via a special command-line
+        // argument not handled here, or by checking parent). This function, as
+        // part of the parent, launches the child and returns 0 for parent to
+        // exit.
+        STARTUPINFO si;
+        PROCESS_INFORMATION pi;
+        ZeroMemory(&si, sizeof(si));
+        si.cb = sizeof(si);
+        ZeroMemory(&pi, sizeof(pi));
+
+        std::string cmdLine;
+        char exePath[MAX_PATH];
+        if (!GetModuleFileName(NULL, exePath, MAX_PATH)) {
+            throw DaemonException(std::format(
+                "GetModuleFileName failed in realDaemon: {}", GetLastError()));
+        }
+        cmdLine = "\"" + std::string(exePath) + "\"";
+        // Pass existing arguments. A robust solution would add a specific flag
+        // for the child.
+        for (int i = 1; i < argc; ++i) {
+            if (argv[i] != nullptr) {  // Ensure argv[i] is not null
+                cmdLine += " \"" + std::string(argv[i]) + "\"";
+            }
+        }
+        // Example: cmdLine += " --daemon-worker"; // Child would check for this
+
+        if (!CreateProcess(NULL,  // Application name (use cmdLine)
+                           const_cast<char*>(cmdLine.c_str()),  // Command line
+                           NULL,              // Process security attributes
+                           NULL,              // Thread security attributes
+                           FALSE,             // Inherit handles
+                           DETACHED_PROCESS,  // Creation flags
+                           NULL,              // Environment
+                           NULL,              // Current directory
+                           &si,               // Startup Info
+                           &pi)               // Process Information
+        ) {
+            throw DaemonException(std::format(
+                "CreateProcess failed in realDaemon: {}", GetLastError()));
         }
 
-        m_parentId.id = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE,
-                                    GetCurrentProcessId());
-        m_parentStartTime = time(nullptr);
+        LOG_F(INFO,
+              "Windows: Parent (PID {}) launched detached process (PID {}). "
+              "Parent will exit.",
+              m_parentId.id, pi.dwProcessId);
+        CloseHandle(pi.hProcess);  // Parent doesn't need these handles
+        CloseHandle(pi.hThread);
+        return 0;  // Signal to startDaemon that parent should exit
 
-        while (true) {
-            PROCESS_INFORMATION processInfo;
-            STARTUPINFO startupInfo;
-            ZeroMemory(&processInfo, sizeof(processInfo));
-            ZeroMemory(&startupInfo, sizeof(startupInfo));
-            startupInfo.cb = sizeof(startupInfo);
-
-            auto cmdLine = std::make_unique<char[]>(MAX_PATH);
-            if (strncpy_s(cmdLine.get(), MAX_PATH, argv[0], strlen(argv[0])) !=
-                0) {
-                LOG_F(ERROR, "Failed to copy command line");
-                return -1;
-            }
-
-            // Create child process
-            if (!CreateProcess(nullptr, cmdLine.get(), nullptr, nullptr, FALSE,
-                               CREATE_NEW_CONSOLE, nullptr, nullptr,
-                               &startupInfo, &processInfo)) {
-                LOG_F(ERROR, "Create process failed with error code {}",
-                      GetLastError());
-                return -1;
-            }
-
-            // Wait for child process to terminate
-            WaitForSingleObject(processInfo.hProcess, INFINITE);
-
-            DWORD exitCode = 0;
-            if (!GetExitCodeProcess(processInfo.hProcess, &exitCode)) {
-                LOG_F(ERROR, "Failed to get exit code, error: {}",
-                      GetLastError());
-            }
-
-            CloseHandle(processInfo.hProcess);
-            CloseHandle(processInfo.hThread);
-
-            // Check exit code
-            if (exitCode == 0) {
-                LOG_F(INFO, "Child process exited normally");
-                break;
-            } else if (exitCode == 9) {  // SIGKILL
-                LOG_F(INFO, "Child process was killed");
-                break;
-            }
-
-            // Wait before restarting child process
-            m_restartCount.fetch_add(1, std::memory_order_relaxed);
-            LOG_F(INFO, "Restarting child process (attempt {})",
-                  m_restartCount.load());
-            ::Sleep(getDaemonRestartInterval() * 1000);
-        }
-#elif defined(__APPLE__)
-        // macOS platform daemon implementation
-        // Ensure file descriptors aren't exhausted
-        struct rlimit rl;
-        if (getrlimit(RLIMIT_NOFILE, &rl) == 0) {
-            // Set to maximum available file descriptors
-            rl.rlim_cur = rl.rlim_max;
-            setrlimit(RLIMIT_NOFILE, &rl);
-        }
-
-        // Create daemon process
+#elif defined(__APPLE__) || defined(__linux__)  // Unix-like daemonization
         pid_t pid = fork();
-        if (pid < 0) {
+        if (pid < 0) {  // Fork failed
             throw DaemonException(
-                std::format("Failed to fork: {}", strerror(errno)));
+                std::format("fork failed in realDaemon: {}", strerror(errno)));
         }
 
-        if (pid > 0) {  // Parent exits
-            exit(EXIT_SUCCESS);
+        if (pid > 0) {  // Parent process
+            LOG_F(INFO,
+                  "Parent process (PID {}) forked child (PID {}). Parent "
+                  "exiting.",
+                  getpid(), pid);
+            m_mainId.id = pid;  // Store child PID in parent's guard (parent is
+                                // about to exit)
+            return 0;           // Indicates parent should exit.
         }
 
-        // Create new session
-        if (setsid() < 0) {
-            throw DaemonException(
-                std::format("Failed to setsid: {}", strerror(errno)));
+        // Child process continues (pid == 0)
+        // This instance of DaemonGuard is now in the child.
+        m_parentId.reset();  // Child has no parent in the context of this guard
+                             // object logic
+        m_mainId = ProcessId::current();
+        m_mainStartTime = time(nullptr);
+        // g_is_daemon should be true, set by startDaemon. Re-affirm if
+        // necessary. std::atomic_store_explicit(&g_is_daemon, true,
+        // std::memory_order_relaxed);
+
+        LOG_F(INFO, "Child process (PID {}) starting as daemon.", m_mainId.id);
+
+        if (setsid() < 0) {  // Create a new session and process group
+            throw DaemonException(std::format(
+                "setsid failed in realDaemon child: {}", strerror(errno)));
         }
 
-        // Ignore terminal I/O signals and SIGHUP
-        signal(SIGCHLD, SIG_IGN);
-        signal(SIGHUP, SIG_IGN);
-
-        // Ensure process doesn't become session leader
+        // Second fork to ensure daemon cannot reacquire a controlling terminal
         pid = fork();
         if (pid < 0) {
-            throw DaemonException(
-                std::format("Second fork failed: {}", strerror(errno)));
+            throw DaemonException(std::format(
+                "Second fork failed in realDaemon: {}", strerror(errno)));
+        }
+        if (pid > 0) {  // First child (intermediate) exits
+            LOG_F(INFO,
+                  "First child (PID {}) forked second child (PID {}). First "
+                  "child exiting.",
+                  getpid(), pid);
+            exit(0);
         }
 
-        if (pid > 0) {  // First child exits
-            exit(EXIT_SUCCESS);
-        }
+        // Second child (actual daemon) continues
+        m_mainId = ProcessId::current();
+        m_mainStartTime = time(nullptr);
+        LOG_F(INFO, "Actual daemon process (PID {}) starting.", m_mainId.id);
 
-        // Change working directory (use current directory on macOS, not root)
-        const char* workDir = ".";
-        if (chdir(workDir) < 0) {
-            LOG_F(WARNING, "Failed to change directory: {}", strerror(errno));
-        }
-
-        // Close all open file descriptors
-        for (int x = sysconf(_SC_OPEN_MAX); x >= 0; x--) {
-            close(x);
-        }
-
-        // Reopen standard input/output/error to /dev/null
-        int fd = open("/dev/null", O_RDWR);
-        if (fd != -1) {
-            dup2(fd, STDIN_FILENO);
-            dup2(fd, STDOUT_FILENO);
-            dup2(fd, STDERR_FILENO);
-            if (fd > STDERR_FILENO) {
-                close(fd);
-            }
-        }
-
-        m_parentId.id = getpid();
-        m_parentStartTime = time(nullptr);
-
-        // Daemon main loop
-        while (true) {
-            pid_t child_pid = fork();  // Create child process
-            if (child_pid == 0) {      // Child process
-                m_mainId.id = getpid();
-                m_mainStartTime = time(nullptr);
-                LOG_F(INFO, "daemon process start pid={}", getpid());
-                return realStart(0, argv, [](int, char**) { return 0; });
-            }
-
-            if (child_pid < 0) {  // Failed to create child process
-                LOG_F(ERROR, "fork fail return={} errno={} errstr={}",
-                      child_pid, errno, strerror(errno));
-                std::this_thread::sleep_for(std::chrono::seconds(1));
-                continue;  // Try again
-            }
-
-            // Parent process
-            int status = 0;
-            waitpid(child_pid, &status, 0);  // Wait for child to exit
-
-            // Child process abnormal exit
-            if (status != 0) {
-                if (WIFEXITED(status) &&
-                    WEXITSTATUS(status) == 9) {  // SIGKILL signal killed child
-                                                 // process, no need to restart
-                    LOG_F(INFO, "daemon process killed pid={}", getpid());
-                    break;
-                }
-
-                // Log and restart child process
-                if (WIFEXITED(status)) {
-                    LOG_F(ERROR, "child exited with status {} pid={}",
-                          WEXITSTATUS(status), child_pid);
-                } else if (WIFSIGNALED(status)) {
-                    LOG_F(ERROR, "child killed by signal {} pid={}",
-                          WTERMSIG(status), child_pid);
-                } else {
-                    LOG_F(ERROR, "child crashed with unknown status {} pid={}",
-                          status, child_pid);
-                }
-            } else {  // Normal exit, exit program directly
-                LOG_F(INFO, "daemon process exit normally pid={}", getpid());
-                break;
-            }
-
-            // Wait before restarting child process
-            m_restartCount.fetch_add(1, std::memory_order_relaxed);
-            std::this_thread::sleep_for(
-                std::chrono::seconds(getDaemonRestartInterval()));
-        }
-#else
-        // Linux platform daemon implementation
-        // Ensure file descriptors aren't exhausted
-        struct rlimit rl;
-        if (getrlimit(RLIMIT_NOFILE, &rl) == 0) {
-            // Set to maximum available file descriptors
-            rl.rlim_cur = rl.rlim_max;
-            setrlimit(RLIMIT_NOFILE, &rl);
-        }
-
-        // Create daemon process
-        pid_t pid = fork();
-        if (pid < 0) {
-            throw DaemonException(
-                std::format("Failed to fork: {}", strerror(errno)));
-        }
-
-        if (pid > 0) {  // Parent exits
-            exit(EXIT_SUCCESS);
-        }
-
-        // Create new session
-        if (setsid() < 0) {
-            throw DaemonException(
-                std::format("Failed to setsid: {}", strerror(errno)));
-        }
-
-        // Ignore terminal I/O signals and SIGHUP
-        signal(SIGCHLD, SIG_IGN);
-        signal(SIGHUP, SIG_IGN);
-
-        // Ensure process doesn't become session leader
-        pid = fork();
-        if (pid < 0) {
-            throw DaemonException(
-                std::format("Second fork failed: {}", strerror(errno)));
-        }
-
-        if (pid > 0) {  // First child exits
-            exit(EXIT_SUCCESS);
-        }
-
-        // Change working directory to root
         if (chdir("/") < 0) {
-            LOG_F(WARNING, "Failed to change directory: {}", strerror(errno));
+            LOG_F(WARNING,
+                  "chdir(\"/\") failed in realDaemon: {}. Continuing...",
+                  strerror(errno));
+        }
+        umask(0);  // Set file mode creation mask to 0
+
+        // Close standard file descriptors
+        close(STDIN_FILENO);
+        close(STDOUT_FILENO);
+        close(STDERR_FILENO);
+
+        // Redirect standard I/O to /dev/null
+        int fd_dev_null = open("/dev/null", O_RDWR);
+        if (fd_dev_null != -1) {
+            dup2(fd_dev_null, STDIN_FILENO);
+            dup2(fd_dev_null, STDOUT_FILENO);
+            dup2(fd_dev_null, STDERR_FILENO);
+            if (fd_dev_null > STDERR_FILENO) {
+                close(fd_dev_null);
+            }
+        } else {
+            LOG_F(WARNING,
+                  "Failed to open /dev/null for redirecting stdio in daemon.");
         }
 
-        // Close all open file descriptors
-        for (int x = sysconf(_SC_OPEN_MAX); x >= 0; x--) {
-            close(x);
-        }
-
-        // Reopen standard input/output/error to /dev/null
-        int fd = open("/dev/null", O_RDWR);
-        if (fd != -1) {
-            dup2(fd, STDIN_FILENO);
-            dup2(fd, STDOUT_FILENO);
-            dup2(fd, STDERR_FILENO);
-            if (fd > STDERR_FILENO) {
-                close(fd);
+        if (m_pidFilePath.has_value()) {
+            try {
+                writePidFile(*m_pidFilePath);  // Daemon writes its own PID
+            } catch (const std::exception& e) {
+                LOG_F(ERROR, "Failed to write PID file {} in daemon: {}",
+                      m_pidFilePath->string(), e.what());
             }
         }
 
-        m_parentId.id = getpid();
-        m_parentStartTime = time(nullptr);
+        LOG_F(INFO,
+              "Daemon process (PID {}) initialized. Calling main callback.",
+              m_mainId.id);
+        return mainCb(argc, argv);  // Call the actual worker function
 
-        while (true) {
-            pid_t child_pid = fork();  // Create child process
-            if (child_pid == 0) {      // Child process
-                m_mainId.id = getpid();
-                m_mainStartTime = time(nullptr);
-                LOG_F(INFO, "daemon process start pid={}", getpid());
-                return realStart(0, argv, [](int, char**) { return 0; });
-            }
-
-            if (child_pid < 0) {  // Failed to create child process
-                LOG_F(ERROR, "fork fail return={} errno={} errstr={}",
-                      child_pid, errno, strerror(errno));
-                std::this_thread::sleep_for(std::chrono::seconds(1));
-                continue;  // Try again
-            }
-
-            // Parent process
-            int status = 0;
-            waitpid(child_pid, &status, 0);  // Wait for child to exit
-
-            // Child process abnormal exit
-            if (status != 0) {
-                if (WIFEXITED(status) &&
-                    WEXITSTATUS(status) == 9) {  // SIGKILL signal killed child
-                                                 // process, no need to restart
-                    LOG_F(INFO, "daemon process killed pid={}", getpid());
-                    break;
-                }
-
-                // Log and restart child process
-                if (WIFEXITED(status)) {
-                    LOG_F(ERROR, "child exited with status {} pid={}",
-                          WEXITSTATUS(status), child_pid);
-                } else if (WIFSIGNALED(status)) {
-                    LOG_F(ERROR, "child killed by signal {} pid={}",
-                          WTERMSIG(status), child_pid);
-                } else {
-                    LOG_F(ERROR, "child crashed with unknown status {} pid={}",
-                          status, child_pid);
-                }
-            } else {  // Normal exit, exit program directly
-                LOG_F(INFO, "daemon process exit normally pid={}", getpid());
-                break;
-            }
-
-            // Wait before restarting child process
-            m_restartCount.fetch_add(1, std::memory_order_relaxed);
-            std::this_thread::sleep_for(
-                std::chrono::seconds(getDaemonRestartInterval()));
-        }
+#else
+        LOG_F(ERROR, "Daemon mode is not supported on this platform.");
+        throw DaemonException("Daemon mode not supported on this platform.");
 #endif
-        return 0;
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Exception in realDaemon: {}", e.what());
         return -1;
@@ -586,201 +541,147 @@ auto DaemonGuard::realDaemon([[maybe_unused]] int argc, char** argv,
 // Implement modern interface version (using std::span)
 template <ModernProcessCallback Callback>
 auto DaemonGuard::realDaemonModern(
-    std::span<char*> args, [[maybe_unused]] const Callback& __unused_mainCb)
+    std::span<char*> args,
+    [[maybe_unused]] const Callback& mainCb)  // mainCb used by child
     -> int {
     try {
-        if (args.empty()) {
-            throw DaemonException("Empty argument vector");
+        if (args.empty() || args[0] == nullptr) {
+            throw DaemonException(
+                "args must not be empty and args[0] not null in "
+                "realDaemonModern");
         }
+        LOG_F(INFO, "Attempting to start daemon process (modern interface)...");
+        m_parentId = ProcessId::current();
+        m_parentStartTime = time(nullptr);
 
 #ifdef _WIN32
-        // Simulate daemon process on Windows platform
-        if (!FreeConsole()) {
-            LOG_F(WARNING, "Failed to free console, error: {}", GetLastError());
+        // Similar to realDaemon for Windows
+        STARTUPINFO si;
+        PROCESS_INFORMATION pi;
+        ZeroMemory(&si, sizeof(si));
+        si.cb = sizeof(si);
+        ZeroMemory(&pi, sizeof(pi));
+
+        std::string cmdLine;
+        char exePath[MAX_PATH];
+        if (!GetModuleFileName(NULL, exePath, MAX_PATH)) {
+            throw DaemonException(
+                std::format("GetModuleFileName failed in realDaemonModern: {}",
+                            GetLastError()));
+        }
+        cmdLine = "\"" + std::string(exePath) + "\"";
+        for (size_t i = 1; i < args.size(); ++i) {
+            if (args[i] != nullptr) {
+                cmdLine += " \"" + std::string(args[i]) + "\"";
+            }
+        }
+        // Example: cmdLine += " --daemon-worker";
+
+        if (!CreateProcess(NULL, const_cast<char*>(cmdLine.c_str()), NULL, NULL,
+                           FALSE, DETACHED_PROCESS, NULL, NULL, &si, &pi)) {
+            throw DaemonException(
+                std::format("CreateProcess failed in realDaemonModern: {}",
+                            GetLastError()));
         }
 
-        m_parentId.id = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE,
-                                    GetCurrentProcessId());
-        m_parentStartTime = time(nullptr);
+        LOG_F(INFO,
+              "Windows: Parent (PID {}) launched detached process (PID {}). "
+              "Parent will exit (modern).",
+              m_parentId.id, pi.dwProcessId);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+        return 0;  // Signal to startDaemonModern that parent should exit
 
-        while (true) {
-            PROCESS_INFORMATION processInfo;
-            STARTUPINFO startupInfo;
-            ZeroMemory(&processInfo, sizeof(processInfo));
-            ZeroMemory(&startupInfo, sizeof(startupInfo));
-            startupInfo.cb = sizeof(startupInfo);
-
-            auto cmdLine = std::make_unique<char[]>(MAX_PATH);
-            if (strncpy_s(cmdLine.get(), MAX_PATH, args[0], strlen(args[0])) !=
-                0) {
-                LOG_F(ERROR, "Failed to copy command line");
-                return -1;
-            }
-
-            // Create child process, using more modern CreateProcessW API
-            // (requires Unicode strings)
-            if (!CreateProcess(nullptr, cmdLine.get(), nullptr, nullptr, FALSE,
-                               CREATE_NEW_CONSOLE, nullptr, nullptr,
-                               &startupInfo, &processInfo)) {
-                LOG_F(ERROR, "Create process failed with error code {}",
-                      GetLastError());
-                return -1;
-            }
-
-            // Wait for child process to terminate
-            WaitForSingleObject(processInfo.hProcess, INFINITE);
-
-            DWORD exitCode = 0;
-            if (!GetExitCodeProcess(processInfo.hProcess, &exitCode)) {
-                LOG_F(ERROR, "Failed to get exit code, error: {}",
-                      GetLastError());
-            }
-
-            CloseHandle(processInfo.hProcess);
-            CloseHandle(processInfo.hThread);
-
-            // Check exit code
-            if (exitCode == 0) {
-                LOG_F(INFO, "Child process exited normally");
-                break;
-            } else if (exitCode == 9) {  // SIGKILL
-                LOG_F(INFO, "Child process was killed");
-                break;
-            }
-
-            // Wait before restarting child process
-            m_restartCount.fetch_add(1, std::memory_order_relaxed);
-            LOG_F(INFO, "Restarting child process (attempt {})",
-                  m_restartCount.load());
-            ::Sleep(getDaemonRestartInterval() * 1000);
-        }
-#elif defined(__APPLE__) || defined(__linux__)
-        // Unix platform implementation (including macOS and Linux)
-        // Ensure file descriptors aren't exhausted
-        struct rlimit rl;
-        if (getrlimit(RLIMIT_NOFILE, &rl) == 0) {
-            // Set to maximum available file descriptors
-            rl.rlim_cur = rl.rlim_max;
-            setrlimit(RLIMIT_NOFILE, &rl);
-        }
-
-        // Create daemon process
+#elif defined(__APPLE__) || defined(__linux__)  // Unix-like daemonization
         pid_t pid = fork();
         if (pid < 0) {
-            throw DaemonException(
-                std::format("Failed to fork: {}", strerror(errno)));
+            throw DaemonException(std::format(
+                "fork failed in realDaemonModern: {}", strerror(errno)));
+        }
+        if (pid > 0) {  // Parent
+            LOG_F(INFO,
+                  "Parent process (PID {}) forked child (PID {}). Parent "
+                  "exiting (modern).",
+                  getpid(), pid);
+            m_mainId.id = pid;
+            return 0;  // Parent exits
         }
 
-        if (pid > 0) {  // Parent exits
-            exit(EXIT_SUCCESS);
-        }
+        // Child process
+        m_parentId.reset();
+        m_mainId = ProcessId::current();
+        m_mainStartTime = time(nullptr);
+        LOG_F(INFO, "Child process (PID {}) starting as daemon (modern).",
+              m_mainId.id);
 
-        // Create new session
         if (setsid() < 0) {
             throw DaemonException(
-                std::format("Failed to setsid: {}", strerror(errno)));
+                std::format("setsid failed in realDaemonModern child: {}",
+                            strerror(errno)));
         }
 
-        // Ignore terminal I/O signals and SIGHUP
-        signal(SIGCHLD, SIG_IGN);
-        signal(SIGHUP, SIG_IGN);
-
-        // Ensure process doesn't become session leader
-        pid = fork();
+        pid = fork();  // Second fork
         if (pid < 0) {
-            throw DaemonException(
-                std::format("Second fork failed: {}", strerror(errno)));
+            throw DaemonException(std::format(
+                "Second fork failed in realDaemonModern: {}", strerror(errno)));
         }
-
         if (pid > 0) {  // First child exits
-            exit(EXIT_SUCCESS);
+            LOG_F(INFO,
+                  "First child (PID {}) forked second child (PID {}). First "
+                  "child exiting (modern).",
+                  getpid(), pid);
+            exit(0);
         }
 
-#ifdef __APPLE__
-        // macOS uses current directory
-        const char* workDir = ".";
+        // Second child (actual daemon)
+        m_mainId = ProcessId::current();
+        m_mainStartTime = time(nullptr);
+        LOG_F(INFO, "Actual daemon process (PID {}) starting (modern).",
+              m_mainId.id);
+
+        if (chdir("/") < 0) {
+            LOG_F(WARNING,
+                  "chdir(\"/\") failed in realDaemonModern: {}. Continuing...",
+                  strerror(errno));
+        }
+        umask(0);
+
+        close(STDIN_FILENO);
+        close(STDOUT_FILENO);
+        close(STDERR_FILENO);
+        int fd_dev_null = open("/dev/null", O_RDWR);
+        if (fd_dev_null != -1) {
+            dup2(fd_dev_null, STDIN_FILENO);
+            dup2(fd_dev_null, STDOUT_FILENO);
+            dup2(fd_dev_null, STDERR_FILENO);
+            if (fd_dev_null > STDERR_FILENO)
+                close(fd_dev_null);
+        } else {
+            LOG_F(WARNING,
+                  "Failed to open /dev/null for redirecting stdio in modern "
+                  "daemon.");
+        }
+
+        if (m_pidFilePath.has_value()) {
+            try {
+                writePidFile(*m_pidFilePath);
+            } catch (const std::exception& e) {
+                LOG_F(ERROR, "Failed to write PID file {} in modern daemon: {}",
+                      m_pidFilePath->string(), e.what());
+            }
+        }
+
+        LOG_F(INFO,
+              "Daemon process (PID {}) initialized. Calling main callback "
+              "(modern).",
+              m_mainId.id);
+        return mainCb(args);  // Call worker
+
 #else
-        // Linux uses root directory
-        const char* workDir = "/";
+        LOG_F(ERROR, "Daemon mode is not supported on this platform (modern).");
+        throw DaemonException(
+            "Daemon mode not supported on this platform (modern).");
 #endif
-
-        // Change working directory
-        if (chdir(workDir) < 0) {
-            LOG_F(WARNING, "Failed to change directory: {}", strerror(errno));
-        }
-
-        // Close all open file descriptors
-        for (int x = sysconf(_SC_OPEN_MAX); x >= 0; x--) {
-            close(x);
-        }
-
-        // Reopen standard input/output/error to /dev/null
-        int fd = open("/dev/null", O_RDWR);
-        if (fd != -1) {
-            dup2(fd, STDIN_FILENO);
-            dup2(fd, STDOUT_FILENO);
-            dup2(fd, STDERR_FILENO);
-            if (fd > STDERR_FILENO) {
-                close(fd);
-            }
-        }
-
-        m_parentId.id = getpid();
-        m_parentStartTime = time(nullptr);
-
-        while (true) {
-            pid_t child_pid = fork();  // Create child process
-            if (child_pid == 0) {      // Child process
-                m_mainId.id = getpid();
-                m_mainStartTime = time(nullptr);
-                LOG_F(INFO, "daemon process start pid={}", getpid());
-                return realStartModern(args,
-                                       [](std::span<char*>) { return 0; });
-            }
-
-            if (child_pid < 0) {  // Failed to create child process
-                LOG_F(ERROR, "fork fail return={} errno={} errstr={}",
-                      child_pid, errno, strerror(errno));
-                std::this_thread::sleep_for(std::chrono::seconds(1));
-                continue;  // Try again
-            }
-
-            // Parent process
-            int status = 0;
-            waitpid(child_pid, &status, 0);  // Wait for child to exit
-
-            // Child process abnormal exit
-            if (status != 0) {
-                if (WIFEXITED(status) &&
-                    WEXITSTATUS(status) == 9) {  // SIGKILL signal killed child
-                                                 // process, no need to restart
-                    LOG_F(INFO, "daemon process killed pid={}", getpid());
-                    break;
-                }
-
-                // Log and restart child process
-                if (WIFEXITED(status)) {
-                    LOG_F(ERROR, "child exited with status {} pid={}",
-                          WEXITSTATUS(status), child_pid);
-                } else if (WIFSIGNALED(status)) {
-                    LOG_F(ERROR, "child killed by signal {} pid={}",
-                          WTERMSIG(status), child_pid);
-                } else {
-                    LOG_F(ERROR, "child crashed with unknown status {} pid={}",
-                          status, child_pid);
-                }
-            } else {  // Normal exit, exit program directly
-                LOG_F(INFO, "daemon process exit normally pid={}", getpid());
-                break;
-            }
-
-            // Wait before restarting child process
-            m_restartCount.fetch_add(1, std::memory_order_relaxed);
-            std::this_thread::sleep_for(
-                std::chrono::seconds(getDaemonRestartInterval()));
-        }
-#endif
-        return 0;
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Exception in realDaemonModern: {}", e.what());
         return -1;
@@ -952,22 +853,41 @@ bool registerSignalHandlers(std::span<const int> signals) noexcept {
         bool success = true;
         for (int sig : signals) {
 #ifdef _WIN32
+            // signal() on Windows has limitations. SetConsoleCtrlHandler is
+            // better for console events. For this generic handler, we'll use
+            // signal() but acknowledge its limits.
             if (signal(sig, signalHandler) == SIG_ERR) {
-                LOG_F(ERROR, "Failed to register signal handler for signal {}",
+                LOG_F(WARNING,
+                      "Failed to register signal handler for signal {} on "
+                      "Windows using CRT signal(). This may not work as "
+                      "expected for all signal types.",
                       sig);
-                success = false;
+                // success = false; // Optionally mark as failure
+            } else {
+                LOG_F(INFO,
+                      "Registered signal handler for signal {} on Windows "
+                      "using CRT signal().",
+                      sig);
             }
-#else
+#else  // Unix-like (macOS, Linux)
             struct sigaction sa;
+            memset(&sa, 0, sizeof(sa));
             sa.sa_handler = signalHandler;
             sigemptyset(&sa.sa_mask);
-            sa.sa_flags = 0;
+            sa.sa_flags =
+                SA_RESTART;  // Important for syscalls interrupted by signals
 
-            if (sigaction(sig, &sa, nullptr) == -1) {
+            if (sigaction(sig, &sa, NULL) == -1) {
                 LOG_F(ERROR,
-                      "Failed to register signal handler for signal {}: {}",
+                      "Failed to register signal handler for signal {} (Unix): "
+                      "{}",
                       sig, strerror(errno));
                 success = false;
+            } else {
+                LOG_F(INFO,
+                      "Successfully registered signal handler for signal {} "
+                      "(Unix).",
+                      sig);
             }
 #endif
         }
@@ -997,34 +917,51 @@ bool isProcessBackground() noexcept {
 
 void writePidFile(const std::filesystem::path& filePath) {
     try {
-        // Create directory (if it doesn't exist)
         auto parent_path = filePath.parent_path();
         if (!parent_path.empty() && !std::filesystem::exists(parent_path)) {
-            std::filesystem::create_directories(parent_path);
+            if (!std::filesystem::create_directories(parent_path)) {
+                throw DaemonException(
+                    std::format("Failed to create directory for PID file: {}",
+                                parent_path.string()));
+            }
+            LOG_F(INFO, "Created directory for PID file: {}",
+                  parent_path.string());
         }
 
-        // Open PID file in exclusive mode
         std::ofstream ofs(filePath, std::ios::out | std::ios::trunc);
         if (!ofs) {
-            throw std::filesystem::filesystem_error(
-                std::format("Failed to open PID file: {}", filePath.string()),
-                filePath, std::make_error_code(std::errc::permission_denied));
+            throw DaemonException(std::format(
+                "Failed to open PID file for writing: {}", filePath.string()));
         }
 
+        ProcessId current_pid_struct = ProcessId::current();
 #ifdef _WIN32
-        ofs << GetCurrentProcessId();
+        // ProcessId struct stores HANDLE for _WIN32, but we need DWORD for PID.
+        // GetCurrentProcessId() is more direct for writing the numeric PID.
+        DWORD pid_val = GetCurrentProcessId();
+        ofs << pid_val;
 #else
-        ofs << getpid();
+        pid_t pid_val = current_pid_struct.id;  // pid_t is already numeric
+        ofs << pid_val;
 #endif
-
+        if (ofs.fail()) {
+            throw DaemonException(std::format("Failed to write PID to file: {}",
+                                              filePath.string()));
+        }
+        // Explicitly close before checking failbit again, as some errors might
+        // only show on close.
         ofs.close();
         if (ofs.fail()) {
-            throw std::filesystem::filesystem_error(
-                std::format("Failed to close PID file: {}", filePath.string()),
-                filePath, std::make_error_code(std::errc::io_error));
+            throw DaemonException(
+                std::format("Failed to close PID file after writing: {}",
+                            filePath.string()));
         }
 
-        LOG_F(INFO, "Created PID file: {}", filePath.string());
+        LOG_F(INFO, "Created PID file: {} with PID: {}", filePath.string(),
+              pid_val);
+        ProcessCleanupManager::registerPidFile(
+            filePath);  // Register for cleanup on exit
+
     } catch (const std::filesystem::filesystem_error& e) {
         throw;
     } catch (const std::exception& e) {
@@ -1036,92 +973,94 @@ void writePidFile(const std::filesystem::path& filePath) {
 
 auto checkPidFile(const std::filesystem::path& filePath) noexcept -> bool {
     try {
-#ifdef _WIN32
-        // Windows platform check if file exists
         if (!std::filesystem::exists(filePath)) {
-            return false;
+            return false;  // PID file doesn't exist
         }
 
-        // Read PID file
         std::ifstream ifs(filePath);
         if (!ifs) {
+            LOG_F(WARNING,
+                  "PID file {} exists but cannot be opened for reading.",
+                  filePath.string());
             return false;
         }
 
-        DWORD pid = 0;
-        ifs >> pid;
+        long pid_from_file = 0;
+        ifs >> pid_from_file;
+        if (ifs.fail() || pid_from_file <= 0) {
+            LOG_F(WARNING,
+                  "PID file {} does not contain a valid PID. Content problem "
+                  "or empty file.",
+                  filePath.string());
+            ifs.close();
+            // Consider removing stale/invalid PID file here after logging
+            // try { std::filesystem::remove(filePath); } catch(...) {}
+            return false;
+        }
         ifs.close();
 
-        if (pid == 0) {
-            return false;
-        }
-
-        // Check if process exists
-        HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
+#ifdef _WIN32
+        HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE,
+                                      static_cast<DWORD>(pid_from_file));
         if (hProcess == NULL) {
+            // If OpenProcess fails with ERROR_INVALID_PARAMETER, process likely
+            // doesn't exist. Other errors (like ERROR_ACCESS_DENIED) mean it
+            // might exist but we can't query.
+            if (GetLastError() == ERROR_INVALID_PARAMETER) {
+                LOG_F(INFO,
+                      "Process with PID {} from file {} not found (OpenProcess "
+                      "ERROR_INVALID_PARAMETER). Stale PID file?",
+                      pid_from_file, filePath.string());
+            } else {
+                LOG_F(WARNING,
+                      "OpenProcess failed for PID {} from file {}. Error: {}. "
+                      "Assuming not accessible/running.",
+                      pid_from_file, filePath.string(), GetLastError());
+            }
             return false;
         }
-
-        DWORD exitCode = 0;
+        DWORD exitCode;
         BOOL result = GetExitCodeProcess(hProcess, &exitCode);
         CloseHandle(hProcess);
-
-        return result && exitCode == STILL_ACTIVE;
-#elif defined(__APPLE__)
-        // macOS platform check if process exists
-        struct stat st{};
-        if (stat(filePath.c_str(), &st) != 0) {
+        if (!result) {
+            LOG_F(
+                WARNING,
+                "GetExitCodeProcess failed for PID {} from file {}. Error: {}",
+                pid_from_file, filePath.string(), GetLastError());
             return false;
         }
-
-        // Read PID
-        std::ifstream ifs(filePath);
-        if (!ifs) {
+        return exitCode == STILL_ACTIVE;
+#elif defined(__APPLE__) || defined(__linux__)  // Unix-like
+        if (kill(static_cast<pid_t>(pid_from_file), 0) == 0) {
+            return true;  // Process exists
+        } else {
+            if (errno == ESRCH) {
+                LOG_F(INFO,
+                      "Process with PID {} from file {} does not exist "
+                      "(ESRCH). Stale PID file?",
+                      pid_from_file, filePath.string());
+                // Consider removing stale PID file here
+                // try { std::filesystem::remove(filePath); } catch(...) {}
+            } else if (errno == EPERM) {
+                LOG_F(WARNING,
+                      "No permission to signal PID {} from file {}, but "
+                      "process likely exists (EPERM).",
+                      pid_from_file, filePath.string());
+                return true;  // Assume running as we can't prove otherwise due
+                              // to permissions
+            } else {
+                LOG_F(WARNING,
+                      "kill(PID, 0) failed for PID {} from file {}: {}. "
+                      "Assuming not running.",
+                      pid_from_file, filePath.string(), strerror(errno));
+            }
             return false;
         }
-
-        pid_t pid = -1;
-        ifs >> pid;
-        ifs.close();
-
-        if (pid <= 0) {
-            return false;
-        }
-
-        // Check if process exists on macOS
-        int name[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, pid};
-        struct kinfo_proc info;
-        size_t size = sizeof(info);
-
-        if (sysctl(name, 4, &info, &size, NULL, 0) == -1) {
-            return false;
-        }
-
-        // If size is 0, process doesn't exist
-        return size > 0;
 #else
-        // Linux platform check if process exists
-        struct stat st{};
-        if (stat(filePath.c_str(), &st) != 0) {
-            return false;
-        }
-
-        // Read PID
-        std::ifstream ifs(filePath);
-        if (!ifs) {
-            return false;
-        }
-
-        pid_t pid = -1;
-        ifs >> pid;
-        ifs.close();
-
-        if (pid <= 0) {
-            return false;
-        }
-
-        // Check if process exists
-        return kill(pid, 0) == 0 || errno != ESRCH;
+        LOG_F(WARNING,
+              "checkPidFile not fully implemented for this platform. Assuming "
+              "process not running.");
+        return false;
 #endif
     } catch (...) {
         return false;

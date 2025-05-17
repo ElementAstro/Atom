@@ -575,6 +575,53 @@ HttpMethod HttpHeaderParser::getMethod() const {
     return impl_->method;
 }
 
+void HttpHeaderParser::setStatus(const HttpStatus& status) {
+    LOG_F(INFO, "setStatus called with status: {} {}", status.code,
+          status.description);
+    impl_->status = status;
+    LOG_F(INFO, "Status set to: {} {}", impl_->status.code,
+          impl_->status.description);
+}
+
+HttpStatus HttpHeaderParser::getStatus() const {
+    LOG_F(INFO, "getStatus called");
+    return impl_->status;
+}
+
+void HttpHeaderParser::setPath(const std::string& path) {
+    LOG_F(INFO, "setPath called with path: {}", path);
+    impl_->path = path;
+    LOG_F(INFO, "Path set to: {}", impl_->path);
+}
+
+std::string HttpHeaderParser::getPath() const {
+    LOG_F(INFO, "getPath called");
+    return impl_->path;
+}
+
+void HttpHeaderParser::setVersion(HttpVersion version) {
+    LOG_F(INFO, "setVersion called with version: {}",
+          static_cast<int>(version));
+    impl_->version = version;
+    LOG_F(INFO, "Version set to: {}", static_cast<int>(impl_->version));
+}
+
+HttpVersion HttpHeaderParser::getVersion() const {
+    LOG_F(INFO, "getVersion called");
+    return impl_->version;
+}
+
+void HttpHeaderParser::setBody(const std::string& body) {
+    LOG_F(INFO, "setBody called with body of length: {}", body.length());
+    impl_->body = body;
+    LOG_F(INFO, "Body set with length: {}", impl_->body.length());
+}
+
+std::string HttpHeaderParser::getBody() const {
+    LOG_F(INFO, "getBody called");
+    return impl_->body;
+}
+
 HttpMethod HttpHeaderParser::stringToMethod(const std::string& methodStr) {
     std::string upperMethod = methodStr;
     std::transform(upperMethod.begin(), upperMethod.end(), upperMethod.begin(),
@@ -644,6 +691,122 @@ std::string HttpHeaderParser::urlDecode(const std::string& str) {
     }
 
     return result;
+}
+
+std::string HttpHeaderParser::urlEncode(const std::string& str) {
+    std::string result;
+    result.reserve(str.size() * 3);  // 预留足够空间
+
+    const char hexChars[] = "0123456789ABCDEF";
+
+    for (unsigned char c : str) {
+        if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            // 保持这些字符不变
+            result += c;
+        } else if (c == ' ') {
+            // 空格转换为加号或%20
+            result += '+';
+        } else {
+            // 其他字符转换为 %HH
+            result += '%';
+            result += hexChars[c >> 4];
+            result += hexChars[c & 15];
+        }
+    }
+
+    return result;
+}
+
+std::string HttpHeaderParser::buildRequest() const {
+    LOG_F(INFO, "buildRequest called");
+
+    std::stringstream request;
+
+    // 构建请求行
+    request << methodToString(impl_->method) << " " << impl_->path << " ";
+
+    // 添加HTTP版本
+    switch (impl_->version) {
+        case HttpVersion::HTTP_1_0:
+            request << "HTTP/1.0";
+            break;
+        case HttpVersion::HTTP_1_1:
+            request << "HTTP/1.1";
+            break;
+        case HttpVersion::HTTP_2_0:
+            request << "HTTP/2.0";
+            break;
+        case HttpVersion::HTTP_3_0:
+            request << "HTTP/3.0";
+            break;
+        default:
+            request << "HTTP/1.1";  // 默认使用 HTTP/1.1
+            break;
+    }
+    request << "\r\n";
+
+    // 添加请求头
+    for (const auto& [key, values] : impl_->headers) {
+        for (const auto& value : values) {
+            request << key << ": " << value << "\r\n";
+        }
+    }
+
+    // 添加空行，表示头部结束
+    request << "\r\n";
+
+    // 添加请求体（如果有）
+    if (!impl_->body.empty()) {
+        request << impl_->body;
+    }
+
+    LOG_F(INFO, "buildRequest completed");
+    return request.str();
+}
+
+std::string HttpHeaderParser::buildResponse() const {
+    LOG_F(INFO, "buildResponse called");
+
+    std::stringstream response;
+
+    // 构建状态行
+    switch (impl_->version) {
+        case HttpVersion::HTTP_1_0:
+            response << "HTTP/1.0";
+            break;
+        case HttpVersion::HTTP_1_1:
+            response << "HTTP/1.1";
+            break;
+        case HttpVersion::HTTP_2_0:
+            response << "HTTP/2.0";
+            break;
+        case HttpVersion::HTTP_3_0:
+            response << "HTTP/3.0";
+            break;
+        default:
+            response << "HTTP/1.1";  // 默认使用 HTTP/1.1
+            break;
+    }
+    response << " " << impl_->status.code << " " << impl_->status.description
+             << "\r\n";
+
+    // 添加响应头
+    for (const auto& [key, values] : impl_->headers) {
+        for (const auto& value : values) {
+            response << key << ": " << value << "\r\n";
+        }
+    }
+
+    // 添加空行，表示头部结束
+    response << "\r\n";
+
+    // 添加响应体（如果有）
+    if (!impl_->body.empty()) {
+        response << impl_->body;
+    }
+
+    LOG_F(INFO, "buildResponse completed");
+    return response.str();
 }
 
 }  // namespace atom::web
