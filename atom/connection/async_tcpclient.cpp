@@ -153,9 +153,9 @@ public:
             asio::ip::tcp::resolver resolver(io_context_);
             auto endpoints = resolver.resolve(host, std::to_string(port));
 
-            // Use a promise to track the connection result
-            std::promise<bool> connect_promise;
-            auto connect_future = connect_promise.get_future();
+            // 使用共享指针来包装promise对象
+            auto connect_promise_ptr = std::make_shared<std::promise<bool>>();
+            auto connect_future = connect_promise_ptr->get_future();
 
             // Create a timer for timeout handling
             auto timer = std::make_shared<asio::steady_timer>(io_context_);
@@ -163,16 +163,16 @@ public:
 
             // Set up connection handlers
             auto handle_connect =
-                [this, timer, connect_promise = std::move(connect_promise)](
+                [this, timer, promise_ptr = connect_promise_ptr](
                     const asio::error_code& ec,
-                    const asio::ip::tcp::endpoint& _endpoint) mutable {
+                    const asio::ip::tcp::endpoint& _endpoint) {
                     timer->cancel();
 
                     if (ec) {
                         logError("Connect error: " + ec.message());
                         stats_.failed_connections++;
                         changeState(ConnectionState::Failed);
-                        connect_promise.set_value(false);
+                        promise_ptr->set_value(false);
 
                         if (on_error_) {
                             on_error_("Connect error: " + ec.message());
@@ -184,15 +184,14 @@ public:
                         // Perform SSL handshake
                         ssl_socket_->async_handshake(
                             asio::ssl::stream_base::client,
-                            [this, timer,
-                             connect_promise = std::move(connect_promise)](
-                                const asio::error_code& handshake_ec) mutable {
+                            [this, timer, promise_ptr](
+                                const asio::error_code& handshake_ec) {
                                 if (handshake_ec) {
                                     logError("SSL handshake error: " +
                                              handshake_ec.message());
                                     stats_.failed_connections++;
                                     changeState(ConnectionState::Failed);
-                                    connect_promise.set_value(false);
+                                    promise_ptr->set_value(false);
 
                                     if (on_error_) {
                                         on_error_("SSL handshake error: " +
@@ -201,33 +200,32 @@ public:
                                     return;
                                 }
 
-                                handleSuccessfulConnection(
-                                    std::move(connect_promise));
+                                handleSuccessfulConnection(*promise_ptr);
                             });
                     } else {
-                        handleSuccessfulConnection(std::move(connect_promise));
+                        handleSuccessfulConnection(*promise_ptr);
                     }
                 };
 
             // Set up timeout handler
-            timer->async_wait(
-                [this, &connect_promise](const asio::error_code& ec) {
-                    if (ec == asio::error::operation_aborted) {
-                        return;
-                    }
-                    logError("Connection timed out");
-                    if (config_.use_ssl) {
-                        ssl_socket_->lowest_layer().cancel();
-                    } else {
-                        plain_socket_->cancel();
-                    }
-                    stats_.failed_connections++;
-                    changeState(ConnectionState::Failed);
-                    connect_promise.set_value(false);
-                    if (on_error_) {
-                        on_error_("Connection timed out");
-                    }
-                });
+            timer->async_wait([this, promise_ptr = connect_promise_ptr](
+                                  const asio::error_code& ec) {
+                if (ec == asio::error::operation_aborted) {
+                    return;
+                }
+                logError("Connection timed out");
+                if (config_.use_ssl) {
+                    ssl_socket_->lowest_layer().cancel();
+                } else {
+                    plain_socket_->cancel();
+                }
+                stats_.failed_connections++;
+                changeState(ConnectionState::Failed);
+                promise_ptr->set_value(false);
+                if (on_error_) {
+                    on_error_("Connection timed out");
+                }
+            });
 
             // Initiate async connection
             if (config_.use_ssl) {
@@ -864,7 +862,8 @@ private:
         }
     }
 
-    void handleSuccessfulConnection(std::promise<bool> connect_promise) {
+    // 修改函数签名，接受引用而不是值
+    void handleSuccessfulConnection(std::promise<bool>& connect_promise) {
         stats_.successful_connections++;
         stats_.last_connected_time = std::chrono::steady_clock::now();
         stats_.last_activity_time = stats_.last_connected_time;

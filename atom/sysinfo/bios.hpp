@@ -52,13 +52,12 @@ public:
     bool backupBiosSettings(const std::string& filepath);
     bool restoreBiosSettings(const std::string& filepath);
     bool isSecureBootSupported();
+    bool isUEFIBootSupported();
 
 private:
     BiosInfo() = default;
     BiosInfoData fetchBiosInfo();
 
-    bool isSecureBootSupported() const;
-    bool isUEFIBootSupported() const;
     std::string getManufacturerUpdateUrl() const;
 
     BiosInfoData cachedInfo;

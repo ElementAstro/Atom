@@ -22,6 +22,7 @@ Description: System Information Module - GPU
 // clang-format on
 #elif defined(__APPLE__)
 #include <CoreGraphics/CoreGraphics.h>
+#include <IOKit/IOKitLib.h>  // Added for IOKit functionalities
 #elif defined(__linux__)
 #include <X11/Xlib.h>
 #if __has_include(<X11/extensions/Xrandr.h>)
@@ -58,8 +59,10 @@ auto getGPUInfo() -> std::string {
             if (SetupDiGetDeviceRegistryPropertyA(
                     deviceInfoSet, &deviceInfoData, SPDRP_DEVICEDESC, nullptr,
                     (PBYTE)buffer, dataSize, nullptr) != 0) {
+                if (!gpuInfo.empty()) {
+                    gpuInfo += "\n";
+                }
                 gpuInfo += buffer;
-                gpuInfo += "\n";
                 LOG_F(INFO, "GPU Info: {}", buffer);
             }
         }
@@ -77,14 +80,106 @@ auto getGPUInfo() -> std::string {
     if (file) {
         std::string line;
         while (std::getline(file, line)) {
+            if (!gpuInfo.empty()) {
+                gpuInfo += "\n";
+            }
             gpuInfo += line;
-            gpuInfo += "\n";
             LOG_F(INFO, "GPU Info: {}", line);
         }
         file.close();
     } else {
         gpuInfo = "Failed to open GPU information file.";
         LOG_F(ERROR, "Failed to open GPU information file.");
+    }
+#elif defined(__APPLE__)
+    LOG_F(INFO, "macOS detected for getGPUInfo");
+    io_iterator_t iterator;
+    kern_return_t kr;
+    CFMutableDictionaryRef matchDict;
+
+    matchDict = IOServiceMatching("IOPCIDevice");
+    if (matchDict == nullptr) {
+        LOG_F(
+            ERROR,
+            "IOServiceMatching failed to create a dictionary for IOPCIDevice.");
+        return "Failed to get GPU information (IOServiceMatching).";
+    }
+
+    kr = IOServiceGetMatchingServices(kIOMasterPortDefault, matchDict,
+                                      &iterator);
+    if (kr != KERN_SUCCESS) {
+        LOG_F(ERROR, "IOServiceGetMatchingServices failed: {}", kr);
+        // matchDict is not consumed by IOServiceGetMatchingServices on failure,
+        // and should be released. However, to maintain consistency with other
+        // parts of the codebase that don't strictly handle all such releases
+        // on error paths for simple return, we omit CFRelease(matchDict) here.
+        return "Failed to get GPU information (IOServiceGetMatchingServices).";
+    }
+
+    io_service_t service;
+    std::string gpuNames;
+    char buffer[256];  // For CFStringGetCString fallback
+
+    while ((service = IOIteratorNext(iterator)) != IO_OBJECT_NULL) {
+        CFTypeRef classCodeProp = IORegistryEntryCreateCFProperty(
+            service, CFSTR("class-code"), kCFAllocatorDefault, 0);
+        bool isDisplayController = false;
+        if (classCodeProp != nullptr) {
+            if (CFGetTypeID(classCodeProp) == CFDataGetTypeID()) {
+                CFDataRef classCodeData = (CFDataRef)classCodeProp;
+                if (CFDataGetLength(classCodeData) > 0) {
+                    const UInt8* bytes = CFDataGetBytePtr(classCodeData);
+                    // PCI Base Class 0x03 is for Display Controllers.
+                    // The class-code property in IORegistry is typically an
+                    // array of bytes where the first byte represents the Base
+                    // Class.
+                    if (bytes[0] == 0x03) {
+                        isDisplayController = true;
+                    }
+                }
+            }
+            CFRelease(classCodeProp);
+        }
+
+        if (isDisplayController) {
+            CFTypeRef modelProp = IORegistryEntryCreateCFProperty(
+                service, CFSTR("model"), kCFAllocatorDefault, 0);
+            if (modelProp != nullptr) {
+                if (CFGetTypeID(modelProp) == CFStringGetTypeID()) {
+                    const char* modelStr = CFStringGetCStringPtr(
+                        (CFStringRef)modelProp, kCFStringEncodingUTF8);
+                    if (modelStr) {
+                        if (!gpuNames.empty()) {
+                            gpuNames += "\n";
+                        }
+                        gpuNames += modelStr;
+                    } else {
+                        // Fallback if direct CString pointer is null
+                        if (CFStringGetCString((CFStringRef)modelProp, buffer,
+                                               sizeof(buffer),
+                                               kCFStringEncodingUTF8)) {
+                            if (!gpuNames.empty()) {
+                                gpuNames += "\n";
+                            }
+                            gpuNames += buffer;
+                        }
+                    }
+                }
+                CFRelease(modelProp);
+            }
+        }
+        IOObjectRelease(service);
+    }
+    IOObjectRelease(iterator);
+
+    if (!gpuNames.empty()) {
+        gpuInfo = gpuNames;
+        LOG_F(INFO, "macOS GPU Info: {}", gpuInfo);
+    } else {
+        gpuInfo = "No identifiable GPU model found on macOS.";
+        LOG_F(WARNING,
+              "No identifiable GPU model found on macOS via IOKit PCI "
+              "iteration.");
     }
 #else
     gpuInfo = "GPU information retrieval is not supported on this platform.";

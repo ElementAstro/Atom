@@ -1,5 +1,5 @@
 /*
- * wifi.hpp
+ * wifi.cpp
  *
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
@@ -12,13 +12,11 @@ Description: System Information Module - Wifi Information
 
 **************************************************/
 
-#include "atom/sysinfo/wifi.hpp"
+// This is a wrapper implementation file that redirects to the new wifi module structure
+#include "atom/sysinfo/wifi/wifi.cpp"
 
-#include <memory>
-#include <string>
-#include <vector>
-
-#ifdef _WIN32
+// This empty file is kept for backward compatibility
+// All actual implementations are now in the wifi/ subdirectory
 // clang-format off
 #include <winsock2.h>
 #include <windows.h>

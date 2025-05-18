@@ -9,6 +9,10 @@
 cmake_minimum_required(VERSION 3.20)
 project(atom-sysinfo VERSION 1.0.0 LANGUAGES C CXX)
 
+# 添加子模块子目录
+add_subdirectory(memory)
+add_subdirectory(wifi)
+
 # Sources and Headers
 set(SOURCES
     battery.cpp
@@ -17,10 +21,22 @@ set(SOURCES
     disk.cpp
     gpu.cpp
     locale.cpp
-    memory.cpp
     os.cpp
-    wifi.cpp
+    # wifi.cpp is now in its own subdirectory
     wm.cpp
+)
+
+# CPU component files
+set(CPU_SOURCES
+    cpu/common.cpp
+    cpu/windows.cpp
+    cpu/linux.cpp
+    cpu/macos.cpp
+    cpu/freebsd.cpp
+)
+
+set(CPU_HEADERS
+    cpu/common.hpp
 )
 
 set(HEADERS
@@ -38,11 +54,13 @@ set(HEADERS
 
 set(LIBS
     loguru
+    atom_sysinfo_memory
+    atom_sysinfo_wifi
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
 # Build Object Library
-add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
+add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS} ${CPU_SOURCES} ${CPU_HEADERS})
 set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 
 target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})

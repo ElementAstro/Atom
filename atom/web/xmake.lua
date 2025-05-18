@@ -12,6 +12,9 @@ set_project("atom-web")
 set_version("1.0.0")
 set_license("GPL3")
 
+-- Include time subdirectory
+includes("time/xmake.lua")
+
 -- Sources
 local sources = {
     "address.cpp",
@@ -19,8 +22,18 @@ local sources = {
     "httpclient.cpp",
     "httplite.cpp",
     "utils.cpp",
-    "time.cpp"
+    "utils/addr_info.cpp",
+    "utils/dns.cpp",
+    "utils/ip.cpp",
+    "utils/network.cpp",
+    "utils/port.cpp",
+    "utils/socket.cpp"
 }
+
+-- Add time module sources
+for _, src in ipairs(get_time_sources()) do
+    table.insert(sources, "time/" .. src)
+end
 
 -- Headers
 local headers = {
@@ -29,8 +42,20 @@ local headers = {
     "httpclient.hpp",
     "httplite.hpp",
     "utils.hpp",
-    "time.hpp"
+    "time.hpp", -- 保留兼容头文件
+    "utils/common.hpp",
+    "utils/addr_info.hpp",
+    "utils/dns.hpp",
+    "utils/ip.hpp",
+    "utils/network.hpp",
+    "utils/port.hpp",
+    "utils/socket.hpp"
 }
+
+-- Add time module headers
+for _, hdr in ipairs(get_time_headers()) do
+    table.insert(headers, "time/" .. hdr)
+end
 
 -- Build Object Library
 target("atom-web-object")

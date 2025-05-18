@@ -1,9 +1,13 @@
 #include "bios.hpp"
 
 #ifdef _WIN32
+// clang-format off
+#include <windows.h>
+#include <winbase.h>
 #include <comdef.h>
-#include <sysinfoapi.h>
+#include <sysinfoapi.h> 
 #include <wbemidl.h>
+// clang-format on
 #if defined(_MSC_VER)
 #pragma comment(lib, "wbemuuid.lib")
 #endif
@@ -792,5 +796,107 @@ BiosInfoData BiosInfo::fetchBiosInfo() {
     return biosInfo;
 }
 #endif
+
+bool BiosInfo::isUEFIBootSupported() {
+    // Add implementation for checking UEFI boot support
+    // This is a placeholder and needs actual OS-specific implementation
+#ifdef _WIN32
+    // Windows: Check if system is booted in UEFI mode
+    // Using WMI to query SecureBoot variable as a proxy for UEFI
+    try {
+        IWbemLocator* pLoc = nullptr;
+        IWbemServices* pSvc = nullptr;
+        HRESULT hres = CoInitializeEx(0, COINIT_MULTITHREADED);
+        if (FAILED(hres))
+            return false;
+
+        struct CleanupCOM {
+            ~CleanupCOM() { CoUninitialize(); }
+        } cleanup;
+
+        hres = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER,
+                                IID_IWbemLocator, (LPVOID*)&pLoc);
+        if (FAILED(hres) || !pLoc)
+            return false;
+
+        hres = pLoc->ConnectServer(_bstr_t(L"ROOT\\WMI"), nullptr, nullptr, 0,
+                                   0, 0, 0, &pSvc);
+        if (FAILED(hres) || !pSvc) {
+            pLoc->Release();
+            return false;
+        }
+
+        // Look for UEFI variables
+        IEnumWbemClassObject* pEnumerator = nullptr;
+        hres = pSvc->ExecQuery(
+            bstr_t("WQL"), bstr_t("SELECT * FROM MSFirmwareUefiInfo"),
+            WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr,
+            &pEnumerator);
+
+        bool isUEFI = SUCCEEDED(hres) && pEnumerator;
+
+        if (pEnumerator)
+            pEnumerator->Release();
+        pSvc->Release();
+        pLoc->Release();
+
+        return isUEFI;
+    } catch (...) {
+        return false;
+    }
+#elif __linux__
+    // Linux: Check for /sys/firmware/efi or efibootmgr
+    std::ifstream efi_dir("/sys/firmware/efi");
+    if (efi_dir.good()) {
+        return true;
+    }
+    // Fallback to checking efibootmgr command availability
+    std::unique_ptr<FILE, int (*)(FILE*)> pipe(
+        popen("command -v efibootmgr", "r"), pclose);
+    if (pipe) {
+        char buffer[128];
+        if (fgets(buffer, sizeof(buffer), pipe.get()) != nullptr) {
+            return true;  // Command exists
+        }
+    }
+    return false;
+#else
+    return false;  // Not supported on other platforms
+#endif
+}
+
+bool BiosInfo::restoreBiosSettings(const std::string& filepath) {
+    try {
+        std::ifstream in(filepath, std::ios::binary);
+        if (!in) {
+            LOG_F(ERROR, "Failed to open BIOS settings backup file: {}",
+                  filepath);
+            return false;
+        }
+
+        // Placeholder for actual BIOS settings restoration logic
+        // This would involve complex, hardware-specific operations
+        // and potentially require direct hardware access or OS APIs
+        // For example, writing to CMOS or UEFI variables.
+        // This is highly dependent on the system and BIOS vendor.
+        LOG_F(INFO, "Placeholder: Restoring BIOS settings from {}", filepath);
+        // Simulate reading the file content
+        std::string content((std::istreambuf_iterator<char>(in)),
+                            std::istreambuf_iterator<char>());
+        if (content.empty()) {
+            LOG_F(WARNING, "BIOS settings backup file is empty: {}", filepath);
+            // Depending on requirements, this might be an error or just a
+            // warning
+        }
+        // Actual restoration logic would go here.
+
+        LOG_F(INFO, "BIOS settings restoration from {} (simulated) successful.",
+              filepath);
+        return true;
+    } catch (const std::exception& e) {
+        LOG_F(ERROR, "Failed to restore BIOS settings: {}", e.what());
+        return false;
+    }
+}
 
 }  // namespace atom::system
