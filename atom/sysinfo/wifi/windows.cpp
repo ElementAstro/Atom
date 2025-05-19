@@ -16,6 +16,8 @@ Description: System Information Module - Windows WiFi Implementation
 
 #include "windows.hpp"
 
+#include <thread>
+
 namespace atom::system::windows {
 
 auto isConnectedToInternet_impl() -> bool {

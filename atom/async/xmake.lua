@@ -1,48 +1,67 @@
--- xmake.lua for Atom-Async
--- This project is licensed under the terms of the GPL3 license.
---
--- Project Name: Atom-Async
--- Description: Async Implementation of Lithium Server and Driver
+-- filepath: d:\msys64\home\qwdma\Atom\atom\async\xmake.lua
+-- xmake configuration for Atom-Async module
 -- Author: Max Qian
 -- License: GPL3
 
+-- Add standard build modes
 add_rules("mode.debug", "mode.release")
 
--- Set project name
+-- Project configuration
 set_project("atom-async")
+set_version("1.0.0")
+set_license("GPL3")
 
--- Set languages
-set_languages("cxx17")
+-- Define source files
+local sources = {
+    "lock.cpp", 
+    "timer.cpp"
+}
 
--- Set source files
-add_files("lock.cpp", "timer.cpp")
+-- Define header files
+local headers = {
+    "*.hpp", 
+    "*.inl"
+}
 
--- Set header files
-add_headerfiles("*.hpp", "*.inl")
-
--- Set link libraries
-add_linkdirs("path/to/loguru/library")  -- Replace with actual path to loguru library
-add_links("loguru")
-
--- Build static library
-target("atom-async")
-    set_kind("static")
-    add_deps("atom-async-object")
-    add_files("lock.cpp", "timer.cpp")
-    add_headerfiles("*.hpp", "*.inl")
-    add_includedirs(".")
-    add_linkdirs(".")
-    add_links("loguru")
-
--- Build object library
+-- Object Library
 target("atom-async-object")
     set_kind("object")
-    add_files("lock.cpp", "timer.cpp")
-    add_headerfiles("*.hpp", "*.inl")
-    add_includedirs(".")
-    add_linkdirs(".")
-    add_links("loguru")
+    
+    -- Add files
+    add_files(table.unpack(sources))
+    add_headerfiles(table.unpack(headers))
+    
+    -- Add dependencies
+    add_packages("loguru")
+    
+    -- Add include directories
+    add_includedirs(".", {public = true})
+    add_includedirs("..", {public = true})
+    
+    -- Set C++ standard
+    set_languages("c++20")
+target_end()
 
--- Install target
-set_configvar("xmake", "installdir", "/path/to/installation/directory")  -- Replace with actual installation directory
-add_installfiles("build/lib/*.a", {prefixdir = "lib"})
+-- Library target
+target("atom-async")
+    -- Set library type based on parent project option
+    set_kind(has_config("shared_libs") and "shared" or "static")
+    
+    -- Add dependencies
+    add_deps("atom-async-object")
+    add_packages("loguru")
+    
+    -- Add include directories
+    add_includedirs(".", {public = true})
+    
+    -- Set output directories
+    set_targetdir("$(buildir)/lib")
+    set_objectdir("$(buildir)/obj")
+    
+    -- Install configuration
+    on_install(function (target)
+        os.cp(target:targetfile(), path.join(target:installdir(), "lib"))
+        os.cp("*.hpp", path.join(target:installdir(), "include/atom/async"))
+        os.cp("*.inl", path.join(target:installdir(), "include/atom/async"))
+    end)
+target_end()

@@ -11,6 +11,87 @@
 #if defined(_MSC_VER)
 #pragma comment(lib, "wbemuuid.lib")
 #endif
+
+// 添加 RAII 风格的 COM 初始化器
+namespace {
+class ComInitializer {
+public:
+    ComInitializer(COINIT coinit = COINIT_MULTITHREADED) : initialized_(false) {
+        HRESULT hr = CoInitializeEx(nullptr, coinit);
+        if (SUCCEEDED(hr) || hr == S_FALSE) {
+            initialized_ = true;
+        } else {
+            throw std::runtime_error("Failed to initialize COM library");
+        }
+    }
+
+    ~ComInitializer() {
+        if (initialized_) {
+            CoUninitialize();
+        }
+    }
+
+    // 禁止拷贝和移动
+    ComInitializer(const ComInitializer&) = delete;
+    ComInitializer& operator=(const ComInitializer&) = delete;
+
+    // 释放所有权
+    void release() { initialized_ = false; }
+
+private:
+    bool initialized_;
+};
+
+// COM 接口的智能指针模板
+template <typename T>
+class ComPtr {
+public:
+    ComPtr() : ptr_(nullptr) {}
+
+    ComPtr(T* ptr) : ptr_(ptr) {}
+
+    ~ComPtr() {
+        if (ptr_) {
+            ptr_->Release();
+        }
+    }
+
+    // 移动构造和赋值
+    ComPtr(ComPtr&& other) noexcept : ptr_(other.ptr_) { other.ptr_ = nullptr; }
+
+    ComPtr& operator=(ComPtr&& other) noexcept {
+        if (this != &other) {
+            if (ptr_) {
+                ptr_->Release();
+            }
+            ptr_ = other.ptr_;
+            other.ptr_ = nullptr;
+        }
+        return *this;
+    }
+
+    // 禁止拷贝
+    ComPtr(const ComPtr&) = delete;
+    ComPtr& operator=(const ComPtr&) = delete;
+
+    // 访问器
+    T* get() const { return ptr_; }
+    T** getAddressOf() { return &ptr_; }
+
+    // 操作符重载
+    T* operator->() const { return ptr_; }
+
+    // 释放所有权
+    T* release() {
+        T* tmp = ptr_;
+        ptr_ = nullptr;
+        return tmp;
+    }
+
+private:
+    T* ptr_;
+};
+}  // namespace
 #endif
 
 #include <chrono>
@@ -475,111 +556,76 @@ bool BiosInfo::setSecureBoot(bool enable) {
 bool BiosInfo::isSecureBootSupported() {
     try {
 #ifdef _WIN32
-        // Check if system supports Secure Boot using WMI
-        IWbemLocator* pLoc = nullptr;
-        IWbemServices* pSvc = nullptr;
-        bool supported = false;
+        // Windows平台检测安全引导是否支持
+        // 使用 GetFirmwareEnvironmentVariable API 检查 UEFI 安全引导变量
+        DWORD size = 0;
+        BYTE buffer[1] = {0};
 
-        // Initialize COM
-        HRESULT hres = CoInitializeEx(0, COINIT_MULTITHREADED);
-        if (FAILED(hres)) {
-            throw std::runtime_error("Failed to initialize COM library");
+        // 首先需要检查是否拥有足够权限
+        // 尝试读取 SecureBoot 变量的值来确认支持
+        BOOL result = GetFirmwareEnvironmentVariableA(
+            "SecureBoot", "{8be4df61-93ca-11d2-aa0d-00e098032b8c}", buffer,
+            size);
+
+        // 如果函数失败但错误为
+        // ERROR_INSUFFICIENT_BUFFER，则变量存在（需要更多空间） 这表明系统支持
+        // SecureBoot
+        DWORD error = GetLastError();
+        if (error == ERROR_INSUFFICIENT_BUFFER || result) {
+            return true;
         }
 
-        // COM cleanup RAII helper
-        struct COM_Cleanup {
-            IWbemLocator* loc;
-            IWbemServices* svc;
-            COM_Cleanup(IWbemLocator* l, IWbemServices* s) : loc(l), svc(s) {}
-            ~COM_Cleanup() {
-                if (svc)
-                    svc->Release();
-                if (loc)
-                    loc->Release();
-                CoUninitialize();
-            }
-        };
-
-        // Set COM security levels
-        hres = CoInitializeSecurity(
-            nullptr, -1, nullptr, nullptr, RPC_C_AUTHN_LEVEL_DEFAULT,
-            RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE, nullptr);
-        if (FAILED(hres)) {
-            CoUninitialize();
-            throw std::runtime_error("Failed to initialize security");
-        }
-
-        // Obtain WMI locator
-        hres = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER,
-                                IID_IWbemLocator, (LPVOID*)&pLoc);
-        if (FAILED(hres)) {
-            CoUninitialize();
-            throw std::runtime_error("Failed to create IWbemLocator object");
-        }
-
-        // Connect to WMI
-        hres = pLoc->ConnectServer(_bstr_t(L"ROOT\\WMI"), nullptr, nullptr, 0,
-                                   0, 0, 0, &pSvc);
-        if (FAILED(hres)) {
-            pLoc->Release();
-            CoUninitialize();
-            throw std::runtime_error("Could not connect to WMI namespace");
-        }
-
-        COM_Cleanup cleanup(pLoc, pSvc);
-
-        // Set security levels on the proxy
-        hres =
-            CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE,
-                              nullptr, RPC_C_AUTHN_LEVEL_CALL,
-                              RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE);
-        if (FAILED(hres)) {
-            throw std::runtime_error("Could not set proxy blanket");
-        }
-
-        // Query for UEFI SecureBoot status
-        IEnumWbemClassObject* pEnumerator = nullptr;
-        hres = pSvc->ExecQuery(
-            bstr_t("WQL"), bstr_t("SELECT * FROM Win32_ComputerSystem"),
-            WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr,
-            &pEnumerator);
-
-        if (FAILED(hres)) {
-            throw std::runtime_error("WMI query failed");
-        }
-
-        IWbemClassObject* pclsObj = nullptr;
-        ULONG uReturn = 0;
-
-        if (pEnumerator &&
-            pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn) == S_OK) {
-            VARIANT vtProp;
-            VariantInit(&vtProp);
-
-            // Check if system is UEFI-based
-            if (SUCCEEDED(pclsObj->Get(L"SystemType", 0, &vtProp, 0, 0))) {
-                std::string systemType =
-                    _com_util::ConvertBSTRToString(vtProp.bstrVal);
-                supported = systemType.find("UEFI") != std::string::npos;
-                VariantClear(&vtProp);
-            }
-
-            pclsObj->Release();
-        }
-
-        if (pEnumerator) {
-            pEnumerator->Release();
-        }
-
-        return supported;
+        // 其它错误可能表示无法访问或不支持
+        LOG_F(INFO, "SecureBoot check failed with error code: {}", error);
+        return false;
 #elif __linux__
-        // Check if system supports Secure Boot using efivarfs
-        std::ifstream secureBootVar(
+        // Linux平台检测安全引导是否支持
+        // 检查 efivarfs 是否挂载且存在 SecureBoot 变量
+
+        // 首先检查是否有 efivarfs 文件系统
+        std::ifstream efi_dir("/sys/firmware/efi");
+        if (!efi_dir.good()) {
+            LOG_F(
+                INFO,
+                "EFI variables directory not found, SecureBoot not supported");
+            return false;
+        }
+
+        // 检查 SecureBoot 变量是否存在
+        std::ifstream secure_boot_var(
             "/sys/firmware/efi/efivars/"
             "SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c");
-        return secureBootVar.good();
+        if (secure_boot_var.good()) {
+            LOG_F(INFO, "SecureBoot variable found, SecureBoot is supported");
+            return true;
+        }
+
+        // 尝试使用 efibootmgr 命令检查
+        if (access("/usr/bin/efibootmgr", X_OK) == 0) {
+            std::array<char, 128> buffer;
+            std::string result;
+            std::unique_ptr<FILE, int (*)(FILE*)> pipe(
+                popen("efibootmgr -v | grep -i secureboot", "r"), pclose);
+
+            if (pipe) {
+                while (fgets(buffer.data(), buffer.size(), pipe.get()) !=
+                       nullptr) {
+                    result += buffer.data();
+                }
+
+                if (!result.empty()) {
+                    LOG_F(INFO, "SecureBoot found via efibootmgr: {}", result);
+                    return true;
+                }
+            }
+        }
+
+        LOG_F(INFO, "No evidence of SecureBoot support found");
+        return false;
 #else
-        return false;  // Not supported on this platform
+        // 其他平台不支持
+        LOG_F(INFO, "SecureBoot check not implemented for this platform");
+        return false;
 #endif
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Failed to check Secure Boot support: {}", e.what());
@@ -895,6 +941,143 @@ bool BiosInfo::restoreBiosSettings(const std::string& filepath) {
         return true;
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Failed to restore BIOS settings: {}", e.what());
+        return false;
+    }
+}
+
+bool BiosInfo::setUEFIBoot(bool enable) {
+    if (!isUEFIBootSupported()) {
+        LOG_F(ERROR, "UEFI Boot is not supported on this system");
+        return false;
+    }
+
+    try {
+#ifdef _WIN32
+        // Windows实现 - 需要管理员权限才能修改UEFI引导设置
+        LOG_F(INFO, "Attempting to {} UEFI Boot mode",
+              enable ? "enable" : "disable");
+
+        // 检查当前权限
+        BOOL isElevated = FALSE;
+        HANDLE hToken = nullptr;
+
+        if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
+            TOKEN_ELEVATION elevation;
+            DWORD size = sizeof(TOKEN_ELEVATION);
+
+            if (GetTokenInformation(hToken, TokenElevation, &elevation,
+                                    sizeof(elevation), &size)) {
+                isElevated = elevation.TokenIsElevated;
+            }
+
+            CloseHandle(hToken);
+        }
+
+        if (!isElevated) {
+            LOG_F(ERROR,
+                  "Administrator privileges required to modify UEFI boot "
+                  "settings");
+            return false;
+        }
+
+        // 这里需要通过BCDEdit或类似工具来修改引导配置
+        // 由于这是系统级别的操作，通常需要创建一个管理员任务
+        // 下面是使用bcdedit的示例（需要以管理员身份运行）
+
+        // 构建命令
+        std::string command = "bcdedit /set {bootmgr} path \\EFI\\";
+        command += enable ? "Microsoft\\Boot\\bootmgfw.efi"
+                          : "Legacy\\Boot\\bootmgfw.efi";
+
+        LOG_F(INFO, "Executing command: {}", command);
+
+        // 在实际产品中，应该使用更安全的API调用而非system
+        // 这里仅作为示例
+        int result = ::system(command.c_str());
+
+        if (result != 0) {
+            LOG_F(ERROR, "Failed to set UEFI boot mode, command returned: {}",
+                  result);
+            return false;
+        }
+
+        LOG_F(WARNING,
+              "System will need to be restarted for changes to take effect");
+        return true;
+#elif __linux__
+        // Linux实现 - 同样需要root权限
+        LOG_F(INFO, "Attempting to {} UEFI Boot mode",
+              enable ? "enable" : "disable");
+
+        // 检查权限
+        if (geteuid() != 0) {
+            LOG_F(ERROR,
+                  "Root privileges required to modify UEFI boot settings");
+            return false;
+        }
+
+        // 检查efibootmgr是否可用
+        if (access("/usr/bin/efibootmgr", X_OK) != 0) {
+            LOG_F(ERROR,
+                  "efibootmgr not found, cannot modify UEFI boot settings");
+            return false;
+        }
+
+        // 构建命令
+        std::string command;
+        if (enable) {
+            // 启用UEFI引导（禁用Legacy引导）
+            command =
+                "efibootmgr --create --disk /dev/sda --part 1 "
+                "--loader \\\\EFI\\\\BOOT\\\\BOOTX64.EFI --label \"UEFI OS\" "
+                "--quiet";
+        } else {
+            // 禁用UEFI引导（需要系统支持Legacy引导模式）
+            // 首先查找UEFI引导项
+            std::array<char, 256> buffer;
+            std::string bootEntries;
+            std::unique_ptr<FILE, int (*)(FILE*)> pipe(
+                popen("efibootmgr | grep \"UEFI OS\"", "r"), pclose);
+
+            if (pipe) {
+                while (fgets(buffer.data(), buffer.size(), pipe.get()) !=
+                       nullptr) {
+                    bootEntries += buffer.data();
+                }
+            }
+
+            // 解析引导项编号
+            std::string bootNum;
+            size_t pos = bootEntries.find("Boot");
+            if (pos != std::string::npos && bootEntries.length() > pos + 8) {
+                bootNum = bootEntries.substr(pos + 4, 4);
+                command = "efibootmgr -b " + bootNum + " -B --quiet";
+            } else {
+                LOG_F(ERROR, "Could not find UEFI boot entry to disable");
+                return false;
+            }
+        }
+
+        LOG_F(INFO, "Executing command: {}", command);
+        int result = ::system(command.c_str());
+
+        if (result != 0) {
+            LOG_F(ERROR, "Failed to set UEFI boot mode, command returned: {}",
+                  result);
+            return false;
+        }
+
+        LOG_F(WARNING,
+              "System will need to be restarted for changes to take effect");
+        return true;
+#else
+        // 其他平台不支持
+        LOG_F(ERROR,
+              "Setting UEFI boot mode is not supported on this platform");
+        return false;
+#endif
+    } catch (const std::exception& e) {
+        LOG_F(ERROR, "Failed to set UEFI boot mode: {}", e.what());
         return false;
     }
 }

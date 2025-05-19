@@ -13,6 +13,49 @@
 
 #include "atom/error/exception.hpp"
 
+namespace {
+// 错误处理辅助函数
+template <typename T>
+inline atom::serial::SerialPortScanner::Result<T> make_error_result(
+    const std::string& message, int code = 0) {
+    return atom::serial::SerialPortScanner::ErrorInfo{message, code};
+}
+
+// 字符串转小写辅助函数 - 减少内存分配
+inline void to_lower_inplace(std::string& str) {
+    std::transform(str.begin(), str.end(), str.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+}
+
+// 字符串比较辅助函数 - 不区分大小写
+inline bool contains_case_insensitive(std::string_view haystack,
+                                     std::string_view needle) {
+    auto it = std::search(
+        haystack.begin(), haystack.end(), needle.begin(), needle.end(),
+        [](char ch1, char ch2) {
+            return std::tolower(static_cast<unsigned char>(ch1)) ==
+                   std::tolower(static_cast<unsigned char>(ch2));
+        });
+    return it != haystack.end();
+}
+
+// 检查是否为虚拟端口
+#ifdef _WIN32
+inline bool is_virtual_port(const std::string& port_name) {
+    return port_name.find("CNCA") == 0 || 
+           port_name.find("VCOM") == 0 || 
+           port_name.find("VPCOM") == 0;
+}
+#else
+inline bool is_virtual_port(const std::string& device_path) {
+    return device_path.find("/dev/ptmx") == 0 || 
+           device_path.find("/dev/pts") == 0 || 
+           device_path.find("/dev/ttyS") == 0;
+}
+#endif
+
+} // anonymous namespace
+
 namespace atom {
 namespace serial {
 
@@ -57,12 +100,12 @@ std::pair<bool, std::string> SerialPortScanner::is_ch340_device(
         return {false, ""};
     }
 
-    // Exact match if description contains "USB-SERIAL CH340"
-    if (description.find("USB-SERIAL CH340") != std::string_view::npos) {
+    // Exact match if description contains "USB-SERIAL CH340" - 避免不必要的转换
+    if (contains_case_insensitive(description, "USB-SERIAL CH340")) {
         return {true, "USB-SERIAL CH340(Exact Match)"};
     }
 
-    // Check if VID exists in our CH340 identifiers
+    // Check if VID exists in our CH340 identifiers - 使用更高效的查找
     auto vid_it = ch340_identifiers.find(vid);
     if (vid_it != ch340_identifiers.end()) {
         // Check if PID exists in the CH340 identifiers for the given VID
@@ -73,15 +116,21 @@ std::pair<bool, std::string> SerialPortScanner::is_ch340_device(
         }
     }
 
-    // Consider it a CH340 device if description contains "ch340" (case
-    // insensitive)
-    std::string lower_desc;
-    lower_desc.reserve(description.size());
-    std::transform(description.begin(), description.end(),
-                   std::back_inserter(lower_desc),
-                   [](unsigned char c) { return std::tolower(c); });
+    // Check custom device detectors
+    for (const auto& [_, detector] : device_detectors_) {
+        try {
+            auto [detected, model] = detector(vid, pid, description);
+            if (detected) {
+                return {true, model};
+            }
+        } catch (...) {
+            // 忽略自定义检测器异常，继续下一个检测
+            continue;
+        }
+    }
 
-    if (lower_desc.find("ch340") != std::string::npos) {
+    // 最后才做大小写不敏感查找（性能较低）
+    if (contains_case_insensitive(description, "ch340")) {
         return {true, "CH340 Series(From Description)"};
     }
 
@@ -112,6 +161,15 @@ SerialPortScanner::list_available_ports(bool highlight_ch340) {
 
 #ifdef _WIN32
         // Windows平台实现
+        // 改进资源管理，使用RAII模式
+        struct SetupDiDeleter {
+            void operator()(HDEVINFO hDevInfo) const {
+                if (hDevInfo != INVALID_HANDLE_VALUE) {
+                    SetupDiDestroyDeviceInfoList(hDevInfo);
+                }
+            }
+        };
+        
         HDEVINFO device_info_set =
             SetupDiGetClassDevs(&GUID_DEVINTERFACE_COMPORT, nullptr, nullptr,
                                 DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
@@ -121,32 +179,19 @@ SerialPortScanner::list_available_ports(bool highlight_ch340) {
                              static_cast<int>(GetLastError())};
         }
 
-        // Ensure proper cleanup of device info set
-        // Define a simple wrapper for the handle
-        struct DeviceInfoWrapper {
-            HDEVINFO handle;
-            explicit DeviceInfoWrapper(HDEVINFO h) : handle(h) {}
-        };
-
-        auto cleanup_wrapper = [](DeviceInfoWrapper* wrapper) {
-            if (wrapper->handle != INVALID_HANDLE_VALUE) {
-                SetupDiDestroyDeviceInfoList(wrapper->handle);
-            }
-            delete wrapper;
-        };
-
-        // Use RAII with the wrapper
-        std::unique_ptr<DeviceInfoWrapper, decltype(cleanup_wrapper)>
-            cleanup_guard(new DeviceInfoWrapper(device_info_set),
-                          cleanup_wrapper);
+        // 使用RAII对象管理设备信息集
+        std::unique_ptr<void, SetupDiDeleter> device_guard(device_info_set);
 
         SP_DEVINFO_DATA device_info_data{};
         device_info_data.cbSize = sizeof(SP_DEVINFO_DATA);
 
+        // 预先为结果分配一些空间，减少重新分配
+        result.reserve(8); // 假设通常有最多8个端口
+        char buffer[256];  // 重用缓冲区
+
         for (DWORD i = 0;
              SetupDiEnumDeviceInfo(device_info_set, i, &device_info_data);
              i++) {
-            char buffer[256];
             std::string port_name;
             std::string description;
             DWORD property_type;
@@ -158,7 +203,7 @@ SerialPortScanner::list_available_ports(bool highlight_ch340) {
                     device_info_set, &device_info_data, SPDRP_FRIENDLYNAME,
                     &property_type, reinterpret_cast<PBYTE>(buffer),
                     sizeof(buffer), &required_size)) {
-                description = buffer;
+                description.assign(buffer); // 优化：直接分配，避免不必要的复制
             }
 
             // 获取硬件ID以提取VID和PID
@@ -166,9 +211,10 @@ SerialPortScanner::list_available_ports(bool highlight_ch340) {
                     device_info_set, &device_info_data, SPDRP_HARDWAREID,
                     &property_type, reinterpret_cast<PBYTE>(buffer),
                     sizeof(buffer), &required_size)) {
-                std::string hw_id = buffer;
-                std::regex vid_regex("VID_(\\w{4})");
-                std::regex pid_regex("PID_(\\w{4})");
+                std::string hw_id(buffer); // 必须用std::string，因为std::regex_search需要它
+                // 编译一次正则表达式并重用
+                static const std::regex vid_regex("VID_(\\w{4})");
+                static const std::regex pid_regex("PID_(\\w{4})");
                 std::smatch match;
 
                 if (std::regex_search(hw_id, match, vid_regex) &&
@@ -203,9 +249,7 @@ SerialPortScanner::list_available_ports(bool highlight_ch340) {
                 // Skip virtual ports if configured to do so
                 if (!config_.include_virtual_ports) {
                     // Simple heuristic: most common virtual port prefixes
-                    if (port_name.find("CNCA") == 0 ||
-                        port_name.find("VCOM") == 0 ||
-                        port_name.find("VPCOM") == 0) {
+                    if (is_virtual_port(port_name)) {
                         continue;
                     }
                 }
@@ -221,37 +265,44 @@ SerialPortScanner::list_available_ports(bool highlight_ch340) {
                 result.push_back(port_info);
             }
         }
-
-        SetupDiDestroyDeviceInfoList(device_info_set);
-        [[maybe_unused]] auto released_handle =
-            cleanup_guard.release();  // Prevent double cleanup
+        
+        // 不需要手动调用 SetupDiDestroyDeviceInfoList，
+        // 因为 device_guard unique_ptr 的自定义删除器会处理
 #else
         // Linux平台实现
+        // 使用 RAII 更优雅地管理 udev 资源
+        struct UdevDeleter {
+            void operator()(struct udev* u) const {
+                if (u) udev_unref(u);
+            }
+        };
+        
+        struct UdevEnumerateDeleter {
+            void operator()(struct udev_enumerate* e) const {
+                if (e) udev_enumerate_unref(e);
+            }
+        };
+        
+        struct UdevDeviceDeleter {
+            void operator()(struct udev_device* d) const {
+                if (d) udev_device_unref(d);
+            }
+        };
+        
         struct udev* udev = udev_new();
         if (!udev) {
             return ErrorInfo{"Failed to create udev context", errno};
         }
-
-        // RAII for udev cleanup
-        auto cleanup_udev = [](struct udev* u) {
-            if (u)
-                udev_unref(u);
-        };
-        std::unique_ptr<struct udev, decltype(cleanup_udev)> udev_guard(
-            udev, cleanup_udev);
-
+        
+        // 使用自定义删除器的智能指针实现 RAII
+        std::unique_ptr<struct udev, UdevDeleter> udev_guard(udev);
+        
         struct udev_enumerate* enumerate = udev_enumerate_new(udev);
         if (!enumerate) {
             return ErrorInfo{"Failed to create udev enumeration", errno};
         }
-
-        // RAII for enumerate cleanup
-        auto cleanup_enumerate = [](struct udev_enumerate* e) {
-            if (e)
-                udev_enumerate_unref(e);
-        };
-        std::unique_ptr<struct udev_enumerate, decltype(cleanup_enumerate)>
-            enumerate_guard(enumerate, cleanup_enumerate);
+        
+        std::unique_ptr<struct udev_enumerate, UdevEnumerateDeleter> enumerate_guard(enumerate);
 
         udev_enumerate_add_match_subsystem(enumerate, "tty");
         udev_enumerate_scan_devices(enumerate);
@@ -265,12 +316,7 @@ SerialPortScanner::list_available_ports(bool highlight_ch340) {
             struct udev_device* dev = udev_device_new_from_syspath(udev, path);
 
             // RAII for device cleanup
-            auto cleanup_device = [](struct udev_device* d) {
-                if (d)
-                    udev_device_unref(d);
-            };
-            std::unique_ptr<struct udev_device, decltype(cleanup_device)>
-                dev_guard(dev, cleanup_device);
+            std::unique_ptr<struct udev_device, UdevDeviceDeleter> dev_guard(dev);
 
             const char* dev_path = udev_device_get_devnode(dev);
             if (dev_path) {
@@ -281,9 +327,7 @@ SerialPortScanner::list_available_ports(bool highlight_ch340) {
                 // Skip virtual ports if configured to do so
                 if (!config_.include_virtual_ports) {
                     // Common virtual port prefixes in Linux
-                    if (device.find("/dev/ptmx") == 0 ||
-                        device.find("/dev/pts") == 0 ||
-                        device.find("/dev/ttyS") == 0) {
+                    if (is_virtual_port(device)) {
                         continue;
                     }
                 }
@@ -568,31 +612,39 @@ SerialPortScanner::get_port_details_linux(std::string_view port_name) {
     try {
         PortDetails details;
 
+        // 使用前面定义的删除器类型
+        struct UdevDeleter {
+            void operator()(struct udev* u) const {
+                if (u) udev_unref(u);
+            }
+        };
+        
+        struct UdevEnumerateDeleter {
+            void operator()(struct udev_enumerate* e) const {
+                if (e) udev_enumerate_unref(e);
+            }
+        };
+        
+        struct UdevDeviceDeleter {
+            void operator()(struct udev_device* d) const {
+                if (d) udev_device_unref(d);
+            }
+        };
+
         struct udev* udev = udev_new();
         if (!udev) {
             throw ScannerError("Failed to create udev context");
         }
 
-        // RAII for udev cleanup
-        auto cleanup_udev = [](struct udev* u) {
-            if (u)
-                udev_unref(u);
-        };
-        std::unique_ptr<struct udev, decltype(cleanup_udev)> udev_guard(
-            udev, cleanup_udev);
+        // 使用统一的智能指针风格进行资源管理
+        std::unique_ptr<struct udev, UdevDeleter> udev_guard(udev);
 
         struct udev_enumerate* enumerate = udev_enumerate_new(udev);
         if (!enumerate) {
             throw ScannerError("Failed to create udev enumeration");
         }
 
-        // RAII for enumerate cleanup
-        auto cleanup_enumerate = [](struct udev_enumerate* e) {
-            if (e)
-                udev_enumerate_unref(e);
-        };
-        std::unique_ptr<struct udev_enumerate, decltype(cleanup_enumerate)>
-            enumerate_guard(enumerate, cleanup_enumerate);
+        std::unique_ptr<struct udev_enumerate, UdevEnumerateDeleter> enumerate_guard(enumerate);
 
         udev_enumerate_add_match_subsystem(enumerate, "tty");
         udev_enumerate_scan_devices(enumerate);
@@ -607,12 +659,7 @@ SerialPortScanner::get_port_details_linux(std::string_view port_name) {
             struct udev_device* dev = udev_device_new_from_syspath(udev, path);
 
             // RAII for device cleanup
-            auto cleanup_device = [](struct udev_device* d) {
-                if (d)
-                    udev_device_unref(d);
-            };
-            std::unique_ptr<struct udev_device, decltype(cleanup_device)>
-                dev_guard(dev, cleanup_device);
+            std::unique_ptr<struct udev_device, UdevDeviceDeleter> dev_guard(dev);
 
             const char* dev_path = udev_device_get_devnode(dev);
             if (dev_path && std::string(dev_path) == port_name) {

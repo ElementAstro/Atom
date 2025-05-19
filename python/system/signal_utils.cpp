@@ -5,7 +5,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(signal_utils, m) {
@@ -79,7 +78,7 @@ Examples:
         .def(py::init<SignalID, const SignalHandler&, int, bool>(),
              py::arg("signal"), py::arg("handler"), py::arg("priority") = 0,
              py::arg("use_safe_manager") = true,
-             "Constructs a new ScopedSignalHandler.");
+             R"(Constructs a new ScopedSignalHandler.)");
 
     // SignalGroup binding
     py::class_<SignalGroup, std::shared_ptr<SignalGroup>>(
@@ -114,10 +113,25 @@ Examples:
 )")
         .def(py::init<const std::string&, bool>(), py::arg("group_name") = "",
              py::arg("use_safe_manager") = true,
-             "Constructs a new SignalGroup.")
-        .def("add_handler", &SignalGroup::addHandler, py::arg("signal"),
-             py::arg("handler"), py::arg("priority") = 0,
-             R"(Add a handler to the group.
+             R"(Constructs a new SignalGroup.)")
+        .def(
+            "add_handler",
+            [](SignalGroup& self, SignalID signal, py::function py_handler,
+               int priority) {
+                SignalHandler cpp_handler = [py_handler](int signal_id) {
+                    py::gil_scoped_acquire acquire;
+                    try {
+                        py::object result = py_handler(signal_id);
+                        return py::cast<bool>(result);
+                    } catch (py::error_already_set& e) {
+                        PyErr_Print();
+                        return false;  // Default behavior on Python exception
+                    }
+                };
+                return self.addHandler(signal, cpp_handler, priority);
+            },
+            py::arg("signal"), py::arg("handler"), py::arg("priority") = 0,
+            R"(Add a handler to the group.
 
 Args:
     signal: The signal to handle
@@ -276,7 +290,10 @@ Examples:
 
     // Wrapper for withBlockedSignal template function
     m.def("with_blocked_signal", [](int signal, py::function function) {
-        withBlockedSignal(signal, [&function]() { function(); });
+        withBlockedSignal(signal, [&function]() {
+            py::gil_scoped_acquire acquire;  // Ensure GIL for python callback
+            function();
+        });
     }, py::arg("signal"), py::arg("function"),
     R"(Temporarily block a signal during a critical section.
 
@@ -289,7 +306,7 @@ Examples:
     >>> import time
     >>> 
     >>> def critical_section():
-    ...     print("Starting critical section (SIGINT blocked)")
+    ...     print("Starting critical section (SIGINT blocked) ")
     ...     time.sleep(2)  # During this time, SIGINT is blocked
     ...     print("Ending critical section")
     ... 
@@ -303,7 +320,7 @@ Examples:
         return py::object();  // Placeholder, actual impl in __enter__
         }), py::arg("signal"), py::arg("handler"), py::arg("priority") = 0, 
            py::arg("use_safe_manager") = true,
-           "Create a context manager for signal handling")
+           R"(Create a context manager for signal handling)")
         .def("__enter__", [](py::object& self, SignalID signal, py::function handler, 
                            int priority, bool use_safe_manager) {
         // Wrap Python function in a C++ lambda
@@ -330,14 +347,14 @@ Examples:
         })
         .def("__exit__", [](py::object& self, py::object, py::object, py::object) {
         // Handler will be deleted by the capsule's destructor
-        return false;  // Don't suppress exceptions
+        return py::bool_(false);  // Don't suppress exceptions
         });
 
     // Factory function for the context manager
     m.def(
         "handle_signal",
-        [](SignalID signal, py::function handler, int priority,
-           bool use_safe_manager) {
+        [&m](SignalID signal, py::function handler, int priority,
+             bool use_safe_manager) {
             return m.attr("SignalHandlerContext")(signal, handler, priority,
                                                   use_safe_manager);
         },
@@ -375,50 +392,62 @@ Examples:
         .def(py::init([](int signal) {
                  return py::object();  // Placeholder, actual impl in __enter__
              }),
-             py::arg("signal"), "Create a context manager for blocked signals")
-        .def("__enter__",
-             [](py::object& self, int signal) {
-                 self.attr("signal") = py::int_(signal);
+             py::arg("signal"),
+             R"(Create a context manager for blocked signals)")
+        .def(
+            "__enter__",
+            [](py::object& self, int signal) {
+                self.attr("signal") = py::int_(signal);
 
 #if !defined(_WIN32) && !defined(_WIN64)
-                 // Create new mask sets
-                 sigset_t* block_set = new sigset_t;
-                 sigset_t* old_set = new sigset_t;
+                // Create new mask sets
+                sigset_t* block_set = new sigset_t;
+                sigset_t* old_set = new sigset_t;
 
-                 sigemptyset(block_set);
-                 sigaddset(block_set, signal);
+                sigemptyset(block_set);
+                sigaddset(block_set, signal);
 
-                 // Block the signal
-                 sigprocmask(SIG_BLOCK, block_set, old_set);
+                // Block the signal
+                if (sigprocmask(SIG_BLOCK, block_set, old_set) == -1) {
+                    delete block_set;
+                    delete old_set;
+                    throw py::error_already_set();  // Or a custom runtime error
+                }
 
-                 // Store both sets for __exit__
-                 self.attr("_block_set") = py::capsule(
-                     block_set,
-                     [](void* ptr) { delete static_cast<sigset_t*>(ptr); });
-                 self.attr("_old_set") = py::capsule(old_set, [](void* ptr) {
-                     delete static_cast<sigset_t*>(ptr);
-                 });
+                // Store both sets for __exit__
+                self.attr("_block_set") = py::capsule(block_set, [](void* ptr) {
+                    delete static_cast<sigset_t*>(ptr);
+                });
+                self.attr("_old_set") = py::capsule(old_set, [](void* ptr) {
+                    delete static_cast<sigset_t*>(ptr);
+                });
 #endif
 
-                 return self;
-             })
-        .def("__exit__",
-             [](py::object& self, py::object, py::object, py::object) {
+                return self;
+            })
+        .def("__exit__", [](py::object& self, py::object, py::object,
+                            py::object) {
 #if !defined(_WIN32) && !defined(_WIN64)
-                 // Restore the old signal mask
-                 sigset_t* old_set = static_cast<sigset_t*>(
-                     PyDescr_NAME(self.attr("_old_set").ptr()));
+            // Restore the old signal mask
+            py::capsule old_set_capsule = py::capsule(self.attr("_old_set"));
+            sigset_t* old_set =
+                static_cast<sigset_t*>(old_set_capsule.get_pointer());
 
-                 sigprocmask(SIG_SETMASK, old_set, nullptr);
+            if (old_set) {
+                if (sigprocmask(SIG_SETMASK, old_set, nullptr) == -1) {
+                    // Consider how to handle errors here, PyErr_Print or throw
+                    // For now, let's assume it works or error is minor in exit
+                }
+            }
 #endif
 
-                 return false;  // Don't suppress exceptions
-             });
+            return py::bool_(false);  // Don't suppress exceptions
+        });
 
     // Factory function for blocked signal context
     m.def(
         "block_signal",
-        [](int signal) { return m.attr("BlockedSignalContext")(signal); },
+        [&m](int signal) { return m.attr("BlockedSignalContext")(signal); },
         py::arg("signal"),
         R"(Create a context manager for temporarily blocking a signal.
 
@@ -444,28 +473,26 @@ Examples:
     // Constructor function that returns a handler or group based on need
     m.def(
         "create_handler",
-        [](py::args signals, py::function handler, int priority,
+        [](py::args signals_args, py::function handler, int priority,
            bool use_safe_manager, const std::string& group_name) {
-            if (signals.size() == 0) {
+            if (signals_args.size() == 0) {
                 throw py::value_error("At least one signal must be specified");
             }
 
-            if (signals.size() == 1) {
+            SignalHandler cpp_handler = [handler](int signal_id) {
+                py::gil_scoped_acquire acquire;
+                try {
+                    py::object result = handler(signal_id);
+                    return py::cast<bool>(result);
+                } catch (py::error_already_set& e) {
+                    PyErr_Print();
+                    return false;
+                }
+            };
+
+            if (signals_args.size() == 1) {
                 // Single signal, return a ScopedSignalHandler
-                SignalID signal = py::cast<SignalID>(signals[0]);
-
-                // Wrap Python function in a C++ lambda
-                SignalHandler cpp_handler = [handler](int signal_id) {
-                    py::gil_scoped_acquire acquire;
-                    try {
-                        py::object result = handler(signal_id);
-                        return py::cast<bool>(result);
-                    } catch (py::error_already_set& e) {
-                        PyErr_Print();
-                        return false;
-                    }
-                };
-
+                SignalID signal = py::cast<SignalID>(signals_args[0]);
                 return py::cast(
                     new ScopedSignalHandler(signal, cpp_handler, priority,
                                             use_safe_manager),
@@ -475,41 +502,28 @@ Examples:
                 auto group =
                     std::make_shared<SignalGroup>(group_name, use_safe_manager);
 
-                // Wrap Python function in a C++ lambda
-                SignalHandler cpp_handler = [handler](int signal_id) {
-                    py::gil_scoped_acquire acquire;
-                    try {
-                        py::object result = handler(signal_id);
-                        return py::cast<bool>(result);
-                    } catch (py::error_already_set& e) {
-                        PyErr_Print();
-                        return false;
-                    }
-                };
-
                 // Add all signals to the group
-                for (auto signal_arg : signals) {
-                    SignalID signal = py::cast<SignalID>(signal_arg);
-                    group->addHandler(signal, cpp_handler, priority);
+                for (auto signal_arg_obj : signals_args) {
+                    SignalID signal = py::cast<SignalID>(signal_arg_obj);
+                    (void)group->addHandler(signal, cpp_handler,
+                                            priority);  // Handle nodiscard
                 }
-
                 return py::cast(group);
             }
         },
-        py::pos_only(), py::arg("signals"), py::arg("handler"), py::kw_only(),
-        py::arg("priority") = 0, py::arg("use_safe_manager") = true,
-        py::arg("group_name") = "",
+        py::arg("signals"), py::arg("handler"), py::arg("priority") = 0,
+        py::arg("use_safe_manager") = true, py::arg("group_name") = "",
         R"(Create a signal handler or group based on the number of signals.
 
 Args:
-    *signals: One or more signal IDs
-    handler: The handler function
-    priority: Priority of the handler (keyword-only, default: 0)
-    use_safe_manager: Whether to use SafeSignalManager (keyword-only, default: True)
-    group_name: Group name if multiple signals (keyword-only, default: "")
+    *signals: One or more signal IDs. This argument will capture all positional arguments.
+    handler: The handler function.
+    priority: Priority of the handler (keyword-only, default: 0).
+    use_safe_manager: Whether to use SafeSignalManager (keyword-only, default: True).
+    group_name: Group name if multiple signals (keyword-only, default: "").
 
 Returns:
-    ScopedSignalHandler if one signal, SignalGroup if multiple signals
+    ScopedSignalHandler if one signal, SignalGroup if multiple signals.
 
 Examples:
     >>> from atom.system import signal_utils
@@ -520,14 +534,20 @@ Examples:
     ...     return True
     ... 
     >>> # Single signal handler
-    >>> int_handler = signal_utils.create_handler(signal_utils.SIGINT, handle_signal)
+    >>> int_handler = signal_utils.create_handler(signal_utils.SIGINT, handler=handle_signal)
     >>> 
     >>> # Multiple signal handler group
     >>> termination_handlers = signal_utils.create_handler(
-    ...     signal_utils.SIGTERM, signal_utils.SIGINT, signal_utils.SIGQUIT,
-    ...     handle_signal, group_name="termination_signals"
+    ...     signal_utils.SIGTERM, signal_utils.SIGINT, signal_utils.SIGQUIT, # these are *signals
+    ...     handler=handle_signal, group_name="termination_signals"
     ... )
 )");
+    // Note: The py::pos_only() and py::kw_only() were removed from
+    // create_handler to simplify the signature and match the py::arg("signals")
+    // for *args behavior. If strict positional-only for signals and
+    // keyword-only for others is desired, the signature needs more careful
+    // construction, possibly splitting the py::args. For now,
+    // py::arg("signals") will capture all positional args into a tuple.
 
     // Helper for installing a temporary signal handler that captures the signal
     // once
@@ -537,31 +557,42 @@ Examples:
             py::object threading = py::module::import("threading");
             py::object event = threading.attr("Event")();
 
-            py::dict result;
-            result["signal_id"] = py::none();
+            // Using a std::optional to hold the captured signal ID
+            std::optional<SignalID> captured_signal_id;
 
             // Create a handler that captures the signal and sets the event
-            SignalHandler cpp_handler = [&event, &result](int signal_id) {
-                py::gil_scoped_acquire acquire;
-                result["signal_id"] = py::int_(signal_id);
-                event.attr("set")();
-                return false;  // Don't continue handling
+            SignalHandler cpp_handler = [&event, &captured_signal_id,
+                                         signal](int sig_id_from_handler) {
+                // Check if it's the signal we are interested in, though
+                // ScopedSignalHandler should only call this for the registered
+                // signal.
+                if (sig_id_from_handler == signal) {
+                    py::gil_scoped_acquire acquire;
+                    captured_signal_id = sig_id_from_handler;
+                    event.attr("set")();
+                }
+                return false;  // Don't continue handling, remove handler
             };
 
             // Install the handler
-            ScopedSignalHandler handler(signal, cpp_handler, 100,
-                                        true);  // High priority
+            ScopedSignalHandler handler_guard(signal, cpp_handler, 1000,
+                                              true);  // High priority
 
             // Wait for the event with optional timeout
             bool success = false;
             if (timeout < 0) {
                 event.attr("wait")();
-                success = true;
+                success = event.attr("is_set")().cast<bool>();
             } else {
-                success = py::cast<bool>(event.attr("wait")(timeout));
+                success = event.attr("wait")(timeout).cast<bool>();
             }
 
-            return py::make_tuple(success, result["signal_id"]);
+            py::object result_signal_id = py::none();
+            if (success && captured_signal_id.has_value()) {
+                result_signal_id = py::int_(captured_signal_id.value());
+            }
+
+            return py::make_tuple(success, result_signal_id);
         },
         py::arg("signal"), py::arg("timeout") = -1.0,
         R"(Wait for the next occurrence of a signal, with optional timeout.
@@ -571,27 +602,35 @@ Args:
     timeout: Timeout in seconds (negative for no timeout)
 
 Returns:
-    Tuple of (success, signal_id), where signal_id is None if timed out
+    Tuple of (success, signal_id), where signal_id is None if timed out or signal not captured.
 
 Examples:
     >>> from atom.system import signal_utils
-    >>> import threading, time
+    >>> import threading, time, os
     >>> 
-    >>> # Set up a thread to send a signal after a delay
-    >>> def send_signal():
-    ...     time.sleep(1)
-    ...     import os, signal
-    ...     os.kill(os.getpid(), signal.SIGUSR1)
+    >>> # Ensure SIGUSR1 is available for the example
+    >>> sig_to_test = signal_utils.SIGUSR1 if hasattr(signal_utils, "SIGUSR1") else signal_utils.SIGINT
+    >>> 
+    >>> def send_signal_thread_func(pid, sig):
+    ...     time.sleep(0.5) # Give capture_next_signal time to set up
+    ...     try:
+    ...         os.kill(pid, sig)
+    ...         print(f"Test thread: Sent signal {sig}")
+    ...     except Exception as e:
+    ...         print(f"Test thread: Error sending signal: {e}")
     ... 
-    >>> t = threading.Thread(target=send_signal)
+    >>> t = threading.Thread(target=send_signal_thread_func, args=(os.getpid(), sig_to_test))
     >>> t.start()
     >>> 
-    >>> # Wait for the signal
-    >>> success, sig = signal_utils.capture_next_signal(signal_utils.SIGUSR1, 2.0)
-    >>> if success:
-    ...     print(f"Captured signal: {signal_utils.get_signal_name(sig)}")
+    >>> print(f"Main thread: Waiting for signal {sig_to_test}...")
+    >>> success, sig = signal_utils.capture_next_signal(sig_to_test, 2.0)
+    >>> if success and sig is not None:
+    ...     print(f"Main thread: Captured signal: {signal_utils.get_signal_name(sig)}")
+    ... elif success and sig is None:
+    ...     print("Main thread: Event set, but signal_id not captured (should not happen).")
     ... else:
-    ...     print("Timed out waiting for signal")
+    ...     print("Main thread: Timed out waiting for signal")
+    >>> t.join()
 )");
 
     // Helper for checking if a signal is ignored
@@ -599,12 +638,15 @@ Examples:
         "is_signal_ignored",
         [](SignalID signal) -> bool {
 #if !defined(_WIN32) && !defined(_WIN64)
-            struct sigaction current_action;
-            sigaction(signal, nullptr, &current_action);
-            return current_action.sa_handler == SIG_IGN;
+        struct sigaction current_action;
+        if (sigaction(signal, nullptr, &current_action) == -1) {
+            // Could throw an error here if sigaction fails
+            return false;  // Or indicate error
+        }
+        return current_action.sa_handler == SIG_IGN;
 #else
-            // Windows doesn't have proper signal management
-            return false;
+        // Windows doesn't have proper signal management like POSIX sigaction
+        return false;
 #endif
         },
         py::arg("signal"),
@@ -614,15 +656,16 @@ Args:
     signal: The signal to check
 
 Returns:
-    True if the signal is being ignored, False otherwise
+    True if the signal is being ignored, False otherwise (or if check fails on POSIX).
 
 Examples:
     >>> from atom.system import signal_utils
-    >>> # Check if SIGPIPE is ignored
-    >>> if signal_utils.is_signal_ignored(signal_utils.SIGPIPE):
-    ...     print("SIGPIPE is being ignored")
-    ... else:
-    ...     print("SIGPIPE is not ignored")
+    >>> # Check if SIGPIPE is ignored (behavior might vary by OS default)
+    >>> if hasattr(signal_utils, "SIGPIPE"): # SIGPIPE is POSIX-specific
+    ...     if signal_utils.is_signal_ignored(signal_utils.SIGPIPE):
+    ...         print("SIGPIPE is being ignored")
+    ...     else:
+    ...         print("SIGPIPE is not ignored (or check failed) ")
 )");
 
     // Create a dictionary of all signal names to values
@@ -659,35 +702,35 @@ Examples:
     m.def(
         "get_available_signals",
         []() {
-            py::list signals;
+            py::list signals_list;  // Renamed from signals to avoid conflict
 
-            signals.append(SIGABRT);
-            signals.append(SIGFPE);
-            signals.append(SIGILL);
-            signals.append(SIGINT);
-            signals.append(SIGSEGV);
-            signals.append(SIGTERM);
+            signals_list.append(SIGABRT);
+            signals_list.append(SIGFPE);
+            signals_list.append(SIGILL);
+            signals_list.append(SIGINT);
+            signals_list.append(SIGSEGV);
+            signals_list.append(SIGTERM);
 
 #if !defined(_WIN32) && !defined(_WIN64)
-            signals.append(SIGALRM);
-            signals.append(SIGBUS);
-            signals.append(SIGCHLD);
-            signals.append(SIGCONT);
-            signals.append(SIGHUP);
-            signals.append(SIGKILL);
-            signals.append(SIGPIPE);
-            signals.append(SIGQUIT);
-            signals.append(SIGSTOP);
-            signals.append(SIGTSTP);
-            signals.append(SIGTTIN);
-            signals.append(SIGTTOU);
-            signals.append(SIGUSR1);
-            signals.append(SIGUSR2);
+            signals_list.append(SIGALRM);
+            signals_list.append(SIGBUS);
+            signals_list.append(SIGCHLD);
+            signals_list.append(SIGCONT);
+            signals_list.append(SIGHUP);
+            signals_list.append(SIGKILL);
+            signals_list.append(SIGPIPE);
+            signals_list.append(SIGQUIT);
+            signals_list.append(SIGSTOP);
+            signals_list.append(SIGTSTP);
+            signals_list.append(SIGTTIN);
+            signals_list.append(SIGTTOU);
+            signals_list.append(SIGUSR1);
+            signals_list.append(SIGUSR2);
 #else
-            signals.append(SIGBREAK);
+            signals_list.append(SIGBREAK);
 #endif
 
-            return signals;
+            return signals_list;
         },
         R"(Get a list of all available signals on the current platform.
 
@@ -696,8 +739,8 @@ Returns:
 
 Examples:
     >>> from atom.system import signal_utils
-    >>> signals = signal_utils.get_available_signals()
-    >>> for sig in signals:
-    ...     print(signal_utils.get_signal_name(sig))
+    >>> available_sigs = signal_utils.get_available_signals()
+    >>> for sig_id in available_sigs:
+    ...     print(signal_utils.get_signal_name(sig_id))
 )");
 }

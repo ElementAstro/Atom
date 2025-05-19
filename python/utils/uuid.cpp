@@ -87,18 +87,14 @@ Examples:
             [](std::string_view str) {
                 auto result = atom::utils::UUID::fromString(str);
                 if (!result.has_value()) {
-                    switch (static_cast<int>(result.error())) {
-                        case static_cast<int>(
-                            atom::utils::UuidError::InvalidFormat):
+                    switch (result.error().error()) { // Changed: Access the UuidError enum
+                        case atom::utils::UuidError::InvalidFormat:
                             throw py::value_error("Invalid UUID format");
-                        case static_cast<int>(
-                            atom::utils::UuidError::InvalidLength):
+                        case atom::utils::UuidError::InvalidLength:
                             throw py::value_error("Invalid UUID length");
-                        case static_cast<int>(
-                            atom::utils::UuidError::InvalidCharacter):
+                        case atom::utils::UuidError::InvalidCharacter:
                             throw py::value_error("Invalid character in UUID");
-                        case static_cast<int>(
-                            atom::utils::UuidError::ConversionFailed):
+                        case atom::utils::UuidError::ConversionFailed:
                             throw py::value_error("Failed to convert UUID");
                         default:
                             throw std::runtime_error(

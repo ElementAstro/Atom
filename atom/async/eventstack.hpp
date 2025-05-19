@@ -19,6 +19,7 @@ Description: A thread-safe stack data structure for managing events.
 #include <atomic>
 #include <concepts>
 #include <exception>
+#include <functional>  // Required for std::function
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
@@ -849,10 +850,18 @@ auto EventStack<T>::getEventsView() const noexcept -> std::span<const T> {
     // design for lock-free.
     return std::span<const T>();
 #else
-    std::shared_lock lock(mtx_);
-    // For std::vector<bool>, .data() is deleted, but span can be constructed
-    // from iterators.
-    return std::span<const T>(events_.begin(), events_.end());
+    if constexpr (std::is_same_v<T, bool>) {
+        // std::vector<bool>::iterator is not a contiguous_iterator in the C++20
+        // sense, and std::to_address cannot be used to get a bool* for it.
+        // Thus, std::span cannot be directly constructed from its iterators
+        // in the typical way that guarantees a view over contiguous bools.
+        // Returning an empty span to avoid compilation errors and indicate this
+        // limitation.
+        return std::span<const T>();
+    } else {
+        std::shared_lock lock(mtx_);
+        return std::span<const T>(events_.begin(), events_.end());
+    }
 #endif
 }
 
@@ -898,23 +907,24 @@ void EventStack<T>::transformEvents(Func&& transformFunc) {
 #if ATOM_ASYNC_USE_LOCKFREE
         std::vector<T> elements = drainStack();
         try {
-            // For bool, handle std::vector<bool>::reference explicitly if
-            // transformFunc expects bool&
+            // Wrap the transformFunc in std::function to help with template
+            // deduction
+            std::function<void(T&)> wrapped_func = transformFunc;
             if constexpr (std::is_same_v<T, bool>) {
                 Parallel::for_each(
                     elements.begin(), elements.end(),
-                    [&transformFunc](
+                    // Capture the std::function by copy for the inner lambda
+                    [wrapped_func_copy = wrapped_func](
                         typename std::vector<T>::reference event_ref) {
-                        bool val = event_ref;  // Convert proxy to bool
-                        transformFunc(val);    // Call user function with bool&
-                                               // (to a local bool)
+                        bool val = event_ref;    // Convert proxy to bool
+                        wrapped_func_copy(val);  // Call user function with
+                                                 // bool& (to a local bool)
                         event_ref = val;  // Assign back from the (potentially
                                           // modified) local bool
                     });
             } else {
-                Parallel::for_each(
-                    elements.begin(), elements.end(),
-                    transformFunc);  // Pass transformFunc as lvalue
+                Parallel::for_each(elements.begin(), elements.end(),
+                                   wrapped_func);
             }
         } catch (...) {
             refillStack(elements);  // Refill on error
@@ -923,22 +933,22 @@ void EventStack<T>::transformEvents(Func&& transformFunc) {
         refillStack(elements);  // Refill after processing
 #else
         std::unique_lock lock(mtx_);
-        // For bool, handle std::vector<bool>::reference explicitly if
-        // transformFunc expects bool&
+        // Wrap the transformFunc in std::function to help with template
+        // deduction
+        std::function<void(T&)> wrapped_func = transformFunc;
         if constexpr (std::is_same_v<T, bool>) {
             // Manual loop or a Parallel::for_each that handles proxy references
             // correctly. Assuming Parallel::for_each might not handle
             // std::vector<bool>::reference well with a bool& functor.
             for (typename std::vector<T>::reference event_ref : events_) {
                 bool val = event_ref;  // Convert proxy to bool
-                transformFunc(
+                wrapped_func(
                     val);  // Call user function with bool& (to a local bool)
                 event_ref = val;  // Assign back from the (potentially modified)
                                   // local bool
             }
         } else {
-            Parallel::for_each(events_.begin(), events_.end(),
-                               transformFunc);  // Pass transformFunc as lvalue
+            Parallel::for_each(events_.begin(), events_.end(), wrapped_func);
         }
 #endif
     } catch (const std::exception& e) {

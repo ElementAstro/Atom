@@ -1,7 +1,6 @@
 #include "gpio.hpp"
 
 #include <atomic>
-#include <csignal>
 #include <cstring>
 #include <mutex>
 #include <thread>
@@ -672,7 +671,14 @@ public:
         : pin_(std::move(pin)),
           direction_(Direction::OUTPUT),
           edge_(Edge::NONE),
-          pullMode_(PullMode::NONE) {
+          pullMode_(PullMode::NONE),
+          pwmActive_(false),
+          pwmFrequency_(0),
+          pwmDutyCycle_(0),
+          pwmMode_(PwmMode::HARDWARE),
+          interruptCounterActive_(false),
+          interruptCount_(0),
+          debounceActive_(false) {
         exportGPIO();
         setGPIODirection("out");
     }
@@ -681,7 +687,14 @@ public:
         : pin_(std::move(pin)),
           direction_(direction),
           edge_(Edge::NONE),
-          pullMode_(PullMode::NONE) {
+          pullMode_(PullMode::NONE),
+          pwmActive_(false),
+          pwmFrequency_(0),
+          pwmDutyCycle_(0),
+          pwmMode_(PwmMode::HARDWARE),
+          interruptCounterActive_(false),
+          interruptCount_(0),
+          debounceActive_(false) {
         exportGPIO();
         setGPIODirection(directionToString(direction));
 
@@ -761,6 +774,260 @@ public:
         setValue(originalValue);
     }
 
+    // 新增PWM功能实现
+    bool setPwm(double frequency, double dutyCycle, PwmMode mode) {
+        // 检查参数
+        if (frequency <= 0 || dutyCycle < 0 || dutyCycle > 1.0) {
+            LOG_F(ERROR,
+                  "Invalid PWM parameters: frequency=%.2fHz, dutyCycle=%.2f",
+                  frequency, dutyCycle);
+            return false;
+        }
+
+        // 确保是输出模式
+        if (direction_ != Direction::OUTPUT) {
+            LOG_F(ERROR, "Cannot setup PWM on input GPIO pin %s", pin_.c_str());
+            return false;
+        }
+
+        // 如果已有PWM运行，先停止
+        if (pwmActive_) {
+            stopPwm();
+        }
+
+        pwmFrequency_ = frequency;
+        pwmDutyCycle_ = dutyCycle;
+        pwmMode_ = (mode == GPIO::PwmMode::HARDWARE) ? PwmMode::HARDWARE
+                                                     : PwmMode::SOFTWARE;
+
+#ifdef _WIN32
+        // Windows模拟PWM (总是使用软件PWM)
+        return startSoftwarePwm();
+#else
+        // Linux上尝试硬件PWM，如果不可用则回退到软件PWM
+        if (mode == PwmMode::HARDWARE && tryHardwarePwm()) {
+            LOG_F(INFO, "Hardware PWM started on pin %s: %.2fHz, %.2f%%",
+                  pin_.c_str(), frequency, dutyCycle * 100);
+            return true;
+        } else if (mode == PwmMode::SOFTWARE || mode == PwmMode::HARDWARE) {
+            // 硬件PWM不可用或用户请求软件PWM
+            return startSoftwarePwm();
+        }
+#endif
+        return false;
+    }
+
+    bool updatePwmDutyCycle(double dutyCycle) {
+        if (!pwmActive_) {
+            LOG_F(ERROR, "Cannot update duty cycle, PWM not active on pin %s",
+                  pin_.c_str());
+            return false;
+        }
+
+        if (dutyCycle < 0 || dutyCycle > 1.0) {
+            LOG_F(ERROR, "Invalid duty cycle: %.2f", dutyCycle);
+            return false;
+        }
+
+        pwmDutyCycle_ = dutyCycle;
+
+#ifdef _WIN32
+        // Windows模拟实现中不需要特殊处理，软件PWM线程会自动使用新的dutyCycle
+        return true;
+#else
+        if (pwmMode_ == PwmMode::HARDWARE) {
+            // 更新硬件PWM占空比
+            std::string pwmPath = std::string(GPIO_PATH) + "/pwm" + pin_;
+            std::string dutyCyclePath = pwmPath + "/duty_cycle";
+
+            try {
+                int period = static_cast<int>(
+                    1.0e9 / pwmFrequency_);  // 周期以纳秒为单位
+                int onTime =
+                    static_cast<int>(period * dutyCycle);  // 高电平时间
+
+                std::ofstream fs(dutyCyclePath);
+                if (!fs) {
+                    LOG_F(ERROR, "Failed to open %s for writing",
+                          dutyCyclePath.c_str());
+                    return false;
+                }
+                fs << onTime;
+                return true;
+            } catch (const std::exception& e) {
+                LOG_F(ERROR, "Failed to update hardware PWM duty cycle: %s",
+                      e.what());
+                return false;
+            }
+        }
+        // 软件PWM会自动使用新的dutyCycle
+#endif
+        return true;
+    }
+
+    void stopPwm() {
+        if (!pwmActive_) {
+            return;
+        }
+
+        LOG_F(INFO, "Stopping PWM on pin %s", pin_.c_str());
+
+#ifndef _WIN32
+        if (pwmMode_ == PwmMode::HARDWARE) {
+            // 关闭硬件PWM
+            try {
+                std::string pwmPath = std::string(GPIO_PATH) + "/pwm" + pin_;
+                std::string enablePath = pwmPath + "/enable";
+
+                std::ofstream fs(enablePath);
+                if (fs) {
+                    fs << "0";
+                }
+            } catch (const std::exception& e) {
+                LOG_F(ERROR, "Error stopping hardware PWM: %s", e.what());
+            }
+        }
+#endif
+
+        // 停止软件PWM线程
+        if (pwmThread_.joinable()) {
+            pwmThreadRunning_ = false;
+            pwmThread_.join();
+        }
+
+        pwmActive_ = false;
+    }
+
+#ifndef _WIN32
+    bool tryHardwarePwm() {
+        // 检查硬件PWM是否可用并尝试配置
+        std::string pwmPath = std::string(GPIO_PATH) + "/pwm" + pin_;
+
+        // 检查是否有PWM硬件支持
+        if (!std::filesystem::exists(pwmPath)) {
+            LOG_F(INFO, "Hardware PWM not available for pin %s", pin_.c_str());
+            return false;
+        }
+
+        try {
+            // 配置硬件PWM
+            std::string periodPath = pwmPath + "/period";
+            std::string dutyCyclePath = pwmPath + "/duty_cycle";
+            std::string enablePath = pwmPath + "/enable";
+
+            // 先禁用PWM
+            std::ofstream enableFs(enablePath);
+            if (!enableFs) {
+                LOG_F(ERROR, "Failed to open %s for writing",
+                      enablePath.c_str());
+                return false;
+            }
+            enableFs << "0";
+            enableFs.close();
+
+            // 设置频率(周期)，单位为纳秒
+            int period = static_cast<int>(1.0e9 / pwmFrequency_);
+            std::ofstream periodFs(periodPath);
+            if (!periodFs) {
+                LOG_F(ERROR, "Failed to open %s for writing",
+                      periodPath.c_str());
+                return false;
+            }
+            periodFs << period;
+            periodFs.close();
+
+            // 设置占空比
+            int onTime = static_cast<int>(period * pwmDutyCycle_);
+            std::ofstream dutyFs(dutyCyclePath);
+            if (!dutyFs) {
+                LOG_F(ERROR, "Failed to open %s for writing",
+                      dutyCyclePath.c_str());
+                return false;
+            }
+            dutyFs << onTime;
+            dutyFs.close();
+
+            // 启用PWM
+            enableFs.open(enablePath);
+            if (!enableFs) {
+                LOG_F(ERROR, "Failed to open %s for writing",
+                      enablePath.c_str());
+                return false;
+            }
+            enableFs << "1";
+
+            pwmActive_ = true;
+            return true;
+        } catch (const std::exception& e) {
+            LOG_F(ERROR, "Failed to setup hardware PWM: %s", e.what());
+            return false;
+        }
+    }
+#endif
+
+    bool startSoftwarePwm() {
+        // 启动软件PWM
+        if (pwmActive_ && pwmThread_.joinable()) {
+            LOG_F(ERROR, "PWM already active on pin %s", pin_.c_str());
+            return false;
+        }
+
+        pwmThreadRunning_ = true;
+        pwmThread_ = std::thread([this]() {
+            LOG_F(INFO, "Software PWM started on pin %s: %.2fHz, %.2f%%",
+                  pin_.c_str(), pwmFrequency_, pwmDutyCycle_ * 100);
+
+            // 计算周期时间（微秒）
+            const auto periodUs =
+                static_cast<int64_t>(1000000.0 / pwmFrequency_);
+
+            while (pwmThreadRunning_) {
+                auto startTime = std::chrono::steady_clock::now();
+
+                // 计算高电平持续时间（微秒）
+                auto highTimeUs =
+                    static_cast<int64_t>(periodUs * pwmDutyCycle_);
+
+                // 如果占空比为0或1，不需要切换状态
+                if (pwmDutyCycle_ <= 0.0) {
+                    setValue(false);
+                    std::this_thread::sleep_for(
+                        std::chrono::microseconds(periodUs));
+                    continue;
+                } else if (pwmDutyCycle_ >= 1.0) {
+                    setValue(true);
+                    std::this_thread::sleep_for(
+                        std::chrono::microseconds(periodUs));
+                    continue;
+                }
+
+                // 设置高电平
+                setValue(true);
+                std::this_thread::sleep_for(
+                    std::chrono::microseconds(highTimeUs));
+
+                // 设置低电平
+                setValue(false);
+
+                // 计算剩余低电平时间
+                auto elapsedTime =
+                    std::chrono::duration_cast<std::chrono::microseconds>(
+                        std::chrono::steady_clock::now() - startTime)
+                        .count();
+                auto lowTimeUs = periodUs - elapsedTime;
+
+                if (lowTimeUs > 0) {
+                    std::this_thread::sleep_for(
+                        std::chrono::microseconds(lowTimeUs));
+                }
+            }
+        });
+
+        pwmActive_ = true;
+        pwmMode_ = PwmMode::SOFTWARE;
+        return true;
+    }
+
     bool onValueChange(std::function<void(bool)> callback) {
         if (direction_ != Direction::INPUT) {
             THROW_RUNTIME_ERROR(
@@ -795,6 +1062,79 @@ public:
         GPIOCallbackManager::getInstance().unregisterCallback(pin_);
     }
 
+    // 按钮防抖功能实现
+    bool setupButtonDebounce(std::function<void()> callback,
+                             unsigned int debounceTimeMs) {
+        if (direction_ != Direction::INPUT) {
+            LOG_F(ERROR, "Button debounce only works on input GPIO pins");
+            return false;
+        }
+
+        if (debounceActive_) {
+            LOG_F(ERROR, "Button debounce already active on pin %s",
+                  pin_.c_str());
+            return false;
+        }
+
+        // 设置边缘检测(通常按钮需要检测下降沿或上升沿)
+        setEdge(Edge::BOTH);
+
+        // 创建防抖回调
+        debounceActive_ = true;
+        debouncePeriodMs_ = debounceTimeMs;
+        lastDebounceTime_ = std::chrono::steady_clock::now();
+
+        // 注册防抖回调
+        return onValueChange([this, callback](bool state) {
+            // 只在按钮被按下(低电平)时触发
+            if (state)
+                return;
+
+            auto now = std::chrono::steady_clock::now();
+            auto elapsedMs =
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    now - lastDebounceTime_)
+                    .count();
+
+            if (elapsedMs > debouncePeriodMs_) {
+                lastDebounceTime_ = now;
+                callback();  // 触发用户回调
+            }
+        });
+    }
+
+    // 中断计数器功能实现
+    bool setupInterruptCounter(Edge edge) {
+        if (direction_ != Direction::INPUT) {
+            LOG_F(ERROR, "Interrupt counter only works on input GPIO pins");
+            return false;
+        }
+
+        // 设置边缘检测
+        setEdge(edge);
+
+        // 重置计数器
+        interruptCount_ = 0;
+        interruptCounterActive_ = true;
+
+        // 注册回调以增加计数器
+        return onValueChange([this](bool /*state*/) {
+            if (interruptCounterActive_) {
+                interruptCount_++;
+            }
+        });
+    }
+
+    uint64_t getInterruptCount(bool resetAfterReading) {
+        uint64_t count = interruptCount_;
+        if (resetAfterReading) {
+            interruptCount_ = 0;
+        }
+        return count;
+    }
+
+    void resetInterruptCount() { interruptCount_ = 0; }
+
     static void notifyOnChange(const std::string& pin,
                                const std::function<void(bool)>& callback) {
         GPIOCallbackManager::getInstance().registerCallback(pin, callback);
@@ -805,6 +1145,17 @@ private:
     Direction direction_;
     Edge edge_;
     PullMode pullMode_;
+    bool pwmActive_;
+    int pwmFrequency_;
+    int pwmDutyCycle_;
+    enum class PwmMode { HARDWARE, SOFTWARE } pwmMode_;
+    bool interruptCounterActive_;
+    int interruptCount_;
+    bool debounceActive_;
+    std::thread pwmThread_;
+    std::atomic<bool> pwmThreadRunning_;
+    unsigned int debouncePeriodMs_;
+    std::chrono::steady_clock::time_point lastDebounceTime_;
 
 #ifdef _WIN32
     // Windows 模拟的 GPIO 状态
@@ -949,6 +1300,34 @@ void GPIO::pulse(bool value, std::chrono::milliseconds duration) {
     impl_->pulse(value, duration);
 }
 
+// 新增的PWM相关方法实现
+bool GPIO::setPwm(double frequency, double dutyCycle, PwmMode mode) {
+    return impl_->setPwm(frequency, dutyCycle, mode);
+}
+
+bool GPIO::updatePwmDutyCycle(double dutyCycle) {
+    return impl_->updatePwmDutyCycle(dutyCycle);
+}
+
+void GPIO::stopPwm() { impl_->stopPwm(); }
+
+// 新增的按钮防抖功能
+bool GPIO::setupButtonDebounce(std::function<void()> callback,
+                               unsigned int debounceTimeMs) {
+    return impl_->setupButtonDebounce(std::move(callback), debounceTimeMs);
+}
+
+// 新增的中断计数器功能
+bool GPIO::setupInterruptCounter(Edge edge) {
+    return impl_->setupInterruptCounter(edge);
+}
+
+uint64_t GPIO::getInterruptCount(bool resetAfterReading) {
+    return impl_->getInterruptCount(resetAfterReading);
+}
+
+void GPIO::resetInterruptCount() { impl_->resetInterruptCount(); }
+
 bool GPIO::onValueChange(std::function<void(bool)> callback) {
     return impl_->onValueChange(std::move(callback));
 }
@@ -963,6 +1342,87 @@ void GPIO::notifyOnChange(const std::string& pin,
                           std::function<void(bool)> callback) {
     Impl::notifyOnChange(pin, std::move(callback));
 }
+
+// ShiftRegister类实现
+GPIO::ShiftRegister::ShiftRegister(const std::string& dataPin,
+                                   const std::string& clockPin,
+                                   const std::string& latchPin, uint8_t numBits)
+    : dataPin_(std::make_unique<GPIO>(dataPin, GPIO::Direction::OUTPUT, false)),
+      clockPin_(
+          std::make_unique<GPIO>(clockPin, GPIO::Direction::OUTPUT, false)),
+      latchPin_(
+          std::make_unique<GPIO>(latchPin, GPIO::Direction::OUTPUT, false)),
+      numBits_(numBits),
+      state_(0) {
+    // 确保所有引脚都初始化为低电平
+    dataPin_->setValue(false);
+    clockPin_->setValue(false);
+    latchPin_->setValue(false);
+}
+
+GPIO::ShiftRegister::~ShiftRegister() = default;
+
+void GPIO::ShiftRegister::shiftOut(uint32_t data, bool msbFirst) {
+    // 保存新状态
+    state_ = data;
+
+    // 拉低锁存引脚，准备发送数据
+    latchPin_->setValue(false);
+
+    // 计算需要移位的位数
+    uint8_t bitsToShift = numBits_ <= 32 ? numBits_ : 32;
+
+    // 移出数据位
+    for (uint8_t i = 0; i < bitsToShift; i++) {
+        // 确定当前要发送的位
+        uint8_t bitPos = msbFirst ? (bitsToShift - 1 - i) : i;
+        bool bitValue = ((data >> bitPos) & 0x01) != 0;
+
+        // 设置数据引脚
+        dataPin_->setValue(bitValue);
+
+        // 时钟上升沿，锁存数据
+        clockPin_->setValue(true);
+        // 短暂延时确保数据稳定
+        std::this_thread::sleep_for(std::chrono::microseconds(1));
+
+        // 时钟下降沿
+        clockPin_->setValue(false);
+        std::this_thread::sleep_for(std::chrono::microseconds(1));
+    }
+
+    // 拉高锁存引脚，将数据输出到端口
+    latchPin_->setValue(true);
+    std::this_thread::sleep_for(std::chrono::microseconds(1));
+    latchPin_->setValue(false);
+}
+
+void GPIO::ShiftRegister::setBit(uint8_t position, bool value) {
+    if (position >= numBits_) {
+        LOG_F(ERROR, "Bit position %u out of range for %u-bit shift register",
+              position, numBits_);
+        return;
+    }
+
+    uint32_t newState = state_;
+
+    if (value) {
+        // 设置指定位
+        newState |= (1UL << position);
+    } else {
+        // 清除指定位
+        newState &= ~(1UL << position);
+    }
+
+    // 如果状态发生了变化，就更新移位寄存器
+    if (newState != state_) {
+        shiftOut(newState, true);
+    }
+}
+
+uint32_t GPIO::ShiftRegister::getState() const { return state_; }
+
+void GPIO::ShiftRegister::clear() { shiftOut(0, true); }
 
 // Implementation of GPIOGroup
 GPIO::GPIOGroup::GPIOGroup(const std::vector<std::string>& pins) {

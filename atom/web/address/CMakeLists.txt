@@ -12,6 +12,9 @@ cmake_minimum_required(VERSION 3.20)
 file(GLOB ADDRESS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 file(GLOB ADDRESS_HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
 
+# 打印找到的源文件，方便调试
+message(STATUS "Found address sources: ${ADDRESS_SOURCES}")
+
 # 添加这些文件到父作用域，供主库包含
 set(ADDRESS_SOURCES ${ADDRESS_SOURCES} PARENT_SCOPE)
 set(ADDRESS_HEADERS ${ADDRESS_HEADERS} PARENT_SCOPE)

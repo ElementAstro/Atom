@@ -1,19 +1,16 @@
--- xmake.lua for Atom-Web-Time
--- This project is licensed under the terms of the GPL3 license.
---
--- Project Name: Atom-Web-Time
--- Description: Time Management API
+-- filepath: d:\msys64\home\qwdma\Atom\atom\web\time\xmake.lua
+-- xmake configuration for Atom-Web-Time submodule
 -- Author: Max Qian
 -- License: GPL3
 
--- Sources
+-- Define source files
 local time_sources = {
     "time_manager.cpp",
     "time_manager_impl.cpp",
     "time_utils.cpp"
 }
 
--- Headers
+-- Define header files
 local time_headers = {
     "time_manager.hpp",
     "time_manager_impl.hpp",
@@ -24,16 +21,27 @@ local time_headers = {
 -- Build Object Library
 target("atom-web-time-object")
     set_kind("object")
-    add_files(time_headers, {public = true})
-    add_files(time_sources, {public = false})
+    
+    -- Add files
+    add_headerfiles(table.unpack(time_headers))
+    add_files(table.unpack(time_sources))
+    
+    -- Add dependencies
     add_packages("loguru")
-    add_includedirs("$(projectdir)/atom")
-
+    
+    -- Add include directories
+    add_includedirs("$(projectdir)/atom", {public = true})
+    
+    -- Platform-specific settings
     if is_plat("windows") then
         add_syslinks("wsock32", "ws2_32")
     end
+    
+    -- Set C++ standard
+    set_languages("c++20")
+target_end()
 
--- Register sources and headers with parent
+-- Register sources and headers for parent module
 function get_time_sources()
     return time_sources
 end

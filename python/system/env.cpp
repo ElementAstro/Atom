@@ -218,7 +218,7 @@ Examples:
                 }
                 return py::cast(self.getOptional<std::string>(key));
             },
-            py::arg("key"), py::arg("type_hint") = py::type::of<py::str>(),
+            py::arg("key"), py::arg("type_hint") = py::str().get_type(),
             R"(Gets the value associated with a key as an optional type.
 
 Args:

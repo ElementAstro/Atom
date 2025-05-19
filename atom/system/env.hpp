@@ -21,6 +21,7 @@ Description: Environment variable management
 #include <memory>
 #include <optional>
 #include <sstream>  // For string conversion in convertFromString
+#include <tuple>    // For std::tuple return type
 #include <type_traits>
 
 #include "atom/containers/high_performance.hpp"  // Include high performance containers
@@ -34,6 +35,24 @@ template <typename K, typename V>
 using HashMap = atom::containers::HashMap<K, V>;
 template <typename T>
 using Vector = atom::containers::Vector<T>;
+
+/**
+ * @brief 环境变量格式枚举
+ */
+enum class VariableFormat {
+    UNIX,     // ${VAR} or $VAR format
+    WINDOWS,  // %VAR% format
+    AUTO      // Auto-detect based on platform
+};
+
+/**
+ * @brief 环境变量持久化级别枚举
+ */
+enum class PersistLevel {
+    PROCESS,  // 仅当前进程有效
+    USER,     // 用户级别持久化
+    SYSTEM    // 系统级别持久化（需要管理员权限）
+};
 
 /**
  * @brief Environment variable class for managing program environment variables,
@@ -270,6 +289,193 @@ public:
      */
     ATOM_NODISCARD auto getAllArgs() const -> HashMap<String, String>;
 
+    /**
+     * @brief 获取用户主目录
+     * @return 返回用户主目录的路径
+     */
+    ATOM_NODISCARD static auto getHomeDir() -> String;
+
+    /**
+     * @brief 获取系统临时目录
+     * @return 返回系统临时目录的路径
+     */
+    ATOM_NODISCARD static auto getTempDir() -> String;
+
+    /**
+     * @brief 获取系统配置目录
+     * @return 返回系统配置目录的路径
+     */
+    ATOM_NODISCARD static auto getConfigDir() -> String;
+
+    /**
+     * @brief 获取用户数据目录
+     * @return 返回用户数据目录的路径
+     */
+    ATOM_NODISCARD static auto getDataDir() -> String;
+
+    /**
+     * @brief 扩展字符串中的环境变量引用
+     * @param str 包含环境变量引用的字符串（如 "$HOME/file" 或
+     * "%PATH%;newpath"）
+     * @param format 环境变量格式，可以是 Unix 风格 (${VAR}) 或 Windows 风格
+     * (%VAR%)
+     * @return 扩展后的字符串
+     */
+    ATOM_NODISCARD static auto expandVariables(
+        const String& str, VariableFormat format = VariableFormat::AUTO)
+        -> String;
+
+    /**
+     * @brief 持久化设置环境变量
+     * @param key 环境变量名称
+     * @param val 环境变量值
+     * @param level 持久化级别
+     * @return 是否成功持久化
+     */
+    static auto setPersistentEnv(const String& key, const String& val,
+                                 PersistLevel level = PersistLevel::USER)
+        -> bool;
+
+    /**
+     * @brief 持久化删除环境变量
+     * @param key 环境变量名称
+     * @param level 持久化级别
+     * @return 是否成功删除
+     */
+    static auto deletePersistentEnv(const String& key,
+                                    PersistLevel level = PersistLevel::USER)
+        -> bool;
+
+    /**
+     * @brief 向 PATH 环境变量添加路径
+     * @param path 要添加的路径
+     * @param prepend 是否添加到开头（默认添加到末尾）
+     * @return 是否成功添加
+     */
+    static auto addToPath(const String& path, bool prepend = false) -> bool;
+
+    /**
+     * @brief 从 PATH 环境变量中移除路径
+     * @param path 要移除的路径
+     * @return 是否成功移除
+     */
+    static auto removeFromPath(const String& path) -> bool;
+
+    /**
+     * @brief 检查路径是否在 PATH 环境变量中
+     * @param path 要检查的路径
+     * @return 是否在 PATH 中
+     */
+    ATOM_NODISCARD static auto isInPath(const String& path) -> bool;
+
+    /**
+     * @brief 获取 PATH 环境变量中的所有路径
+     * @return 包含所有路径的向量
+     */
+    ATOM_NODISCARD static auto getPathEntries() -> Vector<String>;
+
+    /**
+     * @brief 比较两个环境变量集合的差异
+     * @param env1 第一个环境变量集合
+     * @param env2 第二个环境变量集合
+     * @return 差异内容，包括新增、删除和修改的变量
+     */
+    ATOM_NODISCARD static auto diffEnvironments(
+        const HashMap<String, String>& env1,
+        const HashMap<String, String>& env2)
+        -> std::tuple<HashMap<String, String>,   // 新增的变量
+                      HashMap<String, String>,   // 删除的变量
+                      HashMap<String, String>>;  // 修改的变量
+
+    /**
+     * @brief 合并两个环境变量集合
+     * @param baseEnv 基础环境变量集合
+     * @param overlayEnv 覆盖的环境变量集合
+     * @param override 冲突时是否覆盖基础环境变量
+     * @return 合并后的环境变量集合
+     */
+    ATOM_NODISCARD static auto mergeEnvironments(
+        const HashMap<String, String>& baseEnv,
+        const HashMap<String, String>& overlayEnv, bool override = true)
+        -> HashMap<String, String>;
+
+    /**
+     * @brief 获取系统名称
+     * @return 系统名称（如 "Windows"、"Linux"、"MacOS"）
+     */
+    ATOM_NODISCARD static auto getSystemName() -> String;
+
+    /**
+     * @brief 获取系统架构
+     * @return 系统架构（如 "x86_64"、"arm64"）
+     */
+    ATOM_NODISCARD static auto getSystemArch() -> String;
+
+    /**
+     * @brief 获取当前用户名
+     * @return 当前用户名
+     */
+    ATOM_NODISCARD static auto getCurrentUser() -> String;
+
+    /**
+     * @brief 获取主机名
+     * @return 主机名
+     */
+    ATOM_NODISCARD static auto getHostName() -> String;
+
+    /**
+     * @brief 环境变量更改通知回调
+     */
+    using EnvChangeCallback = std::function<void(
+        const String& key, const String& oldValue, const String& newValue)>;
+
+    /**
+     * @brief 注册环境变量更改通知
+     * @param callback 回调函数
+     * @return 通知ID，用于注销
+     */
+    static auto registerChangeNotification(EnvChangeCallback callback)
+        -> size_t;
+
+    /**
+     * @brief 注销环境变量更改通知
+     * @param id 通知ID
+     * @return 是否成功注销
+     */
+    static auto unregisterChangeNotification(size_t id) -> bool;
+
+    /**
+     * @brief 临时环境变量作用域类
+     */
+    class ScopedEnv {
+    public:
+        /**
+         * @brief 构造函数，设置临时环境变量
+         * @param key 环境变量名称
+         * @param value 环境变量值
+         */
+        ScopedEnv(const String& key, const String& value);
+
+        /**
+         * @brief 析构函数，恢复环境变量原值
+         */
+        ~ScopedEnv();
+
+    private:
+        String mKey;
+        String mOriginalValue;
+        bool mHadValue;
+    };
+
+    /**
+     * @brief 创建一个临时环境变量作用域
+     * @param key 环境变量名称
+     * @param value 环境变量值
+     * @return 作用域对象的共享指针
+     */
+    static auto createScopedEnv(const String& key, const String& value)
+        -> std::shared_ptr<ScopedEnv>;
+
 #if ATOM_ENABLE_DEBUG
     /**
      * @brief Prints all environment variables.
@@ -285,9 +491,27 @@ private:
     class Impl;
     std::shared_ptr<Impl> impl_;
 
+    // 存储环境变量更改通知回调的静态成员
+    static HashMap<size_t, EnvChangeCallback> sChangeCallbacks;
+    static std::mutex sCallbackMutex;
+    static size_t sNextCallbackId;
+
+    // 通知所有注册的回调函数
+    static void notifyChangeCallbacks(const String& key, const String& oldValue,
+                                      const String& newValue);
+
     // Helper method for string to numeric conversion
     template <typename T>
     static T convertFromString(const String& str, const T& defaultValue);
+
+    // Helper method for splitting PATH-like strings
+    static auto splitPathString(const String& pathStr) -> Vector<String>;
+
+    // Helper method for joining PATH-like strings
+    static auto joinPathString(const Vector<String>& paths) -> String;
+
+    // Helper method to get platform-specific path separator
+    static auto getPathSeparator() -> char;
 };
 
 // Template implementation

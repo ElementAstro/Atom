@@ -56,10 +56,11 @@ endif()
 set(LIBS
     loguru
     ${CMAKE_THREAD_LIBS_INIT}
+    ${OPENSSL_LIBRARIES}
 )
 
 if (WIN32)
-    list(APPEND LIBS ws2_32)
+    list(APPEND LIBS ws2_32 mswsock)
 endif()
 
 if (ENABLE_SSH)

@@ -1,5 +1,5 @@
--- filepath: d:\msys64\home\qwdma\Atom\atom\meta\xmake.lua
--- xmake configuration for Atom-Meta module
+-- filepath: d:\msys64\home\qwdma\Atom\atom\image\xmake.lua
+-- xmake configuration for Atom-Image module
 -- Author: Max Qian
 -- License: GPL3
 
@@ -7,27 +7,50 @@
 add_rules("mode.debug", "mode.release")
 
 -- Project configuration
-set_project("atom-meta")
+set_project("atom-image")
 set_version("1.0.0")
 set_license("GPL3")
 
 -- Define source files
 local source_files = {
-    "global_ptr.cpp"
+    "exif.cpp",
+    "fits_data.cpp",
+    "fits_file.cpp",
+    "fits_header.cpp",
+    "fits_utils.cpp",
+    "hdu.cpp"
 }
 
 -- Define header files
 local header_files = {
-    "global_ptr.hpp"
+    "exif.hpp",
+    "fits_data.hpp",
+    "fits_file.hpp",
+    "fits_header.hpp",
+    "fits_utils.hpp",
+    "hdu.hpp",
+    "image_blob.hpp"
 }
 
+-- Add required packages
+add_requires("cfitsio", {optional = true})
+
 -- Object Library
-target("atom-meta-object")
+target("atom-image-object")
     set_kind("object")
     
     -- Add files
     add_files(table.unpack(source_files))
     add_headerfiles(table.unpack(header_files))
+    
+    -- Add dependencies
+    add_packages("loguru")
+    
+    -- Add optional dependency on cfitsio if available
+    if has_package("cfitsio") then
+        add_packages("cfitsio")
+        add_defines("HAS_CFITSIO")
+    end
     
     -- Add include directories
     add_includedirs(".", {public = true})
@@ -38,23 +61,26 @@ target("atom-meta-object")
 target_end()
 
 -- Library target
-target("atom-meta")
+target("atom-image")
     -- Set library type based on parent project option
     set_kind(has_config("shared_libs") and "shared" or "static")
     
     -- Add dependencies
-    add_deps("atom-meta-object")
+    add_deps("atom-image-object")
+    add_packages("loguru")
+    
+    -- Add optional dependency on cfitsio if available
+    if has_package("cfitsio") then
+        add_packages("cfitsio")
+    end
     
     -- Set output directories
     set_targetdir("$(buildir)/lib")
     set_objectdir("$(buildir)/obj")
     
-    -- Set version with build timestamp
-    set_version("1.0.0", {build = "%Y%m%d%H%M"})
-    
     -- Install configuration
     on_install(function (target)
         os.cp(target:targetfile(), path.join(target:installdir(), "lib"))
-        os.cp("*.hpp", path.join(target:installdir(), "include/atom/meta"))
+        os.cp("*.hpp", path.join(target:installdir(), "include/atom/image"))
     end)
 target_end()

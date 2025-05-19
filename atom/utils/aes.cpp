@@ -25,9 +25,9 @@ Description: Simple implementation of AES encryption
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <zlib.h>
+#include <filesystem>
 
 #include "atom/error/exception.hpp"
-#include "atom/io/io.hpp"
 #include "atom/log/loguru.hpp"
 
 namespace atom::utils {
@@ -381,7 +381,7 @@ auto calculateSha256(StringLike auto&& filename_arg) -> std::string {
             THROW_INVALID_ARGUMENT("Filename cannot be empty");
         }
 
-        if (!atom::io::isFileExists(std::string(filename))) {
+        if (!std::filesystem::exists(std::filesystem::path(std::string(filename)))) {
             LOG_F(ERROR, "File does not exist: %s", filename.data());
             return "";
         }

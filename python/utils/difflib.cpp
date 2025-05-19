@@ -229,6 +229,7 @@ Examples:
     // Get close matches function
     m.def("get_close_matches", &atom::utils::getCloseMatches, py::arg("word"),
           py::arg("possibilities"), py::arg("n") = 3, py::arg("cutoff") = 0.6,
+          py::arg("options") = atom::utils::DiffOptions{},
           R"(Get a list of close matches to a word from a list of possibilities.
 
 Args:
@@ -236,6 +237,7 @@ Args:
     possibilities: The list of possible matches.
     n: The maximum number of close matches to return (default: 3).
     cutoff: The similarity ratio threshold for considering a match (default: 0.6).
+    options: Optional performance and algorithm options (default: DiffOptions{}).
 
 Returns:
     A list of strings containing the close matches.

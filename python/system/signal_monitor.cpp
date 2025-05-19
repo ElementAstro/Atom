@@ -6,7 +6,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(signal_monitor, m) {
@@ -52,43 +51,56 @@ Examples:
                       "Number of times the signal has been dropped")
         .def_readonly("handler_errors", &SignalStats::handlerErrors,
                       "Number of errors occurred during signal handling")
-        .def_readonly("last_received", &SignalStats::lastReceived,
-                      "Timestamp of when the signal was last received")
-        .def_readonly("last_processed", &SignalStats::lastProcessed,
-                      "Timestamp of when the signal was last processed")
+        .def_readonly(
+            "last_received", &SignalStats::lastReceived,
+            "Timestamp of when the signal was last received (steady_clock)")
+        .def_readonly(
+            "last_processed", &SignalStats::lastProcessed,
+            "Timestamp of when the signal was last processed (steady_clock)")
         .def("__repr__", [](const SignalStats& stats) {
             // Create string representing the timestamp
-            std::string last_received = "N/A";
-            std::string last_processed = "N/A";
+            std::string last_received_str = "N/A";
+            std::string last_processed_str = "N/A";
 
+            // Note: Converting steady_clock to a calendar time is generally
+            // problematic as its epoch is arbitrary. This conversion is for
+            // representation purposes.
             if (stats.lastReceived.time_since_epoch().count() > 0) {
-                auto received_time =
-                    std::chrono::system_clock::to_time_t(stats.lastReceived);
+                auto steady_duration = stats.lastReceived.time_since_epoch();
+                std::chrono::system_clock::time_point system_time_point(
+                    std::chrono::duration_cast<
+                        std::chrono::system_clock::duration>(steady_duration));
+                auto received_time_t =
+                    std::chrono::system_clock::to_time_t(system_time_point);
                 std::tm tm_received;
 #ifdef _WIN32
-                localtime_s(&tm_received, &received_time);
+                localtime_s(&tm_received, &received_time_t);
 #else
-                localtime_r(&received_time, &tm_received);
+                localtime_r(&received_time_t, &tm_received);
 #endif
-                char time_str[100];
-                std::strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S",
-                              &tm_received);
-                last_received = time_str;
+                char time_str_buf[100];
+                std::strftime(time_str_buf, sizeof(time_str_buf),
+                              "%Y-%m-%d %H:%M:%S", &tm_received);
+                last_received_str = time_str_buf;
             }
 
             if (stats.lastProcessed.time_since_epoch().count() > 0) {
-                auto processed_time =
-                    std::chrono::system_clock::to_time_t(stats.lastProcessed);
+                auto steady_duration = stats.lastProcessed.time_since_epoch();
+                std::chrono::system_clock::time_point system_time_point(
+                    std::chrono::duration_cast<
+                        std::chrono::system_clock::duration>(steady_duration));
+                auto processed_time_t =
+                    std::chrono::system_clock::to_time_t(system_time_point);
                 std::tm tm_processed;
 #ifdef _WIN32
-                localtime_s(&tm_processed, &processed_time);
+                localtime_s(&tm_processed, &processed_time_t);
 #else
-                localtime_r(&processed_time, &tm_processed);
+                localtime_r(&processed_time_t, &tm_processed);
 #endif
-                char time_str[100];
-                std::strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S",
-                              &tm_processed);
-                last_processed = time_str;
+                char time_str_buf[100];
+                std::strftime(time_str_buf, sizeof(time_str_buf),
+                              "%Y-%m-%d %H:%M:%S", &tm_processed);
+                last_processed_str = time_str_buf;
             }
 
             return "<SignalStats received=" +
@@ -96,8 +108,8 @@ Examples:
                    " processed=" + std::to_string(stats.processed.load()) +
                    " dropped=" + std::to_string(stats.dropped.load()) +
                    " errors=" + std::to_string(stats.handlerErrors.load()) +
-                   " last_received=\"" + last_received + "\"" +
-                   " last_processed=\"" + last_processed + "\">";
+                   " last_received=\"" + last_received_str + "\"" +
+                   " last_processed=\"" + last_processed_str + "\">";
         });
 
     // Define the callback wrapper type
@@ -479,14 +491,14 @@ Examples:
                      monitor.removeCallback(py::cast<int>(id));
                  }
 
-                 return false;  // Don't suppress exceptions
+                 return py::bool_(false);  // Don't suppress exceptions
              });
 
     // Factory function for signal monitor group
     m.def(
         "monitor_signals",
-        [](const std::vector<SignalID>& signals, py::function callback,
-           std::chrono::milliseconds interval) {
+        [&m](const std::vector<SignalID>& signals, py::function callback,
+             std::chrono::milliseconds interval) {
             return m.attr("SignalMonitorGroup")(signals, callback, interval);
         },
         py::arg("signals"), py::arg("callback"),
@@ -532,36 +544,40 @@ Examples:
             py::object event = threading.attr("Event")();
 
             // Get initial stats to compare against
-            auto initial_stats = monitor.getStatSnapshot();
+            auto initial_stats_map = monitor.getStatSnapshot();
             uint64_t initial_count = 0;
 
-            if (initial_stats.find(signal) != initial_stats.end()) {
-                initial_count = initial_stats[signal].received;
+            auto it_initial = initial_stats_map.find(signal);
+            if (it_initial != initial_stats_map.end()) {
+                initial_count = it_initial->second.received.load();
             }
 
             // Add a threshold callback that will be triggered on the next
             // occurrence
-            SignalMonitorCallback callback = [&event, initial_count](
+            SignalMonitorCallback callback = [&event, initial_count, signal](
                                                  SignalID sig,
                                                  const SignalStats& stats) {
-                if (stats.received > initial_count) {
+                if (sig == signal && stats.received.load() > initial_count) {
                     py::gil_scoped_acquire acquire;
                     event.attr("set")();
                 }
             };
 
             // Register the callback and start monitoring
-            int callback_id =
-                monitor.addThresholdCallback(signal, 1, 0, callback);
+            int callback_id = monitor.addThresholdCallback(
+                signal, initial_count + 1, 0,
+                callback);  // Trigger when received > initial_count
             monitor.start(std::chrono::milliseconds(50), {signal});
 
             // Wait for the event with timeout
             bool result;
-            if (timeout.count() <= 0) {
+            if (timeout.count() <=
+                0) {  // Negative or zero timeout means wait indefinitely
                 event.attr("wait")();
                 result = true;
             } else {
-                double timeout_seconds = timeout.count() / 1000.0;
+                double timeout_seconds =
+                    static_cast<double>(timeout.count()) / 1000.0;
                 result = py::cast<bool>(event.attr("wait")(timeout_seconds));
             }
 
@@ -585,18 +601,24 @@ Examples:
     >>> import signal
     >>> import threading
     >>> import os
+    >>> import time
     >>> 
     >>> # Set up a thread to send a signal after 1 second
-    >>> def send_test_signal():
-    ...     import time
+    >>> def send_test_signal(pid, sig_to_send):
     ...     time.sleep(1)
-    ...     os.kill(os.getpid(), signal.SIGUSR1)
+    ...     os.kill(pid, sig_to_send)
     ... 
-    >>> threading.Thread(target=send_test_signal).start()
+    >>> # Note: SIGUSR1 might not be available on Windows without specific setup.
+    >>> # Using SIGINT for a more portable example, though be careful with terminal interruption.
+    >>> # For a real test, use a signal like SIGUSR1 if available and handled.
+    >>> test_signal = signal.SIGUSR1 if hasattr(signal, "SIGUSR1") else signal.SIGINT
+    >>> pid = os.getpid()
+    >>> threading.Thread(target=send_test_signal, args=(pid, test_signal)).start()
     >>> 
     >>> # Wait for the signal with 2 second timeout
-    >>> if signal_monitor.wait_for_signal(signal.SIGUSR1, 2000):
-    ...     print("Received SIGUSR1 as expected")
+    >>> print(f"Waiting for signal {test_signal}...")
+    >>> if signal_monitor.wait_for_signal(test_signal, 2000):
+    ...     print(f"Received signal {test_signal} as expected")
     ... else:
     ...     print("Timed out waiting for signal")
 )");
@@ -606,17 +628,24 @@ Examples:
         "is_signal_active",
         [](SignalID signal, std::chrono::milliseconds within) {
             SignalMonitor& monitor = SignalMonitor::getInstance();
-            auto stats = monitor.getStatSnapshot();
+            auto stats_map = monitor.getStatSnapshot();
 
-            auto it = stats.find(signal);
-            if (it == stats.end()) {
+            auto it = stats_map.find(signal);
+            if (it == stats_map.end()) {
+                return false;  // Signal not found or not monitored
+            }
+
+            // Compare with steady_clock::now() as lastReceived is steady_clock
+            auto now_steady = std::chrono::steady_clock::now();
+            auto last_received_steady = it->second.lastReceived;
+
+            // Ensure last_received is not its default epoch value if it hasn't
+            // occurred
+            if (last_received_steady.time_since_epoch().count() == 0) {
                 return false;
             }
 
-            auto now = std::chrono::system_clock::now();
-            auto last_received = it->second.lastReceived;
-
-            return (now - last_received) < within;
+            return (now_steady - last_received_steady) < within;
         },
         py::arg("signal"), py::arg("within") = std::chrono::seconds(10),
         R"(Check if a signal has been active recently.
@@ -646,84 +675,101 @@ Examples:
                                            // in __enter__
                  }),
              py::arg("signal"),
-             py::arg("window_size") = std::chrono::seconds(10),
+             py::arg("window_size") = std::chrono::seconds(
+                 10),  // Default window_size, not used in __init__ directly
              "Create a signal rate tracker to measure signal frequency")
         .def("__enter__",
              [](py::object& self, SignalID signal,
-                std::chrono::milliseconds window_size) {
-                 self.attr("signal") = py::int_(signal);
-                 self.attr("window_size") = py::cast(window_size);
-                 self.attr("start_time") =
-                     py::cast(std::chrono::system_clock::now());
+                std::chrono::milliseconds
+                    window_size) {  // window_size is from constructor args
+                 self.attr("signal_id_attr") = py::int_(
+                     signal);  // Use a different name to avoid conflict
+                 self.attr("window_size_attr") =
+                     py::cast(window_size);  // Store for potential use
+                 self.attr("start_time_attr") = py::cast(
+                     std::chrono::steady_clock::now());  // Use steady_clock for
+                                                         // rate calculation
 
                  // Get initial stats
                  SignalMonitor& monitor = SignalMonitor::getInstance();
-                 auto stats = monitor.getStatSnapshot();
+                 auto stats_map = monitor.getStatSnapshot();
 
                  uint64_t initial_count = 0;
-                 if (stats.find(signal) != stats.end()) {
-                     initial_count = stats[signal].received;
+                 auto it_initial = stats_map.find(signal);
+                 if (it_initial != stats_map.end()) {
+                     initial_count = it_initial->second.received.load();
                  }
 
-                 self.attr("initial_count") = py::int_(initial_count);
+                 self.attr("initial_count_attr") = py::int_(initial_count);
 
-                 // Start monitoring if not already started
+                 // Start monitoring if not already started (minimal interval
+                 // for responsiveness)
                  monitor.start(std::chrono::milliseconds(100), {signal});
 
                  return self;
              })
         .def("__exit__",
              [](py::object& self, py::object, py::object, py::object) {
-                 return false;  // Don't suppress exceptions
+                 return py::bool_(false);  // Don't suppress exceptions
              })
         .def(
             "get_rate",
             [](py::object& self) {
-                SignalID signal = py::cast<SignalID>(self.attr("signal"));
+                SignalID signal =
+                    py::cast<SignalID>(self.attr("signal_id_attr"));
                 uint64_t initial_count =
-                    py::cast<uint64_t>(self.attr("initial_count"));
-                auto start_time =
-                    py::cast<std::chrono::system_clock::time_point>(
-                        self.attr("start_time"));
+                    py::cast<uint64_t>(self.attr("initial_count_attr"));
+                auto start_time = py::cast<
+                    std::chrono::steady_clock::time_point>(  // Expect
+                                                             // steady_clock
+                    self.attr("start_time_attr"));
 
                 // Get current stats
                 SignalMonitor& monitor = SignalMonitor::getInstance();
-                auto stats = monitor.getStatSnapshot();
+                auto stats_map = monitor.getStatSnapshot();
 
-                uint64_t current_count = initial_count;
-                if (stats.find(signal) != stats.end()) {
-                    current_count = stats[signal].received;
+                uint64_t current_count =
+                    initial_count;  // Default to initial if not found
+                auto it_current = stats_map.find(signal);
+                if (it_current != stats_map.end()) {
+                    current_count = it_current->second.received.load();
                 }
 
-                // Calculate elapsed time in seconds
-                auto now = std::chrono::system_clock::now();
+                // Calculate elapsed time in seconds using steady_clock
+                auto now_steady = std::chrono::steady_clock::now();
                 double elapsed_seconds =
-                    std::chrono::duration<double>(now - start_time).count();
+                    std::chrono::duration<double>(now_steady - start_time)
+                        .count();
 
                 if (elapsed_seconds <= 0) {
                     return 0.0;
                 }
 
                 // Calculate rate (signals per second)
-                return (current_count - initial_count) / elapsed_seconds;
+                return static_cast<double>(current_count - initial_count) /
+                       elapsed_seconds;
             },
             "Get the current signal rate in signals per second");
 
     // Factory function for signal rate tracker
     m.def(
         "track_signal_rate",
-        [](SignalID signal, std::chrono::milliseconds window_size) {
+        [&m](SignalID signal, std::chrono::milliseconds window_size) {
             return m.attr("SignalRateTracker")(signal, window_size);
         },
         py::arg("signal"), py::arg("window_size") = std::chrono::seconds(10),
         R"(Create a context manager for tracking signal rate.
 
 This function returns a context manager that measures the rate at which
-a signal is being received.
+a signal is being received. The rate is calculated from the moment the
+context is entered until get_rate() is called.
 
 Args:
     signal: The signal ID to track
-    window_size: Size of the measurement window (milliseconds, default: 10000)
+    window_size: This argument is passed to the tracker but the rate calculation
+                 is based on elapsed time since context entry, not a fixed window.
+                 (Default: 10000ms)
+
 
 Returns:
     A context manager for signal rate tracking
@@ -732,16 +778,31 @@ Examples:
     >>> from atom.system import signal_monitor
     >>> import signal
     >>> import time
+    >>> import os
+    >>> 
+    >>> # Note: SIGUSR1 might not be available on Windows.
+    >>> test_signal = signal.SIGUSR1 if hasattr(signal, "SIGUSR1") else signal.SIGINT
+    >>> pid = os.getpid()
     >>> 
     >>> # Use as a context manager to track signal rate
-    >>> with signal_monitor.track_signal_rate(signal.SIGUSR1) as tracker:
+    >>> with signal_monitor.track_signal_rate(test_signal) as tracker:
     ...     # Generate some signals
-    ...     for _ in range(5):
-    ...         os.kill(os.getpid(), signal.SIGUSR1)
-    ...         time.sleep(0.1)
+    ...     def send_signals_thread():
+    ...         for _ in range(5):
+    ...             try:
+    ...                 os.kill(pid, test_signal)
+    ...             except Exception as e:
+    ...                 print(f"Error sending signal: {e}") // Handle case where signal can't be sent
+    ...             time.sleep(0.1)
+    ...
+    ...     import threading
+    ...     sig_thread = threading.Thread(target=send_signals_thread)
+    ...     sig_thread.start()
+    ...     time.sleep(0.6) // Allow signals to be sent and processed
+    ...     sig_thread.join()
     ...     
-    ...     # Get the rate
+    ...     // Get the rate
     ...     rate = tracker.get_rate()
-    ...     print(f"Signal rate: {rate:.2f} signals per second")
+    ...     print(f"Signal rate for {test_signal}: {rate:.2f} signals per second")
 )");
 }

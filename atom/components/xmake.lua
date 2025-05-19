@@ -1,30 +1,34 @@
+-- filepath: d:\msys64\home\qwdma\Atom\atom\components\xmake.lua
+-- xmake configuration for Atom-Component module
+-- Author: Max Qian
+-- License: GPL3
+
+-- Add standard build modes
+add_rules("mode.debug", "mode.release")
+
+-- Project configuration
 set_project("atom-component")
 set_version("1.0.0")
+set_license("GPL3")
 
--- Set the C++ standard
-set_languages("cxx20")
-
--- Add required packages
-add_requires("loguru")
-
--- Define libraries
-local atom_component_libs = {
+-- Define module dependencies
+local atom_component_deps = {
     "atom-error",
     "atom-type",
     "atom-utils"
 }
 
+-- Define package dependencies
 local atom_component_packages = {
-    "loguru",
-    "pthread"
+    "loguru"
 }
 
--- Source files
+-- Define source files
 local source_files = {
     "registry.cpp"
 }
 
--- Header files
+-- Define header files
 local header_files = {
     "component.hpp",
     "dispatch.hpp",
@@ -33,26 +37,50 @@ local header_files = {
 }
 
 -- Object Library
-target("atom-component_object")
+target("atom-component-object")
     set_kind("object")
+    
+    -- Add files
     add_files(table.unpack(source_files))
     add_headerfiles(table.unpack(header_files))
-    add_deps(table.unpack(atom_component_libs))
+    
+    -- Add dependencies
+    add_deps(table.unpack(atom_component_deps))
     add_packages(table.unpack(atom_component_packages))
+    
+    -- Add include directories
+    add_includedirs(".", {public = true})
+    add_includedirs("..", {public = true})
+    
+    -- Set C++ standard
+    set_languages("c++20")
 target_end()
 
--- Static Library
+-- Library target
 target("atom-component")
-    set_kind("static")
-    add_deps("atom-component_object")
-    add_files(table.unpack(source_files))
-    add_headerfiles(table.unpack(header_files))
-    add_packages(table.unpack(atom_component_libs))
-    add_includedirs(".")
+    -- Set library type based on parent project option
+    set_kind(has_config("shared_libs") and "shared" or "static")
+    
+    -- Add dependencies
+    add_deps("atom-component-object")
+    add_deps(table.unpack(atom_component_deps))
+    add_packages(table.unpack(atom_component_packages))
+    
+    -- Platform-specific settings
+    if is_plat("linux") then
+        add_syslinks("pthread")
+    end
+    
+    -- Set output directories
     set_targetdir("$(buildir)/lib")
-    set_installdir("$(installdir)/lib")
+    set_objectdir("$(buildir)/obj")
+    
+    -- Set version with build timestamp
     set_version("1.0.0", {build = "%Y%m%d%H%M"})
+    
+    -- Install configuration
     on_install(function (target)
         os.cp(target:targetfile(), path.join(target:installdir(), "lib"))
+        os.cp("*.hpp", path.join(target:installdir(), "include/atom/components"))
     end)
 target_end()

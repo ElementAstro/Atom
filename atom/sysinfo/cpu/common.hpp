@@ -100,6 +100,12 @@ bool needsCacheRefresh();
 
 }  // anonymous namespace
 
+// Make the functions available for use outside this file
+namespace {
+    using atom::system::getVendorFromString;
+    using atom::system::needsCacheRefresh;
+}
+
 // Platform-specific function declarations - these will be implemented in
 // platform-specific files
 

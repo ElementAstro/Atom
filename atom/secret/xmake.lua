@@ -1,5 +1,5 @@
--- filepath: d:\msys64\home\qwdma\Atom\atom\log\xmake.lua
--- xmake configuration for Atom-Log module
+-- filepath: d:\msys64\home\qwdma\Atom\atom\secret\xmake.lua
+-- xmake configuration for Atom-Secret module
 -- Author: Max Qian
 -- License: GPL3
 
@@ -7,66 +7,70 @@
 add_rules("mode.debug", "mode.release")
 
 -- Project configuration
-set_project("atom-log")
+set_project("atom-secret")
 set_version("1.0.0")
 set_license("GPL3")
 
 -- Define source files
-local sources = {
-    "logger.cpp",
-    "syslog.cpp"
+local source_files = {
+    "encryption.cpp",
+    "storage.cpp"
 }
 
 -- Define header files
-local headers = {
-    "logger.hpp",
-    "syslog.hpp"
+local header_files = {
+    "common.hpp",
+    "encryption.hpp",
+    "password_entry.hpp",
+    "result.hpp",
+    "storage.hpp"
 }
 
 -- Object Library
-target("atom-log-object")
+target("atom-secret-object")
     set_kind("object")
     
     -- Add files
-    add_files(table.unpack(sources))
-    add_headerfiles(table.unpack(headers))
+    add_files(table.unpack(source_files))
+    add_headerfiles(table.unpack(header_files))
     
     -- Add dependencies
     add_packages("loguru")
+    add_deps("atom-utils")
     
     -- Add include directories
     add_includedirs(".", {public = true})
     add_includedirs("..", {public = true})
     
-    -- Set C++ standard
-    set_languages("c++20")
-    
-    -- Configure loguru options
+    -- Platform-specific settings
     if is_plat("windows") then
-        add_defines("LOGURU_STACKTRACES=1", {public = true})
-    else
-        add_defines("LOGURU_STACKTRACES=1", {public = true})
+        add_syslinks("crypt32", "advapi32")
+    elseif is_plat("linux") then
+        add_syslinks("pthread")
+    elseif is_plat("macosx") then
+        add_frameworks("Security")
     end
     
-    add_defines("LOGURU_WITH_STREAMS=1", {public = true})
-    add_defines("LOGURU_RTTI=1", {public = true})
+    -- Set C++ standard
+    set_languages("c++20")
 target_end()
 
 -- Library target
-target("atom-log")
+target("atom-secret")
     -- Set library type based on parent project option
     set_kind(has_config("shared_libs") and "shared" or "static")
     
     -- Add dependencies
-    add_deps("atom-log-object")
+    add_deps("atom-secret-object", "atom-utils")
     add_packages("loguru")
     
     -- Platform-specific settings
     if is_plat("windows") then
-        add_packages("dlfcn-win32")
-        add_syslinks("dbghelp")
-    else
-        add_syslinks("dl", "pthread")
+        add_syslinks("crypt32", "advapi32")
+    elseif is_plat("linux") then
+        add_syslinks("pthread")
+    elseif is_plat("macosx") then
+        add_frameworks("Security")
     end
     
     -- Set output directories
@@ -76,6 +80,6 @@ target("atom-log")
     -- Install configuration
     on_install(function (target)
         os.cp(target:targetfile(), path.join(target:installdir(), "lib"))
-        os.cp("*.hpp", path.join(target:installdir(), "include/atom/log"))
+        os.cp("*.hpp", path.join(target:installdir(), "include/atom/secret"))
     end)
 target_end()

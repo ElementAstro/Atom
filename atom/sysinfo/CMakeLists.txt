@@ -17,8 +17,6 @@ add_subdirectory(wifi)
 set(SOURCES
     battery.cpp
     bios.cpp
-    cpu.cpp
-    disk.cpp
     gpu.cpp
     locale.cpp
     os.cpp
@@ -42,7 +40,6 @@ set(CPU_HEADERS
 set(HEADERS
     battery.hpp
     bios.hpp
-    cpu.hpp
     disk.hpp
     gpu.hpp
     locale.hpp

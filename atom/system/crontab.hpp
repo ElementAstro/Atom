@@ -22,6 +22,16 @@ public:
         last_run_;   ///< Last execution timestamp.
     int run_count_;  ///< Number of times this job has been executed.
 
+    // New fields
+    int priority_;         ///< Priority of the job (1-10, 1 is highest)
+    int max_retries_;      ///< Maximum number of retries on failure
+    int current_retries_;  ///< Current retry count
+    bool
+        one_time_;  ///< If true, job will be deleted after successful execution
+    std::vector<std::pair<std::chrono::system_clock::time_point, bool>>
+        execution_history_;  ///< History of executions with status
+                             ///< (true=success, false=failure)
+
     CronJob(const std::string& time = "", const std::string& command = "",
             bool enabled = true, const std::string& category = "default",
             const std::string& description = "")
@@ -32,7 +42,11 @@ public:
           description_(description),
           created_at_(std::chrono::system_clock::now()),
           last_run_(std::chrono::system_clock::time_point()),
-          run_count_(0) {}
+          run_count_(0),
+          priority_(5),
+          max_retries_(0),
+          current_retries_(0),
+          one_time_(false) {}
 
     /**
      * @brief Converts the CronJob object to a JSON representation.
@@ -52,6 +66,20 @@ public:
      * @return A string that uniquely identifies this job.
      */
     [[nodiscard]] auto getId() const -> std::string;
+
+    /**
+     * @brief Records an execution result in the job's history.
+     * @param success Whether the execution was successful.
+     */
+    void recordExecution(bool success);
+};
+
+/**
+ * @brief Special cron expressions mapped to standard format
+ */
+struct SpecialCronExpression {
+    std::string name;
+    std::string expression;
 };
 
 /**
@@ -139,8 +167,8 @@ public:
      * @param newJob The new CronJob object to replace the old one.
      * @return True if the job was updated successfully, false otherwise.
      */
-    auto updateCronJob(const std::string& oldCommand,
-                       const CronJob& newJob) -> bool;
+    auto updateCronJob(const std::string& oldCommand, const CronJob& newJob)
+        -> bool;
 
     /**
      * @brief Updates a Cron job by its unique identifier.
@@ -148,8 +176,8 @@ public:
      * @param newJob The new CronJob object to replace the old one.
      * @return True if the job was updated successfully, false otherwise.
      */
-    auto updateCronJobById(const std::string& id,
-                           const CronJob& newJob) -> bool;
+    auto updateCronJobById(const std::string& id, const CronJob& newJob)
+        -> bool;
 
     /**
      * @brief Views the details of a Cron job with the specified command.
@@ -247,10 +275,90 @@ public:
      */
     auto clearAllJobs() -> bool;
 
+    /**
+     * @brief Converts a special cron expression to standard format.
+     * @param specialExpr The special expression to convert (e.g., @daily).
+     * @return The standard cron expression or empty string if not recognized.
+     */
+    static auto convertSpecialExpression(const std::string& specialExpr)
+        -> std::string;
+
+    /**
+     * @brief Sets the priority of a job.
+     * @param id The unique identifier of the job.
+     * @param priority Priority value (1-10, 1 is highest).
+     * @return True if successful, false otherwise.
+     */
+    auto setJobPriority(const std::string& id, int priority) -> bool;
+
+    /**
+     * @brief Sets the maximum number of retries for a job.
+     * @param id The unique identifier of the job.
+     * @param maxRetries Maximum retry count.
+     * @return True if successful, false otherwise.
+     */
+    auto setJobMaxRetries(const std::string& id, int maxRetries) -> bool;
+
+    /**
+     * @brief Sets whether a job is a one-time job.
+     * @param id The unique identifier of the job.
+     * @param oneTime Whether the job should be deleted after execution.
+     * @return True if successful, false otherwise.
+     */
+    auto setJobOneTime(const std::string& id, bool oneTime) -> bool;
+
+    /**
+     * @brief Gets the execution history of a job.
+     * @param id The unique identifier of the job.
+     * @return Vector of execution history entries (timestamp, success status).
+     */
+    auto getJobExecutionHistory(const std::string& id)
+        -> std::vector<std::pair<std::chrono::system_clock::time_point, bool>>;
+
+    /**
+     * @brief Record a job execution result.
+     * @param id The unique identifier of the job.
+     * @param success Whether the execution was successful.
+     * @return True if the record was added, false otherwise.
+     */
+    auto recordJobExecutionResult(const std::string& id, bool success) -> bool;
+
+    /**
+     * @brief Get jobs sorted by priority.
+     * @return Vector of jobs sorted by priority (highest first).
+     */
+    auto getJobsByPriority() -> std::vector<CronJob>;
+
+    /**
+     * @brief Creates a new job with a special time expression.
+     * @param specialTime Special time expression (e.g., @daily, @weekly).
+     * @param command The command to execute.
+     * @param other Other job parameters.
+     * @return True if successful, false otherwise.
+     */
+    auto createJobWithSpecialTime(const std::string& specialTime,
+                                  const std::string& command,
+                                  bool enabled = true,
+                                  const std::string& category = "default",
+                                  const std::string& description = "",
+                                  int priority = 5, int maxRetries = 0,
+                                  bool oneTime = false) -> bool;
+
+    /**
+     * @brief Handles job failure and retries if configured.
+     * @param id The unique identifier of the job.
+     * @return True if a retry was scheduled, false otherwise.
+     */
+    auto handleJobFailure(const std::string& id) -> bool;
+
 private:
     std::vector<CronJob> jobs_;  ///< List of Cron jobs.
     std::unordered_map<std::string, size_t>
         jobIndex_;  ///< Index for faster job lookup
+
+    // 特殊cron表达式映射
+    static const std::unordered_map<std::string, std::string>
+        specialExpressions_;
 
     /**
      * @brief Refreshes the job index map for fast lookups.

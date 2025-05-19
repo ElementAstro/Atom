@@ -101,11 +101,28 @@ foreach(type ${MODULE_TYPES})
     # Set include directories
     target_include_directories(
       atom_${type} PRIVATE ${CMAKE_SOURCE_DIR}/.. # Atom root directory
-    )
-
+    )    
     if(TARGET atom-${type})
       target_link_libraries(atom_${type} PRIVATE atom-${type})
+    endif()    # 对web模块特殊处理，确保链接到address组件和utils库
+    if("${type}" STREQUAL "web")
+      if(TARGET atom-web-address)
+        target_link_libraries(atom_${type} PRIVATE atom-web-address)
+        message(STATUS "Linking atom_web to atom-web-address")
+      endif()
+      
+      if(TARGET atom-utils)
+        target_link_libraries(atom_${type} PRIVATE atom-utils)
+        message(STATUS "Linking atom_web to atom-utils")
+      endif()
     endif()
+
+    # 对connection模块特殊处理，在Windows上添加mswsock库
+    if("${type}" STREQUAL "connection" AND WIN32)
+      target_link_libraries(atom_${type} PRIVATE mswsock)
+      message(STATUS "Linking atom_connection to mswsock on Windows")
+    endif()
+    
     target_link_libraries(atom_${type} PRIVATE loguru atom-error)
 
     # Set output name

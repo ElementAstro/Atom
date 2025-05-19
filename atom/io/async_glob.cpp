@@ -1,8 +1,8 @@
 #include "async_glob.hpp"
+#include "glob.hpp"
 
 #include "atom/error/exception.hpp"
 #include "atom/log/loguru.hpp"
-#include "atom/utils/string.hpp"
 
 #include <future>
 #include <mutex>
@@ -78,8 +78,11 @@ auto AsyncGlob::translate(std::string_view pattern) const -> std::string {
 #else
                         if (stuff.find("--") == std::string::npos) {
 #endif
-                            stuff = atom::utils::replaceString(
-                                stuff, std::string{"\\"}, std::string{R"(\\)"});
+                            // Use local stringReplace function instead of atom::utils::replaceString
+                            // to avoid circular dependency
+                            std::string tempStuff = stuff;
+                            while(stringReplace(tempStuff, std::string{"\\"}, std::string{R"(\\)"})) {}
+                            stuff = tempStuff;
                         } else {
                             std::vector<std::string> chunks;
                             std::size_t chunkIndex = 0;
@@ -105,12 +108,12 @@ auto AsyncGlob::translate(std::string_view pattern) const -> std::string {
                                 pattern.substr(index, innerIndex - index));
                             bool first = true;
                             for (auto& chunk : chunks) {
-                                chunk = atom::utils::replaceString(
-                                    chunk, std::string{"\\"},
-                                    std::string{R"(\\)"});
-                                chunk = atom::utils::replaceString(
-                                    chunk, std::string{"-"},
-                                    std::string{R"(\-)"});
+                                // Use local stringReplace function instead of atom::utils::replaceString
+                                // to avoid circular dependency
+                                while(stringReplace(chunk, std::string{"\\"},
+                                    std::string{R"(\\)"})) {}
+                                while(stringReplace(chunk, std::string{"-"},
+                                    std::string{R"(\-)"}) ) {};
                                 if (first) {
                                     stuff += chunk;
                                     first = false;

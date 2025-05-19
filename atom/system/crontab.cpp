@@ -16,11 +16,24 @@
 
 using json = nlohmann::json;
 
+// 定义特殊cron表达式到标准格式的映射
+const std::unordered_map<std::string, std::string>
+    CronManager::specialExpressions_ = {
+        {"@yearly", "0 0 1 1 *"},    // 每年1月1日0:00运行
+        {"@annually", "0 0 1 1 *"},  // 同上
+        {"@monthly", "0 0 1 * *"},   // 每月1日0:00运行
+        {"@weekly", "0 0 * * 0"},    // 每周日0:00运行
+        {"@daily", "0 0 * * *"},     // 每天0:00运行
+        {"@midnight", "0 0 * * *"},  // 同上
+        {"@hourly", "0 * * * *"},    // 每小时整点运行
+        {"@reboot", "@reboot"}       // 系统启动时运行（特殊处理）
+};
+
 auto timePointToString(const std::chrono::system_clock::time_point& timePoint)
     -> std::string {
     auto time = std::chrono::system_clock::to_time_t(timePoint);
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&time), "%Y-%m-%d %H:%M:%S");
+    ss << std::put_time(std::localtime(&time), "%Y-%m-{} %H:%M:%S");
     return ss.str();
 }
 
@@ -28,7 +41,7 @@ auto stringToTimePoint(const std::string& timeStr)
     -> std::chrono::system_clock::time_point {
     std::tm tm = {};
     std::stringstream ss(timeStr);
-    ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
+    ss >> std::get_time(&tm, "%Y-%m-{} %H:%M:%S");
 
     auto time = std::mktime(&tm);
     return std::chrono::system_clock::from_time_t(time);
@@ -43,6 +56,12 @@ auto CronJob::toJson() const -> json {
         lastRunStr = timePointToString(last_run_);
     }
 
+    json historyJson = json::array();
+    for (const auto& entry : execution_history_) {
+        historyJson.push_back({{"timestamp", timePointToString(entry.first)},
+                               {"success", entry.second}});
+    }
+
     return json{{"time", time_},
                 {"command", command_},
                 {"enabled", enabled_},
@@ -50,7 +69,12 @@ auto CronJob::toJson() const -> json {
                 {"description", description_},
                 {"created_at", createdAtStr},
                 {"last_run", lastRunStr},
-                {"run_count", run_count_}};
+                {"run_count", run_count_},
+                {"priority", priority_},
+                {"max_retries", max_retries_},
+                {"current_retries", current_retries_},
+                {"one_time", one_time_},
+                {"execution_history", historyJson}};
 }
 
 auto CronJob::fromJson(const json& jsonObj) -> CronJob {
@@ -90,7 +114,59 @@ auto CronJob::fromJson(const json& jsonObj) -> CronJob {
         job.run_count_ = 0;
     }
 
+    // 加载新增的字段
+    if (jsonObj.contains("priority")) {
+        job.priority_ = jsonObj.at("priority").get<int>();
+    } else {
+        job.priority_ = 5;  // 默认中等优先级
+    }
+
+    if (jsonObj.contains("max_retries")) {
+        job.max_retries_ = jsonObj.at("max_retries").get<int>();
+    } else {
+        job.max_retries_ = 0;
+    }
+
+    if (jsonObj.contains("current_retries")) {
+        job.current_retries_ = jsonObj.at("current_retries").get<int>();
+    } else {
+        job.current_retries_ = 0;
+    }
+
+    if (jsonObj.contains("one_time")) {
+        job.one_time_ = jsonObj.at("one_time").get<bool>();
+    } else {
+        job.one_time_ = false;
+    }
+
+    // 加载执行历史
+    if (jsonObj.contains("execution_history") &&
+        jsonObj["execution_history"].is_array()) {
+        for (const auto& entry : jsonObj["execution_history"]) {
+            if (entry.contains("timestamp") && entry.contains("success")) {
+                auto timestamp =
+                    stringToTimePoint(entry["timestamp"].get<std::string>());
+                bool success = entry["success"].get<bool>();
+                job.execution_history_.push_back({timestamp, success});
+            }
+        }
+    }
+
     return job;
+}
+
+void CronJob::recordExecution(bool success) {
+    last_run_ = std::chrono::system_clock::now();
+    run_count_++;
+    execution_history_.push_back({last_run_, success});
+
+    // 限制历史记录长度，保留最近100条记录
+    const size_t MAX_HISTORY = 100;
+    if (execution_history_.size() > MAX_HISTORY) {
+        execution_history_.erase(execution_history_.begin(),
+                                 execution_history_.begin() +
+                                     (execution_history_.size() - MAX_HISTORY));
+    }
 }
 
 CronManager::CronManager() {
@@ -123,7 +199,23 @@ auto CronManager::validateJob(const CronJob& job) -> bool {
 
 auto CronManager::validateCronExpression(const std::string& cronExpr)
     -> CronValidationResult {
-    // 简单的cron表达式验证逻辑
+    // 先检查特殊表达式
+    if (!cronExpr.empty() && cronExpr[0] == '@') {
+        std::string converted = convertSpecialExpression(cronExpr);
+        if (converted == cronExpr) {
+            // 不是已知的特殊表达式
+            return {false, "Unknown special expression"};
+        } else if (!converted.empty()) {
+            // 如果是@reboot特殊情况
+            if (converted == "@reboot") {
+                return {true, "Valid special expression: reboot"};
+            }
+            // 找到了对应的标准表达式，继续检查
+            return validateCronExpression(converted);
+        }
+    }
+
+    // 标准cron表达式验证逻辑
     std::regex cronRegex(R"(^(\S+\s+){4}\S+$)");
     if (!std::regex_match(cronExpr, cronRegex)) {
         return {false, "Invalid cron expression format. Expected 5 fields."};
@@ -149,6 +241,24 @@ auto CronManager::validateCronExpression(const std::string& cronExpr)
     // 可以继续添加其他字段的验证...
 
     return {true, "Valid cron expression"};
+}
+
+auto CronManager::convertSpecialExpression(const std::string& specialExpr)
+    -> std::string {
+    // 检查表达式是否以@开头
+    if (specialExpr.empty() || specialExpr[0] != '@') {
+        return specialExpr;  // 不是特殊表达式，直接返回
+    }
+
+    // 查找映射
+    auto it = specialExpressions_.find(specialExpr);
+    if (it != specialExpressions_.end()) {
+        return it->second;
+    }
+
+    // 未知的特殊表达式
+    LOG_F(WARNING, "Unknown special cron expression: {}", specialExpr);
+    return "";
 }
 
 auto CronManager::createCronJob(const CronJob& job) -> bool {
@@ -185,6 +295,30 @@ auto CronManager::createCronJob(const CronJob& job) -> bool {
 
     LOG_F(INFO, "Cron job created successfully.");
     return true;
+}
+
+auto CronManager::createJobWithSpecialTime(
+    const std::string& specialTime, const std::string& command, bool enabled,
+    const std::string& category, const std::string& description, int priority,
+    int maxRetries, bool oneTime) -> bool {
+    LOG_F(INFO, "Creating Cron job with special time: {} {}", specialTime,
+          command);
+
+    // 转换特殊时间表达式
+    std::string standardTime = convertSpecialExpression(specialTime);
+    if (standardTime.empty()) {
+        LOG_F(ERROR, "Invalid special time expression: {}", specialTime);
+        return false;
+    }
+
+    // 创建新任务并设置属性
+    CronJob job(standardTime, command, enabled, category, description);
+    job.priority_ = priority;
+    job.max_retries_ = maxRetries;
+    job.one_time_ = oneTime;
+
+    // 使用标准方法创建任务
+    return createCronJob(job);
 }
 
 auto CronManager::deleteCronJob(const std::string& command) -> bool {
@@ -284,8 +418,7 @@ auto CronManager::listCronJobsByCategory(const std::string& category)
         jobs_.begin(), jobs_.end(), std::back_inserter(filteredJobs),
         [&category](const CronJob& job) { return job.category_ == category; });
 
-    LOG_F(INFO, "Found %zu jobs in category %s", filteredJobs.size(),
-          category.c_str());
+    LOG_F(INFO, "Found %zu jobs in category {}", filteredJobs.size(), category);
     return filteredJobs;
 }
 
@@ -339,11 +472,11 @@ auto CronManager::importFromJSON(const std::string& filename) -> bool {
                 LOG_F(WARNING, "Failed to import Cron job: {}", job.command_);
             }
         }
-        LOG_F(INFO, "Successfully imported %d of %zu jobs", successCount,
+        LOG_F(INFO, "Successfully imported {} of %zu jobs", successCount,
               jsonObj.size());
         return successCount > 0;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error parsing JSON file: %s", e.what());
+        LOG_F(ERROR, "Error parsing JSON file: {}", e.what());
         return false;
     }
 }
@@ -394,7 +527,7 @@ auto CronManager::viewCronJobById(const std::string& id) -> CronJob {
     if (it != jobIndex_.end()) {
         return jobs_[it->second];
     }
-    LOG_F(WARNING, "Cron job with ID %s not found.", id.c_str());
+    LOG_F(WARNING, "Cron job with ID {} not found.", id);
     return CronJob{"", "", false};
 }
 
@@ -449,7 +582,7 @@ auto CronManager::statistics() -> std::unordered_map<std::string, int> {
     }
 
     LOG_F(INFO,
-          "Generated statistics. Total jobs: %d, enabled: %d, disabled: %d",
+          "Generated statistics. Total jobs: {}, enabled: {}, disabled: {}",
           stats["total"], stats["enabled"], stats["disabled"]);
 
     return stats;
@@ -505,8 +638,7 @@ auto CronManager::enableCronJobsByCategory(const std::string& category) -> int {
 
     if (count > 0) {
         if (exportToCrontab()) {
-            LOG_F(INFO, "Enabled %d jobs in category %s", count,
-                  category.c_str());
+            LOG_F(INFO, "Enabled {} jobs in category {}", count, category);
         } else {
             LOG_F(ERROR, "Failed to update crontab after enabling jobs");
             return 0;
@@ -530,8 +662,7 @@ auto CronManager::disableCronJobsByCategory(const std::string& category)
 
     if (count > 0) {
         if (exportToCrontab()) {
-            LOG_F(INFO, "Disabled %d jobs in category %s", count,
-                  category.c_str());
+            LOG_F(INFO, "Disabled {} jobs in category {}", count, category);
         } else {
             LOG_F(ERROR, "Failed to update crontab after disabling jobs");
             return 0;
@@ -566,7 +697,7 @@ auto CronManager::exportToCrontab() -> bool {
     // 导入到系统crontab
     std::string loadCmd = "crontab " + tmpFilename;
     if (atom::system::executeCommandWithStatus(loadCmd).second == 0) {
-        LOG_F(INFO, "Crontab updated successfully with %d enabled jobs.",
+        LOG_F(INFO, "Crontab updated successfully with {} enabled jobs.",
               static_cast<int>(
                   std::count_if(jobs_.begin(), jobs_.end(),
                                 [](const CronJob& j) { return j.enabled_; })));
@@ -592,7 +723,7 @@ auto CronManager::batchCreateJobs(const std::vector<CronJob>& jobs) -> int {
         }
     }
 
-    LOG_F(INFO, "Successfully created %d of %zu jobs", successCount,
+    LOG_F(INFO, "Successfully created {} of %zu jobs", successCount,
           jobs.size());
     return successCount;
 }
@@ -608,7 +739,7 @@ auto CronManager::batchDeleteJobs(const std::vector<std::string>& commands)
         }
     }
 
-    LOG_F(INFO, "Successfully deleted %d of %zu jobs", successCount,
+    LOG_F(INFO, "Successfully deleted {} of %zu jobs", successCount,
           commands.size());
     return successCount;
 }
@@ -621,13 +752,22 @@ auto CronManager::recordJobExecution(const std::string& command) -> bool {
     if (it != jobs_.end()) {
         it->last_run_ = std::chrono::system_clock::now();
         it->run_count_++;
-        LOG_F(INFO, "Recorded execution of job: %s (Run count: %d)",
-              command.c_str(), it->run_count_);
+        it->recordExecution(true);  // 记录此次执行成功
+
+        // 如果是一次性任务，执行后删除
+        if (it->one_time_) {
+            std::string jobId = it->getId();
+            LOG_F(INFO, "One-time job completed, removing: {}", jobId);
+            deleteCronJobById(jobId);
+            return true;
+        }
+
+        LOG_F(INFO, "Recorded execution of job: {} (Run count: {})", command,
+              it->run_count_);
         return true;
     }
 
-    LOG_F(WARNING, "Tried to record execution for unknown job: %s",
-          command.c_str());
+    LOG_F(WARNING, "Tried to record execution for unknown job: {}", command);
     return false;
 }
 
@@ -647,4 +787,129 @@ auto CronManager::clearAllJobs() -> bool {
 
     LOG_F(INFO, "All cron jobs cleared successfully");
     return true;
+}
+
+auto CronManager::setJobPriority(const std::string& id, int priority) -> bool {
+    if (priority < 1 || priority > 10) {
+        LOG_F(ERROR, "Invalid priority value {}. Must be between 1-10",
+              priority);
+        return false;
+    }
+
+    auto it = jobIndex_.find(id);
+    if (it != jobIndex_.end()) {
+        jobs_[it->second].priority_ = priority;
+        LOG_F(INFO, "Set priority to {} for job: {}", priority, id);
+        return true;
+    }
+
+    LOG_F(ERROR, "Failed to find job with ID: {}", id);
+    return false;
+}
+
+auto CronManager::setJobMaxRetries(const std::string& id, int maxRetries)
+    -> bool {
+    if (maxRetries < 0) {
+        LOG_F(ERROR, "Invalid max retries value {}. Must be non-negative",
+              maxRetries);
+        return false;
+    }
+
+    auto it = jobIndex_.find(id);
+    if (it != jobIndex_.end()) {
+        jobs_[it->second].max_retries_ = maxRetries;
+        // 如果当前重试次数大于最大重试次数，重置它
+        if (jobs_[it->second].current_retries_ > maxRetries) {
+            jobs_[it->second].current_retries_ = 0;
+        }
+        LOG_F(INFO, "Set max retries to {} for job: {}", maxRetries, id);
+        return true;
+    }
+
+    LOG_F(ERROR, "Failed to find job with ID: {}", id);
+    return false;
+}
+
+auto CronManager::setJobOneTime(const std::string& id, bool oneTime) -> bool {
+    auto it = jobIndex_.find(id);
+    if (it != jobIndex_.end()) {
+        jobs_[it->second].one_time_ = oneTime;
+        LOG_F(INFO, "Set one-time status to {} for job: {}",
+              oneTime ? "true" : "false", id);
+        return true;
+    }
+
+    LOG_F(ERROR, "Failed to find job with ID: {}", id);
+    return false;
+}
+
+auto CronManager::getJobExecutionHistory(const std::string& id)
+    -> std::vector<std::pair<std::chrono::system_clock::time_point, bool>> {
+    auto it = jobIndex_.find(id);
+    if (it != jobIndex_.end()) {
+        return jobs_[it->second].execution_history_;
+    }
+
+    LOG_F(ERROR, "Failed to find job with ID: {}", id);
+    return {};
+}
+
+auto CronManager::recordJobExecutionResult(const std::string& id, bool success)
+    -> bool {
+    auto it = jobIndex_.find(id);
+    if (it != jobIndex_.end()) {
+        CronJob& job = jobs_[it->second];
+        job.recordExecution(success);
+
+        if (success && job.one_time_) {
+            // 如果是一次性任务且执行成功，删除它
+            LOG_F(INFO, "One-time job completed successfully, removing: {}",
+                  id);
+            return deleteCronJobById(id);
+        } else if (!success) {
+            // 如果执行失败，处理失败逻辑
+            return handleJobFailure(id);
+        }
+
+        return true;
+    }
+
+    LOG_F(ERROR, "Failed to find job with ID: {}", id);
+    return false;
+}
+
+auto CronManager::handleJobFailure(const std::string& id) -> bool {
+    auto it = jobIndex_.find(id);
+    if (it != jobIndex_.end()) {
+        CronJob& job = jobs_[it->second];
+
+        // 如果配置了重试且未超过最大重试次数
+        if (job.max_retries_ > 0 && job.current_retries_ < job.max_retries_) {
+            job.current_retries_++;
+            LOG_F(INFO, "Job failed, scheduling retry {}/{} for: {}",
+                  job.current_retries_, job.max_retries_, id);
+            return true;
+        } else if (job.current_retries_ >= job.max_retries_ &&
+                   job.max_retries_ > 0) {
+            LOG_F(WARNING,
+                  "Job failed after {} retries, no more retries for: {}",
+                  job.max_retries_, id);
+        }
+        return true;
+    }
+
+    LOG_F(ERROR, "Failed to find job with ID: {}", id);
+    return false;
+}
+
+auto CronManager::getJobsByPriority() -> std::vector<CronJob> {
+    std::vector<CronJob> sortedJobs = jobs_;
+
+    // 按优先级排序（数字越小优先级越高）
+    std::sort(sortedJobs.begin(), sortedJobs.end(),
+              [](const CronJob& a, const CronJob& b) {
+                  return a.priority_ < b.priority_;
+              });
+
+    return sortedJobs;
 }

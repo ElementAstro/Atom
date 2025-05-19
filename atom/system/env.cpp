@@ -14,6 +14,7 @@ Description: Environment variable management
 
 #include "env.hpp"
 
+#include <algorithm>  // For std::find, std::replace
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -23,9 +24,20 @@ Description: Environment variable management
 #include <string_view>  // Keep for Environ parsing
 
 #ifdef _WIN32
+// clang-format off
 #include <windows.h>
+#include <shlobj.h>   // For SHGetKnownFolderPath
+#include <userenv.h>  // For persistent environment variables
+// clang-format on
+#pragma comment(lib, "userenv.lib")
 #else
-#include <unistd.h>  // For readlink on Linux/macOS
+#include <limits.h>  // For HOST_NAME_MAX
+#include <pwd.h>     // For getpwuid
+#include <sys/types.h>
+#include <unistd.h>  // For readlink on Linux/macOS, gethostname
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>  // For _NSGetExecutablePath on macOS
+#endif
 extern char** environ;  // POSIX environment variables
 #endif
 
@@ -36,6 +48,25 @@ extern char** environ;  // POSIX environment variables
 namespace fs = std::filesystem;
 
 namespace atom::utils {
+
+// Initialize static members
+HashMap<size_t, Env::EnvChangeCallback> Env::sChangeCallbacks;
+std::mutex Env::sCallbackMutex;
+size_t Env::sNextCallbackId = 1;
+
+// 用于通知环境变量变化的辅助函数
+void Env::notifyChangeCallbacks(const String& key, const String& oldValue,
+                                const String& newValue) {
+    LOG_F(INFO, "notifyChangeCallbacks called for key: {}", key);
+    std::lock_guard<std::mutex> lock(sCallbackMutex);
+    for (const auto& [id, callback] : sChangeCallbacks) {
+        try {
+            callback(key, oldValue, newValue);
+        } catch (const std::exception& e) {
+            LOG_F(ERROR, "Exception in change callback: {}", e.what());
+        }
+    }
+}
 
 // Use type aliases from high_performance.hpp within the implementation
 using atom::containers::String;
@@ -266,6 +297,10 @@ auto Env::get(const String& key, const String& default_value) -> String {
 auto Env::setEnv(const String& key, const String& val) -> bool {
     LOG_F(INFO, "Env::setEnv called with key: {}, val: {}", key, val);
     DLOG_F(INFO, "Env::setEnv: Set key: {} with value: {}", key, val);
+
+    // 保存旧值用于通知
+    String oldValue = getEnv(key, "");
+
 #ifdef _WIN32
     // Use _putenv_s for safety if available and preferred
     // bool result = _putenv_s(key, val) == 0;
@@ -274,6 +309,12 @@ auto Env::setEnv(const String& key, const String& val) -> bool {
 #else
     bool result = ::setenv(key.c_str(), val.c_str(), 1) == 0;
 #endif
+
+    if (result) {
+        // 触发通知回调
+        notifyChangeCallbacks(key, oldValue, val);
+    }
+
     LOG_F(INFO, "Env::setEnv returning: {}", result);
     return result;
 }
@@ -664,5 +705,924 @@ void Env::printAllArgs() const {
     }
 }
 #endif
+
+Env::ScopedEnv::ScopedEnv(const String& key, const String& value)
+    : mKey(key), mHadValue(false) {
+    LOG_F(INFO, "ScopedEnv constructor called with key: {}, value: {}", key,
+          value);
+    // 保存原始值
+    mOriginalValue = getEnv(key, "");
+    mHadValue = !mOriginalValue.empty();
+
+    // 设置新值
+    setEnv(key, value);
+}
+
+Env::ScopedEnv::~ScopedEnv() {
+    LOG_F(INFO, "ScopedEnv destructor called for key: {}", mKey);
+    if (mHadValue) {
+        // 恢复原始值
+        setEnv(mKey, mOriginalValue);
+    } else {
+        // 如果之前没有这个环境变量，则删除它
+        unsetEnv(mKey);
+    }
+}
+
+auto Env::createScopedEnv(const String& key, const String& value)
+    -> std::shared_ptr<ScopedEnv> {
+    LOG_F(INFO, "createScopedEnv called with key: {}, value: {}", key, value);
+    return std::make_shared<ScopedEnv>(key, value);
+}
+
+auto Env::registerChangeNotification(EnvChangeCallback callback) -> size_t {
+    LOG_F(INFO, "registerChangeNotification called");
+    std::lock_guard<std::mutex> lock(sCallbackMutex);
+    size_t id = sNextCallbackId++;
+    sChangeCallbacks[id] = callback;
+    return id;
+}
+
+auto Env::unregisterChangeNotification(size_t id) -> bool {
+    LOG_F(INFO, "unregisterChangeNotification called with id: {}", id);
+    std::lock_guard<std::mutex> lock(sCallbackMutex);
+    return sChangeCallbacks.erase(id) > 0;
+}
+
+// 实现获取系统特定环境目录功能
+auto Env::getHomeDir() -> String {
+    LOG_F(INFO, "getHomeDir called");
+
+#ifdef _WIN32
+    // 在Windows上使用USERPROFILE环境变量
+    String homePath = getEnv("USERPROFILE", "");
+    if (homePath.empty()) {
+        // 备用方案：使用HOMEDRIVE+HOMEPATH组合
+        String homeDrive = getEnv("HOMEDRIVE", "");
+        String homePath2 = getEnv("HOMEPATH", "");
+        if (!homeDrive.empty() && !homePath2.empty()) {
+            homePath = homeDrive + homePath2;
+        }
+    }
+#else
+    // 在POSIX系统上使用HOME环境变量
+    String homePath = getEnv("HOME", "");
+    if (homePath.empty()) {
+        // 备用方案：使用passwd文件
+        struct passwd* pw = getpwuid(getuid());
+        if (pw && pw->pw_dir) {
+            homePath = pw->pw_dir;
+        }
+    }
+#endif
+
+    LOG_F(INFO, "getHomeDir returning: {}", homePath);
+    return homePath;
+}
+
+auto Env::getTempDir() -> String {
+    LOG_F(INFO, "getTempDir called");
+    String tempPath;
+
+#ifdef _WIN32
+    // 在Windows上使用GetTempPath API
+    DWORD bufferLength = MAX_PATH + 1;
+    std::vector<char> buffer(bufferLength);
+    DWORD length = GetTempPathA(bufferLength, buffer.data());
+    if (length > 0 && length <= bufferLength) {
+        tempPath = String(buffer.data(), length);
+    } else {
+        // 备用方案：使用环境变量
+        tempPath = getEnv("TEMP", "");
+        if (tempPath.empty()) {
+            tempPath = getEnv("TMP", "C:\\Temp");
+        }
+    }
+#else
+    // 在POSIX系统上使用标准环境变量
+    tempPath = getEnv("TMPDIR", "");
+    if (tempPath.empty()) {
+        tempPath = "/tmp";  // 标准POSIX临时目录
+    }
+#endif
+
+    LOG_F(INFO, "getTempDir returning: {}", tempPath);
+    return tempPath;
+}
+
+auto Env::getConfigDir() -> String {
+    LOG_F(INFO, "getConfigDir called");
+    String configPath;
+
+#ifdef _WIN32
+    // 在Windows上使用APPDATA或LOCALAPPDATA
+    configPath = getEnv("APPDATA", "");
+    if (configPath.empty()) {
+        configPath = getEnv("LOCALAPPDATA", "");
+    }
+#else
+    // 在Linux上使用XDG_CONFIG_HOME或默认的~/.config
+    configPath = getEnv("XDG_CONFIG_HOME", "");
+    if (configPath.empty()) {
+        String home = getHomeDir();
+        if (!home.empty()) {
+            configPath = home + "/.config";
+        }
+    }
+#endif
+
+    LOG_F(INFO, "getConfigDir returning: {}", configPath);
+    return configPath;
+}
+
+auto Env::getDataDir() -> String {
+    LOG_F(INFO, "getDataDir called");
+    String dataPath;
+
+#ifdef _WIN32
+    // 在Windows上使用LOCALAPPDATA
+    dataPath = getEnv("LOCALAPPDATA", "");
+    if (dataPath.empty()) {
+        dataPath = getEnv("APPDATA", "");
+    }
+#else
+    // 在Linux上使用XDG_DATA_HOME或默认的~/.local/share
+    dataPath = getEnv("XDG_DATA_HOME", "");
+    if (dataPath.empty()) {
+        String home = getHomeDir();
+        if (!home.empty()) {
+            dataPath = home + "/.local/share";
+        }
+    }
+#endif
+
+    LOG_F(INFO, "getDataDir returning: {}", dataPath);
+    return dataPath;
+}
+
+// 实现环境变量扩展功能
+auto Env::expandVariables(const String& str, VariableFormat format) -> String {
+    LOG_F(INFO, "expandVariables called with format: {}",
+          static_cast<int>(format));
+
+    if (str.empty()) {
+        return str;
+    }
+
+    // 自动检测格式
+    if (format == VariableFormat::AUTO) {
+#ifdef _WIN32
+        format = VariableFormat::WINDOWS;
+#else
+        format = VariableFormat::UNIX;
+#endif
+    }
+
+    String result;
+    result.reserve(str.length() * 2);  // 预留足够空间避免频繁重新分配
+
+    if (format == VariableFormat::UNIX) {
+        // 处理UNIX风格变量 ($VAR或${VAR})
+        size_t pos = 0;
+        while (pos < str.length()) {
+            if (str[pos] == '$' && pos + 1 < str.length()) {
+                if (str[pos + 1] == '{') {  // ${VAR}形式
+                    size_t closePos = str.find('}', pos + 2);
+                    if (closePos != String::npos) {
+                        String varName =
+                            str.substr(pos + 2, closePos - pos - 2);
+                        String varValue = getEnv(varName, "");
+                        result += varValue;
+                        pos = closePos + 1;
+                        continue;
+                    }
+                } else if (isalpha(str[pos + 1]) ||
+                           str[pos + 1] == '_') {  // $VAR形式
+                    size_t endPos = pos + 1;
+                    while (endPos < str.length() &&
+                           (isalnum(str[endPos]) || str[endPos] == '_')) {
+                        endPos++;
+                    }
+                    String varName = str.substr(pos + 1, endPos - pos - 1);
+                    String varValue = getEnv(varName, "");
+                    result += varValue;
+                    pos = endPos;
+                    continue;
+                }
+            }
+            // 如果不是变量引用，直接添加字符
+            result += str[pos++];
+        }
+    } else {  // VariableFormat::WINDOWS
+        // 处理Windows风格变量 (%VAR%)
+        size_t pos = 0;
+        while (pos < str.length()) {
+            if (str[pos] == '%') {
+                size_t endPos = str.find('%', pos + 1);
+                if (endPos != String::npos) {
+                    String varName = str.substr(pos + 1, endPos - pos - 1);
+                    String varValue = getEnv(varName, "");
+                    result += varValue;
+                    pos = endPos + 1;
+                    continue;
+                }
+            }
+            // 如果不是变量引用，直接添加字符
+            result += str[pos++];
+        }
+    }
+
+    LOG_F(INFO, "expandVariables returning expanded string");
+    return result;
+}
+
+// 实现持久化环境变量功能
+auto Env::setPersistentEnv(const String& key, const String& val,
+                           PersistLevel level) -> bool {
+    LOG_F(INFO, "setPersistentEnv called with key: {}, val: {}, level: {}", key,
+          val, static_cast<int>(level));
+
+    // PROCESS级别就是普通的setEnv
+    if (level == PersistLevel::PROCESS) {
+        return setEnv(key, val);
+    }
+
+#ifdef _WIN32
+    // Windows平台上的持久化设置
+    HKEY hKey;
+    DWORD dwDisposition;
+
+    // 根据级别选择注册表位置
+    const char* subKey = (level == PersistLevel::USER)
+                             ? "Environment"
+                             : "SYSTEM\\CurrentControlSet\\Control\\Session "
+                               "Manager\\Environment";
+    REGSAM sam = KEY_WRITE;
+    HKEY rootKey =
+        (level == PersistLevel::USER) ? HKEY_CURRENT_USER : HKEY_LOCAL_MACHINE;
+
+    if (level == PersistLevel::SYSTEM && !IsUserAnAdmin()) {
+        LOG_F(ERROR,
+              "setPersistentEnv: Setting SYSTEM level environment requires "
+              "admin privileges");
+        return false;
+    }
+
+    // 打开或创建注册表项
+    if (RegCreateKeyExA(rootKey, subKey, 0, NULL, 0, sam, NULL, &hKey,
+                        &dwDisposition) != ERROR_SUCCESS) {
+        LOG_F(ERROR, "setPersistentEnv: Failed to open registry key");
+        return false;
+    }
+
+    // 设置注册表值
+    LONG result = RegSetValueExA(hKey, key.c_str(), 0, REG_SZ,
+                                 (LPBYTE)val.c_str(), val.length() + 1);
+    RegCloseKey(hKey);
+
+    if (result != ERROR_SUCCESS) {
+        LOG_F(ERROR, "setPersistentEnv: Failed to set registry value");
+        return false;
+    }
+
+    // 广播环境变量改变的消息
+    SendMessageTimeoutA(HWND_BROADCAST, WM_SETTINGCHANGE, 0,
+                        (LPARAM) "Environment", SMTO_ABORTIFHUNG, 5000, NULL);
+
+    // 同时设置当前进程的环境变量
+    setEnv(key, val);
+    return true;
+#else
+    // POSIX系统上的持久化设置
+    // 通常是修改配置文件，如~/.profile, ~/.bashrc等
+
+    String homeDir = getHomeDir();
+    if (homeDir.empty()) {
+        LOG_F(ERROR, "setPersistentEnv: Failed to get home directory");
+        return false;
+    }
+
+    std::string filePath;
+    if (level == PersistLevel::USER) {
+        // 选择适当的配置文件
+        if (std::filesystem::exists(homeDir + "/.bash_profile")) {
+            filePath = homeDir + "/.bash_profile";
+        } else if (std::filesystem::exists(homeDir + "/.profile")) {
+            filePath = homeDir + "/.profile";
+        } else {
+            filePath = homeDir + "/.bashrc";  // 使用最常见的
+        }
+    } else {  // PersistLevel::SYSTEM
+        // 系统级别需要管理员权限，通常写入/etc/environment或/etc/profile.d/
+        filePath = "/etc/environment";
+        // 检查是否有写权限
+        if (access(filePath.c_str(), W_OK) != 0) {
+            LOG_F(ERROR,
+                  "setPersistentEnv: No write permission for system "
+                  "environment file");
+            return false;
+        }
+    }
+
+    // 读取现有文件
+    std::vector<std::string> lines;
+    std::ifstream inFile(filePath);
+    if (inFile.is_open()) {
+        std::string line;
+        while (std::getline(inFile, line)) {
+            // 跳过注释以及要设置的变量的现有定义
+            if (line.empty() || line[0] == '#') {
+                lines.push_back(line);
+                continue;
+            }
+
+            // 查找"KEY="形式的行
+            std::string pattern = key.c_str();
+            pattern += "=";
+            if (line.find(pattern) == 0) {
+                continue;  // 跳过要替换的行
+            }
+
+            lines.push_back(line);
+        }
+        inFile.close();
+    }
+
+    // 添加新的环境变量定义
+    std::string newLine = key.c_str();
+    newLine += "=";
+    newLine += val.c_str();
+    lines.push_back(newLine);
+
+    // 写回文件
+    std::ofstream outFile(filePath);
+    if (!outFile.is_open()) {
+        LOG_F(ERROR, "setPersistentEnv: Failed to open file for writing: {}",
+              filePath);
+        return false;
+    }
+
+    for (const auto& line : lines) {
+        outFile << line << std::endl;
+    }
+    outFile.close();
+
+    // 同时设置当前进程的环境变量
+    setEnv(key, val);
+
+    LOG_F(INFO,
+          "setPersistentEnv: Successfully set persistent environment variable "
+          "in {}",
+          filePath);
+    return true;
+#endif
+}
+
+auto Env::deletePersistentEnv(const String& key, PersistLevel level) -> bool {
+    LOG_F(INFO, "deletePersistentEnv called with key: {}, level: {}", key,
+          static_cast<int>(level));
+
+    // PROCESS级别就是普通的unsetEnv
+    if (level == PersistLevel::PROCESS) {
+        unsetEnv(key);
+        return true;
+    }
+
+#ifdef _WIN32
+    // Windows平台上的删除
+    HKEY hKey;
+
+    // 根据级别选择注册表位置
+    const char* subKey = (level == PersistLevel::USER)
+                             ? "Environment"
+                             : "SYSTEM\\CurrentControlSet\\Control\\Session "
+                               "Manager\\Environment";
+    REGSAM sam = KEY_WRITE;
+    HKEY rootKey =
+        (level == PersistLevel::USER) ? HKEY_CURRENT_USER : HKEY_LOCAL_MACHINE;
+
+    if (level == PersistLevel::SYSTEM && !IsUserAnAdmin()) {
+        LOG_F(ERROR,
+              "deletePersistentEnv: Deleting SYSTEM level environment requires "
+              "admin privileges");
+        return false;
+    }
+
+    // 打开注册表项
+    if (RegOpenKeyExA(rootKey, subKey, 0, sam, &hKey) != ERROR_SUCCESS) {
+        LOG_F(ERROR, "deletePersistentEnv: Failed to open registry key");
+        return false;
+    }
+
+    // 删除注册表值
+    LONG result = RegDeleteValueA(hKey, key.c_str());
+    RegCloseKey(hKey);
+
+    if (result != ERROR_SUCCESS && result != ERROR_FILE_NOT_FOUND) {
+        LOG_F(ERROR, "deletePersistentEnv: Failed to delete registry value");
+        return false;
+    }
+
+    // 广播环境变量改变的消息
+    SendMessageTimeoutA(HWND_BROADCAST, WM_SETTINGCHANGE, 0,
+                        (LPARAM) "Environment", SMTO_ABORTIFHUNG, 5000, NULL);
+
+    // 同时从当前进程中删除
+    unsetEnv(key);
+    return true;
+#else
+    // POSIX系统上的删除
+    String homeDir = getHomeDir();
+    if (homeDir.empty()) {
+        LOG_F(ERROR, "deletePersistentEnv: Failed to get home directory");
+        return false;
+    }
+
+    std::string filePath;
+    if (level == PersistLevel::USER) {
+        // 选择适当的配置文件
+        if (std::filesystem::exists(homeDir + "/.bash_profile")) {
+            filePath = homeDir + "/.bash_profile";
+        } else if (std::filesystem::exists(homeDir + "/.profile")) {
+            filePath = homeDir + "/.profile";
+        } else {
+            filePath = homeDir + "/.bashrc";
+        }
+    } else {  // PersistLevel::SYSTEM
+        filePath = "/etc/environment";
+        // 检查是否有写权限
+        if (access(filePath.c_str(), W_OK) != 0) {
+            LOG_F(ERROR,
+                  "deletePersistentEnv: No write permission for system "
+                  "environment file");
+            return false;
+        }
+    }
+
+    // 读取现有文件
+    std::vector<std::string> lines;
+    std::ifstream inFile(filePath);
+    bool found = false;
+
+    if (inFile.is_open()) {
+        std::string line;
+        while (std::getline(inFile, line)) {
+            // 查找"KEY="形式的行
+            std::string pattern = key.c_str();
+            pattern += "=";
+            if (line.find(pattern) == 0) {
+                found = true;
+                continue;  // 跳过要删除的行
+            }
+            lines.push_back(line);
+        }
+        inFile.close();
+    } else {
+        LOG_F(ERROR, "deletePersistentEnv: Failed to open file: {}", filePath);
+        return false;
+    }
+
+    if (!found) {
+        LOG_F(INFO, "deletePersistentEnv: Key not found in {}", filePath);
+        return true;  // 不存在也算成功
+    }
+
+    // 写回文件
+    std::ofstream outFile(filePath);
+    if (!outFile.is_open()) {
+        LOG_F(ERROR, "deletePersistentEnv: Failed to open file for writing: {}",
+              filePath);
+        return false;
+    }
+
+    for (const auto& line : lines) {
+        outFile << line << std::endl;
+    }
+    outFile.close();
+
+    // 同时从当前进程中删除
+    unsetEnv(key);
+
+    LOG_F(INFO,
+          "deletePersistentEnv: Successfully deleted persistent environment "
+          "variable from {}",
+          filePath);
+    return true;
+#endif
+}
+
+// 实现PATH操作功能
+auto Env::getPathSeparator() -> char {
+#ifdef _WIN32
+    return ';';
+#else
+    return ':';
+#endif
+}
+
+auto Env::splitPathString(const String& pathStr) -> Vector<String> {
+    LOG_F(INFO, "splitPathString called");
+    Vector<String> result;
+    if (pathStr.empty()) {
+        return result;
+    }
+
+    char separator = getPathSeparator();
+    size_t start = 0;
+    size_t end = pathStr.find(separator);
+
+    while (end != String::npos) {
+        String path = pathStr.substr(start, end - start);
+        if (!path.empty()) {
+            // 去除首尾空格
+            while (!path.empty() && std::isspace(path.front())) {
+                path.erase(0, 1);
+            }
+            while (!path.empty() && std::isspace(path.back())) {
+                path.pop_back();
+            }
+
+            if (!path.empty()) {
+                result.push_back(path);
+            }
+        }
+        start = end + 1;
+        end = pathStr.find(separator, start);
+    }
+
+    // 添加最后一段
+    if (start < pathStr.length()) {
+        String path = pathStr.substr(start);
+        // 去除首尾空格
+        while (!path.empty() && std::isspace(path.front())) {
+            path.erase(0, 1);
+        }
+        while (!path.empty() && std::isspace(path.back())) {
+            path.pop_back();
+        }
+
+        if (!path.empty()) {
+            result.push_back(path);
+        }
+    }
+
+    return result;
+}
+
+auto Env::joinPathString(const Vector<String>& paths) -> String {
+    LOG_F(INFO, "joinPathString called with {} paths", paths.size());
+    if (paths.empty()) {
+        return "";
+    }
+
+    char separator = getPathSeparator();
+    String result;
+
+    for (size_t i = 0; i < paths.size(); ++i) {
+        result += paths[i];
+        if (i < paths.size() - 1) {
+            result += separator;
+        }
+    }
+
+    return result;
+}
+
+auto Env::getPathEntries() -> Vector<String> {
+    LOG_F(INFO, "getPathEntries called");
+
+#ifdef _WIN32
+    String pathVar = getEnv("Path", "");
+#else
+    String pathVar = getEnv("PATH", "");
+#endif
+
+    return splitPathString(pathVar);
+}
+
+auto Env::isInPath(const String& path) -> bool {
+    LOG_F(INFO, "isInPath called with path: {}", path);
+    Vector<String> paths = getPathEntries();
+
+    // 标准化给定的路径以进行比较
+    std::filesystem::path normalizedPath;
+    try {
+        normalizedPath =
+            std::filesystem::absolute(path.c_str()).lexically_normal();
+    } catch (const std::exception& e) {
+        LOG_F(ERROR, "isInPath: Failed to normalize path: {}", e.what());
+        return false;
+    }
+
+    String normalizedPathStr = normalizedPath.string();
+
+    for (const auto& entry : paths) {
+        try {
+            std::filesystem::path entryPath =
+                std::filesystem::absolute(entry.c_str()).lexically_normal();
+            if (entryPath == normalizedPath) {
+                LOG_F(INFO, "isInPath: Path found in PATH");
+                return true;
+            }
+        } catch (const std::exception& e) {
+            LOG_F(WARNING, "isInPath: Failed to normalize PATH entry: {}",
+                  e.what());
+            continue;
+        }
+    }
+
+    // 尝试直接字符串比较（不区分大小写）
+    for (const auto& entry : paths) {
+        String lowerEntry = entry;
+        String lowerPath = path;
+
+        std::transform(lowerEntry.begin(), lowerEntry.end(), lowerEntry.begin(),
+                       ::tolower);
+        std::transform(lowerPath.begin(), lowerPath.end(), lowerPath.begin(),
+                       ::tolower);
+
+        if (lowerEntry == lowerPath) {
+            LOG_F(INFO,
+                  "isInPath: Path found in PATH (case-insensitive match)");
+            return true;
+        }
+    }
+
+    LOG_F(INFO, "isInPath: Path not found in PATH");
+    return false;
+}
+
+auto Env::addToPath(const String& path, bool prepend) -> bool {
+    LOG_F(INFO, "addToPath called with path: {}, prepend: {}", path, prepend);
+
+    // 检查路径是否已经存在于PATH中
+    if (isInPath(path)) {
+        LOG_F(INFO, "addToPath: Path already exists in PATH");
+        return true;  // 已经存在，无需添加
+    }
+
+    // 获取PATH环境变量名称
+#ifdef _WIN32
+    String pathVarName = "Path";
+#else
+    String pathVarName = "PATH";
+#endif
+
+    // 获取当前PATH
+    String currentPath = getEnv(pathVarName, "");
+    String newPath;
+
+    // 构造新的PATH
+    if (currentPath.empty()) {
+        newPath = path;
+    } else {
+        if (prepend) {
+            newPath = path + getPathSeparator() + currentPath;
+        } else {
+            newPath = currentPath + getPathSeparator() + path;
+        }
+    }
+
+    // 更新PATH
+    bool result = setEnv(pathVarName, newPath);
+    if (result) {
+        LOG_F(INFO, "addToPath: Successfully added path to PATH");
+    } else {
+        LOG_F(ERROR, "addToPath: Failed to update PATH");
+    }
+
+    return result;
+}
+
+auto Env::removeFromPath(const String& path) -> bool {
+    LOG_F(INFO, "removeFromPath called with path: {}", path);
+
+    // 检查路径是否存在于PATH中
+    if (!isInPath(path)) {
+        LOG_F(INFO, "removeFromPath: Path does not exist in PATH");
+        return true;  // 不存在，无需删除
+    }
+
+    // 获取PATH环境变量名称
+#ifdef _WIN32
+    String pathVarName = "Path";
+#else
+    String pathVarName = "PATH";
+#endif
+
+    // 获取当前PATH条目
+    Vector<String> paths = getPathEntries();
+    Vector<String> newPaths;
+
+    // 标准化给定的路径以进行比较
+    std::filesystem::path normalizedPath;
+    try {
+        normalizedPath =
+            std::filesystem::absolute(path.c_str()).lexically_normal();
+    } catch (const std::exception& e) {
+        LOG_F(ERROR, "removeFromPath: Failed to normalize path: {}", e.what());
+        return false;
+    }
+
+    String normalizedPathStr = normalizedPath.string();
+
+    // 过滤掉要删除的路径
+    for (const auto& entry : paths) {
+        try {
+            std::filesystem::path entryPath =
+                std::filesystem::absolute(entry.c_str()).lexically_normal();
+            if (entryPath != normalizedPath) {
+                newPaths.push_back(entry);
+            }
+        } catch (const std::exception& e) {
+            LOG_F(WARNING, "removeFromPath: Failed to normalize PATH entry: {}",
+                  e.what());
+
+            // 使用简单的字符串比较作为备选方案
+            String lowerEntry = entry;
+            String lowerPath = path;
+
+            std::transform(lowerEntry.begin(), lowerEntry.end(),
+                           lowerEntry.begin(), ::tolower);
+            std::transform(lowerPath.begin(), lowerPath.end(),
+                           lowerPath.begin(), ::tolower);
+
+            if (lowerEntry != lowerPath) {
+                newPaths.push_back(entry);
+            }
+        }
+    }
+
+    // 更新PATH
+    String newPath = joinPathString(newPaths);
+    bool result = setEnv(pathVarName, newPath);
+
+    if (result) {
+        LOG_F(INFO, "removeFromPath: Successfully removed path from PATH");
+    } else {
+        LOG_F(ERROR, "removeFromPath: Failed to update PATH");
+    }
+
+    return result;
+}
+
+// 实现环境变量比较和合并功能
+auto Env::diffEnvironments(const HashMap<String, String>& env1,
+                           const HashMap<String, String>& env2)
+    -> std::tuple<HashMap<String, String>, HashMap<String, String>,
+                  HashMap<String, String>> {
+    LOG_F(INFO, "diffEnvironments called");
+
+    HashMap<String, String> added;
+    HashMap<String, String> removed;
+    HashMap<String, String> modified;
+
+    // 查找env2中添加或修改的变量
+    for (const auto& [key, val2] : env2) {
+        auto it = env1.find(key);
+        if (it == env1.end()) {
+            // 添加的变量
+            added[key] = val2;
+        } else if (it->second != val2) {
+            // 修改的变量
+            modified[key] = val2;
+        }
+    }
+
+    // 查找在env1中存在但在env2中不存在的变量
+    for (const auto& [key, val1] : env1) {
+        if (env2.find(key) == env2.end()) {
+            removed[key] = val1;
+        }
+    }
+
+    LOG_F(INFO,
+          "diffEnvironments: Found {} added, {} removed, {} modified variables",
+          added.size(), removed.size(), modified.size());
+
+    return std::make_tuple(added, removed, modified);
+}
+
+auto Env::mergeEnvironments(const HashMap<String, String>& baseEnv,
+                            const HashMap<String, String>& overlayEnv,
+                            bool override) -> HashMap<String, String> {
+    LOG_F(INFO, "mergeEnvironments called with override: {}", override);
+
+    HashMap<String, String> result = baseEnv;  // 从基础环境开始
+
+    for (const auto& [key, val] : overlayEnv) {
+        auto it = result.find(key);
+        if (it == result.end() || override) {
+            // 如果键不存在或者允许覆盖，则添加/覆盖
+            result[key] = val;
+        }
+    }
+
+    LOG_F(INFO,
+          "mergeEnvironments: Created merged environment with {} variables",
+          result.size());
+    return result;
+}
+
+// 实现系统信息功能
+auto Env::getSystemName() -> String {
+    LOG_F(INFO, "getSystemName called");
+
+#ifdef _WIN32
+    return "Windows";
+#elif defined(__APPLE__)
+    return "macOS";
+#elif defined(__linux__)
+    return "Linux";
+#elif defined(__FreeBSD__)
+    return "FreeBSD";
+#elif defined(__unix__)
+    return "Unix";
+#else
+    return "Unknown";
+#endif
+}
+
+auto Env::getSystemArch() -> String {
+    LOG_F(INFO, "getSystemArch called");
+
+#if defined(__x86_64__) || defined(_M_X64)
+    return "x86_64";
+#elif defined(__i386) || defined(_M_IX86)
+    return "x86";
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    return "arm64";
+#elif defined(__arm__) || defined(_M_ARM)
+    return "arm";
+#else
+    return "unknown";
+#endif
+}
+
+auto Env::getCurrentUser() -> String {
+    LOG_F(INFO, "getCurrentUser called");
+
+    String username;
+
+#ifdef _WIN32
+    DWORD size = 256;
+    char buffer[256];
+    if (GetUserNameA(buffer, &size)) {
+        username = String(buffer);
+    } else {
+        LOG_F(ERROR, "getCurrentUser: GetUserNameA failed with error {}",
+              GetLastError());
+        username = getEnv("USERNAME", "unknown");
+    }
+#else
+    username = getEnv("USER", "");
+    if (username.empty()) {
+        username = getEnv("LOGNAME", "");
+    }
+
+    if (username.empty()) {
+        // 尝试从passwd获取
+        uid_t uid = geteuid();
+        struct passwd* pw = getpwuid(uid);
+        if (pw) {
+            username = pw->pw_name;
+        } else {
+            username = "unknown";
+        }
+    }
+#endif
+
+    LOG_F(INFO, "getCurrentUser returning: {}", username);
+    return username;
+}
+
+auto Env::getHostName() -> String {
+    LOG_F(INFO, "getHostName called");
+
+    String hostname;
+
+#ifdef _WIN32
+    DWORD size = MAX_COMPUTERNAME_LENGTH + 1;
+    char buffer[MAX_COMPUTERNAME_LENGTH + 1];
+    if (GetComputerNameA(buffer, &size)) {
+        hostname = String(buffer, size);
+    } else {
+        LOG_F(ERROR, "getHostName: GetComputerNameA failed with error {}",
+              GetLastError());
+        hostname = getEnv("COMPUTERNAME", "unknown");
+    }
+#else
+    char buffer[HOST_NAME_MAX + 1];
+    if (gethostname(buffer, sizeof(buffer)) == 0) {
+        hostname = buffer;
+    } else {
+        LOG_F(ERROR, "getHostName: gethostname failed with error {}", errno);
+        hostname = getEnv("HOSTNAME", "unknown");
+    }
+#endif
+
+    LOG_F(INFO, "getHostName returning: {}", hostname);
+    return hostname;
+}
 
 }  // namespace atom::utils

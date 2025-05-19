@@ -330,12 +330,30 @@ Examples:
             py::return_value_policy::reference)
         .def(
             "set_alert_callback",
-            [](BatteryManager& self, py::function callback) {
-                self.setAlertCallback([callback](const std::string& alert,
-                                                 const BatteryInfo& info) {
+            [](BatteryManager& self, py::function py_callback) {
+                self.setAlertCallback([py_callback](AlertType alert_type,
+                                                    const BatteryInfo& info) {
                     py::gil_scoped_acquire acquire;
                     try {
-                        callback(alert, info);
+                        std::string alert_msg;
+                        switch (alert_type) {
+                            case AlertType::LOW_BATTERY:
+                                alert_msg = "LOW_BATTERY";
+                                break;
+                            case AlertType::CRITICAL_BATTERY:
+                                alert_msg = "CRITICAL_BATTERY";
+                                break;
+                            case AlertType::HIGH_TEMPERATURE:
+                                alert_msg = "HIGH_TEMPERATURE";
+                                break;
+                            case AlertType::LOW_BATTERY_HEALTH:
+                                alert_msg = "LOW_BATTERY_HEALTH";
+                                break;
+                            default:
+                                alert_msg = "UNKNOWN_ALERT";
+                                break;
+                        }
+                        py_callback(alert_msg, info);
                     } catch (py::error_already_set& e) {
                         PyErr_Print();
                     }
@@ -533,8 +551,8 @@ Examples:
     m.def(
         "is_charging",
         []() {
-            BatteryInfo info = getBatteryInfo();
-            return info.isCharging;
+            auto infoOpt = getBatteryInfo();
+            return infoOpt.has_value() ? infoOpt->isCharging : false;
         },
         R"(Check if battery is currently charging.
 
@@ -552,11 +570,15 @@ Examples:
     m.def(
         "get_battery_level",
         []() {
-            BatteryInfo info = getBatteryInfo();
-            if (!info.isBatteryPresent) {
-                return -1.0f;
+            auto infoOpt = getBatteryInfo();
+            if (infoOpt.has_value()) {
+                const auto& info = infoOpt.value();
+                if (!info.isBatteryPresent) {
+                    return -1.0f;
+                }
+                return info.batteryLifePercent;
             }
-            return info.batteryLifePercent;
+            return -1.0f;  // No battery info available
         },
         R"(Get current battery level.
 
@@ -575,11 +597,15 @@ Examples:
     m.def(
         "get_estimated_runtime",
         []() {
-            BatteryInfo info = getBatteryInfo();
-            if (!info.isBatteryPresent || info.isCharging) {
-                return -1.0f;
+            auto infoOpt = getBatteryInfo();
+            if (infoOpt.has_value()) {
+                const auto& info = infoOpt.value();
+                if (!info.isBatteryPresent || info.isCharging) {
+                    return -1.0f;
+                }
+                return info.getEstimatedTimeRemaining();
             }
-            return info.getEstimatedTimeRemaining();
+            return -1.0f;  // No battery info or not applicable
         },
         R"(Get estimated remaining battery runtime in hours.
 
@@ -597,7 +623,10 @@ Examples:
 
     m.def(
         "is_battery_present",
-        []() { return getBatteryInfo().isBatteryPresent; },
+        []() {
+            auto infoOpt = getBatteryInfo();
+            return infoOpt.has_value() ? infoOpt->isBatteryPresent : false;
+        },
         R"(Check if a battery is present in the system.
 
 Returns:
@@ -614,11 +643,15 @@ Examples:
     m.def(
         "get_battery_health",
         []() {
-            BatteryInfo info = getDetailedBatteryInfo();
-            if (!info.isBatteryPresent) {
-                return -1.0f;
+            BatteryResult result = getDetailedBatteryInfo();
+            if (std::holds_alternative<BatteryInfo>(result)) {
+                const auto& info = std::get<BatteryInfo>(result);
+                if (!info.isBatteryPresent) {
+                    return -1.0f;
+                }
+                return info.getBatteryHealth();
             }
-            return info.getBatteryHealth();
+            return -1.0f;  // Error or no battery
         },
         R"(Get battery health percentage.
 
@@ -707,9 +740,13 @@ Examples:
     m.def(
         "is_battery_low",
         [](float threshold) {
-            BatteryInfo info = getBatteryInfo();
-            return info.isBatteryPresent && !info.isCharging &&
-                   info.batteryLifePercent < threshold;
+            auto infoOpt = getBatteryInfo();
+            if (infoOpt.has_value()) {
+                const auto& info = infoOpt.value();
+                return info.isBatteryPresent && !info.isCharging &&
+                       info.batteryLifePercent < threshold;
+            }
+            return false;  // If no battery info, assume not low
         },
         py::arg("threshold") = 20.0f,
         R"(Check if battery level is below the specified threshold.
@@ -731,33 +768,37 @@ Examples:
     m.def(
         "format_time_remaining",
         [](bool include_seconds) {
-            BatteryInfo info = getBatteryInfo();
-            if (!info.isBatteryPresent || info.isCharging) {
-                return std::string("N/A");
+            auto infoOpt = getBatteryInfo();
+            if (infoOpt.has_value()) {
+                const auto& info = infoOpt.value();
+                if (!info.isBatteryPresent || info.isCharging) {
+                    return std::string("N/A");
+                }
+
+                float hours = info.getEstimatedTimeRemaining();
+                if (hours <= 0) {
+                    return std::string("Unknown");
+                }
+
+                int whole_hours = static_cast<int>(hours);
+                int minutes = static_cast<int>((hours - whole_hours) * 60);
+
+                std::string result_str;
+                if (whole_hours > 0) {
+                    result_str += std::to_string(whole_hours) + "h ";
+                }
+
+                result_str += std::to_string(minutes) + "m";
+
+                if (include_seconds) {
+                    int seconds =
+                        static_cast<int>((hours - whole_hours) * 3600) % 60;
+                    result_str += " " + std::to_string(seconds) + "s";
+                }
+
+                return result_str;
             }
-
-            float hours = info.getEstimatedTimeRemaining();
-            if (hours <= 0) {
-                return std::string("Unknown");
-            }
-
-            int whole_hours = static_cast<int>(hours);
-            int minutes = static_cast<int>((hours - whole_hours) * 60);
-
-            std::string result;
-            if (whole_hours > 0) {
-                result += std::to_string(whole_hours) + "h ";
-            }
-
-            result += std::to_string(minutes) + "m";
-
-            if (include_seconds) {
-                int seconds =
-                    static_cast<int>((hours - whole_hours) * 3600) % 60;
-                result += " " + std::to_string(seconds) + "s";
-            }
-
-            return result;
+            return std::string("N/A");  // If no battery info
         },
         py::arg("include_seconds") = false,
         R"(Format battery time remaining as a human-readable string.

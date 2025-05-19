@@ -54,7 +54,6 @@ set(HEADERS
 )
 
 set(LIBS
-    atom-io
     atom-error
     loguru
     tinyxml2

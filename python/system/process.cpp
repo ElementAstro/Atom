@@ -123,19 +123,23 @@ PYBIND11_MODULE(process, m) {
         .def(py::init<>())
         .def_readwrite("privileges", &atom::system::PrivilegesInfo::privileges,
                        "List of privilege names")
-        .def_readwrite("enabled", &atom::system::PrivilegesInfo::enabled,
-                       "List of whether each privilege is enabled")
+        // Removed .def_readwrite for "enabled" as it's not in PrivilegesInfo
+        // .def_readwrite("enabled", &atom::system::PrivilegesInfo::enabled,
+        //                "List of whether each privilege is enabled")
         .def("__repr__", [](const atom::system::PrivilegesInfo& info) {
             std::string repr = "<PrivilegesInfo [";
-            for (size_t i = 0;
-                 i < info.privileges.size() && i < info.enabled.size(); ++i) {
+            for (size_t i = 0; i < info.privileges.size();
+                 ++i) {  // Iterate only based on privileges size
                 if (i > 0)
                     repr += ", ";
-                repr += info.privileges[i] + ": " +
-                        (info.enabled[i] ? "enabled" : "disabled");
+                repr += info.privileges[i];  // Display only the privilege name
+                // Removed display of enabled status: (info.enabled[i] ?
+                // "enabled" : "disabled")
                 if (i >= 2 && info.privileges.size() > 5) {
                     repr += ", ... (" +
-                            std::to_string(info.privileges.size() - 3) +
+                            std::to_string(
+                                info.privileges.size() -
+                                (i + 1)) +  // Correctly calculate remaining
                             " more)";
                     break;
                 }
@@ -782,7 +786,8 @@ Examples:
     ...     print(f"{syscall}: {count} calls")
 )");
 
-    m.def("get_process_network_connections", &atom::system::getProcessNetworkConnections, py::arg("pid"),
+    m.def("get_process_network_connections",
+          &atom::system::getProcessNetworkConnections, py::arg("pid"),
           R"(Gets network connection information for a process.
 
 Args:
@@ -801,7 +806,8 @@ Examples:
     ...           f"{conn.remote_address}:{conn.remote_port} ({conn.status}) ")
 )");
 
-    m.def("get_process_file_descriptors", &atom::system::getProcessFileDescriptors, py::arg("pid"),
+    m.def("get_process_file_descriptors",
+          &atom::system::getProcessFileDescriptors, py::arg("pid"),
           R"(Gets file descriptor information for a process.
 
 Args:
@@ -819,8 +825,9 @@ Examples:
     ...     print(f"{fd.fd}: {fd.path} ({fd.type}, {fd.mode}) ")
 )");
 
-    m.def("get_process_performance_history", &atom::system::getProcessPerformanceHistory,
-          py::arg("pid"), py::arg("duration"), py::arg("interval_ms") = 1000,
+    m.def("get_process_performance_history",
+          &atom::system::getProcessPerformanceHistory, py::arg("pid"),
+          py::arg("duration"), py::arg("interval_ms") = 1000,
           R"(Gets performance history data for a process over a time period.
 
 Args:
@@ -1061,32 +1068,35 @@ Examples:
     ...     print(f"{i+1}. {proc.name} (PID: {proc.pid}): {mem_mb:.2f} MB")
 )");
 
-    m.def("get_process_tree", [](int pid) {
-        std::map<int, std::vector<int>> tree;
-        std::vector<int> to_process = {pid};
-        std::set<int> processed;
+    m.def(
+        "get_process_tree",
+        [](int pid) {
+            std::map<int, std::vector<int>> tree;
+            std::vector<int> to_process = {pid};
+            std::set<int> processed;
 
-        while (!to_process.empty()) {
-            int current_pid = to_process.back();
-            to_process.pop_back();
+            while (!to_process.empty()) {
+                int current_pid = to_process.back();
+                to_process.pop_back();
 
-            if (processed.count(current_pid) > 0) {
-                continue;
+                if (processed.count(current_pid) > 0) {
+                    continue;
+                }
+
+                processed.insert(current_pid);
+
+                auto children = atom::system::getChildProcesses(current_pid);
+                if (!children.empty()) {
+                    tree[current_pid] = children;
+                    to_process.insert(to_process.end(), children.begin(),
+                                      children.end());
+                }
             }
 
-            processed.insert(current_pid);
-
-            auto children = atom::system::getChildProcesses(current_pid);
-            if (!children.empty()) {
-                tree[current_pid] = children;
-                to_process.insert(to_process.end(), children.begin(),
-                                  children.end());
-            }
-        }
-
-        return tree;
-    }, py::arg("pid"),
-    R"(Get the process tree starting from a specific process.
+            return tree;
+        },
+        py::arg("pid"),
+        R"(Get the process tree starting from a specific process.
 
 Args:
     pid: Root process ID.
@@ -1106,46 +1116,51 @@ Examples:
     ...
     >>> print_tree(pid, tree)
 )");
-    
-    // Define a helper class for process monitoring context manager
-    py::class_<py::object>(m, "ProcessMonitor", "Process monitoring context manager")
-        .def(py::init([](int pid, std::function<void(int, const std::string&)> callback, 
-                        unsigned int interval_ms = 1000) {
-        return py::object();  // Placeholder, actual impl in __enter__
-        }), py::arg("pid"), py::arg("callback"), py::arg("interval_ms") = 1000,
-            "Initialize a process monitor context manager")
-        .def("__enter__", [](py::object& self, py::object exc_type, 
-                            py::object exc_value, py::object traceback) {
-        // Here we capture self and extract the monitor parameters
-        if (py::hasattr(self, "pid") && py::hasattr(self, "callback") &&
-            py::hasattr(self, "interval_ms")) {
-            int pid = py::cast<int>(self.attr("pid"));
-            auto callback =
-                py::cast<std::function<void(int, const std::string&)>>(
-                    self.attr("callback"));
-            unsigned int interval_ms =
-                py::cast<unsigned int>(self.attr("interval_ms"));
 
-            int monitor_id =
-                atom::system::monitorProcess(pid, callback, interval_ms);
-            self.attr("monitor_id") = py::int_(monitor_id);
-        }
-        return self;
-        })
-        .def("__exit__", [](py::object& self, py::object exc_type, py::object exc_value, 
-                           py::object traceback) {
-        if (py::hasattr(self, "monitor_id")) {
-            int monitor_id = py::cast<int>(self.attr("monitor_id"));
-            atom::system::stopMonitoring(monitor_id);
-        }
-        return false;  // Don't suppress exceptions
+    // Define a helper class for process monitoring context manager
+    py::class_<py::object>(m, "ProcessMonitor",
+                           "Process monitoring context manager")
+        .def(py::init([](int pid,
+                         std::function<void(int, const std::string&)> callback,
+                         unsigned int interval_ms = 1000) {
+                 return py::object();  // Placeholder, actual impl in __enter__
+             }),
+             py::arg("pid"), py::arg("callback"), py::arg("interval_ms") = 1000,
+             "Initialize a process monitor context manager")
+        .def("__enter__",
+             [](py::object& self, py::object exc_type, py::object exc_value,
+                py::object traceback) {
+                 // Here we capture self and extract the monitor parameters
+                 if (py::hasattr(self, "pid") &&
+                     py::hasattr(self, "callback") &&
+                     py::hasattr(self, "interval_ms")) {
+                     int pid = py::cast<int>(self.attr("pid"));
+                     auto callback =
+                         py::cast<std::function<void(int, const std::string&)>>(
+                             self.attr("callback"));
+                     unsigned int interval_ms =
+                         py::cast<unsigned int>(self.attr("interval_ms"));
+
+                     int monitor_id = atom::system::monitorProcess(
+                         pid, callback, interval_ms);
+                     self.attr("monitor_id") = py::int_(monitor_id);
+                 }
+                 return self;
+             })
+        .def("__exit__", [](py::object& self, py::object exc_type,
+                            py::object exc_value, py::object traceback) {
+            if (py::hasattr(self, "monitor_id")) {
+                int monitor_id = py::cast<int>(self.attr("monitor_id"));
+                atom::system::stopMonitoring(monitor_id);
+            }
+            return false;  // Don't suppress exceptions
         });
 
     // Context manager factory function
     m.def(
         "monitor",
         [&m](int pid, std::function<void(int, const std::string&)> callback,
-           unsigned int interval_ms = 1000) {
+             unsigned int interval_ms = 1000) {
             auto obj = m.attr("ProcessMonitor")(pid, callback, interval_ms);
             obj.attr("pid") = py::int_(pid);
             obj.attr("callback") = py::cast(callback);

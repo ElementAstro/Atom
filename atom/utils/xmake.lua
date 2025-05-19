@@ -1,18 +1,17 @@
--- xmake.lua for Atom-Utils
--- This project is licensed under the terms of the GPL3 license.
---
--- Project Name: Atom-Utils
--- Description: A collection of useful functions
+-- filepath: d:\msys64\home\qwdma\Atom\atom\utils\xmake.lua
+-- xmake configuration for Atom-Utils module
 -- Author: Max Qian
 -- License: GPL3
 
+-- Add standard build modes
 add_rules("mode.debug", "mode.release")
 
+-- Project configuration
 set_project("atom-utils")
 set_version("1.0.0")
 set_license("GPL3")
 
--- Sources
+-- Define source files
 local sources = {
     "aes.cpp",
     "env.cpp",
@@ -25,7 +24,7 @@ local sources = {
     "xml.cpp"
 }
 
--- Headers
+-- Define header files
 local headers = {
     "aes.hpp",
     "env.hpp",
@@ -40,28 +39,44 @@ local headers = {
     "xml.hpp"
 }
 
--- Private Headers
-local private_headers = {
-}
-
--- Build Object Library
+-- Object Library
 target("atom-utils-object")
     set_kind("object")
-    add_headerfiles(headers, {public = true})
-    add_files(sources, private_headers, {public = false})
+    
+    -- Add files
+    add_headerfiles(table.unpack(headers))
+    add_files(table.unpack(sources))
+    
+    -- Add dependencies
     add_packages("loguru", "tinyxml2")
+    
+    -- Add include directories
+    add_includedirs(".", {public = true})
+    add_includedirs("..", {public = true})
+    
+    -- Set C++ standard
+    set_languages("c++20")
+target_end()
 
--- Build Static Library
+-- Library target
 target("atom-utils")
-    set_kind("static")
+    -- Set library type based on parent project option
+    set_kind(has_config("shared_libs") and "shared" or "static")
+    
+    -- Add dependencies
     add_deps("atom-utils-object")
     add_packages("loguru", "tinyxml2")
+    
+    -- Add include directories
     add_includedirs(".", {public = true})
-
+    
+    -- Set output directories
     set_targetdir("$(buildir)/lib")
     set_objectdir("$(buildir)/obj")
-
-    after_build(function (target)
-        os.cp("$(buildir)/lib", "$(projectdir)/lib")
-        os.cp("$(projectdir)/*.hpp", "$(projectdir)/include")
+    
+    -- Install configuration
+    on_install(function (target)
+        os.cp(target:targetfile(), path.join(target:installdir(), "lib"))
+        os.cp("*.hpp", path.join(target:installdir(), "include/atom/utils"))
     end)
+target_end()

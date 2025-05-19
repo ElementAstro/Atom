@@ -45,6 +45,16 @@ public:
         DOWN   ///< Pull-down resistor
     };
 
+    // 添加PWM模式枚举
+    /**
+     * @enum PwmMode
+     * @brief PWM (Pulse Width Modulation) operation mode.
+     */
+    enum class PwmMode {
+        HARDWARE, ///< Use hardware PWM if available
+        SOFTWARE  ///< Use software PWM implementation
+    };
+
     /**
      * @brief Constructs a GPIO object for a specific pin.
      * @param pin The pin number as a string.
@@ -173,6 +183,55 @@ public:
                                std::function<void(bool)> callback);
 
     /**
+     * @brief Sets up PWM (Pulse Width Modulation) on the pin.
+     * @param frequency The PWM frequency in hertz.
+     * @param dutyCycle The duty cycle (0.0 to 1.0).
+     * @param mode The PWM mode (hardware or software).
+     * @return True if PWM was successfully set up, false otherwise.
+     */
+    bool setPwm(double frequency, double dutyCycle, PwmMode mode = PwmMode::HARDWARE);
+
+    /**
+     * @brief Updates the PWM duty cycle.
+     * @param dutyCycle The new duty cycle (0.0 to 1.0).
+     * @return True if successful, false otherwise.
+     */
+    bool updatePwmDutyCycle(double dutyCycle);
+
+    /**
+     * @brief Stops PWM operation.
+     */
+    void stopPwm();
+
+    /**
+     * @brief Implements button debouncing for input pins.
+     * @param callback The function to call when a debounced press is detected.
+     * @param debounceTimeMs The debounce time in milliseconds.
+     * @return True if debouncing was successfully set up, false otherwise.
+     */
+    bool setupButtonDebounce(std::function<void()> callback, 
+                            unsigned int debounceTimeMs = 50);
+
+    /**
+     * @brief Sets up an interrupt counter for this pin.
+     * @param edge The edge to count (RISING, FALLING, or BOTH).
+     * @return True if the counter was successfully set up, false otherwise.
+     */
+    bool setupInterruptCounter(Edge edge = Edge::RISING);
+
+    /**
+     * @brief Gets the current interrupt count.
+     * @param resetAfterReading Whether to reset the counter after reading.
+     * @return The number of interrupts counted.
+     */
+    uint64_t getInterruptCount(bool resetAfterReading = false);
+
+    /**
+     * @brief Resets the interrupt counter to zero.
+     */
+    void resetInterruptCount();
+
+    /**
      * @class GPIOGroup
      * @brief A utility class for managing multiple GPIO pins as a group.
      */
@@ -209,6 +268,60 @@ public:
 
     private:
         std::vector<std::unique_ptr<GPIO>> gpios_;
+    };
+
+    /**
+     * @class ShiftRegister
+     * @brief A utility class for managing shift registers (e.g., 74HC595).
+     */
+    class ShiftRegister {
+    public:
+        /**
+         * @brief Constructs a ShiftRegister with specified pins.
+         * @param dataPin The data pin (DS).
+         * @param clockPin The clock pin (SH_CP).
+         * @param latchPin The latch pin (ST_CP).
+         * @param numBits The number of bits in the shift register chain.
+         */
+        ShiftRegister(const std::string& dataPin, const std::string& clockPin,
+                      const std::string& latchPin, uint8_t numBits = 8);
+
+        /**
+         * @brief Destructs the ShiftRegister.
+         */
+        ~ShiftRegister();
+
+        /**
+         * @brief Shifts out data to the register.
+         * @param data The data to shift out.
+         * @param bitOrder True for MSB first, false for LSB first.
+         */
+        void shiftOut(uint32_t data, bool msbFirst = true);
+
+        /**
+         * @brief Sets a single bit in the shift register.
+         * @param position The bit position (0-based).
+         * @param value The value to set (true/false).
+         */
+        void setBit(uint8_t position, bool value);
+
+        /**
+         * @brief Gets the current state of the output register.
+         * @return The current register state.
+         */
+        uint32_t getState() const;
+
+        /**
+         * @brief Clears all bits in the register (sets to 0).
+         */
+        void clear();
+
+    private:
+        std::unique_ptr<GPIO> dataPin_;   ///< Data pin (DS)
+        std::unique_ptr<GPIO> clockPin_;  ///< Clock pin (SH_CP)
+        std::unique_ptr<GPIO> latchPin_;  ///< Latch pin (ST_CP)
+        uint8_t numBits_;                ///< Number of bits in the register
+        uint32_t state_;                 ///< Current register state
     };
 
 private:
