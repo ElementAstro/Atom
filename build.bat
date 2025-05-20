@@ -1,20 +1,10 @@
 @echo off
-REM Build script for Atom project using xmake
+REM Build script for Atom project using xmake or CMake
 REM Author: Max Qian
 
 echo ===============================================
 echo Atom Project Build Script
 echo ===============================================
-
-REM Check if xmake is installed
-where xmake >nul 2>nul
-if %ERRORLEVEL% NEQ 0 (
-    echo Error: xmake not found in PATH
-    echo Please install xmake from https://xmake.io/
-    exit /b 1
-)
-
-echo Configuring Atom project...
 
 REM Parse command-line options
 set BUILD_TYPE=release
@@ -24,6 +14,9 @@ set BUILD_EXAMPLES=n
 set BUILD_TESTS=n
 set BUILD_CFITSIO=n
 set BUILD_SSH=n
+set BUILD_SYSTEM=cmake
+set CLEAN_BUILD=n
+set SHOW_HELP=n
 
 :parse_args
 if "%~1"=="" goto end_parse_args
@@ -56,23 +49,26 @@ if /i "%~1"=="--ssh" (
     set BUILD_SSH=y
     goto next_arg
 )
-if /i "%~1"=="--help" (
-    echo Usage: build.bat [options]
-    echo Options:
-    echo   --debug       Build in debug mode
-    echo   --python      Build with Python bindings
-    echo   --shared      Build shared libraries instead of static
-    echo   --examples    Build examples
-    echo   --tests       Build tests
-    echo   --cfitsio     Build with CFITSIO support
-    echo   --ssh         Build with SSH support
-    echo   --help        Show this help message
-    exit /b 0
+if /i "%~1"=="--xmake" (
+    set BUILD_SYSTEM=xmake
+    goto next_arg
 )
-
-echo Unknown option: %~1
-echo Use --help for usage information
-exit /b 1
+if /i "%~1"=="--cmake" (
+    set BUILD_SYSTEM=cmake
+    goto next_arg
+)
+if /i "%~1"=="--clean" (
+    set CLEAN_BUILD=y
+    goto next_arg
+)
+if /i "%~1"=="--help" (
+    set SHOW_HELP=y
+    goto next_arg
+) else (
+    echo Unknown option: %1
+    set SHOW_HELP=y
+    goto next_arg
+)
 
 :next_arg
 shift
@@ -80,39 +76,120 @@ goto parse_args
 
 :end_parse_args
 
-echo Configuration:
+REM Show help if requested
+if "%SHOW_HELP%"=="y" (
+    echo Usage: build.bat [options]
+    echo.
+    echo Options:
+    echo   --debug        Build in debug mode
+    echo   --python       Enable Python bindings
+    echo   --shared       Build shared libraries
+    echo   --examples     Build examples
+    echo   --tests        Build tests
+    echo   --cfitsio      Enable CFITSIO support
+    echo   --ssh          Enable SSH support
+    echo   --xmake        Use XMake build system
+    echo   --cmake        Use CMake build system (default)
+    echo   --clean        Clean build directory before building
+    echo   --help         Show this help message
+    echo.
+    exit /b 0
+)
+
+echo Build configuration:
 echo   Build type: %BUILD_TYPE%
 echo   Python bindings: %BUILD_PYTHON%
 echo   Shared libraries: %BUILD_SHARED%
-echo   Examples: %BUILD_EXAMPLES%
-echo   Tests: %BUILD_TESTS%
+echo   Build examples: %BUILD_EXAMPLES%
+echo   Build tests: %BUILD_TESTS%
 echo   CFITSIO support: %BUILD_CFITSIO%
 echo   SSH support: %BUILD_SSH%
+echo   Build system: %BUILD_SYSTEM%
+echo   Clean build: %CLEAN_BUILD%
+echo.
 
-REM Configure build
-xmake config -m %BUILD_TYPE% --build_python=%BUILD_PYTHON% --shared_libs=%BUILD_SHARED% ^
-    --build_examples=%BUILD_EXAMPLES% --build_tests=%BUILD_TESTS% ^
-    --enable_ssh=%BUILD_SSH%
-
-if %ERRORLEVEL% NEQ 0 (
-    echo Configuration failed!
-    exit /b %ERRORLEVEL%
+REM Check if the selected build system is available
+if "%BUILD_SYSTEM%"=="xmake" (
+    where xmake >nul 2>nul
+    if %ERRORLEVEL% NEQ 0 (
+        echo Error: xmake not found in PATH
+        echo Please install xmake from https://xmake.io/
+        exit /b 1
+    )
+) else (
+    where cmake >nul 2>nul
+    if %ERRORLEVEL% NEQ 0 (
+        echo Error: cmake not found in PATH
+        echo Please install CMake from https://cmake.org/download/
+        exit /b 1
+    )
 )
 
-echo ===============================================
-echo Building Atom...
-echo ===============================================
-
-xmake build -v
-
-if %ERRORLEVEL% NEQ 0 (
-    echo Build failed!
-    exit /b %ERRORLEVEL%
+REM Clean build directory if requested
+if "%CLEAN_BUILD%"=="y" (
+    echo Cleaning build directory...
+    if exist build rmdir /s /q build
+    mkdir build
 )
 
-echo ===============================================
+REM Build using the selected system
+if "%BUILD_SYSTEM%"=="xmake" (
+    echo Building with XMake...
+    
+    REM Configure XMake options
+    set XMAKE_ARGS=
+    if "%BUILD_TYPE%"=="debug" set XMAKE_ARGS=%XMAKE_ARGS% -m debug
+    if "%BUILD_PYTHON%"=="y" set XMAKE_ARGS=%XMAKE_ARGS% --python=y
+    if "%BUILD_SHARED%"=="y" set XMAKE_ARGS=%XMAKE_ARGS% --shared=y
+    if "%BUILD_EXAMPLES%"=="y" set XMAKE_ARGS=%XMAKE_ARGS% --examples=y
+    if "%BUILD_TESTS%"=="y" set XMAKE_ARGS=%XMAKE_ARGS% --tests=y
+    if "%BUILD_CFITSIO%"=="y" set XMAKE_ARGS=%XMAKE_ARGS% --cfitsio=y
+    if "%BUILD_SSH%"=="y" set XMAKE_ARGS=%XMAKE_ARGS% --ssh=y
+    
+    REM Run XMake
+    echo Configuring XMake project...
+    xmake f %XMAKE_ARGS%
+    if %ERRORLEVEL% NEQ 0 (
+        echo Error: XMake configuration failed
+        exit /b 1
+    )
+    
+    echo Building project...
+    xmake
+    if %ERRORLEVEL% NEQ 0 (
+        echo Error: XMake build failed
+        exit /b 1
+    )
+) else (
+    echo Building with CMake...
+    
+    REM Configure CMake options
+    set CMAKE_ARGS=-B build
+    if "%BUILD_TYPE%"=="debug" set CMAKE_ARGS=%CMAKE_ARGS% -DCMAKE_BUILD_TYPE=Debug
+    if "%BUILD_TYPE%"=="release" set CMAKE_ARGS=%CMAKE_ARGS% -DCMAKE_BUILD_TYPE=Release
+    if "%BUILD_PYTHON%"=="y" set CMAKE_ARGS=%CMAKE_ARGS% -DATOM_BUILD_PYTHON_BINDINGS=ON
+    if "%BUILD_SHARED%"=="y" set CMAKE_ARGS=%CMAKE_ARGS% -DBUILD_SHARED_LIBS=ON
+    if "%BUILD_EXAMPLES%"=="y" set CMAKE_ARGS=%CMAKE_ARGS% -DATOM_BUILD_EXAMPLES=ON
+    if "%BUILD_TESTS%"=="y" set CMAKE_ARGS=%CMAKE_ARGS% -DATOM_BUILD_TESTS=ON
+    if "%BUILD_CFITSIO%"=="y" set CMAKE_ARGS=%CMAKE_ARGS% -DATOM_USE_CFITSIO=ON
+    if "%BUILD_SSH%"=="y" set CMAKE_ARGS=%CMAKE_ARGS% -DATOM_USE_SSH=ON
+    
+    REM Run CMake
+    echo Configuring CMake project...
+    cmake %CMAKE_ARGS% .
+    if %ERRORLEVEL% NEQ 0 (
+        echo Error: CMake configuration failed
+        exit /b 1
+    )
+    
+    echo Building project...
+    cmake --build build --config %BUILD_TYPE%
+    if %ERRORLEVEL% NEQ 0 (
+        echo Error: CMake build failed
+        exit /b 1
+    )
+)
+
+echo.
 echo Build completed successfully!
 echo ===============================================
-
-echo To install, run: xmake install
-echo To run tests (if built), run: xmake run -g test

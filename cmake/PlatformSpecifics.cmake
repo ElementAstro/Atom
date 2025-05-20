@@ -1,4 +1,6 @@
 # cmake/PlatformSpecifics.cmake
+# This script handles platform-specific configurations and compiler settings
+# It detects the build environment and applies appropriate settings
 
 # ATOM_MSYS2_ENV is set by VcpkgSetup.cmake if USE_VCPKG is ON.
 # If USE_VCPKG is OFF, VcpkgSetup might not run, so check ENV{MSYSTEM} again.

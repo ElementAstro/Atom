@@ -1,31 +1,85 @@
 cmake_minimum_required(VERSION 3.10)
 
 # 设置项目名称
-project(GenerateExecutables)
+project(AtomExamples)
 
-# 获取当前目录的所有子目录
-file(GLOB SUBDIRS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/*)
+# 示例构建选项在 cmake/ExamplesBuildOptions.cmake 中定义
 
-# 遍历所有子目录
-foreach(SUBDIR ${SUBDIRS})
-    if(IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${SUBDIR})
-        # 获取子目录中的所有 .cpp 文件
-        file(GLOB CPP_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/${SUBDIR} ${CMAKE_CURRENT_SOURCE_DIR}/${SUBDIR}/*.cpp)
+# 有条件地添加子目录
+if(ATOM_EXAMPLE_BUILD_ALGORITHM)
+    add_subdirectory(algorithm)
+endif()
 
-        # 遍历所有 .cpp 文件
-        foreach(CPP_FILE ${CPP_FILES})
-            # 构造可执行文件名称（子文件夹名_文件名）
-            string(REPLACE ".cpp" "" EXECUTABLE_NAME ${CPP_FILE})
-            set(EXECUTABLE_NAME ${SUBDIR}_${EXECUTABLE_NAME})
+if(ATOM_EXAMPLE_BUILD_ASYNC)
+    add_subdirectory(async)
+endif()
 
-            # 添加可执行文件
-            add_executable(${EXECUTABLE_NAME} ${SUBDIR}/${CPP_FILE})
-            message(STATUS "Add executable: ${EXECUTABLE_NAME}")
+if(ATOM_EXAMPLE_BUILD_COMPONENTS)
+    add_subdirectory(components)
+endif()
 
-            # 可选：设置编译选项、链接库等
-            # target_compile_options(${EXECUTABLE_NAME} PRIVATE ...)
-            # target_link_libraries(${EXECUTABLE_NAME} ...)
-            target_link_libraries(${EXECUTABLE_NAME} atom)
-        endforeach()
-    endif()
+if(ATOM_EXAMPLE_BUILD_CONNECTION)
+    add_subdirectory(connection)
+endif()
+
+if(ATOM_EXAMPLE_BUILD_ERROR)
+    add_subdirectory(error)
+endif()
+
+if(ATOM_EXAMPLE_BUILD_EXTRA)
+    add_subdirectory(extra)
+endif()
+
+if(ATOM_EXAMPLE_BUILD_IMAGE)
+    add_subdirectory(image)
+endif()
+
+if(ATOM_EXAMPLE_BUILD_IO)
+    add_subdirectory(io)
+endif()
+
+if(ATOM_EXAMPLE_BUILD_LOG)
+    add_subdirectory(log)
+endif()
+
+if(ATOM_EXAMPLE_BUILD_MEMORY)
+    add_subdirectory(memory)
+endif()
+
+if(ATOM_EXAMPLE_BUILD_META)
+    add_subdirectory(meta)
+endif()
+
+if(ATOM_EXAMPLE_BUILD_SEARCH)
+    add_subdirectory(search)
+endif()
+
+if(ATOM_EXAMPLE_BUILD_SERIAL)
+    add_subdirectory(serial)
+endif()
+
+if(ATOM_EXAMPLE_BUILD_SYSTEM)
+    add_subdirectory(system)
+endif()
+
+if(ATOM_EXAMPLE_BUILD_TYPE)
+    add_subdirectory(type)
+endif()
+
+if(ATOM_EXAMPLE_BUILD_UTILS)
+    add_subdirectory(utils)
+endif()
+
+if(ATOM_EXAMPLE_BUILD_WEB)
+    add_subdirectory(web)
+endif()
+
+# Set example targets grouping
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+set(EXAMPLE_GROUP_NAME "Examples")
+
+# Recursively set all example targets to the example group
+get_property(TARGETS DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY BUILDSYSTEM_TARGETS)
+foreach(TARGET ${TARGETS})
+    set_property(TARGET ${TARGET} PROPERTY FOLDER ${EXAMPLE_GROUP_NAME})
 endforeach()

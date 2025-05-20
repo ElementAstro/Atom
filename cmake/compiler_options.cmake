@@ -1,4 +1,6 @@
 # CompilerOptions.cmake - Compiler options configuration module
+# This file contains compiler-specific settings and optimizations for the Atom project
+# It handles compiler detection, feature testing, and warning/optimization settings
 
 # Avoid repeated inclusion
 if(DEFINED COMPILER_OPTIONS_INCLUDED)

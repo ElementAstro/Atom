@@ -1,9 +1,11 @@
-# CMakeLists.txt for Atom This project is licensed under the terms of the GPL3
-# license.
+# CMakeLists.txt for Atom Project
+# This project is licensed under the terms of the GPL3 license.
+#
+# Description: The foundational library for all elemental astro projects
+# Author: Max Qian
+# License: GPL3
 
-# Description: The foundational library for all elemental astro projects Author:
-# Max Qian License: GPL3
-
+# Require minimum CMake version
 cmake_minimum_required(VERSION 3.21)
 
 # Include Git version function before initializing project
@@ -13,7 +15,14 @@ include(cmake/GitVersion.cmake)
 project(
   Atom
   LANGUAGES C CXX
-  VERSION 0.1.0)
+  VERSION 0.1.0
+  DESCRIPTION "Foundational library for astronomical software"
+  HOMEPAGE_URL "https://github.com/ElementAstro/Atom"
+)
+
+# =============================================================================
+# Package Management Configuration
+# =============================================================================
 
 option(USE_VCPKG "Use vcpkg package manager" OFF)
 option(UPDATE_VCPKG_BASELINE "Update vcpkg baseline to latest" OFF)
@@ -24,19 +33,27 @@ if(USE_VCPKG)
 else()
   message(STATUS "Not using vcpkg package manager.")
 endif()
+
+# Configure version information
 include(cmake/VersionConfig.cmake)
+
+# =============================================================================
+# C++ Standard Setting
+# =============================================================================
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Add custom target for additional CMake files
 add_custom_target(
   AtomCmakeAdditionalFiles
   SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/cmake/compiler_options.cmake
-          ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GitVersion.cmake)
+          ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GitVersion.cmake
+)
 
-# 将版本信息作为定义传递给所有目标
+# Pass version information as definitions to all targets
 add_compile_definitions(ATOM_VERSION="${PROJECT_VERSION}"
                         ATOM_VERSION_STRING="${PROJECT_VERSION}")
 
@@ -44,10 +61,17 @@ add_compile_definitions(ATOM_VERSION="${PROJECT_VERSION}"
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
+# =============================================================================
+# Build Options
+# =============================================================================
+
 # Global build options
-option(ATOM_BUILD_EXAMPLES "Build examples" OFF)
-option(ATOM_BUILD_TESTS "Build tests" OFF)
-option(ATOM_BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
+option(ATOM_BUILD_EXAMPLES "Build examples" ON)
+option(ATOM_BUILD_EXAMPLES_SELECTIVE "Enable selective building of example modules" OFF)
+option(ATOM_BUILD_TESTS "Build tests" ON)
+option(ATOM_BUILD_TESTS_SELECTIVE "Enable selective building of test modules" OFF)
+option(ATOM_BUILD_PYTHON_BINDINGS "Build Python bindings" OFF)
+option(ATOM_BUILD_DOCS "Build documentation" OFF)
 
 # Boost related options
 option(ATOM_USE_BOOST "Enable Boost high-performance data structures" OFF)
@@ -63,18 +87,28 @@ option(ATOM_BUILD_ALGORITHM "Build algorithm module" ${ATOM_BUILD_ALL})
 option(ATOM_BUILD_ASYNC "Build async module" ${ATOM_BUILD_ALL})
 option(ATOM_BUILD_COMPONENTS "Build components module" ${ATOM_BUILD_ALL})
 option(ATOM_BUILD_CONNECTION "Build connection module" ${ATOM_BUILD_ALL})
+option(ATOM_BUILD_CONTAINERS "Build containers module" ${ATOM_BUILD_ALL})
 option(ATOM_BUILD_ERROR "Build error module" ${ATOM_BUILD_ALL})
+option(ATOM_BUILD_IMAGE "Build image module" ${ATOM_BUILD_ALL})
 option(ATOM_BUILD_IO "Build IO module" ${ATOM_BUILD_ALL})
 option(ATOM_BUILD_LOG "Build log module" ${ATOM_BUILD_ALL})
+option(ATOM_BUILD_MEMORY "Build memory module" ${ATOM_BUILD_ALL})
 option(ATOM_BUILD_META "Build meta module" ${ATOM_BUILD_ALL})
 option(ATOM_BUILD_SEARCH "Build search module" ${ATOM_BUILD_ALL})
 option(ATOM_BUILD_SECRET "Build security module" ${ATOM_BUILD_ALL})
+option(ATOM_BUILD_SERIAL "Build serial module" ${ATOM_BUILD_ALL})
 option(ATOM_BUILD_SYSINFO "Build system info module" ${ATOM_BUILD_ALL})
 option(ATOM_BUILD_SYSTEM "Build system module" ${ATOM_BUILD_ALL})
+option(ATOM_BUILD_TYPE "Build type module" ${ATOM_BUILD_ALL})
 option(ATOM_BUILD_UTILS "Build utils module" ${ATOM_BUILD_ALL})
 option(ATOM_BUILD_WEB "Build Web module" ${ATOM_BUILD_ALL})
 
-include(cmake/PlatformSpecifics.cmake) # Uses variables from VcpkgSetup.cmake
+# =============================================================================
+# Platform and Configuration Setup
+# =============================================================================
+
+# Setup platform-specific configurations
+include(cmake/PlatformSpecifics.cmake)
 
 # Append module paths
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
@@ -86,15 +120,28 @@ include(cmake/compiler_options.cmake)
 # Add module dependency configuration file
 include(cmake/module_dependencies.cmake)
 
+# Include example build options
+include(cmake/ExamplesBuildOptions.cmake)
+
+# Include test build options
+include(cmake/TestsBuildOptions.cmake)
+
 # Process module dependencies
 include(cmake/ScanModule.cmake)
+
+# =============================================================================
+# Include Directories
+# =============================================================================
 
 # Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/extra)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(.)
 
-# Find necessary packages
+# =============================================================================
+# Find Necessary Packages
+# =============================================================================
+
 message(STATUS "Finding dependency packages...")
 if(USE_VCPKG)
   # Ensure only vcpkg-provided packages are used Set CMake preferred Config mode
@@ -214,18 +261,70 @@ endif()
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/version_info.h.in
                ${CMAKE_CURRENT_BINARY_DIR}/atom_version_info.h @ONLY)
 
-# Add subdirectories
-add_subdirectory(extra)
+# =============================================================================
+# Subdirectories to Build
+# =============================================================================
+
+# Add core library subdirectory
 add_subdirectory(atom)
-if(ATOM_BUILD_PYTHON_BINDINGS)
-  add_subdirectory(python)
-endif()
+
+# Add examples if enabled
 if(ATOM_BUILD_EXAMPLES)
   add_subdirectory(example)
 endif()
+
+# Add extra libraries
+add_subdirectory(extra)
+
+# Add Python bindings if enabled
+if(ATOM_BUILD_PYTHON_BINDINGS)
+  add_subdirectory(python)
+endif()
+
+# Add tests if enabled
 if(ATOM_BUILD_TESTS)
   add_subdirectory(tests)
 endif()
+
+# =============================================================================
+# Documentation Setup
+# =============================================================================
+
+if(ATOM_BUILD_DOCS)
+  find_package(Doxygen)
+  if(DOXYGEN_FOUND)
+    message(STATUS "Doxygen found. Documentation generation enabled.")
+    # Configure Doxygen options here if needed
+  else()
+    message(WARNING "Doxygen not found. Documentation will not be generated.")
+    set(ATOM_BUILD_DOCS OFF)
+  endif()
+endif()
+
+# =============================================================================
+# Installation Configuration
+# =============================================================================
+
+include(GNUInstallDirs)
+
+# Install headers
+install(
+  DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/atom/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom
+  FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+  PATTERN "**/internal" EXCLUDE
+  PATTERN "**/tests" EXCLUDE
+  PATTERN "**/example" EXCLUDE
+)
+
+# Install version headers
+install(
+  FILES ${CMAKE_CURRENT_BINARY_DIR}/atom_version.h
+        ${CMAKE_CURRENT_BINARY_DIR}/atom_version_info.h
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom
+)
+
+message(STATUS "Atom configured successfully")
 
 # Enable folder grouping in IDE
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)

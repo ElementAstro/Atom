@@ -1,11 +1,13 @@
 # cmake/VcpkgSetup.cmake
+# This script configures vcpkg integration for Atom project
+# It detects vcpkg installation and sets up appropriate triplets
 
 if(NOT USE_VCPKG)
     message(STATUS "USE_VCPKG is OFF. Skipping vcpkg setup.")
     return()
 endif()
 
-message(STATUS "Setting up vcpkg...")
+message(STATUS "Setting up vcpkg integration...")
 
 if(UPDATE_VCPKG_BASELINE)
   include(cmake/UpdateBaseline.cmake)
