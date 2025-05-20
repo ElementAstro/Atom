@@ -1,11 +1,33 @@
 #include "atom/async/safetype.hpp"
 
 #include <pybind11/functional.h>
+#include <pybind11/operators.h>  // For operators like == if needed explicitly for py::object with concepts
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
+
+// Specialization of std::hash for py::object
+// This allows py::object to be used as a key in std::unordered_map,
+// and satisfies the HashTableKeyValue concept for LockFreeHashTable.
+namespace std {
+template <>
+struct hash<py::object> {
+    std::size_t operator()(const py::object& obj) const {
+        try {
+            // py::hash correctly handles Python's hash, including
+            // negative results, and converts it to std::size_t.
+            return py::hash(obj);
+        } catch (const py::error_already_set& e) {
+            // If the Python object is unhashable, py::hash_value will throw.
+            // We rethrow the Python error, which pybind11 will convert to a C++
+            // exception. This makes the error visible at the C++ level. Ensure
+            // that only hashable Python objects are used as keys.
+            throw;
+        }
+    }
+};
+}  // namespace std
 
 PYBIND11_MODULE(safetype, m) {
     m.doc() =
@@ -20,6 +42,13 @@ PYBIND11_MODULE(safetype, m) {
             PyErr_SetString(PyExc_ValueError, e.what());
         } catch (const std::runtime_error& e) {
             PyErr_SetString(PyExc_RuntimeError, e.what());
+        } catch (const py::error_already_set& e) {  // Catch pybind11 errors
+            // Let pybind11 handle it or convert to PyExc_Exception if not
+            // already set
+            if (!PyErr_Occurred()) {
+                PyErr_SetString(PyExc_Exception,
+                                "An unknown pybind11 error occurred");
+            }
         } catch (const std::exception& e) {
             PyErr_SetString(PyExc_Exception, e.what());
         }
@@ -116,10 +145,11 @@ Examples:
             "find",
             [](const atom::async::LockFreeHashTable<py::object, py::object>&
                    self,
-               py::object key) {
+               const py::object& key) -> py::object {  // Key should be const&
                 auto result = self.find(key);
                 if (result) {
-                    return result->get();
+                    return py::object(
+                        result->get());  // Ensure a new py::object is returned
                 }
                 return py::none();
             },
@@ -135,7 +165,10 @@ Returns:
         .def(
             "insert",
             [](atom::async::LockFreeHashTable<py::object, py::object>& self,
-               py::object key, py::object value) { self.insert(key, value); },
+               const py::object& key,
+               const py::object& value) {  // const& for args
+                self.insert(key, value);
+            },
             py::arg("key"), py::arg("value"),
             R"(Insert a key-value pair into the hash table.
 
@@ -146,7 +179,9 @@ Args:
         .def(
             "erase",
             [](atom::async::LockFreeHashTable<py::object, py::object>& self,
-               py::object key) { return self.erase(key); },
+               const py::object& key) {
+                return self.erase(key);
+            },  // const& for key
             py::arg("key"),
             R"(Remove a key-value pair from the hash table.
 
@@ -175,11 +210,13 @@ Returns:
              R"(Clear all elements from the hash table.)")
         .def(
             "__getitem__",
-            [](atom::async::LockFreeHashTable<py::object, py::object>& self,
-               py::object key) {
+            [](const atom::async::LockFreeHashTable<py::object, py::object>&
+                   self,                 // const self
+               const py::object& key) {  // const& for key
                 auto result = self.find(key);
                 if (result) {
-                    return result->get();
+                    return py::object(
+                        result->get());  // Ensure a new py::object
                 }
                 throw py::key_error("Key not found: " +
                                     py::str(key).cast<std::string>());
@@ -188,7 +225,10 @@ Returns:
         .def(
             "__setitem__",
             [](atom::async::LockFreeHashTable<py::object, py::object>& self,
-               py::object key, py::object value) { self.insert(key, value); },
+               const py::object& key,
+               const py::object& value) {  // const& for args
+                self.insert(key, value);
+            },
             py::arg("key"), py::arg("value"),
             "Support for table[key] = value assignment.")
         .def("__len__",
@@ -203,15 +243,24 @@ Returns:
             "__contains__",
             [](const atom::async::LockFreeHashTable<py::object, py::object>&
                    self,
-               py::object key) { return self.find(key).has_value(); },
+               const py::object& key) {
+                return self.find(key).has_value();
+            },  // const& for key
             py::arg("key"), "Support for 'key in table' membership test.")
         .def(
             "__iter__",
             [](const atom::async::LockFreeHashTable<py::object, py::object>&
                    self) {
+                // For LockFreeHashTable, iterating over keys is common.
+                // The C++ iterator yields std::pair<const Key&, Value&>.
+                // py::make_iterator will convert this to a Python tuple (key,
+                // value). If you want to iterate over keys like a Python dict,
+                // you'd do: return py::make_key_iterator(self.begin(),
+                // self.end()); For items (key, value pairs):
                 return py::make_iterator(self.begin(), self.end());
             },
-            py::keep_alive<0, 1>(), "Support for iteration over table items.");
+            py::keep_alive<0, 1>(),
+            "Support for iteration over table items (key, value pairs).");
 
     // ThreadSafeVector class binding
     py::class_<atom::async::ThreadSafeVector<py::object>>(
@@ -240,7 +289,9 @@ Examples:
         .def(
             "push_back",
             [](atom::async::ThreadSafeVector<py::object>& self,
-               py::object value) { self.pushBack(value); },
+               const py::object& value) {
+                self.pushBack(value);
+            },  // const& for value
             py::arg("value"),
             R"(Add an element to the end of the vector.
 
@@ -333,10 +384,13 @@ Returns:
 )")
         .def(
             "__getitem__",
-            [](atom::async::ThreadSafeVector<py::object>& self, size_t index) {
+            [](const atom::async::ThreadSafeVector<py::object>& self,
+               size_t index) {  // const self
                 if (index >= self.getSize()) {
                     throw py::index_error("Index out of range");
                 }
+                // The C++ operator[] returns by value (T), which is py::object.
+                // This is fine.
                 return self[index];
             },
             py::arg("index"), "Support for vector[index] access.")
@@ -351,10 +405,12 @@ Returns:
         .def(
             "__iter__",
             [](const atom::async::ThreadSafeVector<py::object>& self) {
-                // Create a temporary vector to hold all elements
+                // Create a temporary vector to hold all elements for safe
+                // iteration as the underlying vector can change.
                 std::vector<py::object> items;
+                items.reserve(self.getSize());  // Pre-allocate
                 for (size_t i = 0; i < self.getSize(); ++i) {
-                    items.push_back(self.at(i));
+                    items.push_back(self.at(i));  // at() is thread-safe
                 }
                 return py::make_iterator(items.begin(), items.end());
             },
@@ -383,7 +439,8 @@ Examples:
         .def(py::init<>(), "Creates a new empty LockFreeList.")
         .def(
             "push_front",
-            [](atom::async::LockFreeList<py::object>& self, py::object value) {
+            [](atom::async::LockFreeList<py::object>& self,
+               const py::object& value) {  // const&
                 self.pushFront(value);
             },
             py::arg("value"),
@@ -477,9 +534,10 @@ Examples:
         [](const py::list& items) {
             auto vec =
                 std::make_shared<atom::async::ThreadSafeVector<py::object>>(
-                    items.size());
-            for (auto item : items) {
-                vec->pushBack(item);
+                    items.size());                  // Initialize with capacity
+            for (py::handle item_handle : items) {  // item_handle is py::handle
+                vec->pushBack(
+                    item_handle.cast<py::object>());  // Cast to py::object
             }
             return vec;
         },
@@ -502,13 +560,16 @@ Examples:
     m.def(
         "create_lock_free_list",
         [](const py::list& items) {
-            auto list =
+            auto list_ptr =  // Renamed to avoid conflict with std::list
                 std::make_shared<atom::async::LockFreeList<py::object>>();
-            // Add items in reverse order to maintain original list order
-            for (auto it = items.rbegin(); it != items.rend(); ++it) {
-                list->pushFront(*it);
+            // Add items in reverse order to maintain original list order when
+            // pushing to front
+            for (ssize_t i = static_cast<ssize_t>(items.size()) - 1; i >= 0;
+                 --i) {
+                list_ptr->pushFront(
+                    items[i].cast<py::object>());  // items[i] is py::handle
             }
-            return list;
+            return list_ptr;
         },
         py::arg("items") = py::list(),
         R"(Create a new LockFreeList with initial elements.
@@ -521,8 +582,9 @@ Returns:
 
 Examples:
     >>> from atom.async import create_lock_free_list
-    >>> lst = create_lock_free_list(["item1", "item2", "item3"])
+    >>> lst = create_lock_free_list(["item1", "item2", "item3"]) # Becomes item3 -> item2 -> item1
     >>> lst.size()
     3
+    >>> lst.front() # Should be item3
 )");
 }

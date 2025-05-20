@@ -5,6 +5,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+
 namespace py = pybind11;
 
 // Template for declaring EnhancedFuture with different return types
@@ -54,7 +55,13 @@ void declare_enhanced_future(py::module& m, const std::string& type_name) {
              Raises:
                  RuntimeError: If the future is cancelled or throws an exception.
              )pbdoc")
-        .def("wait_for", &EnhancedFutureT::waitFor, py::arg("timeout"),
+        /*
+        .def("wait_for",
+             &EnhancedFutureT::waitFor,
+             [](EnhancedFutureT& self, int timeout_ms) {
+                 return self.waitFor(std::chrono::milliseconds(timeout_ms));
+             },
+             py::arg("timeout"),
              R"pbdoc(
              Waits for the future with a timeout and auto-cancels if not ready.
              
@@ -64,6 +71,7 @@ void declare_enhanced_future(py::module& m, const std::string& type_name) {
              Returns:
                  The value if ready, or None if timed out
              )pbdoc")
+        */
         .def("is_ready", &EnhancedFutureT::isReady,
              "Checks if the future is ready")
         .def("get", &EnhancedFutureT::get,
@@ -233,7 +241,10 @@ void declare_enhanced_future_void(py::module& m) {
              Raises:
                  RuntimeError: If the future is cancelled or throws an exception.
              )pbdoc")
-        .def("wait_for", &EnhancedFutureVoid::waitFor, py::arg("timeout"),
+        .def("wait_for",
+             static_cast<bool (EnhancedFutureVoid::*)(
+                 std::chrono::milliseconds)>(&EnhancedFutureVoid::waitFor),
+             py::arg("timeout"),
              R"pbdoc(
              Waits for the future with a timeout and auto-cancels if not ready.
              

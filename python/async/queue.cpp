@@ -45,30 +45,60 @@ Examples:
     item1
 )")
         .def(py::init<>(), "Creates a new empty ThreadSafeQueue.")
-        .def("put", &atom::async::ThreadSafeQueue<py::object>::put,
-             py::arg("element"),
-             R"(Add an element to the queue.
+        .def(
+            "put",
+            [](atom::async::ThreadSafeQueue<py::object>& self,
+               py::object element) { self.put(std::move(element)); },
+            py::arg("element"),
+            R"(Add an element to the queue.
 
 Args:
     element: The element to be added to the queue.
 )")
         .def(
-            "take", &atom::async::ThreadSafeQueue<py::object>::take,
+            "take",
+            [](atom::async::ThreadSafeQueue<py::object>& self) {
+                auto result = self.take();
+                if (result) {
+                    return *result;
+                }
+                throw py::value_error("Queue is empty or being destroyed");
+            },
             R"(Take an element from the queue, blocking until one is available.
 
 Returns:
-    The next element from the queue, or None if the queue is being destroyed.
+    The next element from the queue.
+
+Raises:
+    ValueError: If the queue is being destroyed.
 )")
-        .def("try_take", &atom::async::ThreadSafeQueue<py::object>::tryTake,
-             R"(Try to take an element from the queue without waiting.
+        .def(
+            "try_take",
+            [](atom::async::ThreadSafeQueue<py::object>& self) {
+                auto result = self.tryTake();
+                if (result) {
+                    return *result;
+                }
+                throw py::value_error("Queue is empty");
+            },
+            R"(Try to take an element from the queue without waiting.
 
 Returns:
-    The next element from the queue, or None if the queue is empty.
+    The next element from the queue.
+
+Raises:
+    ValueError: If the queue is empty.
 )")
         .def(
             "take_for",
-            &atom::async::ThreadSafeQueue<py::object>::takeFor<long,
-                                                               std::ratio<1>>,
+            [](atom::async::ThreadSafeQueue<py::object>& self,
+               const std::chrono::duration<long, std::ratio<1>>& timeout) {
+                auto result = self.takeFor(timeout);
+                if (result) {
+                    return *result;
+                }
+                throw py::value_error("Queue is empty or timeout expired");
+            },
             py::arg("timeout"),
             R"(Try to take an element from the queue, waiting up to the specified timeout.
 
@@ -76,7 +106,10 @@ Args:
     timeout: Maximum time to wait in seconds.
 
 Returns:
-    The next element from the queue, or None if the timeout expires or the queue is empty.
+    The next element from the queue.
+
+Raises:
+    ValueError: If the timeout expires or the queue is empty.
 )")
         .def("size", &atom::async::ThreadSafeQueue<py::object>::size,
              R"(Get the current size of the queue.
@@ -92,23 +125,49 @@ Returns:
 )")
         .def("clear", &atom::async::ThreadSafeQueue<py::object>::clear,
              R"(Clear all elements from the queue.)")
-        .def("front", &atom::async::ThreadSafeQueue<py::object>::front,
-             R"(Get the front element without removing it.
+        .def(
+            "front",
+            [](atom::async::ThreadSafeQueue<py::object>& self) {
+                auto result = self.front();
+                if (result) {
+                    return *result;
+                }
+                throw py::value_error("Queue is empty");
+            },
+            R"(Get the front element without removing it.
 
 Returns:
-    The front element, or None if the queue is empty.
+    The front element.
+
+Raises:
+    ValueError: If the queue is empty.
 )")
-        .def("back", &atom::async::ThreadSafeQueue<py::object>::back,
-             R"(Get the back element without removing it.
+        .def(
+            "back",
+            [](atom::async::ThreadSafeQueue<py::object>& self) {
+                auto result = self.back();
+                if (result) {
+                    return *result;
+                }
+                throw py::value_error("Queue is empty");
+            },
+            R"(Get the back element without removing it.
 
 Returns:
-    The back element, or None if the queue is empty.
+    The back element.
+
+Raises:
+    ValueError: If the queue is empty.
 )")
         .def("wait_until_empty",
              &atom::async::ThreadSafeQueue<py::object>::waitUntilEmpty,
              R"(Wait until the queue becomes empty.)")
-        .def("to_vector", &atom::async::ThreadSafeQueue<py::object>::toVector,
-             R"(Convert queue contents to a list.
+        .def(
+            "to_vector",
+            [](atom::async::ThreadSafeQueue<py::object>& self) {
+                return self.toVector();
+            },
+            R"(Convert queue contents to a list.
 
 Returns:
     A list containing copies of all elements in the queue.
@@ -116,7 +175,7 @@ Returns:
         .def(
             "emplace",
             [](atom::async::ThreadSafeQueue<py::object>& self,
-               py::object element) { self.emplace(element); },
+               py::object element) { self.emplace(std::move(element)); },
             py::arg("element"),
             R"(Construct an element in-place in the queue.
 
@@ -127,7 +186,7 @@ Args:
             "for_each",
             [](atom::async::ThreadSafeQueue<py::object>& self,
                py::function func, bool parallel = false) {
-                self.forEach([&func](py::object& obj) { func(obj); }, parallel);
+                self.forEach([func](py::object& obj) { func(obj); }, parallel);
             },
             py::arg("func"), py::arg("parallel") = false,
             R"(Apply a function to each element in the queue.
@@ -140,7 +199,7 @@ Args:
             "filter",
             [](atom::async::ThreadSafeQueue<py::object>& self,
                py::function predicate) {
-                self.filter([&predicate](const py::object& obj) {
+                self.filter([predicate](const py::object& obj) {
                     return predicate(obj).cast<bool>();
                 });
             },
@@ -154,9 +213,14 @@ Args:
             "wait_for",
             [](atom::async::ThreadSafeQueue<py::object>& self,
                py::function predicate) {
-                return self.waitFor([&predicate](const py::object& obj) {
+                auto result = self.waitFor([predicate](const py::object& obj) {
                     return predicate(obj).cast<bool>();
                 });
+
+                if (result) {
+                    return *result;
+                }
+                throw py::value_error("Queue is being destroyed");
             },
             py::arg("predicate"),
             R"(Wait for an element that satisfies a predicate.
@@ -165,30 +229,41 @@ Args:
     predicate: A function that returns True when the condition is met.
 
 Returns:
-    The first element that satisfies the predicate, or None if the queue is being destroyed.
+    The first element that satisfies the predicate.
+
+Raises:
+    ValueError: If the queue is being destroyed.
 )")
+        /*
         .def(
-            "extract_if",
-            [](atom::async::ThreadSafeQueue<py::object>& self,
-               py::function predicate) {
-                return self.extractIf([&predicate](const py::object& obj) {
-                    return predicate(obj).cast<bool>();
-                });
-            },
-            py::arg("predicate"),
-            R"(Extract elements that satisfy a predicate.
+        "extract_if",
+        [](atom::async::ThreadSafeQueue<py::object>& self,
+           py::function predicate) {
+            // Create a C++ compatible predicate function
+            auto cpp_predicate =
+                [predicate](const py::object& obj) -> bool {
+                return predicate(obj).cast<bool>();
+            };
+
+            // Call the extractIf method with the wrapper predicate
+            return self.extractIf(cpp_predicate);
+        },
+        py::arg("predicate"),
+        R"(Extract elements that satisfy a predicate.
 
 Args:
-    predicate: A function that returns True for elements to extract.
+predicate: A function that returns True for elements to extract.
 
 Returns:
-    A list of extracted elements.
+A list of extracted elements.
 )")
+        */
+
         .def(
             "sort",
             [](atom::async::ThreadSafeQueue<py::object>& self,
                py::function comp) {
-                self.sort([&comp](const py::object& a, const py::object& b) {
+                self.sort([comp](const py::object& a, const py::object& b) {
                     return comp(a, b).cast<bool>();
                 });
             },
@@ -203,7 +278,7 @@ Args:
             [](atom::async::ThreadSafeQueue<py::object>& self,
                py::function func) {
                 return self.transform<py::object>(
-                    [&func](py::object obj) { return func(obj); });
+                    [func](py::object obj) { return func(obj); });
             },
             py::arg("func"),
             R"(Transform elements using a function and return a new queue.
@@ -219,7 +294,7 @@ Returns:
             [](atom::async::ThreadSafeQueue<py::object>& self,
                py::function key_func) {
                 return self.groupBy<py::object>(
-                    [&key_func](const py::object& obj) {
+                    [key_func](const py::object& obj) {
                         return key_func(obj);
                     });
             },
@@ -237,7 +312,7 @@ Returns:
             [](atom::async::ThreadSafeQueue<py::object>& self,
                size_t batch_size, py::function processor) {
                 return self.processBatches(
-                    batch_size, [&processor](std::span<py::object> batch) {
+                    batch_size, [processor](std::span<py::object> batch) {
                         // Convert span to list for Python
                         py::list batch_list;
                         for (auto& item : batch) {
@@ -276,8 +351,10 @@ Returns:
         [](const py::list& items) {
             auto queue =
                 std::make_shared<atom::async::ThreadSafeQueue<py::object>>();
-            for (auto item : items) {
-                queue->put(item);
+            for (const py::handle& item : items) {
+                // Convert handle to object properly
+                py::object obj = py::reinterpret_borrow<py::object>(item);
+                queue->put(std::move(obj));
             }
             return queue;
         },

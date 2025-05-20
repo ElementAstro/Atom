@@ -406,7 +406,7 @@ Examples:
 
     m.def(
         "temp_env",
-        [](py::dict variables) {
+        [&m](py::dict variables) {
             return m.attr("EnvironmentContext")(variables);
         },
         py::arg("variables"),

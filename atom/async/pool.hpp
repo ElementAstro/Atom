@@ -1078,6 +1078,22 @@ public:
      */
     [[nodiscard]] const Options& getOptions() const { return options_; }
 
+    [[nodiscard]] bool isShutdown() const {
+        return stop_.load(std::memory_order_acquire);
+    }
+
+    [[nodiscard]] bool isThreadGrowthAllowed() const {
+        return options_.allowThreadGrowth;
+    }
+
+    [[nodiscard]] bool isThreadShrinkAllowed() const {
+        return options_.allowThreadShrink;
+    }
+
+    [[nodiscard]] bool isWorkStealingEnabled() const {
+        return options_.useWorkStealing;
+    }
+
 private:
     /**
      * @brief Create a worker thread

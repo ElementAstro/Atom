@@ -92,19 +92,9 @@ size_t stringToBytes(const std::string& str);
  */
 CpuVendor getVendorFromString(const std::string& vendorId);
 
-/**
- * @brief Check if cache needs refresh
- * @return True if cache needs refresh
- */
 bool needsCacheRefresh();
 
 }  // anonymous namespace
-
-// Make the functions available for use outside this file
-namespace {
-    using atom::system::getVendorFromString;
-    using atom::system::needsCacheRefresh;
-}
 
 // Platform-specific function declarations - these will be implemented in
 // platform-specific files

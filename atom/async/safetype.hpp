@@ -170,12 +170,20 @@ public:
 
 private:
     void push_node(std::shared_ptr<Node> newNode) noexcept {
-        newNode->next = head_.load(std::memory_order_relaxed);
-        while (!head_.compare_exchange_weak(newNode->next, newNode,
+        // 修复：创建一个临时变量存储当前head
+        std::shared_ptr<Node> expected = head_.load(std::memory_order_relaxed);
+
+        // 初始化newNode->next
+        newNode->next.store(expected, std::memory_order_relaxed);
+
+        // 尝试更新head_
+        while (!head_.compare_exchange_weak(expected, newNode,
                                             std::memory_order_acq_rel,
                                             std::memory_order_relaxed)) {
-            // Retry with updated head
+            // 如果失败，更新newNode->next为新的expected值
+            newNode->next.store(expected, std::memory_order_relaxed);
         }
+
         approximateSize_.fetch_add(1, std::memory_order_relaxed);
     }
 };
@@ -222,12 +230,19 @@ private:
         void insert(const Key& key, const Value& value) {
             try {
                 auto newNode = std::make_shared<Node>(key, value);
-                newNode->next = head.load(std::memory_order_acquire);
+                // 修复：创建一个临时变量存储当前head
+                std::shared_ptr<Node> expected =
+                    head.load(std::memory_order_acquire);
 
-                while (!head.compare_exchange_weak(newNode->next, newNode,
+                // 初始化newNode->next
+                newNode->next.store(expected, std::memory_order_relaxed);
+
+                // 尝试更新head
+                while (!head.compare_exchange_weak(expected, newNode,
                                                    std::memory_order_acq_rel,
                                                    std::memory_order_relaxed)) {
-                    // Retry with updated head
+                    // 如果失败，更新newNode->next为新的expected值
+                    newNode->next.store(expected, std::memory_order_relaxed);
                 }
             } catch (const std::exception& e) {
                 // Handle allocation failure
@@ -814,12 +829,20 @@ public:
 
 private:
     void pushNodeFront(std::shared_ptr<Node> newNode) noexcept {
-        newNode->next = head_.load(std::memory_order_relaxed);
-        while (!head_.compare_exchange_weak(newNode->next, newNode,
+        // 修复：创建一个临时变量存储当前head
+        std::shared_ptr<Node> expected = head_.load(std::memory_order_relaxed);
+
+        // 初始化newNode->next
+        newNode->next.store(expected, std::memory_order_relaxed);
+
+        // 尝试更新head_
+        while (!head_.compare_exchange_weak(expected, newNode,
                                             std::memory_order_acq_rel,
                                             std::memory_order_relaxed)) {
-            // Retry with updated head
+            // 如果失败，更新newNode->next为新的expected值
+            newNode->next.store(expected, std::memory_order_relaxed);
         }
+
         size_.fetch_add(1, std::memory_order_relaxed);
     }
 };

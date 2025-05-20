@@ -25,11 +25,13 @@ PYBIND11_MODULE(wregistry, m) {
     });
 
     // Define the predefined root keys as module constants
-    m.attr("HKEY_CLASSES_ROOT") = py::cast<intptr_t>(HKEY_CLASSES_ROOT);
-    m.attr("HKEY_CURRENT_USER") = py::cast<intptr_t>(HKEY_CURRENT_USER);
-    m.attr("HKEY_LOCAL_MACHINE") = py::cast<intptr_t>(HKEY_LOCAL_MACHINE);
-    m.attr("HKEY_USERS") = py::cast<intptr_t>(HKEY_USERS);
-    m.attr("HKEY_CURRENT_CONFIG") = py::cast<intptr_t>(HKEY_CURRENT_CONFIG);
+    m.attr("HKEY_CLASSES_ROOT") = reinterpret_cast<intptr_t>(HKEY_CLASSES_ROOT);
+    m.attr("HKEY_CURRENT_USER") = reinterpret_cast<intptr_t>(HKEY_CURRENT_USER);
+    m.attr("HKEY_LOCAL_MACHINE") =
+        reinterpret_cast<intptr_t>(HKEY_LOCAL_MACHINE);
+    m.attr("HKEY_USERS") = reinterpret_cast<intptr_t>(HKEY_USERS);
+    m.attr("HKEY_CURRENT_CONFIG") =
+        reinterpret_cast<intptr_t>(HKEY_CURRENT_CONFIG);
 
     // Bind the functions
     m.def(
@@ -793,7 +795,8 @@ Examples:
     m.def(
         "get_value_type",
         [](intptr_t hRootKey, const std::string& subKey,
-           const std::string& valueName) {
+           const std::string& valueName)
+            -> std::string {  // Explicitly specify return type
             HKEY hKey;
             LONG result = RegOpenKeyExA(reinterpret_cast<HKEY>(hRootKey),
                                         subKey.c_str(), 0, KEY_READ, &hKey);

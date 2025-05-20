@@ -344,7 +344,7 @@ Examples:
     // Module-level helper function to use the context manager
     m.def(
         "monitor_storage",
-        [](const std::function<void(const std::string&)>& callback) {
+        [&m](const std::function<void(const std::string&)>& callback) {
             return m.attr("StorageMonitorContext")(callback);
         },
         py::arg("callback"),

@@ -5,7 +5,7 @@ project(
   LANGUAGES C CXX)
 
 # Sources
-set(SOURCES daemon.cpp limiter.cpp lock.cpp timer.cpp)
+set(SOURCES limiter.cpp lock.cpp timer.cpp)
 
 # Headers
 set(HEADERS

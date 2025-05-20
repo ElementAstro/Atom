@@ -15,6 +15,7 @@ set(SOURCES
     convert.cpp
     difflib.cpp
     error_stack.cpp
+    lcg.cpp
     print.cpp
     qdatetime.cpp
     qprocess.cpp
@@ -38,6 +39,7 @@ set(HEADERS
     convert.hpp
     difflib.hpp
     error_stack.hpp
+    lcg.hpp
     qdatetime.hpp
     qprocess.hpp
     qtimer.hpp
@@ -53,6 +55,8 @@ set(HEADERS
     xml.hpp
 )
 
+find_package(TBB REQUIRED)
+
 set(LIBS
     atom-error
     loguru
@@ -60,7 +64,12 @@ set(LIBS
     OpenSSL::SSL
     OpenSSL::Crypto
     ${CMAKE_THREAD_LIBS_INIT}
+    TBB::tbb
 )
+
+if (WIN32 OR WIN64)
+    list(APPEND LIBS iphlpapi)
+endif()
 
 # Build Object Library
 add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})

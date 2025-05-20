@@ -1,11 +1,11 @@
 #include "atom/system/voltage.hpp"
 
-#include <pybind11/optional.h>
+#include <pybind11/functional.h>  // Added for py::cpp_function and advanced lambda wrapping
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
+using namespace py::literals;
 
 PYBIND11_MODULE(voltage, m) {
     m.doc() = "Voltage and power source monitoring module for the atom package";
@@ -415,89 +415,99 @@ Examples:
                 self.attr("callback") = callback;
 
                 // Start a monitoring thread
-                auto monitor_func = [](py::object self) {
-                    py::gil_scoped_release release;  // Release GIL
+                auto monitor_func =
+                    [](py::object self_thread_arg) {     // Renamed 'self' to
+                                                         // 'self_thread_arg' to
+                                                         // avoid confusion
+                        py::gil_scoped_release release;  // Release GIL
 
-                    auto monitor = py::cast<atom::system::VoltageMonitor*>(
-                        self.attr("monitor"));
-                    double interval =
-                        py::cast<double>(self.attr("check_interval"));
+                        auto monitor_ptr = py::cast<
+                            atom::system::VoltageMonitor*>(  // Renamed
+                                                             // 'monitor' to
+                                                             // 'monitor_ptr'
+                            self_thread_arg.attr("monitor"));
+                        double interval = py::cast<double>(
+                            self_thread_arg.attr("check_interval"));
 
-                    // Store the last readings
-                    std::optional<double> last_input_voltage =
-                        monitor->getInputVoltage();
-                    std::optional<double> last_battery_voltage =
-                        monitor->getBatteryVoltage();
-                    auto last_sources = monitor->getAllPowerSources();
+                        // Store the last readings
+                        std::optional<double> last_input_voltage =
+                            monitor_ptr->getInputVoltage();
+                        std::optional<double> last_battery_voltage =
+                            monitor_ptr->getBatteryVoltage();
+                        auto last_sources = monitor_ptr->getAllPowerSources();
 
-                    while (py::cast<bool>(self.attr("running"))) {
-                        // Sleep for the specified interval
-                        std::this_thread::sleep_for(std::chrono::milliseconds(
-                            static_cast<int>(interval * 1000)));
+                        while (
+                            py::cast<bool>(self_thread_arg.attr("running"))) {
+                            // Sleep for the specified interval
+                            std::this_thread::sleep_for(
+                                std::chrono::milliseconds(
+                                    static_cast<int>(interval * 1000)));
 
-                        if (!py::cast<bool>(self.attr("running")))
-                            break;
+                            if (!py::cast<bool>(
+                                    self_thread_arg.attr("running")))
+                                break;
 
-                        // Get new readings
-                        std::optional<double> input_voltage =
-                            monitor->getInputVoltage();
-                        std::optional<double> battery_voltage =
-                            monitor->getBatteryVoltage();
-                        auto sources = monitor->getAllPowerSources();
+                            // Get new readings
+                            std::optional<double> input_voltage =
+                                monitor_ptr->getInputVoltage();
+                            std::optional<double> battery_voltage =
+                                monitor_ptr->getBatteryVoltage();
+                            auto sources = monitor_ptr->getAllPowerSources();
 
-                        // Check for changes
-                        bool changed = false;
+                            // Check for changes
+                            bool changed = false;
 
-                        if (input_voltage != last_input_voltage) {
-                            changed = true;
-                        }
+                            if (input_voltage != last_input_voltage) {
+                                changed = true;
+                            }
 
-                        if (battery_voltage != last_battery_voltage) {
-                            changed = true;
-                        }
+                            if (battery_voltage != last_battery_voltage) {
+                                changed = true;
+                            }
 
-                        if (sources.size() != last_sources.size()) {
-                            changed = true;
-                        } else {
-                            for (size_t i = 0; i < sources.size(); ++i) {
-                                if (sources[i].voltage !=
-                                        last_sources[i].voltage ||
-                                    sources[i].current !=
-                                        last_sources[i].current ||
-                                    sources[i].chargePercent !=
-                                        last_sources[i].chargePercent ||
-                                    sources[i].isCharging !=
-                                        last_sources[i].isCharging) {
-                                    changed = true;
-                                    break;
+                            if (sources.size() != last_sources.size()) {
+                                changed = true;
+                            } else {
+                                for (size_t i = 0; i < sources.size(); ++i) {
+                                    if (sources[i].voltage !=
+                                            last_sources[i].voltage ||
+                                        sources[i].current !=
+                                            last_sources[i].current ||
+                                        sources[i].chargePercent !=
+                                            last_sources[i].chargePercent ||
+                                        sources[i].isCharging !=
+                                            last_sources[i].isCharging) {
+                                        changed = true;
+                                        break;
+                                    }
                                 }
                             }
-                        }
 
-                        // If changes detected, call the callback
-                        if (changed) {
-                            py::gil_scoped_acquire
-                                acquire;  // Reacquire GIL for Python calls
-                            try {
-                                self.attr("callback")(input_voltage,
-                                                      battery_voltage, sources);
-                            } catch (py::error_already_set& e) {
-                                // Log but don't propagate the error
-                                PyErr_Print();
+                            // If changes detected, call the callback
+                            if (changed) {
+                                py::gil_scoped_acquire
+                                    acquire;  // Reacquire GIL for Python calls
+                                try {
+                                    self_thread_arg.attr("callback")(
+                                        input_voltage,  // Use self_thread_arg
+                                        battery_voltage, sources);
+                                } catch (py::error_already_set& e) {
+                                    // Log but don't propagate the error
+                                    PyErr_Print();
+                                }
+
+                                // Update last readings
+                                last_input_voltage = input_voltage;
+                                last_battery_voltage = battery_voltage;
+                                last_sources = sources;
                             }
-
-                            // Update last readings
-                            last_input_voltage = input_voltage;
-                            last_battery_voltage = battery_voltage;
-                            last_sources = sources;
                         }
-                    }
-                };
+                    };
 
                 // Create and start the thread
                 self.attr("thread") = threading.attr("Thread")(
-                    py::kwargs("target"_a = monitor_func,
-                               "args"_a = py::make_tuple(self)));
+                    "target"_a = py::cpp_function(monitor_func),
+                    "args"_a = py::make_tuple(self));
                 self.attr("thread").attr("daemon") = py::bool_(true);
                 self.attr("thread").attr("start")();
 
@@ -523,7 +533,7 @@ Examples:
     // Factory function for voltage monitor context
     m.def(
         "monitor_voltage_changes",
-        [](double check_interval, py::function callback) {
+        [m](double check_interval, py::function callback) {  // Capture m
             return m.attr("VoltageMonitorContext")(check_interval, callback);
         },
         py::arg("check_interval") = 1.0, py::arg("callback"),

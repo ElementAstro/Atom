@@ -227,24 +227,25 @@ private:
 
 #ifdef ATOM_USE_BOOST_LOCKFREE
     /**
-     * @brief Task container using Boost.lockfree for better performance in high-concurrency scenarios
+     * @brief Task container using Boost.lockfree for better performance in
+     * high-concurrency scenarios
      */
     class TaskContainer {
     public:
         TaskContainer() : m_queue(128) {}  // Default capacity of 128 tasks
-        
-        void push(const TimerTask& task) {
+
+        void push(const TimerTask &task) {
             // Create a copy on heap since lockfree queue needs ownership
-            auto* taskPtr = new TimerTask(task);
+            auto *taskPtr = new TimerTask(task);
             // Try pushing until successful
             while (!m_queue.push(taskPtr)) {
                 // If queue is full, allow other threads to process
                 std::this_thread::yield();
             }
         }
-        
-        bool pop(TimerTask& task) {
-            TimerTask* taskPtr = nullptr;
+
+        bool pop(TimerTask &task) {
+            TimerTask *taskPtr = nullptr;
             if (m_queue.pop(taskPtr)) {
                 if (taskPtr) {
                     task = *taskPtr;
@@ -254,40 +255,42 @@ private:
             }
             return false;
         }
-        
-        bool empty() const {
-            return m_queue.empty();
-        }
-        
+
+        bool empty() const { return m_queue.empty(); }
+
         void clear() {
-            TimerTask* taskPtr = nullptr;
+            TimerTask *taskPtr = nullptr;
             while (m_queue.pop(taskPtr)) {
                 if (taskPtr) {
                     delete taskPtr;
                 }
             }
         }
-        
-        ~TaskContainer() {
-            clear();
-        }
-        
+
+        ~TaskContainer() { clear(); }
+
     private:
-        boost::lockfree::queue<TimerTask*> m_queue;
+        boost::lockfree::queue<TimerTask *> m_queue;
     };
-    
+
     TaskContainer m_taskContainer;  ///< Lockfree container for pending tasks
     TimerTask m_currentTask;        ///< The current task being processed
-    std::atomic<bool> m_hasCurrentTask{false}; ///< Flag indicating if there's a current task
+    std::atomic<bool> m_hasCurrentTask{
+        false};  ///< Flag indicating if there's a current task
 #else
-    std::priority_queue<TimerTask> m_taskQueue;  ///< The priority queue for scheduled tasks.
+    std::priority_queue<TimerTask>
+        m_taskQueue;  ///< The priority queue for scheduled tasks.
 #endif
 
     mutable std::mutex m_mutex;  ///< Mutex for thread synchronization.
-    std::condition_variable m_cond;  ///< Condition variable for thread synchronization.
-    std::function<void()> m_callback;  ///< The callback function to be called when a task is executed.
-    std::atomic<bool> m_stop{false};  ///< Flag indicating whether the timer should stop.
-    std::atomic<bool> m_paused{false};  ///< Flag indicating whether the timer is paused.
+    std::condition_variable
+        m_cond;  ///< Condition variable for thread synchronization.
+    std::function<void()> m_callback;  ///< The callback function to be called
+                                       ///< when a task is executed.
+    std::atomic<bool> m_stop{
+        false};  ///< Flag indicating whether the timer should stop.
+    std::atomic<bool> m_paused{
+        false};  ///< Flag indicating whether the timer is paused.
 };
 
 template <typename Function, typename... Args>
@@ -295,10 +298,6 @@ template <typename Function, typename... Args>
 auto Timer::setTimeout(Function &&func, unsigned int delay,
                        Args &&...args) noexcept(false)
     -> EnhancedFuture<std::invoke_result_t<Function, Args...>> {
-    if (!func) {
-        throw std::invalid_argument(
-            "Timer::setTimeout: Function cannot be null");
-    }
     validateTaskParams(delay, 1);
 
     using ReturnType = std::invoke_result_t<Function, Args...>;
@@ -319,10 +318,7 @@ template <typename Function, typename... Args>
     requires Invocable<Function, Args...>
 void Timer::setInterval(Function &&func, unsigned int interval, int repeatCount,
                         int priority, Args &&...args) noexcept(false) {
-    if (!func) {
-        throw std::invalid_argument(
-            "Timer::setInterval: Function cannot be null");
-    }
+    // 移除对func的空检查
     if (interval == 0) {
         throw std::invalid_argument(
             "Timer::setInterval: Interval must be greater than 0");
@@ -338,9 +334,7 @@ template <typename Function, typename... Args>
 auto Timer::addTask(Function &&func, unsigned int delay, int repeatCount,
                     int priority, Args &&...args) noexcept(false)
     -> EnhancedFuture<std::invoke_result_t<Function, Args...>> {
-    if (!func) {
-        throw std::invalid_argument("Timer::addTask: Function cannot be null");
-    }
+    // 移除对func的空检查
     validateTaskParams(delay, repeatCount);
 
     using ReturnType = std::invoke_result_t<Function, Args...>;
@@ -356,7 +350,8 @@ auto Timer::addTask(Function &&func, unsigned int delay, int repeatCount,
 #else
     {
         std::scoped_lock lock(m_mutex);
-        m_taskQueue.emplace([task]() { (*task)(); }, delay, repeatCount, priority);
+        m_taskQueue.emplace([task]() { (*task)(); }, delay, repeatCount,
+                            priority);
     }
 #endif
 
@@ -367,10 +362,6 @@ auto Timer::addTask(Function &&func, unsigned int delay, int repeatCount,
 template <typename Function>
     requires Invocable<Function>
 void Timer::setCallback(Function &&func) noexcept(false) {
-    if (!func) {
-        throw std::invalid_argument(
-            "Timer::setCallback: Callback function cannot be null");
-    }
     std::scoped_lock lock(m_mutex);
     m_callback = std::forward<Function>(func);
 }

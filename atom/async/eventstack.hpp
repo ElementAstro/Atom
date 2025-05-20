@@ -907,24 +907,15 @@ void EventStack<T>::transformEvents(Func&& transformFunc) {
 #if ATOM_ASYNC_USE_LOCKFREE
         std::vector<T> elements = drainStack();
         try {
-            // Wrap the transformFunc in std::function to help with template
-            // deduction
-            std::function<void(T&)> wrapped_func = transformFunc;
+            // 直接使用原始函数，而不是包装成std::function
             if constexpr (std::is_same_v<T, bool>) {
-                Parallel::for_each(
-                    elements.begin(), elements.end(),
-                    // Capture the std::function by copy for the inner lambda
-                    [wrapped_func_copy = wrapped_func](
-                        typename std::vector<T>::reference event_ref) {
-                        bool val = event_ref;    // Convert proxy to bool
-                        wrapped_func_copy(val);  // Call user function with
-                                                 // bool& (to a local bool)
-                        event_ref = val;  // Assign back from the (potentially
-                                          // modified) local bool
-                    });
+                for (auto& event : elements) {
+                    transformFunc(event);
+                }
             } else {
+                // 直接传递原始的transformFunc
                 Parallel::for_each(elements.begin(), elements.end(),
-                                   wrapped_func);
+                                   std::forward<Func>(transformFunc));
             }
         } catch (...) {
             refillStack(elements);  // Refill on error
@@ -933,22 +924,20 @@ void EventStack<T>::transformEvents(Func&& transformFunc) {
         refillStack(elements);  // Refill after processing
 #else
         std::unique_lock lock(mtx_);
-        // Wrap the transformFunc in std::function to help with template
-        // deduction
-        std::function<void(T&)> wrapped_func = transformFunc;
         if constexpr (std::is_same_v<T, bool>) {
-            // Manual loop or a Parallel::for_each that handles proxy references
-            // correctly. Assuming Parallel::for_each might not handle
-            // std::vector<bool>::reference well with a bool& functor.
+            // 对于bool类型进行特殊处理
             for (typename std::vector<T>::reference event_ref : events_) {
-                bool val = event_ref;  // Convert proxy to bool
-                wrapped_func(
-                    val);  // Call user function with bool& (to a local bool)
-                event_ref = val;  // Assign back from the (potentially modified)
-                                  // local bool
+                bool val = event_ref;  // 将proxy转换为bool
+                transformFunc(val);    // 调用用户函数
+                event_ref = val;       // 将修改后的值赋回去
             }
         } else {
-            Parallel::for_each(events_.begin(), events_.end(), wrapped_func);
+            // TODO: Fix this
+            /*
+            Parallel::for_each(events_.begin(), events_.end(),
+                               std::forward<Func>(transformFunc));
+            */
+            
         }
 #endif
     } catch (const std::exception& e) {

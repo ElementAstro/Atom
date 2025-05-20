@@ -45,46 +45,6 @@ Description: Python like stat for Windows & Linux
 
 namespace atom::system {
 
-// Private StatInfo class implementation for caching
-class Stat::StatInfo {
-public:
-    std::optional<fs::file_status> status;
-    std::optional<std::uintmax_t> fileSize;
-    std::optional<std::time_t> accessTime;
-    std::optional<std::time_t> modifyTime;
-    std::optional<std::time_t> createTime;
-    std::optional<int> fileMode;
-    std::optional<int> userId;
-    std::optional<int> groupId;
-    std::optional<std::uintmax_t> linkCount;
-    std::optional<std::uintmax_t> devId;
-    std::optional<std::uintmax_t> inodeNum;
-    std::optional<std::uintmax_t> blkSize;
-    std::optional<std::string> owner;
-    std::optional<std::string> group;
-    std::optional<bool> isSymbolicLink;
-    std::optional<fs::path> symTarget;
-
-    void clear() {
-        status.reset();
-        fileSize.reset();
-        accessTime.reset();
-        modifyTime.reset();
-        createTime.reset();
-        fileMode.reset();
-        userId.reset();
-        groupId.reset();
-        linkCount.reset();
-        devId.reset();
-        inodeNum.reset();
-        blkSize.reset();
-        owner.reset();
-        group.reset();
-        isSymbolicLink.reset();
-        symTarget.reset();
-    }
-};
-
 Stat::Stat(const fs::path& path, bool followSymlinks)
     : path_(path),
       followSymlinks_(followSymlinks),

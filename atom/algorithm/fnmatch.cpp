@@ -144,17 +144,17 @@ auto fnmatch(T1&& pattern, T2&& string, int flags) -> bool {
 
         if (!result) {
             const char* error_msg = "Unknown error";
-            switch (result.error()) {
-                case FnmatchError::InvalidPattern:
+            switch (static_cast<int>(result.error().error())) {
+                case static_cast<int>(FnmatchError::InvalidPattern):
                     error_msg = "Invalid pattern";
                     break;
-                case FnmatchError::UnmatchedBracket:
+                case static_cast<int>(FnmatchError::UnmatchedBracket):
                     error_msg = "Unmatched bracket in pattern";
                     break;
-                case FnmatchError::EscapeAtEnd:
+                case static_cast<int>(FnmatchError::EscapeAtEnd):
                     error_msg = "Escape character at end of pattern";
                     break;
-                case FnmatchError::InternalError:
+                case static_cast<int>(FnmatchError::InternalError):
                     error_msg = "Internal error during matching";
                     break;
             }
@@ -566,5 +566,22 @@ auto translate(Pattern&& pattern, int flags) noexcept
         return atom::type::unexpected(FnmatchError::InternalError);
     }
 }
+
+// 显式模板实例化，用于解决Python绑定链接错误
+template bool atom::algorithm::fnmatch<std::string, std::string>(std::string&&,
+                                                                 std::string&&,
+                                                                 int);
+template atom::type::expected<bool, atom::algorithm::FnmatchError>
+atom::algorithm::fnmatch_nothrow<std::string, std::string>(std::string&&,
+                                                           std::string&&,
+                                                           int) noexcept;
+template atom::type::expected<std::string, atom::algorithm::FnmatchError>
+atom::algorithm::translate<std::string>(std::string&&, int) noexcept;
+template bool atom::algorithm::filter<std::vector<std::string>, std::string>(
+    const std::vector<std::string>&, std::string&&, int);
+template std::vector<std::string>
+atom::algorithm::filter<std::vector<std::string>, std::vector<std::string>>(
+    const std::vector<std::string>&, const std::vector<std::string>&, int,
+    bool);
 
 }  // namespace atom::algorithm

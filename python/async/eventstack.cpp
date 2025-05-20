@@ -52,9 +52,12 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
         // Copy and move constructors
         .def(py::init<const EventStackType&>(), py::arg("other"),
              "Copy constructor - creates a new stack from an existing one")
-        .def(py::init<EventStackType&&>(), py::arg("other"),
+             /*
+            .def(py::init<EventStackType&&>(), py::arg("other"),
              "Move constructor - creates a new stack by taking ownership of "
-             "another stack")
+             "another stack") 
+             */
+        
 
         // Core stack operations
         .def("push_event", &EventStackType::pushEvent, py::arg("event"),
@@ -361,7 +364,7 @@ PYBIND11_MODULE(eventstack, m) {
     declare_event_stack<float>(m, "Float");
     declare_event_stack<double>(m, "Double");
     declare_event_stack<std::string>(m, "String");
-    declare_event_stack<bool>(m, "Bool");
+    // declare_event_stack<bool>(m, "Bool");
 
     // Utility function to create appropriate event stack based on input type
     m.def(

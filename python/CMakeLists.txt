@@ -123,6 +123,14 @@ foreach(type ${MODULE_TYPES})
       message(STATUS "Linking atom_connection to mswsock on Windows")
     endif()
     
+    # 对algorithm模块特殊处理，确保链接必要的库
+    if("${type}" STREQUAL "algorithm")
+      if(TARGET atom-type)
+        target_link_libraries(atom_${type} PRIVATE atom-type)
+        message(STATUS "Linking atom_algorithm to atom-type")
+      endif()
+    endif()
+    
     target_link_libraries(atom_${type} PRIVATE loguru atom-error)
 
     # Set output name

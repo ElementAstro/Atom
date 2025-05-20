@@ -47,6 +47,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 # Global build options
 option(ATOM_BUILD_EXAMPLES "Build examples" OFF)
 option(ATOM_BUILD_TESTS "Build tests" OFF)
+option(ATOM_BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
 
 # Boost related options
 option(ATOM_USE_BOOST "Enable Boost high-performance data structures" OFF)
@@ -54,7 +55,7 @@ option(ATOM_USE_BOOST_LOCKFREE "Enable Boost lock-free data structures" OFF)
 option(ATOM_USE_BOOST_CONTAINER "Enable Boost container library" OFF)
 option(ATOM_USE_BOOST_GRAPH "Enable Boost graph library" OFF)
 option(ATOM_USE_BOOST_INTRUSIVE "Enable Boost intrusive containers" OFF)
-option(ATOM_USE_PYBIND11 "Enable pybind11 support" ON)
+option(ATOM_USE_PYBIND11 "Enable pybind11 support" ${ATOM_BUILD_PYTHON_BINDINGS})
 
 # Module build options
 option(ATOM_BUILD_ALL "Build all Atom modules" ON)
@@ -111,11 +112,14 @@ find_package(Asio REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(SQLite3 REQUIRED)
 find_package(fmt REQUIRED)
-find_package(
-  Python
-  COMPONENTS Interpreter Development
-  REQUIRED)
-find_package(pybind11 CONFIG REQUIRED)
+# Find Python and pybind11 only if building Python bindings
+if(ATOM_BUILD_PYTHON_BINDINGS)
+  find_package(
+    Python
+    COMPONENTS Interpreter Development
+    REQUIRED)
+  find_package(pybind11 CONFIG REQUIRED)
+endif()
 find_package(Readline REQUIRED)
 find_package(ZLIB REQUIRED)
 if(LINUX)
@@ -173,7 +177,10 @@ else()
   endif()
 endif()
 
-include_directories(${pybind11_INCLUDE_DIRS} ${Python_INCLUDE_DIRS})
+# Include Python and pybind11 directories only if building Python bindings
+if(ATOM_BUILD_PYTHON_BINDINGS)
+  include_directories(${pybind11_INCLUDE_DIRS} ${Python_INCLUDE_DIRS})
+endif()
 
 # If Boost support is enabled
 if(ATOM_USE_BOOST)
@@ -210,7 +217,9 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/version_info.h.in
 # Add subdirectories
 add_subdirectory(extra)
 add_subdirectory(atom)
-add_subdirectory(python)
+if(ATOM_BUILD_PYTHON_BINDINGS)
+  add_subdirectory(python)
+endif()
 if(ATOM_BUILD_EXAMPLES)
   add_subdirectory(example)
 endif()

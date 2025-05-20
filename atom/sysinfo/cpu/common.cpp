@@ -56,7 +56,8 @@ size_t stringToBytes(const std::string& str) {
         case 'G':
             size *= 1024 * 1024 * 1024;
             break;
-    }    return size;
+    }
+    return size;
 }
 
 /**

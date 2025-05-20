@@ -4,6 +4,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/pytypes.h>
 #include <pybind11/stl.h>
+#include <pybind11/stl_bind.h>
 
 namespace py = pybind11;
 std::shared_ptr<atom::utils::Env> create_env_shared_wrapper(
@@ -58,6 +59,45 @@ PYBIND11_MODULE(env, m) {
             PyErr_SetString(PyExc_Exception, e.what());
         }
     });
+
+    // 注册环境变量格式枚举
+    py::enum_<atom::utils::VariableFormat>(m, "VariableFormat",
+                                           "Environment variable format")
+        .value("UNIX", atom::utils::VariableFormat::UNIX,
+               "Unix format (${VAR} or $VAR)")
+        .value("WINDOWS", atom::utils::VariableFormat::WINDOWS,
+               "Windows format (%VAR%)")
+        .value("AUTO", atom::utils::VariableFormat::AUTO,
+               "Auto-detect based on platform")
+        .export_values();
+
+    // 注册环境变量持久化级别枚举
+    py::enum_<atom::utils::PersistLevel>(
+        m, "PersistLevel", "Environment variable persistence level")
+        .value("PROCESS", atom::utils::PersistLevel::PROCESS,
+               "Only valid for current process")
+        .value("USER", atom::utils::PersistLevel::USER,
+               "User level persistence")
+        .value("SYSTEM", atom::utils::PersistLevel::SYSTEM,
+               "System level persistence (requires admin)")
+        .export_values();
+
+    // 绑定ScopedEnv类
+    py::class_<atom::utils::Env::ScopedEnv,
+               std::shared_ptr<atom::utils::Env::ScopedEnv>>(
+        m, "ScopedEnv",
+        R"(Temporary environment variable scope.
+        
+When this object is created, it sets the specified environment variable.
+When the object is destroyed, the original value is restored.)")
+        .def(py::init<const atom::utils::String&, const atom::utils::String&>(),
+             py::arg("key"), py::arg("value"),
+             R"(Constructor that sets a temporary environment variable.
+
+Args:
+    key: The environment variable name.
+    value: The value to set.
+)");
 
     // Env 类绑定
     py::class_<atom::utils::Env, std::shared_ptr<atom::utils::Env>>(
@@ -237,9 +277,9 @@ Examples:
     >>> print(e.get_optional("MISSING_VAR", int))
     None
 )")
-        .def("set_env", &atom::utils::Env::setEnv, py::arg("key"),
-             py::arg("val"),
-             R"(Sets the value of an environment variable.
+        .def_static("set_env", &atom::utils::Env::setEnv, py::arg("key"),
+                    py::arg("val"),
+                    R"(Sets the value of an environment variable.
 
 Args:
     key: The key name.
@@ -248,9 +288,9 @@ Args:
 Returns:
     True if the environment variable was set successfully, otherwise False.
 )")
-        .def("set_env_multiple", &atom::utils::Env::setEnvMultiple,
-             py::arg("vars"),
-             R"(Sets multiple environment variables.
+        .def_static("set_env_multiple", &atom::utils::Env::setEnvMultiple,
+                    py::arg("vars"),
+                    R"(Sets multiple environment variables.
 
 Args:
     vars: The dictionary of key-value pairs to set.
@@ -258,7 +298,7 @@ Args:
 Returns:
     True if all environment variables were set successfully, otherwise False.
 )")
-        .def(
+        .def_static(
             "get_env", &atom::utils::Env::getEnv, py::arg("key"),
             py::arg("default_value") = std::string(""),
             R"(Gets the value of an environment variable, or returns a default value if the variable does not exist.
@@ -300,15 +340,15 @@ Args:
 Returns:
     The value converted to the appropriate type, or the default value.
 )")
-        .def("unset_env", &atom::utils::Env::unsetEnv, py::arg("name"),
-             R"(Unsets an environment variable.
+        .def_static("unset_env", &atom::utils::Env::unsetEnv, py::arg("name"),
+                    R"(Unsets an environment variable.
 
 Args:
     name: The name of the environment variable to unset.
 )")
-        .def("unset_env_multiple", &atom::utils::Env::unsetEnvMultiple,
-             py::arg("names"),
-             R"(Unsets multiple environment variables.
+        .def_static("unset_env_multiple", &atom::utils::Env::unsetEnvMultiple,
+                    py::arg("names"),
+                    R"(Unsets multiple environment variables.
 
 Args:
     names: The list of environment variable names to unset.
@@ -412,6 +452,203 @@ Returns:
 Returns:
     The dictionary of command-line arguments.
 )")
+        // 添加新增的静态方法
+        .def_static("get_home_dir", &atom::utils::Env::getHomeDir,
+                    R"(Gets the user's home directory.
+
+Returns:
+    The path to the user's home directory.
+)")
+        .def_static("get_temp_dir", &atom::utils::Env::getTempDir,
+                    R"(Gets the system temporary directory.
+
+Returns:
+    The path to the system temporary directory.
+)")
+        .def_static("get_config_dir", &atom::utils::Env::getConfigDir,
+                    R"(Gets the system configuration directory.
+
+Returns:
+    The path to the system configuration directory.
+)")
+        .def_static("get_data_dir", &atom::utils::Env::getDataDir,
+                    R"(Gets the user data directory.
+
+Returns:
+    The path to the user data directory.
+)")
+        .def_static("expand_variables", &atom::utils::Env::expandVariables,
+                    py::arg("str"),
+                    py::arg("format") = atom::utils::VariableFormat::AUTO,
+                    R"(Expands environment variables in a string.
+
+Args:
+    str: The string containing environment variable references (e.g., "$HOME/file" or "%PATH%;newpath").
+    format: The environment variable format (Unix style ${VAR} or Windows style %VAR%).
+
+Returns:
+    The expanded string.
+)")
+        .def_static("set_persistent_env", &atom::utils::Env::setPersistentEnv,
+                    py::arg("key"), py::arg("val"),
+                    py::arg("level") = atom::utils::PersistLevel::USER,
+                    R"(Persistently sets an environment variable.
+
+Args:
+    key: The environment variable name.
+    val: The value to set.
+    level: The persistence level (PROCESS, USER, or SYSTEM).
+
+Returns:
+    True if the variable was successfully set, otherwise False.
+)")
+        .def_static("delete_persistent_env",
+                    &atom::utils::Env::deletePersistentEnv, py::arg("key"),
+                    py::arg("level") = atom::utils::PersistLevel::USER,
+                    R"(Persistently deletes an environment variable.
+
+Args:
+    key: The environment variable name.
+    level: The persistence level (PROCESS, USER, or SYSTEM).
+
+Returns:
+    True if the variable was successfully deleted, otherwise False.
+)")
+        .def_static("add_to_path", &atom::utils::Env::addToPath,
+                    py::arg("path"), py::arg("prepend") = false,
+                    R"(Adds a path to the PATH environment variable.
+
+Args:
+    path: The path to add.
+    prepend: Whether to add the path to the beginning (True) or end (False) of PATH.
+
+Returns:
+    True if the path was successfully added, otherwise False.
+)")
+        .def_static("remove_from_path", &atom::utils::Env::removeFromPath,
+                    py::arg("path"),
+                    R"(Removes a path from the PATH environment variable.
+
+Args:
+    path: The path to remove.
+
+Returns:
+    True if the path was successfully removed, otherwise False.
+)")
+        .def_static("is_in_path", &atom::utils::Env::isInPath, py::arg("path"),
+                    R"(Checks if a path is in the PATH environment variable.
+
+Args:
+    path: The path to check.
+
+Returns:
+    True if the path is in PATH, otherwise False.
+)")
+        .def_static("get_path_entries", &atom::utils::Env::getPathEntries,
+                    R"(Gets all paths in the PATH environment variable.
+
+Returns:
+    A list of all paths in PATH.
+)")
+        .def_static("diff_environments", &atom::utils::Env::diffEnvironments,
+                    py::arg("env1"), py::arg("env2"),
+                    R"(Compares two environment variable sets.
+
+Args:
+    env1: First environment variable set.
+    env2: Second environment variable set.
+
+Returns:
+    A tuple of (added, removed, modified) variables.
+)")
+        .def_static("merge_environments", &atom::utils::Env::mergeEnvironments,
+                    py::arg("base_env"), py::arg("overlay_env"),
+                    py::arg("override") = true,
+                    R"(Merges two environment variable sets.
+
+Args:
+    base_env: Base environment variable set.
+    overlay_env: Overlay environment variable set.
+    override: Whether to override base variables with overlay variables when conflicts occur.
+
+Returns:
+    The merged environment variable set.
+)")
+        .def_static("get_system_name", &atom::utils::Env::getSystemName,
+                    R"(Gets the system name.
+
+Returns:
+    The system name (e.g., "Windows", "Linux", "MacOS").
+)")
+        .def_static("get_system_arch", &atom::utils::Env::getSystemArch,
+                    R"(Gets the system architecture.
+
+Returns:
+    The system architecture (e.g., "x86_64", "arm64").
+)")
+        .def_static("get_current_user", &atom::utils::Env::getCurrentUser,
+                    R"(Gets the current user name.
+
+Returns:
+    The current user name.
+)")
+        .def_static("get_host_name", &atom::utils::Env::getHostName,
+                    R"(Gets the host name.
+
+Returns:
+    The host name.
+)")
+        .def_static(
+            "register_change_notification",
+            [](const py::function& py_callback) {
+                auto cpp_callback = [py_callback](const std::string& key,
+                                                  const std::string& oldValue,
+                                                  const std::string& newValue) {
+                    py::gil_scoped_acquire gil;
+                    py_callback(key, oldValue, newValue);
+                };
+                return atom::utils::Env::registerChangeNotification(
+                    cpp_callback);
+            },
+            py::arg("callback"),
+            R"(Registers a notification for environment variable changes.
+
+Args:
+    callback: A function that takes (key, old_value, new_value) parameters.
+
+Returns:
+    A notification ID that can be used to unregister the notification.
+)")
+        .def_static("unregister_change_notification",
+                    &atom::utils::Env::unregisterChangeNotification,
+                    py::arg("id"),
+                    R"(Unregisters an environment variable change notification.
+
+Args:
+    id: The notification ID to unregister.
+
+Returns:
+    True if the notification was successfully unregistered, otherwise False.
+)")
+        .def_static("create_scoped_env", &atom::utils::Env::createScopedEnv,
+                    py::arg("key"), py::arg("value"),
+                    R"(Creates a temporary environment variable scope.
+
+Args:
+    key: The environment variable name.
+    value: The value to set.
+
+Returns:
+    A ScopedEnv object that will restore the original value when destroyed.
+
+Example:
+    >>> from atom.system import env
+    >>> # Create a temporary environment variable
+    >>> with env.Env.create_scoped_env("TEMP_VAR", "temp_value") as scoped:
+    ...     # TEMP_VAR is set to "temp_value" here
+    ...     print(env.get_env("TEMP_VAR"))
+    ... # TEMP_VAR is restored to its original value here
+)")
 #if ATOM_ENABLE_DEBUG
         .def_static("print_all_variables", &atom::utils::Env::printAllVariables,
                     "Prints all environment variables.")
@@ -498,5 +735,61 @@ Examples:
     >>> all_vars = env.get_all_env()
     >>> for key, value in all_vars.items():
     ...     print(f"{key} = {value}")
+)");
+
+    // 添加新增的便捷模块级函数
+    m.def(
+        "expand_variables",
+        [](const std::string& str, atom::utils::VariableFormat format =
+                                       atom::utils::VariableFormat::AUTO) {
+            return atom::utils::Env::expandVariables(str, format);
+        },
+        py::arg("str"), py::arg("format") = atom::utils::VariableFormat::AUTO,
+        R"(Expands environment variables in a string.
+
+Args:
+    str: The string containing environment variable references.
+    format: The environment variable format (UNIX, WINDOWS, or AUTO).
+
+Returns:
+    The expanded string.
+
+Examples:
+    >>> from atom.system import env
+    >>> path = env.expand_variables("$HOME/documents")
+    >>> print(path)
+)");
+
+    m.def("get_home_dir", &atom::utils::Env::getHomeDir,
+          R"(Gets the user's home directory.
+
+Returns:
+    The path to the user's home directory.
+
+Examples:
+    >>> from atom.system import env
+    >>> home = env.get_home_dir()
+    >>> print(f"Home directory: {home}")
+)");
+
+    m.def(
+        "get_system_info",
+        []() {
+            return py::dict(
+                py::arg("system") = atom::utils::Env::getSystemName(),
+                py::arg("arch") = atom::utils::Env::getSystemArch(),
+                py::arg("user") = atom::utils::Env::getCurrentUser(),
+                py::arg("host") = atom::utils::Env::getHostName());
+        },
+        R"(Gets system information.
+
+Returns:
+    A dictionary containing system name, architecture, user name, and host name.
+
+Examples:
+    >>> from atom.system import env
+    >>> info = env.get_system_info()
+    >>> print(f"System: {info['system']} ({info['arch']}) ")
+    >>> print(f"User: {info['user']} on {info['host']}")
 )");
 }

@@ -5,7 +5,6 @@
 #include <pybind11/stl.h>
 #include <future>
 
-
 namespace py = pybind11;
 
 auto make_callable_task(const py::function& func) {
@@ -23,9 +22,9 @@ auto make_callable_task(const py::function& func) {
 }
 
 template <typename ReturnType = void>
-auto submit_task_to_pool(atom::async::ThreadPool<>& pool,
+auto submit_task_to_pool(atom::async::ThreadPool& pool,
                          const py::function& func) {
-    return pool.enqueue([func]() -> ReturnType {
+    return pool.submit([func]() -> ReturnType {
         try {
             py::object result = func();
             if constexpr (!std::is_same_v<ReturnType, void>) {
@@ -139,7 +138,7 @@ Examples:
             "Support for boolean evaluation.");
 
     // ThreadPool类的绑定
-    py::class_<atom::async::ThreadPool<>>(
+    py::class_<atom::async::ThreadPool>(
         m, "ThreadPool",
         R"(A high-performance thread pool for parallel task execution.
 
@@ -161,35 +160,44 @@ Examples:
 )")
         .def(
             py::init([](unsigned int num_threads, py::function init_func) {
-                if (py::isinstance<py::none>(init_func)) {
-                    return std::make_unique<atom::async::ThreadPool<>>(
-                        num_threads);
-                } else {
-                    return std::make_unique<atom::async::ThreadPool<>>(
-                        num_threads, make_init_func(init_func));
+                atom::async::ThreadPool::Options options;
+
+                if (num_threads > 0) {
+                    options.initialThreadCount = num_threads;
                 }
+
+                auto pool = std::make_unique<atom::async::ThreadPool>(options);
+
+                if (!py::isinstance<py::none>(init_func)) {
+                    py::print(
+                        "Warning: Thread initialization function is provided "
+                        "but not supported by ThreadPool class");
+                }
+
+                return pool;
             }),
             py::arg("num_threads") = 0, py::arg("init_func") = py::none(),
             "Constructs a new ThreadPool with the specified number of threads.")
-        .def("size", &atom::async::ThreadPool<>::size,
+        .def("size", &atom::async::ThreadPool::getThreadCount,
              "Returns the number of threads in the pool.")
-        .def("active_task_count", &atom::async::ThreadPool<>::activeTaskCount,
+        .def("active_task_count",
+             &atom::async::ThreadPool::getActiveThreadCount,
              "Returns the number of currently active tasks.")
-        .def("is_shutting_down", &atom::async::ThreadPool<>::isShuttingDown,
-             "Checks if the thread pool is in the process of shutting down.")
-        .def("wait_for_tasks", &atom::async::ThreadPool<>::waitForTasks,
-             py::arg("timeout_ms") = 0,
+        .def(
+            "is_shutting_down",
+            [](const atom::async::ThreadPool& pool) {
+                return pool.isShutdown();
+            },
+            "Checks if the thread pool is in the process of shutting down.")
+        .def("wait_for_tasks", &atom::async::ThreadPool::waitForTasks,
              R"(Waits for all queued tasks to complete.
-
-Args:
-    timeout_ms: Maximum time to wait in milliseconds (0 = wait indefinitely)
 
 Returns:
     True if all tasks completed, False if timed out
 )")
         .def(
             "submit",
-            [](atom::async::ThreadPool<>& pool, py::function func) {
+            [](atom::async::ThreadPool& pool, py::function func) {
                 auto future = submit_task_to_pool<py::object>(pool, func);
 
                 auto py_future =
@@ -224,7 +232,7 @@ Examples:
 )")
         .def(
             "submit_batch",
-            [](atom::async::ThreadPool<>& pool, py::list tasks) {
+            [](atom::async::ThreadPool& pool, py::list tasks) {
                 // 创建Python Future列表
                 py::list futures;
 
@@ -269,7 +277,7 @@ Examples:
 )")
         .def(
             "submit_detached",
-            [](atom::async::ThreadPool<>& pool, py::function func) {
+            [](atom::async::ThreadPool& pool, py::function func) {
                 pool.enqueueDetach(make_callable_task(func));
             },
             py::arg("func"),
@@ -288,23 +296,30 @@ Examples:
     m.def(
         "create_thread_pool",
         [](py::kwargs kwargs) {
-            unsigned int num_threads = 0;
+            atom::async::ThreadPool::Options options;
             py::function init_func = py::none();
 
             if (kwargs.contains("num_threads")) {
-                num_threads = kwargs["num_threads"].cast<unsigned int>();
+                unsigned int num_threads =
+                    kwargs["num_threads"].cast<unsigned int>();
+                if (num_threads > 0) {
+                    options.initialThreadCount = num_threads;
+                }
             }
 
             if (kwargs.contains("init_func")) {
                 init_func = kwargs["init_func"].cast<py::function>();
             }
 
-            if (py::isinstance<py::none>(init_func)) {
-                return std::make_unique<atom::async::ThreadPool<>>(num_threads);
-            } else {
-                return std::make_unique<atom::async::ThreadPool<>>(
-                    num_threads, make_init_func(init_func));
+            auto pool = std::make_unique<atom::async::ThreadPool>(options);
+
+            if (!py::isinstance<py::none>(init_func)) {
+                py::print(
+                    "Warning: Thread initialization function is provided "
+                    "but not supported by ThreadPool class");
             }
+
+            return pool;
         },
         R"(Factory function to create a thread pool with optimal configuration.
 

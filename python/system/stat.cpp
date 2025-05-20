@@ -4,7 +4,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(stat, m) {
@@ -544,21 +543,24 @@ Examples:
         [](int mode) {
             std::string result;
 
-            // File type
             if (S_ISREG(mode))
                 result += "-";
             else if (S_ISDIR(mode))
                 result += "d";
+#ifdef S_ISLNK
             else if (S_ISLNK(mode))
                 result += "l";
+#endif
             else if (S_ISCHR(mode))
                 result += "c";
             else if (S_ISBLK(mode))
                 result += "b";
             else if (S_ISFIFO(mode))
                 result += "p";
+#ifdef S_ISSOCK
             else if (S_ISSOCK(mode))
                 result += "s";
+#endif
             else
                 result += "?";
 
@@ -658,6 +660,7 @@ Examples:
         py::arg("exe") = "Windows executable");
 
     // Class for stat caching
+    // Class for stat caching
     py::class_<py::object>(m, "StatCache")
         .def(py::init([]() {
                  py::dict cache;
@@ -665,7 +668,7 @@ Examples:
              }),
              "Create a new stat cache")
         .def("__getitem__",
-             [](py::object& self, const std::string& path) {
+             [m](py::object& self, const std::string& path) -> py::object {
                  if (!py::hasattr(self, "cache")) {
                      self.attr("cache") = py::dict();
                  }
@@ -677,22 +680,26 @@ Examples:
                  }
 
                  // Check if in cache and not expired
-                 if (cache.contains(path)) {
-                     py::tuple cached = cache[path];
-                     std::time_t cache_time = py::cast<std::time_t>(cached[0]);
+                 if (cache.contains(py::str(path))) {
+                     py::object cached = cache[py::str(path)];
+                     py::tuple cached_tuple = py::cast<py::tuple>(cached);
+                     std::time_t cache_time =
+                         py::cast<std::time_t>(cached_tuple[0]);
                      std::time_t now = std::time(nullptr);
 
                      // Cache valid for 1 second
                      if (now - cache_time < 1) {
-                         return cached[1];
+                         return cached_tuple[1];
                      }
                  }
 
                  // Get fresh info
-                 py::dict info =
-                     py::cast<py::dict>(m.attr("get_file_info")(path));
+                 py::object info = m.attr("get_file_info")(path);
                  std::time_t now = std::time(nullptr);
-                 cache[path.c_str()] = py::make_tuple(now, info);
+
+                 // Create tuple and store in cache
+                 py::tuple data = py::make_tuple(now, info);
+                 cache[py::str(path)] = data;
 
                  return info;
              })
@@ -704,7 +711,7 @@ Examples:
                 }
             },
             "Clear the stat cache")
-        .def("__len__", [](py::object& self) {
+        .def("__len__", [](py::object& self) -> size_t {
             if (py::hasattr(self, "cache")) {
                 return py::len(self.attr("cache"));
             }
@@ -740,7 +747,7 @@ Examples:
     // Function to use the context manager
     m.def(
         "open_stat",
-        [](const std::string& path, bool follow_symlinks) {
+        [&m](const std::string& path, bool follow_symlinks) {
             return m.attr("StatContext")(path, follow_symlinks);
         },
         py::arg("path"), py::arg("follow_symlinks") = true,

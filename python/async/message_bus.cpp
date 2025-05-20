@@ -16,7 +16,9 @@ py::function create_message_handler(py::function py_handler) {
         try {
             py_handler(message);
         } catch (py::error_already_set& e) {
-            PyErr_WriteUnraisable(e.python_error().ptr());
+            // Pass the Python handler function as context to
+            // PyErr_WriteUnraisable
+            PyErr_WriteUnraisable(py_handler.ptr());
         }
     });
 }
@@ -55,12 +57,15 @@ void declare_message_type(py::module& m, const std::string& type_name) {
               // Create filter function if provided
               std::function<bool(const MessageType&)> cpp_filter;
               if (filter) {
-                  cpp_filter = [filter](const MessageType& msg) {
+                  // Capture the Python filter function by value for the lambda
+                  py::function py_filter_func = filter.value();
+                  cpp_filter = [py_filter_func](const MessageType& msg) {
                       py::gil_scoped_acquire acquire;
                       try {
-                          return filter.value()(msg).cast<bool>();
+                          return py_filter_func(msg).template cast<bool>();
                       } catch (py::error_already_set& e) {
-                          PyErr_WriteUnraisable(e.python_error().ptr());
+                          // Pass the Python filter function as context
+                          PyErr_WriteUnraisable(py_filter_func.ptr());
                           return false;
                       }
                   };
@@ -69,12 +74,15 @@ void declare_message_type(py::module& m, const std::string& type_name) {
               }
 
               // Create and register the handler
-              auto cpp_handler = [handler](const MessageType& msg) {
+              // Capture the Python handler function by value for the lambda
+              py::function py_handler_func = handler;
+              auto cpp_handler = [py_handler_func](const MessageType& msg) {
                   py::gil_scoped_acquire acquire;
                   try {
-                      handler(msg);
+                      py_handler_func(msg);
                   } catch (py::error_already_set& e) {
-                      PyErr_WriteUnraisable(e.python_error().ptr());
+                      // Pass the Python handler function as context
+                      PyErr_WriteUnraisable(py_handler_func.ptr());
                   }
               };
 

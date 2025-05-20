@@ -81,13 +81,16 @@ Examples:
     >>> # Register the handler for SIGINT (usually 2)
     >>> handler_id = registry.set_signal_handler(2, handle_interrupt)
 )")
-        .def_static("get_instance", &SignalHandlerRegistry::getInstance,
+/*
+.def_static("get_instance", &SignalHandlerRegistry::getInstance,
                     py::return_value_policy::reference,
                     R"(Get the singleton instance of the SignalHandlerRegistry.
 
 Returns:
     Reference to the singleton SignalHandlerRegistry instance.
 )")
+*/
+        
         .def(
             "set_signal_handler", &SignalHandlerRegistry::setSignalHandler,
             py::arg("signal"), py::arg("handler"), py::arg("priority") = 0,

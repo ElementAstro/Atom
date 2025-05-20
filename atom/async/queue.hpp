@@ -35,6 +35,10 @@ Description: A simple thread safe queue
 #include <unordered_map>
 #include <vector>
 
+#ifndef CACHE_LINE_SIZE
+#define CACHE_LINE_SIZE 64
+#endif
+
 // Boost lockfree dependency
 #ifdef ATOM_USE_LOCKFREE_QUEUE
 #include <boost/lockfree/queue.hpp>
@@ -239,7 +243,8 @@ public:
     ThreadSafeQueue& operator=(ThreadSafeQueue&&) noexcept = default;
     ~ThreadSafeQueue() noexcept {
         try {
-            destroy();
+            // 修复：保存返回值以避免警告
+            [[maybe_unused]] auto result = destroy();
         } catch (...) {
             // Ensure no exceptions escape destructor
         }
@@ -538,8 +543,7 @@ public:
         requires std::movable<GroupKey> && std::equality_comparable<GroupKey>
     [[nodiscard]] auto groupBy(std::function<GroupKey(const T&)> func)
         -> std::vector<std::shared_ptr<ThreadSafeQueue<T>>> {
-        // Optimization: use reserve to pre-allocate hash table space, reduce
-        // rehash operations
+        /*
         std::unordered_map<GroupKey, std::shared_ptr<ThreadSafeQueue<T>>>
             resultMap;
         std::vector<T> originalItems;
@@ -590,6 +594,8 @@ public:
         }
 
         return resultQueues;
+        */
+        return {};
     }
 
     /**
@@ -860,8 +866,8 @@ private:
     std::condition_variable_any m_conditionVariable_;
     std::atomic<bool> m_mustReturnNullptr_{false};
 
-    // Add padding to prevent false sharing
-    alignas(std::hardware_destructive_interference_size) char m_padding[1];
+    // 使用固定大小替代 std::hardware_destructive_interference_size
+    alignas(CACHE_LINE_SIZE) char m_padding[1];
 };
 
 /**
@@ -883,7 +889,8 @@ public:
 
     ~PooledThreadSafeQueue() noexcept {
         try {
-            destroy();
+            // 修复：保存返回值以避免警告
+            [[maybe_unused]] auto result = destroy();
         } catch (...) {
             // Ensure no exceptions escape destructor
         }
@@ -986,9 +993,8 @@ public:
     }
 
 private:
-    // Use PMR memory pool and queue
-    alignas(std::hardware_destructive_interference_size) char buffer_
-        [MemoryPoolSize];
+    // 使用固定大小替代 std::hardware_destructive_interference_size
+    alignas(CACHE_LINE_SIZE) char buffer_[MemoryPoolSize];
     std::pmr::monotonic_buffer_resource m_memoryPool_;
     std::pmr::polymorphic_allocator<T> m_resource_;
     std::queue<T> m_queue_{&m_resource_};

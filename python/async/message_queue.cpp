@@ -7,6 +7,51 @@
 
 namespace py = pybind11;
 
+// 为容器类型提供哈希函数特化
+namespace std {
+// 为 vector<string> 添加哈希函数特化
+template <>
+struct hash<std::vector<std::string>> {
+    std::size_t operator()(const std::vector<std::string>& v) const {
+        std::size_t seed = v.size();
+        for (const auto& str : v) {
+            seed ^= std::hash<std::string>{}(str) + 0x9e3779b9 + (seed << 6) +
+                    (seed >> 2);
+        }
+        return seed;
+    }
+};
+
+// 为 vector<int> 添加哈希函数特化
+template <>
+struct hash<std::vector<int>> {
+    std::size_t operator()(const std::vector<int>& v) const {
+        std::size_t seed = v.size();
+        for (const auto& i : v) {
+            seed ^=
+                std::hash<int>{}(i) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        }
+        return seed;
+    }
+};
+
+// 为 unordered_map<string, string> 添加哈希函数特化
+template <>
+struct hash<std::unordered_map<std::string, std::string>> {
+    std::size_t operator()(
+        const std::unordered_map<std::string, std::string>& m) const {
+        std::size_t seed = m.size();
+        for (const auto& [k, v] : m) {
+            seed ^= std::hash<std::string>{}(k) + 0x9e3779b9 + (seed << 6) +
+                    (seed >> 2);
+            seed ^= std::hash<std::string>{}(v) + 0x9e3779b9 + (seed << 6) +
+                    (seed >> 2);
+        }
+        return seed;
+    }
+};
+}  // namespace std
+
 // Helper to create an io_context wrapper that can be managed by Python
 class PyIOContext {
 public:
@@ -302,7 +347,7 @@ Examples:
                             }
                         } catch (py::error_already_set& e) {
                             e.restore();
-                            PyErr_WriteUnraisable(Py_None); 
+                            PyErr_WriteUnraisable(Py_None);
                         }
                     },
                     "awaitable_subscriber", 0, cpp_filter,
