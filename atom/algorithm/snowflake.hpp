@@ -3,12 +3,13 @@
 
 #include <atomic>
 #include <chrono>
-#include <cstdint>
 #include <mutex>
 #include <random>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
+
+#include "atom/algorithm/rust_numeric.hpp"
 
 #ifdef ATOM_USE_BOOST
 #include <boost/random.hpp>
@@ -50,7 +51,7 @@ public:
      * @param worker_id The invalid worker ID.
      * @param max The maximum allowed worker ID.
      */
-    InvalidWorkerIdException(uint64_t worker_id, uint64_t max)
+    InvalidWorkerIdException(u64 worker_id, u64 max)
         : SnowflakeException("Worker ID " + std::to_string(worker_id) +
                              " exceeds maximum of " + std::to_string(max)) {}
 };
@@ -70,7 +71,7 @@ public:
      * @param datacenter_id The invalid datacenter ID.
      * @param max The maximum allowed datacenter ID.
      */
-    InvalidDatacenterIdException(uint64_t datacenter_id, uint64_t max)
+    InvalidDatacenterIdException(u64 datacenter_id, u64 max)
         : SnowflakeException("Datacenter ID " + std::to_string(datacenter_id) +
                              " exceeds maximum of " + std::to_string(max)) {}
 };
@@ -89,7 +90,7 @@ public:
      *
      * @param timestamp The invalid timestamp.
      */
-    InvalidTimestampException(uint64_t timestamp)
+    InvalidTimestampException(u64 timestamp)
         : SnowflakeException("Timestamp " + std::to_string(timestamp) +
                              " is invalid or out of range.") {}
 };
@@ -134,7 +135,7 @@ using mutex_type = std::mutex;
  * @tparam Lock The lock type to use for thread safety. Defaults to
  * SnowflakeNonLock for no locking.
  */
-template <uint64_t Twepoch, typename Lock = SnowflakeNonLock>
+template <u64 Twepoch, typename Lock = SnowflakeNonLock>
 class Snowflake {
     static_assert(std::is_same_v<Lock, SnowflakeNonLock> ||
 #ifdef ATOM_USE_BOOST
@@ -151,55 +152,53 @@ public:
      * @brief The custom epoch (in milliseconds) used as the starting point for
      * timestamp generation.
      */
-    static constexpr uint64_t TWEPOCH = Twepoch;
+    static constexpr u64 TWEPOCH = Twepoch;
 
     /**
      * @brief The number of bits used to represent the worker ID.
      */
-    static constexpr uint64_t WORKER_ID_BITS = 5;
+    static constexpr u64 WORKER_ID_BITS = 5;
 
     /**
      * @brief The number of bits used to represent the datacenter ID.
      */
-    static constexpr uint64_t DATACENTER_ID_BITS = 5;
+    static constexpr u64 DATACENTER_ID_BITS = 5;
 
     /**
      * @brief The maximum value that can be assigned to a worker ID.
      */
-    static constexpr uint64_t MAX_WORKER_ID = (1ULL << WORKER_ID_BITS) - 1;
+    static constexpr u64 MAX_WORKER_ID = (1ULL << WORKER_ID_BITS) - 1;
 
     /**
      * @brief The maximum value that can be assigned to a datacenter ID.
      */
-    static constexpr uint64_t MAX_DATACENTER_ID =
-        (1ULL << DATACENTER_ID_BITS) - 1;
+    static constexpr u64 MAX_DATACENTER_ID = (1ULL << DATACENTER_ID_BITS) - 1;
 
     /**
      * @brief The number of bits used to represent the sequence number.
      */
-    static constexpr uint64_t SEQUENCE_BITS = 12;
+    static constexpr u64 SEQUENCE_BITS = 12;
 
     /**
      * @brief The number of bits to shift the worker ID to the left.
      */
-    static constexpr uint64_t WORKER_ID_SHIFT = SEQUENCE_BITS;
+    static constexpr u64 WORKER_ID_SHIFT = SEQUENCE_BITS;
 
     /**
      * @brief The number of bits to shift the datacenter ID to the left.
      */
-    static constexpr uint64_t DATACENTER_ID_SHIFT =
-        SEQUENCE_BITS + WORKER_ID_BITS;
+    static constexpr u64 DATACENTER_ID_SHIFT = SEQUENCE_BITS + WORKER_ID_BITS;
 
     /**
      * @brief The number of bits to shift the timestamp to the left.
      */
-    static constexpr uint64_t TIMESTAMP_LEFT_SHIFT =
+    static constexpr u64 TIMESTAMP_LEFT_SHIFT =
         SEQUENCE_BITS + WORKER_ID_BITS + DATACENTER_ID_BITS;
 
     /**
      * @brief A mask used to extract the sequence number from an ID.
      */
-    static constexpr uint64_t SEQUENCE_MASK = (1ULL << SEQUENCE_BITS) - 1;
+    static constexpr u64 SEQUENCE_MASK = (1ULL << SEQUENCE_BITS) - 1;
 
     /**
      * @brief Constructs a Snowflake ID generator with specified worker and
@@ -214,7 +213,7 @@ public:
      * @throws InvalidDatacenterIdException If the datacenter_id is greater than
      * MAX_DATACENTER_ID.
      */
-    explicit Snowflake(uint64_t worker_id = 0, uint64_t datacenter_id = 0)
+    explicit Snowflake(u64 worker_id = 0, u64 datacenter_id = 0)
         : workerid_(worker_id), datacenterid_(datacenter_id) {
         initialize();
     }
@@ -238,7 +237,7 @@ public:
      * @throws InvalidDatacenterIdException If the datacenter_id is greater than
      * MAX_DATACENTER_ID.
      */
-    void init(uint64_t worker_id, uint64_t datacenter_id) {
+    void init(u64 worker_id, u64 datacenter_id) {
 #ifdef ATOM_USE_BOOST
         boost_lock_guard lock(lock_);
 #else
@@ -267,10 +266,10 @@ public:
      * @throws InvalidTimestampException If the system clock is adjusted
      * backwards or if there is an issue with timestamp generation.
      */
-    template <size_t N = 1>
-    [[nodiscard]] auto nextid() -> std::array<uint64_t, N> {
-        std::array<uint64_t, N> ids;
-        uint64_t timestamp = current_millis();
+    template <usize N = 1>
+    [[nodiscard]] auto nextid() -> std::array<u64, N> {
+        std::array<u64, N> ids;
+        u64 timestamp = current_millis();
 
 #ifdef ATOM_USE_BOOST
         boost_lock_guard lock(lock_);
@@ -295,7 +294,7 @@ public:
 
         last_timestamp_ = timestamp;
 
-        for (size_t i = 0; i < N; ++i) {
+        for (usize i = 0; i < N; ++i) {
             if (timestamp < last_timestamp_) {
                 throw InvalidTimestampException(timestamp);
             }
@@ -333,12 +332,12 @@ public:
      * @param id The ID to validate.
      * @return True if the ID was generated by this instance, false otherwise.
      */
-    [[nodiscard]] bool validateId(uint64_t id) const {
-        uint64_t decrypted = id ^ secret_key_;
-        uint64_t timestamp = (decrypted >> TIMESTAMP_LEFT_SHIFT) + TWEPOCH;
-        uint64_t datacenter_id =
+    [[nodiscard]] bool validateId(u64 id) const {
+        u64 decrypted = id ^ secret_key_;
+        u64 timestamp = (decrypted >> TIMESTAMP_LEFT_SHIFT) + TWEPOCH;
+        u64 datacenter_id =
             (decrypted >> DATACENTER_ID_SHIFT) & MAX_DATACENTER_ID;
-        uint64_t worker_id = (decrypted >> WORKER_ID_SHIFT) & MAX_WORKER_ID;
+        u64 worker_id = (decrypted >> WORKER_ID_SHIFT) & MAX_WORKER_ID;
 
         return datacenter_id == datacenterid_ && worker_id == workerid_ &&
                timestamp <= current_millis();
@@ -353,7 +352,7 @@ public:
      * @return The timestamp (in milliseconds since the epoch) extracted from
      * the ID.
      */
-    [[nodiscard]] uint64_t extractTimestamp(uint64_t id) const {
+    [[nodiscard]] u64 extractTimestamp(u64 id) const {
         return ((id ^ secret_key_) >> TIMESTAMP_LEFT_SHIFT) + TWEPOCH;
     }
 
@@ -369,10 +368,9 @@ public:
      * @param worker_id A reference to store the extracted worker ID.
      * @param sequence A reference to store the extracted sequence number.
      */
-    void parseId(uint64_t encrypted_id, uint64_t &timestamp,
-                 uint64_t &datacenter_id, uint64_t &worker_id,
-                 uint64_t &sequence) const {
-        uint64_t id = encrypted_id ^ secret_key_;
+    void parseId(u64 encrypted_id, u64 &timestamp, u64 &datacenter_id,
+                 u64 &worker_id, u64 &sequence) const {
+        u64 id = encrypted_id ^ secret_key_;
 
         timestamp = (id >> TIMESTAMP_LEFT_SHIFT) + TWEPOCH;
         datacenter_id = (id >> DATACENTER_ID_SHIFT) & MAX_DATACENTER_ID;
@@ -402,16 +400,14 @@ public:
      *
      * @return The current worker ID.
      */
-    [[nodiscard]] auto getWorkerId() const -> uint64_t { return workerid_; }
+    [[nodiscard]] auto getWorkerId() const -> u64 { return workerid_; }
 
     /**
      * @brief Retrieves the current datacenter ID.
      *
      * @return The current datacenter ID.
      */
-    [[nodiscard]] auto getDatacenterId() const -> uint64_t {
-        return datacenterid_;
-    }
+    [[nodiscard]] auto getDatacenterId() const -> u64 { return datacenterid_; }
 
     /**
      * @brief Structure for collecting statistics about ID generation.
@@ -420,18 +416,18 @@ public:
         /**
          * @brief The total number of IDs generated by this instance.
          */
-        uint64_t total_ids_generated;
+        u64 total_ids_generated;
 
         /**
          * @brief The number of times the sequence number rolled over.
          */
-        uint64_t sequence_rollovers;
+        u64 sequence_rollovers;
 
         /**
          * @brief The number of times the generator had to wait for the next
          * millisecond due to clock synchronization issues.
          */
-        uint64_t timestamp_wait_count;
+        u64 timestamp_wait_count;
     };
 
     /**
@@ -518,13 +514,13 @@ private:
         /**
          * @brief The last timestamp used by this thread.
          */
-        uint64_t last_timestamp;
+        u64 last_timestamp;
 
         /**
          * @brief The sequence number for the last timestamp used by this
          * thread.
          */
-        uint64_t sequence;
+        u64 sequence;
     };
 
     /**
@@ -535,17 +531,17 @@ private:
     /**
      * @brief The ID of the worker generating the IDs.
      */
-    uint64_t workerid_ = 0;
+    u64 workerid_ = 0;
 
     /**
      * @brief The ID of the datacenter where the worker is located.
      */
-    uint64_t datacenterid_ = 0;
+    u64 datacenterid_ = 0;
 
     /**
      * @brief The current sequence number.
      */
-    uint64_t sequence_ = 0;
+    u64 sequence_ = 0;
 
     /**
      * @brief The lock used to synchronize access to the Snowflake generator.
@@ -555,12 +551,12 @@ private:
     /**
      * @brief A secret key used to encrypt the generated IDs.
      */
-    uint64_t secret_key_;
+    u64 secret_key_;
 
     /**
      * @brief The last generated timestamp.
      */
-    std::atomic<uint64_t> last_timestamp_{0};
+    std::atomic<u64> last_timestamp_{0};
 
     /**
      * @brief The time point when the Snowflake generator was started.
@@ -572,11 +568,11 @@ private:
      * @brief The system time in milliseconds when the Snowflake generator was
      * started.
      */
-    uint64_t start_millisecond_ = get_system_millis();
+    u64 start_millisecond_ = get_system_millis();
 
 #ifdef ATOM_USE_BOOST
     boost::random::mt19937_64 eng_;
-    boost::random::uniform_int_distribution<uint64_t> distr_;
+    boost::random::uniform_int_distribution<u64> distr_;
 #endif
 
     /**
@@ -598,7 +594,7 @@ private:
 #else
         std::random_device rd;
         std::mt19937_64 eng(rd());
-        std::uniform_int_distribution<uint64_t> distr;
+        std::uniform_int_distribution<u64> distr;
         secret_key_ = distr(eng);
 #endif
 
@@ -616,8 +612,8 @@ private:
      *
      * @return The current system time in milliseconds since the epoch.
      */
-    [[nodiscard]] auto get_system_millis() const -> uint64_t {
-        return static_cast<uint64_t>(
+    [[nodiscard]] auto get_system_millis() const -> u64 {
+        return static_cast<u64>(
             std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch())
                 .count());
@@ -631,8 +627,8 @@ private:
      *
      * @return The current timestamp in milliseconds.
      */
-    [[nodiscard]] auto current_millis() const -> uint64_t {
-        static thread_local uint64_t last_cached_millis = 0;
+    [[nodiscard]] auto current_millis() const -> u64 {
+        static thread_local u64 last_cached_millis = 0;
         static thread_local std::chrono::steady_clock::time_point
             last_time_point;
 
@@ -644,7 +640,7 @@ private:
         auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(
                         now - start_time_point_)
                         .count();
-        last_cached_millis = start_millisecond_ + static_cast<uint64_t>(diff);
+        last_cached_millis = start_millisecond_ + static_cast<u64>(diff);
         last_time_point = now;
         return last_cached_millis;
     }
@@ -660,8 +656,8 @@ private:
      * @param last The last generated timestamp.
      * @return The next valid timestamp.
      */
-    [[nodiscard]] auto wait_next_millis(uint64_t last) -> uint64_t {
-        uint64_t timestamp = current_millis();
+    [[nodiscard]] auto wait_next_millis(u64 last) -> u64 {
+        u64 timestamp = current_millis();
         while (timestamp <= last) {
             timestamp = current_millis();
             ++statistics_.timestamp_wait_count;

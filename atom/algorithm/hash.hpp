@@ -29,6 +29,8 @@ Description: A collection of optimized and enhanced hash algorithms
 #include <variant>
 #include <vector>
 
+#include "atom/algorithm/rust_numeric.hpp"
+
 #ifdef ATOM_USE_BOOST
 #include <boost/functional/hash.hpp>
 #endif
@@ -42,13 +44,14 @@ Description: A collection of optimized and enhanced hash algorithms
 #endif
 
 constexpr auto hash(const char* str,
-                    std::size_t basis = 2166136261u) noexcept -> std::size_t {
+                    atom::algorithm::usize basis = 2166136261u) noexcept
+    -> atom::algorithm::usize {
 #if defined(__AVX2__)
     __m256i hash_vec = _mm256_set1_epi64x(basis);
     const __m256i prime = _mm256_set1_epi64x(16777619u);
 
     while (*str != '\0') {
-        __m256i char_vec = _mm256_set1_epi64x(static_cast<std::int64_t>(*str));
+        __m256i char_vec = _mm256_set1_epi64x(static_cast<i64>(*str));
         hash_vec = _mm256_xor_si256(hash_vec, char_vec);
         hash_vec = _mm256_mullo_epi64(hash_vec, prime);
         ++str;
@@ -56,9 +59,9 @@ constexpr auto hash(const char* str,
 
     return _mm256_extract_epi64(hash_vec, 0);
 #else
-    std::size_t hash = basis;
+    atom::algorithm::usize hash = basis;
     while (*str != '\0') {
-        hash ^= static_cast<std::size_t>(*str);
+        hash ^= static_cast<atom::algorithm::usize>(*str);
         hash *= 16777619u;
         ++str;
     }
@@ -73,10 +76,10 @@ template <typename T>
 class HashCache {
 private:
     std::shared_mutex mutex_;
-    std::unordered_map<T, std::size_t> cache_;
+    std::unordered_map<T, usize> cache_;
 
 public:
-    std::optional<std::size_t> get(const T& key) {
+    std::optional<usize> get(const T& key) {
         std::shared_lock lock(mutex_);
         if (auto it = cache_.find(key); it != cache_.end()) {
             return it->second;
@@ -84,7 +87,7 @@ public:
         return std::nullopt;
     }
 
-    void set(const T& key, std::size_t hash) {
+    void set(const T& key, usize hash) {
         std::unique_lock lock(mutex_);
         cache_[key] = hash;
     }
@@ -99,11 +102,11 @@ public:
  * @brief Concept for types that can be hashed.
  *
  * A type is Hashable if it supports hashing via std::hash and the result is
- * convertible to std::size_t.
+ * convertible to usize.
  */
 template <typename T>
 concept Hashable = requires(T a) {
-    { std::hash<T>{}(a) } -> std::convertible_to<std::size_t>;
+    { std::hash<T>{}(a) } -> std::convertible_to<usize>;
 };
 
 /**
@@ -124,7 +127,7 @@ enum class HashAlgorithm {
  * @param seed The initial hash value.
  * @param hash The hash value to combine with the seed.
  */
-inline void hashCombine(std::size_t& seed, std::size_t hash) noexcept {
+inline void hashCombine(usize& seed, usize hash) noexcept {
     boost::hash_combine(seed, hash);
 }
 #else
@@ -136,10 +139,9 @@ inline void hashCombine(std::size_t& seed, std::size_t hash) noexcept {
  *
  * @param seed The initial hash value.
  * @param hash The hash value to combine with the seed.
- * @return std::size_t The combined hash value.
+ * @return usize The combined hash value.
  */
-inline auto hashCombine(std::size_t seed,
-                        std::size_t hash) noexcept -> std::size_t {
+inline auto hashCombine(usize seed, usize hash) noexcept -> usize {
 #if defined(__AVX2__)
     __m256i seed_vec = _mm256_set1_epi64x(seed);
     __m256i hash_vec = _mm256_set1_epi64x(hash);
@@ -165,19 +167,19 @@ inline auto hashCombine(std::size_t seed,
  * @tparam T Type of value to hash
  * @param value The value to hash
  * @param algorithm Hash algorithm to use
- * @return std::size_t Computed hash value
+ * @return usize Computed hash value
  */
 template <Hashable T>
 inline auto computeHash(const T& value,
                         HashAlgorithm algorithm = HashAlgorithm::STD) noexcept
-    -> std::size_t {
+    -> usize {
     static thread_local HashCache<T> cache;
 
     if (auto cached = cache.get(value); cached) {
         return *cached;
     }
 
-    std::size_t result = 0;
+    usize result = 0;
     switch (algorithm) {
         case HashAlgorithm::STD:
             result = std::hash<T>{}(value);
@@ -201,17 +203,17 @@ inline auto computeHash(const T& value,
  * @tparam T Type of the elements in the vector, must satisfy Hashable concept.
  * @param values The vector of values to hash.
  * @param parallel Use parallel processing for large vectors
- * @return std::size_t Hash value of the vector of values.
+ * @return usize Hash value of the vector of values.
  */
 template <Hashable T>
 inline auto computeHash(const std::vector<T>& values,
-                        bool parallel = false) noexcept -> std::size_t {
+                        bool parallel = false) noexcept -> usize {
     if (values.empty()) {
         return 0;
     }
 
     if (!parallel || values.size() < 1000) {
-        std::size_t result = 0;
+        usize result = 0;
         for (const auto& value : values) {
             hashCombine(result, computeHash(value));
         }
@@ -219,12 +221,12 @@ inline auto computeHash(const std::vector<T>& values,
     }
 
     // Parallel implementation for large vectors
-    const size_t num_threads = std::thread::hardware_concurrency();
-    std::vector<std::size_t> partial_results(num_threads, 0);
+    const usize num_threads = std::thread::hardware_concurrency();
+    std::vector<usize> partial_results(num_threads, 0);
     std::vector<std::thread> threads;
 
-    const size_t chunk_size = values.size() / num_threads;
-    for (size_t i = 0; i < num_threads; ++i) {
+    const usize chunk_size = values.size() / num_threads;
+    for (usize i = 0; i < num_threads; ++i) {
         threads.emplace_back([&, i] {
             auto start = values.begin() + i * chunk_size;
             auto end =
@@ -239,7 +241,7 @@ inline auto computeHash(const std::vector<T>& values,
         t.join();
     }
 
-    std::size_t final_result = 0;
+    usize final_result = 0;
     for (const auto& partial : partial_results) {
         hashCombine(final_result, partial);
     }
@@ -253,12 +255,11 @@ inline auto computeHash(const std::vector<T>& values,
  * @tparam Ts Types of the elements in the tuple, all must satisfy Hashable
  * concept.
  * @param tuple The tuple of values to hash.
- * @return std::size_t Hash value of the tuple of values.
+ * @return usize Hash value of the tuple of values.
  */
 template <Hashable... Ts>
-inline auto computeHash(const std::tuple<Ts...>& tuple) noexcept
-    -> std::size_t {
-    std::size_t result = 0;
+inline auto computeHash(const std::tuple<Ts...>& tuple) noexcept -> usize {
+    usize result = 0;
     std::apply(
         [&result](const Ts&... values) {
             ((hashCombine(result, computeHash(values))), ...);
@@ -273,11 +274,11 @@ inline auto computeHash(const std::tuple<Ts...>& tuple) noexcept
  * @tparam T Type of the elements in the array, must satisfy Hashable concept.
  * @tparam N Size of the array.
  * @param array The array of values to hash.
- * @return std::size_t Hash value of the array of values.
+ * @return usize Hash value of the array of values.
  */
-template <Hashable T, std::size_t N>
-inline auto computeHash(const std::array<T, N>& array) noexcept -> std::size_t {
-    std::size_t result = 0;
+template <Hashable T, usize N>
+inline auto computeHash(const std::array<T, N>& array) noexcept -> usize {
+    usize result = 0;
     for (const auto& value : array) {
         hashCombine(result, computeHash(value));
     }
@@ -292,11 +293,11 @@ inline auto computeHash(const std::array<T, N>& array) noexcept -> std::size_t {
  * @tparam T2 Type of the second element in the pair, must satisfy Hashable
  * concept.
  * @param pair The pair of values to hash.
- * @return std::size_t Hash value of the pair of values.
+ * @return usize Hash value of the pair of values.
  */
 template <Hashable T1, Hashable T2>
-inline auto computeHash(const std::pair<T1, T2>& pair) noexcept -> std::size_t {
-    std::size_t seed = computeHash(pair.first);
+inline auto computeHash(const std::pair<T1, T2>& pair) noexcept -> usize {
+    usize seed = computeHash(pair.first);
     hashCombine(seed, computeHash(pair.second));
     return seed;
 }
@@ -307,10 +308,10 @@ inline auto computeHash(const std::pair<T1, T2>& pair) noexcept -> std::size_t {
  * @tparam T Type of the value inside the optional, must satisfy Hashable
  * concept.
  * @param opt The optional value to hash.
- * @return std::size_t Hash value of the optional value.
+ * @return usize Hash value of the optional value.
  */
 template <Hashable T>
-inline auto computeHash(const std::optional<T>& opt) noexcept -> std::size_t {
+inline auto computeHash(const std::optional<T>& opt) noexcept -> usize {
     if (opt.has_value()) {
         return computeHash(*opt) +
 #ifdef ATOM_USE_BOOST
@@ -327,13 +328,12 @@ inline auto computeHash(const std::optional<T>& opt) noexcept -> std::size_t {
  *
  * @tparam Ts Types contained in the variant, all must satisfy Hashable concept.
  * @param var The variant of values to hash.
- * @return std::size_t Hash value of the variant value.
+ * @return usize Hash value of the variant value.
  */
 template <Hashable... Ts>
-inline auto computeHash(const std::variant<Ts...>& var) noexcept
-    -> std::size_t {
+inline auto computeHash(const std::variant<Ts...>& var) noexcept -> usize {
 #ifdef ATOM_USE_BOOST
-    std::size_t result = 0;
+    usize result = 0;
     boost::apply_visitor(
         [&result](const auto& value) {
             hashCombine(result, computeHash(value));
@@ -341,7 +341,7 @@ inline auto computeHash(const std::variant<Ts...>& var) noexcept
         var);
     return result;
 #else
-    std::size_t result = 0;
+    usize result = 0;
     std::visit(
         [&result](const auto& value) {
             hashCombine(result, computeHash(value));
@@ -359,9 +359,9 @@ inline auto computeHash(const std::variant<Ts...>& var) noexcept
  * instead. Includes thread-safe caching.
  *
  * @param value The std::any value to hash.
- * @return std::size_t Hash value of the std::any value.
+ * @return usize Hash value of the std::any value.
  */
-inline auto computeHash(const std::any& value) noexcept -> std::size_t {
+inline auto computeHash(const std::any& value) noexcept -> usize {
     static HashCache<std::type_index> type_cache;
 
     if (!value.has_value()) {
@@ -373,7 +373,7 @@ inline auto computeHash(const std::any& value) noexcept -> std::size_t {
         return *cached;
     }
 
-    std::size_t result = type.hash_code();
+    usize result = type.hash_code();
     type_cache.set(std::type_index(type), result);
     return result;
 }
@@ -386,8 +386,8 @@ inline auto computeHash(const std::any& value) noexcept -> std::size_t {
  * @param tolerance Allowed difference (for fuzzy matching)
  * @return bool True if hashes match within tolerance
  */
-inline auto verifyHash(std::size_t hash1, std::size_t hash2,
-                       std::size_t tolerance = 0) noexcept -> bool {
+inline auto verifyHash(usize hash1, usize hash2, usize tolerance = 0) noexcept
+    -> bool {
     return (hash1 == hash2) ||
            (tolerance > 0 &&
             (hash1 >= hash2 ? hash1 - hash2 : hash2 - hash1) <= tolerance);
@@ -399,10 +399,10 @@ inline auto verifyHash(std::size_t hash1, std::size_t hash2,
  *
  * @param str Pointer to the null-terminated string to hash.
  * @param basis Initial basis value for hashing.
- * @return constexpr std::size_t Hash value of the string.
+ * @return constexpr usize Hash value of the string.
  */
-constexpr auto hash(const char* str,
-                    std::size_t basis = 2166136261u) noexcept -> std::size_t {
+constexpr auto hash(const char* str, usize basis = 2166136261u) noexcept
+    -> usize {
 #if defined(__AVX2__)
     __m256i hash_vec = _mm256_set1_epi64x(basis);
     const __m256i prime = _mm256_set1_epi64x(16777619u);
@@ -416,9 +416,9 @@ constexpr auto hash(const char* str,
 
     return _mm256_extract_epi64(hash_vec, 0);
 #else
-    std::size_t hash = basis;
+    usize hash = basis;
     while (*str != '\0') {
-        hash ^= static_cast<std::size_t>(*str);
+        hash ^= static_cast<usize>(*str);
         hash *= 16777619u;
         ++str;
     }
@@ -434,10 +434,11 @@ constexpr auto hash(const char* str,
  *
  * @param str Pointer to the string literal to hash.
  * @param size Size of the string literal (unused).
- * @return constexpr std::size_t Hash value of the string literal.
+ * @return constexpr usize Hash value of the string literal.
  */
 constexpr auto operator""_hash(const char* str,
-                               std::size_t size) noexcept -> std::size_t {
+                               atom::algorithm::usize size) noexcept
+    -> atom::algorithm::usize {
     // The size parameter is not used in this implementation
     static_cast<void>(size);
     return atom::algorithm::hash(str);

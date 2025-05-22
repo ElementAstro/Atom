@@ -52,7 +52,7 @@ namespace {
 // Thread-local cache for frequently used values
 thread_local std::vector<bool> isPrimeCache;
 thread_local bool isPrimeCacheInitialized = false;
-constexpr size_t PRIME_CACHE_SIZE = 1024;
+constexpr usize PRIME_CACHE_SIZE = 1024;
 
 // Helper function for input validation with compile-time evaluation if possible
 template <typename T>
@@ -66,7 +66,7 @@ constexpr void validateInput(T value, T min, T max, const char* errorMsg) {
 template <typename T>
 class PooledMemory {
 public:
-    explicit PooledMemory(size_t count)
+    explicit PooledMemory(usize count)
         : size_(count * sizeof(T)),
           ptr_(static_cast<T*>(MathMemoryPool::getInstance().allocate(size_))) {
     }
@@ -105,7 +105,7 @@ public:
     [[nodiscard]] operator T*() const noexcept { return ptr_; }
 
 private:
-    size_t size_;
+    usize size_;
     T* ptr_;
 };
 
@@ -115,9 +115,9 @@ void initPrimeCache() {
         isPrimeCache.resize(PRIME_CACHE_SIZE, true);
         isPrimeCache[0] = isPrimeCache[1] = false;
 
-        for (size_t i = 2; i * i < PRIME_CACHE_SIZE; ++i) {
+        for (usize i = 2; i * i < PRIME_CACHE_SIZE; ++i) {
             if (isPrimeCache[i]) {
-                for (size_t j = i * i; j < PRIME_CACHE_SIZE; j += i) {
+                for (usize j = i * i; j < PRIME_CACHE_SIZE; j += i) {
                     isPrimeCache[j] = false;
                 }
             }
@@ -134,8 +134,7 @@ MathCache& MathCache::getInstance() noexcept {
     return instance;
 }
 
-std::shared_ptr<const std::vector<uint64_t>> MathCache::getCachedPrimes(
-    uint64_t limit) {
+std::shared_ptr<const std::vector<u64>> MathCache::getCachedPrimes(u64 limit) {
     // Use shared lock for reading
     {
         std::shared_lock lock(mutex_);
@@ -146,24 +145,24 @@ std::shared_ptr<const std::vector<uint64_t>> MathCache::getCachedPrimes(
     }
 
     // Generate primes (outside the lock to avoid contention)
-    auto primes = std::make_shared<std::vector<uint64_t>>();
+    auto primes = std::make_shared<std::vector<u64>>();
 
     // Generate prime numbers using Sieve of Eratosthenes
     std::vector<bool> isPrime(limit + 1, true);
     isPrime[0] = isPrime[1] = false;
 
-    uint64_t sqrtLimit = approximateSqrt(limit);
+    u64 sqrtLimit = approximateSqrt(limit);
 
-    for (uint64_t i = 2; i <= sqrtLimit; ++i) {
+    for (u64 i = 2; i <= sqrtLimit; ++i) {
         if (isPrime[i]) {
-            for (uint64_t j = i * i; j <= limit; j += i) {
+            for (u64 j = i * i; j <= limit; j += i) {
                 isPrime[j] = false;
             }
         }
     }
 
     primes->reserve(limit / 10);  // Reserve estimated capacity
-    for (uint64_t i = 2; i <= limit; ++i) {
+    for (u64 i = 2; i <= limit; ++i) {
         if (isPrime[i]) {
             primes->push_back(i);
         }
@@ -206,7 +205,7 @@ MathMemoryPool& MathMemoryPool::getInstance() noexcept {
     return instance;
 }
 
-void* MathMemoryPool::allocate(size_t size) {
+void* MathMemoryPool::allocate(usize size) {
 #ifdef ATOM_USE_BOOST
     std::unique_lock lock(mutex_);
     if (size <= SMALL_BLOCK_SIZE) {
@@ -223,7 +222,7 @@ void* MathMemoryPool::allocate(size_t size) {
 #endif
 }
 
-void MathMemoryPool::deallocate(void* ptr, size_t size) noexcept {
+void MathMemoryPool::deallocate(void* ptr, usize size) noexcept {
 #ifdef ATOM_USE_BOOST
     std::unique_lock lock(mutex_);
     if (size <= SMALL_BLOCK_SIZE) {
@@ -246,8 +245,8 @@ MathMemoryPool::~MathMemoryPool() {
 
 // MathAllocator implementation
 template <typename T>
-T* MathAllocator<T>::allocate(std::size_t n) {
-    if (n > std::numeric_limits<std::size_t>::max() / sizeof(T)) {
+T* MathAllocator<T>::allocate(usize n) {
+    if (n > std::numeric_limits<usize>::max() / sizeof(T)) {
         throw std::bad_alloc();
     }
 
@@ -260,24 +259,23 @@ T* MathAllocator<T>::allocate(std::size_t n) {
 }
 
 template <typename T>
-void MathAllocator<T>::deallocate(T* p, std::size_t n) noexcept {
+void MathAllocator<T>::deallocate(T* p, usize n) noexcept {
     MathMemoryPool::getInstance().deallocate(p, n * sizeof(T));
 }
 
 // Generate random numbers
-auto secureRandom() noexcept -> std::optional<uint64_t> {
+auto secureRandom() noexcept -> std::optional<u64> {
     try {
         std::random_device rd;
         std::mt19937_64 gen(rd());
-        std::uniform_int_distribution<uint64_t> dist;
+        std::uniform_int_distribution<u64> dist;
         return dist(gen);
     } catch (...) {
         return std::nullopt;
     }
 }
 
-auto randomInRange(uint64_t min, uint64_t max) noexcept
-    -> std::optional<uint64_t> {
+auto randomInRange(u64 min, u64 max) noexcept -> std::optional<u64> {
     if (min > max) {
         return std::nullopt;
     }
@@ -285,7 +283,7 @@ auto randomInRange(uint64_t min, uint64_t max) noexcept
     try {
         std::random_device rd;
         std::mt19937_64 gen(rd());
-        std::uniform_int_distribution<uint64_t> dist(min, max);
+        std::uniform_int_distribution<u64> dist(min, max);
         return dist(gen);
     } catch (...) {
         return std::nullopt;
@@ -293,8 +291,7 @@ auto randomInRange(uint64_t min, uint64_t max) noexcept
 }
 
 #ifdef ATOM_USE_BOOST
-auto mulDiv64(uint64_t operand, uint64_t multiplier, uint64_t divider)
-    -> uint64_t {
+auto mulDiv64(u64 operand, u64 multiplier, u64 divider) -> u64 {
     try {
         if (isDivisionByZero(divider)) {
             THROW_INVALID_ARGUMENT("Division by zero");
@@ -303,7 +300,7 @@ auto mulDiv64(uint64_t operand, uint64_t multiplier, uint64_t divider)
         boost::multiprecision::uint128_t a = operand;
         boost::multiprecision::uint128_t b = multiplier;
         boost::multiprecision::uint128_t c = divider;
-        return static_cast<uint64_t>((a * b) / c);
+        return static_cast<u64>((a * b) / c);
     } catch (const boost::multiprecision::overflow_error&) {
         THROW_OVERFLOW("Overflow in multiplication before division");
     } catch (const std::exception& e) {
@@ -313,8 +310,7 @@ auto mulDiv64(uint64_t operand, uint64_t multiplier, uint64_t divider)
 #endif
 
 #if defined(__GNUC__) && defined(__SIZEOF_INT128__)
-auto mulDiv64(uint64_t operand, uint64_t multiplier, uint64_t divider)
-    -> uint64_t {
+auto mulDiv64(u64 operand, u64 multiplier, u64 divider) -> u64 {
     try {
         if (isDivisionByZero(divider)) {
             THROW_INVALID_ARGUMENT("Division by zero");
@@ -325,12 +321,12 @@ auto mulDiv64(uint64_t operand, uint64_t multiplier, uint64_t divider)
         __uint128_t c = divider;
         __uint128_t result = (a * b) / c;
 
-        // Check if result fits in uint64_t
-        if (result > std::numeric_limits<uint64_t>::max()) {
-            THROW_OVERFLOW("Result exceeds uint64_t range");
+        // Check if result fits in u64
+        if (result > std::numeric_limits<u64>::max()) {
+            THROW_OVERFLOW("Result exceeds u64 range");
         }
 
-        return static_cast<uint64_t>(result);
+        return static_cast<u64>(result);
     } catch (const atom::error::Exception& e) {
         // Re-throw atom exceptions
         throw;
@@ -339,19 +335,18 @@ auto mulDiv64(uint64_t operand, uint64_t multiplier, uint64_t divider)
     }
 }
 #elif defined(_MSC_VER)
-auto mulDiv64(uint64_t operand, uint64_t multiplier, uint64_t divider)
-    -> uint64_t {
+auto mulDiv64(u64 operand, u64 multiplier, u64 divider) -> u64 {
     try {
         if (isDivisionByZero(divider)) {
             THROW_INVALID_ARGUMENT("Division by zero");
         }
 
-        uint64_t highProd;
-        uint64_t lowProd = _umul128(operand, multiplier, &highProd);
+        u64 highProd;
+        u64 lowProd = _umul128(operand, multiplier, &highProd);
 
         // Check for overflow in multiplication
         if (operand > 0 && multiplier > 0 &&
-            highProd > (std::numeric_limits<uint64_t>::max() / operand)) {
+            highProd > (std::numeric_limits<u64>::max() / operand)) {
             THROW_OVERFLOW("Overflow in multiplication");
         }
 
@@ -362,14 +357,14 @@ auto mulDiv64(uint64_t operand, uint64_t multiplier, uint64_t divider)
 
         // Normalize divisor
         unsigned long shift = 63 - std::countl_zero(divider);
-        uint64_t normDiv = divider << shift;
+        u64 normDiv = divider << shift;
 
         // Prepare for division
         highProd = (highProd << shift) | (lowProd >> (64 - shift));
         lowProd <<= shift;
 
         // Perform division
-        uint64_t quotient;
+        u64 quotient;
         _udiv128(highProd, lowProd, normDiv, &quotient);
 
         return quotient;
@@ -384,7 +379,7 @@ auto mulDiv64(uint64_t operand, uint64_t multiplier, uint64_t divider)
 #error "Platform not supported for mulDiv64 function!"
 #endif
 
-auto bitReverse64(uint64_t n) noexcept -> uint64_t {
+auto bitReverse64(u64 n) noexcept -> u64 {
     // Use efficient platform-specific intrinsics for bit reversal
     if constexpr (std::endian::native == std::endian::little) {
 #ifdef USE_SIMD
@@ -397,18 +392,17 @@ auto bitReverse64(uint64_t n) noexcept -> uint64_t {
     }
 
     // Optimized implementation using lookup table and constexpr evaluation
-    static constexpr uint8_t lookup[16] = {0x0, 0x8, 0x4, 0xc, 0x2, 0xa,
-                                           0x6, 0xe, 0x1, 0x9, 0x5, 0xd,
-                                           0x3, 0xb, 0x7, 0xf};
+    static constexpr u8 lookup[16] = {0x0, 0x8, 0x4, 0xc, 0x2, 0xa, 0x6, 0xe,
+                                      0x1, 0x9, 0x5, 0xd, 0x3, 0xb, 0x7, 0xf};
 
-    uint64_t result = 0;
-    for (int i = 0; i < 16; ++i) {
+    u64 result = 0;
+    for (i32 i = 0; i < 16; ++i) {
         result = (result << 4) | lookup[(n >> (i * 4)) & 0xF];
     }
     return result;
 }
 
-auto approximateSqrt(uint64_t n) noexcept -> uint64_t {
+auto approximateSqrt(u64 n) noexcept -> u64 {
     if (n <= 1) {
         return n;
     }
@@ -426,15 +420,15 @@ auto approximateSqrt(uint64_t n) noexcept -> uint64_t {
         vmul_f32(vrsqrts_f32(vmul_f32(x, sqrt_reciprocal), sqrt_reciprocal),
                  sqrt_reciprocal);
     float32x2_t result = vmul_f32(x, sqrt_reciprocal);
-    return static_cast<uint64_t>(vget_lane_f32(result, 0));
+    return static_cast<u64>(vget_lane_f32(result, 0));
 #else
     // Fall back to optimized integer implementation
 #endif
 #endif
 
     // Fast integer Newton-Raphson method
-    uint64_t x = n;
-    uint64_t y = (x + 1) / 2;
+    u64 x = n;
+    u64 y = (x + 1) / 2;
 
     while (y < x) {
         x = y;
@@ -444,7 +438,7 @@ auto approximateSqrt(uint64_t n) noexcept -> uint64_t {
     return x;
 }
 
-auto lcm64(uint64_t a, uint64_t b) -> uint64_t {
+auto lcm64(u64 a, u64 b) -> u64 {
     try {
         // Handle edge cases explicitly
         if (a == 0 || b == 0) {
@@ -453,11 +447,11 @@ auto lcm64(uint64_t a, uint64_t b) -> uint64_t {
 
         // Use std::lcm from C++17 for the actual computation with overflow
         // check
-        uint64_t gcd_val = gcd64(a, b);
-        uint64_t first_part = a / gcd_val;  // This division is always exact
+        u64 gcd_val = gcd64(a, b);
+        u64 first_part = a / gcd_val;  // This division is always exact
 
         // Check for overflow in multiplication
-        if (first_part > std::numeric_limits<uint64_t>::max() / b) {
+        if (first_part > std::numeric_limits<u64>::max() / b) {
             THROW_OVERFLOW("Overflow in LCM calculation");
         }
 
@@ -470,7 +464,7 @@ auto lcm64(uint64_t a, uint64_t b) -> uint64_t {
     }
 }
 
-auto isPrime(uint64_t n) noexcept -> bool {
+auto isPrime(u64 n) noexcept -> bool {
     // Initialize thread-local cache if needed
     initPrimeCache();
 
@@ -487,8 +481,8 @@ auto isPrime(uint64_t n) noexcept -> bool {
         return false;
 
     // Optimized trial division
-    uint64_t limit = approximateSqrt(n);
-    for (uint64_t i = 5; i <= limit; i += 6) {
+    u64 limit = approximateSqrt(n);
+    for (u64 i = 5; i <= limit; i += 6) {
         if (n % i == 0 || n % (i + 2) == 0)
             return false;
     }
@@ -496,10 +490,10 @@ auto isPrime(uint64_t n) noexcept -> bool {
     return true;
 }
 
-auto generatePrimes(uint64_t limit) -> std::vector<uint64_t> {
+auto generatePrimes(u64 limit) -> std::vector<u64> {
     try {
         // Input validation
-        if (limit > std::numeric_limits<uint32_t>::max()) {
+        if (limit > std::numeric_limits<u32>::max()) {
             THROW_INVALID_ARGUMENT("Limit too large for efficient sieve");
         }
 
@@ -514,7 +508,7 @@ auto generatePrimes(uint64_t limit) -> std::vector<uint64_t> {
     }
 }
 
-auto montgomeryMultiply(uint64_t a, uint64_t b, uint64_t n) -> uint64_t {
+auto montgomeryMultiply(u64 a, u64 b, u64 n) -> u64 {
     try {
         if (isDivisionByZero(n)) {
             THROW_INVALID_ARGUMENT("Division by zero");
@@ -527,21 +521,21 @@ auto montgomeryMultiply(uint64_t a, uint64_t b, uint64_t n) -> uint64_t {
         }
 
         // Compute R^2 mod n
-        uint64_t r_sq = 0;
-        for (int i = 0; i < 128; ++i) {
+        u64 r_sq = 0;
+        for (i32 i = 0; i < 128; ++i) {
             r_sq = (r_sq << 1) % n;
         }
 
         // Convert a and b to Montgomery form
-        uint64_t a_mont = (a * r_sq) % n;
-        uint64_t b_mont = (b * r_sq) % n;
+        u64 a_mont = (a * r_sq) % n;
+        u64 b_mont = (b * r_sq) % n;
 
         // Compute Montgomery multiplication
-        uint64_t t = a_mont * b_mont;
+        u64 t = a_mont * b_mont;
 
         // Convert back from Montgomery form
-        uint64_t result = 0;
-        for (int i = 0; i < 64; ++i) {
+        u64 result = 0;
+        for (i32 i = 0; i < 64; ++i) {
             result = (result + ((t & 1) * n)) >> 1;
             t >>= 1;
         }
@@ -559,7 +553,7 @@ auto montgomeryMultiply(uint64_t a, uint64_t b, uint64_t n) -> uint64_t {
     }
 }
 
-auto modPow(uint64_t base, uint64_t exponent, uint64_t modulus) -> uint64_t {
+auto modPow(u64 base, u64 exponent, u64 modulus) -> u64 {
     try {
         if (isDivisionByZero(modulus)) {
             THROW_INVALID_ARGUMENT("Division by zero");
@@ -573,11 +567,11 @@ auto modPow(uint64_t base, uint64_t exponent, uint64_t modulus) -> uint64_t {
         // Use Montgomery multiplication for large moduli
         if (modulus > 1000000ULL && (modulus & 1)) {
             // Compute R = 2^64 mod n
-            uint64_t r = 0;
+            u64 r = 0;
 
             // Compute R^2 mod n
-            uint64_t r_sq = 0;
-            for (int i = 0; i < 128; ++i) {
+            u64 r_sq = 0;
+            for (i32 i = 0; i < 128; ++i) {
                 r_sq = (r_sq << 1) % modulus;
                 if (i == 63) {
                     r = r_sq;
@@ -585,8 +579,8 @@ auto modPow(uint64_t base, uint64_t exponent, uint64_t modulus) -> uint64_t {
             }
 
             // Convert base to Montgomery form
-            uint64_t base_mont = (base * r_sq) % modulus;
-            uint64_t result_mont = (1 * r_sq) % modulus;
+            u64 base_mont = (base * r_sq) % modulus;
+            u64 result_mont = (1 * r_sq) % modulus;
 
             while (exponent > 0) {
                 if (exponent & 1) {
@@ -599,14 +593,14 @@ auto modPow(uint64_t base, uint64_t exponent, uint64_t modulus) -> uint64_t {
             }
 
             // Convert back from Montgomery form (improved implementation)
-            uint64_t inv_r = 1;
+            u64 inv_r = 1;
             // Use extended Euclidean algorithm to compute inverse more
             // efficiently
-            uint64_t u = modulus, v = 1;
-            uint64_t s = r, t = 0;
+            u64 u = modulus, v = 1;
+            u64 s = r, t = 0;
 
             while (s != 0) {
-                uint64_t q = u / s;
+                u64 q = u / s;
                 std::swap(u -= q * s, s);
                 std::swap(v -= q * t, t);
             }
@@ -621,7 +615,7 @@ auto modPow(uint64_t base, uint64_t exponent, uint64_t modulus) -> uint64_t {
             return (result_mont * inv_r) % modulus;
         } else {
             // Standard binary exponentiation for smaller moduli
-            uint64_t result = 1;
+            u64 result = 1;
             base %= modulus;
 
             while (exponent > 0) {
@@ -643,9 +637,9 @@ auto modPow(uint64_t base, uint64_t exponent, uint64_t modulus) -> uint64_t {
 }
 
 // Explicit template instantiations for MathAllocator
-template class MathAllocator<int>;
-template class MathAllocator<float>;
-template class MathAllocator<double>;
-template class MathAllocator<uint64_t>;
+template class MathAllocator<i32>;
+template class MathAllocator<f32>;
+template class MathAllocator<f64>;
+template class MathAllocator<u64>;
 
 }  // namespace atom::algorithm

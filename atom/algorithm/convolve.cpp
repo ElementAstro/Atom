@@ -14,34 +14,142 @@ and deconvolution with optional OpenCL support.
 **************************************************/
 
 #include "convolve.hpp"
+
 #include <algorithm>
-#include <array>
+#include <cmath>
 #include <cstring>
-#include <format>
+#include <numbers>
 #include <thread>
+#include <utility>
 #include <vector>
 
-#include "atom/error/exception.hpp"
 #include "atom/log/loguru.hpp"
+
+#if ATOM_USE_SIMD && !ATOM_USE_STD_SIMD
+#ifdef __SSE__
+#include <immintrin.h>
+#endif
+#endif
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
-#elif defined(__clang__)
+#endif
+
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-compare"
-#elif defined(_MSC_VER)
+#endif
+
+#ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4996)
+#pragma warning(disable : 4251)  // Needs to have dll-interface
+#pragma warning(disable : 4275)  // Non dll-interface class used as base for
+                                 // dll-interface class
 #endif
 
 namespace atom::algorithm {
-
-// 常量和辅助类定义
+// Constants and helper class definitions
 constexpr double EPSILON = 1e-10;  // Prevent division by zero
 
-// 自定义删除器，用于OpenCL资源管理
-#if USE_OPENCL
+// Validate matrix dimensions
+template <typename T>
+void validateMatrix(const std::vector<std::vector<T>>& matrix,
+                    const std::string& name) {
+    if (matrix.empty()) {
+        THROW_CONVOLVE_ERROR("Empty matrix: {}", name);
+    }
+
+    const size_t cols = matrix[0].size();
+    if (cols == 0) {
+        THROW_CONVOLVE_ERROR("Matrix {} has empty rows", name);
+    }
+
+    // Check if all rows have the same length
+    for (size_t i = 1; i < matrix.size(); ++i) {
+        if (matrix[i].size() != cols) {
+            THROW_CONVOLVE_ERROR("Matrix {} has inconsistent row lengths",
+                                 name);
+        }
+    }
+}
+
+// Validate and adjust thread count
+int validateAndAdjustThreadCount(int requestedThreads) {
+    int availableThreads =
+        static_cast<int>(std::thread::hardware_concurrency());
+    if (availableThreads == 0) {
+        availableThreads = 1;  // Use at least one thread
+    }
+
+    if (requestedThreads <= 0) {
+        return availableThreads;
+    }
+
+    if (requestedThreads > availableThreads) {
+        DLOG_F(WARNING, "Requested %d threads but only %d are available",
+               requestedThreads, availableThreads);
+        return availableThreads;
+    }
+
+    return requestedThreads;
+}
+
+// Cache-friendly matrix structure
+template <typename T>
+class AlignedMatrix {
+public:
+    AlignedMatrix(size_t rows, size_t cols) : rows_(rows), cols_(cols) {
+        // Allocate cache-line aligned memory
+        const size_t alignment = 64;  // Common cache line size
+        size_t size = rows * cols * sizeof(T);
+        data_.resize(size);
+    }
+
+    AlignedMatrix(const std::vector<std::vector<T>>& input)
+        : AlignedMatrix(input.size(), input[0].size()) {
+        // Copy data
+        for (size_t i = 0; i < rows_; ++i) {
+            for (size_t j = 0; j < cols_; ++j) {
+                at(i, j) = input[i][j];
+            }
+        }
+    }
+
+    T& at(size_t row, size_t col) {
+        return *reinterpret_cast<T*>(&data_[sizeof(T) * (row * cols_ + col)]);
+    }
+
+    const T& at(size_t row, size_t col) const {
+        return *reinterpret_cast<const T*>(
+            &data_[sizeof(T) * (row * cols_ + col)]);
+    }
+
+    std::vector<std::vector<T>> toVector() const {
+        std::vector<std::vector<T>> result(rows_, std::vector<T>(cols_));
+        for (size_t i = 0; i < rows_; ++i) {
+            for (size_t j = 0; j < cols_; ++j) {
+                result[i][j] = at(i, j);
+            }
+        }
+        return result;
+    }
+
+    size_t rows() const { return rows_; }
+    size_t cols() const { return cols_; }
+
+    T* data() { return reinterpret_cast<T*>(data_.data()); }
+    const T* data() const { return reinterpret_cast<const T*>(data_.data()); }
+
+private:
+    size_t rows_;
+    size_t cols_;
+    std::vector<std::byte> data_;
+};
+
+// OpenCL resource management
+#if ATOM_USE_OPENCL
 template <typename T>
 struct OpenCLReleaser {
     void operator()(cl_mem obj) const noexcept { clReleaseMemObject(obj); }
@@ -53,7 +161,7 @@ struct OpenCLReleaser {
     }
 };
 
-// 为OpenCL资源定义智能指针类型
+// Smart pointers for OpenCL resources
 using CLMemPtr =
     std::unique_ptr<std::remove_pointer_t<cl_mem>, OpenCLReleaser<cl_mem>>;
 using CLProgramPtr = std::unique_ptr<std::remove_pointer_t<cl_program>,
@@ -71,10 +179,10 @@ template <typename T>
 auto extend2D(const std::vector<std::vector<T>>& input, std::size_t newRows,
               std::size_t newCols) -> std::vector<std::vector<T>> {
     if (input.empty() || input[0].empty()) {
-        THROW_INVALID_ARGUMENT("Input matrix cannot be empty");
+        THROW_CONVOLVE_ERROR("Input matrix cannot be empty");
     }
     if (newRows < input.size() || newCols < input[0].size()) {
-        THROW_INVALID_ARGUMENT(
+        THROW_CONVOLVE_ERROR(
             "New dimensions must be greater than or equal to original "
             "dimensions");
     }
@@ -84,8 +192,7 @@ auto extend2D(const std::vector<std::vector<T>>& input, std::size_t newRows,
     // Copy original data
     for (std::size_t i = 0; i < input.size(); ++i) {
         if (input[i].size() != input[0].size()) {
-            THROW_INVALID_ARGUMENT(
-                "Input matrix must have uniform column sizes");
+            THROW_CONVOLVE_ERROR("Input matrix must have uniform column sizes");
         }
         std::copy(input[i].begin(), input[i].end(), result[i].begin());
     }
@@ -93,7 +200,164 @@ auto extend2D(const std::vector<std::vector<T>>& input, std::size_t newRows,
     return result;
 }
 
-#if USE_OPENCL
+// Helper function to extend 2D vectors with proper padding modes
+template <typename T>
+auto pad2D(const std::vector<std::vector<T>>& input, size_t padTop,
+           size_t padBottom, size_t padLeft, size_t padRight, PaddingMode mode)
+    -> std::vector<std::vector<T>> {
+    if (input.empty() || input[0].empty()) {
+        THROW_CONVOLVE_ERROR("Cannot pad empty matrix");
+    }
+
+    const size_t inputRows = input.size();
+    const size_t inputCols = input[0].size();
+    const size_t outputRows = inputRows + padTop + padBottom;
+    const size_t outputCols = inputCols + padLeft + padRight;
+
+    std::vector<std::vector<T>> output(outputRows, std::vector<T>(outputCols));
+
+    // Implementation of different padding modes
+    switch (mode) {
+        case PaddingMode::VALID: {
+            // In VALID mode, no padding is applied, just copy the original data
+            for (size_t i = 0; i < inputRows; ++i) {
+                for (size_t j = 0; j < inputCols; ++j) {
+                    output[i + padTop][j + padLeft] = input[i][j];
+                }
+            }
+            break;
+        }
+
+        case PaddingMode::SAME: {
+            // For SAME mode, we pad the borders with zeros
+            for (size_t i = 0; i < inputRows; ++i) {
+                for (size_t j = 0; j < inputCols; ++j) {
+                    output[i + padTop][j + padLeft] = input[i][j];
+                }
+            }
+            break;
+        }
+
+        case PaddingMode::FULL: {
+            // For FULL mode, we pad the borders with reflected values
+            // Copy the original data
+            for (size_t i = 0; i < inputRows; ++i) {
+                for (size_t j = 0; j < inputCols; ++j) {
+                    output[i + padTop][j + padLeft] = input[i][j];
+                }
+            }
+
+            // Top border padding
+            for (size_t i = 0; i < padTop; ++i) {
+                for (size_t j = 0; j < outputCols; ++j) {
+                    if (j < padLeft) {
+                        // Top-left corner
+                        output[padTop - 1 - i][padLeft - 1 - j] =
+                            input[std::min<size_t>(i, inputRows - 1)]
+                                 [std::min<size_t>(j, inputCols - 1)];
+                    } else if (j >= padLeft + inputCols) {
+                        // Top-right corner
+                        output[padTop - 1 - i][j] =
+                            input[std::min<size_t>(i, inputRows - 1)]
+                                 [std::min<size_t>(
+                                     inputCols - 1 -
+                                         (j - (padLeft + inputCols)),
+                                     inputCols - 1)];
+                    } else {
+                        // Top edge
+                        output[padTop - 1 - i][j] = input[std::min<size_t>(
+                            i, inputRows - 1)][j - padLeft];
+                    }
+                }
+            }
+
+            // Bottom border padding
+            for (size_t i = 0; i < padBottom; ++i) {
+                for (size_t j = 0; j < outputCols; ++j) {
+                    if (j < padLeft) {
+                        // Bottom-left corner
+                        output[padTop + inputRows + i][j] =
+                            input[std::max<size_t>(0UL, inputRows - 1 - i)]
+                                 [std::min<size_t>(j, inputCols - 1)];
+                    } else if (j >= padLeft + inputCols) {
+                        // Bottom-right corner
+                        output[padTop + inputRows + i][j] =
+                            input[std::max<size_t>(0UL, inputRows - 1 - i)]
+                                 [std::max<size_t>(
+                                     0UL, inputCols - 1 -
+                                              (j - (padLeft + inputCols)))];
+                    } else {
+                        // Bottom edge
+                        output[padTop + inputRows + i][j] =
+                            input[std::max<size_t>(0UL, inputRows - 1 - i)]
+                                 [j - padLeft];
+                    }
+                }
+            }
+
+            // Left border padding
+            for (size_t i = padTop; i < padTop + inputRows; ++i) {
+                for (size_t j = 0; j < padLeft; ++j) {
+                    output[i][padLeft - 1 - j] =
+                        input[i - padTop][std::min<size_t>(j, inputCols - 1)];
+                }
+            }
+
+            // Right border padding
+            for (size_t i = padTop; i < padTop + inputRows; ++i) {
+                for (size_t j = 0; j < padRight; ++j) {
+                    output[i][padLeft + inputCols + j] =
+                        input[i - padTop]
+                             [std::max<size_t>(0UL, inputCols - 1 - j)];
+                }
+            }
+
+            break;
+        }
+    }
+
+    return output;
+}
+
+// Helper function to get output dimensions for convolution
+auto getConvolutionOutputDimensions(size_t inputHeight, size_t inputWidth,
+                                    size_t kernelHeight, size_t kernelWidth,
+                                    size_t strideY, size_t strideX,
+                                    PaddingMode paddingMode)
+    -> std::pair<size_t, size_t> {
+    if (kernelHeight > inputHeight || kernelWidth > inputWidth) {
+        THROW_CONVOLVE_ERROR(
+            "Kernel dimensions ({},{}) cannot be larger than input dimensions "
+            "({},{})",
+            kernelHeight, kernelWidth, inputHeight, inputWidth);
+    }
+
+    size_t outputHeight = 0;
+    size_t outputWidth = 0;
+
+    switch (paddingMode) {
+        case PaddingMode::VALID:
+            outputHeight = (inputHeight - kernelHeight) / strideY + 1;
+            outputWidth = (inputWidth - kernelWidth) / strideX + 1;
+            break;
+
+        case PaddingMode::SAME:
+            outputHeight = (inputHeight + strideY - 1) / strideY;
+            outputWidth = (inputWidth + strideX - 1) / strideX;
+            break;
+
+        case PaddingMode::FULL:
+            outputHeight =
+                (inputHeight + kernelHeight - 1 + strideY - 1) / strideY;
+            outputWidth =
+                (inputWidth + kernelWidth - 1 + strideX - 1) / strideX;
+            break;
+    }
+
+    return {outputHeight, outputWidth};
+}
+
+#if ATOM_USE_OPENCL
 // OpenCL initialization and helper functions
 auto initializeOpenCL() -> CLContextPtr {
     cl_uint numPlatforms;
@@ -101,8 +365,7 @@ auto initializeOpenCL() -> CLContextPtr {
     cl_int err = clGetPlatformIDs(1, &platform, &numPlatforms);
 
     if (err != CL_SUCCESS) {
-        THROW_RUNTIME_ERROR(
-            std::format("Failed to get OpenCL platforms: error {}", err));
+        THROW_CONVOLVE_ERROR("Failed to get OpenCL platforms: error {}", err);
     }
 
     cl_context_properties properties[] = {CL_CONTEXT_PLATFORM,
@@ -111,8 +374,7 @@ auto initializeOpenCL() -> CLContextPtr {
     cl_context context = clCreateContextFromType(properties, CL_DEVICE_TYPE_GPU,
                                                  nullptr, nullptr, &err);
     if (err != CL_SUCCESS) {
-        THROW_RUNTIME_ERROR(
-            std::format("Failed to create OpenCL context: error {}", err));
+        THROW_CONVOLVE_ERROR("Failed to create OpenCL context: error {}", err);
     }
 
     return CLContextPtr(context);
@@ -123,29 +385,27 @@ auto createCommandQueue(cl_context context) -> CLCmdQueuePtr {
     cl_int err =
         clGetDeviceIDs(nullptr, CL_DEVICE_TYPE_GPU, 1, &device_id, nullptr);
     if (err != CL_SUCCESS) {
-        THROW_RUNTIME_ERROR(
-            std::format("Failed to get OpenCL device: error {}", err));
+        THROW_CONVOLVE_ERROR("Failed to get OpenCL device: error {}", err);
     }
 
     cl_command_queue commandQueue =
         clCreateCommandQueue(context, device_id, 0, &err);
     if (err != CL_SUCCESS) {
-        THROW_RUNTIME_ERROR(std::format(
-            "Failed to create OpenCL command queue: error {}", err));
+        THROW_CONVOLVE_ERROR("Failed to create OpenCL command queue: error {}",
+                             err);
     }
 
     return CLCmdQueuePtr(commandQueue);
 }
 
-auto createProgram(const std::string& source,
-                   cl_context context) -> CLProgramPtr {
+auto createProgram(const std::string& source, cl_context context)
+    -> CLProgramPtr {
     const char* sourceStr = source.c_str();
     cl_int err;
     cl_program program =
         clCreateProgramWithSource(context, 1, &sourceStr, nullptr, &err);
     if (err != CL_SUCCESS) {
-        THROW_RUNTIME_ERROR(
-            std::format("Failed to create OpenCL program: error {}", err));
+        THROW_CONVOLVE_ERROR("Failed to create OpenCL program: error {}", err);
     }
 
     return CLProgramPtr(program);
@@ -153,8 +413,8 @@ auto createProgram(const std::string& source,
 
 void checkErr(cl_int err, const char* operation) {
     if (err != CL_SUCCESS) {
-        THROW_RUNTIME_ERROR(
-            std::format("OpenCL Error during {}: error {}", operation, err));
+        THROW_CONVOLVE_ERROR("OpenCL Error during {}: error {}", operation,
+                             err);
     }
 }
 
@@ -205,21 +465,20 @@ auto convolve2DOpenCL(const std::vector<std::vector<double>>& input,
         // 验证输入有效性
         if (inputRows == 0 || inputCols == 0 || kernelRows == 0 ||
             kernelCols == 0) {
-            THROW_INVALID_ARGUMENT(
-                "Input and kernel matrices must not be empty");
+            THROW_CONVOLVE_ERROR("Input and kernel matrices must not be empty");
         }
 
         // 检查所有行的长度是否一致
         for (const auto& row : input) {
             if (row.size() != inputCols) {
-                THROW_INVALID_ARGUMENT(
+                THROW_CONVOLVE_ERROR(
                     "Input matrix must have uniform column sizes");
             }
         }
 
         for (const auto& row : kernel) {
             if (row.size() != kernelCols) {
-                THROW_INVALID_ARGUMENT(
+                THROW_CONVOLVE_ERROR(
                     "Kernel matrix must have uniform column sizes");
             }
         }
@@ -282,9 +541,8 @@ auto convolve2DOpenCL(const std::vector<std::vector<double>>& input,
                                   CL_PROGRAM_BUILD_LOG, logSize,
                                   buildLog.data(), nullptr);
 
-            THROW_RUNTIME_ERROR(
-                std::format("Failed to build OpenCL program: {}",
-                            std::string(buildLog.data(), logSize)));
+            THROW_CONVOLVE_ERROR("Failed to build OpenCL program: {}",
+                                 std::string(buildLog.data(), logSize));
         }
 
         // 创建内核
@@ -343,8 +601,7 @@ auto convolve2DOpenCL(const std::vector<std::vector<double>>& input,
         return output;
     } catch (const std::exception& e) {
         // 重新抛出异常，提供更多上下文
-        THROW_RUNTIME_ERROR(
-            std::format("OpenCL convolution failed: {}", e.what()));
+        THROW_CONVOLVE_ERROR("OpenCL convolution failed: {}", e.what());
     }
 }
 
@@ -357,8 +614,7 @@ auto deconvolve2DOpenCL(const std::vector<std::vector<double>>& signal,
         // 这里为简化起见，调用非OpenCL版本
         return deconvolve2D(signal, kernel, numThreads);
     } catch (const std::exception& e) {
-        THROW_RUNTIME_ERROR(
-            std::format("OpenCL deconvolution failed: {}", e.what()));
+        THROW_CONVOLVE_ERROR("OpenCL deconvolution failed: {}", e.what());
     }
 }
 #endif
@@ -366,15 +622,15 @@ auto deconvolve2DOpenCL(const std::vector<std::vector<double>>& signal,
 // Function to convolve a 2D input with a 2D kernel using multithreading or
 // OpenCL
 auto convolve2D(const std::vector<std::vector<double>>& input,
-                const std::vector<std::vector<double>>& kernel,
-                int numThreads) -> std::vector<std::vector<double>> {
+                const std::vector<std::vector<double>>& kernel, int numThreads)
+    -> std::vector<std::vector<double>> {
     try {
         // 输入验证
         if (input.empty() || input[0].empty()) {
-            THROW_INVALID_ARGUMENT("Input matrix cannot be empty");
+            THROW_CONVOLVE_ERROR("Input matrix cannot be empty");
         }
         if (kernel.empty() || kernel[0].empty()) {
-            THROW_INVALID_ARGUMENT("Kernel matrix cannot be empty");
+            THROW_CONVOLVE_ERROR("Kernel matrix cannot be empty");
         }
 
         // 检查每行的列数是否一致
@@ -383,14 +639,14 @@ auto convolve2D(const std::vector<std::vector<double>>& input,
 
         for (const auto& row : input) {
             if (row.size() != inputCols) {
-                THROW_INVALID_ARGUMENT(
+                THROW_CONVOLVE_ERROR(
                     "Input matrix must have uniform column sizes");
             }
         }
 
         for (const auto& row : kernel) {
             if (row.size() != kernelCols) {
-                THROW_INVALID_ARGUMENT(
+                THROW_CONVOLVE_ERROR(
                     "Kernel matrix must have uniform column sizes");
             }
         }
@@ -403,7 +659,7 @@ auto convolve2D(const std::vector<std::vector<double>>& input,
             numThreads = availableThreads;
         }
 
-#if USE_OPENCL
+#if ATOM_USE_OPENCL
         return convolve2DOpenCL(input, kernel, numThreads);
 #else
         const std::size_t inputRows = input.size();
@@ -425,7 +681,7 @@ auto convolve2D(const std::vector<std::vector<double>>& input,
                 for (std::size_t j = 0; j < inputCols; ++j) {
                     double sum = 0.0;
 
-#ifdef ATOM_USE_SIMD
+#ifdef ATOM_ATOM_USE_SIMD
                     // 使用SIMD加速内循环计算
                     const std::size_t kernelRowMid = kernelRows / 2;
                     const std::size_t kernelColMid = kernelCols / 2;
@@ -489,7 +745,7 @@ auto convolve2D(const std::vector<std::vector<double>>& input,
         return output;
 #endif
     } catch (const std::exception& e) {
-        THROW_RUNTIME_ERROR(std::format("2D convolution failed: {}", e.what()));
+        THROW_CONVOLVE_ERROR("2D convolution failed: {}", e.what());
     }
 }
 
@@ -501,10 +757,10 @@ auto deconvolve2D(const std::vector<std::vector<double>>& signal,
     try {
         // 输入验证
         if (signal.empty() || signal[0].empty()) {
-            THROW_INVALID_ARGUMENT("Signal matrix cannot be empty");
+            THROW_CONVOLVE_ERROR("Signal matrix cannot be empty");
         }
         if (kernel.empty() || kernel[0].empty()) {
-            THROW_INVALID_ARGUMENT("Kernel matrix cannot be empty");
+            THROW_CONVOLVE_ERROR("Kernel matrix cannot be empty");
         }
 
         // 验证所有行的列数是否一致
@@ -513,14 +769,14 @@ auto deconvolve2D(const std::vector<std::vector<double>>& signal,
 
         for (const auto& row : signal) {
             if (row.size() != signalCols) {
-                THROW_INVALID_ARGUMENT(
+                THROW_CONVOLVE_ERROR(
                     "Signal matrix must have uniform column sizes");
             }
         }
 
         for (const auto& row : kernel) {
             if (row.size() != kernelCols) {
-                THROW_INVALID_ARGUMENT(
+                THROW_CONVOLVE_ERROR(
                     "Kernel matrix must have uniform column sizes");
             }
         }
@@ -533,7 +789,7 @@ auto deconvolve2D(const std::vector<std::vector<double>>& signal,
             numThreads = availableThreads;
         }
 
-#if USE_OPENCL
+#if ATOM_USE_OPENCL
         return deconvolve2DOpenCL(signal, kernel, numThreads);
 #else
         const std::size_t signalRows = signal.size();
@@ -560,7 +816,7 @@ auto deconvolve2D(const std::vector<std::vector<double>>& signal,
                                               {0, 0}));
 
         // SIMD-optimized computation of frequencyProduct
-#ifdef ATOM_USE_SIMD
+#ifdef ATOM_ATOM_USE_SIMD
         const int simdWidth = SIMD_WIDTH;
         __m256d epsilon_vec = _mm256_set1_pd(EPSILON);
 
@@ -641,14 +897,13 @@ auto deconvolve2D(const std::vector<std::vector<double>>& signal,
         return result;
 #endif
     } catch (const std::exception& e) {
-        THROW_RUNTIME_ERROR(
-            std::format("2D deconvolution failed: {}", e.what()));
+        THROW_CONVOLVE_ERROR("2D deconvolution failed: {}", e.what());
     }
 }
 
 // 2D Discrete Fourier Transform (2D DFT)
-auto dfT2D(const std::vector<std::vector<double>>& signal,
-           int numThreads) -> std::vector<std::vector<std::complex<double>>> {
+auto dfT2D(const std::vector<std::vector<double>>& signal, int numThreads)
+    -> std::vector<std::vector<std::complex<double>>> {
     const std::size_t M = signal.size();
     const std::size_t N = signal[0].size();
     std::vector<std::vector<std::complex<double>>> frequency(
@@ -656,13 +911,13 @@ auto dfT2D(const std::vector<std::vector<double>>& signal,
 
     // Lambda function to compute the DFT for a block of rows
     auto computeDFT = [&](std::size_t startRow, std::size_t endRow) {
-#ifdef ATOM_USE_SIMD
+#ifdef ATOM_ATOM_USE_SIMD
         std::array<double, 4> realParts{};
         std::array<double, 4> imagParts{};
 #endif
         for (std::size_t u = startRow; u < endRow; ++u) {
             for (std::size_t v = 0; v < N; ++v) {
-#ifdef ATOM_USE_SIMD
+#ifdef ATOM_ATOM_USE_SIMD
                 __m256d sumReal = _mm256_setzero_pd();
                 __m256d sumImag = _mm256_setzero_pd();
 
@@ -753,7 +1008,7 @@ auto idfT2D(const std::vector<std::vector<std::complex<double>>>& spectrum,
     auto computeIDFT = [&](std::size_t startRow, std::size_t endRow) {
         for (std::size_t m = startRow; m < endRow; ++m) {
             for (std::size_t n = 0; n < N; ++n) {
-#ifdef ATOM_USE_SIMD
+#ifdef ATOM_ATOM_USE_SIMD
                 __m256d sumReal = _mm256_setzero_pd();
                 __m256d sumImag = _mm256_setzero_pd();
                 for (std::size_t u = 0; u < M; ++u) {
@@ -846,13 +1101,13 @@ auto idfT2D(const std::vector<std::vector<std::complex<double>>>& spectrum,
 }
 
 // Function to generate a Gaussian kernel
-auto generateGaussianKernel(int size,
-                            double sigma) -> std::vector<std::vector<double>> {
+auto generateGaussianKernel(int size, double sigma)
+    -> std::vector<std::vector<double>> {
     std::vector<std::vector<double>> kernel(size, std::vector<double>(size));
     double sum = 0.0;
     int center = size / 2;
 
-#ifdef ATOM_USE_SIMD
+#ifdef ATOM_ATOM_USE_SIMD
     SIMD_ALIGNED double tempBuffer[SIMD_WIDTH];
     __m256d sigmaVec = _mm256_set1_pd(sigma);
     __m256d twoSigmaSquared =
@@ -907,7 +1162,7 @@ auto generateGaussianKernel(int size,
 
     // Normalize to ensure the sum of the weights is 1
     for (int i = 0; i < size; ++i) {
-        for (int j = 0; j < size; ++j) {
+        for (int j = 0; j < size; ++j) {  // 修复循环变量错误
             kernel[i][j] /= sum;
         }
     }
@@ -927,7 +1182,7 @@ auto applyGaussianFilter(const std::vector<std::vector<double>>& image,
     std::vector<std::vector<double>> filteredImage(
         imageHeight, std::vector<double>(imageWidth, 0.0));
 
-#ifdef ATOM_USE_SIMD
+#ifdef ATOM_ATOM_USE_SIMD
     SIMD_ALIGNED double tempBuffer[SIMD_WIDTH];
 
     for (std::size_t i = 0; i < imageHeight; ++i) {
@@ -984,8 +1239,12 @@ auto applyGaussianFilter(const std::vector<std::vector<double>>& image,
 
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
-#elif defined(__clang__)
+#endif
+
+#ifdef __clang__
 #pragma clang diagnostic pop
-#elif defined(_MSC_VER)
+#endif
+
+#ifdef _MSC_VER
 #pragma warning(pop)
 #endif

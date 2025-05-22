@@ -9,6 +9,8 @@
 #include <span>
 #include <vector>
 
+#include "atom/algorithm/rust_numeric.hpp"
+
 #ifdef ATOM_USE_OPENCL
 #include <CL/cl.h>
 #include "atom/error/exception.hpp"
@@ -21,8 +23,7 @@
 namespace atom::algorithm {
 class PerlinNoise {
 public:
-    explicit PerlinNoise(
-        unsigned int seed = std::default_random_engine::default_seed) {
+    explicit PerlinNoise(u32 seed = std::default_random_engine::default_seed) {
         p.resize(512);
         std::iota(p.begin(), p.begin() + 256, 0);
 
@@ -54,14 +55,14 @@ public:
     }
 
     template <std::floating_point T>
-    [[nodiscard]] auto octaveNoise(T x, T y, T z, int octaves,
+    [[nodiscard]] auto octaveNoise(T x, T y, T z, i32 octaves,
                                    T persistence) const -> T {
         T total = 0;
         T frequency = 1;
         T amplitude = 1;
         T maxValue = 0;
 
-        for (int i = 0; i < octaves; ++i) {
+        for (i32 i = 0; i < octaves; ++i) {
             total +=
                 noise(x * frequency, y * frequency, z * frequency) * amplitude;
             maxValue += amplitude;
@@ -73,21 +74,20 @@ public:
     }
 
     [[nodiscard]] auto generateNoiseMap(
-        int width, int height, double scale, int octaves, double persistence,
-        double /*lacunarity*/,
-        int seed = std::default_random_engine::default_seed) const
-        -> std::vector<std::vector<double>> {
-        std::vector<std::vector<double>> noiseMap(height,
-                                                  std::vector<double>(width));
+        i32 width, i32 height, f64 scale, i32 octaves, f64 persistence,
+        f64 /*lacunarity*/,
+        i32 seed = std::default_random_engine::default_seed) const
+        -> std::vector<std::vector<f64>> {
+        std::vector<std::vector<f64>> noiseMap(height, std::vector<f64>(width));
         std::default_random_engine prng(seed);
-        std::uniform_real_distribution<double> dist(-10000, 10000);
-        double offsetX = dist(prng);
-        double offsetY = dist(prng);
+        std::uniform_real_distribution<f64> dist(-10000, 10000);
+        f64 offsetX = dist(prng);
+        f64 offsetY = dist(prng);
 
-        for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) {
-                double sampleX = (x - width / 2.0 + offsetX) / scale;
-                double sampleY = (y - height / 2.0 + offsetY) / scale;
+        for (i32 y = 0; y < height; ++y) {
+            for (i32 x = 0; x < width; ++x) {
+                f64 sampleX = (x - width / 2.0 + offsetX) / scale;
+                f64 sampleY = (y - height / 2.0 + offsetY) / scale;
                 noiseMap[y][x] =
                     octaveNoise(sampleX, sampleY, 0.0, octaves, persistence);
             }
@@ -97,7 +97,7 @@ public:
     }
 
 private:
-    std::vector<int> p;
+    std::vector<i32> p;
 
 #ifdef ATOM_USE_OPENCL
     cl_context context_;
@@ -114,7 +114,8 @@ private:
         err = clGetPlatformIDs(1, &platform, nullptr);
         if (err != CL_SUCCESS) {
 #ifdef ATOM_USE_BOOST
-            throw boost::enable_error_info(std::runtime_error("Failed to get OpenCL platform ID"))
+            throw boost::enable_error_info(
+                std::runtime_error("Failed to get OpenCL platform ID"))
                 << boost::errinfo_api_function("initializeOpenCL");
 #else
             THROW_RUNTIME_ERROR("Failed to get OpenCL platform ID");
@@ -124,7 +125,8 @@ private:
         err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, nullptr);
         if (err != CL_SUCCESS) {
 #ifdef ATOM_USE_BOOST
-            throw boost::enable_error_info(std::runtime_error("Failed to get OpenCL device ID"))
+            throw boost::enable_error_info(
+                std::runtime_error("Failed to get OpenCL device ID"))
                 << boost::errinfo_api_function("initializeOpenCL");
 #else
             THROW_RUNTIME_ERROR("Failed to get OpenCL device ID");
@@ -134,7 +136,8 @@ private:
         context_ = clCreateContext(nullptr, 1, &device, nullptr, nullptr, &err);
         if (err != CL_SUCCESS) {
 #ifdef ATOM_USE_BOOST
-            throw boost::enable_error_info(std::runtime_error("Failed to create OpenCL context"))
+            throw boost::enable_error_info(
+                std::runtime_error("Failed to create OpenCL context"))
                 << boost::errinfo_api_function("initializeOpenCL");
 #else
             THROW_RUNTIME_ERROR("Failed to create OpenCL context");
@@ -144,7 +147,8 @@ private:
         queue_ = clCreateCommandQueue(context_, device, 0, &err);
         if (err != CL_SUCCESS) {
 #ifdef ATOM_USE_BOOST
-            throw boost::enable_error_info(std::runtime_error("Failed to create OpenCL command queue"))
+            throw boost::enable_error_info(
+                std::runtime_error("Failed to create OpenCL command queue"))
                 << boost::errinfo_api_function("initializeOpenCL");
 #else
             THROW_RUNTIME_ERROR("Failed to create OpenCL command queue");
@@ -209,7 +213,8 @@ private:
                                              nullptr, &err);
         if (err != CL_SUCCESS) {
 #ifdef ATOM_USE_BOOST
-            throw boost::enable_error_info(std::runtime_error("Failed to create OpenCL program"))
+            throw boost::enable_error_info(
+                std::runtime_error("Failed to create OpenCL program"))
                 << boost::errinfo_api_function("initializeOpenCL");
 #else
             THROW_RUNTIME_ERROR("Failed to create OpenCL program");
@@ -219,7 +224,8 @@ private:
         err = clBuildProgram(program_, 1, &device, nullptr, nullptr, nullptr);
         if (err != CL_SUCCESS) {
 #ifdef ATOM_USE_BOOST
-            throw boost::enable_error_info(std::runtime_error("Failed to build OpenCL program"))
+            throw boost::enable_error_info(
+                std::runtime_error("Failed to build OpenCL program"))
                 << boost::errinfo_api_function("initializeOpenCL");
 #else
             THROW_RUNTIME_ERROR("Failed to build OpenCL program");
@@ -229,7 +235,8 @@ private:
         noise_kernel_ = clCreateKernel(program_, "noise_kernel", &err);
         if (err != CL_SUCCESS) {
 #ifdef ATOM_USE_BOOST
-            throw boost::enable_error_info(std::runtime_error("Failed to create OpenCL kernel"))
+            throw boost::enable_error_info(
+                std::runtime_error("Failed to create OpenCL kernel"))
                 << boost::errinfo_api_function("initializeOpenCL");
 #else
             THROW_RUNTIME_ERROR("Failed to create OpenCL kernel");
@@ -250,9 +257,9 @@ private:
 
     template <std::floating_point T>
     auto noiseOpenCL(T x, T y, T z) const -> T {
-        float coords[] = {static_cast<float>(x), static_cast<float>(y),
-                          static_cast<float>(z)};
-        float result;
+        f32 coords[] = {static_cast<f32>(x), static_cast<f32>(y),
+                        static_cast<f32>(z)};
+        f32 result;
 
         cl_int err;
         cl_mem coords_buffer =
@@ -260,7 +267,8 @@ private:
                            sizeof(coords), coords, &err);
         if (err != CL_SUCCESS) {
 #ifdef ATOM_USE_BOOST
-            throw boost::enable_error_info(std::runtime_error("Failed to create OpenCL buffer for coords"))
+            throw boost::enable_error_info(
+                std::runtime_error("Failed to create OpenCL buffer for coords"))
                 << boost::errinfo_api_function("noiseOpenCL");
 #else
             THROW_RUNTIME_ERROR("Failed to create OpenCL buffer for coords");
@@ -268,10 +276,11 @@ private:
         }
 
         cl_mem result_buffer = clCreateBuffer(context_, CL_MEM_WRITE_ONLY,
-                                              sizeof(float), nullptr, &err);
+                                              sizeof(f32), nullptr, &err);
         if (err != CL_SUCCESS) {
 #ifdef ATOM_USE_BOOST
-            throw boost::enable_error_info(std::runtime_error("Failed to create OpenCL buffer for result"))
+            throw boost::enable_error_info(
+                std::runtime_error("Failed to create OpenCL buffer for result"))
                 << boost::errinfo_api_function("noiseOpenCL");
 #else
             THROW_RUNTIME_ERROR("Failed to create OpenCL buffer for result");
@@ -280,13 +289,15 @@ private:
 
         cl_mem p_buffer =
             clCreateBuffer(context_, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                           p.size() * sizeof(int), p.data(), &err);
+                           p.size() * sizeof(i32), p.data(), &err);
         if (err != CL_SUCCESS) {
 #ifdef ATOM_USE_BOOST
-            throw boost::enable_error_info(std::runtime_error("Failed to create OpenCL buffer for permutation"))
+            throw boost::enable_error_info(std::runtime_error(
+                "Failed to create OpenCL buffer for permutation"))
                 << boost::errinfo_api_function("noiseOpenCL");
 #else
-            THROW_RUNTIME_ERROR("Failed to create OpenCL buffer for permutation");
+            THROW_RUNTIME_ERROR(
+                "Failed to create OpenCL buffer for permutation");
 #endif
         }
 
@@ -296,21 +307,24 @@ private:
 
         size_t global_work_size = 1;
         err = clEnqueueNDRangeKernel(queue_, noise_kernel_, 1, nullptr,
-                                     &global_work_size, nullptr, 0, nullptr, nullptr);
+                                     &global_work_size, nullptr, 0, nullptr,
+                                     nullptr);
         if (err != CL_SUCCESS) {
 #ifdef ATOM_USE_BOOST
-            throw boost::enable_error_info(std::runtime_error("Failed to enqueue OpenCL kernel"))
+            throw boost::enable_error_info(
+                std::runtime_error("Failed to enqueue OpenCL kernel"))
                 << boost::errinfo_api_function("noiseOpenCL");
 #else
             THROW_RUNTIME_ERROR("Failed to enqueue OpenCL kernel");
 #endif
         }
 
-        err = clEnqueueReadBuffer(queue_, result_buffer, CL_TRUE, 0, sizeof(float),
-                                  &result, 0, nullptr, nullptr);
+        err = clEnqueueReadBuffer(queue_, result_buffer, CL_TRUE, 0,
+                                  sizeof(f32), &result, 0, nullptr, nullptr);
         if (err != CL_SUCCESS) {
 #ifdef ATOM_USE_BOOST
-            throw boost::enable_error_info(std::runtime_error("Failed to read OpenCL buffer for result"))
+            throw boost::enable_error_info(
+                std::runtime_error("Failed to read OpenCL buffer for result"))
                 << boost::errinfo_api_function("noiseOpenCL");
 #else
             THROW_RUNTIME_ERROR("Failed to read OpenCL buffer for result");
@@ -328,9 +342,9 @@ private:
     template <std::floating_point T>
     [[nodiscard]] auto noiseCPU(T x, T y, T z) const -> T {
         // Find unit cube containing point
-        int X = static_cast<int>(std::floor(x)) & 255;
-        int Y = static_cast<int>(std::floor(y)) & 255;
-        int Z = static_cast<int>(std::floor(z)) & 255;
+        i32 X = static_cast<i32>(std::floor(x)) & 255;
+        i32 Y = static_cast<i32>(std::floor(y)) & 255;
+        i32 Z = static_cast<i32>(std::floor(z)) & 255;
 
         // Find relative x, y, z of point in cube
         x -= std::floor(x);
@@ -367,12 +381,12 @@ private:
 #endif
 
         // Hash coordinates of the 8 cube corners
-        int A = p[X] + Y;
-        int AA = p[A] + Z;
-        int AB = p[A + 1] + Z;
-        int B = p[X + 1] + Y;
-        int BA = p[B] + Z;
-        int BB = p[B + 1] + Z;
+        i32 A = p[X] + Y;
+        i32 AA = p[A] + Z;
+        i32 AB = p[A + 1] + Z;
+        i32 B = p[X + 1] + Y;
+        i32 BA = p[B] + Z;
+        i32 BB = p[B + 1] + Z;
 
         // Add blended results from 8 corners of cube
         T res = lerp(
@@ -388,20 +402,18 @@ private:
         return (res + 1) / 2;  // Normalize to [0,1]
     }
 
-    static constexpr auto fade(double t) noexcept -> double {
+    static constexpr auto fade(f64 t) noexcept -> f64 {
         return t * t * t * (t * (t * 6 - 15) + 10);
     }
 
-    static constexpr auto lerp(double t, double a,
-                               double b) noexcept -> double {
+    static constexpr auto lerp(f64 t, f64 a, f64 b) noexcept -> f64 {
         return a + t * (b - a);
     }
 
-    static constexpr auto grad(int hash, double x, double y,
-                               double z) noexcept -> double {
-        int h = hash & 15;
-        double u = h < 8 ? x : y;
-        double v = h < 4 ? y : (h == 12 || h == 14 ? x : z);
+    static constexpr auto grad(i32 hash, f64 x, f64 y, f64 z) noexcept -> f64 {
+        i32 h = hash & 15;
+        f64 u = h < 8 ? x : y;
+        f64 v = h < 4 ? y : (h == 12 || h == 14 ? x : z);
         return ((h & 1) == 0 ? u : -u) + ((h & 2) == 0 ? v : -v);
     }
 };

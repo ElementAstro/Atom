@@ -16,6 +16,7 @@
 #include <span>
 #include <vector>
 
+#include "atom/algorithm/rust_numeric.hpp"
 #include "atom/utils/random.hpp"
 
 #ifdef ATOM_USE_BOOST
@@ -66,7 +67,7 @@ public:
          * @return Selected index
          */
         [[nodiscard]] virtual auto select(std::span<const T> cumulative_weights,
-                                          T total_weight) const -> size_t = 0;
+                                          T total_weight) const -> usize = 0;
 
         /**
          * @brief Create a clone of this strategy
@@ -95,11 +96,11 @@ public:
     public:
         DefaultSelectionStrategy() : random_(min_value, max_value) {}
 
-        explicit DefaultSelectionStrategy(uint32_t seed)
+        explicit DefaultSelectionStrategy(u32 seed)
             : random_(min_value, max_value, seed) {}
 
         [[nodiscard]] auto select(std::span<const T> cumulative_weights,
-                                  T total_weight) const -> size_t override {
+                                  T total_weight) const -> usize override {
             T randomValue = random_() * total_weight;
 #ifdef ATOM_USE_BOOST
             auto it =
@@ -136,11 +137,11 @@ public:
     public:
         BottomHeavySelectionStrategy() : random_(min_value, max_value) {}
 
-        explicit BottomHeavySelectionStrategy(uint32_t seed)
+        explicit BottomHeavySelectionStrategy(u32 seed)
             : random_(min_value, max_value, seed) {}
 
         [[nodiscard]] auto select(std::span<const T> cumulative_weights,
-                                  T total_weight) const -> size_t override {
+                                  T total_weight) const -> usize override {
             T randomValue = std::sqrt(random_()) * total_weight;
 #ifdef ATOM_USE_BOOST
             auto it =
@@ -170,27 +171,27 @@ public:
         mutable utils::Random<std::mt19937, std::uniform_int_distribution<>>
             random_index_;
 #endif
-        size_t max_index_;
+        usize max_index_;
 
     public:
-        explicit RandomSelectionStrategy(size_t max_index)
-            : random_index_(static_cast<size_t>(0),
+        explicit RandomSelectionStrategy(usize max_index)
+            : random_index_(static_cast<usize>(0),
                             max_index > 0 ? max_index - 1 : 0),
               max_index_(max_index) {}
 
-        RandomSelectionStrategy(size_t max_index, uint32_t seed)
+        RandomSelectionStrategy(usize max_index, u32 seed)
             : random_index_(0, max_index > 0 ? max_index - 1 : 0, seed),
               max_index_(max_index) {}
 
         [[nodiscard]] auto select(std::span<const T> /*cumulative_weights*/,
-                                  T /*total_weight*/) const -> size_t override {
+                                  T /*total_weight*/) const -> usize override {
             return random_index_();
         }
 
-        void updateMaxIndex(size_t new_max_index) {
+        void updateMaxIndex(usize new_max_index) {
             max_index_ = new_max_index;
             random_index_ = decltype(random_index_)(
-                static_cast<size_t>(0),
+                static_cast<usize>(0),
                 new_max_index > 0 ? new_max_index - 1 : 0);
         }
 
@@ -220,11 +221,11 @@ public:
     public:
         TopHeavySelectionStrategy() : random_(min_value, max_value) {}
 
-        explicit TopHeavySelectionStrategy(uint32_t seed)
+        explicit TopHeavySelectionStrategy(u32 seed)
             : random_(min_value, max_value, seed) {}
 
         [[nodiscard]] auto select(std::span<const T> cumulative_weights,
-                                  T total_weight) const -> size_t override {
+                                  T total_weight) const -> usize override {
             T randomValue = std::pow(random_(), 2) * total_weight;
 #ifdef ATOM_USE_BOOST
             auto it =
@@ -267,7 +268,7 @@ public:
             }
         }
 
-        PowerLawSelectionStrategy(T exponent, uint32_t seed)
+        PowerLawSelectionStrategy(T exponent, u32 seed)
             : random_(min_value, max_value, seed), exponent_(exponent) {
             if (exponent <= 0) {
                 throw WeightError("Exponent must be positive");
@@ -275,7 +276,7 @@ public:
         }
 
         [[nodiscard]] auto select(std::span<const T> cumulative_weights,
-                                  T total_weight) const -> size_t override {
+                                  T total_weight) const -> usize override {
             T randomValue = std::pow(random_(), exponent_) * total_weight;
 #ifdef ATOM_USE_BOOST
             auto it =
@@ -308,11 +309,11 @@ public:
      */
     class WeightedRandomSampler {
     private:
-        std::optional<uint32_t> seed_;
+        std::optional<u32> seed_;
 
     public:
         WeightedRandomSampler() = default;
-        explicit WeightedRandomSampler(uint32_t seed) : seed_(seed) {}
+        explicit WeightedRandomSampler(u32 seed) : seed_(seed) {}
 
         /**
          * @brief Sample n indices according to their weights
@@ -320,8 +321,8 @@ public:
          * @param n Number of samples to draw
          * @return Vector of sampled indices
          */
-        [[nodiscard]] auto sample(std::span<const T> weights, size_t n) const
-            -> std::vector<size_t> {
+        [[nodiscard]] auto sample(std::span<const T> weights, usize n) const
+            -> std::vector<usize> {
             if (weights.empty()) {
                 throw WeightError("Cannot sample from empty weights");
             }
@@ -330,7 +331,7 @@ public:
                 return {};
             }
 
-            std::vector<size_t> results(n);
+            std::vector<usize> results(n);
 
 #ifdef ATOM_USE_BOOST
             utils::Random<boost::random::mt19937,
@@ -367,7 +368,7 @@ public:
          * @throws WeightError if n is greater than the number of weights
          */
         [[nodiscard]] auto sampleUnique(std::span<const T> weights,
-                                        size_t n) const -> std::vector<size_t> {
+                                        usize n) const -> std::vector<usize> {
             if (weights.empty()) {
                 throw WeightError("Cannot sample from empty weights");
             }
@@ -393,12 +394,12 @@ public:
 
     private:
         [[nodiscard]] auto sampleUniqueRejection(std::span<const T> weights,
-                                                 size_t n) const
-            -> std::vector<size_t> {
-            std::vector<size_t> indices(weights.size());
+                                                 usize n) const
+            -> std::vector<usize> {
+            std::vector<usize> indices(weights.size());
             std::iota(indices.begin(), indices.end(), 0);
 
-            std::vector<size_t> results;
+            std::vector<usize> results;
             results.reserve(n);
 
             std::vector<bool> selected(weights.size(), false);
@@ -410,7 +411,7 @@ public:
                        seed_.has_value() ? *seed_ : 0);
 
             while (results.size() < n) {
-                size_t idx = random();
+                usize idx = random();
                 if (!selected[idx]) {
                     selected[idx] = true;
                     results.push_back(idx);
@@ -428,7 +429,7 @@ public:
             }
 
             while (results.size() < n) {
-                size_t idx = dist(gen);
+                usize idx = dist(gen);
                 if (!selected[idx]) {
                     selected[idx] = true;
                     results.push_back(idx);
@@ -440,16 +441,16 @@ public:
         }
 
         [[nodiscard]] auto sampleUniqueShuffle(std::span<const T> weights,
-                                               size_t n) const
-            -> std::vector<size_t> {
-            std::vector<size_t> indices(weights.size());
+                                               usize n) const
+            -> std::vector<usize> {
+            std::vector<usize> indices(weights.size());
             std::iota(indices.begin(), indices.end(), 0);
 
             // Create a vector of pairs (weight, index)
-            std::vector<std::pair<T, size_t>> weighted_indices;
+            std::vector<std::pair<T, usize>> weighted_indices;
             weighted_indices.reserve(weights.size());
 
-            for (size_t i = 0; i < weights.size(); ++i) {
+            for (usize i = 0; i < weights.size(); ++i) {
                 weighted_indices.emplace_back(weights[i], i);
             }
 
@@ -490,10 +491,10 @@ public:
                 });
 
             // Extract the top n indices
-            std::vector<size_t> results;
+            std::vector<usize> results;
             results.reserve(n);
 
-            for (size_t i = 0; i < n; ++i) {
+            for (usize i = 0; i < n; ++i) {
                 results.push_back(weighted_indices[i].second);
             }
 
@@ -506,7 +507,7 @@ private:
     std::vector<T> cumulative_weights_;
     std::unique_ptr<SelectionStrategy> strategy_;
     mutable std::shared_mutex mutex_;  // For thread safety
-    uint32_t seed_ = 0;
+    u32 seed_ = 0;
     bool weights_dirty_ = true;
 
     /**
@@ -539,7 +540,7 @@ private:
      * @throws WeightError if any weight is negative
      */
     void validateWeights() const {
-        for (size_t i = 0; i < weights_.size(); ++i) {
+        for (usize i = 0; i < weights_.size(); ++i) {
             if (weights_[i] < T{0}) {
                 throw WeightError(std::format(
                     "Weight at index {} is negative: {}", i, weights_[i]));
@@ -573,7 +574,7 @@ public:
      * DefaultSelectionStrategy)
      * @throws WeightError If input weights contain negative values
      */
-    WeightSelector(std::span<const T> input_weights, uint32_t seed,
+    WeightSelector(std::span<const T> input_weights, u32 seed,
                    std::unique_ptr<SelectionStrategy> custom_strategy =
                        std::make_unique<DefaultSelectionStrategy>())
         : weights_(input_weights.begin(), input_weights.end()),
@@ -653,7 +654,7 @@ public:
      * @return Selected index
      * @throws WeightError if total weight is zero or negative
      */
-    [[nodiscard]] auto select() -> size_t {
+    [[nodiscard]] auto select() -> usize {
         std::shared_lock lock(mutex_);
 
         if (weights_.empty()) {
@@ -684,14 +685,14 @@ public:
      * @param n Number of selections to make
      * @return Vector of selected indices
      */
-    [[nodiscard]] auto selectMultiple(size_t n) -> std::vector<size_t> {
+    [[nodiscard]] auto selectMultiple(usize n) -> std::vector<usize> {
         if (n == 0)
             return {};
 
-        std::vector<size_t> results;
+        std::vector<usize> results;
         results.reserve(n);
 
-        for (size_t i = 0; i < n; ++i) {
+        for (usize i = 0; i < n; ++i) {
             results.push_back(select());
         }
 
@@ -705,8 +706,8 @@ public:
      * @return Vector of unique selected indices
      * @throws WeightError if n > number of weights
      */
-    [[nodiscard]] auto selectUniqueMultiple(size_t n) const
-        -> std::vector<size_t> {
+    [[nodiscard]] auto selectUniqueMultiple(usize n) const
+        -> std::vector<usize> {
         if (n == 0)
             return {};
 
@@ -729,7 +730,7 @@ public:
      * @throws std::out_of_range if index is out of bounds
      * @throws WeightError if new_weight is negative
      */
-    void updateWeight(size_t index, T new_weight) {
+    void updateWeight(usize index, T new_weight) {
         if (new_weight < T{0}) {
             throw WeightError(
                 std::format("Weight cannot be negative: {}", new_weight));
@@ -771,7 +772,7 @@ public:
      * @param index Index of the weight to remove
      * @throws std::out_of_range if index is out of bounds
      */
-    void removeWeight(size_t index) {
+    void removeWeight(usize index) {
         std::unique_lock lock(mutex_);
         if (index >= weights_.size()) {
             throw std::out_of_range(std::format(
@@ -837,7 +838,7 @@ public:
      * @throws std::out_of_range if any index is out of bounds
      * @throws WeightError if any new weight is negative
      */
-    void batchUpdateWeights(const std::vector<std::pair<size_t, T>>& updates) {
+    void batchUpdateWeights(const std::vector<std::pair<usize, T>>& updates) {
         std::unique_lock lock(mutex_);
 
         // Validate first
@@ -868,7 +869,7 @@ public:
      * @return Optional containing the weight, or nullopt if index is out of
      * bounds
      */
-    [[nodiscard]] auto getWeight(size_t index) const -> std::optional<T> {
+    [[nodiscard]] auto getWeight(usize index) const -> std::optional<T> {
         std::shared_lock lock(mutex_);
         if (index >= weights_.size()) {
             return std::nullopt;
@@ -881,7 +882,7 @@ public:
      * @return Index of the maximum weight
      * @throws WeightError if weights collection is empty
      */
-    [[nodiscard]] auto getMaxWeightIndex() const -> size_t {
+    [[nodiscard]] auto getMaxWeightIndex() const -> usize {
         std::shared_lock lock(mutex_);
         if (weights_.empty()) {
             throw WeightError(
@@ -902,7 +903,7 @@ public:
      * @return Index of the minimum weight
      * @throws WeightError if weights collection is empty
      */
-    [[nodiscard]] auto getMinWeightIndex() const -> size_t {
+    [[nodiscard]] auto getMinWeightIndex() const -> usize {
         std::shared_lock lock(mutex_);
         if (weights_.empty()) {
             throw WeightError(
@@ -922,7 +923,7 @@ public:
      * @brief Gets the number of weights
      * @return Number of weights
      */
-    [[nodiscard]] auto size() const -> size_t {
+    [[nodiscard]] auto size() const -> usize {
         std::shared_lock lock(mutex_);
         return weights_.size();
     }
@@ -1048,7 +1049,7 @@ public:
      * @brief Sets the random seed for selection strategies
      * @param seed The new seed value
      */
-    void setSeed(uint32_t seed) {
+    void setSeed(u32 seed) {
         std::unique_lock lock(mutex_);
         seed_ = seed;
     }
@@ -1073,7 +1074,7 @@ public:
      * @brief Reserves space for weights
      * @param capacity New capacity
      */
-    void reserve(size_t capacity) {
+    void reserve(usize capacity) {
         std::unique_lock lock(mutex_);
         weights_.reserve(capacity);
         cumulative_weights_.reserve(capacity);
@@ -1130,11 +1131,11 @@ public:
      * @return Vector of indices where predicate returns true
      */
     template <std::predicate<T> P>
-    [[nodiscard]] auto findIndices(P&& predicate) const -> std::vector<size_t> {
+    [[nodiscard]] auto findIndices(P&& predicate) const -> std::vector<usize> {
         std::shared_lock lock(mutex_);
-        std::vector<size_t> result;
+        std::vector<usize> result;
 
-        for (size_t i = 0; i < weights_.size(); ++i) {
+        for (usize i = 0; i < weights_.size(); ++i) {
             if (std::invoke(std::forward<P>(predicate), weights_[i])) {
                 result.push_back(i);
             }

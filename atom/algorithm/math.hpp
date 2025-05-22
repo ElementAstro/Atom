@@ -16,15 +16,14 @@ Description: Extra Math Library
 #define ATOM_ALGORITHM_MATH_HPP
 
 #include <concepts>
-#include <cstdint>
 #include <memory>
 #include <numeric>
 #include <optional>
 #include <shared_mutex>
-#include <span>
 #include <unordered_map>
 #include <vector>
 
+#include "atom/algorithm/rust_numeric.hpp"
 #include "atom/error/exception.hpp"
 
 namespace atom::algorithm {
@@ -54,11 +53,11 @@ public:
      * @brief Get a cached prime number vector up to the specified limit
      *
      * @param limit Upper bound for prime generation
-     * @return std::shared_ptr<const std::vector<uint64_t>> Thread-safe shared
+     * @return std::shared_ptr<const std::vector<u64>> Thread-safe shared
      * pointer to prime vector
      */
-    [[nodiscard]] std::shared_ptr<const std::vector<uint64_t>> getCachedPrimes(
-        uint64_t limit);
+    [[nodiscard]] std::shared_ptr<const std::vector<u64>> getCachedPrimes(
+        u64 limit);
 
     /**
      * @brief Clear all cached values
@@ -74,8 +73,7 @@ private:
     MathCache& operator=(MathCache&&) = delete;
 
     std::shared_mutex mutex_;
-    std::unordered_map<uint64_t, std::shared_ptr<std::vector<uint64_t>>>
-        primeCache_;
+    std::unordered_map<u64, std::shared_ptr<std::vector<u64>>> primeCache_;
 };
 
 /**
@@ -90,8 +88,7 @@ private:
  * @return The result of (operant * multiplier) / divider.
  * @throws atom::error::InvalidArgumentException if divider is zero.
  */
-[[nodiscard]] auto mulDiv64(uint64_t operant, uint64_t multiplier,
-                            uint64_t divider) -> uint64_t;
+[[nodiscard]] auto mulDiv64(u64 operant, u64 multiplier, u64 divider) -> u64;
 
 /**
  * @brief Performs a safe addition operation.
@@ -104,19 +101,19 @@ private:
  * @return The result of a + b.
  * @throws atom::error::OverflowException if the operation would overflow.
  */
-[[nodiscard]] constexpr auto safeAdd(uint64_t a, uint64_t b) -> uint64_t {
+[[nodiscard]] constexpr auto safeAdd(u64 a, u64 b) -> u64 {
     try {
-        uint64_t result;
+        u64 result;
 #ifdef ATOM_USE_BOOST
         boost::multiprecision::uint128_t temp =
             boost::multiprecision::uint128_t(a) + b;
-        if (temp > std::numeric_limits<uint64_t>::max()) {
+        if (temp > std::numeric_limits<u64>::max()) {
             THROW_OVERFLOW("Overflow in addition");
         }
-        result = static_cast<uint64_t>(temp);
+        result = static_cast<u64>(temp);
 #else
         // Check for overflow before addition using C++20 feature
-        if (std::numeric_limits<uint64_t>::max() - a < b) {
+        if (std::numeric_limits<u64>::max() - a < b) {
             THROW_OVERFLOW("Overflow in addition");
         }
         result = a + b;
@@ -141,19 +138,19 @@ private:
  * @return The result of a * b.
  * @throws atom::error::OverflowException if the operation would overflow.
  */
-[[nodiscard]] constexpr auto safeMul(uint64_t a, uint64_t b) -> uint64_t {
+[[nodiscard]] constexpr auto safeMul(u64 a, u64 b) -> u64 {
     try {
-        uint64_t result;
+        u64 result;
 #ifdef ATOM_USE_BOOST
         boost::multiprecision::uint128_t temp =
             boost::multiprecision::uint128_t(a) * b;
-        if (temp > std::numeric_limits<uint64_t>::max()) {
+        if (temp > std::numeric_limits<u64>::max()) {
             THROW_OVERFLOW("Overflow in multiplication");
         }
-        result = static_cast<uint64_t>(temp);
+        result = static_cast<u64>(temp);
 #else
         // Check for overflow before multiplication
-        if (a > 0 && b > std::numeric_limits<uint64_t>::max() / a) {
+        if (a > 0 && b > std::numeric_limits<u64>::max() / a) {
             THROW_OVERFLOW("Overflow in multiplication");
         }
         result = a * b;
@@ -177,8 +174,7 @@ private:
  * @param c The number of bits to rotate.
  * @return The rotated 64-bit integer.
  */
-[[nodiscard]] constexpr auto rotl64(uint64_t n, unsigned int c) noexcept
-    -> uint64_t {
+[[nodiscard]] constexpr auto rotl64(u64 n, u32 c) noexcept -> u64 {
     // Using std::rotl from C++20
     return std::rotl(n, static_cast<int>(c));
 }
@@ -193,8 +189,7 @@ private:
  * @param c The number of bits to rotate.
  * @return The rotated 64-bit integer.
  */
-[[nodiscard]] constexpr auto rotr64(uint64_t n, unsigned int c) noexcept
-    -> uint64_t {
+[[nodiscard]] constexpr auto rotr64(u64 n, u32 c) noexcept -> u64 {
     // Using std::rotr from C++20
     return std::rotr(n, static_cast<int>(c));
 }
@@ -208,7 +203,7 @@ private:
  * @param x The 64-bit integer to count leading zeros in.
  * @return The number of leading zeros in the 64-bit integer.
  */
-[[nodiscard]] constexpr auto clz64(uint64_t x) noexcept -> int {
+[[nodiscard]] constexpr auto clz64(u64 x) noexcept -> i32 {
     // Using std::countl_zero from C++20
     return std::countl_zero(x);
 }
@@ -222,11 +217,11 @@ private:
  * @param x The 64-bit integer to normalize.
  * @return The normalized 64-bit integer.
  */
-[[nodiscard]] constexpr auto normalize(uint64_t x) noexcept -> uint64_t {
+[[nodiscard]] constexpr auto normalize(u64 x) noexcept -> u64 {
     if (x == 0) {
         return 0;
     }
-    int n = clz64(x);
+    i32 n = clz64(x);
     return x << n;
 }
 
@@ -241,7 +236,7 @@ private:
  * @return The result of a - b.
  * @throws atom::error::UnderflowException if the operation would underflow.
  */
-[[nodiscard]] constexpr auto safeSub(uint64_t a, uint64_t b) -> uint64_t {
+[[nodiscard]] constexpr auto safeSub(u64 a, u64 b) -> u64 {
     try {
         if (b > a) {
             THROW_UNDERFLOW("Underflow in subtraction");
@@ -255,7 +250,7 @@ private:
     }
 }
 
-[[nodiscard]] constexpr bool isDivisionByZero(uint64_t divisor) noexcept {
+[[nodiscard]] constexpr bool isDivisionByZero(u64 divisor) noexcept {
     return divisor == 0;
 }
 
@@ -270,7 +265,7 @@ private:
  * @return The result of a / b.
  * @throws atom::error::InvalidArgumentException if there is a division by zero.
  */
-[[nodiscard]] constexpr auto safeDiv(uint64_t a, uint64_t b) -> uint64_t {
+[[nodiscard]] constexpr auto safeDiv(u64 a, u64 b) -> u64 {
     try {
         if (isDivisionByZero(b)) {
             THROW_INVALID_ARGUMENT("Division by zero");
@@ -293,7 +288,7 @@ private:
  * @param n The 64-bit integer to reverse.
  * @return The bitwise reverse of the 64-bit integer.
  */
-[[nodiscard]] auto bitReverse64(uint64_t n) noexcept -> uint64_t;
+[[nodiscard]] auto bitReverse64(u64 n) noexcept -> u64;
 
 /**
  * @brief Approximates the square root of a 64-bit integer.
@@ -304,7 +299,7 @@ private:
  * @param n The 64-bit integer for which to approximate the square root.
  * @return The approximate square root of the 64-bit integer.
  */
-[[nodiscard]] auto approximateSqrt(uint64_t n) noexcept -> uint64_t;
+[[nodiscard]] auto approximateSqrt(u64 n) noexcept -> u64;
 
 /**
  * @brief Calculates the greatest common divisor (GCD) of two 64-bit integers.
@@ -316,8 +311,7 @@ private:
  * @param b The second 64-bit integer.
  * @return The greatest common divisor of the two 64-bit integers.
  */
-[[nodiscard]] constexpr auto gcd64(uint64_t a, uint64_t b) noexcept
-    -> uint64_t {
+[[nodiscard]] constexpr auto gcd64(u64 a, u64 b) noexcept -> u64 {
     // Using std::gcd from C++17, which is constexpr in C++20
     return std::gcd(a, b);
 }
@@ -333,7 +327,7 @@ private:
  * @return The least common multiple of the two 64-bit integers.
  * @throws atom::error::OverflowException if the operation would overflow.
  */
-[[nodiscard]] auto lcm64(uint64_t a, uint64_t b) -> uint64_t;
+[[nodiscard]] auto lcm64(u64 a, u64 b) -> u64;
 
 /**
  * @brief Checks if a 64-bit integer is a power of two.
@@ -344,7 +338,7 @@ private:
  * @param n The 64-bit integer to check.
  * @return True if the 64-bit integer is a power of two, false otherwise.
  */
-[[nodiscard]] constexpr auto isPowerOfTwo(uint64_t n) noexcept -> bool {
+[[nodiscard]] constexpr auto isPowerOfTwo(u64 n) noexcept -> bool {
     // Using C++20 std::has_single_bit
     return n != 0 && std::has_single_bit(n);
 }
@@ -358,7 +352,7 @@ private:
  * @param n The 64-bit integer for which to calculate the next power of two.
  * @return The next power of two for the 64-bit integer.
  */
-[[nodiscard]] constexpr auto nextPowerOfTwo(uint64_t n) noexcept -> uint64_t {
+[[nodiscard]] constexpr auto nextPowerOfTwo(u64 n) noexcept -> u64 {
     if (n == 0) {
         return 1;
     }
@@ -410,7 +404,7 @@ template <std::integral T>
  * @return true If n is prime
  * @return false If n is not prime
  */
-[[nodiscard]] auto isPrime(uint64_t n) noexcept -> bool;
+[[nodiscard]] auto isPrime(u64 n) noexcept -> bool;
 
 /**
  * @brief Generates prime numbers up to a limit using the Sieve of Eratosthenes
@@ -418,9 +412,9 @@ template <std::integral T>
  * Uses thread-safe caching for repeated calls with the same limit.
  *
  * @param limit Upper limit for prime generation
- * @return std::vector<uint64_t> Vector of primes up to limit
+ * @return std::vector<u64> Vector of primes up to limit
  */
-[[nodiscard]] auto generatePrimes(uint64_t limit) -> std::vector<uint64_t>;
+[[nodiscard]] auto generatePrimes(u64 limit) -> std::vector<u64>;
 
 /**
  * @brief Montgomery modular multiplication
@@ -430,10 +424,9 @@ template <std::integral T>
  * @param a First operand
  * @param b Second operand
  * @param n Modulus
- * @return uint64_t (a * b) mod n
+ * @return u64 (a * b) mod n
  */
-[[nodiscard]] auto montgomeryMultiply(uint64_t a, uint64_t b, uint64_t n)
-    -> uint64_t;
+[[nodiscard]] auto montgomeryMultiply(u64 a, u64 b, u64 n) -> u64;
 
 /**
  * @brief Modular exponentiation using Montgomery reduction
@@ -444,28 +437,27 @@ template <std::integral T>
  * @param base Base value
  * @param exponent Exponent value
  * @param modulus Modulus
- * @return uint64_t (base^exponent) mod modulus
+ * @return u64 (base^exponent) mod modulus
  */
-[[nodiscard]] auto modPow(uint64_t base, uint64_t exponent, uint64_t modulus)
-    -> uint64_t;
+[[nodiscard]] auto modPow(u64 base, u64 exponent, u64 modulus) -> u64;
 
 /**
  * @brief Generate a cryptographically secure random number
  *
- * @return std::optional<uint64_t> Random value, or nullopt if generation failed
+ * @return std::optional<u64> Random value, or nullopt if generation failed
  */
-[[nodiscard]] auto secureRandom() noexcept -> std::optional<uint64_t>;
+[[nodiscard]] auto secureRandom() noexcept -> std::optional<u64>;
 
 /**
  * @brief Generate a random number in the specified range
  *
  * @param min Minimum value (inclusive)
  * @param max Maximum value (inclusive)
- * @return std::optional<uint64_t> Random value in range, or nullopt if
+ * @return std::optional<u64> Random value in range, or nullopt if
  * generation failed
  */
-[[nodiscard]] auto randomInRange(uint64_t min, uint64_t max) noexcept
-    -> std::optional<uint64_t>;
+[[nodiscard]] auto randomInRange(u64 min, u64 max) noexcept
+    -> std::optional<u64>;
 
 /**
  * @brief Custom memory pool for efficient allocation in math operations
@@ -485,7 +477,7 @@ public:
      * @param size Size in bytes to allocate
      * @return void* Pointer to allocated memory
      */
-    [[nodiscard]] void* allocate(size_t size);
+    [[nodiscard]] void* allocate(usize size);
 
     /**
      * @brief Return memory to the pool
@@ -493,7 +485,7 @@ public:
      * @param ptr Pointer to memory
      * @param size Size of the allocation
      */
-    void deallocate(void* ptr, size_t size) noexcept;
+    void deallocate(void* ptr, usize size) noexcept;
 
 private:
     MathMemoryPool() = default;
@@ -522,8 +514,8 @@ public:
     template <typename U>
     MathAllocator(const MathAllocator<U>&) noexcept {}
 
-    [[nodiscard]] T* allocate(std::size_t n);
-    void deallocate(T* p, std::size_t n) noexcept;
+    [[nodiscard]] T* allocate(usize n);
+    void deallocate(T* p, usize n) noexcept;
 
     template <typename U>
     bool operator==(const MathAllocator<U>&) const noexcept {

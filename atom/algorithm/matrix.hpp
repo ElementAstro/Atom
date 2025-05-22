@@ -11,6 +11,7 @@
 #include <random>
 #include <vector>
 
+#include "atom/algorithm/rust_numeric.hpp"
 #include "atom/error/exception.hpp"
 
 namespace atom::algorithm {
@@ -22,7 +23,7 @@ namespace atom::algorithm {
  * @tparam Rows The number of rows in the matrix.
  * @tparam Cols The number of columns in the matrix.
  */
-template <typename T, std::size_t Rows, std::size_t Cols>
+template <typename T, usize Rows, usize Cols>
 class Matrix;
 
 /**
@@ -32,7 +33,7 @@ class Matrix;
  * @tparam Size The size of the identity matrix (Size x Size).
  * @return constexpr Matrix<T, Size, Size> The identity matrix.
  */
-template <typename T, std::size_t Size>
+template <typename T, usize Size>
 constexpr Matrix<T, Size, Size> identity();
 
 /**
@@ -43,7 +44,7 @@ constexpr Matrix<T, Size, Size> identity();
  * @tparam Rows The number of rows in the matrix.
  * @tparam Cols The number of columns in the matrix.
  */
-template <typename T, std::size_t Rows, std::size_t Cols>
+template <typename T, usize Rows, usize Cols>
 class Matrix {
 private:
     std::array<T, Rows * Cols> data_{};
@@ -96,7 +97,7 @@ public:
      * @param col The column index.
      * @return T& A reference to the matrix element.
      */
-    constexpr auto operator()(std::size_t row, std::size_t col) -> T& {
+    constexpr auto operator()(usize row, usize col) -> T& {
         return data_[row * Cols + col];
     }
 
@@ -108,8 +109,7 @@ public:
      * @param col The column index.
      * @return const T& A const reference to the matrix element.
      */
-    constexpr auto operator()(std::size_t row,
-                              std::size_t col) const -> const T& {
+    constexpr auto operator()(usize row, usize col) const -> const T& {
         return data_[row * Cols + col];
     }
 
@@ -134,9 +134,9 @@ public:
      * @param width The width of each element when printed.
      * @param precision The precision of each element when printed.
      */
-    void print(int width = 8, int precision = 2) const {
-        for (std::size_t i = 0; i < Rows; ++i) {
-            for (std::size_t j = 0; j < Cols; ++j) {
+    void print(i32 width = 8, i32 precision = 2) const {
+        for (usize i = 0; i < Rows; ++i) {
+            for (usize j = 0; j < Cols; ++j) {
                 std::cout << std::setw(width) << std::fixed
                           << std::setprecision(precision) << (*this)(i, j)
                           << ' ';
@@ -154,7 +154,7 @@ public:
         static_assert(Rows == Cols,
                       "Trace is only defined for square matrices");
         T result = T{};
-        for (std::size_t i = 0; i < Rows; ++i) {
+        for (usize i = 0; i < Rows; ++i) {
             result += (*this)(i, i);
         }
         return result;
@@ -204,8 +204,8 @@ public:
     [[nodiscard]] auto isSymmetric() const -> bool {
         static_assert(Rows == Cols,
                       "Symmetry is only defined for square matrices");
-        for (std::size_t i = 0; i < Rows; ++i) {
-            for (std::size_t j = i + 1; j < Cols; ++j) {
+        for (usize i = 0; i < Rows; ++i) {
+            for (usize j = i + 1; j < Cols; ++j) {
                 if ((*this)(i, j) != (*this)(j, i)) {
                     return false;
                 }
@@ -220,7 +220,7 @@ public:
      * @param n The exponent.
      * @return Matrix The resulting matrix after exponentiation.
      */
-    auto pow(unsigned int n) const -> Matrix {
+    auto pow(u32 n) const -> Matrix {
         static_assert(Rows == Cols,
                       "Matrix power is only defined for square matrices");
         if (n == 0) {
@@ -230,7 +230,7 @@ public:
             return *this;
         }
         Matrix result = *this;
-        for (unsigned int i = 1; i < n; ++i) {
+        for (u32 i = 1; i < n; ++i) {
             result = result * (*this);
         }
         return result;
@@ -246,7 +246,7 @@ public:
                       "Determinant is only defined for square matrices");
         auto [L, U] = luDecomposition(*this);
         T det = T{1};
-        for (std::size_t i = 0; i < Rows; ++i) {
+        for (usize i = 0; i < Rows; ++i) {
             det *= U(i, i);
         }
         return det;
@@ -270,18 +270,18 @@ public:
         Matrix<T, Rows, Cols> inv = identity<T, Rows>();
 
         // Forward substitution (L * Y = I)
-        for (std::size_t k = 0; k < Cols; ++k) {
-            for (std::size_t i = k + 1; i < Rows; ++i) {
-                for (std::size_t j = 0; j < k; ++j) {
+        for (usize k = 0; k < Cols; ++k) {
+            for (usize i = k + 1; i < Rows; ++i) {
+                for (usize j = 0; j < k; ++j) {
                     inv(i, k) -= L(i, j) * inv(j, k);
                 }
             }
         }
 
         // Backward substitution (U * X = Y)
-        for (std::size_t k = 0; k < Cols; ++k) {
-            for (std::size_t i = Rows; i-- > 0;) {
-                for (std::size_t j = i + 1; j < Cols; ++j) {
+        for (usize k = 0; k < Cols; ++k) {
+            for (usize i = Rows; i-- > 0;) {
+                for (usize j = i + 1; j < Cols; ++j) {
                     inv(i, k) -= U(i, j) * inv(j, k);
                 }
                 inv(i, k) /= U(i, i);
@@ -294,15 +294,15 @@ public:
     /**
      * @brief Computes the rank of the matrix using Gaussian elimination.
      *
-     * @return std::size_t The rank of the matrix.
+     * @return usize The rank of the matrix.
      */
-    [[nodiscard]] auto rank() const -> std::size_t {
+    [[nodiscard]] auto rank() const -> usize {
         Matrix<T, Rows, Cols> temp = *this;
-        std::size_t rank = 0;
-        for (std::size_t i = 0; i < Rows && i < Cols; ++i) {
+        usize rank = 0;
+        for (usize i = 0; i < Rows && i < Cols; ++i) {
             // Find the pivot
-            std::size_t pivot = i;
-            for (std::size_t j = i + 1; j < Rows; ++j) {
+            usize pivot = i;
+            for (usize j = i + 1; j < Rows; ++j) {
                 if (std::abs(temp(j, i)) > std::abs(temp(pivot, i))) {
                     pivot = j;
                 }
@@ -312,14 +312,14 @@ public:
             }
             // Swap rows
             if (pivot != i) {
-                for (std::size_t j = i; j < Cols; ++j) {
+                for (usize j = i; j < Cols; ++j) {
                     std::swap(temp(i, j), temp(pivot, j));
                 }
             }
             // Eliminate
-            for (std::size_t j = i + 1; j < Rows; ++j) {
+            for (usize j = i + 1; j < Rows; ++j) {
                 T factor = temp(j, i) / temp(i, i);
-                for (std::size_t k = i; k < Cols; ++k) {
+                for (usize k = i; k < Cols; ++k) {
                     temp(j, k) -= factor * temp(i, k);
                 }
             }
@@ -351,12 +351,12 @@ public:
  * @param b The second matrix.
  * @return constexpr Matrix<T, Rows, Cols> The resulting matrix after addition.
  */
-template <typename T, std::size_t Rows, std::size_t Cols>
+template <typename T, usize Rows, usize Cols>
 constexpr auto operator+(const Matrix<T, Rows, Cols>& a,
                          const Matrix<T, Rows, Cols>& b)
     -> Matrix<T, Rows, Cols> {
     Matrix<T, Rows, Cols> result{};
-    for (std::size_t i = 0; i < Rows * Cols; ++i) {
+    for (usize i = 0; i < Rows * Cols; ++i) {
         result.getData()[i] = a.getData()[i] + b.getData()[i];
     }
     return result;
@@ -373,12 +373,12 @@ constexpr auto operator+(const Matrix<T, Rows, Cols>& a,
  * @return constexpr Matrix<T, Rows, Cols> The resulting matrix after
  * subtraction.
  */
-template <typename T, std::size_t Rows, std::size_t Cols>
+template <typename T, usize Rows, usize Cols>
 constexpr auto operator-(const Matrix<T, Rows, Cols>& a,
                          const Matrix<T, Rows, Cols>& b)
     -> Matrix<T, Rows, Cols> {
     Matrix<T, Rows, Cols> result{};
-    for (std::size_t i = 0; i < Rows * Cols; ++i) {
+    for (usize i = 0; i < Rows * Cols; ++i) {
         result.getData()[i] = a.getData()[i] - b.getData()[i];
     }
     return result;
@@ -396,15 +396,14 @@ constexpr auto operator-(const Matrix<T, Rows, Cols>& a,
  * @param b The second matrix.
  * @return Matrix<T, RowsA, ColsB> The resulting matrix after multiplication.
  */
-template <typename T, std::size_t RowsA, std::size_t ColsA_RowsB,
-          std::size_t ColsB>
+template <typename T, usize RowsA, usize ColsA_RowsB, usize ColsB>
 auto operator*(const Matrix<T, RowsA, ColsA_RowsB>& a,
                const Matrix<T, ColsA_RowsB, ColsB>& b)
     -> Matrix<T, RowsA, ColsB> {
     Matrix<T, RowsA, ColsB> result{};
-    for (std::size_t i = 0; i < RowsA; ++i) {
-        for (std::size_t j = 0; j < ColsB; ++j) {
-            for (std::size_t k = 0; k < ColsA_RowsB; ++k) {
+    for (usize i = 0; i < RowsA; ++i) {
+        for (usize j = 0; j < ColsB; ++j) {
+            for (usize k = 0; k < ColsA_RowsB; ++k) {
                 result(i, j) += a(i, k) * b(k, j);
             }
         }
@@ -423,10 +422,10 @@ auto operator*(const Matrix<T, RowsA, ColsA_RowsB>& a,
  * @param scalar The scalar.
  * @return constexpr auto The resulting matrix after multiplication.
  */
-template <typename T, typename U, std::size_t Rows, std::size_t Cols>
+template <typename T, typename U, usize Rows, usize Cols>
 constexpr auto operator*(const Matrix<T, Rows, Cols>& m, U scalar) {
     Matrix<decltype(T{} * U{}), Rows, Cols> result;
-    for (std::size_t i = 0; i < Rows * Cols; ++i) {
+    for (usize i = 0; i < Rows * Cols; ++i) {
         result.getData()[i] = m.getData()[i] * scalar;
     }
     return result;
@@ -443,7 +442,7 @@ constexpr auto operator*(const Matrix<T, Rows, Cols>& m, U scalar) {
  * @param m The matrix.
  * @return constexpr auto The resulting matrix after multiplication.
  */
-template <typename T, typename U, std::size_t Rows, std::size_t Cols>
+template <typename T, typename U, usize Rows, usize Cols>
 constexpr auto operator*(U scalar, const Matrix<T, Rows, Cols>& m) {
     return m * scalar;
 }
@@ -460,12 +459,12 @@ constexpr auto operator*(U scalar, const Matrix<T, Rows, Cols>& m) {
  * @return constexpr Matrix<T, Rows, Cols> The resulting matrix after Hadamard
  * product.
  */
-template <typename T, std::size_t Rows, std::size_t Cols>
+template <typename T, usize Rows, usize Cols>
 constexpr auto elementWiseProduct(const Matrix<T, Rows, Cols>& a,
                                   const Matrix<T, Rows, Cols>& b)
     -> Matrix<T, Rows, Cols> {
     Matrix<T, Rows, Cols> result{};
-    for (std::size_t i = 0; i < Rows * Cols; ++i) {
+    for (usize i = 0; i < Rows * Cols; ++i) {
         result.getData()[i] = a.getData()[i] * b.getData()[i];
     }
     return result;
@@ -480,12 +479,12 @@ constexpr auto elementWiseProduct(const Matrix<T, Rows, Cols>& a,
  * @param m The matrix to transpose.
  * @return constexpr Matrix<T, Cols, Rows> The transposed matrix.
  */
-template <typename T, std::size_t Rows, std::size_t Cols>
+template <typename T, usize Rows, usize Cols>
 constexpr auto transpose(const Matrix<T, Rows, Cols>& m)
     -> Matrix<T, Cols, Rows> {
     Matrix<T, Cols, Rows> result{};
-    for (std::size_t i = 0; i < Rows; ++i) {
-        for (std::size_t j = 0; j < Cols; ++j) {
+    for (usize i = 0; i < Rows; ++i) {
+        for (usize j = 0; j < Cols; ++j) {
             result(j, i) = m(i, j);
         }
     }
@@ -499,10 +498,10 @@ constexpr auto transpose(const Matrix<T, Rows, Cols>& m)
  * @tparam Size The size of the identity matrix (Size x Size).
  * @return constexpr Matrix<T, Size, Size> The identity matrix.
  */
-template <typename T, std::size_t Size>
+template <typename T, usize Size>
 constexpr auto identity() -> Matrix<T, Size, Size> {
     Matrix<T, Size, Size> result{};
-    for (std::size_t i = 0; i < Size; ++i) {
+    for (usize i = 0; i < Size; ++i) {
         result(i, i) = T{1};
     }
     return result;
@@ -518,21 +517,21 @@ constexpr auto identity() -> Matrix<T, Size, Size> {
  * matrices (L, U) where L is the lower triangular matrix and U is the upper
  * triangular matrix.
  */
-template <typename T, std::size_t Size>
+template <typename T, usize Size>
 auto luDecomposition(const Matrix<T, Size, Size>& m)
     -> std::pair<Matrix<T, Size, Size>, Matrix<T, Size, Size>> {
     Matrix<T, Size, Size> L = identity<T, Size>();
     Matrix<T, Size, Size> U = m;
 
-    for (std::size_t k = 0; k < Size - 1; ++k) {
-        for (std::size_t i = k + 1; i < Size; ++i) {
+    for (usize k = 0; k < Size - 1; ++k) {
+        for (usize i = k + 1; i < Size; ++i) {
             if (std::abs(U(k, k)) < 1e-10) {
                 THROW_RUNTIME_ERROR(
                     "LU decomposition failed: division by zero");
             }
             T factor = U(i, k) / U(k, k);
             L(i, k) = factor;
-            for (std::size_t j = k; j < Size; ++j) {
+            for (usize j = k; j < Size; ++j) {
                 U(i, j) -= factor * U(k, j);
             }
         }
@@ -551,28 +550,28 @@ auto luDecomposition(const Matrix<T, Size, Size>& m)
  * @param m The matrix to decompose.
  * @return std::vector<T> A vector of singular values.
  */
-template <typename T, std::size_t Rows, std::size_t Cols>
+template <typename T, usize Rows, usize Cols>
 auto singularValueDecomposition(const Matrix<T, Rows, Cols>& m)
     -> std::vector<T> {
-    const std::size_t n = std::min(Rows, Cols);
+    const usize n = std::min(Rows, Cols);
     Matrix<T, Cols, Rows> mt = transpose(m);
     Matrix<T, Cols, Cols> mtm = mt * m;
 
     // 使用幂法计算最大特征值和对应的特征向量
-    auto powerIteration = [&mtm](std::size_t max_iter = 100, T tol = 1e-10) {
+    auto powerIteration = [&mtm](usize max_iter = 100, T tol = 1e-10) {
         std::vector<T> v(Cols);
         std::generate(v.begin(), v.end(),
                       []() { return static_cast<T>(rand()) / RAND_MAX; });
         T lambdaOld = 0;
-        for (std::size_t iter = 0; iter < max_iter; ++iter) {
+        for (usize iter = 0; iter < max_iter; ++iter) {
             std::vector<T> vNew(Cols);
-            for (std::size_t i = 0; i < Cols; ++i) {
-                for (std::size_t j = 0; j < Cols; ++j) {
+            for (usize i = 0; i < Cols; ++i) {
+                for (usize j = 0; j < Cols; ++j) {
                     vNew[i] += mtm(i, j) * v[j];
                 }
             }
             T lambda = 0;
-            for (std::size_t i = 0; i < Cols; ++i) {
+            for (usize i = 0; i < Cols; ++i) {
                 lambda += vNew[i] * v[i];
             }
             T norm = std::sqrt(std::inner_product(vNew.begin(), vNew.end(),
@@ -590,13 +589,13 @@ auto singularValueDecomposition(const Matrix<T, Rows, Cols>& m)
     };
 
     std::vector<T> singularValues;
-    for (std::size_t i = 0; i < n; ++i) {
+    for (usize i = 0; i < n; ++i) {
         T sigma = powerIteration();
         singularValues.push_back(sigma);
         // Deflate the matrix
         Matrix<T, Cols, Cols> vvt;
-        for (std::size_t j = 0; j < Cols; ++j) {
-            for (std::size_t k = 0; k < Cols; ++k) {
+        for (usize j = 0; j < Cols; ++j) {
+            for (usize k = 0; k < Cols; ++k) {
                 vvt(j, k) = mtm(j, k) / (sigma * sigma);
             }
         }
@@ -626,7 +625,7 @@ auto singularValueDecomposition(const Matrix<T, Rows, Cols>& m)
  * @note This function uses a uniform real distribution to generate the random
  * elements. The random number generator is seeded with a random device.
  */
-template <typename T, std::size_t Rows, std::size_t Cols>
+template <typename T, usize Rows, usize Cols>
 auto randomMatrix(T min = 0, T max = 1) -> Matrix<T, Rows, Cols> {
     static std::random_device rd;
     static std::mt19937 gen(rd());

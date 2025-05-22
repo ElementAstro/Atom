@@ -15,9 +15,12 @@ Description: Enhanced implementation of Huffman encoding
 #ifndef ATOM_ALGORITHM_HUFFMAN_HPP
 #define ATOM_ALGORITHM_HUFFMAN_HPP
 
+#include <concepts>
 #include <memory>
+#include <span>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -40,11 +43,11 @@ public:
  */
 struct HuffmanNode {
     unsigned char
-        data;       ///< Byte stored in this node (used only in leaf nodes).
-    int frequency;  ///< Frequency of the byte or sum of frequencies for
-                    ///< internal nodes.
-    std::shared_ptr<HuffmanNode> left;   ///< Pointer to the left child node.
-    std::shared_ptr<HuffmanNode> right;  ///< Pointer to the right child node.
+        data;      /**< Byte stored in this node (used only in leaf nodes) */
+    int frequency; /**< Frequency of the byte or sum of frequencies for internal
+                      nodes */
+    std::shared_ptr<HuffmanNode> left;  /**< Pointer to the left child node */
+    std::shared_ptr<HuffmanNode> right; /**< Pointer to the right child node */
 
     /**
      * @brief Constructs a new Huffman Node.
@@ -166,5 +169,87 @@ void visualizeHuffmanTree(const HuffmanNode* root,
                           const std::string& indent = "");
 
 }  // namespace atom::algorithm
+
+namespace huffman_optimized {
+/**
+ * @concept ByteLike
+ * @brief Type constraint for byte-like types
+ * @tparam T Type to check
+ */
+template <typename T>
+concept ByteLike = std::integral<T> && sizeof(T) == 1;
+
+/**
+ * @brief Parallel frequency counting using SIMD and multithreading
+ *
+ * @tparam T Byte-like type
+ * @param data Input data
+ * @param threadCount Number of threads to use (defaults to hardware
+ * concurrency)
+ * @return Frequency map of each byte
+ */
+template <ByteLike T>
+std::unordered_map<T, size_t> parallelFrequencyCount(
+    std::span<const T> data,
+    size_t threadCount = std::thread::hardware_concurrency());
+
+/**
+ * @brief Builds a Huffman tree in parallel
+ *
+ * @param frequencies Map of byte frequencies
+ * @return Shared pointer to the root of the Huffman tree
+ */
+std::shared_ptr<atom::algorithm::HuffmanNode> createTreeParallel(
+    const std::unordered_map<unsigned char, size_t>& frequencies);
+
+/**
+ * @brief Compresses data using SIMD acceleration
+ *
+ * @param data Input data to compress
+ * @param huffmanCodes Huffman codes for each byte
+ * @return Compressed data as string
+ */
+std::string compressSimd(
+    std::span<const unsigned char> data,
+    const std::unordered_map<unsigned char, std::string>& huffmanCodes);
+
+/**
+ * @brief Compresses data using parallel processing
+ *
+ * @param data Input data to compress
+ * @param huffmanCodes Huffman codes for each byte
+ * @param threadCount Number of threads to use (defaults to hardware
+ * concurrency)
+ * @return Compressed data as string
+ */
+std::string compressParallel(
+    std::span<const unsigned char> data,
+    const std::unordered_map<unsigned char, std::string>& huffmanCodes,
+    size_t threadCount = std::thread::hardware_concurrency());
+
+/**
+ * @brief Validates input data and Huffman codes
+ *
+ * @param data Input data to validate
+ * @param huffmanCodes Huffman codes to validate
+ */
+void validateInput(
+    std::span<const unsigned char> data,
+    const std::unordered_map<unsigned char, std::string>& huffmanCodes);
+
+/**
+ * @brief Decompresses data using parallel processing
+ *
+ * @param compressedData Compressed data to decompress
+ * @param root Root of the Huffman tree
+ * @param threadCount Number of threads to use (defaults to hardware
+ * concurrency)
+ * @return Decompressed data as byte vector
+ */
+std::vector<unsigned char> decompressParallel(
+    const std::string& compressedData, const atom::algorithm::HuffmanNode* root,
+    size_t threadCount = std::thread::hardware_concurrency());
+
+}  // namespace huffman_optimized
 
 #endif  // ATOM_ALGORITHM_HUFFMAN_HPP

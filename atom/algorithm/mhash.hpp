@@ -18,7 +18,6 @@ Description: Implementation of murmur3 hash and quick hash
 #include <array>
 #include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -37,6 +36,7 @@ Description: Implementation of murmur3 hash and quick hash
 #include <memory>
 #endif
 
+#include "atom/algorithm/rust_numeric.hpp"
 #include "atom/macro.hpp"
 
 #ifdef ATOM_USE_BOOST
@@ -50,15 +50,15 @@ namespace atom::algorithm {
 // Use C++20 concepts to define hashable types
 template <typename T>
 concept Hashable = requires(T a) {
-    { std::hash<T>{}(a) } -> std::convertible_to<std::size_t>;
+    { std::hash<T>{}(a) } -> std::convertible_to<usize>;
 };
 
-inline constexpr size_t K_HASH_SIZE = 32;
+inline constexpr usize K_HASH_SIZE = 32;
 
 #ifdef ATOM_USE_BOOST
 // Boost small_vector type, suitable for short hash value storage, avoids heap
 // allocation
-template <typename T, size_t N>
+template <typename T, usize N>
 using SmallVector = boost::container::small_vector<T, N>;
 
 // Use Boost's shared mutex type
@@ -67,7 +67,7 @@ using SharedLock = boost::shared_lock<SharedMutex>;
 using UniqueLock = boost::unique_lock<SharedMutex>;
 #else
 // Standard library small_vector alternative, uses PMR for compact memory layout
-template <typename T, size_t N>
+template <typename T, usize N>
 using SmallVector = std::vector<T, std::pmr::polymorphic_allocator<T>>;
 
 // Use standard library's shared mutex type
@@ -117,12 +117,12 @@ public:
     /**
      * @brief Type definition for a hash function used in MinHash.
      */
-    using HashFunction = std::function<size_t(size_t)>;
+    using HashFunction = std::function<usize(usize)>;
 
     /**
      * @brief Hash signature type using memory-efficient vector
      */
-    using HashSignature = SmallVector<size_t, 64>;
+    using HashSignature = SmallVector<usize, 64>;
 
     /**
      * @brief Constructs a MinHash object with a specified number of hash
@@ -132,7 +132,7 @@ public:
      * @throws std::bad_alloc If memory allocation fails
      * @throws std::invalid_argument If num_hashes is 0
      */
-    explicit MinHash(size_t num_hashes) noexcept(false);
+    explicit MinHash(usize num_hashes) noexcept(false);
 
     /**
      * @brief Destructor to clean up OpenCL resources.
@@ -164,7 +164,7 @@ public:
         }
 
         HashSignature signature(hash_functions_.size(),
-                                std::numeric_limits<size_t>::max());
+                                std::numeric_limits<usize>::max());
 #if USE_OPENCL
         if (opencl_available_) {
             try {
@@ -192,15 +192,15 @@ public:
      * @throws std::invalid_argument If signature lengths do not match
      */
     [[nodiscard]] static auto jaccardIndex(
-        std::span<const size_t> sig1,
-        std::span<const size_t> sig2) noexcept(false) -> double;
+        std::span<const usize> sig1,
+        std::span<const usize> sig2) noexcept(false) -> f64;
 
     /**
      * @brief Gets the number of hash functions.
      *
-     * @return size_t The number of hash functions.
+     * @return usize The number of hash functions.
      */
-    [[nodiscard]] size_t getHashFunctionCount() const noexcept {
+    [[nodiscard]] usize getHashFunctionCount() const noexcept {
         // Use shared lock to protect read operations
         SharedLock lock(mutex_);
         return hash_functions_.size();
@@ -233,8 +233,8 @@ private:
     /**
      * @brief Thread-local storage buffer for performance improvement.
      */
-    inline static std::vector<size_t>& get_tls_buffer() {
-        static thread_local std::vector<size_t> tls_buffer_{};
+    inline static std::vector<usize>& get_tls_buffer() {
+        static thread_local std::vector<usize> tls_buffer_{};
         return tls_buffer_;
     }
 
@@ -263,7 +263,7 @@ private:
         auto& tls_buffer = get_tls_buffer();
 
         // Optimization 1: Use thread-local storage to precompute hash values
-        const auto setSize = static_cast<size_t>(std::ranges::distance(set));
+        const auto setSize = static_cast<usize>(std::ranges::distance(set));
         if (tls_buffer.capacity() < setSize) {
             tls_buffer.reserve(setSize);
         }
@@ -276,23 +276,23 @@ private:
 
         // Optimization 2: Loop unrolling to leverage SIMD and instruction-level
         // parallelism
-        constexpr size_t UNROLL_FACTOR = 4;
-        const size_t hash_count = hash_functions_.size();
-        const size_t hash_count_aligned =
+        constexpr usize UNROLL_FACTOR = 4;
+        const usize hash_count = hash_functions_.size();
+        const usize hash_count_aligned =
             hash_count - (hash_count % UNROLL_FACTOR);
 
         // Use range-based for loop to iterate over precomputed hash values
         for (const auto element_hash : tls_buffer) {
             // Main loop, processing UNROLL_FACTOR hash functions per iteration
-            for (size_t i = 0; i < hash_count_aligned; i += UNROLL_FACTOR) {
-                for (size_t j = 0; j < UNROLL_FACTOR; ++j) {
+            for (usize i = 0; i < hash_count_aligned; i += UNROLL_FACTOR) {
+                for (usize j = 0; j < UNROLL_FACTOR; ++j) {
                     signature[i + j] = std::min(
                         signature[i + j], hash_functions_[i + j](element_hash));
                 }
             }
 
             // Process remaining hash functions
-            for (size_t i = hash_count_aligned; i < hash_count; ++i) {
+            for (usize i = hash_count_aligned; i < hash_count; ++i) {
                 signature[i] =
                     std::min(signature[i], hash_functions_[i](element_hash));
             }
@@ -329,7 +329,7 @@ private:
      */
     class CLMemWrapper {
     public:
-        CLMemWrapper(cl_context ctx, cl_mem_flags flags, size_t size,
+        CLMemWrapper(cl_context ctx, cl_mem_flags flags, usize size,
                      void* host_ptr = nullptr)
             : context_(ctx), mem_(nullptr) {
             cl_int error;
@@ -400,8 +400,8 @@ private:
         // Acquire shared read lock
         SharedLock lock(mutex_);
 
-        size_t numHashes = hash_functions_.size();
-        size_t numElements = std::ranges::distance(set);
+        usize numHashes = hash_functions_.size();
+        usize numElements = std::ranges::distance(set);
 
         if (numElements == 0) {
             return;  // Empty set, keep signature unchanged
@@ -421,10 +421,10 @@ private:
             tls_buffer.push_back(std::hash<ValueType>{}(element));
         }
 
-        std::vector<size_t> aValues(numHashes);
-        std::vector<size_t> bValues(numHashes);
+        std::vector<usize> aValues(numHashes);
+        std::vector<usize> bValues(numHashes);
         // Extract hash function parameters
-        for (size_t i = 0; i < numHashes; ++i) {
+        for (usize i = 0; i < numHashes; ++i) {
             // Implement logic to extract a and b parameters
             // TODO: Replace with actual parameter extraction from
             // hash_functions_
@@ -436,24 +436,24 @@ private:
             // Create memory buffers
             CLMemWrapper hashesBuffer(opencl_resources_->context,
                                       CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                                      numElements * sizeof(size_t),
+                                      numElements * sizeof(usize),
                                       tls_buffer.data());
 
             CLMemWrapper signatureBuffer(opencl_resources_->context,
                                          CL_MEM_WRITE_ONLY,
-                                         numHashes * sizeof(size_t));
+                                         numHashes * sizeof(usize));
 
             CLMemWrapper aValuesBuffer(opencl_resources_->context,
                                        CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                                       numHashes * sizeof(size_t),
+                                       numHashes * sizeof(usize),
                                        aValues.data());
 
             CLMemWrapper bValuesBuffer(opencl_resources_->context,
                                        CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                                       numHashes * sizeof(size_t),
+                                       numHashes * sizeof(usize),
                                        bValues.data());
 
-            size_t p = std::numeric_limits<size_t>::max();
+            usize p = std::numeric_limits<usize>::max();
 
             // Set kernel arguments
             err = clSetKernelArg(opencl_resources_->minhash_kernel, 0,
@@ -477,25 +477,25 @@ private:
                 throw std::runtime_error("Failed to set kernel arg 3");
 
             err = clSetKernelArg(opencl_resources_->minhash_kernel, 4,
-                                 sizeof(size_t), &p);
+                                 sizeof(usize), &p);
             if (err != CL_SUCCESS)
                 throw std::runtime_error("Failed to set kernel arg 4");
 
             err = clSetKernelArg(opencl_resources_->minhash_kernel, 5,
-                                 sizeof(size_t), &numHashes);
+                                 sizeof(usize), &numHashes);
             if (err != CL_SUCCESS)
                 throw std::runtime_error("Failed to set kernel arg 5");
 
             err = clSetKernelArg(opencl_resources_->minhash_kernel, 6,
-                                 sizeof(size_t), &numElements);
+                                 sizeof(usize), &numElements);
             if (err != CL_SUCCESS)
                 throw std::runtime_error("Failed to set kernel arg 6");
 
             // Optimization: Use multi-dimensional work-group structure for
             // better parallelism
-            constexpr size_t WORK_GROUP_SIZE = 256;
-            size_t globalWorkSize = (numHashes + WORK_GROUP_SIZE - 1) /
-                                    WORK_GROUP_SIZE * WORK_GROUP_SIZE;
+            constexpr usize WORK_GROUP_SIZE = 256;
+            usize globalWorkSize = (numHashes + WORK_GROUP_SIZE - 1) /
+                                   WORK_GROUP_SIZE * WORK_GROUP_SIZE;
 
             err = clEnqueueNDRangeKernel(opencl_resources_->queue,
                                          opencl_resources_->minhash_kernel, 1,
@@ -507,7 +507,7 @@ private:
             // Read results
             err = clEnqueueReadBuffer(opencl_resources_->queue,
                                       signatureBuffer.get(), CL_TRUE, 0,
-                                      numHashes * sizeof(size_t),
+                                      numHashes * sizeof(usize),
                                       signature.data(), 0, nullptr, nullptr);
             if (err != CL_SUCCESS)
                 throw std::runtime_error("Failed to read results");
@@ -523,23 +523,23 @@ private:
  * @brief Computes the Keccak-256 hash of the input data
  *
  * @param input Span of input data
- * @return std::array<uint8_t, K_HASH_SIZE> The computed hash
+ * @return std::array<u8, K_HASH_SIZE> The computed hash
  * @throws std::bad_alloc If memory allocation fails
  */
-[[nodiscard]] auto keccak256(std::span<const uint8_t> input) noexcept(false)
-    -> std::array<uint8_t, K_HASH_SIZE>;
+[[nodiscard]] auto keccak256(std::span<const u8> input) noexcept(false)
+    -> std::array<u8, K_HASH_SIZE>;
 
 /**
  * @brief Computes the Keccak-256 hash of the input string
  *
  * @param input Input string
- * @return std::array<uint8_t, K_HASH_SIZE> The computed hash
+ * @return std::array<u8, K_HASH_SIZE> The computed hash
  * @throws std::bad_alloc If memory allocation fails
  */
 [[nodiscard]] inline auto keccak256(std::string_view input) noexcept(false)
-    -> std::array<uint8_t, K_HASH_SIZE> {
-    return keccak256(std::span<const uint8_t>(
-        reinterpret_cast<const uint8_t*>(input.data()), input.size()));
+    -> std::array<u8, K_HASH_SIZE> {
+    return keccak256(std::span<const u8>(
+        reinterpret_cast<const u8*>(input.data()), input.size()));
 }
 
 /**
@@ -579,7 +579,7 @@ public:
      * @param length Length of the data.
      * @return bool True if the operation was successful, false otherwise.
      */
-    bool update(const void* data, size_t length) noexcept;
+    bool update(const void* data, usize length) noexcept;
 
     /**
      * @brief Updates the hash computation with data from a string view.
@@ -600,10 +600,10 @@ public:
     /**
      * @brief Finalizes the hash computation and retrieves the result.
      *
-     * @return std::optional<std::array<uint8_t, K_HASH_SIZE>> The hash result,
+     * @return std::optional<std::array<u8, K_HASH_SIZE>> The hash result,
      * or std::nullopt on failure.
      */
-    [[nodiscard]] std::optional<std::array<uint8_t, K_HASH_SIZE>>
+    [[nodiscard]] std::optional<std::array<u8, K_HASH_SIZE>>
     finalize() noexcept;
 
 private:

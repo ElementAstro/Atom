@@ -17,6 +17,9 @@ Description: Enhanced implementation of Huffman encoding
 #include <functional>
 #include <iostream>
 #include <queue>
+#include <span>
+#include <thread>
+#include <unordered_map>
 
 #ifdef ATOM_USE_BOOST
 #include <boost/format.hpp>
@@ -47,15 +50,16 @@ struct CompareNode {
 
 /* ------------------------ createHuffmanTree ------------------------ */
 
-auto createHuffmanTree(const std::unordered_map<unsigned char, int>&
-                           frequencies) noexcept(false) -> std::shared_ptr<HuffmanNode> {
+auto createHuffmanTree(
+    const std::unordered_map<unsigned char, int>& frequencies) noexcept(false)
+    -> std::shared_ptr<HuffmanNode> {
     if (frequencies.empty()) {
         throw HuffmanException(
             "Frequency map is empty. Cannot create Huffman Tree.");
     }
 
-    std::priority_queue<std::shared_ptr<HuffmanNode>, std::vector<std::shared_ptr<HuffmanNode>>,
-                        CompareNode>
+    std::priority_queue<std::shared_ptr<HuffmanNode>,
+                        std::vector<std::shared_ptr<HuffmanNode>>, CompareNode>
         minHeap;
 
     // Initialize heap with leaf nodes
@@ -93,9 +97,9 @@ auto createHuffmanTree(const std::unordered_map<unsigned char, int>&
 
 /* ------------------------ generateHuffmanCodes ------------------------ */
 
-void generateHuffmanCodes(
-    const HuffmanNode* root, const std::string& code,
-    std::unordered_map<unsigned char, std::string>& huffmanCodes) noexcept(false) {
+void generateHuffmanCodes(const HuffmanNode* root, const std::string& code,
+                          std::unordered_map<unsigned char, std::string>&
+                              huffmanCodes) noexcept(false) {
     if (root == nullptr) {
         throw HuffmanException(
             "Cannot generate Huffman codes from a null tree.");
@@ -144,7 +148,8 @@ auto compressData(const std::vector<unsigned char>& data,
 /* ------------------------ decompressData ------------------------ */
 
 auto decompressData(const std::string& compressedData,
-                    const HuffmanNode* root) noexcept(false) -> std::vector<unsigned char> {
+                    const HuffmanNode* root) noexcept(false)
+    -> std::vector<unsigned char> {
     if (!root) {
         throw HuffmanException("Huffman tree is null. Cannot decompress data.");
     }
@@ -226,8 +231,8 @@ auto serializeTree(const HuffmanNode* root) -> std::string {
 
 /* ------------------------ deserializeTree ------------------------ */
 
-auto deserializeTree(const std::string& serializedTree,
-                     size_t& index) -> std::shared_ptr<HuffmanNode> {
+auto deserializeTree(const std::string& serializedTree, size_t& index)
+    -> std::shared_ptr<HuffmanNode> {
     if (index >= serializedTree.size()) {
 #ifdef ATOM_USE_BOOST
         throw HuffmanException(boost::str(boost::format(
@@ -314,3 +319,169 @@ void visualizeHuffmanTree(const HuffmanNode* root, const std::string& indent) {
 }
 
 }  // namespace atom::algorithm
+
+namespace huffman_optimized {
+
+/* ------------------------ parallelFrequencyCount (unsigned char 特化)
+ * ------------------------ */
+
+template <>
+std::unordered_map<unsigned char, size_t> parallelFrequencyCount(
+    std::span<const unsigned char> data, size_t threadCount) {
+    if (data.empty()) {
+        return {};
+    }
+
+    // 单线程情况下直接串行处理
+    if (threadCount <= 1) {
+        std::unordered_map<unsigned char, size_t> freq;
+        for (const unsigned char& byte : data) {
+            freq[byte]++;
+        }
+        return freq;
+    }
+
+    std::vector<std::unordered_map<unsigned char, size_t>> localMaps(
+        threadCount);
+    std::vector<std::thread> threads;
+    size_t block = data.size() / threadCount;
+
+    for (size_t t = 0; t < threadCount; ++t) {
+        size_t begin = t * block;
+        size_t end = (t == threadCount - 1) ? data.size() : (t + 1) * block;
+        threads.emplace_back([&, begin, end, t] {
+            for (size_t i = begin; i < end; ++i) {
+                localMaps[t][data[i]]++;
+            }
+        });
+    }
+
+    for (auto& th : threads) {
+        th.join();
+    }
+
+    std::unordered_map<unsigned char, size_t> result;
+    for (const auto& m : localMaps) {
+        for (const auto& [k, v] : m) {
+            result[k] += v;
+        }
+    }
+    return result;
+}
+
+/* ------------------------ createTreeParallel ------------------------ */
+
+std::shared_ptr<atom::algorithm::HuffmanNode> createTreeParallel(
+    const std::unordered_map<unsigned char, size_t>& frequencies) {
+    // 转换为createHuffmanTree所期望的类型
+    std::unordered_map<unsigned char, int> freq32;
+    for (const auto& [k, v] : frequencies) {
+        freq32[k] = static_cast<int>(v);
+    }
+    return atom::algorithm::createHuffmanTree(freq32);
+}
+
+/* ------------------------ compressSimd ------------------------ */
+
+std::string compressSimd(
+    std::span<const unsigned char> data,
+    const std::unordered_map<unsigned char, std::string>& huffmanCodes) {
+    std::string compressed;
+    compressed.reserve(data.size() * 2);  // 预估大小
+
+    // 未来可添加SIMD优化，当前为基本串行实现
+    for (unsigned char b : data) {
+        auto it = huffmanCodes.find(b);
+        if (it == huffmanCodes.end()) {
+            throw atom::algorithm::HuffmanException(
+                "Byte not found in Huffman codes table");
+        }
+        compressed += it->second;
+    }
+
+    return compressed;
+}
+
+/* ------------------------ compressParallel ------------------------ */
+
+std::string compressParallel(
+    std::span<const unsigned char> data,
+    const std::unordered_map<unsigned char, std::string>& huffmanCodes,
+    size_t threadCount) {
+    // 数据量小或单线程时直接使用SIMD版本
+    if (data.size() < 1024 * 32 || threadCount <= 1) {
+        return compressSimd(data, huffmanCodes);
+    }
+
+    std::vector<std::string> results(threadCount);
+    std::vector<std::thread> threads;
+    size_t block = data.size() / threadCount;
+
+    for (size_t t = 0; t < threadCount; ++t) {
+        size_t begin = t * block;
+        size_t end = (t == threadCount - 1) ? data.size() : (t + 1) * block;
+        threads.emplace_back([&, begin, end, t] {
+            results[t] =
+                compressSimd(std::span<const unsigned char>(
+                                 data.begin() + begin, data.begin() + end),
+                             huffmanCodes);
+        });
+    }
+
+    for (auto& th : threads) {
+        th.join();
+    }
+
+    // 计算结果大小并合并
+    size_t total_size = 0;
+    for (const auto& s : results) {
+        total_size += s.size();
+    }
+
+    std::string out;
+    out.reserve(total_size);
+    for (auto& s : results) {
+        out += s;
+    }
+    return out;
+}
+
+/* ------------------------ validateInput ------------------------ */
+
+void validateInput(
+    std::span<const unsigned char> data,
+    const std::unordered_map<unsigned char, std::string>& huffmanCodes) {
+    if (data.empty()) {
+        throw atom::algorithm::HuffmanException("Input data is empty");
+    }
+    if (huffmanCodes.empty()) {
+        throw atom::algorithm::HuffmanException("Huffman code map is empty");
+    }
+
+    // 可以选择性执行完整验证，这里仅检查首个字节
+    if (!huffmanCodes.contains(data[0])) {
+        throw atom::algorithm::HuffmanException(
+            "Data contains byte not in huffmanCodes");
+    }
+}
+
+/* ------------------------ decompressParallel ------------------------ */
+
+std::vector<unsigned char> decompressParallel(
+    const std::string& compressedData, const atom::algorithm::HuffmanNode* root,
+    size_t threadCount) {
+    if (compressedData.empty()) {
+        return {};
+    }
+
+    if (!root) {
+        throw atom::algorithm::HuffmanException(
+            "Huffman tree is null. Cannot decompress data.");
+    }
+
+    // 注意：由于Huffman解压缩需要从树根开始，并且状态依赖于之前的位，
+    // 这里仍然使用串行版本。未来可以研究更复杂的并行解压缩算法。
+    return atom::algorithm::decompressData(compressedData, root);
+}
+
+}  // namespace huffman_optimized
