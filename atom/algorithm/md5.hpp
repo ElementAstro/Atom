@@ -17,23 +17,25 @@ Description: Self implemented MD5 algorithm.
 
 #include <array>
 #include <concepts>
-#include <cstdint>
 #include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include <spdlog/spdlog.h>
+#include "atom/algorithm/rust_numeric.hpp"
+
 namespace atom::algorithm {
 
-// 自定义异常类
+// Custom exception class
 class MD5Exception : public std::runtime_error {
 public:
     explicit MD5Exception(const std::string& message)
         : std::runtime_error(message) {}
 };
 
-// 定义字符串类型的concept
+// Define a concept for string-like types
 template <typename StrType>
 concept StringLike = std::convertible_to<StrType, std::string_view>;
 
@@ -102,24 +104,20 @@ private:
      */
     void processBlock(std::span<const std::byte, 64> block) noexcept;
 
-    // 声明MD5算法使用的四个辅助函数为constexpr以支持编译时计算
-    static constexpr auto F(uint32_t x, uint32_t y, uint32_t z) noexcept
-        -> uint32_t;
-    static constexpr auto G(uint32_t x, uint32_t y, uint32_t z) noexcept
-        -> uint32_t;
-    static constexpr auto H(uint32_t x, uint32_t y, uint32_t z) noexcept
-        -> uint32_t;
-    static constexpr auto I(uint32_t x, uint32_t y, uint32_t z) noexcept
-        -> uint32_t;
-    static constexpr auto leftRotate(uint32_t x, uint32_t n) noexcept
-        -> uint32_t;
+    // Define helper functions as constexpr to support compile-time computation
+    static constexpr auto F(u32 x, u32 y, u32 z) noexcept -> u32;
+    static constexpr auto G(u32 x, u32 y, u32 z) noexcept -> u32;
+    static constexpr auto H(u32 x, u32 y, u32 z) noexcept -> u32;
+    static constexpr auto I(u32 x, u32 y, u32 z) noexcept -> u32;
+    static constexpr auto leftRotate(u32 x, u32 n) noexcept -> u32;
 
-    uint32_t a_, b_, c_, d_;         ///< MD5 state variables.
-    uint64_t count_;                 ///< Number of bits processed.
+    u32 a_, b_, c_, d_;              ///< MD5 state variables.
+    u64 count_;                      ///< Number of bits processed.
     std::vector<std::byte> buffer_;  ///< Input buffer.
 
-    // 常量表，使用constexpr定义，重命名为T_Constants以避免与模板参数冲突
-    static constexpr std::array<uint32_t, 64> T_Constants{
+    // Constants table, using constexpr definition, renamed to T_Constants to
+    // avoid conflicts
+    static constexpr std::array<u32, 64> T_Constants{
         0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee, 0xf57c0faf, 0x4787c62a,
         0xa8304613, 0xfd469501, 0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be,
         0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821, 0xf61e2562, 0xc040b340,
@@ -132,7 +130,7 @@ private:
         0xffeff47d, 0x85845dd1, 0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1,
         0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391};
 
-    static constexpr std::array<uint32_t, 64> s{
+    static constexpr std::array<u32, 64> s{
         7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
         5, 9,  14, 20, 5, 9,  14, 20, 5, 9,  14, 20, 5, 9,  14, 20,
         4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
@@ -145,12 +143,15 @@ auto MD5::encrypt(const StrType& input) -> std::string {
     try {
         std::string_view sv(input);
         if (sv.empty()) {
+            spdlog::debug("MD5: Processing empty input string");
             return encryptBinary({});
         }
 
+        spdlog::debug("MD5: Encrypting string of length {}", sv.size());
         const auto* data_ptr = reinterpret_cast<const std::byte*>(sv.data());
         return encryptBinary(std::span<const std::byte>(data_ptr, sv.size()));
     } catch (const std::exception& e) {
+        spdlog::error("MD5: Encryption failed - {}", e.what());
         throw MD5Exception(std::string("MD5 encryption failed: ") + e.what());
     }
 }
@@ -159,8 +160,10 @@ template <StringLike StrType>
 auto MD5::verify(const StrType& input, const std::string& hash) noexcept
     -> bool {
     try {
+        spdlog::debug("MD5: Verifying hash match for input");
         return encrypt(input) == hash;
     } catch (...) {
+        spdlog::error("MD5: Hash verification failed with exception");
         return false;
     }
 }

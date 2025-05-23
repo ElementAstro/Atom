@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <concepts>
-#include <cstdint>
 #include <functional>
 #include <optional>
 #include <queue>
@@ -13,14 +12,18 @@
 #include <unordered_set>
 #include <vector>
 
+#include <spdlog/spdlog.h>
+#include "atom/algorithm/rust_numeric.hpp"
+
+
 namespace atom::algorithm {
 
 //=============================================================================
 // Point Structure
 //=============================================================================
 struct Point {
-    int x;
-    int y;
+    i32 x;
+    i32 y;
 
     // Using C++20 spaceship operator
     auto operator<=>(const Point&) const = default;
@@ -46,14 +49,14 @@ public:
 
     virtual ~IGraph() = default;
     virtual std::vector<NodeType> neighbors(const NodeType& node) const = 0;
-    virtual float cost(const NodeType& from, const NodeType& to) const = 0;
+    virtual f32 cost(const NodeType& from, const NodeType& to) const = 0;
 };
 
 // Concept for a valid Graph type
 template <typename G>
 concept Graph = requires(G g, typename G::node_type n) {
     { g.neighbors(n) } -> std::ranges::range;
-    { g.cost(n, n) } -> std::convertible_to<float>;
+    { g.cost(n, n) } -> std::convertible_to<f32>;
 };
 
 //=============================================================================
@@ -65,14 +68,14 @@ namespace heuristics {
 template <typename F, typename Node>
 concept Heuristic =
     std::invocable<F, Node, Node> &&
-    std::convertible_to<std::invoke_result_t<F, Node, Node>, float>;
+    std::convertible_to<std::invoke_result_t<F, Node, Node>, f32>;
 
 // Heuristic functions
-float manhattan(const Point& a, const Point& b);
-float euclidean(const Point& a, const Point& b);
-float diagonal(const Point& a, const Point& b);
-float zero(const Point& a, const Point& b);
-float octile(const Point& a, const Point& b);  // 优化的对角线启发式
+f32 manhattan(const Point& a, const Point& b);
+f32 euclidean(const Point& a, const Point& b);
+f32 diagonal(const Point& a, const Point& b);
+f32 zero(const Point& a, const Point& b);
+f32 octile(const Point& a, const Point& b);  // Optimized diagonal heuristic
 
 }  // namespace heuristics
 
@@ -82,7 +85,7 @@ float octile(const Point& a, const Point& b);  // 优化的对角线启发式
 class GridMap : public IGraph<Point> {
 public:
     // Movement direction flags
-    enum Direction : uint8_t {
+    enum Direction : u8 {
         NONE = 0,
         N = 1,       // 0001
         E = 2,       // 0010
@@ -95,13 +98,13 @@ public:
     };
 
     // Terrain types with associated costs
-    enum class TerrainType : uint8_t {
-        Open = 0,           // 正常通行区域
-        Difficult = 1,      // 困难地形 (如砂砾，高草)
-        VeryDifficult = 2,  // 非常困难的地形 (如沼泽)
-        Road = 3,           // 道路 (移动更快)
-        Water = 4,          // 水域 (某些单位可通过)
-        Obstacle = 5        // 障碍物 (不可通行)
+    enum class TerrainType : u8 {
+        Open = 0,           // Normal passage area
+        Difficult = 1,      // Difficult terrain (like gravel, tall grass)
+        VeryDifficult = 2,  // Very difficult terrain (like swamps)
+        Road = 3,           // Roads (faster movement)
+        Water = 4,          // Water (passable by some units)
+        Obstacle = 5        // Obstacle (impassable)
     };
 
     /**
@@ -109,7 +112,7 @@ public:
      * @param width Width of the grid
      * @param height Height of the grid
      */
-    GridMap(int width, int height);
+    GridMap(i32 width, i32 height);
 
     /**
      * @brief Construct a grid map with obstacles
@@ -117,19 +120,19 @@ public:
      * @param width Width of the grid
      * @param height Height of the grid
      */
-    GridMap(std::span<const bool> obstacles, int width, int height);
+    GridMap(std::span<const bool> obstacles, i32 width, i32 height);
 
     /**
-     * @brief Construct a grid map with obstacles from uint8_t values
+     * @brief Construct a grid map with obstacles from u8 values
      * @param obstacles Array of obstacles (non-zero = obstacle, 0 = free)
      * @param width Width of the grid
      * @param height Height of the grid
      */
-    GridMap(std::span<const uint8_t> obstacles, int width, int height);
+    GridMap(std::span<const u8> obstacles, i32 width, i32 height);
 
     // IGraph implementation
     std::vector<Point> neighbors(const Point& p) const override;
-    float cost(const Point& from, const Point& to) const override;
+    f32 cost(const Point& from, const Point& to) const override;
 
     // Advanced neighborhood function with directional constraints for JPS
     std::vector<Point> getNeighborsForJPS(const Point& p,
@@ -147,29 +150,30 @@ public:
     // Terrain functions
     void setTerrain(const Point& p, TerrainType terrain);
     TerrainType getTerrain(const Point& p) const;
-    float getTerrainCost(TerrainType terrain) const;
+    f32 getTerrainCost(TerrainType terrain) const;
 
     // Utility methods for JPS algorithm
     bool hasForced(const Point& p, Direction dir) const;
     Direction getDirType(const Point& p, const Point& next) const;
 
     // Accessors
-    int getWidth() const { return width_; }
-    int getHeight() const { return height_; }
+    i32 getWidth() const { return width_; }
+    i32 getHeight() const { return height_; }
 
     // Get position from index
-    Point indexToPoint(int index) const {
+    Point indexToPoint(i32 index) const {
         return {index % width_, index / width_};
     }
 
     // Get index from position
-    int pointToIndex(const Point& p) const { return p.y * width_ + p.x; }
+    i32 pointToIndex(const Point& p) const { return p.y * width_ + p.x; }
 
 private:
-    int width_;
-    int height_;
-    std::vector<bool> obstacles_;       // 将来可以替换为地形类型矩阵
-    std::vector<TerrainType> terrain_;  // 地形类型
+    i32 width_;
+    i32 height_;
+    std::vector<bool>
+        obstacles_;  // Can be replaced with terrain type matrix in the future
+    std::vector<TerrainType> terrain_;  // Terrain types
 };
 
 //=============================================================================
@@ -198,17 +202,17 @@ public:
         using Node = typename G::node_type;
 
         // Priority queue for open set
-        using QueueItem = std::pair<float, Node>;
+        using QueueItem = std::pair<f32, Node>;
         std::priority_queue<QueueItem, std::vector<QueueItem>, std::greater<>>
             openSet;
 
-        // Maps for tracking (预分配以提高性能)
+        // Maps for tracking (pre-allocate to improve performance)
         std::unordered_map<Node, Node> cameFrom;
-        std::unordered_map<Node, float> gScore;
+        std::unordered_map<Node, f32> gScore;
         std::unordered_set<Node> closedSet;
 
         // Reserve space to reduce allocations
-        const size_t estimatedSize = std::sqrt(1000);  // 估计节点数量
+        const usize estimatedSize = std::sqrt(1000);  // Estimate node count
         cameFrom.reserve(estimatedSize);
         gScore.reserve(estimatedSize);
         closedSet.reserve(estimatedSize);
@@ -230,7 +234,7 @@ public:
             if (current == goal) {
                 // Reconstruct path
                 std::vector<Node> path;
-                path.reserve(estimatedSize);  // 预分配空间
+                path.reserve(estimatedSize);  // Pre-allocate space
                 while (current != start) {
                     path.push_back(current);
                     current = cameFrom[current];
@@ -250,7 +254,7 @@ public:
                     continue;
 
                 // Calculate tentative g-score
-                float tentativeG =
+                f32 tentativeG =
                     gScore[current] + graph.cost(current, neighbor);
 
                 // If better path found
@@ -259,7 +263,7 @@ public:
                     // Update tracking information
                     cameFrom[neighbor] = current;
                     gScore[neighbor] = tentativeG;
-                    float fScore = tentativeG + heuristic(neighbor, goal);
+                    f32 fScore = tentativeG + heuristic(neighbor, goal);
 
                     // Add to open set
                     openSet.emplace(fScore, neighbor);
@@ -300,24 +304,24 @@ public:
                           const typename G::node_type& goal, H&& heuristic) {
         using Node = typename G::node_type;
 
-        // 从起点和终点同时开始搜索
+        // Search from both start and goal simultaneously
         std::unordered_map<Node, Node> cameFromStart;
-        std::unordered_map<Node, float> gScoreStart;
+        std::unordered_map<Node, f32> gScoreStart;
         std::unordered_set<Node> closedSetStart;
 
         std::unordered_map<Node, Node> cameFromGoal;
-        std::unordered_map<Node, float> gScoreGoal;
+        std::unordered_map<Node, f32> gScoreGoal;
         std::unordered_set<Node> closedSetGoal;
 
         // Priority queues
-        using QueueItem = std::pair<float, Node>;
+        using QueueItem = std::pair<f32, Node>;
         std::priority_queue<QueueItem, std::vector<QueueItem>, std::greater<>>
             openSetStart;
         std::priority_queue<QueueItem, std::vector<QueueItem>, std::greater<>>
             openSetGoal;
 
-        // 预分配空间以提高性能
-        const size_t estimatedSize = 1000;
+        // Pre-allocate space to improve performance
+        const usize estimatedSize = 1000;
         cameFromStart.reserve(estimatedSize);
         gScoreStart.reserve(estimatedSize);
         closedSetStart.reserve(estimatedSize);
@@ -325,27 +329,27 @@ public:
         gScoreGoal.reserve(estimatedSize);
         closedSetGoal.reserve(estimatedSize);
 
-        // 初始化
+        // Initialize
         gScoreStart[start] = 0.0f;
         openSetStart.emplace(heuristic(start, goal), start);
 
         gScoreGoal[goal] = 0.0f;
         openSetGoal.emplace(heuristic(goal, start), goal);
 
-        // 用于存储最佳交汇点
+        // For storing best meeting point
         std::optional<Node> meetingPoint;
-        float bestTotalCost = std::numeric_limits<float>::infinity();
+        f32 bestTotalCost = std::numeric_limits<f32>::infinity();
 
-        // 两个方向轮流搜索
+        // Alternate searching from both directions
         while (!openSetStart.empty() && !openSetGoal.empty()) {
-            // 从起点方向搜索一步
+            // Search one step from start direction
             if (!processOneStep(graph, openSetStart, closedSetStart,
                                 cameFromStart, gScoreStart, goal, heuristic,
                                 closedSetGoal, meetingPoint, bestTotalCost)) {
-                break;  // 找到路径或无路径可达
+                break;  // Found path or no path exists
             }
 
-            // 从终点方向搜索一步
+            // Search one step from goal direction
             if (!processOneStep(
                     graph, openSetGoal, closedSetGoal, cameFromGoal, gScoreGoal,
                     start,
@@ -353,16 +357,16 @@ public:
                         return heuristic(b, a);
                     },
                     closedSetStart, meetingPoint, bestTotalCost)) {
-                break;  // 找到路径或无路径可达
+                break;  // Found path or no path exists
             }
         }
 
-        // 如果找到交汇点，重建路径
+        // If meeting point found, reconstruct path
         if (meetingPoint) {
             std::vector<Node> pathFromStart;
             Node current = *meetingPoint;
 
-            // 构建从起点到交汇点的路径
+            // Build path from start to meeting point
             while (current != start) {
                 pathFromStart.push_back(current);
                 current = cameFromStart[current];
@@ -370,7 +374,7 @@ public:
             pathFromStart.push_back(start);
             std::ranges::reverse(pathFromStart);
 
-            // 构建从交汇点到终点的路径
+            // Build path from meeting point to goal
             std::vector<Node> pathToGoal;
             current = *meetingPoint;
             while (current != goal) {
@@ -378,13 +382,13 @@ public:
                 pathToGoal.push_back(current);
             }
 
-            // 合并路径
+            // Combine paths
             pathFromStart.insert(pathFromStart.end(), pathToGoal.begin(),
                                  pathToGoal.end());
             return std::make_optional(pathFromStart);
         }
 
-        // 没找到路径
+        // No path found
         return std::nullopt;
     }
 
@@ -394,55 +398,54 @@ public:
     template <Graph G, heuristics::Heuristic<typename G::node_type> H>
     static bool processOneStep(
         const G& graph,
-        std::priority_queue<
-            std::pair<float, typename G::node_type>,
-            std::vector<std::pair<float, typename G::node_type>>,
-            std::greater<>>& openSet,
+        std::priority_queue<std::pair<f32, typename G::node_type>,
+                            std::vector<std::pair<f32, typename G::node_type>>,
+                            std::greater<>>& openSet,
         std::unordered_set<typename G::node_type>& closedSet,
         std::unordered_map<typename G::node_type, typename G::node_type>&
             cameFrom,
-        std::unordered_map<typename G::node_type, float>& gScore,
+        std::unordered_map<typename G::node_type, f32>& gScore,
         const typename G::node_type& target, H&& heuristic,
         const std::unordered_set<typename G::node_type>& oppositeClosedSet,
         std::optional<typename G::node_type>& meetingPoint,
-        float& bestTotalCost) {
+        f32& bestTotalCost) {
         if (openSet.empty())
             return false;
 
         auto current = openSet.top().second;
         openSet.pop();
 
-        // 跳过已处理节点
+        // Skip already processed nodes
         if (closedSet.contains(current))
             return true;
 
         closedSet.insert(current);
 
-        // 检查是否与另一个方向的搜索相遇
+        // Check if we've met the opposite direction search
         if (oppositeClosedSet.contains(current)) {
-            float totalCost = gScore[current];
+            f32 totalCost = gScore[current];
             if (totalCost < bestTotalCost) {
                 bestTotalCost = totalCost;
                 meetingPoint = current;
             }
         }
 
-        // 处理邻居节点
+        // Process neighbors
         for (const auto& neighbor : graph.neighbors(current)) {
             if (closedSet.contains(neighbor))
                 continue;
 
-            float tentativeG = gScore[current] + graph.cost(current, neighbor);
+            f32 tentativeG = gScore[current] + graph.cost(current, neighbor);
 
             if (!gScore.contains(neighbor) || tentativeG < gScore[neighbor]) {
                 cameFrom[neighbor] = current;
                 gScore[neighbor] = tentativeG;
-                float fScore = tentativeG + heuristic(neighbor, target);
+                f32 fScore = tentativeG + heuristic(neighbor, target);
                 openSet.emplace(fScore, neighbor);
 
-                // 检查这个邻居是否与另一个方向的搜索相遇
+                // Check if this neighbor meets the opposite search
                 if (oppositeClosedSet.contains(neighbor)) {
-                    float totalCost = tentativeG;
+                    f32 totalCost = tentativeG;
                     if (totalCost < bestTotalCost) {
                         bestTotalCost = totalCost;
                         meetingPoint = neighbor;
@@ -516,7 +519,8 @@ namespace std {
 template <>
 struct hash<atom::algorithm::Point> {
     size_t operator()(const atom::algorithm::Point& p) const {
-        return hash<int>()(p.x) ^ (hash<int>()(p.y) << 1);
+        return hash<atom::algorithm::i32>()(p.x) ^
+               (hash<atom::algorithm::i32>()(p.y) << 1);
     }
 };
 }  // namespace std

@@ -21,6 +21,7 @@ and deconvolution with optional OpenCL support.
 #include <type_traits>
 #include <vector>
 
+#include "atom/algorithm/rust_numeric.hpp"
 #include "atom/error/exception.hpp"
 
 // Define if OpenCL support is required
@@ -34,7 +35,7 @@ and deconvolution with optional OpenCL support.
 #endif
 
 // Define if C++20 std::simd should be used (if available)
-#if defined(__cpp_lib_experimental_parallel_simd) && USE_SIMD
+#if defined(__cpp_lib_experimental_parallel_simd) && ATOM_USE_SIMD
 #include <experimental/simd>
 #define ATOM_USE_STD_SIMD 1
 #else
@@ -65,24 +66,24 @@ enum class PaddingMode {
  */
 template <typename T>
 concept ConvolutionNumeric =
-    std::is_arithmetic_v<T> || std::is_same_v<T, std::complex<float>> ||
-    std::is_same_v<T, std::complex<double>>;
+    std::is_arithmetic_v<T> || std::is_same_v<T, std::complex<f32>> ||
+    std::is_same_v<T, std::complex<f64>>;
 
 /**
  * @brief Configuration options for convolution operations
  *
  * @tparam T Numeric type for convolution calculations
  */
-template <ConvolutionNumeric T = double>
+template <ConvolutionNumeric T = f64>
 struct ConvolutionOptions {
     PaddingMode paddingMode = PaddingMode::SAME;  ///< Padding mode
-    int strideX = 1;                              ///< Horizontal stride
-    int strideY = 1;                              ///< Vertical stride
-    int numThreads =
-        std::thread::hardware_concurrency();  ///< Number of threads to use
+    i32 strideX = 1;                              ///< Horizontal stride
+    i32 strideY = 1;                              ///< Vertical stride
+    i32 numThreads = static_cast<i32>(
+        std::thread::hardware_concurrency());  ///< Number of threads to use
     bool useOpenCL = false;  ///< Whether to use OpenCL if available
     bool useSIMD = true;     ///< Whether to use SIMD if available
-    int tileSize = 32;       ///< Tile size for cache optimization
+    i32 tileSize = 32;       ///< Tile size for cache optimization
 };
 
 /**
@@ -94,7 +95,7 @@ struct ConvolutionOptions {
  * @param options Configuration options for the convolution
  * @return std::vector<std::vector<T>> Result of convolution
  */
-template <ConvolutionNumeric T = double>
+template <ConvolutionNumeric T = f64>
 auto convolve2D(const std::vector<std::vector<T>>& input,
                 const std::vector<std::vector<T>>& kernel,
                 const ConvolutionOptions<T>& options = {})
@@ -110,22 +111,24 @@ auto convolve2D(const std::vector<std::vector<T>>& input,
  * @return std::vector<std::vector<T>> Original input recovered via
  * deconvolution
  */
-template <ConvolutionNumeric T = double>
+template <ConvolutionNumeric T = f64>
 auto deconvolve2D(const std::vector<std::vector<T>>& signal,
                   const std::vector<std::vector<T>>& kernel,
                   const ConvolutionOptions<T>& options = {})
     -> std::vector<std::vector<T>>;
 
 // Legacy overloads for backward compatibility
-auto convolve2D(const std::vector<std::vector<double>>& input,
-                const std::vector<std::vector<double>>& kernel,
-                int numThreads = std::thread::hardware_concurrency())
-    -> std::vector<std::vector<double>>;
+auto convolve2D(
+    const std::vector<std::vector<f64>>& input,
+    const std::vector<std::vector<f64>>& kernel,
+    i32 numThreads = static_cast<i32>(std::thread::hardware_concurrency()))
+    -> std::vector<std::vector<f64>>;
 
-auto deconvolve2D(const std::vector<std::vector<double>>& signal,
-                  const std::vector<std::vector<double>>& kernel,
-                  int numThreads = std::thread::hardware_concurrency())
-    -> std::vector<std::vector<double>>;
+auto deconvolve2D(
+    const std::vector<std::vector<f64>>& signal,
+    const std::vector<std::vector<f64>>& kernel,
+    i32 numThreads = static_cast<i32>(std::thread::hardware_concurrency()))
+    -> std::vector<std::vector<f64>>;
 
 /**
  * @brief Computes 2D Discrete Fourier Transform
@@ -136,9 +139,10 @@ auto deconvolve2D(const std::vector<std::vector<double>>& signal,
  * @return std::vector<std::vector<std::complex<T>>> Frequency domain
  * representation
  */
-template <ConvolutionNumeric T = double>
-auto dfT2D(const std::vector<std::vector<T>>& signal,
-           int numThreads = std::thread::hardware_concurrency())
+template <ConvolutionNumeric T = f64>
+auto dfT2D(
+    const std::vector<std::vector<T>>& signal,
+    i32 numThreads = static_cast<i32>(std::thread::hardware_concurrency()))
     -> std::vector<std::vector<std::complex<T>>>;
 
 /**
@@ -149,9 +153,10 @@ auto dfT2D(const std::vector<std::vector<T>>& signal,
  * @param numThreads Number of threads to use (default: all available cores)
  * @return std::vector<std::vector<T>> Spatial domain representation
  */
-template <ConvolutionNumeric T = double>
-auto idfT2D(const std::vector<std::vector<std::complex<T>>>& spectrum,
-            int numThreads = std::thread::hardware_concurrency())
+template <ConvolutionNumeric T = f64>
+auto idfT2D(
+    const std::vector<std::vector<std::complex<T>>>& spectrum,
+    i32 numThreads = static_cast<i32>(std::thread::hardware_concurrency()))
     -> std::vector<std::vector<T>>;
 
 /**
@@ -162,9 +167,8 @@ auto idfT2D(const std::vector<std::vector<std::complex<T>>>& spectrum,
  * @param sigma Standard deviation of the Gaussian distribution
  * @return std::vector<std::vector<T>> Gaussian kernel
  */
-template <ConvolutionNumeric T = double>
-auto generateGaussianKernel(int size, double sigma)
-    -> std::vector<std::vector<T>>;
+template <ConvolutionNumeric T = f64>
+auto generateGaussianKernel(i32 size, f64 sigma) -> std::vector<std::vector<T>>;
 
 /**
  * @brief Applies a Gaussian filter to an image
@@ -175,27 +179,29 @@ auto generateGaussianKernel(int size, double sigma)
  * @param options Configuration options for the filtering
  * @return std::vector<std::vector<T>> Filtered image
  */
-template <ConvolutionNumeric T = double>
+template <ConvolutionNumeric T = f64>
 auto applyGaussianFilter(const std::vector<std::vector<T>>& image,
                          const std::vector<std::vector<T>>& kernel,
                          const ConvolutionOptions<T>& options = {})
     -> std::vector<std::vector<T>>;
 
 // Legacy overloads for backward compatibility
-auto dfT2D(const std::vector<std::vector<double>>& signal,
-           int numThreads = std::thread::hardware_concurrency())
-    -> std::vector<std::vector<std::complex<double>>>;
+auto dfT2D(
+    const std::vector<std::vector<f64>>& signal,
+    i32 numThreads = static_cast<i32>(std::thread::hardware_concurrency()))
+    -> std::vector<std::vector<std::complex<f64>>>;
 
-auto idfT2D(const std::vector<std::vector<std::complex<double>>>& spectrum,
-            int numThreads = std::thread::hardware_concurrency())
-    -> std::vector<std::vector<double>>;
+auto idfT2D(
+    const std::vector<std::vector<std::complex<f64>>>& spectrum,
+    i32 numThreads = static_cast<i32>(std::thread::hardware_concurrency()))
+    -> std::vector<std::vector<f64>>;
 
-auto generateGaussianKernel(int size, double sigma)
-    -> std::vector<std::vector<double>>;
+auto generateGaussianKernel(i32 size, f64 sigma)
+    -> std::vector<std::vector<f64>>;
 
-auto applyGaussianFilter(const std::vector<std::vector<double>>& image,
-                         const std::vector<std::vector<double>>& kernel)
-    -> std::vector<std::vector<double>>;
+auto applyGaussianFilter(const std::vector<std::vector<f64>>& image,
+                         const std::vector<std::vector<f64>>& kernel)
+    -> std::vector<std::vector<f64>>;
 
 #if ATOM_USE_OPENCL
 /**
@@ -207,7 +213,7 @@ auto applyGaussianFilter(const std::vector<std::vector<double>>& image,
  * @param options Configuration options for the convolution
  * @return std::vector<std::vector<T>> Result of convolution
  */
-template <ConvolutionNumeric T = double>
+template <ConvolutionNumeric T = f64>
 auto convolve2DOpenCL(const std::vector<std::vector<T>>& input,
                       const std::vector<std::vector<T>>& kernel,
                       const ConvolutionOptions<T>& options = {})
@@ -223,22 +229,24 @@ auto convolve2DOpenCL(const std::vector<std::vector<T>>& input,
  * @return std::vector<std::vector<T>> Original input recovered via
  * deconvolution
  */
-template <ConvolutionNumeric T = double>
+template <ConvolutionNumeric T = f64>
 auto deconvolve2DOpenCL(const std::vector<std::vector<T>>& signal,
                         const std::vector<std::vector<T>>& kernel,
                         const ConvolutionOptions<T>& options = {})
     -> std::vector<std::vector<T>>;
 
 // Legacy overloads for backward compatibility
-auto convolve2DOpenCL(const std::vector<std::vector<double>>& input,
-                      const std::vector<std::vector<double>>& kernel,
-                      int numThreads = std::thread::hardware_concurrency())
-    -> std::vector<std::vector<double>>;
+auto convolve2DOpenCL(
+    const std::vector<std::vector<f64>>& input,
+    const std::vector<std::vector<f64>>& kernel,
+    i32 numThreads = static_cast<i32>(std::thread::hardware_concurrency()))
+    -> std::vector<std::vector<f64>>;
 
-auto deconvolve2DOpenCL(const std::vector<std::vector<double>>& signal,
-                        const std::vector<std::vector<double>>& kernel,
-                        int numThreads = std::thread::hardware_concurrency())
-    -> std::vector<std::vector<double>>;
+auto deconvolve2DOpenCL(
+    const std::vector<std::vector<f64>>& signal,
+    const std::vector<std::vector<f64>>& kernel,
+    i32 numThreads = static_cast<i32>(std::thread::hardware_concurrency()))
+    -> std::vector<std::vector<f64>>;
 #endif
 
 /**
@@ -247,7 +255,7 @@ auto deconvolve2DOpenCL(const std::vector<std::vector<double>>& signal,
  *
  * @tparam T Type of the data
  */
-template <ConvolutionNumeric T = double>
+template <ConvolutionNumeric T = f64>
 class ConvolutionFilters {
 public:
     /**
@@ -291,7 +299,7 @@ public:
  *
  * @tparam T Type of the data
  */
-template <ConvolutionNumeric T = double>
+template <ConvolutionNumeric T = f64>
 class Convolution1D {
 public:
     /**
@@ -304,11 +312,10 @@ public:
      * @param numThreads Number of threads to use
      * @return std::vector<T> Result of convolution
      */
-    static auto convolve(const std::vector<T>& signal,
-                         const std::vector<T>& kernel,
-                         PaddingMode paddingMode = PaddingMode::SAME,
-                         int stride = 1,
-                         int numThreads = std::thread::hardware_concurrency())
+    static auto convolve(
+        const std::vector<T>& signal, const std::vector<T>& kernel,
+        PaddingMode paddingMode = PaddingMode::SAME, i32 stride = 1,
+        i32 numThreads = static_cast<i32>(std::thread::hardware_concurrency()))
         -> std::vector<T>;
 
     /**
@@ -319,9 +326,9 @@ public:
      * @param numThreads Number of threads to use
      * @return std::vector<T> Deconvolved signal
      */
-    static auto deconvolve(const std::vector<T>& signal,
-                           const std::vector<T>& kernel,
-                           int numThreads = std::thread::hardware_concurrency())
+    static auto deconvolve(
+        const std::vector<T>& signal, const std::vector<T>& kernel,
+        i32 numThreads = static_cast<i32>(std::thread::hardware_concurrency()))
         -> std::vector<T>;
 };
 
@@ -337,9 +344,9 @@ public:
  * @param mode Padding mode (zero, reflect, symmetric, etc.)
  * @return std::vector<std::vector<T>> Padded matrix
  */
-template <ConvolutionNumeric T = double>
-auto pad2D(const std::vector<std::vector<T>>& input, size_t padTop,
-           size_t padBottom, size_t padLeft, size_t padRight,
+template <ConvolutionNumeric T = f64>
+auto pad2D(const std::vector<std::vector<T>>& input, usize padTop,
+           usize padBottom, usize padLeft, usize padRight,
            PaddingMode mode = PaddingMode::SAME) -> std::vector<std::vector<T>>;
 
 /**
@@ -352,20 +359,20 @@ auto pad2D(const std::vector<std::vector<T>>& input, size_t padTop,
  * @param strideY Vertical stride
  * @param strideX Horizontal stride
  * @param paddingMode Mode for handling boundaries
- * @return std::pair<size_t, size_t> Output dimensions (height, width)
+ * @return std::pair<usize, usize> Output dimensions (height, width)
  */
-auto getConvolutionOutputDimensions(size_t inputHeight, size_t inputWidth,
-                                    size_t kernelHeight, size_t kernelWidth,
-                                    size_t strideY = 1, size_t strideX = 1,
+auto getConvolutionOutputDimensions(usize inputHeight, usize inputWidth,
+                                    usize kernelHeight, usize kernelWidth,
+                                    usize strideY = 1, usize strideX = 1,
                                     PaddingMode paddingMode = PaddingMode::SAME)
-    -> std::pair<size_t, size_t>;
+    -> std::pair<usize, usize>;
 
 /**
  * @brief Efficient class for working with convolution in frequency domain
  *
  * @tparam T Type of the data
  */
-template <ConvolutionNumeric T = double>
+template <ConvolutionNumeric T = f64>
 class FrequencyDomainConvolution {
 public:
     /**
@@ -376,8 +383,8 @@ public:
      * @param kernelHeight Height of kernel
      * @param kernelWidth Width of kernel
      */
-    FrequencyDomainConvolution(size_t inputHeight, size_t inputWidth,
-                               size_t kernelHeight, size_t kernelWidth);
+    FrequencyDomainConvolution(usize inputHeight, usize inputWidth,
+                               usize kernelHeight, usize kernelWidth);
 
     /**
      * @brief Perform convolution in frequency domain
@@ -393,8 +400,8 @@ public:
         -> std::vector<std::vector<T>>;
 
 private:
-    size_t padded_height_;
-    size_t padded_width_;
+    usize padded_height_;
+    usize padded_width_;
     std::vector<std::vector<std::complex<T>>> frequency_space_buffer_;
 };
 

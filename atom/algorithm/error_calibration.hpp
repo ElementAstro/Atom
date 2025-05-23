@@ -25,9 +25,10 @@
 #endif
 #endif
 
+#include <spdlog/spdlog.h>
+#include "atom/algorithm/rust_numeric.hpp"
 #include "atom/async/pool.hpp"
 #include "atom/error/exception.hpp"
-#include "atom/log/loguru.hpp"
 
 #ifdef ATOM_USE_BOOST
 #include <boost/numeric/ublas/io.hpp>
@@ -51,15 +52,15 @@ private:
     std::mutex metrics_mutex_;
     std::unique_ptr<atom::async::ThreadPool> thread_pool_;
 
-    // 使用更高效的内存池
-    static constexpr size_t MAX_CACHE_SIZE = 10000;
+    // More efficient memory pool
+    static constexpr usize MAX_CACHE_SIZE = 10000;
     std::shared_ptr<std::pmr::monotonic_buffer_resource> memory_resource_;
     std::pmr::vector<T> cached_residuals_{memory_resource_.get()};
 
-    // 使用线程本地存储优化并行计算
+    // Thread-local storage for parallel computation optimization
     thread_local static std::vector<T> tls_buffer;
 
-    // 自动资源管理
+    // Automatic resource management
     struct ResourceGuard {
         std::function<void()> cleanup;
         ~ResourceGuard() {
@@ -73,13 +74,14 @@ private:
      */
     void initThreadPool() {
         if (!thread_pool_) {
-            const unsigned int num_threads =
+            const u32 num_threads =
                 std::min(std::thread::hardware_concurrency(), 8u);
             // Option 2: If Options has a constructor taking thread count
             thread_pool_ = std::make_unique<atom::async::ThreadPool>(
                 atom::async::ThreadPool::Options(num_threads));
 
-            LOG_F(INFO, "Thread pool initialized with {} threads", num_threads);
+            spdlog::info("Thread pool initialized with {} threads",
+                         num_threads);
         }
     }
 
@@ -92,7 +94,7 @@ private:
                           const std::vector<T>& actual) {
         initThreadPool();
 
-        // 使用std::execution::par_unseq进行并行计算
+        // Using std::execution::par_unseq for parallel computation
         T meanActual =
             std::transform_reduce(std::execution::par_unseq, actual.begin(),
                                   actual.end(), T(0), std::plus<>{},
@@ -102,9 +104,9 @@ private:
         residuals_.clear();
         residuals_.resize(measured.size());
 
-        // 更高效的SIMD实现
+        // More efficient SIMD implementation
 #ifdef USE_SIMD
-        // 使用更高级的SIMD指令
+        // Using more advanced SIMD instructions
         // ...
 #else
         std::transform(std::execution::par_unseq, measured.begin(),
@@ -124,7 +126,7 @@ private:
                residuals_.size();
 #endif
 
-        // 计算R-squared
+        // Calculate R-squared
         T ssTotal = std::transform_reduce(
             std::execution::par_unseq, actual.begin(), actual.end(), T(0),
             std::plus<>{},
@@ -158,24 +160,24 @@ private:
     auto levenbergMarquardt(const std::vector<T>& x, const std::vector<T>& y,
                             NonlinearFunction func,
                             std::vector<T> initial_params,
-                            int max_iterations = 100, T lambda = 0.01,
+                            i32 max_iterations = 100, T lambda = 0.01,
                             T epsilon = 1e-8) -> std::vector<T> {
-        int n = x.size();
-        int m = initial_params.size();
+        i32 n = static_cast<i32>(x.size());
+        i32 m = static_cast<i32>(initial_params.size());
         std::vector<T> params = initial_params;
         std::vector<T> prevParams(m);
         std::vector<std::vector<T>> jacobian(n, std::vector<T>(m));
 
-        for (int iteration = 0; iteration < max_iterations; ++iteration) {
+        for (i32 iteration = 0; iteration < max_iterations; ++iteration) {
             std::vector<T> residuals(n);
-            for (int i = 0; i < n; ++i) {
+            for (i32 i = 0; i < n; ++i) {
                 try {
                     residuals[i] = y[i] - func(x[i], params);
                 } catch (const std::exception& e) {
-                    LOG_F(ERROR, "Exception in func: %s", e.what());
+                    spdlog::error("Exception in func: {}", e.what());
                     throw;
                 }
-                for (int j = 0; j < m; ++j) {
+                for (i32 j = 0; j < m; ++j) {
                     T h = std::max(T(1e-6), std::abs(params[j]) * T(1e-6));
                     std::vector<T> paramsPlusH = params;
                     paramsPlusH[j] += h;
@@ -183,8 +185,8 @@ private:
                         jacobian[i][j] =
                             (func(x[i], paramsPlusH) - func(x[i], params)) / h;
                     } catch (const std::exception& e) {
-                        LOG_F(ERROR, "Exception in jacobian computation: %s",
-                              e.what());
+                        spdlog::error("Exception in jacobian computation: {}",
+                                      e.what());
                         throw;
                     }
                 }
@@ -192,32 +194,31 @@ private:
 
             std::vector<std::vector<T>> JTJ(m, std::vector<T>(m, 0.0));
             std::vector<T> jTr(m, 0.0);
-            for (int i = 0; i < m; ++i) {
-                for (int j = 0; j < m; ++j) {
-                    for (int k = 0; k < n; ++k) {
+            for (i32 i = 0; i < m; ++i) {
+                for (i32 j = 0; j < m; ++j) {
+                    for (i32 k = 0; k < n; ++k) {
                         JTJ[i][j] += jacobian[k][i] * jacobian[k][j];
                     }
                     if (i == j)
                         JTJ[i][j] += lambda;
                 }
-                for (int k = 0; k < n; ++k) {
+                for (i32 k = 0; k < n; ++k) {
                     jTr[i] += jacobian[k][i] * residuals[k];
                 }
             }
 
 #ifdef ATOM_USE_BOOST
-            // 使用Boost的LU分解来求解线性系统
+            // Using Boost's LU decomposition to solve linear system
             boost::numeric::ublas::matrix<T> A(m, m);
             boost::numeric::ublas::vector<T> b(m);
-            for (int i = 0; i < m; ++i) {
-                for (int j = 0; j < m; ++j) {
+            for (i32 i = 0; i < m; ++i) {
+                for (i32 j = 0; j < m; ++j) {
                     A(i, j) = JTJ[i][j];
                 }
                 b(i) = jTr[i];
             }
 
-            boost::numeric::ublas::permutation_matrix<std::size_t> pm(
-                A.size1());
+            boost::numeric::ublas::permutation_matrix<usize> pm(A.size1());
             bool singular = boost::numeric::ublas::lu_factorize(A, pm);
             if (singular) {
                 THROW_RUNTIME_ERROR("Matrix is singular.");
@@ -225,28 +226,28 @@ private:
             boost::numeric::ublas::lu_substitute(A, pm, b);
 
             std::vector<T> delta(m);
-            for (int i = 0; i < m; ++i) {
+            for (i32 i = 0; i < m; ++i) {
                 delta[i] = b(i);
             }
 #else
-            // 使用自定义的高斯消元法
+            // Using custom Gaussian elimination method
             std::vector<T> delta;
             try {
                 delta = solveLinearSystem(JTJ, jTr);
             } catch (const std::exception& e) {
-                LOG_F(ERROR, "Exception in solving linear system: %s",
-                      e.what());
+                spdlog::error("Exception in solving linear system: {}",
+                              e.what());
                 throw;
             }
 #endif
 
             prevParams = params;
-            for (int i = 0; i < m; ++i) {
+            for (i32 i = 0; i < m; ++i) {
                 params[i] += delta[i];
             }
 
             T diff = 0;
-            for (int i = 0; i < m; ++i) {
+            for (i32 i = 0; i < m; ++i) {
                 diff += std::abs(params[i] - prevParams[i]);
             }
             if (diff < epsilon) {
@@ -264,23 +265,23 @@ private:
      * @return Solution vector
      */
 #ifdef ATOM_USE_BOOST
-    // 使用Boost的线性代数库，无需自定义实现
+    // Using Boost's linear algebra library, no need for custom implementation
 #else
     auto solveLinearSystem(const std::vector<std::vector<T>>& A,
                            const std::vector<T>& b) -> std::vector<T> {
-        int n = A.size();
+        i32 n = static_cast<i32>(A.size());
         std::vector<std::vector<T>> augmented(n, std::vector<T>(n + 1, 0.0));
-        for (int i = 0; i < n; ++i) {
-            for (int j = 0; j < n; ++j) {
+        for (i32 i = 0; i < n; ++i) {
+            for (i32 j = 0; j < n; ++j) {
                 augmented[i][j] = A[i][j];
             }
             augmented[i][n] = b[i];
         }
 
-        for (int i = 0; i < n; ++i) {
+        for (i32 i = 0; i < n; ++i) {
             // Partial pivoting
-            int maxRow = i;
-            for (int k = i + 1; k < n; ++k) {
+            i32 maxRow = i;
+            for (i32 k = i + 1; k < n; ++k) {
                 if (std::abs(augmented[k][i]) >
                     std::abs(augmented[maxRow][i])) {
                     maxRow = k;
@@ -292,22 +293,22 @@ private:
             std::swap(augmented[i], augmented[maxRow]);
 
             // Eliminate below
-            for (int k = i + 1; k < n; ++k) {
+            for (i32 k = i + 1; k < n; ++k) {
                 T factor = augmented[k][i] / augmented[i][i];
-                for (int j = i; j <= n; ++j) {
+                for (i32 j = i; j <= n; ++j) {
                     augmented[k][j] -= factor * augmented[i][j];
                 }
             }
         }
 
         std::vector<T> x(n, 0.0);
-        for (int i = n - 1; i >= 0; --i) {
+        for (i32 i = n - 1; i >= 0; --i) {
             if (std::abs(augmented[i][i]) < 1e-12) {
                 THROW_RUNTIME_ERROR(
                     "Division by zero during back substitution.");
             }
             x[i] = augmented[i][n];
-            for (int j = i + 1; j < n; ++j) {
+            for (i32 j = i + 1; j < n; ++j) {
                 x[i] -= augmented[i][j] * x[j];
             }
             x[i] /= augmented[i][i];
@@ -321,7 +322,7 @@ public:
     ErrorCalibration()
         : memory_resource_(
               std::make_shared<std::pmr::monotonic_buffer_resource>()) {
-        // 预分配内存以避免频繁重分配
+        // Pre-allocate memory to avoid frequent reallocation
         cached_residuals_.reserve(MAX_CACHE_SIZE);
     }
 
@@ -331,8 +332,8 @@ public:
                 thread_pool_->waitForTasks();
             }
         } catch (...) {
-            // 确保析构函数永远不抛出异常
-            LOG_F(ERROR, "Exception during thread pool cleanup");
+            // Ensure destructor never throws exceptions
+            spdlog::error("Exception during thread pool cleanup");
         }
     }
 
@@ -372,8 +373,8 @@ public:
      * @param degree Degree of the polynomial
      */
     void polynomialCalibrate(const std::vector<T>& measured,
-                             const std::vector<T>& actual, int degree) {
-        // 强化输入验证
+                             const std::vector<T>& actual, i32 degree) {
+        // Enhanced input validation
         if (measured.size() != actual.size()) {
             THROW_INVALID_ARGUMENT("Input vectors must be of equal size");
         }
@@ -386,12 +387,12 @@ public:
             THROW_INVALID_ARGUMENT("Polynomial degree must be at least 1.");
         }
 
-        if (measured.size() <= static_cast<size_t>(degree)) {
+        if (measured.size() <= static_cast<usize>(degree)) {
             THROW_INVALID_ARGUMENT(
                 "Number of data points must exceed polynomial degree.");
         }
 
-        // 检查NaN和无穷大
+        // Check for NaN and infinity values
         if (std::ranges::any_of(
                 measured, [](T x) { return std::isnan(x) || std::isinf(x); }) ||
             std::ranges::any_of(
@@ -402,7 +403,7 @@ public:
 
         auto polyFunc = [degree](T x, const std::vector<T>& params) -> T {
             T result = 0;
-            for (int i = 0; i <= degree; ++i) {
+            for (i32 i = 0; i <= degree; ++i) {
                 result += params[i] * std::pow(x, i);
             }
             return result;
@@ -544,12 +545,12 @@ public:
     }
 
     void printParameters() const {
-        LOG_F(INFO, "Calibration parameters: slope = {}, intercept = {}",
-              slope_, intercept_);
+        spdlog::info("Calibration parameters: slope = {}, intercept = {}",
+                     slope_, intercept_);
         if (r_squared_.has_value()) {
-            LOG_F(INFO, "R-squared = {}", r_squared_.value());
+            spdlog::info("R-squared = {}", r_squared_.value());
         }
-        LOG_F(INFO, "MSE = {}, MAE = {}", mse_, mae_);
+        spdlog::info("MSE = {}, MAE = {}", mse_, mae_);
     }
 
     [[nodiscard]] auto getResiduals() const -> std::vector<T> {
@@ -563,7 +564,7 @@ public:
         }
 
         file << "Index,Residual\n";
-        for (size_t i = 0; i < residuals_.size(); ++i) {
+        for (usize i = 0; i < residuals_.size(); ++i) {
             file << i << "," << residuals_[i] << "\n";
         }
     }
@@ -578,8 +579,8 @@ public:
      */
     auto bootstrapConfidenceInterval(const std::vector<T>& measured,
                                      const std::vector<T>& actual,
-                                     int n_iterations = 1000,
-                                     double confidence_level = 0.95)
+                                     i32 n_iterations = 1000,
+                                     f64 confidence_level = 0.95)
         -> std::pair<T, T> {
         if (n_iterations <= 0) {
             THROW_INVALID_ARGUMENT("Number of iterations must be positive.");
@@ -600,13 +601,13 @@ public:
         std::uniform_int_distribution<> dis(0, measured.size() - 1);
 #endif
 
-        for (int i = 0; i < n_iterations; ++i) {
+        for (i32 i = 0; i < n_iterations; ++i) {
             std::vector<T> bootMeasured;
             std::vector<T> bootActual;
             bootMeasured.reserve(measured.size());
             bootActual.reserve(actual.size());
-            for (size_t j = 0; j < measured.size(); ++j) {
-                int idx = dis(gen);
+            for (usize j = 0; j < measured.size(); ++j) {
+                i32 idx = dis(gen);
                 bootMeasured.push_back(measured[idx]);
                 bootActual.push_back(actual[idx]);
             }
@@ -616,8 +617,7 @@ public:
                 bootCalibrator.linearCalibrate(bootMeasured, bootActual);
                 bootstrapSlopes.push_back(bootCalibrator.getSlope());
             } catch (const std::exception& e) {
-                LOG_F(WARNING, "Bootstrap iteration %d failed: %s", i,
-                      e.what());
+                spdlog::warn("Bootstrap iteration {} failed: {}", i, e.what());
             }
         }
 
@@ -626,15 +626,15 @@ public:
         }
 
         std::sort(bootstrapSlopes.begin(), bootstrapSlopes.end());
-        int lowerIdx = static_cast<int>((1 - confidence_level) / 2 *
+        i32 lowerIdx = static_cast<i32>((1 - confidence_level) / 2 *
                                         bootstrapSlopes.size());
-        int upperIdx = static_cast<int>((1 + confidence_level) / 2 *
+        i32 upperIdx = static_cast<i32>((1 + confidence_level) / 2 *
                                         bootstrapSlopes.size());
 
         lowerIdx = std::clamp(lowerIdx, 0,
-                              static_cast<int>(bootstrapSlopes.size()) - 1);
+                              static_cast<i32>(bootstrapSlopes.size()) - 1);
         upperIdx = std::clamp(upperIdx, 0,
-                              static_cast<int>(bootstrapSlopes.size()) - 1);
+                              static_cast<i32>(bootstrapSlopes.size()) - 1);
 
         return {bootstrapSlopes[lowerIdx], bootstrapSlopes[upperIdx]};
     }
@@ -665,7 +665,7 @@ public:
 
 #if ATOM_ENABLE_DEBUG
         std::cout << "Detected outliers:" << std::endl;
-        for (size_t i = 0; i < residuals_.size(); ++i) {
+        for (usize i = 0; i < residuals_.size(); ++i) {
             if (std::abs(residuals_[i] - meanResidual) > threshold * std_dev) {
                 std::cout << "Index: " << i << ", Measured: " << measured[i]
                           << ", Actual: " << actual[i]
@@ -677,9 +677,9 @@ public:
     }
 
     void crossValidation(const std::vector<T>& measured,
-                         const std::vector<T>& actual, int k = 5) {
+                         const std::vector<T>& actual, i32 k = 5) {
         if (measured.size() != actual.size() ||
-            measured.size() < static_cast<size_t>(k)) {
+            measured.size() < static_cast<usize>(k)) {
             THROW_INVALID_ARGUMENT(
                 "Input vectors must be non-empty and of size greater than k");
         }
@@ -688,13 +688,13 @@ public:
         std::vector<T> maeValues;
         std::vector<T> rSquaredValues;
 
-        for (int i = 0; i < k; ++i) {
+        for (i32 i = 0; i < k; ++i) {
             std::vector<T> trainMeasured;
             std::vector<T> trainActual;
             std::vector<T> testMeasured;
             std::vector<T> testActual;
-            for (size_t j = 0; j < measured.size(); ++j) {
-                if (j % k == static_cast<size_t>(i)) {
+            for (usize j = 0; j < measured.size(); ++j) {
+                if (j % k == static_cast<usize>(i)) {
                     testMeasured.push_back(measured[j]);
                     testActual.push_back(actual[j]);
                 } else {
@@ -707,8 +707,8 @@ public:
             try {
                 cvCalibrator.linearCalibrate(trainMeasured, trainActual);
             } catch (const std::exception& e) {
-                LOG_F(WARNING, "Cross-validation fold %d failed: %s", i,
-                      e.what());
+                spdlog::warn("Cross-validation fold {} failed: {}", i,
+                             e.what());
                 continue;
             }
 
@@ -719,7 +719,7 @@ public:
             T meanTestActual =
                 std::accumulate(testActual.begin(), testActual.end(), T(0)) /
                 testActual.size();
-            for (size_t j = 0; j < testMeasured.size(); ++j) {
+            for (usize j = 0; j < testMeasured.size(); ++j) {
                 T predicted = cvCalibrator.apply(testMeasured[j]);
                 T error = testActual[j] - predicted;
                 foldMse += error * error;
@@ -751,11 +751,10 @@ public:
                    mseValues.size();
         T avgMae = std::accumulate(maeValues.begin(), maeValues.end(), T(0)) /
                    maeValues.size();
-        std::cout << "K-fold cross-validation results (k = " << k
-                  << "):" << std::endl;
-        std::cout << "Average MSE: " << avgMse << std::endl;
-        std::cout << "Average MAE: " << avgMae << std::endl;
-        std::cout << "Average R-squared: " << avgRSquared << std::endl;
+        spdlog::debug("K-fold cross-validation results (k = {})", k);
+        spdlog::debug("Average MSE: {}", avgMse);
+        spdlog::debug("Average MAE: {}", avgMae);
+        spdlog::debug("Average R-squared: {}", avgRSquared);
 #endif
     }
 
@@ -768,7 +767,7 @@ public:
     [[nodiscard]] auto getMae() const -> T { return mae_; }
 };
 
-// 使用协程支持的异步校准方法
+// Coroutine support for asynchronous calibration
 template <std::floating_point T>
 class AsyncCalibrationTask {
 public:
@@ -782,8 +781,9 @@ public:
         auto initial_suspend() { return std::suspend_never{}; }
         auto final_suspend() noexcept { return std::suspend_always{}; }
         void unhandled_exception() {
-            LOG_F(ERROR, "Exception in AsyncCalibrationTask: %s",
-                  std::current_exception().__cxa_exception_type()->name());
+            spdlog::error(
+                "Exception in AsyncCalibrationTask: {}",
+                std::current_exception().__cxa_exception_type()->name());
         }
         void return_value(ErrorCalibration<T>* calibrator) {
             result = calibrator;
@@ -801,23 +801,23 @@ public:
     ErrorCalibration<T>* getResult() { return handle.promise().result; }
 };
 
-// 使用协程的异步校准方法
+// Asynchronous calibration method using coroutines
 template <std::floating_point T>
 AsyncCalibrationTask<T> calibrateAsync(const std::vector<T>& measured,
                                        const std::vector<T>& actual) {
     auto calibrator = new ErrorCalibration<T>();
 
-    // 在后台线程中执行校准
+    // Execute calibration in background thread
     std::thread worker([calibrator, measured, actual]() {
         try {
             calibrator->linearCalibrate(measured, actual);
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Async calibration failed: %s", e.what());
+            spdlog::error("Async calibration failed: {}", e.what());
         }
     });
-    worker.detach();  // 让线程在后台运行
+    worker.detach();  // Let the thread run in the background
 
-    // 等待一些结果就绪的标志
+    // Wait for some ready flag
     co_await std::suspend_always{};
 
     co_return calibrator;

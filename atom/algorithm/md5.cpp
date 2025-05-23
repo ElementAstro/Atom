@@ -15,14 +15,13 @@ Description: Self implemented MD5 algorithm.
 #include "md5.hpp"
 
 #include <bit>
-#include <cstring>
 #include <format>
 #include <iomanip>
 #include <iostream>
 #include <span>
 #include <sstream>
 
-// SIMD和并行支持
+// SIMD and parallel support
 #ifdef __AVX2__
 #include <immintrin.h>
 #define USE_SIMD
@@ -43,13 +42,15 @@ void MD5::init() noexcept {
     d_ = 0x10325476;
     count_ = 0;
     buffer_.clear();
-    buffer_.reserve(64);  // 预分配空间提高性能
+    buffer_.reserve(64);  // Preallocate space for better performance
 }
 
 void MD5::update(std::span<const std::byte> input) {
     try {
-        auto update_length = [this](size_t length) {
-            if (std::numeric_limits<uint64_t>::max() - count_ < length * 8) {
+        auto update_length = [this](usize length) {
+            if (std::numeric_limits<u64>::max() - count_ < length * 8) {
+                spdlog::error(
+                    "MD5: Input too large, would cause counter overflow");
                 throw MD5Exception(
                     "Input too large, would cause counter overflow");
             }
@@ -67,6 +68,7 @@ void MD5::update(std::span<const std::byte> input) {
             }
         }
     } catch (const std::exception& e) {
+        spdlog::error("MD5: Update failed - {}", e.what());
         throw MD5Exception(std::format("Update failed: {}", e.what()));
     }
 }
@@ -76,8 +78,8 @@ auto MD5::finalize() -> std::string {
         // Padding
         buffer_.push_back(static_cast<std::byte>(0x80));
 
-        // 调整buffer至最终大小
-        const size_t padding_needed =
+        // Adjust buffer to final size
+        const usize padding_needed =
             (56 <= buffer_.size() && buffer_.size() < 64)
                 ? (64 + 56 - buffer_.size())
                 : (56 - buffer_.size());
@@ -85,24 +87,25 @@ auto MD5::finalize() -> std::string {
         buffer_.resize(buffer_.size() + padding_needed,
                        static_cast<std::byte>(0));
 
-        // 添加消息长度作为64位整数
-        for (int i = 0; i < 8; ++i) {
+        // Append message length as 64-bit integer
+        for (i32 i = 0; i < 8; ++i) {
             buffer_.push_back(
                 static_cast<std::byte>((count_ >> (i * 8)) & 0xff));
         }
 
-        // 处理最终块
+        // Process final block
         if (buffer_.size() == 64) {
             processBlock(std::span<const std::byte, 64>(buffer_.data(), 64));
         } else {
+            spdlog::error("MD5: Buffer size incorrect during finalization");
             throw MD5Exception("Buffer size incorrect during finalization");
         }
 
-        // 格式化结果
+        // Format result
         std::stringstream ss;
         ss << std::hex << std::setfill('0');
 
-        // 使用std::byteswap实现小端序转换 (C++20)
+        // Use std::byteswap for little-endian conversion (C++20)
         ss << std::setw(8) << std::byteswap(a_);
         ss << std::setw(8) << std::byteswap(b_);
         ss << std::setw(8) << std::byteswap(c_);
@@ -110,49 +113,50 @@ auto MD5::finalize() -> std::string {
 
         return ss.str();
     } catch (const std::exception& e) {
+        spdlog::error("MD5: Finalization failed - {}", e.what());
         throw MD5Exception(std::format("Finalization failed: {}", e.what()));
     }
 }
 
 void MD5::processBlock(std::span<const std::byte, 64> block) noexcept {
-    // 将输入块转换为16个32位字
-    std::array<uint32_t, 16> M;
+    // Convert input block to 16 32-bit words
+    std::array<u32, 16> M;
 
 #ifdef USE_SIMD
-    // 使用AVX2指令集加速数据加载和处理
-    for (size_t i = 0; i < 16; i += 4) {
+    // Use AVX2 instruction set to accelerate data loading and processing
+    for (usize i = 0; i < 16; i += 4) {
         __m128i chunk =
             _mm_loadu_si128(reinterpret_cast<const __m128i*>(&block[i * 4]));
         _mm_storeu_si128(reinterpret_cast<__m128i*>(&M[i]), chunk);
     }
 #else
-    // 标准实现
-    for (size_t i = 0; i < 16; ++i) {
-        uint32_t value = 0;
-        for (size_t j = 0; j < 4; ++j) {
-            value |= static_cast<uint32_t>(
-                         std::to_integer<uint8_t>(block[i * 4 + j]))
+    // Standard implementation
+    for (usize i = 0; i < 16; ++i) {
+        u32 value = 0;
+        for (usize j = 0; j < 4; ++j) {
+            value |= static_cast<u32>(std::to_integer<u8>(block[i * 4 + j]))
                      << (j * 8);
         }
         M[i] = value;
     }
 #endif
 
-    uint32_t a = a_;
-    uint32_t b = b_;
-    uint32_t c = c_;
-    uint32_t d = d_;
+    u32 a = a_;
+    u32 b = b_;
+    u32 c = c_;
+    u32 d = d_;
 
 #ifdef USE_OPENMP
-    // 划分为四个独立阶段，每个阶段可并行处理
-    constexpr int rounds[] = {16, 32, 48, 64};
-    for (int round = 0; round < 4; ++round) {
-        const int start = (round > 0) ? rounds[round - 1] : 0;
-        const int end = rounds[round];
+    // Divide into four independent stages, each stage can be processed in
+    // parallel
+    constexpr i32 rounds[] = {16, 32, 48, 64};
+    for (i32 round = 0; round < 4; ++round) {
+        const i32 start = (round > 0) ? rounds[round - 1] : 0;
+        const i32 end = rounds[round];
 
 #pragma omp parallel for
-        for (int i = start; i < end; ++i) {
-            uint32_t f, g;
+        for (i32 i = start; i < end; ++i) {
+            u32 f, g;
 
             if (i < 16) {
                 f = F(b, c, d);
@@ -168,7 +172,7 @@ void MD5::processBlock(std::span<const std::byte, 64> block) noexcept {
                 g = (7 * i) % 16;
             }
 
-            uint32_t temp = d;
+            u32 temp = d;
             d = c;
             c = b;
             b = b + leftRotate(a + f + T_Constants[i] + M[g], s[i]);
@@ -176,9 +180,9 @@ void MD5::processBlock(std::span<const std::byte, 64> block) noexcept {
         }
     }
 #else
-    // 标准串行实现
-    for (uint32_t i = 0; i < 64; ++i) {
-        uint32_t f, g;
+    // Standard serial implementation
+    for (u32 i = 0; i < 64; ++i) {
+        u32 f, g;
         if (i < 16) {
             f = F(b, c, d);
             g = i;
@@ -193,7 +197,7 @@ void MD5::processBlock(std::span<const std::byte, 64> block) noexcept {
             g = (7 * i) % 16;
         }
 
-        uint32_t temp = d;
+        u32 temp = d;
         d = c;
         c = b;
         b = b + leftRotate(a + f + T_Constants[i] + M[g], s[i]);
@@ -201,40 +205,40 @@ void MD5::processBlock(std::span<const std::byte, 64> block) noexcept {
     }
 #endif
 
-    // 更新状态变量
+    // Update state variables
     a_ += a;
     b_ += b;
     c_ += c;
     d_ += d;
 }
 
-constexpr auto MD5::F(uint32_t x, uint32_t y, uint32_t z) noexcept -> uint32_t {
+constexpr auto MD5::F(u32 x, u32 y, u32 z) noexcept -> u32 {
     return (x & y) | (~x & z);
 }
 
-constexpr auto MD5::G(uint32_t x, uint32_t y, uint32_t z) noexcept -> uint32_t {
+constexpr auto MD5::G(u32 x, u32 y, u32 z) noexcept -> u32 {
     return (x & z) | (y & ~z);
 }
 
-constexpr auto MD5::H(uint32_t x, uint32_t y, uint32_t z) noexcept -> uint32_t {
-    return x ^ y ^ z;
-}
+constexpr auto MD5::H(u32 x, u32 y, u32 z) noexcept -> u32 { return x ^ y ^ z; }
 
-constexpr auto MD5::I(uint32_t x, uint32_t y, uint32_t z) noexcept -> uint32_t {
+constexpr auto MD5::I(u32 x, u32 y, u32 z) noexcept -> u32 {
     return y ^ (x | ~z);
 }
 
-constexpr auto MD5::leftRotate(uint32_t x, uint32_t n) noexcept -> uint32_t {
-    return std::rotl(x, n);  // C++20的std::rotl
+constexpr auto MD5::leftRotate(u32 x, u32 n) noexcept -> u32 {
+    return std::rotl(x, n);  // C++20's std::rotl
 }
 
 auto MD5::encryptBinary(std::span<const std::byte> data) -> std::string {
     try {
+        spdlog::debug("MD5: Processing binary data of size {}", data.size());
         MD5 md5;
         md5.init();
         md5.update(data);
         return md5.finalize();
     } catch (const std::exception& e) {
+        spdlog::error("MD5: Binary encryption failed - {}", e.what());
         throw MD5Exception(
             std::format("Binary encryption failed: {}", e.what()));
     }

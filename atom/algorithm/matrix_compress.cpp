@@ -3,10 +3,11 @@
 #include <algorithm>
 #include <fstream>
 #include <future>
-#include <iostream>
 #include <random>
 #include <thread>
 
+#include <spdlog/spdlog.h>
+#include "atom/algorithm/rust_numeric.hpp"
 #include "atom/error/exception.hpp"
 
 #ifdef __AVX2__
@@ -26,30 +27,30 @@
 
 namespace atom::algorithm {
 
-// 定义压缩/解压缩线程的默认数量
-static size_t getDefaultThreadCount() noexcept {
+// Define default number of threads for compression/decompression
+static usize getDefaultThreadCount() noexcept {
     return std::max(1u, std::thread::hardware_concurrency());
 }
 
 auto MatrixCompressor::compress(const Matrix& matrix) -> CompressedData {
-    // 输入验证
+    // Input validation
     if (matrix.empty() || matrix[0].empty()) {
         return {};
     }
 
     try {
-        // 如果支持SIMD，使用SIMD优化版本
+        // Use SIMD optimized version if available
 #if USE_SIMD > 0
         return compressWithSIMD(matrix);
 #else
         CompressedData compressed;
         compressed.reserve(
-            std::min<size_t>(1000, matrix.size() * matrix[0].size() / 2));
+            std::min<usize>(1000, matrix.size() * matrix[0].size() / 2));
 
         char currentChar = matrix[0][0];
-        int count = 0;
+        i32 count = 0;
 
-        // 使用C++20 ranges
+        // Use C++20 ranges
         for (const auto& row : matrix) {
             for (const char ch : row) {
                 if (ch == currentChar) {
@@ -74,14 +75,14 @@ auto MatrixCompressor::compress(const Matrix& matrix) -> CompressedData {
     }
 }
 
-auto MatrixCompressor::compressParallel(const Matrix& matrix, int thread_count)
+auto MatrixCompressor::compressParallel(const Matrix& matrix, i32 thread_count)
     -> CompressedData {
     if (matrix.empty() || matrix[0].empty()) {
         return {};
     }
 
-    size_t num_threads = thread_count > 0 ? static_cast<size_t>(thread_count)
-                                          : getDefaultThreadCount();
+    usize num_threads = thread_count > 0 ? static_cast<usize>(thread_count)
+                                         : getDefaultThreadCount();
 
     if (matrix.size() < num_threads ||
         matrix.size() * matrix[0].size() < 10000) {
@@ -89,14 +90,14 @@ auto MatrixCompressor::compressParallel(const Matrix& matrix, int thread_count)
     }
 
     try {
-        size_t rows_per_thread = matrix.size() / num_threads;
+        usize rows_per_thread = matrix.size() / num_threads;
         std::vector<std::future<CompressedData>> futures;
         futures.reserve(num_threads);
 
-        for (size_t t = 0; t < num_threads; ++t) {
-            size_t start_row = t * rows_per_thread;
-            size_t end_row = (t == num_threads - 1) ? matrix.size()
-                                                    : (t + 1) * rows_per_thread;
+        for (usize t = 0; t < num_threads; ++t) {
+            usize start_row = t * rows_per_thread;
+            usize end_row = (t == num_threads - 1) ? matrix.size()
+                                                   : (t + 1) * rows_per_thread;
 
             futures.push_back(
                 std::async(std::launch::async, [&matrix, start_row, end_row]() {
@@ -105,9 +106,9 @@ auto MatrixCompressor::compressParallel(const Matrix& matrix, int thread_count)
                         return result;
 
                     char currentChar = matrix[start_row][0];
-                    int count = 0;
+                    i32 count = 0;
 
-                    for (size_t i = start_row; i < end_row; ++i) {
+                    for (usize i = start_row; i < end_row; ++i) {
                         for (char ch : matrix[i]) {
                             if (ch == currentChar) {
                                 count++;
@@ -151,8 +152,8 @@ auto MatrixCompressor::compressParallel(const Matrix& matrix, int thread_count)
     }
 }
 
-auto MatrixCompressor::decompress(const CompressedData& compressed, int rows,
-                                  int cols) -> Matrix {
+auto MatrixCompressor::decompress(const CompressedData& compressed, i32 rows,
+                                  i32 cols) -> Matrix {
     if (rows <= 0 || cols <= 0) {
         THROW_MATRIX_DECOMPRESS_EXCEPTION(
             "Invalid dimensions: rows and cols must be positive");
@@ -167,15 +168,15 @@ auto MatrixCompressor::decompress(const CompressedData& compressed, int rows,
         return decompressWithSIMD(compressed, rows, cols);
 #else
         Matrix matrix(rows, std::vector<char>(cols));
-        int index = 0;
-        int totalElements = rows * cols;
-        size_t elementCount = 0;
+        i32 index = 0;
+        i32 totalElements = rows * cols;
+        usize elementCount = 0;
 
         for (const auto& [ch, count] : compressed) {
             elementCount += count;
         }
 
-        if (elementCount != static_cast<size_t>(totalElements)) {
+        if (elementCount != static_cast<usize>(totalElements)) {
             THROW_MATRIX_DECOMPRESS_EXCEPTION(
                 "Decompression error: Element count mismatch - expected " +
                 std::to_string(totalElements) + ", got " +
@@ -183,9 +184,9 @@ auto MatrixCompressor::decompress(const CompressedData& compressed, int rows,
         }
 
         for (const auto& [ch, count] : compressed) {
-            for (int i = 0; i < count; ++i) {
-                int row = index / cols;
-                int col = index % cols;
+            for (i32 i = 0; i < count; ++i) {
+                i32 row = index / cols;
+                i32 col = index % cols;
 
                 if (row >= rows || col >= cols) {
                     THROW_MATRIX_DECOMPRESS_EXCEPTION(
@@ -208,7 +209,7 @@ auto MatrixCompressor::decompress(const CompressedData& compressed, int rows,
 }
 
 auto MatrixCompressor::decompressParallel(const CompressedData& compressed,
-                                          int rows, int cols, int thread_count)
+                                          i32 rows, i32 cols, i32 thread_count)
     -> Matrix {
     if (rows <= 0 || cols <= 0) {
         THROW_MATRIX_DECOMPRESS_EXCEPTION(
@@ -224,61 +225,60 @@ auto MatrixCompressor::decompressParallel(const CompressedData& compressed,
     }
 
     try {
-        size_t num_threads = thread_count > 0
-                                 ? static_cast<size_t>(thread_count)
-                                 : getDefaultThreadCount();
-        num_threads = std::min(num_threads, static_cast<size_t>(rows));
+        usize num_threads = thread_count > 0 ? static_cast<usize>(thread_count)
+                                             : getDefaultThreadCount();
+        num_threads = std::min(num_threads, static_cast<usize>(rows));
 
         Matrix result(rows, std::vector<char>(cols));
 
-        std::vector<std::pair<size_t, size_t>> row_ranges;
-        std::vector<std::pair<size_t, size_t>> element_ranges;
+        std::vector<std::pair<usize, usize>> row_ranges;
+        std::vector<std::pair<usize, usize>> element_ranges;
 
-        size_t rows_per_thread = rows / num_threads;
-        size_t elements_per_row = cols;
+        usize rows_per_thread = rows / num_threads;
+        usize elements_per_row = cols;
 
-        for (size_t t = 0; t < num_threads; ++t) {
-            size_t start_row = t * rows_per_thread;
-            size_t end_row =
+        for (usize t = 0; t < num_threads; ++t) {
+            usize start_row = t * rows_per_thread;
+            usize end_row =
                 (t == num_threads - 1) ? rows : (t + 1) * rows_per_thread;
             row_ranges.emplace_back(start_row, end_row);
 
-            size_t start_element = start_row * elements_per_row;
-            size_t end_element = end_row * elements_per_row;
+            usize start_element = start_row * elements_per_row;
+            usize end_element = end_row * elements_per_row;
             element_ranges.emplace_back(start_element, end_element);
         }
 
-        std::vector<size_t> element_offsets = {0};
+        std::vector<usize> element_offsets = {0};
         for (const auto& [ch, count] : compressed) {
             element_offsets.push_back(element_offsets.back() + count);
         }
 
         std::vector<std::future<void>> futures;
-        for (size_t t = 0; t < num_threads; ++t) {
+        for (usize t = 0; t < num_threads; ++t) {
             futures.push_back(std::async(std::launch::async, [&, t]() {
-                size_t start_element = element_ranges[t].first;
-                size_t end_element = element_ranges[t].second;
+                usize start_element = element_ranges[t].first;
+                usize end_element = element_ranges[t].second;
 
-                size_t block_index = 0;
+                usize block_index = 0;
                 while (block_index < element_offsets.size() - 1 &&
                        element_offsets[block_index + 1] <= start_element) {
                     block_index++;
                 }
 
-                size_t current_element = start_element;
+                usize current_element = start_element;
                 while (current_element < end_element &&
                        block_index < compressed.size()) {
                     char ch = compressed[block_index].first;
-                    size_t block_start = element_offsets[block_index];
-                    size_t block_end = element_offsets[block_index + 1];
+                    usize block_start = element_offsets[block_index];
+                    usize block_end = element_offsets[block_index + 1];
 
-                    size_t process_start =
+                    usize process_start =
                         std::max(current_element, block_start);
-                    size_t process_end = std::min(end_element, block_end);
+                    usize process_end = std::min(end_element, block_end);
 
-                    for (size_t i = process_start; i < process_end; ++i) {
-                        int row = static_cast<int>(i / cols);
-                        int col = static_cast<int>(i % cols);
+                    for (usize i = process_start; i < process_end; ++i) {
+                        i32 row = static_cast<i32>(i / cols);
+                        i32 col = static_cast<i32>(i % cols);
                         result[row][col] = ch;
                     }
 
@@ -306,21 +306,21 @@ auto MatrixCompressor::compressWithSIMD(const Matrix& matrix)
     -> CompressedData {
     CompressedData compressed;
     compressed.reserve(
-        std::min<size_t>(1000, matrix.size() * matrix[0].size() / 4));
+        std::min<usize>(1000, matrix.size() * matrix[0].size() / 4));
 
     char currentChar = matrix[0][0];
-    int count = 0;
+    i32 count = 0;
 
 #if USE_SIMD == 2  // AVX2
     for (const auto& row : matrix) {
-        size_t i = 0;
+        usize i = 0;
         for (; i + 32 <= row.size(); i += 32) {
             __m256i chars1 =
                 _mm256_load_si256(reinterpret_cast<const __m256i*>(&row[i]));
             __m256i chars2 = _mm256_load_si256(
                 reinterpret_cast<const __m256i*>(&row[i + 16]));
 
-            for (int j = 0; j < 16; ++j) {
+            for (i32 j = 0; j < 16; ++j) {
                 char ch = reinterpret_cast<const char*>(&chars1)[j];
                 if (ch == currentChar) {
                     count++;
@@ -331,7 +331,7 @@ auto MatrixCompressor::compressWithSIMD(const Matrix& matrix)
                 }
             }
 
-            for (int j = 0; j < 16; ++j) {
+            for (i32 j = 0; j < 16; ++j) {
                 char ch = reinterpret_cast<const char*>(&chars2)[j];
                 if (ch == currentChar) {
                     count++;
@@ -356,12 +356,12 @@ auto MatrixCompressor::compressWithSIMD(const Matrix& matrix)
     }
 #elif USE_SIMD == 1
     for (const auto& row : matrix) {
-        size_t i = 0;
+        usize i = 0;
         for (; i + 16 <= row.size(); i += 16) {
             __m128i chars =
                 _mm_load_si128(reinterpret_cast<const __m128i*>(&row[i]));
 
-            for (int j = 0; j < 16; ++j) {
+            for (i32 j = 0; j < 16; ++j) {
                 char ch = reinterpret_cast<const char*>(&chars)[j];
                 if (ch == currentChar) {
                     count++;
@@ -406,17 +406,17 @@ auto MatrixCompressor::compressWithSIMD(const Matrix& matrix)
 }
 
 auto MatrixCompressor::decompressWithSIMD(const CompressedData& compressed,
-                                          int rows, int cols) -> Matrix {
+                                          i32 rows, i32 cols) -> Matrix {
     Matrix matrix(rows, std::vector<char>(cols));
-    int index = 0;
-    int total_elements = rows * cols;
+    i32 index = 0;
+    i32 total_elements = rows * cols;
 
-    size_t elementCount = 0;
+    usize elementCount = 0;
     for (const auto& [ch, count] : compressed) {
         elementCount += count;
     }
 
-    if (elementCount != static_cast<size_t>(total_elements)) {
+    if (elementCount != static_cast<usize>(total_elements)) {
         THROW_MATRIX_DECOMPRESS_EXCEPTION(
             "Decompression error: Element count mismatch - expected " +
             std::to_string(total_elements) + ", got " +
@@ -426,11 +426,11 @@ auto MatrixCompressor::decompressWithSIMD(const CompressedData& compressed,
 #if USE_SIMD == 2  // AVX2
     for (const auto& [ch, count] : compressed) {
         __m256i chars = _mm256_set1_epi8(ch);
-        for (int i = 0; i < count; i += 32) {
-            int remaining = std::min(32, count - i);
-            for (int j = 0; j < remaining; ++j) {
-                int row = index / cols;
-                int col = index % cols;
+        for (i32 i = 0; i < count; i += 32) {
+            i32 remaining = std::min(32, count - i);
+            for (i32 j = 0; j < remaining; ++j) {
+                i32 row = index / cols;
+                i32 col = index % cols;
                 if (row >= rows || col >= cols) {
                     THROW_MATRIX_DECOMPRESS_EXCEPTION(
                         "Decompression error: Index out of bounds at " +
@@ -445,11 +445,11 @@ auto MatrixCompressor::decompressWithSIMD(const CompressedData& compressed,
 #elif USE_SIMD == 1  // SSE4.1
     for (const auto& [ch, count] : compressed) {
         __m128i chars = _mm_set1_epi8(ch);
-        for (int i = 0; i < count; i += 16) {
-            int remaining = std::min(16, count - i);
-            for (int j = 0; j < remaining; ++j) {
-                int row = index / cols;
-                int col = index % cols;
+        for (i32 i = 0; i < count; i += 16) {
+            i32 remaining = std::min(16, count - i);
+            for (i32 j = 0; j < remaining; ++j) {
+                i32 row = index / cols;
+                i32 col = index % cols;
                 if (row >= rows || col >= cols) {
                     THROW_MATRIX_DECOMPRESS_EXCEPTION(
                         "Decompression error: Index out of bounds at " +
@@ -463,9 +463,9 @@ auto MatrixCompressor::decompressWithSIMD(const CompressedData& compressed,
     }
 #else
     for (const auto& [ch, count] : compressed) {
-        for (int i = 0; i < count; ++i) {
-            int row = index / cols;
-            int col = index % cols;
+        for (i32 i = 0; i < count; ++i) {
+            i32 row = index / cols;
+            i32 col = index % cols;
             if (row >= rows || col >= cols) {
                 THROW_MATRIX_DECOMPRESS_EXCEPTION(
                     "Decompression error: Index out of bounds at " +
@@ -481,13 +481,13 @@ auto MatrixCompressor::decompressWithSIMD(const CompressedData& compressed,
     return matrix;
 }
 
-auto MatrixCompressor::generateRandomMatrix(int rows, int cols,
+auto MatrixCompressor::generateRandomMatrix(i32 rows, i32 cols,
                                             std::string_view charset)
     -> Matrix {
     std::random_device randomDevice;
     std::mt19937 generator(randomDevice());
-    std::uniform_int_distribution<int> distribution(
-        0, static_cast<int>(charset.length()) - 1);
+    std::uniform_int_distribution<i32> distribution(
+        0, static_cast<i32>(charset.length()) - 1);
 
     Matrix matrix(rows, std::vector<char>(cols));
     for (auto& row : matrix) {
@@ -544,7 +544,7 @@ auto MatrixCompressor::loadCompressedFromFile(std::string_view filename)
 
     CompressedData compressed;
     char ch;
-    int count;
+    i32 count;
     while (file.read(reinterpret_cast<char*>(&ch), sizeof(ch)) &&
            file.read(reinterpret_cast<char*>(&count), sizeof(count))) {
         compressed.emplace_back(ch, count);
@@ -554,37 +554,36 @@ auto MatrixCompressor::loadCompressedFromFile(std::string_view filename)
 }
 
 #if ATOM_ENABLE_DEBUG
-void performanceTest(int rows, int cols, bool runParallel) {
+void performanceTest(i32 rows, i32 cols, bool runParallel) {
     auto matrix = MatrixCompressor::generateRandomMatrix(rows, cols);
 
     auto start = std::chrono::high_resolution_clock::now();
     auto compressed = MatrixCompressor::compress(matrix);
     auto end = std::chrono::high_resolution_clock::now();
 
-    std::chrono::duration<double, std::milli> compression_time = end - start;
+    std::chrono::duration<f64, std::milli> compression_time = end - start;
 
     start = std::chrono::high_resolution_clock::now();
     auto decompressed = MatrixCompressor::decompress(compressed, rows, cols);
     end = std::chrono::high_resolution_clock::now();
 
-    std::chrono::duration<double, std::milli> decompression_time = end - start;
+    std::chrono::duration<f64, std::milli> decompression_time = end - start;
 
-    double compression_ratio =
+    f64 compression_ratio =
         MatrixCompressor::calculateCompressionRatio(matrix, compressed);
 
-    std::cout << "Matrix size: " << rows << "x" << cols << "\n";
-    std::cout << "Compression time: " << compression_time.count() << " ms\n";
-    std::cout << "Decompression time: " << decompression_time.count()
-              << " ms\n";
-    std::cout << "Compression ratio: " << compression_ratio << "\n";
-    std::cout << "Compressed size: " << compressed.size() << " elements\n";
+    spdlog::info("Matrix size: {}x{}", rows, cols);
+    spdlog::info("Compression time: {} ms", compression_time.count());
+    spdlog::info("Decompression time: {} ms", decompression_time.count());
+    spdlog::info("Compression ratio: {}", compression_ratio);
+    spdlog::info("Compressed size: {} elements", compressed.size());
 
     if (runParallel) {
         start = std::chrono::high_resolution_clock::now();
         compressed = MatrixCompressor::compressParallel(matrix);
         end = std::chrono::high_resolution_clock::now();
 
-        std::chrono::duration<double, std::milli> parallel_compression_time =
+        std::chrono::duration<f64, std::milli> parallel_compression_time =
             end - start;
 
         start = std::chrono::high_resolution_clock::now();
@@ -592,14 +591,14 @@ void performanceTest(int rows, int cols, bool runParallel) {
             MatrixCompressor::decompressParallel(compressed, rows, cols);
         end = std::chrono::high_resolution_clock::now();
 
-        std::chrono::duration<double, std::milli> parallel_decompression_time =
+        std::chrono::duration<f64, std::milli> parallel_decompression_time =
             end - start;
 
-        std::cout << "\nParallel processing:\n";
-        std::cout << "Compression time: " << parallel_compression_time.count()
-                  << " ms\n";
-        std::cout << "Decompression time: "
-                  << parallel_decompression_time.count() << " ms\n";
+        spdlog::info("\nParallel processing:");
+        spdlog::info("Compression time: {} ms",
+                     parallel_compression_time.count());
+        spdlog::info("Decompression time: {} ms",
+                     parallel_decompression_time.count());
     }
 }
 #endif

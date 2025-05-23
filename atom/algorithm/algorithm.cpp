@@ -4,7 +4,7 @@
 #include <future>
 #include <thread>
 
-#include "atom/log/loguru.hpp"
+#include "spdlog/spdlog.h"
 
 #ifdef ATOM_USE_OPENMP
 #include <omp.h>
@@ -18,19 +18,21 @@
 #include <boost/algorithm/string.hpp>
 #endif
 
+#include "atom/error/exception.hpp"
+
 namespace atom::algorithm {
 
 KMP::KMP(std::string_view pattern) {
     try {
-        LOG_F(INFO, "Initializing KMP with pattern length: {}", pattern.size());
+        spdlog::info("Initializing KMP with pattern length: {}",
+                     pattern.size());
         if (pattern.empty()) {
-            LOG_F(WARNING, "Initialized KMP with empty pattern");
+            spdlog::warn("Initialized KMP with empty pattern");
         }
         setPattern(pattern);
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Failed to initialize KMP: {}", e.what());
-        throw std::invalid_argument(std::string("Invalid pattern: ") +
-                                    e.what());
+        spdlog::error("Failed to initialize KMP: {}", e.what());
+        THROW_INVALID_ARGUMENT(std::string("Invalid pattern: ") + e.what());
     }
 }
 
@@ -40,17 +42,17 @@ auto KMP::search(std::string_view text) const -> std::vector<int> {
         std::shared_lock lock(mutex_);
         auto n = static_cast<int>(text.length());
         auto m = static_cast<int>(pattern_.length());
-        LOG_F(INFO, "KMP searching text of length {} with pattern length {}.",
-              n, m);
+        spdlog::info("KMP searching text of length {} with pattern length {}.",
+                     n, m);
 
         // Validate inputs
         if (m == 0) {
-            LOG_F(WARNING, "Empty pattern provided to KMP::search.");
+            spdlog::warn("Empty pattern provided to KMP::search.");
             return occurrences;
         }
 
         if (n < m) {
-            LOG_F(INFO, "Text is shorter than pattern, no matches possible.");
+            spdlog::info("Text is shorter than pattern, no matches possible.");
             return occurrences;
         }
 
@@ -184,17 +186,17 @@ auto KMP::search(std::string_view text) const -> std::vector<int> {
             }
         }
 #endif
-        LOG_F(INFO, "KMP search completed with {} occurrences found.",
-              occurrences.size());
+        spdlog::info("KMP search completed with {} occurrences found.",
+                     occurrences.size());
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in KMP::search: {}", e.what());
+        spdlog::error("Exception in KMP::search: {}", e.what());
         throw std::runtime_error(std::string("KMP search failed: ") + e.what());
     }
     return occurrences;
 }
 
-auto KMP::searchParallel(std::string_view text,
-                         size_t chunk_size) const -> std::vector<int> {
+auto KMP::searchParallel(std::string_view text, size_t chunk_size) const
+    -> std::vector<int> {
     if (text.empty() || pattern_.empty() || text.length() < pattern_.length()) {
         return {};
     }
@@ -282,7 +284,7 @@ auto KMP::searchParallel(std::string_view text,
 
         return occurrences;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in KMP::searchParallel: {}", e.what());
+        spdlog::error("Exception in KMP::searchParallel: {}", e.what());
         throw std::runtime_error(std::string("KMP parallel search failed: ") +
                                  e.what());
     }
@@ -291,19 +293,19 @@ auto KMP::searchParallel(std::string_view text,
 void KMP::setPattern(std::string_view pattern) {
     try {
         std::unique_lock lock(mutex_);
-        LOG_F(INFO, "Setting new pattern for KMP of length {}", pattern.size());
+        spdlog::info("Setting new pattern for KMP of length {}",
+                     pattern.size());
         pattern_ = pattern;
         failure_ = computeFailureFunction(pattern_);
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Failed to set KMP pattern: {}", e.what());
-        throw std::invalid_argument(std::string("Invalid pattern: ") +
-                                    e.what());
+        spdlog::error("Failed to set KMP pattern: {}", e.what());
+        THROW_INVALID_ARGUMENT(std::string("Invalid pattern: ") + e.what());
     }
 }
 
 auto KMP::computeFailureFunction(std::string_view pattern) noexcept
     -> std::vector<int> {
-    LOG_F(INFO, "Computing failure function for pattern.");
+    spdlog::info("Computing failure function for pattern.");
     auto m = static_cast<int>(pattern.length());
     std::vector<int> failure(m, 0);
 
@@ -325,22 +327,21 @@ auto KMP::computeFailureFunction(std::string_view pattern) noexcept
         }
     }
 
-    LOG_F(INFO, "Failure function computed.");
+    spdlog::info("Failure function computed.");
     return failure;
 }
 
 BoyerMoore::BoyerMoore(std::string_view pattern) {
     try {
-        LOG_F(INFO, "Initializing BoyerMoore with pattern length: {}",
-              pattern.size());
+        spdlog::info("Initializing BoyerMoore with pattern length: {}",
+                     pattern.size());
         if (pattern.empty()) {
-            LOG_F(WARNING, "Initialized BoyerMoore with empty pattern");
+            spdlog::warn("Initialized BoyerMoore with empty pattern");
         }
         setPattern(pattern);
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Failed to initialize BoyerMoore: {}", e.what());
-        throw std::invalid_argument(std::string("Invalid pattern: ") +
-                                    e.what());
+        spdlog::error("Failed to initialize BoyerMoore: {}", e.what());
+        THROW_INVALID_ARGUMENT(std::string("Invalid pattern: ") + e.what());
     }
 }
 
@@ -350,11 +351,11 @@ auto BoyerMoore::search(std::string_view text) const -> std::vector<int> {
         std::lock_guard lock(mutex_);
         auto n = static_cast<int>(text.length());
         auto m = static_cast<int>(pattern_.length());
-        LOG_F(INFO,
-              "BoyerMoore searching text of length {} with pattern length {}.",
-              n, m);
+        spdlog::info(
+            "BoyerMoore searching text of length {} with pattern length {}.", n,
+            m);
         if (m == 0) {
-            LOG_F(WARNING, "Empty pattern provided to BoyerMoore::search.");
+            spdlog::warn("Empty pattern provided to BoyerMoore::search.");
             return occurrences;
         }
 
@@ -416,10 +417,10 @@ auto BoyerMoore::search(std::string_view text) const -> std::vector<int> {
             }
         }
 #endif
-        LOG_F(INFO, "BoyerMoore search completed with {} occurrences found.",
-              occurrences.size());
+        spdlog::info("BoyerMoore search completed with {} occurrences found.",
+                     occurrences.size());
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in BoyerMoore::search: {}", e.what());
+        spdlog::error("Exception in BoyerMoore::search: {}", e.what());
         throw;
     }
     return occurrences;
@@ -434,14 +435,14 @@ auto BoyerMoore::searchOptimized(std::string_view text) const
         auto n = static_cast<int>(text.length());
         auto m = static_cast<int>(pattern_.length());
 
-        LOG_F(INFO,
-              "BoyerMoore optimized search on text length {} with pattern "
-              "length {}",
-              n, m);
+        spdlog::info(
+            "BoyerMoore optimized search on text length {} with pattern "
+            "length {}",
+            n, m);
 
         if (m == 0 || n < m) {
-            LOG_F(INFO,
-                  "Early return: empty pattern or text shorter than pattern");
+            spdlog::info(
+                "Early return: empty pattern or text shorter than pattern");
             return occurrences;
         }
 
@@ -627,12 +628,11 @@ auto BoyerMoore::searchOptimized(std::string_view text) const
             }
         }
 #endif
-        LOG_F(
-            INFO,
+        spdlog::info(
             "BoyerMoore optimized search completed with {} occurrences found.",
             occurrences.size());
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in BoyerMoore::searchOptimized: {}", e.what());
+        spdlog::error("Exception in BoyerMoore::searchOptimized: {}", e.what());
         throw std::runtime_error(
             std::string("BoyerMoore optimized search failed: ") + e.what());
     }
@@ -642,25 +642,25 @@ auto BoyerMoore::searchOptimized(std::string_view text) const
 
 void BoyerMoore::setPattern(std::string_view pattern) {
     std::lock_guard lock(mutex_);
-    LOG_F(INFO, "Setting new pattern for BoyerMoore: %.*s",
-          static_cast<int>(pattern.size()), pattern.data());
+    spdlog::info("Setting new pattern for BoyerMoore: {0:.{1}}", pattern.data(),
+                 static_cast<int>(pattern.size()));
     pattern_ = std::string(pattern);
     computeBadCharacterShift();
     computeGoodSuffixShift();
 }
 
 void BoyerMoore::computeBadCharacterShift() noexcept {
-    LOG_F(INFO, "Computing bad character shift table.");
+    spdlog::info("Computing bad character shift table.");
     bad_char_shift_.clear();
     for (int i = 0; i < static_cast<int>(pattern_.length()) - 1; ++i) {
         bad_char_shift_[pattern_[i]] =
             static_cast<int>(pattern_.length()) - 1 - i;
     }
-    LOG_F(INFO, "Bad character shift table computed.");
+    spdlog::info("Bad character shift table computed.");
 }
 
 void BoyerMoore::computeGoodSuffixShift() noexcept {
-    LOG_F(INFO, "Computing good suffix shift table.");
+    spdlog::info("Computing good suffix shift table.");
     auto m = static_cast<int>(pattern_.length());
     good_suffix_shift_.resize(m + 1, m);
     std::vector<int> suffix(m + 1, 0);
@@ -691,7 +691,7 @@ void BoyerMoore::computeGoodSuffixShift() noexcept {
     for (int i = 0; i < m - 1; ++i) {
         good_suffix_shift_[m - suffix[i]] = m - 1 - i;
     }
-    LOG_F(INFO, "Good suffix shift table computed.");
+    spdlog::info("Good suffix shift table computed.");
 }
 
 }  // namespace atom::algorithm

@@ -12,10 +12,11 @@
 #define ATOM_MATRIX_COMPRESS_HPP
 
 #include <concepts>
-#include <iostream>
 #include <string>
 #include <vector>
 
+#include <spdlog/spdlog.h>
+#include "atom/algorithm/rust_numeric.hpp"
 #include "atom/error/exception.hpp"
 
 class MatrixCompressException : public atom::error::Exception {
@@ -42,11 +43,11 @@ public:
 
 namespace atom::algorithm {
 
-// 添加概念约束以确保Matrix类型满足要求
+// Concept constraints to ensure Matrix type meets requirements
 template <typename T>
 concept MatrixLike = requires(T m) {
-    { m.size() } -> std::convertible_to<std::size_t>;
-    { m[0].size() } -> std::convertible_to<std::size_t>;
+    { m.size() } -> std::convertible_to<usize>;
+    { m[0].size() } -> std::convertible_to<usize>;
     { m[0][0] } -> std::convertible_to<char>;
 };
 
@@ -58,7 +59,7 @@ concept MatrixLike = requires(T m) {
 class MatrixCompressor {
 public:
     using Matrix = std::vector<std::vector<char>>;
-    using CompressedData = std::vector<std::pair<char, int>>;
+    using CompressedData = std::vector<std::pair<char, i32>>;
 
     /**
      * @brief Compresses a matrix using run-length encoding.
@@ -69,13 +70,14 @@ public:
     static auto compress(const Matrix& matrix) -> CompressedData;
 
     /**
-     * @brief 使用多线程压缩大型矩阵
-     * @param matrix 要压缩的矩阵
-     * @param thread_count 使用的线程数，默认为系统可用线程数
-     * @return 压缩后的数据
-     * @throws MatrixCompressException 如果压缩失败
+     * @brief Compress a large matrix using multiple threads
+     * @param matrix The matrix to compress
+     * @param thread_count Number of threads to use, defaults to system
+     * available threads
+     * @return The compressed data
+     * @throws MatrixCompressException if compression fails
      */
-    static auto compressParallel(const Matrix& matrix, int thread_count = 0)
+    static auto compressParallel(const Matrix& matrix, i32 thread_count = 0)
         -> CompressedData;
 
     /**
@@ -86,20 +88,21 @@ public:
      * @return The decompressed matrix.
      * @throws MatrixDecompressException if decompression fails.
      */
-    static auto decompress(const CompressedData& compressed, int rows, int cols)
+    static auto decompress(const CompressedData& compressed, i32 rows, i32 cols)
         -> Matrix;
 
     /**
-     * @brief 使用多线程解压缩大型矩阵
-     * @param compressed 压缩的数据
-     * @param rows 解压后矩阵的行数
-     * @param cols 解压后矩阵的列数
-     * @param thread_count 使用的线程数，默认为系统可用线程数
-     * @return 解压后的矩阵
-     * @throws MatrixDecompressException 如果解压失败
+     * @brief Decompress a large matrix using multiple threads
+     * @param compressed The compressed data
+     * @param rows Number of rows in the decompressed matrix
+     * @param cols Number of columns in the decompressed matrix
+     * @param thread_count Number of threads to use, defaults to system
+     * available threads
+     * @return The decompressed matrix
+     * @throws MatrixDecompressException if decompression fails
      */
-    static auto decompressParallel(const CompressedData& compressed, int rows,
-                                   int cols, int thread_count = 0) -> Matrix;
+    static auto decompressParallel(const CompressedData& compressed, i32 rows,
+                                   i32 cols, i32 thread_count = 0) -> Matrix;
 
     /**
      * @brief Prints the matrix to the standard output.
@@ -116,7 +119,7 @@ public:
      * @return The generated random matrix.
      * @throws std::invalid_argument if rows or cols are not positive.
      */
-    static auto generateRandomMatrix(int rows, int cols,
+    static auto generateRandomMatrix(i32 rows, i32 cols,
                                      std::string_view charset = "ABCD")
         -> Matrix;
 
@@ -146,7 +149,7 @@ public:
      */
     template <MatrixLike M>
     static auto calculateCompressionRatio(
-        const M& original, const CompressedData& compressed) noexcept -> double;
+        const M& original, const CompressedData& compressed) noexcept -> f64;
 
     /**
      * @brief Downsamples a matrix by a given factor.
@@ -156,7 +159,7 @@ public:
      * @throws std::invalid_argument if factor is not positive.
      */
     template <MatrixLike M>
-    static auto downsample(const M& matrix, int factor) -> Matrix;
+    static auto downsample(const M& matrix, i32 factor) -> Matrix;
 
     /**
      * @brief Upsamples a matrix by a given factor.
@@ -166,7 +169,7 @@ public:
      * @throws std::invalid_argument if factor is not positive.
      */
     template <MatrixLike M>
-    static auto upsample(const M& matrix, int factor) -> Matrix;
+    static auto upsample(const M& matrix, i32 factor) -> Matrix;
 
     /**
      * @brief Calculates the mean squared error (MSE) between two matrices.
@@ -178,45 +181,44 @@ public:
     template <MatrixLike M1, MatrixLike M2>
         requires std::same_as<std::decay_t<decltype(std::declval<M1>()[0][0])>,
                               std::decay_t<decltype(std::declval<M2>()[0][0])>>
-    static auto calculateMSE(const M1& matrix1, const M2& matrix2) -> double;
+    static auto calculateMSE(const M1& matrix1, const M2& matrix2) -> f64;
 
 private:
-    // 用于SIMD处理的内部方法
+    // Internal methods for SIMD processing
     static auto compressWithSIMD(const Matrix& matrix) -> CompressedData;
-    static auto decompressWithSIMD(const CompressedData& compressed, int rows,
-                                   int cols) -> Matrix;
+    static auto decompressWithSIMD(const CompressedData& compressed, i32 rows,
+                                   i32 cols) -> Matrix;
 };
 
-// 实现模板函数
+// Template function implementations
 template <MatrixLike M>
 void MatrixCompressor::printMatrix(const M& matrix) noexcept {
     for (const auto& row : matrix) {
         for (const auto& ch : row) {
-            std::cout << ch << ' ';
+            spdlog::info("{} ", ch);
         }
-        std::cout << '\n';
+        spdlog::info("");
     }
 }
 
 template <MatrixLike M>
 auto MatrixCompressor::calculateCompressionRatio(
-    const M& original, const CompressedData& compressed) noexcept -> double {
+    const M& original, const CompressedData& compressed) noexcept -> f64 {
     if (original.empty() || original[0].empty()) {
         return 0.0;
     }
 
-    size_t originalSize = 0;
+    usize originalSize = 0;
     for (const auto& row : original) {
         originalSize += row.size() * sizeof(char);
     }
 
-    size_t compressedSize = compressed.size() * (sizeof(char) + sizeof(int));
-    return static_cast<double>(compressedSize) /
-           static_cast<double>(originalSize);
+    usize compressedSize = compressed.size() * (sizeof(char) + sizeof(i32));
+    return static_cast<f64>(compressedSize) / static_cast<f64>(originalSize);
 }
 
 template <MatrixLike M>
-auto MatrixCompressor::downsample(const M& matrix, int factor) -> Matrix {
+auto MatrixCompressor::downsample(const M& matrix, i32 factor) -> Matrix {
     if (factor <= 0) {
         THROW_INVALID_ARGUMENT("Downsampling factor must be positive");
     }
@@ -225,21 +227,21 @@ auto MatrixCompressor::downsample(const M& matrix, int factor) -> Matrix {
         return {};
     }
 
-    int rows = static_cast<int>(matrix.size());
-    int cols = static_cast<int>(matrix[0].size());
-    int newRows = std::max(1, rows / factor);
-    int newCols = std::max(1, cols / factor);
+    i32 rows = static_cast<i32>(matrix.size());
+    i32 cols = static_cast<i32>(matrix[0].size());
+    i32 newRows = std::max(1, rows / factor);
+    i32 newCols = std::max(1, cols / factor);
 
     Matrix downsampled(newRows, std::vector<char>(newCols));
 
     try {
-        for (int i = 0; i < newRows; ++i) {
-            for (int j = 0; j < newCols; ++j) {
-                // 使用简单的平均值作为降采样策略
-                int sum = 0;
-                int count = 0;
-                for (int di = 0; di < factor && i * factor + di < rows; ++di) {
-                    for (int dj = 0; dj < factor && j * factor + dj < cols;
+        for (i32 i = 0; i < newRows; ++i) {
+            for (i32 j = 0; j < newCols; ++j) {
+                // Simple averaging as downsampling strategy
+                i32 sum = 0;
+                i32 count = 0;
+                for (i32 di = 0; di < factor && i * factor + di < rows; ++di) {
+                    for (i32 dj = 0; di < factor && j * factor + dj < cols;
                          ++dj) {
                         sum += matrix[i * factor + di][j * factor + dj];
                         count++;
@@ -249,15 +251,15 @@ auto MatrixCompressor::downsample(const M& matrix, int factor) -> Matrix {
             }
         }
     } catch (const std::exception& e) {
-        THROW_MATRIX_COMPRESS_EXCEPTION(
-            "Error during matrix downsampling: " + std::string(e.what()));
+        THROW_MATRIX_COMPRESS_EXCEPTION("Error during matrix downsampling: " +
+                                        std::string(e.what()));
     }
 
     return downsampled;
 }
 
 template <MatrixLike M>
-auto MatrixCompressor::upsample(const M& matrix, int factor) -> Matrix {
+auto MatrixCompressor::upsample(const M& matrix, i32 factor) -> Matrix {
     if (factor <= 0) {
         THROW_INVALID_ARGUMENT("Upsampling factor must be positive");
     }
@@ -266,23 +268,23 @@ auto MatrixCompressor::upsample(const M& matrix, int factor) -> Matrix {
         return {};
     }
 
-    int rows = static_cast<int>(matrix.size());
-    int cols = static_cast<int>(matrix[0].size());
-    int newRows = rows * factor;
-    int newCols = cols * factor;
+    i32 rows = static_cast<i32>(matrix.size());
+    i32 cols = static_cast<i32>(matrix[0].size());
+    i32 newRows = rows * factor;
+    i32 newCols = cols * factor;
 
     Matrix upsampled(newRows, std::vector<char>(newCols));
 
     try {
-        for (int i = 0; i < newRows; ++i) {
-            for (int j = 0; j < newCols; ++j) {
-                // 使用最近邻插值
+        for (i32 i = 0; i < newRows; ++i) {
+            for (i32 j = 0; j < newCols; ++j) {
+                // Nearest neighbor interpolation
                 upsampled[i][j] = matrix[i / factor][j / factor];
             }
         }
     } catch (const std::exception& e) {
-        THROW_MATRIX_COMPRESS_EXCEPTION(
-            "Error during matrix upsampling: " + std::string(e.what()));
+        THROW_MATRIX_COMPRESS_EXCEPTION("Error during matrix upsampling: " +
+                                        std::string(e.what()));
     }
 
     return upsampled;
@@ -292,30 +294,30 @@ template <MatrixLike M1, MatrixLike M2>
     requires std::same_as<std::decay_t<decltype(std::declval<M1>()[0][0])>,
                           std::decay_t<decltype(std::declval<M2>()[0][0])>>
 auto MatrixCompressor::calculateMSE(const M1& matrix1, const M2& matrix2)
-    -> double {
+    -> f64 {
     if (matrix1.empty() || matrix2.empty() ||
         matrix1.size() != matrix2.size() ||
         matrix1[0].size() != matrix2[0].size()) {
         THROW_INVALID_ARGUMENT("Matrices must have the same dimensions");
     }
 
-    double mse = 0.0;
-    auto rows = static_cast<int>(matrix1.size());
-    auto cols = static_cast<int>(matrix1[0].size());
-    int totalElements = 0;
+    f64 mse = 0.0;
+    auto rows = static_cast<i32>(matrix1.size());
+    auto cols = static_cast<i32>(matrix1[0].size());
+    i32 totalElements = 0;
 
     try {
-        for (int i = 0; i < rows; ++i) {
-            for (int j = 0; j < cols; ++j) {
-                double diff = static_cast<double>(matrix1[i][j]) -
-                              static_cast<double>(matrix2[i][j]);
+        for (i32 i = 0; i < rows; ++i) {
+            for (i32 j = 0; j < cols; ++j) {
+                f64 diff = static_cast<f64>(matrix1[i][j]) -
+                           static_cast<f64>(matrix2[i][j]);
                 mse += diff * diff;
                 totalElements++;
             }
         }
     } catch (const std::exception& e) {
         THROW_MATRIX_COMPRESS_EXCEPTION("Error calculating MSE: " +
-                                               std::string(e.what()));
+                                        std::string(e.what()));
     }
 
     return totalElements > 0 ? (mse / totalElements) : 0.0;
@@ -328,7 +330,7 @@ auto MatrixCompressor::calculateMSE(const M1& matrix1, const M2& matrix2)
  * @param cols The number of columns in the test matrix.
  * @param runParallel Whether to test parallel versions.
  */
-void performanceTest(int rows, int cols, bool runParallel = true);
+void performanceTest(i32 rows, i32 cols, bool runParallel = true);
 #endif
 
 }  // namespace atom::algorithm

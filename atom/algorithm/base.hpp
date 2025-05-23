@@ -27,8 +27,6 @@ Description: A collection of algorithms for C++
 
 namespace atom::algorithm {
 
-using Error = std::string;
-
 namespace detail {
 /**
  * @brief Base64 character set.

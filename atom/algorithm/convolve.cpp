@@ -14,16 +14,14 @@ and deconvolution with optional OpenCL support.
 **************************************************/
 
 #include "convolve.hpp"
+#include "rust_numeric.hpp"
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 #include <numbers>
 #include <thread>
 #include <utility>
 #include <vector>
-
-#include "atom/log/loguru.hpp"
 
 #if ATOM_USE_SIMD && !ATOM_USE_STD_SIMD
 #ifdef __SSE__
@@ -51,7 +49,7 @@ and deconvolution with optional OpenCL support.
 
 namespace atom::algorithm {
 // Constants and helper class definitions
-constexpr double EPSILON = 1e-10;  // Prevent division by zero
+constexpr f64 EPSILON = 1e-10;  // Prevent division by zero
 
 // Validate matrix dimensions
 template <typename T>
@@ -61,13 +59,13 @@ void validateMatrix(const std::vector<std::vector<T>>& matrix,
         THROW_CONVOLVE_ERROR("Empty matrix: {}", name);
     }
 
-    const size_t cols = matrix[0].size();
+    const usize cols = matrix[0].size();
     if (cols == 0) {
         THROW_CONVOLVE_ERROR("Matrix {} has empty rows", name);
     }
 
     // Check if all rows have the same length
-    for (size_t i = 1; i < matrix.size(); ++i) {
+    for (usize i = 1; i < matrix.size(); ++i) {
         if (matrix[i].size() != cols) {
             THROW_CONVOLVE_ERROR("Matrix {} has inconsistent row lengths",
                                  name);
@@ -76,9 +74,9 @@ void validateMatrix(const std::vector<std::vector<T>>& matrix,
 }
 
 // Validate and adjust thread count
-int validateAndAdjustThreadCount(int requestedThreads) {
-    int availableThreads =
-        static_cast<int>(std::thread::hardware_concurrency());
+i32 validateAndAdjustThreadCount(i32 requestedThreads) {
+    i32 availableThreads =
+        static_cast<i32>(std::thread::hardware_concurrency());
     if (availableThreads == 0) {
         availableThreads = 1;  // Use at least one thread
     }
@@ -88,8 +86,6 @@ int validateAndAdjustThreadCount(int requestedThreads) {
     }
 
     if (requestedThreads > availableThreads) {
-        DLOG_F(WARNING, "Requested %d threads but only %d are available",
-               requestedThreads, availableThreads);
         return availableThreads;
     }
 
@@ -100,51 +96,51 @@ int validateAndAdjustThreadCount(int requestedThreads) {
 template <typename T>
 class AlignedMatrix {
 public:
-    AlignedMatrix(size_t rows, size_t cols) : rows_(rows), cols_(cols) {
+    AlignedMatrix(usize rows, usize cols) : rows_(rows), cols_(cols) {
         // Allocate cache-line aligned memory
-        const size_t alignment = 64;  // Common cache line size
-        size_t size = rows * cols * sizeof(T);
+        const usize alignment = 64;  // Common cache line size
+        usize size = rows * cols * sizeof(T);
         data_.resize(size);
     }
 
     AlignedMatrix(const std::vector<std::vector<T>>& input)
         : AlignedMatrix(input.size(), input[0].size()) {
         // Copy data
-        for (size_t i = 0; i < rows_; ++i) {
-            for (size_t j = 0; j < cols_; ++j) {
+        for (usize i = 0; i < rows_; ++i) {
+            for (usize j = 0; j < cols_; ++j) {
                 at(i, j) = input[i][j];
             }
         }
     }
 
-    T& at(size_t row, size_t col) {
+    T& at(usize row, usize col) {
         return *reinterpret_cast<T*>(&data_[sizeof(T) * (row * cols_ + col)]);
     }
 
-    const T& at(size_t row, size_t col) const {
+    const T& at(usize row, usize col) const {
         return *reinterpret_cast<const T*>(
             &data_[sizeof(T) * (row * cols_ + col)]);
     }
 
     std::vector<std::vector<T>> toVector() const {
         std::vector<std::vector<T>> result(rows_, std::vector<T>(cols_));
-        for (size_t i = 0; i < rows_; ++i) {
-            for (size_t j = 0; j < cols_; ++j) {
+        for (usize i = 0; i < rows_; ++i) {
+            for (usize j = 0; j < cols_; ++j) {
                 result[i][j] = at(i, j);
             }
         }
         return result;
     }
 
-    size_t rows() const { return rows_; }
-    size_t cols() const { return cols_; }
+    usize rows() const { return rows_; }
+    usize cols() const { return cols_; }
 
     T* data() { return reinterpret_cast<T*>(data_.data()); }
     const T* data() const { return reinterpret_cast<const T*>(data_.data()); }
 
 private:
-    size_t rows_;
-    size_t cols_;
+    usize rows_;
+    usize cols_;
     std::vector<std::byte> data_;
 };
 
@@ -176,8 +172,8 @@ using CLCmdQueuePtr = std::unique_ptr<std::remove_pointer_t<cl_command_queue>,
 
 // Helper function to extend 2D vectors
 template <typename T>
-auto extend2D(const std::vector<std::vector<T>>& input, std::size_t newRows,
-              std::size_t newCols) -> std::vector<std::vector<T>> {
+auto extend2D(const std::vector<std::vector<T>>& input, usize newRows,
+              usize newCols) -> std::vector<std::vector<T>> {
     if (input.empty() || input[0].empty()) {
         THROW_CONVOLVE_ERROR("Input matrix cannot be empty");
     }
@@ -190,7 +186,7 @@ auto extend2D(const std::vector<std::vector<T>>& input, std::size_t newRows,
     std::vector<std::vector<T>> result(newRows, std::vector<T>(newCols, T{}));
 
     // Copy original data
-    for (std::size_t i = 0; i < input.size(); ++i) {
+    for (usize i = 0; i < input.size(); ++i) {
         if (input[i].size() != input[0].size()) {
             THROW_CONVOLVE_ERROR("Input matrix must have uniform column sizes");
         }
@@ -202,17 +198,17 @@ auto extend2D(const std::vector<std::vector<T>>& input, std::size_t newRows,
 
 // Helper function to extend 2D vectors with proper padding modes
 template <typename T>
-auto pad2D(const std::vector<std::vector<T>>& input, size_t padTop,
-           size_t padBottom, size_t padLeft, size_t padRight, PaddingMode mode)
+auto pad2D(const std::vector<std::vector<T>>& input, usize padTop,
+           usize padBottom, usize padLeft, usize padRight, PaddingMode mode)
     -> std::vector<std::vector<T>> {
     if (input.empty() || input[0].empty()) {
         THROW_CONVOLVE_ERROR("Cannot pad empty matrix");
     }
 
-    const size_t inputRows = input.size();
-    const size_t inputCols = input[0].size();
-    const size_t outputRows = inputRows + padTop + padBottom;
-    const size_t outputCols = inputCols + padLeft + padRight;
+    const usize inputRows = input.size();
+    const usize inputCols = input[0].size();
+    const usize outputRows = inputRows + padTop + padBottom;
+    const usize outputCols = inputCols + padLeft + padRight;
 
     std::vector<std::vector<T>> output(outputRows, std::vector<T>(outputCols));
 
@@ -220,8 +216,8 @@ auto pad2D(const std::vector<std::vector<T>>& input, size_t padTop,
     switch (mode) {
         case PaddingMode::VALID: {
             // In VALID mode, no padding is applied, just copy the original data
-            for (size_t i = 0; i < inputRows; ++i) {
-                for (size_t j = 0; j < inputCols; ++j) {
+            for (usize i = 0; i < inputRows; ++i) {
+                for (usize j = 0; j < inputCols; ++j) {
                     output[i + padTop][j + padLeft] = input[i][j];
                 }
             }
@@ -230,8 +226,8 @@ auto pad2D(const std::vector<std::vector<T>>& input, size_t padTop,
 
         case PaddingMode::SAME: {
             // For SAME mode, we pad the borders with zeros
-            for (size_t i = 0; i < inputRows; ++i) {
-                for (size_t j = 0; j < inputCols; ++j) {
+            for (usize i = 0; i < inputRows; ++i) {
+                for (usize j = 0; j < inputCols; ++j) {
                     output[i + padTop][j + padLeft] = input[i][j];
                 }
             }
@@ -241,74 +237,70 @@ auto pad2D(const std::vector<std::vector<T>>& input, size_t padTop,
         case PaddingMode::FULL: {
             // For FULL mode, we pad the borders with reflected values
             // Copy the original data
-            for (size_t i = 0; i < inputRows; ++i) {
-                for (size_t j = 0; j < inputCols; ++j) {
+            for (usize i = 0; i < inputRows; ++i) {
+                for (usize j = 0; j < inputCols; ++j) {
                     output[i + padTop][j + padLeft] = input[i][j];
                 }
             }
 
             // Top border padding
-            for (size_t i = 0; i < padTop; ++i) {
-                for (size_t j = 0; j < outputCols; ++j) {
+            for (usize i = 0; i < padTop; ++i) {
+                for (usize j = 0; j < outputCols; ++j) {
                     if (j < padLeft) {
                         // Top-left corner
                         output[padTop - 1 - i][padLeft - 1 - j] =
-                            input[std::min<size_t>(i, inputRows - 1)]
-                                 [std::min<size_t>(j, inputCols - 1)];
+                            input[Usize::min(i, inputRows - 1)]
+                                 [Usize::min(j, inputCols - 1)];
                     } else if (j >= padLeft + inputCols) {
                         // Top-right corner
                         output[padTop - 1 - i][j] =
-                            input[std::min<size_t>(i, inputRows - 1)]
-                                 [std::min<size_t>(
-                                     inputCols - 1 -
-                                         (j - (padLeft + inputCols)),
-                                     inputCols - 1)];
+                            input[Usize::min(i, inputRows - 1)][Usize::min(
+                                inputCols - 1 - (j - (padLeft + inputCols)),
+                                inputCols - 1)];
                     } else {
                         // Top edge
-                        output[padTop - 1 - i][j] = input[std::min<size_t>(
-                            i, inputRows - 1)][j - padLeft];
+                        output[padTop - 1 - i][j] =
+                            input[Usize::min(i, inputRows - 1)][j - padLeft];
                     }
                 }
             }
 
             // Bottom border padding
-            for (size_t i = 0; i < padBottom; ++i) {
-                for (size_t j = 0; j < outputCols; ++j) {
+            for (usize i = 0; i < padBottom; ++i) {
+                for (usize j = 0; j < outputCols; ++j) {
                     if (j < padLeft) {
                         // Bottom-left corner
                         output[padTop + inputRows + i][j] =
-                            input[std::max<size_t>(0UL, inputRows - 1 - i)]
-                                 [std::min<size_t>(j, inputCols - 1)];
+                            input[Usize::max(0UL, inputRows - 1 - i)]
+                                 [Usize::min(j, inputCols - 1)];
                     } else if (j >= padLeft + inputCols) {
                         // Bottom-right corner
                         output[padTop + inputRows + i][j] =
-                            input[std::max<size_t>(0UL, inputRows - 1 - i)]
-                                 [std::max<size_t>(
-                                     0UL, inputCols - 1 -
-                                              (j - (padLeft + inputCols)))];
+                            input[Usize::max(0UL, inputRows - 1 - i)]
+                                 [Usize::max(0UL,
+                                             inputCols - 1 -
+                                                 (j - (padLeft + inputCols)))];
                     } else {
                         // Bottom edge
-                        output[padTop + inputRows + i][j] =
-                            input[std::max<size_t>(0UL, inputRows - 1 - i)]
-                                 [j - padLeft];
+                        output[padTop + inputRows + i][j] = input[Usize::max(
+                            0UL, inputRows - 1 - i)][j - padLeft];
                     }
                 }
             }
 
             // Left border padding
-            for (size_t i = padTop; i < padTop + inputRows; ++i) {
-                for (size_t j = 0; j < padLeft; ++j) {
+            for (usize i = padTop; i < padTop + inputRows; ++i) {
+                for (usize j = 0; j < padLeft; ++j) {
                     output[i][padLeft - 1 - j] =
-                        input[i - padTop][std::min<size_t>(j, inputCols - 1)];
+                        input[i - padTop][Usize::min(j, inputCols - 1)];
                 }
             }
 
             // Right border padding
-            for (size_t i = padTop; i < padTop + inputRows; ++i) {
-                for (size_t j = 0; j < padRight; ++j) {
+            for (usize i = padTop; i < padTop + inputRows; ++i) {
+                for (usize j = 0; j < padRight; ++j) {
                     output[i][padLeft + inputCols + j] =
-                        input[i - padTop]
-                             [std::max<size_t>(0UL, inputCols - 1 - j)];
+                        input[i - padTop][Usize::max(0UL, inputCols - 1 - j)];
                 }
             }
 
@@ -320,11 +312,11 @@ auto pad2D(const std::vector<std::vector<T>>& input, size_t padTop,
 }
 
 // Helper function to get output dimensions for convolution
-auto getConvolutionOutputDimensions(size_t inputHeight, size_t inputWidth,
-                                    size_t kernelHeight, size_t kernelWidth,
-                                    size_t strideY, size_t strideX,
+auto getConvolutionOutputDimensions(usize inputHeight, usize inputWidth,
+                                    usize kernelHeight, usize kernelWidth,
+                                    usize strideY, usize strideX,
                                     PaddingMode paddingMode)
-    -> std::pair<size_t, size_t> {
+    -> std::pair<usize, usize> {
     if (kernelHeight > inputHeight || kernelWidth > inputWidth) {
         THROW_CONVOLVE_ERROR(
             "Kernel dimensions ({},{}) cannot be larger than input dimensions "
@@ -332,8 +324,8 @@ auto getConvolutionOutputDimensions(size_t inputHeight, size_t inputWidth,
             kernelHeight, kernelWidth, inputHeight, inputWidth);
     }
 
-    size_t outputHeight = 0;
-    size_t outputWidth = 0;
+    usize outputHeight = 0;
+    usize outputWidth = 0;
 
     switch (paddingMode) {
         case PaddingMode::VALID:
@@ -450,17 +442,17 @@ __kernel void convolve2D(__global const float* input,
 )CLC";
 
 // Function to convolve a 2D input with a 2D kernel using OpenCL
-auto convolve2DOpenCL(const std::vector<std::vector<double>>& input,
-                      const std::vector<std::vector<double>>& kernel,
-                      int numThreads) -> std::vector<std::vector<double>> {
+auto convolve2DOpenCL(const std::vector<std::vector<f64>>& input,
+                      const std::vector<std::vector<f64>>& kernel,
+                      i32 numThreads) -> std::vector<std::vector<f64>> {
     try {
         auto context = initializeOpenCL();
         auto queue = createCommandQueue(context.get());
 
-        const std::size_t inputRows = input.size();
-        const std::size_t inputCols = input[0].size();
-        const std::size_t kernelRows = kernel.size();
-        const std::size_t kernelCols = kernel[0].size();
+        const usize inputRows = input.size();
+        const usize inputCols = input[0].size();
+        const usize kernelRows = kernel.size();
+        const usize kernelCols = kernel[0].size();
 
         // 验证输入有效性
         if (inputRows == 0 || inputCols == 0 || kernelRows == 0 ||
@@ -484,22 +476,22 @@ auto convolve2DOpenCL(const std::vector<std::vector<double>>& input,
         }
 
         // 扁平化数据以便传输到OpenCL设备
-        std::vector<float> inputFlattened(inputRows * inputCols);
-        std::vector<float> kernelFlattened(kernelRows * kernelCols);
-        std::vector<float> outputFlattened(inputRows * inputCols, 0.0f);
+        std::vector<f32> inputFlattened(inputRows * inputCols);
+        std::vector<f32> kernelFlattened(kernelRows * kernelCols);
+        std::vector<f32> outputFlattened(inputRows * inputCols, 0.0f);
 
         // 使用C++20 ranges进行数据扁平化
-        for (std::size_t i = 0; i < inputRows; ++i) {
-            for (std::size_t j = 0; j < inputCols; ++j) {
+        for (usize i = 0; i < inputRows; ++i) {
+            for (usize j = 0; j < inputCols; ++j) {
                 inputFlattened[i * inputCols + j] =
-                    static_cast<float>(input[i][j]);
+                    static_cast<f32>(input[i][j]);
             }
         }
 
-        for (std::size_t i = 0; i < kernelRows; ++i) {
-            for (std::size_t j = 0; j < kernelCols; ++j) {
+        for (usize i = 0; i < kernelRows; ++i) {
+            for (usize j = 0; j < kernelCols; ++j) {
                 kernelFlattened[i * kernelCols + j] =
-                    static_cast<float>(kernel[i][j]);
+                    static_cast<f32>(kernel[i][j]);
             }
         }
 
@@ -507,19 +499,18 @@ auto convolve2DOpenCL(const std::vector<std::vector<double>>& input,
         cl_int err;
         CLMemPtr inputBuffer(clCreateBuffer(
             context.get(), CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-            sizeof(float) * inputFlattened.size(), inputFlattened.data(),
-            &err));
+            sizeof(f32) * inputFlattened.size(), inputFlattened.data(), &err));
         checkErr(err, "Creating input buffer");
 
         CLMemPtr kernelBuffer(clCreateBuffer(
             context.get(), CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-            sizeof(float) * kernelFlattened.size(), kernelFlattened.data(),
+            sizeof(f32) * kernelFlattened.size(), kernelFlattened.data(),
             &err));
         checkErr(err, "Creating kernel buffer");
 
         CLMemPtr outputBuffer(clCreateBuffer(
             context.get(), CL_MEM_WRITE_ONLY,
-            sizeof(float) * outputFlattened.size(), nullptr, &err));
+            sizeof(f32) * outputFlattened.size(), nullptr, &err));
         checkErr(err, "Creating output buffer");
 
         // 创建和编译OpenCL程序
@@ -532,7 +523,7 @@ auto convolve2DOpenCL(const std::vector<std::vector<double>>& input,
             cl_device_id device_id;
             clGetDeviceIDs(nullptr, CL_DEVICE_TYPE_GPU, 1, &device_id, nullptr);
 
-            size_t logSize;
+            usize logSize;
             clGetProgramBuildInfo(program.get(), device_id,
                                   CL_PROGRAM_BUILD_LOG, 0, nullptr, &logSize);
 
@@ -551,10 +542,10 @@ auto convolve2DOpenCL(const std::vector<std::vector<double>>& input,
         checkErr(err, "Creating kernel");
 
         // 设置内核参数
-        int inputRowsInt = static_cast<int>(inputRows);
-        int inputColsInt = static_cast<int>(inputCols);
-        int kernelRowsInt = static_cast<int>(kernelRows);
-        int kernelColsInt = static_cast<int>(kernelCols);
+        i32 inputRowsInt = static_cast<i32>(inputRows);
+        i32 inputColsInt = static_cast<i32>(inputCols);
+        i32 kernelRowsInt = static_cast<i32>(kernelRows);
+        i32 kernelColsInt = static_cast<i32>(kernelCols);
 
         err = clSetKernelArg(openclKernel.get(), 0, sizeof(cl_mem),
                              &inputBuffer.get());
@@ -563,17 +554,17 @@ auto convolve2DOpenCL(const std::vector<std::vector<double>>& input,
         err |= clSetKernelArg(openclKernel.get(), 2, sizeof(cl_mem),
                               &outputBuffer.get());
         err |=
-            clSetKernelArg(openclKernel.get(), 3, sizeof(int), &inputRowsInt);
+            clSetKernelArg(openclKernel.get(), 3, sizeof(i32), &inputRowsInt);
         err |=
-            clSetKernelArg(openclKernel.get(), 4, sizeof(int), &inputColsInt);
+            clSetKernelArg(openclKernel.get(), 4, sizeof(i32), &inputColsInt);
         err |=
-            clSetKernelArg(openclKernel.get(), 5, sizeof(int), &kernelRowsInt);
+            clSetKernelArg(openclKernel.get(), 5, sizeof(i32), &kernelRowsInt);
         err |=
-            clSetKernelArg(openclKernel.get(), 6, sizeof(int), &kernelColsInt);
+            clSetKernelArg(openclKernel.get(), 6, sizeof(i32), &kernelColsInt);
         checkErr(err, "Setting kernel arguments");
 
         // 执行内核
-        size_t globalWorkSize[2] = {inputRows, inputCols};
+        usize globalWorkSize[2] = {inputRows, inputCols};
         err = clEnqueueNDRangeKernel(queue.get(), openclKernel.get(), 2,
                                      nullptr, globalWorkSize, nullptr, 0,
                                      nullptr, nullptr);
@@ -583,18 +574,18 @@ auto convolve2DOpenCL(const std::vector<std::vector<double>>& input,
         clFinish(queue.get());
 
         err = clEnqueueReadBuffer(queue.get(), outputBuffer.get(), CL_TRUE, 0,
-                                  sizeof(float) * outputFlattened.size(),
+                                  sizeof(f32) * outputFlattened.size(),
                                   outputFlattened.data(), 0, nullptr, nullptr);
         checkErr(err, "Reading back output buffer");
 
         // 将结果转换回2D向量
-        std::vector<std::vector<double>> output(inputRows,
-                                                std::vector<double>(inputCols));
+        std::vector<std::vector<f64>> output(inputRows,
+                                             std::vector<f64>(inputCols));
 
-        for (std::size_t i = 0; i < inputRows; ++i) {
-            for (std::size_t j = 0; j < inputCols; ++j) {
+        for (usize i = 0; i < inputRows; ++i) {
+            for (usize j = 0; j < inputCols; ++j) {
                 output[i][j] =
-                    static_cast<double>(outputFlattened[i * inputCols + j]);
+                    static_cast<f64>(outputFlattened[i * inputCols + j]);
             }
         }
 
@@ -606,9 +597,9 @@ auto convolve2DOpenCL(const std::vector<std::vector<double>>& input,
 }
 
 // OpenCL实现的二维反卷积
-auto deconvolve2DOpenCL(const std::vector<std::vector<double>>& signal,
-                        const std::vector<std::vector<double>>& kernel,
-                        int numThreads) -> std::vector<std::vector<double>> {
+auto deconvolve2DOpenCL(const std::vector<std::vector<f64>>& signal,
+                        const std::vector<std::vector<f64>>& kernel,
+                        i32 numThreads) -> std::vector<std::vector<f64>> {
     try {
         // 可以实现OpenCL版本的反卷积
         // 这里为简化起见，调用非OpenCL版本
@@ -621,9 +612,9 @@ auto deconvolve2DOpenCL(const std::vector<std::vector<double>>& signal,
 
 // Function to convolve a 2D input with a 2D kernel using multithreading or
 // OpenCL
-auto convolve2D(const std::vector<std::vector<double>>& input,
-                const std::vector<std::vector<double>>& kernel, int numThreads)
-    -> std::vector<std::vector<double>> {
+auto convolve2D(const std::vector<std::vector<f64>>& input,
+                const std::vector<std::vector<f64>>& kernel, i32 numThreads)
+    -> std::vector<std::vector<f64>> {
     try {
         // 输入验证
         if (input.empty() || input[0].empty()) {
@@ -652,7 +643,8 @@ auto convolve2D(const std::vector<std::vector<double>>& input,
         }
 
         // 线程数验证和调整
-        int availableThreads = std::thread::hardware_concurrency();
+        i32 availableThreads =
+            static_cast<i32>(std::thread::hardware_concurrency());
         if (numThreads <= 0) {
             numThreads = 1;
         } else if (numThreads > availableThreads) {
@@ -662,8 +654,8 @@ auto convolve2D(const std::vector<std::vector<double>>& input,
 #if ATOM_USE_OPENCL
         return convolve2DOpenCL(input, kernel, numThreads);
 #else
-        const std::size_t inputRows = input.size();
-        const std::size_t kernelRows = kernel.size();
+        const usize inputRows = input.size();
+        const usize kernelRows = kernel.size();
 
         // 扩展输入和卷积核以便于计算
         auto extendedInput = extend2D(input, inputRows + kernelRows - 1,
@@ -671,28 +663,27 @@ auto convolve2D(const std::vector<std::vector<double>>& input,
         auto extendedKernel = extend2D(kernel, inputRows + kernelRows - 1,
                                        inputCols + kernelCols - 1);
 
-        std::vector<std::vector<double>> output(
-            inputRows, std::vector<double>(inputCols, 0.0));
+        std::vector<std::vector<f64>> output(inputRows,
+                                             std::vector<f64>(inputCols, 0.0));
 
         // 使用C++20 ranges提高可读性，用std::execution提高性能
-        auto computeBlock = [&](std::size_t blockStartRow,
-                                std::size_t blockEndRow) {
-            for (std::size_t i = blockStartRow; i < blockEndRow; ++i) {
-                for (std::size_t j = 0; j < inputCols; ++j) {
-                    double sum = 0.0;
+        auto computeBlock = [&](usize blockStartRow, usize blockEndRow) {
+            for (usize i = blockStartRow; i < blockEndRow; ++i) {
+                for (usize j = 0; j < inputCols; ++j) {
+                    f64 sum = 0.0;
 
 #ifdef ATOM_ATOM_USE_SIMD
                     // 使用SIMD加速内循环计算
-                    const std::size_t kernelRowMid = kernelRows / 2;
-                    const std::size_t kernelColMid = kernelCols / 2;
+                    const usize kernelRowMid = kernelRows / 2;
+                    const usize kernelColMid = kernelCols / 2;
 
                     // SIMD_ALIGNED double simdSum[SIMD_WIDTH] = {0.0};
                     // __m256d sum_vec = _mm256_setzero_pd();
 
-                    for (std::size_t ki = 0; ki < kernelRows; ++ki) {
-                        for (std::size_t kj = 0; kj < kernelCols; ++kj) {
-                            std::size_t ii = i + ki;
-                            std::size_t jj = j + kj;
+                    for (usize ki = 0; ki < kernelRows; ++ki) {
+                        for (usize kj = 0; kj < kernelCols; ++kj) {
+                            usize ii = i + ki;
+                            usize jj = j + kj;
                             if (ii < inputRows + kernelRows - 1 &&
                                 jj < inputCols + kernelCols - 1) {
                                 sum += extendedInput[ii][jj] *
@@ -703,10 +694,10 @@ auto convolve2D(const std::vector<std::vector<double>>& input,
                     }
 #else
                     // 标准实现
-                    for (std::size_t ki = 0; ki < kernelRows; ++ki) {
-                        for (std::size_t kj = 0; kj < kernelCols; ++kj) {
-                            std::size_t ii = i + ki;
-                            std::size_t jj = j + kj;
+                    for (usize ki = 0; ki < kernelRows; ++ki) {
+                        for (usize kj = 0; kj < kernelCols; ++kj) {
+                            usize ii = i + ki;
+                            usize jj = j + kj;
                             if (ii < inputRows + kernelRows - 1 &&
                                 jj < inputCols + kernelCols - 1) {
                                 sum += extendedInput[ii][jj] *
@@ -724,13 +715,15 @@ auto convolve2D(const std::vector<std::vector<double>>& input,
         // 使用多线程处理
         if (numThreads > 1) {
             std::vector<std::jthread> threadPool;
-            std::size_t blockSize = (inputRows + numThreads - 1) / numThreads;
-            std::size_t blockStartRow = kernelRows / 2;
+            usize blockSize = (inputRows + static_cast<usize>(numThreads) - 1) /
+                              static_cast<usize>(numThreads);
+            usize blockStartRow = kernelRows / 2;
 
-            for (int threadIndex = 0; threadIndex < numThreads; ++threadIndex) {
-                std::size_t startRow = blockStartRow + threadIndex * blockSize;
-                std::size_t endRow =
-                    std::min(startRow + blockSize, inputRows + kernelRows / 2);
+            for (i32 threadIndex = 0; threadIndex < numThreads; ++threadIndex) {
+                usize startRow =
+                    blockStartRow + static_cast<usize>(threadIndex) * blockSize;
+                usize endRow = Usize::min(startRow + blockSize,
+                                          inputRows + kernelRows / 2);
 
                 // 使用C++20 jthread自动管理线程生命周期
                 threadPool.emplace_back(computeBlock, startRow, endRow);
@@ -751,9 +744,9 @@ auto convolve2D(const std::vector<std::vector<double>>& input,
 
 // Function to deconvolve a 2D input with a 2D kernel using multithreading or
 // OpenCL
-auto deconvolve2D(const std::vector<std::vector<double>>& signal,
-                  const std::vector<std::vector<double>>& kernel,
-                  int numThreads) -> std::vector<std::vector<double>> {
+auto deconvolve2D(const std::vector<std::vector<f64>>& signal,
+                  const std::vector<std::vector<f64>>& kernel, i32 numThreads)
+    -> std::vector<std::vector<f64>> {
     try {
         // 输入验证
         if (signal.empty() || signal[0].empty()) {
@@ -782,7 +775,8 @@ auto deconvolve2D(const std::vector<std::vector<double>>& signal,
         }
 
         // 线程数验证和调整
-        int availableThreads = std::thread::hardware_concurrency();
+        i32 availableThreads =
+            static_cast<i32>(std::thread::hardware_concurrency());
         if (numThreads <= 0) {
             numThreads = 1;
         } else if (numThreads > availableThreads) {
@@ -792,8 +786,8 @@ auto deconvolve2D(const std::vector<std::vector<double>>& signal,
 #if ATOM_USE_OPENCL
         return deconvolve2DOpenCL(signal, kernel, numThreads);
 #else
-        const std::size_t signalRows = signal.size();
-        const std::size_t kernelRows = kernel.size();
+        const usize signalRows = signal.size();
+        const usize kernelRows = kernel.size();
 
         auto extendedSignal = extend2D(signal, signalRows + kernelRows - 1,
                                        signalCols + kernelCols - 1);
@@ -801,7 +795,7 @@ auto deconvolve2D(const std::vector<std::vector<double>>& signal,
                                        signalCols + kernelCols - 1);
 
         auto discreteFourierTransform2D =
-            [&](const std::vector<std::vector<double>>& input) {
+            [&](const std::vector<std::vector<f64>>& input) {
                 return dfT2D(
                     input,
                     numThreads);  // Assume DFT2D supports multithreading
@@ -810,19 +804,19 @@ auto deconvolve2D(const std::vector<std::vector<double>>& signal,
         auto frequencySignal = discreteFourierTransform2D(extendedSignal);
         auto frequencyKernel = discreteFourierTransform2D(extendedKernel);
 
-        std::vector<std::vector<std::complex<double>>> frequencyProduct(
+        std::vector<std::vector<std::complex<f64>>> frequencyProduct(
             signalRows + kernelRows - 1,
-            std::vector<std::complex<double>>(signalCols + kernelCols - 1,
-                                              {0, 0}));
+            std::vector<std::complex<f64>>(signalCols + kernelCols - 1,
+                                           {0, 0}));
 
         // SIMD-optimized computation of frequencyProduct
 #ifdef ATOM_ATOM_USE_SIMD
-        const int simdWidth = SIMD_WIDTH;
+        const i32 simdWidth = SIMD_WIDTH;
         __m256d epsilon_vec = _mm256_set1_pd(EPSILON);
 
-        for (std::size_t u = 0; u < signalRows + kernelRows - 1; ++u) {
-            for (std::size_t v = 0; v < signalCols + kernelCols - 1;
-                 v += simdWidth) {
+        for (usize u = 0; u < signalRows + kernelRows - 1; ++u) {
+            for (usize v = 0; v < signalCols + kernelCols - 1;
+                 v += static_cast<usize>(simdWidth)) {
                 __m256d kernelReal =
                     _mm256_loadu_pd(&frequencyKernel[u][v].real());
                 __m256d kernelImag =
@@ -855,8 +849,9 @@ auto deconvolve2D(const std::vector<std::vector<double>>& signal,
             }
 
             // Handle remaining elements
-            for (std::size_t v =
-                     ((signalCols + kernelCols - 1) / simdWidth) * simdWidth;
+            for (usize v = ((signalCols + kernelCols - 1) /
+                            static_cast<usize>(simdWidth)) *
+                           static_cast<usize>(simdWidth);
                  v < signalCols + kernelCols - 1; ++v) {
                 if (std::abs(frequencyKernel[u][v]) > EPSILON) {
                     frequencyProduct[u][v] =
@@ -869,8 +864,8 @@ auto deconvolve2D(const std::vector<std::vector<double>>& signal,
         }
 #else
         // Fallback to non-SIMD version
-        for (std::size_t u = 0; u < signalRows + kernelRows - 1; ++u) {
-            for (std::size_t v = 0; v < signalCols + kernelCols - 1; ++v) {
+        for (usize u = 0; u < signalRows + kernelRows - 1; ++u) {
+            for (usize v = 0; v < signalCols + kernelCols - 1; ++v) {
                 if (std::abs(frequencyKernel[u][v]) > EPSILON) {
                     frequencyProduct[u][v] =
                         std::conj(frequencyKernel[u][v]) /
@@ -882,15 +877,15 @@ auto deconvolve2D(const std::vector<std::vector<double>>& signal,
         }
 #endif
 
-        std::vector<std::vector<double>> frequencyInverse =
+        std::vector<std::vector<f64>> frequencyInverse =
             idfT2D(frequencyProduct, numThreads);
 
-        std::vector<std::vector<double>> result(
-            signalRows, std::vector<double>(signalCols, 0.0));
-        for (std::size_t i = 0; i < signalRows; ++i) {
-            for (std::size_t j = 0; j < signalCols; ++j) {
-                result[i][j] =
-                    frequencyInverse[i][j] / (signalRows * signalCols);
+        std::vector<std::vector<f64>> result(signalRows,
+                                             std::vector<f64>(signalCols, 0.0));
+        for (usize i = 0; i < signalRows; ++i) {
+            for (usize j = 0; j < signalCols; ++j) {
+                result[i][j] = frequencyInverse[i][j] /
+                               static_cast<f64>(signalRows * signalCols);
             }
         }
 
@@ -902,41 +897,45 @@ auto deconvolve2D(const std::vector<std::vector<double>>& signal,
 }
 
 // 2D Discrete Fourier Transform (2D DFT)
-auto dfT2D(const std::vector<std::vector<double>>& signal, int numThreads)
-    -> std::vector<std::vector<std::complex<double>>> {
-    const std::size_t M = signal.size();
-    const std::size_t N = signal[0].size();
-    std::vector<std::vector<std::complex<double>>> frequency(
-        M, std::vector<std::complex<double>>(N, {0, 0}));
+auto dfT2D(const std::vector<std::vector<f64>>& signal, i32 numThreads)
+    -> std::vector<std::vector<std::complex<f64>>> {
+    const usize M = signal.size();
+    const usize N = signal[0].size();
+    std::vector<std::vector<std::complex<f64>>> frequency(
+        M, std::vector<std::complex<f64>>(N, {0, 0}));
 
     // Lambda function to compute the DFT for a block of rows
-    auto computeDFT = [&](std::size_t startRow, std::size_t endRow) {
+    auto computeDFT = [&](usize startRow, usize endRow) {
 #ifdef ATOM_ATOM_USE_SIMD
-        std::array<double, 4> realParts{};
-        std::array<double, 4> imagParts{};
+        std::array<f64, 4> realParts{};
+        std::array<f64, 4> imagParts{};
 #endif
-        for (std::size_t u = startRow; u < endRow; ++u) {
-            for (std::size_t v = 0; v < N; ++v) {
+        for (usize u = startRow; u < endRow; ++u) {
+            for (usize v = 0; v < N; ++v) {
 #ifdef ATOM_ATOM_USE_SIMD
                 __m256d sumReal = _mm256_setzero_pd();
                 __m256d sumImag = _mm256_setzero_pd();
 
-                for (std::size_t m = 0; m < M; ++m) {
-                    for (std::size_t n = 0; n < N; n += 4) {
-                        double theta[4];
-                        for (int k = 0; k < 4; ++k) {
-                            theta[k] = -2.0 * std::numbers::pi *
-                                       ((static_cast<double>(u) * m) / M +
-                                        (static_cast<double>(v) * (n + k)) / N);
+                for (usize m = 0; m < M; ++m) {
+                    for (usize n = 0; n < N; n += 4) {
+                        f64 theta[4];
+                        for (i32 k = 0; k < 4; ++k) {
+                            theta[k] =
+                                -2.0 * std::numbers::pi *
+                                ((static_cast<f64>(u) * static_cast<f64>(m)) /
+                                     static_cast<f64>(M) +
+                                 (static_cast<f64>(v) *
+                                  static_cast<f64>(n + static_cast<usize>(k))) /
+                                     static_cast<f64>(N));
                         }
 
                         __m256d signalVec = _mm256_loadu_pd(&signal[m][n]);
                         __m256d cosVec = _mm256_setr_pd(
-                            std::cos(theta[0]), std::cos(theta[1]),
-                            std::cos(theta[2]), std::cos(theta[3]));
+                            F64::cos(theta[0]), F64::cos(theta[1]),
+                            F64::cos(theta[2]), F64::cos(theta[3]));
                         __m256d sinVec = _mm256_setr_pd(
-                            std::sin(theta[0]), std::sin(theta[1]),
-                            std::sin(theta[2]), std::sin(theta[3]));
+                            F64::sin(theta[0]), F64::sin(theta[1]),
+                            F64::sin(theta[2]), F64::sin(theta[3]));
 
                         sumReal = _mm256_add_pd(
                             sumReal, _mm256_mul_pd(signalVec, cosVec));
@@ -948,23 +947,23 @@ auto dfT2D(const std::vector<std::vector<double>>& signal, int numThreads)
                 _mm256_store_pd(realParts.data(), sumReal);
                 _mm256_store_pd(imagParts.data(), sumImag);
 
-                double realSum =
+                f64 realSum =
                     realParts[0] + realParts[1] + realParts[2] + realParts[3];
-                double imagSum =
+                f64 imagSum =
                     imagParts[0] + imagParts[1] + imagParts[2] + imagParts[3];
 
-                frequency[u][v] = std::complex<double>(realSum, imagSum);
+                frequency[u][v] = std::complex<f64>(realSum, imagSum);
 #else
-                std::complex<double> sum(0, 0);
-                for (std::size_t m = 0; m < M; ++m) {
-                    for (std::size_t n = 0; n < N; ++n) {
-                        double theta = -2 * std::numbers::pi *
-                                       ((static_cast<double>(u) * m) /
-                                            static_cast<double>(M) +
-                                        (static_cast<double>(v) * n) /
-                                            static_cast<double>(N));
-                        std::complex<double> w(std::cos(theta),
-                                               std::sin(theta));
+                std::complex<f64> sum(0, 0);
+                for (usize m = 0; m < M; ++m) {
+                    for (usize n = 0; n < N; ++n) {
+                        f64 theta =
+                            -2 * std::numbers::pi *
+                            ((static_cast<f64>(u) * static_cast<f64>(m)) /
+                                 static_cast<f64>(M) +
+                             (static_cast<f64>(v) * static_cast<f64>(n)) /
+                                 static_cast<f64>(N));
+                        std::complex<f64> w(F64::cos(theta), F64::sin(theta));
                         sum += signal[m][n] * w;
                     }
                 }
@@ -977,13 +976,13 @@ auto dfT2D(const std::vector<std::vector<double>>& signal, int numThreads)
     // Multithreading support
     if (numThreads > 1) {
         std::vector<std::jthread> threadPool;
-        std::size_t rowsPerThread = M / numThreads;
-        std::size_t blockStartRow = 0;
+        usize rowsPerThread = M / static_cast<usize>(numThreads);
+        usize blockStartRow = 0;
 
-        for (int threadIndex = 0; threadIndex < numThreads; ++threadIndex) {
-            std::size_t blockEndRow = (threadIndex == numThreads - 1)
-                                          ? M
-                                          : blockStartRow + rowsPerThread;
+        for (i32 threadIndex = 0; threadIndex < numThreads; ++threadIndex) {
+            usize blockEndRow = (threadIndex == numThreads - 1)
+                                    ? M
+                                    : blockStartRow + rowsPerThread;
             threadPool.emplace_back(computeDFT, blockStartRow, blockEndRow);
             blockStartRow = blockEndRow;
         }
@@ -998,42 +997,45 @@ auto dfT2D(const std::vector<std::vector<double>>& signal, int numThreads)
 }
 
 // 2D Inverse Discrete Fourier Transform (2D IDFT)
-auto idfT2D(const std::vector<std::vector<std::complex<double>>>& spectrum,
-            int numThreads) -> std::vector<std::vector<double>> {
-    const std::size_t M = spectrum.size();
-    const std::size_t N = spectrum[0].size();
-    std::vector<std::vector<double>> spatial(M, std::vector<double>(N, 0.0));
+auto idfT2D(const std::vector<std::vector<std::complex<f64>>>& spectrum,
+            i32 numThreads) -> std::vector<std::vector<f64>> {
+    const usize M = spectrum.size();
+    const usize N = spectrum[0].size();
+    std::vector<std::vector<f64>> spatial(M, std::vector<f64>(N, 0.0));
 
     // Lambda function to compute the IDFT for a block of rows
-    auto computeIDFT = [&](std::size_t startRow, std::size_t endRow) {
-        for (std::size_t m = startRow; m < endRow; ++m) {
-            for (std::size_t n = 0; n < N; ++n) {
+    auto computeIDFT = [&](usize startRow, usize endRow) {
+        for (usize m = startRow; m < endRow; ++m) {
+            for (usize n = 0; n < N; ++n) {
 #ifdef ATOM_ATOM_USE_SIMD
                 __m256d sumReal = _mm256_setzero_pd();
                 __m256d sumImag = _mm256_setzero_pd();
-                for (std::size_t u = 0; u < M; ++u) {
-                    for (std::size_t v = 0; v < N; v += SIMD_WIDTH) {
+                for (usize u = 0; u < M; ++u) {
+                    for (usize v = 0; v < N; v += SIMD_WIDTH) {
                         __m256d theta = _mm256_set_pd(
                             2 * std::numbers::pi *
-                                ((static_cast<double>(u) * m) /
-                                     static_cast<double>(M) +
-                                 (static_cast<double>(v) * (n + 3)) /
-                                     static_cast<double>(N)),
+                                ((static_cast<f64>(u) * static_cast<f64>(m)) /
+                                     static_cast<f64>(M) +
+                                 (static_cast<f64>(v) *
+                                  static_cast<f64>(n + 3)) /
+                                     static_cast<f64>(N)),
                             2 * std::numbers::pi *
-                                ((static_cast<double>(u) * m) /
-                                     static_cast<double>(M) +
-                                 (static_cast<double>(v) * (n + 2)) /
-                                     static_cast<double>(N)),
+                                ((static_cast<f64>(u) * static_cast<f64>(m)) /
+                                     static_cast<f64>(M) +
+                                 (static_cast<f64>(v) *
+                                  static_cast<f64>(n + 2)) /
+                                     static_cast<f64>(N)),
                             2 * std::numbers::pi *
-                                ((static_cast<double>(u) * m) /
-                                     static_cast<double>(M) +
-                                 (static_cast<double>(v) * (n + 1)) /
-                                     static_cast<double>(N)),
+                                ((static_cast<f64>(u) * static_cast<f64>(m)) /
+                                     static_cast<f64>(M) +
+                                 (static_cast<f64>(v) *
+                                  static_cast<f64>(n + 1)) /
+                                     static_cast<f64>(N)),
                             2 * std::numbers::pi *
-                                ((static_cast<double>(u) * m) /
-                                     static_cast<double>(M) +
-                                 (static_cast<double>(v) * n) /
-                                     static_cast<double>(N)));
+                                ((static_cast<f64>(u) * static_cast<f64>(m)) /
+                                     static_cast<f64>(M) +
+                                 (static_cast<f64>(v) * static_cast<f64>(n)) /
+                                     static_cast<f64>(N)));
                         __m256d wReal = _mm256_cos_pd(theta);
                         __m256d wImag = _mm256_sin_pd(theta);
                         __m256d spectrumReal =
@@ -1047,31 +1049,28 @@ auto idfT2D(const std::vector<std::vector<std::complex<double>>>& spectrum,
                 }
                 // Assuming _mm256_reduce_add_pd is defined or use an
                 // alternative
-                double realPart =
-                    _mm256_hadd_pd(sumReal, sumReal).m256d_f64[0] +
-                    _mm256_hadd_pd(sumReal, sumReal).m256d_f64[2];
-                double imagPart =
-                    _mm256_hadd_pd(sumImag, sumImag).m256d_f64[0] +
-                    _mm256_hadd_pd(sumImag, sumImag).m256d_f64[2];
-                spatial[m][n] =
-                    (realPart + imagPart) /
-                    (static_cast<double>(M) * static_cast<double>(N));
+                f64 realPart = _mm256_hadd_pd(sumReal, sumReal).m256d_f64[0] +
+                               _mm256_hadd_pd(sumReal, sumReal).m256d_f64[2];
+                f64 imagPart = _mm256_hadd_pd(sumImag, sumImag).m256d_f64[0] +
+                               _mm256_hadd_pd(sumImag, sumImag).m256d_f64[2];
+                spatial[m][n] = (realPart + imagPart) /
+                                (static_cast<f64>(M) * static_cast<f64>(N));
 #else
-                std::complex<double> sum(0.0, 0.0);
-                for (std::size_t u = 0; u < M; ++u) {
-                    for (std::size_t v = 0; v < N; ++v) {
-                        double theta = 2 * std::numbers::pi *
-                                       ((static_cast<double>(u) * m) /
-                                            static_cast<double>(M) +
-                                        (static_cast<double>(v) * n) /
-                                            static_cast<double>(N));
-                        std::complex<double> w(std::cos(theta),
-                                               std::sin(theta));
+                std::complex<f64> sum(0.0, 0.0);
+                for (usize u = 0; u < M; ++u) {
+                    for (usize v = 0; v < N; ++v) {
+                        f64 theta =
+                            2 * std::numbers::pi *
+                            ((static_cast<f64>(u) * static_cast<f64>(m)) /
+                                 static_cast<f64>(M) +
+                             (static_cast<f64>(v) * static_cast<f64>(n)) /
+                                 static_cast<f64>(N));
+                        std::complex<f64> w(F64::cos(theta), F64::sin(theta));
                         sum += spectrum[u][v] * w;
                     }
                 }
-                spatial[m][n] = std::real(sum) / (static_cast<double>(M) *
-                                                  static_cast<double>(N));
+                spatial[m][n] = std::real(sum) /
+                                (static_cast<f64>(M) * static_cast<f64>(N));
 #endif
             }
         }
@@ -1080,13 +1079,13 @@ auto idfT2D(const std::vector<std::vector<std::complex<double>>>& spectrum,
     // Multithreading support
     if (numThreads > 1) {
         std::vector<std::jthread> threadPool;
-        std::size_t rowsPerThread = M / numThreads;
-        std::size_t blockStartRow = 0;
+        usize rowsPerThread = M / static_cast<usize>(numThreads);
+        usize blockStartRow = 0;
 
-        for (int threadIndex = 0; threadIndex < numThreads; ++threadIndex) {
-            std::size_t blockEndRow = (threadIndex == numThreads - 1)
-                                          ? M
-                                          : blockStartRow + rowsPerThread;
+        for (i32 threadIndex = 0; threadIndex < numThreads; ++threadIndex) {
+            usize blockEndRow = (threadIndex == numThreads - 1)
+                                    ? M
+                                    : blockStartRow + rowsPerThread;
             threadPool.emplace_back(computeIDFT, blockStartRow, blockEndRow);
             blockStartRow = blockEndRow;
         }
@@ -1101,14 +1100,15 @@ auto idfT2D(const std::vector<std::vector<std::complex<double>>>& spectrum,
 }
 
 // Function to generate a Gaussian kernel
-auto generateGaussianKernel(int size, double sigma)
-    -> std::vector<std::vector<double>> {
-    std::vector<std::vector<double>> kernel(size, std::vector<double>(size));
-    double sum = 0.0;
-    int center = size / 2;
+auto generateGaussianKernel(i32 size, f64 sigma)
+    -> std::vector<std::vector<f64>> {
+    std::vector<std::vector<f64>> kernel(
+        static_cast<usize>(size), std::vector<f64>(static_cast<usize>(size)));
+    f64 sum = 0.0;
+    i32 center = size / 2;
 
 #ifdef ATOM_ATOM_USE_SIMD
-    SIMD_ALIGNED double tempBuffer[SIMD_WIDTH];
+    SIMD_ALIGNED f64 tempBuffer[SIMD_WIDTH];
     __m256d sigmaVec = _mm256_set1_pd(sigma);
     __m256d twoSigmaSquared =
         _mm256_mul_pd(_mm256_set1_pd(2.0), _mm256_mul_pd(sigmaVec, sigmaVec));
@@ -1116,13 +1116,13 @@ auto generateGaussianKernel(int size, double sigma)
         _mm256_set1_pd(1.0),
         _mm256_mul_pd(_mm256_set1_pd(2 * std::numbers::pi), twoSigmaSquared));
 
-    for (int i = 0; i < size; ++i) {
-        __m256d iVec = _mm256_set1_pd(static_cast<double>(i - center));
-        for (int j = 0; j < size; j += SIMD_WIDTH) {
-            __m256d jVec = _mm256_set_pd(static_cast<double>(j + 3 - center),
-                                         static_cast<double>(j + 2 - center),
-                                         static_cast<double>(j + 1 - center),
-                                         static_cast<double>(j - center));
+    for (i32 i = 0; i < size; ++i) {
+        __m256d iVec = _mm256_set1_pd(static_cast<f64>(i - center));
+        for (i32 j = 0; j < size; j += SIMD_WIDTH) {
+            __m256d jVec = _mm256_set_pd(static_cast<f64>(j + 3 - center),
+                                         static_cast<f64>(j + 2 - center),
+                                         static_cast<f64>(j + 1 - center),
+                                         static_cast<f64>(j - center));
 
             __m256d xSquared = _mm256_mul_pd(iVec, iVec);
             __m256d ySquared = _mm256_mul_pd(jVec, jVec);
@@ -1133,8 +1133,9 @@ auto generateGaussianKernel(int size, double sigma)
                 _mm256_exp_pd(_mm256_mul_pd(_mm256_set1_pd(-0.5), exponent)));
 
             _mm256_store_pd(tempBuffer, kernelValues);
-            for (int k = 0; k < SIMD_WIDTH && (j + k) < size; ++k) {
-                kernel[i][j + k] = tempBuffer[k];
+            for (i32 k = 0; k < SIMD_WIDTH && (j + k) < size; ++k) {
+                kernel[static_cast<usize>(i)][static_cast<usize>(j + k)] =
+                    tempBuffer[k];
                 sum += tempBuffer[k];
             }
         }
@@ -1142,28 +1143,33 @@ auto generateGaussianKernel(int size, double sigma)
 
     // Normalize to ensure the sum of the weights is 1
     __m256d sumVec = _mm256_set1_pd(sum);
-    for (int i = 0; i < size; ++i) {
-        for (int j = 0; j < size; j += SIMD_WIDTH) {
-            __m256d kernelValues = _mm256_loadu_pd(&kernel[i][j]);
+    for (i32 i = 0; i < size; ++i) {
+        for (i32 j = 0; j < size; j += SIMD_WIDTH) {
+            __m256d kernelValues = _mm256_loadu_pd(
+                &kernel[static_cast<usize>(i)][static_cast<usize>(j)]);
             kernelValues = _mm256_div_pd(kernelValues, sumVec);
-            _mm256_storeu_pd(&kernel[i][j], kernelValues);
+            _mm256_storeu_pd(
+                &kernel[static_cast<usize>(i)][static_cast<usize>(j)],
+                kernelValues);
         }
     }
 #else
-    for (int i = 0; i < size; ++i) {
-        for (int j = 0; j < size; ++j) {
-            kernel[i][j] =
-                std::exp(-0.5 * (std::pow((i - center) / sigma, 2.0) +
-                                 std::pow((j - center) / sigma, 2.0))) /
+    for (i32 i = 0; i < size; ++i) {
+        for (i32 j = 0; i < size; ++j) {
+            kernel[static_cast<usize>(i)][static_cast<usize>(j)] =
+                F64::exp(
+                    -0.5 *
+                    (F64::pow(static_cast<f64>(i - center) / sigma, 2.0) +
+                     F64::pow(static_cast<f64>(j - center) / sigma, 2.0))) /
                 (2 * std::numbers::pi * sigma * sigma);
-            sum += kernel[i][j];
+            sum += kernel[static_cast<usize>(i)][static_cast<usize>(j)];
         }
     }
 
     // Normalize to ensure the sum of the weights is 1
-    for (int i = 0; i < size; ++i) {
-        for (int j = 0; j < size; ++j) {  // 修复循环变量错误
-            kernel[i][j] /= sum;
+    for (i32 i = 0; i < size; ++i) {
+        for (i32 j = 0; j < size; ++j) {  // 修复循环变量错误
+            kernel[static_cast<usize>(i)][static_cast<usize>(j)] /= sum;
         }
     }
 #endif
@@ -1172,34 +1178,36 @@ auto generateGaussianKernel(int size, double sigma)
 }
 
 // Function to apply Gaussian filter to an image
-auto applyGaussianFilter(const std::vector<std::vector<double>>& image,
-                         const std::vector<std::vector<double>>& kernel)
-    -> std::vector<std::vector<double>> {
-    const std::size_t imageHeight = image.size();
-    const std::size_t imageWidth = image[0].size();
-    const std::size_t kernelSize = kernel.size();
-    const std::size_t kernelRadius = kernelSize / 2;
-    std::vector<std::vector<double>> filteredImage(
-        imageHeight, std::vector<double>(imageWidth, 0.0));
+auto applyGaussianFilter(const std::vector<std::vector<f64>>& image,
+                         const std::vector<std::vector<f64>>& kernel)
+    -> std::vector<std::vector<f64>> {
+    const usize imageHeight = image.size();
+    const usize imageWidth = image[0].size();
+    const usize kernelSize = kernel.size();
+    const usize kernelRadius = kernelSize / 2;
+    std::vector<std::vector<f64>> filteredImage(
+        imageHeight, std::vector<f64>(imageWidth, 0.0));
 
 #ifdef ATOM_ATOM_USE_SIMD
-    SIMD_ALIGNED double tempBuffer[SIMD_WIDTH];
+    SIMD_ALIGNED f64 tempBuffer[SIMD_WIDTH];
 
-    for (std::size_t i = 0; i < imageHeight; ++i) {
-        for (std::size_t j = 0; j < imageWidth; j += SIMD_WIDTH) {
+    for (usize i = 0; i < imageHeight; ++i) {
+        for (usize j = 0; j < imageWidth; j += SIMD_WIDTH) {
             __m256d sumVec = _mm256_setzero_pd();
 
-            for (std::size_t k = 0; k < kernelSize; ++k) {
-                for (std::size_t l = 0; l < kernelSize; ++l) {
+            for (usize k = 0; k < kernelSize; ++k) {
+                for (usize l = 0; l < kernelSize; ++l) {
                     __m256d kernelVal = _mm256_set1_pd(
                         kernel[kernelRadius + k][kernelRadius + l]);
 
-                    for (int m = 0; m < SIMD_WIDTH; ++m) {
-                        int x = std::clamp(static_cast<int>(i + k), 0,
-                                           static_cast<int>(imageHeight) - 1);
-                        int y = std::clamp(static_cast<int>(j + l + m), 0,
-                                           static_cast<int>(imageWidth) - 1);
-                        tempBuffer[m] = image[x][y];
+                    for (i32 m = 0; m < SIMD_WIDTH; ++m) {
+                        i32 x = I32::clamp(static_cast<i32>(i + k), 0,
+                                           static_cast<i32>(imageHeight) - 1);
+                        i32 y = I32::clamp(
+                            static_cast<i32>(j + l + static_cast<usize>(m)), 0,
+                            static_cast<i32>(imageWidth) - 1);
+                        tempBuffer[m] =
+                            image[static_cast<usize>(x)][static_cast<usize>(y)];
                     }
 
                     __m256d imageVal = _mm256_loadu_pd(tempBuffer);
@@ -1209,22 +1217,24 @@ auto applyGaussianFilter(const std::vector<std::vector<double>>& image,
             }
 
             _mm256_storeu_pd(tempBuffer, sumVec);
-            for (int m = 0; m < SIMD_WIDTH && (j + m) < imageWidth; ++m) {
-                filteredImage[i][j + m] = tempBuffer[m];
+            for (i32 m = 0;
+                 m < SIMD_WIDTH && (j + static_cast<usize>(m)) < imageWidth;
+                 ++m) {
+                filteredImage[i][j + static_cast<usize>(m)] = tempBuffer[m];
             }
         }
     }
 #else
-    for (std::size_t i = 0; i < imageHeight; ++i) {
-        for (std::size_t j = 0; j < imageWidth; ++j) {
-            double sum = 0.0;
-            for (std::size_t k = 0; k < kernelSize; ++k) {
-                for (std::size_t l = 0; l < kernelSize; ++l) {
-                    int x = std::clamp(static_cast<int>(i + k), 0,
-                                       static_cast<int>(imageHeight) - 1);
-                    int y = std::clamp(static_cast<int>(j + l), 0,
-                                       static_cast<int>(imageWidth) - 1);
-                    sum += image[x][y] *
+    for (usize i = 0; i < imageHeight; ++i) {
+        for (usize j = 0; j < imageWidth; ++j) {
+            f64 sum = 0.0;
+            for (usize k = 0; k < kernelSize; ++k) {
+                for (usize l = 0; l < kernelSize; ++l) {
+                    i32 x = I32::clamp(static_cast<i32>(i + k), 0,
+                                       static_cast<i32>(imageHeight) - 1);
+                    i32 y = I32::clamp(static_cast<i32>(j + l), 0,
+                                       static_cast<i32>(imageWidth) - 1);
+                    sum += image[static_cast<usize>(x)][static_cast<usize>(y)] *
                            kernel[kernelRadius + k][kernelRadius + l];
                 }
             }

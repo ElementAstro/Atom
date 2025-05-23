@@ -3,10 +3,12 @@
 
 #include <array>
 #include <concepts>
-#include <cstdint>
 #include <span>
 #include <string>
 #include <vector>
+
+#include <spdlog/spdlog.h>
+#include "atom/algorithm/rust_numeric.hpp"
 
 #ifdef __AVX2__
 #include <immintrin.h>  // AVX2 instruction set
@@ -18,14 +20,14 @@ namespace atom::algorithm {
  * @brief Concept that checks if a type is a byte container.
  *
  * A type satisfies this concept if it provides access to its data as a
- * contiguous array of `uint8_t` and provides a size.
+ * contiguous array of `u8` and provides a size.
  *
  * @tparam T The type to check.
  */
 template <typename T>
 concept ByteContainer = requires(T t) {
-    { std::data(t) } -> std::convertible_to<const uint8_t*>;
-    { std::size(t) } -> std::convertible_to<size_t>;
+    { std::data(t) } -> std::convertible_to<const u8*>;
+    { std::size(t) } -> std::convertible_to<usize>;
 };
 
 /**
@@ -54,7 +56,7 @@ public:
      *
      * @param data A span of constant bytes to hash.
      */
-    void update(std::span<const uint8_t> data) noexcept;
+    void update(std::span<const u8> data) noexcept;
 
     /**
      * @brief Updates the hash with a raw byte array.
@@ -65,7 +67,7 @@ public:
      * @param data A pointer to the start of the byte array.
      * @param length The number of bytes to hash.
      */
-    void update(const uint8_t* data, size_t length);
+    void update(const u8* data, usize length);
 
     /**
      * @brief Updates the hash with a byte container.
@@ -78,8 +80,8 @@ public:
      */
     template <ByteContainer Container>
     void update(const Container& container) noexcept {
-        update(std::span<const uint8_t>(
-            reinterpret_cast<const uint8_t*>(std::data(container)),
+        update(std::span<const u8>(
+            reinterpret_cast<const u8*>(std::data(container)),
             std::size(container)));
     }
 
@@ -92,7 +94,7 @@ public:
      *
      * @return A 20-byte array containing the SHA-1 digest.
      */
-    [[nodiscard]] auto digest() noexcept -> std::array<uint8_t, 20>;
+    [[nodiscard]] auto digest() noexcept -> std::array<u8, 20>;
 
     /**
      * @brief Finalizes the hash computation and returns the digest as a
@@ -117,7 +119,7 @@ public:
     /**
      * @brief The size of the SHA-1 digest in bytes.
      */
-    static constexpr size_t DIGEST_SIZE = 20;
+    static constexpr usize DIGEST_SIZE = 20;
 
 private:
     /**
@@ -127,7 +129,7 @@ private:
      *
      * @param block A pointer to the 64-byte block to process.
      */
-    void processBlock(const uint8_t* block) noexcept;
+    void processBlock(const u8* block) noexcept;
 
     /**
      * @brief Rotates a 32-bit value to the left by a specified number of bits.
@@ -139,8 +141,8 @@ private:
      * @param bits The number of bits to rotate by.
      * @return The rotated value.
      */
-    [[nodiscard]] static constexpr auto rotateLeft(
-        uint32_t value, size_t bits) noexcept -> uint32_t {
+    [[nodiscard]] static constexpr auto rotateLeft(u32 value,
+                                                   usize bits) noexcept -> u32 {
         return (value << bits) | (value >> (WORD_SIZE - bits));
     }
 
@@ -154,63 +156,63 @@ private:
      *
      * @param block A pointer to the 64-byte block to process.
      */
-    void processBlockSIMD(const uint8_t* block) noexcept;
+    void processBlockSIMD(const u8* block) noexcept;
 #endif
 
     /**
      * @brief The size of a data block in bytes.
      */
-    static constexpr size_t BLOCK_SIZE = 64;
+    static constexpr usize BLOCK_SIZE = 64;
 
     /**
      * @brief The number of 32-bit words in the hash state.
      */
-    static constexpr size_t HASH_SIZE = 5;
+    static constexpr usize HASH_SIZE = 5;
 
     /**
      * @brief The number of 32-bit words in the message schedule.
      */
-    static constexpr size_t SCHEDULE_SIZE = 80;
+    static constexpr usize SCHEDULE_SIZE = 80;
 
     /**
      * @brief The size of the message length in bytes.
      */
-    static constexpr size_t LENGTH_SIZE = 8;
+    static constexpr usize LENGTH_SIZE = 8;
 
     /**
      * @brief The number of bits per byte.
      */
-    static constexpr size_t BITS_PER_BYTE = 8;
+    static constexpr usize BITS_PER_BYTE = 8;
 
     /**
      * @brief The padding byte used to pad the message.
      */
-    static constexpr uint8_t PADDING_BYTE = 0x80;
+    static constexpr u8 PADDING_BYTE = 0x80;
 
     /**
      * @brief The byte mask used for byte operations.
      */
-    static constexpr uint8_t BYTE_MASK = 0xFF;
+    static constexpr u8 BYTE_MASK = 0xFF;
 
     /**
      * @brief The size of a word in bits.
      */
-    static constexpr size_t WORD_SIZE = 32;
+    static constexpr usize WORD_SIZE = 32;
 
     /**
      * @brief The current hash state.
      */
-    std::array<uint32_t, HASH_SIZE> hash_;
+    std::array<u32, HASH_SIZE> hash_;
 
     /**
      * @brief The buffer to store the current block of data.
      */
-    std::array<uint8_t, BLOCK_SIZE> buffer_;
+    std::array<u8, BLOCK_SIZE> buffer_;
 
     /**
      * @brief The total number of bits processed so far.
      */
-    uint64_t bitCount_;
+    u64 bitCount_;
 
     /**
      * @brief Flag indicating whether to use SIMD instructions for processing.
@@ -228,8 +230,8 @@ private:
  * @param bytes The array of bytes to convert.
  * @return A string containing the hexadecimal representation of the byte array.
  */
-template <size_t N>
-[[nodiscard]] auto bytesToHex(const std::array<uint8_t, N>& bytes) noexcept
+template <usize N>
+[[nodiscard]] auto bytesToHex(const std::array<u8, N>& bytes) noexcept
     -> std::string;
 
 /**
@@ -243,8 +245,7 @@ template <size_t N>
  */
 template <>
 [[nodiscard]] auto bytesToHex<SHA1::DIGEST_SIZE>(
-    const std::array<uint8_t, SHA1::DIGEST_SIZE>& bytes) noexcept
-    -> std::string;
+    const std::array<u8, SHA1::DIGEST_SIZE>& bytes) noexcept -> std::string;
 
 /**
  * @brief Computes SHA-1 hashes of multiple containers in parallel.
@@ -260,7 +261,7 @@ template <>
  */
 template <ByteContainer... Containers>
 [[nodiscard]] auto computeHashesInParallel(const Containers&... containers)
-    -> std::vector<std::array<uint8_t, SHA1::DIGEST_SIZE>>;
+    -> std::vector<std::array<u8, SHA1::DIGEST_SIZE>>;
 
 }  // namespace atom::algorithm
 

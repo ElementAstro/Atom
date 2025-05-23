@@ -28,7 +28,7 @@
 #endif
 
 #include "atom/error/exception.hpp"
-#include "atom/log/loguru.hpp"
+#include "spdlog/spdlog.h"
 
 template <typename ProblemType, typename SolutionType>
 concept AnnealingProblem =
@@ -93,7 +93,7 @@ private:
             return;
         }
 
-        LOG_F(INFO, "Performing restart optimization");
+        spdlog::info("Performing restart optimization");
         auto newSolution = problem_instance_.randomSolution();
         double newEnergy = problem_instance_.energy(newSolution);
 
@@ -102,8 +102,8 @@ private:
             best_energy_ = newEnergy;
             total_restarts_++;
             current_restart_ = 0;
-            LOG_F(INFO, "Restart found better solution with energy: {}",
-                  best_energy_);
+            spdlog::info("Restart found better solution with energy: {}",
+                         best_energy_);
         }
     }
 
@@ -123,18 +123,18 @@ private:
         auto elapsed =
             std::chrono::duration_cast<std::chrono::seconds>(now - start_time_);
 
-        LOG_F(INFO, "Checkpoint at {} seconds:", elapsed.count());
-        LOG_F(INFO, "  Best energy: {}", best_energy_);
-        LOG_F(INFO, "  Total steps: {}", total_steps_.load());
-        LOG_F(INFO, "  Accepted steps: {}", accepted_steps_.load());
-        LOG_F(INFO, "  Rejected steps: {}", rejected_steps_.load());
-        LOG_F(INFO, "  Restarts: {}", total_restarts_.load());
+        spdlog::info("Checkpoint at {} seconds:", elapsed.count());
+        spdlog::info("  Best energy: {}", best_energy_);
+        spdlog::info("  Total steps: {}", total_steps_.load());
+        spdlog::info("  Accepted steps: {}", accepted_steps_.load());
+        spdlog::info("  Rejected steps: {}", rejected_steps_.load());
+        spdlog::info("  Restarts: {}", total_restarts_.load());
     }
 
     void resume() {
         std::lock_guard lock(best_mutex_);
-        LOG_F(INFO, "Resuming optimization from checkpoint");
-        LOG_F(INFO, "  Current best energy: {}", best_energy_);
+        spdlog::info("Resuming optimization from checkpoint");
+        spdlog::info("  Current best energy: {}", best_energy_);
     }
 
     void adaptTemperature(double acceptance_rate) {
@@ -152,8 +152,8 @@ private:
 
         // Keep cooling rate within reasonable bounds
         cooling_rate_ = std::clamp(cooling_rate_, 0.8, 0.999);
-        LOG_F(INFO, "Adaptive temperature adjustment. New cooling rate: {}",
-              cooling_rate_);
+        spdlog::info("Adaptive temperature adjustment. New cooling rate: {}",
+                     cooling_rate_);
     }
 
 public:
@@ -243,11 +243,11 @@ SimulatedAnnealing<ProblemType, SolutionType>::SimulatedAnnealing(
       cooling_strategy_(builder.cooling_strategy_),
       cooling_rate_(builder.cooling_rate_),
       restart_interval_(builder.restart_interval_) {
-    LOG_F(INFO,
-          "SimulatedAnnealing initialized with max_iterations: {}, "
-          "initial_temperature: {}, cooling_strategy: {}, cooling_rate: {}",
-          max_iterations_, initial_temperature_,
-          static_cast<int>(cooling_strategy_), cooling_rate_);
+    spdlog::info(
+        "SimulatedAnnealing initialized with max_iterations: {}, "
+        "initial_temperature: {}, cooling_strategy: {}, cooling_rate: {}",
+        max_iterations_, initial_temperature_,
+        static_cast<int>(cooling_strategy_), cooling_rate_);
     setCoolingSchedule(cooling_strategy_);
     start_time_ = std::chrono::steady_clock::now();
 }
@@ -257,8 +257,8 @@ template <typename ProblemType, typename SolutionType>
 void SimulatedAnnealing<ProblemType, SolutionType>::setCoolingSchedule(
     AnnealingStrategy strategy) {
     cooling_strategy_ = strategy;
-    LOG_F(INFO, "Setting cooling schedule to strategy: {}",
-          static_cast<int>(strategy));
+    spdlog::info("Setting cooling schedule to strategy: {}",
+                 static_cast<int>(strategy));
     switch (cooling_strategy_) {
         case AnnealingStrategy::LINEAR:
             cooling_schedule_ = [this](int iteration) {
@@ -303,8 +303,8 @@ void SimulatedAnnealing<ProblemType, SolutionType>::setCoolingSchedule(
             };
             break;
         default:
-            LOG_F(WARNING,
-                  "Unknown cooling strategy. Defaulting to EXPONENTIAL.");
+            spdlog::warn(
+                "Unknown cooling strategy. Defaulting to EXPONENTIAL.");
             cooling_schedule_ = [this](int iteration) {
                 return initial_temperature_ *
                        std::pow(cooling_rate_, iteration);
@@ -318,7 +318,7 @@ template <typename ProblemType, typename SolutionType>
 void SimulatedAnnealing<ProblemType, SolutionType>::setProgressCallback(
     std::function<void(int, double, const SolutionType&)> callback) {
     progress_callback_ = callback;
-    LOG_F(INFO, "Progress callback has been set.");
+    spdlog::info("Progress callback has been set.");
 }
 
 template <typename ProblemType, typename SolutionType>
@@ -326,7 +326,7 @@ template <typename ProblemType, typename SolutionType>
 void SimulatedAnnealing<ProblemType, SolutionType>::setStopCondition(
     std::function<bool(int, double, const SolutionType&)> condition) {
     stop_condition_ = condition;
-    LOG_F(INFO, "Stop condition has been set.");
+    spdlog::info("Stop condition has been set.");
 }
 
 template <typename ProblemType, typename SolutionType>
@@ -351,15 +351,15 @@ void SimulatedAnnealing<ProblemType, SolutionType>::optimizeThread() {
 
         auto currentSolution = problem_instance_.randomSolution();
         double currentEnergy = problem_instance_.energy(currentSolution);
-        LOG_F(INFO, "Thread {} started with initial energy: {}",
-              threadIdToString(), currentEnergy);
+        spdlog::info("Thread {} started with initial energy: {}",
+                     threadIdToString(), currentEnergy);
 
         {
             std::lock_guard lock(best_mutex_);
             if (currentEnergy < best_energy_) {
                 best_solution_ = currentSolution;
                 best_energy_ = currentEnergy;
-                LOG_F(INFO, "New best energy found: {}", best_energy_);
+                spdlog::info("New best energy found: {}", best_energy_);
             }
         }
 
@@ -367,9 +367,9 @@ void SimulatedAnnealing<ProblemType, SolutionType>::optimizeThread() {
              iteration < max_iterations_ && !should_stop_.load(); ++iteration) {
             double temperature = cooling_schedule_(iteration);
             if (temperature <= 0) {
-                LOG_F(WARNING,
-                      "Temperature has reached zero or below at iteration {}.",
-                      iteration);
+                spdlog::warn(
+                    "Temperature has reached zero or below at iteration {}.",
+                    iteration);
                 break;
             }
 
@@ -377,11 +377,11 @@ void SimulatedAnnealing<ProblemType, SolutionType>::optimizeThread() {
             double neighborEnergy = problem_instance_.energy(neighborSolution);
 
             double energyDifference = neighborEnergy - currentEnergy;
-            LOG_F(INFO,
-                  "Iteration {}: Current Energy = {}, Neighbor Energy = "
-                  "{}, Energy Difference = {}, Temperature = {}",
-                  iteration, currentEnergy, neighborEnergy, energyDifference,
-                  temperature);
+            spdlog::info(
+                "Iteration {}: Current Energy = {}, Neighbor Energy = "
+                "{}, Energy Difference = {}, Temperature = {}",
+                iteration, currentEnergy, neighborEnergy, energyDifference,
+                temperature);
 
             [[maybe_unused]] bool accepted = false;
             if (energyDifference < 0 ||
@@ -391,14 +391,16 @@ void SimulatedAnnealing<ProblemType, SolutionType>::optimizeThread() {
                 currentEnergy = neighborEnergy;
                 accepted = true;
                 accepted_steps_++;
-                LOG_F(INFO, "Solution accepted at iteration {} with energy: {}",
-                      iteration, currentEnergy);
+                spdlog::info(
+                    "Solution accepted at iteration {} with energy: {}",
+                    iteration, currentEnergy);
 
                 std::lock_guard lock(best_mutex_);
                 if (currentEnergy < best_energy_) {
                     best_solution_ = currentSolution;
                     best_energy_ = currentEnergy;
-                    LOG_F(INFO, "New best energy updated to: {}", best_energy_);
+                    spdlog::info("New best energy updated to: {}",
+                                 best_energy_);
                 }
             } else {
                 rejected_steps_++;
@@ -418,22 +420,22 @@ void SimulatedAnnealing<ProblemType, SolutionType>::optimizeThread() {
                     progress_callback_(iteration, currentEnergy,
                                        currentSolution);
                 } catch (const std::exception& e) {
-                    LOG_F(ERROR, "Exception in progress_callback_: {}",
-                          e.what());
+                    spdlog::error("Exception in progress_callback_: {}",
+                                  e.what());
                 }
             }
 
             if (stop_condition_ &&
                 stop_condition_(iteration, currentEnergy, currentSolution)) {
                 should_stop_.store(true);
-                LOG_F(INFO, "Stop condition met at iteration {}.", iteration);
+                spdlog::info("Stop condition met at iteration {}.", iteration);
                 break;
             }
         }
-        LOG_F(INFO, "Thread {} completed optimization with best energy: {}",
-              threadIdToString(), best_energy_);
+        spdlog::info("Thread {} completed optimization with best energy: {}",
+                     threadIdToString(), best_energy_);
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in optimizeThread: {}", e.what());
+        spdlog::error("Exception in optimizeThread: {}", e.what());
     }
 }
 
@@ -442,10 +444,10 @@ template <typename ProblemType, typename SolutionType>
 auto SimulatedAnnealing<ProblemType, SolutionType>::optimize(int numThreads)
     -> SolutionType {
     try {
-        LOG_F(INFO, "Starting optimization with {} threads.", numThreads);
+        spdlog::info("Starting optimization with {} threads.", numThreads);
         if (numThreads < 1) {
-            LOG_F(WARNING, "Invalid number of threads ({}). Defaulting to 1.",
-                  numThreads);
+            spdlog::warn("Invalid number of threads ({}). Defaulting to 1.",
+                         numThreads);
             numThreads = 1;
         }
 
@@ -454,15 +456,15 @@ auto SimulatedAnnealing<ProblemType, SolutionType>::optimize(int numThreads)
 
         for (int threadIndex = 0; threadIndex < numThreads; ++threadIndex) {
             threads.emplace_back([this]() { optimizeThread(); });
-            LOG_F(INFO, "Launched optimization thread {}.", threadIndex + 1);
+            spdlog::info("Launched optimization thread {}.", threadIndex + 1);
         }
 
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in optimize: {}", e.what());
+        spdlog::error("Exception in optimize: {}", e.what());
         throw;
     }
 
-    LOG_F(INFO, "Optimization completed with best energy: {}", best_energy_);
+    spdlog::info("Optimization completed with best energy: {}", best_energy_);
     return best_solution_;
 }
 
@@ -481,7 +483,7 @@ void SimulatedAnnealing<ProblemType, SolutionType>::setInitialTemperature(
         THROW_INVALID_ARGUMENT("Initial temperature must be positive");
     }
     initial_temperature_ = temperature;
-    LOG_F(INFO, "Initial temperature set to: {}", temperature);
+    spdlog::info("Initial temperature set to: {}", temperature);
 }
 
 template <typename ProblemType, typename SolutionType>
@@ -492,12 +494,12 @@ void SimulatedAnnealing<ProblemType, SolutionType>::setCoolingRate(
         THROW_INVALID_ARGUMENT("Cooling rate must be between 0 and 1");
     }
     cooling_rate_ = rate;
-    LOG_F(INFO, "Cooling rate set to: {}", rate);
+    spdlog::info("Cooling rate set to: {}", rate);
 }
 
 inline TSP::TSP(const std::vector<std::pair<double, double>>& cities)
     : cities_(cities) {
-    LOG_F(INFO, "TSP instance created with %zu cities.", cities_.size());
+    spdlog::info("TSP instance created with {} cities.", cities_.size());
 }
 
 inline auto TSP::energy(const std::vector<int>& solution) const -> double {
@@ -601,11 +603,11 @@ inline auto TSP::neighbor(const std::vector<int>& solution)
         int index1 = distribution(generator);
         int index2 = distribution(generator);
         std::swap(newSolution[index1], newSolution[index2]);
-        LOG_F(INFO,
-              "Generated neighbor solution by swapping indices {} and {}.",
-              index1, index2);
+        spdlog::info(
+            "Generated neighbor solution by swapping indices {} and {}.",
+            index1, index2);
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in TSP::neighbor: {}", e.what());
+        spdlog::error("Exception in TSP::neighbor: {}", e.what());
         throw;
     }
     return newSolution;
@@ -624,9 +626,9 @@ inline auto TSP::randomSolution() const -> std::vector<int> {
         std::mt19937 generator(randomDevice());
         std::ranges::shuffle(solution, generator);
 #endif
-        LOG_F(INFO, "Generated random solution.");
+        spdlog::info("Generated random solution.");
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in TSP::randomSolution: {}", e.what());
+        spdlog::error("Exception in TSP::randomSolution: {}", e.what());
         throw;
     }
     return solution;

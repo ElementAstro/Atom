@@ -2,20 +2,20 @@
 #define ATOM_ALGORITHM_BLOWFISH_HPP
 
 #include <array>
-#include <cstdint>
 #include <span>
 #include <string_view>
 
+#include <spdlog/spdlog.h>
+#include "atom/algorithm/rust_numeric.hpp"
+
 namespace atom::algorithm {
 
-// 添加概念约束
 /**
  * @brief Concept to ensure the type is an unsigned integral type of size 1
  * byte.
  */
- template<typename T>
- concept ByteType = std::is_same_v<T, std::byte> || 
-                   std::is_same_v<T, char> ||
+template <typename T>
+concept ByteType = std::is_same_v<T, std::byte> || std::is_same_v<T, char> ||
                    std::is_same_v<T, unsigned char>;
 
 /**
@@ -24,12 +24,12 @@ namespace atom::algorithm {
  */
 class Blowfish {
 private:
-    static constexpr size_t P_ARRAY_SIZE = 18;  ///< Size of the P-array.
-    static constexpr size_t S_BOX_SIZE = 256;   ///< Size of each S-box.
-    static constexpr size_t BLOCK_SIZE = 8;     ///< Size of a block in bytes.
+    static constexpr usize P_ARRAY_SIZE = 18;  ///< Size of the P-array.
+    static constexpr usize S_BOX_SIZE = 256;   ///< Size of each S-box.
+    static constexpr usize BLOCK_SIZE = 8;     ///< Size of a block in bytes.
 
-    std::array<uint32_t, P_ARRAY_SIZE> P_;  ///< P-array used in the algorithm.
-    std::array<std::array<uint32_t, S_BOX_SIZE>, 4>
+    std::array<u32, P_ARRAY_SIZE> P_;  ///< P-array used in the algorithm.
+    std::array<std::array<u32, S_BOX_SIZE>, 4>
         S_;  ///< S-boxes used in the algorithm.
 
     /**
@@ -37,7 +37,7 @@ private:
      * @param x The input to the F function.
      * @return The output of the F function.
      */
-    uint32_t F(uint32_t x) const noexcept;
+    u32 F(u32 x) const noexcept;
 
 public:
     /**
@@ -70,10 +70,11 @@ public:
      * @brief Decrypts a span of data.
      * @tparam T The type of the data, must satisfy ByteType.
      * @param data The data to decrypt.
-     * @param length The length of data to decrypt, will be updated to actual length after removing padding.
+     * @param length The length of data to decrypt, will be updated to actual
+     * length after removing padding.
      */
     template <ByteType T>
-    void decrypt_data(std::span<T> data, size_t& length);
+    void decrypt_data(std::span<T> data, usize& length);
 
     /**
      * @brief Encrypts a file.
@@ -111,21 +112,21 @@ private:
      * @param size The size of the block.
      * @throws std::invalid_argument If the block size is invalid.
      */
-    static void validate_block_size(size_t size);
+    static void validate_block_size(usize size);
 
     /**
      * @brief Applies PKCS7 padding to the data.
      * @param data The data to pad.
      * @param length The length of the data after padding.
      */
-    void pkcs7_padding(std::span<std::byte> data, size_t& length);
+    void pkcs7_padding(std::span<std::byte> data, usize& length);
 
     /**
      * @brief Removes PKCS7 padding from the data.
      * @param data The data to unpad.
      * @param length The length of the data after removing padding.
      */
-    void remove_padding(std::span<std::byte> data, size_t& length);
+    void remove_padding(std::span<std::byte> data, usize& length);
 };
 
 }  // namespace atom::algorithm

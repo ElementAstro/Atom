@@ -3,7 +3,6 @@
 
 #include <atomic>
 #include <concepts>
-#include <limits>
 #include <mutex>
 #include <queue>
 #include <ranges>
@@ -17,8 +16,10 @@
 #include <immintrin.h>
 #endif
 
+#include "atom/algorithm/rust_numeric.hpp"
 #include "atom/error/exception.hpp"
-#include "atom/log/loguru.hpp"
+
+#include <spdlog/spdlog.h>
 
 /**
  * @enum Connectivity
@@ -30,8 +31,8 @@ enum class Connectivity {
 };
 
 // Static assertion to ensure enum values are as expected
-static_assert(static_cast<int>(Connectivity::Four) == 0 &&
-                  static_cast<int>(Connectivity::Eight) == 1,
+static_assert(static_cast<std::int32_t>(Connectivity::Four) == 0 &&
+                  static_cast<std::int32_t>(Connectivity::Eight) == 1,
               "Connectivity enum values must be 0 and 1");
 
 /**
@@ -39,7 +40,7 @@ static_assert(static_cast<int>(Connectivity::Four) == 0 &&
  * @brief Concept that defines requirements for a type to be used as a grid.
  */
 template <typename T>
-concept Grid = requires(T t, size_t i) {
+concept Grid = requires(T t, usize i) {
     { t[i] } -> std::ranges::random_access_range;
     { t[i][i] } -> std::convertible_to<typename T::value_type::value_type>;
     requires std::is_default_constructible_v<T>;
@@ -52,11 +53,11 @@ concept Grid = requires(T t, size_t i) {
  */
 template <typename T>
 concept SIMDCompatibleGrid =
-    Grid<T> && (std::same_as<typename T::value_type::value_type, int> ||
-                std::same_as<typename T::value_type::value_type, float> ||
-                std::same_as<typename T::value_type::value_type, double> ||
-                std::same_as<typename T::value_type::value_type, uint8_t> ||
-                std::same_as<typename T::value_type::value_type, uint32_t>);
+    Grid<T> && (std::same_as<typename T::value_type::value_type, i32> ||
+                std::same_as<typename T::value_type::value_type, f32> ||
+                std::same_as<typename T::value_type::value_type, f64> ||
+                std::same_as<typename T::value_type::value_type, u8> ||
+                std::same_as<typename T::value_type::value_type, u32>);
 
 /**
  * @concept ContiguousGrid
@@ -92,11 +93,11 @@ public:
      */
     struct FloodFillConfig {
         Connectivity connectivity = Connectivity::Four;
-        unsigned int numThreads = std::thread::hardware_concurrency();
+        u32 numThreads = static_cast<u32>(std::thread::hardware_concurrency());
         bool useSIMD = true;
         bool useBlockProcessing = true;
-        unsigned int blockSize = 32;  // Size of cache-friendly blocks
-        float loadBalancingFactor =
+        u32 blockSize = 32;  // Size of cache-friendly blocks
+        f32 loadBalancingFactor =
             1.5f;  // Work distribution factor for parallel processing
 
         // Validation method for configuration
@@ -123,8 +124,8 @@ public:
      * @throws std::runtime_error If operation fails during execution.
      */
     template <Grid GridType>
-    [[nodiscard]] static size_t fillBFS(
-        GridType& grid, int start_x, int start_y,
+    [[nodiscard]] static usize fillBFS(
+        GridType& grid, i32 start_x, i32 start_y,
         typename GridType::value_type::value_type target_color,
         typename GridType::value_type::value_type fill_color,
         Connectivity conn = Connectivity::Four);
@@ -146,8 +147,8 @@ public:
      * @throws std::runtime_error If operation fails during execution.
      */
     template <Grid GridType>
-    [[nodiscard]] static size_t fillDFS(
-        GridType& grid, int start_x, int start_y,
+    [[nodiscard]] static usize fillDFS(
+        GridType& grid, i32 start_x, i32 start_y,
         typename GridType::value_type::value_type target_color,
         typename GridType::value_type::value_type fill_color,
         Connectivity conn = Connectivity::Four);
@@ -168,8 +169,8 @@ public:
      * @throws std::runtime_error If operation fails during execution.
      */
     template <Grid GridType>
-    [[nodiscard]] static size_t fillParallel(
-        GridType& grid, int start_x, int start_y,
+    [[nodiscard]] static usize fillParallel(
+        GridType& grid, i32 start_x, i32 start_y,
         typename GridType::value_type::value_type target_color,
         typename GridType::value_type::value_type fill_color,
         const FloodFillConfig& config);
@@ -192,8 +193,8 @@ public:
      * grid type.
      */
     template <SIMDCompatibleGrid GridType>
-    [[nodiscard]] static size_t fillSIMD(
-        GridType& grid, int start_x, int start_y,
+    [[nodiscard]] static usize fillSIMD(
+        GridType& grid, i32 start_x, i32 start_y,
         typename GridType::value_type::value_type target_color,
         typename GridType::value_type::value_type fill_color,
         const FloodFillConfig& config);
@@ -213,7 +214,7 @@ public:
      */
     template <Grid GridType>
     static auto fillAsync(
-        GridType& grid, int start_x, int start_y,
+        GridType& grid, i32 start_x, i32 start_y,
         typename GridType::value_type::value_type target_color,
         typename GridType::value_type::value_type fill_color,
         Connectivity conn = Connectivity::Four);
@@ -231,31 +232,31 @@ public:
      * @return Number of cells filled
      */
     template <Grid GridType>
-    [[nodiscard]] static size_t fillBlockOptimized(
-        GridType& grid, int start_x, int start_y,
+    [[nodiscard]] static usize fillBlockOptimized(
+        GridType& grid, i32 start_x, i32 start_y,
         typename GridType::value_type::value_type target_color,
         typename GridType::value_type::value_type fill_color,
         const FloodFillConfig& config);
 
     /**
      * @brief Specialized BFS flood fill method for
-     * std::vector<std::vector<int>>
+     * std::vector<std::vector<i32>>
      * @return Number of cells filled
      */
-    [[nodiscard]] static size_t fillBFS(std::vector<std::vector<int>>& grid,
-                                        int start_x, int start_y,
-                                        int target_color, int fill_color,
-                                        Connectivity conn = Connectivity::Four);
+    [[nodiscard]] static usize fillBFS(std::vector<std::vector<i32>>& grid,
+                                       i32 start_x, i32 start_y,
+                                       i32 target_color, i32 fill_color,
+                                       Connectivity conn = Connectivity::Four);
 
     /**
      * @brief Specialized DFS flood fill method for
-     * std::vector<std::vector<int>>
+     * std::vector<std::vector<i32>>
      * @return Number of cells filled
      */
-    [[nodiscard]] static size_t fillDFS(std::vector<std::vector<int>>& grid,
-                                        int start_x, int start_y,
-                                        int target_color, int fill_color,
-                                        Connectivity conn = Connectivity::Four);
+    [[nodiscard]] static usize fillDFS(std::vector<std::vector<i32>>& grid,
+                                       i32 start_x, i32 start_y,
+                                       i32 target_color, i32 fill_color,
+                                       Connectivity conn = Connectivity::Four);
 
 private:
     /**
@@ -267,8 +268,8 @@ private:
      * @param cols The number of columns in the grid.
      * @return true if the position is within bounds, false otherwise.
      */
-    [[nodiscard]] static constexpr bool isInBounds(int x, int y, int rows,
-                                                   int cols) noexcept {
+    [[nodiscard]] static constexpr bool isInBounds(i32 x, i32 y, i32 rows,
+                                                   i32 cols) noexcept {
         return x >= 0 && x < rows && y >= 0 && y < cols;
     }
 
@@ -279,7 +280,7 @@ private:
      * @return A vector of direction pairs.
      */
     [[nodiscard]] static auto getDirections(Connectivity conn)
-        -> std::vector<std::pair<int, int>>;
+        -> std::vector<std::pair<i32, i32>>;
 
     /**
      * @brief Validate grid and coordinates before processing.
@@ -292,7 +293,7 @@ private:
      * invalid.
      */
     template <Grid GridType>
-    static void validateInput(const GridType& grid, int start_x, int start_y);
+    static void validateInput(const GridType& grid, i32 start_x, i32 start_y);
 
     /**
      * @brief Extended validation for additional input parameters
@@ -308,7 +309,7 @@ private:
      */
     template <Grid GridType>
     static void validateExtendedInput(
-        const GridType& grid, int start_x, int start_y,
+        const GridType& grid, i32 start_x, i32 start_y,
         typename GridType::value_type::value_type target_color,
         typename GridType::value_type::value_type fill_color,
         const FloodFillConfig& config);
@@ -335,9 +336,8 @@ private:
      * @return Number of cells filled
      */
     template <typename T>
-    [[nodiscard]] static size_t processRowSIMD(T* row, int start_idx,
-                                               int length, T target_color,
-                                               T fill_color);
+    [[nodiscard]] static usize processRowSIMD(T* row, i32 start_idx, i32 length,
+                                              T target_color, T fill_color);
 
     /**
      * @brief Process a block of the grid for block-based flood fill
@@ -354,21 +354,21 @@ private:
      * @return Number of cells filled in the block
      */
     template <Grid GridType>
-    [[nodiscard]] static size_t processBlock(
-        GridType& grid, int blockX, int blockY, int blockSize,
+    [[nodiscard]] static usize processBlock(
+        GridType& grid, i32 blockX, i32 blockY, i32 blockSize,
         typename GridType::value_type::value_type target_color,
         typename GridType::value_type::value_type fill_color, Connectivity conn,
-        std::queue<std::pair<int, int>>& borderQueue);
+        std::queue<std::pair<i32, i32>>& borderQueue);
 };
 
 template <Grid GridType>
-void FloodFill::validateInput(const GridType& grid, int start_x, int start_y) {
+void FloodFill::validateInput(const GridType& grid, i32 start_x, i32 start_y) {
     if (grid.empty() || grid[0].empty()) {
         THROW_INVALID_ARGUMENT("Grid cannot be empty");
     }
 
-    int rows = static_cast<int>(grid.size());
-    int cols = static_cast<int>(grid[0].size());
+    i32 rows = static_cast<i32>(grid.size());
+    i32 cols = static_cast<i32>(grid[0].size());
 
     if (!isInBounds(start_x, start_y, rows, cols)) {
         THROW_INVALID_ARGUMENT("Starting coordinates out of bounds");
@@ -377,7 +377,7 @@ void FloodFill::validateInput(const GridType& grid, int start_x, int start_y) {
 
 template <Grid GridType>
 void FloodFill::validateExtendedInput(
-    const GridType& grid, int start_x, int start_y,
+    const GridType& grid, i32 start_x, i32 start_y,
     typename GridType::value_type::value_type target_color,
     typename GridType::value_type::value_type fill_color,
     const FloodFillConfig& config) {
@@ -404,7 +404,8 @@ void FloodFill::validateExtendedInput(
 template <Grid GridType>
 void FloodFill::validateGridSize(const GridType& grid) {
     // Check if grid dimensions are within reasonable limits
-    const size_t max_dimension = std::numeric_limits<int>::max() / 2;
+    const usize max_dimension =
+        static_cast<usize>(atom::algorithm::I32::MAX) / 2;
 
     if (grid.size() > max_dimension) {
         THROW_INVALID_ARGUMENT("Grid row count exceeds maximum allowed size");
@@ -419,8 +420,8 @@ void FloodFill::validateGridSize(const GridType& grid) {
 
     // Check for uniform row sizes
     if (!grid.empty()) {
-        const size_t first_row_size = grid[0].size();
-        for (size_t i = 1; i < grid.size(); ++i) {
+        const usize first_row_size = grid[0].size();
+        for (usize i = 1; i < grid.size(); ++i) {
             if (grid[i].size() != first_row_size) {
                 THROW_INVALID_ARGUMENT("Grid has non-uniform row sizes");
             }
@@ -429,158 +430,170 @@ void FloodFill::validateGridSize(const GridType& grid) {
 }
 
 template <Grid GridType>
-size_t FloodFill::fillBFS(
-    GridType& grid, int start_x, int start_y,
-    typename GridType::value_type::value_type target_color,
-    typename GridType::value_type::value_type fill_color, Connectivity conn) {
-    LOG_F(INFO, "Starting BFS Flood Fill at ({}, {})", start_x, start_y);
+usize FloodFill::fillBFS(GridType& grid, i32 start_x, i32 start_y,
+                         typename GridType::value_type::value_type target_color,
+                         typename GridType::value_type::value_type fill_color,
+                         Connectivity conn) {
+    spdlog::info("Starting BFS Flood Fill at position ({}, {})", start_x,
+                 start_y);
 
-    size_t filled_cells = 0;  // Counter for filled cells
+    usize filled_cells = 0;  // Counter for filled cells
 
     try {
         validateInput(grid, start_x, start_y);
 
-        if (grid[start_x][start_y] != target_color ||
+        if (grid[static_cast<usize>(start_x)][static_cast<usize>(start_y)] !=
+                target_color ||
             target_color == fill_color) {
-            LOG_F(
-                WARNING,
+            spdlog::warn(
                 "Start position does not match target color or target color is "
-                "the same as fill color.");
+                "the same as fill color");
             return filled_cells;
         }
 
-        int rows = static_cast<int>(grid.size());
-        int cols = static_cast<int>(grid[0].size());
+        i32 rows = static_cast<i32>(grid.size());
+        i32 cols = static_cast<i32>(grid[0].size());
         const auto directions = getDirections(conn);  // Now returns vector
-        std::queue<std::pair<int, int>> toVisitQueue;
+        std::queue<std::pair<i32, i32>> toVisitQueue;
 
         toVisitQueue.emplace(start_x, start_y);
-        grid[start_x][start_y] = fill_color;
+        grid[static_cast<usize>(start_x)][static_cast<usize>(start_y)] =
+            fill_color;
         filled_cells++;  // Count filled cells
 
         while (!toVisitQueue.empty()) {
             auto [x, y] = toVisitQueue.front();
             toVisitQueue.pop();
-            LOG_F(INFO, "Filling position ({}, {})", x, y);
+            spdlog::debug("Filling position ({}, {})", x, y);
 
             // Now we can directly iterate over the vector
             for (const auto& [dx, dy] : directions) {
-                int newX = x + dx;
-                int newY = y + dy;
+                i32 newX = x + dx;
+                i32 newY = y + dy;
 
                 if (isInBounds(newX, newY, rows, cols) &&
-                    grid[newX][newY] == target_color) {
-                    grid[newX][newY] = fill_color;
+                    grid[static_cast<usize>(newX)][static_cast<usize>(newY)] ==
+                        target_color) {
+                    grid[static_cast<usize>(newX)][static_cast<usize>(newY)] =
+                        fill_color;
                     filled_cells++;  // Count filled cells
                     toVisitQueue.emplace(newX, newY);
-                    LOG_F(INFO, "Adding position ({}, {}) to queue", newX,
-                          newY);
+                    spdlog::debug("Adding position ({}, {}) to queue", newX,
+                                  newY);
                 }
             }
         }
 
         return filled_cells;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in fillBFS: {}", e.what());
+        spdlog::error("Exception in fillBFS: {}", e.what());
         throw;  // Re-throw the exception after logging
     }
 }
 
 template <Grid GridType>
-size_t FloodFill::fillDFS(
-    GridType& grid, int start_x, int start_y,
-    typename GridType::value_type::value_type target_color,
-    typename GridType::value_type::value_type fill_color, Connectivity conn) {
-    LOG_F(INFO, "Starting DFS Flood Fill at ({}, {})", start_x, start_y);
+usize FloodFill::fillDFS(GridType& grid, i32 start_x, i32 start_y,
+                         typename GridType::value_type::value_type target_color,
+                         typename GridType::value_type::value_type fill_color,
+                         Connectivity conn) {
+    spdlog::info("Starting DFS Flood Fill at position ({}, {})", start_x,
+                 start_y);
 
-    size_t filled_cells = 0;  // Counter for filled cells
+    usize filled_cells = 0;  // Counter for filled cells
 
     try {
         validateInput(grid, start_x, start_y);
 
-        if (grid[start_x][start_y] != target_color ||
+        if (grid[static_cast<usize>(start_x)][static_cast<usize>(start_y)] !=
+                target_color ||
             target_color == fill_color) {
-            LOG_F(
-                WARNING,
+            spdlog::warn(
                 "Start position does not match target color or target color is "
-                "the same as fill color.");
+                "the same as fill color");
             return filled_cells;
         }
 
-        int rows = static_cast<int>(grid.size());
-        int cols = static_cast<int>(grid[0].size());
+        i32 rows = static_cast<i32>(grid.size());
+        i32 cols = static_cast<i32>(grid[0].size());
         auto directions = getDirections(conn);
-        std::stack<std::pair<int, int>> toVisitStack;
+        std::stack<std::pair<i32, i32>> toVisitStack;
 
         toVisitStack.emplace(start_x, start_y);
-        grid[start_x][start_y] = fill_color;
+        grid[static_cast<usize>(start_x)][static_cast<usize>(start_y)] =
+            fill_color;
         filled_cells++;  // Count filled cells
 
         while (!toVisitStack.empty()) {
             auto [x, y] = toVisitStack.top();
             toVisitStack.pop();
-            LOG_F(INFO, "Filling position ({}, {})", x, y);
+            spdlog::debug("Filling position ({}, {})", x, y);
 
             for (auto [dx, dy] : directions) {
-                int newX = x + dx;
-                int newY = y + dy;
+                i32 newX = x + dx;
+                i32 newY = y + dy;
 
                 if (isInBounds(newX, newY, rows, cols) &&
-                    grid[newX][newY] == target_color) {
-                    grid[newX][newY] = fill_color;
+                    grid[static_cast<usize>(newX)][static_cast<usize>(newY)] ==
+                        target_color) {
+                    grid[static_cast<usize>(newX)][static_cast<usize>(newY)] =
+                        fill_color;
                     filled_cells++;  // Count filled cells
                     toVisitStack.emplace(newX, newY);
-                    LOG_F(INFO, "Adding position ({}, {}) to stack", newX,
-                          newY);
+                    spdlog::debug("Adding position ({}, {}) to stack", newX,
+                                  newY);
                 }
             }
         }
 
         return filled_cells;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in fillDFS: {}", e.what());
+        spdlog::error("Exception in fillDFS: {}", e.what());
         throw;  // Re-throw the exception after logging
     }
 }
 
 template <Grid GridType>
-size_t FloodFill::fillParallel(
-    GridType& grid, int start_x, int start_y,
+usize FloodFill::fillParallel(
+    GridType& grid, i32 start_x, i32 start_y,
     typename GridType::value_type::value_type target_color,
     typename GridType::value_type::value_type fill_color,
     const FloodFillConfig& config) {
-    LOG_F(INFO, "Starting Parallel Flood Fill at ({}, {}) with {} threads",
-          start_x, start_y, config.numThreads);
+    spdlog::info(
+        "Starting Parallel Flood Fill at position ({}, {}) with {} threads",
+        start_x, start_y, config.numThreads);
 
-    size_t filled_cells = 0;  // Counter for filled cells
+    usize filled_cells = 0;  // Counter for filled cells
 
     try {
         // Enhanced validation with the extended input function
         validateExtendedInput(grid, start_x, start_y, target_color, fill_color,
                               config);
 
-        if (grid[start_x][start_y] != target_color ||
+        if (grid[static_cast<usize>(start_x)][static_cast<usize>(start_y)] !=
+                target_color ||
             target_color == fill_color) {
-            LOG_F(
-                WARNING,
+            spdlog::warn(
                 "Start position does not match target color or target color is "
-                "the same as fill color.");
+                "the same as fill color");
             return filled_cells;
         }
 
-        int rows = static_cast<int>(grid.size());
-        int cols = static_cast<int>(grid[0].size());
+        i32 rows = static_cast<i32>(grid.size());
+        i32 cols = static_cast<i32>(grid[0].size());
         auto directions = getDirections(config.connectivity);
 
         // First BFS phase to find initial points to process in parallel
-        std::vector<std::pair<int, int>> seeds;
-        std::queue<std::pair<int, int>> queue;
-        std::vector<std::vector<bool>> visited(rows,
-                                               std::vector<bool>(cols, false));
+        std::vector<std::pair<i32, i32>> seeds;
+        std::queue<std::pair<i32, i32>> queue;
+        std::vector<std::vector<bool>> visited(
+            static_cast<usize>(rows),
+            std::vector<bool>(static_cast<usize>(cols), false));
 
         queue.emplace(start_x, start_y);
-        visited[start_x][start_y] = true;
-        grid[start_x][start_y] = fill_color;
+        visited[static_cast<usize>(start_x)][static_cast<usize>(start_y)] =
+            true;
+        grid[static_cast<usize>(start_x)][static_cast<usize>(start_y)] =
+            fill_color;
         filled_cells++;  // Count filled cells
 
         // Find seed points for parallel processing
@@ -595,13 +608,18 @@ size_t FloodFill::fillParallel(
 
             // Explore neighbors to find more potential seeds
             for (auto [dx, dy] : directions) {
-                int newX = x + dx;
-                int newY = y + dy;
+                i32 newX = x + dx;
+                i32 newY = y + dy;
 
                 if (isInBounds(newX, newY, rows, cols) &&
-                    grid[newX][newY] == target_color && !visited[newX][newY]) {
-                    visited[newX][newY] = true;
-                    grid[newX][newY] = fill_color;
+                    grid[static_cast<usize>(newX)][static_cast<usize>(newY)] ==
+                        target_color &&
+                    !visited[static_cast<usize>(newX)]
+                            [static_cast<usize>(newY)]) {
+                    visited[static_cast<usize>(newX)]
+                           [static_cast<usize>(newY)] = true;
+                    grid[static_cast<usize>(newX)][static_cast<usize>(newY)] =
+                        fill_color;
                     filled_cells++;  // Count filled cells
                     queue.emplace(newX, newY);
                 }
@@ -610,34 +628,36 @@ size_t FloodFill::fillParallel(
 
         // If we didn't find enough seeds, use what we have
         if (seeds.empty()) {
-            LOG_F(INFO,
-                  "Area too small for parallel fill, using single thread");
+            spdlog::info(
+                "Area too small for parallel fill, using single thread");
             return filled_cells;  // Already filled by the seed finding phase
         }
 
         // Use mutex to protect concurrent access to the grid
         std::mutex gridMutex;
         std::atomic<bool> shouldTerminate{false};
-        std::atomic<size_t> threadFilledCells{0};
+        std::atomic<usize> threadFilledCells{0};
 
         // Worker function for each thread
-        auto worker = [&](const std::pair<int, int>& seed) {
-            std::queue<std::pair<int, int>> localQueue;
+        auto worker = [&](const std::pair<i32, i32>& seed) {
+            std::queue<std::pair<i32, i32>> localQueue;
             localQueue.push(seed);
-            size_t localFilledCells = 0;
+            usize localFilledCells = 0;
 
             while (!localQueue.empty() && !shouldTerminate) {
                 auto [x, y] = localQueue.front();
                 localQueue.pop();
 
                 for (auto [dx, dy] : directions) {
-                    int newX = x + dx;
-                    int newY = y + dy;
+                    i32 newX = x + dx;
+                    i32 newY = y + dy;
 
                     if (isInBounds(newX, newY, rows, cols)) {
                         std::lock_guard<std::mutex> lock(gridMutex);
-                        if (grid[newX][newY] == target_color) {
-                            grid[newX][newY] = fill_color;
+                        if (grid[static_cast<usize>(newX)]
+                                [static_cast<usize>(newY)] == target_color) {
+                            grid[static_cast<usize>(newX)]
+                                [static_cast<usize>(newY)] = fill_color;
                             localFilledCells++;
                             localQueue.emplace(newX, newY);
                         }
@@ -663,11 +683,11 @@ size_t FloodFill::fillParallel(
         return filled_cells;
 
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in fillParallel: {}", e.what());
+        spdlog::error("Exception in fillParallel: {}", e.what());
         throw;  // Re-throw the exception after logging
     }
 }
 
 }  // namespace atom::algorithm
 
-#endif  // ATOM_ALGOTFLOOD_GPP
+#endif  // ATOM_ALGORITHM_FLOOD_GPP

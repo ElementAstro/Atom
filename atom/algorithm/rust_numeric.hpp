@@ -929,6 +929,16 @@ public:
         }
         return a;
     }
+
+    static Int bitwise_and(Int a, Int b) { return a & b; }
+
+    static Option<Int> checked_bitand(Int a, Int b) {
+        return Option<Int>::some(a & b);
+    }
+
+    static Int wrapping_bitand(Int a, Int b) { return a & b; }
+
+    static Int saturating_bitand(Int a, Int b) { return a & b; }
 };
 
 template <typename Float,
@@ -1507,3 +1517,16 @@ Enumerate<Container> enumerate(Container& container) {
     return Enumerate<Container>(container);
 }
 }  // namespace atom::algorithm
+
+using i8 = atom::algorithm::I8;
+using i16 = atom::algorithm::I16;
+using i32 = atom::algorithm::I32;
+using i64 = atom::algorithm::I64;
+using u8 = atom::algorithm::U8;
+using u16 = atom::algorithm::U16;
+using u32 = atom::algorithm::U32;
+using u64 = atom::algorithm::U64;
+using isize = atom::algorithm::Isize;
+using usize = atom::algorithm::Usize;
+using f32 = atom::algorithm::F32;
+using f64 = atom::algorithm::F64;
