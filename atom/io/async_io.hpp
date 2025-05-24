@@ -7,13 +7,19 @@
 #include <filesystem>
 #include <functional>
 #include <future>
-#include <memory>
 #include <span>
 #include <string>
 #include <utility>
 #include <vector>
 
+#ifdef ATOM_USE_ASIO
 #include <asio.hpp>
+#else
+#include <atomic>
+#include <condition_variable>
+#include <queue>
+#include <thread>
+#endif
 
 namespace atom::async::io {
 
@@ -40,16 +46,41 @@ struct AsyncResult<void> {
 template <typename T>
 class [[nodiscard]] Task;
 
+#ifndef ATOM_USE_ASIO
+class ThreadPool {
+public:
+    explicit ThreadPool(size_t threads = std::thread::hardware_concurrency());
+    ~ThreadPool();
+
+    template <typename F>
+    void post(F&& func);
+
+private:
+    std::vector<std::thread> workers_;
+    std::queue<std::function<void()>> tasks_;
+    std::mutex queue_mutex_;
+    std::condition_variable condition_;
+    std::atomic<bool> stop_;
+};
+#endif
+
 /**
  * @brief Class for performing asynchronous file operations.
  */
 class AsyncFile {
 public:
+#ifdef ATOM_USE_ASIO
     /**
      * @brief Constructs an AsyncFile object.
      * @param io_context The ASIO I/O context.
      */
     explicit AsyncFile(asio::io_context& io_context) noexcept;
+#else
+    /**
+     * @brief Constructs an AsyncFile object.
+     */
+    explicit AsyncFile() noexcept;
+#endif
 
     /**
      * @brief Asynchronously reads the content of a file.
@@ -190,9 +221,13 @@ public:
         PathString auto&& filename, std::span<const char> content);
 
 private:
+#ifdef ATOM_USE_ASIO
     asio::io_context& io_context_;  ///< The ASIO I/O context.
     std::shared_ptr<asio::steady_timer>
         timer_;  ///< Smart pointer to timer for operations.
+#else
+    ThreadPool thread_pool_;
+#endif
 
     static constexpr int kSimulateSlowReadingMs =
         100;  ///< Simulated slow reading time in milliseconds.
@@ -203,6 +238,11 @@ private:
      * @return True if the path is valid, false otherwise.
      */
     static bool validatePath(const std::string& path) noexcept;
+
+#ifndef ATOM_USE_ASIO
+    template <typename F>
+    void scheduleTimeout(std::chrono::milliseconds timeout, F&& callback);
+#endif
 };
 
 /**
@@ -210,11 +250,18 @@ private:
  */
 class AsyncDirectory {
 public:
+#ifdef ATOM_USE_ASIO
     /**
      * @brief Constructs an AsyncDirectory object.
      * @param io_context The ASIO I/O context.
      */
     explicit AsyncDirectory(asio::io_context& io_context) noexcept;
+#else
+    /**
+     * @brief Constructs an AsyncDirectory object.
+     */
+    explicit AsyncDirectory() noexcept;
+#endif
 
     /**
      * @brief Asynchronously creates a directory.
@@ -266,7 +313,11 @@ public:
     listContents(PathString auto&& path);
 
 private:
+#ifdef ATOM_USE_ASIO
     asio::io_context& io_context_;  ///< The ASIO I/O context.
+#else
+    ThreadPool thread_pool_;
+#endif
 
     /**
      * @brief Validates a directory path.

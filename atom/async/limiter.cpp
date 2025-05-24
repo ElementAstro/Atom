@@ -1,31 +1,44 @@
 #include "limiter.hpp"
 
 #include <algorithm>
+#include <chrono> // Required for time types
+#include <coroutine> // Required for std::coroutine_handle
 #include <execution>
 #include <format>
 #include <ranges>
 #include <string_view>
+#include <vector> // Required for std::vector
 
 #include "atom/error/exception.hpp"
 #include "atom/log/loguru.hpp"
 
+#ifdef ATOM_USE_ASIO
+#include <asio/post.hpp>
+#include <asio/thread_pool.hpp>
+#include <thread> // For std::thread::hardware_concurrency
+#endif
+
+#ifdef ATOM_PLATFORM_WINDOWS
+#include <windows.h>
+#endif
+
+#ifdef ATOM_PLATFORM_MACOS
+#include <dispatch/dispatch.h>
+#endif
+
+#ifdef ATOM_PLATFORM_LINUX
+#include <pthread.h>
+#include <semaphore.h>
+#endif
+
 namespace atom::async {
-
-RateLimiter::Settings::Settings(size_t max_requests,
-                                std::chrono::seconds time_window)
-    : maxRequests(max_requests), timeWindow(time_window) {
-    if (max_requests == 0) {
-        THROW_INVALID_ARGUMENT("max_requests must be greater than 0");
-    }
-    if (time_window.count() <= 0) {
-        THROW_INVALID_ARGUMENT("time_window must be greater than 0");
-    }
-    LOG_F(INFO, "Settings created: max_requests={}, time_window={} seconds",
-          max_requests, time_window.count());
-}
-
 // Implementation of RateLimiter constructor
-RateLimiter::RateLimiter() noexcept {
+RateLimiter::RateLimiter() noexcept
+#ifdef ATOM_USE_ASIO
+    // Initialize Asio thread pool with a number of threads equal to hardware concurrency, or 1 if not determinable.
+    : asio_pool_( (std::thread::hardware_concurrency() > 0 ? std::thread::hardware_concurrency() : 1) )
+#endif
+{
     LOG_F(INFO, "RateLimiter created");
 
     // Initialize platform-specific synchronization primitives
@@ -65,6 +78,10 @@ RateLimiter::~RateLimiter() noexcept {
         }
 #endif
 
+#ifdef ATOM_USE_ASIO
+        asio_pool_.join(); // Wait for all Asio tasks to complete
+#endif
+
         // Clean up platform-specific resources
 #ifdef ATOM_PLATFORM_WINDOWS
         DeleteCriticalSection(&resumeLock_);
@@ -78,7 +95,14 @@ RateLimiter::~RateLimiter() noexcept {
 
 // Move constructor
 RateLimiter::RateLimiter(RateLimiter&& other) noexcept
-    : paused_(other.paused_.load()) {
+    : paused_(other.paused_.load())
+#ifdef ATOM_USE_ASIO
+    // The asio_pool_ member will be default-initialized for the new object,
+    // or initialized as per its member initializer in this class's constructor.
+    // other.asio_pool_ will be joined upon other's destruction.
+    , asio_pool_( (std::thread::hardware_concurrency() > 0 ? std::thread::hardware_concurrency() : 1) )
+#endif
+{
     std::unique_lock lock(other.mutex_);
     settings_ = std::move(other.settings_);
 #ifdef ATOM_USE_BOOST_LOCKFREE
@@ -144,6 +168,8 @@ RateLimiter& RateLimiter::operator=(RateLimiter&& other) noexcept {
         sem_destroy(&other.resumeSemaphore_);
         sem_init(&other.resumeSemaphore_, 0, 0);
 #endif
+        // Note: this->asio_pool_ is not affected by the move of other members.
+        // It continues to exist and operate. other.asio_pool_ will be joined on other's destruction.
     }
     return *this;
 }
@@ -159,7 +185,7 @@ RateLimiter::Awaiter::Awaiter(RateLimiter& limiter,
 auto RateLimiter::Awaiter::await_ready() const noexcept -> bool {
     LOG_F(INFO, "Awaiter::await_ready called for function: %s",
           function_name_.c_str());
-    return false;
+    return false; // Always suspend to check rate limit
 }
 
 // Implementation of Awaiter::await_suspend
@@ -189,15 +215,15 @@ void RateLimiter::Awaiter::await_suspend(std::coroutine_handle<> handle) {
                 1, std::memory_order_relaxed);
             was_rejected_ = true;
 
-            // Platform-specific optimization
-#ifdef ATOM_PLATFORM_LINUX
+            // Platform-specific optimization for Linux native path
+#if defined(ATOM_PLATFORM_LINUX) && !defined(ATOM_USE_ASIO)
             limiter_.waitersReady_.fetch_add(1, std::memory_order_relaxed);
 #endif
 
             LOG_F(WARNING,
-                  "Request for function %s rejected. Total rejected: {}",
+                  "Request for function %s rejected. Total rejected: %zu",
                   function_name_.c_str(),
-                  limiter_.rejected_requests_[function_name_].load());
+                  limiter_.rejected_requests_[function_name_].load(std::memory_order_relaxed));
         } else {
             limiter_.requests_[function_name_].push(
                 std::chrono::steady_clock::now());
@@ -215,15 +241,15 @@ void RateLimiter::Awaiter::await_suspend(std::coroutine_handle<> handle) {
                 1, std::memory_order_relaxed);
             was_rejected_ = true;
 
-            // Platform-specific optimization
-#ifdef ATOM_PLATFORM_LINUX
+            // Platform-specific optimization for Linux native path
+#if defined(ATOM_PLATFORM_LINUX) && !defined(ATOM_USE_ASIO)
             limiter_.waitersReady_.fetch_add(1, std::memory_order_relaxed);
 #endif
 
             LOG_F(WARNING,
-                  "Request for function %s rejected. Total rejected: {}",
+                  "Request for function %s rejected. Total rejected: %zu",
                   function_name_.c_str(),
-                  limiter_.rejected_requests_[function_name_].load());
+                  limiter_.rejected_requests_[function_name_].load(std::memory_order_relaxed));
         } else {
             limiter_.requests_[function_name_].emplace_back(
                 std::chrono::steady_clock::now());
@@ -256,7 +282,7 @@ void RateLimiter::Awaiter::await_resume() {
 // Implementation of RateLimiter::acquire
 RateLimiter::Awaiter RateLimiter::acquire(std::string_view function_name) {
     LOG_F(INFO, "RateLimiter::acquire called for function: %s",
-          function_name.data());
+          std::string(function_name).c_str()); // Ensure null-terminated for log
     return Awaiter(*this, std::string(function_name));
 }
 
@@ -268,45 +294,46 @@ void RateLimiter::setFunctionLimit(std::string_view function_name,
         THROW_INVALID_ARGUMENT("max_requests must be greater than 0");
     }
     if (time_window.count() <= 0) {
-        THROW_INVALID_ARGUMENT("time_window must be greater than 0");
+        THROW_INVALID_ARGUMENT("time_window must be greater than 0 seconds");
     }
 
     LOG_F(INFO,
           "RateLimiter::setFunctionLimit called for function: %s, "
-          "max_requests={}, time_window={} seconds",
-          function_name.data(), max_requests, time_window.count());
+          "max_requests=%zu, time_window=%lld seconds",
+          std::string(function_name).c_str(), max_requests, (long long)time_window.count());
 
     std::unique_lock<std::shared_mutex> lock(mutex_);
     settings_[std::string(function_name)] = Settings(max_requests, time_window);
 }
 
-// Implementation of RateLimiter::setFunctionLimits - New
+// Implementation of RateLimiter::setFunctionLimits
 void RateLimiter::setFunctionLimits(
-    std::span<const std::pair<std::string_view, Settings>> settings) {
-    LOG_F(INFO, "RateLimiter::setFunctionLimits called with {} settings",
-          settings.size());
+    std::span<const std::pair<std::string_view, Settings>> settings_list) {
+    LOG_F(INFO, "RateLimiter::setFunctionLimits called with %zu settings",
+          settings_list.size());
 
     std::unique_lock<std::shared_mutex> lock(mutex_);
 
-    for (const auto& [function_name, setting] : settings) {
+    for (const auto& [function_name_sv, setting] : settings_list) {
+        std::string function_name_str(function_name_sv);
         if (setting.maxRequests == 0) {
             THROW_INVALID_ARGUMENT(std::format(
                 "max_requests must be greater than 0 for function: {}",
-                function_name));
+                function_name_str));
         }
         if (setting.timeWindow.count() <= 0) {
             THROW_INVALID_ARGUMENT(std::format(
-                "time_window must be greater than 0 for function: {}",
-                function_name));
+                "time_window must be greater than 0 seconds for function: {}",
+                function_name_str));
         }
 
-        settings_[std::string(function_name)] = setting;
+        settings_[function_name_str] = setting;
 
         LOG_F(INFO,
-              "Set limit for function: %s, max_requests={}, time_window={} "
+              "Set limit for function: %s, max_requests=%zu, time_window=%lld "
               "seconds",
-              std::string(function_name).c_str(), setting.maxRequests,
-              setting.timeWindow.count());
+              function_name_str.c_str(), setting.maxRequests,
+              (long long)setting.timeWindow.count());
     }
 }
 
@@ -322,33 +349,33 @@ void RateLimiter::resume() {
     {
         std::unique_lock<std::shared_mutex> lock(mutex_);
         paused_.store(false, std::memory_order_release);
+        lock.unlock(); // Release mutex before calling processing functions
 
-        // Selectively use platform-specific optimizations
-#if defined(ATOM_PLATFORM_WINDOWS)
-        lock.unlock();
+        // Selectively use platform-specific or Asio optimizations
+#if defined(ATOM_USE_ASIO)
+        asioProcessWaiters();
+#elif defined(ATOM_PLATFORM_WINDOWS)
         optimizedProcessWaiters();
 #elif defined(ATOM_PLATFORM_MACOS)
-        lock.unlock();
         optimizedProcessWaiters();
 #elif defined(ATOM_PLATFORM_LINUX)
-        lock.unlock();
         optimizedProcessWaiters();
 #else
-        processWaiters();
+        processWaiters(); // Generic version
 #endif
     }
 }
 
 // Implementation of RateLimiter::printLog
 void RateLimiter::printLog() const noexcept {
-#if ENABLE_DEBUG
+#if ENABLE_DEBUG // Assuming ENABLE_DEBUG is a macro controlling this
     LOG_F(INFO, "RateLimiter::printLog called");
-    std::shared_lock<std::shared_mutex> lock(mutex_);
+    std::shared_lock<std::shared_mutex> lock(mutex_); // Read lock
     for (const auto& [function_name, timestamps] : log_) {
-        std::cout << "Request log for " << function_name << ":\n";
+        // Using LOG_F for consistency, though std::cout is also fine for debug
+        LOG_F(INFO, "Request log for %s:", function_name.c_str());
         for (const auto& timestamp : timestamps) {
-            std::cout << "Request at " << timestamp.time_since_epoch().count()
-                      << std::endl;
+            LOG_F(INFO, "  Request at %lld", (long long)timestamp.time_since_epoch().count());
         }
     }
 #endif
@@ -358,29 +385,31 @@ void RateLimiter::printLog() const noexcept {
 auto RateLimiter::getRejectedRequests(
     std::string_view function_name) const noexcept -> size_t {
     LOG_F(INFO, "RateLimiter::getRejectedRequests called for function: %s",
-          function_name.data());
+          std::string(function_name).c_str());
 
-    std::shared_lock<std::shared_mutex> lock(mutex_);
-    if (auto it = rejected_requests_.find(std::string(function_name));
-        it != rejected_requests_.end()) {
+    std::shared_lock<std::shared_mutex> lock(mutex_); // Read lock
+    auto it = rejected_requests_.find(std::string(function_name));
+    if (it != rejected_requests_.end()) {
         return it->second.load(std::memory_order_relaxed);
     }
     return 0;
 }
 
-// Implementation of RateLimiter::resetFunction - New
-void RateLimiter::resetFunction(std::string_view function_name) {
+// Implementation of RateLimiter::resetFunction
+void RateLimiter::resetFunction(std::string_view function_name_sv) {
+    std::string func_name(function_name_sv);
     LOG_F(INFO, "RateLimiter::resetFunction called for function: %s",
-          function_name.data());
+          func_name.c_str());
 
     std::unique_lock<std::shared_mutex> lock(mutex_);
-
-    std::string func_name(function_name);
 
     // Clear request records
 #ifdef ATOM_USE_BOOST_LOCKFREE
     if (auto it = requests_.find(func_name); it != requests_.end()) {
-        it->second.clear();
+        // Assuming 'clear' is not directly available on boost::lockfree::queue
+        // Reassign to an empty queue or pop all elements
+        LockfreeRequestQueue empty_queue;
+        it->second.swap(empty_queue); // Efficiently clears by swapping with empty
     }
 #else
     if (auto it = requests_.find(func_name); it != requests_.end()) {
@@ -392,12 +421,17 @@ void RateLimiter::resetFunction(std::string_view function_name) {
     if (auto it = rejected_requests_.find(func_name);
         it != rejected_requests_.end()) {
         it->second.store(0, std::memory_order_relaxed);
+    } else {
+        // Ensure the entry exists if we want to reset it to 0,
+        // or rely on getRejectedRequests returning 0 for non-existent keys.
+        // For consistency, we can insert it if not present.
+        rejected_requests_[func_name].store(0, std::memory_order_relaxed);
     }
 
-    LOG_F(INFO, "Reset completed for function: %s", function_name.data());
+    LOG_F(INFO, "Reset completed for function: %s", func_name.c_str());
 }
 
-// Implementation of RateLimiter::resetAll - New
+// Implementation of RateLimiter::resetAll
 void RateLimiter::resetAll() noexcept {
     LOG_F(INFO, "RateLimiter::resetAll called");
 
@@ -405,163 +439,92 @@ void RateLimiter::resetAll() noexcept {
 
     // Clear all request records
 #ifdef ATOM_USE_BOOST_LOCKFREE
-    for (auto& [_, queue] : requests_) {
-        queue.clear();
+    for (auto& pair : requests_) {
+        LockfreeRequestQueue empty_queue;
+        pair.second.swap(empty_queue);
     }
 #else
-    for (auto& [_, queue] : requests_) {
-        queue.clear();
+    for (auto& pair : requests_) {
+        pair.second.clear();
     }
 #endif
 
     // Reset all rejection counts
-    for (auto& [_, count] : rejected_requests_) {
-        count.store(0, std::memory_order_relaxed);
+    for (auto& pair : rejected_requests_) {
+        pair.second.store(0, std::memory_order_relaxed);
     }
 
     LOG_F(INFO, "All rate limits have been reset");
 }
 
 // Implementation of RateLimiter::cleanup
-void RateLimiter::cleanup(std::string_view function_name,
+void RateLimiter::cleanup(std::string_view function_name_sv,
                           const std::chrono::seconds& time_window) {
+    std::string func_name(function_name_sv);
     LOG_F(INFO,
-          "RateLimiter::cleanup called for function: %s, time_window={} "
+          "RateLimiter::cleanup called for function: %s, time_window=%lld "
           "seconds",
-          function_name.data(), time_window.count());
+          func_name.c_str(), (long long)time_window.count());
 
     auto now = std::chrono::steady_clock::now();
     auto cutoff_time = now - time_window;
 
 #ifdef ATOM_USE_BOOST_LOCKFREE
-    // For lockfree implementation, we need to create a new queue and transfer
-    // valid items
-    LockfreeRequestQueue new_queue;
-    auto& current_queue = requests_[std::string(function_name)];
+    // For lockfree implementation, we need to create a new queue and transfer valid items
+    // This needs to be done carefully if requests_ might not contain func_name yet.
+    auto it = requests_.find(func_name);
+    if (it == requests_.end()) return; // No requests to clean for this function
+
+    LockfreeRequestQueue& current_queue = it->second;
+    LockfreeRequestQueue new_queue; // Assuming default construction is fine
 
     // Move valid timestamps to the new queue
     std::chrono::steady_clock::time_point timestamp;
-    while (!current_queue.empty() && current_queue.pop(timestamp)) {
+    // Consume all items from current_queue
+    while (current_queue.pop(timestamp)) {
         if (timestamp >= cutoff_time) {
-            new_queue.push(timestamp);
+            new_queue.push(timestamp); // Push valid items to new_queue
         }
     }
-
-    // Replace the old queue with the new one
-    current_queue = std::move(new_queue);
+    // Replace the old queue with the new one by swapping
+    current_queue.swap(new_queue);
 #else
-    auto& reqs = requests_[std::string(function_name)];
+    auto it = requests_.find(func_name);
+    if (it == requests_.end()) return; // No requests to clean
+
+    auto& reqs = it->second;
 
     // C++20 ranges and views for more concise filtering
-    auto is_expired = [&cutoff_time](const auto& time) {
-        return time < cutoff_time;
+    auto is_expired = [&cutoff_time](const auto& time_point) {
+        return time_point < cutoff_time;
     };
-
-    reqs.erase(std::ranges::remove_if(reqs, is_expired).begin(), reqs.end());
+    // std::erase_if is C++20 for deques
+    std::erase_if(reqs, is_expired);
 #endif
 }
 
-// Implementation of RateLimiter::processWaiters
+// Implementation of RateLimiter::processWaiters (Generic)
 void RateLimiter::processWaiters() {
-    LOG_F(INFO, "RateLimiter::processWaiters called");
+    LOG_F(INFO, "RateLimiter::processWaiters called (generic)");
 
-#ifdef ATOM_USE_BOOST_LOCKFREE
-    // Create temporary storage for waiters to process
-    std::vector<std::pair<std::string, std::coroutine_handle<>>>
-        waiters_to_process;
+    std::vector<std::pair<std::string, std::coroutine_handle<>>> waiters_to_process;
 
-    // Identify waiters that can be processed
-    for (auto& [function_name, wait_queue] : waiters_) {
-        if (wait_queue.empty())
-            continue;
+    { // Scope for the unique_lock
+        std::unique_lock<std::shared_mutex> lock(mutex_); // Re-lock mutex for this operation section
 
-        auto& settings = settings_[function_name];
-        auto& req_queue = requests_[function_name];
-
-        // Process as many waiters as possible according to rate limits
-        while (!wait_queue.empty() &&
-               req_queue.size_approx() < settings.maxRequests) {
-            std::coroutine_handle<> handle;
-            if (wait_queue.pop(handle)) {
-                req_queue.push(std::chrono::steady_clock::now());
-                waiters_to_process.emplace_back(function_name, handle);
-            }
-        }
-    }
-
-    // Release lock before resuming waiters
-    if (!waiters_to_process.empty()) {
-        mutex_.unlock();
-        // Use C++20 parallel algorithms for better performance
-        std::for_each(std::execution::par_unseq, waiters_to_process.begin(),
-                      waiters_to_process.end(), [](const auto& pair) {
-                          LOG_F(INFO, "Resuming waiter for function: %s",
-                                pair.first.c_str());
-                          pair.second.resume();
-                      });
-        mutex_.lock();
-    }
-#else
-    // Create temporary storage for waiters to process
-    std::vector<std::pair<std::string, std::coroutine_handle<>>>
-        waiters_to_process;
-
-    // Get waiters that need processing
-    for (auto& [function_name, wait_queue] : waiters_) {
-        if (wait_queue.empty())
-            continue;
-
-        auto& settings = settings_[function_name];
-        while (!wait_queue.empty() &&
-               requests_[function_name].size() < settings.maxRequests) {
-            auto waiter = wait_queue.front();
-            wait_queue.pop_front();
-            requests_[function_name].emplace_back(
-                std::chrono::steady_clock::now());
-            waiters_to_process.emplace_back(function_name, waiter);
-        }
-    }
-
-    // Release lock before processing waiters to avoid lock contention
-    if (!waiters_to_process.empty()) {
-        mutex_.unlock();
-        // Use C++20 parallel algorithms for better performance
-        std::for_each(std::execution::par_unseq, waiters_to_process.begin(),
-                      waiters_to_process.end(), [](const auto& pair) {
-                          LOG_F(INFO, "Resuming waiter for function: %s",
-                                pair.first.c_str());
-                          pair.second.resume();
-                      });
-        mutex_.lock();
-    }
-#endif
-}
-
-// Windows platform-specific optimized implementation
-#ifdef ATOM_PLATFORM_WINDOWS
-void RateLimiter::optimizedProcessWaiters() {
-    LOG_F(INFO, "Using Windows-optimized processWaiters");
-
-    EnterCriticalSection(&resumeLock_);
-
-    // Create temporary storage for waiters to process
-    std::vector<std::pair<std::string, std::coroutine_handle<>>>
-        waiters_to_process;
-
-    {
-        std::unique_lock<std::shared_mutex> lock(mutex_);
-
-        // Standard processing logic, same as processWaiters
 #ifdef ATOM_USE_BOOST_LOCKFREE
         for (auto& [function_name, wait_queue] : waiters_) {
-            if (wait_queue.empty())
-                continue;
+            if (wait_queue.empty()) continue;
 
-            auto& settings = settings_[function_name];
-            auto& req_queue = requests_[function_name];
+            auto settings_it = settings_.find(function_name);
+            if (settings_it == settings_.end()) continue; // Should have settings
+            auto& current_settings = settings_it->second;
+            
+            // Ensure requests_ map has an entry for function_name before accessing
+            auto& req_queue = requests_[function_name]; // Creates if not exists
 
             while (!wait_queue.empty() &&
-                   req_queue.size_approx() < settings.maxRequests) {
+                   req_queue.size_approx() < current_settings.maxRequests) {
                 std::coroutine_handle<> handle;
                 if (wait_queue.pop(handle)) {
                     req_queue.push(std::chrono::steady_clock::now());
@@ -571,48 +534,170 @@ void RateLimiter::optimizedProcessWaiters() {
         }
 #else
         for (auto& [function_name, wait_queue] : waiters_) {
-            if (wait_queue.empty())
-                continue;
+            if (wait_queue.empty()) continue;
 
-            auto& settings = settings_[function_name];
+            auto settings_it = settings_.find(function_name);
+            if (settings_it == settings_.end()) continue;
+            auto& current_settings = settings_it->second;
+
+            // Ensure requests_ map has an entry
+            auto& req_list = requests_[function_name]; // Creates if not exists
+
             while (!wait_queue.empty() &&
-                   requests_[function_name].size() < settings.maxRequests) {
+                   req_list.size() < current_settings.maxRequests) {
                 auto waiter = wait_queue.front();
                 wait_queue.pop_front();
-                requests_[function_name].emplace_back(
-                    std::chrono::steady_clock::now());
+                req_list.emplace_back(std::chrono::steady_clock::now());
                 waiters_to_process.emplace_back(function_name, waiter);
             }
         }
 #endif
-    }
+    } // unique_lock released here
 
-    // Use Windows thread pool instead of std::for_each to process waiters
+    // Resume waiters outside the lock
+    if (!waiters_to_process.empty()) {
+        // Use C++20 parallel algorithms for better performance if appropriate,
+        // but ensure safety with coroutine resumption. Sequential might be safer
+        // if coroutines interact heavily or are not thread-safe.
+        // For now, using parallel as in original.
+        std::for_each(std::execution::par_unseq, waiters_to_process.begin(),
+                      waiters_to_process.end(), [](const auto& pair) {
+                          LOG_F(INFO, "Resuming waiter for function: %s (generic)",
+                                pair.first.c_str());
+                          pair.second.resume();
+                      });
+    }
+}
+
+#ifdef ATOM_USE_ASIO
+void RateLimiter::asioProcessWaiters() {
+    LOG_F(INFO, "Using Asio-optimized processWaiters");
+
+    std::vector<std::pair<std::string, std::coroutine_handle<>>> waiters_to_process;
+
+    { // Scope for the unique_lock
+        std::unique_lock<std::shared_mutex> lock(mutex_); // Lock to safely access shared data
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        for (auto& [function_name, wait_queue] : waiters_) {
+            if (wait_queue.empty()) continue;
+            auto settings_it = settings_.find(function_name);
+            if (settings_it == settings_.end()) continue;
+            auto& current_settings = settings_it->second;
+            auto& req_queue = requests_[function_name];
+
+            while (!wait_queue.empty() && req_queue.size_approx() < current_settings.maxRequests) {
+                std::coroutine_handle<> handle;
+                if (wait_queue.pop(handle)) {
+                    req_queue.push(std::chrono::steady_clock::now());
+                    waiters_to_process.emplace_back(function_name, handle);
+                }
+            }
+        }
+#else // Not ATOM_USE_BOOST_LOCKFREE
+        for (auto& [function_name, wait_queue] : waiters_) {
+            if (wait_queue.empty()) continue;
+            auto settings_it = settings_.find(function_name);
+            if (settings_it == settings_.end()) continue;
+            auto& current_settings = settings_it->second;
+            auto& req_list = requests_[function_name];
+
+            while (!wait_queue.empty() && req_list.size() < current_settings.maxRequests) {
+                auto waiter = wait_queue.front();
+                wait_queue.pop_front();
+                req_list.emplace_back(std::chrono::steady_clock::now());
+                waiters_to_process.emplace_back(function_name, waiter);
+            }
+        }
+#endif
+    } // unique_lock released
+
+    if (!waiters_to_process.empty()) {
+        for (const auto& pair_to_process : waiters_to_process) {
+            // Capture necessary data by value for the lambda
+            std::string fn_copy = pair_to_process.first;
+            std::coroutine_handle<> h_copy = pair_to_process.second;
+            asio::post(asio_pool_, [fn_copy, h_copy]() {
+                LOG_F(INFO, "Resuming waiter for function: %s (Asio)", fn_copy.c_str());
+                h_copy.resume();
+            });
+        }
+    }
+}
+#endif
+
+
+// Windows platform-specific optimized implementation
+#ifdef ATOM_PLATFORM_WINDOWS
+void RateLimiter::optimizedProcessWaiters() {
+    LOG_F(INFO, "Using Windows-optimized processWaiters");
+
+    EnterCriticalSection(&resumeLock_); // Outer lock for the operation
+
+    std::vector<std::pair<std::string, std::coroutine_handle<>>> waiters_to_process;
+
+    { // Scope for unique_lock on mutex_
+        std::unique_lock<std::shared_mutex> lock(mutex_); // Lock for shared data access
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+        for (auto& [function_name, wait_queue] : waiters_) {
+            if (wait_queue.empty()) continue;
+            auto settings_it = settings_.find(function_name);
+            if (settings_it == settings_.end()) continue;
+            auto& current_settings = settings_it->second;
+            auto& req_queue = requests_[function_name];
+
+            while (!wait_queue.empty() &&
+                   req_queue.size_approx() < current_settings.maxRequests) {
+                std::coroutine_handle<> handle;
+                if (wait_queue.pop(handle)) {
+                    req_queue.push(std::chrono::steady_clock::now());
+                    waiters_to_process.emplace_back(function_name, handle);
+                }
+            }
+        }
+#else
+        for (auto& [function_name, wait_queue] : waiters_) {
+            if (wait_queue.empty()) continue;
+            auto settings_it = settings_.find(function_name);
+            if (settings_it == settings_.end()) continue;
+            auto& current_settings = settings_it->second;
+            auto& req_list = requests_[function_name];
+            
+            while (!wait_queue.empty() &&
+                   req_list.size() < current_settings.maxRequests) {
+                auto waiter = wait_queue.front();
+                wait_queue.pop_front();
+                req_list.emplace_back(std::chrono::steady_clock::now());
+                waiters_to_process.emplace_back(function_name, waiter);
+            }
+        }
+#endif
+    } // unique_lock on mutex_ released
+
+    // Use Windows thread pool to process waiters
     if (!waiters_to_process.empty()) {
         struct ResumeInfo {
             std::string function_name;
             std::coroutine_handle<> handle;
         };
 
-        for (const auto& [function_name, handle] : waiters_to_process) {
-            auto* info = new ResumeInfo{function_name, handle};
+        for (const auto& pair_to_process : waiters_to_process) {
+            auto* info = new ResumeInfo{pair_to_process.first, pair_to_process.second};
 
-            // Use Windows thread pool API
             if (!QueueUserWorkItem(
                     [](PVOID context) -> DWORD {
-                        auto* info = static_cast<ResumeInfo*>(context);
-                        LOG_F(INFO, "Resuming waiter for function: %s",
-                              info->function_name.c_str());
-                        info->handle.resume();
-                        delete info;
+                        auto* current_info = static_cast<ResumeInfo*>(context);
+                        LOG_F(INFO, "Resuming waiter for function: %s (Windows)",
+                              current_info->function_name.c_str());
+                        current_info->handle.resume();
+                        delete current_info;
                         return 0;
                     },
                     info, WT_EXECUTEDEFAULT)) {
-                // If queuing fails, fall back to synchronous execution
                 LOG_F(WARNING,
-                      "Failed to queue work item, executing synchronously");
-                LOG_F(INFO, "Resuming waiter for function: %s",
-                      info->function_name.c_str());
+                      "Failed to queue work item for %s, executing synchronously", info->function_name.c_str());
+                // Fallback to synchronous execution if queuing fails
                 info->handle.resume();
                 delete info;
             }
@@ -628,24 +713,21 @@ void RateLimiter::optimizedProcessWaiters() {
 void RateLimiter::optimizedProcessWaiters() {
     LOG_F(INFO, "Using macOS-optimized processWaiters");
 
-    // Create temporary storage for waiters to process
-    std::vector<std::pair<std::string, std::coroutine_handle<>>>
-        waiters_to_process;
+    std::vector<std::pair<std::string, std::coroutine_handle<>>> waiters_to_process;
 
-    {
+    { // Scope for unique_lock
         std::unique_lock<std::shared_mutex> lock(mutex_);
 
-        // Standard processing logic, same as processWaiters
 #ifdef ATOM_USE_BOOST_LOCKFREE
         for (auto& [function_name, wait_queue] : waiters_) {
-            if (wait_queue.empty())
-                continue;
-
-            auto& settings = settings_[function_name];
+            if (wait_queue.empty()) continue;
+            auto settings_it = settings_.find(function_name);
+            if (settings_it == settings_.end()) continue;
+            auto& current_settings = settings_it->second;
             auto& req_queue = requests_[function_name];
 
             while (!wait_queue.empty() &&
-                   req_queue.size_approx() < settings.maxRequests) {
+                   req_queue.size_approx() < current_settings.maxRequests) {
                 std::coroutine_handle<> handle;
                 if (wait_queue.pop(handle)) {
                     req_queue.push(std::chrono::steady_clock::now());
@@ -655,46 +737,44 @@ void RateLimiter::optimizedProcessWaiters() {
         }
 #else
         for (auto& [function_name, wait_queue] : waiters_) {
-            if (wait_queue.empty())
-                continue;
+            if (wait_queue.empty()) continue;
+            auto settings_it = settings_.find(function_name);
+            if (settings_it == settings_.end()) continue;
+            auto& current_settings = settings_it->second;
+            auto& req_list = requests_[function_name];
 
-            auto& settings = settings_[function_name];
             while (!wait_queue.empty() &&
-                   requests_[function_name].size() < settings.maxRequests) {
+                   req_list.size() < current_settings.maxRequests) {
                 auto waiter = wait_queue.front();
                 wait_queue.pop_front();
-                requests_[function_name].emplace_back(
-                    std::chrono::steady_clock::now());
+                req_list.emplace_back(std::chrono::steady_clock::now());
                 waiters_to_process.emplace_back(function_name, waiter);
             }
         }
 #endif
-    }
+    } // unique_lock released
 
-    // Use GCD instead of std::for_each to process waiters
+    // Use GCD to process waiters
     if (!waiters_to_process.empty()) {
-        // Create a concurrent dispatch queue
         dispatch_queue_t queue =
             dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
-
-        // Create a group to track all tasks
         dispatch_group_t group = dispatch_group_create();
 
-        for (const auto& [function_name, handle] : waiters_to_process) {
-            // Copy data for each waiter to use safely in the block
-            auto fname_copy = function_name;
-            auto handle_copy = handle;
+        for (const auto& pair_to_process : waiters_to_process) {
+            std::string fname_copy = pair_to_process.first; // Capture by value
+            std::coroutine_handle<> handle_copy = pair_to_process.second; // Capture by value
 
             dispatch_group_async(group, queue, ^{
-                LOG_F(INFO, "Resuming waiter for function: %s",
-                      fname_copy.c_str());
-                handle_copy.resume();
+              LOG_F(INFO, "Resuming waiter for function: %s (macOS GCD)",
+                    fname_copy.c_str());
+              handle_copy.resume();
             });
         }
-
-        // Wait for all tasks to complete
         dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
-        dispatch_release(group);
+        // dispatch_release(group); // Not needed with ARC, but good practice if not ARC or for older GCD.
+                                 // Modern GCD with ARC manages object lifetimes.
+                                 // If this project doesn't use ARC for C++ objects interacting with Obj-C runtime,
+                                 // then manual release is important. Assuming modern setup.
     }
 }
 #endif
@@ -704,55 +784,60 @@ void RateLimiter::optimizedProcessWaiters() {
 void RateLimiter::optimizedProcessWaiters() {
     LOG_F(INFO, "Using Linux-optimized processWaiters");
 
+#if !defined(ATOM_USE_ASIO) // This optimization is for the native Linux path
     int expected_waiters = waitersReady_.load(std::memory_order_relaxed);
     if (expected_waiters <= 0) {
-        return;  // No waiters, return directly
+        LOG_F(INFO, "No waiters ready for Linux optimized path, returning.");
+        return; 
     }
+#endif
 
-    // Create temporary storage for waiters to process
-    std::vector<std::pair<std::string, std::coroutine_handle<>>>
-        waiters_to_process;
+    std::vector<std::pair<std::string, std::coroutine_handle<>>> waiters_to_process;
 
-    {
+    { // Scope for unique_lock
         std::unique_lock<std::shared_mutex> lock(mutex_);
 
-        // Standard processing logic, same as processWaiters
 #ifdef ATOM_USE_BOOST_LOCKFREE
         for (auto& [function_name, wait_queue] : waiters_) {
-            if (wait_queue.empty())
-                continue;
-
-            auto& settings = settings_[function_name];
+            if (wait_queue.empty()) continue;
+            auto settings_it = settings_.find(function_name);
+            if (settings_it == settings_.end()) continue;
+            auto& current_settings = settings_it->second;
             auto& req_queue = requests_[function_name];
 
             while (!wait_queue.empty() &&
-                   req_queue.size_approx() < settings.maxRequests) {
+                   req_queue.size_approx() < current_settings.maxRequests) {
                 std::coroutine_handle<> handle;
                 if (wait_queue.pop(handle)) {
                     req_queue.push(std::chrono::steady_clock::now());
                     waiters_to_process.emplace_back(function_name, handle);
+#if !defined(ATOM_USE_ASIO)
                     waitersReady_.fetch_sub(1, std::memory_order_relaxed);
+#endif
                 }
             }
         }
 #else
         for (auto& [function_name, wait_queue] : waiters_) {
-            if (wait_queue.empty())
-                continue;
+            if (wait_queue.empty()) continue;
+            auto settings_it = settings_.find(function_name);
+            if (settings_it == settings_.end()) continue;
+            auto& current_settings = settings_it->second;
+            auto& req_list = requests_[function_name];
 
-            auto& settings = settings_[function_name];
             while (!wait_queue.empty() &&
-                   requests_[function_name].size() < settings.maxRequests) {
+                   req_list.size() < current_settings.maxRequests) {
                 auto waiter = wait_queue.front();
                 wait_queue.pop_front();
-                requests_[function_name].emplace_back(
-                    std::chrono::steady_clock::now());
+                req_list.emplace_back(std::chrono::steady_clock::now());
                 waiters_to_process.emplace_back(function_name, waiter);
+#if !defined(ATOM_USE_ASIO)
                 waitersReady_.fetch_sub(1, std::memory_order_relaxed);
+#endif
             }
         }
 #endif
-    }
+    } // unique_lock released
 
     // Use POSIX threads to process waiters
     if (!waiters_to_process.empty()) {
@@ -764,15 +849,14 @@ void RateLimiter::optimizedProcessWaiters() {
         std::vector<pthread_t> threads;
         threads.reserve(waiters_to_process.size());
 
-        for (const auto& [function_name, handle] : waiters_to_process) {
-            auto* arg = new ResumeThreadArg{function_name, handle};
-
+        for (const auto& pair_to_process : waiters_to_process) {
+            auto* arg = new ResumeThreadArg{pair_to_process.first, pair_to_process.second};
             pthread_t thread;
             if (pthread_create(
                     &thread, nullptr,
-                    [](void* arg) -> void* {
-                        auto* data = static_cast<ResumeThreadArg*>(arg);
-                        LOG_F(INFO, "Resuming waiter for function: %s",
+                    [](void* thread_arg) -> void* {
+                        auto* data = static_cast<ResumeThreadArg*>(thread_arg);
+                        LOG_F(INFO, "Resuming waiter for function: %s (Linux pthread)",
                               data->function_name.c_str());
                         data->handle.resume();
                         delete data;
@@ -781,19 +865,17 @@ void RateLimiter::optimizedProcessWaiters() {
                     arg) == 0) {
                 threads.push_back(thread);
             } else {
-                // If thread creation fails, fall back to synchronous execution
                 LOG_F(WARNING,
-                      "Failed to create thread, executing synchronously");
-                LOG_F(INFO, "Resuming waiter for function: %s",
-                      arg->function_name.c_str());
+                      "Failed to create thread for %s, executing synchronously", arg->function_name.c_str());
+                // Fallback to synchronous execution
                 arg->handle.resume();
                 delete arg;
             }
         }
 
-        // Detach all threads
-        for (auto thread : threads) {
-            pthread_detach(thread);
+        // Detach all successfully created threads
+        for (auto thread_id : threads) {
+            pthread_detach(thread_id);
         }
     }
 }

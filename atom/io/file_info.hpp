@@ -1,7 +1,6 @@
 #ifndef ATOM_IO_FILE_INFO_HPP
 #define ATOM_IO_FILE_INFO_HPP
 
-#include <ctime>
 #include <filesystem>
 
 #include "atom/containers/high_performance.hpp"
@@ -10,7 +9,6 @@
 namespace atom::io {
 namespace fs = std::filesystem;
 
-// Use type alias from high_performance.hpp
 using atom::containers::String;
 
 /**
@@ -51,6 +49,7 @@ FileInfo getFileInfo(const fs::path& filePath);
  * @param info The FileInfo structure containing file details.
  */
 void printFileInfo(const FileInfo& info);
+
 }  // namespace atom::io
 
 #endif  // ATOM_IO_FILE_INFO_HPP

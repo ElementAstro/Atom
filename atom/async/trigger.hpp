@@ -31,6 +31,9 @@ Description: Trigger class for C++
 #include <utility>
 #include <vector>
 
+// Add spdlog include
+#include "spdlog/spdlog.h"
+
 #ifdef ATOM_USE_BOOST_LOCKS
 #include <boost/thread.hpp>
 #include <boost/thread/future.hpp>
@@ -82,7 +85,18 @@ public:
 
     ~joining_thread() {
         if (thread_.joinable()) {
-            thread_.join();
+            try {
+                thread_.join();
+            } catch (const std::exception& e) {
+                spdlog::error(
+                    "Exception during boost::thread join in ~joining_thread: "
+                    "{}",
+                    e.what());
+            } catch (...) {
+                spdlog::error(
+                    "Unknown exception during boost::thread join in "
+                    "~joining_thread");
+            }
         }
     }
 
@@ -211,7 +225,10 @@ concept CopyableType =
 class TriggerException : public std::runtime_error {
 public:
     explicit TriggerException(const std::string& message)
-        : std::runtime_error(message) {}
+        : std::runtime_error(message) {
+        // spdlog::debug("TriggerException created: {}", message); // Optional:
+        // log creation
+    }
 };
 
 /**
@@ -238,12 +255,15 @@ public:
     /**
      * @brief Constructor.
      */
-    Trigger() noexcept = default;
+    Trigger() noexcept { spdlog::debug("Trigger instance created."); };
 
     /**
      * @brief Destructor that ensures all pending operations are completed.
      */
-    ~Trigger() noexcept { cancelAllTriggers(); }
+    ~Trigger() noexcept {
+        spdlog::debug("Trigger instance destroyed, cancelling all triggers.");
+        cancelAllTriggers();
+    }
 
     // Rule of five
     Trigger(const Trigger&) = delete;
@@ -409,18 +429,24 @@ template <typename ParamType>
     requires CallableWithParam<ParamType> && CopyableType<ParamType>
 [[nodiscard]] std::size_t Trigger<ParamType>::registerCallback(
     std::string_view event, Callback callback, CallbackPriority priority) {
-    if (event.empty()) {
+    std::string event_str(event);
+    if (event_str.empty()) {
+        spdlog::error("Attempted to register callback with empty event name.");
         throw TriggerException("Event name cannot be empty");
     }
     if (!callback) {
+        spdlog::error("Attempted to register null callback for event '{}'.",
+                      event_str);
         throw TriggerException("Callback cannot be null");
     }
 
+    spdlog::debug("Registering callback for event '{}' with priority {}.",
+                  event_str, static_cast<int>(priority));
     internal::unique_lock_t<internal::shared_mutex_type> lock(m_mutex_);
     auto id = m_next_id_++;
     auto callbackPtr = std::make_shared<Callback>(std::move(callback));
-    m_callbacks_[std::string(event)].push_back(
-        {priority, id, std::move(callbackPtr)});
+    m_callbacks_[event_str].push_back({priority, id, std::move(callbackPtr)});
+    spdlog::info("Registered callback ID {} for event '{}'.", id, event_str);
     return id;
 }
 
@@ -428,13 +454,20 @@ template <typename ParamType>
     requires CallableWithParam<ParamType> && CopyableType<ParamType>
 bool Trigger<ParamType>::unregisterCallback(std::string_view event,
                                             std::size_t callbackId) noexcept {
-    if (event.empty()) {
+    std::string event_str(event);
+    if (event_str.empty()) {
+        spdlog::warn("Attempted to unregister callback with empty event name.");
         return false;
     }
+    spdlog::debug("Attempting to unregister callback ID {} for event '{}'.",
+                  callbackId, event_str);
 
     internal::unique_lock_t<internal::shared_mutex_type> lock(m_mutex_);
-    auto it = m_callbacks_.find(std::string(event));
+    auto it = m_callbacks_.find(event_str);
     if (it == m_callbacks_.end()) {
+        spdlog::warn(
+            "Failed to unregister callback ID {}: event '{}' not found.",
+            callbackId, event_str);
         return false;
     }
 
@@ -444,10 +477,15 @@ bool Trigger<ParamType>::unregisterCallback(std::string_view event,
         [callbackId](const auto& info) { return info.id == callbackId; });
 
     if (callbackIt == callbacks.end()) {
+        spdlog::warn(
+            "Failed to unregister callback: ID {} not found for event '{}'.",
+            callbackId, event_str);
         return false;
     }
 
     callbacks.erase(callbackIt);
+    spdlog::info("Unregistered callback ID {} for event '{}'.", callbackId,
+                 event_str);
     return true;
 }
 
@@ -455,18 +493,25 @@ template <typename ParamType>
     requires CallableWithParam<ParamType> && CopyableType<ParamType>
 std::size_t Trigger<ParamType>::unregisterAllCallbacks(
     std::string_view event) noexcept {
-    if (event.empty()) {
+    std::string event_str(event);
+    if (event_str.empty()) {
+        spdlog::warn(
+            "Attempted to unregister all callbacks with empty event name.");
         return 0;
     }
+    spdlog::debug("Unregistering all callbacks for event '{}'.", event_str);
 
     internal::unique_lock_t<internal::shared_mutex_type> lock(m_mutex_);
-    auto it = m_callbacks_.find(std::string(event));
+    auto it = m_callbacks_.find(event_str);
     if (it == m_callbacks_.end()) {
+        spdlog::debug("No callbacks found to unregister for event '{}'.",
+                      event_str);
         return 0;
     }
 
     std::size_t count = it->second.size();
     m_callbacks_.erase(it);
+    spdlog::info("Unregistered {} callbacks for event '{}'.", count, event_str);
     return count;
 }
 
@@ -474,21 +519,22 @@ template <typename ParamType>
     requires CallableWithParam<ParamType> && CopyableType<ParamType>
 std::size_t Trigger<ParamType>::trigger(std::string_view event,
                                         const ParamType& param) noexcept {
-    if (event.empty()) {
+    std::string event_str(event);
+    if (event_str.empty()) {
+        spdlog::warn("Attempted to trigger an empty event name.");
         return 0;
     }
+    spdlog::trace("Triggering event '{}'.", event_str);
 
-    // Create a local copy of callbacks to avoid holding the lock while calling
-    // them
     std::vector<CallbackPtr> callbacksToExecute;
     {
         internal::shared_lock_t<internal::shared_mutex_type> lock(m_mutex_);
-        auto it = m_callbacks_.find(std::string(event));
+        auto it = m_callbacks_.find(event_str);
         if (it == m_callbacks_.end()) {
+            spdlog::trace("No callbacks registered for event '{}'.", event_str);
             return 0;
         }
 
-        // Sort callbacks by priority (High -> Normal -> Low)
         auto sortedCallbacks = it->second;
         std::ranges::sort(sortedCallbacks,
                           [](const auto& cb1, const auto& cb2) {
@@ -496,29 +542,36 @@ std::size_t Trigger<ParamType>::trigger(std::string_view event,
                                      static_cast<int>(cb2.priority);
                           });
 
-        // Extract the callback pointers
         callbacksToExecute.reserve(sortedCallbacks.size());
         for (const auto& info : sortedCallbacks) {
             callbacksToExecute.push_back(info.callback);
         }
     }
+    spdlog::trace("Found {} callbacks for event '{}' to execute.",
+                  callbacksToExecute.size(), event_str);
 
-    // Execute callbacks outside the lock
     std::size_t executedCount = 0;
-    for (const auto& callback : callbacksToExecute) {
+    for (const auto& callback_ptr : callbacksToExecute) {
         try {
-            if (callback) {
-                (*callback)(param);
+            if (callback_ptr && *callback_ptr) {
+                (*callback_ptr)(param);
                 ++executedCount;
+            } else {
+                spdlog::warn(
+                    "Encountered null or empty callback pointer for event "
+                    "'{}'.",
+                    event_str);
             }
         } catch (const std::exception& e) {
-            // Log exception but continue with other callbacks
-            // In real implementation, use proper logging
+            spdlog::error("Exception in callback for event '{}': {}", event_str,
+                          e.what());
         } catch (...) {
-            // Catch all other exceptions
+            spdlog::error("Unknown exception in callback for event '{}'.",
+                          event_str);
         }
     }
-
+    spdlog::debug("Executed {} callbacks for event '{}'.", executedCount,
+                  event_str);
     return executedCount;
 }
 
@@ -528,12 +581,19 @@ template <typename ParamType>
 Trigger<ParamType>::scheduleTrigger(std::string event, ParamType param,
                                     std::chrono::milliseconds delay) {
     if (event.empty()) {
+        spdlog::error("Attempted to schedule trigger with empty event name.");
         throw TriggerException("Event name cannot be empty");
     }
     if (delay < std::chrono::milliseconds(0)) {
+        spdlog::error(
+            "Attempted to schedule trigger for event '{}' with negative delay "
+            "({}ms).",
+            event, delay.count());
         throw TriggerException("Delay cannot be negative");
     }
 
+    spdlog::debug("Scheduling trigger for event '{}' with delay {}ms.", event,
+                  delay.count());
     auto cancelFlag = std::make_shared<internal::atomic<bool>>(false);
 
     {
@@ -541,22 +601,69 @@ Trigger<ParamType>::scheduleTrigger(std::string event, ParamType param,
         m_pending_triggers_[event].push_back(cancelFlag);
     }
 
-    internal::joining_thread([this, event = std::move(event),
-                              param = std::move(param), delay,
-                              cancelFlag]() mutable {
-        // Early check before sleep
-        if (*cancelFlag) {
+    // Capture event and param by value (they are already std::string and
+    // ParamType)
+    internal::joining_thread([this,
+                              event_copy =
+                                  event,  // Explicit copy for clarity if
+                                          // needed, or rely on lambda capture
+                              param_copy = param, delay, cancelFlag]() mutable {
+        spdlog::trace("Scheduled trigger thread started for event '{}'.",
+                      event_copy);
+        if (cancelFlag->load(std::memory_order_acquire)) {
+            spdlog::debug(
+                "Scheduled trigger for event '{}' cancelled before sleep.",
+                event_copy);
+            // Clean up the cancel flag from m_pending_triggers_ if it was
+            // cancelled early
+            internal::unique_lock_t<internal::shared_mutex_type> lock(m_mutex_);
+            auto it = m_pending_triggers_.find(event_copy);
+            if (it != m_pending_triggers_.end()) {
+                auto& flags = it->second;
+                flags.erase(std::remove(flags.begin(), flags.end(), cancelFlag),
+                            flags.end());
+                if (flags.empty()) {
+                    m_pending_triggers_.erase(it);
+                }
+            }
             return;
         }
 
         std::this_thread::sleep_for(delay);
 
-        if (!(*cancelFlag)) {
-            trigger(event, param);
+        if (!cancelFlag->load(std::memory_order_acquire)) {
+            spdlog::info(
+                "Executing scheduled trigger for event '{}' after delay.",
+                event_copy);
+            trigger(event_copy,
+                    param_copy);  // param_copy is moved if ParamType is movable
+                                  // and trigger takes by value or copied if
+                                  // trigger takes by const ref. Current trigger
+                                  // takes by const ParamType& param
 
-            // Remove the cancel flag from pending triggers
             internal::unique_lock_t<internal::shared_mutex_type> lock(m_mutex_);
-            auto it = m_pending_triggers_.find(event);
+            auto it = m_pending_triggers_.find(event_copy);
+            if (it != m_pending_triggers_.end()) {
+                auto& flags = it->second;
+                flags.erase(std::remove(flags.begin(), flags.end(), cancelFlag),
+                            flags.end());
+                if (flags.empty()) {
+                    m_pending_triggers_.erase(it);
+                }
+                spdlog::trace(
+                    "Removed cancel flag for completed scheduled trigger of "
+                    "event '{}'.",
+                    event_copy);
+            }
+        } else {
+            spdlog::debug(
+                "Scheduled trigger for event '{}' cancelled after sleep, "
+                "before execution.",
+                event_copy);
+            // Clean up the cancel flag if it was cancelled during/after sleep
+            // but before execution
+            internal::unique_lock_t<internal::shared_mutex_type> lock(m_mutex_);
+            auto it = m_pending_triggers_.find(event_copy);
             if (it != m_pending_triggers_.end()) {
                 auto& flags = it->second;
                 flags.erase(std::remove(flags.begin(), flags.end(), cancelFlag),
@@ -566,6 +673,8 @@ Trigger<ParamType>::scheduleTrigger(std::string event, ParamType param,
                 }
             }
         }
+        spdlog::trace("Scheduled trigger thread finished for event '{}'.",
+                      event_copy);
     }).detach();
 
     return cancelFlag;
@@ -576,24 +685,74 @@ template <typename ParamType>
 [[nodiscard]] internal::future<std::size_t>
 Trigger<ParamType>::scheduleAsyncTrigger(std::string event, ParamType param) {
     if (event.empty()) {
+        spdlog::error(
+            "Attempted to schedule async trigger with empty event name.");
         throw TriggerException("Event name cannot be empty");
     }
+    spdlog::debug("Scheduling async trigger for event '{}'.", event);
 
-    auto promise = std::make_shared<internal::promise<std::size_t>>();
-    internal::future<std::size_t> future = promise->get_future();
+    auto promise_ptr = std::make_shared<internal::promise<std::size_t>>();
+    internal::future<std::size_t> future = promise_ptr->get_future();
 
-    internal::joining_thread([this, event = std::move(event),
-                              param = std::move(param), promise]() mutable {
+    internal::joining_thread([this, event_copy = event, param_copy = param,
+                              promise_ptr]() mutable {
+        spdlog::trace("Async trigger thread started for event '{}'.",
+                      event_copy);
         try {
-            std::size_t count = trigger(event, param);
-            promise->set_value(count);
-        } catch (...) {
+            std::size_t count = trigger(event_copy, param_copy);
+            promise_ptr->set_value(count);
+            spdlog::trace(
+                "Async trigger for event '{}' completed, {} callbacks "
+                "executed.",
+                event_copy, count);
+        } catch (const std::exception& e) {
+            spdlog::error(
+                "Exception in async trigger execution for event '{}': {}",
+                event_copy, e.what());
             try {
-                promise->set_exception(std::current_exception());
+                promise_ptr->set_exception(std::current_exception());
+            } catch (const std::future_error& fe) {
+                spdlog::error(
+                    "std::future_error setting exception for async trigger "
+                    "promise (event '{}'): {}",
+                    event_copy, fe.what());
+            } catch (const std::exception& se) {
+                spdlog::error(
+                    "std::exception setting exception for async trigger "
+                    "promise (event '{}'): {}",
+                    event_copy, se.what());
             } catch (...) {
-                // Handle any exception from set_exception
+                spdlog::error(
+                    "Unknown exception setting exception for async trigger "
+                    "promise for event '{}'.",
+                    event_copy);
+            }
+        } catch (...) {
+            spdlog::error(
+                "Unknown exception in async trigger execution for event '{}'.",
+                event_copy);
+            try {
+                promise_ptr->set_exception(std::make_exception_ptr(
+                    TriggerException("Unknown error in async trigger")));
+            } catch (const std::future_error& fe) {
+                spdlog::error(
+                    "std::future_error setting exception for async trigger "
+                    "promise (event '{}'): {}",
+                    event_copy, fe.what());
+            } catch (const std::exception& se) {
+                spdlog::error(
+                    "std::exception setting exception for async trigger "
+                    "promise (event '{}'): {}",
+                    event_copy, se.what());
+            } catch (...) {
+                spdlog::error(
+                    "Unknown exception setting exception for async trigger "
+                    "promise for event '{}' (after unknown trigger error).",
+                    event_copy);
             }
         }
+        spdlog::trace("Async trigger thread finished for event '{}'.",
+                      event_copy);
     }).detach();
 
     return future;
@@ -602,48 +761,68 @@ Trigger<ParamType>::scheduleAsyncTrigger(std::string event, ParamType param) {
 template <typename ParamType>
     requires CallableWithParam<ParamType> && CopyableType<ParamType>
 std::size_t Trigger<ParamType>::cancelTrigger(std::string_view event) noexcept {
-    if (event.empty()) {
+    std::string event_str(event);
+    if (event_str.empty()) {
+        spdlog::warn("Attempted to cancel trigger with empty event name.");
         return 0;
     }
+    spdlog::debug("Cancelling scheduled triggers for event '{}'.", event_str);
 
     internal::unique_lock_t<internal::shared_mutex_type> lock(m_mutex_);
-    auto it = m_pending_triggers_.find(std::string(event));
+    auto it = m_pending_triggers_.find(event_str);
     if (it == m_pending_triggers_.end()) {
+        spdlog::debug("No pending triggers found to cancel for event '{}'.",
+                      event_str);
         return 0;
     }
 
     std::size_t canceledCount = 0;
-    for (auto& flag : it->second) {
+    for (auto& flag_ptr : it->second) {
+        if (flag_ptr) {
 #ifdef ATOM_USE_BOOST_LOCKFREE
-        flag->store(true, boost::memory_order_release);
+            flag_ptr->store(true, boost::memory_order_release);
 #else
-        flag->store(true, std::memory_order_release);
+            flag_ptr->store(true, std::memory_order_release);
 #endif
-        ++canceledCount;
+            ++canceledCount;
+        }
     }
 
     m_pending_triggers_.erase(it);
+    if (canceledCount > 0) {
+        spdlog::info("Cancelled {} pending triggers for event '{}'.",
+                     canceledCount, event_str);
+    } else {
+        spdlog::debug(
+            "No active pending triggers were cancelled for event '{}' (flags "
+            "might have been null or already processed).",
+            event_str);
+    }
     return canceledCount;
 }
 
 template <typename ParamType>
     requires CallableWithParam<ParamType> && CopyableType<ParamType>
 std::size_t Trigger<ParamType>::cancelAllTriggers() noexcept {
+    spdlog::debug("Cancelling all scheduled triggers.");
     internal::unique_lock_t<internal::shared_mutex_type> lock(m_mutex_);
     std::size_t canceledCount = 0;
 
-    for (auto& [event, flags] : m_pending_triggers_) {
-        for (auto& flag : flags) {
+    for (auto& pair_event_flags : m_pending_triggers_) {
+        for (auto& flag_ptr : pair_event_flags.second) {
+            if (flag_ptr) {
 #ifdef ATOM_USE_BOOST_LOCKFREE
-            flag->store(true, boost::memory_order_release);
+                flag_ptr->store(true, boost::memory_order_release);
 #else
-            flag->store(true, std::memory_order_release);
+                flag_ptr->store(true, std::memory_order_release);
 #endif
-            ++canceledCount;
+                ++canceledCount;
+            }
         }
     }
 
     m_pending_triggers_.clear();
+    spdlog::info("Cancelled {} total pending triggers.", canceledCount);
     return canceledCount;
 }
 
@@ -651,26 +830,38 @@ template <typename ParamType>
     requires CallableWithParam<ParamType> && CopyableType<ParamType>
 [[nodiscard]] bool Trigger<ParamType>::hasCallbacks(
     std::string_view event) const noexcept {
-    if (event.empty()) {
+    std::string event_str(event);
+    if (event_str.empty()) {
+        // spdlog::trace("hasCallbacks check for empty event name."); // Too
+        // verbose
         return false;
     }
 
     internal::shared_lock_t<internal::shared_mutex_type> lock(m_mutex_);
-    auto it = m_callbacks_.find(std::string(event));
-    return it != m_callbacks_.end() && !it->second.empty();
+    auto it = m_callbacks_.find(event_str);
+    bool found = it != m_callbacks_.end() && !it->second.empty();
+    // spdlog::trace("hasCallbacks for event '{}': {}", event_str, found); //
+    // Too verbose
+    return found;
 }
 
 template <typename ParamType>
     requires CallableWithParam<ParamType> && CopyableType<ParamType>
 [[nodiscard]] std::size_t Trigger<ParamType>::callbackCount(
     std::string_view event) const noexcept {
-    if (event.empty()) {
+    std::string event_str(event);
+    if (event_str.empty()) {
+        // spdlog::trace("callbackCount check for empty event name."); // Too
+        // verbose
         return 0;
     }
 
     internal::shared_lock_t<internal::shared_mutex_type> lock(m_mutex_);
-    auto it = m_callbacks_.find(std::string(event));
-    return it != m_callbacks_.end() ? it->second.size() : 0;
+    auto it = m_callbacks_.find(event_str);
+    size_t count = it != m_callbacks_.end() ? it->second.size() : 0;
+    // spdlog::trace("callbackCount for event '{}': {}", event_str, count); //
+    // Too verbose
+    return count;
 }
 
 #ifdef ATOM_USE_BOOST_LOCKFREE
@@ -679,6 +870,7 @@ template <typename ParamType>
 [[nodiscard]] std::unique_ptr<
     internal::lockfree_queue<std::pair<std::string, ParamType>>>
 Trigger<ParamType>::createLockFreeTriggerQueue(std::size_t queueSize) {
+    spdlog::debug("Creating lock-free trigger queue with size {}.", queueSize);
     return std::make_unique<
         internal::lockfree_queue<std::pair<std::string, ParamType>>>(queueSize);
 }
@@ -688,14 +880,22 @@ template <typename ParamType>
 std::size_t Trigger<ParamType>::processLockFreeTriggers(
     internal::lockfree_queue<std::pair<std::string, ParamType>>& queue,
     std::size_t maxEvents) noexcept {
+    spdlog::trace("Processing lock-free triggers, maxEvents: {}.", maxEvents);
     std::size_t processedCount = 0;
     std::pair<std::string, ParamType> eventData;
 
     while ((maxEvents == 0 || processedCount < maxEvents) &&
            queue.pop(eventData)) {
+        spdlog::trace("Popped event '{}' from lock-free queue.",
+                      eventData.first);
         processedCount += trigger(eventData.first, eventData.second);
     }
-
+    if (processedCount > 0) {
+        spdlog::debug("Processed {} events from lock-free queue.",
+                      processedCount);
+    } else {
+        spdlog::trace("No events processed from lock-free queue in this call.");
+    }
     return processedCount;
 }
 #endif

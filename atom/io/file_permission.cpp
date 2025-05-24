@@ -27,7 +27,6 @@ namespace fs = std::filesystem;
 #include "atom/log/loguru.hpp"
 
 namespace atom::io {
-// anonymous namespace removed as logError is no longer needed
 
 #ifdef ATOM_USE_BOOST
 std::string getFilePermissions(std::string_view filePath) noexcept {
@@ -38,7 +37,7 @@ std::string getFilePermissions(std::string_view filePath) noexcept {
 
     try {
         boost::system::error_code ec;
-        fs::path pPath(filePath);  // Use fs::path for consistency
+        fs::path pPath(filePath);
         fs::file_status status = fs::status(pPath, ec);
         if (ec) {
             LOG_F(ERROR, "Error getting status for '{}': {}", filePath,
@@ -82,7 +81,6 @@ std::string getFilePermissions(std::string_view filePath) noexcept {
 std::string getSelfPermissions() noexcept {
     try {
         boost::system::error_code ec;
-        // Try to get executable path first if available
 #ifdef _WIN32
         std::array<char, MAX_PATH> path{};
         if (GetModuleFileNameA(nullptr, path.data(),
@@ -101,7 +99,6 @@ std::string getSelfPermissions() noexcept {
             LOG_F(ERROR, "readlink /proc/self/exe failed: {}", strerror(errno));
         }
 #endif
-        // Fallback to current path
         fs::path selfPath = fs::current_path(ec);
         if (ec) {
             LOG_F(ERROR, "Error getting current path: {}", ec.message());
@@ -118,7 +115,7 @@ std::string getSelfPermissions() noexcept {
     }
 }
 
-#else  // Standard C++ implementation
+#else
 
 #ifdef _WIN32
 std::string getFilePermissions(std::string_view filePath) noexcept {
@@ -131,9 +128,8 @@ std::string getFilePermissions(std::string_view filePath) noexcept {
         DWORD dwRtnCode = 0;
         PSECURITY_DESCRIPTOR pSD = nullptr;
         std::array<char, 9> permissions;
-        permissions.fill('-');  // Initialize with '-'
+        permissions.fill('-');
 
-        // Use smart pointer with custom deleter for security descriptor
         auto psdDeleter = [](PSECURITY_DESCRIPTOR psd) {
             if (psd)
                 LocalFree(static_cast<HLOCAL>(psd));
@@ -141,7 +137,6 @@ std::string getFilePermissions(std::string_view filePath) noexcept {
         std::unique_ptr<void, decltype(psdDeleter)> psdPtr(nullptr, psdDeleter);
 
         PACL pDACL = nullptr;
-        // Use GetNamedSecurityInfoW for better Unicode support
         std::wstring wFilePath(filePath.begin(), filePath.end());
         dwRtnCode = GetNamedSecurityInfoW(wFilePath.c_str(), SE_FILE_OBJECT,
                                           DACL_SECURITY_INFORMATION, nullptr,
@@ -153,23 +148,15 @@ std::string getFilePermissions(std::string_view filePath) noexcept {
             return {};
         }
 
-        // Update smart pointer to manage the security descriptor
         psdPtr.reset(pSD);
 
         if (pDACL != nullptr) {
-            // Simplified permission check (may not be fully accurate for
-            // complex ACLs) A more robust implementation would iterate through
-            // ACEs and check SIDs For simplicity, we check if *any* ACE grants
-            // these permissions.
             bool canRead = false, canWrite = false, canExec = false;
 
             for (DWORD i = 0; i < pDACL->AceCount; ++i) {
                 ACCESS_ALLOWED_ACE* ace = nullptr;
                 if (GetAce(pDACL, i, reinterpret_cast<LPVOID*>(&ace))) {
-                    // Check for ACCESS_ALLOWED_ACE_TYPE, could also check DENY
-                    // types
                     if (ace->Header.AceType == ACCESS_ALLOWED_ACE_TYPE) {
-                        // Check against common file access rights
                         if ((ace->Mask & FILE_GENERIC_READ) ==
                             FILE_GENERIC_READ)
                             canRead = true;
@@ -182,8 +169,7 @@ std::string getFilePermissions(std::string_view filePath) noexcept {
                     }
                 }
             }
-            // Apply simplified permissions (assuming owner/group/other have
-            // same basic rights)
+
             if (canRead)
                 permissions[0] = permissions[3] = permissions[6] = 'r';
             if (canWrite)
@@ -195,10 +181,7 @@ std::string getFilePermissions(std::string_view filePath) noexcept {
             LOG_F(WARNING,
                   "No DACL found for '{}', cannot determine permissions.",
                   filePath);
-            // Return default '-' permissions or an empty string based on
-            // desired behavior
-            return {};  // Or return std::string(permissions.begin(),
-                        // permissions.end());
+            return {};
         }
 
         return {permissions.begin(), permissions.end()};
@@ -215,20 +198,20 @@ std::string getFilePermissions(std::string_view filePath) noexcept {
 
 std::string getSelfPermissions() noexcept {
     try {
-        std::array<wchar_t, MAX_PATH> wPath{};  // Use wide characters
+        std::array<wchar_t, MAX_PATH> wPath{};
         if (GetModuleFileNameW(nullptr, wPath.data(),
                                static_cast<DWORD>(wPath.size())) == 0) {
             const auto error = GetLastError();
             LOG_F(ERROR, "GetModuleFileNameW error: {}", error);
             return {};
         }
-        // Convert wide string path to narrow string for getFilePermissions
+
         int size_needed = WideCharToMultiByte(CP_UTF8, 0, wPath.data(), -1,
                                               NULL, 0, NULL, NULL);
         std::string path(size_needed, 0);
         WideCharToMultiByte(CP_UTF8, 0, wPath.data(), -1, &path[0], size_needed,
                             NULL, NULL);
-        path.pop_back();  // Remove null terminator added by WideCharToMultiByte
+        path.pop_back();
 
         return getFilePermissions(path);
     } catch (const std::exception& e) {
@@ -239,7 +222,7 @@ std::string getSelfPermissions() noexcept {
         return {};
     }
 }
-#else   // POSIX systems
+#else
 std::string getFilePermissions(std::string_view filePath) noexcept {
     if (filePath.empty()) {
         LOG_F(ERROR, "Empty file path provided");
@@ -249,7 +232,6 @@ std::string getFilePermissions(std::string_view filePath) noexcept {
     try {
         struct stat fileStat{};
         if (stat(filePath.data(), &fileStat) < 0) {
-            // Use {} for strerror result
             LOG_F(ERROR, "stat error for '{}': {}", filePath, strerror(errno));
             return {};
         }
@@ -281,12 +263,10 @@ std::string getSelfPermissions() noexcept {
     try {
         std::array<char, 1024> path{};
 
-        // Try to get executable path using readlink
         ssize_t len = readlink("/proc/self/exe", path.data(), path.size() - 1);
         if (len < 0) {
             LOG_F(ERROR, "readlink /proc/self/exe error: {}", strerror(errno));
 
-            // Fallback to current directory if available
             try {
                 auto currentPath = fs::current_path();
                 LOG_F(WARNING,
@@ -298,7 +278,7 @@ std::string getSelfPermissions() noexcept {
             }
         }
 
-        path[len] = '\0';  // Ensure null-terminated
+        path[len] = '\0';
         return getFilePermissions(path.data());
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Exception in getSelfPermissions: {}", e.what());
@@ -308,8 +288,8 @@ std::string getSelfPermissions() noexcept {
         return {};
     }
 }
-#endif  // _WIN32
-#endif  // ATOM_USE_BOOST
+#endif
+#endif
 
 std::optional<bool> compareFileAndSelfPermissions(
     std::string_view filePath) noexcept {
@@ -319,7 +299,6 @@ std::optional<bool> compareFileAndSelfPermissions(
     }
 
     try {
-        // Check if file exists using the correct namespace
         fs::path pPath(filePath);
         if (!fs::exists(pPath)) {
             LOG_F(ERROR, "File does not exist for comparison: '{}'", filePath);
@@ -331,24 +310,22 @@ std::optional<bool> compareFileAndSelfPermissions(
             LOG_F(WARNING,
                   "Could not get permissions for file '{}' during comparison.",
                   filePath);
-            return std::nullopt;  // Already logged in getFilePermissions
+            return std::nullopt;
         }
 
         std::string selfPermissions = getSelfPermissions();
         if (selfPermissions.empty()) {
             LOG_F(WARNING, "Could not get self permissions during comparison.");
-            return std::nullopt;  // Already logged in getSelfPermissions
+            return std::nullopt;
         }
 
-        // Log the permissions being compared for debugging
         VLOG_F(1, "Comparing file ('{}': {}) and self ({}) permissions.",
                filePath, filePermissions, selfPermissions);
 
         return filePermissions == selfPermissions;
     }
 #ifdef ATOM_USE_BOOST
-    catch (const boost::system::system_error&
-               e) {  // Catch boost filesystem errors
+    catch (const boost::system::system_error& e) {
         LOG_F(ERROR,
               "Boost Filesystem error in compareFileAndSelfPermissions for "
               "'{}': {}",
@@ -356,7 +333,7 @@ std::optional<bool> compareFileAndSelfPermissions(
         return std::nullopt;
     }
 #else
-    catch (const fs::filesystem_error& e) {  // Catch std filesystem errors
+    catch (const fs::filesystem_error& e) {
         LOG_F(ERROR,
               "Filesystem error in compareFileAndSelfPermissions for '{}': {}",
               filePath, e.what());
@@ -375,12 +352,8 @@ std::optional<bool> compareFileAndSelfPermissions(
     }
 }
 
-// Implementation for changing file permissions
-// Ensure atom::containers::String is available
-using atom::containers::String;
 void changeFilePermissions(const fs::path& filePath,
-                           const String& permissions) {
-    // Check if filePath is empty using fs::path's empty() method
+                           const atom::containers::String& permissions) {
     if (filePath.empty()) {
         LOG_F(ERROR, "Empty file path provided to changeFilePermissions.");
         throw std::invalid_argument("Empty file path provided.");
@@ -395,8 +368,6 @@ void changeFilePermissions(const fs::path& filePath,
 
         fs::perms newPerms = fs::perms::none;
 
-        // Parse the permission string in the format "rwxrwxrwx"
-        // Assuming String has length() and operator[] similar to std::string
         if (permissions.length() != 9) {
             LOG_F(ERROR,
                   "Invalid permission format: '{}'. Expected 'rwxrwxrwx'.",
@@ -405,7 +376,6 @@ void changeFilePermissions(const fs::path& filePath,
                 "Invalid permission format. Expected format: 'rwxrwxrwx'");
         }
 
-        // Owner permissions
         if (permissions[0] == 'r')
             newPerms |= fs::perms::owner_read;
         if (permissions[1] == 'w')
@@ -413,7 +383,6 @@ void changeFilePermissions(const fs::path& filePath,
         if (permissions[2] == 'x')
             newPerms |= fs::perms::owner_exec;
 
-        // Group permissions
         if (permissions[3] == 'r')
             newPerms |= fs::perms::group_read;
         if (permissions[4] == 'w')
@@ -421,7 +390,6 @@ void changeFilePermissions(const fs::path& filePath,
         if (permissions[5] == 'x')
             newPerms |= fs::perms::group_exec;
 
-        // Others permissions
         if (permissions[6] == 'r')
             newPerms |= fs::perms::others_read;
         if (permissions[7] == 'w')
@@ -429,7 +397,6 @@ void changeFilePermissions(const fs::path& filePath,
         if (permissions[8] == 'x')
             newPerms |= fs::perms::others_exec;
 
-        // Apply the permissions
         VLOG_F(1, "Setting permissions for '{}' to %03o", filePath.string(),
                static_cast<int>(newPerms));
         fs::permissions(filePath, newPerms, fs::perm_options::replace);
@@ -439,14 +406,10 @@ void changeFilePermissions(const fs::path& filePath,
     } catch (const fs::filesystem_error& e) {
         LOG_F(ERROR, "Failed to change permissions for '{}': {}",
               filePath.string(), e.what());
-        // Re-throw as a runtime_error for consistent exception handling upwards
         throw std::runtime_error("Failed to change permissions for '" +
                                  filePath.string() + "': " + e.what());
     } catch (const std::invalid_argument& e) {
-        // Log invalid argument errors specifically if they weren't already
-        // logged LOG_F(ERROR, "Invalid argument in changeFilePermissions: {}",
-        // e.what()); // Already logged above
-        throw;  // Re-throw original exception
+        throw;
     } catch (const std::exception& e) {
         LOG_F(ERROR, "Error changing file permissions for '{}': {}",
               filePath.string(), e.what());

@@ -10,18 +10,28 @@
 #include "atom/error/exception.hpp"
 #include "atom/macro.hpp"
 
+/**
+ * @namespace atom::io
+ * @brief Input/Output utilities for the Atom framework
+ */
 namespace atom::io {
 
-// Use type aliases from high_performance.hpp
-using atom::containers::Map;  // Use Map alias
+using atom::containers::Map;
 using atom::containers::String;
 using atom::containers::Vector;
 
 namespace fs = std::filesystem;
 
+/**
+ * @brief Replace the first occurrence of a substring in a string
+ * @param str The string to modify
+ * @param from The substring to find
+ * @param toStr The replacement substring
+ * @return true if replacement was made, false otherwise
+ */
 ATOM_INLINE auto stringReplace(String &str, const String &from,
                                const String &toStr) -> bool {
-    String::size_type startPos = str.find(from);  // Use String::size_type
+    String::size_type startPos = str.find(from);
     if (startPos == String::npos) {
         return false;
     }
@@ -29,14 +39,25 @@ ATOM_INLINE auto stringReplace(String &str, const String &from,
     return true;
 }
 
+/**
+ * @brief Translate a shell-style pattern to a regular expression
+ * @param pattern The shell pattern to translate (e.g., "*.txt", "file?.py")
+ * @return The equivalent regular expression pattern
+ * @details Converts glob patterns to regex:
+ *          - * becomes .*
+ *          - ? becomes .
+ *          - [abc] becomes character class
+ *          - Special characters are escaped
+ */
 ATOM_INLINE auto translate(const String &pattern) -> String {
-    String::size_type index = 0;                     // Use String::size_type
-    String::size_type patternSize = pattern.size();  // Use String::size_type
+    String::size_type index = 0;
+    String::size_type patternSize = pattern.size();
     String resultString;
 
     while (index < patternSize) {
         auto currentChar = pattern[index];
         index += 1;
+
         if (currentChar == '*') {
             resultString.append(".*");
         } else if (currentChar == '?') {
@@ -52,20 +73,18 @@ ATOM_INLINE auto translate(const String &pattern) -> String {
             while (innerIndex < patternSize && pattern[innerIndex] != ']') {
                 innerIndex += 1;
             }
+
             if (innerIndex >= patternSize) {
                 resultString.append("\\[");
             } else {
-                // Use String iterators or constructor
                 String stuff(pattern.begin() + index,
                              pattern.begin() + innerIndex);
 
-                // Replace contains with find() != npos for broader
-                // compatibility
                 if (stuff.find("--") != String::npos) {
                     stringReplace(stuff, String{"\\"}, String{R"(\\)"});
                 } else {
-                    Vector<String> chunks;             // Use Vector<String>
-                    String::size_type chunkIndex = 0;  // Use String::size_type
+                    Vector<String> chunks;
+                    String::size_type chunkIndex = 0;
                     if (pattern[index] == '!') {
                         chunkIndex = index + 2;
                     } else {
@@ -73,31 +92,21 @@ ATOM_INLINE auto translate(const String &pattern) -> String {
                     }
 
                     while (true) {
-                        // Use find with iterators or indices
                         chunkIndex = pattern.find("-", chunkIndex);
                         if (chunkIndex == String::npos ||
-                            chunkIndex >= innerIndex) {  // Check bounds
+                            chunkIndex >= innerIndex) {
                             break;
                         }
-                        // Use String constructor with iterators
                         chunks.emplace_back(pattern.begin() + index,
                                             pattern.begin() + chunkIndex);
                         index = chunkIndex + 1;
-                        // Adjust chunkIndex logic if needed based on find
-                        // behavior This part seems complex and might need
-                        // careful review depending on String impl. Assuming
-                        // find works similarly to std::string::find chunkIndex
-                        // = chunkIndex + 3; // This seems potentially wrong,
-                        // maybe just chunkIndex + 1?
-                        chunkIndex =
-                            index;  // Start next search from the new index
+                        chunkIndex = index;
                     }
 
-                    // Use String constructor with iterators
                     chunks.emplace_back(pattern.begin() + index,
                                         pattern.begin() + innerIndex);
-                    bool first = true;  // Corrected initialization
-                    String tempStuff;   // Build the string incrementally
+                    bool first = true;
+                    String tempStuff;
                     for (auto &chunk : chunks) {
                         stringReplace(chunk, String{"\\"}, String{R"(\\)"});
                         stringReplace(chunk, String{"-"}, String{R"(\-)"});
@@ -108,39 +117,31 @@ ATOM_INLINE auto translate(const String &pattern) -> String {
                             tempStuff.append("-").append(chunk);
                         }
                     }
-                    stuff = std::move(tempStuff);  // Assign the built string
+                    stuff = std::move(tempStuff);
                 }
 
-                // Regex operations might require std::string or const char*
-                // Convert `stuff` if necessary. Assuming String is compatible
-                // or convertible.
-                std::string std_stuff =
-                    stuff.c_str();  // Convert to std::string via c_str()
+                std::string std_stuff = stuff.c_str();
                 std::string result_std;
-                std::regex_replace(
-                    std::back_inserter(result_std),       // result
-                    std_stuff.begin(), std_stuff.end(),   // string
-                    std::regex(std::string{R"([&~|])"}),  // pattern
-                    std::string{R"(\\\1)"});              // repl
-                stuff = result_std.c_str();  // Convert back to String
+                std::regex_replace(std::back_inserter(result_std),
+                                   std_stuff.begin(), std_stuff.end(),
+                                   std::regex(std::string{R"([&~|])"}),
+                                   std::string{R"(\\\1)"});
+                stuff = result_std.c_str();
                 index = innerIndex + 1;
-                if (!stuff.empty() &&
-                    stuff[0] == '!') {  // Check for empty string
+
+                if (!stuff.empty() && stuff[0] == '!') {
                     stuff = "^" + String(stuff.begin() + 1, stuff.end());
                 } else if (!stuff.empty() &&
-                           (stuff[0] == '^' ||
-                            stuff[0] == '[')) {  // Check for empty string
-                    // Use String concatenation
+                           (stuff[0] == '^' || stuff[0] == '[')) {
                     stuff = String("\\\\") + stuff;
                 }
                 resultString.append("[").append(stuff).append("]");
             }
         } else {
-            // Use String for specialCharacters
             static const String specialCharacters =
                 "()[]{}?*+-|^$\\.&~# \t\n\r\v\f";
-            // Use Map<int, String> for specialCharactersMap
             static Map<int, String> specialCharactersMap;
+
             if (specialCharactersMap.empty()) {
                 for (auto &specialChar : specialCharacters) {
                     specialCharactersMap.insert(
@@ -149,7 +150,6 @@ ATOM_INLINE auto translate(const String &pattern) -> String {
                 }
             }
 
-            // Replace contains with find() != npos
             if (specialCharacters.find(currentChar) != String::npos) {
                 resultString.append(
                     specialCharactersMap[static_cast<int>(currentChar)]);
@@ -158,26 +158,38 @@ ATOM_INLINE auto translate(const String &pattern) -> String {
             }
         }
     }
-    // Use String concatenation
     return String{"(("} + resultString + String{R"()|[\r\n])$)"};
 }
 
+/**
+ * @brief Compile a pattern string into a regular expression
+ * @param pattern The pattern string to compile
+ * @return A compiled std::regex object
+ */
 ATOM_INLINE auto compilePattern(const String &pattern) -> std::regex {
-    // std::regex constructor usually takes std::string or const char*
     return std::regex(pattern.c_str(), std::regex::ECMAScript);
 }
 
+/**
+ * @brief Test whether a filename matches a shell-style pattern
+ * @param name The filesystem path to test
+ * @param pattern The shell pattern to match against
+ * @return true if the name matches the pattern, false otherwise
+ */
 ATOM_INLINE auto fnmatch(const fs::path &name, const String &pattern) -> bool {
-    // std::regex_match usually takes std::string or const char* for the subject
     return std::regex_match(name.string(), compilePattern(pattern));
 }
 
-ATOM_INLINE auto filter(const Vector<fs::path> &names,  // Use Vector
-                        const String &pattern)
-    -> Vector<fs::path> {     // Use Vector
-    Vector<fs::path> result;  // Use Vector
+/**
+ * @brief Filter a list of paths by a shell-style pattern
+ * @param names Vector of filesystem paths to filter
+ * @param pattern The shell pattern to match against
+ * @return Vector of paths that match the pattern
+ */
+ATOM_INLINE auto filter(const Vector<fs::path> &names, const String &pattern)
+    -> Vector<fs::path> {
+    Vector<fs::path> result;
     for (const auto &name : names) {
-        // fnmatch expects String pattern, name.string() returns std::string
         if (fnmatch(name, pattern)) {
             result.push_back(name);
         }
@@ -185,6 +197,12 @@ ATOM_INLINE auto filter(const Vector<fs::path> &names,  // Use Vector
     return result;
 }
 
+/**
+ * @brief Expand tilde (~) in a filesystem path to the user's home directory
+ * @param path The path that may contain a tilde
+ * @return The expanded path with tilde replaced by home directory
+ * @throws std::invalid_argument if HOME environment variable is not set
+ */
 ATOM_INLINE auto expandTilde(fs::path path) -> fs::path {
     if (path.empty()) {
         return path;
@@ -195,62 +213,77 @@ ATOM_INLINE auto expandTilde(fs::path path) -> fs::path {
 #else
     const char *homeVariable = "USER";
 #endif
-    String home;  // Use String
+    String home;
+
 #ifdef _WIN32
     size_t len = 0;
     char *homeCStr = nullptr;
     _dupenv_s(&homeCStr, &len, homeVariable);
     if (homeCStr) {
-        home = homeCStr;  // Assign C-string to String
+        home = homeCStr;
         free(homeCStr);
     }
 #else
     const char *homeCStr = getenv(homeVariable);
     if (homeCStr) {
-        home = homeCStr;  // Assign C-string to String
+        home = homeCStr;
     }
 #endif
+
     if (home.empty()) {
         THROW_INVALID_ARGUMENT(
             "error: Unable to expand `~` - HOME environment variable not set.");
     }
 
-    // fs::path.string() returns std::string, convert to String if needed for
-    // manipulation
-    String pathStr = path.string().c_str();  // Convert std::string to String
-    if (!pathStr.empty() && pathStr[0] == '~') {  // Check for empty string
-        // Use String concatenation and substr
-        pathStr = home + pathStr.substr(1);  // substr(pos) is sufficient
-        // fs::path constructor accepts std::string or types convertible to it
-        return fs::path(pathStr.c_str());  // Convert String back if needed
+    String pathStr = path.string().c_str();
+    if (!pathStr.empty() && pathStr[0] == '~') {
+        pathStr = home + pathStr.substr(1);
+        return fs::path(pathStr.c_str());
     }
     return path;
 }
 
-ATOM_INLINE auto hasMagic(const String &pathname) -> bool {  // Use String
+/**
+ * @brief Check if a pathname contains glob magic characters
+ * @param pathname The path string to check
+ * @return true if the pathname contains *, ?, or [ characters
+ */
+ATOM_INLINE auto hasMagic(const String &pathname) -> bool {
     static const auto MAGIC_CHECK = std::regex("([*?[])");
-    // std::regex_search usually takes std::string or const char*
     return std::regex_search(pathname.c_str(), MAGIC_CHECK);
 }
 
-ATOM_INLINE auto isHidden(const String &pathname) -> bool {  // Use String
-    // std::regex_match usually takes std::string or const char*
+/**
+ * @brief Check if a pathname represents a hidden file or directory
+ * @param pathname The path string to check
+ * @return true if the pathname is hidden (starts with dot)
+ */
+ATOM_INLINE auto isHidden(const String &pathname) -> bool {
     return std::regex_match(pathname.c_str(),
                             std::regex(R"(^(.*\/)*\.[^\.\/]+\/*$)"));
 }
 
-ATOM_INLINE auto isRecursive(const String &pattern) -> bool {  // Use String
+/**
+ * @brief Check if a pattern is a recursive glob pattern (**)
+ * @param pattern The pattern to check
+ * @return true if the pattern is "**"
+ */
+ATOM_INLINE auto isRecursive(const String &pattern) -> bool {
     return pattern == "**";
 }
 
-ATOM_INLINE auto iterDirectory(const fs::path &dirname,
-                               bool dironly)
-    -> Vector<fs::path> {     // Use Vector
-    Vector<fs::path> result;  // Use Vector
-
+/**
+ * @brief Iterate through entries in a directory
+ * @param dirname The directory to iterate
+ * @param dironly If true, only return directories
+ * @return Vector of filesystem paths found in the directory
+ */
+ATOM_INLINE auto iterDirectory(const fs::path &dirname, bool dironly)
+    -> Vector<fs::path> {
+    Vector<fs::path> result;
     auto currentDirectory = dirname;
+
     if (currentDirectory.empty()) {
-        // Use default constructor for current path
         currentDirectory = fs::current_path();
     }
 
@@ -264,31 +297,31 @@ ATOM_INLINE auto iterDirectory(const fs::path &dirname,
                     if (dirname.is_absolute()) {
                         result.push_back(entry.path());
                     } else {
-                        // fs::relative might need adjustment depending on path
-                        // types
                         result.push_back(fs::relative(entry.path()));
                     }
                 }
             }
         } catch (std::exception &) {
-            // not a directory
-            // do nothing
+            // Directory iteration failed, return empty result
         }
     }
-
     return result;
 }
 
-ATOM_INLINE auto rlistdir(const fs::path &dirname,
-                          bool dironly) -> Vector<fs::path> {  // Use Vector
-    Vector<fs::path> result;                                   // Use Vector
+/**
+ * @brief Recursively list all entries in a directory tree
+ * @param dirname The root directory to start from
+ * @param dironly If true, only return directories
+ * @return Vector of all filesystem paths found recursively
+ */
+ATOM_INLINE auto rlistdir(const fs::path &dirname, bool dironly)
+    -> Vector<fs::path> {
+    Vector<fs::path> result;
     auto names = iterDirectory(dirname, dironly);
+
     for (auto &name : names) {
-        // isHidden expects String, name.string() returns std::string
-        if (!isHidden(
-                name.string().c_str())) {  // Convert to String via c_str()
+        if (!isHidden(name.string().c_str())) {
             result.push_back(name);
-            // Recurse and extend the result vector
             auto subNames = rlistdir(name, dironly);
             result.insert(result.end(), subNames.begin(), subNames.end());
         }
@@ -296,52 +329,63 @@ ATOM_INLINE auto rlistdir(const fs::path &dirname,
     return result;
 }
 
+/**
+ * @brief Handle recursive glob patterns (**)
+ * @param dirname The directory to search in
+ * @param pattern The glob pattern (should be "**")
+ * @param dironly If true, only return directories
+ * @return Vector of all matching paths found recursively
+ */
 ATOM_INLINE auto glob2(const fs::path &dirname,
-                       [[maybe_unused]] const String &pattern,  // Use String
-                       bool dironly) -> Vector<fs::path> {      // Use Vector
-    Vector<fs::path> result;                                    // Use Vector
+                       [[maybe_unused]] const String &pattern, bool dironly)
+    -> Vector<fs::path> {
+    Vector<fs::path> result;
     assert(isRecursive(pattern));
+
     for (auto &dir : rlistdir(dirname, dironly)) {
         result.push_back(dir);
     }
     return result;
 }
 
-ATOM_INLINE auto glob1(const fs::path &dirname,
-                       const String &pattern,               // Use String
-                       bool dironly) -> Vector<fs::path> {  // Use Vector
+/**
+ * @brief Handle single-level glob patterns
+ * @param dirname The directory to search in
+ * @param pattern The glob pattern
+ * @param dironly If true, only return directories
+ * @return Vector of matching paths in the directory
+ */
+ATOM_INLINE auto glob1(const fs::path &dirname, const String &pattern,
+                       bool dironly) -> Vector<fs::path> {
     auto names = iterDirectory(dirname, dironly);
-    Vector<fs::path> filteredNames;  // Use Vector
+    Vector<fs::path> filteredNames;
+
     for (auto &name : names) {
-        // isHidden expects String, name.string() returns std::string
-        if (!isHidden(
-                name.string().c_str())) {  // Convert to String via c_str()
+        if (!isHidden(name.string().c_str())) {
             filteredNames.push_back(name.filename());
         }
     }
     return filter(filteredNames, pattern);
 }
 
+/**
+ * @brief Handle literal (non-glob) patterns
+ * @param dirname The directory containing the file
+ * @param basename The filename to check for existence
+ * @param dironly Unused parameter for consistency
+ * @return Vector containing the path if it exists, empty otherwise
+ */
 ATOM_INLINE auto glob0(const fs::path &dirname, const fs::path &basename,
-                       bool /*dironly*/) -> Vector<fs::path> {  // Use Vector
-    Vector<fs::path> result;                                    // Use Vector
-    // Check if basename is empty using fs::path::empty()
+                       bool /*dironly*/) -> Vector<fs::path> {
+    Vector<fs::path> result;
+
     if (basename.empty()) {
-        // Check if dirname is a directory
         if (fs::is_directory(dirname)) {
-            // result = {basename}; // This would add an empty path if basename
-            // is empty
-            result.push_back(
-                dirname);  // Maybe push dirname itself? Or handle based on
-                           // desired glob0 behavior. Let's assume pushing
-                           // basename is intended.
-            if (fs::exists(dirname)) {  // Ensure dirname exists before adding
-                                        // empty basename?
-                result.push_back(basename);  // Add the empty path part
+            if (fs::exists(dirname)) {
+                result.push_back(basename);
             }
         }
     } else {
-        // Check if the combined path exists
         if (fs::exists(dirname / basename)) {
             result = {basename};
         }
@@ -349,34 +393,38 @@ ATOM_INLINE auto glob0(const fs::path &dirname, const fs::path &basename,
     return result;
 }
 
-ATOM_INLINE auto glob(const String &pathname,
-                      bool recursive = false,                      // Use String
-                      bool dironly = false) -> Vector<fs::path> {  // Use Vector
-    Vector<fs::path> result;                                       // Use Vector
-
-    // fs::path constructor can usually take std::string or const char*
+/**
+ * @brief Main glob function - find all paths matching a shell-style pattern
+ * @param pathname The pattern to match (may contain *, ?, [], etc.)
+ * @param recursive If true, enable recursive matching with **
+ * @param dironly If true, only return directories
+ * @return Vector of filesystem paths that match the pattern
+ * @details This is the core glob implementation that handles:
+ *          - Tilde expansion (~)
+ *          - Magic character detection
+ *          - Recursive and non-recursive pattern matching
+ *          - Directory and file filtering
+ */
+ATOM_INLINE auto glob(const String &pathname, bool recursive = false,
+                      bool dironly = false) -> Vector<fs::path> {
+    Vector<fs::path> result;
     auto path = fs::path(pathname.c_str());
 
-    // Check first character of String
     if (!pathname.empty() && pathname[0] == '~') {
         path = expandTilde(path);
     }
 
     auto dirname = path.parent_path();
-    // Use fs::path::filename() which returns fs::path
     const auto BASENAME_PATH = path.filename();
-    // Convert filename path to String for magic checks etc.
     const String BASENAME = BASENAME_PATH.string().c_str();
 
     if (!hasMagic(pathname)) {
         assert(!dironly);
-        // Use fs::path::empty()
         if (!BASENAME_PATH.empty()) {
             if (fs::exists(path)) {
                 result.push_back(path);
             }
         } else {
-            // If BASENAME is empty, path refers to dirname
             if (fs::is_directory(dirname)) {
                 result.push_back(path);
             }
@@ -384,28 +432,23 @@ ATOM_INLINE auto glob(const String &pathname,
         return result;
     }
 
-    // Use fs::path::empty()
     if (dirname.empty()) {
-        // Use String BASENAME for checks
         if (recursive && isRecursive(BASENAME)) {
             return glob2(dirname, BASENAME, dironly);
         }
-        // Pass String BASENAME to glob1
         return glob1(dirname, BASENAME, dironly);
     }
 
-    Vector<fs::path> dirs;  // Use Vector
-    // Use fs::path::string() and convert to String for hasMagic
+    Vector<fs::path> dirs;
     if (dirname != path && hasMagic(dirname.string().c_str())) {
-        // Pass String for recursive glob call
         dirs = glob(dirname.string().c_str(), recursive, true);
     } else {
         dirs = {dirname};
     }
 
-    // Adjust function pointer type to use String
     std::function<Vector<fs::path>(const fs::path &, const String &, bool)>
         globInDir;
+
     if (hasMagic(BASENAME)) {
         if (recursive && isRecursive(BASENAME)) {
             globInDir = glob2;
@@ -413,8 +456,6 @@ ATOM_INLINE auto glob(const String &pathname,
             globInDir = glob1;
         }
     } else {
-        // glob0 expects fs::path basename
-        // Need a wrapper or adjust glob0 if it should take String
         auto glob0Wrapper = [](const fs::path &dir, const String &baseStr,
                                bool dironly_flag) -> Vector<fs::path> {
             return glob0(dir, fs::path(baseStr.c_str()), dironly_flag);
@@ -423,36 +464,43 @@ ATOM_INLINE auto glob(const String &pathname,
     }
 
     for (auto &dir : dirs) {
-        // Pass String BASENAME to globInDir
         for (auto &name : globInDir(dir, BASENAME, dironly)) {
             fs::path subresult = name;
-            // Check parent_path().empty() on fs::path `name`
             if (name.parent_path().empty()) {
                 subresult = dir / name;
             }
             result.push_back(subresult);
         }
     }
-
     return result;
 }
 
-// Overloads taking single String
-static ATOM_INLINE auto glob(const String &pathname)  // Use String
-    -> Vector<fs::path> {                             // Use Vector
+/**
+ * @brief Find all paths matching a shell-style pattern (non-recursive)
+ * @param pathname The pattern to match
+ * @return Vector of filesystem paths that match the pattern
+ */
+static ATOM_INLINE auto glob(const String &pathname) -> Vector<fs::path> {
     return glob(pathname, false);
 }
 
-static ATOM_INLINE auto rglob(const String &pathname)  // Use String
-    -> Vector<fs::path> {                              // Use Vector
+/**
+ * @brief Find all paths matching a shell-style pattern (recursive)
+ * @param pathname The pattern to match
+ * @return Vector of filesystem paths that match the pattern recursively
+ */
+static ATOM_INLINE auto rglob(const String &pathname) -> Vector<fs::path> {
     return glob(pathname, true);
 }
 
-// Overloads taking Vector<String>
-static ATOM_INLINE auto glob(
-    const Vector<String> &pathnames)  // Use Vector<String>
-    -> Vector<fs::path> {             // Use Vector
-    Vector<fs::path> result;          // Use Vector
+/**
+ * @brief Find all paths matching multiple shell-style patterns (non-recursive)
+ * @param pathnames Vector of patterns to match
+ * @return Vector of filesystem paths that match any of the patterns
+ */
+static ATOM_INLINE auto glob(const Vector<String> &pathnames)
+    -> Vector<fs::path> {
+    Vector<fs::path> result;
     for (const auto &pathname : pathnames) {
         for (auto &match : glob(pathname, false)) {
             result.push_back(std::move(match));
@@ -461,10 +509,14 @@ static ATOM_INLINE auto glob(
     return result;
 }
 
-static ATOM_INLINE auto rglob(
-    const Vector<String> &pathnames)  // Use Vector<String>
-    -> Vector<fs::path> {             // Use Vector
-    Vector<fs::path> result;          // Use Vector
+/**
+ * @brief Find all paths matching multiple shell-style patterns (recursive)
+ * @param pathnames Vector of patterns to match
+ * @return Vector of filesystem paths that match any of the patterns recursively
+ */
+static ATOM_INLINE auto rglob(const Vector<String> &pathnames)
+    -> Vector<fs::path> {
+    Vector<fs::path> result;
     for (const auto &pathname : pathnames) {
         for (auto &match : glob(pathname, true)) {
             result.push_back(std::move(match));
@@ -473,18 +525,23 @@ static ATOM_INLINE auto rglob(
     return result;
 }
 
-// Overloads taking initializer_list<String>
-static ATOM_INLINE auto glob(const std::initializer_list<String>  // Use String
-                                 &pathnames)
-    -> Vector<fs::path> {  // Use Vector
-    // Construct Vector<String> from initializer_list
+/**
+ * @brief Find all paths matching patterns from initializer list (non-recursive)
+ * @param pathnames Initializer list of patterns to match
+ * @return Vector of filesystem paths that match any of the patterns
+ */
+static ATOM_INLINE auto glob(const std::initializer_list<String> &pathnames)
+    -> Vector<fs::path> {
     return glob(Vector<String>(pathnames));
 }
 
-static ATOM_INLINE auto rglob(const std::initializer_list<String>  // Use String
-                                  &pathnames)
-    -> Vector<fs::path> {  // Use Vector
-    // Construct Vector<String> from initializer_list
+/**
+ * @brief Find all paths matching patterns from initializer list (recursive)
+ * @param pathnames Initializer list of patterns to match
+ * @return Vector of filesystem paths that match any of the patterns recursively
+ */
+static ATOM_INLINE auto rglob(const std::initializer_list<String> &pathnames)
+    -> Vector<fs::path> {
     return rglob(Vector<String>(pathnames));
 }
 

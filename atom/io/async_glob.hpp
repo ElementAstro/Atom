@@ -15,9 +15,10 @@
 #include <utility>
 #include <vector>
 
+#include <spdlog/spdlog.h>
 #include <asio.hpp>
 #include "atom/error/exception.hpp"
-#include "atom/log/loguru.hpp"
+
 namespace atom::io {
 
 namespace fs = std::filesystem;
@@ -268,8 +269,9 @@ namespace atom::io {
 template <GlobCallbackInvocable Callback>
 void AsyncGlob::iterDirectory(const fs::path& dirname, bool dironly,
                               Callback&& callback) {
-    LOG_F(INFO, "AsyncGlob::iterDirectory called with dirname: {}, dironly: {}",
-          dirname.string(), dironly);
+    spdlog::info(
+        "AsyncGlob::iterDirectory called with dirname: {}, dironly: {}",
+        dirname.string(), dironly);
 
     io_context_.post([dirname, dironly,
                       callback = std::forward<Callback>(callback)]() mutable {
@@ -281,8 +283,8 @@ void AsyncGlob::iterDirectory(const fs::path& dirname, bool dironly,
 
         // Validate the directory exists before iterating
         if (!fs::exists(currentDirectory)) {
-            LOG_F(WARNING, "Directory does not exist: {}",
-                  currentDirectory.string());
+            spdlog::warn("Directory does not exist: {}",
+                         currentDirectory.string());
             callback({});
             return;
         }
@@ -302,113 +304,21 @@ void AsyncGlob::iterDirectory(const fs::path& dirname, bool dironly,
                 }
             }
         } catch (const fs::filesystem_error& e) {
-            LOG_F(ERROR, "Filesystem error in iterDirectory: {}", e.what());
+            spdlog::error("Filesystem error in iterDirectory: {}", e.what());
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Exception in iterDirectory: {}", e.what());
+            spdlog::error("Exception in iterDirectory: {}", e.what());
         }
 
         callback(std::move(result));
     });
 }
 
-inline void AsyncGlob::rlistdir(
-    const fs::path& dirname, bool dironly,
-    std::function<void(std::vector<fs::path>)> callback, int depth) {
-    LOG_F(INFO,
-          "AsyncGlob::recursiveListDir called with dirname: {}, dironly: {}, "
-          "depth: {}",
-          dirname.string(), dironly, depth);
-
-    // 防止过深递归
-    if (depth > 100) {  // 设置合理的最大递归深度
-        LOG_F(WARNING, "Reached maximum recursion depth at {}",
-              dirname.string());
-        callback({});
-        return;
-    }
-
-    // 首先检查path是否为目录
-    if (!fs::is_directory(dirname)) {
-        LOG_F(INFO, "Path is not a directory: {}", dirname.string());
-        callback({});
-        return;
-    }
-
-    iterDirectory(
-        dirname, dironly,
-        [this, dirname, dironly, depth,
-         callback](std::vector<fs::path> names) mutable {
-            std::vector<fs::path> result;
-            result.reserve(names.size() * 2);  // Estimate for efficiency
-
-            std::vector<std::future<std::vector<fs::path>>> futures;
-
-            for (auto& name : names) {
-                if (!isHidden(name.string())) {
-                    result.push_back(name);
-
-                    // 只有目录才继续递归
-                    if (fs::is_directory(name)) {
-                        // Process subdirectories in parallel if more than a few
-                        // directories
-                        if (names.size() > 10 && thread_pool_ &&
-                            thread_pool_->size() > 1) {
-                            futures.push_back(std::async(
-                                std::launch::async,
-                                [this, name, dironly, depth]() {
-                                    std::vector<fs::path> subdirResults;
-                                    auto promise = std::make_shared<
-                                        std::promise<std::vector<fs::path>>>();
-                                    auto future = promise->get_future();
-
-                                    // 使用新的名称避免拼写问题
-                                    this->rlistdir(
-                                        name, dironly,
-                                        [promise](
-                                            std::vector<fs::path> results) {
-                                            promise->set_value(
-                                                std::move(results));
-                                        },
-                                        depth + 1);  // 增加深度
-
-                                    return future.get();
-                                }));
-                        } else {
-                            // Process sequentially for small number of
-                            // directories
-                            this->rlistdir(
-                                name, dironly,
-                                [&result](std::vector<fs::path> subNames) {
-                                    result.insert(result.end(),
-                                                  std::make_move_iterator(
-                                                      subNames.begin()),
-                                                  std::make_move_iterator(
-                                                      subNames.end()));
-                                },
-                                depth + 1);  // 增加深度
-                        }
-                    }
-                }
-            }
-
-            // Gather results from parallel processing
-            for (auto& future : futures) {
-                auto subResults = future.get();
-                result.insert(result.end(),
-                              std::make_move_iterator(subResults.begin()),
-                              std::make_move_iterator(subResults.end()));
-            }
-
-            callback(std::move(result));
-        });
-}
-
 template <GlobCallbackInvocable Callback>
 void AsyncGlob::glob2(const fs::path& dirname, std::string_view pattern,
                       bool dironly, Callback&& callback) {
-    LOG_F(INFO,
-          "AsyncGlob::glob2 called with dirname: {}, pattern: {}, dironly: {}",
-          dirname.string(), pattern, dironly);
+    spdlog::info(
+        "AsyncGlob::glob2 called with dirname: {}, pattern: {}, dironly: {}",
+        dirname.string(), pattern, dironly);
 
     assert(isRecursive(pattern));
     this->rlistdir(dirname, dironly,
@@ -419,9 +329,9 @@ void AsyncGlob::glob2(const fs::path& dirname, std::string_view pattern,
 template <GlobCallbackInvocable Callback>
 void AsyncGlob::glob1(const fs::path& dirname, std::string_view pattern,
                       bool dironly, Callback&& callback) {
-    LOG_F(INFO,
-          "AsyncGlob::glob1 called with dirname: {}, pattern: {}, dironly: {}",
-          dirname.string(), pattern, dironly);
+    spdlog::info(
+        "AsyncGlob::glob1 called with dirname: {}, pattern: {}, dironly: {}",
+        dirname.string(), pattern, dironly);
 
     iterDirectory(
         dirname, dironly,
@@ -459,9 +369,9 @@ void AsyncGlob::glob1(const fs::path& dirname, std::string_view pattern,
 template <GlobCallbackInvocable Callback>
 void AsyncGlob::glob0(const fs::path& dirname, const fs::path& basename,
                       bool dironly, Callback&& callback) {
-    LOG_F(INFO,
-          "AsyncGlob::glob0 called with dirname: {}, basename: {}, dironly: {}",
-          dirname.string(), basename.string(), dironly);
+    spdlog::info(
+        "AsyncGlob::glob0 called with dirname: {}, basename: {}, dironly: {}",
+        dirname.string(), basename.string(), dironly);
 
     fs::path path;
     if (dirname.empty()) {
@@ -479,7 +389,7 @@ void AsyncGlob::glob0(const fs::path& dirname, const fs::path& basename,
                 result.push_back(path);
             }
         } catch (const fs::filesystem_error& e) {
-            LOG_F(ERROR, "Filesystem error in glob0: {}", e.what());
+            spdlog::error("Filesystem error in glob0: {}", e.what());
         }
 
         callback(std::move(result));
@@ -489,8 +399,7 @@ void AsyncGlob::glob0(const fs::path& dirname, const fs::path& basename,
 template <GlobCallbackInvocable Callback>
 void AsyncGlob::glob(std::string_view pathname, Callback&& callback,
                      bool recursive, bool dironly) {
-    LOG_F(
-        INFO,
+    spdlog::info(
         "AsyncGlob::glob called with pathname: {}, recursive: {}, dironly: {}",
         pathname, recursive, dironly);
 
@@ -539,17 +448,17 @@ void AsyncGlob::glob(std::string_view pathname, Callback&& callback,
         // Handle regular pattern matching
         glob1(dirname, basenameStr, dironly, std::forward<Callback>(callback));
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in glob: {}", e.what());
+        spdlog::error("Exception in glob: {}", e.what());
         callback({});
     }
 }
 
 inline AsyncGlob::Task<std::vector<fs::path>> AsyncGlob::glob_async(
     std::string_view pathname, bool recursive, bool dironly) {
-    LOG_F(INFO,
-          "AsyncGlob::glob_async called with pathname: {}, recursive: {}, "
-          "dironly: {}",
-          pathname, recursive, dironly);
+    spdlog::info(
+        "AsyncGlob::glob_async called with pathname: {}, recursive: {}, "
+        "dironly: {}",
+        pathname, recursive, dironly);
 
     std::vector<fs::path> result;
 
@@ -566,7 +475,7 @@ inline AsyncGlob::Task<std::vector<fs::path>> AsyncGlob::glob_async(
 
         result = future.get();
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in glob_async: {}", e.what());
+        spdlog::error("Exception in glob_async: {}", e.what());
         THROW_EXCEPTION("Error in glob_async: {}", e.what());
     }
 

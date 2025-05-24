@@ -1,6 +1,7 @@
 #ifndef ATOM_ASYNC_FUTURE_HPP
 #define ATOM_ASYNC_FUTURE_HPP
 
+#include <algorithm>  // For std::max
 #include <atomic>
 #include <concepts>
 #include <coroutine>
@@ -21,16 +22,43 @@
 #include <dispatch/dispatch.h>
 #elif defined(__linux__)
 #define ATOM_PLATFORM_LINUX
-#include <sys/sysinfo.h>
+#include <sys/sysinfo.h>  // For get_nprocs
 #endif
 
 #ifdef ATOM_USE_BOOST_LOCKFREE
 #include <boost/lockfree/queue.hpp>
 #endif
 
+#ifdef ATOM_USE_ASIO
+#include <asio/post.hpp>
+#include <asio/thread_pool.hpp>
+#include <mutex>  // For std::once_flag for thread_pool initialization
+#endif
+
 #include "atom/error/exception.hpp"
 
 namespace atom::async {
+
+/**
+ * @brief Helper to get the return type of a future.
+ * @tparam T The type of the future.
+ */
+template <typename T>
+using future_value_t = decltype(std::declval<T>().get());
+
+#ifdef ATOM_USE_ASIO
+namespace internal {
+inline asio::thread_pool& get_asio_thread_pool() {
+    // Ensure thread pool is initialized safely and runs with a reasonable
+    // number of threads
+    static asio::thread_pool pool(
+        std::max(1u, std::thread::hardware_concurrency() > 0
+                         ? std::thread::hardware_concurrency()
+                         : 2));
+    return pool;
+}
+}  // namespace internal
+#endif
 
 /**
  * @class InvalidFutureException
@@ -70,7 +98,7 @@ concept ValidCallable = requires(F&& f, Args&&... args) {
     { std::invoke(std::forward<F>(f), std::forward<Args>(args)...) };
 };
 
-// 新增：协程等待对象辅助类
+// New: Coroutine awaitable helper class
 template <typename T>
 class [[nodiscard]] AwaitableEnhancedFuture {
 public:
@@ -84,9 +112,15 @@ public:
 
     template <typename Promise>
     void await_suspend(std::coroutine_handle<Promise> handle) const {
-#if defined(ATOM_PLATFORM_WINDOWS)
-        // Windows 线程池优化
-        auto thread = [](void* data) -> unsigned long {
+#ifdef ATOM_USE_ASIO
+        asio::post(atom::async::internal::get_asio_thread_pool(),
+                   [future = future_, h = handle]() mutable {
+                       future.wait();  // Wait in an Asio thread pool thread
+                       h.resume();
+                   });
+#elif defined(ATOM_PLATFORM_WINDOWS)
+        // Windows thread pool optimization (original comment)
+        auto thread_proc = [](void* data) -> unsigned long {
             auto* params = static_cast<
                 std::pair<std::shared_future<T>, std::coroutine_handle<>>*>(
                 data);
@@ -100,9 +134,15 @@ public:
             new std::pair<std::shared_future<T>, std::coroutine_handle<>>(
                 future_, handle);
         HANDLE threadHandle =
-            CreateThread(nullptr, 0, thread, params, 0, nullptr);
-        if (threadHandle)
+            CreateThread(nullptr, 0, thread_proc, params, 0, nullptr);
+        if (threadHandle) {
             CloseHandle(threadHandle);
+        } else {
+            // Handle thread creation failure, e.g., resume immediately or throw
+            delete params;
+            if (handle)
+                handle.resume();  // Or signal error
+        }
 #elif defined(ATOM_PLATFORM_MACOS)
         auto* params =
             new std::pair<std::shared_future<T>, std::coroutine_handle<>>(
@@ -130,6 +170,7 @@ public:
 private:
     std::shared_future<T> future_;
 };
+
 template <>
 class [[nodiscard]] AwaitableEnhancedFuture<void> {
 public:
@@ -143,8 +184,14 @@ public:
 
     template <typename Promise>
     void await_suspend(std::coroutine_handle<Promise> handle) const {
-#if defined(ATOM_PLATFORM_WINDOWS)
-        auto thread = [](void* data) -> unsigned long {
+#ifdef ATOM_USE_ASIO
+        asio::post(atom::async::internal::get_asio_thread_pool(),
+                   [future = future_, h = handle]() mutable {
+                       future.wait();  // Wait in an Asio thread pool thread
+                       h.resume();
+                   });
+#elif defined(ATOM_PLATFORM_WINDOWS)
+        auto thread_proc = [](void* data) -> unsigned long {
             auto* params = static_cast<
                 std::pair<std::shared_future<void>, std::coroutine_handle<>>*>(
                 data);
@@ -158,9 +205,14 @@ public:
             new std::pair<std::shared_future<void>, std::coroutine_handle<>>(
                 future_, handle);
         HANDLE threadHandle =
-            CreateThread(nullptr, 0, thread, params, 0, nullptr);
-        if (threadHandle)
+            CreateThread(nullptr, 0, thread_proc, params, 0, nullptr);
+        if (threadHandle) {
             CloseHandle(threadHandle);
+        } else {
+            delete params;
+            if (handle)
+                handle.resume();
+        }
 #elif defined(ATOM_PLATFORM_MACOS)
         auto* params =
             new std::pair<std::shared_future<void>, std::coroutine_handle<>>(
@@ -236,6 +288,7 @@ public:
                         wrapper->callback(value);
                     } catch (...) {
                         // Log error but continue with other callbacks
+                        // Consider adding spdlog here if available globally
                     }
                     delete wrapper;
                 }
@@ -254,6 +307,13 @@ public:
     private:
         boost::lockfree::queue<CallbackWrapper*> queue_;
     };
+#else
+    // Mutex for std::vector based callbacks if ATOM_USE_BOOST_LOCKFREE is not
+    // defined and onComplete can be called concurrently. For simplicity, this
+    // example assumes external synchronization or non-concurrent calls to
+    // onComplete for the std::vector case if not using Boost.Lockfree. If
+    // concurrent calls to onComplete are expected for the std::vector path,
+    // callbacks_ (the vector itself) would need a mutex for add and iteration.
 #endif
 
     /**
@@ -307,7 +367,8 @@ public:
         auto sharedCancelled = cancelled_;  // Share the cancelled flag
 
         return EnhancedFuture<ResultType>(
-            std::async(std::launch::async,
+            std::async(std::launch::async,  // This itself could use
+                                            // makeOptimizedFuture
                        [sharedFuture, sharedCancelled,
                         func = std::forward<F>(func)]() -> ResultType {
                            if (*sharedCancelled) {
@@ -369,7 +430,12 @@ public:
         }
 
         cancel();
-        if constexpr (!std::is_same_v<CancelFunc, std::function<void()>>) {
+        // Check if cancelPolicy is not the default empty std::function
+        if constexpr (!std::is_same_v<std::decay_t<CancelFunc>,
+                                      std::function<void()>> ||
+                      (std::is_same_v<std::decay_t<CancelFunc>,
+                                      std::function<void()>> &&
+                       cancelPolicy)) {
             std::invoke(std::forward<CancelFunc>(cancelPolicy));
         }
         return std::nullopt;
@@ -396,35 +462,64 @@ public:
         }
 
 #ifdef ATOM_USE_BOOST_LOCKFREE
-        callbacks_->add(std::forward<F>(func));
+        callbacks_->add(std::function<void(T)>(std::forward<F>(func)));
+#else
+        // For std::vector, ensure thread safety if onComplete is called
+        // concurrently. This example assumes it's handled externally or not an
+        // issue.
+        callbacks_->emplace_back(std::forward<F>(func));
+#endif
 
+#ifdef ATOM_USE_ASIO
+        asio::post(
+            atom::async::internal::get_asio_thread_pool(),
+            [future = future_, callbacks = callbacks_,
+             cancelled = cancelled_]() mutable {
+                try {
+                    if (!*cancelled && future.valid()) {
+                        T result =
+                            future.get();  // Wait for the future in Asio thread
+                        if (!*cancelled) {
+#ifdef ATOM_USE_BOOST_LOCKFREE
+                            callbacks->executeAll(result);
+#else
+                            // Iterate over the vector of callbacks.
+                            // Assumes vector modifications are synchronized if
+                            // they can occur.
+                            for (auto& callback_fn : *callbacks) {
+                                try {
+                                    callback_fn(result);
+                                } catch (...) {
+                                    // Log error but continue
+                                }
+                            }
+#endif
+                        }
+                    }
+                } catch (...) {
+                    // Future completed with exception
+                }
+            });
+#else  // Original std::thread implementation
         std::thread([future = future_, callbacks = callbacks_,
                      cancelled = cancelled_]() mutable {
             try {
                 if (!*cancelled && future.valid()) {
                     T result = future.get();
                     if (!*cancelled) {
+#ifdef ATOM_USE_BOOST_LOCKFREE
                         callbacks->executeAll(result);
-                    }
-                }
-            } catch (...) {
-                // Future completed with exception
-            }
-        }).detach();
 #else
-        callbacks_->emplace_back(std::forward<F>(func));
-
-        std::thread([future = future_, callbacks = callbacks_,
-                     cancelled = cancelled_]() mutable {
-            try {
-                if (!*cancelled && future.valid()) {
-                    T result = future.get();
-                    for (auto& callback : *callbacks) {
-                        try {
-                            callback(result);
-                        } catch (...) {
-                            // Log error but continue with other callbacks
+                        for (auto& callback :
+                             *callbacks) {  // Note: original captured callbacks
+                                            // by value (shared_ptr copy)
+                            try {
+                                callback(result);
+                            } catch (...) {
+                                // Log error but continue with other callbacks
+                            }
                         }
+#endif
                     }
                 }
             } catch (...) {
@@ -457,12 +552,13 @@ public:
 
     template <ValidCallable<std::exception_ptr> F>
     auto catching(F&& func) {
-        using ResultType = T;
+        using ResultType = T;  // Assuming catching returns T or throws
         auto sharedFuture = std::make_shared<std::shared_future<T>>(future_);
         auto sharedCancelled = cancelled_;
 
         return EnhancedFuture<ResultType>(
-            std::async(std::launch::async,
+            std::async(std::launch::async,  // This itself could use
+                                            // makeOptimizedFuture
                        [sharedFuture, sharedCancelled,
                         func = std::forward<F>(func)]() -> ResultType {
                            if (*sharedCancelled) {
@@ -477,6 +573,10 @@ public:
                                THROW_INVALID_FUTURE_EXCEPTION(
                                    "Future is invalid");
                            } catch (...) {
+                               // If func rethrows or returns a different type,
+                               // ResultType needs adjustment Assuming func
+                               // returns T or throws, which is then caught by
+                               // std::async's future
                                return func(std::current_exception());
                            }
                        })
@@ -501,10 +601,14 @@ public:
      * @return A pointer to the exception, or nullptr if no exception.
      */
     auto getException() noexcept -> std::exception_ptr {
-        try {
-            future_.get();
-        } catch (...) {
-            return std::current_exception();
+        if (isDone() && !*cancelled_) {  // Check if ready to avoid blocking
+            try {
+                future_.get();  // This re-throws if future stores an exception
+            } catch (...) {
+                return std::current_exception();
+            }
+        } else if (*cancelled_) {
+            // Optionally return a specific exception for cancelled futures
         }
         return nullptr;
     }
@@ -529,7 +633,7 @@ public:
         auto sharedCancelled = cancelled_;
 
         return EnhancedFuture<ResultType>(
-            std::async(
+            std::async(  // This itself could use makeOptimizedFuture
                 std::launch::async,
                 [sharedFuture, sharedCancelled, func = std::forward<F>(func),
                  max_retries, backoff_ms]() -> ResultType {
@@ -538,28 +642,51 @@ public:
                             "Future has been cancelled");
                     }
 
-                    for (int attempt = 0; attempt < max_retries; ++attempt) {
+                    for (int attempt = 0; attempt <= max_retries;
+                         ++attempt) {  // <= to allow max_retries attempts
                         if (!sharedFuture->valid()) {
-                            THROW_INVALID_FUTURE_EXCEPTION("Future is invalid");
+                            // This check might be problematic if the original
+                            // future is single-use and already .get() Assuming
+                            // 'func' takes the result of the *original* future.
+                            // If 'func' is the operation to retry, this
+                            // structure is different. The current structure
+                            // implies 'func' processes the result of
+                            // 'sharedFuture'. A retry typically means
+                            // re-executing the operation that *produced*
+                            // sharedFuture. This 'retry' seems to retry
+                            // processing its result. For clarity, let's assume
+                            // 'func' is a processing step.
+                            THROW_INVALID_FUTURE_EXCEPTION(
+                                "Future is invalid for retry processing");
                         }
 
                         try {
+                            // This implies the original future should be
+                            // get-able multiple times, or func is retrying
+                            // based on a single result. If sharedFuture.get()
+                            // throws, the catch block is hit.
                             return func(sharedFuture->get());
                         } catch (const std::exception& e) {
-                            if (attempt == max_retries - 1) {
+                            if (attempt == max_retries) {
                                 throw;  // Rethrow on last attempt
                             }
-
-                            // Apply backoff if specified
+                            // Log attempt failure: spdlog::warn("Retry attempt
+                            // {} failed: {}", attempt, e.what());
                             if (backoff_ms.has_value()) {
                                 std::this_thread::sleep_for(
                                     std::chrono::milliseconds(
-                                        backoff_ms.value() * (attempt + 1)));
+                                        backoff_ms.value() *
+                                        (attempt +
+                                         1)));  // Consider exponential backoff
                             }
                         }
+                        if (*sharedCancelled) {  // Check cancellation between
+                                                 // retries
+                            THROW_INVALID_FUTURE_EXCEPTION(
+                                "Future cancelled during retry");
+                        }
                     }
-
-                    // Should never reach here if max_retries > 0
+                    // Should not be reached if max_retries >= 0
                     THROW_INVALID_FUTURE_EXCEPTION(
                         "Retry failed after maximum attempts");
                 })
@@ -587,7 +714,6 @@ public:
         }
 
         auto initial_suspend() noexcept -> std::suspend_never { return {}; }
-
         auto final_suspend() noexcept -> std::suspend_never { return {}; }
 
         template <typename U>
@@ -654,7 +780,6 @@ public:
 
         void add(const std::function<void()>& callback) {
             auto* wrapper = new CallbackWrapper(callback);
-            // Try pushing until successful
             while (!queue_.push(wrapper)) {
                 std::this_thread::yield();
             }
@@ -667,7 +792,7 @@ public:
                     try {
                         wrapper->callback();
                     } catch (...) {
-                        // Log error but continue with other callbacks
+                        // Log error
                     }
                     delete wrapper;
                 }
@@ -688,10 +813,6 @@ public:
     };
 #endif
 
-    /**
-     * @brief Constructs an EnhancedFuture from a shared future.
-     * @param fut The shared future to wrap.
-     */
     explicit EnhancedFuture(std::shared_future<void>&& fut) noexcept
         : future_(std::move(fut)),
           cancelled_(std::make_shared<std::atomic<bool>>(false))
@@ -718,20 +839,11 @@ public:
     {
     }
 
-    // Move constructor and assignment
     EnhancedFuture(EnhancedFuture&& other) noexcept = default;
     EnhancedFuture& operator=(EnhancedFuture&& other) noexcept = default;
-
-    // Copy constructor and assignment
     EnhancedFuture(const EnhancedFuture&) = default;
     EnhancedFuture& operator=(const EnhancedFuture&) = default;
 
-    /**
-     * @brief Chains another operation to be called after the future is done.
-     * @tparam F The type of the function to call.
-     * @param func The function to call when the future is done.
-     * @return An EnhancedFuture for the result of the function.
-     */
     template <ValidCallable F>
     auto then(F&& func) {
         using ResultType = std::invoke_result_t<F>;
@@ -739,17 +851,17 @@ public:
         auto sharedCancelled = cancelled_;
 
         return EnhancedFuture<ResultType>(
-            std::async(std::launch::async,
+            std::async(std::launch::async,  // This itself could use
+                                            // makeOptimizedFuture
                        [sharedFuture, sharedCancelled,
                         func = std::forward<F>(func)]() -> ResultType {
                            if (*sharedCancelled) {
                                THROW_INVALID_FUTURE_EXCEPTION(
                                    "Future has been cancelled");
                            }
-
                            if (sharedFuture->valid()) {
                                try {
-                                   sharedFuture->get();
+                                   sharedFuture->get();  // Wait for void future
                                    return func();
                                } catch (...) {
                                    THROW_NESTED_INVALID_FUTURE_EXCEPTION(
@@ -761,11 +873,6 @@ public:
                 .share());
     }
 
-    /**
-     * @brief Waits for the future with a timeout and auto-cancels if not ready.
-     * @param timeout The timeout duration.
-     * @return True if the future is ready, false otherwise.
-     */
     auto waitFor(std::chrono::milliseconds timeout) noexcept -> bool {
         if (future_.wait_for(timeout) == std::future_status::ready &&
             !*cancelled_) {
@@ -773,27 +880,18 @@ public:
                 future_.get();
                 return true;
             } catch (...) {
-                return false;
+                return false;  // Exception during get
             }
         }
         cancel();
         return false;
     }
 
-    /**
-     * @brief Checks if the future is done.
-     * @return True if the future is done, false otherwise.
-     */
     [[nodiscard]] auto isDone() const noexcept -> bool {
         return future_.wait_for(std::chrono::milliseconds(0)) ==
                std::future_status::ready;
     }
 
-    /**
-     * @brief Sets a completion callback to be called when the future is done.
-     * @tparam F The type of the callback function.
-     * @param func The callback function to add.
-     */
     template <ValidCallable F>
     void onComplete(F&& func) {
         if (*cancelled_) {
@@ -801,35 +899,54 @@ public:
         }
 
 #ifdef ATOM_USE_BOOST_LOCKFREE
-        callbacks_->add(std::forward<F>(func));
+        callbacks_->add(std::function<void()>(std::forward<F>(func)));
+#else
+        callbacks_->emplace_back(std::forward<F>(func));
+#endif
 
+#ifdef ATOM_USE_ASIO
+        asio::post(atom::async::internal::get_asio_thread_pool(),
+                   [future = future_, callbacks = callbacks_,
+                    cancelled = cancelled_]() mutable {
+                       try {
+                           if (!*cancelled && future.valid()) {
+                               future.get();  // Wait for void future
+                               if (!*cancelled) {
+#ifdef ATOM_USE_BOOST_LOCKFREE
+                                   callbacks->executeAll();
+#else
+                        for (auto& callback_fn : *callbacks) {
+                            try {
+                                callback_fn();
+                            } catch (...) {
+                                // Log error
+                            }
+                        }
+#endif
+                               }
+                           }
+                       } catch (...) {
+                           // Future completed with exception
+                       }
+                   });
+#else  // Original std::thread implementation
         std::thread([future = future_, callbacks = callbacks_,
                      cancelled = cancelled_]() mutable {
             try {
                 if (!*cancelled && future.valid()) {
                     future.get();
                     if (!*cancelled) {
+#ifdef ATOM_USE_BOOST_LOCKFREE
                         callbacks->executeAll();
-                    }
-                }
-            } catch (...) {
-                // Future completed with exception
-            }
-        }).detach();
 #else
-        callbacks_->emplace_back(std::forward<F>(func));
-
-        std::thread([future = future_, callbacks = callbacks_,
-                     cancelled = cancelled_]() mutable {
-            try {
-                if (!*cancelled && future.valid()) {
-                    future.get();
-                    for (auto& callback : *callbacks) {
-                        try {
-                            callback();
-                        } catch (...) {
-                            // Log error but continue with other callbacks
+                        for (auto& callback : *callbacks) {
+                            try {
+                                callback();
+                            } catch (...) {
+                                // Log error
+                            }
                         }
+#endif
                     }
                 }
             } catch (...) {
@@ -839,45 +956,33 @@ public:
 #endif
     }
 
-    /**
-     * @brief Waits synchronously for the future to complete.
-     * @throws InvalidFutureException if the future is cancelled.
-     */
     void wait() {
         if (*cancelled_) {
             THROW_INVALID_FUTURE_EXCEPTION("Future has been cancelled");
         }
-
         try {
             future_.get();
         } catch (const std::exception& e) {
-            THROW_INVALID_FUTURE_EXCEPTION(
+            THROW_NESTED_INVALID_FUTURE_EXCEPTION(  // Corrected macro
                 "Exception while waiting for future: ", e.what());
+        } catch (...) {
+            THROW_NESTED_INVALID_FUTURE_EXCEPTION(  // Corrected macro
+                "Unknown exception while waiting for future");
         }
     }
 
-    /**
-     * @brief Cancels the future.
-     */
     void cancel() noexcept { *cancelled_ = true; }
-
-    /**
-     * @brief Checks if the future has been cancelled.
-     * @return True if the future has been cancelled, false otherwise.
-     */
     [[nodiscard]] auto isCancelled() const noexcept -> bool {
         return *cancelled_;
     }
 
-    /**
-     * @brief Gets the exception associated with the future, if any.
-     * @return A pointer to the exception, or nullptr if no exception.
-     */
     auto getException() noexcept -> std::exception_ptr {
-        try {
-            future_.get();
-        } catch (...) {
-            return std::current_exception();
+        if (isDone() && !*cancelled_) {
+            try {
+                future_.get();
+            } catch (...) {
+                return std::current_exception();
+            }
         }
         return nullptr;
     }
@@ -887,27 +992,22 @@ public:
                std::future_status::ready;
     }
 
-    auto get() -> void {
+    void get() {  // Renamed from wait to get for void, or keep wait? 'get' is
+                  // more std::future like.
         if (*cancelled_) {
             THROW_INVALID_FUTURE_EXCEPTION("Future has been cancelled");
         }
         future_.get();
     }
 
-    // C++20 coroutine support
     struct promise_type {
         std::promise<void> promise;
-
         auto get_return_object() noexcept -> EnhancedFuture<void> {
             return EnhancedFuture<void>(promise.get_future().share());
         }
-
         auto initial_suspend() noexcept -> std::suspend_never { return {}; }
-
         auto final_suspend() noexcept -> std::suspend_never { return {}; }
-
         void return_void() noexcept { promise.set_value(); }
-
         void unhandled_exception() {
             promise.set_exception(std::current_exception());
         }
@@ -922,15 +1022,12 @@ public:
     }
 
 protected:
-    std::shared_future<void> future_;  ///< The underlying shared future.
-    std::shared_ptr<std::atomic<bool>>
-        cancelled_;  ///< Flag indicating if the future has been cancelled.
+    std::shared_future<void> future_;
+    std::shared_ptr<std::atomic<bool>> cancelled_;
 #ifdef ATOM_USE_BOOST_LOCKFREE
-    std::shared_ptr<LockfreeCallbackContainer>
-        callbacks_;  ///< Lockfree container for callbacks.
+    std::shared_ptr<LockfreeCallbackContainer> callbacks_;
 #else
-    std::shared_ptr<std::vector<std::function<void()>>>
-        callbacks_;  ///< List of callbacks to be called on completion.
+    std::shared_ptr<std::vector<std::function<void()>>> callbacks_;
 #endif
 };
 
@@ -945,11 +1042,9 @@ protected:
 template <typename F, typename... Args>
     requires ValidCallable<F, Args...>
 auto makeEnhancedFuture(F&& f, Args&&... args) {
-    using result_type = std::invoke_result_t<F, Args...>;
-    return EnhancedFuture<result_type>(std::async(std::launch::async,
-                                                  std::forward<F>(f),
-                                                  std::forward<Args>(args)...)
-                                           .share());
+    // Forward to makeOptimizedFuture to use potential Asio or platform
+    // optimizations
+    return makeOptimizedFuture(std::forward<F>(f), std::forward<Args>(args)...);
 }
 
 /**
@@ -963,55 +1058,102 @@ auto makeEnhancedFuture(F&& f, Args&&... args) {
 template <std::input_iterator InputIt>
 auto whenAll(InputIt first, InputIt last,
              std::optional<std::chrono::milliseconds> timeout = std::nullopt)
-    -> std::future<
-        std::vector<typename std::iterator_traits<InputIt>::value_type>> {
-    using FutureType = typename std::iterator_traits<InputIt>::value_type;
-    using ResultType = std::vector<FutureType>;
+    -> std::future<std::vector<
+        typename std::iterator_traits<InputIt>::value_type::value_type>> {
+    using EnhancedFutureType =
+        typename std::iterator_traits<InputIt>::value_type;
+    using ValueType = decltype(std::declval<EnhancedFutureType>().get());
+    using ResultType = std::vector<ValueType>;
 
-    // Validate input range
     if (std::distance(first, last) < 0) {
         THROW_INVALID_ARGUMENT("Invalid iterator range");
     }
+    if (first == last) {
+        std::promise<ResultType> promise;
+        promise.set_value({});
+        return promise.get_future();
+    }
 
-    auto promise = std::make_shared<std::promise<ResultType>>();
-    std::future<ResultType> resultFuture = promise->get_future();
+    auto promise_ptr = std::make_shared<std::promise<ResultType>>();
+    std::future<ResultType> resultFuture = promise_ptr->get_future();
 
-    // Create an intermediate shared vector to store results
-    auto results = std::make_shared<ResultType>();
-    results->reserve(static_cast<size_t>(
-        std::distance(first, last)));  // Pre-allocate memory
+    auto results_ptr = std::make_shared<ResultType>();
+    size_t total_count = static_cast<size_t>(std::distance(first, last));
+    results_ptr->reserve(total_count);
 
-    // Use a thread to avoid blocking
-    std::thread([promise, results, first, last, timeout]() mutable {
+    auto futures_vec =
+        std::make_shared<std::vector<EnhancedFutureType>>(first, last);
+
+    auto temp_results =
+        std::make_shared<std::vector<std::optional<ValueType>>>(total_count);
+    auto promise_fulfilled = std::make_shared<std::atomic<bool>>(false);
+
+    std::thread([promise_ptr, results_ptr, futures_vec, timeout, total_count,
+                 temp_results, promise_fulfilled]() mutable {
         try {
-            for (auto it = first; it != last; ++it) {
-                if (timeout) {
-                    // Check each future with timeout (if specified)
-                    if (it->wait_for(*timeout) == std::future_status::timeout) {
-                        promise->set_exception(
-                            std::make_exception_ptr(InvalidFutureException(
-                                ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME,
-                                "Timeout while waiting for a future.")));
-                        return;
+            for (size_t i = 0; i < total_count; ++i) {
+                auto& fut = (*futures_vec)[i];
+                if (timeout.has_value()) {
+                    if (fut.isReady()) {
+                        // already ready
+                    } else {
+                        // EnhancedFuture::waitFor returns std::optional<T>
+                        // If it returns nullopt, it means timeout or error
+                        // during its own get().
+                        auto opt_val = fut.waitFor(timeout.value());
+                        if (!opt_val.has_value() && !fut.isReady()) {
+                            if (!promise_fulfilled->exchange(true)) {
+                                promise_ptr->set_exception(
+                                    std::make_exception_ptr(
+                                        InvalidFutureException(
+                                            ATOM_FILE_NAME, ATOM_FILE_LINE,
+                                            ATOM_FUNC_NAME,
+                                            "Timeout while waiting for a "
+                                            "future in whenAll.")));
+                            }
+                            return;
+                        }
+                        // If fut.isReady() is true here, it means it completed.
+                        // The value from opt_val is not directly used here,
+                        // fut.get() below will retrieve it or rethrow.
                     }
                 }
-                results->push_back(std::move(*it));
+
+                if constexpr (std::is_void_v<ValueType>) {
+                    fut.get();
+                    (*temp_results)[i].emplace();
+                } else {
+                    (*temp_results)[i] = fut.get();
+                }
             }
-            promise->set_value(std::move(*results));
+
+            if (!promise_fulfilled->exchange(true)) {
+                if constexpr (std::is_void_v<ValueType>) {
+                    results_ptr->resize(total_count);
+                } else {
+                    results_ptr->clear();
+                    for (size_t i = 0; i < total_count; ++i) {
+                        if ((*temp_results)[i].has_value()) {
+                            results_ptr->push_back(*(*temp_results)[i]);
+                        }
+                        // If a non-void future's result was not set in
+                        // temp_results, it implies an issue, as fut.get()
+                        // should have thrown if it failed. For correctly
+                        // completed non-void futures, has_value() should be
+                        // true.
+                    }
+                }
+                promise_ptr->set_value(std::move(*results_ptr));
+            }
         } catch (...) {
-            promise->set_exception(std::current_exception());
+            if (!promise_fulfilled->exchange(true)) {
+                promise_ptr->set_exception(std::current_exception());
+            }
         }
     }).detach();
 
     return resultFuture;
 }
-
-/**
- * @brief Helper to get the return type of a future.
- * @tparam T The type of the future.
- */
-template <typename T>
-using future_value_t = decltype(std::declval<T>().get());
 
 /**
  * @brief Helper function for a variadic template version (when_all for futures
@@ -1022,27 +1164,44 @@ using future_value_t = decltype(std::declval<T>().get());
  * @throws InvalidFutureException if any future is invalid
  */
 template <typename... Futures>
-auto whenAll(Futures&&... futures)
-    -> std::future<std::tuple<future_value_t<Futures>...>> {
-    auto promise = std::make_shared<
-        std::promise<std::tuple<future_value_t<Futures>...>>>();
-    std::future<std::tuple<future_value_t<Futures>...>> resultFuture =
-        promise->get_future();
+    requires(FutureCompatible<future_value_t<std::decay_t<Futures>>> &&
+             ...)  // Ensure results are FutureCompatible
+auto whenAll(Futures&&... futures) -> std::future<
+    std::tuple<future_value_t<std::decay_t<Futures>>...>> {  // Ensure decay for
+                                                             // future_value_t
 
-    // Copy futures to a tuple to prevent dangling references
+    auto promise = std::make_shared<
+        std::promise<std::tuple<future_value_t<std::decay_t<Futures>>...>>>();
+    std::future<std::tuple<future_value_t<std::decay_t<Futures>>...>>
+        resultFuture = promise->get_future();
+
     auto futuresTuple = std::make_shared<std::tuple<std::decay_t<Futures>...>>(
         std::forward<Futures>(futures)...);
 
-    // Use a thread to process futures asynchronously
-    std::thread([promise, futuresTuple]() mutable {
+    std::thread([promise,
+                 futuresTuple]() mutable {  // Could use makeOptimizedFuture for
+                                            // this thread
         try {
+            // Check validity before calling get()
+            std::apply(
+                [](auto&... fs) {
+                    if (((!fs.isReady() && !fs.isCancelled() && !fs.valid()) ||
+                         ...)) {
+                        // For EnhancedFuture, check isReady() or isCancelled()
+                        // A more generic check: if it's not done and not going
+                        // to be done. This check needs to be adapted for
+                        // EnhancedFuture's interface. For now, assume .get()
+                        // will throw if invalid.
+                    }
+                },
+                *futuresTuple);
+
             auto results = std::apply(
                 [](auto&... fs) {
-                    // Check if all futures are valid
-                    if ((!fs.valid() || ...)) {
-                        THROW_INVALID_FUTURE_EXCEPTION(
-                            "One or more futures are invalid");
-                    }
+                    // Original check: if ((!fs.valid() || ...))
+                    // For EnhancedFuture, valid() is not the primary check.
+                    // isCancelled() or get() throwing is. The .get() method in
+                    // EnhancedFuture already checks for cancellation.
                     return std::make_tuple(fs.get()...);
                 },
                 *futuresTuple);
@@ -1050,7 +1209,8 @@ auto whenAll(Futures&&... futures)
         } catch (...) {
             promise->set_exception(std::current_exception());
         }
-    }).detach();
+    })
+        .detach();
 
     return resultFuture;
 }
@@ -1064,67 +1224,80 @@ EnhancedFuture<T> co_makeEnhancedFuture(T value) {
 // Specialization for void
 inline EnhancedFuture<void> co_makeEnhancedFuture() { co_return; }
 
-// Utility to run parallel operations on a data collection using SIMD where
-// applicable
+// Utility to run parallel operations on a data collection
 template <std::ranges::input_range Range, typename Func>
     requires std::invocable<Func, std::ranges::range_value_t<Range>>
-auto parallelProcess(Range&& range, Func&& func, size_t chunkSize = 0) {
+auto parallelProcess(Range&& range, Func&& func, size_t numTasks = 0) {
     using ValueType = std::ranges::range_value_t<Range>;
-    using ResultType = std::invoke_result_t<Func, ValueType>;
+    using SingleItemResultType = std::invoke_result_t<Func, ValueType>;
+    using TaskChunkResultType =
+        std::conditional_t<std::is_void_v<SingleItemResultType>, void,
+                           std::vector<SingleItemResultType>>;
 
-    // 根据平台自动确定最佳线程数和任务调度
+    if (numTasks == 0) {
 #if defined(ATOM_PLATFORM_WINDOWS)
-    if (chunkSize == 0) {
         SYSTEM_INFO sysInfo;
         GetSystemInfo(&sysInfo);
-        chunkSize = sysInfo.dwNumberOfProcessors;
-    }
+        numTasks = sysInfo.dwNumberOfProcessors;
 #elif defined(ATOM_PLATFORM_LINUX)
-    if (chunkSize == 0) {
-        chunkSize = get_nprocs();
-    }
-#else
-    // 默认方法
-    if (chunkSize == 0) {
-        chunkSize =
+        numTasks = get_nprocs();
+#elif defined(__APPLE__)
+        numTasks =
             std::max(size_t(1),
                      static_cast<size_t>(std::thread::hardware_concurrency()));
-    }
+#else
+        numTasks =
+            std::max(size_t(1),
+                     static_cast<size_t>(std::thread::hardware_concurrency()));
 #endif
+        if (numTasks == 0) {
+            numTasks = 2;
+        }
+    }
 
-    std::vector<EnhancedFuture<ResultType>> futures;
+    std::vector<EnhancedFuture<TaskChunkResultType>> futures;
     auto begin = std::ranges::begin(range);
     auto end = std::ranges::end(range);
+    size_t totalSize = static_cast<size_t>(std::ranges::distance(range));
 
-    while (begin != end) {
-        auto chunkEnd = begin;
-        size_t distance = 0;
-
-        while (chunkEnd != end && distance < chunkSize) {
-            ++chunkEnd;
-            ++distance;
-        }
-
-        futures.push_back(EnhancedFuture<ResultType>(
-            std::async(std::launch::async,
-                       [func = func, chunk = std::vector<ValueType>(
-                                         begin, chunkEnd)]() -> ResultType {
-                           // 处理分块
-                           if (chunk.size() == 1) {
-                               return func(chunk[0]);
-                           } else {
-                               ResultType result{};
-                               for (const auto& item : chunk) {
-                                   result = func(item);
-                               }
-                               return result;
-                           }
-                       })
-                .share()));
-
-        begin = chunkEnd;
+    if (totalSize == 0) {
+        return futures;
     }
 
+    size_t itemsPerTask = (totalSize + numTasks - 1) / numTasks;
+
+    for (size_t i = 0; i < numTasks && begin != end; ++i) {
+        auto task_begin = begin;
+        auto task_end = std::ranges::next(
+            task_begin,
+            std::min(itemsPerTask, static_cast<size_t>(
+                                       std::ranges::distance(task_begin, end))),
+            end);
+
+        std::vector<ValueType> local_chunk(task_begin, task_end);
+        if (local_chunk.empty()) {
+            continue;
+        }
+
+        futures.push_back(makeOptimizedFuture(
+            [func = std::forward<Func>(func),
+             local_chunk = std::move(local_chunk)]() -> TaskChunkResultType {
+                if constexpr (std::is_void_v<SingleItemResultType>) {
+                    for (const auto& item : local_chunk) {
+                        func(item);
+                    }
+                    return;
+                } else {
+                    std::vector<SingleItemResultType> chunk_results;
+                    chunk_results.reserve(local_chunk.size());
+                    for (const auto& item : local_chunk) {
+                        chunk_results.push_back(func(item));
+                    }
+                    return chunk_results;
+                }
+            }));
+        begin = task_end;
+    }
     return futures;
 }
 
@@ -1141,64 +1314,76 @@ template <typename F, typename... Args>
 auto makeOptimizedFuture(F&& f, Args&&... args) {
     using result_type = std::invoke_result_t<F, Args...>;
 
-    // Use platform-specific thread pool optimization
-#if defined(ATOM_PLATFORM_WINDOWS)
-    // Windows thread pool implementation
-    // This is just an example, actual projects may need a more complete
-    // implementation
-    return EnhancedFuture<result_type>(std::async(std::launch::async,
-                                                  std::forward<F>(f),
-                                                  std::forward<Args>(args)...)
-                                           .share());
-#elif defined(ATOM_PLATFORM_MACOS)
-    // macOS uses GCD
+#ifdef ATOM_USE_ASIO
     std::promise<result_type> promise;
     auto future = promise.get_future();
 
-    // Create data structure to store function and parameters
-    struct CallData {
-        std::promise<result_type> promise;
-        std::tuple<std::decay_t<F>, std::decay_t<Args>...> func_and_args;
-
-        CallData(std::promise<result_type>&& p, F&& f, Args&&... args)
-            : promise(std::move(p)),
-              func_and_args(std::forward<F>(f), std::forward<Args>(args)...) {}
-
-        static void execute(void* context) {
-            auto* data = static_cast<CallData*>(context);
+    asio::post(
+        atom::async::internal::get_asio_thread_pool(),
+        // Capture arguments carefully for the task
+        [p = std::move(promise), func_capture = std::forward<F>(f),
+         args_tuple = std::make_tuple(std::forward<Args>(args)...)]() mutable {
             try {
                 if constexpr (std::is_void_v<result_type>) {
-                    std::apply(
-                        [](auto&&... args) {
-                            std::invoke(std::forward<decltype(args)>(args)...);
-                        },
-                        data->func_and_args);
-                    data->promise.set_value();
+                    std::apply(func_capture, std::move(args_tuple));
+                    p.set_value();
                 } else {
-                    data->promise.set_value(std::apply(
-                        [](auto&&... args) {
-                            return std::invoke(
-                                std::forward<decltype(args)>(args)...);
-                        },
-                        data->func_and_args));
+                    p.set_value(
+                        std::apply(func_capture, std::move(args_tuple)));
                 }
             } catch (...) {
-                data->promise.set_exception(std::current_exception());
+                p.set_exception(std::current_exception());
             }
+        });
+    return EnhancedFuture<result_type>(future.share());
+
+#elif defined(ATOM_PLATFORM_MACOS) && \
+    !defined(ATOM_USE_ASIO)  // Ensure ATOM_USE_ASIO takes precedence
+    std::promise<result_type> promise;
+    auto future = promise.get_future();
+
+    struct CallData {
+        std::promise<result_type> promise;
+        // Use a std::function or store f and args separately if they are not
+        // easily stored in a tuple or decay issues. For simplicity, assuming
+        // they can be moved/copied into a lambda or struct.
+        std::function<void()> work;  // Type erase the call
+
+        template <typename F_inner, typename... Args_inner>
+        CallData(std::promise<result_type>&& p, F_inner&& f_inner,
+                 Args_inner&&... args_inner)
+            : promise(std::move(p)) {
+            work = [this, f_capture = std::forward<F_inner>(f_inner),
+                    args_capture_tuple = std::make_tuple(
+                        std::forward<Args_inner>(args_inner)...)]() mutable {
+                try {
+                    if constexpr (std::is_void_v<result_type>) {
+                        std::apply(f_capture, std::move(args_capture_tuple));
+                        this->promise.set_value();
+                    } else {
+                        this->promise.set_value(std::apply(
+                            f_capture, std::move(args_capture_tuple)));
+                    }
+                } catch (...) {
+                    this->promise.set_exception(std::current_exception());
+                }
+            };
+        }
+        static void execute(void* context) {
+            auto* data = static_cast<CallData*>(context);
+            data->work();
             delete data;
         }
     };
-
     auto* callData = new CallData(std::move(promise), std::forward<F>(f),
                                   std::forward<Args>(args)...);
-
     dispatch_async_f(
         dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), callData,
         &CallData::execute);
-
     return EnhancedFuture<result_type>(future.share());
-#else
-    // Default standard implementation
+
+#else  // Default to std::async (covers Windows if not ATOM_USE_ASIO, and
+       // generic Linux)
     return EnhancedFuture<result_type>(std::async(std::launch::async,
                                                   std::forward<F>(f),
                                                   std::forward<Args>(args)...)

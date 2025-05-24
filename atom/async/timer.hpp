@@ -29,6 +29,10 @@ Description: Timer class for C++
 #include <boost/lockfree/queue.hpp>
 #endif
 
+#ifdef ATOM_USE_ASIO
+#include <asio.hpp>
+#endif
+
 #include "future.hpp"
 
 namespace atom::async {
@@ -223,7 +227,16 @@ private:
     static void validateTaskParams(unsigned int delay,
                                    int repeatCount) noexcept(false);
 
+#ifdef ATOM_USE_ASIO
+    void asioRun() noexcept;
+    std::unique_ptr<asio::io_context> m_ioContext;
+    std::unique_ptr<asio::io_context::work> m_work;
+    std::unique_ptr<asio::steady_timer> m_asioTimer;
+#endif
+
+#ifndef ATOM_USE_ASIO
     std::jthread m_thread;  ///< The thread for running the timer loop (C++20)
+#endif
 
 #ifdef ATOM_USE_BOOST_LOCKFREE
     /**
@@ -305,12 +318,46 @@ auto Timer::setTimeout(Function &&func, unsigned int delay,
         std::bind(std::forward<Function>(func), std::forward<Args>(args)...));
     std::future<ReturnType> result = task->get_future();
 
+#ifdef ATOM_USE_ASIO
+    {
+        std::scoped_lock lock(m_mutex);
+        if (!m_ioContext || m_stop.load(std::memory_order_acquire)) {
+            throw std::runtime_error("Timer is stopped or not initialized");
+        }
+
+        auto timer = std::make_shared<asio::steady_timer>(
+            *m_ioContext, std::chrono::milliseconds(delay));
+
+        timer->async_wait([this, task, timer](const asio::error_code &error) {
+            if (!error) {
+                try {
+                    (*task)();
+
+                    std::function<void()> callback;
+                    {
+                        std::scoped_lock callbackLock(m_mutex);
+                        callback = m_callback;
+                    }
+
+                    if (callback) {
+                        try {
+                            callback();
+                        } catch (...) {
+                        }
+                    }
+                } catch (...) {
+                }
+            }
+        });
+    }
+#else
     {
         std::scoped_lock lock(m_mutex);
         m_taskQueue.emplace([task]() { (*task)(); }, delay, 1, 0);
     }
-
     m_cond.notify_all();
+#endif
+
     return EnhancedFuture<ReturnType>(std::move(result).share());
 }
 
@@ -318,10 +365,8 @@ template <typename Function, typename... Args>
     requires Invocable<Function, Args...>
 void Timer::setInterval(Function &&func, unsigned int interval, int repeatCount,
                         int priority, Args &&...args) noexcept(false) {
-    // 移除对func的空检查
     if (interval == 0) {
-        throw std::invalid_argument(
-            "Timer::setInterval: Interval must be greater than 0");
+        throw std::invalid_argument("Interval must be greater than 0");
     }
     validateTaskParams(interval, repeatCount);
 
@@ -334,7 +379,6 @@ template <typename Function, typename... Args>
 auto Timer::addTask(Function &&func, unsigned int delay, int repeatCount,
                     int priority, Args &&...args) noexcept(false)
     -> EnhancedFuture<std::invoke_result_t<Function, Args...>> {
-    // 移除对func的空检查
     validateTaskParams(delay, repeatCount);
 
     using ReturnType = std::invoke_result_t<Function, Args...>;
@@ -342,10 +386,63 @@ auto Timer::addTask(Function &&func, unsigned int delay, int repeatCount,
         std::bind(std::forward<Function>(func), std::forward<Args>(args)...));
     std::future<ReturnType> result = task->get_future();
 
+#ifdef ATOM_USE_ASIO
+    std::scoped_lock lock(m_mutex);
+    if (!m_ioContext || m_stop.load(std::memory_order_acquire)) {
+        throw std::runtime_error("Timer is stopped or not initialized");
+    }
+
+    auto repeatTask =
+        std::make_shared<std::function<void(const asio::error_code &)>>();
+    auto timer = std::make_shared<asio::steady_timer>(
+        *m_ioContext, std::chrono::milliseconds(delay));
+
+    *repeatTask = [this, task, timer, delay, repeatCount,
+                   remainingCount = repeatCount,
+                   repeatTask](const asio::error_code &error) mutable {
+        if (error)
+            return;
+        if (m_paused.load(std::memory_order_acquire)) {
+            timer->expires_after(std::chrono::milliseconds(100));
+            timer->async_wait(*repeatTask);
+            return;
+        }
+
+        try {
+            (*task)();
+
+            std::function<void()> callback;
+            {
+                std::scoped_lock callbackLock(m_mutex);
+                callback = m_callback;
+            }
+
+            if (callback) {
+                try {
+                    callback();
+                } catch (...) {
+                }
+            }
+        } catch (...) {
+        }
+
+        if (remainingCount > 0) {
+            --remainingCount;
+        }
+
+        if (remainingCount > 0 || remainingCount == -1) {
+            if (!m_stop.load(std::memory_order_acquire)) {
+                timer->expires_after(std::chrono::milliseconds(delay));
+                timer->async_wait(*repeatTask);
+            }
+        }
+    };
+
+    timer->async_wait(*repeatTask);
+#else
     TimerTask timerTask([task]() { (*task)(); }, delay, repeatCount, priority);
 
 #ifdef ATOM_USE_BOOST_LOCKFREE
-    // For lockfree implementation, we don't need lock for pushing task
     m_taskContainer.push(timerTask);
 #else
     {
@@ -354,8 +451,9 @@ auto Timer::addTask(Function &&func, unsigned int delay, int repeatCount,
                             priority);
     }
 #endif
-
     m_cond.notify_all();
+#endif
+
     return EnhancedFuture<ReturnType>(std::move(result).share());
 }
 

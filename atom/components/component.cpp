@@ -14,9 +14,9 @@ Description: Basic Component Definition
 
 #include "component.hpp"
 
-#include "atom/log/loguru.hpp"
 #include "dispatch.hpp"
 #include "registry.hpp"
+#include "spdlog/spdlog.h"  // Replaced loguru with spdlog
 
 #include <algorithm>
 #include <cassert>
@@ -26,33 +26,35 @@ Component::Component(std::string name) : m_name_(std::move(name)) {
     if (m_name_.empty()) {
         throw std::invalid_argument("Component name cannot be empty");
     }
-    LOG_F(INFO, "Component created: {}", m_name_);
+    spdlog::info("Component created: {}", m_name_);
     setState(ComponentState::Created);
 }
 
 auto Component::getInstance() const -> std::weak_ptr<const Component> {
-    LOG_SCOPE_FUNCTION(INFO);
+    // spdlog::trace("Entering function: {}", __func__); // Removed
+    // LOG_SCOPE_FUNCTION
     return shared_from_this();
 }
 
 auto Component::initialize() -> bool {
-    LOG_SCOPE_FUNCTION(INFO);
-    LOG_F(INFO, "Initializing component: {}", m_name_);
+    // spdlog::trace("Entering function: {}", __func__); // Removed
+    // LOG_SCOPE_FUNCTION
+    spdlog::info("Initializing component: {}", m_name_);
 
     setState(ComponentState::Initializing);
 
     if (initFunc) {
         try {
             initFunc(*this);
-            LOG_F(INFO, "Successfully ran initialization function for: {}",
-                  m_name_);
+            spdlog::info("Successfully ran initialization function for: {}",
+                         m_name_);
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Error during initialization of {}: {}", m_name_,
-                  e.what());
+            spdlog::error("Error during initialization of {}: {}", m_name_,
+                          e.what());
             setState(ComponentState::Error);
             return false;
         } catch (...) {
-            LOG_F(ERROR, "Unknown error during initialization of {}", m_name_);
+            spdlog::error("Unknown error during initialization of {}", m_name_);
             setState(ComponentState::Error);
             return false;
         }
@@ -69,21 +71,22 @@ auto Component::initialize() -> bool {
 }
 
 auto Component::destroy() -> bool {
-    LOG_SCOPE_FUNCTION(INFO);
-    LOG_F(INFO, "Destroying component: {}", m_name_);
+    // spdlog::trace("Entering function: {}", __func__); // Removed
+    // LOG_SCOPE_FUNCTION
+    spdlog::info("Destroying component: {}", m_name_);
 
     setState(ComponentState::Destroying);
 
     if (cleanupFunc) {
         try {
             cleanupFunc();
-            LOG_F(INFO, "Successfully ran cleanup function for: {}", m_name_);
+            spdlog::info("Successfully ran cleanup function for: {}", m_name_);
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Error during cleanup of {}: {}", m_name_, e.what());
+            spdlog::error("Error during cleanup of {}: {}", m_name_, e.what());
             setState(ComponentState::Error);
             return false;
         } catch (...) {
-            LOG_F(ERROR, "Unknown error during cleanup of {}", m_name_);
+            spdlog::error("Unknown error during cleanup of {}", m_name_);
             setState(ComponentState::Error);
             return false;
         }
@@ -119,8 +122,8 @@ void Component::setState(ComponentState state) noexcept {
     ComponentState oldState =
         m_state_.exchange(state, std::memory_order_acq_rel);
 
-    LOG_F(INFO, "Component '{}' state changed: {} -> {}", m_name_,
-          static_cast<int>(oldState), static_cast<int>(state));
+    spdlog::info("Component '{}' state changed: {} -> {}", m_name_,
+                 static_cast<int>(oldState), static_cast<int>(state));
 
 // Trigger state change event
 #if ENABLE_EVENT_SYSTEM
@@ -139,7 +142,7 @@ void Component::setState(ComponentState state) noexcept {
         handleEvent(event);
     } catch (const std::exception& e) {
         // Do not let event handling exceptions affect state setting
-        LOG_F(ERROR, "Failed to handle state change event: {}", e.what());
+        spdlog::error("Failed to handle state change event: {}", e.what());
     }
 #endif
 }
@@ -151,7 +154,7 @@ auto Component::getPerformanceStats() const noexcept
 
 void Component::resetPerformanceStats() noexcept {
     m_PerformanceStats_.reset();
-    LOG_F(INFO, "Reset performance stats for component: {}", m_name_);
+    spdlog::info("Reset performance stats for component: {}", m_name_);
 }
 
 #if ENABLE_EVENT_SYSTEM
@@ -162,7 +165,7 @@ void Component::emitEvent(std::string_view eventName, std::any eventData) {
     event.source = m_name_;
     event.timestamp = std::chrono::steady_clock::now();
 
-    LOG_F(INFO, "Component '{}' emitting event: {}", m_name_, eventName);
+    spdlog::info("Component '{}' emitting event: {}", m_name_, eventName);
 
     // Update statistics
     m_PerformanceStats_.eventCount.fetch_add(1, std::memory_order_relaxed);
@@ -177,8 +180,8 @@ void Component::emitEvent(std::string_view eventName, std::any eventData) {
 atom::components::EventCallbackId Component::on(
     std::string_view eventName, atom::components::EventCallback callback) {
     if (!callback) {
-        LOG_F(WARNING, "Attempting to register null callback for event '{}'",
-              eventName);
+        spdlog::warn("Attempting to register null callback for event '{}'",
+                     eventName);
         return 0;
     }
 
@@ -191,8 +194,8 @@ atom::components::EventCallbackId Component::on(
 
     m_EventHandlers_[std::string(eventName)].push_back(std::move(handler));
 
-    LOG_F(INFO, "Component '{}' registered handler for event '{}' with ID {}",
-          m_name_, eventName, handler.id);
+    spdlog::info("Component '{}' registered handler for event '{}' with ID {}",
+                 m_name_, eventName, handler.id);
 
     return handler.id;
 }
@@ -200,8 +203,8 @@ atom::components::EventCallbackId Component::on(
 atom::components::EventCallbackId Component::once(
     std::string_view eventName, atom::components::EventCallback callback) {
     if (!callback) {
-        LOG_F(WARNING, "Attempting to register null callback for event '{}'",
-              eventName);
+        spdlog::warn("Attempting to register null callback for event '{}'",
+                     eventName);
         return 0;
     }
 
@@ -214,8 +217,7 @@ atom::components::EventCallbackId Component::once(
 
     m_EventHandlers_[std::string(eventName)].push_back(std::move(handler));
 
-    LOG_F(
-        INFO,
+    spdlog::info(
         "Component '{}' registered one-time handler for event '{}' with ID {}",
         m_name_, eventName, handler.id);
 
@@ -228,8 +230,8 @@ bool Component::off(std::string_view eventName,
 
     auto it = m_EventHandlers_.find(std::string(eventName));
     if (it == m_EventHandlers_.end()) {
-        LOG_F(WARNING, "Component '{}' has no handlers for event '{}'", m_name_,
-              eventName);
+        spdlog::warn("Component '{}' has no handlers for event '{}'", m_name_,
+                     eventName);
         return false;
     }
 
@@ -240,9 +242,8 @@ bool Component::off(std::string_view eventName,
                                   });
 
     if (handlerIt == handlers.end()) {
-        LOG_F(WARNING,
-              "Component '{}' has no handler with ID {} for event '{}'",
-              m_name_, callbackId, eventName);
+        spdlog::warn("Component '{}' has no handler with ID {} for event '{}'",
+                     m_name_, callbackId, eventName);
         return false;
     }
 
@@ -253,8 +254,9 @@ bool Component::off(std::string_view eventName,
         m_EventHandlers_.erase(it);
     }
 
-    LOG_F(INFO, "Component '{}' unregistered handler with ID {} for event '{}'",
-          m_name_, callbackId, eventName);
+    spdlog::info(
+        "Component '{}' unregistered handler with ID {} for event '{}'",
+        m_name_, callbackId, eventName);
 
     return true;
 }
@@ -282,9 +284,9 @@ void Component::handleEvent(const atom::components::Event& event) {
                 handlersToRemove.push_back(handler.id);
             }
         } catch (const std::exception& e) {
-            LOG_F(ERROR,
-                  "Error in event handler for '{}' in component '{}': {}",
-                  event.name, m_name_, e.what());
+            spdlog::error(
+                "Error in event handler for '{}' in component '{}': {}",
+                event.name, m_name_, e.what());
         }
     }
 
@@ -293,45 +295,44 @@ void Component::handleEvent(const atom::components::Event& event) {
         off(event.name, id);
     }
 
-    LOG_F(INFO, "Component '{}' handled event '{}' from source '{}'", m_name_,
-          event.name, event.source);
+    spdlog::info("Component '{}' handled event '{}' from source '{}'", m_name_,
+                 event.name, event.source);
 }
 #endif
 
 void Component::addAlias(std::string_view name, std::string_view alias) const {
-    LOG_F(INFO, "Adding alias '{}' for command '{}'", alias, name);
+    spdlog::info("Adding alias '{}' for command '{}'", alias, name);
     bool result =
         m_CommandDispatcher_->addAlias(std::string(name), std::string(alias));
     if (!result) {
-        LOG_F(WARNING, "Failed to add alias '{}' for command '{}'", alias,
-              name);
+        spdlog::warn("Failed to add alias '{}' for command '{}'", alias, name);
     }
 }
 
 void Component::addGroup(std::string_view name, std::string_view group) const {
-    LOG_F(INFO, "Adding command '{}' to group '{}'", name, group);
+    spdlog::info("Adding command '{}' to group '{}'", name, group);
     bool result =
         m_CommandDispatcher_->addGroup(std::string(name), std::string(group));
     if (!result) {
-        LOG_F(WARNING, "Failed to add command '{}' to group '{}'", name, group);
+        spdlog::warn("Failed to add command '{}' to group '{}'", name, group);
     }
 }
 
 void Component::setTimeout(std::string_view name,
                            std::chrono::milliseconds timeout) const {
-    LOG_F(INFO, "Setting timeout for command '{}': {} ms", name,
-          timeout.count());
+    spdlog::info("Setting timeout for command '{}': {} ms", name,
+                 timeout.count());
     bool result = m_CommandDispatcher_->setTimeout(std::string(name), timeout);
     if (!result) {
-        LOG_F(WARNING, "Failed to set timeout for command '{}'", name);
+        spdlog::warn("Failed to set timeout for command '{}'", name);
     }
 }
 
 void Component::removeCommand(std::string_view name) const {
-    LOG_F(INFO, "Removing command '{}'", name);
+    spdlog::info("Removing command '{}'", name);
     bool result = m_CommandDispatcher_->removeCommand(std::string(name));
     if (!result) {
-        LOG_F(WARNING, "Failed to remove command '{}'", name);
+        spdlog::warn("Failed to remove command '{}'", name);
     }
 }
 
@@ -370,12 +371,12 @@ auto Component::getNeededComponents() -> std::vector<std::string> {
 void Component::addOtherComponent(std::string_view name,
                                   const std::weak_ptr<Component>& component) {
     if (name.empty()) {
-        LOG_F(ERROR, "Cannot add component with empty name");
+        spdlog::error("Cannot add component with empty name");
         throw std::invalid_argument("Cannot add component with empty name");
     }
 
     if (component.expired()) {
-        LOG_F(ERROR, "Cannot add expired component: {}", name);
+        spdlog::error("Cannot add expired component: {}", name);
         throw std::invalid_argument(
             std::string("Cannot add expired component: ") + std::string(name));
     }
@@ -384,10 +385,10 @@ void Component::addOtherComponent(std::string_view name,
 
     std::string nameStr(name);
     if (m_OtherComponents_.contains(nameStr)) {
-        LOG_F(WARNING, "Replacing existing component '{}'", name);
+        spdlog::warn("Replacing existing component '{}'", name);
     }
 
-    LOG_F(INFO, "Adding component '{}' to '{}'", name, m_name_);
+    spdlog::info("Adding component '{}' to '{}'", name, m_name_);
     m_OtherComponents_[nameStr] = component;
 
 #if ENABLE_EVENT_SYSTEM
@@ -399,12 +400,12 @@ void Component::addOtherComponent(std::string_view name,
 void Component::removeOtherComponent(std::string_view name) noexcept {
     std::unique_lock<std::shared_mutex> lock(m_ComponentsMutex_);
 
-    LOG_F(INFO, "Removing component '{}' from '{}'", name, m_name_);
+    spdlog::info("Removing component '{}' from '{}'", name, m_name_);
 
     // Check if the component exists
     std::string nameStr(name);
     if (!m_OtherComponents_.contains(nameStr)) {
-        LOG_F(WARNING, "Component '{}' not found in '{}'", name, m_name_);
+        spdlog::warn("Component '{}' not found in '{}'", name, m_name_);
         return;
     }
 
@@ -423,7 +424,7 @@ void Component::removeOtherComponent(std::string_view name) noexcept {
 void Component::clearOtherComponents() noexcept {
     std::unique_lock<std::shared_mutex> lock(m_ComponentsMutex_);
 
-    LOG_F(INFO, "Clearing all components from '{}'", m_name_);
+    spdlog::info("Clearing all components from '{}'", m_name_);
     m_OtherComponents_.clear();
 
 #if ENABLE_EVENT_SYSTEM
@@ -444,7 +445,7 @@ auto Component::getOtherComponent(std::string_view name)
     auto it = m_OtherComponents_.find(nameStr);
     if (it != m_OtherComponents_.end()) {
         if (it->second.expired()) {
-            LOG_F(WARNING, "Component '{}' has expired", name);
+            spdlog::warn("Component '{}' has expired", name);
 
             // Release shared lock and acquire unique lock to modify container
             lock.unlock();
@@ -462,7 +463,7 @@ auto Component::getOtherComponent(std::string_view name)
         return it->second;
     }
 
-    LOG_F(ERROR, "Component '{}' not found in '{}'", name, m_name_);
+    spdlog::error("Component '{}' not found in '{}'", name, m_name_);
     return {};
 }
 
@@ -470,7 +471,7 @@ bool Component::has(std::string_view name) const noexcept {
     try {
         return m_CommandDispatcher_->has(std::string(name));
     } catch (...) {
-        LOG_F(ERROR, "Error checking if command '{}' exists", name);
+        spdlog::error("Error checking if command '{}' exists", name);
         return false;
     }
 }
@@ -481,7 +482,7 @@ bool Component::hasType(std::string_view name) const noexcept {
 
 auto Component::getAllCommands() const -> std::vector<std::string> {
     if (!m_CommandDispatcher_) {
-        LOG_F(ERROR, "Command dispatcher not initialized in '{}'", m_name_);
+        spdlog::error("Command dispatcher not initialized in '{}'", m_name_);
         throw std::runtime_error("Command dispatcher not initialized");
     }
     return m_CommandDispatcher_->getAllCommands();
@@ -489,7 +490,7 @@ auto Component::getAllCommands() const -> std::vector<std::string> {
 
 auto Component::getRegisteredTypes() const -> std::vector<std::string> {
     if (!m_TypeCaster_) {
-        LOG_F(ERROR, "Type caster not initialized in '{}'", m_name_);
+        spdlog::error("Type caster not initialized in '{}'", m_name_);
         throw std::runtime_error("Type caster not initialized");
     }
     return m_TypeCaster_->getRegisteredTypes();
@@ -517,14 +518,14 @@ auto Component::dispatch(std::string_view name,
         auto& stats = const_cast<PerformanceStats&>(m_PerformanceStats_);
         stats.commandErrorCount.fetch_add(1, std::memory_order_relaxed);
 
-        LOG_F(ERROR, "Error dispatching command '{}': {}", name, e.what());
+        spdlog::error("Error dispatching command '{}': {}", name, e.what());
         throw;  // Rethrow exception
     }
 }
 
 auto Component::runCommand(std::string_view name,
                            std::span<const std::any> args) -> std::any {
-    LOG_F(INFO, "Running command '{}' in '{}'", name, m_name_);
+    spdlog::info("Running command '{}' in '{}'", name, m_name_);
 
     auto startTime = std::chrono::high_resolution_clock::now();
     std::string nameStr(name);
@@ -554,7 +555,7 @@ auto Component::runCommand(std::string_view name,
 
         for (const auto& [key, value] : m_OtherComponents_) {
             if (value.expired()) {
-                LOG_F(WARNING, "Component '{}' has expired", key);
+                spdlog::warn("Component '{}' has expired", key);
                 expiredComponents.push_back(key);
                 continue;
             }
@@ -562,8 +563,8 @@ auto Component::runCommand(std::string_view name,
             auto component = value.lock();
             if (component->has(name)) {
                 try {
-                    LOG_F(INFO, "Running command '{}' in other component '{}'",
-                          name, key);
+                    spdlog::info("Running command '{}' in other component '{}'",
+                                 name, key);
                     std::vector<std::any> argsVec(args.begin(), args.end());
                     auto result = component->dispatch(name, argsVec);
                     auto endTime = std::chrono::high_resolution_clock::now();
@@ -578,9 +579,9 @@ auto Component::runCommand(std::string_view name,
 
                     return result;
                 } catch (const std::exception& e) {
-                    LOG_F(ERROR,
-                          "Error running command '{}' in component '{}': {}",
-                          name, key, e.what());
+                    spdlog::error(
+                        "Error running command '{}' in component '{}': {}",
+                        name, key, e.what());
                     m_PerformanceStats_.commandErrorCount.fetch_add(
                         1, std::memory_order_relaxed);
                     throw;  // Rethrow exception
@@ -599,9 +600,9 @@ auto Component::runCommand(std::string_view name,
             }
         }
 
-        LOG_F(ERROR,
-              "Command '{}' not found in '{}' or any of its dependencies", name,
-              m_name_);
+        spdlog::error(
+            "Command '{}' not found in '{}' or any of its dependencies", name,
+            m_name_);
         throw atom::error::Exception(
             ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME,
             "Command '{}' not found in '{}' or any of its dependencies",
@@ -625,7 +626,7 @@ auto Component::getDoc() const noexcept -> std::string_view { return m_doc_; }
 void Component::defClassConversion(
     const std::shared_ptr<atom::meta::TypeConversionBase>& conversion) {
     if (!m_TypeConverter_) {
-        LOG_F(ERROR, "Type converter not initialized in '{}'", m_name_);
+        spdlog::error("Type converter not initialized in '{}'", m_name_);
         throw std::runtime_error("Type converter not initialized");
     }
     m_TypeConverter_->addConversion(conversion);
@@ -635,7 +636,7 @@ auto Component::hasVariable(std::string_view name) const noexcept -> bool {
     try {
         return m_VariableManager_->has(std::string(name));
     } catch (...) {
-        LOG_F(ERROR, "Error checking if variable '{}' exists", name);
+        spdlog::error("Error checking if variable '{}' exists", name);
         return false;
     }
 }

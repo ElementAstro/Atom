@@ -29,7 +29,13 @@
 #include <utility>
 #include <vector>
 
+// Add spdlog include
+#include "spdlog/spdlog.h"
+
+// Conditional Asio include
+#ifdef ATOM_USE_ASIO
 #include <asio.hpp>
+#endif
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
@@ -81,7 +87,7 @@
 
 namespace atom::async {
 
-// Custom exception classes for message queue operations
+// Custom exception classes for message queue operations (messages in English)
 class MessageQueueException : public std::runtime_error {
 public:
     explicit MessageQueueException(
@@ -89,7 +95,11 @@ public:
         const std::source_location& location = std::source_location::current())
         : std::runtime_error(message + " at " + location.file_name() + ":" +
                              std::to_string(location.line()) + " in " +
-                             location.function_name()) {}
+                             location.function_name()) {
+        // Example: spdlog::error("MessageQueueException: {} (at {}:{} in {})",
+        // message, location.file_name(), location.line(),
+        // location.function_name());
+    }
 };
 
 class SubscriberException : public MessageQueueException {
@@ -185,14 +195,19 @@ public:
     using FilterType = std::function<bool(const T&)>;
 
     /**
-     * @brief Constructs a MessageQueue with the given io_context.
-     * @param ioContext The Asio io_context to use for asynchronous operations.
+     * @brief Constructs a MessageQueue.
+     * @param ioContext The Asio io_context to use for asynchronous operations
+     * (if ATOM_USE_ASIO is defined).
      * @param capacity Initial capacity for lockfree queue (used only if
      * ATOM_USE_LOCKFREE_QUEUE is defined)
      */
+#ifdef ATOM_USE_ASIO
     explicit MessageQueue(asio::io_context& ioContext,
                           [[maybe_unused]] size_t capacity = 1024) noexcept
         : ioContext_(ioContext)
+#else
+    explicit MessageQueue([[maybe_unused]] size_t capacity = 1024) noexcept
+#endif
 #ifdef ATOM_USE_LOCKFREE_QUEUE
 #ifdef ATOM_USE_SPSC_QUEUE
           ,
@@ -201,14 +216,18 @@ public:
           ,
           m_lockfreeQueue_(capacity)
 #endif
-#endif
+#endif  // ATOM_USE_LOCKFREE_QUEUE
     {
-        // 预先分配内存以减少运行时分配
+        // Pre-allocate memory to reduce runtime allocations
         m_subscribers_.reserve(16);
+        spdlog::debug("MessageQueue initialized.");
     }
 
     // Rule of five implementation
-    ~MessageQueue() noexcept { stopProcessing(); }
+    ~MessageQueue() noexcept {
+        spdlog::debug("MessageQueue destructor called.");
+        stopProcessing();
+    }
 
     MessageQueue(const MessageQueue&) = delete;
     MessageQueue& operator=(const MessageQueue&) = delete;
@@ -228,12 +247,27 @@ public:
      * criteria.
      * @param timeout The maximum time allowed for the subscriber to process a
      * message.
-     * @throws SubscriberException if the callback is empty
+     * @throws SubscriberException if the callback is empty or name is empty
      */
     void subscribe(
         CallbackType callback, std::string_view subscriberName,
         int priority = 0, FilterType filter = nullptr,
-        std::chrono::milliseconds timeout = std::chrono::milliseconds::zero());
+        std::chrono::milliseconds timeout = std::chrono::milliseconds::zero()) {
+        if (!callback) {
+            throw SubscriberException("Callback function cannot be empty");
+        }
+        if (subscriberName.empty()) {
+            throw SubscriberException("Subscriber name cannot be empty");
+        }
+
+        std::lock_guard lock(m_mutex_);
+        m_subscribers_.emplace_back(std::string(subscriberName),
+                                    std::move(callback), priority,
+                                    std::move(filter), timeout);
+        sortSubscribers();
+        spdlog::debug("Subscriber '{}' added with priority {}.",
+                      std::string(subscriberName), priority);
+    }
 
     /**
      * @brief Unsubscribe from messages using the given callback.
@@ -241,7 +275,23 @@ public:
      * @param callback The callback function used during subscription.
      * @return true if subscriber was found and removed, false otherwise
      */
-    [[nodiscard]] bool unsubscribe(const CallbackType& callback) noexcept;
+    [[nodiscard]] bool unsubscribe(const CallbackType& callback) noexcept {
+        std::lock_guard lock(m_mutex_);
+        const auto initialSize = m_subscribers_.size();
+        auto it = std::remove_if(m_subscribers_.begin(), m_subscribers_.end(),
+                                 [&callback](const auto& subscriber) {
+                                     return subscriber.callback.target_type() ==
+                                            callback.target_type();
+                                 });
+        bool removed = it != m_subscribers_.end();
+        m_subscribers_.erase(it, m_subscribers_.end());
+        if (removed) {
+            spdlog::debug("Subscriber unsubscribed.");
+        } else {
+            spdlog::warn("Attempted to unsubscribe a non-existent subscriber.");
+        }
+        return removed;
+    }
 
 #ifdef ATOM_USE_LOCKFREE_QUEUE
     /**
@@ -254,9 +304,7 @@ public:
      */
     void publish(const T& message, int priority = 0) {
         Message msg(message, priority);
-
         bool pushed = false;
-        // Try pushing to the queue with a retry mechanism
         for (int retry = 0; retry < 3 && !pushed; ++retry) {
             pushed = m_lockfreeQueue_.push(msg);
             if (!pushed) {
@@ -264,15 +312,18 @@ public:
             }
         }
 
-        // If queue is full, fall back to mutex-based approach
         if (!pushed) {
+            spdlog::warn(
+                "Lockfree queue push failed after retries, falling back to "
+                "standard deque.");
             std::lock_guard lock(m_mutex_);
             m_messages_.emplace_back(std::move(msg));
         }
 
-        // Wake up processing thread if needed
         m_condition_.notify_one();
+#ifdef ATOM_USE_ASIO
         ioContext_.post([this]() { processMessages(); });
+#endif
     }
 
     /**
@@ -284,28 +335,32 @@ public:
      */
     void publish(T&& message, int priority = 0) {
         Message msg(std::move(message), priority);
-
         bool pushed = false;
-        // Try pushing to the queue with a retry mechanism
         for (int retry = 0; retry < 3 && !pushed; ++retry) {
-            pushed = m_lockfreeQueue_.push(msg);
+            pushed =
+                m_lockfreeQueue_.push(std::move(msg));  // Assuming push(T&&)
             if (!pushed) {
                 std::this_thread::yield();
             }
         }
 
-        // If queue is full, fall back to mutex-based approach
         if (!pushed) {
+            spdlog::warn(
+                "Lockfree queue move-push failed after retries, falling back "
+                "to standard deque.");
             std::lock_guard lock(m_mutex_);
-            m_messages_.emplace_back(std::move(msg));
+            m_messages_.emplace_back(
+                std::move(msg));  // msg was already constructed with move,
+                                  // re-move if needed
         }
 
-        // Wake up processing thread if needed
         m_condition_.notify_one();
+#ifdef ATOM_USE_ASIO
         ioContext_.post([this]() { processMessages(); });
+#endif
     }
 
-#else
+#else  // NOT ATOM_USE_LOCKFREE_QUEUE
     /**
      * @brief Publish a message to the queue, with an optional priority.
      *
@@ -313,7 +368,16 @@ public:
      * @param priority The priority of the message, higher priority messages are
      * handled first.
      */
-    void publish(const T& message, int priority = 0);
+    void publish(const T& message, int priority = 0) {
+        {
+            std::lock_guard lock(m_mutex_);
+            m_messages_.emplace_back(message, priority);
+        }
+        m_condition_.notify_one();
+#ifdef ATOM_USE_ASIO
+        ioContext_.post([this]() { processMessages(); });
+#endif
+    }
 
     /**
      * @brief Publish a message to the queue using move semantics.
@@ -321,18 +385,199 @@ public:
      * @param message The message to publish (will be moved).
      * @param priority The priority of the message.
      */
-    void publish(T&& message, int priority = 0);
+    void publish(T&& message, int priority = 0) {
+        {
+            std::lock_guard lock(m_mutex_);
+            m_messages_.emplace_back(std::move(message), priority);
+        }
+        m_condition_.notify_one();
+#ifdef ATOM_USE_ASIO
+        ioContext_.post([this]() { processMessages(); });
 #endif
+    }
+#endif  // ATOM_USE_LOCKFREE_QUEUE
 
     /**
      * @brief Start processing messages in the queue.
      */
-    void startProcessing();
+    void startProcessing() {
+        if (m_isRunning_.exchange(true)) {
+            spdlog::info("Message processing is already running.");
+            return;
+        }
+        spdlog::info("Starting message processing...");
+
+        m_processingThread_ =
+            std::make_unique<std::jthread>([this](std::stop_token stoken) {
+                m_isProcessing_.store(true);
+
+#ifndef ATOM_USE_ASIO  // This whole loop is for non-Asio path
+                spdlog::debug("MessageQueue jthread started (non-Asio mode).");
+                auto process_message_content =
+                    [&](const T& data, const std::string& source_q_name) {
+                        spdlog::trace(
+                            "jthread: Processing message from {} queue.",
+                            source_q_name);
+                        std::vector<Subscriber> subscribersCopy;
+                        {
+                            std::lock_guard<std::mutex> slock(m_mutex_);
+                            subscribersCopy = m_subscribers_;
+                        }
+
+                        for (const auto& subscriber : subscribersCopy) {
+                            try {
+                                if (applyFilter(subscriber, data)) {
+                                    (void)handleTimeout(subscriber, data);
+                                }
+                            } catch (const TimeoutException& e) {
+                                spdlog::warn(
+                                    "jthread: Timeout in subscriber '{}': {}",
+                                    subscriber.name, e.what());
+                            } catch (const std::exception& e) {
+                                spdlog::error(
+                                    "jthread: Exception in subscriber '{}': {}",
+                                    subscriber.name, e.what());
+                            }
+                        }
+                    };
+
+                while (!stoken.stop_requested()) {
+                    bool processedThisCycle = false;
+                    Message currentMessage;
+
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+                    // 1. Try to get from lockfree queue (non-blocking)
+                    if (m_lockfreeQueue_.pop(currentMessage)) {
+                        process_message_content(currentMessage.data,
+                                                "lockfree_q_direct");
+                        processedThisCycle = true;
+                    }
+#endif  // ATOM_USE_LOCKFREE_QUEUE
+
+                    // 2. If nothing from lockfree (or lockfree not used), check
+                    // m_messages_
+                    if (!processedThisCycle) {
+                        std::unique_lock lock(m_mutex_);
+                        m_condition_.wait(lock, [&]() {
+                            if (stoken.stop_requested())
+                                return true;
+                            bool has_deque_msg = !m_messages_.empty();
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+                            return has_deque_msg || !m_lockfreeQueue_.empty();
+#else
+                        return has_deque_msg;
+#endif
+                        });
+
+                        if (stoken.stop_requested())
+                            break;
+
+                    // After wait, re-check queues. Lock is held.
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+                        if (m_lockfreeQueue_.pop(
+                                currentMessage)) {  // Pop while lock is held
+                                                    // (pop is thread-safe)
+                            lock.unlock();          // Unlock BEFORE processing
+                            process_message_content(currentMessage.data,
+                                                    "lockfree_q_after_wait");
+                            processedThisCycle = true;
+                        } else if (!m_messages_
+                                        .empty()) {  // Check deque if lockfree
+                                                     // was empty
+                            std::sort(m_messages_.begin(), m_messages_.end());
+                            currentMessage = std::move(m_messages_.front());
+                            m_messages_.pop_front();
+                            lock.unlock();  // Unlock BEFORE processing
+                            process_message_content(currentMessage.data,
+                                                    "deque_q_after_wait");
+                            processedThisCycle = true;
+                        } else {
+                            lock.unlock();  // Nothing found after wait
+                        }
+#else   // NOT ATOM_USE_LOCKFREE_QUEUE (Only m_messages_ queue)
+                        if (!m_messages_.empty()) {  // Lock is held
+                            std::sort(m_messages_.begin(), m_messages_.end());
+                            currentMessage = std::move(m_messages_.front());
+                            m_messages_.pop_front();
+                            lock.unlock();  // Unlock BEFORE processing
+                            process_message_content(currentMessage.data,
+                                                    "deque_q_after_wait");
+                            processedThisCycle = true;
+                        } else {
+                            lock.unlock();  // Nothing found after wait
+                        }
+#endif  // ATOM_USE_LOCKFREE_QUEUE (inside wait block)
+                    }  // end if !processedThisCycle (from initial direct
+                       // lockfree check)
+
+                    if (!processedThisCycle && !stoken.stop_requested()) {
+                        std::this_thread::yield();  // Avoid busy spin on
+                                                    // spurious wakeup
+                    }
+                }  // end while (!stoken.stop_requested())
+                spdlog::debug("MessageQueue jthread stopping (non-Asio mode).");
+#else   // ATOM_USE_ASIO is defined
+        // If Asio is used, this jthread is idle and just waits for stop.
+        // Asio's processMessages will handle message processing.
+                spdlog::debug(
+                    "MessageQueue jthread started (Asio mode - idle).");
+                std::unique_lock lock(m_mutex_);
+                m_condition_.wait(
+                    lock, [&stoken]() { return stoken.stop_requested(); });
+                spdlog::debug(
+                    "MessageQueue jthread stopping (Asio mode - idle).");
+#endif  // ATOM_USE_ASIO (for jthread loop)
+                m_isProcessing_.store(false);
+            });
+
+#ifdef ATOM_USE_ASIO
+        if (!ioContext_.stopped()) {
+            ioContext_.restart();  // Ensure io_context is running
+            ioContext_.poll();     // Process any initial handlers
+        }
+#endif
+    }
 
     /**
      * @brief Stop processing messages in the queue.
      */
-    void stopProcessing() noexcept;
+    void stopProcessing() noexcept {
+        if (!m_isRunning_.exchange(false)) {
+            // spdlog::info("Message processing is already stopped or was not
+            // running.");
+            return;
+        }
+        spdlog::info("Stopping message processing...");
+
+        if (m_processingThread_) {
+            m_processingThread_->request_stop();
+            m_condition_.notify_all();  // Wake up jthread if it's waiting
+            try {
+                if (m_processingThread_->joinable()) {
+                    m_processingThread_->join();
+                }
+            } catch (const std::system_error& e) {
+                spdlog::error("Exception joining processing thread: {}",
+                              e.what());
+            }
+            m_processingThread_.reset();
+        }
+        spdlog::debug("Processing thread stopped.");
+
+#ifdef ATOM_USE_ASIO
+        if (!ioContext_.stopped()) {
+            try {
+                ioContext_.stop();
+                spdlog::debug("Asio io_context stopped.");
+            } catch (const std::exception& e) {
+                spdlog::error("Exception while stopping io_context: {}",
+                              e.what());
+            } catch (...) {
+                spdlog::error("Unknown exception while stopping io_context.");
+            }
+        }
+#endif
+    }
 
     /**
      * @brief Get the number of messages currently in the queue.
@@ -341,13 +586,17 @@ public:
 #ifdef ATOM_USE_LOCKFREE_QUEUE
     [[nodiscard]] size_t getMessageCount() const noexcept {
         size_t lockfreeCount = 0;
+        // boost::lockfree::queue doesn't have a reliable size().
+        // It has `empty()`. We can't get an exact count easily without
+        // consuming. The original code returned 1 if not empty, which is
+        // misleading. For now, let's report 0 or 1 for lockfree part as an
+        // estimate.
         if (!m_lockfreeQueue_.empty()) {
-            lockfreeCount =
-                1;  // Can only detect empty/non-empty with lockfree queue
+            lockfreeCount = 1;  // Approximate: at least one
         }
-
         std::lock_guard lock(m_mutex_);
-        return lockfreeCount + m_messages_.size();
+        return lockfreeCount +
+               m_messages_.size();  // This is still an approximation
     }
 #else
     [[nodiscard]] size_t getMessageCount() const noexcept;
@@ -370,13 +619,25 @@ public:
     bool resizeQueue(size_t newCapacity) noexcept {
 #if defined(ATOM_USE_LOCKFREE_QUEUE) && !defined(ATOM_USE_SPSC_QUEUE)
         try {
-            m_lockfreeQueue_.reserve(newCapacity);
-            return true;
-        } catch (...) {
+            // boost::lockfree::queue does not have a reserve or resize method
+            // after construction. The capacity is fixed at construction or uses
+            // node-based allocation. The original
+            // `m_lockfreeQueue_.reserve(newCapacity)` is incorrect for
+            // boost::lockfree::queue. For spsc_queue, capacity is also fixed.
+            spdlog::warn(
+                "Resizing boost::lockfree::queue capacity at runtime is not "
+                "supported.");
+            return false;
+        } catch (const std::exception& e) {
+            spdlog::error("Exception during (unsupported) queue resize: {}",
+                          e.what());
             return false;
         }
 #else
-        return false;  // Not supported with SPSC queue
+        spdlog::warn(
+            "Queue resize not supported for SPSC queue or if lockfree queue is "
+            "not used.");
+        return false;
 #endif
     }
 
@@ -385,8 +646,16 @@ public:
      * @return Current capacity of the lockfree queue
      */
     [[nodiscard]] size_t getQueueCapacity() const noexcept {
-#ifdef ATOM_USE_LOCKFREE_QUEUE
-        return m_lockfreeQueue_.capacity();
+// boost::lockfree::queue (node-based) doesn't have a fixed capacity to query
+// easily. spsc_queue has fixed capacity.
+#if defined(ATOM_USE_LOCKFREE_QUEUE) && defined(ATOM_USE_SPSC_QUEUE)
+        // For spsc_queue, if it stores capacity, return it. Otherwise, this is
+        // hard. The constructor takes capacity, but it's not directly queryable
+        // from the object. Let's assume it's not easily available.
+        return 0;  // Placeholder, as boost::lockfree queues don't typically
+                   // expose this easily.
+#elif defined(ATOM_USE_LOCKFREE_QUEUE)
+        return 0;  // Placeholder for boost::lockfree::queue (MPMC)
 #else
         return 0;
 #endif
@@ -410,20 +679,16 @@ public:
 #ifdef ATOM_USE_LOCKFREE_QUEUE
     [[nodiscard]] size_t clearAllMessages() noexcept {
         size_t count = 0;
-
-        // Clear lockfree queue
         Message msg;
         while (m_lockfreeQueue_.pop(msg)) {
             count++;
         }
-
-        // Clear standard queue
         {
             std::lock_guard lock(m_mutex_);
             count += m_messages_.size();
             m_messages_.clear();
         }
-
+        spdlog::info("Cleared {} messages from the queue.", count);
         return count;
     }
 #else
@@ -457,13 +722,14 @@ public:
         }
 
         T await_resume() {
-            *cancelled = true;
+            *cancelled =
+                true;  // Mark as done to prevent callback from resuming again
             if (!result.has_value()) {
-                throw MessageQueueException("No message received");
+                throw MessageQueueException("No message received by awaitable");
             }
             return std::move(*result);
         }
-
+        // Ensure cancellation on destruction if coroutine is destroyed early
         ~MessageAwaitable() { *cancelled = true; }
     };
 
@@ -494,7 +760,7 @@ private:
               timeout(timeout) {}
 
         bool operator<(const Subscriber& other) const noexcept {
-            return priority > other.priority;
+            return priority > other.priority;  // Higher priority comes first
         }
     };
 
@@ -503,16 +769,20 @@ private:
         int priority;
         std::chrono::steady_clock::time_point timestamp;
 
-        Message() {}  // Default constructor required for boost::lockfree
+        Message() = default;
 
-        Message(T data, int priority)
-            : data(std::move(data)),
-              priority(priority),
+        Message(T data_val, int prio)
+            : data(std::move(data_val)),
+              priority(prio),
               timestamp(std::chrono::steady_clock::now()) {}
 
+        // Ensure Message is copyable and movable if T is, for queue operations
+        Message(const Message&) = default;
+        Message(Message&&) noexcept = default;
+        Message& operator=(const Message&) = default;
+        Message& operator=(Message&&) noexcept = default;
+
         bool operator<(const Message& other) const noexcept {
-            // First compare by priority, then by timestamp (FIFO for equal
-            // priorities)
             return priority != other.priority ? priority > other.priority
                                               : timestamp < other.timestamp;
         }
@@ -520,112 +790,163 @@ private:
 
     std::deque<Message> m_messages_;
     std::vector<Subscriber> m_subscribers_;
-    mutable std::mutex m_mutex_;
+    mutable std::mutex m_mutex_;  // Protects m_messages_ and m_subscribers_
     std::condition_variable m_condition_;
     std::atomic<bool> m_isRunning_{false};
-    std::atomic<bool> m_isProcessing_{false};
+    std::atomic<bool> m_isProcessing_{
+        false};  // Guard for Asio-driven processMessages
+
+#ifdef ATOM_USE_ASIO
     asio::io_context& ioContext_;
+#endif
     std::unique_ptr<std::jthread> m_processingThread_;
 
 #ifdef ATOM_USE_LOCKFREE_QUEUE
 #ifdef ATOM_USE_SPSC_QUEUE
-    // Single-producer, single-consumer queue
     boost::lockfree::spsc_queue<Message> m_lockfreeQueue_;
 #else
-    // Multi-producer, multi-consumer queue
     boost::lockfree::queue<Message> m_lockfreeQueue_;
 #endif
-#endif
+#endif  // ATOM_USE_LOCKFREE_QUEUE
 
+#if defined(ATOM_USE_ASIO)  // processMessages methods are only for Asio path
 #ifdef ATOM_USE_LOCKFREE_QUEUE
     /**
-     * @brief Process messages in the queue.
-     * Lockfree version.
+     * @brief Process messages in the queue. Asio, Lockfree version.
      */
     void processMessages() {
-        if (!m_isRunning_.load() || m_isProcessing_.load()) {
+        if (!m_isRunning_.load(std::memory_order_relaxed))
+            return;
+
+        bool expected_processing = false;
+        if (!m_isProcessing_.compare_exchange_strong(
+                expected_processing, true, std::memory_order_acq_rel)) {
             return;
         }
 
-        // First check lockfree queue
+        struct ProcessingGuard {
+            std::atomic<bool>& flag;
+            ProcessingGuard(std::atomic<bool>& f) : flag(f) {}
+            ~ProcessingGuard() { flag.store(false, std::memory_order_release); }
+        } guard(m_isProcessing_);
+
+        spdlog::trace("Asio: processMessages (lockfree) started.");
         Message message;
-        bool messageProcessed = false;
+        bool messageProcessedThisCall = false;
 
-        // Try to get a message from the lockfree queue
         if (m_lockfreeQueue_.pop(message)) {
-            messageProcessed = true;
-
-            // Make a copy of subscribers to avoid issues if list changes during
-            // processing
+            spdlog::trace("Asio: Popped message from lockfree queue.");
+            messageProcessedThisCall = true;
             std::vector<Subscriber> subscribersCopy;
             {
-                std::lock_guard subscribersLock(m_mutex_);
+                std::lock_guard lock(m_mutex_);
                 subscribersCopy = m_subscribers_;
             }
-
-            // Process message with all subscribers in priority order
             for (const auto& subscriber : subscribersCopy) {
                 try {
                     if (applyFilter(subscriber, message.data)) {
                         (void)handleTimeout(subscriber, message.data);
                     }
-                } catch (const std::exception&) {
-                    // Handle exceptions but continue processing for other
-                    // subscribers
+                } catch (const TimeoutException& e) {
+                    spdlog::warn("Asio: Timeout in subscriber '{}': {}",
+                                 subscriber.name, e.what());
+                } catch (const std::exception& e) {
+                    spdlog::error("Asio: Exception in subscriber '{}': {}",
+                                  subscriber.name, e.what());
                 }
             }
         }
 
-        // If no message in lockfree queue, check standard queue
-        if (!messageProcessed) {
+        if (!messageProcessedThisCall) {
             std::unique_lock lock(m_mutex_);
-            if (m_messages_.empty()) {
-                return;
-            }
+            if (!m_messages_.empty()) {
+                std::sort(m_messages_.begin(), m_messages_.end());
+                message = std::move(m_messages_.front());
+                m_messages_.pop_front();
+                spdlog::trace("Asio: Popped message from deque.");
+                messageProcessedThisCall = true;
 
-            // Sort messages by priority
-            std::sort(m_messages_.begin(), m_messages_.end());
+                std::vector<Subscriber> subscribersCopy = m_subscribers_;
+                lock.unlock();
 
-            // Process the highest priority message
-            message = std::move(m_messages_.front());
-            m_messages_.pop_front();
-            messageProcessed = true;
-
-            // Release the lock before processing
-            lock.unlock();
-
-            // Make a copy of subscribers to avoid issues if list changes during
-            // processing
-            std::vector<Subscriber> subscribersCopy;
-            {
-                std::lock_guard subscribersLock(m_mutex_);
-                subscribersCopy = m_subscribers_;
-            }
-
-            // Process message with all subscribers in priority order
-            for (const auto& subscriber : subscribersCopy) {
-                try {
-                    if (applyFilter(subscriber, message.data)) {
-                        (void)handleTimeout(subscriber, message.data);
+                for (const auto& subscriber : subscribersCopy) {
+                    try {
+                        if (applyFilter(subscriber, message.data)) {
+                            (void)handleTimeout(subscriber, message.data);
+                        }
+                    } catch (const TimeoutException& e) {
+                        spdlog::warn("Asio: Timeout in subscriber '{}': {}",
+                                     subscriber.name, e.what());
+                    } catch (const std::exception& e) {
+                        spdlog::error("Asio: Exception in subscriber '{}': {}",
+                                      subscriber.name, e.what());
                     }
-                } catch (const std::exception&) {
-                    // Handle exceptions but continue processing for other
-                    // subscribers
                 }
+            } else {
+                // lock.unlock(); // Not needed, unique_lock destructor handles
+                // it
             }
         }
 
-        // Schedule next message processing if there are more messages
-        if (messageProcessed) {
+        if (messageProcessedThisCall) {
+            spdlog::trace(
+                "Asio: Message processed, re-posting processMessages.");
             ioContext_.post([this]() { processMessages(); });
+        } else {
+            spdlog::trace("Asio: No message processed in this call.");
         }
     }
-#else
+#else   // NOT ATOM_USE_LOCKFREE_QUEUE (Asio, non-lockfree path)
     /**
-     * @brief Process messages in the queue.
+     * @brief Process messages in the queue. Asio, Non-lockfree version.
      */
-    void processMessages();
-#endif
+    void processMessages() {
+        if (!m_isRunning_.load(std::memory_order_relaxed))
+            return;
+        spdlog::trace("Asio: processMessages (non-lockfree) started.");
+
+        std::unique_lock lock(m_mutex_);
+        if (m_messages_.empty()) {
+            spdlog::trace("Asio: No messages in deque.");
+            return;
+        }
+
+        std::sort(m_messages_.begin(), m_messages_.end());
+        auto message = std::move(m_messages_.front());
+        m_messages_.pop_front();
+        spdlog::trace("Asio: Popped message from deque.");
+
+        std::vector<Subscriber> subscribersCopy = m_subscribers_;
+        lock.unlock();
+
+        for (const auto& subscriber : subscribersCopy) {
+            try {
+                if (applyFilter(subscriber, message.data)) {
+                    (void)handleTimeout(subscriber, message.data);
+                }
+            } catch (const TimeoutException& e) {
+                spdlog::warn("Asio: Timeout in subscriber '{}': {}",
+                             subscriber.name, e.what());
+            } catch (const std::exception& e) {
+                spdlog::error("Asio: Exception in subscriber '{}': {}",
+                              subscriber.name, e.what());
+            }
+        }
+
+        std::unique_lock check_lock(m_mutex_);
+        bool more_messages = !m_messages_.empty();
+        check_lock.unlock();
+
+        if (more_messages) {
+            spdlog::trace(
+                "Asio: More messages in deque, re-posting processMessages.");
+            ioContext_.post([this]() { processMessages(); });
+        } else {
+            spdlog::trace("Asio: No more messages in deque for now.");
+        }
+    }
+#endif  // ATOM_USE_LOCKFREE_QUEUE (for Asio processMessages)
+#endif  // ATOM_USE_ASIO (for processMessages methods)
 
     /**
      * @brief Apply the filter to a message for a given subscriber.
@@ -634,7 +955,22 @@ private:
      * @return True if the message passes the filter, false otherwise.
      */
     [[nodiscard]] bool applyFilter(const Subscriber& subscriber,
-                                   const T& message) const noexcept;
+                                   const T& message) const noexcept {
+        if (!subscriber.filter) {
+            return true;
+        }
+        try {
+            return subscriber.filter(message);
+        } catch (const std::exception& e) {
+            spdlog::error("Exception in filter for subscriber '{}': {}",
+                          subscriber.name, e.what());
+            return false;  // Skip subscriber if filter throws
+        } catch (...) {
+            spdlog::error("Unknown exception in filter for subscriber '{}'",
+                          subscriber.name);
+            return false;
+        }
+    }
 
     /**
      * @brief Handle the timeout for a given subscriber and message.
@@ -644,166 +980,81 @@ private:
      * otherwise.
      */
     [[nodiscard]] bool handleTimeout(const Subscriber& subscriber,
-                                     const T& message) const;
+                                     const T& message) const {
+        if (subscriber.timeout == std::chrono::milliseconds::zero()) {
+            try {
+                subscriber.callback(message);
+                return true;
+            } catch (const std::exception& e) {
+                // Logged by caller (processMessages or jthread loop)
+                throw;  // Propagate to be caught and logged by caller
+            }
+        }
+
+#ifdef ATOM_USE_ASIO
+        std::promise<void> promise;
+        auto future = promise.get_future();
+        // Capture necessary parts by value for the task
+        auto task = [cb = subscriber.callback, &message, p = std::move(promise),
+                     sub_name = subscriber.name]() mutable {
+            try {
+                cb(message);
+                p.set_value();
+            } catch (...) {
+                try {
+                    // Log inside task for immediate context, or let caller log
+                    // TimeoutException spdlog::warn("Asio task: Exception in
+                    // callback for subscriber '{}'", sub_name);
+                    p.set_exception(std::current_exception());
+                } catch (...) { /* std::promise::set_exception can throw */
+                    spdlog::error(
+                        "Asio task: Failed to set exception for subscriber "
+                        "'{}'",
+                        sub_name);
+                }
+            }
+        };
+        asio::post(ioContext_, std::move(task));
+
+        auto status = future.wait_for(subscriber.timeout);
+        if (status == std::future_status::timeout) {
+            throw TimeoutException("Subscriber " + subscriber.name +
+                                   " timed out (Asio path)");
+        }
+        future.get();  // Re-throw exceptions from callback
+        return true;
+#else  // NOT ATOM_USE_ASIO
+        std::future<void> future = std::async(
+            std::launch::async,
+            [cb = subscriber.callback, &message, name = subscriber.name]() {
+                try {
+                    cb(message);
+                } catch (const std::exception& e_async) {
+                    // Logged by caller (processMessages or jthread loop)
+                    throw;
+                } catch (...) {
+                    // Logged by caller
+                    throw;
+                }
+            });
+        auto status = future.wait_for(subscriber.timeout);
+        if (status == std::future_status::timeout) {
+            throw TimeoutException("Subscriber " + subscriber.name +
+                                   " timed out (non-Asio path)");
+        }
+        future.get();  // Propagate exceptions from callback
+        return true;
+#endif
+    }
 
     /**
      * @brief Sort subscribers by priority
      */
-    void sortSubscribers() noexcept;
+    void sortSubscribers() noexcept {
+        // Assumes m_mutex_ is held by caller if modification occurs
+        std::sort(m_subscribers_.begin(), m_subscribers_.end());
+    }
 };
-
-template <MessageType T>
-void MessageQueue<T>::subscribe(CallbackType callback,
-                                std::string_view subscriberName, int priority,
-                                FilterType filter,
-                                std::chrono::milliseconds timeout) {
-    if (!callback) {
-        throw SubscriberException("Callback function cannot be empty");
-    }
-
-    if (subscriberName.empty()) {
-        throw SubscriberException("Subscriber name cannot be empty");
-    }
-
-    std::lock_guard lock(m_mutex_);
-    m_subscribers_.emplace_back(std::string(subscriberName),
-                                std::move(callback), priority,
-                                std::move(filter), timeout);
-    sortSubscribers();
-}
-
-template <MessageType T>
-bool MessageQueue<T>::unsubscribe(const CallbackType& callback) noexcept {
-    std::lock_guard lock(m_mutex_);
-    const auto initialSize = m_subscribers_.size();
-
-    auto it = std::remove_if(m_subscribers_.begin(), m_subscribers_.end(),
-                             [&callback](const auto& subscriber) {
-                                 return subscriber.callback.target_type() ==
-                                        callback.target_type();
-                             });
-
-    m_subscribers_.erase(it, m_subscribers_.end());
-    return m_subscribers_.size() < initialSize;
-}
-
-#ifndef ATOM_USE_LOCKFREE_QUEUE
-template <MessageType T>
-void MessageQueue<T>::publish(const T& message, int priority) {
-    {
-        std::lock_guard lock(m_mutex_);
-        m_messages_.emplace_back(message, priority);
-    }
-    // Wake up processing thread if needed
-    m_condition_.notify_one();
-    ioContext_.post([this]() { processMessages(); });
-}
-
-template <MessageType T>
-void MessageQueue<T>::publish(T&& message, int priority) {
-    {
-        std::lock_guard lock(m_mutex_);
-        m_messages_.emplace_back(std::move(message), priority);
-    }
-    // Wake up processing thread if needed
-    m_condition_.notify_one();
-    ioContext_.post([this]() { processMessages(); });
-}
-#endif
-
-template <MessageType T>
-void MessageQueue<T>::startProcessing() {
-    if (m_isRunning_.exchange(true)) {
-        return;  // Already running
-    }
-
-    m_processingThread_ =
-        std::make_unique<std::jthread>([this](std::stop_token stoken) {
-            m_isProcessing_.store(true);
-            while (!stoken.stop_requested()) {
-                std::unique_lock lock(m_mutex_);
-
-                // Wait for messages or stop request
-                m_condition_.wait(lock, [this, &stoken]() {
-                    return !m_messages_.empty() || stoken.stop_requested();
-                });
-
-                if (stoken.stop_requested()) {
-                    break;
-                }
-
-                if (!m_messages_.empty()) {
-                    // Sort messages by priority
-                    std::sort(m_messages_.begin(), m_messages_.end());
-
-                    // Process all available messages
-                    while (!m_messages_.empty()) {
-                        auto message = std::move(m_messages_.front());
-                        m_messages_.pop_front();
-
-                        // Release lock while processing to allow new messages
-                        lock.unlock();
-
-                        // Make a copy of subscribers to avoid issues if list
-                        // changes during processing
-                        std::vector<Subscriber> subscribersCopy;
-                        {
-                            std::lock_guard subscribersLock(m_mutex_);
-                            subscribersCopy = m_subscribers_;
-                        }
-
-                        for (const auto& subscriber : subscribersCopy) {
-                            try {
-                                if (applyFilter(subscriber, message.data)) {
-                                    (void)handleTimeout(subscriber,
-                                                        message.data);
-                                }
-                            } catch (const TimeoutException& e) {
-                                // Log timeout but continue with other
-                                // subscribers In a real application, you might
-                                // want to log this
-                            } catch (const std::exception& e) {
-                                // Handle exceptions from subscriber callbacks
-                                // In a real application, you might want to log
-                                // this
-                            }
-                        }
-
-                        lock.lock();
-                    }
-                }
-            }
-            m_isProcessing_.store(false);
-        });
-
-    // Execute any pending tasks
-    if (!ioContext_.stopped()) {
-        ioContext_.restart();
-        ioContext_.poll();
-    }
-}
-
-template <MessageType T>
-void MessageQueue<T>::stopProcessing() noexcept {
-    if (!m_isRunning_.exchange(false)) {
-        return;  // Already stopped
-    }
-
-    // Stop the processing thread
-    if (m_processingThread_) {
-        m_processingThread_->request_stop();
-        m_condition_.notify_all();
-        m_processingThread_.reset();
-    }
-
-    if (!ioContext_.stopped()) {
-        try {
-            ioContext_.stop();
-        } catch (...) {
-            // Ignore any exceptions when stopping
-        }
-    }
-}
 
 #ifndef ATOM_USE_LOCKFREE_QUEUE
 template <MessageType T>
@@ -825,17 +1076,27 @@ size_t MessageQueue<T>::cancelMessages(
     if (!cancelCondition) {
         return 0;
     }
-
+    size_t cancelledCount = 0;
+#ifdef ATOM_USE_LOCKFREE_QUEUE
+    // Cancelling from lockfree queue is complex; typically, you'd filter on
+    // dequeue. For simplicity, we only cancel from the m_messages_ deque. Users
+    // should be aware of this limitation if lockfree queue is active.
+    spdlog::warn(
+        "cancelMessages currently only operates on the standard deque, not the "
+        "lockfree queue portion.");
+#endif
     std::lock_guard lock(m_mutex_);
     const auto initialSize = m_messages_.size();
-
     auto it = std::remove_if(m_messages_.begin(), m_messages_.end(),
                              [&cancelCondition](const auto& msg) {
                                  return cancelCondition(msg.data);
                              });
-
+    cancelledCount = std::distance(it, m_messages_.end());
     m_messages_.erase(it, m_messages_.end());
-    return initialSize - m_messages_.size();
+    if (cancelledCount > 0) {
+        spdlog::info("Cancelled {} messages from the deque.", cancelledCount);
+    }
+    return cancelledCount;
 }
 
 #ifndef ATOM_USE_LOCKFREE_QUEUE
@@ -844,122 +1105,12 @@ size_t MessageQueue<T>::clearAllMessages() noexcept {
     std::lock_guard lock(m_mutex_);
     const size_t count = m_messages_.size();
     m_messages_.clear();
+    if (count > 0) {
+        spdlog::info("Cleared {} messages from the deque.", count);
+    }
     return count;
 }
 #endif
-
-#ifndef ATOM_USE_LOCKFREE_QUEUE
-template <MessageType T>
-void MessageQueue<T>::processMessages() {
-    if (!m_isRunning_.load() || m_isProcessing_.load()) {
-        return;
-    }
-
-    std::unique_lock lock(m_mutex_);
-    if (m_messages_.empty()) {
-        return;
-    }
-
-    // Sort messages by priority
-    std::sort(m_messages_.begin(), m_messages_.end());
-
-    // Process the highest priority message
-    auto message = std::move(m_messages_.front());
-    m_messages_.pop_front();
-
-    // Release the lock before processing
-    lock.unlock();
-
-    // Make a copy of subscribers to avoid issues if list changes during
-    // processing
-    std::vector<Subscriber> subscribersCopy;
-    {
-        std::lock_guard subscribersLock(m_mutex_);
-        subscribersCopy = m_subscribers_;
-    }
-
-    // Process message with all subscribers in priority order
-    for (const auto& subscriber : subscribersCopy) {
-        try {
-            if (applyFilter(subscriber, message.data)) {
-                (void)handleTimeout(subscriber, message.data);
-            }
-        } catch (const std::exception&) {
-            // Handle exceptions but continue processing for other subscribers
-        }
-    }
-
-    // Schedule next message processing if there are more
-    lock.lock();
-    if (!m_messages_.empty()) {
-        ioContext_.post([this]() { processMessages(); });
-    }
-}
-#endif
-
-template <MessageType T>
-bool MessageQueue<T>::applyFilter(const Subscriber& subscriber,
-                                  const T& message) const noexcept {
-    if (!subscriber.filter) {
-        return true;
-    }
-
-    try {
-        return subscriber.filter(message);
-    } catch (...) {
-        // If filter throws an exception, we'll skip this subscriber
-        return false;
-    }
-}
-
-template <MessageType T>
-bool MessageQueue<T>::handleTimeout(const Subscriber& subscriber,
-                                    const T& message) const {
-    if (subscriber.timeout == std::chrono::milliseconds::zero()) {
-        try {
-            subscriber.callback(message);
-            return true;
-        } catch (const std::exception& e) {
-            // Propagate exception upward for caller to handle
-            throw;
-        }
-    }
-
-    // Use a future to handle timeouts
-    std::promise<void> promise;
-    auto future = promise.get_future();
-
-    auto task = [callback = subscriber.callback, &message,
-                 promise = std::move(promise)]() mutable {
-        try {
-            callback(message);
-            promise.set_value();
-        } catch (...) {
-            promise.set_exception(std::current_exception());
-        }
-    };
-
-    asio::post(ioContext_, std::move(task));
-
-    auto status = future.wait_for(subscriber.timeout);
-    if (status == std::future_status::timeout) {
-        throw TimeoutException("Subscriber " + subscriber.name +
-                               " timed out processing message");
-    }
-
-    // Re-throw any exceptions that occurred in the callback
-    try {
-        future.get();
-        return true;
-    } catch (...) {
-        throw;
-    }
-}
-
-template <MessageType T>
-void MessageQueue<T>::sortSubscribers() noexcept {
-    std::sort(m_subscribers_.begin(), m_subscribers_.end());
-}
 
 }  // namespace atom::async
 

@@ -40,6 +40,10 @@
 #include <boost/lockfree/stack.hpp>
 #endif
 
+#ifdef ATOM_USE_ASIO
+#include <asio.hpp>
+#endif
+
 #include "atom/async/future.hpp"
 #include "atom/async/promise.hpp"
 
@@ -626,6 +630,11 @@ template <typename T>
 using DefaultQueueType = ThreadSafeQueue<T>;
 #endif
 
+// Forward declaration of IO context wrapper
+#ifdef ATOM_USE_ASIO
+class AsioContextWrapper;
+#endif
+
 /**
  * @class ThreadPool
  * @brief High-performance thread pool implementation with modern C++20 features
@@ -669,6 +678,10 @@ public:
         bool setStackSize = false;  // Whether to set custom stack size
         size_t stackSize = 0;       // Custom thread stack size, 0 means default
 
+#ifdef ATOM_USE_ASIO
+        bool useAsioContext = false;  // Whether to use ASIO context
+#endif
+
         static Options createDefault() { return {}; }
 
         static Options createHighPerformance() {
@@ -704,6 +717,14 @@ public:
             opts.threadPriority = ThreadPriority::BelowNormal;
             return opts;
         }
+
+#ifdef ATOM_USE_ASIO
+        static Options createAsioEnabled() {
+            Options opts = createDefault();
+            opts.useAsioContext = true;
+            return opts;
+        }
+#endif
     };
 
     /**
@@ -712,6 +733,13 @@ public:
      */
     explicit ThreadPool(Options options = Options::createDefault())
         : options_(std::move(options)), stop_(false), activeThreads_(0) {
+#ifdef ATOM_USE_ASIO
+        // Initialize ASIO if enabled
+        if (options_.useAsioContext) {
+            initAsioContext();
+        }
+#endif
+
         // Initialize threads
         size_t numThreads = options_.initialThreadCount;
         if (numThreads == 0) {
@@ -736,7 +764,15 @@ public:
     /**
      * @brief Destructor, stops all threads
      */
-    ~ThreadPool() { shutdown(); }
+    ~ThreadPool() {
+        shutdown();
+#ifdef ATOM_USE_ASIO
+        // Clean up ASIO context
+        if (asioContext_) {
+            asioContext_.reset();
+        }
+#endif
+    }
 
     /**
      * @brief Submit a task to the thread pool
@@ -751,6 +787,15 @@ public:
     auto submit(F&& f, Args&&... args) {
         using ResultType = std::invoke_result_t<F, Args...>;
         using TaskType = std::packaged_task<ResultType()>;
+
+#ifdef ATOM_USE_ASIO
+        // If using ASIO and context is available, delegate to ASIO
+        // implementation
+        if (options_.useAsioContext && asioContext_) {
+            return submitAsio<ResultType>(std::forward<F>(f),
+                                          std::forward<Args>(args)...);
+        }
+#endif
 
         // Create task encapsulating function and arguments
         auto task = std::make_shared<TaskType>(
@@ -789,6 +834,58 @@ public:
         // Return enhanced future
         return EnhancedFuture<ResultType>(future.share());
     }
+
+#ifdef ATOM_USE_ASIO
+    /**
+     * @brief Submit a task using ASIO
+     * @tparam ResultType Type of the result
+     * @tparam F Function type
+     * @tparam Args Argument types
+     * @param f Function to execute
+     * @param args Function arguments
+     * @return EnhancedFuture containing the task result
+     */
+    template <typename ResultType, typename F, typename... Args>
+        requires std::invocable<F, Args...>
+    auto submitAsio(F&& f, Args&&... args) {
+        // Create a shared state for promise and future
+        auto promise = std::make_shared<std::promise<ResultType>>();
+        auto future = promise->get_future();
+
+        // Post the task to ASIO
+        asio::post(*asioContext_->getContext(),
+                   [promise, func = std::forward<F>(f),
+                    ... largs = std::forward<Args>(args)]() mutable {
+                       try {
+                           if constexpr (std::is_void_v<ResultType>) {
+                               std::invoke(std::forward<F>(func),
+                                           std::forward<Args>(largs)...);
+                               promise->set_value();
+                           } else {
+                               promise->set_value(
+                                   std::invoke(std::forward<F>(func),
+                                               std::forward<Args>(largs)...));
+                           }
+                       } catch (...) {
+                           promise->set_exception(std::current_exception());
+                       }
+                   });
+
+        // Return enhanced future
+        return EnhancedFuture<ResultType>(future.share());
+    }
+
+    /**
+     * @brief Get the underlying ASIO context
+     * @return Pointer to the ASIO context or nullptr if not using ASIO
+     */
+    auto getAsioContext() -> asio::io_context* {
+        if (asioContext_) {
+            return asioContext_->getContext();
+        }
+        return nullptr;
+    }
+#endif
 
     /**
      * @brief Submit multiple tasks and wait for all to complete
@@ -831,6 +928,31 @@ public:
 
         // Create Promise
         Promise<ResultType> promise;
+
+#ifdef ATOM_USE_ASIO
+        // If using ASIO and context is available, use ASIO for execution
+        if (options_.useAsioContext && asioContext_) {
+            asio::post(*asioContext_->getContext(),
+                       [promise, func = std::forward<F>(f),
+                        ... largs = std::forward<Args>(args)]() mutable {
+                           try {
+                               if constexpr (std::is_void_v<ResultType>) {
+                                   std::invoke(std::forward<F>(func),
+                                               std::forward<Args>(largs)...);
+                                   promise.setValue();
+                               } else {
+                                   promise.setValue(std::invoke(
+                                       std::forward<F>(func),
+                                       std::forward<Args>(largs)...));
+                               }
+                           } catch (...) {
+                               promise.setException(std::current_exception());
+                           }
+                       });
+
+            return promise;
+        }
+#endif
 
         // Create task
         auto task = [promise, func = std::forward<F>(f),
@@ -883,6 +1005,14 @@ public:
     template <typename F>
         requires std::invocable<F>
     void execute(F&& f) {
+#ifdef ATOM_USE_ASIO
+        // If using ASIO and context is available, use ASIO for execution
+        if (options_.useAsioContext && asioContext_) {
+            asio::post(*asioContext_->getContext(), std::forward<F>(f));
+            return;
+        }
+#endif
+
         {
             std::unique_lock lock(queueMutex_);
             tasks_.emplace_back(std::forward<F>(f));
@@ -905,6 +1035,31 @@ public:
             throw ThreadPoolError(
                 "Cannot enqueue detached task: Thread pool is shutting down");
         }
+
+#ifdef ATOM_USE_ASIO
+        // If using ASIO and context is available, use ASIO for execution
+        if (options_.useAsioContext && asioContext_) {
+            asio::post(
+                *asioContext_->getContext(),
+                [func = std::forward<Function>(func),
+                 ... largs = std::forward<Args>(args)]() mutable {
+                    try {
+                        if constexpr (std::is_same_v<
+                                          void, std::invoke_result_t<
+                                                    Function&&, Args&&...>>) {
+                            std::invoke(func, largs...);
+                        } else {
+                            std::ignore = std::invoke(func, largs...);
+                        }
+                    } catch (...) {
+                        // Catch and log exception (in production, might log to
+                        // a logging system)
+                    }
+                });
+
+            return;
+        }
+#endif
 
         try {
             {
@@ -1031,6 +1186,13 @@ public:
                 worker.join();
             }
         }
+
+#ifdef ATOM_USE_ASIO
+        // Stop ASIO context
+        if (asioContext_) {
+            asioContext_->stop();
+        }
+#endif
     }
 
     /**
@@ -1052,6 +1214,13 @@ public:
                 worker.join();
             }
         }
+
+#ifdef ATOM_USE_ASIO
+        // Stop ASIO context
+        if (asioContext_) {
+            asioContext_->stop();
+        }
+#endif
     }
 
     /**
@@ -1094,7 +1263,52 @@ public:
         return options_.useWorkStealing;
     }
 
+#ifdef ATOM_USE_ASIO
+    [[nodiscard]] bool isAsioEnabled() const {
+        return options_.useAsioContext && asioContext_ != nullptr;
+    }
+#endif
+
 private:
+#ifdef ATOM_USE_ASIO
+    /**
+     * @brief Wrapper for ASIO context
+     */
+    class AsioContextWrapper {
+    public:
+        AsioContextWrapper() : context_(std::make_unique<asio::io_context>()) {
+            // Start the work guard to prevent io_context from running out of
+            // work
+            workGuard_ = std::make_unique<asio::io_context::work>(*context_);
+        }
+
+        ~AsioContextWrapper() { stop(); }
+
+        void stop() {
+            if (workGuard_) {
+                // Reset work guard to allow run() to exit when queue is empty
+                workGuard_.reset();
+
+                // Stop the context
+                context_->stop();
+            }
+        }
+
+        auto getContext() -> asio::io_context* { return context_.get(); }
+
+    private:
+        std::unique_ptr<asio::io_context> context_;
+        std::unique_ptr<asio::io_context::work> workGuard_;
+    };
+
+    /**
+     * @brief Initialize ASIO context
+     */
+    void initAsioContext() {
+        asioContext_ = std::make_unique<AsioContextWrapper>();
+    }
+#endif
+
     /**
      * @brief Create a worker thread
      * @param id Thread ID
@@ -1113,7 +1327,6 @@ private:
 
         // Create worker thread
         workers_.emplace_back([this, id]() {
-        // Set thread name (if platform supports it)
 #if defined(ATOM_PLATFORM_LINUX) || defined(ATOM_PLATFORM_MACOS)
             {
                 char threadName[16];
@@ -1390,6 +1603,11 @@ private:
         waitAvailable_;  // Condition variable for waiting for available thread
 
     std::atomic<size_t> activeThreads_;  // Current active thread count
+
+#ifdef ATOM_USE_ASIO
+    // ASIO context
+    std::unique_ptr<AsioContextWrapper> asioContext_;
+#endif
 };
 
 // Global thread pool singleton
@@ -1415,6 +1633,14 @@ inline ThreadPool& energyEfficientThreadPool() {
     static ThreadPool instance(ThreadPool::Options::createEnergyEfficient());
     return instance;
 }
+
+#ifdef ATOM_USE_ASIO
+// ASIO-enabled thread pool singleton
+inline ThreadPool& asioThreadPool() {
+    static ThreadPool instance(ThreadPool::Options::createAsioEnabled());
+    return instance;
+}
+#endif
 
 /**
  * @brief Asynchronously execute a task in the global thread pool
@@ -1475,6 +1701,23 @@ auto asyncEnergyEfficient(F&& f, Args&&... args) {
     return energyEfficientThreadPool().submit(std::forward<F>(f),
                                               std::forward<Args>(args)...);
 }
+
+#ifdef ATOM_USE_ASIO
+/**
+ * @brief Asynchronously execute a task in the ASIO thread pool
+ * @tparam F Function type
+ * @tparam Args Argument types
+ * @param f Function to execute
+ * @param args Function arguments
+ * @return EnhancedFuture containing the task result
+ */
+template <typename F, typename... Args>
+    requires std::invocable<F, Args...>
+auto asyncAsio(F&& f, Args&&... args) {
+    return asioThreadPool().submit(std::forward<F>(f),
+                                   std::forward<Args>(args)...);
+}
+#endif
 
 }  // namespace atom::async
 

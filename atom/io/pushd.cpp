@@ -16,51 +16,33 @@ namespace asio = boost::asio;
 
 #include "atom/log/loguru.hpp"
 namespace fs = std::filesystem;
-#endif
 
-// Include asio explicitly if not using Boost for strand
-#ifndef ATOM_USE_BOOST
+#ifdef ATOM_USE_ASIO
 #include <asio.hpp>
 #endif
+#endif
 
-#include "atom/containers/high_performance.hpp"  // Include high performance containers
-#include "atom/io/pushd.hpp"                     // Ensure header is included
+#include "atom/containers/high_performance.hpp"
 
-// Use type aliases from high_performance.hpp
 using atom::containers::String;
 using atom::containers::Vector;
 
 namespace atom::io {
 
 namespace {
-// Helper function for path validation
 [[nodiscard]] bool isValidPath(const fs::path& path) noexcept {
     try {
         if (path.empty())
             return false;
 
-        // Check for basic format validity
-        // Allow paths that are just root names (e.g., "C:")
-        // if (!path.has_filename() && !path.has_parent_path() &&
-        // !path.has_root_name())
-        //    return false;
-
-        // Attempt to make canonical path - this might fail for non-existent
-        // paths, use weakly_canonical instead for basic syntax checks.
         std::error_code ec;
         [[maybe_unused]] auto canonical_path = fs::weakly_canonical(path, ec);
         if (ec) {
-            // Log the error if needed
-            // LOG_F(WARNING, "Path validation failed for %s: %s",
-            // path.string().c_str(), ec.message().c_str());
-            return false;  // Consider invalid if weakly_canonical fails
+            return false;
         }
 
         return true;
-    } catch (const std::exception& e) {
-        // Log the exception if needed
-        // LOG_F(ERROR, "Exception during path validation for %s: %s",
-        // path.string().c_str(), e.what());
+    } catch (const std::exception&) {
         return false;
     }
 }
@@ -68,19 +50,20 @@ namespace {
 
 class DirectoryStackImpl {
 public:
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
     explicit DirectoryStackImpl(asio::io_context& io_context)
-        : strand_(asio::make_strand(io_context)) {}  // Use make_strand
+        : strand_(asio::make_strand(io_context)) {}
+#else
+    explicit DirectoryStackImpl(void* io_context) {}
+#endif
 
-    // Thread-safe access to directory stack
     mutable std::shared_mutex stackMutex_;
 
-    // Note: Template function definitions should generally be in the header.
-    // Keeping them here requires explicit instantiation or careful linking.
     template <PathLike P>
     void asyncPushd(
         const P& new_dir_param,
         const std::function<void(const std::error_code&)>& handler) {
-        fs::path new_dir = new_dir_param;  // Convert PathLike to fs::path
+        fs::path new_dir = new_dir_param;
 
 #ifdef ATOM_USE_BOOST
         BOOST_LOG_TRIVIAL(info)
@@ -89,7 +72,7 @@ public:
         LOG_F(INFO, "asyncPushd called with new_dir: %s",
               new_dir.string().c_str());
 #endif
-        // Validate path before proceeding
+
         if (!isValidPath(new_dir)) {
             std::error_code ec =
                 std::make_error_code(std::errc::invalid_argument);
@@ -100,13 +83,20 @@ public:
             LOG_F(WARNING, "asyncPushd: Invalid path provided - %s",
                   new_dir.string().c_str());
 #endif
-            // Call handler directly or post it to the strand for consistency?
-            // Posting ensures handler runs on the strand.
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
             asio::post(strand_, [handler, ec]() { handler(ec); });
+#else
+            handler(ec);
+#endif
             return;
         }
 
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
         asio::post(strand_, [this, new_dir, handler]() {
+#else
+        // Execute synchronously when asio is not available
+        {
+#endif
             try {
                 std::error_code errorCode;
                 fs::path currentDir = fs::current_path(errorCode);
@@ -116,10 +106,8 @@ public:
                         std::unique_lock lock(stackMutex_);
                         dirStack_.push(currentDir);
                     }
-                    // Attempt to change directory
                     fs::current_path(new_dir, errorCode);
                     if (errorCode) {
-                        // If changing directory failed, rollback the stack push
 #ifdef ATOM_USE_BOOST
                         BOOST_LOG_TRIVIAL(warning)
                             << "asyncPushd: Failed to change directory to "
@@ -127,8 +115,11 @@ public:
                             << ", rolling back stack push. Error: "
                             << errorCode.message();
 #else
-                        LOG_F(WARNING, "asyncPushd: Failed to change directory to %s, rolling back stack push. Error: %s",
-                              new_dir.string().c_str(), errorCode.message().c_str());
+                        LOG_F(WARNING,
+                              "asyncPushd: Failed to change directory to %s, "
+                              "rolling back stack push. Error: %s",
+                              new_dir.string().c_str(),
+                              errorCode.message().c_str());
 #endif
                         std::unique_lock lock(stackMutex_);
                         if (!dirStack_.empty() &&
@@ -142,7 +133,9 @@ public:
                         << "asyncPushd: Failed to get current path. Error: "
                         << errorCode.message();
 #else
-                    LOG_F(ERROR, "asyncPushd: Failed to get current path. Error: %s", errorCode.message().c_str());
+                    LOG_F(ERROR,
+                          "asyncPushd: Failed to get current path. Error: %s",
+                          errorCode.message().c_str());
 #endif
                 }
 
@@ -151,18 +144,18 @@ public:
                     << "asyncPushd completed with error code: "
                     << errorCode.value() << " (" << errorCode.message() << ")";
 #else
-                LOG_F(INFO, "asyncPushd completed with error code: %d (%s)", errorCode.value(), errorCode.message().c_str());
+                LOG_F(INFO, "asyncPushd completed with error code: %d (%s)",
+                      errorCode.value(), errorCode.message().c_str());
 #endif
                 handler(errorCode);
-            } catch (const fs::filesystem_error&
-                         e) {  // Catch filesystem_error specifically
-                std::error_code errorCode =
-                    e.code();  // Use error code from exception
+            } catch (const fs::filesystem_error& e) {
+                std::error_code errorCode = e.code();
 #ifdef ATOM_USE_BOOST
                 BOOST_LOG_TRIVIAL(error)
                     << "Filesystem exception in asyncPushd: " << e.what();
 #else
-                LOG_F(ERROR, "Filesystem exception in asyncPushd: %s", e.what());
+                LOG_F(ERROR, "Filesystem exception in asyncPushd: %s",
+                      e.what());
 #endif
                 handler(errorCode);
             } catch (const std::exception& e) {
@@ -176,7 +169,11 @@ public:
 #endif
                 handler(errorCode);
             }
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
         });
+#else
+        }
+#endif
     }
 
     void asyncPopd(const std::function<void(const std::error_code&)>& handler) {
@@ -185,7 +182,11 @@ public:
 #else
         LOG_F(INFO, "asyncPopd called");
 #endif
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
         asio::post(strand_, [this, handler]() {
+#else
+        {
+#endif
             try {
                 std::error_code errorCode;
                 fs::path prevDir;
@@ -203,26 +204,23 @@ public:
                         LOG_F(WARNING, "asyncPopd: Stack is empty.");
 #endif
                         errorCode = std::make_error_code(
-                            std::errc::operation_not_permitted);  // More
-                                                                  // specific
-                                                                  // error?
+                            std::errc::operation_not_permitted);
                         handler(errorCode);
                         return;
                     }
                 }
 
-                // Validate the path before changing to it
                 if (!isValidPath(prevDir)) {
 #ifdef ATOM_USE_BOOST
                     BOOST_LOG_TRIVIAL(error)
                         << "asyncPopd: Invalid path found in stack - "
                         << prevDir.string();
 #else
-                    LOG_F(ERROR, "asyncPopd: Invalid path found in stack - %s", prevDir.string().c_str());
+                    LOG_F(ERROR, "asyncPopd: Invalid path found in stack - %s",
+                          prevDir.string().c_str());
 #endif
                     errorCode =
                         std::make_error_code(std::errc::invalid_argument);
-                    // Should we push the invalid path back? Probably not.
                     handler(errorCode);
                     return;
                 }
@@ -235,13 +233,12 @@ public:
                         << prevDir.string()
                         << ". Error: " << errorCode.message();
 #else
-                    LOG_F(ERROR, "asyncPopd: Failed to change directory to %s. Error: %s",
-                          prevDir.string().c_str(), errorCode.message().c_str());
+                    LOG_F(ERROR,
+                          "asyncPopd: Failed to change directory to %s. Error: "
+                          "%s",
+                          prevDir.string().c_str(),
+                          errorCode.message().c_str());
 #endif
-                    // Attempt to push the directory back onto the stack if
-                    // change failed? This might lead to inconsistent state if
-                    // the reason for failure is persistent. For now, just
-                    // report the error.
                 }
 
 #ifdef ATOM_USE_BOOST
@@ -249,11 +246,11 @@ public:
                     << "asyncPopd completed with error code: "
                     << errorCode.value() << " (" << errorCode.message() << ")";
 #else
-                LOG_F(INFO, "asyncPopd completed with error code: %d (%s)", errorCode.value(), errorCode.message().c_str());
+                LOG_F(INFO, "asyncPopd completed with error code: %d (%s)",
+                      errorCode.value(), errorCode.message().c_str());
 #endif
                 handler(errorCode);
-            } catch (const fs::filesystem_error&
-                         e) {  // Catch filesystem_error specifically
+            } catch (const fs::filesystem_error& e) {
                 std::error_code errorCode = e.code();
 #ifdef ATOM_USE_BOOST
                 BOOST_LOG_TRIVIAL(error)
@@ -273,23 +270,24 @@ public:
 #endif
                 handler(errorCode);
             }
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
         });
+#else
+        }
+#endif
     }
 
-    [[nodiscard]] auto getStackContents() const
-        -> Vector<fs::path> {  // Return Vector
+    [[nodiscard]] auto getStackContents() const -> Vector<fs::path> {
         std::shared_lock lock(stackMutex_);
         std::stack<fs::path> tempStack = dirStack_;
-        Vector<fs::path> contents;           // Use Vector
-        contents.reserve(tempStack.size());  // Pre-allocate memory
+        Vector<fs::path> contents;
+        contents.reserve(tempStack.size());
 
         while (!tempStack.empty()) {
-            // Add elements in reverse order temporarily
             contents.push_back(tempStack.top());
             tempStack.pop();
         }
 
-        // Reverse to get the correct stack order (top is last)
         std::reverse(contents.begin(), contents.end());
         return contents;
     }
@@ -303,35 +301,29 @@ public:
 #else
         LOG_F(INFO, "asyncGotoIndex called with index: %zu", index);
 #endif
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
         asio::post(strand_, [this, index, handler]() {
+#else
+        {
+#endif
             try {
                 std::error_code errorCode;
-                Vector<fs::path> contents;  // Use Vector
-                {                           // Lock only while reading the stack
+                Vector<fs::path> contents;
+                {
                     std::shared_lock lock(stackMutex_);
-                    // Need to reconstruct the stack in the correct order for
-                    // indexing
                     std::stack<fs::path> tempStack = dirStack_;
                     contents.reserve(tempStack.size());
                     while (!tempStack.empty()) {
                         contents.push_back(tempStack.top());
                         tempStack.pop();
                     }
-                    std::reverse(contents.begin(),
-                                 contents.end());  // Now contents[0] is bottom,
-                                                   // contents[size-1] is top
+                    std::reverse(contents.begin(), contents.end());
                 }
 
                 if (index < contents.size()) {
-                    // Note: The interpretation of index might be ambiguous.
-                    // Standard 'dirs' command shows top first (index 0).
-                    // Let's assume index 0 refers to the top of the stack (last
-                    // pushed). Since `contents` is now ordered bottom-to-top,
-                    // the target is at size - 1 - index.
                     size_t effective_index = contents.size() - 1 - index;
                     const fs::path& targetPath = contents[effective_index];
 
-                    // Validate the path before changing to it
                     if (!isValidPath(targetPath)) {
 #ifdef ATOM_USE_BOOST
                         BOOST_LOG_TRIVIAL(error)
@@ -339,7 +331,9 @@ public:
                                "index "
                             << index << " - " << targetPath.string();
 #else
-                        LOG_F(ERROR, "asyncGotoIndex: Invalid path found in stack at index %zu - %s",
+                        LOG_F(ERROR,
+                              "asyncGotoIndex: Invalid path found in stack at "
+                              "index %zu - %s",
                               index, targetPath.string().c_str());
 #endif
                         errorCode =
@@ -356,8 +350,11 @@ public:
                             << targetPath.string()
                             << ". Error: " << errorCode.message();
 #else
-                        LOG_F(ERROR, "asyncGotoIndex: Failed to change directory to %s. Error: %s",
-                              targetPath.string().c_str(), errorCode.message().c_str());
+                        LOG_F(ERROR,
+                              "asyncGotoIndex: Failed to change directory to "
+                              "%s. Error: %s",
+                              targetPath.string().c_str(),
+                              errorCode.message().c_str());
 #endif
                     }
                 } else {
@@ -367,7 +364,10 @@ public:
                         << " out of bounds (stack size " << contents.size()
                         << ").";
 #else
-                    LOG_F(WARNING, "asyncGotoIndex: Index %zu out of bounds (stack size %zu).", index, contents.size());
+                    LOG_F(WARNING,
+                          "asyncGotoIndex: Index %zu out of bounds (stack size "
+                          "%zu).",
+                          index, contents.size());
 #endif
                     errorCode =
                         std::make_error_code(std::errc::invalid_argument);
@@ -378,17 +378,18 @@ public:
                     << "asyncGotoIndex completed with error code: "
                     << errorCode.value() << " (" << errorCode.message() << ")";
 #else
-                LOG_F(INFO, "asyncGotoIndex completed with error code: %d (%s)", errorCode.value(), errorCode.message().c_str());
+                LOG_F(INFO, "asyncGotoIndex completed with error code: %d (%s)",
+                      errorCode.value(), errorCode.message().c_str());
 #endif
                 handler(errorCode);
-            } catch (const fs::filesystem_error&
-                         e) {  // Catch filesystem_error specifically
+            } catch (const fs::filesystem_error& e) {
                 std::error_code errorCode = e.code();
 #ifdef ATOM_USE_BOOST
                 BOOST_LOG_TRIVIAL(error)
                     << "Filesystem exception in asyncGotoIndex: " << e.what();
 #else
-                LOG_F(ERROR, "Filesystem exception in asyncGotoIndex: %s", e.what());
+                LOG_F(ERROR, "Filesystem exception in asyncGotoIndex: %s",
+                      e.what());
 #endif
                 handler(errorCode);
             } catch (const std::exception& e) {
@@ -398,25 +399,28 @@ public:
                 BOOST_LOG_TRIVIAL(error)
                     << "Generic exception in asyncGotoIndex: " << e.what();
 #else
-                LOG_F(ERROR, "Generic exception in asyncGotoIndex: %s", e.what());
+                LOG_F(ERROR, "Generic exception in asyncGotoIndex: %s",
+                      e.what());
 #endif
                 handler(errorCode);
             }
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
         });
+#else
+        }
+#endif
     }
 
     void asyncSaveStackToFile(
-        const String& filename,  // Use String
+        const String& filename,
         const std::function<void(const std::error_code&)>& handler) {
 #ifdef ATOM_USE_BOOST
-        BOOST_LOG_TRIVIAL(info)
-            << "asyncSaveStackToFile called with filename: "
-            << filename.c_str();  // Use c_str() for logging if needed
+        BOOST_LOG_TRIVIAL(info) << "asyncSaveStackToFile called with filename: "
+                                << filename.c_str();
 #else
         LOG_F(INFO, "asyncSaveStackToFile called with filename: %s",
               filename.c_str());
 #endif
-        // Validate filename
         if (filename.empty()) {
 #ifdef ATOM_USE_BOOST
             BOOST_LOG_TRIVIAL(warning)
@@ -426,32 +430,33 @@ public:
 #endif
             std::error_code errorCode =
                 std::make_error_code(std::errc::invalid_argument);
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
             asio::post(strand_, [handler, errorCode]() { handler(errorCode); });
+#else
+            handler(errorCode);
+#endif
             return;
         }
 
-        // Convert String to std::string for ofstream if necessary
-        std::string filename_str =
-            filename.c_str();  // Assuming String has toStdString() or similar
+        std::string filename_str = filename.c_str();
 
-        asio::post(strand_, [this, filename_str,
-                             handler]() {  // Capture std::string
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
+        asio::post(strand_, [this, filename_str, handler]() {
+#else
+        {
+#endif
             try {
                 std::error_code errorCode;
-                std::ofstream file(filename_str);  // Use std::string
+                std::ofstream file(filename_str);
 
                 if (file) {
-                    Vector<fs::path> contents =
-                        getStackContents();  // Use Vector
+                    Vector<fs::path> contents = getStackContents();
 
-                    // Write stack contents (bottom to top)
                     for (const auto& dir : contents) {
-                        // Ensure path strings don't contain newlines
-                        // internally, or handle appropriately
                         file << dir.string() << '\n';
                     }
 
-                    if (!file.good()) {  // Check stream state after writing
+                    if (!file.good()) {
                         errorCode = std::make_error_code(std::errc::io_error);
 #ifdef ATOM_USE_BOOST
                         BOOST_LOG_TRIVIAL(error)
@@ -459,19 +464,24 @@ public:
                                "to file "
                             << filename_str;
 #else
-                        LOG_F(ERROR, "asyncSaveStackToFile: IO error while writing to file %s", filename_str.c_str());
+                        LOG_F(ERROR,
+                              "asyncSaveStackToFile: IO error while writing to "
+                              "file %s",
+                              filename_str.c_str());
 #endif
                     }
                 } else {
-                    errorCode = std::make_error_code(
-                        std::errc::permission_denied);  // Or other appropriate
-                                                        // error
+                    errorCode =
+                        std::make_error_code(std::errc::permission_denied);
 #ifdef ATOM_USE_BOOST
                     BOOST_LOG_TRIVIAL(error)
                         << "asyncSaveStackToFile: Failed to open file "
                         << filename_str << " for writing.";
 #else
-                    LOG_F(ERROR, "asyncSaveStackToFile: Failed to open file %s for writing.", filename_str.c_str());
+                    LOG_F(ERROR,
+                          "asyncSaveStackToFile: Failed to open file %s for "
+                          "writing.",
+                          filename_str.c_str());
 #endif
                 }
 
@@ -480,7 +490,9 @@ public:
                     << "asyncSaveStackToFile completed with error code: "
                     << errorCode.value() << " (" << errorCode.message() << ")";
 #else
-                LOG_F(INFO, "asyncSaveStackToFile completed with error code: %d (%s)", errorCode.value(), errorCode.message().c_str());
+                LOG_F(INFO,
+                      "asyncSaveStackToFile completed with error code: %d (%s)",
+                      errorCode.value(), errorCode.message().c_str());
 #endif
                 handler(errorCode);
             } catch (const std::exception& e) {
@@ -494,11 +506,15 @@ public:
 #endif
                 handler(errorCode);
             }
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
         });
+#else
+        }
+#endif
     }
 
     void asyncLoadStackFromFile(
-        const String& filename,  // Use String
+        const String& filename,
         const std::function<void(const std::error_code&)>& handler) {
 #ifdef ATOM_USE_BOOST
         BOOST_LOG_TRIVIAL(info)
@@ -509,11 +525,8 @@ public:
               filename.c_str());
 #endif
 
-        // Convert String to std::string for ifstream and fs::exists
-        std::string filename_str =
-            filename.c_str();  // Assuming String has toStdString()
+        std::string filename_str = filename.c_str();
 
-        // Validate filename and existence
         if (filename_str.empty()) {
 #ifdef ATOM_USE_BOOST
             BOOST_LOG_TRIVIAL(warning)
@@ -523,7 +536,11 @@ public:
 #endif
             std::error_code errorCode =
                 std::make_error_code(std::errc::invalid_argument);
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
             asio::post(strand_, [handler, errorCode]() { handler(errorCode); });
+#else
+            handler(errorCode);
+#endif
             return;
         }
         std::error_code exists_ec;
@@ -540,23 +557,28 @@ public:
 #endif
             std::error_code errorCode =
                 std::make_error_code(std::errc::no_such_file_or_directory);
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
             asio::post(strand_, [handler, errorCode]() { handler(errorCode); });
+#else
+            handler(errorCode);
+#endif
             return;
         }
 
-        asio::post(strand_, [this, filename_str,
-                             handler]() {  // Capture std::string
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
+        asio::post(strand_, [this, filename_str, handler]() {
+#else
+        {
+#endif
             try {
                 std::error_code errorCode;
-                std::ifstream file(filename_str);  // Use std::string
+                std::ifstream file(filename_str);
 
                 if (file) {
-                    std::vector<fs::path>
-                        loadedPaths;  // Read into a temporary vector first
+                    std::vector<fs::path> loadedPaths;
                     std::string line;
 
                     while (std::getline(file, line)) {
-                        // Basic validation: skip empty lines
                         if (line.empty())
                             continue;
 
@@ -568,20 +590,20 @@ public:
                                    "in file "
                                 << filename_str << " - " << line;
 #else
-                            LOG_F(ERROR, "asyncLoadStackFromFile: Invalid path found in file %s - %s",
+                            LOG_F(ERROR,
+                                  "asyncLoadStackFromFile: Invalid path found "
+                                  "in file %s - %s",
                                   filename_str.c_str(), line.c_str());
 #endif
                             errorCode = std::make_error_code(
                                 std::errc::invalid_argument);
-                            // Stop loading on first invalid path
                             handler(errorCode);
                             return;
                         }
                         loadedPaths.push_back(std::move(currentPath));
                     }
 
-                    if (!file.eof() &&
-                        file.fail()) {  // Check for read errors other than EOF
+                    if (!file.eof() && file.fail()) {
                         errorCode = std::make_error_code(std::errc::io_error);
 #ifdef ATOM_USE_BOOST
                         BOOST_LOG_TRIVIAL(error)
@@ -589,13 +611,15 @@ public:
                                "file "
                             << filename_str;
 #else
-                         LOG_F(ERROR, "asyncLoadStackFromFile: IO error while reading file %s", filename_str.c_str());
+                        LOG_F(ERROR,
+                              "asyncLoadStackFromFile: IO error while reading "
+                              "file %s",
+                              filename_str.c_str());
 #endif
                         handler(errorCode);
                         return;
                     }
 
-                    // Construct the new stack (paths are loaded bottom-to-top)
                     std::stack<fs::path> newStack;
                     for (const auto& path : loadedPaths) {
                         newStack.push(path);
@@ -606,15 +630,17 @@ public:
                         dirStack_ = std::move(newStack);
                     }
                 } else {
-                    errorCode = std::make_error_code(
-                        std::errc::permission_denied);  // Or other appropriate
-                                                        // error
+                    errorCode =
+                        std::make_error_code(std::errc::permission_denied);
 #ifdef ATOM_USE_BOOST
                     BOOST_LOG_TRIVIAL(error)
                         << "asyncLoadStackFromFile: Failed to open file "
                         << filename_str << " for reading.";
 #else
-                     LOG_F(ERROR, "asyncLoadStackFromFile: Failed to open file %s for reading.", filename_str.c_str());
+                    LOG_F(ERROR,
+                          "asyncLoadStackFromFile: Failed to open file %s for "
+                          "reading.",
+                          filename_str.c_str());
 #endif
                 }
 
@@ -623,7 +649,10 @@ public:
                     << "asyncLoadStackFromFile completed with error code: "
                     << errorCode.value() << " (" << errorCode.message() << ")";
 #else
-                LOG_F(INFO, "asyncLoadStackFromFile completed with error code: %d (%s)", errorCode.value(), errorCode.message().c_str());
+                LOG_F(
+                    INFO,
+                    "asyncLoadStackFromFile completed with error code: %d (%s)",
+                    errorCode.value(), errorCode.message().c_str());
 #endif
                 handler(errorCode);
             } catch (const std::exception& e) {
@@ -633,26 +662,31 @@ public:
                 BOOST_LOG_TRIVIAL(error)
                     << "Exception in asyncLoadStackFromFile: " << e.what();
 #else
-                LOG_F(ERROR, "Exception in asyncLoadStackFromFile: %s", e.what());
+                LOG_F(ERROR, "Exception in asyncLoadStackFromFile: %s",
+                      e.what());
 #endif
                 handler(errorCode);
             }
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
         });
+#else
+        }
+#endif
     }
 
     void asyncGetCurrentDirectory(
         const std::function<void(const fs::path&, const std::error_code&)>&
-            handler) const {  // Add error code to handler
+            handler) const {
 #ifdef ATOM_USE_BOOST
         BOOST_LOG_TRIVIAL(info) << "asyncGetCurrentDirectory called";
 #else
         LOG_F(INFO, "asyncGetCurrentDirectory called");
 #endif
-        // No strand needed for read-only fs::current_path? Check thread-safety
-        // guarantees. Assuming fs::current_path() is thread-safe for reading.
-        // If not, post to strand. Let's post to strand for consistency and
-        // safety.
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
         asio::post(strand_, [handler]() {
+#else
+        {
+#endif
             std::error_code ec;
             fs::path currentPath;
             try {
@@ -664,7 +698,10 @@ public:
                            "path. Error: "
                         << ec.message();
 #else
-                    LOG_F(ERROR, "asyncGetCurrentDirectory: Failed to get current path. Error: %s", ec.message().c_str());
+                    LOG_F(ERROR,
+                          "asyncGetCurrentDirectory: Failed to get current "
+                          "path. Error: %s",
+                          ec.message().c_str());
 #endif
                 } else {
 #ifdef ATOM_USE_BOOST
@@ -672,11 +709,13 @@ public:
                                                "completed with current path: "
                                             << currentPath.string();
 #else
-                    LOG_F(INFO, "asyncGetCurrentDirectory completed with current path: %s",
+                    LOG_F(INFO,
+                          "asyncGetCurrentDirectory completed with current "
+                          "path: %s",
                           currentPath.string().c_str());
 #endif
                 }
-                handler(currentPath, ec);  // Pass path and error code
+                handler(currentPath, ec);
             } catch (const fs::filesystem_error& e) {
                 ec = e.code();
 #ifdef ATOM_USE_BOOST
@@ -684,9 +723,11 @@ public:
                     << "Filesystem exception in asyncGetCurrentDirectory: "
                     << e.what();
 #else
-                LOG_F(ERROR, "Filesystem exception in asyncGetCurrentDirectory: %s", e.what());
+                LOG_F(ERROR,
+                      "Filesystem exception in asyncGetCurrentDirectory: %s",
+                      e.what());
 #endif
-                handler(fs::path(), ec);  // Return empty path and error code
+                handler(fs::path(), ec);
             } catch (const std::exception& e) {
                 ec = std::make_error_code(std::errc::io_error);
 #ifdef ATOM_USE_BOOST
@@ -694,59 +735,60 @@ public:
                     << "Generic exception in asyncGetCurrentDirectory: "
                     << e.what();
 #else
-                LOG_F(ERROR, "Generic exception in asyncGetCurrentDirectory: %s", e.what());
+                LOG_F(ERROR,
+                      "Generic exception in asyncGetCurrentDirectory: %s",
+                      e.what());
 #endif
-                handler(fs::path(), ec);  // Return empty path and error code
+                handler(fs::path(), ec);
             }
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
         });
+#else
+        }
+#endif
     }
 
     std::stack<fs::path> dirStack_;
-    asio::strand<asio::io_context::executor_type>
-        strand_;  // Use strand correctly
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
+    asio::strand<asio::io_context::executor_type> strand_;
+#endif
 };
 
-// DirectoryStack public interface methods implementation
-
-DirectoryStack::DirectoryStack(asio::io_context& io_context)
-    : impl_(std::make_unique<DirectoryStackImpl>(io_context)) {}
+DirectoryStack::DirectoryStack(
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
+    asio::io_context& io_context
+#else
+    void* io_context
+#endif
+    )
+    : impl_(std::make_unique<DirectoryStackImpl>(
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
+          io_context
+#else
+          io_context
+#endif
+          )) {
+#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
+    executor_ = io_context.get_executor();
+#endif
+}
 
 DirectoryStack::~DirectoryStack() noexcept = default;
-
 DirectoryStack::DirectoryStack(DirectoryStack&& other) noexcept = default;
-
 auto DirectoryStack::operator=(DirectoryStack&& other) noexcept
     -> DirectoryStack& = default;
-
-// --- Template Definitions ---
-// NOTE: These template definitions should ideally be moved to the header file
-// (pushd.hpp)
-//       to avoid potential linker errors, unless you explicitly instantiate
-//       them for all required PathLike types (like fs::path, std::string, const
-//       char*).
 
 template <PathLike P>
 void DirectoryStack::asyncPushd(
     const P& new_dir,
     const std::function<void(const std::error_code&)>& handler) {
-    // Forward to implementation's template method
     impl_->asyncPushd<P>(new_dir, handler);
 }
 
 template <PathLike P>
 auto DirectoryStack::pushd(const P& new_dir_param) -> Task<void> {
-    fs::path new_dir = new_dir_param;  // Convert PathLike to fs::path
-    // co_await asio::post(impl_->strand_, asio::use_awaitable); // Ensure
-    // execution on strand if needed, requires C++20 awaitable support in Asio
-
-    // The actual logic needs to be awaitable or run synchronously within the
-    // coroutine context. For simplicity, let's perform the operations directly,
-    // assuming they are safe to call from the coroutine's context. If they
-    // block heavily, consider co_awaiting an async operation posted to a
-    // background thread.
-
-    co_await std::suspend_never{};  // Minimal awaitable just to make it a
-                                    // coroutine
+    fs::path new_dir = new_dir_param;
+    co_await std::suspend_never{};
 
     std::error_code ec;
     try {
@@ -758,7 +800,6 @@ auto DirectoryStack::pushd(const P& new_dir_param) -> Task<void> {
             LOG_F(ERROR, "pushd: Invalid path provided - %s",
                   new_dir.string().c_str());
 #endif
-            // How to report error from coroutine? Throwing is standard.
             throw fs::filesystem_error(
                 "Invalid path provided", new_dir,
                 std::make_error_code(std::errc::invalid_argument));
@@ -783,7 +824,6 @@ auto DirectoryStack::pushd(const P& new_dir_param) -> Task<void> {
 
         fs::current_path(new_dir, ec);
         if (ec) {
-            // Rollback if changing directory failed
 #ifdef ATOM_USE_BOOST
             BOOST_LOG_TRIVIAL(warning)
                 << "pushd: Failed to change directory to " << new_dir.string()
@@ -808,24 +848,18 @@ auto DirectoryStack::pushd(const P& new_dir_param) -> Task<void> {
         LOG_F(INFO, "pushd successful to %s", new_dir.string().c_str());
 #endif
     } catch (const fs::filesystem_error& e) {
-        // Log already happened or will happen in caller
-        throw;  // Re-throw filesystem_error
+        throw;
     } catch (const std::exception& e) {
 #ifdef ATOM_USE_BOOST
         BOOST_LOG_TRIVIAL(error) << "Generic exception in pushd: " << e.what();
 #else
         LOG_F(ERROR, "Generic exception in pushd: %s", e.what());
 #endif
-        // Wrap generic exception in filesystem_error? Or rethrow as is?
-        // Rethrowing as is might be better unless we can map it to a specific
-        // filesystem issue.
         throw;
     }
 
-    co_return;  // Indicates success
+    co_return;
 }
-
-// --- End Template Definitions ---
 
 void DirectoryStack::asyncPopd(
     const std::function<void(const std::error_code&)>& handler) {
@@ -833,10 +867,7 @@ void DirectoryStack::asyncPopd(
 }
 
 auto DirectoryStack::popd() -> Task<void> {
-    // co_await asio::post(impl_->strand_, asio::use_awaitable); // Ensure
-    // execution on strand if needed
-
-    co_await std::suspend_never{};  // Minimal awaitable
+    co_await std::suspend_never{};
 
     std::error_code ec;
     try {
@@ -858,7 +889,6 @@ auto DirectoryStack::popd() -> Task<void> {
             impl_->dirStack_.pop();
         }
 
-        // Validate the path before changing to it
         if (!isValidPath(prevDir)) {
 #ifdef ATOM_USE_BOOST
             BOOST_LOG_TRIVIAL(error)
@@ -867,7 +897,6 @@ auto DirectoryStack::popd() -> Task<void> {
             LOG_F(ERROR, "popd: Invalid path found in stack - %s",
                   prevDir.string().c_str());
 #endif
-            // Don't push back the invalid path.
             throw fs::filesystem_error(
                 "Invalid path in stack", prevDir,
                 std::make_error_code(std::errc::invalid_argument));
@@ -883,7 +912,6 @@ auto DirectoryStack::popd() -> Task<void> {
             LOG_F(ERROR, "popd: Failed to change directory to %s. Error: %s",
                   prevDir.string().c_str(), ec.message().c_str());
 #endif
-            // Should we push prevDir back? Maybe not, state is uncertain.
             throw fs::filesystem_error("Failed to change directory", prevDir,
                                        ec);
         }
@@ -893,7 +921,7 @@ auto DirectoryStack::popd() -> Task<void> {
         LOG_F(INFO, "popd successful to %s", prevDir.string().c_str());
 #endif
     } catch (const fs::filesystem_error& e) {
-        throw;  // Re-throw filesystem_error
+        throw;
     } catch (const std::exception& e) {
 #ifdef ATOM_USE_BOOST
         BOOST_LOG_TRIVIAL(error) << "Generic exception in popd: " << e.what();
@@ -903,40 +931,30 @@ auto DirectoryStack::popd() -> Task<void> {
         throw;
     }
 
-    co_return;  // Indicates success
+    co_return;
 }
 
 auto DirectoryStack::peek() const -> fs::path {
     std::shared_lock lock(impl_->stackMutex_);
     if (impl_->dirStack_.empty()) {
-        // Returning empty path is conventional, but throwing might be better
-        // depending on expected usage. Let's throw for clarity.
         throw std::runtime_error("Directory stack is empty");
     }
     return impl_->dirStack_.top();
 }
 
-auto DirectoryStack::dirs() const noexcept
-    -> Vector<fs::path> {  // Return Vector
-    // The result of getStackContents is already bottom-to-top.
-    // If 'dirs' command traditionally shows top-first, we need to reverse it
-    // here. Let's assume 'dirs' shows top-first (like Unix `dirs`).
-    Vector<fs::path> contents =
-        impl_->getStackContents();                   // Gets bottom-to-top
-    std::reverse(contents.begin(), contents.end());  // Reverse to top-to-bottom
+auto DirectoryStack::dirs() const noexcept -> Vector<fs::path> {
+    Vector<fs::path> contents = impl_->getStackContents();
+    std::reverse(contents.begin(), contents.end());
     return contents;
 }
 
 void DirectoryStack::clear() noexcept {
     std::unique_lock lock(impl_->stackMutex_);
-    // Efficiently clear the stack
     std::stack<fs::path>().swap(impl_->dirStack_);
 }
 
 void DirectoryStack::swap(size_t index1, size_t index2) {
-    // Need to lock exclusively as we modify the stack
     std::unique_lock lock(impl_->stackMutex_);
-    // Get stack contents (bottom-to-top order)
     std::stack<fs::path> tempStack = impl_->dirStack_;
     Vector<fs::path> contents;
     contents.reserve(tempStack.size());
@@ -944,9 +962,8 @@ void DirectoryStack::swap(size_t index1, size_t index2) {
         contents.push_back(tempStack.top());
         tempStack.pop();
     }
-    std::reverse(contents.begin(), contents.end());  // Now bottom-to-top
+    std::reverse(contents.begin(), contents.end());
 
-    // Assuming index 0 is top of stack (like `dirs` output)
     size_t size = contents.size();
     if (index1 >= size || index2 >= size) {
 #ifdef ATOM_USE_BOOST
@@ -954,17 +971,14 @@ void DirectoryStack::swap(size_t index1, size_t index2) {
 #else
         LOG_F(WARNING, "swap: Index out of bounds.");
 #endif
-        // Throw or return? Throwing seems more appropriate for invalid args.
         throw std::out_of_range("Index out of bounds for directory stack swap");
     }
 
-    // Convert top-based index to bottom-based index for vector
     size_t vec_index1 = size - 1 - index1;
     size_t vec_index2 = size - 1 - index2;
 
     std::swap(contents[vec_index1], contents[vec_index2]);
 
-    // Rebuild the stack (pushing bottom element first)
     std::stack<fs::path> newStack;
     for (const auto& path : contents) {
         newStack.push(path);
@@ -974,7 +988,6 @@ void DirectoryStack::swap(size_t index1, size_t index2) {
 
 void DirectoryStack::remove(size_t index) {
     std::unique_lock lock(impl_->stackMutex_);
-    // Get stack contents (bottom-to-top order)
     std::stack<fs::path> tempStack = impl_->dirStack_;
     Vector<fs::path> contents;
     contents.reserve(tempStack.size());
@@ -982,9 +995,8 @@ void DirectoryStack::remove(size_t index) {
         contents.push_back(tempStack.top());
         tempStack.pop();
     }
-    std::reverse(contents.begin(), contents.end());  // Now bottom-to-top
+    std::reverse(contents.begin(), contents.end());
 
-    // Assuming index 0 is top of stack
     size_t size = contents.size();
     if (index >= size) {
 #ifdef ATOM_USE_BOOST
@@ -996,13 +1008,10 @@ void DirectoryStack::remove(size_t index) {
             "Index out of bounds for directory stack remove");
     }
 
-    // Convert top-based index to bottom-based index
     size_t vec_index = size - 1 - index;
     contents.erase(contents.begin() +
-                   static_cast<Vector<fs::path>::difference_type>(
-                       vec_index));  // Use correct difference_type
+                   static_cast<Vector<fs::path>::difference_type>(vec_index));
 
-    // Rebuild the stack
     std::stack<fs::path> newStack;
     for (const auto& path : contents) {
         newStack.push(path);
@@ -1015,9 +1024,7 @@ void DirectoryStack::asyncGotoIndex(
     impl_->asyncGotoIndex(index, handler);
 }
 
-// Coroutine versions need implementation
 auto DirectoryStack::gotoIndex(size_t index) -> Task<void> {
-    // co_await asio::post(impl_->strand_, asio::use_awaitable);
     co_await std::suspend_never{};
 
     std::error_code ec;
@@ -1031,7 +1038,7 @@ auto DirectoryStack::gotoIndex(size_t index) -> Task<void> {
                 contents.push_back(tempStack.top());
                 tempStack.pop();
             }
-            std::reverse(contents.begin(), contents.end());  // bottom-to-top
+            std::reverse(contents.begin(), contents.end());
         }
 
         size_t size = contents.size();
@@ -1046,7 +1053,6 @@ auto DirectoryStack::gotoIndex(size_t index) -> Task<void> {
                 std::make_error_code(std::errc::invalid_argument));
         }
 
-        // Assuming index 0 is top
         size_t vec_index = size - 1 - index;
         const fs::path& targetPath = contents[vec_index];
 
@@ -1091,17 +1097,15 @@ auto DirectoryStack::gotoIndex(size_t index) -> Task<void> {
 }
 
 void DirectoryStack::asyncSaveStackToFile(
-    const String& filename,  // Use String
+    const String& filename,
     const std::function<void(const std::error_code&)>& handler) {
     impl_->asyncSaveStackToFile(filename, handler);
 }
 
-auto DirectoryStack::saveStackToFile(const String& filename)
-    -> Task<void> {  // Use String
-    // co_await asio::post(impl_->strand_, asio::use_awaitable);
+auto DirectoryStack::saveStackToFile(const String& filename) -> Task<void> {
     co_await std::suspend_never{};
 
-    std::string filename_str = filename.c_str();  // Convert
+    std::string filename_str = filename.c_str();
 
     try {
         if (filename_str.empty()) {
@@ -1130,7 +1134,7 @@ auto DirectoryStack::saveStackToFile(const String& filename)
                 std::make_error_code(std::errc::permission_denied));
         }
 
-        Vector<fs::path> contents = impl_->getStackContents();  // bottom-to-top
+        Vector<fs::path> contents = impl_->getStackContents();
 
         for (const auto& dir : contents) {
             file << dir.string() << '\n';
@@ -1164,17 +1168,15 @@ auto DirectoryStack::saveStackToFile(const String& filename)
 }
 
 void DirectoryStack::asyncLoadStackFromFile(
-    const String& filename,  // Use String
+    const String& filename,
     const std::function<void(const std::error_code&)>& handler) {
     impl_->asyncLoadStackFromFile(filename, handler);
 }
 
-auto DirectoryStack::loadStackFromFile(const String& filename)
-    -> Task<void> {  // Use String
-    // co_await asio::post(impl_->strand_, asio::use_awaitable);
+auto DirectoryStack::loadStackFromFile(const String& filename) -> Task<void> {
     co_await std::suspend_never{};
 
-    std::string filename_str = filename.c_str();  // Convert
+    std::string filename_str = filename.c_str();
 
     try {
         if (filename_str.empty()) {
@@ -1289,13 +1291,11 @@ auto DirectoryStack::isEmpty() const noexcept -> bool {
 
 void DirectoryStack::asyncGetCurrentDirectory(
     const std::function<void(const std::filesystem::path&,
-                             const std::error_code&)>& handler)
-    const {  // Add error code
+                             const std::error_code&)>& handler) const {
     impl_->asyncGetCurrentDirectory(handler);
 }
 
 auto DirectoryStack::getCurrentDirectory() const -> Task<fs::path> {
-    // co_await asio::post(impl_->strand_, asio::use_awaitable);
     co_await std::suspend_never{};
 
     std::error_code ec;
@@ -1328,11 +1328,6 @@ auto DirectoryStack::getCurrentDirectory() const -> Task<fs::path> {
     co_return currentPath;
 }
 
-// --- Explicit Instantiations (Required if definitions remain in .cpp) ---
-// You MUST explicitly instantiate the template functions for every PathLike
-// type you intend to use them with (e.g., fs::path, std::string, const char*).
-// If you don't do this, you will get linker errors.
-// Example:
 template void DirectoryStack::asyncPushd<fs::path>(
     const fs::path&, const std::function<void(const std::error_code&)>&);
 template void DirectoryStack::asyncPushd<std::string>(
