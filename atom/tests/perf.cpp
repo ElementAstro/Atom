@@ -24,29 +24,30 @@ using namespace std::chrono_literals;
 Perf::Location::Location(std::source_location const& loc, const char* tag)
     : func(loc.function_name()),
       file(loc.file_name()),
-      line(loc.line()),
+      line(static_cast<int>(loc.line())),
       tag(tag ? tag : "") {}
 
 Perf::Location::Location(const char* func, std::source_location const& loc,
                          const char* tag)
     : func(func),
       file(loc.file_name()),
-      line(loc.line()),
+      line(static_cast<int>(loc.line())),
       tag(tag ? tag : "") {}
 #endif
 
 Perf::Location::Location(const char* func, const char* file, int line,
                          const char* tag)
-    : func(func ? func : "unknown_func"),  // Ensure func is not null
-      file(file ? file : "unknown_file"),  // Ensure file is not null
+    : func(func ? func : "unknown_func"),
+      file(file ? file : "unknown_file"),
       line(line),
       tag(tag ? tag : "") {}
 
 bool Perf::Location::operator<(const Location& rhs) const {
-    // Use string_view for efficient comparison if needed, but pointers are fine
-    // if lifetime is guaranteed (which it should be for string literals and
-    // __func__)
-    return std::tie(func, file, line) < std::tie(rhs.func, rhs.file, rhs.line);
+    if (auto cmp = std::strcmp(func, rhs.func); cmp != 0)
+        return cmp < 0;
+    if (auto cmp = std::strcmp(file, rhs.file); cmp != 0)
+        return cmp < 0;
+    return line < rhs.line;
 }
 
 // --- Perf::PerfTableEntry Implementation ---
@@ -60,38 +61,37 @@ Perf::PerfTableEntry::PerfTableEntry(std::uint64_t start, std::uint64_t end,
 // --- Perf::PerfFilter Implementation ---
 
 bool Perf::PerfFilter::match(const PerfTableEntry& entry) const {
-    auto duration = entry.t1 - entry.t0;
-    // Compare directly as uint64_t without using .count()
-    bool duration_match = duration >= minDuration;
-    bool func_match =
-        funcContains.empty() ||
-        (entry.location.func &&
-         std::string_view(entry.location.func).find(funcContains) !=
-             std::string_view::npos);
-    return duration_match && func_match;
+    const auto duration = entry.t1 - entry.t0;
+    if (duration < minDuration)
+        return false;
+
+    if (!funcContains.empty() && entry.location.func) {
+        return std::string_view(entry.location.func).find(funcContains) !=
+               std::string_view::npos;
+    }
+    return true;
 }
 
 // --- Perf::generateFilteredReport Implementation ---
 
 void Perf::generateFilteredReport(const PerfFilter& filter) {
-    std::cout << "--- Filtered Performance Report ---\n";
-    std::cout << "Filter: minDuration=" << filter.minDuration
+    std::cout << "--- Filtered Performance Report ---\n"
+              << "Filter: minDuration=" << filter.minDuration
               << "ns, funcContains='" << filter.funcContains << "'\n";
+
     bool found = false;
-    // Access gathered data safely
     std::lock_guard guard(gathered.lock);
     for (const auto& entry : gathered.table) {
         if (filter.match(entry)) {
             found = true;
-            auto duration_ns = entry.t1 - entry.t0;
-            std::cout << (entry.location.func ? entry.location.func : "?")
-                      << " ("
-                      << (entry.location.file ? entry.location.file : "??")
+            const auto duration_ns = entry.t1 - entry.t0;
+            std::cout << entry.location.func << " (" << entry.location.file
                       << ":" << entry.location.line << ") Tag: ["
-                      << (entry.location.tag ? entry.location.tag : "")
-                      << "] Duration: " << duration_ns << " ns\n";
+                      << entry.location.tag << "] Duration: " << duration_ns
+                      << " ns\n";
         }
     }
+
     if (!found) {
         std::cout << "No entries matched the filter.\n";
     }
@@ -106,17 +106,7 @@ void Perf::PerfThreadLocal::startNested(std::uint64_t t0) {
 
 void Perf::PerfThreadLocal::endNested(std::uint64_t t1) {
     if (!stack.empty()) {
-        if (t1 < stack.back()) {
-            std::cerr << "Warning: End time " << t1 << " is before start time "
-                      << stack.back() << " on thread "
-                      << std::this_thread::get_id() << std::endl;
-        }
         stack.pop_back();
-    } else {
-        std::cerr
-            << "Warning: PerfThreadLocal::endNested called on empty stack "
-            << "at time " << t1 << " on thread " << std::this_thread::get_id()
-            << std::endl;
     }
 }
 
@@ -130,25 +120,21 @@ Perf::PerfEntry::PerfEntry(std::chrono::high_resolution_clock::time_point start,
       location_(std::move(location)),
       threadId_(threadId) {}
 
-[[nodiscard]] std::chrono::nanoseconds Perf::PerfEntry::duration() const {
+std::chrono::nanoseconds Perf::PerfEntry::duration() const {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(end_ - start_);
 }
 
-[[nodiscard]] auto Perf::PerfEntry::startTimeRaw() const {
+auto Perf::PerfEntry::startTimeRaw() const {
     return start_.time_since_epoch().count();
 }
 
-[[nodiscard]] auto Perf::PerfEntry::endTimeRaw() const {
+auto Perf::PerfEntry::endTimeRaw() const {
     return end_.time_since_epoch().count();
 }
 
-[[nodiscard]] const Perf::Location& Perf::PerfEntry::location() const {
-    return location_;
-}
+const Perf::Location& Perf::PerfEntry::location() const { return location_; }
 
-[[nodiscard]] std::thread::id Perf::PerfEntry::threadId() const {
-    return threadId_;
-}
+std::thread::id Perf::PerfEntry::threadId() const { return threadId_; }
 
 // --- Perf::PerfAsyncLogger Implementation ---
 
@@ -156,21 +142,16 @@ Perf::PerfAsyncLogger::PerfAsyncLogger() : done(false) {
     worker = std::thread([this]() { this->run(); });
 }
 
-Perf::PerfAsyncLogger::~PerfAsyncLogger() {
-    // Ensure stop() is called, RAII style
-    stop();
-}
+Perf::PerfAsyncLogger::~PerfAsyncLogger() { stop(); }
 
 void Perf::PerfAsyncLogger::log(const PerfTableEntry& entry) {
-    if (!worker.joinable()) {
+    if (!worker.joinable())
         return;
-    }
+
     {
         std::lock_guard lock(mutex);
-        if (queue.size() >= getConfig().maxQueueSize) {
-            std::cerr << "Warning: Perf async log queue full (" << queue.size()
-                      << "), potentially dropping entries." << std::endl;
-        }
+        if (queue.size() >= getConfig().maxQueueSize)
+            return;
         queue.push(entry);
     }
     cv.notify_one();
@@ -179,42 +160,34 @@ void Perf::PerfAsyncLogger::log(const PerfTableEntry& entry) {
 void Perf::PerfAsyncLogger::run() {
     const std::string log_filename = "perf_async.log";
     std::ofstream fout(log_filename);
-    if (!fout) {
-        std::cerr << "Error: Failed to open async log file: " << log_filename
-                  << std::endl;
+    if (!fout)
         return;
-    }
 
     fout << "StartTimestamp,EndTimestamp,Duration(ns),Function,File,Line,Tag,"
-            "ThreadID\n";  // CSV Header
+            "ThreadID\n";
 
     while (true) {
         std::unique_lock lock(mutex);
         cv.wait(lock, [&] { return !queue.empty() || done; });
 
-        // Process all entries currently in the queue
-        std::queue<PerfTableEntry> local_queue;  // Process a batch
+        std::queue<PerfTableEntry> local_queue;
         local_queue.swap(queue);
-        lock.unlock();  // Unlock mutex while writing to file
+        lock.unlock();
 
         while (!local_queue.empty()) {
             const auto& entry = local_queue.front();
-            auto duration_ns = entry.t1 - entry.t0;
+            const auto duration_ns = entry.t1 - entry.t0;
 
             fout << entry.t0 << ',' << entry.t1 << ',' << duration_ns << ','
-                 << (entry.location.func ? entry.location.func : "?") << ','
-                 << (entry.location.file ? entry.location.file : "??") << ','
-                 << entry.location.line << ','
-                 << (entry.location.tag ? entry.location.tag : "") << ','
+                 << entry.location.func << ',' << entry.location.file << ','
+                 << entry.location.line << ',' << entry.location.tag << ','
                  << std::hash<std::thread::id>()(entry.threadId) << '\n';
             local_queue.pop();
         }
 
-        // Re-check done flag after processing the batch
         lock.lock();
-        if (done && queue.empty()) {
-            break;  // Exit loop only if done and queue is truly empty
-        }
+        if (done && queue.empty())
+            break;
     }
 }
 
@@ -223,56 +196,44 @@ void Perf::PerfAsyncLogger::stop() {
         std::lock_guard lock(mutex);
         done = true;
     }
-    cv.notify_all();  // Wake up the worker thread
+    cv.notify_all();
     if (worker.joinable()) {
-        worker.join();  // Wait for the worker thread to finish
+        worker.join();
     }
 }
 
 // --- Perf::PerfGather Implementation ---
 
 Perf::PerfGather::PerfGather() : output(nullptr) {
-    // Initialize output path from environment variable if set
-    const char* env_path = std::getenv("PERF_OUTPUT");
-    if (env_path) {
+    if (const char* env_path = std::getenv("PERF_OUTPUT")) {
         output_path = env_path;
         output = output_path.c_str();
     }
 }
 
-// --- Perf Implementation ---
-
 Perf::Perf(Location location) : location_(std::move(location)) {
-    auto now = std::chrono::high_resolution_clock::now();
-    t0_ = now.time_since_epoch().count();
-
+    t0_ = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     perthread.startNested(t0_);
 }
 
 Perf::~Perf() {
-    auto t1 =
+    const auto t1 =
         std::chrono::high_resolution_clock::now().time_since_epoch().count();
-
-    auto duration = t1 - t0_;
-
-    uint64_t min_duration =
+    const auto duration = t1 - t0_;
+    const auto min_duration =
         static_cast<uint64_t>(getConfig().minimumDuration.count());
 
     if (duration >= min_duration) {
-        // Create entry only if duration is sufficient
         PerfTableEntry entry(t0_, t1, location_);
 
-        // Log to thread-local storage (no lock needed)
         if (perthread.table.size() < getConfig().maxEventsPerThread) {
             perthread.table.push_back(entry);
         }
 
-        // Log to async logger (thread-safe)
         if (getConfig().asyncLogging) {
             asyncLogger.log(entry);
         }
 
-        // Log to central gathered table (thread-safe)
         {
             std::lock_guard guard(gathered.lock);
             gathered.table.push_back(entry);
@@ -287,20 +248,19 @@ Perf::~Perf() {
 void Perf::setConfig(const Config& config) {
     config_ = config;
 
+    std::lock_guard guard(gathered.lock);
     if (config.outputPath.has_value()) {
-        std::lock_guard guard(gathered.lock);
         gathered.output_path = config.outputPath.value().string();
         gathered.output = gathered.output_path.c_str();
     } else {
-        std::lock_guard guard(gathered.lock);
         gathered.output_path.clear();
         gathered.output = nullptr;
     }
 }
 
-[[nodiscard]] const Perf::Config& Perf::getConfig() { return config_; }
+const Perf::Config& Perf::getConfig() { return config_; }
 
-std::string formatDuration(std::chrono::nanoseconds duration_ns) {
+static std::string formatDuration(std::chrono::nanoseconds duration_ns) {
     std::ostringstream oss;
     oss << duration_ns.count() << " ns";
 
@@ -329,26 +289,26 @@ std::string formatDuration(std::chrono::nanoseconds duration_ns) {
 void Perf::PerfGather::exportToJSON(const std::string& filename) {
     nlohmann::json j = nlohmann::json::array();
     const auto& config = Perf::getConfig();
-    auto min_duration_ns =
+    const auto min_duration_ns =
         static_cast<uint64_t>(config.minimumDuration.count());
 
     try {
         std::lock_guard guard(lock);
+
         for (const auto& entry : table) {
-            auto duration = entry.t1 - entry.t0;
-            if (duration < min_duration_ns) {
+            const auto duration = entry.t1 - entry.t0;
+            if (duration < min_duration_ns)
                 continue;
-            }
 
             j.push_back(
-                {{"func", entry.location.func ? entry.location.func : "?"},
-                 {"file", entry.location.file ? entry.location.file : "??"},
+                {{"func", entry.location.func},
+                 {"file", entry.location.file},
                  {"line", entry.location.line},
                  {"start_ns", entry.t0},
                  {"end_ns", entry.t1},
                  {"duration_ns", duration},
                  {"thread_id", std::hash<std::thread::id>()(entry.threadId)},
-                 {"tag", entry.location.tag ? entry.location.tag : ""}});
+                 {"tag", entry.location.tag}});
         }
     } catch (const std::exception& e) {
         std::cerr << "Error processing performance data for JSON export: "
@@ -357,7 +317,7 @@ void Perf::PerfGather::exportToJSON(const std::string& filename) {
     }
 
     try {
-        auto path = fs::path(filename);
+        const auto path = fs::path(filename);
         if (!path.parent_path().empty() && !fs::exists(path.parent_path())) {
             std::error_code ec;
             fs::create_directories(path.parent_path(), ec);
@@ -388,13 +348,13 @@ void Perf::PerfGather::generateThreadReport() {
              std::vector<std::reference_wrapper<const PerfTableEntry>>>
         threadData;
     const auto& config = Perf::getConfig();
-    auto min_duration_ns =
+    const auto min_duration_ns =
         static_cast<uint64_t>(config.minimumDuration.count());
 
     {
         std::lock_guard guard(lock);
         for (const auto& entry : table) {
-            auto duration = entry.t1 - entry.t0;
+            const auto duration = entry.t1 - entry.t0;
             if (duration >= min_duration_ns) {
                 threadData[entry.threadId].emplace_back(entry);
             }
@@ -408,24 +368,23 @@ void Perf::PerfGather::generateThreadReport() {
         return;
     }
 
-    std::cout << "==========================================\n";
-    std::cout << "Performance Summary Report\n";
-    std::cout << "==========================================\n";
-    std::cout << "Configuration:\n";
-    std::cout << "  Minimum Duration: " << min_duration_ns << " ns\n";
-    std::cout << "  Async Logging: "
-              << (config.asyncLogging ? "Enabled" : "Disabled") << "\n";
-    std::cout << "------------------------------------------\n";
-    std::cout << "Total threads with recorded entries: " << threadData.size()
+    std::cout << "==========================================\n"
+              << "Performance Summary Report\n"
+              << "==========================================\n"
+              << "Configuration:\n"
+              << "  Minimum Duration: " << min_duration_ns << " ns\n"
+              << "  Async Logging: "
+              << (config.asyncLogging ? "Enabled" : "Disabled") << "\n"
+              << "------------------------------------------\n"
+              << "Total threads with recorded entries: " << threadData.size()
               << "\n\n";
 
-    // --- 每线程统计 ---
     for (const auto& [id, entries] : threadData) {
         std::cout << "--- Thread " << std::hash<std::thread::id>()(id)
-                  << " ---\n";
-        std::cout << "  Total entries recorded: " << entries.size() << "\n";
+                  << " ---\n"
+                  << "  Total entries recorded: " << entries.size() << "\n";
 
-        uint64_t totalDuration =
+        const uint64_t totalDuration =
             std::accumulate(entries.begin(), entries.end(), uint64_t(0),
                             [](uint64_t sum, const auto& entry_ref) {
                                 const auto& entry = entry_ref.get();
@@ -434,8 +393,7 @@ void Perf::PerfGather::generateThreadReport() {
 
         std::cout << "  Total duration recorded: " << totalDuration << " ns\n";
 
-        std::vector<std::reference_wrapper<const PerfTableEntry>>
-            sortedEntries = entries;
+        auto sortedEntries = entries;
         std::sort(sortedEntries.begin(), sortedEntries.end(),
                   [](const auto& a_ref, const auto& b_ref) {
                       const auto& a = a_ref.get();
@@ -443,27 +401,25 @@ void Perf::PerfGather::generateThreadReport() {
                       return (a.t1 - a.t0) > (b.t1 - b.t0);
                   });
 
-        std::cout << "  Top " << std::min(size_t(10), sortedEntries.size())
-                  << " entries by duration:\n";
-        for (size_t i = 0; i < std::min(size_t(10), sortedEntries.size());
-             ++i) {
+        const auto topCount = std::min(size_t(10), sortedEntries.size());
+        std::cout << "  Top " << topCount << " entries by duration:\n";
+
+        for (size_t i = 0; i < topCount; ++i) {
             const auto& entry = sortedEntries[i].get();
-            auto duration = entry.t1 - entry.t0;
-            std::cout << "    "
-                      << (entry.location.func ? entry.location.func : "?");
+            const auto duration = entry.t1 - entry.t0;
+            std::cout << "    " << entry.location.func;
             if (entry.location.tag && *entry.location.tag) {
                 std::cout << " [" << entry.location.tag << "]";
             }
-            std::cout << " - " << duration << " ns ("
-                      << (entry.location.file ? entry.location.file : "??")
+            std::cout << " - " << duration << " ns (" << entry.location.file
                       << ":" << entry.location.line << ")\n";
         }
         std::cout << "\n";
     }
 
-    std::cout << "==========================================\n";
-    std::cout << "Overall Top Functions (Across All Threads)\n";
-    std::cout << "==========================================\n";
+    std::cout << "==========================================\n"
+              << "Overall Top Functions (Across All Threads)\n"
+              << "==========================================\n";
 
     std::vector<std::reference_wrapper<const PerfTableEntry>> allEntries;
     for (const auto& [id, entries] : threadData) {
@@ -479,64 +435,59 @@ void Perf::PerfGather::generateThreadReport() {
 
     const size_t topCount = std::min(size_t(20), allEntries.size());
     std::cout << "Top " << topCount << " entries by duration:\n";
+
     for (size_t i = 0; i < topCount; ++i) {
         const auto& entry = allEntries[i].get();
-        auto duration = entry.t1 - entry.t0;
-        std::cout << std::setw(2) << (i + 1) << ". "
-                  << (entry.location.func ? entry.location.func : "?");
+        const auto duration = entry.t1 - entry.t0;
+        std::cout << std::setw(2) << (i + 1) << ". " << entry.location.func;
         if (entry.location.tag && *entry.location.tag) {
             std::cout << " [" << entry.location.tag << "]";
         }
         std::cout << " - " << duration << " ns (Thread "
                   << std::hash<std::thread::id>()(entry.threadId) << ", "
-                  << (entry.location.file ? entry.location.file : "??") << ":"
-                  << entry.location.line << ")\n";
+                  << entry.location.file << ":" << entry.location.line << ")\n";
     }
     std::cout << "==========================================\n";
 }
 
-void writeCsvData(std::ostream& csv, const Perf::PerfGather& gatherer,
-                  const Perf::Config& config) {
+static void writeCsvData(std::ostream& csv, const Perf::PerfGather& gatherer,
+                         const Perf::Config& config) {
     csv << "Function,File,Line,Start(ns),End(ns),Duration(ns),ThreadID,Tag\n";
 
-    auto min_duration_ns =
+    const auto min_duration_ns =
         static_cast<uint64_t>(config.minimumDuration.count());
 
-    // TODO: Fix this lock, it should be a scoped lock
     std::scoped_lock guard(gatherer.lock);
     for (const auto& entry : gatherer.table) {
-        auto duration = entry.t1 - entry.t0;
-        if (duration < min_duration_ns) {
+        const auto duration = entry.t1 - entry.t0;
+        if (duration < min_duration_ns)
             continue;
-        }
 
-        csv << (entry.location.func ? entry.location.func : "?") << ","
-            << (entry.location.file ? entry.location.file : "??") << ","
+        csv << entry.location.func << "," << entry.location.file << ","
             << entry.location.line << "," << entry.t0 << "," << entry.t1 << ","
             << duration << "," << std::hash<std::thread::id>()(entry.threadId)
             << ",";
 
-        if (entry.location.tag) {
+        if (entry.location.tag && *entry.location.tag) {
             csv << entry.location.tag;
         }
         csv << "\n";
     }
 }
 
-void writeFlamegraphData(std::ostream& folded, const Perf::PerfGather& gatherer,
-                         const Perf::Config& config) {
-    auto min_duration_ns =
+static void writeFlamegraphData(std::ostream& folded,
+                                const Perf::PerfGather& gatherer,
+                                const Perf::Config& config) {
+    const auto min_duration_ns =
         static_cast<uint64_t>(config.minimumDuration.count());
 
     std::scoped_lock guard(gatherer.lock);
     for (const auto& entry : gatherer.table) {
-        auto duration = entry.t1 - entry.t0;
-        if (duration < min_duration_ns) {
+        const auto duration = entry.t1 - entry.t0;
+        if (duration < min_duration_ns)
             continue;
-        }
 
-        folded << (entry.location.func ? entry.location.func : "?") << ";"
-               << (entry.location.file ? entry.location.file : "??") << ":"
+        folded << entry.location.func << ";" << entry.location.file << ":"
                << entry.location.line;
 
         if (entry.location.tag && *entry.location.tag) {
@@ -563,9 +514,9 @@ void Perf::finalize() {
     }
 
     if (!outputPathBase.empty()) {
-        fs::path basePath(outputPathBase);
-
+        const fs::path basePath(outputPathBase);
         const auto& formats = config.outputFormats;
+
         auto hasFormat = [&](OutputFormat fmt) {
             return std::any_of(formats.begin(), formats.end(),
                                [=](OutputFormat f) { return f == fmt; });
@@ -578,9 +529,10 @@ void Perf::finalize() {
         }
 
         if (hasFormat(OutputFormat::CSV)) {
-            std::string csvFilename = (basePath.parent_path() /
-                                       (basePath.filename().string() + ".csv"))
-                                          .string();
+            const std::string csvFilename =
+                (basePath.parent_path() /
+                 (basePath.filename().string() + ".csv"))
+                    .string();
             try {
                 std::ofstream csv(csvFilename);
                 if (csv) {
@@ -599,13 +551,14 @@ void Perf::finalize() {
         }
 
         if (hasFormat(OutputFormat::FLAMEGRAPH)) {
-            std::string foldedFilename =
+            const std::string foldedFilename =
                 (basePath.parent_path() /
                  (basePath.filename().string() + ".folded"))
                     .string();
-            std::string svgFilename = (basePath.parent_path() /
-                                       (basePath.filename().string() + ".svg"))
-                                          .string();
+            const std::string svgFilename =
+                (basePath.parent_path() /
+                 (basePath.filename().string() + ".svg"))
+                    .string();
             try {
                 std::ofstream folded(foldedFilename);
                 if (folded) {

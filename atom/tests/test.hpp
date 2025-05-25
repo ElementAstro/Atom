@@ -52,23 +52,24 @@ auto sortTestsByDependencies(const std::vector<TestCase>& tests)
 struct TestCase {
     std::string name;
     std::function<void()> func;
-    bool skip = false;                      // Whether to skip the test
-    bool async = false;                     // Whether to run asynchronously
-    double timeLimit = 0.0;                 // Time threshold for test
-    std::vector<std::string> dependencies;  // Tests this one depends on
-    std::vector<std::string> tags;          // Tags for categorizing tests
+    bool skip = false;
+    bool async = false;
+    double timeLimit = 0.0;
+    std::vector<std::string> dependencies;
+    std::vector<std::string> tags;
 
     /**
      * @brief Executes the test function and returns whether it passed
-     * @details This wraps the void-returning func in a try-catch block and returns success/failure
+     * @details This wraps the void-returning func in a try-catch block and
+     * returns success/failure
      * @return True if the test passed, false otherwise
      */
-    [[nodiscard]] bool testFunction() const {
+    [[nodiscard]] bool testFunction() const noexcept {
         try {
             func();
-            return true;  // Test passed if no exceptions were thrown
-        } catch (const std::exception&) {
-            return false;  // Test failed if an exception was thrown
+            return true;
+        } catch (...) {
+            return false;
         }
     }
 } ATOM_ALIGNAS(128);
@@ -133,7 +134,6 @@ ATOM_INLINE void registerTest(const std::string& name,
                       std::move(tags)};
 
     std::lock_guard lock(getTestMutex());
-    // Find default suite or create one
     auto& suites = getTestSuites();
     auto it = std::find_if(suites.begin(), suites.end(),
                            [](const TestSuite& s) { return s.name.empty(); });
@@ -187,10 +187,10 @@ using Hook = std::function<void()>;
  * @details Functions called at different phases of the test lifecycle
  */
 struct Hooks {
-    Hook beforeEach;  // Called before each test
-    Hook afterEach;   // Called after each test
-    Hook beforeAll;   // Called once before all tests
-    Hook afterAll;    // Called once after all tests
+    Hook beforeEach;
+    Hook afterEach;
+    Hook beforeAll;
+    Hook afterAll;
 } ATOM_ALIGNAS(128);
 
 /**
@@ -247,7 +247,7 @@ struct Timer {
  */
 ATOM_INLINE void exportResults(const std::string& filename,
                                const std::string& format) {
-    auto& stats = getTestStats();
+    const auto& stats = getTestStats();
     nlohmann::json jsonReport;
 
     jsonReport["total_tests"] = stats.totalTests;
@@ -265,57 +265,62 @@ ATOM_INLINE void exportResults(const std::string& filename,
         jsonResult["message"] = result.message;
         jsonResult["duration"] = result.duration;
         jsonResult["timed_out"] = result.timedOut;
-        jsonReport["test_results"].push_back(jsonResult);
+        jsonReport["test_results"].push_back(std::move(jsonResult));
     }
 
     if (format == "json") {
         std::ofstream file(filename + ".json");
-        file << jsonReport.dump(4);
-        file.close();
-        std::cout << "Test report saved to " << filename << ".json\n";
+        if (file) {
+            file << jsonReport.dump(4);
+            std::cout << "Test report saved to " << filename << ".json\n";
+        }
     } else if (format == "xml") {
         std::ofstream file(filename + ".xml");
-        file << "<?xml version=\"1.0\"?>\n<testsuite>\n";
-        file << "  <total_tests>" << stats.totalTests << "</total_tests>\n";
-        file << "  <passed_asserts>" << stats.passedAsserts
-             << "</passed_asserts>\n";
-        file << "  <failed_asserts>" << stats.failedAsserts
-             << "</failed_asserts>\n";
-        file << "  <skipped_tests>" << stats.skippedTests
-             << "</skipped_tests>\n";
-        for (const auto& result : stats.results) {
-            file << "  <testcase name=\"" << result.name << "\">\n";
-            file << "    <passed>" << (result.passed ? "true" : "false")
-                 << "</passed>\n";
-            file << "    <message>" << result.message << "</message>\n";
-            file << "    <duration>" << result.duration << "</duration>\n";
-            file << "    <timed_out>" << (result.timedOut ? "true" : "false")
-                 << "</timed_out>\n";
-            file << "  </testcase>\n";
+        if (file) {
+            file << "<?xml version=\"1.0\"?>\n<testsuite>\n"
+                 << "  <total_tests>" << stats.totalTests << "</total_tests>\n"
+                 << "  <passed_asserts>" << stats.passedAsserts
+                 << "</passed_asserts>\n"
+                 << "  <failed_asserts>" << stats.failedAsserts
+                 << "</failed_asserts>\n"
+                 << "  <skipped_tests>" << stats.skippedTests
+                 << "</skipped_tests>\n";
+
+            for (const auto& result : stats.results) {
+                file << "  <testcase name=\"" << result.name << "\">\n"
+                     << "    <passed>" << (result.passed ? "true" : "false")
+                     << "</passed>\n"
+                     << "    <message>" << result.message << "</message>\n"
+                     << "    <duration>" << result.duration << "</duration>\n"
+                     << "    <timed_out>"
+                     << (result.timedOut ? "true" : "false") << "</timed_out>\n"
+                     << "  </testcase>\n";
+            }
+            file << "</testsuite>\n";
+            std::cout << "Test report saved to " << filename << ".xml\n";
         }
-        file << "</testsuite>\n";
-        file.close();
-        std::cout << "Test report saved to " << filename << ".xml\n";
     } else if (format == "html") {
         std::ofstream file(filename + ".html");
-        file << "<!DOCTYPE html><html><head><title>Test Report</title></head>"
-                "<body>\n";
-        file << "<h1>Test Report</h1>\n";
-        file << "<p>Total Tests: " << stats.totalTests << "</p>\n";
-        file << "<p>Passed Asserts: " << stats.passedAsserts << "</p>\n";
-        file << "<p>Failed Asserts: " << stats.failedAsserts << "</p>\n";
-        file << "<p>Skipped Tests: " << stats.skippedTests << "</p>\n";
-        file << "<ul>\n";
-        for (const auto& result : stats.results) {
-            file << "  <li><strong>" << result.name << "</strong>: "
-                 << (result.passed ? "<span style='color:green;'>PASSED</span>"
-                                   : "<span style='color:red;'>FAILED</span>")
-                 << " (" << result.duration << " ms)</li>\n";
+        if (file) {
+            file << "<!DOCTYPE html><html><head><title>Test "
+                    "Report</title></head><body>\n"
+                 << "<h1>Test Report</h1>\n"
+                 << "<p>Total Tests: " << stats.totalTests << "</p>\n"
+                 << "<p>Passed Asserts: " << stats.passedAsserts << "</p>\n"
+                 << "<p>Failed Asserts: " << stats.failedAsserts << "</p>\n"
+                 << "<p>Skipped Tests: " << stats.skippedTests << "</p>\n"
+                 << "<ul>\n";
+
+            for (const auto& result : stats.results) {
+                file << "  <li><strong>" << result.name << "</strong>: "
+                     << (result.passed
+                             ? "<span style='color:green;'>PASSED</span>"
+                             : "<span style='color:red;'>FAILED</span>")
+                     << " (" << result.duration << " ms)</li>\n";
+            }
+            file << "</ul>\n</body></html>";
+            std::cout << "Test report saved to " << filename << ".html\n";
         }
-        file << "</ul>\n";
-        file << "</body></html>";
-        file.close();
-        std::cout << "Test report saved to " << filename << ".html\n";
     }
 }
 
@@ -327,15 +332,15 @@ ATOM_INLINE void exportResults(const std::string& filename,
 ATOM_INLINE void runTestCase(const TestCase& test, int retryCount = 0) {
     auto& stats = getTestStats();
     Timer timer;
-    auto& hooks = getHooks();
+    const auto& hooks = getHooks();
 
     if (test.skip) {
         printColored("SKIPPED\n", "1;33");
         std::lock_guard lock(getTestMutex());
         stats.skippedTests++;
         stats.totalTests++;
-        stats.results.push_back(
-            {std::string(test.name), false, true, "Test Skipped", 0.0, false});
+        stats.results.emplace_back(test.name, false, true, "Test Skipped", 0.0,
+                                   false);
         return;
     }
 
@@ -344,7 +349,6 @@ ATOM_INLINE void runTestCase(const TestCase& test, int retryCount = 0) {
     bool timedOut = false;
 
     try {
-        // Execute beforeEach hook if set
         if (hooks.beforeEach) {
             hooks.beforeEach();
         }
@@ -373,7 +377,6 @@ ATOM_INLINE void runTestCase(const TestCase& test, int retryCount = 0) {
         }
     }
 
-    // Execute afterEach hook if set
     try {
         if (hooks.afterEach) {
             hooks.afterEach();
@@ -387,8 +390,8 @@ ATOM_INLINE void runTestCase(const TestCase& test, int retryCount = 0) {
 
     std::lock_guard lock(getTestMutex());
     stats.totalTests++;
-    stats.results.push_back({std::string(test.name), passed, false,
-                             resultMessage, timer.elapsed(), timedOut});
+    stats.results.emplace_back(test.name, passed, false, resultMessage,
+                               timer.elapsed(), timedOut);
 
     if (timedOut) {
         printColored(resultMessage + " (TIMEOUT)", "1;31");
@@ -407,6 +410,7 @@ ATOM_INLINE void runTestsInParallel(const std::vector<TestCase>& tests,
                                     int numThreads = 4) {
     std::vector<std::thread> threads;
     threads.reserve(numThreads);
+
     for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back([i, &tests, numThreads]() {
             for (size_t j = i; j < tests.size(); j += numThreads) {
@@ -460,7 +464,7 @@ ATOM_INLINE void runTests(int argc, char* argv[]) {
         }
     }
 
-    auto& hooks = getHooks();
+    const auto& hooks = getHooks();
     if (hooks.beforeAll) {
         hooks.beforeAll();
     }
@@ -468,7 +472,7 @@ ATOM_INLINE void runTests(int argc, char* argv[]) {
     if (!filterPattern.empty()) {
         std::regex pattern(filterPattern);
         auto filteredTests = filterTests(pattern);
-        runAllTests(retryCount, parallel, numThreads);
+        runTestsFiltered(filteredTests, retryCount, parallel, numThreads);
     } else if (!testTag.empty()) {
         auto filteredTests = filterTestsByTag(testTag);
         runTestsFiltered(filteredTests, retryCount, parallel, numThreads);
@@ -547,11 +551,11 @@ ATOM_INLINE void runTestsFiltered(const std::vector<TestCase>& tests,
         }
     }
 
-    auto& stats = getTestStats();
+    const auto& stats = getTestStats();
     std::cout << "============================================================="
-                 "==================\n";
-    std::cout << "Total tests: " << stats.totalTests << "\n";
-    std::cout << "Total asserts: " << stats.totalAsserts << " | "
+                 "====================\n"
+              << "Total tests: " << stats.totalTests << "\n"
+              << "Total asserts: " << stats.totalAsserts << " | "
               << stats.passedAsserts << " passed | " << stats.failedAsserts
               << " failed | " << stats.skippedTests << " skipped\n";
 }
@@ -567,29 +571,23 @@ ATOM_INLINE auto sortTestsByDependencies(const std::vector<TestCase>& tests)
     std::vector<TestCase> sortedTests;
     std::set<std::string> processed;
 
-    // 首先构建名称到测试用例的映射
     for (const auto& test : tests) {
         testMap[test.name] = test;
     }
 
-    // 递归处理依赖关系
     std::function<void(const TestCase&)> resolveDependencies;
     resolveDependencies = [&](const TestCase& test) {
-        // 如果测试已经处理过，则跳过
         if (!processed.contains(test.name)) {
-            // 先处理该测试的所有依赖
             for (const auto& dep : test.dependencies) {
                 if (testMap.contains(dep)) {
                     resolveDependencies(testMap[dep]);
                 }
             }
-            // 将当前测试标记为已处理并添加到结果中
             processed.insert(test.name);
             sortedTests.push_back(test);
         }
     };
 
-    // 对每个测试用例应用依赖解析
     for (const auto& test : tests) {
         resolveDependencies(test);
     }
@@ -604,7 +602,7 @@ ATOM_INLINE auto sortTestsByDependencies(const std::vector<TestCase>& tests)
  * @param numThreads Number of threads for parallel execution
  */
 ATOM_INLINE void runAllTests(int retryCount, bool parallel, int numThreads) {
-    auto& stats = getTestStats();
+    const auto& stats = getTestStats();
     Timer globalTimer;
 
     std::vector<TestCase> allTests;
@@ -613,7 +611,6 @@ ATOM_INLINE void runAllTests(int retryCount, bool parallel, int numThreads) {
                         suite.testCases.end());
     }
 
-    // Sort tests by dependencies
     allTests = sortTestsByDependencies(allTests);
 
     if (parallel) {
@@ -625,12 +622,12 @@ ATOM_INLINE void runAllTests(int retryCount, bool parallel, int numThreads) {
     }
 
     std::cout << "============================================================="
-                 "==================\n";
-    std::cout << "Total tests: " << stats.totalTests << "\n";
-    std::cout << "Total asserts: " << stats.totalAsserts << " | "
+                 "====================\n"
+              << "Total tests: " << stats.totalTests << "\n"
+              << "Total asserts: " << stats.totalAsserts << " | "
               << stats.passedAsserts << " passed | " << stats.failedAsserts
-              << " failed | " << stats.skippedTests << " skipped\n";
-    std::cout << "Total time: " << globalTimer.elapsed() << " ms\n";
+              << " failed | " << stats.skippedTests << " skipped\n"
+              << "Total time: " << globalTimer.elapsed() << " ms\n";
 }
 
 /**
@@ -651,14 +648,14 @@ struct alignas(64) Expect {
      * @param msg Message describing the assertion
      */
     Expect(bool result, const char* file, int line, std::string msg)
-        : result(result), file(file), line(line), message(msg) {
+        : result(result), file(file), line(line), message(std::move(msg)) {
         auto& stats = getTestStats();
         stats.totalAsserts++;
         if (!result) {
             stats.failedAsserts++;
             throw std::runtime_error(std::string(file) + ":" +
                                      std::to_string(line) + ": FAILED - " +
-                                     std::string(msg));
+                                     message);
         }
         stats.passedAsserts++;
     }
@@ -692,9 +689,9 @@ ATOM_INLINE auto expectApprox(double lhs, double rhs, double epsilon,
 template <typename T, typename U>
 auto expectEq(const T& lhs, const U& rhs, const char* file, int line)
     -> Expect {
-    return Expect(lhs == rhs, file, line,
-                  std::string("Expected ") + std::to_string(lhs) +
-                      " == " + std::to_string(rhs));
+    return Expect(
+        lhs == rhs, file, line,
+        "Expected " + std::to_string(lhs) + " == " + std::to_string(rhs));
 }
 
 /**
@@ -708,9 +705,9 @@ auto expectEq(const T& lhs, const U& rhs, const char* file, int line)
 template <typename T, typename U>
 auto expectNe(const T& lhs, const U& rhs, const char* file, int line)
     -> Expect {
-    return Expect(lhs != rhs, file, line,
-                  std::string("Expected ") + std::to_string(lhs) +
-                      " != " + std::to_string(rhs));
+    return Expect(
+        lhs != rhs, file, line,
+        "Expected " + std::to_string(lhs) + " != " + std::to_string(rhs));
 }
 
 /**
@@ -724,9 +721,9 @@ auto expectNe(const T& lhs, const U& rhs, const char* file, int line)
 template <typename T, typename U>
 auto expectGt(const T& lhs, const U& rhs, const char* file, int line)
     -> Expect {
-    return Expect(lhs > rhs, file, line,
-                  std::string("Expected ") + std::to_string(lhs) + " > " +
-                      std::to_string(rhs));
+    return Expect(
+        lhs > rhs, file, line,
+        "Expected " + std::to_string(lhs) + " > " + std::to_string(rhs));
 }
 
 /**
@@ -759,8 +756,7 @@ ATOM_INLINE auto expectSetEq(const std::vector<T>& lhs,
                              int line) -> Expect {
     std::set<T> lhsSet(lhs.begin(), lhs.end());
     std::set<T> rhsSet(rhs.begin(), rhs.end());
-    bool result = lhsSet == rhsSet;
-    return {result, file, line, "Expected sets to be equal"};
+    return {lhsSet == rhsSet, file, line, "Expected sets to be equal"};
 }
 
 /**
@@ -774,9 +770,9 @@ ATOM_INLINE auto expectSetEq(const std::vector<T>& lhs,
 template <typename T, typename U>
 auto expectLt(const T& lhs, const U& rhs, const char* file, int line)
     -> Expect {
-    return Expect(lhs < rhs, file, line,
-                  std::string("Expected ") + std::to_string(lhs) + " < " +
-                      std::to_string(rhs));
+    return Expect(
+        lhs < rhs, file, line,
+        "Expected " + std::to_string(lhs) + " < " + std::to_string(rhs));
 }
 
 /**
@@ -790,9 +786,9 @@ auto expectLt(const T& lhs, const U& rhs, const char* file, int line)
 template <typename T, typename U>
 auto expectGe(const T& lhs, const U& rhs, const char* file, int line)
     -> Expect {
-    return Expect(lhs >= rhs, file, line,
-                  std::string("Expected ") + std::to_string(lhs) +
-                      " >= " + std::to_string(rhs));
+    return Expect(
+        lhs >= rhs, file, line,
+        "Expected " + std::to_string(lhs) + " >= " + std::to_string(rhs));
 }
 
 /**
@@ -809,11 +805,10 @@ template <typename T, typename U>
 auto expectLe(const T& lhs, const U& rhs, const char* file, int line)
     -> Expect {
     if constexpr (std::is_arithmetic_v<T> && std::is_arithmetic_v<U>) {
-        return Expect(lhs <= rhs, file, line,
-                      std::string("Expected ") + std::to_string(lhs) +
-                          " <= " + std::to_string(rhs));
+        return Expect(
+            lhs <= rhs, file, line,
+            "Expected " + std::to_string(lhs) + " <= " + std::to_string(rhs));
     } else {
-        using namespace std::string_literals;
         std::stringstream stream;
         stream << "Expected " << lhs << " <= " << rhs;
         return Expect(lhs <= rhs, file, line, stream.str());
@@ -904,20 +899,18 @@ public:
         return *this;
     }
 
-    // Disable copy and move operations
     TestSuiteBuilder(const TestSuiteBuilder&) = delete;
     TestSuiteBuilder& operator=(const TestSuiteBuilder&) = delete;
     TestSuiteBuilder(TestSuiteBuilder&&) = delete;
     TestSuiteBuilder& operator=(TestSuiteBuilder&&) = delete;
 
 private:
-    std::string suiteName_;            ///< Suite name
-    std::vector<TestCase> testCases_;  ///< Test cases in this suite
+    std::string suiteName_;
+    std::vector<TestCase> testCases_;
 };
 
 }  // namespace atom::test
 
-// Assertion macros
 #define expect(expr) atom::test::Expect(expr, __FILE__, __LINE__, #expr)
 #define expect_eq(lhs, rhs) atom::test::expectEq(lhs, rhs, __FILE__, __LINE__)
 #define expect_ne(lhs, rhs) atom::test::expectNe(lhs, rhs, __FILE__, __LINE__)

@@ -21,9 +21,6 @@ namespace atom::io {
 /**
  * @brief Concept for types that can be converted to a filesystem path
  * @tparam T The type to check for path conversion compatibility
- * @details This concept ensures that a type T is either convertible to
- *          std::filesystem::path or std::string_view, enabling flexible
- *          path handling in function templates
  */
 template <typename T>
 concept PathLike = std::convertible_to<T, std::filesystem::path> ||
@@ -47,7 +44,6 @@ auto compareFileAndSelfPermissions(std::string_view filePath) noexcept
  * @param filePath Path-like object representing the file path
  * @return Optional boolean as described in primary function
  * @noexcept Does not throw exceptions
- * @see compareFileAndSelfPermissions(std::string_view)
  */
 template <PathLike T>
 auto compareFileAndSelfPermissions(const T &filePath) noexcept
@@ -68,7 +64,6 @@ std::string getFilePermissions(std::string_view filePath) noexcept;
  * @brief Retrieve current process permissions as a readable string
  * @return Permission string in format "rwxrwxrwx" or empty string on error
  * @noexcept Does not throw exceptions; errors indicated by empty return
- * @details Determines effective permissions of the running process executable
  */
 std::string getSelfPermissions() noexcept;
 
@@ -78,13 +73,8 @@ std::string getSelfPermissions() noexcept;
  * @param permissions Permission string in format "rwxrwxrwx"
  * @throws std::invalid_argument If permission string format is invalid
  * @throws std::runtime_error If file doesn't exist or permission change fails
- * @details Sets file permissions based on 9-character permission string where:
- *          - Characters 0-2: owner permissions (read, write, execute)
- *          - Characters 3-5: group permissions (read, write, execute)
- *          - Characters 6-8: other permissions (read, write, execute)
  */
-void changeFilePermissions(
-    const std::filesystem::path &filePath,
-    const atom::containers::String &permissions);
+void changeFilePermissions(const std::filesystem::path &filePath,
+                           const atom::containers::String &permissions);
 
 }  // namespace atom::io

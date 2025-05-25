@@ -23,15 +23,15 @@ namespace fs = std::filesystem;
 #include <sys/types.h>
 #endif
 
+#include <spdlog/spdlog.h>
 #include "atom/containers/high_performance.hpp"
-#include "atom/log/loguru.hpp"
 
 namespace atom::io {
 
 #ifdef ATOM_USE_BOOST
 std::string getFilePermissions(std::string_view filePath) noexcept {
     if (filePath.empty()) {
-        LOG_F(ERROR, "Empty file path provided");
+        spdlog::error("Empty file path provided");
         return {};
     }
 
@@ -40,8 +40,8 @@ std::string getFilePermissions(std::string_view filePath) noexcept {
         fs::path pPath(filePath);
         fs::file_status status = fs::status(pPath, ec);
         if (ec) {
-            LOG_F(ERROR, "Error getting status for '{}': {}", filePath,
-                  ec.message());
+            spdlog::error("Failed to get status for '{}': {}", filePath,
+                          ec.message());
             return {};
         }
         fs::perms p = status.permissions();
@@ -68,12 +68,12 @@ std::string getFilePermissions(std::string_view filePath) noexcept {
 
         return {permissions.begin(), permissions.end()};
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in getFilePermissions for '{}': {}", filePath,
-              e.what());
+        spdlog::error("Exception in getFilePermissions for '{}': {}", filePath,
+                      e.what());
         return {};
     } catch (...) {
-        LOG_F(ERROR, "Unknown exception in getFilePermissions for '{}'",
-              filePath);
+        spdlog::error("Unknown exception in getFilePermissions for '{}'",
+                      filePath);
         return {};
     }
 }
@@ -87,7 +87,8 @@ std::string getSelfPermissions() noexcept {
                                static_cast<DWORD>(path.size())) != 0) {
             return getFilePermissions(path.data());
         } else {
-            LOG_F(ERROR, "GetModuleFileNameA failed: {}", GetLastError());
+            spdlog::error("GetModuleFileNameA failed with error: {}",
+                          GetLastError());
         }
 #else
         std::array<char, 1024> path{};
@@ -96,21 +97,22 @@ std::string getSelfPermissions() noexcept {
             path[len] = '\0';
             return getFilePermissions(path.data());
         } else {
-            LOG_F(ERROR, "readlink /proc/self/exe failed: {}", strerror(errno));
+            spdlog::error("readlink /proc/self/exe failed: {}",
+                          strerror(errno));
         }
 #endif
         fs::path selfPath = fs::current_path(ec);
         if (ec) {
-            LOG_F(ERROR, "Error getting current path: {}", ec.message());
+            spdlog::error("Failed to get current path: {}", ec.message());
             return {};
         }
         return getFilePermissions(selfPath.string());
 
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in getSelfPermissions: {}", e.what());
+        spdlog::error("Exception in getSelfPermissions: {}", e.what());
         return {};
     } catch (...) {
-        LOG_F(ERROR, "Unknown exception in getSelfPermissions");
+        spdlog::error("Unknown exception in getSelfPermissions");
         return {};
     }
 }
@@ -120,7 +122,7 @@ std::string getSelfPermissions() noexcept {
 #ifdef _WIN32
 std::string getFilePermissions(std::string_view filePath) noexcept {
     if (filePath.empty()) {
-        LOG_F(ERROR, "Empty file path provided");
+        spdlog::error("Empty file path provided");
         return {};
     }
 
@@ -143,8 +145,9 @@ std::string getFilePermissions(std::string_view filePath) noexcept {
                                           nullptr, &pDACL, nullptr, &pSD);
 
         if (dwRtnCode != ERROR_SUCCESS) {
-            LOG_F(ERROR, "GetNamedSecurityInfoW error for '{}': {}", filePath,
-                  dwRtnCode);
+            spdlog::error(
+                "GetNamedSecurityInfoW failed for '{}' with error code: {}",
+                filePath, dwRtnCode);
             return {};
         }
 
@@ -178,20 +181,19 @@ std::string getFilePermissions(std::string_view filePath) noexcept {
                 permissions[2] = permissions[5] = permissions[8] = 'x';
 
         } else {
-            LOG_F(WARNING,
-                  "No DACL found for '{}', cannot determine permissions.",
-                  filePath);
+            spdlog::warn("No DACL found for '{}', cannot determine permissions",
+                         filePath);
             return {};
         }
 
         return {permissions.begin(), permissions.end()};
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in getFilePermissions for '{}': {}", filePath,
-              e.what());
+        spdlog::error("Exception in getFilePermissions for '{}': {}", filePath,
+                      e.what());
         return {};
     } catch (...) {
-        LOG_F(ERROR, "Unknown exception in getFilePermissions for '{}'",
-              filePath);
+        spdlog::error("Unknown exception in getFilePermissions for '{}'",
+                      filePath);
         return {};
     }
 }
@@ -202,7 +204,7 @@ std::string getSelfPermissions() noexcept {
         if (GetModuleFileNameW(nullptr, wPath.data(),
                                static_cast<DWORD>(wPath.size())) == 0) {
             const auto error = GetLastError();
-            LOG_F(ERROR, "GetModuleFileNameW error: {}", error);
+            spdlog::error("GetModuleFileNameW failed with error: {}", error);
             return {};
         }
 
@@ -215,24 +217,25 @@ std::string getSelfPermissions() noexcept {
 
         return getFilePermissions(path);
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in getSelfPermissions: {}", e.what());
+        spdlog::error("Exception in getSelfPermissions: {}", e.what());
         return {};
     } catch (...) {
-        LOG_F(ERROR, "Unknown exception in getSelfPermissions");
+        spdlog::error("Unknown exception in getSelfPermissions");
         return {};
     }
 }
 #else
 std::string getFilePermissions(std::string_view filePath) noexcept {
     if (filePath.empty()) {
-        LOG_F(ERROR, "Empty file path provided");
+        spdlog::error("Empty file path provided");
         return {};
     }
 
     try {
         struct stat fileStat{};
         if (stat(filePath.data(), &fileStat) < 0) {
-            LOG_F(ERROR, "stat error for '{}': {}", filePath, strerror(errno));
+            spdlog::error("stat failed for '{}': {}", filePath,
+                          strerror(errno));
             return {};
         }
 
@@ -249,12 +252,12 @@ std::string getFilePermissions(std::string_view filePath) noexcept {
 
         return {permissions.begin(), permissions.end()};
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in getFilePermissions for '{}': {}", filePath,
-              e.what());
+        spdlog::error("Exception in getFilePermissions for '{}': {}", filePath,
+                      e.what());
         return {};
     } catch (...) {
-        LOG_F(ERROR, "Unknown exception in getFilePermissions for '{}'",
-              filePath);
+        spdlog::error("Unknown exception in getFilePermissions for '{}'",
+                      filePath);
         return {};
     }
 }
@@ -265,15 +268,15 @@ std::string getSelfPermissions() noexcept {
 
         ssize_t len = readlink("/proc/self/exe", path.data(), path.size() - 1);
         if (len < 0) {
-            LOG_F(ERROR, "readlink /proc/self/exe error: {}", strerror(errno));
+            spdlog::error("readlink /proc/self/exe failed: {}",
+                          strerror(errno));
 
             try {
                 auto currentPath = fs::current_path();
-                LOG_F(WARNING,
-                      "Falling back to current directory permissions.");
+                spdlog::warn("Falling back to current directory permissions");
                 return getFilePermissions(currentPath.string());
             } catch (const fs::filesystem_error& e) {
-                LOG_F(ERROR, "Failed to get current path: {}", e.what());
+                spdlog::error("Failed to get current path: {}", e.what());
                 return {};
             }
         }
@@ -281,10 +284,10 @@ std::string getSelfPermissions() noexcept {
         path[len] = '\0';
         return getFilePermissions(path.data());
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in getSelfPermissions: {}", e.what());
+        spdlog::error("Exception in getSelfPermissions: {}", e.what());
         return {};
     } catch (...) {
-        LOG_F(ERROR, "Unknown exception in getSelfPermissions");
+        spdlog::error("Unknown exception in getSelfPermissions");
         return {};
     }
 }
@@ -294,60 +297,60 @@ std::string getSelfPermissions() noexcept {
 std::optional<bool> compareFileAndSelfPermissions(
     std::string_view filePath) noexcept {
     if (filePath.empty()) {
-        LOG_F(ERROR, "Empty file path provided for comparison");
+        spdlog::error("Empty file path provided for comparison");
         return std::nullopt;
     }
 
     try {
         fs::path pPath(filePath);
         if (!fs::exists(pPath)) {
-            LOG_F(ERROR, "File does not exist for comparison: '{}'", filePath);
+            spdlog::error("File does not exist for comparison: '{}'", filePath);
             return std::nullopt;
         }
 
         std::string filePermissions = getFilePermissions(filePath);
         if (filePermissions.empty()) {
-            LOG_F(WARNING,
-                  "Could not get permissions for file '{}' during comparison.",
-                  filePath);
+            spdlog::warn(
+                "Could not get permissions for file '{}' during comparison",
+                filePath);
             return std::nullopt;
         }
 
         std::string selfPermissions = getSelfPermissions();
         if (selfPermissions.empty()) {
-            LOG_F(WARNING, "Could not get self permissions during comparison.");
+            spdlog::warn("Could not get self permissions during comparison");
             return std::nullopt;
         }
 
-        VLOG_F(1, "Comparing file ('{}': {}) and self ({}) permissions.",
-               filePath, filePermissions, selfPermissions);
+        spdlog::debug("Comparing file ('{}': {}) and self ({}) permissions",
+                      filePath, filePermissions, selfPermissions);
 
         return filePermissions == selfPermissions;
     }
 #ifdef ATOM_USE_BOOST
     catch (const boost::system::system_error& e) {
-        LOG_F(ERROR,
-              "Boost Filesystem error in compareFileAndSelfPermissions for "
-              "'{}': {}",
-              filePath, e.what());
+        spdlog::error(
+            "Boost filesystem error in compareFileAndSelfPermissions for '{}': "
+            "{}",
+            filePath, e.what());
         return std::nullopt;
     }
 #else
     catch (const fs::filesystem_error& e) {
-        LOG_F(ERROR,
-              "Filesystem error in compareFileAndSelfPermissions for '{}': {}",
-              filePath, e.what());
+        spdlog::error(
+            "Filesystem error in compareFileAndSelfPermissions for '{}': {}",
+            filePath, e.what());
         return std::nullopt;
     }
 #endif
     catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in compareFileAndSelfPermissions for '{}': {}",
-              filePath, e.what());
+        spdlog::error("Exception in compareFileAndSelfPermissions for '{}': {}",
+                      filePath, e.what());
         return std::nullopt;
     } catch (...) {
-        LOG_F(ERROR,
-              "Unknown exception in compareFileAndSelfPermissions for '{}'",
-              filePath);
+        spdlog::error(
+            "Unknown exception in compareFileAndSelfPermissions for '{}'",
+            filePath);
         return std::nullopt;
     }
 }
@@ -355,13 +358,13 @@ std::optional<bool> compareFileAndSelfPermissions(
 void changeFilePermissions(const fs::path& filePath,
                            const atom::containers::String& permissions) {
     if (filePath.empty()) {
-        LOG_F(ERROR, "Empty file path provided to changeFilePermissions.");
-        throw std::invalid_argument("Empty file path provided.");
+        spdlog::error("Empty file path provided to changeFilePermissions");
+        throw std::invalid_argument("Empty file path provided");
     }
 
     try {
         if (!fs::exists(filePath)) {
-            LOG_F(ERROR, "File does not exist: '{}'", filePath.string());
+            spdlog::error("File does not exist: '{}'", filePath.string());
             throw std::runtime_error("File does not exist: " +
                                      filePath.string());
         }
@@ -369,9 +372,9 @@ void changeFilePermissions(const fs::path& filePath,
         fs::perms newPerms = fs::perms::none;
 
         if (permissions.length() != 9) {
-            LOG_F(ERROR,
-                  "Invalid permission format: '{}'. Expected 'rwxrwxrwx'.",
-                  permissions);
+            spdlog::error(
+                "Invalid permission format: '{}'. Expected 'rwxrwxrwx'",
+                permissions);
             throw std::invalid_argument(
                 "Invalid permission format. Expected format: 'rwxrwxrwx'");
         }
@@ -382,14 +385,12 @@ void changeFilePermissions(const fs::path& filePath,
             newPerms |= fs::perms::owner_write;
         if (permissions[2] == 'x')
             newPerms |= fs::perms::owner_exec;
-
         if (permissions[3] == 'r')
             newPerms |= fs::perms::group_read;
         if (permissions[4] == 'w')
             newPerms |= fs::perms::group_write;
         if (permissions[5] == 'x')
             newPerms |= fs::perms::group_exec;
-
         if (permissions[6] == 'r')
             newPerms |= fs::perms::others_read;
         if (permissions[7] == 'w')
@@ -397,27 +398,27 @@ void changeFilePermissions(const fs::path& filePath,
         if (permissions[8] == 'x')
             newPerms |= fs::perms::others_exec;
 
-        VLOG_F(1, "Setting permissions for '{}' to %03o", filePath.string(),
-               static_cast<int>(newPerms));
+        spdlog::debug("Setting permissions for '{}' to {:#o}",
+                      filePath.string(), static_cast<int>(newPerms));
         fs::permissions(filePath, newPerms, fs::perm_options::replace);
-        LOG_F(INFO, "Successfully changed permissions for '{}'",
-              filePath.string());
+        spdlog::info("Successfully changed permissions for '{}'",
+                     filePath.string());
 
     } catch (const fs::filesystem_error& e) {
-        LOG_F(ERROR, "Failed to change permissions for '{}': {}",
-              filePath.string(), e.what());
+        spdlog::error("Failed to change permissions for '{}': {}",
+                      filePath.string(), e.what());
         throw std::runtime_error("Failed to change permissions for '" +
                                  filePath.string() + "': " + e.what());
     } catch (const std::invalid_argument& e) {
         throw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error changing file permissions for '{}': {}",
-              filePath.string(), e.what());
+        spdlog::error("Error changing file permissions for '{}': {}",
+                      filePath.string(), e.what());
         throw std::runtime_error("Error changing file permissions: " +
                                  std::string(e.what()));
     } catch (...) {
-        LOG_F(ERROR, "Unknown error changing file permissions for '{}'",
-              filePath.string());
+        spdlog::error("Unknown error changing file permissions for '{}'",
+                      filePath.string());
         throw std::runtime_error(
             "Unknown error changing file permissions for '" +
             filePath.string() + "'");
