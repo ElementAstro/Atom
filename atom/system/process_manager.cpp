@@ -1,17 +1,8 @@
-// process.cpp
 /*
- * process.cpp
+ * process_manager.cpp
  *
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
-
-/*************************************************
-
-Date: 2023-12-24
-
-Description: Enhanced Process Manager Implementation
-
-**************************************************/
 
 #include "process_manager.hpp"
 
@@ -22,13 +13,11 @@ Description: Enhanced Process Manager Implementation
 #include <sstream>
 
 #if defined(_WIN32)
-// clang-format off
-#include <windows.h>
-#include <tlhelp32.h>
 #include <iphlpapi.h>
-#include <tchar.h>
 #include <psapi.h>
-// clang-format on
+#include <tchar.h>
+#include <tlhelp32.h>
+#include <windows.h>
 #elif defined(__linux__) || defined(__ANDROID__)
 #include <dirent.h>
 #include <grp.h>
@@ -52,7 +41,7 @@ Description: Enhanced Process Manager Implementation
 #error "Unknown platform"
 #endif
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 
 namespace atom::system {
 
@@ -62,10 +51,7 @@ class ProcessManager::ProcessManagerImpl {
 public:
     explicit ProcessManagerImpl(int maxProcess) : m_maxProcesses(maxProcess) {}
 
-    ~ProcessManagerImpl() {
-        // Ensure all processes are cleaned up
-        waitForCompletion();
-    }
+    ~ProcessManagerImpl() { waitForCompletion(); }
 
     ProcessManagerImpl(const ProcessManagerImpl &) = delete;
     ProcessManagerImpl &operator=(const ProcessManagerImpl &) = delete;
@@ -73,10 +59,11 @@ public:
     ProcessManagerImpl &operator=(ProcessManagerImpl &&) = delete;
 
     auto createProcess(const std::string &command,
-                       const std::string &identifier,
-                       bool isBackground) -> bool {
+                       const std::string &identifier, bool isBackground)
+        -> bool {
         if (processes.size() >= static_cast<size_t>(m_maxProcesses)) {
-            LOG_F(ERROR, "Maximum number of managed processes reached.");
+            spdlog::error("Maximum number of managed processes reached: {}",
+                          m_maxProcesses);
             THROW_PROCESS_ERROR("Maximum number of managed processes reached.");
         }
 
@@ -88,23 +75,15 @@ public:
         si.cb = sizeof(si);
         ZeroMemory(&pi, sizeof(pi));
 
-        // Create the child process.
         BOOL success = CreateProcessA(
-            NULL,  // No module name (use command line)
-            const_cast<char *>(command.c_str()),  // Command line
-            NULL,   // Process handle not inheritable
-            NULL,   // Thread handle not inheritable
-            FALSE,  // Set handle inheritance to FALSE
-            isBackground ? CREATE_NO_WINDOW : 0,  // Creation flags
-            NULL,  // Use parent's environment block
-            NULL,  // Use parent's starting directory
-            &si,   // Pointer to STARTUPINFO structure
-            &pi    // Pointer to PROCESS_INFORMATION structure
-        );
+            NULL, const_cast<char *>(command.c_str()), NULL, NULL, FALSE,
+            isBackground ? CREATE_NO_WINDOW : 0, NULL, NULL, &si, &pi);
 
         if (!success) {
             DWORD error = GetLastError();
-            LOG_F(ERROR, "CreateProcess failed with error code: {}", error);
+            spdlog::error(
+                "CreateProcess failed with error code: {} for command: {}",
+                error, command);
             THROW_PROCESS_ERROR("Failed to create process.");
         }
 
@@ -112,19 +91,16 @@ public:
 #else
         pid = fork();
         if (pid == 0) {
-            // Child process
             if (isBackground) {
-                // Detach from terminal
                 if (setsid() < 0) {
                     _exit(EXIT_FAILURE);
                 }
             }
             execlp(command.c_str(), command.c_str(), nullptr);
-            // If execlp fails
-            LOG_F(ERROR, "execlp failed for command: {}", command);
+            spdlog::error("execlp failed for command: {}", command);
             _exit(EXIT_FAILURE);
         } else if (pid < 0) {
-            LOG_F(ERROR, "Failed to fork process for command: {}", command);
+            spdlog::error("Failed to fork process for command: {}", command);
             THROW_PROCESS_ERROR("Failed to fork process.");
         }
 #endif
@@ -138,7 +114,9 @@ public:
         process.handle = pi.hProcess;
 #endif
         processes.emplace_back(process);
-        LOG_F(INFO, "Process created: PID={}, Name={}", pid, identifier);
+        spdlog::info(
+            "Process created successfully: PID={}, identifier={}, command={}",
+            pid, identifier, command);
         return true;
     }
 
@@ -150,26 +128,28 @@ public:
 
         if (processIt != processes.end()) {
 #ifdef _WIN32
-            // Windows-specific process termination
             if (!TerminateProcess(processIt->handle, 1)) {
                 DWORD error = GetLastError();
-                LOG_F(ERROR, "TerminateProcess failed with error code: {}",
-                      error);
+                spdlog::error(
+                    "TerminateProcess failed with error code: {} for PID: {}",
+                    error, pid);
                 THROW_PROCESS_ERROR("Failed to terminate process.");
             }
             CloseHandle(processIt->handle);
 #else
             if (kill(pid, signal) != 0) {
-                LOG_F(ERROR, "Failed to send signal {} to PID {}", signal, pid);
+                spdlog::error("Failed to send signal {} to PID {}: {}", signal,
+                              pid, strerror(errno));
                 THROW_PROCESS_ERROR("Failed to terminate process.");
             }
 #endif
-            LOG_F(INFO, "Process terminated: PID={}, Signal={}", pid, signal);
+            spdlog::info("Process terminated successfully: PID={}, signal={}",
+                         pid, signal);
             processes.erase(processIt);
             cv.notify_all();
             return true;
         }
-        LOG_F(WARNING, "Attempted to terminate non-existent PID: {}", pid);
+        spdlog::warn("Attempted to terminate non-existent PID: {}", pid);
         return false;
     }
 
@@ -180,70 +160,70 @@ public:
              processIt != processes.end();) {
             if (processIt->name == name) {
                 try {
-                    terminateProcess(processIt->pid, signal);
-                    success = true;
+                    if (terminateProcess(processIt->pid, signal)) {
+                        success = true;
+                    }
                 } catch (const ProcessException &e) {
-                    LOG_F(ERROR, "Failed to terminate process {}: {}", name,
-                          e.what());
+                    spdlog::error("Failed to terminate process {}: {}", name,
+                                  e.what());
                 }
                 processIt = processes.erase(processIt);
             } else {
                 ++processIt;
             }
         }
+        if (success) {
+            spdlog::info("Successfully terminated processes with name: {}",
+                         name);
+        } else {
+            spdlog::warn("No processes found with name: {}", name);
+        }
         return success;
     }
 
     void waitForCompletion() {
         std::unique_lock lock(mtx);
-        // TODO: Implement a more efficient way to wait for all processes to
-        // complete cv.wait(lock, [this] { return processes.empty(); });
-        LOG_F(INFO, "All managed processes have completed.");
+        spdlog::info(
+            "Waiting for all managed processes to complete. Current count: {}",
+            processes.size());
     }
 
     auto runScript(const std::string &script, const std::string &identifier,
                    bool isBackground) -> bool {
-        // Assuming the script is executable
         return createProcess(script, identifier, isBackground);
     }
 
     auto monitorProcesses() -> bool {
 #ifdef _WIN32
-        // Windows-specific monitoring can be implemented using
-        // WaitForSingleObject or similar APIs For simplicity, not implemented
-        // here
-        LOG_F(WARNING, "Process monitoring not implemented for Windows.");
+        spdlog::warn("Process monitoring not implemented for Windows platform");
         return false;
 #elif defined(__linux__) || defined(__APPLE__)
         std::unique_lock lock(mtx);
+        size_t initialCount = processes.size();
         for (auto processIt = processes.begin();
              processIt != processes.end();) {
             int status;
             pid_t result = waitpid(processIt->pid, &status, WNOHANG);
             if (result == 0) {
-                // Process is still running
                 ++processIt;
             } else if (result == -1) {
-                LOG_F(ERROR, "Error monitoring PID {}: {}", processIt->pid,
-                      [&] {
-                          std::array<char, BUFFER_SIZE> buffer;
-                          char *errorMsg =
-                              strerror_r(errno, buffer.data(), buffer.size());
-                          return std::string(errorMsg);
-                          return std::string(buffer.data());
-                      }());
+                spdlog::error("Error monitoring PID {}: {}", processIt->pid,
+                              strerror(errno));
                 processIt = processes.erase(processIt);
             } else {
-                // Process has terminated
-                LOG_F(INFO, "Process terminated: PID={}, Status={}",
-                      processIt->pid, status);
+                spdlog::info("Process terminated naturally: PID={}, status={}",
+                             processIt->pid, status);
                 processIt = processes.erase(processIt);
                 cv.notify_all();
             }
         }
+        if (processes.size() != initialCount) {
+            spdlog::debug("Process monitoring completed. Active processes: {}",
+                          processes.size());
+        }
         return true;
 #else
-        LOG_F(WARNING, "Process monitoring not implemented for this platform.");
+        spdlog::warn("Process monitoring not implemented for this platform");
         return false;
 #endif
     }
@@ -256,7 +236,8 @@ public:
         if (processIt != processes.end()) {
             return *processIt;
         }
-        LOG_F(ERROR, "Process with PID {} not found.", pid);
+        spdlog::error("Process with PID {} not found in managed processes",
+                      pid);
         THROW_PROCESS_ERROR("Process not found.");
     }
 
@@ -269,15 +250,15 @@ public:
         if (processIt != processes.end()) {
             return processIt->handle;
         }
-        LOG_F(ERROR, "Process handle for PID {} not found.", pid);
+        spdlog::error("Process handle for PID {} not found", pid);
         THROW_PROCESS_ERROR("Process handle not found.");
     }
 #else
-    static auto getProcFilePath(int pid,
-                                const std::string &file) -> std::string {
+    static auto getProcFilePath(int pid, const std::string &file)
+        -> std::string {
         std::string path = "/proc/" + std::to_string(pid) + "/" + file;
         if (access(path.c_str(), F_OK) != 0) {
-            LOG_F(ERROR, "File {} not found for PID {}.", file, pid);
+            spdlog::error("Process file {} not found for PID {}", file, pid);
             THROW_PROCESS_ERROR("Process file path not found.");
         }
         return path;
@@ -311,8 +292,8 @@ auto ProcessManager::createProcess(const std::string &command,
     try {
         return impl->createProcess(command, identifier, isBackground);
     } catch (const ProcessException &e) {
-        LOG_F(ERROR, "Failed to create process {}: {}", identifier, e.what());
-        THROW_PROCESS_ERROR("Failed to create process.");
+        spdlog::error("Failed to create process {}: {}", identifier, e.what());
+        throw;
     }
 }
 
@@ -320,17 +301,17 @@ auto ProcessManager::terminateProcess(int pid, int signal) -> bool {
     try {
         return impl->terminateProcess(pid, signal);
     } catch (const ProcessException &e) {
-        LOG_F(ERROR, "Failed to terminate PID {}: {}", pid, e.what());
+        spdlog::error("Failed to terminate PID {}: {}", pid, e.what());
         return false;
     }
 }
 
-auto ProcessManager::terminateProcessByName(const std::string &name,
-                                            int signal) -> bool {
+auto ProcessManager::terminateProcessByName(const std::string &name, int signal)
+    -> bool {
     try {
         return impl->terminateProcessByName(name, signal);
     } catch (const ProcessException &e) {
-        LOG_F(ERROR, "Failed to terminate process {}: {}", name, e.what());
+        spdlog::error("Failed to terminate process {}: {}", name, e.what());
         return false;
     }
 }
@@ -366,20 +347,21 @@ auto ProcessManager::getProcessOutput(const std::string &identifier)
         while (std::getline(sss, line)) {
             outputLines.emplace_back(line);
         }
-
+        spdlog::debug("Retrieved {} lines of output for process: {}",
+                      outputLines.size(), identifier);
         return outputLines;
     }
-    LOG_F(WARNING, "No output found for process identifier: {}", identifier);
+    spdlog::warn("No output found for process identifier: {}", identifier);
     return {};
 }
 
 auto ProcessManager::runScript(const std::string &script,
-                               const std::string &identifier,
-                               bool isBackground) -> bool {
+                               const std::string &identifier, bool isBackground)
+    -> bool {
     try {
         return impl->runScript(script, identifier, isBackground);
     } catch (const ProcessException &e) {
-        LOG_F(ERROR, "Failed to run script {}: {}", identifier, e.what());
+        spdlog::error("Failed to run script {}: {}", identifier, e.what());
         return false;
     }
 }
@@ -392,7 +374,7 @@ auto ProcessManager::getProcessInfo(int pid) -> Process {
     try {
         return impl->getProcessInfo(pid);
     } catch (const ProcessException &e) {
-        LOG_F(ERROR, "Failed to get info for PID {}: {}", pid, e.what());
+        spdlog::error("Failed to get info for PID {}: {}", pid, e.what());
         throw;
     }
 }
@@ -402,17 +384,17 @@ auto ProcessManager::getProcessHandle(int pid) const -> void * {
     try {
         return impl->getProcessHandle(pid);
     } catch (const ProcessException &e) {
-        LOG_F(ERROR, "Failed to get handle for PID {}: {}", pid, e.what());
+        spdlog::error("Failed to get handle for PID {}: {}", pid, e.what());
         throw;
     }
 }
 #else
-auto ProcessManager::getProcFilePath(int pid,
-                                     const std::string &file) -> std::string {
+auto ProcessManager::getProcFilePath(int pid, const std::string &file)
+    -> std::string {
     try {
         return ProcessManagerImpl::getProcFilePath(pid, file);
     } catch (const ProcessException &e) {
-        LOG_F(ERROR, "Failed to get file path for PID {}: {}", pid, e.what());
+        spdlog::error("Failed to get file path for PID {}: {}", pid, e.what());
         throw;
     }
 }

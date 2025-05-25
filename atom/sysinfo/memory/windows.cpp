@@ -1,370 +1,372 @@
-/*
- * windows.cpp
+/**
+ * @file windows.cpp
+ * @brief Windows platform implementation for memory information
  *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ * This file contains Windows-specific implementations for retrieving memory
+ * information using Windows API.
+ *
+ * @copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
-
-/*************************************************
-
-Date: 2024-2-21
-
-Description: System Information Module - Memory Windows Implementation
-
-**************************************************/
 
 #include "windows.hpp"
 #include "common.hpp"
 
 #ifdef _WIN32
-#include "atom/log/loguru.hpp"
-
-// clang-format off
-#include <windows.h>
-#include <psapi.h>
 #include <intrin.h>
 #include <iphlpapi.h>
 #include <pdh.h>
+#include <psapi.h>
+#include <spdlog/spdlog.h>
 #include <tlhelp32.h>
 #include <wincon.h>
+#include <windows.h>
 #include <chrono>
 #include <thread>
-// clang-format on
 
-namespace atom::system {
-namespace windows {
+
+namespace atom::system::windows {
 
 auto getMemoryUsage() -> float {
-    LOG_F(INFO, "Starting getMemoryUsage function (Windows)");
-    float memoryUsage = 0.0;
+    spdlog::debug("Getting memory usage percentage");
 
-    MEMORYSTATUSEX status;
+    MEMORYSTATUSEX status{};
     status.dwLength = sizeof(status);
-    float totalMemory = 0.0f;
-    float availableMemory = 0.0f;
-    if (GlobalMemoryStatusEx(&status) != 0) {
-        totalMemory =
-            static_cast<float>(status.ullTotalPhys) / 1024.0f / 1024.0f;
-        availableMemory =
-            static_cast<float>(status.ullAvailPhys) / 1024.0f / 1024.0f;
-        memoryUsage = (totalMemory - availableMemory) / totalMemory * 100.0;
-        LOG_F(INFO,
-              "Total Memory: %.2f MB, Available Memory: %.2f MB, Memory Usage: "
-              "%.2f%%",
-              totalMemory, availableMemory, memoryUsage);
-    } else {
-        LOG_F(ERROR, "GetMemoryUsage error: GlobalMemoryStatusEx error");
+
+    if (!GlobalMemoryStatusEx(&status)) {
+        spdlog::error("Failed to get memory status: {}", GetLastError());
+        return 0.0f;
     }
 
-    LOG_F(INFO, "Finished getMemoryUsage function (Windows)");
+    const auto totalMemory =
+        static_cast<float>(status.ullTotalPhys) / (1024.0f * 1024.0f);
+    const auto availableMemory =
+        static_cast<float>(status.ullAvailPhys) / (1024.0f * 1024.0f);
+    const auto memoryUsage =
+        (totalMemory - availableMemory) / totalMemory * 100.0f;
+
+    spdlog::debug(
+        "Memory usage: {:.2f}% (Total: {:.2f} MB, Available: {:.2f} MB)",
+        memoryUsage, totalMemory, availableMemory);
+
     return memoryUsage;
 }
 
 auto getTotalMemorySize() -> unsigned long long {
-    LOG_F(INFO, "Starting getTotalMemorySize function (Windows)");
-    unsigned long long totalMemorySize = 0;
+    spdlog::debug("Getting total memory size");
 
-    MEMORYSTATUSEX status;
+    MEMORYSTATUSEX status{};
     status.dwLength = sizeof(status);
-    if (GlobalMemoryStatusEx(&status)) {
-        totalMemorySize = status.ullTotalPhys;
-        LOG_F(INFO, "Total Memory Size: {} bytes", totalMemorySize);
-    } else {
-        LOG_F(ERROR, "GetTotalMemorySize error: GlobalMemoryStatusEx error");
+
+    if (!GlobalMemoryStatusEx(&status)) {
+        spdlog::error("Failed to get total memory size: {}", GetLastError());
+        return 0;
     }
 
-    LOG_F(INFO, "Finished getTotalMemorySize function (Windows)");
-    return totalMemorySize;
+    spdlog::debug("Total memory size: {} bytes", status.ullTotalPhys);
+    return status.ullTotalPhys;
 }
 
 auto getAvailableMemorySize() -> unsigned long long {
-    LOG_F(INFO, "Starting getAvailableMemorySize function (Windows)");
-    unsigned long long availableMemorySize = 0;
+    spdlog::debug("Getting available memory size");
 
-    MEMORYSTATUSEX status;
+    MEMORYSTATUSEX status{};
     status.dwLength = sizeof(status);
-    if (GlobalMemoryStatusEx(&status)) {
-        availableMemorySize = status.ullAvailPhys;
-        LOG_F(INFO, "Available Memory Size: {} bytes", availableMemorySize);
-    } else {
-        LOG_F(ERROR,
-              "GetAvailableMemorySize error: GlobalMemoryStatusEx error");
+
+    if (!GlobalMemoryStatusEx(&status)) {
+        spdlog::error("Failed to get available memory size: {}",
+                      GetLastError());
+        return 0;
     }
 
-    LOG_F(INFO, "Finished getAvailableMemorySize function (Windows)");
-    return availableMemorySize;
+    spdlog::debug("Available memory size: {} bytes", status.ullAvailPhys);
+    return status.ullAvailPhys;
 }
 
 auto getPhysicalMemoryInfo() -> MemoryInfo::MemorySlot {
-    LOG_F(INFO, "Starting getPhysicalMemoryInfo function (Windows)");
+    spdlog::debug("Getting physical memory information");
+
     MemoryInfo::MemorySlot slot;
 
-    MEMORYSTATUSEX memoryStatus;
-    memoryStatus.dwLength = sizeof(memoryStatus);
-    if (GlobalMemoryStatusEx(&memoryStatus)) {
-        slot.capacity = std::to_string(memoryStatus.ullTotalPhys /
-                                       (1024 * 1024));
-        LOG_F(INFO, "Physical Memory Capacity: {} MB", slot.capacity);
-    } else {
-        LOG_F(ERROR, "GetPhysicalMemoryInfo error: GlobalMemoryStatusEx error");
+    MEMORYSTATUSEX status{};
+    status.dwLength = sizeof(status);
+
+    if (!GlobalMemoryStatusEx(&status)) {
+        spdlog::error("Failed to get physical memory info: {}", GetLastError());
+        return slot;
     }
 
-    LOG_F(INFO, "Finished getPhysicalMemoryInfo function (Windows)");
+    slot.capacity = std::to_string(status.ullTotalPhys / (1024 * 1024));
+    slot.type = "DDR";
+    slot.clockSpeed = "Unknown";
+
+    spdlog::debug("Physical memory capacity: {} MB", slot.capacity);
     return slot;
 }
 
 auto getVirtualMemoryMax() -> unsigned long long {
-    LOG_F(INFO, "Starting getVirtualMemoryMax function (Windows)");
-    unsigned long long virtualMemoryMax = 0;
+    spdlog::debug("Getting maximum virtual memory size");
 
-    MEMORYSTATUSEX memoryStatus;
-    memoryStatus.dwLength = sizeof(memoryStatus);
-    if (GlobalMemoryStatusEx(&memoryStatus)) {
-        virtualMemoryMax = memoryStatus.ullTotalVirtual / (1024 * 1024);
-        LOG_F(INFO, "Virtual Memory Max: {} MB", virtualMemoryMax);
-    } else {
-        LOG_F(ERROR, "GetVirtualMemoryMax error: GlobalMemoryStatusEx error");
+    MEMORYSTATUSEX status{};
+    status.dwLength = sizeof(status);
+
+    if (!GlobalMemoryStatusEx(&status)) {
+        spdlog::error("Failed to get virtual memory max: {}", GetLastError());
+        return 0;
     }
 
-    LOG_F(INFO, "Finished getVirtualMemoryMax function (Windows)");
+    const auto virtualMemoryMax = status.ullTotalVirtual;
+    spdlog::debug("Maximum virtual memory: {} bytes", virtualMemoryMax);
     return virtualMemoryMax;
 }
 
 auto getVirtualMemoryUsed() -> unsigned long long {
-    LOG_F(INFO, "Starting getVirtualMemoryUsed function (Windows)");
-    unsigned long long virtualMemoryUsed = 0;
+    spdlog::debug("Getting used virtual memory size");
 
-    MEMORYSTATUSEX memoryStatus;
-    memoryStatus.dwLength = sizeof(memoryStatus);
-    if (GlobalMemoryStatusEx(&memoryStatus)) {
-        virtualMemoryUsed =
-            (memoryStatus.ullTotalVirtual - memoryStatus.ullAvailVirtual) /
-            (1024 * 1024);
-        LOG_F(INFO, "Virtual Memory Used: {} MB", virtualMemoryUsed);
-    } else {
-        LOG_F(ERROR, "GetVirtualMemoryUsed error: GlobalMemoryStatusEx error");
+    MEMORYSTATUSEX status{};
+    status.dwLength = sizeof(status);
+
+    if (!GlobalMemoryStatusEx(&status)) {
+        spdlog::error("Failed to get virtual memory used: {}", GetLastError());
+        return 0;
     }
 
-    LOG_F(INFO, "Finished getVirtualMemoryUsed function (Windows)");
+    const auto virtualMemoryUsed =
+        status.ullTotalVirtual - status.ullAvailVirtual;
+    spdlog::debug("Used virtual memory: {} bytes", virtualMemoryUsed);
     return virtualMemoryUsed;
 }
 
 auto getSwapMemoryTotal() -> unsigned long long {
-    LOG_F(INFO, "Starting getSwapMemoryTotal function (Windows)");
-    unsigned long long swapMemoryTotal = 0;
+    spdlog::debug("Getting total swap memory size");
 
-    MEMORYSTATUSEX memoryStatus;
-    memoryStatus.dwLength = sizeof(memoryStatus);
-    if (GlobalMemoryStatusEx(&memoryStatus)) {
-        swapMemoryTotal = memoryStatus.ullTotalPageFile / (1024 * 1024);
-        LOG_F(INFO, "Swap Memory Total: {} MB", swapMemoryTotal);
-    } else {
-        LOG_F(ERROR, "GetSwapMemoryTotal error: GlobalMemoryStatusEx error");
+    MEMORYSTATUSEX status{};
+    status.dwLength = sizeof(status);
+
+    if (!GlobalMemoryStatusEx(&status)) {
+        spdlog::error("Failed to get swap memory total: {}", GetLastError());
+        return 0;
     }
 
-    LOG_F(INFO, "Finished getSwapMemoryTotal function (Windows)");
+    const auto swapMemoryTotal = status.ullTotalPageFile;
+    spdlog::debug("Total swap memory: {} bytes", swapMemoryTotal);
     return swapMemoryTotal;
 }
 
 auto getSwapMemoryUsed() -> unsigned long long {
-    LOG_F(INFO, "Starting getSwapMemoryUsed function (Windows)");
-    unsigned long long swapMemoryUsed = 0;
+    spdlog::debug("Getting used swap memory size");
 
-    MEMORYSTATUSEX memoryStatus;
-    memoryStatus.dwLength = sizeof(memoryStatus);
-    if (GlobalMemoryStatusEx(&memoryStatus)) {
-        swapMemoryUsed =
-            (memoryStatus.ullTotalPageFile - memoryStatus.ullAvailPageFile) /
-            (1024 * 1024);
-        LOG_F(INFO, "Swap Memory Used: {} MB", swapMemoryUsed);
-    } else {
-        LOG_F(ERROR, "GetSwapMemoryUsed error: GlobalMemoryStatusEx error");
+    MEMORYSTATUSEX status{};
+    status.dwLength = sizeof(status);
+
+    if (!GlobalMemoryStatusEx(&status)) {
+        spdlog::error("Failed to get swap memory used: {}", GetLastError());
+        return 0;
     }
 
-    LOG_F(INFO, "Finished getSwapMemoryUsed function (Windows)");
+    const auto swapMemoryUsed =
+        status.ullTotalPageFile - status.ullAvailPageFile;
+    spdlog::debug("Used swap memory: {} bytes", swapMemoryUsed);
     return swapMemoryUsed;
 }
 
 auto getCommittedMemory() -> size_t {
-    LOG_F(INFO, "Starting getCommittedMemory function (Windows)");
-    size_t committedMemory = 0;
+    spdlog::debug("Getting committed memory size");
 
-    MEMORYSTATUSEX status;
+    MEMORYSTATUSEX status{};
     status.dwLength = sizeof(status);
-    if (GlobalMemoryStatusEx(&status)) {
-        committedMemory = status.ullTotalPhys - status.ullAvailPhys;
-        LOG_F(INFO, "Committed Memory: {} bytes", committedMemory);
-    } else {
-        LOG_F(ERROR, "GetCommittedMemory error: GlobalMemoryStatusEx error");
+
+    if (!GlobalMemoryStatusEx(&status)) {
+        spdlog::error("Failed to get committed memory: {}", GetLastError());
+        return 0;
     }
 
-    LOG_F(INFO, "Finished getCommittedMemory function (Windows)");
-    return committedMemory;
+    const auto committedMemory = status.ullTotalPhys - status.ullAvailPhys;
+    spdlog::debug("Committed memory: {} bytes", committedMemory);
+    return static_cast<size_t>(committedMemory);
 }
 
 auto getUncommittedMemory() -> size_t {
-    LOG_F(INFO, "Starting getUncommittedMemory function (Windows)");
-    size_t uncommittedMemory = 0;
+    spdlog::debug("Getting uncommitted memory size");
 
-    MEMORYSTATUSEX status;
+    MEMORYSTATUSEX status{};
     status.dwLength = sizeof(status);
-    if (GlobalMemoryStatusEx(&status)) {
-        uncommittedMemory = status.ullAvailPhys;
-        LOG_F(INFO, "Uncommitted Memory: {} bytes", uncommittedMemory);
-    } else {
-        LOG_F(ERROR, "GetUncommittedMemory error: GlobalMemoryStatusEx error");
+
+    if (!GlobalMemoryStatusEx(&status)) {
+        spdlog::error("Failed to get uncommitted memory: {}", GetLastError());
+        return 0;
     }
 
-    LOG_F(INFO, "Finished getUncommittedMemory function (Windows)");
-    return uncommittedMemory;
+    const auto uncommittedMemory = status.ullAvailPhys;
+    spdlog::debug("Uncommitted memory: {} bytes", uncommittedMemory);
+    return static_cast<size_t>(uncommittedMemory);
 }
 
 auto getDetailedMemoryStats() -> MemoryInfo {
-    LOG_F(INFO, "Starting getDetailedMemoryStats function (Windows)");
-    MemoryInfo info;
+    spdlog::debug("Getting detailed memory statistics");
 
-    MEMORYSTATUSEX memStatus;
+    MemoryInfo info{};
+
+    MEMORYSTATUSEX memStatus{};
     memStatus.dwLength = sizeof(memStatus);
-    if (GlobalMemoryStatusEx(&memStatus)) {
-        info.memoryLoadPercentage = memStatus.dwMemoryLoad;
-        info.totalPhysicalMemory = memStatus.ullTotalPhys;
-        info.availablePhysicalMemory = memStatus.ullAvailPhys;
-        info.virtualMemoryMax = memStatus.ullTotalVirtual;
-        info.virtualMemoryUsed =
-            memStatus.ullTotalVirtual - memStatus.ullAvailVirtual;
-        info.swapMemoryTotal = memStatus.ullTotalPageFile;
-        info.swapMemoryUsed = memStatus.ullTotalPageFile - memStatus.ullAvailPageFile;
 
-        PROCESS_MEMORY_COUNTERS pmc;
-        if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
-            info.pageFaultCount = pmc.PageFaultCount;
-            info.peakWorkingSetSize = pmc.PeakWorkingSetSize;
-            info.workingSetSize = pmc.WorkingSetSize;
-            info.quotaPeakPagedPoolUsage = pmc.QuotaPeakPagedPoolUsage;
-            info.quotaPagedPoolUsage = pmc.QuotaPagedPoolUsage;
-            
-            LOG_F(INFO, "Process memory counters retrieved successfully");
-        } else {
-            LOG_F(ERROR, "GetProcessMemoryInfo failed");
-        }
-    } else {
-        LOG_F(ERROR, "GlobalMemoryStatusEx failed");
+    if (!GlobalMemoryStatusEx(&memStatus)) {
+        spdlog::error("Failed to get memory status: {}", GetLastError());
+        return info;
     }
 
-    // 获取物理内存插槽信息 (这里使用简化实现，实际需要使用WMI)
+    info.memoryLoadPercentage = memStatus.dwMemoryLoad;
+    info.totalPhysicalMemory = memStatus.ullTotalPhys;
+    info.availablePhysicalMemory = memStatus.ullAvailPhys;
+    info.virtualMemoryMax = memStatus.ullTotalVirtual;
+    info.virtualMemoryUsed =
+        memStatus.ullTotalVirtual - memStatus.ullAvailVirtual;
+    info.swapMemoryTotal = memStatus.ullTotalPageFile;
+    info.swapMemoryUsed =
+        memStatus.ullTotalPageFile - memStatus.ullAvailPageFile;
+
+    PROCESS_MEMORY_COUNTERS pmc{};
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+        info.pageFaultCount = pmc.PageFaultCount;
+        info.peakWorkingSetSize = pmc.PeakWorkingSetSize;
+        info.workingSetSize = pmc.WorkingSetSize;
+        info.quotaPeakPagedPoolUsage = pmc.QuotaPeakPagedPoolUsage;
+        info.quotaPagedPoolUsage = pmc.QuotaPagedPoolUsage;
+        spdlog::debug("Process memory counters retrieved successfully");
+    } else {
+        spdlog::error("Failed to get process memory info: {}", GetLastError());
+    }
+
     MemoryInfo::MemorySlot slot;
     slot.capacity = std::to_string(info.totalPhysicalMemory / (1024 * 1024));
-    slot.type = "Unknown"; // 在实际应用中，可以通过WMI获取详细信息
+    slot.type = "DDR";
     slot.clockSpeed = "Unknown";
     info.slots.push_back(slot);
 
-    LOG_F(INFO, "Finished getDetailedMemoryStats function (Windows)");
+    spdlog::debug("Detailed memory statistics retrieved successfully");
     return info;
 }
 
 auto getPeakWorkingSetSize() -> size_t {
-    LOG_F(INFO, "Starting getPeakWorkingSetSize function (Windows)");
-    size_t peakSize = 0;
+    spdlog::debug("Getting peak working set size");
 
-    PROCESS_MEMORY_COUNTERS pmc;
-    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
-        peakSize = pmc.PeakWorkingSetSize;
+    PROCESS_MEMORY_COUNTERS pmc{};
+    if (!GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+        spdlog::error("Failed to get peak working set size: {}",
+                      GetLastError());
+        return 0;
     }
 
-    LOG_F(INFO, "Peak working set size: {} bytes (Windows)", peakSize);
-    return peakSize;
+    spdlog::debug("Peak working set size: {} bytes", pmc.PeakWorkingSetSize);
+    return pmc.PeakWorkingSetSize;
 }
 
 auto getCurrentWorkingSetSize() -> size_t {
-    LOG_F(INFO, "Starting getCurrentWorkingSetSize function (Windows)");
-    size_t currentSize = 0;
+    spdlog::debug("Getting current working set size");
 
-    PROCESS_MEMORY_COUNTERS pmc;
-    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
-        currentSize = pmc.WorkingSetSize;
+    PROCESS_MEMORY_COUNTERS pmc{};
+    if (!GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+        spdlog::error("Failed to get current working set size: {}",
+                      GetLastError());
+        return 0;
     }
 
-    LOG_F(INFO, "Current working set size: {} bytes (Windows)", currentSize);
-    return currentSize;
+    spdlog::debug("Current working set size: {} bytes", pmc.WorkingSetSize);
+    return pmc.WorkingSetSize;
 }
 
 auto getPageFaultCount() -> size_t {
-    LOG_F(INFO, "Starting getPageFaultCount function (Windows)");
-    size_t pageFaults = 0;
+    spdlog::debug("Getting page fault count");
 
-    PROCESS_MEMORY_COUNTERS pmc;
-    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
-        pageFaults = pmc.PageFaultCount;
+    PROCESS_MEMORY_COUNTERS pmc{};
+    if (!GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+        spdlog::error("Failed to get page fault count: {}", GetLastError());
+        return 0;
     }
 
-    LOG_F(INFO, "Page fault count: {} (Windows)", pageFaults);
-    return pageFaults;
+    spdlog::debug("Page fault count: {}", pmc.PageFaultCount);
+    return pmc.PageFaultCount;
 }
 
 auto getMemoryLoadPercentage() -> double {
-    LOG_F(INFO, "Starting getMemoryLoadPercentage function (Windows)");
-    double memoryLoad = 0.0;
+    spdlog::debug("Getting memory load percentage");
 
-    MEMORYSTATUSEX memStatus;
-    memStatus.dwLength = sizeof(memStatus);
-    if (GlobalMemoryStatusEx(&memStatus)) {
-        memoryLoad = memStatus.dwMemoryLoad;
+    MEMORYSTATUSEX status{};
+    status.dwLength = sizeof(status);
+
+    if (!GlobalMemoryStatusEx(&status)) {
+        spdlog::error("Failed to get memory load: {}", GetLastError());
+        return 0.0;
     }
 
-    LOG_F(INFO, "Memory load: {}% (Windows)", memoryLoad);
+    const auto memoryLoad = static_cast<double>(status.dwMemoryLoad);
+    spdlog::debug("Memory load: {}%", memoryLoad);
     return memoryLoad;
 }
 
 auto getMemoryPerformance() -> MemoryPerformance {
-    LOG_F(INFO, "Getting memory performance metrics (Windows)");
+    spdlog::debug("Getting memory performance metrics");
+
     MemoryPerformance perf{};
-    
-    // 使用Windows性能计数器获取内存性能指标
+
     PDH_HQUERY query;
     PDH_HCOUNTER readCounter, writeCounter;
-    if (PdhOpenQuery(NULL, 0, &query) == ERROR_SUCCESS) {
-        PdhAddCounterW(query, L"\\Memory\\Pages/sec", 0, &readCounter);
-        PdhAddCounterW(query, L"\\Memory\\Page Writes/sec", 0, &writeCounter);
-        PdhCollectQueryData(query);
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        PdhCollectQueryData(query);
-        
-        PDH_FMT_COUNTERVALUE readValue, writeValue;
-        PdhGetFormattedCounterValue(readCounter, PDH_FMT_DOUBLE, NULL, &readValue);
-        PdhGetFormattedCounterValue(writeCounter, PDH_FMT_DOUBLE, NULL, &writeValue);
-        
-        // 页面大小通常为4KB
-        perf.readSpeed = readValue.doubleValue * 4.0 / 1024; // 转换为MB/s
-        perf.writeSpeed = writeValue.doubleValue * 4.0 / 1024; // 转换为MB/s
-        
+
+    if (PdhOpenQuery(nullptr, 0, &query) == ERROR_SUCCESS) {
+        if (PdhAddCounterW(query, L"\\Memory\\Pages/sec", 0, &readCounter) ==
+                ERROR_SUCCESS &&
+            PdhAddCounterW(query, L"\\Memory\\Page Writes/sec", 0,
+                           &writeCounter) == ERROR_SUCCESS) {
+            PdhCollectQueryData(query);
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            PdhCollectQueryData(query);
+
+            PDH_FMT_COUNTERVALUE readValue, writeValue;
+            if (PdhGetFormattedCounterValue(readCounter, PDH_FMT_DOUBLE,
+                                            nullptr,
+                                            &readValue) == ERROR_SUCCESS &&
+                PdhGetFormattedCounterValue(writeCounter, PDH_FMT_DOUBLE,
+                                            nullptr,
+                                            &writeValue) == ERROR_SUCCESS) {
+                constexpr double PAGE_SIZE_KB = 4.0;
+                constexpr double KB_TO_MB = 1.0 / 1024.0;
+
+                perf.readSpeed =
+                    readValue.doubleValue * PAGE_SIZE_KB * KB_TO_MB;
+                perf.writeSpeed =
+                    writeValue.doubleValue * PAGE_SIZE_KB * KB_TO_MB;
+            }
+        }
         PdhCloseQuery(query);
+    } else {
+        spdlog::warn("Failed to open PDH query for memory performance");
     }
 
-    // 计算带宽使用率
-    perf.bandwidthUsage = (perf.readSpeed + perf.writeSpeed) /
-                          (getTotalMemorySize() / 1024.0 / 1024) * 100.0;
+    const auto totalMemoryMB =
+        static_cast<double>(getTotalMemorySize()) / (1024.0 * 1024.0);
+    perf.bandwidthUsage =
+        totalMemoryMB > 0
+            ? (perf.readSpeed + perf.writeSpeed) / totalMemoryMB * 100.0
+            : 0.0;
 
-    // 测量内存延迟
-    const int TEST_SIZE = 1024 * 1024;  // 1MB
+    constexpr int TEST_SIZE = 1024 * 1024;
     std::vector<int> testData(TEST_SIZE);
-    auto start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < TEST_SIZE; i++) {
+    const auto start = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < TEST_SIZE; ++i) {
         testData[i] = i;
     }
-    auto end = std::chrono::high_resolution_clock::now();
+    const auto end = std::chrono::high_resolution_clock::now();
     perf.latency =
         std::chrono::duration_cast<std::chrono::nanoseconds>(end - start)
             .count() /
         static_cast<double>(TEST_SIZE);
 
-    LOG_F(INFO,
-          "Memory performance metrics: Read: {:.2f} MB/s, Write: {:.2f} MB/s, "
-          "Bandwidth: {:.1f}%, Latency: {:.2f} ns (Windows)",
-          perf.readSpeed, perf.writeSpeed, perf.bandwidthUsage, perf.latency);
+    spdlog::debug(
+        "Memory performance - Read: {:.2f} MB/s, Write: {:.2f} MB/s, "
+        "Bandwidth: {:.1f}%, Latency: {:.2f} ns",
+        perf.readSpeed, perf.writeSpeed, perf.bandwidthUsage, perf.latency);
 
     return perf;
 }
+}  // namespace atom::system::windows
 
-} // namespace windows
-} // namespace atom::system
-
-#endif // _WIN32
+#endif  // _WIN32

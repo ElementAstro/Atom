@@ -45,14 +45,13 @@ public:
         DOWN   ///< Pull-down resistor
     };
 
-    // 添加PWM模式枚举
     /**
      * @enum PwmMode
      * @brief PWM (Pulse Width Modulation) operation mode.
      */
     enum class PwmMode {
-        HARDWARE, ///< Use hardware PWM if available
-        SOFTWARE  ///< Use software PWM implementation
+        HARDWARE,  ///< Use hardware PWM if available
+        SOFTWARE   ///< Use software PWM implementation
     };
 
     /**
@@ -189,7 +188,8 @@ public:
      * @param mode The PWM mode (hardware or software).
      * @return True if PWM was successfully set up, false otherwise.
      */
-    bool setPwm(double frequency, double dutyCycle, PwmMode mode = PwmMode::HARDWARE);
+    bool setPwm(double frequency, double dutyCycle,
+                PwmMode mode = PwmMode::HARDWARE);
 
     /**
      * @brief Updates the PWM duty cycle.
@@ -209,8 +209,8 @@ public:
      * @param debounceTimeMs The debounce time in milliseconds.
      * @return True if debouncing was successfully set up, false otherwise.
      */
-    bool setupButtonDebounce(std::function<void()> callback, 
-                            unsigned int debounceTimeMs = 50);
+    bool setupButtonDebounce(std::function<void()> callback,
+                             unsigned int debounceTimeMs = 50);
 
     /**
      * @brief Sets up an interrupt counter for this pin.
@@ -320,15 +320,14 @@ public:
         std::unique_ptr<GPIO> dataPin_;   ///< Data pin (DS)
         std::unique_ptr<GPIO> clockPin_;  ///< Clock pin (SH_CP)
         std::unique_ptr<GPIO> latchPin_;  ///< Latch pin (ST_CP)
-        uint8_t numBits_;                ///< Number of bits in the register
-        uint32_t state_;                 ///< Current register state
+        uint8_t numBits_;                 ///< Number of bits in the register
+        uint32_t state_;                  ///< Current register state
     };
 
 private:
     class Impl;  ///< Forward declaration of the implementation class.
     std::unique_ptr<Impl> impl_;  ///< Pointer to the implementation.
 
-    // Disable copy construction and assignment
     GPIO(const GPIO&) = delete;
     GPIO& operator=(const GPIO&) = delete;
 };

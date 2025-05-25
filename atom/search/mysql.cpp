@@ -4,19 +4,10 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2023-12-6, updated: 2024-04-5
-
-Description: Enhanced MySQL/MariaDB wrapper implementation
-
-**************************************************/
-
 #include "mysql.hpp"
 
+#include <spdlog/spdlog.h>
 #include <cstring>
-
-#include "atom/log/loguru.hpp"
 
 namespace atom {
 namespace database {
@@ -44,14 +35,38 @@ int Row::getInt(unsigned int index) const {
     if (index >= numFields || isNull(index)) {
         return 0;
     }
-    return std::stoi(getString(index));
+    try {
+        return std::stoi(getString(index));
+    } catch (const std::exception& e) {
+        spdlog::warn("Failed to convert field {} to int: {}", index, e.what());
+        return 0;
+    }
+}
+
+int64_t Row::getInt64(unsigned int index) const {
+    if (index >= numFields || isNull(index)) {
+        return 0;
+    }
+    try {
+        return std::stoll(getString(index));
+    } catch (const std::exception& e) {
+        spdlog::warn("Failed to convert field {} to int64: {}", index,
+                     e.what());
+        return 0;
+    }
 }
 
 double Row::getDouble(unsigned int index) const {
     if (index >= numFields || isNull(index)) {
         return 0.0;
     }
-    return std::stod(getString(index));
+    try {
+        return std::stod(getString(index));
+    } catch (const std::exception& e) {
+        spdlog::warn("Failed to convert field {} to double: {}", index,
+                     e.what());
+        return 0.0;
+    }
 }
 
 bool Row::getBool(unsigned int index) const {
@@ -86,11 +101,13 @@ ResultSet::ResultSet(ResultSet&& other) noexcept
     : result(other.result),
       currentRow(other.currentRow),
       lengths(other.lengths),
-      numFields(other.numFields) {
+      numFields(other.numFields),
+      initialized(other.initialized) {
     other.result = nullptr;
     other.currentRow = nullptr;
     other.lengths = nullptr;
     other.numFields = 0;
+    other.initialized = false;
 }
 
 ResultSet& ResultSet::operator=(ResultSet&& other) noexcept {
@@ -103,11 +120,13 @@ ResultSet& ResultSet::operator=(ResultSet&& other) noexcept {
         currentRow = other.currentRow;
         lengths = other.lengths;
         numFields = other.numFields;
+        initialized = other.initialized;
 
         other.result = nullptr;
         other.currentRow = nullptr;
         other.lengths = nullptr;
         other.numFields = 0;
+        other.initialized = false;
     }
     return *this;
 }
@@ -127,7 +146,7 @@ bool ResultSet::next() {
 
 Row ResultSet::getCurrentRow() const {
     if (!currentRow || !lengths) {
-        throw std::runtime_error("No current row");
+        throw std::runtime_error("No current row available");
     }
     return Row(currentRow, lengths, numFields);
 }
@@ -145,6 +164,18 @@ std::string ResultSet::getFieldName(unsigned int index) const {
 
 unsigned long long ResultSet::getRowCount() const {
     return result ? mysql_num_rows(result) : 0;
+}
+
+bool ResultSet::reset() {
+    if (!result) {
+        return false;
+    }
+
+    mysql_data_seek(result, 0);
+    currentRow = nullptr;
+    lengths = nullptr;
+    initialized = false;
+    return true;
 }
 
 //--------------------
@@ -172,13 +203,14 @@ PreparedStatement::PreparedStatement(MYSQL* connection,
         stringLengths.resize(paramCount);
         isNull.resize(paramCount);
 
-        // Initialize binds
         for (unsigned int i = 0; i < paramCount; ++i) {
             memset(&binds[i], 0, sizeof(MYSQL_BIND));
             isNull[i] = true;
             binds[i].is_null = &isNull[i];
         }
     }
+
+    spdlog::debug("Prepared statement created with {} parameters", paramCount);
 }
 
 PreparedStatement::~PreparedStatement() {
@@ -217,14 +249,13 @@ PreparedStatement& PreparedStatement::operator=(
 PreparedStatement& PreparedStatement::bindString(int index,
                                                  const std::string& value) {
     if (index < 0 || static_cast<size_t>(index) >= binds.size()) {
-        throw MySQLException("Parameter index out of range");
+        throw MySQLException("Parameter index out of range: " +
+                             std::to_string(index));
     }
 
-    // Allocate buffer for string data (should persist until execute)
     auto buffer = std::make_unique<char[]>(value.length());
     memcpy(buffer.get(), value.c_str(), value.length());
 
-    // Set up the MYSQL_BIND structure
     binds[index].buffer_type = MYSQL_TYPE_STRING;
     binds[index].buffer = buffer.get();
     binds[index].buffer_length = value.length();
@@ -232,92 +263,98 @@ PreparedStatement& PreparedStatement::bindString(int index,
     binds[index].length = &stringLengths[index];
     isNull[index] = false;
 
-    // Store buffer pointer
     stringBuffers[index] = std::move(buffer);
-
     return *this;
 }
 
 PreparedStatement& PreparedStatement::bindInt(int index, int value) {
     if (index < 0 || static_cast<size_t>(index) >= binds.size()) {
-        throw MySQLException("Parameter index out of range");
+        throw MySQLException("Parameter index out of range: " +
+                             std::to_string(index));
     }
 
-    // Allocate buffer for int data
     auto buffer = std::make_unique<int>(value);
 
-    // Set up the MYSQL_BIND structure
     binds[index].buffer_type = MYSQL_TYPE_LONG;
     binds[index].buffer = buffer.get();
     binds[index].buffer_length = sizeof(int);
     isNull[index] = false;
     binds[index].is_null = &isNull[index];
 
-    // Store buffer pointer
     stringBuffers[index] =
         std::unique_ptr<char[]>(reinterpret_cast<char*>(buffer.release()));
+    return *this;
+}
 
+PreparedStatement& PreparedStatement::bindInt64(int index, int64_t value) {
+    if (index < 0 || static_cast<size_t>(index) >= binds.size()) {
+        throw MySQLException("Parameter index out of range: " +
+                             std::to_string(index));
+    }
+
+    auto buffer = std::make_unique<int64_t>(value);
+
+    binds[index].buffer_type = MYSQL_TYPE_LONGLONG;
+    binds[index].buffer = buffer.get();
+    binds[index].buffer_length = sizeof(int64_t);
+    isNull[index] = false;
+    binds[index].is_null = &isNull[index];
+
+    stringBuffers[index] =
+        std::unique_ptr<char[]>(reinterpret_cast<char*>(buffer.release()));
     return *this;
 }
 
 PreparedStatement& PreparedStatement::bindDouble(int index, double value) {
     if (index < 0 || static_cast<size_t>(index) >= binds.size()) {
-        throw MySQLException("Parameter index out of range");
+        throw MySQLException("Parameter index out of range: " +
+                             std::to_string(index));
     }
 
-    // Allocate buffer for double data
     auto buffer = std::make_unique<double>(value);
 
-    // Set up the MYSQL_BIND structure
     binds[index].buffer_type = MYSQL_TYPE_DOUBLE;
     binds[index].buffer = buffer.get();
     binds[index].buffer_length = sizeof(double);
     isNull[index] = false;
     binds[index].is_null = &isNull[index];
 
-    // Store buffer pointer
     stringBuffers[index] =
         std::unique_ptr<char[]>(reinterpret_cast<char*>(buffer.release()));
-
     return *this;
 }
 
 PreparedStatement& PreparedStatement::bindBool(int index, bool value) {
     if (index < 0 || static_cast<size_t>(index) >= binds.size()) {
-        throw MySQLException("Parameter index out of range");
+        throw MySQLException("Parameter index out of range: " +
+                             std::to_string(index));
     }
 
-    // Allocate buffer for bool data (use tiny int for MySQL)
     auto buffer = std::make_unique<my_bool>(value ? 1 : 0);
 
-    // Set up the MYSQL_BIND structure
     binds[index].buffer_type = MYSQL_TYPE_TINY;
     binds[index].buffer = buffer.get();
     binds[index].buffer_length = sizeof(my_bool);
     isNull[index] = false;
     binds[index].is_null = &isNull[index];
 
-    // Store buffer pointer
     stringBuffers[index] =
         std::unique_ptr<char[]>(reinterpret_cast<char*>(buffer.release()));
-
     return *this;
 }
 
 PreparedStatement& PreparedStatement::bindNull(int index) {
     if (index < 0 || static_cast<size_t>(index) >= binds.size()) {
-        throw MySQLException("Parameter index out of range");
+        throw MySQLException("Parameter index out of range: " +
+                             std::to_string(index));
     }
 
-    // Set the is_null flag to true
     isNull[index] = true;
     binds[index].is_null = &isNull[index];
-
     return *this;
 }
 
 bool PreparedStatement::execute() {
-    // Bind parameters if we have any
     if (!binds.empty()) {
         if (mysql_stmt_bind_param(stmt, binds.data()) != 0) {
             throw MySQLException(std::string("Failed to bind parameters: ") +
@@ -325,8 +362,9 @@ bool PreparedStatement::execute() {
         }
     }
 
-    // Execute the statement
     if (mysql_stmt_execute(stmt) != 0) {
+        spdlog::error("Failed to execute prepared statement: {}",
+                      mysql_stmt_error(stmt));
         return false;
     }
 
@@ -339,19 +377,16 @@ std::unique_ptr<ResultSet> PreparedStatement::executeQuery() {
                              mysql_stmt_error(stmt));
     }
 
-    // Store the result
     if (mysql_stmt_store_result(stmt) != 0) {
         throw MySQLException(std::string("Failed to store result: ") +
                              mysql_stmt_error(stmt));
     }
 
-    // Get the result
     MYSQL_RES* metaData = mysql_stmt_result_metadata(stmt);
     if (!metaData) {
         throw MySQLException("Statement did not return a result set");
     }
 
-    // Create a ResultSet from the metadata
     return std::make_unique<ResultSet>(metaData);
 }
 
@@ -361,8 +396,7 @@ int PreparedStatement::executeUpdate() {
                              mysql_stmt_error(stmt));
     }
 
-    // Return affected rows
-    return mysql_stmt_affected_rows(stmt);
+    return static_cast<int>(mysql_stmt_affected_rows(stmt));
 }
 
 void PreparedStatement::reset() {
@@ -373,7 +407,6 @@ void PreparedStatement::reset() {
 }
 
 void PreparedStatement::clearParameters() {
-    // Reset all parameter binds
     for (size_t i = 0; i < binds.size(); i++) {
         memset(&binds[i], 0, sizeof(MYSQL_BIND));
         isNull[i] = true;
@@ -382,12 +415,19 @@ void PreparedStatement::clearParameters() {
     }
 }
 
+unsigned int PreparedStatement::getParameterCount() const {
+    return stmt ? mysql_stmt_param_count(stmt) : 0;
+}
+
 //--------------------
 // MysqlDB Implementation
 //--------------------
 
-MysqlDB::MysqlDB(const ConnectionParams& params) : db(nullptr), params(params) {
-    connect();
+MysqlDB::MysqlDB(const ConnectionParams& params)
+    : db(nullptr), params(params), autoReconnect(params.autoReconnect) {
+    if (!connect()) {
+        throw MySQLException("Failed to connect to database");
+    }
 }
 
 MysqlDB::MysqlDB(const std::string& host, const std::string& user,
@@ -403,7 +443,9 @@ MysqlDB::MysqlDB(const std::string& host, const std::string& user,
     params.socket = socket;
     params.clientFlag = clientFlag;
 
-    connect();
+    if (!connect()) {
+        throw MySQLException("Failed to connect to database");
+    }
 }
 
 MysqlDB::~MysqlDB() { disconnect(); }
@@ -430,6 +472,30 @@ MysqlDB& MysqlDB::operator=(MysqlDB&& other) noexcept {
     return *this;
 }
 
+void MysqlDB::configureConnection() {
+    if (!db)
+        return;
+
+    my_bool reconnect = autoReconnect ? 1 : 0;
+    mysql_options(db, MYSQL_OPT_RECONNECT, &reconnect);
+
+    if (params.connectTimeout > 0) {
+        mysql_options(db, MYSQL_OPT_CONNECT_TIMEOUT, &params.connectTimeout);
+    }
+
+    if (params.readTimeout > 0) {
+        mysql_options(db, MYSQL_OPT_READ_TIMEOUT, &params.readTimeout);
+    }
+
+    if (params.writeTimeout > 0) {
+        mysql_options(db, MYSQL_OPT_WRITE_TIMEOUT, &params.writeTimeout);
+    }
+
+    if (!params.charset.empty()) {
+        mysql_options(db, MYSQL_SET_CHARSET_NAME, params.charset.c_str());
+    }
+}
+
 bool MysqlDB::connect() {
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -443,11 +509,8 @@ bool MysqlDB::connect() {
         return false;
     }
 
-    // Enable auto-reconnect
-    my_bool reconnect = autoReconnect ? 1 : 0;
-    mysql_options(db, MYSQL_OPT_RECONNECT, &reconnect);
+    configureConnection();
 
-    // Connect to the database
     if (!mysql_real_connect(
             db, params.host.c_str(), params.user.c_str(),
             params.password.c_str(), params.database.c_str(), params.port,
@@ -457,6 +520,8 @@ bool MysqlDB::connect() {
         return false;
     }
 
+    spdlog::info("Connected to MySQL database: {}@{}:{}/{}", params.user,
+                 params.host, params.port, params.database);
     return true;
 }
 
@@ -464,13 +529,12 @@ bool MysqlDB::reconnect() {
     std::lock_guard<std::mutex> lock(mutex);
 
     if (db) {
-        // Try mysql_ping first, which will auto-reconnect if enabled
         if (mysql_ping(db) == 0) {
             return true;
         }
     }
 
-    // If ping failed or there was no connection, try to connect
+    spdlog::warn("Connection lost, attempting to reconnect...");
     return connect();
 }
 
@@ -480,21 +544,14 @@ void MysqlDB::disconnect() {
     if (db) {
         mysql_close(db);
         db = nullptr;
+        spdlog::debug("Disconnected from MySQL database");
     }
 }
 
 bool MysqlDB::isConnected() {
     std::lock_guard<std::mutex> lock(mutex);
-
-    if (!db) {
-        return false;
-    }
-
-    // Use mysql_ping to check if connection is alive
-    return mysql_ping(db) == 0;
+    return db && mysql_ping(db) == 0;
 }
-
-// Implementation of remaining methods...
 
 bool MysqlDB::executeQuery(const std::string& query) {
     std::lock_guard<std::mutex> lock(mutex);
@@ -504,9 +561,11 @@ bool MysqlDB::executeQuery(const std::string& query) {
     }
 
     if (mysql_query(db, query.c_str()) != 0) {
-        return handleError("Failed to execute query: " + query, false);
+        return !handleError("Failed to execute query: " + query, false);
     }
 
+    spdlog::debug("Query executed successfully: {}",
+                  query.length() > 100 ? query.substr(0, 100) + "..." : query);
     return true;
 }
 
@@ -544,42 +603,39 @@ int MysqlDB::executeUpdate(const std::string& query) {
         return -1;
     }
 
-    return mysql_affected_rows(db);
+    int affected = static_cast<int>(mysql_affected_rows(db));
+    spdlog::debug("Update query affected {} rows", affected);
+    return affected;
 }
 
-int MysqlDB::getIntValue(const std::string& query) {
+std::optional<int> MysqlDB::getIntValue(const std::string& query) {
     auto result = executeQueryWithResults(query);
     if (!result || !result->next()) {
-        return 0;
+        return std::nullopt;
     }
-
     return result->getCurrentRow().getInt(0);
 }
 
-double MysqlDB::getDoubleValue(const std::string& query) {
+std::optional<double> MysqlDB::getDoubleValue(const std::string& query) {
     auto result = executeQueryWithResults(query);
     if (!result || !result->next()) {
-        return 0.0;
+        return std::nullopt;
     }
-
     return result->getCurrentRow().getDouble(0);
 }
 
-std::string MysqlDB::getStringValue(const std::string& query) {
+std::optional<std::string> MysqlDB::getStringValue(const std::string& query) {
     auto result = executeQueryWithResults(query);
     if (!result || !result->next()) {
-        return "";
+        return std::nullopt;
     }
-
     return result->getCurrentRow().getString(0);
 }
-
-// Additional method implementations would follow...
 
 bool MysqlDB::handleError(const std::string& operation, bool throwOnError) {
     if (!db) {
         std::string errorMessage = "Not connected to database";
-        LOG_F(ERROR, "{}: {}", operation, errorMessage);
+        spdlog::error("{}: {}", operation, errorMessage);
 
         if (errorCallback) {
             errorCallback(errorMessage, 0);
@@ -588,7 +644,6 @@ bool MysqlDB::handleError(const std::string& operation, bool throwOnError) {
         if (throwOnError) {
             throw MySQLException(errorMessage);
         }
-
         return true;
     }
 
@@ -598,7 +653,8 @@ bool MysqlDB::handleError(const std::string& operation, bool throwOnError) {
     }
 
     std::string errorMessage = mysql_error(db);
-    LOG_F(ERROR, "{}: {} (Error code: {})", operation, errorMessage, errorCode);
+    spdlog::error("{}: {} (Error code: {})", operation, errorMessage,
+                  errorCode);
 
     if (errorCallback) {
         errorCallback(errorMessage, errorCode);
@@ -607,7 +663,6 @@ bool MysqlDB::handleError(const std::string& operation, bool throwOnError) {
     if (throwOnError) {
         throw MySQLException(operation + ": " + errorMessage);
     }
-
     return true;
 }
 
@@ -632,11 +687,29 @@ std::unique_ptr<PreparedStatement> MysqlDB::prepareStatement(
     return std::make_unique<PreparedStatement>(db, query);
 }
 
-bool MysqlDB::beginTransaction() { return executeQuery("START TRANSACTION"); }
+bool MysqlDB::beginTransaction() {
+    bool success = executeQuery("START TRANSACTION");
+    if (success) {
+        spdlog::debug("Transaction started");
+    }
+    return success;
+}
 
-bool MysqlDB::commitTransaction() { return executeQuery("COMMIT"); }
+bool MysqlDB::commitTransaction() {
+    bool success = executeQuery("COMMIT");
+    if (success) {
+        spdlog::debug("Transaction committed");
+    }
+    return success;
+}
 
-bool MysqlDB::rollbackTransaction() { return executeQuery("ROLLBACK"); }
+bool MysqlDB::rollbackTransaction() {
+    bool success = executeQuery("ROLLBACK");
+    if (success) {
+        spdlog::debug("Transaction rolled back");
+    }
+    return success;
+}
 
 bool MysqlDB::setSavepoint(const std::string& savepointName) {
     std::string escapedName = escapeString(savepointName);
@@ -667,6 +740,7 @@ bool MysqlDB::setTransactionIsolation(TransactionIsolation level) {
             query = "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE";
             break;
         default:
+            spdlog::error("Invalid transaction isolation level");
             return false;
     }
 
@@ -676,9 +750,12 @@ bool MysqlDB::setTransactionIsolation(TransactionIsolation level) {
 bool MysqlDB::executeBatch(const std::vector<std::string>& queries) {
     for (const auto& query : queries) {
         if (!executeQuery(query)) {
+            spdlog::error("Batch execution failed at query: {}", query);
             return false;
         }
     }
+    spdlog::debug("Batch execution completed successfully, {} queries",
+                  queries.size());
     return true;
 }
 
@@ -689,12 +766,39 @@ bool MysqlDB::executeBatchTransaction(const std::vector<std::string>& queries) {
 
     for (const auto& query : queries) {
         if (!executeQuery(query)) {
+            spdlog::error("Batch transaction failed, rolling back at query: {}",
+                          query);
             rollbackTransaction();
             return false;
         }
     }
 
-    return commitTransaction();
+    bool success = commitTransaction();
+    if (success) {
+        spdlog::debug("Batch transaction completed successfully, {} queries",
+                      queries.size());
+    }
+    return success;
+}
+
+void MysqlDB::withTransaction(const std::function<void()>& operations) {
+    if (!beginTransaction()) {
+        throw MySQLException("Failed to begin transaction");
+    }
+
+    try {
+        operations();
+        if (!commitTransaction()) {
+            throw MySQLException("Failed to commit transaction");
+        }
+    } catch (...) {
+        try {
+            rollbackTransaction();
+        } catch (const std::exception& e) {
+            spdlog::critical("Failed to rollback transaction: {}", e.what());
+        }
+        throw;
+    }
 }
 
 std::unique_ptr<ResultSet> MysqlDB::callProcedure(
@@ -713,19 +817,13 @@ std::unique_ptr<ResultSet> MysqlDB::callProcedure(
         }
         query += "'" + escapeString(params[i]) + "'";
     }
-
     query += ")";
 
     return executeQueryWithResults(query);
 }
 
 std::vector<std::string> MysqlDB::getDatabases() {
-    std::lock_guard<std::mutex> lock(mutex);
     std::vector<std::string> databases;
-
-    if (!db && !reconnect()) {
-        throw MySQLException("Not connected to database");
-    }
 
     auto result = executeQueryWithResults("SHOW DATABASES");
     if (!result) {
@@ -740,12 +838,7 @@ std::vector<std::string> MysqlDB::getDatabases() {
 }
 
 std::vector<std::string> MysqlDB::getTables() {
-    std::lock_guard<std::mutex> lock(mutex);
     std::vector<std::string> tables;
-
-    if (!db && !reconnect()) {
-        throw MySQLException("Not connected to database");
-    }
 
     auto result = executeQueryWithResults("SHOW TABLES");
     if (!result) {
@@ -760,12 +853,7 @@ std::vector<std::string> MysqlDB::getTables() {
 }
 
 std::vector<std::string> MysqlDB::getColumns(const std::string& tableName) {
-    std::lock_guard<std::mutex> lock(mutex);
     std::vector<std::string> columns;
-
-    if (!db && !reconnect()) {
-        throw MySQLException("Not connected to database");
-    }
 
     std::string escapedTableName = escapeString(tableName);
     std::string query = "SHOW COLUMNS FROM " + escapedTableName;
@@ -782,13 +870,32 @@ std::vector<std::string> MysqlDB::getColumns(const std::string& tableName) {
     return columns;
 }
 
+bool MysqlDB::tableExists(const std::string& tableName) {
+    try {
+        std::string query =
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema "
+            "= ? AND table_name = ?";
+        auto stmt = prepareStatement(query);
+        stmt->bindString(0, params.database);
+        stmt->bindString(1, tableName);
+
+        auto result = stmt->executeQuery();
+        if (result && result->next()) {
+            return result->getCurrentRow().getInt(0) > 0;
+        }
+    } catch (const std::exception& e) {
+        spdlog::error("Error checking table existence: {}", e.what());
+    }
+    return false;
+}
+
 std::string MysqlDB::getLastError() const {
-    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(mutex));
+    std::lock_guard<std::mutex> lock(mutex);
     return db ? mysql_error(db) : "Not connected to database";
 }
 
 unsigned int MysqlDB::getLastErrorCode() const {
-    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(mutex));
+    std::lock_guard<std::mutex> lock(mutex);
     return db ? mysql_errno(db) : 0;
 }
 
@@ -805,41 +912,26 @@ std::string MysqlDB::escapeString(const std::string& str) {
         throw MySQLException("Not connected to database");
     }
 
-    // Allocate buffer for escaped string (worst case: 2*length+1)
     std::vector<char> buffer(str.length() * 2 + 1);
-
-    // Escape the string
     unsigned long length =
         mysql_real_escape_string(db, buffer.data(), str.c_str(), str.length());
-
     return std::string(buffer.data(), length);
 }
 
 unsigned long long MysqlDB::getLastInsertId() const {
-    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(mutex));
-
-    if (!db) {
-        return 0;
-    }
-
-    return mysql_insert_id(db);
+    std::lock_guard<std::mutex> lock(mutex);
+    return db ? mysql_insert_id(db) : 0;
 }
 
 unsigned long long MysqlDB::getAffectedRows() const {
-    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(mutex));
-
-    if (!db) {
-        return 0;
-    }
-
-    return mysql_affected_rows(db);
+    std::lock_guard<std::mutex> lock(mutex);
+    return db ? mysql_affected_rows(db) : 0;
 }
 
 std::unique_ptr<ResultSet> MysqlDB::executeQueryWithPagination(
     const std::string& query, int limit, int offset) {
     std::string paginatedQuery = query;
 
-    // Add LIMIT and OFFSET if they don't already exist
     if (paginatedQuery.find("LIMIT") == std::string::npos) {
         paginatedQuery += " LIMIT " + std::to_string(limit);
     }
@@ -849,6 +941,31 @@ std::unique_ptr<ResultSet> MysqlDB::executeQueryWithPagination(
     }
 
     return executeQueryWithResults(paginatedQuery);
+}
+
+std::string MysqlDB::getServerVersion() const {
+    std::lock_guard<std::mutex> lock(mutex);
+    return db ? mysql_get_server_info(db) : "Not connected";
+}
+
+std::string MysqlDB::getClientVersion() const {
+    return mysql_get_client_info();
+}
+
+bool MysqlDB::ping() {
+    std::lock_guard<std::mutex> lock(mutex);
+    return db && mysql_ping(db) == 0;
+}
+
+bool MysqlDB::setConnectionTimeout(unsigned int timeout) {
+    std::lock_guard<std::mutex> lock(mutex);
+
+    if (!db) {
+        params.connectTimeout = timeout;
+        return true;
+    }
+
+    return mysql_options(db, MYSQL_OPT_CONNECT_TIMEOUT, &timeout) == 0;
 }
 
 }  // namespace database

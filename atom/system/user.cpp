@@ -4,14 +4,6 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2023-6-17
-
-Description: Some system functions to get user information.
-
-**************************************************/
-
 #include "user.hpp"
 
 #include <algorithm>
@@ -44,14 +36,13 @@ Description: Some system functions to get user information.
 #include <locale>
 #endif
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 
 namespace std {
 template <>
 struct formatter<std::wstring> {
     constexpr auto parse(format_parse_context &ctx) { return ctx.end(); }
 
-    // 格式化输出
     template <typename FormatContext>
     auto format(const std::wstring &wstr, FormatContext &ctx) {
         return format_to(ctx.out(), "{}",
@@ -62,62 +53,61 @@ struct formatter<std::wstring> {
 
 namespace atom::system {
 auto isRoot() -> bool {
-    LOG_F(INFO, "isRoot called");
+    spdlog::debug("Checking if current user has root/administrator privileges");
 #ifdef _WIN32
     HANDLE hToken;
     TOKEN_ELEVATION elevation;
     DWORD dwSize;
 
     if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken) == 0) {
-        LOG_F(ERROR, "isRoot error: OpenProcessToken error");
+        spdlog::error("Failed to open process token for elevation check");
         return false;
     }
 
     if (GetTokenInformation(hToken, TokenElevation, &elevation,
                             sizeof(elevation), &dwSize) == 0) {
-        LOG_F(ERROR, "isRoot error: GetTokenInformation error");
+        spdlog::error("Failed to get token elevation information");
         CloseHandle(hToken);
         return false;
     }
 
     bool elevated = (elevation.TokenIsElevated != 0);
     CloseHandle(hToken);
-    LOG_F(INFO, "isRoot completed with result: {}", elevated);
+    spdlog::debug("User elevation status: {}", elevated ? "elevated" : "not elevated");
     return elevated;
 #else
     bool result = (getuid() == 0);
-    LOG_F(INFO, "isRoot completed with result: {}", result);
+    spdlog::debug("User root status: {}", result ? "root" : "not root");
     return result;
 #endif
 }
 
 auto getUserGroups() -> std::vector<std::wstring> {
-    LOG_F(INFO, "getUserGroups called");
+    spdlog::debug("Retrieving user groups");
     std::vector<std::wstring> groups;
 
 #ifdef _WIN32
     HANDLE hToken;
     if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken) == 0) {
-        LOG_F(ERROR, "Failed to open process token.");
+        spdlog::error("Failed to open process token for group enumeration");
         return groups;
     }
+    
     DWORD bufferSize = 0;
     GetTokenInformation(hToken, TokenGroups, nullptr, 0, &bufferSize);
     if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
-        LOG_F(ERROR, "Failed to get token information size.");
+        spdlog::error("Failed to get required buffer size for token groups");
         CloseHandle(hToken);
         return groups;
     }
 
     std::vector<BYTE> buffer(bufferSize);
-    if (GetTokenInformation(hToken, TokenGroups, buffer.data(), bufferSize,
-                            &bufferSize) == 0) {
-        LOG_F(ERROR, "Failed to get token information.");
+    if (GetTokenInformation(hToken, TokenGroups, buffer.data(), bufferSize, &bufferSize) == 0) {
+        spdlog::error("Failed to retrieve token group information");
         CloseHandle(hToken);
         return groups;
     }
 
-    // 解析用户组信息
     auto *pTokenGroups = reinterpret_cast<PTOKEN_GROUPS>(buffer.data());
 
     for (DWORD i = 0; i < pTokenGroups->GroupCount; i++) {
@@ -127,105 +117,101 @@ auto getUserGroups() -> std::vector<std::wstring> {
         LookupAccountSid(nullptr, pTokenGroups->Groups[i].Sid, nullptr,
                          &nameLength, nullptr, &domainLength, &sidUse);
         if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
-            LOG_F(ERROR, "Failed to get account name and domain length.");
-            CloseHandle(hToken);
-            return groups;
+            continue;
         }
 
         std::vector<TCHAR> nameBuffer(nameLength);
         std::vector<TCHAR> domainBuffer(domainLength);
-        if (!LookupAccountSid(nullptr, pTokenGroups->Groups[i].Sid,
-                              nameBuffer.data(), &nameLength,
-                              domainBuffer.data(), &domainLength, &sidUse)) {
-            LOG_F(ERROR, "Failed to lookup account SID.");
-            CloseHandle(hToken);
-            return groups;
+        if (LookupAccountSid(nullptr, pTokenGroups->Groups[i].Sid,
+                            nameBuffer.data(), &nameLength,
+                            domainBuffer.data(), &domainLength, &sidUse)) {
+            std::wstring nameStr(nameBuffer.begin(), nameBuffer.end());
+            groups.push_back(nameStr);
+            spdlog::debug("Found group: {}", atom::utils::wstringToString(nameStr));
         }
-
-        std::wstring groupName;
-        std::wstring nameStr(nameBuffer.begin(), nameBuffer.end());
-        groupName += nameStr;
-        groups.push_back(groupName);
-        LOG_F(INFO, "Found group: {}", atom::utils::wstringToString(nameStr));
     }
 
     CloseHandle(hToken);
 #else
-    // 获取用户组信息
     gid_t *groupsArray = nullptr;
     int groupCount = getgroups(0, nullptr);
     if (groupCount == -1) {
-        LOG_F(ERROR, "Failed to get user group count.");
+        spdlog::error("Failed to get user group count");
         return groups;
     }
 
     groupsArray = new gid_t[groupCount];
     if (getgroups(groupCount, groupsArray) == -1) {
-        LOG_F(ERROR, "Failed to get user groups.");
+        spdlog::error("Failed to retrieve user groups");
         delete[] groupsArray;
         return groups;
     }
 
-    // 解析用户组信息
     for (int i = 0; i < groupCount; i++) {
         struct group *grp = getgrgid(groupsArray[i]);
         if (grp != nullptr) {
-            std::wstring groupName;
-            std::wstring_convert<std::codecvt_utf8_utf16<wchar_t> > converter;
+            std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
             std::wstring nameStr = converter.from_bytes(grp->gr_name);
-            groupName += nameStr;
-            groups.push_back(groupName);
+            groups.push_back(nameStr);
+            spdlog::debug("Found group: {}", grp->gr_name);
         }
     }
 
     delete[] groupsArray;
 #endif
 
-    LOG_F(INFO, "getUserGroups completed with {} groups found", groups.size());
+    spdlog::debug("Retrieved {} user groups", groups.size());
     return groups;
 }
 
 auto getUsername() -> std::string {
-    LOG_F(INFO, "getUsername called");
+    spdlog::debug("Retrieving current username");
     std::string username;
 #ifdef _WIN32
     std::array<char, UNLEN + 1> buffer;
     DWORD size = UNLEN + 1;
     if (GetUserNameA(buffer.data(), &size) != 0) {
         username = std::string(buffer.data(), size - 1);
+    } else {
+        spdlog::error("Failed to get username on Windows");
     }
 #else
-    char *buffer;
-    buffer = getlogin();
+    char *buffer = getlogin();
     if (buffer != nullptr) {
         username = buffer;
+    } else {
+        spdlog::error("Failed to get username on Unix");
     }
 #endif
-    LOG_F(INFO, "getUsername completed with result: {}", username);
+    spdlog::debug("Username: {}", username);
     return username;
 }
 
 auto getHostname() -> std::string {
-    LOG_F(INFO, "getHostname called");
+    spdlog::debug("Retrieving system hostname");
     std::string hostname;
 #ifdef _WIN32
     std::array<char, MAX_COMPUTERNAME_LENGTH + 1> buffer;
     DWORD size = MAX_COMPUTERNAME_LENGTH + 1;
     if (GetComputerNameA(buffer.data(), &size) != 0) {
         hostname = std::string(buffer.data(), size);
+    } else {
+        spdlog::error("Failed to get hostname on Windows");
     }
 #else
     std::array<char, 256> buffer;
     if (gethostname(buffer.data(), buffer.size()) == 0) {
         hostname = buffer.data();
+    } else {
+        spdlog::error("Failed to get hostname on Unix");
     }
 #endif
-    LOG_F(INFO, "getHostname completed with result: {}", hostname);
+    spdlog::debug("Hostname: {}", hostname);
     return hostname;
 }
 
 auto getUserId() -> int {
-    LOG_F(INFO, "getUserId called");
+    spdlog::debug("Retrieving current user ID");
     int userId = 0;
 #ifdef _WIN32
     HANDLE hToken;
@@ -238,53 +224,55 @@ auto getUserId() -> int {
                                 dwLengthNeeded, &dwLengthNeeded) != 0) {
             PSID sid = pTokenUser->User.Sid;
             DWORD subAuthorityCount = *GetSidSubAuthorityCount(sid);
-            DWORD *subAuthority =
-                GetSidSubAuthority(sid, subAuthorityCount - 1);
+            DWORD *subAuthority = GetSidSubAuthority(sid, subAuthorityCount - 1);
             userId = static_cast<int>(*subAuthority);
+        } else {
+            spdlog::error("Failed to get user token information");
         }
         CloseHandle(hToken);
+    } else {
+        spdlog::error("Failed to open process token for user ID");
     }
 #else
     userId = getuid();
 #endif
-    LOG_F(INFO, "getUserId completed with result: {}", userId);
+    spdlog::debug("User ID: {}", userId);
     return userId;
 }
 
 auto getGroupId() -> int {
-    LOG_F(INFO, "getGroupId called");
+    spdlog::debug("Retrieving current group ID");
     int groupId = 0;
 #ifdef _WIN32
     HANDLE hToken;
     if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken) != 0) {
         DWORD dwLengthNeeded;
-        GetTokenInformation(hToken, TokenPrimaryGroup, nullptr, 0,
-                            &dwLengthNeeded);
-        auto pTokenPrimaryGroup =
-            std::unique_ptr<TOKEN_PRIMARY_GROUP, decltype(&free)>(
-                static_cast<TOKEN_PRIMARY_GROUP *>(malloc(dwLengthNeeded)),
-                free);
+        GetTokenInformation(hToken, TokenPrimaryGroup, nullptr, 0, &dwLengthNeeded);
+        auto pTokenPrimaryGroup = std::unique_ptr<TOKEN_PRIMARY_GROUP, decltype(&free)>(
+            static_cast<TOKEN_PRIMARY_GROUP *>(malloc(dwLengthNeeded)), free);
         if (GetTokenInformation(hToken, TokenPrimaryGroup,
-                                pTokenPrimaryGroup.get(), dwLengthNeeded,
-                                &dwLengthNeeded) != 0) {
+                                pTokenPrimaryGroup.get(), dwLengthNeeded, &dwLengthNeeded) != 0) {
             PSID sid = pTokenPrimaryGroup->PrimaryGroup;
             DWORD subAuthorityCount = *GetSidSubAuthorityCount(sid);
-            DWORD *subAuthority =
-                GetSidSubAuthority(sid, subAuthorityCount - 1);
+            DWORD *subAuthority = GetSidSubAuthority(sid, subAuthorityCount - 1);
             groupId = static_cast<int>(*subAuthority);
+        } else {
+            spdlog::error("Failed to get primary group token information");
         }
         CloseHandle(hToken);
+    } else {
+        spdlog::error("Failed to open process token for group ID");
     }
 #else
     groupId = getgid();
 #endif
-    LOG_F(INFO, "getGroupId completed with result: {}", groupId);
+    spdlog::debug("Group ID: {}", groupId);
     return groupId;
 }
 
 #ifdef _WIN32
 auto getUserProfileDirectory() -> std::string {
-    LOG_F(INFO, "getUserProfileDirectory called");
+    spdlog::debug("Retrieving user profile directory (Windows)");
     std::string userProfileDir;
     HANDLE hToken;
     if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken) != 0) {
@@ -293,98 +281,108 @@ auto getUserProfileDirectory() -> std::string {
         auto buffer = std::make_unique<char[]>(dwSize);
         if (GetUserProfileDirectoryA(hToken, buffer.get(), &dwSize) != 0) {
             userProfileDir = buffer.get();
+        } else {
+            spdlog::error("Failed to get user profile directory");
         }
         CloseHandle(hToken);
+    } else {
+        spdlog::error("Failed to open process token for profile directory");
     }
-    LOG_F(INFO, "getUserProfileDirectory completed with result: {}",
-          userProfileDir);
+    spdlog::debug("User profile directory: {}", userProfileDir);
     return userProfileDir;
 }
 #endif
 
 auto getHomeDirectory() -> std::string {
-    LOG_F(INFO, "getHomeDirectory called");
+    spdlog::debug("Retrieving user home directory");
     std::string homeDir;
 #ifdef _WIN32
     homeDir = getUserProfileDirectory();
 #else
     int userId = getUserId();
     struct passwd *userInfo = getpwuid(userId);
-    homeDir = std::string(userInfo->pw_dir);
+    if (userInfo != nullptr) {
+        homeDir = std::string(userInfo->pw_dir);
+    } else {
+        spdlog::error("Failed to get user information for home directory");
+    }
 #endif
-    LOG_F(INFO, "getHomeDirectory completed with result: {}", homeDir);
+    spdlog::debug("Home directory: {}", homeDir);
     return homeDir;
 }
 
 auto getCurrentWorkingDirectory() -> std::string {
-    LOG_F(INFO, "getCurrentWorkingDirectory called");
+    spdlog::debug("Retrieving current working directory");
 #ifdef _WIN32
-    // Windows-specific code
     std::array<char, MAX_PATH> cwd;
     if (GetCurrentDirectory(cwd.size(), cwd.data())) {
         std::string result = cwd.data();
-        LOG_F(INFO, "getCurrentWorkingDirectory completed with result: {}",
-              result);
+        spdlog::debug("Current working directory: {}", result);
         return result;
     }
-    LOG_F(ERROR, "Error getting current working directory");
-    return "Error getting current working directory";
+    spdlog::error("Failed to get current working directory on Windows");
+    return "";
 #else
-    // POSIX (Linux, macOS) specific code
     std::array<char, PATH_MAX> cwd;
     if (getcwd(cwd.data(), cwd.size()) != nullptr) {
         std::string result = cwd.data();
-        LOG_F(INFO, "getCurrentWorkingDirectory completed with result: {}",
-              result);
+        spdlog::debug("Current working directory: {}", result);
         return result;
     }
-    LOG_F(ERROR, "Error getting current working directory");
-    return "Error getting current working directory";
+    spdlog::error("Failed to get current working directory on Unix");
+    return "";
 #endif
 }
 
 auto getLoginShell() -> std::string {
-    LOG_F(INFO, "getLoginShell called");
+    spdlog::debug("Retrieving login shell");
     std::string loginShell;
 #ifdef _WIN32
     std::array<char, MAX_PATH> buf;
     DWORD bufSize = buf.size();
     if (GetEnvironmentVariableA("COMSPEC", buf.data(), bufSize) != 0) {
         loginShell = std::string(buf.data());
+    } else {
+        spdlog::error("Failed to get COMSPEC environment variable");
     }
 #else
     int userId = getUserId();
     struct passwd *userInfo = getpwuid(userId);
-    loginShell = std::string(userInfo->pw_shell);
+    if (userInfo != nullptr) {
+        loginShell = std::string(userInfo->pw_shell);
+    } else {
+        spdlog::error("Failed to get user information for login shell");
+    }
 #endif
-    LOG_F(INFO, "getLoginShell completed with result: {}", loginShell);
+    spdlog::debug("Login shell: {}", loginShell);
     return loginShell;
 }
 
 auto getLogin() -> std::string {
-    LOG_F(INFO, "getLogin called");
+    spdlog::debug("Retrieving login name");
 #ifdef _WIN32
     std::array<char, UNLEN + 1> buffer;
     DWORD bufferSize = buffer.size();
     if (GetUserNameA(buffer.data(), &bufferSize) != 0) {
         std::string result = buffer.data();
-        LOG_F(INFO, "getLogin completed with result: {}", result);
+        spdlog::debug("Login name: {}", result);
         return result;
     }
+    spdlog::error("Failed to get login name on Windows");
 #else
     char *username = ::getlogin();
     if (username != nullptr) {
         std::string result = username;
-        LOG_F(INFO, "getLogin completed with result: {}", result);
+        spdlog::debug("Login name: {}", result);
         return result;
     }
+    spdlog::error("Failed to get login name on Unix");
 #endif
-    LOG_F(ERROR, "Error getting login name");
     return "";
 }
 
 auto getEnvironmentVariable(const std::string &name) -> std::string {
-    LOG_F(INFO, "getEnvironmentVariable called with name: {}", name);
+    spdlog::debug("Getting environment variable: {}", name);
     std::string value;
 
 #ifdef _WIN32
@@ -392,23 +390,25 @@ auto getEnvironmentVariable(const std::string &name) -> std::string {
     if (size > 0) {
         std::vector<char> buffer(size);
         GetEnvironmentVariableA(name.c_str(), buffer.data(), size);
-        value = std::string(buffer.data(),
-                            buffer.size() - 1);  // Remove null terminator
+        value = std::string(buffer.data(), buffer.size() - 1);
+    } else {
+        spdlog::debug("Environment variable '{}' not found", name);
     }
 #else
     const char *envValue = std::getenv(name.c_str());
     if (envValue != nullptr) {
         value = envValue;
+    } else {
+        spdlog::debug("Environment variable '{}' not found", name);
     }
 #endif
 
-    LOG_F(INFO, "getEnvironmentVariable completed with result: {}", value);
+    spdlog::debug("Environment variable '{}' = '{}'", name, value);
     return value;
 }
 
-auto getAllEnvironmentVariables()
-    -> std::unordered_map<std::string, std::string> {
-    LOG_F(INFO, "getAllEnvironmentVariables called");
+auto getAllEnvironmentVariables() -> std::unordered_map<std::string, std::string> {
+    spdlog::debug("Retrieving all environment variables");
     std::unordered_map<std::string, std::string> envVars;
 
 #ifdef _WIN32
@@ -426,6 +426,8 @@ auto getAllEnvironmentVariables()
             current += envString.length() + 1;
         }
         FreeEnvironmentStrings(envStrings);
+    } else {
+        spdlog::error("Failed to get environment strings on Windows");
     }
 #else
     extern char **environ;
@@ -440,15 +442,12 @@ auto getAllEnvironmentVariables()
     }
 #endif
 
-    LOG_F(INFO, "getAllEnvironmentVariables completed with {} variables",
-          envVars.size());
+    spdlog::debug("Retrieved {} environment variables", envVars.size());
     return envVars;
 }
 
-auto setEnvironmentVariable(const std::string &name, const std::string &value)
-    -> bool {
-    LOG_F(INFO, "setEnvironmentVariable called with name: {} and value: {}",
-          name, value);
+auto setEnvironmentVariable(const std::string &name, const std::string &value) -> bool {
+    spdlog::debug("Setting environment variable '{}' = '{}'", name, value);
     bool success = false;
 
 #ifdef _WIN32
@@ -457,60 +456,64 @@ auto setEnvironmentVariable(const std::string &name, const std::string &value)
     success = (setenv(name.c_str(), value.c_str(), 1) == 0);
 #endif
 
-    LOG_F(INFO, "setEnvironmentVariable completed with result: {}", success);
+    if (success) {
+        spdlog::debug("Successfully set environment variable '{}'", name);
+    } else {
+        spdlog::error("Failed to set environment variable '{}'", name);
+    }
     return success;
 }
 
 auto getSystemUptime() -> uint64_t {
-    LOG_F(INFO, "getSystemUptime called");
+    spdlog::debug("Retrieving system uptime");
     uint64_t uptime = 0;
 
 #ifdef _WIN32
-    uptime = GetTickCount64() / 1000;  // Convert milliseconds to seconds
+    uptime = GetTickCount64() / 1000;
 #else
     struct sysinfo info;
     if (sysinfo(&info) == 0) {
         uptime = static_cast<uint64_t>(info.uptime);
+    } else {
+        spdlog::error("Failed to get system uptime");
     }
 #endif
 
-    LOG_F(INFO, "getSystemUptime completed with result: {} seconds", uptime);
+    spdlog::debug("System uptime: {} seconds", uptime);
     return uptime;
 }
 
 auto getLoggedInUsers() -> std::vector<std::string> {
-    LOG_F(INFO, "getLoggedInUsers called");
+    spdlog::debug("Retrieving logged-in users");
     std::vector<std::string> users;
 
 #ifdef _WIN32
     WTS_SESSION_INFO *sessionInfo = nullptr;
     DWORD sessionCount = 0;
 
-    if (WTSEnumerateSessions(WTS_CURRENT_SERVER_HANDLE, 0, 1, &sessionInfo,
-                             &sessionCount)) {
+    if (WTSEnumerateSessions(WTS_CURRENT_SERVER_HANDLE, 0, 1, &sessionInfo, &sessionCount)) {
         for (DWORD i = 0; i < sessionCount; i++) {
             if (sessionInfo[i].State == WTSActive) {
                 LPSTR buffer = nullptr;
                 DWORD bytesReturned = 0;
 
-                if (WTSQuerySessionInformationA(
-                        WTS_CURRENT_SERVER_HANDLE, sessionInfo[i].SessionId,
-                        WTSUserName, &buffer, &bytesReturned)) {
+                if (WTSQuerySessionInformationA(WTS_CURRENT_SERVER_HANDLE, sessionInfo[i].SessionId,
+                                              WTSUserName, &buffer, &bytesReturned)) {
                     if (buffer && bytesReturned > 1) {
                         std::string username(buffer);
-                        if (!username.empty() &&
-                            std::find(users.begin(), users.end(), username) ==
-                                users.end()) {
+                        if (!username.empty() && 
+                            std::find(users.begin(), users.end(), username) == users.end()) {
                             users.push_back(username);
+                            spdlog::debug("Found logged-in user: {}", username);
                         }
                     }
-
                     WTSFreeMemory(buffer);
                 }
             }
         }
-
         WTSFreeMemory(sessionInfo);
+    } else {
+        spdlog::error("Failed to enumerate WTS sessions");
     }
 #else
     setutent();
@@ -519,30 +522,29 @@ auto getLoggedInUsers() -> std::vector<std::string> {
     while ((entry = getutent()) != nullptr) {
         if (entry->ut_type == USER_PROCESS) {
             std::string username(entry->ut_user);
-            if (!username.empty() && std::find(users.begin(), users.end(),
-                                               username) == users.end()) {
+            if (!username.empty() && 
+                std::find(users.begin(), users.end(), username) == users.end()) {
                 users.push_back(username);
+                spdlog::debug("Found logged-in user: {}", username);
             }
         }
     }
-
     endutent();
 #endif
 
-    LOG_F(INFO, "getLoggedInUsers completed with {} users found", users.size());
+    spdlog::debug("Found {} logged-in users", users.size());
     return users;
 }
 
 auto userExists(const std::string &username) -> bool {
-    LOG_F(INFO, "userExists called with username: {}", username);
+    spdlog::debug("Checking if user exists: {}", username);
     bool exists = false;
 
 #ifdef _WIN32
     DWORD level = 1;
     USER_INFO_1 *userInfo = nullptr;
     std::wstring wUsername(username.begin(), username.end());
-    NET_API_STATUS status =
-        NetUserGetInfo(nullptr, wUsername.c_str(), level, (LPBYTE *)&userInfo);
+    NET_API_STATUS status = NetUserGetInfo(nullptr, wUsername.c_str(), level, (LPBYTE *)&userInfo);
 
     exists = (status == NERR_Success);
 
@@ -554,8 +556,7 @@ auto userExists(const std::string &username) -> bool {
     exists = (pwd != nullptr);
 #endif
 
-    LOG_F(INFO, "userExists completed for username: {} with result: {}",
-          username, exists);
+    spdlog::debug("User '{}' exists: {}", username, exists ? "yes" : "no");
     return exists;
 }
 }  // namespace atom::system

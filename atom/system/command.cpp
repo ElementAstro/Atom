@@ -4,21 +4,12 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2023-12-24
-
-Description: Simple wrapper for executing commands.
-
-**************************************************/
-
 #include "command.hpp"
 
 #include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <cstdio>
 #include <cstring>
 #include <future>
@@ -48,16 +39,15 @@ Description: Simple wrapper for executing commands.
 #define UNSETENV(name) unsetenv(name)
 #endif
 
-#include "atom/macro.hpp"
-
 #include "atom/error/exception.hpp"
-#include "atom/log/loguru.hpp"
 #include "atom/meta/global_ptr.hpp"
 #include "atom/system/process.hpp"
 
 #ifdef _WIN32
 #include "atom/utils/convert.hpp"
 #endif
+
+#include <spdlog/spdlog.h>
 
 namespace atom::system {
 
@@ -69,14 +59,12 @@ auto executeCommandInternal(
     const std::string &input = "", const std::string &username = "",
     const std::string &domain = "", const std::string &password = "")
     -> std::string {
-    LOG_F(INFO,
-          "executeCommandInternal called with command: {}, openTerminal: {}, "
-          "input: [hidden], username: {}, domain: {}, password: [hidden]",
-          command, openTerminal, username, domain);
+    spdlog::debug("Executing command: {}, openTerminal: {}", command,
+                  openTerminal);
 
     if (command.empty()) {
         status = -1;
-        LOG_F(ERROR, "Command is empty");
+        spdlog::error("Command is empty");
         return "";
     }
 
@@ -94,13 +82,13 @@ auto executeCommandInternal(
 
     if (!username.empty() && !domain.empty() && !password.empty()) {
         if (!createProcessAsUser(command, username, domain, password)) {
-            LOG_F(ERROR, "Failed to run command '{}' as user '{}\\{}'.",
-                  command, domain, username);
-            THROW_RUNTIME_ERROR("Failed to run command as user.");
+            spdlog::error("Failed to run command '{}' as user '{}\\{}'",
+                          command, domain, username);
+            THROW_RUNTIME_ERROR("Failed to run command as user");
         }
         status = 0;
-        LOG_F(INFO, "Command '{}' executed as user '{}\\{}'.", command, domain,
-              username);
+        spdlog::info("Command '{}' executed as user '{}\\{}'", command, domain,
+                     username);
         return "";
     }
 
@@ -117,33 +105,32 @@ auto executeCommandInternal(
             CloseHandle(processInfo.hProcess);
             CloseHandle(processInfo.hThread);
             status = 0;
-            LOG_F(INFO, "Command '{}' executed in terminal.", command);
+            spdlog::info("Command '{}' executed in terminal", command);
             return "";
         }
-        LOG_F(ERROR, "Failed to run command '{}' in terminal.", command);
-        THROW_FAIL_TO_CREATE_PROCESS("Failed to run command in terminal.");
+        spdlog::error("Failed to run command '{}' in terminal", command);
+        THROW_FAIL_TO_CREATE_PROCESS("Failed to run command in terminal");
     }
     pipe.reset(_popen(command.c_str(), "w"));
-#else  // Non-Windows
+#else
     pipe.reset(popen(command.c_str(), "w"));
 #endif
 
     if (!pipe) {
-        LOG_F(ERROR, "Failed to run command '{}'.", command);
-        THROW_FAIL_TO_CREATE_PROCESS("Failed to run command.");
+        spdlog::error("Failed to run command '{}'", command);
+        THROW_FAIL_TO_CREATE_PROCESS("Failed to run command");
     }
 
-    // Write input if provided
     if (!input.empty()) {
         if (fwrite(input.c_str(), sizeof(char), input.size(), pipe.get()) !=
             input.size()) {
-            LOG_F(ERROR, "Failed to write input to pipe for command '{}'.",
-                  command);
-            THROW_RUNTIME_ERROR("Failed to write input to pipe.");
+            spdlog::error("Failed to write input to pipe for command '{}'",
+                          command);
+            THROW_RUNTIME_ERROR("Failed to write input to pipe");
         }
         if (fflush(pipe.get()) != 0) {
-            LOG_F(ERROR, "Failed to flush pipe for command '{}'.", command);
-            THROW_RUNTIME_ERROR("Failed to flush pipe.");
+            spdlog::error("Failed to flush pipe for command '{}'", command);
+            THROW_RUNTIME_ERROR("Failed to flush pipe");
         }
     }
 
@@ -161,7 +148,7 @@ auto executeCommandInternal(
 
         if (_kbhit()) {
             int key = _getch();
-            if (key == 3) {  // Ctrl+C
+            if (key == 3) {
                 interrupted = true;
             }
         }
@@ -187,7 +174,7 @@ auto executeCommandInternal(
 #else
     status = WEXITSTATUS(pclose(pipe.release()));
 #endif
-    LOG_F(INFO, "Command '{}' executed with status: {}", command, status);
+    spdlog::debug("Command '{}' executed with status: {}", command, status);
     return output.str();
 }
 
@@ -195,13 +182,12 @@ auto executeCommandStream(
     const std::string &command, bool openTerminal,
     const std::function<void(const std::string &)> &processLine, int &status,
     const std::function<bool()> &terminateCondition) -> std::string {
-    LOG_F(INFO,
-          "executeCommandStream called with command: {}, openTerminal: {}",
-          command, openTerminal);
+    spdlog::debug("Executing command stream: {}, openTerminal: {}", command,
+                  openTerminal);
 
     if (command.empty()) {
         status = -1;
-        LOG_F(ERROR, "Command is empty");
+        spdlog::error("Command is empty");
         return "";
     }
 
@@ -231,20 +217,20 @@ auto executeCommandStream(
             CloseHandle(processInfo.hProcess);
             CloseHandle(processInfo.hThread);
             status = 0;
-            LOG_F(INFO, "Command '{}' executed in terminal.", command);
+            spdlog::info("Command '{}' executed in terminal", command);
             return "";
         }
-        LOG_F(ERROR, "Failed to run command '{}' in terminal.", command);
-        THROW_FAIL_TO_CREATE_PROCESS("Failed to run command in terminal.");
+        spdlog::error("Failed to run command '{}' in terminal", command);
+        THROW_FAIL_TO_CREATE_PROCESS("Failed to run command in terminal");
     }
     pipe.reset(_popen(command.c_str(), "r"));
-#else  // Non-Windows
+#else
     pipe.reset(popen(command.c_str(), "r"));
 #endif
 
     if (!pipe) {
-        LOG_F(ERROR, "Failed to run command '{}'.", command);
-        THROW_FAIL_TO_CREATE_PROCESS("Failed to run command.");
+        spdlog::error("Failed to run command '{}'", command);
+        THROW_FAIL_TO_CREATE_PROCESS("Failed to run command");
     }
 
     constexpr std::size_t BUFFER_SIZE = 4096;
@@ -275,7 +261,6 @@ auto executeCommandStream(
             }
         });
 
-    // Monitor for termination condition
     while (!terminateCondition()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
@@ -292,29 +277,29 @@ auto executeCommandStream(
     status = WEXITSTATUS(pclose(pipe.release()));
 #endif
 
-    LOG_F(INFO, "Command '{}' executed with status: {}", command, status);
+    spdlog::debug("Command '{}' executed with status: {}", command, status);
     return output.str();
 }
 
 auto executeCommand(const std::string &command, bool openTerminal,
                     const std::function<void(const std::string &)> &processLine)
     -> std::string {
-    LOG_F(INFO, "executeCommand called with command: {}, openTerminal: {}",
-          command, openTerminal);
+    spdlog::debug("Executing command: {}, openTerminal: {}", command,
+                  openTerminal);
     int status = 0;
     auto result =
         executeCommandInternal(command, openTerminal, processLine, status);
-    LOG_F(INFO, "executeCommand completed with status: {}", status);
+    spdlog::debug("Command completed with status: {}", status);
     return result;
 }
 
 auto executeCommandWithStatus(const std::string &command)
     -> std::pair<std::string, int> {
-    LOG_F(INFO, "executeCommandWithStatus called with command: {}", command);
+    spdlog::debug("Executing command with status: {}", command);
     int status = 0;
     std::string output =
         executeCommandInternal(command, false, nullptr, status);
-    LOG_F(INFO, "executeCommandWithStatus completed with status: {}", status);
+    spdlog::debug("Command completed with status: {}", status);
     return {output, status};
 }
 
@@ -322,18 +307,16 @@ auto executeCommandWithInput(
     const std::string &command, const std::string &input,
     const std::function<void(const std::string &)> &processLine)
     -> std::string {
-    LOG_F(INFO,
-          "executeCommandWithInput called with command: {}, input: [hidden]",
-          command);
+    spdlog::debug("Executing command with input: {}", command);
     int status = 0;
     auto result =
         executeCommandInternal(command, false, processLine, status, input);
-    LOG_F(INFO, "executeCommandWithInput completed with status: {}", status);
+    spdlog::debug("Command with input completed with status: {}", status);
     return result;
 }
 
 void executeCommands(const std::vector<std::string> &commands) {
-    LOG_F(INFO, "executeCommands called with {} commands", commands.size());
+    spdlog::debug("Executing {} commands", commands.size());
     std::vector<std::thread> threads;
     std::vector<std::string> errors;
     std::mutex errorMutex;
@@ -368,16 +351,16 @@ void executeCommands(const std::vector<std::string> &commands) {
         }
         THROW_INVALID_ARGUMENT("One or more commands failed:\n" + oss.str());
     }
-    LOG_F(INFO, "executeCommands completed");
+    spdlog::debug("All commands executed successfully");
 }
 
 auto executeCommandWithEnv(
     const std::string &command,
     const std::unordered_map<std::string, std::string> &envVars)
     -> std::string {
-    LOG_F(INFO, "executeCommandWithEnv called with command: {}", command);
+    spdlog::debug("Executing command with environment: {}", command);
     if (command.empty()) {
-        LOG_F(WARNING, "Command is empty");
+        spdlog::warn("Command is empty");
         return "";
     }
 
@@ -408,25 +391,25 @@ auto executeCommandWithEnv(
         }
     }
 
-    LOG_F(INFO, "executeCommandWithEnv completed");
+    spdlog::debug("Command with environment completed");
     return result;
 }
 
 auto executeCommandSimple(const std::string &command) -> bool {
-    LOG_F(INFO, "executeCommandSimple called with command: {}", command);
+    spdlog::debug("Executing simple command: {}", command);
     auto result = executeCommandWithStatus(command).second == 0;
-    LOG_F(INFO, "executeCommandSimple completed with result: {}", result);
+    spdlog::debug("Simple command completed with result: {}", result);
     return result;
 }
 
 void killProcessByName(const std::string &processName, int signal) {
-    LOG_F(INFO, "killProcessByName called with processName: {}, signal: {}",
-          processName, signal);
+    spdlog::debug("Killing process by name: {}, signal: {}", processName,
+                  signal);
 #ifdef _WIN32
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snap == INVALID_HANDLE_VALUE) {
-        LOG_F(ERROR, "Unable to create toolhelp snapshot.");
-        THROW_SYSTEM_COLLAPSE("Unable to create toolhelp snapshot.");
+        spdlog::error("Unable to create toolhelp snapshot");
+        THROW_SYSTEM_COLLAPSE("Unable to create toolhelp snapshot");
     }
 
     PROCESSENTRY32W entry{};
@@ -434,8 +417,8 @@ void killProcessByName(const std::string &processName, int signal) {
 
     if (!Process32FirstW(snap, &entry)) {
         CloseHandle(snap);
-        LOG_F(ERROR, "Unable to get the first process.");
-        THROW_SYSTEM_COLLAPSE("Unable to get the first process.");
+        spdlog::error("Unable to get the first process");
+        THROW_SYSTEM_COLLAPSE("Unable to get the first process");
     }
 
     do {
@@ -446,13 +429,13 @@ void killProcessByName(const std::string &processName, int signal) {
                 OpenProcess(PROCESS_TERMINATE, FALSE, entry.th32ProcessID);
             if (hProcess) {
                 if (!TerminateProcess(hProcess, 0)) {
-                    LOG_F(ERROR, "Failed to terminate process '{}'.",
-                          processName);
+                    spdlog::error("Failed to terminate process '{}'",
+                                  processName);
                     CloseHandle(hProcess);
-                    THROW_SYSTEM_COLLAPSE("Failed to terminate process.");
+                    THROW_SYSTEM_COLLAPSE("Failed to terminate process");
                 }
                 CloseHandle(hProcess);
-                LOG_F(INFO, "Process '{}' terminated.", processName);
+                spdlog::info("Process '{}' terminated", processName);
             }
         }
     } while (Process32NextW(snap, &entry));
@@ -462,43 +445,42 @@ void killProcessByName(const std::string &processName, int signal) {
     std::string cmd = "pkill -" + std::to_string(signal) + " -f " + processName;
     auto [output, status] = executeCommandWithStatus(cmd);
     if (status != 0) {
-        LOG_F(ERROR, "Failed to kill process with name '{}'.", processName);
-        THROW_SYSTEM_COLLAPSE("Failed to kill process by name.");
+        spdlog::error("Failed to kill process with name '{}'", processName);
+        THROW_SYSTEM_COLLAPSE("Failed to kill process by name");
     }
-    LOG_F(INFO, "Process '{}' terminated with signal {}.", processName, signal);
+    spdlog::info("Process '{}' terminated with signal {}", processName, signal);
 #endif
 }
 
 void killProcessByPID(int pid, int signal) {
-    LOG_F(INFO, "killProcessByPID called with pid: {}, signal: {}", pid,
-          signal);
+    spdlog::debug("Killing process by PID: {}, signal: {}", pid, signal);
 #ifdef _WIN32
     HANDLE hProcess =
         OpenProcess(PROCESS_TERMINATE, FALSE, static_cast<DWORD>(pid));
     if (!hProcess) {
-        LOG_F(ERROR, "Unable to open process with PID {}.", pid);
-        THROW_SYSTEM_COLLAPSE("Unable to open process.");
+        spdlog::error("Unable to open process with PID {}", pid);
+        THROW_SYSTEM_COLLAPSE("Unable to open process");
     }
     if (!TerminateProcess(hProcess, 0)) {
-        LOG_F(ERROR, "Failed to terminate process with PID {}.", pid);
+        spdlog::error("Failed to terminate process with PID {}", pid);
         CloseHandle(hProcess);
-        THROW_SYSTEM_COLLAPSE("Failed to terminate process by PID.");
+        THROW_SYSTEM_COLLAPSE("Failed to terminate process by PID");
     }
     CloseHandle(hProcess);
-    LOG_F(INFO, "Process with PID {} terminated.", pid);
+    spdlog::info("Process with PID {} terminated", pid);
 #else
     if (kill(pid, signal) == -1) {
-        LOG_F(ERROR, "Failed to kill process with PID {}.", pid);
-        THROW_SYSTEM_COLLAPSE("Failed to kill process by PID.");
+        spdlog::error("Failed to kill process with PID {}", pid);
+        THROW_SYSTEM_COLLAPSE("Failed to kill process by PID");
     }
     int status;
     waitpid(pid, &status, 0);
-    LOG_F(INFO, "Process with PID {} terminated with signal {}.", pid, signal);
+    spdlog::info("Process with PID {} terminated with signal {}", pid, signal);
 #endif
 }
 
 auto startProcess(const std::string &command) -> std::pair<int, void *> {
-    LOG_F(INFO, "startProcess called with command: {}", command);
+    spdlog::debug("Starting process: {}", command);
 #ifdef _WIN32
     STARTUPINFOW startupInfo{};
     PROCESS_INFORMATION processInfo{};
@@ -509,24 +491,24 @@ auto startProcess(const std::string &command) -> std::pair<int, void *> {
                        nullptr, FALSE, 0, nullptr, nullptr, &startupInfo,
                        &processInfo)) {
         CloseHandle(processInfo.hThread);
-        LOG_F(INFO, "Process '{}' started with PID: {}", command,
-              processInfo.dwProcessId);
+        spdlog::info("Process '{}' started with PID: {}", command,
+                     processInfo.dwProcessId);
         return {processInfo.dwProcessId, processInfo.hProcess};
     } else {
-        LOG_F(ERROR, "Failed to start process '{}'.", command);
-        THROW_FAIL_TO_CREATE_PROCESS("Failed to start process.");
+        spdlog::error("Failed to start process '{}'", command);
+        THROW_FAIL_TO_CREATE_PROCESS("Failed to start process");
     }
 #else
     pid_t pid = fork();
     if (pid == -1) {
-        LOG_F(ERROR, "Failed to fork process for command '{}'.", command);
-        THROW_FAIL_TO_CREATE_PROCESS("Failed to fork process.");
+        spdlog::error("Failed to fork process for command '{}'", command);
+        THROW_FAIL_TO_CREATE_PROCESS("Failed to fork process");
     }
     if (pid == 0) {
         execl("/bin/sh", "sh", "-c", command.c_str(), (char *)nullptr);
-        _exit(EXIT_FAILURE);  // If execl fails
+        _exit(EXIT_FAILURE);
     } else {
-        LOG_F(INFO, "Process '{}' started with PID: {}", command, pid);
+        spdlog::info("Process '{}' started with PID: {}", command, pid);
         return {pid, nullptr};
     }
 #endif
@@ -546,16 +528,16 @@ auto executeCommandAsync(
     const std::string &command, bool openTerminal,
     const std::function<void(const std::string &)> &processLine)
     -> std::future<std::string> {
-    LOG_F(INFO, "executeCommandAsync called with command: {}, openTerminal: {}",
-          command, openTerminal);
+    spdlog::debug("Executing async command: {}, openTerminal: {}", command,
+                  openTerminal);
 
     return std::async(
         std::launch::async, [command, openTerminal, processLine]() {
             int status = 0;
             auto result = executeCommandInternal(command, openTerminal,
                                                  processLine, status);
-            LOG_F(INFO, "Async command '{}' completed with status: {}", command,
-                  status);
+            spdlog::debug("Async command '{}' completed with status: {}",
+                          command, status);
             return result;
         });
 }
@@ -565,19 +547,16 @@ auto executeCommandWithTimeout(
     bool openTerminal,
     const std::function<void(const std::string &)> &processLine)
     -> std::optional<std::string> {
-    LOG_F(INFO,
-          "executeCommandWithTimeout called with command: {}, timeout: {}ms",
-          command, timeout.count());
+    spdlog::debug("Executing command with timeout: {}, timeout: {}ms", command,
+                  timeout.count());
 
     auto future = executeCommandAsync(command, openTerminal, processLine);
     auto status = future.wait_for(timeout);
 
     if (status == std::future_status::timeout) {
-        LOG_F(WARNING, "Command '{}' timed out after {}ms", command,
-              timeout.count());
+        spdlog::warn("Command '{}' timed out after {}ms", command,
+                     timeout.count());
 
-        // Attempt to kill the process (implementation depends on platform)
-        // This is simplified; in reality would need process tracking
 #ifdef _WIN32
         std::string killCmd =
             "taskkill /F /IM " + command.substr(0, command.find(' ')) + ".exe";
@@ -586,20 +565,20 @@ auto executeCommandWithTimeout(
 #endif
         auto result = executeCommandSimple(killCmd);
         if (!result) {
-            LOG_F(ERROR, "Failed to kill process for command '{}'", command);
+            spdlog::error("Failed to kill process for command '{}'", command);
         } else {
-            LOG_F(INFO, "Process for command '{}' killed successfully",
-                  command);
+            spdlog::info("Process for command '{}' killed successfully",
+                         command);
         }
         return std::nullopt;
     }
 
     try {
         auto result = future.get();
-        LOG_F(INFO, "Command with timeout completed successfully");
+        spdlog::debug("Command with timeout completed successfully");
         return result;
     } catch (const std::exception &e) {
-        LOG_F(ERROR, "Command with timeout failed: {}", e.what());
+        spdlog::error("Command with timeout failed: {}", e.what());
         return std::nullopt;
     }
 }
@@ -608,18 +587,16 @@ auto executeCommandsWithCommonEnv(
     const std::vector<std::string> &commands,
     const std::unordered_map<std::string, std::string> &envVars,
     bool stopOnError) -> std::vector<std::pair<std::string, int>> {
-    LOG_F(INFO, "executeCommandsWithCommonEnv called with {} commands",
-          commands.size());
+    spdlog::debug("Executing {} commands with common environment",
+                  commands.size());
 
     std::vector<std::pair<std::string, int>> results;
     results.reserve(commands.size());
 
-    // Save the current environment
     std::unordered_map<std::string, std::string> oldEnvVars;
     std::shared_ptr<utils::Env> env;
     GET_OR_CREATE_PTR(env, utils::Env, "LITHIUM.ENV");
 
-    // Set new environment variables
     {
         std::lock_guard lock(envMutex);
         for (const auto &var : envVars) {
@@ -631,20 +608,18 @@ auto executeCommandsWithCommonEnv(
         }
     }
 
-    // Execute commands
     for (const auto &command : commands) {
         auto [output, status] = executeCommandWithStatus(command);
         results.emplace_back(output, status);
 
         if (stopOnError && status != 0) {
-            LOG_F(WARNING,
-                  "Command '{}' failed with status {}. Stopping sequence.",
-                  command, status);
+            spdlog::warn(
+                "Command '{}' failed with status {}. Stopping sequence",
+                command, status);
             break;
         }
     }
 
-    // Restore old environment
     {
         std::lock_guard lock(envMutex);
         for (const auto &var : envVars) {
@@ -656,14 +631,14 @@ auto executeCommandsWithCommonEnv(
         }
     }
 
-    LOG_F(INFO, "executeCommandsWithCommonEnv completed with {} results",
-          results.size());
+    spdlog::debug("Commands with common environment completed with {} results",
+                  results.size());
     return results;
 }
 
 auto getProcessesBySubstring(const std::string &substring)
     -> std::vector<std::pair<int, std::string>> {
-    LOG_F(INFO, "getProcessesBySubstring called with substring: {}", substring);
+    spdlog::debug("Getting processes by substring: {}", substring);
 
     std::vector<std::pair<int, std::string>> processes;
 
@@ -699,7 +674,6 @@ auto getProcessesBySubstring(const std::string &substring)
         std::string processName;
 
         if (lineStream >> pid >> processName) {
-            // Skip the grep process itself
             if (processName != "grep") {
                 processes.emplace_back(pid, processName);
             }
@@ -707,14 +681,14 @@ auto getProcessesBySubstring(const std::string &substring)
     }
 #endif
 
-    LOG_F(INFO, "Found {} processes matching '{}'", processes.size(),
-          substring);
+    spdlog::debug("Found {} processes matching '{}'", processes.size(),
+                  substring);
     return processes;
 }
 
 auto executeCommandGetLines(const std::string &command)
     -> std::vector<std::string> {
-    LOG_F(INFO, "executeCommandGetLines called with command: {}", command);
+    spdlog::debug("Executing command and getting lines: {}", command);
 
     std::vector<std::string> lines;
     auto output = executeCommand(command);
@@ -723,25 +697,21 @@ auto executeCommandGetLines(const std::string &command)
     std::string line;
 
     while (std::getline(ss, line)) {
-        // Remove trailing carriage return if present
         if (!line.empty() && line.back() == '\r') {
             line.pop_back();
         }
         lines.push_back(line);
     }
 
-    LOG_F(INFO, "Command returned {} lines", lines.size());
+    spdlog::debug("Command returned {} lines", lines.size());
     return lines;
 }
 
 auto pipeCommands(const std::string &firstCommand,
                   const std::string &secondCommand) -> std::string {
-    LOG_F(INFO, "pipeCommands called with commands: '{}' | '{}'", firstCommand,
-          secondCommand);
+    spdlog::debug("Piping commands: '{}' | '{}'", firstCommand, secondCommand);
 
 #ifdef _WIN32
-    // Windows doesn't handle pipes well in system(), so we create a temporary
-    // file
     std::string tempFile = std::tmpnam(nullptr);
     std::string combinedCommand = firstCommand + " > " + tempFile + " && " +
                                   secondCommand + " < " + tempFile +
@@ -751,11 +721,10 @@ auto pipeCommands(const std::string &firstCommand,
 #endif
 
     auto result = executeCommand(combinedCommand);
-    LOG_F(INFO, "pipeCommands completed");
+    spdlog::debug("Pipe commands completed");
     return result;
 }
 
-// CommandHistory implementation
 class CommandHistory::Impl {
 public:
     explicit Impl(size_t maxSize) : _maxSize(maxSize) {}
@@ -842,7 +811,7 @@ auto CommandHistory::size() const -> size_t { return pImpl->size(); }
 
 auto createCommandHistory(size_t maxHistorySize)
     -> std::unique_ptr<CommandHistory> {
-    LOG_F(INFO, "Creating command history with max size: {}", maxHistorySize);
+    spdlog::debug("Creating command history with max size: {}", maxHistorySize);
     return std::make_unique<CommandHistory>(maxHistorySize);
 }
 

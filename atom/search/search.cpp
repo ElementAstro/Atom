@@ -20,15 +20,47 @@
 #include <thread>
 #endif
 
-#include "atom/log/loguru.hpp"
-
 namespace atom::search {
 
 Document::Document(String id, String content,
                    std::initializer_list<std::string> tags)
     : id_(std::move(id)), content_(std::move(content)), tags_(tags) {
     validate();
-    LOG_F(INFO, "Document created with id: {}", std::string(id_));
+    spdlog::info("Document created with id: {}", std::string(id_));
+}
+
+Document::Document(const Document& other)
+    : id_(other.id_),
+      content_(other.content_),
+      tags_(other.tags_),
+      clickCount_(other.clickCount_.load(std::memory_order_relaxed)) {}
+
+Document& Document::operator=(const Document& other) {
+    if (this != &other) {
+        id_ = other.id_;
+        content_ = other.content_;
+        tags_ = other.tags_;
+        clickCount_.store(other.clickCount_.load(std::memory_order_relaxed),
+                          std::memory_order_relaxed);
+    }
+    return *this;
+}
+
+Document::Document(Document&& other) noexcept
+    : id_(std::move(other.id_)),
+      content_(std::move(other.content_)),
+      tags_(std::move(other.tags_)),
+      clickCount_(other.clickCount_.load(std::memory_order_relaxed)) {}
+
+Document& Document::operator=(Document&& other) noexcept {
+    if (this != &other) {
+        id_ = std::move(other.id_);
+        content_ = std::move(other.content_);
+        tags_ = std::move(other.tags_);
+        clickCount_.store(other.clickCount_.load(std::memory_order_relaxed),
+                          std::memory_order_relaxed);
+    }
+    return *this;
 }
 
 void Document::validate() const {
@@ -84,17 +116,17 @@ SearchEngine::SearchEngine(unsigned maxThreads)
                              : std::thread::hardware_concurrency())
 #endif
 {
-    LOG_F(INFO, "SearchEngine initialized with max threads: {}", maxThreads_);
+    spdlog::info("SearchEngine initialized with max threads: {}", maxThreads_);
 
     taskQueue_ = std::make_unique<threading::lockfree_queue<SearchTask>>(1024);
     startWorkerThreads();
-    LOG_F(INFO, "Task queue initialized with {} worker threads", maxThreads_);
+    spdlog::info("Task queue initialized with {} worker threads", maxThreads_);
 }
 
 SearchEngine::~SearchEngine() {
-    LOG_F(INFO, "SearchEngine being destroyed");
+    spdlog::info("SearchEngine being destroyed");
     stopWorkerThreads();
-    LOG_F(INFO, "Worker threads stopped and cleaned up");
+    spdlog::info("Worker threads stopped and cleaned up");
 }
 
 void SearchEngine::startWorkerThreads() {
@@ -105,11 +137,11 @@ void SearchEngine::startWorkerThreads() {
         workerThreads_.push_back(std::make_unique<threading::thread>(
             [this]() { workerFunction(); }));
     }
-    LOG_F(INFO, "Started {} worker threads", maxThreads_);
+    spdlog::info("Started {} worker threads", maxThreads_);
 }
 
 void SearchEngine::stopWorkerThreads() {
-    LOG_F(INFO, "Stopping worker threads");
+    spdlog::info("Stopping worker threads");
     shouldStopWorkers_.store(true);
 
     for (auto& thread : workerThreads_) {
@@ -119,7 +151,7 @@ void SearchEngine::stopWorkerThreads() {
     }
 
     workerThreads_.clear();
-    LOG_F(INFO, "All worker threads stopped");
+    spdlog::info("All worker threads stopped");
 }
 
 void SearchEngine::workerFunction() {
@@ -130,7 +162,7 @@ void SearchEngine::workerFunction() {
             try {
                 task.callback(task.words);
             } catch (const std::exception& e) {
-                LOG_F(ERROR, "Error in worker thread: {}", e.what());
+                spdlog::error("Error in worker thread: {}", e.what());
             }
         } else {
 #ifdef ATOM_USE_BOOST
@@ -144,26 +176,26 @@ void SearchEngine::workerFunction() {
 
 void SearchEngine::addDocument(const Document& doc) {
     try {
-        LOG_F(INFO, "Adding document copy with id: {}",
-              std::string(doc.getId()));
+        spdlog::info("Adding document copy with id: {}",
+                     std::string(doc.getId()));
         Document tempDoc = doc;
         addDocument(std::move(tempDoc));
     } catch (const DocumentValidationException& e) {
-        LOG_F(ERROR, "Failed to add document copy: {}", e.what());
+        spdlog::error("Failed to add document copy: {}", e.what());
         throw;
     } catch (const std::invalid_argument& e) {
-        LOG_F(ERROR, "Failed to add document copy: {}", e.what());
+        spdlog::error("Failed to add document copy: {}", e.what());
         throw;
     }
 }
 
 void SearchEngine::addDocument(Document&& doc) {
-    LOG_F(INFO, "Adding document move with id: {}", std::string(doc.getId()));
+    spdlog::info("Adding document move with id: {}", std::string(doc.getId()));
 
     try {
         doc.validate();
     } catch (const DocumentValidationException& e) {
-        LOG_F(ERROR, "Document validation failed: {}", e.what());
+        spdlog::error("Document validation failed: {}", e.what());
         throw;
     }
 
@@ -171,7 +203,7 @@ void SearchEngine::addDocument(Document&& doc) {
     String docId = String(doc.getId());
 
     if (documents_.count(docId) > 0) {
-        LOG_F(ERROR, "Document with ID {} already exists", std::string(docId));
+        spdlog::error("Document with ID {} already exists", std::string(docId));
         throw std::invalid_argument("Document with this ID already exists");
     }
 
@@ -181,18 +213,18 @@ void SearchEngine::addDocument(Document&& doc) {
     for (const auto& tag : docPtr->getTags()) {
         tagIndex_[tag].push_back(docId);
         docFrequency_[tag]++;
-        LOG_F(INFO, "Tag '{}' added to index for doc {}", tag,
-              std::string(docId));
+        spdlog::debug("Tag '{}' added to index for doc {}", tag,
+                      std::string(docId));
     }
 
     addContentToIndex(docPtr);
     totalDocs_++;
-    LOG_F(INFO, "Document added successfully, total docs: {}",
-          totalDocs_.load());
+    spdlog::info("Document added successfully, total docs: {}",
+                 totalDocs_.load());
 }
 
 void SearchEngine::removeDocument(const String& docId) {
-    LOG_F(INFO, "Removing document with id: {}", std::string(docId));
+    spdlog::info("Removing document with id: {}", std::string(docId));
 
     if (docId.empty()) {
         throw std::invalid_argument("Document ID cannot be empty");
@@ -202,7 +234,7 @@ void SearchEngine::removeDocument(const String& docId) {
 
     auto docIt = documents_.find(docId);
     if (docIt == documents_.end()) {
-        LOG_F(ERROR, "Document with ID {} not found", std::string(docId));
+        spdlog::error("Document with ID {} not found", std::string(docId));
         throw DocumentNotFoundException(docId);
     }
 
@@ -251,12 +283,12 @@ void SearchEngine::removeDocument(const String& docId) {
     documents_.erase(docIt);
     totalDocs_--;
 
-    LOG_F(INFO, "Document with id: {} removed, total docs: {}",
-          std::string(docId), totalDocs_.load());
+    spdlog::info("Document with id: {} removed, total docs: {}",
+                 std::string(docId), totalDocs_.load());
 }
 
 void SearchEngine::updateDocument(const Document& doc) {
-    LOG_F(INFO, "Updating document with id: {}", std::string(doc.getId()));
+    spdlog::info("Updating document with id: {}", std::string(doc.getId()));
 
     try {
         doc.validate();
@@ -264,7 +296,7 @@ void SearchEngine::updateDocument(const Document& doc) {
         String docId = String(doc.getId());
 
         if (documents_.find(docId) == documents_.end()) {
-            LOG_F(ERROR, "Document with ID {} not found", std::string(docId));
+            spdlog::error("Document with ID {} not found", std::string(docId));
             throw DocumentNotFoundException(docId);
         }
 
@@ -272,25 +304,55 @@ void SearchEngine::updateDocument(const Document& doc) {
         removeDocument(docId);
         addDocument(doc);
 
-        LOG_F(INFO, "Document with id: {} updated", std::string(docId));
+        spdlog::info("Document with id: {} updated", std::string(docId));
     } catch (const DocumentNotFoundException& e) {
-        LOG_F(ERROR, "Error updating document (not found): {}", e.what());
+        spdlog::error("Error updating document (not found): {}", e.what());
         throw;
     } catch (const DocumentValidationException& e) {
-        LOG_F(ERROR, "Error updating document (validation): {}", e.what());
+        spdlog::error("Error updating document (validation): {}", e.what());
         throw;
     } catch (const std::invalid_argument& e) {
-        LOG_F(ERROR, "Error updating document (invalid arg): {}", e.what());
+        spdlog::error("Error updating document (invalid arg): {}", e.what());
         throw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error updating document: {}", e.what());
+        spdlog::error("Error updating document: {}", e.what());
         throw;
     }
 }
 
+void SearchEngine::clear() {
+    spdlog::info("Clearing all documents and indexes");
+
+    std::unique_lock<threading::shared_mutex> lock(indexMutex_);
+    documents_.clear();
+    tagIndex_.clear();
+    contentIndex_.clear();
+    docFrequency_.clear();
+    totalDocs_ = 0;
+
+    spdlog::info("All documents and indexes cleared");
+}
+
+bool SearchEngine::hasDocument(const String& docId) const {
+    threading::shared_lock lock(indexMutex_);
+    return documents_.find(docId) != documents_.end();
+}
+
+std::vector<String> SearchEngine::getAllDocumentIds() const {
+    threading::shared_lock lock(indexMutex_);
+    std::vector<String> ids;
+    ids.reserve(documents_.size());
+
+    for (const auto& [docId, _] : documents_) {
+        ids.push_back(docId);
+    }
+
+    return ids;
+}
+
 void SearchEngine::addContentToIndex(const std::shared_ptr<Document>& doc) {
-    LOG_F(INFO, "Indexing content for document id: {}",
-          std::string(doc->getId()));
+    spdlog::debug("Indexing content for document id: {}",
+                  std::string(doc->getId()));
 
     String docId = String(doc->getId());
     String content = String(doc->getContent());
@@ -299,8 +361,8 @@ void SearchEngine::addContentToIndex(const std::shared_ptr<Document>& doc) {
     for (const auto& token : tokens) {
         contentIndex_[token].insert(docId);
         docFrequency_[std::string(token)]++;
-        LOG_F(INFO, "Token '{}' indexed for document id: {}",
-              std::string(token), std::string(docId));
+        spdlog::trace("Token '{}' indexed for document id: {}",
+                      std::string(token), std::string(docId));
     }
 }
 
@@ -324,10 +386,10 @@ std::vector<String> SearchEngine::tokenizeContent(const String& content) const {
 
 std::vector<std::shared_ptr<Document>> SearchEngine::searchByTag(
     const std::string& tag) {
-    LOG_F(INFO, "Searching by tag: {}", tag);
+    spdlog::debug("Searching by tag: {}", tag);
 
     if (tag.empty()) {
-        LOG_F(WARNING, "Empty tag provided for search");
+        spdlog::warn("Empty tag provided for search");
         return {};
     }
 
@@ -344,29 +406,29 @@ std::vector<std::shared_ptr<Document>> SearchEngine::searchByTag(
                 if (docIt != documents_.end()) {
                     results.push_back(docIt->second);
                 } else {
-                    LOG_F(WARNING,
-                          "Document ID {} found in tag index but not in "
-                          "documents map",
-                          std::string(docId));
+                    spdlog::warn(
+                        "Document ID {} found in tag index but not in "
+                        "documents map",
+                        std::string(docId));
                 }
             }
         }
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error during tag search: {}", e.what());
+        spdlog::error("Error during tag search: {}", e.what());
         throw SearchOperationException(e.what());
     }
 
-    LOG_F(INFO, "Found {} documents with tag '{}'", results.size(), tag);
+    spdlog::debug("Found {} documents with tag '{}'", results.size(), tag);
     return results;
 }
 
 std::vector<std::shared_ptr<Document>> SearchEngine::fuzzySearchByTag(
     const std::string& tag, int tolerance) {
-    LOG_F(INFO, "Fuzzy searching by tag: {} with tolerance: {}", tag,
-          tolerance);
+    spdlog::debug("Fuzzy searching by tag: {} with tolerance: {}", tag,
+                  tolerance);
 
     if (tag.empty()) {
-        LOG_F(WARNING, "Empty tag provided for fuzzy search");
+        spdlog::warn("Empty tag provided for fuzzy search");
         return {};
     }
 
@@ -414,8 +476,8 @@ std::vector<std::shared_ptr<Document>> SearchEngine::fuzzySearchByTag(
                             const auto& docIds = tagIt->second;
                             matchedDocIds.insert(matchedDocIds.end(),
                                                  docIds.begin(), docIds.end());
-                            LOG_F(INFO, "Tag '{}' matched '{}' (fuzzy)", key,
-                                  tag);
+                            spdlog::trace("Tag '{}' matched '{}' (fuzzy)", key,
+                                          tag);
                         }
                     }
                 }
@@ -435,8 +497,8 @@ std::vector<std::shared_ptr<Document>> SearchEngine::fuzzySearchByTag(
                                 matchedDocIds.insert(matchedDocIds.end(),
                                                      docIds.begin(),
                                                      docIds.end());
-                                LOG_F(INFO, "Tag '{}' matched '{}' (fuzzy)",
-                                      key, tag);
+                                spdlog::trace("Tag '{}' matched '{}' (fuzzy)",
+                                              key, tag);
                             }
                         }
                     }
@@ -456,34 +518,34 @@ std::vector<std::shared_ptr<Document>> SearchEngine::fuzzySearchByTag(
                         if (docIt != documents_.end()) {
                             results.push_back(docIt->second);
                         } else {
-                            LOG_F(WARNING,
-                                  "Doc ID {} from fuzzy search not found in "
-                                  "documents map",
-                                  std::string(docId));
+                            spdlog::warn(
+                                "Doc ID {} from fuzzy search not found in "
+                                "documents map",
+                                std::string(docId));
                         }
                     }
                 }
             } catch (const std::exception& e) {
-                LOG_F(ERROR, "Exception collecting fuzzy search results: {}",
-                      e.what());
+                spdlog::error("Exception collecting fuzzy search results: {}",
+                              e.what());
             }
         }
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error during fuzzy tag search setup: {}", e.what());
+        spdlog::error("Error during fuzzy tag search setup: {}", e.what());
         throw SearchOperationException(e.what());
     }
 
-    LOG_F(INFO, "Found {} documents with fuzzy tag match for '{}'",
-          results.size(), tag);
+    spdlog::debug("Found {} documents with fuzzy tag match for '{}'",
+                  results.size(), tag);
     return results;
 }
 
 std::vector<std::shared_ptr<Document>> SearchEngine::searchByTags(
     const std::vector<std::string>& tags) {
-    LOG_F(INFO, "Searching by multiple tags");
+    spdlog::debug("Searching by multiple tags");
 
     if (tags.empty()) {
-        LOG_F(WARNING, "Empty tags list provided for search");
+        spdlog::warn("Empty tags list provided for search");
         return {};
     }
 
@@ -499,19 +561,19 @@ std::vector<std::shared_ptr<Document>> SearchEngine::searchByTags(
                     auto docIt = documents_.find(docId);
                     if (docIt != documents_.end()) {
                         scores[docId] += tfIdf(*docIt->second, tag);
-                        LOG_F(INFO, "Tag '{}' found in document id: {}", tag,
-                              std::string(docId));
+                        spdlog::trace("Tag '{}' found in document id: {}", tag,
+                                      std::string(docId));
                     }
                 }
             }
         }
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error during multi-tag search: {}", e.what());
+        spdlog::error("Error during multi-tag search: {}", e.what());
         throw SearchOperationException(e.what());
     }
 
     auto results = getRankedResults(scores);
-    LOG_F(INFO, "Found {} documents matching the tags", results.size());
+    spdlog::debug("Found {} documents matching the tags", results.size());
     return results;
 }
 
@@ -529,8 +591,8 @@ void SearchEngine::searchByContentWorker(const std::vector<String>& wordChunk,
                 if (docIt != documents_.end()) {
                     localScores[docId] +=
                         tfIdf(*docIt->second, std::string_view(word));
-                    LOG_F(INFO, "Word '{}' found in document id: {}",
-                          std::string(word), std::string(docId));
+                    spdlog::trace("Word '{}' found in document id: {}",
+                                  std::string(word), std::string(docId));
                 }
             }
         }
@@ -545,16 +607,16 @@ void SearchEngine::searchByContentWorker(const std::vector<String>& wordChunk,
 
 std::vector<std::shared_ptr<Document>> SearchEngine::searchByContent(
     const String& query) {
-    LOG_F(INFO, "Searching by content: {}", std::string(query));
+    spdlog::debug("Searching by content: {}", std::string(query));
 
     if (query.empty()) {
-        LOG_F(WARNING, "Empty query provided for content search");
+        spdlog::warn("Empty query provided for content search");
         return {};
     }
 
     auto words = tokenizeContent(query);
     if (words.empty()) {
-        LOG_F(WARNING, "No valid tokens in query");
+        spdlog::warn("No valid tokens in query");
         return {};
     }
 
@@ -600,27 +662,27 @@ std::vector<std::shared_ptr<Document>> SearchEngine::searchByContent(
                 try {
                     future.get();
                 } catch (const std::exception& e) {
-                    LOG_F(ERROR, "Exception in content search worker: {}",
-                          e.what());
+                    spdlog::error("Exception in content search worker: {}",
+                                  e.what());
                 }
             }
         }
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error during content search: {}", e.what());
+        spdlog::error("Error during content search: {}", e.what());
         throw SearchOperationException(e.what());
     }
 
     auto results = getRankedResults(scores);
-    LOG_F(INFO, "Found {} documents matching content query", results.size());
+    spdlog::debug("Found {} documents matching content query", results.size());
     return results;
 }
 
 std::vector<std::shared_ptr<Document>> SearchEngine::booleanSearch(
     const String& query) {
-    LOG_F(INFO, "Performing boolean search: {}", std::string(query));
+    spdlog::debug("Performing boolean search: {}", std::string(query));
 
     if (query.empty()) {
-        LOG_F(WARNING, "Empty query provided for boolean search");
+        spdlog::warn("Empty query provided for boolean search");
         return {};
     }
 
@@ -662,13 +724,14 @@ std::vector<std::shared_ptr<Document>> SearchEngine::booleanSearch(
 
                         if (isNot) {
                             scores[docId] -= tfidfScore * 2.0;
-                            LOG_F(INFO,
-                                  "Word '{}' excluded from document id: {}",
-                                  wordStd, std::string(docId));
+                            spdlog::trace(
+                                "Word '{}' excluded from document id: {}",
+                                wordStd, std::string(docId));
                         } else {
                             scores[docId] += tfidfScore;
-                            LOG_F(INFO, "Word '{}' included in document id: {}",
-                                  wordStd, std::string(docId));
+                            spdlog::trace(
+                                "Word '{}' included in document id: {}",
+                                wordStd, std::string(docId));
                         }
                     }
                 }
@@ -676,21 +739,21 @@ std::vector<std::shared_ptr<Document>> SearchEngine::booleanSearch(
             isNot = false;
         }
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error during boolean search: {}", e.what());
+        spdlog::error("Error during boolean search: {}", e.what());
         throw SearchOperationException(e.what());
     }
 
     auto results = getRankedResults(scores);
-    LOG_F(INFO, "Found {} documents matching boolean query", results.size());
+    spdlog::debug("Found {} documents matching boolean query", results.size());
     return results;
 }
 
 std::vector<String> SearchEngine::autoComplete(const String& prefix,
                                                size_t maxResults) {
-    LOG_F(INFO, "Auto-completing for prefix: {}", std::string(prefix));
+    spdlog::debug("Auto-completing for prefix: {}", std::string(prefix));
 
     if (prefix.empty()) {
-        LOG_F(WARNING, "Empty prefix provided for autocomplete");
+        spdlog::warn("Empty prefix provided for autocomplete");
         return {};
     }
 
@@ -711,7 +774,7 @@ std::vector<String> SearchEngine::autoComplete(const String& prefix,
                                [](unsigned char c) { return std::tolower(c); });
                 if (tagLower.rfind(prefixStd, 0) == 0) {
                     suggestions.push_back(String(tag));
-                    LOG_F(INFO, "Tag suggestion: {}", tag);
+                    spdlog::trace("Tag suggestion: {}", tag);
                 }
             }
             if (maxResults > 0 && suggestions.size() >= maxResults)
@@ -735,8 +798,8 @@ std::vector<String> SearchEngine::autoComplete(const String& prefix,
                         }
                         if (!found) {
                             suggestions.push_back(word);
-                            LOG_F(INFO, "Content suggestion: {}",
-                                  std::string(word));
+                            spdlog::trace("Content suggestion: {}",
+                                          std::string(word));
                         }
                     }
                 }
@@ -763,17 +826,17 @@ std::vector<String> SearchEngine::autoComplete(const String& prefix,
             suggestions.resize(maxResults);
         }
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error during autocomplete: {}", e.what());
+        spdlog::error("Error during autocomplete: {}", e.what());
         throw SearchOperationException(e.what());
     }
 
-    LOG_F(INFO, "Found {} suggestions for prefix '{}'", suggestions.size(),
-          std::string(prefix));
+    spdlog::debug("Found {} suggestions for prefix '{}'", suggestions.size(),
+                  std::string(prefix));
     return suggestions;
 }
 
 void SearchEngine::saveIndex(const String& filename) const {
-    LOG_F(INFO, "Saving index to file: {}", std::string(filename));
+    spdlog::info("Saving index to file: {}", std::string(filename));
 
     if (filename.empty()) {
         throw std::invalid_argument("Filename cannot be empty");
@@ -785,7 +848,7 @@ void SearchEngine::saveIndex(const String& filename) const {
         if (!ofs) {
             std::string errMsg =
                 "Failed to open file for writing: " + std::string(filename);
-            LOG_F(ERROR, "{}", errMsg);
+            spdlog::error("{}", errMsg);
             throw std::ios_base::failure(errMsg);
         }
 
@@ -826,18 +889,18 @@ void SearchEngine::saveIndex(const String& filename) const {
                       sizeof(clickCount));
         }
 
-        LOG_F(INFO, "Index saved successfully to {}", std::string(filename));
+        spdlog::info("Index saved successfully to {}", std::string(filename));
     } catch (const std::ios_base::failure& e) {
-        LOG_F(ERROR, "I/O error while saving index: {}", e.what());
+        spdlog::error("I/O error while saving index: {}", e.what());
         throw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error while saving index: {}", e.what());
+        spdlog::error("Error while saving index: {}", e.what());
         throw;
     }
 }
 
 void SearchEngine::loadIndex(const String& filename) {
-    LOG_F(INFO, "Loading index from file: {}", std::string(filename));
+    spdlog::info("Loading index from file: {}", std::string(filename));
 
     if (filename.empty()) {
         throw std::invalid_argument("Filename cannot be empty");
@@ -849,7 +912,7 @@ void SearchEngine::loadIndex(const String& filename) {
         if (!ifs) {
             std::string errMsg =
                 "Failed to open file for reading: " + std::string(filename);
-            LOG_F(ERROR, "{}", errMsg);
+            spdlog::error("{}", errMsg);
             throw std::ios_base::failure(errMsg);
         }
 
@@ -863,8 +926,9 @@ void SearchEngine::loadIndex(const String& filename) {
         if (!ifs.read(reinterpret_cast<char*>(&totalDocsValue),
                       sizeof(totalDocsValue))) {
             if (ifs.eof()) {
-                LOG_F(INFO, "Index file {} is empty or truncated at totalDocs.",
-                      std::string(filename));
+                spdlog::info(
+                    "Index file {} is empty or truncated at totalDocs.",
+                    std::string(filename));
                 return;
             } else {
                 throw std::ios_base::failure(
@@ -877,8 +941,8 @@ void SearchEngine::loadIndex(const String& filename) {
         size_t docSize;
         if (!ifs.read(reinterpret_cast<char*>(&docSize), sizeof(docSize))) {
             if (ifs.eof() && totalDocsValue == 0) {
-                LOG_F(INFO, "Index file {} contains 0 documents.",
-                      std::string(filename));
+                spdlog::info("Index file {} contains 0 documents.",
+                             std::string(filename));
                 return;
             } else {
                 throw std::ios_base::failure(
@@ -932,6 +996,7 @@ void SearchEngine::loadIndex(const String& filename) {
             for (const auto& tag : tags) {
                 doc->addTag(tag);
             }
+            doc->setClickCount(clickCount);
 
             documents_[docId] = doc;
 
@@ -944,16 +1009,16 @@ void SearchEngine::loadIndex(const String& filename) {
         }
 
         if (documents_.size() != static_cast<size_t>(totalDocs_.load())) {
-            LOG_F(WARNING,
-                  "Loaded document count ({}) does not match stored totalDocs "
-                  "({}) in file {}",
-                  documents_.size(), totalDocs_.load(), std::string(filename));
+            spdlog::warn(
+                "Loaded document count ({}) does not match stored totalDocs "
+                "({}) in file {}",
+                documents_.size(), totalDocs_.load(), std::string(filename));
         }
 
-        LOG_F(INFO, "Index loaded successfully from {}, total docs: {}",
-              std::string(filename), totalDocs_.load());
+        spdlog::info("Index loaded successfully from {}, total docs: {}",
+                     std::string(filename), totalDocs_.load());
     } catch (const std::ios_base::failure& e) {
-        LOG_F(ERROR, "I/O error while loading index: {}", e.what());
+        spdlog::error("I/O error while loading index: {}", e.what());
         documents_.clear();
         tagIndex_.clear();
         contentIndex_.clear();
@@ -961,7 +1026,7 @@ void SearchEngine::loadIndex(const String& filename) {
         totalDocs_ = 0;
         throw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error while loading index: {}", e.what());
+        spdlog::error("Error while loading index: {}", e.what());
         documents_.clear();
         tagIndex_.clear();
         contentIndex_.clear();
@@ -1050,7 +1115,7 @@ double SearchEngine::tfIdf(const Document& doc,
 }
 
 std::shared_ptr<Document> SearchEngine::findDocumentById(const String& docId) {
-    LOG_F(INFO, "Finding document by id: {}", std::string(docId));
+    spdlog::debug("Finding document by id: {}", std::string(docId));
 
     if (docId.empty()) {
         throw std::invalid_argument("Document ID cannot be empty");
@@ -1059,11 +1124,11 @@ std::shared_ptr<Document> SearchEngine::findDocumentById(const String& docId) {
     threading::shared_lock lock(indexMutex_);
     auto it = documents_.find(docId);
     if (it == documents_.end()) {
-        LOG_F(ERROR, "Document not found: {}", std::string(docId));
+        spdlog::error("Document not found: {}", std::string(docId));
         throw DocumentNotFoundException(docId);
     }
 
-    LOG_F(INFO, "Document found: {}", std::string(docId));
+    spdlog::debug("Document found: {}", std::string(docId));
     return it->second;
 }
 
@@ -1089,13 +1154,13 @@ std::vector<std::shared_ptr<Document>> SearchEngine::getRankedResults(
         if (it != documents_.end()) {
             auto doc = it->second;
             priorityQueue.push({doc, score});
-            LOG_F(INFO, "Document id: {}, score: {:.6f}",
-                  std::string(doc->getId()), score);
+            spdlog::trace("Document id: {}, score: {:.6f}",
+                          std::string(doc->getId()), score);
         } else {
-            LOG_F(WARNING,
-                  "Document ID {} found in scores but not in documents map "
-                  "during ranking.",
-                  std::string(docId));
+            spdlog::warn(
+                "Document ID {} found in scores but not in documents map "
+                "during ranking.",
+                std::string(docId));
         }
     }
     lock.unlock();
@@ -1108,7 +1173,7 @@ std::vector<std::shared_ptr<Document>> SearchEngine::getRankedResults(
         priorityQueue.pop();
     }
 
-    LOG_F(INFO, "Ranked results obtained: {} documents", results.size());
+    spdlog::info("Ranked results obtained: {} documents", results.size());
     return results;
 }
 

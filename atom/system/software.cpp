@@ -7,13 +7,11 @@
 #include <unordered_map>
 
 #ifdef _WIN32
-// clang-format off
-#include <windows.h>
 #include <aclapi.h>
+#include <psapi.h>
 #include <shlobj.h>
 #include <tlhelp32.h>
-#include <psapi.h>
-// clang-format on
+#include <windows.h>
 #elif defined(__APPLE__)
 #include <CoreFoundation/CoreFoundation.h>
 #include <Foundation/Foundation.h>
@@ -37,7 +35,7 @@
 #include <cstring>
 #endif
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 #include "atom/utils/string.hpp"
 
 namespace atom::system {
@@ -57,7 +55,8 @@ int g_next_monitor_id = 1;
 }  // namespace
 
 auto getAppVersion(const fs::path& app_path) -> std::string {
-    LOG_F(INFO, "Entering getAppVersion with app_path: {}", app_path.string());
+    spdlog::debug("Getting application version for path: {}",
+                  app_path.string());
 
 #ifdef _WIN32
     DWORD handle;
@@ -73,7 +72,7 @@ auto getAppVersion(const fs::path& app_path) -> std::string {
                               &value, &length)) {
                 std::string version(static_cast<char*>(value), length);
                 free(buffer);
-                LOG_F(INFO, "Found version: {}", version);
+                spdlog::info("Found application version: {}", version);
                 return version;
             }
         }
@@ -94,7 +93,7 @@ auto getAppVersion(const fs::path& app_path) -> std::string {
                                        kCFStringEncodingUTF8)) {
                     CFRelease(bundle);
                     CFRelease(url);
-                    LOG_F(INFO, "Found version: {}", buffer);
+                    spdlog::info("Found application version: {}", buffer);
                     return std::string(buffer);
                 }
             }
@@ -118,7 +117,7 @@ auto getAppVersion(const fs::path& app_path) -> std::string {
             std::string result(utf8_version);
             env->ReleaseStringUTFChars(version, utf8_version);
             env->DeleteLocalRef(version);
-            LOG_F(INFO, "Found version: {}", result);
+            spdlog::info("Found application version: {}", result);
             return result;
         }
         activity->vm->DetachCurrentThread();
@@ -142,19 +141,20 @@ auto getAppVersion(const fs::path& app_path) -> std::string {
         }
         fclose(file);
         if (!version.empty()) {
-            LOG_F(INFO, "Found version: {}", version);
+            spdlog::info("Found application version: {}", version);
             return version;
         }
     }
 #endif
 
-    LOG_F(WARNING, "Version not found for app_path: {}", app_path.string());
+    spdlog::warn("Version not found for application path: {}",
+                 app_path.string());
     return "";
 }
 
 auto getAppPermissions(const fs::path& app_path) -> std::vector<std::string> {
-    LOG_F(INFO, "Entering getAppPermissions with app_path: {}",
-          app_path.string());
+    spdlog::debug("Getting application permissions for path: {}",
+                  app_path.string());
     std::vector<std::string> permissions;
 
 #ifdef _WIN32
@@ -192,7 +192,7 @@ auto getAppPermissions(const fs::path& app_path) -> std::vector<std::string> {
                                 std::format("User: {}\\{}", userName.data(),
                                             domainName.data());
                             permissions.push_back(permission);
-                            LOG_F(INFO, "Found permission: {}", permission);
+                            spdlog::debug("Found permission: {}", permission);
                         }
                     }
                 }
@@ -203,35 +203,27 @@ auto getAppPermissions(const fs::path& app_path) -> std::vector<std::string> {
 #elif defined(__APPLE__) || defined(__linux__)
     struct stat file_stat;
     if (stat(app_path.c_str(), &file_stat) == 0) {
-        if (file_stat.st_mode & S_IRUSR) {
+        if (file_stat.st_mode & S_IRUSR)
             permissions.push_back("Owner: Read");
-        }
-        if (file_stat.st_mode & S_IWUSR) {
+        if (file_stat.st_mode & S_IWUSR)
             permissions.push_back("Owner: Write");
-        }
-        if (file_stat.st_mode & S_IXUSR) {
+        if (file_stat.st_mode & S_IXUSR)
             permissions.push_back("Owner: Execute");
-        }
-        if (file_stat.st_mode & S_IRGRP) {
+        if (file_stat.st_mode & S_IRGRP)
             permissions.push_back("Group: Read");
-        }
-        if (file_stat.st_mode & S_IWGRP) {
+        if (file_stat.st_mode & S_IWGRP)
             permissions.push_back("Group: Write");
-        }
-        if (file_stat.st_mode & S_IXGRP) {
+        if (file_stat.st_mode & S_IXGRP)
             permissions.push_back("Group: Execute");
-        }
-        if (file_stat.st_mode & S_IROTH) {
+        if (file_stat.st_mode & S_IROTH)
             permissions.push_back("Others: Read");
-        }
-        if (file_stat.st_mode & S_IWOTH) {
+        if (file_stat.st_mode & S_IWOTH)
             permissions.push_back("Others: Write");
-        }
-        if (file_stat.st_mode & S_IXOTH) {
+        if (file_stat.st_mode & S_IXOTH)
             permissions.push_back("Others: Execute");
-        }
+
         for (const auto& perm : permissions) {
-            LOG_F(INFO, "Found permission: {}", perm);
+            spdlog::debug("Found permission: {}", perm);
         }
     }
 #elif defined(__ANDROID__)
@@ -253,7 +245,7 @@ auto getAppPermissions(const fs::path& app_path) -> std::vector<std::string> {
                 const char* utf8_permission =
                     env->GetStringUTFChars(permission, nullptr);
                 permissions.push_back(std::string(utf8_permission));
-                LOG_F(INFO, "Found permission: {}", utf8_permission);
+                spdlog::debug("Found permission: {}", utf8_permission);
                 env->ReleaseStringUTFChars(permission, utf8_permission);
                 env->DeleteLocalRef(permission);
             }
@@ -263,11 +255,13 @@ auto getAppPermissions(const fs::path& app_path) -> std::vector<std::string> {
     }
 #endif
 
+    spdlog::info("Retrieved {} permissions for application: {}",
+                 permissions.size(), app_path.string());
     return permissions;
 }
 
 auto getAppPath(const std::string& software_name) -> fs::path {
-    LOG_F(INFO, "Entering getAppPath with software_name: {}", software_name);
+    spdlog::debug("Getting application path for software: {}", software_name);
 
 #ifdef _WIN32
     WCHAR programFilesPath[MAX_PATH];
@@ -276,20 +270,20 @@ auto getAppPath(const std::string& software_name) -> fs::path {
         fs::path path(programFilesPath);
         path.append(software_name);
         if (fs::exists(path)) {
-            LOG_F(INFO, "Found app path: {}", path.string());
+            spdlog::info("Found application path: {}", path.string());
             return path;
         }
     }
-    LOG_F(WARNING, "App path not found for software_name: {}", software_name);
+    spdlog::warn("Application path not found for software: {}", software_name);
     return "";
 #elif defined(__APPLE__)
     fs::path app_path("/Applications");
     app_path.append(software_name);
     if (fs::exists(app_path)) {
-        LOG_F(INFO, "Found app path: {}", app_path.string());
+        spdlog::info("Found application path: {}", app_path.string());
         return app_path;
     }
-    LOG_F(WARNING, "App path not found for software_name: {}", software_name);
+    spdlog::warn("Application path not found for software: {}", software_name);
     return "";
 #elif defined(__linux__)
     std::string command = "which " + software_name;
@@ -299,30 +293,29 @@ auto getAppPath(const std::string& software_name) -> fs::path {
     std::unique_ptr<FILE, PcloseDeleter> pipe(popen(command.c_str(), "r"),
                                               pclose);
     if (!pipe) {
-        LOG_F(ERROR, "Failed to execute command: {}", command);
+        spdlog::error("Failed to execute command: {}", command);
         return "";
     }
     while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
         result += buffer.data();
     }
     if (!result.empty()) {
-        result.pop_back();  // Remove newline
+        result.pop_back();
         if (fs::exists(result)) {
-            LOG_F(INFO, "Found app path: {}", result);
+            spdlog::info("Found application path: {}", result);
             return fs::path(result);
         }
     }
-    LOG_F(WARNING, "App path not found for software_name: {}", software_name);
+    spdlog::warn("Application path not found for software: {}", software_name);
     return "";
 #endif
-    LOG_F(WARNING, "Fallback to current path for software_name: {}",
-          software_name);
-    return fs::current_path();  // Fallback to current path if all else fails
+    spdlog::warn("Using current path as fallback for software: {}",
+                 software_name);
+    return fs::current_path();
 }
 
 auto checkSoftwareInstalled(const std::string& software_name) -> bool {
-    LOG_F(INFO, "Entering checkSoftwareInstalled with software_name: {}",
-          software_name);
+    spdlog::debug("Checking if software is installed: {}", software_name);
     bool isInstalled = false;
 
 #ifdef _WIN32
@@ -348,7 +341,7 @@ auto checkSoftwareInstalled(const std::string& software_name) -> bool {
                                      &displayNameSize) == ERROR_SUCCESS) {
                     if (software_name == displayName) {
                         isInstalled = true;
-                        LOG_F(INFO, "Software {} is installed", software_name);
+                        spdlog::info("Software {} is installed", software_name);
                         RegCloseKey(hSubKey);
                         break;
                     }
@@ -360,7 +353,7 @@ auto checkSoftwareInstalled(const std::string& software_name) -> bool {
         }
         RegCloseKey(hKey);
     }
-
+#elif defined(__APPLE__)
     std::string command =
         "mdfind \"kMDItemKind == 'Application' && kMDItemFSName == '*" +
         software_name + "*.app'\"";
@@ -375,28 +368,20 @@ auto checkSoftwareInstalled(const std::string& software_name) -> bool {
         }
         isInstalled = !result.empty();
         if (isInstalled) {
-            LOG_F(INFO,
-                  "Software {} "
-                  "is installed",
-                  software_name);
+            spdlog::info("Software {} is installed", software_name);
         } else {
-            LOG_F(WARNING,
-                  "Software {} is "
-                  "not installed",
-                  software_name);
+            spdlog::warn("Software {} is not installed", software_name);
         }
     }
-
 #elif defined(__linux__)
     std::string command = "which " + software_name + " > /dev/null 2>&1";
     int result = std::system(command.c_str());
     isInstalled = (result == 0);
     if (isInstalled) {
-        LOG_F(INFO, "Software {} is installed", software_name);
+        spdlog::info("Software {} is installed", software_name);
     } else {
-        LOG_F(WARNING, "Software {} is not installed", software_name);
+        spdlog::warn("Software {} is not installed", software_name);
     }
-
 #endif
 
     return isInstalled;
@@ -404,8 +389,8 @@ auto checkSoftwareInstalled(const std::string& software_name) -> bool {
 
 auto getProcessInfo(const std::string& software_name)
     -> std::map<std::string, std::string> {
-    LOG_F(INFO, "Entering getProcessInfo with software_name: {}",
-          software_name);
+    spdlog::debug("Getting process information for software: {}",
+                  software_name);
     std::map<std::string, std::string> info;
 
 #ifdef _WIN32
@@ -424,7 +409,6 @@ auto getProcessInfo(const std::string& software_name)
                         OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
                                     FALSE, processEntry.th32ProcessID);
                     if (hProcess) {
-                        // Get memory usage
                         PROCESS_MEMORY_COUNTERS_EX pmc;
                         if (GetProcessMemoryInfo(hProcess,
                                                  (PROCESS_MEMORY_COUNTERS*)&pmc,
@@ -435,7 +419,6 @@ auto getProcessInfo(const std::string& software_name)
                                 std::to_string(pmc.WorkingSetSize / 1024) +
                                 " KB";
 
-                            // Get CPU usage (simplified)
                             FILETIME creation_time, exit_time, kernel_time,
                                 user_time;
                             if (GetProcessTimes(hProcess, &creation_time,
@@ -474,7 +457,6 @@ auto getProcessInfo(const std::string& software_name)
             if (process_name.find(software_name) != std::string::npos) {
                 info["pid"] = std::to_string(pids[i]);
 
-                // Get memory usage
                 struct proc_taskinfo proc_info;
                 if (proc_pidinfo(pids[i], PROC_PIDTASKINFO, 0, &proc_info,
                                  sizeof(proc_info)) > 0) {
@@ -496,11 +478,9 @@ auto getProcessInfo(const std::string& software_name)
         struct dirent* entry;
         while ((entry = readdir(dir)) != nullptr) {
             if (entry->d_type == DT_DIR) {
-                // Check if directory name is a number (PID)
                 char* end;
                 long pid = strtol(entry->d_name, &end, 10);
                 if (*end == '\0') {
-                    // Read process name from /proc/[pid]/comm
                     std::string comm_path =
                         "/proc/" + std::string(entry->d_name) + "/comm";
                     FILE* comm_file = fopen(comm_path.c_str(), "r");
@@ -508,7 +488,6 @@ auto getProcessInfo(const std::string& software_name)
                         char process_name[256];
                         if (fgets(process_name, sizeof(process_name),
                                   comm_file) != nullptr) {
-                            // Remove trailing newline
                             size_t len = strlen(process_name);
                             if (len > 0 && process_name[len - 1] == '\n')
                                 process_name[len - 1] = '\0';
@@ -517,7 +496,6 @@ auto getProcessInfo(const std::string& software_name)
                                 nullptr) {
                                 info["pid"] = std::to_string(pid);
 
-                                // Read memory usage
                                 std::string status_path =
                                     "/proc/" + std::string(entry->d_name) +
                                     "/status";
@@ -538,7 +516,6 @@ auto getProcessInfo(const std::string& software_name)
                                     fclose(status_file);
                                 }
 
-                                // Read CPU usage
                                 std::string stat_path =
                                     "/proc/" + std::string(entry->d_name) +
                                     "/stat";
@@ -568,17 +545,23 @@ auto getProcessInfo(const std::string& software_name)
     }
 #endif
 
+    if (!info.empty()) {
+        spdlog::info("Retrieved process information for software: {}",
+                     software_name);
+    } else {
+        spdlog::warn("No process information found for software: {}",
+                     software_name);
+    }
     return info;
 }
 
 auto launchSoftware(const fs::path& software_path,
                     const std::vector<std::string>& args) -> bool {
-    LOG_F(INFO, "Launching software at path: {}", software_path.string());
+    spdlog::info("Launching software at path: {}", software_path.string());
 
 #ifdef _WIN32
     std::wstring cmd = atom::utils::stringToWString(software_path.string());
 
-    // Add arguments if provided
     for (const auto& arg : args) {
         cmd += L" " + atom::utils::stringToWString(arg);
     }
@@ -590,60 +573,52 @@ auto launchSoftware(const fs::path& software_path,
     si.cb = sizeof(si);
     ZeroMemory(&pi, sizeof(pi));
 
-    // Create process
     if (CreateProcessW(NULL, const_cast<LPWSTR>(cmd.c_str()), NULL, NULL, FALSE,
                        0, NULL, NULL, &si, &pi)) {
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
-        LOG_F(INFO, "Successfully launched software: {}",
-              software_path.string());
+        spdlog::info("Successfully launched software: {}",
+                     software_path.string());
         return true;
     } else {
-        LOG_F(ERROR, "Failed to launch software: {}. Error code: {}",
-              software_path.string(), GetLastError());
+        spdlog::error("Failed to launch software: {}. Error code: {}",
+                      software_path.string(), GetLastError());
         return false;
     }
 #elif defined(__APPLE__) || defined(__linux__)
     std::string cmd = software_path.string();
 
-    // Fork process
     pid_t pid = fork();
 
     if (pid < 0) {
-        LOG_F(ERROR, "Fork failed when trying to launch: {}", cmd);
+        spdlog::error("Fork failed when trying to launch: {}", cmd);
         return false;
     } else if (pid == 0) {
-        // Child process
-
-        // Prepare arguments
         std::vector<char*> c_args;
         c_args.push_back(const_cast<char*>(cmd.c_str()));
 
         for (const auto& arg : args) {
             c_args.push_back(const_cast<char*>(arg.c_str()));
         }
-        c_args.push_back(nullptr);  // Null terminator
+        c_args.push_back(nullptr);
 
-        // Execute program
         execv(cmd.c_str(), c_args.data());
 
-        // If we get here, execv failed
-        LOG_F(ERROR, "execv failed when trying to launch: {}", cmd);
+        spdlog::error("execv failed when trying to launch: {}", cmd);
         exit(1);
     } else {
-        // Parent process
-        LOG_F(INFO, "Successfully launched software: {} with PID: {}", cmd,
-              pid);
+        spdlog::info("Successfully launched software: {} with PID: {}", cmd,
+                     pid);
         return true;
     }
 #else
-    LOG_F(ERROR, "launchSoftware not implemented for this platform");
+    spdlog::error("launchSoftware not implemented for this platform");
     return false;
 #endif
 }
 
 auto terminateSoftware(const std::string& software_name) -> bool {
-    LOG_F(INFO, "Terminating software: {}", software_name);
+    spdlog::info("Terminating software: {}", software_name);
 
 #ifdef _WIN32
     bool success = false;
@@ -663,17 +638,16 @@ auto terminateSoftware(const std::string& software_name) -> bool {
                                                   processEntry.th32ProcessID);
                     if (hProcess) {
                         if (TerminateProcess(hProcess, 0)) {
-                            LOG_F(
-                                INFO,
+                            spdlog::info(
                                 "Successfully terminated process: {} (PID: {})",
                                 process_name, processEntry.th32ProcessID);
                             success = true;
                         } else {
-                            LOG_F(ERROR,
-                                  "Failed to terminate process: {} (PID: {}). "
-                                  "Error: {}",
-                                  process_name, processEntry.th32ProcessID,
-                                  GetLastError());
+                            spdlog::error(
+                                "Failed to terminate process: {} (PID: {}). "
+                                "Error: {}",
+                                process_name, processEntry.th32ProcessID,
+                                GetLastError());
                         }
                         CloseHandle(hProcess);
                     }
@@ -686,48 +660,44 @@ auto terminateSoftware(const std::string& software_name) -> bool {
 #elif defined(__APPLE__) || defined(__linux__)
     bool success = false;
 
-    // Find process by name
     auto process_info = getProcessInfo(software_name);
     if (process_info.find("pid") != process_info.end()) {
         int pid = std::stoi(process_info["pid"]);
 
-        // Send SIGTERM signal
         if (kill(pid, SIGTERM) == 0) {
-            LOG_F(INFO, "Successfully sent SIGTERM to process: {} (PID: {})",
-                  software_name, pid);
+            spdlog::info("Successfully sent SIGTERM to process: {} (PID: {})",
+                         software_name, pid);
 
-            // Wait briefly to see if process terminates
             int status;
             pid_t result = waitpid(pid, &status, WNOHANG);
 
             if (result == 0) {
-                // Process still running, try SIGKILL
-                LOG_F(INFO,
-                      "Process didn't terminate with SIGTERM, trying SIGKILL");
+                spdlog::info(
+                    "Process didn't terminate with SIGTERM, trying SIGKILL");
                 if (kill(pid, SIGKILL) == 0) {
-                    LOG_F(INFO,
-                          "Successfully sent SIGKILL to process: {} (PID: {})",
-                          software_name, pid);
+                    spdlog::info(
+                        "Successfully sent SIGKILL to process: {} (PID: {})",
+                        software_name, pid);
                     success = true;
                 } else {
-                    LOG_F(ERROR,
-                          "Failed to send SIGKILL to process: {} (PID: {})",
-                          software_name, pid);
+                    spdlog::error(
+                        "Failed to send SIGKILL to process: {} (PID: {})",
+                        software_name, pid);
                 }
             } else {
                 success = true;
             }
         } else {
-            LOG_F(ERROR, "Failed to send SIGTERM to process: {} (PID: {})",
-                  software_name, pid);
+            spdlog::error("Failed to send SIGTERM to process: {} (PID: {})",
+                          software_name, pid);
         }
     } else {
-        LOG_F(WARNING, "Process not found: {}", software_name);
+        spdlog::warn("Process not found: {}", software_name);
     }
 
     return success;
 #else
-    LOG_F(ERROR, "terminateSoftware not implemented for this platform");
+    spdlog::error("terminateSoftware not implemented for this platform");
     return false;
 #endif
 }
@@ -736,8 +706,8 @@ auto monitorSoftwareUsage(
     const std::string& software_name,
     std::function<void(const std::map<std::string, std::string>&)> callback,
     int interval_ms) -> int {
-    LOG_F(INFO, "Starting monitoring for software: {} with interval: {} ms",
-          software_name, interval_ms);
+    spdlog::info("Starting monitoring for software: {} with interval: {} ms",
+                 software_name, interval_ms);
 
     std::lock_guard<std::mutex> lock(g_monitors_mutex);
     int monitor_id = g_next_monitor_id++;
@@ -762,17 +732,17 @@ auto monitorSoftwareUsage(
                 std::chrono::milliseconds(monitor.interval_ms));
         }
 
-        LOG_F(INFO, "Monitoring thread for software: {} (ID: {}) exiting",
-              monitor.software_name, monitor_id);
+        spdlog::info("Monitoring thread for software: {} (ID: {}) exiting",
+                     monitor.software_name, monitor_id);
     });
 
-    LOG_F(INFO, "Started monitoring for software: {} with ID: {}",
-          software_name, monitor_id);
+    spdlog::info("Started monitoring for software: {} with ID: {}",
+                 software_name, monitor_id);
     return monitor_id;
 }
 
 auto stopMonitoring(int monitor_id) -> bool {
-    LOG_F(INFO, "Stopping monitoring for ID: {}", monitor_id);
+    spdlog::info("Stopping monitoring for ID: {}", monitor_id);
 
     std::lock_guard<std::mutex> lock(g_monitors_mutex);
     auto it = g_monitors.find(monitor_id);
@@ -783,27 +753,22 @@ auto stopMonitoring(int monitor_id) -> bool {
             it->second.thread.join();
         }
         g_monitors.erase(it);
-        LOG_F(INFO, "Successfully stopped monitoring for ID: {}", monitor_id);
+        spdlog::info("Successfully stopped monitoring for ID: {}", monitor_id);
         return true;
     }
 
-    LOG_F(WARNING, "Monitor ID not found: {}", monitor_id);
+    spdlog::warn("Monitor ID not found: {}", monitor_id);
     return false;
 }
 
 auto checkSoftwareUpdates(const std::string& software_name,
                           const std::string& current_version) -> std::string {
-    LOG_F(INFO, "Checking updates for software: {} (current version: {})",
-          software_name, current_version);
-
-    // 注意：实际实现通常需要连接到软件的更新服务器或API
-    // 这里提供一个简化的示例实现，仅用于演示
+    spdlog::info("Checking updates for software: {} (current version: {})",
+                 software_name, current_version);
 
 #ifdef _WIN32
-    // 这里只是一个模拟实现
-    // 实际应用中，可能需要查询注册表或连接到更新服务器
     if (software_name == "Microsoft Office") {
-        return "16.0.14729.20254";  // 模拟返回最新版本
+        return "16.0.14729.20254";
     } else if (software_name == "Google Chrome") {
         return "96.0.4664.110";
     }
@@ -813,14 +778,13 @@ auto checkSoftwareUpdates(const std::string& software_name,
     } else if (software_name == "Final Cut Pro") {
         return "10.6.1";
     }
+#elif defined(__linux__)
     std::string cmd = "apt-cache policy " + software_name +
                       " | grep Candidate | awk '{print $2}'";
     std::array<char, 128> buffer;
     std::string result;
     using PcloseDeleter = int (*)(FILE*);
     std::unique_ptr<FILE, PcloseDeleter> pipe(popen(cmd.c_str(), "r"), pclose);
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"),
-                                                  pclose);
 
     if (pipe) {
         while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
@@ -828,19 +792,19 @@ auto checkSoftwareUpdates(const std::string& software_name,
         }
 
         if (!result.empty()) {
-            // 移除尾部的换行符
             result.erase(std::remove(result.begin(), result.end(), '\n'),
                          result.end());
 
-            // 比较版本号
             if (result != current_version) {
+                spdlog::info("Update available for {}: {} -> {}", software_name,
+                             current_version, result);
                 return result;
             }
         }
     }
 #endif
 
-    // 如果没有找到更新或版本相同，返回空字符串
+    spdlog::debug("No updates found for software: {}", software_name);
     return "";
 }
 

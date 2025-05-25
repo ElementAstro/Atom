@@ -1,5 +1,6 @@
 #include "gpio.hpp"
 
+#include <spdlog/spdlog.h>
 #include <atomic>
 #include <cstring>
 #include <mutex>
@@ -8,26 +9,22 @@
 #include <utility>
 
 #include "atom/error/exception.hpp"
-#include "atom/log/loguru.hpp"
 
 #ifdef _WIN32
-// Windows specific headers
-// clang-format off
-#include <windows.h>
 #include <cfgmgr32.h>
-#include <setupapi.h>
 #include <hidsdi.h>
-// clang-format on
+#include <setupapi.h>
+#include <windows.h>
 #ifdef _MSC_VER
 #pragma comment(lib, "setupapi.lib")
 #pragma comment(lib, "cfgmgr32.lib")
 #endif
 #else
-// Linux specific headers
 #include <fcntl.h>
 #include <poll.h>
 #include <sys/epoll.h>
 #include <unistd.h>
+#include <filesystem>
 
 #define GPIO_EXPORT "/sys/class/gpio/export"
 #define GPIO_UNEXPORT "/sys/class/gpio/unexport"
@@ -36,7 +33,6 @@
 
 namespace atom::system {
 
-// Utility functions for string conversions
 GPIO::Direction stringToDirection(const std::string& direction) {
     if (direction == "in")
         return GPIO::Direction::INPUT;
@@ -84,7 +80,12 @@ std::string edgeToString(GPIO::Edge edge) {
 }
 
 #ifdef _WIN32
-// Windows 版本的 GPIO 回调管理器
+/**
+ * @brief Windows GPIO callback manager for simulating GPIO functionality
+ *
+ * This class provides GPIO simulation on Windows platforms by using USB
+ * devices or serial ports that can be configured as GPIO controllers.
+ */
 class GPIOCallbackManager {
 public:
     static GPIOCallbackManager& getInstance() {
@@ -92,15 +93,21 @@ public:
         return instance;
     }
 
+    /**
+     * @brief Register a callback for GPIO pin state changes
+     * @param pin GPIO pin identifier
+     * @param callback Function to call when pin state changes
+     */
     void registerCallback(const std::string& pin,
                           std::function<void(bool)> callback) {
         std::lock_guard<std::mutex> lock(mutex_);
 
-        // 如果这是第一个回调，初始化硬件并启动监视线程
+        // Initialize hardware and start monitoring if this is the first
+        // callback
         if (callbacks_.empty() && !monitorThreadRunning_) {
             if (!deviceInitialized_) {
                 if (!initializeDevice()) {
-                    LOG_F(ERROR, "无法初始化 GPIO 设备");
+                    spdlog::error("Failed to initialize GPIO device");
                     return;
                 }
             }
@@ -108,23 +115,29 @@ public:
         }
 
         callbacks_[pin] = std::move(callback);
-
-        // 添加此引脚到引脚状态跟踪中
         pinStates_[pin] = readPinState(pin);
     }
 
+    /**
+     * @brief Unregister callback for specified pin
+     * @param pin GPIO pin identifier
+     */
     void unregisterCallback(const std::string& pin) {
         std::lock_guard<std::mutex> lock(mutex_);
         callbacks_.erase(pin);
         pinStates_.erase(pin);
 
-        // 如果没有更多回调，停止线程
+        // Stop monitoring thread if no more callbacks exist
         if (callbacks_.empty() && monitorThreadRunning_) {
             stopMonitorThread();
         }
     }
 
-    // 模拟引脚状态变化，供测试使用
+    /**
+     * @brief Simulate pin state change for testing purposes
+     * @param pin GPIO pin identifier
+     * @param state New pin state
+     */
     void simulatePinStateChange(const std::string& pin, bool state) {
         std::lock_guard<std::mutex> lock(mutex_);
         auto it = callbacks_.find(pin);
@@ -133,9 +146,9 @@ public:
             try {
                 it->second(state);
             } catch (const std::exception& e) {
-                LOG_F(ERROR, "GPIO 回调中发生异常: %s", e.what());
+                spdlog::error("Exception in GPIO callback: {}", e.what());
             } catch (...) {
-                LOG_F(ERROR, "GPIO 回调中发生未知异常");
+                spdlog::error("Unknown exception in GPIO callback");
             }
         }
     }
@@ -152,58 +165,63 @@ private:
           deviceHandle_(INVALID_HANDLE_VALUE),
           useSerialMode_(false) {}
 
-    // 初始化设备 - 尝试 USB 设备，如果失败则尝试串口
+    /**
+     * @brief Initialize GPIO device - try USB first, fallback to serial
+     * @return true if device initialization successful
+     */
     bool initializeDevice() {
-        // 首先尝试 USB GPIO 适配器
+        // Try USB GPIO adapter first
         if (initializeUsbDevice()) {
             useSerialMode_ = false;
             deviceInitialized_ = true;
-            LOG_F(INFO, "已成功初始化 USB GPIO 设备");
+            spdlog::info("Successfully initialized USB GPIO device");
             return true;
         }
 
-        // 如果 USB 设备失败，尝试串口
+        // Fallback to serial port if USB fails
         if (initializeSerialDevice()) {
             useSerialMode_ = true;
             deviceInitialized_ = true;
-            LOG_F(INFO, "已成功初始化串口 GPIO 设备");
+            spdlog::info("Successfully initialized serial GPIO device");
             return true;
         }
 
-        LOG_F(ERROR, "无法找到可用的 GPIO 设备");
+        spdlog::error("No available GPIO device found");
         return false;
     }
 
-    // 初始化 USB GPIO 适配器
+    /**
+     * @brief Initialize USB GPIO adapter
+     * @return true if USB device found and initialized
+     */
     bool initializeUsbDevice() {
-        // 查找具有特定 VID/PID 的 USB 设备
         GUID guid;
         HDEVINFO deviceInfo;
         SP_DEVICE_INTERFACE_DATA interfaceData;
 
-        // 使用 HID 设备类 GUID
+        // Use HID device class GUID
         HidD_GetHidGuid(&guid);
         deviceInfo = SetupDiGetClassDevs(&guid, NULL, NULL,
                                          DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
 
         if (deviceInfo == INVALID_HANDLE_VALUE) {
-            LOG_F(ERROR, "无法获取设备信息集");
+            spdlog::error("Failed to get device information set");
             return false;
         }
 
         interfaceData.cbSize = sizeof(SP_DEVICE_INTERFACE_DATA);
 
-        // 枚举设备
+        // Enumerate devices
         for (DWORD i = 0; SetupDiEnumDeviceInterfaces(deviceInfo, NULL, &guid,
                                                       i, &interfaceData);
              i++) {
             DWORD requiredSize = 0;
 
-            // 获取详细信息所需的大小
+            // Get required size for detail data
             SetupDiGetDeviceInterfaceDetail(deviceInfo, &interfaceData, NULL, 0,
                                             &requiredSize, NULL);
 
-            // 分配内存
+            // Allocate memory
             PSP_DEVICE_INTERFACE_DETAIL_DATA detailData =
                 (PSP_DEVICE_INTERFACE_DETAIL_DATA)malloc(requiredSize);
 
@@ -212,19 +230,19 @@ private:
 
             detailData->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA);
 
-            // 获取详细信息
+            // Get detailed information
             if (SetupDiGetDeviceInterfaceDetail(deviceInfo, &interfaceData,
                                                 detailData, requiredSize, NULL,
                                                 NULL)) {
-                // 尝试打开设备
+                // Try to open device
                 deviceHandle_ = CreateFile(detailData->DevicePath,
                                            GENERIC_READ | GENERIC_WRITE,
                                            FILE_SHARE_READ | FILE_SHARE_WRITE,
                                            NULL, OPEN_EXISTING, 0, NULL);
 
                 if (deviceHandle_ != INVALID_HANDLE_VALUE) {
-                    // TODO: 这里可以添加设备识别代码，检查是否为目标 GPIO 设备
-                    // 例如检查 VID/PID
+                    // TODO: Add device identification code to verify target
+                    // GPIO device For example, check VID/PID
 
                     free(detailData);
                     SetupDiDestroyDeviceInfoList(deviceInfo);
@@ -239,21 +257,24 @@ private:
         return false;
     }
 
-    // 初始化串口设备
+    /**
+     * @brief Initialize serial port device
+     * @return true if serial GPIO device found and initialized
+     */
     bool initializeSerialDevice() {
-        // 尝试常见的串口名称
+        // Try common serial port names
         std::vector<std::string> comPorts = {"COM1", "COM2", "COM3", "COM4",
                                              "COM5"};
 
         for (const auto& port : comPorts) {
-            // 尝试打开串口
+            // Try to open serial port
             std::string portName = "\\\\.\\" + port;
             deviceHandle_ =
                 CreateFileA(portName.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
                             NULL, OPEN_EXISTING, 0, NULL);
 
             if (deviceHandle_ != INVALID_HANDLE_VALUE) {
-                // 配置串口参数
+                // Configure serial parameters
                 DCB dcbSerialParams = {};
                 dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
 
@@ -263,7 +284,7 @@ private:
                     continue;
                 }
 
-                // 设置波特率，通常是 9600 或其他值
+                // Set baud rate, typically 9600 or other values
                 dcbSerialParams.BaudRate = CBR_9600;
                 dcbSerialParams.ByteSize = 8;
                 dcbSerialParams.StopBits = ONESTOPBIT;
@@ -275,7 +296,7 @@ private:
                     continue;
                 }
 
-                // 设置超时
+                // Set timeouts
                 COMMTIMEOUTS timeouts = {};
                 timeouts.ReadIntervalTimeout = 50;
                 timeouts.ReadTotalTimeoutConstant = 50;
@@ -289,9 +310,11 @@ private:
                     continue;
                 }
 
-                // 验证设备是否为 GPIO 设备
+                // Verify device is a GPIO controller
                 if (verifyGpioDevice()) {
-                    LOG_F(INFO, "成功初始化串口 GPIO 设备: %s", port.c_str());
+                    spdlog::info(
+                        "Successfully initialized serial GPIO device: {}",
+                        port);
                     return true;
                 }
 
@@ -303,12 +326,15 @@ private:
         return false;
     }
 
-    // 验证串口设备是否为 GPIO 控制器
+    /**
+     * @brief Verify if serial device is a GPIO controller
+     * @return true if device responds as GPIO controller
+     */
     bool verifyGpioDevice() {
         if (deviceHandle_ == INVALID_HANDLE_VALUE)
             return false;
 
-        // 发送识别命令
+        // Send identification command
         const char* cmd = "IDENTIFY\r\n";
         DWORD bytesWritten;
 
@@ -316,7 +342,7 @@ private:
             return false;
         }
 
-        // 读取响应
+        // Read response
         char buffer[64] = {0};
         DWORD bytesRead;
 
@@ -325,12 +351,14 @@ private:
             return false;
         }
 
-        // 检查响应是否包含 GPIO 标识符
+        // Check if response contains GPIO identifier
         std::string response(buffer);
         return (response.find("GPIO") != std::string::npos);
     }
 
-    // 关闭设备
+    /**
+     * @brief Close GPIO device handle
+     */
     void closeDevice() {
         if (deviceHandle_ != INVALID_HANDLE_VALUE) {
             CloseHandle(deviceHandle_);
@@ -339,7 +367,11 @@ private:
         deviceInitialized_ = false;
     }
 
-    // 读取引脚状态，根据连接模式采用不同实现
+    /**
+     * @brief Read pin state using appropriate method based on connection mode
+     * @param pin GPIO pin identifier
+     * @return Current pin state
+     */
     bool readPinState(const std::string& pin) {
         if (!deviceInitialized_ || deviceHandle_ == INVALID_HANDLE_VALUE) {
             return false;
@@ -348,64 +380,78 @@ private:
         return useSerialMode_ ? readPinStateSerial(pin) : readPinStateUsb(pin);
     }
 
-    // 通过 USB 设备读取引脚状态
+    /**
+     * @brief Read pin state via USB device
+     * @param pin GPIO pin identifier
+     * @return Pin state
+     */
     bool readPinStateUsb(const std::string& pin) {
-        // 构建包含 GPIO 引脚编号的命令缓冲区
+        // Build command buffer containing GPIO pin number
         unsigned char buffer[8] = {0};
         int pinNumber = std::stoi(pin);
 
-        // 命令格式: [命令码 0x01][引脚号]
-        buffer[0] = 0x01;  // 读取命令
+        // Command format: [command code 0x01][pin number]
+        buffer[0] = 0x01;  // Read command
         buffer[1] = static_cast<unsigned char>(pinNumber);
 
         DWORD bytesWritten = 0;
         if (!WriteFile(deviceHandle_, buffer, 2, &bytesWritten, NULL)) {
-            LOG_F(ERROR, "写入 USB GPIO 命令失败: %d", GetLastError());
+            spdlog::error("Failed to write USB GPIO command: {}",
+                          GetLastError());
             return false;
         }
 
-        // 读取响应
+        // Read response
         memset(buffer, 0, sizeof(buffer));
         DWORD bytesRead = 0;
 
         if (!ReadFile(deviceHandle_, buffer, sizeof(buffer), &bytesRead,
                       NULL)) {
-            LOG_F(ERROR, "读取 USB GPIO 状态失败: %d", GetLastError());
+            spdlog::error("Failed to read USB GPIO state: {}", GetLastError());
             return false;
         }
 
-        // 假设第一个字节是状态值
+        // Assume first byte is status value
         return (buffer[0] != 0);
     }
 
-    // 通过串口读取引脚状态
+    /**
+     * @brief Read pin state via serial port
+     * @param pin GPIO pin identifier
+     * @return Pin state
+     */
     bool readPinStateSerial(const std::string& pin) {
-        // 构建串口命令
+        // Build serial command
         std::string cmd = "READ " + pin + "\r\n";
         DWORD bytesWritten = 0;
 
         if (!WriteFile(deviceHandle_, cmd.c_str(), cmd.length(), &bytesWritten,
                        NULL)) {
-            LOG_F(ERROR, "写入串口 GPIO 命令失败: %d", GetLastError());
+            spdlog::error("Failed to write serial GPIO command: {}",
+                          GetLastError());
             return false;
         }
 
-        // 读取响应
+        // Read response
         char buffer[64] = {0};
         DWORD bytesRead = 0;
 
         if (!ReadFile(deviceHandle_, buffer, sizeof(buffer) - 1, &bytesRead,
                       NULL)) {
-            LOG_F(ERROR, "读取串口 GPIO 状态失败: %d", GetLastError());
+            spdlog::error("Failed to read serial GPIO state: {}",
+                          GetLastError());
             return false;
         }
 
-        // 分析响应字符串
+        // Parse response string
         std::string response(buffer, bytesRead);
         return (response.find("HIGH") != std::string::npos ||
                 response.find("1") != std::string::npos);
     }
 
+    /**
+     * @brief Start GPIO monitoring thread
+     */
     void startMonitorThread() {
         if (monitorThreadRunning_)
             return;
@@ -413,7 +459,7 @@ private:
         monitorThreadRunning_ = true;
         monitorThread_ = std::thread([this]() {
             while (monitorThreadRunning_) {
-                // 定期轮询引脚状态
+                // Periodically poll pin states
                 {
                     std::lock_guard<std::mutex> lock(mutex_);
                     for (auto& [pin, callback] : callbacks_) {
@@ -423,10 +469,11 @@ private:
                             try {
                                 callback(currentState);
                             } catch (const std::exception& e) {
-                                LOG_F(ERROR, "GPIO 回调中发生异常: %s",
-                                      e.what());
+                                spdlog::error("Exception in GPIO callback: {}",
+                                              e.what());
                             } catch (...) {
-                                LOG_F(ERROR, "GPIO 回调中发生未知异常");
+                                spdlog::error(
+                                    "Unknown exception in GPIO callback");
                             }
                         }
                     }
@@ -436,6 +483,9 @@ private:
         });
     }
 
+    /**
+     * @brief Stop GPIO monitoring thread
+     */
     void stopMonitorThread() {
         if (!monitorThreadRunning_)
             return;
@@ -449,18 +499,23 @@ private:
 
     std::mutex mutex_;
     std::unordered_map<std::string, std::function<void(bool)>> callbacks_;
-    std::unordered_map<std::string, bool> pinStates_;  // 跟踪引脚状态
+    std::unordered_map<std::string, bool> pinStates_;
     std::thread monitorThread_;
     std::atomic<bool> monitorThreadRunning_;
 
-    // 硬件相关成员
+    // Hardware-related members
     bool deviceInitialized_;
     HANDLE deviceHandle_;
-    bool useSerialMode_;  // 标识使用串口模式还是USB模式
+    bool useSerialMode_;  // Flag for serial mode vs USB mode
 };
 
 #else
-// Linux 版本的 GPIO 回调管理器
+/**
+ * @brief Linux GPIO callback manager using sysfs interface
+ *
+ * This class provides real GPIO functionality on Linux platforms using
+ * the standard sysfs GPIO interface with epoll for efficient monitoring.
+ */
 class GPIOCallbackManager {
 public:
     static GPIOCallbackManager& getInstance() {
@@ -468,21 +523,30 @@ public:
         return instance;
     }
 
+    /**
+     * @brief Register a callback for GPIO pin state changes
+     * @param pin GPIO pin identifier
+     * @param callback Function to call when pin state changes
+     */
     void registerCallback(const std::string& pin,
                           std::function<void(bool)> callback) {
         std::lock_guard<std::mutex> lock(mutex_);
 
-        // If this is our first callback, start the monitor thread
+        // Start monitor thread if this is our first callback
         if (callbacks_.empty() && !monitorThreadRunning_) {
             startMonitorThread();
         }
 
         callbacks_[pin] = std::move(callback);
 
-        // Add this pin to the monitoring if not already present
+        // Add this pin to monitoring if not already present
         setupPinMonitoring(pin);
     }
 
+    /**
+     * @brief Unregister callback for specified pin
+     * @param pin GPIO pin identifier
+     */
     void unregisterCallback(const std::string& pin) {
         std::lock_guard<std::mutex> lock(mutex_);
         callbacks_.erase(pin);
@@ -495,7 +559,7 @@ public:
             fdMap_.erase(it);
         }
 
-        // If no more callbacks, stop the thread
+        // Stop thread if no more callbacks
         if (callbacks_.empty() && monitorThreadRunning_) {
             stopMonitorThread();
         }
@@ -519,11 +583,15 @@ private:
     GPIOCallbackManager() : monitorThreadRunning_(false), epollFd_(-1) {
         epollFd_ = epoll_create1(0);
         if (epollFd_ < 0) {
-            LOG_F(ERROR, "Failed to create epoll instance: %s",
-                  strerror(errno));
+            spdlog::error("Failed to create epoll instance: {}",
+                          strerror(errno));
         }
     }
 
+    /**
+     * @brief Setup monitoring for specified GPIO pin
+     * @param pin GPIO pin identifier
+     */
     void setupPinMonitoring(const std::string& pin) {
         // Check if already monitoring this pin
         if (fdMap_.find(pin) != fdMap_.end()) {
@@ -533,19 +601,18 @@ private:
         std::string path = std::string(GPIO_PATH) + "/gpio" + pin + "/value";
         int fd = open(path.c_str(), O_RDONLY);
         if (fd < 0) {
-            LOG_F(ERROR, "Failed to open gpio value for reading: %s",
-                  strerror(errno));
+            spdlog::error("Failed to open gpio value for reading: {}",
+                          strerror(errno));
             return;
         }
 
-        // Configure the pin for edge-triggered interrupts
+        // Configure pin for edge-triggered interrupts
         std::string edgePath = std::string(GPIO_PATH) + "/gpio" + pin + "/edge";
         int edgeFd = open(edgePath.c_str(), O_WRONLY);
         if (edgeFd >= 0) {
             ssize_t res = write(edgeFd, "both", 4);
             if (res != 4) {
-                LOG_F(WARNING, "Failed to set edge to 'both' for GPIO %s",
-                      pin.c_str());
+                spdlog::warn("Failed to set edge to 'both' for GPIO {}", pin);
             }
             close(edgeFd);
         }
@@ -556,7 +623,7 @@ private:
         ev.data.fd = fd;
 
         if (epoll_ctl(epollFd_, EPOLL_CTL_ADD, fd, &ev) == -1) {
-            LOG_F(ERROR, "Failed to add fd to epoll: %s", strerror(errno));
+            spdlog::error("Failed to add fd to epoll: {}", strerror(errno));
             close(fd);
             return;
         }
@@ -566,13 +633,16 @@ private:
         lseek(fd, 0, SEEK_SET);
         ssize_t res = read(fd, buffer, sizeof(buffer));
         if (res < 0) {
-            LOG_F(WARNING, "Failed to read initial GPIO value: %s",
-                  strerror(errno));
+            spdlog::warn("Failed to read initial GPIO value: {}",
+                         strerror(errno));
         }
 
         fdMap_[pin] = fd;
     }
 
+    /**
+     * @brief Start GPIO monitoring thread using epoll
+     */
     void startMonitorThread() {
         if (monitorThreadRunning_)
             return;
@@ -586,7 +656,7 @@ private:
                 int nfds = epoll_wait(epollFd_, events, MAX_EVENTS, 500);
                 if (nfds < 0) {
                     if (errno != EINTR) {
-                        LOG_F(ERROR, "epoll_wait failed: %s", strerror(errno));
+                        spdlog::error("epoll_wait failed: {}", strerror(errno));
                     }
                     continue;
                 }
@@ -628,13 +698,13 @@ private:
                                     try {
                                         callback(value);
                                     } catch (const std::exception& e) {
-                                        LOG_F(ERROR,
-                                              "Exception in GPIO callback: %s",
-                                              e.what());
+                                        spdlog::error(
+                                            "Exception in GPIO callback: {}",
+                                            e.what());
                                     } catch (...) {
-                                        LOG_F(ERROR,
-                                              "Unknown exception in GPIO "
-                                              "callback");
+                                        spdlog::error(
+                                            "Unknown exception in GPIO "
+                                            "callback");
                                     }
                                 }
                             }
@@ -645,6 +715,9 @@ private:
         });
     }
 
+    /**
+     * @brief Stop GPIO monitoring thread
+     */
     void stopMonitorThread() {
         if (!monitorThreadRunning_)
             return;
@@ -665,6 +738,9 @@ private:
 };
 #endif
 
+/**
+ * @brief GPIO implementation class providing platform-specific functionality
+ */
 class GPIO::Impl {
 public:
     explicit Impl(std::string pin)
@@ -678,7 +754,8 @@ public:
           pwmMode_(PwmMode::HARDWARE),
           interruptCounterActive_(false),
           interruptCount_(0),
-          debounceActive_(false) {
+          debounceActive_(false),
+          pwmThreadRunning_(false) {
         exportGPIO();
         setGPIODirection("out");
     }
@@ -694,7 +771,8 @@ public:
           pwmMode_(PwmMode::HARDWARE),
           interruptCounterActive_(false),
           interruptCount_(0),
-          debounceActive_(false) {
+          debounceActive_(false),
+          pwmThreadRunning_(false) {
         exportGPIO();
         setGPIODirection(directionToString(direction));
 
@@ -705,13 +783,10 @@ public:
 
     ~Impl() {
         try {
-            // Remove any callbacks
             stopCallbacks();
-
-            // Unexport GPIO to release the pin
             unexportGPIO();
         } catch (...) {
-            // Suppress all exceptions
+            // Suppress all exceptions in destructor
         }
     }
 
@@ -743,9 +818,7 @@ public:
     Edge getEdge() const { return edge_; }
 
     void setPullMode(PullMode mode) {
-        // Some platforms like the Raspberry Pi might require setting pull mode
-        // through a device tree overlay or other means. We'll just store the
-        // mode for now.
+        // Store pull mode - platform-specific implementation may be required
         pullMode_ = mode;
     }
 
@@ -774,107 +847,113 @@ public:
         setValue(originalValue);
     }
 
-    // 新增PWM功能实现
+    /**
+     * @brief Setup PWM signal generation on GPIO pin
+     * @param frequency PWM frequency in Hz
+     * @param dutyCycle Duty cycle (0.0 to 1.0)
+     * @param mode PWM mode (hardware or software)
+     * @return true if PWM setup successful
+     */
     bool setPwm(double frequency, double dutyCycle, PwmMode mode) {
-        // 检查参数
         if (frequency <= 0 || dutyCycle < 0 || dutyCycle > 1.0) {
-            LOG_F(ERROR,
-                  "Invalid PWM parameters: frequency=%.2fHz, dutyCycle=%.2f",
-                  frequency, dutyCycle);
+            spdlog::error(
+                "Invalid PWM parameters: frequency={:.2f}Hz, dutyCycle={:.2f}",
+                frequency, dutyCycle);
             return false;
         }
 
-        // 确保是输出模式
         if (direction_ != Direction::OUTPUT) {
-            LOG_F(ERROR, "Cannot setup PWM on input GPIO pin %s", pin_.c_str());
+            spdlog::error("Cannot setup PWM on input GPIO pin {}", pin_);
             return false;
         }
 
-        // 如果已有PWM运行，先停止
+        // Stop existing PWM if active
         if (pwmActive_) {
             stopPwm();
         }
 
         pwmFrequency_ = frequency;
         pwmDutyCycle_ = dutyCycle;
-        pwmMode_ = (mode == GPIO::PwmMode::HARDWARE) ? PwmMode::HARDWARE
-                                                     : PwmMode::SOFTWARE;
+        pwmMode_ = mode;
 
 #ifdef _WIN32
-        // Windows模拟PWM (总是使用软件PWM)
+        // Windows simulation always uses software PWM
         return startSoftwarePwm();
 #else
-        // Linux上尝试硬件PWM，如果不可用则回退到软件PWM
+        // Try hardware PWM on Linux, fallback to software
         if (mode == PwmMode::HARDWARE && tryHardwarePwm()) {
-            LOG_F(INFO, "Hardware PWM started on pin %s: %.2fHz, %.2f%%",
-                  pin_.c_str(), frequency, dutyCycle * 100);
+            spdlog::info("Hardware PWM started on pin {}: {:.2f}Hz, {:.2f}%%",
+                         pin_, frequency, dutyCycle * 100);
             return true;
-        } else if (mode == PwmMode::SOFTWARE || mode == PwmMode::HARDWARE) {
-            // 硬件PWM不可用或用户请求软件PWM
+        } else {
             return startSoftwarePwm();
         }
 #endif
-        return false;
     }
 
+    /**
+     * @brief Update PWM duty cycle while keeping frequency unchanged
+     * @param dutyCycle New duty cycle (0.0 to 1.0)
+     * @return true if update successful
+     */
     bool updatePwmDutyCycle(double dutyCycle) {
         if (!pwmActive_) {
-            LOG_F(ERROR, "Cannot update duty cycle, PWM not active on pin %s",
-                  pin_.c_str());
+            spdlog::error("Cannot update duty cycle, PWM not active on pin {}",
+                          pin_);
             return false;
         }
 
         if (dutyCycle < 0 || dutyCycle > 1.0) {
-            LOG_F(ERROR, "Invalid duty cycle: %.2f", dutyCycle);
+            spdlog::error("Invalid duty cycle: {:.2f}", dutyCycle);
             return false;
         }
 
         pwmDutyCycle_ = dutyCycle;
 
 #ifdef _WIN32
-        // Windows模拟实现中不需要特殊处理，软件PWM线程会自动使用新的dutyCycle
+        // Software PWM thread automatically uses new duty cycle
         return true;
 #else
         if (pwmMode_ == PwmMode::HARDWARE) {
-            // 更新硬件PWM占空比
+            // Update hardware PWM duty cycle
             std::string pwmPath = std::string(GPIO_PATH) + "/pwm" + pin_;
             std::string dutyCyclePath = pwmPath + "/duty_cycle";
 
             try {
-                int period = static_cast<int>(
-                    1.0e9 / pwmFrequency_);  // 周期以纳秒为单位
-                int onTime =
-                    static_cast<int>(period * dutyCycle);  // 高电平时间
+                int period = static_cast<int>(1.0e9 / pwmFrequency_);
+                int onTime = static_cast<int>(period * dutyCycle);
 
                 std::ofstream fs(dutyCyclePath);
                 if (!fs) {
-                    LOG_F(ERROR, "Failed to open %s for writing",
-                          dutyCyclePath.c_str());
+                    spdlog::error("Failed to open {} for writing",
+                                  dutyCyclePath);
                     return false;
                 }
                 fs << onTime;
                 return true;
             } catch (const std::exception& e) {
-                LOG_F(ERROR, "Failed to update hardware PWM duty cycle: %s",
-                      e.what());
+                spdlog::error("Failed to update hardware PWM duty cycle: {}",
+                              e.what());
                 return false;
             }
         }
-        // 软件PWM会自动使用新的dutyCycle
 #endif
         return true;
     }
 
+    /**
+     * @brief Stop PWM signal generation
+     */
     void stopPwm() {
         if (!pwmActive_) {
             return;
         }
 
-        LOG_F(INFO, "Stopping PWM on pin %s", pin_.c_str());
+        spdlog::info("Stopping PWM on pin {}", pin_);
 
 #ifndef _WIN32
         if (pwmMode_ == PwmMode::HARDWARE) {
-            // 关闭硬件PWM
+            // Disable hardware PWM
             try {
                 std::string pwmPath = std::string(GPIO_PATH) + "/pwm" + pin_;
                 std::string enablePath = pwmPath + "/enable";
@@ -884,12 +963,12 @@ public:
                     fs << "0";
                 }
             } catch (const std::exception& e) {
-                LOG_F(ERROR, "Error stopping hardware PWM: %s", e.what());
+                spdlog::error("Error stopping hardware PWM: {}", e.what());
             }
         }
 #endif
 
-        // 停止软件PWM线程
+        // Stop software PWM thread
         if (pwmThread_.joinable()) {
             pwmThreadRunning_ = false;
             pwmThread_.join();
@@ -899,59 +978,58 @@ public:
     }
 
 #ifndef _WIN32
+    /**
+     * @brief Attempt to configure hardware PWM
+     * @return true if hardware PWM available and configured
+     */
     bool tryHardwarePwm() {
-        // 检查硬件PWM是否可用并尝试配置
         std::string pwmPath = std::string(GPIO_PATH) + "/pwm" + pin_;
 
-        // 检查是否有PWM硬件支持
+        // Check if hardware PWM is available
         if (!std::filesystem::exists(pwmPath)) {
-            LOG_F(INFO, "Hardware PWM not available for pin %s", pin_.c_str());
+            spdlog::info("Hardware PWM not available for pin {}", pin_);
             return false;
         }
 
         try {
-            // 配置硬件PWM
+            // Configure hardware PWM
             std::string periodPath = pwmPath + "/period";
             std::string dutyCyclePath = pwmPath + "/duty_cycle";
             std::string enablePath = pwmPath + "/enable";
 
-            // 先禁用PWM
+            // Disable PWM first
             std::ofstream enableFs(enablePath);
             if (!enableFs) {
-                LOG_F(ERROR, "Failed to open %s for writing",
-                      enablePath.c_str());
+                spdlog::error("Failed to open {} for writing", enablePath);
                 return false;
             }
             enableFs << "0";
             enableFs.close();
 
-            // 设置频率(周期)，单位为纳秒
+            // Set period in nanoseconds
             int period = static_cast<int>(1.0e9 / pwmFrequency_);
             std::ofstream periodFs(periodPath);
             if (!periodFs) {
-                LOG_F(ERROR, "Failed to open %s for writing",
-                      periodPath.c_str());
+                spdlog::error("Failed to open {} for writing", periodPath);
                 return false;
             }
             periodFs << period;
             periodFs.close();
 
-            // 设置占空比
+            // Set duty cycle
             int onTime = static_cast<int>(period * pwmDutyCycle_);
             std::ofstream dutyFs(dutyCyclePath);
             if (!dutyFs) {
-                LOG_F(ERROR, "Failed to open %s for writing",
-                      dutyCyclePath.c_str());
+                spdlog::error("Failed to open {} for writing", dutyCyclePath);
                 return false;
             }
             dutyFs << onTime;
             dutyFs.close();
 
-            // 启用PWM
+            // Enable PWM
             enableFs.open(enablePath);
             if (!enableFs) {
-                LOG_F(ERROR, "Failed to open %s for writing",
-                      enablePath.c_str());
+                spdlog::error("Failed to open {} for writing", enablePath);
                 return false;
             }
             enableFs << "1";
@@ -959,36 +1037,39 @@ public:
             pwmActive_ = true;
             return true;
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Failed to setup hardware PWM: %s", e.what());
+            spdlog::error("Failed to setup hardware PWM: {}", e.what());
             return false;
         }
     }
 #endif
 
+    /**
+     * @brief Start software PWM implementation
+     * @return true if software PWM started successfully
+     */
     bool startSoftwarePwm() {
-        // 启动软件PWM
         if (pwmActive_ && pwmThread_.joinable()) {
-            LOG_F(ERROR, "PWM already active on pin %s", pin_.c_str());
+            spdlog::error("PWM already active on pin {}", pin_);
             return false;
         }
 
         pwmThreadRunning_ = true;
         pwmThread_ = std::thread([this]() {
-            LOG_F(INFO, "Software PWM started on pin %s: %.2fHz, %.2f%%",
-                  pin_.c_str(), pwmFrequency_, pwmDutyCycle_ * 100);
+            spdlog::info("Software PWM started on pin {}: {:.2f}Hz, {:.2f}%%",
+                         pin_, pwmFrequency_, pwmDutyCycle_ * 100);
 
-            // 计算周期时间（微秒）
+            // Calculate period time in microseconds
             const auto periodUs =
                 static_cast<int64_t>(1000000.0 / pwmFrequency_);
 
             while (pwmThreadRunning_) {
                 auto startTime = std::chrono::steady_clock::now();
 
-                // 计算高电平持续时间（微秒）
+                // Calculate high time in microseconds
                 auto highTimeUs =
                     static_cast<int64_t>(periodUs * pwmDutyCycle_);
 
-                // 如果占空比为0或1，不需要切换状态
+                // Handle edge cases for duty cycle
                 if (pwmDutyCycle_ <= 0.0) {
                     setValue(false);
                     std::this_thread::sleep_for(
@@ -1001,15 +1082,15 @@ public:
                     continue;
                 }
 
-                // 设置高电平
+                // Set high level
                 setValue(true);
                 std::this_thread::sleep_for(
                     std::chrono::microseconds(highTimeUs));
 
-                // 设置低电平
+                // Set low level
                 setValue(false);
 
-                // 计算剩余低电平时间
+                // Calculate remaining low time
                 auto elapsedTime =
                     std::chrono::duration_cast<std::chrono::microseconds>(
                         std::chrono::steady_clock::now() - startTime)
@@ -1028,6 +1109,11 @@ public:
         return true;
     }
 
+    /**
+     * @brief Register callback for GPIO value changes
+     * @param callback Function to call when value changes
+     * @return true if callback registered successfully
+     */
     bool onValueChange(std::function<void(bool)> callback) {
         if (direction_ != Direction::INPUT) {
             THROW_RUNTIME_ERROR(
@@ -1044,49 +1130,58 @@ public:
         return true;
     }
 
+    /**
+     * @brief Register callback for specific edge changes
+     * @param edge Edge type to monitor
+     * @param callback Function to call when edge detected
+     * @return true if callback registered successfully
+     */
     bool onEdgeChange(Edge edge, std::function<void(bool)> callback) {
         if (direction_ != Direction::INPUT) {
             THROW_RUNTIME_ERROR(
                 "Edge change callback only works on input GPIO pins");
         }
 
-        // Set the requested edge mode
         setEdge(edge);
-
         GPIOCallbackManager::getInstance().registerCallback(
             pin_, std::move(callback));
         return true;
     }
 
+    /**
+     * @brief Stop all callbacks for this GPIO pin
+     */
     void stopCallbacks() {
         GPIOCallbackManager::getInstance().unregisterCallback(pin_);
     }
 
-    // 按钮防抖功能实现
+    /**
+     * @brief Setup button debounce functionality
+     * @param callback Function to call when button pressed (debounced)
+     * @param debounceTimeMs Debounce time in milliseconds
+     * @return true if debounce setup successful
+     */
     bool setupButtonDebounce(std::function<void()> callback,
                              unsigned int debounceTimeMs) {
         if (direction_ != Direction::INPUT) {
-            LOG_F(ERROR, "Button debounce only works on input GPIO pins");
+            spdlog::error("Button debounce only works on input GPIO pins");
             return false;
         }
 
         if (debounceActive_) {
-            LOG_F(ERROR, "Button debounce already active on pin %s",
-                  pin_.c_str());
+            spdlog::error("Button debounce already active on pin {}", pin_);
             return false;
         }
 
-        // 设置边缘检测(通常按钮需要检测下降沿或上升沿)
         setEdge(Edge::BOTH);
 
-        // 创建防抖回调
         debounceActive_ = true;
         debouncePeriodMs_ = debounceTimeMs;
         lastDebounceTime_ = std::chrono::steady_clock::now();
 
-        // 注册防抖回调
+        // Register debounced callback
         return onValueChange([this, callback](bool state) {
-            // 只在按钮被按下(低电平)时触发
+            // Trigger only on button press (low level)
             if (state)
                 return;
 
@@ -1098,26 +1193,28 @@ public:
 
             if (elapsedMs > debouncePeriodMs_) {
                 lastDebounceTime_ = now;
-                callback();  // 触发用户回调
+                callback();
             }
         });
     }
 
-    // 中断计数器功能实现
+    /**
+     * @brief Setup interrupt counter for edge detection
+     * @param edge Edge type to count
+     * @return true if counter setup successful
+     */
     bool setupInterruptCounter(Edge edge) {
         if (direction_ != Direction::INPUT) {
-            LOG_F(ERROR, "Interrupt counter only works on input GPIO pins");
+            spdlog::error("Interrupt counter only works on input GPIO pins");
             return false;
         }
 
-        // 设置边缘检测
         setEdge(edge);
 
-        // 重置计数器
         interruptCount_ = 0;
         interruptCounterActive_ = true;
 
-        // 注册回调以增加计数器
+        // Register callback to increment counter
         return onValueChange([this](bool /*state*/) {
             if (interruptCounterActive_) {
                 interruptCount_++;
@@ -1125,6 +1222,11 @@ public:
         });
     }
 
+    /**
+     * @brief Get interrupt count with optional reset
+     * @param resetAfterReading Reset counter after reading if true
+     * @return Current interrupt count
+     */
     uint64_t getInterruptCount(bool resetAfterReading) {
         uint64_t count = interruptCount_;
         if (resetAfterReading) {
@@ -1133,8 +1235,16 @@ public:
         return count;
     }
 
+    /**
+     * @brief Reset interrupt counter to zero
+     */
     void resetInterruptCount() { interruptCount_ = 0; }
 
+    /**
+     * @brief Static method to register callback for any pin
+     * @param pin GPIO pin identifier
+     * @param callback Function to call when pin state changes
+     */
     static void notifyOnChange(const std::string& pin,
                                const std::function<void(bool)>& callback) {
         GPIOCallbackManager::getInstance().registerCallback(pin, callback);
@@ -1146,11 +1256,11 @@ private:
     Edge edge_;
     PullMode pullMode_;
     bool pwmActive_;
-    int pwmFrequency_;
-    int pwmDutyCycle_;
-    enum class PwmMode { HARDWARE, SOFTWARE } pwmMode_;
+    double pwmFrequency_;
+    double pwmDutyCycle_;
+    PwmMode pwmMode_;
     bool interruptCounterActive_;
-    int interruptCount_;
+    std::atomic<uint64_t> interruptCount_;
     bool debounceActive_;
     std::thread pwmThread_;
     std::atomic<bool> pwmThreadRunning_;
@@ -1158,55 +1268,46 @@ private:
     std::chrono::steady_clock::time_point lastDebounceTime_;
 
 #ifdef _WIN32
-    // Windows 模拟的 GPIO 状态
+    // Windows simulation state
     bool currentValue_ = false;
 
     void exportGPIO() {
-        // Windows 上，这是一个模拟实现
-        LOG_F(INFO, "GPIO pin %s exported (Windows simulation)", pin_.c_str());
+        spdlog::info("GPIO pin {} exported (Windows simulation)", pin_);
     }
 
     void unexportGPIO() {
-        // Windows 上，这是一个模拟实现
-        LOG_F(INFO, "GPIO pin %s unexported (Windows simulation)",
-              pin_.c_str());
+        spdlog::info("GPIO pin {} unexported (Windows simulation)", pin_);
     }
 
     void setGPIODirection(const std::string& direction) {
-        // Windows 上，这是一个模拟实现
-        LOG_F(INFO, "GPIO pin %s direction set to %s (Windows simulation)",
-              pin_.c_str(), direction.c_str());
+        spdlog::info("GPIO pin {} direction set to {} (Windows simulation)",
+                     pin_, direction);
     }
 
     void setGPIOValue(const std::string& value) {
-        // Windows 上，这是一个模拟实现
         currentValue_ = (value == "1");
-        LOG_F(INFO, "GPIO pin %s value set to %s (Windows simulation)",
-              pin_.c_str(), value.c_str());
+        spdlog::info("GPIO pin {} value set to {} (Windows simulation)", pin_,
+                     value);
     }
 
     void setGPIOEdge(const std::string& edge) {
-        // Windows 上，这是一个模拟实现
-        LOG_F(INFO, "GPIO pin %s edge set to %s (Windows simulation)",
-              pin_.c_str(), edge.c_str());
+        spdlog::info("GPIO pin {} edge set to {} (Windows simulation)", pin_,
+                     edge);
     }
 
-    bool readGPIOValue() const {
-        // Windows 上，这是一个模拟实现
-        return currentValue_;
-    }
+    bool readGPIOValue() const { return currentValue_; }
 #else
-    // Linux 实现
+    // Linux implementation using sysfs
     void exportGPIO() {
         // Check if GPIO is already exported
         std::string path = std::string(GPIO_PATH) + "/gpio" + pin_;
         if (access(path.c_str(), F_OK) == 0) {
-            // Already exported, no need to export again
-            return;
+            return;  // Already exported
         }
+
         executeGPIOCommand(GPIO_EXPORT, pin_);
 
-        // Wait for the GPIO to be properly exported
+        // Wait for GPIO to be properly exported
         int retries = 10;
         while (access(path.c_str(), F_OK) != 0 && retries > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -1266,6 +1367,7 @@ private:
 #endif
 };
 
+// GPIO public interface implementation
 GPIO::GPIO(const std::string& pin) : impl_(std::make_unique<Impl>(pin)) {}
 
 GPIO::GPIO(const std::string& pin, Direction direction, bool initialValue)
@@ -1300,7 +1402,6 @@ void GPIO::pulse(bool value, std::chrono::milliseconds duration) {
     impl_->pulse(value, duration);
 }
 
-// 新增的PWM相关方法实现
 bool GPIO::setPwm(double frequency, double dutyCycle, PwmMode mode) {
     return impl_->setPwm(frequency, dutyCycle, mode);
 }
@@ -1311,13 +1412,11 @@ bool GPIO::updatePwmDutyCycle(double dutyCycle) {
 
 void GPIO::stopPwm() { impl_->stopPwm(); }
 
-// 新增的按钮防抖功能
 bool GPIO::setupButtonDebounce(std::function<void()> callback,
                                unsigned int debounceTimeMs) {
     return impl_->setupButtonDebounce(std::move(callback), debounceTimeMs);
 }
 
-// 新增的中断计数器功能
 bool GPIO::setupInterruptCounter(Edge edge) {
     return impl_->setupInterruptCounter(edge);
 }
@@ -1343,7 +1442,9 @@ void GPIO::notifyOnChange(const std::string& pin,
     Impl::notifyOnChange(pin, std::move(callback));
 }
 
-// ShiftRegister类实现
+/**
+ * @brief Shift register implementation for controlling multiple outputs
+ */
 GPIO::ShiftRegister::ShiftRegister(const std::string& dataPin,
                                    const std::string& clockPin,
                                    const std::string& latchPin, uint8_t numBits)
@@ -1354,7 +1455,7 @@ GPIO::ShiftRegister::ShiftRegister(const std::string& dataPin,
           std::make_unique<GPIO>(latchPin, GPIO::Direction::OUTPUT, false)),
       numBits_(numBits),
       state_(0) {
-    // 确保所有引脚都初始化为低电平
+    // Initialize all pins to low
     dataPin_->setValue(false);
     clockPin_->setValue(false);
     latchPin_->setValue(false);
@@ -1362,59 +1463,65 @@ GPIO::ShiftRegister::ShiftRegister(const std::string& dataPin,
 
 GPIO::ShiftRegister::~ShiftRegister() = default;
 
+/**
+ * @brief Shift data out to the shift register
+ * @param data Data to shift out
+ * @param msbFirst Shift MSB first if true, LSB first if false
+ */
 void GPIO::ShiftRegister::shiftOut(uint32_t data, bool msbFirst) {
-    // 保存新状态
     state_ = data;
 
-    // 拉低锁存引脚，准备发送数据
+    // Pull latch low to prepare for data transmission
     latchPin_->setValue(false);
 
-    // 计算需要移位的位数
+    // Calculate number of bits to shift
     uint8_t bitsToShift = numBits_ <= 32 ? numBits_ : 32;
 
-    // 移出数据位
+    // Shift out data bits
     for (uint8_t i = 0; i < bitsToShift; i++) {
-        // 确定当前要发送的位
+        // Determine current bit to send
         uint8_t bitPos = msbFirst ? (bitsToShift - 1 - i) : i;
         bool bitValue = ((data >> bitPos) & 0x01) != 0;
 
-        // 设置数据引脚
+        // Set data pin
         dataPin_->setValue(bitValue);
 
-        // 时钟上升沿，锁存数据
+        // Clock rising edge to latch data
         clockPin_->setValue(true);
-        // 短暂延时确保数据稳定
         std::this_thread::sleep_for(std::chrono::microseconds(1));
 
-        // 时钟下降沿
+        // Clock falling edge
         clockPin_->setValue(false);
         std::this_thread::sleep_for(std::chrono::microseconds(1));
     }
 
-    // 拉高锁存引脚，将数据输出到端口
+    // Pull latch high to output data to ports
     latchPin_->setValue(true);
     std::this_thread::sleep_for(std::chrono::microseconds(1));
     latchPin_->setValue(false);
 }
 
+/**
+ * @brief Set individual bit in shift register
+ * @param position Bit position (0-based)
+ * @param value Bit value to set
+ */
 void GPIO::ShiftRegister::setBit(uint8_t position, bool value) {
     if (position >= numBits_) {
-        LOG_F(ERROR, "Bit position %u out of range for %u-bit shift register",
-              position, numBits_);
+        spdlog::error("Bit position {} out of range for {}-bit shift register",
+                      position, numBits_);
         return;
     }
 
     uint32_t newState = state_;
 
     if (value) {
-        // 设置指定位
         newState |= (1UL << position);
     } else {
-        // 清除指定位
         newState &= ~(1UL << position);
     }
 
-    // 如果状态发生了变化，就更新移位寄存器
+    // Update shift register if state changed
     if (newState != state_) {
         shiftOut(newState, true);
     }
@@ -1424,7 +1531,9 @@ uint32_t GPIO::ShiftRegister::getState() const { return state_; }
 
 void GPIO::ShiftRegister::clear() { shiftOut(0, true); }
 
-// Implementation of GPIOGroup
+/**
+ * @brief GPIO group implementation for controlling multiple pins together
+ */
 GPIO::GPIOGroup::GPIOGroup(const std::vector<std::string>& pins) {
     for (const auto& pin : pins) {
         gpios_.push_back(std::make_unique<GPIO>(pin));
@@ -1433,6 +1542,10 @@ GPIO::GPIOGroup::GPIOGroup(const std::vector<std::string>& pins) {
 
 GPIO::GPIOGroup::~GPIOGroup() = default;
 
+/**
+ * @brief Set values for all GPIOs in the group
+ * @param values Vector of boolean values for each GPIO
+ */
 void GPIO::GPIOGroup::setValues(const std::vector<bool>& values) {
     if (values.size() != gpios_.size()) {
         THROW_RUNTIME_ERROR("Values count doesn't match GPIO count");
@@ -1443,6 +1556,10 @@ void GPIO::GPIOGroup::setValues(const std::vector<bool>& values) {
     }
 }
 
+/**
+ * @brief Get values from all GPIOs in the group
+ * @return Vector of current GPIO values
+ */
 std::vector<bool> GPIO::GPIOGroup::getValues() const {
     std::vector<bool> values;
     values.reserve(gpios_.size());
@@ -1454,6 +1571,10 @@ std::vector<bool> GPIO::GPIOGroup::getValues() const {
     return values;
 }
 
+/**
+ * @brief Set direction for all GPIOs in the group
+ * @param direction Direction to set for all GPIOs
+ */
 void GPIO::GPIOGroup::setDirection(Direction direction) {
     for (auto& gpio : gpios_) {
         gpio->setDirection(direction);
@@ -1461,11 +1582,16 @@ void GPIO::GPIOGroup::setDirection(Direction direction) {
 }
 
 #ifdef _WIN32
-// Windows 平台特有的辅助函数，用于模拟 GPIO 状态变化
-// 这仅用于测试目的
+/**
+ * @brief Windows-specific helper functions for GPIO simulation
+ */
 namespace windows {
 
-// 模拟 GPIO 状态变化
+/**
+ * @brief Simulate GPIO state change for testing purposes
+ * @param pin GPIO pin identifier
+ * @param state New pin state
+ */
 void simulateGPIOStateChange(const std::string& pin, bool state) {
     GPIOCallbackManager::getInstance().simulatePinStateChange(pin, state);
 }

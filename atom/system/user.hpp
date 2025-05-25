@@ -4,14 +4,6 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2023-6-17
-
-Description: Some system functions to get user information.
-
-**************************************************/
-
 #ifndef ATOM_SYSTEM_USER_HPP
 #define ATOM_SYSTEM_USER_HPP
 
@@ -81,17 +73,12 @@ auto getUserProfileDirectory() -> std::string;
 
 /**
  * @brief Retrieves the login name of the user.
- *
- * This function retrieves the login name of the user associated with the
- * current process.
- *
  * @return The login name of the user.
  */
 auto getLogin() -> std::string;
 
 /**
  * @brief Check whether the current user has root/administrator privileges.
- *
  * @return true if the current user has root/administrator privileges.
  * @return false if the current user does not have root/administrator
  * privileges.
@@ -100,7 +87,6 @@ auto isRoot() -> bool;
 
 /**
  * @brief Get the value of an environment variable.
- *
  * @param name The name of the environment variable.
  * @return The value of the environment variable or an empty string if not
  * found.
@@ -110,7 +96,6 @@ ATOM_NODISCARD auto getEnvironmentVariable(const std::string& name)
 
 /**
  * @brief Get all environment variables.
- *
  * @return A map containing all environment variables.
  */
 ATOM_NODISCARD auto getAllEnvironmentVariables()
@@ -118,7 +103,6 @@ ATOM_NODISCARD auto getAllEnvironmentVariables()
 
 /**
  * @brief Set the value of an environment variable.
- *
  * @param name The name of the environment variable.
  * @param value The value to set.
  * @return true if the environment variable was set successfully.
@@ -129,21 +113,18 @@ auto setEnvironmentVariable(const std::string& name, const std::string& value)
 
 /**
  * @brief Get the system uptime in seconds.
- *
  * @return System uptime in seconds.
  */
 ATOM_NODISCARD auto getSystemUptime() -> uint64_t;
 
 /**
  * @brief Get the list of logged-in users.
- *
  * @return A vector of logged-in user names.
  */
 ATOM_NODISCARD auto getLoggedInUsers() -> std::vector<std::string>;
 
 /**
  * @brief Check if a user exists.
- *
  * @param username The username to check.
  * @return true if the user exists.
  * @return false if the user does not exist.

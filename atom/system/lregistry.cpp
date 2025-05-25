@@ -23,7 +23,7 @@ Description: A self-contained registry manager.
 #include <regex>
 #include <sstream>
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 
 // Optional JSON library inclusion
 #ifdef HAVE_NLOHMANN_JSON
@@ -100,36 +100,18 @@ struct TransactionData {
 
 class Registry::RegistryImpl {
 public:
-    // Registry data storage
     RegistryNode rootNode;
-
-    // Path where registry is stored
     std::string registryFilePath = "registry_data.txt";
-
-    // Format settings
     RegistryFormat defaultFormat = RegistryFormat::TEXT;
-
-    // Security settings
     bool encryptionEnabled = false;
     std::string encryptionKey;
-
-    // Auto save settings
     bool autoSaveEnabled = true;
-
-    // Transaction support
     TransactionData transaction;
-
-    // Callback handling
     std::map<size_t, EventCallback> eventCallbacks;
     size_t nextCallbackId = 1;
-
-    // Thread safety
     mutable std::recursive_mutex mutex;
-
-    // Error tracking
     std::string lastError;
 
-    // Registry file operations
     RegistryResult saveRegistryToFile(
         const std::string& filePath = "",
         RegistryFormat format = RegistryFormat::TEXT);
@@ -137,20 +119,16 @@ public:
     RegistryResult loadRegistryFromFile(const std::string& filePath,
                                         RegistryFormat format);
 
-    // Node access functions
     RegistryNode* getNode(const std::string& path,
                           bool createIfMissing = false);
     const RegistryNode* getNode(const std::string& path) const;
 
-    // Node enumeration
     void collectKeyPaths(const RegistryNode& node,
                          const std::string& currentPath,
                          std::vector<std::string>& result) const;
 
-    // Event notification
     void notifyEvent(const std::string& eventType, const std::string& keyPath);
 
-    // Format conversion functions
     std::string nodeToText(const RegistryNode& node,
                            const std::string& path = "");
     RegistryResult textToNode(const std::string& text, RegistryNode& node);
@@ -167,27 +145,22 @@ public:
     RegistryResult xmlToNode(tinyxml2::XMLElement* element, RegistryNode& node);
 #endif
 
-    // Encryption functions
 #ifdef HAVE_OPENSSL
     std::string encrypt(const std::string& data);
     std::string decrypt(const std::string& encryptedData);
 #endif
 
-    // Pattern matching for searches
     bool matchesPattern(const std::string& text,
                         const std::string& pattern) const;
 };
 
-// Implementation of Registry class methods
-
 Registry::Registry() : pImpl_(std::make_unique<RegistryImpl>()) {
-    LOG_F(INFO, "Registry constructor called");
+    spdlog::info("Registry constructor called");
 }
 
 Registry::~Registry() {
-    LOG_F(INFO, "Registry destructor called");
+    spdlog::info("Registry destructor called");
 
-    // Save any pending changes if auto-save is enabled
     if (pImpl_->autoSaveEnabled) {
         pImpl_->saveRegistryToFile();
     }
@@ -195,9 +168,8 @@ Registry::~Registry() {
 
 RegistryResult Registry::initialize(const std::string& filePath,
                                     bool useEncryption) {
-    LOG_F(INFO,
-          "Registry::initialize called with filePath: {}, useEncryption: {}",
-          filePath, useEncryption);
+    spdlog::info("Initializing registry with file: {}, encryption: {}",
+                 filePath, useEncryption);
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
@@ -209,15 +181,13 @@ RegistryResult Registry::initialize(const std::string& filePath,
 
 #ifdef HAVE_OPENSSL
     if (useEncryption) {
-        // Generate random encryption key
         unsigned char key[32];
         if (RAND_bytes(key, sizeof(key)) != 1) {
             pImpl_->lastError = "Failed to generate encryption key";
-            LOG_F(ERROR, "Failed to generate encryption key");
+            spdlog::error("Failed to generate encryption key");
             return RegistryResult::ENCRYPTION_ERROR;
         }
 
-        // Convert key to hex string
         std::stringstream ss;
         for (int i = 0; i < 32; i++) {
             ss << std::hex << std::setw(2) << std::setfill('0')
@@ -227,82 +197,73 @@ RegistryResult Registry::initialize(const std::string& filePath,
     }
 #else
     if (useEncryption) {
-        LOG_F(WARNING,
-              "Encryption requested but OpenSSL support not compiled in");
+        spdlog::warn(
+            "Encryption requested but OpenSSL support not compiled in");
         pImpl_->lastError =
             "Encryption requested but not supported in this build";
         return RegistryResult::ENCRYPTION_ERROR;
     }
 #endif
 
-    LOG_F(INFO, "Registry initialized successfully");
+    spdlog::info("Registry initialized successfully");
     return RegistryResult::SUCCESS;
 }
 
 RegistryResult Registry::loadRegistryFromFile(const std::string& filePath,
                                               RegistryFormat format) {
-    LOG_F(INFO, "Registry::loadRegistryFromFile called with filePath: {}",
-          filePath.empty() ? pImpl_->registryFilePath : filePath);
+    spdlog::info("Loading registry from file: {}",
+                 filePath.empty() ? pImpl_->registryFilePath : filePath);
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
     std::string actualFilePath =
         filePath.empty() ? pImpl_->registryFilePath : filePath;
-
     return pImpl_->loadRegistryFromFile(actualFilePath, format);
 }
 
 RegistryResult Registry::createKey(const std::string& keyPath) {
-    LOG_F(INFO, "Registry::createKey called with keyPath: {}", keyPath);
+    spdlog::info("Creating key: {}", keyPath);
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
-    // Check if the key already exists
     if (keyExists(keyPath)) {
-        LOG_F(WARNING, "Key already exists: {}", keyPath);
+        spdlog::warn("Key already exists: {}", keyPath);
         pImpl_->lastError = "Key already exists: " + keyPath;
         return RegistryResult::ALREADY_EXISTS;
     }
 
-    // Create the key nodes
     RegistryNode* node = pImpl_->getNode(keyPath, true);
     if (!node) {
-        LOG_F(ERROR, "Failed to create key: {}", keyPath);
+        spdlog::error("Failed to create key: {}", keyPath);
         pImpl_->lastError = "Failed to create key: " + keyPath;
         return RegistryResult::UNKNOWN_ERROR;
     }
 
-    // Update the timestamp
     node->lastModified = std::time(nullptr);
 
-    // Auto-save if enabled
     if (pImpl_->autoSaveEnabled) {
         pImpl_->saveRegistryToFile();
     }
 
-    // Notify event listeners
     pImpl_->notifyEvent("KeyCreated", keyPath);
-
-    LOG_F(INFO, "Registry::createKey completed for keyPath: {}", keyPath);
+    spdlog::debug("Key created successfully: {}", keyPath);
     return RegistryResult::SUCCESS;
 }
 
 RegistryResult Registry::deleteKey(const std::string& keyPath) {
-    LOG_F(INFO, "Registry::deleteKey called with keyPath: {}", keyPath);
+    spdlog::info("Deleting key: {}", keyPath);
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
-    // Can't delete the root
     if (keyPath == "/" || keyPath.empty()) {
-        LOG_F(WARNING, "Cannot delete root key");
+        spdlog::warn("Cannot delete root key");
         pImpl_->lastError = "Cannot delete root key";
         return RegistryResult::PERMISSION_DENIED;
     }
 
-    // Split the path to get parent path and key name
     auto components = PathHelper::splitPath(keyPath);
     if (components.empty()) {
-        LOG_F(ERROR, "Invalid key path: {}", keyPath);
+        spdlog::error("Invalid key path: {}", keyPath);
         pImpl_->lastError = "Invalid key path: " + keyPath;
         return RegistryResult::KEY_NOT_FOUND;
     }
@@ -311,18 +272,16 @@ RegistryResult Registry::deleteKey(const std::string& keyPath) {
     components.pop_back();
     std::string parentPath = PathHelper::joinPath(components);
 
-    // Get the parent node
     RegistryNode* parentNode = pImpl_->getNode(parentPath);
     if (!parentNode) {
-        LOG_F(WARNING, "Parent key not found: {}", parentPath);
+        spdlog::warn("Parent key not found: {}", parentPath);
         pImpl_->lastError = "Parent key not found: " + parentPath;
         return RegistryResult::KEY_NOT_FOUND;
     }
 
-    // Delete the key
     auto it = parentNode->children.find(keyName);
     if (it == parentNode->children.end()) {
-        LOG_F(WARNING, "Key not found: {}", keyPath);
+        spdlog::warn("Key not found: {}", keyPath);
         pImpl_->lastError = "Key not found: " + keyPath;
         return RegistryResult::KEY_NOT_FOUND;
     }
@@ -330,24 +289,19 @@ RegistryResult Registry::deleteKey(const std::string& keyPath) {
     parentNode->children.erase(it);
     parentNode->lastModified = std::time(nullptr);
 
-    // Auto-save if enabled
     if (pImpl_->autoSaveEnabled) {
         pImpl_->saveRegistryToFile();
     }
 
-    // Notify event listeners
     pImpl_->notifyEvent("KeyDeleted", keyPath);
-
-    LOG_F(INFO, "Registry::deleteKey completed for keyPath: {}", keyPath);
+    spdlog::debug("Key deleted successfully: {}", keyPath);
     return RegistryResult::SUCCESS;
 }
 
 RegistryResult Registry::setValue(const std::string& keyPath,
                                   const std::string& valueName,
                                   const std::string& data) {
-    LOG_F(INFO, "Registry::setValue called with keyPath: {}, valueName: {}",
-          keyPath, valueName);
-
+    spdlog::debug("Setting value: {} in key: {}", valueName, keyPath);
     return setTypedValue(keyPath, valueName, data, "string");
 }
 
@@ -355,43 +309,32 @@ RegistryResult Registry::setTypedValue(const std::string& keyPath,
                                        const std::string& valueName,
                                        const std::string& data,
                                        const std::string& type) {
-    LOG_F(INFO,
-          "Registry::setTypedValue called with keyPath: {}, valueName: {}, "
-          "type: {}",
-          keyPath, valueName, type);
+    spdlog::debug("Setting typed value: {} of type {} in key: {}", valueName,
+                  type, keyPath);
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
-    // Get or create the key node
     RegistryNode* node = pImpl_->getNode(keyPath, true);
     if (!node) {
-        LOG_F(ERROR, "Failed to access key: {}", keyPath);
+        spdlog::error("Failed to access key: {}", keyPath);
         pImpl_->lastError = "Failed to access key: " + keyPath;
         return RegistryResult::KEY_NOT_FOUND;
     }
 
-    // Set the value
     node->values[valueName] = RegistryValue(data, type);
     node->lastModified = std::time(nullptr);
 
-    // Auto-save if enabled
     if (pImpl_->autoSaveEnabled) {
         pImpl_->saveRegistryToFile();
     }
 
-    // Notify event listeners
     pImpl_->notifyEvent("ValueSet", keyPath + "/" + valueName);
-
-    LOG_F(INFO,
-          "Registry::setTypedValue completed for keyPath: {}, valueName: {}",
-          keyPath, valueName);
     return RegistryResult::SUCCESS;
 }
 
 std::optional<std::string> Registry::getValue(const std::string& keyPath,
                                               const std::string& valueName) {
-    LOG_F(INFO, "Registry::getValue called with keyPath: {}, valueName: {}",
-          keyPath, valueName);
+    spdlog::debug("Getting value: {} from key: {}", valueName, keyPath);
 
     std::string type;
     return getTypedValue(keyPath, valueName, type);
@@ -400,58 +343,44 @@ std::optional<std::string> Registry::getValue(const std::string& keyPath,
 std::optional<std::string> Registry::getTypedValue(const std::string& keyPath,
                                                    const std::string& valueName,
                                                    std::string& type) {
-    LOG_F(INFO,
-          "Registry::getTypedValue called with keyPath: {}, valueName: {}",
-          keyPath, valueName);
+    spdlog::debug("Getting typed value: {} from key: {}", valueName, keyPath);
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
-    // Get the key node
     const RegistryNode* node = pImpl_->getNode(keyPath);
     if (!node) {
-        LOG_F(WARNING, "Key not found: {}", keyPath);
+        spdlog::warn("Key not found: {}", keyPath);
         pImpl_->lastError = "Key not found: " + keyPath;
         return std::nullopt;
     }
 
-    // Find the value
     auto valueIt = node->values.find(valueName);
     if (valueIt == node->values.end()) {
-        LOG_F(WARNING, "Value not found for keyPath: {}, valueName: {}",
-              keyPath, valueName);
+        spdlog::warn("Value not found: {} in key: {}", valueName, keyPath);
         pImpl_->lastError = "Value not found: " + valueName;
         return std::nullopt;
     }
 
-    // Return the data and type
     type = valueIt->second.type;
-    LOG_F(INFO,
-          "Registry::getTypedValue found value of type {} for keyPath: {}, "
-          "valueName: {}",
-          type, keyPath, valueName);
     return valueIt->second.data;
 }
 
 RegistryResult Registry::deleteValue(const std::string& keyPath,
                                      const std::string& valueName) {
-    LOG_F(INFO, "Registry::deleteValue called with keyPath: {}, valueName: {}",
-          keyPath, valueName);
+    spdlog::info("Deleting value: {} from key: {}", valueName, keyPath);
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
-    // Get the key node
     RegistryNode* node = pImpl_->getNode(keyPath);
     if (!node) {
-        LOG_F(WARNING, "Key not found: {}", keyPath);
+        spdlog::warn("Key not found: {}", keyPath);
         pImpl_->lastError = "Key not found: " + keyPath;
         return RegistryResult::KEY_NOT_FOUND;
     }
 
-    // Delete the value
     auto valueIt = node->values.find(valueName);
     if (valueIt == node->values.end()) {
-        LOG_F(WARNING, "Value not found for keyPath: {}, valueName: {}",
-              keyPath, valueName);
+        spdlog::warn("Value not found: {} in key: {}", valueName, keyPath);
         pImpl_->lastError = "Value not found: " + valueName;
         return RegistryResult::VALUE_NOT_FOUND;
     }
@@ -459,27 +388,22 @@ RegistryResult Registry::deleteValue(const std::string& keyPath,
     node->values.erase(valueIt);
     node->lastModified = std::time(nullptr);
 
-    // Auto-save if enabled
     if (pImpl_->autoSaveEnabled) {
         pImpl_->saveRegistryToFile();
     }
 
-    // Notify event listeners
     pImpl_->notifyEvent("ValueDeleted", keyPath + "/" + valueName);
-
-    LOG_F(INFO,
-          "Registry::deleteValue completed for keyPath: {}, valueName: {}",
-          keyPath, valueName);
+    spdlog::debug("Value deleted successfully: {} from key: {}", valueName,
+                  keyPath);
     return RegistryResult::SUCCESS;
 }
 
 RegistryResult Registry::backupRegistryData(const std::string& backupPath) {
-    LOG_F(INFO, "Registry::backupRegistryData called with backupPath: {}",
-          backupPath.empty() ? "default" : backupPath);
+    spdlog::info("Backing up registry data to: {}",
+                 backupPath.empty() ? "auto-generated path" : backupPath);
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
-    // Generate a default backup filename if none provided
     std::string actualBackupPath = backupPath;
     if (actualBackupPath.empty()) {
         std::time_t currentTime = std::time(nullptr);
@@ -488,37 +412,30 @@ RegistryResult Registry::backupRegistryData(const std::string& backupPath) {
         actualBackupPath = ss.str();
     }
 
-    // Save to the backup file
     RegistryResult result =
         pImpl_->saveRegistryToFile(actualBackupPath, pImpl_->defaultFormat);
 
     if (result == RegistryResult::SUCCESS) {
-        LOG_F(INFO, "Registry data backed up successfully to file: {}",
-              actualBackupPath);
+        spdlog::info("Registry data backed up successfully to: {}",
+                     actualBackupPath);
     } else {
-        LOG_F(ERROR, "Failed to back up registry data: {}", pImpl_->lastError);
+        spdlog::error("Failed to backup registry data: {}", pImpl_->lastError);
     }
 
     return result;
 }
 
 RegistryResult Registry::restoreRegistryData(const std::string& backupFile) {
-    LOG_F(INFO, "Registry::restoreRegistryData called with backupFile: {}",
-          backupFile);
+    spdlog::info("Restoring registry data from: {}", backupFile);
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
-    // Check if the backup file exists
     if (!std::filesystem::exists(backupFile)) {
-        LOG_F(ERROR, "Backup file does not exist: {}", backupFile);
+        spdlog::error("Backup file does not exist: {}", backupFile);
         pImpl_->lastError = "Backup file does not exist: " + backupFile;
         return RegistryResult::FILE_ERROR;
     }
 
-    // Create a temporary registry node to load into
-    RegistryNode tempNode;
-
-    // Determine format from file extension
     RegistryFormat format = pImpl_->defaultFormat;
     std::string extension =
         std::filesystem::path(backupFile).extension().string();
@@ -529,65 +446,44 @@ RegistryResult Registry::restoreRegistryData(const std::string& backupFile) {
     else if (extension == ".bin")
         format = RegistryFormat::BINARY;
 
-    // Attempt to load the backup file
     RegistryResult result = pImpl_->loadRegistryFromFile(backupFile, format);
 
     if (result == RegistryResult::SUCCESS) {
-        LOG_F(INFO, "Registry data restored successfully from backup file: {}",
-              backupFile);
+        spdlog::info("Registry data restored successfully from: {}",
+                     backupFile);
 
-        // Auto-save to the main registry file if enabled
         if (pImpl_->autoSaveEnabled) {
             pImpl_->saveRegistryToFile();
         }
 
-        // Notify event listeners
         pImpl_->notifyEvent("RegistryRestored", backupFile);
     } else {
-        LOG_F(ERROR, "Failed to restore registry data: {}", pImpl_->lastError);
+        spdlog::error("Failed to restore registry data: {}", pImpl_->lastError);
     }
 
     return result;
 }
 
 bool Registry::keyExists(const std::string& keyPath) const {
-    LOG_F(INFO, "Registry::keyExists called with keyPath: {}", keyPath);
-
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
-
-    const RegistryNode* node = pImpl_->getNode(keyPath);
-    bool exists = (node != nullptr);
-
-    LOG_F(INFO, "Registry::keyExists returning: {}", exists);
-    return exists;
+    return pImpl_->getNode(keyPath) != nullptr;
 }
 
 bool Registry::valueExists(const std::string& keyPath,
                            const std::string& valueName) const {
-    LOG_F(INFO, "Registry::valueExists called with keyPath: {}, valueName: {}",
-          keyPath, valueName);
-
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
     const RegistryNode* node = pImpl_->getNode(keyPath);
-    bool exists = false;
-
-    if (node) {
-        exists = (node->values.find(valueName) != node->values.end());
-    }
-
-    LOG_F(INFO, "Registry::valueExists returning: {}", exists);
-    return exists;
+    return node && (node->values.find(valueName) != node->values.end());
 }
 
 std::vector<std::string> Registry::getValueNames(
     const std::string& keyPath) const {
-    LOG_F(INFO, "Registry::getValueNames called with keyPath: {}", keyPath);
+    spdlog::debug("Getting value names for key: {}", keyPath);
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
     std::vector<std::string> valueNames;
-
     const RegistryNode* node = pImpl_->getNode(keyPath);
     if (node) {
         for (const auto& pair : node->values) {
@@ -595,41 +491,35 @@ std::vector<std::string> Registry::getValueNames(
         }
     }
 
-    LOG_F(INFO, "Registry::getValueNames returning {} value names",
-          valueNames.size());
     return valueNames;
 }
 
 std::vector<std::string> Registry::getAllKeys() const {
-    LOG_F(INFO, "Registry::getAllKeys called");
+    spdlog::debug("Getting all registry keys");
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
     std::vector<std::string> keyPaths;
     pImpl_->collectKeyPaths(pImpl_->rootNode, "", keyPaths);
-
-    LOG_F(INFO, "Registry::getAllKeys returning {} keys", keyPaths.size());
     return keyPaths;
 }
 
 std::optional<RegistryValueInfo> Registry::getValueInfo(
     const std::string& keyPath, const std::string& valueName) const {
-    LOG_F(INFO, "Registry::getValueInfo called with keyPath: {}, valueName: {}",
-          keyPath, valueName);
+    spdlog::debug("Getting value info for: {} in key: {}", valueName, keyPath);
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
     const RegistryNode* node = pImpl_->getNode(keyPath);
     if (!node) {
-        LOG_F(WARNING, "Key not found: {}", keyPath);
+        spdlog::warn("Key not found: {}", keyPath);
         pImpl_->lastError = "Key not found: " + keyPath;
         return std::nullopt;
     }
 
     auto valueIt = node->values.find(valueName);
     if (valueIt == node->values.end()) {
-        LOG_F(WARNING, "Value not found for keyPath: {}, valueName: {}",
-              keyPath, valueName);
+        spdlog::warn("Value not found: {} in key: {}", valueName, keyPath);
         pImpl_->lastError = "Value not found: " + valueName;
         return std::nullopt;
     }
@@ -640,129 +530,112 @@ std::optional<RegistryValueInfo> Registry::getValueInfo(
     info.lastModified = valueIt->second.lastModified;
     info.size = valueIt->second.data.size();
 
-    LOG_F(INFO, "Registry::getValueInfo returning info for {}", valueName);
     return info;
 }
 
 size_t Registry::registerEventCallback(EventCallback callback) {
-    LOG_F(INFO, "Registry::registerEventCallback called");
+    spdlog::debug("Registering event callback");
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
     size_t callbackId = pImpl_->nextCallbackId++;
     pImpl_->eventCallbacks[callbackId] = callback;
 
-    LOG_F(INFO, "Registered event callback with ID: {}", callbackId);
+    spdlog::debug("Event callback registered with ID: {}", callbackId);
     return callbackId;
 }
 
 bool Registry::unregisterEventCallback(size_t callbackId) {
-    LOG_F(INFO, "Registry::unregisterEventCallback called with ID: {}",
-          callbackId);
+    spdlog::debug("Unregistering event callback ID: {}", callbackId);
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
     auto it = pImpl_->eventCallbacks.find(callbackId);
     if (it != pImpl_->eventCallbacks.end()) {
         pImpl_->eventCallbacks.erase(it);
-        LOG_F(INFO, "Unregistered event callback with ID: {}", callbackId);
+        spdlog::debug("Event callback unregistered: {}", callbackId);
         return true;
     }
 
-    LOG_F(WARNING, "Event callback with ID {} not found", callbackId);
+    spdlog::warn("Event callback not found: {}", callbackId);
     return false;
 }
 
 bool Registry::beginTransaction() {
-    LOG_F(INFO, "Registry::beginTransaction called");
+    spdlog::info("Beginning transaction");
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
-    // Check if a transaction is already active
     if (pImpl_->transaction.active) {
-        LOG_F(WARNING, "Transaction already active");
+        spdlog::warn("Transaction already active");
         pImpl_->lastError = "Transaction already active";
         return false;
     }
 
-    // Create a deep copy of the current registry state
     pImpl_->transaction.originalData = pImpl_->rootNode;
     pImpl_->transaction.active = true;
 
-    LOG_F(INFO, "Transaction begun successfully");
+    spdlog::debug("Transaction begun successfully");
     return true;
 }
 
 RegistryResult Registry::commitTransaction() {
-    LOG_F(INFO, "Registry::commitTransaction called");
+    spdlog::info("Committing transaction");
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
-    // Check if a transaction is active
     if (!pImpl_->transaction.active) {
-        LOG_F(WARNING, "No active transaction to commit");
+        spdlog::warn("No active transaction to commit");
         pImpl_->lastError = "No active transaction to commit";
         return RegistryResult::UNKNOWN_ERROR;
     }
 
-    // Clear the transaction
     pImpl_->transaction.active = false;
 
-    // Auto-save if enabled
     if (pImpl_->autoSaveEnabled) {
         pImpl_->saveRegistryToFile();
     }
 
-    // Notify event listeners
     pImpl_->notifyEvent("TransactionCommitted", "");
-
-    LOG_F(INFO, "Transaction committed successfully");
+    spdlog::debug("Transaction committed successfully");
     return RegistryResult::SUCCESS;
 }
 
 RegistryResult Registry::rollbackTransaction() {
-    LOG_F(INFO, "Registry::rollbackTransaction called");
+    spdlog::info("Rolling back transaction");
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
-    // Check if a transaction is active
     if (!pImpl_->transaction.active) {
-        LOG_F(WARNING, "No active transaction to roll back");
-        pImpl_->lastError = "No active transaction to roll back";
+        spdlog::warn("No active transaction to rollback");
+        pImpl_->lastError = "No active transaction to rollback";
         return RegistryResult::UNKNOWN_ERROR;
     }
 
-    // Restore the original data
     pImpl_->rootNode = pImpl_->transaction.originalData;
     pImpl_->transaction.active = false;
 
-    // Notify event listeners
     pImpl_->notifyEvent("TransactionRolledBack", "");
-
-    LOG_F(INFO, "Transaction rolled back successfully");
+    spdlog::debug("Transaction rolled back successfully");
     return RegistryResult::SUCCESS;
 }
 
 RegistryResult Registry::exportRegistry(const std::string& filePath,
                                         RegistryFormat format) {
-    LOG_F(INFO, "Registry::exportRegistry called with filePath: {}", filePath);
+    spdlog::info("Exporting registry to: {}", filePath);
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
-
     return pImpl_->saveRegistryToFile(filePath, format);
 }
 
 RegistryResult Registry::importRegistry(const std::string& filePath,
                                         RegistryFormat format,
                                         bool mergeExisting) {
-    LOG_F(
-        INFO,
-        "Registry::importRegistry called with filePath: {}, mergeExisting: {}",
-        filePath, mergeExisting);
+    spdlog::info("Importing registry from: {}, merge: {}", filePath,
+                 mergeExisting);
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
-    // If not merging, clear existing data first
     if (!mergeExisting) {
         pImpl_->rootNode = RegistryNode();
     }
@@ -770,13 +643,12 @@ RegistryResult Registry::importRegistry(const std::string& filePath,
     RegistryResult result = pImpl_->loadRegistryFromFile(filePath, format);
 
     if (result == RegistryResult::SUCCESS) {
-        // Auto-save if enabled
         if (pImpl_->autoSaveEnabled) {
             pImpl_->saveRegistryToFile();
         }
 
-        // Notify event listeners
         pImpl_->notifyEvent("RegistryImported", filePath);
+        spdlog::info("Registry imported successfully from: {}", filePath);
     }
 
     return result;
@@ -784,7 +656,7 @@ RegistryResult Registry::importRegistry(const std::string& filePath,
 
 std::vector<std::string> Registry::searchKeys(
     const std::string& pattern) const {
-    LOG_F(INFO, "Registry::searchKeys called with pattern: {}", pattern);
+    spdlog::debug("Searching keys with pattern: {}", pattern);
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
@@ -798,15 +670,13 @@ std::vector<std::string> Registry::searchKeys(
         }
     }
 
-    LOG_F(INFO, "Registry::searchKeys found {} matching keys",
-          matchingKeys.size());
+    spdlog::debug("Found {} matching keys", matchingKeys.size());
     return matchingKeys;
 }
 
 std::vector<std::pair<std::string, std::string>> Registry::searchValues(
     const std::string& valuePattern) const {
-    LOG_F(INFO, "Registry::searchValues called with valuePattern: {}",
-          valuePattern);
+    spdlog::debug("Searching values with pattern: {}", valuePattern);
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
 
@@ -827,19 +697,18 @@ std::vector<std::pair<std::string, std::string>> Registry::searchValues(
         }
     }
 
-    LOG_F(INFO, "Registry::searchValues found {} matching values",
-          results.size());
+    spdlog::debug("Found {} matching values", results.size());
     return results;
 }
 
 void Registry::setAutoSave(bool enable) {
-    LOG_F(INFO, "Registry::setAutoSave called with enable: {}", enable);
+    spdlog::debug("Setting auto-save to: {}", enable);
 
     std::lock_guard<std::recursive_mutex> lock(pImpl_->mutex);
     pImpl_->autoSaveEnabled = enable;
 
     if (enable && pImpl_->transaction.active) {
-        LOG_F(WARNING, "Auto-save enabled while transaction is active");
+        spdlog::warn("Auto-save enabled while transaction is active");
     }
 }
 
@@ -853,14 +722,14 @@ std::string Registry::getLastError() const {
 RegistryResult Registry::RegistryImpl::saveRegistryToFile(
     const std::string& filePath, RegistryFormat format) {
     std::string actualFilePath = filePath.empty() ? registryFilePath : filePath;
-    LOG_F(INFO, "RegistryImpl::saveRegistryToFile called with filePath: {}",
-          actualFilePath);
+    spdlog::debug("Saving registry to file: {}", actualFilePath);
 
     try {
         std::ofstream file(actualFilePath, std::ios::binary);
         if (!file.is_open()) {
             lastError = "Unable to open file for writing: " + actualFilePath;
-            LOG_F(ERROR, "Error: {}", lastError);
+            spdlog::error("Failed to open file for writing: {}",
+                          actualFilePath);
             return RegistryResult::FILE_ERROR;
         }
 
@@ -881,8 +750,7 @@ RegistryResult Registry::RegistryImpl::saveRegistryToFile(
 #ifdef HAVE_NLOHMANN_JSON
             case RegistryFormat::JSON: {
                 nlohmann::json jsonData = nodeToJson(rootNode);
-                std::string content =
-                    jsonData.dump(4);  // Pretty-print with 4-space indent
+                std::string content = jsonData.dump(4);
 
 #ifdef HAVE_OPENSSL
                 if (encryptionEnabled) {
@@ -918,70 +786,61 @@ RegistryResult Registry::RegistryImpl::saveRegistryToFile(
 #endif
 
             case RegistryFormat::BINARY:
-                // Basic binary serialization
-                // In real implementation, this would use a proper binary
-                // serialization library
-                lastError = "Binary format not fully implemented yet";
-                LOG_F(ERROR, "Error: {}", lastError);
+                lastError = "Binary format not fully implemented";
+                spdlog::error("Binary format not implemented");
                 return RegistryResult::INVALID_FORMAT;
 
             default:
                 lastError = "Unsupported registry format";
-                LOG_F(ERROR, "Error: {}", lastError);
+                spdlog::error("Unsupported registry format");
                 return RegistryResult::INVALID_FORMAT;
         }
 
         file.close();
-        LOG_F(INFO, "Registry data saved to file successfully");
+        spdlog::debug("Registry saved successfully to: {}", actualFilePath);
         return RegistryResult::SUCCESS;
     } catch (const std::exception& e) {
         lastError = "Exception while saving registry: " + std::string(e.what());
-        LOG_F(ERROR, "Error: {}", lastError);
+        spdlog::error("Exception while saving registry: {}", e.what());
         return RegistryResult::UNKNOWN_ERROR;
     }
 }
 
 RegistryResult Registry::RegistryImpl::loadRegistryFromFile(
     const std::string& filePath, RegistryFormat format) {
-    LOG_F(INFO, "RegistryImpl::loadRegistryFromFile called with filePath: {}",
-          filePath);
+    spdlog::debug("Loading registry from file: {}", filePath);
 
     try {
-        // Check if the file exists
         if (!std::filesystem::exists(filePath)) {
             lastError = "File does not exist: " + filePath;
-            LOG_F(WARNING, "Warning: {}", lastError);
+            spdlog::warn("File does not exist: {}", filePath);
             return RegistryResult::FILE_ERROR;
         }
 
-        // Open the file
         std::ifstream file(filePath, std::ios::binary);
         if (!file.is_open()) {
             lastError = "Unable to open file for reading: " + filePath;
-            LOG_F(ERROR, "Error: {}", lastError);
+            spdlog::error("Failed to open file for reading: {}", filePath);
             return RegistryResult::FILE_ERROR;
         }
 
-        // Read the file content
         std::stringstream buffer;
         buffer << file.rdbuf();
         std::string content = buffer.str();
         file.close();
 
 #ifdef HAVE_OPENSSL
-        // Decrypt the content if encryption is enabled
         if (encryptionEnabled) {
             try {
                 content = decrypt(content);
             } catch (const std::exception& e) {
                 lastError = "Decryption error: " + std::string(e.what());
-                LOG_F(ERROR, "Error: {}", lastError);
+                spdlog::error("Decryption error: {}", e.what());
                 return RegistryResult::ENCRYPTION_ERROR;
             }
         }
 #endif
 
-        // Parse the content based on format
         switch (format) {
             case RegistryFormat::TEXT: {
                 RegistryNode tempNode;
@@ -1004,7 +863,7 @@ RegistryResult Registry::RegistryImpl::loadRegistryFromFile(
                     return result;
                 } catch (const nlohmann::json::exception& e) {
                     lastError = "JSON parsing error: " + std::string(e.what());
-                    LOG_F(ERROR, "Error: {}", lastError);
+                    spdlog::error("JSON parsing error: {}", e.what());
                     return RegistryResult::INVALID_FORMAT;
                 }
             }
@@ -1016,7 +875,7 @@ RegistryResult Registry::RegistryImpl::loadRegistryFromFile(
                 if (doc.Parse(content.c_str()) != tinyxml2::XML_SUCCESS) {
                     lastError =
                         "XML parsing error: " + std::string(doc.ErrorStr());
-                    LOG_F(ERROR, "Error: {}", lastError);
+                    spdlog::error("XML parsing error: {}", doc.ErrorStr());
                     return RegistryResult::INVALID_FORMAT;
                 }
 
@@ -1025,7 +884,8 @@ RegistryResult Registry::RegistryImpl::loadRegistryFromFile(
                 if (!rootElement) {
                     lastError =
                         "Invalid XML structure: missing Registry root element";
-                    LOG_F(ERROR, "Error: {}", lastError);
+                    spdlog::error(
+                        "Invalid XML structure: missing Registry root element");
                     return RegistryResult::INVALID_FORMAT;
                 }
 
@@ -1039,53 +899,43 @@ RegistryResult Registry::RegistryImpl::loadRegistryFromFile(
 #endif
 
             case RegistryFormat::BINARY:
-                // Basic binary deserialization
-                lastError = "Binary format not fully implemented yet";
-                LOG_F(ERROR, "Error: {}", lastError);
+                lastError = "Binary format not fully implemented";
+                spdlog::error("Binary format not implemented");
                 return RegistryResult::INVALID_FORMAT;
 
             default:
                 lastError = "Unsupported registry format";
-                LOG_F(ERROR, "Error: {}", lastError);
+                spdlog::error("Unsupported registry format");
                 return RegistryResult::INVALID_FORMAT;
         }
     } catch (const std::exception& e) {
         lastError =
             "Exception while loading registry: " + std::string(e.what());
-        LOG_F(ERROR, "Error: {}", lastError);
+        spdlog::error("Exception while loading registry: {}", e.what());
         return RegistryResult::UNKNOWN_ERROR;
     }
 }
 
 RegistryNode* Registry::RegistryImpl::getNode(const std::string& path,
                                               bool createIfMissing) {
-    // Handle root path
     if (path.empty() || path == "/") {
         return &rootNode;
     }
 
-    // Split the path into components
     std::vector<std::string> components = PathHelper::splitPath(path);
-
-    // Start at the root node
     RegistryNode* currentNode = &rootNode;
 
-    // Navigate through the path
     for (const auto& component : components) {
         auto it = currentNode->children.find(component);
 
         if (it == currentNode->children.end()) {
-            // Node doesn't exist
             if (createIfMissing) {
-                // Create the node if requested
                 currentNode->children[component] = RegistryNode();
                 currentNode = &currentNode->children[component];
             } else {
-                // Not creating missing nodes, return null
                 return nullptr;
             }
         } else {
-            // Move to the next node
             currentNode = &it->second;
         }
     }
@@ -1095,26 +945,19 @@ RegistryNode* Registry::RegistryImpl::getNode(const std::string& path,
 
 const RegistryNode* Registry::RegistryImpl::getNode(
     const std::string& path) const {
-    // Handle root path
     if (path.empty() || path == "/") {
         return &rootNode;
     }
 
-    // Split the path into components
     std::vector<std::string> components = PathHelper::splitPath(path);
-
-    // Start at the root node
     const RegistryNode* currentNode = &rootNode;
 
-    // Navigate through the path
     for (const auto& component : components) {
         auto it = currentNode->children.find(component);
 
         if (it == currentNode->children.end()) {
-            // Node doesn't exist
             return nullptr;
         } else {
-            // Move to the next node
             currentNode = &it->second;
         }
     }
@@ -1125,12 +968,10 @@ const RegistryNode* Registry::RegistryImpl::getNode(
 void Registry::RegistryImpl::collectKeyPaths(
     const RegistryNode& node, const std::string& currentPath,
     std::vector<std::string>& result) const {
-    // Add the current path if it's not empty
     if (!currentPath.empty()) {
         result.push_back(currentPath);
     }
 
-    // Recursively process child nodes
     for (const auto& child : node.children) {
         std::string childPath = currentPath.empty()
                                     ? "/" + child.first
@@ -1141,14 +982,13 @@ void Registry::RegistryImpl::collectKeyPaths(
 
 void Registry::RegistryImpl::notifyEvent(const std::string& eventType,
                                          const std::string& keyPath) {
-    LOG_F(INFO, "Event: {} occurred for key: {}", eventType, keyPath);
+    spdlog::debug("Event triggered: {} for key: {}", eventType, keyPath);
 
-    // Call all registered callbacks
     for (const auto& callback : eventCallbacks) {
         try {
             callback.second(eventType, keyPath);
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Exception in event callback: {}", e.what());
+            spdlog::error("Exception in event callback: {}", e.what());
         }
     }
 }
@@ -1200,7 +1040,8 @@ RegistryResult Registry::RegistryImpl::textToNode(const std::string& text,
             currentNode = getNode(currentPath, true);
             if (!currentNode) {
                 lastError = "Failed to create node for path: " + currentPath;
-                LOG_F(ERROR, "Error: {}", lastError);
+                spdlog::error("Failed to create node for path: {}",
+                              currentPath);
                 return RegistryResult::UNKNOWN_ERROR;
             }
         }
@@ -1318,7 +1159,7 @@ RegistryResult Registry::RegistryImpl::jsonToNode(const nlohmann::json& json,
         return RegistryResult::SUCCESS;
     } catch (const nlohmann::json::exception& e) {
         lastError = "JSON parsing error: " + std::string(e.what());
-        LOG_F(ERROR, "Error: {}", lastError);
+        spdlog::error("JSON parsing error: {}", e.what());
         return RegistryResult::INVALID_FORMAT;
     }
 }
@@ -1435,7 +1276,7 @@ RegistryResult Registry::RegistryImpl::xmlToNode(tinyxml2::XMLElement* element,
         return RegistryResult::SUCCESS;
     } catch (const std::exception& e) {
         lastError = "XML parsing error: " + std::string(e.what());
-        LOG_F(ERROR, "Error: {}", lastError);
+        spdlog::error("XML parsing error: {}", e.what());
         return RegistryResult::INVALID_FORMAT;
     }
 }
@@ -1444,12 +1285,11 @@ RegistryResult Registry::RegistryImpl::xmlToNode(tinyxml2::XMLElement* element,
 #ifdef HAVE_OPENSSL
 std::string Registry::RegistryImpl::encrypt(const std::string& data) {
     if (!encryptionEnabled || encryptionKey.empty()) {
-        LOG_F(WARNING, "Encryption requested but not enabled or missing key");
+        spdlog::warn("Encryption requested but not enabled or missing key");
         return data;
     }
 
     try {
-        // Convert hex key to bytes
         std::vector<unsigned char> key(16);
         for (size_t i = 0; i < 16; i++) {
             std::string byteString = encryptionKey.substr(i * 2, 2);
@@ -1457,13 +1297,11 @@ std::string Registry::RegistryImpl::encrypt(const std::string& data) {
                 static_cast<unsigned char>(std::stoi(byteString, nullptr, 16));
         }
 
-        // Generate random IV
         std::vector<unsigned char> iv(16);
         if (RAND_bytes(iv.data(), static_cast<int>(iv.size())) != 1) {
             throw std::runtime_error("Failed to generate random IV");
         }
 
-        // Initialize encryption
         EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
         if (!ctx) {
             throw std::runtime_error("Failed to create cipher context");
@@ -1475,7 +1313,6 @@ std::string Registry::RegistryImpl::encrypt(const std::string& data) {
             throw std::runtime_error("Failed to initialize encryption");
         }
 
-        // Encrypt the data
         std::vector<unsigned char> ciphertext(data.size() +
                                               EVP_MAX_BLOCK_LENGTH);
         int ciphertextLen = 0;
@@ -1500,13 +1337,10 @@ std::string Registry::RegistryImpl::encrypt(const std::string& data) {
 
         EVP_CIPHER_CTX_free(ctx);
 
-        // Combine IV and ciphertext and encode as base64
         std::vector<unsigned char> combined;
         combined.insert(combined.end(), iv.begin(), iv.end());
         combined.insert(combined.end(), ciphertext.begin(), ciphertext.end());
 
-        // In a real implementation, this would use base64 encoding
-        // For simplicity, returning hex encoding instead
         std::stringstream ss;
         for (unsigned char byte : combined) {
             ss << std::hex << std::setw(2) << std::setfill('0')
@@ -1515,19 +1349,18 @@ std::string Registry::RegistryImpl::encrypt(const std::string& data) {
 
         return ss.str();
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Encryption error: {}", e.what());
+        spdlog::error("Encryption error: {}", e.what());
         throw;
     }
 }
 
 std::string Registry::RegistryImpl::decrypt(const std::string& encryptedData) {
     if (!encryptionEnabled || encryptionKey.empty()) {
-        LOG_F(WARNING, "Decryption requested but not enabled or missing key");
+        spdlog::warn("Decryption requested but not enabled or missing key");
         return encryptedData;
     }
 
     try {
-        // Convert hex key to bytes
         std::vector<unsigned char> key(16);
         for (size_t i = 0; i < 16; i++) {
             std::string byteString = encryptionKey.substr(i * 2, 2);
@@ -1535,7 +1368,6 @@ std::string Registry::RegistryImpl::decrypt(const std::string& encryptedData) {
                 static_cast<unsigned char>(std::stoi(byteString, nullptr, 16));
         }
 
-        // Decode from hex
         std::vector<unsigned char> combined;
         for (size_t i = 0; i < encryptedData.length(); i += 2) {
             std::string byteString = encryptedData.substr(i, 2);
@@ -1547,12 +1379,10 @@ std::string Registry::RegistryImpl::decrypt(const std::string& encryptedData) {
             throw std::runtime_error("Invalid encrypted data: too short");
         }
 
-        // Extract IV and ciphertext
         std::vector<unsigned char> iv(combined.begin(), combined.begin() + 16);
         std::vector<unsigned char> ciphertext(combined.begin() + 16,
                                               combined.end());
 
-        // Initialize decryption
         EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
         if (!ctx) {
             throw std::runtime_error("Failed to create cipher context");
@@ -1564,7 +1394,6 @@ std::string Registry::RegistryImpl::decrypt(const std::string& encryptedData) {
             throw std::runtime_error("Failed to initialize decryption");
         }
 
-        // Decrypt the data
         std::vector<unsigned char> plaintext(ciphertext.size());
         int plaintextLen = 0;
 
@@ -1590,7 +1419,7 @@ std::string Registry::RegistryImpl::decrypt(const std::string& encryptedData) {
         return std::string(reinterpret_cast<char*>(plaintext.data()),
                            plaintext.size());
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Decryption error: {}", e.what());
+        spdlog::error("Decryption error: {}", e.what());
         throw;
     }
 }
@@ -1602,8 +1431,6 @@ bool Registry::RegistryImpl::matchesPattern(const std::string& text,
         std::regex regex(pattern);
         return std::regex_search(text, regex);
     } catch (const std::regex_error&) {
-        // If the pattern is not a valid regex, fall back to simple substring
-        // search
         return text.find(pattern) != std::string::npos;
     }
 }

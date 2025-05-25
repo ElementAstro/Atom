@@ -15,13 +15,13 @@ Description: Simple wrapper for executing commands.
 #ifndef ATOM_SYSTEM_COMMAND_HPP
 #define ATOM_SYSTEM_COMMAND_HPP
 
+#include <chrono>
 #include <functional>
+#include <future>
+#include <optional>
 #include <string>
 #include <unordered_map>
-#include <future>
-#include <chrono>
 #include <vector>
-#include <optional>
 
 #include "atom/macro.hpp"
 
@@ -77,9 +77,8 @@ ATOM_NODISCARD auto executeCommandWithInput(
 auto executeCommandStream(
     const std::string &command, bool openTerminal,
     const std::function<void(const std::string &)> &processLine, int &status,
-    const std::function<bool()> &terminateCondition = [] {
-        return false;
-    }) -> std::string;
+    const std::function<bool()> &terminateCondition = [] { return false; })
+    -> std::string;
 
 /**
  * @brief Execute a list of commands.
@@ -95,6 +94,7 @@ void executeCommands(const std::vector<std::string> &commands);
  * @brief Kill a process by its name.
  *
  * @param processName The name of the process to kill.
+ * @param signal The signal to send to the process.
  */
 void killProcessByName(const std::string &processName, int signal);
 
@@ -102,6 +102,7 @@ void killProcessByName(const std::string &processName, int signal);
  * @brief Kill a process by its PID.
  *
  * @param pid The PID of the process to kill.
+ * @param signal The signal to send to the process.
  */
 void killProcessByPID(int pid, int signal);
 
@@ -165,7 +166,7 @@ auto isCommandAvailable(const std::string &command) -> bool;
 
 /**
  * @brief Execute a command asynchronously and return a future to the result.
- * 
+ *
  * @param command The command to execute.
  * @param openTerminal Whether to open a terminal window for the command.
  * @param processLine A callback function to process each line of output.
@@ -178,7 +179,7 @@ ATOM_NODISCARD auto executeCommandAsync(
 
 /**
  * @brief Execute a command with a timeout.
- * 
+ *
  * @param command The command to execute.
  * @param timeout The maximum time to wait for the command to complete.
  * @param openTerminal Whether to open a terminal window for the command.
@@ -186,15 +187,14 @@ ATOM_NODISCARD auto executeCommandAsync(
  * @return The output of the command or empty string if timed out.
  */
 ATOM_NODISCARD auto executeCommandWithTimeout(
-    const std::string &command, 
-    const std::chrono::milliseconds& timeout,
+    const std::string &command, const std::chrono::milliseconds &timeout,
     bool openTerminal = false,
     const std::function<void(const std::string &)> &processLine = nullptr)
     -> std::optional<std::string>;
 
 /**
  * @brief Execute multiple commands sequentially with a common environment.
- * 
+ *
  * @param commands The list of commands to execute.
  * @param envVars The environment variables to set for all commands.
  * @param stopOnError Whether to stop execution if a command fails.
@@ -203,12 +203,11 @@ ATOM_NODISCARD auto executeCommandWithTimeout(
 ATOM_NODISCARD auto executeCommandsWithCommonEnv(
     const std::vector<std::string> &commands,
     const std::unordered_map<std::string, std::string> &envVars,
-    bool stopOnError = true)
-    -> std::vector<std::pair<std::string, int>>;
+    bool stopOnError = true) -> std::vector<std::pair<std::string, int>>;
 
 /**
  * @brief Get a list of running processes containing the specified substring.
- * 
+ *
  * @param substring The substring to search for in process names.
  * @return A vector of pairs containing PIDs and process names.
  */
@@ -217,7 +216,7 @@ ATOM_NODISCARD auto getProcessesBySubstring(const std::string &substring)
 
 /**
  * @brief Execute a command and return its output as a list of lines.
- * 
+ *
  * @param command The command to execute.
  * @return A vector of strings, each representing a line of output.
  */
@@ -226,23 +225,23 @@ ATOM_NODISCARD auto executeCommandGetLines(const std::string &command)
 
 /**
  * @brief Pipe the output of one command to another command.
- * 
+ *
  * @param firstCommand The first command to execute.
- * @param secondCommand The second command that receives the output of the first.
+ * @param secondCommand The second command that receives the output of the
+ * first.
  * @return The output of the second command.
  */
-ATOM_NODISCARD auto pipeCommands(
-    const std::string &firstCommand, 
-    const std::string &secondCommand)
+ATOM_NODISCARD auto pipeCommands(const std::string &firstCommand,
+                                 const std::string &secondCommand)
     -> std::string;
 
 /**
  * @brief Creates a command history tracker to keep track of executed commands.
- * 
+ *
  * @param maxHistorySize The maximum number of commands to keep in history.
  * @return A unique pointer to the command history tracker.
  */
-auto createCommandHistory(size_t maxHistorySize = 100) 
+auto createCommandHistory(size_t maxHistorySize = 100)
     -> std::unique_ptr<class CommandHistory>;
 
 /**
@@ -250,13 +249,55 @@ auto createCommandHistory(size_t maxHistorySize = 100)
  */
 class CommandHistory {
 public:
+    /**
+     * @brief Construct a new Command History object.
+     *
+     * @param maxSize The maximum number of commands to keep in history.
+     */
     CommandHistory(size_t maxSize);
+
+    /**
+     * @brief Destroy the Command History object.
+     */
     ~CommandHistory();
 
-    void addCommand(const std::string& command, int exitStatus);
-    ATOM_NODISCARD auto getLastCommands(size_t count) const -> std::vector<std::pair<std::string, int>>;
-    ATOM_NODISCARD auto searchCommands(const std::string& substring) const -> std::vector<std::pair<std::string, int>>;
+    /**
+     * @brief Add a command to the history.
+     *
+     * @param command The command to add.
+     * @param exitStatus The exit status of the command.
+     */
+    void addCommand(const std::string &command, int exitStatus);
+
+    /**
+     * @brief Get the last commands from history.
+     *
+     * @param count The number of commands to retrieve.
+     * @return A vector of pairs containing commands and their exit status.
+     */
+    ATOM_NODISCARD auto getLastCommands(size_t count) const
+        -> std::vector<std::pair<std::string, int>>;
+
+    /**
+     * @brief Search commands in history by substring.
+     *
+     * @param substring The substring to search for.
+     * @return A vector of pairs containing matching commands and their exit
+     * status.
+     */
+    ATOM_NODISCARD auto searchCommands(const std::string &substring) const
+        -> std::vector<std::pair<std::string, int>>;
+
+    /**
+     * @brief Clear all commands from history.
+     */
     void clear();
+
+    /**
+     * @brief Get the number of commands in history.
+     *
+     * @return The size of the command history.
+     */
     ATOM_NODISCARD auto size() const -> size_t;
 
 private:

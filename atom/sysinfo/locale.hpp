@@ -30,8 +30,7 @@ enum class LocaleError {
     None,          /**< No error occurred */
     InvalidLocale, /**< The specified locale is invalid or not recognized */
     SystemError,   /**< A system-level error occurred during the operation */
-    UnsupportedPlatform /**< The operation is not supported on the current
-                           platform */
+    UnsupportedPlatform /**< The operation is not supported on the current platform */
 };
 
 /**
@@ -49,18 +48,15 @@ struct LocaleInfo {
     std::string countryDisplayName;  /**< Human-readable country name */
     std::string currencySymbol;      /**< Currency symbol (e.g., "$") */
     std::string decimalSymbol;       /**< Decimal point symbol (e.g., ".") */
-    std::string
-        thousandSeparator;  /**< Thousands separator symbol (e.g., ",") */
-    std::string dateFormat; /**< Date format string */
-    std::string timeFormat; /**< Time format string */
-    std::string characterEncoding; /**< Character encoding (e.g., "UTF-8") */
-    bool isRTL{false};        /**< Whether text is displayed right-to-left */
-    std::string numberFormat; /**< Number format pattern */
-    std::string measurementSystem; /**< Measurement system (e.g., "metric",
-                                      "imperial") */
-    std::string paperSize; /**< Default paper size (e.g., "A4", "Letter") */
-    std::chrono::seconds cacheTimeout{
-        300}; /**< Cache timeout duration in seconds */
+    std::string thousandSeparator;   /**< Thousands separator symbol (e.g., ",") */
+    std::string dateFormat;          /**< Date format string */
+    std::string timeFormat;          /**< Time format string */
+    std::string characterEncoding;   /**< Character encoding (e.g., "UTF-8") */
+    bool isRTL{false};              /**< Whether text is displayed right-to-left */
+    std::string numberFormat;        /**< Number format pattern */
+    std::string measurementSystem;   /**< Measurement system (e.g., "metric", "imperial") */
+    std::string paperSize;           /**< Default paper size (e.g., "A4", "Letter") */
+    std::chrono::seconds cacheTimeout{300}; /**< Cache timeout duration in seconds */
 
     /**
      * @brief Equality comparison operator

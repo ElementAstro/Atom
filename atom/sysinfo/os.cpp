@@ -1,91 +1,128 @@
 #include "os.hpp"
 
 #include <array>
+#include <chrono>
 #include <format>
 #include <fstream>
+#include <memory>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
-#include <chrono>
 
 #ifdef _WIN32
 #include <windows.h>
 #elif __linux__
+#include <sys/sysinfo.h>
 #include <unistd.h>
 #include <fstream>
-#include <sys/sysinfo.h>
 #elif __APPLE__
-#include <sys/utsname.h>
+#include <CoreFoundation/CoreFoundation.h>
+#include <SystemConfiguration/SystemConfiguration.h>
 #include <sys/sysctl.h>
 #include <sys/time.h>
+#include <sys/utsname.h>
 #endif
 
+#include <spdlog/spdlog.h>
 #include "atom/error/exception.hpp"
-#include "atom/log/loguru.hpp"
 
 namespace atom::system {
 
 auto OperatingSystemInfo::toJson() const -> std::string {
-    LOG_F(INFO, "Converting OperatingSystemInfo to JSON");
-    std::stringstream stringstream;
-    stringstream << "{\n";
-    stringstream << R"(  "osName": ")" << osName << "\",\n";
-    stringstream << R"(  "osVersion": ")" << osVersion << "\",\n";
-    stringstream << R"(  "kernelVersion": ")" << kernelVersion << "\",\n";
-    stringstream << R"(  "architecture": ")" << architecture << "\",\n";
-    stringstream << R"(  "compiler": ")" << compiler << "\",\n";
-    stringstream << R"(  "computerName": ")" << computerName << "\"\n";
-    stringstream << "}\n";
-    return stringstream.str();
+    spdlog::debug("Converting OperatingSystemInfo to JSON");
+    std::stringstream ss;
+    ss << "{\n";
+    ss << R"(  "osName": ")" << osName << "\",\n";
+    ss << R"(  "osVersion": ")" << osVersion << "\",\n";
+    ss << R"(  "kernelVersion": ")" << kernelVersion << "\",\n";
+    ss << R"(  "architecture": ")" << architecture << "\",\n";
+    ss << R"(  "compiler": ")" << compiler << "\",\n";
+    ss << R"(  "computerName": ")" << computerName << "\",\n";
+    ss << R"(  "bootTime": ")" << bootTime << "\",\n";
+    ss << R"(  "timeZone": ")" << timeZone << "\",\n";
+    ss << R"(  "charSet": ")" << charSet << "\",\n";
+    ss << R"(  "isServer": )" << (isServer ? "true" : "false") << "\n";
+    ss << "}\n";
+    return ss.str();
 }
 
+auto OperatingSystemInfo::toDetailedString() const -> std::string {
+    spdlog::debug("Converting OperatingSystemInfo to detailed string");
+    std::stringstream ss;
+    ss << "Operating System Information:\n";
+    ss << "  OS Name: " << osName << "\n";
+    ss << "  OS Version: " << osVersion << "\n";
+    ss << "  Kernel Version: " << kernelVersion << "\n";
+    ss << "  Architecture: " << architecture << "\n";
+    ss << "  Compiler: " << compiler << "\n";
+    ss << "  Computer Name: " << computerName << "\n";
+    ss << "  Boot Time: " << bootTime << "\n";
+    ss << "  Time Zone: " << timeZone << "\n";
+    ss << "  Character Set: " << charSet << "\n";
+    ss << "  Server Edition: " << (isServer ? "Yes" : "No") << "\n";
+    return ss.str();
+}
+
+auto OperatingSystemInfo::toJsonString() const -> std::string {
+    return toJson();
+}
+
+/**
+ * @brief Retrieves the computer name from the system
+ * @return Optional string containing the computer name, or nullopt if failed
+ */
 auto getComputerName() -> std::optional<std::string> {
-    LOG_F(INFO, "Getting computer name");
+    spdlog::debug("Retrieving computer name");
     constexpr size_t bufferSize = 256;
     std::array<char, bufferSize> buffer;
 
 #if defined(_WIN32)
     auto size = static_cast<DWORD>(buffer.size());
-    if (BOOL result = GetComputerNameA(buffer.data(), &size); result) {
-        LOG_F(INFO, "Successfully retrieved computer name: {}", buffer.data());
+    if (GetComputerNameA(buffer.data(), &size)) {
+        spdlog::info("Successfully retrieved computer name: {}", buffer.data());
         return std::string(buffer.data());
     } else {
-        LOG_F(ERROR, "Failed to get computer name");
+        spdlog::error("Failed to get computer name on Windows");
     }
 #elif defined(__APPLE__)
-    CFStringRef name = SCDynamicStoreCopyComputerName(NULL, NULL);
-    if (name != NULL) {
+    CFStringRef name = SCDynamicStoreCopyComputerName(nullptr, nullptr);
+    if (name != nullptr) {
         CFStringGetCString(name, buffer.data(), buffer.size(),
                            kCFStringEncodingUTF8);
         CFRelease(name);
-        LOG_F(INFO, "Successfully retrieved computer name: {}", buffer.data());
+        spdlog::info("Successfully retrieved computer name: {}", buffer.data());
         return std::string(buffer.data());
     } else {
-        LOG_F(ERROR, "Failed to get computer name");
+        spdlog::error("Failed to get computer name on macOS");
     }
 #elif defined(__linux__) || defined(__linux)
     if (gethostname(buffer.data(), buffer.size()) == 0) {
-        LOG_F(INFO, "Successfully retrieved computer name: {}", buffer.data());
+        spdlog::info("Successfully retrieved computer name: {}", buffer.data());
         return std::string(buffer.data());
     } else {
-        LOG_F(ERROR, "Failed to get computer name");
+        spdlog::error("Failed to get computer name on Linux");
     }
 #elif defined(__ANDROID__)
-    LOG_F(WARNING, "Getting computer name is not supported on Android");
+    spdlog::warn("Getting computer name is not supported on Android");
     return std::nullopt;
 #endif
 
     return std::nullopt;
 }
 
+/**
+ * @brief Parses a configuration file for OS information
+ * @param filePath Path to the file to parse
+ * @return Pair containing OS name and version
+ */
 auto parseFile(const std::string& filePath)
     -> std::pair<std::string, std::string> {
-    LOG_F(INFO, "Parsing file: {}", filePath.c_str());
+    spdlog::debug("Parsing file: {}", filePath);
     std::ifstream file(filePath);
     if (!file.is_open()) {
-        LOG_F(ERROR, "Cannot open file: {}", filePath.c_str());
+        spdlog::error("Cannot open file: {}", filePath);
         THROW_FAIL_TO_OPEN_FILE("Cannot open file: " + filePath);
     }
 
@@ -94,7 +131,7 @@ auto parseFile(const std::string& filePath)
 
     while (std::getline(file, line)) {
         if (line.empty() || line[0] == '#') {
-            continue;  // Skip empty lines and comments
+            continue;
         }
 
         size_t delimiterPos = line.find('=');
@@ -102,17 +139,16 @@ auto parseFile(const std::string& filePath)
             std::string key = line.substr(0, delimiterPos);
             std::string value = line.substr(delimiterPos + 1);
 
-            // Remove double quotes from the value
             if (!value.empty() && value.front() == '"' && value.back() == '"') {
                 value = value.substr(1, value.size() - 2);
             }
 
             if (key == "PRETTY_NAME") {
                 osInfo.first = value;
-                LOG_F(INFO, "Found PRETTY_NAME: {}", value.c_str());
+                spdlog::debug("Found PRETTY_NAME: {}", value);
             } else if (key == "VERSION") {
                 osInfo.second = value;
-                LOG_F(INFO, "Found VERSION: {}", value.c_str());
+                spdlog::debug("Found VERSION: {}", value);
             }
         }
     }
@@ -121,23 +157,25 @@ auto parseFile(const std::string& filePath)
 }
 
 auto getOperatingSystemInfo() -> OperatingSystemInfo {
-    LOG_F(INFO, "Starting getOperatingSystemInfo function");
+    spdlog::info("Retrieving operating system information");
     OperatingSystemInfo osInfo;
 
 #ifdef _WIN32
+    spdlog::debug("Using Windows API for OS information");
     OSVERSIONINFOEX osvi;
     ZeroMemory(&osvi, sizeof(OSVERSIONINFOEX));
     osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
-    if (GetVersionEx((LPOSVERSIONINFO)&osvi) != 0) {
+    if (GetVersionEx(reinterpret_cast<LPOSVERSIONINFO>(&osvi))) {
         osInfo.osName = "Windows";
         osInfo.osVersion = std::format("{}.{} (Build {})", osvi.dwMajorVersion,
                                        osvi.dwMinorVersion, osvi.dwBuildNumber);
-        LOG_F(INFO, "Retrieved OS info: {} {}", osInfo.osName.c_str(),
-              osInfo.osVersion.c_str());
+        spdlog::info("Retrieved Windows OS info: {} {}", osInfo.osName,
+                     osInfo.osVersion);
     } else {
-        LOG_F(ERROR, "Failed to get OS version");
+        spdlog::error("Failed to get Windows OS version");
     }
 #elif __linux__
+    spdlog::debug("Using Linux API for OS information");
     auto osReleaseInfo = parseFile("/etc/os-release");
     if (!osReleaseInfo.first.empty()) {
         osInfo.osName = osReleaseInfo.first;
@@ -154,14 +192,14 @@ auto getOperatingSystemInfo() -> OperatingSystemInfo {
                 std::getline(redhatReleaseFile, line);
                 osInfo.osName = line;
                 redhatReleaseFile.close();
-                LOG_F(INFO, "Retrieved OS info from /etc/redhat-release: {}",
-                      line.c_str());
+                spdlog::info("Retrieved OS info from /etc/redhat-release: {}",
+                             line);
             }
         }
     }
 
     if (osInfo.osName.empty()) {
-        LOG_F(ERROR, "Failed to get OS name");
+        spdlog::error("Failed to get OS name on Linux");
     }
 
     std::ifstream kernelVersionFile("/proc/version");
@@ -170,25 +208,24 @@ auto getOperatingSystemInfo() -> OperatingSystemInfo {
         std::getline(kernelVersionFile, line);
         osInfo.kernelVersion = line.substr(0, line.find(" "));
         kernelVersionFile.close();
-        LOG_F(INFO, "Retrieved kernel version: {}",
-              osInfo.kernelVersion.c_str());
+        spdlog::info("Retrieved kernel version: {}", osInfo.kernelVersion);
     } else {
-        LOG_F(ERROR, "Failed to open /proc/version");
+        spdlog::error("Failed to open /proc/version");
     }
 #elif __APPLE__
+    spdlog::debug("Using macOS API for OS information");
     struct utsname info;
     if (uname(&info) == 0) {
         osInfo.osName = info.sysname;
         osInfo.osVersion = info.release;
         osInfo.kernelVersion = info.version;
-        LOG_F(INFO, "Retrieved OS info: {} {} {}", info.sysname, info.release,
-              info.version);
+        spdlog::info("Retrieved macOS OS info: {} {} {}", info.sysname,
+                     info.release, info.version);
     } else {
-        LOG_F(ERROR, "Failed to get OS info using uname");
+        spdlog::error("Failed to get OS info using uname");
     }
 #endif
 
-    // 获取系统架构
 #if defined(__i386__) || defined(__i386)
     const std::string ARCHITECTURE = "x86";
 #elif defined(__x86_64__)
@@ -198,10 +235,10 @@ auto getOperatingSystemInfo() -> OperatingSystemInfo {
 #elif defined(__aarch64__)
     const std::string ARCHITECTURE = "ARM64";
 #else
-    const std::string ARCHITECTURE = "Unknown architecture";
+    const std::string ARCHITECTURE = "Unknown";
 #endif
     osInfo.architecture = ARCHITECTURE;
-    LOG_F(INFO, "Detected architecture: {}", ARCHITECTURE.c_str());
+    spdlog::info("Detected architecture: {}", ARCHITECTURE);
 
     const std::string COMPILER =
 #if defined(__clang__)
@@ -213,39 +250,42 @@ auto getOperatingSystemInfo() -> OperatingSystemInfo {
 #elif defined(_MSC_VER)
         std::format("MSVC {}", _MSC_FULL_VER);
 #else
-        "Unknown compiler";
+        "Unknown";
 #endif
     osInfo.compiler = COMPILER;
-    LOG_F(INFO, "Detected compiler: {}", COMPILER.c_str());
+    spdlog::info("Detected compiler: {}", COMPILER);
 
-    osInfo.computerName = getComputerName().value_or("Unknown computer name");
-    LOG_F(INFO, "Detected computer name: {}", osInfo.computerName.c_str());
+    osInfo.computerName = getComputerName().value_or("Unknown");
+    osInfo.bootTime = getLastBootTime();
+    osInfo.timeZone = getSystemTimeZone();
+    osInfo.charSet = getSystemEncoding();
+    osInfo.isServer = isServerEdition();
+    osInfo.installedUpdates = getInstalledUpdates();
 
-    LOG_F(INFO, "Finished getOperatingSystemInfo function");
+    spdlog::info(
+        "Successfully retrieved complete operating system information");
     return osInfo;
 }
 
 auto isWsl() -> bool {
-    LOG_F(INFO, "Checking if running in WSL");
+    spdlog::debug("Checking if running in WSL");
     std::ifstream procVersion("/proc/version");
     std::string line;
     if (procVersion.is_open()) {
         std::getline(procVersion, line);
         procVersion.close();
-        // Check if the line contains "Microsoft" which is a typical indicator
-        // of WSL
-        bool isWsl = line.find("microsoft") != std::string::npos ||
-                     line.find("WSL") != std::string::npos;
-        LOG_F(INFO, "WSL check result: %d", isWsl);
-        return isWsl;
+        bool isWslEnv = line.find("microsoft") != std::string::npos ||
+                        line.find("WSL") != std::string::npos;
+        spdlog::info("WSL detection result: {}", isWslEnv);
+        return isWslEnv;
     } else {
-        LOG_F(ERROR, "Failed to open /proc/version");
+        spdlog::error("Failed to open /proc/version for WSL detection");
     }
     return false;
 }
 
 auto getSystemUptime() -> std::chrono::seconds {
-    LOG_F(INFO, "Getting system uptime");
+    spdlog::debug("Getting system uptime");
 #ifdef _WIN32
     return std::chrono::seconds(GetTickCount64() / 1000);
 #elif __linux__
@@ -257,7 +297,7 @@ auto getSystemUptime() -> std::chrono::seconds {
     struct timeval boottime;
     size_t len = sizeof(boottime);
     int mib[2] = {CTL_KERN, KERN_BOOTTIME};
-    if (sysctl(mib, 2, &boottime, &len, NULL, 0) == 0) {
+    if (sysctl(mib, 2, &boottime, &len, nullptr, 0) == 0) {
         time_t now;
         time(&now);
         return std::chrono::seconds(now - boottime.tv_sec);
@@ -267,7 +307,7 @@ auto getSystemUptime() -> std::chrono::seconds {
 }
 
 auto getLastBootTime() -> std::string {
-    LOG_F(INFO, "Getting last boot time");
+    spdlog::debug("Getting last boot time");
     auto uptime = getSystemUptime();
     auto now = std::chrono::system_clock::now();
     auto bootTime = now - uptime;
@@ -275,23 +315,50 @@ auto getLastBootTime() -> std::string {
     return std::string(std::ctime(&bootTimeT));
 }
 
+auto getSystemTimeZone() -> std::string {
+    spdlog::debug("Getting system timezone");
+#ifdef _WIN32
+    TIME_ZONE_INFORMATION tzi;
+    if (GetTimeZoneInformation(&tzi) != TIME_ZONE_ID_INVALID) {
+        std::wstring wstr(tzi.StandardName);
+        return std::string(wstr.begin(), wstr.end());
+    }
+#elif __linux__
+    std::ifstream tz("/etc/timezone");
+    if (tz.is_open()) {
+        std::string timezone;
+        std::getline(tz, timezone);
+        return timezone;
+    }
+#endif
+    return "Unknown";
+}
+
 auto getInstalledUpdates() -> std::vector<std::string> {
-    LOG_F(INFO, "Getting installed updates");
+    spdlog::debug("Getting installed updates");
     std::vector<std::string> updates;
 
 #ifdef _WIN32
-    // 使用PowerShell命令获取Windows更新历史
     std::array<char, 128> buffer;
-    std::string command = "powershell -Command \"Get-HotFix | Select-Object HotFixID\"";
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.c_str(), "r"), pclose);
-    
+    std::string command =
+        "powershell -Command \"Get-HotFix | Select-Object HotFixID\"";
+    std::unique_ptr<FILE, decltype(&_pclose)> pipe(_popen(command.c_str(), "r"),
+                                                   _pclose);
+
     if (pipe) {
         while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
-            updates.push_back(buffer.data());
+            std::string update(buffer.data());
+            if (!update.empty() && update.back() == '\n') {
+                update.pop_back();
+            }
+            if (!update.empty() &&
+                update.find("HotFixID") == std::string::npos &&
+                update.find("--------") == std::string::npos) {
+                updates.push_back(update);
+            }
         }
     }
 #elif __linux__
-    // 读取dpkg或rpm日志获取更新历史
     std::ifstream log("/var/log/dpkg.log");
     if (log.is_open()) {
         std::string line;
@@ -303,7 +370,60 @@ auto getInstalledUpdates() -> std::vector<std::string> {
     }
 #endif
 
+    spdlog::info("Found {} installed updates", updates.size());
     return updates;
+}
+
+auto checkForUpdates() -> std::vector<std::string> {
+    spdlog::debug("Checking for available updates");
+    std::vector<std::string> updates;
+    spdlog::warn("Update checking not implemented for this platform");
+    return updates;
+}
+
+auto getSystemLanguage() -> std::string {
+    spdlog::debug("Getting system language");
+#ifdef _WIN32
+    LCID lcid = GetSystemDefaultLCID();
+    WCHAR lang[LOCALE_NAME_MAX_LENGTH];
+    if (LCIDToLocaleName(lcid, lang, LOCALE_NAME_MAX_LENGTH, 0) > 0) {
+        std::wstring wstr(lang);
+        return std::string(wstr.begin(), wstr.end());
+    }
+#elif __linux__
+    const char* lang = getenv("LANG");
+    if (lang) {
+        return std::string(lang);
+    }
+#endif
+    return "Unknown";
+}
+
+auto getSystemEncoding() -> std::string {
+    spdlog::debug("Getting system encoding");
+#ifdef _WIN32
+    UINT codePage = GetACP();
+    return std::format("CP{}", codePage);
+#elif __linux__
+    const char* encoding = getenv("LC_CTYPE");
+    if (encoding) {
+        return std::string(encoding);
+    }
+#endif
+    return "UTF-8";
+}
+
+auto isServerEdition() -> bool {
+    spdlog::debug("Checking if OS is server edition");
+#ifdef _WIN32
+    OSVERSIONINFOEX osvi;
+    ZeroMemory(&osvi, sizeof(OSVERSIONINFOEX));
+    osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
+    if (GetVersionEx(reinterpret_cast<LPOSVERSIONINFO>(&osvi))) {
+        return osvi.wProductType != VER_NT_WORKSTATION;
+    }
+#endif
+    return false;
 }
 
 }  // namespace atom::system

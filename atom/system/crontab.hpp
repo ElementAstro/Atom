@@ -19,10 +19,8 @@ public:
     std::string description_;  ///< Description of what the job does.
     std::chrono::system_clock::time_point created_at_;  ///< Creation timestamp.
     std::chrono::system_clock::time_point
-        last_run_;   ///< Last execution timestamp.
-    int run_count_;  ///< Number of times this job has been executed.
-
-    // New fields
+        last_run_;         ///< Last execution timestamp.
+    int run_count_;        ///< Number of times this job has been executed.
     int priority_;         ///< Priority of the job (1-10, 1 is highest)
     int max_retries_;      ///< Maximum number of retries on failure
     int current_retries_;  ///< Current retry count
@@ -32,6 +30,14 @@ public:
         execution_history_;  ///< History of executions with status
                              ///< (true=success, false=failure)
 
+    /**
+     * @brief Constructs a new CronJob object.
+     * @param time Scheduled time for the Cron job
+     * @param command Command to be executed by the Cron job
+     * @param enabled Status of the Cron job
+     * @param category Category of the Cron job for organization
+     * @param description Description of what the job does
+     */
     CronJob(const std::string& time = "", const std::string& command = "",
             bool enabled = true, const std::string& category = "default",
             const std::string& description = "")
@@ -95,7 +101,14 @@ struct CronValidationResult {
  */
 class CronManager {
 public:
+    /**
+     * @brief Constructs a new CronManager object.
+     */
     CronManager();
+
+    /**
+     * @brief Destroys the CronManager object.
+     */
     ~CronManager();
 
     /**
@@ -333,7 +346,12 @@ public:
      * @brief Creates a new job with a special time expression.
      * @param specialTime Special time expression (e.g., @daily, @weekly).
      * @param command The command to execute.
-     * @param other Other job parameters.
+     * @param enabled Whether the job is enabled.
+     * @param category The category of the job.
+     * @param description The description of the job.
+     * @param priority The priority of the job.
+     * @param maxRetries Maximum number of retries.
+     * @param oneTime Whether this is a one-time job.
      * @return True if successful, false otherwise.
      */
     auto createJobWithSpecialTime(const std::string& specialTime,
@@ -352,11 +370,9 @@ public:
     auto handleJobFailure(const std::string& id) -> bool;
 
 private:
-    std::vector<CronJob> jobs_;  ///< List of Cron jobs.
-    std::unordered_map<std::string, size_t>
-        jobIndex_;  ///< Index for faster job lookup
+    std::vector<CronJob> jobs_;
+    std::unordered_map<std::string, size_t> jobIndex_;
 
-    // 特殊cron表达式映射
     static const std::unordered_map<std::string, std::string>
         specialExpressions_;
 

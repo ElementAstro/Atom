@@ -15,21 +15,20 @@ Description: Environment variable management
 #ifndef ATOM_UTILS_ENV_HPP
 #define ATOM_UTILS_ENV_HPP
 
-#include <cstdlib>  // For getenv, setenv, unsetenv
+#include <cstdlib>
 #include <filesystem>
 #include <functional>
 #include <memory>
 #include <optional>
-#include <sstream>  // For string conversion in convertFromString
-#include <tuple>    // For std::tuple return type
+#include <sstream>
+#include <tuple>
 #include <type_traits>
 
-#include "atom/containers/high_performance.hpp"  // Include high performance containers
+#include "atom/containers/high_performance.hpp"
 #include "atom/macro.hpp"
 
 namespace atom::utils {
 
-// Use type aliases from high_performance.hpp
 using atom::containers::String;
 template <typename K, typename V>
 using HashMap = atom::containers::HashMap<K, V>;
@@ -37,7 +36,7 @@ template <typename T>
 using Vector = atom::containers::Vector<T>;
 
 /**
- * @brief 环境变量格式枚举
+ * @brief Environment variable format enumeration
  */
 enum class VariableFormat {
     UNIX,     // ${VAR} or $VAR format
@@ -46,12 +45,12 @@ enum class VariableFormat {
 };
 
 /**
- * @brief 环境变量持久化级别枚举
+ * @brief Environment variable persistence level enumeration
  */
 enum class PersistLevel {
-    PROCESS,  // 仅当前进程有效
-    USER,     // 用户级别持久化
-    SYSTEM    // 系统级别持久化（需要管理员权限）
+    PROCESS,  // Current process only
+    USER,     // User level persistence
+    SYSTEM    // System level persistence (requires admin privileges)
 };
 
 /**
@@ -290,109 +289,111 @@ public:
     ATOM_NODISCARD auto getAllArgs() const -> HashMap<String, String>;
 
     /**
-     * @brief 获取用户主目录
-     * @return 返回用户主目录的路径
+     * @brief Gets the user home directory.
+     * @return The path to the user home directory.
      */
     ATOM_NODISCARD static auto getHomeDir() -> String;
 
     /**
-     * @brief 获取系统临时目录
-     * @return 返回系统临时目录的路径
+     * @brief Gets the system temporary directory.
+     * @return The path to the system temporary directory.
      */
     ATOM_NODISCARD static auto getTempDir() -> String;
 
     /**
-     * @brief 获取系统配置目录
-     * @return 返回系统配置目录的路径
+     * @brief Gets the system configuration directory.
+     * @return The path to the system configuration directory.
      */
     ATOM_NODISCARD static auto getConfigDir() -> String;
 
     /**
-     * @brief 获取用户数据目录
-     * @return 返回用户数据目录的路径
+     * @brief Gets the user data directory.
+     * @return The path to the user data directory.
      */
     ATOM_NODISCARD static auto getDataDir() -> String;
 
     /**
-     * @brief 扩展字符串中的环境变量引用
-     * @param str 包含环境变量引用的字符串（如 "$HOME/file" 或
-     * "%PATH%;newpath"）
-     * @param format 环境变量格式，可以是 Unix 风格 (${VAR}) 或 Windows 风格
-     * (%VAR%)
-     * @return 扩展后的字符串
+     * @brief Expands environment variable references in a string.
+     * @param str String containing environment variable references (e.g.,
+     * "$HOME/file" or "%PATH%;newpath")
+     * @param format Environment variable format, can be Unix style (${VAR}) or
+     * Windows style (%VAR%)
+     * @return Expanded string.
      */
     ATOM_NODISCARD static auto expandVariables(
         const String& str, VariableFormat format = VariableFormat::AUTO)
         -> String;
 
     /**
-     * @brief 持久化设置环境变量
-     * @param key 环境变量名称
-     * @param val 环境变量值
-     * @param level 持久化级别
-     * @return 是否成功持久化
+     * @brief Sets a persistent environment variable.
+     * @param key Environment variable name.
+     * @param val Environment variable value.
+     * @param level Persistence level.
+     * @return True if successfully persisted, otherwise false.
      */
     static auto setPersistentEnv(const String& key, const String& val,
                                  PersistLevel level = PersistLevel::USER)
         -> bool;
 
     /**
-     * @brief 持久化删除环境变量
-     * @param key 环境变量名称
-     * @param level 持久化级别
-     * @return 是否成功删除
+     * @brief Deletes a persistent environment variable.
+     * @param key Environment variable name.
+     * @param level Persistence level.
+     * @return True if successfully deleted, otherwise false.
      */
     static auto deletePersistentEnv(const String& key,
                                     PersistLevel level = PersistLevel::USER)
         -> bool;
 
     /**
-     * @brief 向 PATH 环境变量添加路径
-     * @param path 要添加的路径
-     * @param prepend 是否添加到开头（默认添加到末尾）
-     * @return 是否成功添加
+     * @brief Adds a path to the PATH environment variable.
+     * @param path Path to add.
+     * @param prepend Whether to add to the beginning (default adds to end).
+     * @return True if successfully added, otherwise false.
      */
     static auto addToPath(const String& path, bool prepend = false) -> bool;
 
     /**
-     * @brief 从 PATH 环境变量中移除路径
-     * @param path 要移除的路径
-     * @return 是否成功移除
+     * @brief Removes a path from the PATH environment variable.
+     * @param path Path to remove.
+     * @return True if successfully removed, otherwise false.
      */
     static auto removeFromPath(const String& path) -> bool;
 
     /**
-     * @brief 检查路径是否在 PATH 环境变量中
-     * @param path 要检查的路径
-     * @return 是否在 PATH 中
+     * @brief Checks if a path is in the PATH environment variable.
+     * @param path Path to check.
+     * @return True if in PATH, otherwise false.
      */
     ATOM_NODISCARD static auto isInPath(const String& path) -> bool;
 
     /**
-     * @brief 获取 PATH 环境变量中的所有路径
-     * @return 包含所有路径的向量
+     * @brief Gets all paths in the PATH environment variable.
+     * @return Vector containing all paths.
      */
     ATOM_NODISCARD static auto getPathEntries() -> Vector<String>;
 
     /**
-     * @brief 比较两个环境变量集合的差异
-     * @param env1 第一个环境变量集合
-     * @param env2 第二个环境变量集合
-     * @return 差异内容，包括新增、删除和修改的变量
+     * @brief Compares differences between two environment variable sets.
+     * @param env1 First environment variable set.
+     * @param env2 Second environment variable set.
+     * @return Difference content, including added, removed, and modified
+     * variables.
      */
     ATOM_NODISCARD static auto diffEnvironments(
         const HashMap<String, String>& env1,
         const HashMap<String, String>& env2)
-        -> std::tuple<HashMap<String, String>,   // 新增的变量
-                      HashMap<String, String>,   // 删除的变量
-                      HashMap<String, String>>;  // 修改的变量
+        -> std::tuple<HashMap<String, String>,   // Added variables
+                      HashMap<String, String>,   // Removed variables
+                      HashMap<String, String>>;  // Modified variables
 
     /**
-     * @brief 合并两个环境变量集合
-     * @param baseEnv 基础环境变量集合
-     * @param overlayEnv 覆盖的环境变量集合
-     * @param override 冲突时是否覆盖基础环境变量
-     * @return 合并后的环境变量集合
+     * @brief Merges two environment variable sets.
+     * @param baseEnv Base environment variable set.
+     * @param overlayEnv Overlay environment variable set.
+     * @param override Whether to override base environment variables in case of
+     * conflict.
+     * @return Merged environment variable set.
      */
     ATOM_NODISCARD static auto mergeEnvironments(
         const HashMap<String, String>& baseEnv,
@@ -400,64 +401,64 @@ public:
         -> HashMap<String, String>;
 
     /**
-     * @brief 获取系统名称
-     * @return 系统名称（如 "Windows"、"Linux"、"MacOS"）
+     * @brief Gets the system name.
+     * @return System name (e.g., "Windows", "Linux", "macOS").
      */
     ATOM_NODISCARD static auto getSystemName() -> String;
 
     /**
-     * @brief 获取系统架构
-     * @return 系统架构（如 "x86_64"、"arm64"）
+     * @brief Gets the system architecture.
+     * @return System architecture (e.g., "x86_64", "arm64").
      */
     ATOM_NODISCARD static auto getSystemArch() -> String;
 
     /**
-     * @brief 获取当前用户名
-     * @return 当前用户名
+     * @brief Gets the current username.
+     * @return Current username.
      */
     ATOM_NODISCARD static auto getCurrentUser() -> String;
 
     /**
-     * @brief 获取主机名
-     * @return 主机名
+     * @brief Gets the hostname.
+     * @return Hostname.
      */
     ATOM_NODISCARD static auto getHostName() -> String;
 
     /**
-     * @brief 环境变量更改通知回调
+     * @brief Environment variable change notification callback.
      */
     using EnvChangeCallback = std::function<void(
         const String& key, const String& oldValue, const String& newValue)>;
 
     /**
-     * @brief 注册环境变量更改通知
-     * @param callback 回调函数
-     * @return 通知ID，用于注销
+     * @brief Registers environment variable change notification.
+     * @param callback Callback function.
+     * @return Notification ID for unregistration.
      */
     static auto registerChangeNotification(EnvChangeCallback callback)
         -> size_t;
 
     /**
-     * @brief 注销环境变量更改通知
-     * @param id 通知ID
-     * @return 是否成功注销
+     * @brief Unregisters environment variable change notification.
+     * @param id Notification ID.
+     * @return True if successfully unregistered, otherwise false.
      */
     static auto unregisterChangeNotification(size_t id) -> bool;
 
     /**
-     * @brief 临时环境变量作用域类
+     * @brief Temporary environment variable scope class.
      */
     class ScopedEnv {
     public:
         /**
-         * @brief 构造函数，设置临时环境变量
-         * @param key 环境变量名称
-         * @param value 环境变量值
+         * @brief Constructor, sets temporary environment variable.
+         * @param key Environment variable name.
+         * @param value Environment variable value.
          */
         ScopedEnv(const String& key, const String& value);
 
         /**
-         * @brief 析构函数，恢复环境变量原值
+         * @brief Destructor, restores original environment variable value.
          */
         ~ScopedEnv();
 
@@ -468,10 +469,10 @@ public:
     };
 
     /**
-     * @brief 创建一个临时环境变量作用域
-     * @param key 环境变量名称
-     * @param value 环境变量值
-     * @return 作用域对象的共享指针
+     * @brief Creates a temporary environment variable scope.
+     * @param key Environment variable name.
+     * @param value Environment variable value.
+     * @return Shared pointer to scope object.
      */
     static auto createScopedEnv(const String& key, const String& value)
         -> std::shared_ptr<ScopedEnv>;
@@ -487,38 +488,29 @@ public:
      */
     void printAllArgs() const;
 #endif
+
 private:
     class Impl;
     std::shared_ptr<Impl> impl_;
 
-    // 存储环境变量更改通知回调的静态成员
     static HashMap<size_t, EnvChangeCallback> sChangeCallbacks;
     static std::mutex sCallbackMutex;
     static size_t sNextCallbackId;
 
-    // 通知所有注册的回调函数
     static void notifyChangeCallbacks(const String& key, const String& oldValue,
                                       const String& newValue);
 
-    // Helper method for string to numeric conversion
     template <typename T>
     static T convertFromString(const String& str, const T& defaultValue);
 
-    // Helper method for splitting PATH-like strings
     static auto splitPathString(const String& pathStr) -> Vector<String>;
-
-    // Helper method for joining PATH-like strings
     static auto joinPathString(const Vector<String>& paths) -> String;
-
-    // Helper method to get platform-specific path separator
     static auto getPathSeparator() -> char;
 };
 
-// Template implementation
 template <typename T>
 auto Env::getAs(const String& key, const T& default_value) -> T {
     String strValue = get(key, "");
-    // Assuming String has empty() method
     if (strValue.empty()) {
         return default_value;
     }
@@ -528,12 +520,10 @@ auto Env::getAs(const String& key, const T& default_value) -> T {
 template <typename T>
 auto Env::getOptional(const String& key) -> std::optional<T> {
     String strValue = get(key, "");
-    // Assuming String has empty() method
     if (strValue.empty()) {
         return std::nullopt;
     }
     try {
-        // Assuming convertFromString throws on failure for relevant types
         return convertFromString<T>(strValue, T{});
     } catch (...) {
         return std::nullopt;
@@ -543,7 +533,6 @@ auto Env::getOptional(const String& key) -> std::optional<T> {
 template <typename T>
 auto Env::getEnvAs(const String& key, const T& default_value) -> T {
     String strValue = getEnv(key, "");
-    // Assuming String has empty() method
     if (strValue.empty()) {
         return default_value;
     }
@@ -552,27 +541,12 @@ auto Env::getEnvAs(const String& key, const T& default_value) -> T {
 
 template <typename T>
 T Env::convertFromString(const String& str, const T& defaultValue) {
-    // Assuming String can be implicitly converted to std::string
-    // or provides a compatible stream insertion operator.
-    // If not, use str.c_str() or str.data() for std::string construction
-    // or direct parsing.
-    // Using std::stringstream for conversion as a general approach.
-    // Requires String to be streamable or convertible to std::string.
-
-    // Option 1: Assuming String is streamable
-    // std::stringstream ss;
-    // ss << str;
-
-    // Option 2: Assuming String has c_str() or data()
-    std::stringstream ss(
-        std::string(str.data(), str.length()));  // Construct std::string
+    std::stringstream ss(std::string(str.data(), str.length()));
 
     T value = defaultValue;
     if constexpr (std::is_same_v<T, bool>) {
-        // Handle bool separately for more flexible parsing
         std::string lower_str;
         ss >> lower_str;
-        // Convert to lower case for case-insensitive comparison
         std::transform(lower_str.begin(), lower_str.end(), lower_str.begin(),
                        ::tolower);
         if (lower_str == "true" || lower_str == "1" || lower_str == "yes" ||
@@ -581,19 +555,11 @@ T Env::convertFromString(const String& str, const T& defaultValue) {
         } else if (lower_str == "false" || lower_str == "0" ||
                    lower_str == "no" || lower_str == "off") {
             value = false;
-        } else {
-            // Conversion failed, keep default
         }
     } else if constexpr (std::is_same_v<T, String>) {
-        // Already a String, just return it (or handle potential stream
-        // extraction issues if needed) If using stringstream, extract back into
-        // a String if necessary For simplicity, assume direct assignment is
-        // okay here.
         value = str;
     } else {
-        // Attempt to extract numeric types
         if (!(ss >> value) || !ss.eof()) {
-            // Conversion failed or extra characters found, return default
             return defaultValue;
         }
     }

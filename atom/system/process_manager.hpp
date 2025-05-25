@@ -1,16 +1,8 @@
 /*
- * process.hpp
+ * process_manager.hpp
  *
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
-
-/*************************************************
-
-Date: 2023-12-24
-
-Description: Enhanced Process Manager with additional functionalities.
-
-**************************************************/
 
 #ifndef ATOM_SYSTEM_PROCESS_MANAGER_HPP
 #define ATOM_SYSTEM_PROCESS_MANAGER_HPP
@@ -19,11 +11,9 @@ Description: Enhanced Process Manager with additional functionalities.
 #include <string>
 #include <vector>
 
-#include "process_info.hpp"
-
 #include "atom/error/exception.hpp"
-
 #include "atom/macro.hpp"
+#include "process_info.hpp"
 
 namespace atom::system {
 
@@ -78,8 +68,8 @@ public:
      * @throws ProcessException if process creation fails.
      */
     auto createProcess(const std::string &command,
-                       const std::string &identifier,
-                       bool isBackground = false) -> bool;
+                       const std::string &identifier, bool isBackground = false)
+        -> bool;
 
     /**
      * @brief Terminates a process by its PID.
@@ -88,7 +78,7 @@ public:
      * @return True if the process was terminated successfully, otherwise false.
      * @throws ProcessException if termination fails.
      */
-    auto terminateProcess(int pid, int signal = 15 /*SIGTERM*/) -> bool;
+    auto terminateProcess(int pid, int signal = 15) -> bool;
 
     /**
      * @brief Terminates a process by its name.
@@ -97,8 +87,8 @@ public:
      * @return True if the process was terminated successfully, otherwise false.
      * @throws ProcessException if termination fails.
      */
-    auto terminateProcessByName(const std::string &name,
-                                int signal = 15 /*SIGTERM*/) -> bool;
+    auto terminateProcessByName(const std::string &name, int signal = 15)
+        -> bool;
 
     /**
      * @brief Checks if a process with the given identifier exists.
@@ -167,13 +157,13 @@ public:
      * @return The file path of the process.
      * @throws ProcessException if retrieval fails.
      */
-    static auto getProcFilePath(int pid,
-                                const std::string &file) -> std::string;
+    static auto getProcFilePath(int pid, const std::string &file)
+        -> std::string;
 #endif
 
 private:
-    class ProcessManagerImpl;  ///< Forward declaration of implementation class
-    std::unique_ptr<ProcessManagerImpl> impl;  ///< Pointer to implementation
+    class ProcessManagerImpl;
+    std::unique_ptr<ProcessManagerImpl> impl;
 };
 
 }  // namespace atom::system
