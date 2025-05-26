@@ -1,23 +1,25 @@
 /*!
  * \file decorate.hpp
  * \brief An enhanced implementation of decorate function, inspired by Python's
- * decorator pattern. \author Max Qian <lightapt.com> (Original) \date
- * 2025-03-12 (Updated) \copyright Copyright (C) 2023-2024 Max Qian
+ * decorator pattern.
+ * \author Max Qian <lightapt.com> (Original)
+ * \date 2025-03-12 (Updated)
+ * \copyright Copyright (C) 2023-2024 Max Qian
  */
 
 #ifndef ATOM_META_DECORATE_HPP
 #define ATOM_META_DECORATE_HPP
 
 #include <chrono>
+#include <cmath>
 #include <concepts>
 #include <exception>
-#include <expected>  // C++23
-#include <format>    // C++20
+#include <format>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <source_location>  // C++20
+#include <source_location>
 #include <string_view>
 #include <thread>
 #include <type_traits>
@@ -25,38 +27,44 @@
 #include <utility>
 #include <vector>
 
-#include "atom/type/expected.hpp"
 #include "func_traits.hpp"
 
 namespace atom::meta {
 
-// Forward declarations
 class DecoratorError;
 
-// ==== Concepts ====
-template <typename F, typename... Args>
-concept Callable = requires(F&& func, Args&&... args) {
-    { std::invoke(std::forward<F>(func), std::forward<Args>(args)...) };
-};
-
+/**
+ * \brief Concept to check if a function is callable with specific arguments and
+ * return type
+ * \tparam F Function type
+ * \tparam R Expected return type
+ * \tparam Args Argument types
+ */
 template <typename F, typename R, typename... Args>
 concept CallableWithResult =
-    Callable<F, Args...> && requires(F&& func, Args&&... args) {
+    std::invocable<F, Args...> && requires(F&& func, Args&&... args) {
         {
             std::invoke(std::forward<F>(func), std::forward<Args>(args)...)
         } -> std::convertible_to<R>;
     };
 
+/**
+ * \brief Concept to check if a function is nothrow callable
+ * \tparam F Function type
+ * \tparam Args Argument types
+ */
 template <typename F, typename... Args>
 concept NoThrowCallable =
-    Callable<F, Args...> && requires(F&& func, Args&&... args) {
+    std::invocable<F, Args...> && requires(F&& func, Args&&... args) {
         {
             noexcept(
                 std::invoke(std::forward<F>(func), std::forward<Args>(args)...))
         };
     };
 
-// ==== Error Handling ====
+/**
+ * \brief Exception class for decorator-related errors
+ */
 class DecoratorError : public std::exception {
     std::string message_;
     std::source_location location_;
@@ -78,7 +86,10 @@ public:
     }
 };
 
-// ==== Base Decorator Classes ====
+/**
+ * \brief Switchable decorator that allows changing the underlying function
+ * \tparam Func Function type
+ */
 template <typename Func>
 class Switchable {
 public:
@@ -88,20 +99,19 @@ public:
 
     explicit Switchable(Func func) noexcept(
         std::is_nothrow_move_constructible_v<Func>)
-        : f_(std::move(func)) {}
+        : func_(std::move(func)) {}
 
     template <typename F>
-        requires Callable<F, typename std::tuple_element_t<0, TupleArgs>,
-                          typename std::tuple_element_t<1, TupleArgs>>
+        requires std::invocable<F>
     void switchTo(F&& new_f) {
-        f_ = std::forward<F>(new_f);
+        func_ = std::forward<F>(new_f);
     }
 
     template <std::size_t... Is>
     [[nodiscard]] auto callImpl(const TupleArgs& args,
                                 std::index_sequence<Is...> /*unused*/) const
         -> R {
-        return std::invoke(f_, std::get<Is>(args)...);
+        return std::invoke(func_, std::get<Is>(args)...);
     }
 
     template <typename... ArgsT>
@@ -115,9 +125,13 @@ public:
     }
 
 private:
-    std::function<Func> f_;
+    std::function<Func> func_;
 };
 
+/**
+ * \brief Base decorator class template
+ * \tparam FuncType Function type to decorate
+ */
 template <typename FuncType>
 class decorator {
 protected:
@@ -136,6 +150,11 @@ public:
     }
 };
 
+/**
+ * \brief Abstract base decorator class for inheritance-based decorators
+ * \tparam R Return type
+ * \tparam Args Argument types
+ */
 template <typename R, typename... Args>
 class BaseDecorator {
 public:
@@ -150,6 +169,10 @@ public:
     BaseDecorator& operator=(BaseDecorator&&) noexcept = default;
 };
 
+/**
+ * \brief Decorator that executes a function multiple times in a loop
+ * \tparam FuncType Function type to decorate
+ */
 template <typename FuncType>
 class LoopDecorator : public decorator<FuncType> {
     using Base = decorator<FuncType>;
@@ -166,7 +189,7 @@ public:
             for (int i = 0; i < loopCount; ++i) {
                 if constexpr (!std::is_null_pointer_v<
                                   std::decay_t<ProgressCallback>>) {
-                    if constexpr (Callable<ProgressCallback, int, int>) {
+                    if constexpr (std::invocable<ProgressCallback, int, int>) {
                         std::invoke(std::forward<ProgressCallback>(callback), i,
                                     loopCount);
                     }
@@ -178,7 +201,7 @@ public:
             for (int i = 0; i < loopCount; ++i) {
                 if constexpr (!std::is_null_pointer_v<
                                   std::decay_t<ProgressCallback>>) {
-                    if constexpr (Callable<ProgressCallback, int, int>) {
+                    if constexpr (std::invocable<ProgressCallback, int, int>) {
                         std::invoke(std::forward<ProgressCallback>(callback), i,
                                     loopCount);
                     }
@@ -190,34 +213,37 @@ public:
     }
 };
 
-// Enhanced RetryDecorator with configurable backoff strategy
+/**
+ * \brief Decorator that retries function execution on failure with configurable
+ * backoff
+ * \tparam R Return type
+ * \tparam Args Argument types
+ */
 template <typename R, typename... Args>
 class RetryDecorator : public BaseDecorator<R, Args...> {
     using FuncType = std::function<R(Args...)>;
-    FuncType func_;
     int maxRetries_;
     std::chrono::milliseconds initialBackoff_;
     double backoffMultiplier_;
     bool useExponentialBackoff_;
 
 public:
-    RetryDecorator(FuncType func, int maxRetries,
+    RetryDecorator(int maxRetries,
                    std::chrono::milliseconds initialBackoff =
                        std::chrono::milliseconds(100),
                    double backoffMultiplier = 2.0,
                    bool useExponentialBackoff = true)
-        : func_(std::move(func)),
-          maxRetries_(maxRetries),
+        : maxRetries_(maxRetries),
           initialBackoff_(initialBackoff),
           backoffMultiplier_(backoffMultiplier),
           useExponentialBackoff_(useExponentialBackoff) {}
 
-    auto operator()(FuncType, Args... args) -> R override {
+    auto operator()(FuncType func, Args... args) -> R override {
         std::exception_ptr lastException;
 
         for (int attempt = 0; attempt < maxRetries_ + 1; ++attempt) {
             try {
-                return func_(std::forward<Args>(args)...);
+                return func(std::forward<Args>(args)...);
             } catch (...) {
                 lastException = std::current_exception();
 
@@ -237,7 +263,10 @@ public:
     }
 };
 
-// Standalone RetryDecorator for use without the BaseDecorator framework
+/**
+ * \brief Standalone retry decorator for direct function wrapping
+ * \tparam Func Function type
+ */
 template <typename Func>
 class FunctionRetryDecorator {
     using Traits = FunctionTraits<Func>;
@@ -291,8 +320,10 @@ public:
     }
 };
 
-// ==== Timing Decorator ====
-// Standalone TimingDecorator for direct function wrapping
+/**
+ * \brief Standalone timing decorator for direct function wrapping
+ * \tparam Func Function type
+ */
 template <typename Func>
 class FunctionTimingDecorator {
     using Traits = FunctionTraits<Func>;
@@ -331,7 +362,11 @@ public:
     }
 };
 
-// BaseDecorator-compatible TimingDecorator for use with DecorateStepper
+/**
+ * \brief BaseDecorator-compatible timing decorator
+ * \tparam R Return type
+ * \tparam Args Argument types
+ */
 template <typename R, typename... Args>
 class TimingDecorator : public BaseDecorator<R, Args...> {
     using FuncType = std::function<R(Args...)>;
@@ -367,7 +402,10 @@ public:
     }
 };
 
-// Enhanced Condition Checker with improved interface
+/**
+ * \brief Condition checker decorator with improved interface
+ * \tparam FuncType Function type
+ */
 template <typename FuncType>
 class ConditionCheckDecorator : public decorator<FuncType> {
     using Base = decorator<FuncType>;
@@ -375,9 +413,8 @@ class ConditionCheckDecorator : public decorator<FuncType> {
 public:
     using Base::Base;
 
-    // With condition and fallback value/function
     template <typename ConditionFunc, typename Fallback, typename... TArgs>
-        requires Callable<ConditionFunc> &&
+        requires std::invocable<ConditionFunc> &&
                  std::convertible_to<std::invoke_result_t<ConditionFunc>, bool>
     auto operator()(ConditionFunc&& condition, Fallback&& fallback,
                     TArgs&&... args) const {
@@ -395,9 +432,8 @@ public:
         }
     }
 
-    // Simplified version without fallback
     template <typename ConditionFunc, typename... TArgs>
-        requires Callable<ConditionFunc> &&
+        requires std::invocable<ConditionFunc> &&
                  std::convertible_to<std::invoke_result_t<ConditionFunc>, bool>
     auto operator()(ConditionFunc&& condition, TArgs&&... args) const {
         using ReturnType = std::invoke_result_t<FuncType, TArgs...>;
@@ -412,7 +448,11 @@ public:
     }
 };
 
-// Enhanced Cache Decorator with TTL and size limit
+/**
+ * \brief Cache decorator with TTL and size limit
+ * \tparam R Return type
+ * \tparam Args Argument types
+ */
 template <typename R, typename... Args>
 class CacheDecorator : public BaseDecorator<R, Args...> {
     struct CacheEntry {
@@ -457,8 +497,6 @@ class CacheDecorator : public BaseDecorator<R, Args...> {
             }
         }
 
-        // If still over size limit, remove oldest entries (would be better with
-        // an LRU policy)
         if (cache_.size() > maxSize_) {
             std::size_t numToRemove = cache_.size() - maxSize_;
             auto it = cache_.begin();
@@ -470,8 +508,7 @@ class CacheDecorator : public BaseDecorator<R, Args...> {
     }
 
 public:
-    CacheDecorator(FuncType func,
-                   std::chrono::milliseconds ttl = std::chrono::hours(1),
+    CacheDecorator(std::chrono::milliseconds ttl = std::chrono::hours(1),
                    std::size_t maxSize = 1000)
         : ttl_(ttl), maxSize_(maxSize) {}
 
@@ -481,18 +518,15 @@ public:
         auto argsTuple = std::make_tuple(args...);
         auto now = std::chrono::steady_clock::now();
 
-        // Check if we need cleanup
         if (cache_.size() >= maxSize_) {
             cleanup();
         }
 
-        // Check cache
         auto it = cache_.find(argsTuple);
         if (it != cache_.end() && it->second.expiry > now) {
             return it->second.value;
         }
 
-        // Execute function and cache result
         auto result = func(std::forward<Args>(args)...);
         cache_[argsTuple] = {result, now + ttl_};
         return result;
@@ -517,7 +551,11 @@ public:
     }
 };
 
-// ==== New Feature: Throttling Decorator ====
+/**
+ * \brief Throttling decorator that limits execution frequency
+ * \tparam R Return type
+ * \tparam Args Argument types
+ */
 template <typename R, typename... Args>
 class ThrottlingDecorator : public BaseDecorator<R, Args...> {
     using FuncType = std::function<R(Args...)>;
@@ -551,7 +589,11 @@ public:
     }
 };
 
-// ==== New Feature: Parameter Validation Decorator ====
+/**
+ * \brief Parameter validation decorator
+ * \tparam R Return type
+ * \tparam Args Argument types
+ */
 template <typename R, typename... Args>
 class ValidationDecorator : public BaseDecorator<R, Args...> {
     using FuncType = std::function<R(Args...)>;
@@ -574,7 +616,11 @@ public:
     }
 };
 
-// ==== DecorateStepper with Enhanced Interface ====
+/**
+ * \brief Decorator composition system with enhanced interface
+ * \tparam R Return type
+ * \tparam Args Argument types
+ */
 template <typename R, typename... Args>
 class DecorateStepper {
     using FuncType = std::function<R(Args...)>;
@@ -602,7 +648,6 @@ public:
         try {
             FuncType currentFunction = baseFunction_;
 
-            // Use std::ranges instead of manual iteration where possible
             for (auto it = decorators_.rbegin(); it != decorators_.rend();
                  ++it) {
                 auto& decorator = *it;
@@ -616,28 +661,30 @@ public:
 
             return currentFunction(std::forward<Args>(args)...);
         } catch (const DecoratorError& e) {
-            throw;  // Rethrow decorator errors
+            throw;
         } catch (const std::exception& e) {
             throw DecoratorError(
                 std::format("Exception in decorated function: {}", e.what()));
         }
     }
 
-    // Allow direct invocation
     [[nodiscard]] auto operator()(Args... args) -> R {
         return execute(std::forward<Args>(args)...);
     }
 };
 
-// ==== Helper Functions ====
+/**
+ * \brief Helper function to create DecorateStepper from function
+ * \tparam Func Function type
+ * \param func Function to wrap
+ * \return DecorateStepper instance
+ */
 template <typename Func>
 auto makeDecorateStepper(Func&& func) {
     using Traits = FunctionTraits<std::decay_t<Func>>;
     using ReturnType = typename Traits::return_type;
     using ArgumentTuple = typename Traits::argument_types;
 
-    // Use fold expressions to expand the tuple types into the DecorateStepper
-    // template
     return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
         return DecorateStepper<ReturnType,
                                std::tuple_element_t<Is, ArgumentTuple>...>(
@@ -645,32 +692,58 @@ auto makeDecorateStepper(Func&& func) {
     }(std::make_index_sequence<std::tuple_size_v<ArgumentTuple>>{});
 }
 
+/**
+ * \brief Helper function to create LoopDecorator
+ * \tparam Func Function type
+ * \param func Function to wrap
+ * \return LoopDecorator instance
+ */
 template <typename Func>
 auto makeLoopDecorator(Func&& func) {
     return LoopDecorator<std::decay_t<Func>>(std::forward<Func>(func));
 }
 
+/**
+ * \brief Helper function to create RetryDecorator
+ * \tparam Func Function type
+ * \param func Function to wrap
+ * \param retryCount Number of retries
+ * \return RetryDecorator instance
+ */
 template <typename Func>
 auto makeRetryDecorator(Func&& func, int retryCount) {
     using FuncType = std::decay_t<Func>;
     using Traits = FunctionTraits<FuncType>;
     using ReturnType = typename Traits::return_type;
 
-    // Use fold expressions to expand argument types
     return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
         using ArgTuple = typename Traits::argument_types;
         return RetryDecorator<ReturnType,
                               std::tuple_element_t<Is, ArgTuple>...>(
-            std::forward<Func>(func), retryCount);
+            retryCount);
     }(std::make_index_sequence<Traits::arity>{});
 }
 
+/**
+ * \brief Helper function to create ConditionCheckDecorator
+ * \tparam Func Function type
+ * \param func Function to wrap
+ * \return ConditionCheckDecorator instance
+ */
 template <typename Func>
 auto makeConditionCheckDecorator(Func&& func) {
     return ConditionCheckDecorator<std::decay_t<Func>>(
         std::forward<Func>(func));
 }
 
+/**
+ * \brief Helper function to create TimingDecorator
+ * \tparam Func Function type
+ * \param func Function to wrap
+ * \param name Timer name
+ * \param callback Timing callback function
+ * \return TimingDecorator instance
+ */
 template <typename Func>
 auto makeTimingDecorator(
     Func&& func, std::string name,

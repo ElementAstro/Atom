@@ -2,35 +2,29 @@
 #define ATOM_META_PROPERTY_HPP
 
 #include <functional>
-#include <future>
-#include <optional>
+#include <iostream>
+#include <mutex>
 #include <shared_mutex>
-#include <unordered_map>
 
 #include "atom/error/exception.hpp"
-#include "atom/meta/concept.hpp"
+
+namespace atom::meta {
 
 /**
  * @brief A template class that encapsulates a property with optional getter,
  * setter, and onChange callback.
  *
- * @tparam T The type of the property value. Must satisfy the Copyable concept.
+ * @tparam T The type of the property value.
  */
-template <Copyable T>
+template <typename T>
 class Property {
 private:
-    std::optional<T>
-        value_;  ///< The value of the property, using std::optional to handle
-                 ///< default-initialized state.
-    std::function<T()> getter_;      ///< The getter function for the property.
-    std::function<void(T)> setter_;  ///< The setter function for the property.
-    std::function<void(const T&)>
-        onChange_;  ///< The onChange callback function for the property.
-    mutable std::shared_mutex mutex_;  ///< Mutex for thread-safe access.
-
-    // Cache for property values
-    mutable std::unordered_map<std::string, T> cache_;
-    mutable std::shared_mutex cacheMutex_;
+    mutable T value_{};
+    mutable bool hasValue_ = false;
+    std::function<T()> getter_;
+    std::function<void(const T&)> setter_;
+    std::function<void(const T&)> onChange_;
+    mutable std::shared_mutex mutex_;
 
 public:
     /**
@@ -52,7 +46,7 @@ public:
      * @param get The getter function.
      * @param set The setter function.
      */
-    Property(std::function<T()> get, std::function<void(T)> set)
+    Property(std::function<T()> get, std::function<void(const T&)> set)
         : getter_(std::move(get)), setter_(std::move(set)) {}
 
     /**
@@ -60,7 +54,8 @@ public:
      *
      * @param defaultValue The default value of the property.
      */
-    explicit Property(const T& defaultValue) : value_(defaultValue) {}
+    explicit Property(const T& defaultValue)
+        : value_(defaultValue), hasValue_(true) {}
 
     /**
      * @brief Destructor.
@@ -72,11 +67,14 @@ public:
      *
      * @param other The other Property object to copy from.
      */
-    Property(const Property& other)
-        : value_(other.value_),
-          getter_(other.getter_),
-          setter_(other.setter_),
-          onChange_(other.onChange_) {}
+    Property(const Property& other) {
+        std::shared_lock lock(other.mutex_);
+        value_ = other.value_;
+        hasValue_ = other.hasValue_;
+        getter_ = other.getter_;
+        setter_ = other.setter_;
+        onChange_ = other.onChange_;
+    }
 
     /**
      * @brief Copy assignment operator.
@@ -86,7 +84,10 @@ public:
      */
     auto operator=(const Property& other) -> Property& {
         if (this != &other) {
+            std::shared_lock otherLock(other.mutex_);
+            std::unique_lock thisLock(mutex_);
             value_ = other.value_;
+            hasValue_ = other.hasValue_;
             getter_ = other.getter_;
             setter_ = other.setter_;
             onChange_ = other.onChange_;
@@ -99,11 +100,15 @@ public:
      *
      * @param other The other Property object to move from.
      */
-    Property(Property&& other) noexcept
-        : value_(std::move(other.value_)),
-          getter_(std::move(other.getter_)),
-          setter_(std::move(other.setter_)),
-          onChange_(std::move(other.onChange_)) {}
+    Property(Property&& other) noexcept {
+        std::unique_lock lock(other.mutex_);
+        value_ = std::move(other.value_);
+        hasValue_ = other.hasValue_;
+        getter_ = std::move(other.getter_);
+        setter_ = std::move(other.setter_);
+        onChange_ = std::move(other.onChange_);
+        other.hasValue_ = false;
+    }
 
     /**
      * @brief Move assignment operator.
@@ -113,10 +118,14 @@ public:
      */
     auto operator=(Property&& other) noexcept -> Property& {
         if (this != &other) {
+            std::unique_lock thisLock(mutex_);
+            std::unique_lock otherLock(other.mutex_);
             value_ = std::move(other.value_);
+            hasValue_ = other.hasValue_;
             getter_ = std::move(other.getter_);
             setter_ = std::move(other.setter_);
             onChange_ = std::move(other.onChange_);
+            other.hasValue_ = false;
         }
         return *this;
     }
@@ -132,11 +141,19 @@ public:
         if (getter_) {
             return getter_();
         }
-        if (value_) {
-            return *value_;
+        if (hasValue_) {
+            return value_;
         }
         THROW_INVALID_ARGUMENT("Property has no value or getter defined");
     }
+
+    /**
+     * @brief Gets the value of the property.
+     *
+     * @return T The value of the property.
+     * @throws std::invalid_argument if neither value nor getter is defined.
+     */
+    [[nodiscard]] auto get() const -> T { return static_cast<T>(*this); }
 
     /**
      * @brief Assignment operator for the underlying type T.
@@ -145,16 +162,26 @@ public:
      * @return Property& A reference to this Property object.
      */
     auto operator=(const T& newValue) -> Property& {
-        std::unique_lock lock(mutex_);
-        if (setter_) {
-            setter_(newValue);
-        } else {
-            value_ = newValue;
-        }
-        if (onChange_) {
-            onChange_(newValue);
-        }
+        set(newValue);
         return *this;
+    }
+
+    /**
+     * @brief Sets the value of the property.
+     *
+     * @param newValue The new value to set.
+     */
+    void set(const T& newValue) {
+        {
+            std::unique_lock lock(mutex_);
+            if (setter_) {
+                setter_(newValue);
+            } else {
+                value_ = newValue;
+                hasValue_ = true;
+            }
+        }
+        notifyChange(newValue);
     }
 
     /**
@@ -180,6 +207,7 @@ public:
         std::unique_lock lock(mutex_);
         getter_ = nullptr;
         setter_ = nullptr;
+        hasValue_ = false;
     }
 
     /**
@@ -193,15 +221,49 @@ public:
     }
 
     /**
+     * @brief Checks if the property has a value.
+     *
+     * @return bool True if the property has a value, false otherwise.
+     */
+    [[nodiscard]] auto hasValue() const -> bool {
+        std::shared_lock lock(mutex_);
+        return hasValue_ || getter_;
+    }
+
+    /**
+     * @brief Checks if the property is readonly.
+     *
+     * @return bool True if the property is readonly, false otherwise.
+     */
+    [[nodiscard]] auto isReadonly() const -> bool {
+        std::shared_lock lock(mutex_);
+        return !setter_;
+    }
+
+    /**
+     * @brief Checks if the property is writeonly.
+     *
+     * @return bool True if the property is writeonly, false otherwise.
+     */
+    [[nodiscard]] auto isWriteonly() const -> bool {
+        std::shared_lock lock(mutex_);
+        return !getter_ && !hasValue_;
+    }
+
+    /**
      * @brief Stream output operator for the Property class.
      *
      * @param outputStream The output stream.
      * @param prop The Property object to output.
      * @return std::ostream& The output stream.
      */
-    friend auto operator<<(std::ostream& outputStream,
-                           const Property& prop) -> std::ostream& {
-        outputStream << static_cast<T>(prop);
+    friend auto operator<<(std::ostream& outputStream, const Property& prop)
+        -> std::ostream& {
+        try {
+            outputStream << static_cast<T>(prop);
+        } catch (const std::exception&) {
+            outputStream << "[Property: no value]";
+        }
         return outputStream;
     }
 
@@ -209,7 +271,7 @@ public:
      * @brief Three-way comparison operator.
      *
      * @param other The other value to compare with.
-     * @return std::strong_ordering The result of the comparison.
+     * @return auto The result of the comparison.
      */
     auto operator<=>(const T& other) const {
         return static_cast<T>(*this) <=> other;
@@ -222,7 +284,11 @@ public:
      * @return bool True if equal, false otherwise.
      */
     auto operator==(const T& other) const -> bool {
-        return static_cast<T>(*this) == other;
+        try {
+            return static_cast<T>(*this) == other;
+        } catch (const std::exception&) {
+            return false;
+        }
     }
 
     /**
@@ -283,76 +349,21 @@ public:
      * @param other The other value to modulus.
      * @return Property& A reference to this Property object.
      */
-    auto operator%=(const T& other) -> Property& {
+    template <typename U = T>
+    auto operator%=(const T& other)
+        -> std::enable_if_t<std::is_integral_v<U>, Property&> {
         *this = static_cast<T>(*this) % other;
         return *this;
     }
 
-    /**
-     * @brief Asynchronously gets the value of the property.
-     *
-     * @return A future containing the value of the property.
-     */
-    auto asyncGet() const -> std::future<T> {
-        return std::async(std::launch::async, [this] {
-            std::shared_lock lock(mutex_);
-            return static_cast<T>(*this);
-        });
-    }
-
-    /**
-     * @brief Asynchronously sets the value of the property.
-     *
-     * @param newValue The new value to set.
-     * @return A future indicating the completion of the operation.
-     */
-    auto asyncSet(const T& newValue) -> std::future<void> {
-        return std::async(std::launch::async, [this, newValue] {
-            std::unique_lock lock(mutex_);
-            *this = newValue;
-        });
-    }
-
-    /**
-     * @brief Caches the value of the property.
-     *
-     * @param key The key associated with the value.
-     * @param value The value to cache.
-     */
-    void cacheValue(const std::string& key, const T& value) const {
-        std::unique_lock lock(cacheMutex_);
-        cache_[key] = value;
-    }
-
-    /**
-     * @brief Retrieves the cached value of the property.
-     *
-     * @param key The key associated with the value.
-     * @return The cached value if found, std::nullopt otherwise.
-     */
-    auto getCachedValue(const std::string& key) const -> std::optional<T> {
-        std::shared_lock lock(cacheMutex_);
-        auto it = cache_.find(key);
-        if (it != cache_.end()) {
-            return it->second;
-        }
-        return std::nullopt;
-    }
-
-    /**
-     * @brief Clears the cache.
-     */
-    void clearCache() const {
-        std::unique_lock lock(cacheMutex_);
-        cache_.clear();
-    }
-
+private:
     /**
      * @brief Notifies listeners of a change in the property value.
      *
      * @param newValue The new value of the property.
      */
     void notifyChange(const T& newValue) const {
+        std::shared_lock lock(mutex_);
         if (onChange_) {
             onChange_(newValue);
         }
@@ -360,19 +371,59 @@ public:
 };
 
 /**
+ * @brief Creates a property with getter and setter functions.
+ *
+ * @tparam T The type of the property value.
+ * @param getter The getter function.
+ * @param setter The setter function.
+ * @return Property<T> The created property.
+ */
+template <typename T>
+auto makeProperty(std::function<T()> getter,
+                  std::function<void(const T&)> setter) -> Property<T> {
+    return Property<T>(std::move(getter), std::move(setter));
+}
+
+/**
+ * @brief Creates a readonly property with a getter function.
+ *
+ * @tparam T The type of the property value.
+ * @param getter The getter function.
+ * @return Property<T> The created readonly property.
+ */
+template <typename T>
+auto makeReadonlyProperty(std::function<T()> getter) -> Property<T> {
+    return Property<T>(std::move(getter));
+}
+
+/**
+ * @brief Creates a property with an initial value.
+ *
+ * @tparam T The type of the property value.
+ * @param value The initial value.
+ * @return Property<T> The created property.
+ */
+template <typename T>
+auto makeValueProperty(const T& value) -> Property<T> {
+    return Property<T>(value);
+}
+
+}  // namespace atom::meta
+
+/**
  * @brief Macro to define a read-write property.
  *
  * @param Type The type of the property.
  * @param Name The name of the property.
  */
-#define DEFINE_RW_PROPERTY(Type, Name)               \
-private:                                             \
-    Type Name##_;                                    \
-                                                     \
-public:                                              \
-    Property<Type>(Name) =                           \
-        Property<Type>([this]() { return Name##_; }, \
-                       [this](const Type& value) { Name##_ = value; });
+#define DEFINE_RW_PROPERTY(Type, Name)        \
+private:                                      \
+    Type Name##_;                             \
+                                              \
+public:                                       \
+    atom::meta::Property<Type> Name{          \
+        [this]() -> Type { return Name##_; }, \
+        [this](const Type& value) { Name##_ = value; }};
 
 /**
  * @brief Macro to define a read-only property.
@@ -385,7 +436,7 @@ private:                               \
     Type Name##_;                      \
                                        \
 public:                                \
-    Property<Type>(Name) = Property<Type>([this]() { return Name##_; });
+    atom::meta::Property<Type> Name{[this]() -> Type { return Name##_; }};
 
 /**
  * @brief Macro to define a write-only property.
@@ -393,12 +444,12 @@ public:                                \
  * @param Type The type of the property.
  * @param Name The name of the property.
  */
-#define DEFINE_WO_PROPERTY(Type, Name)     \
-private:                                   \
-    Type Name##_;                          \
-                                           \
-public:                                    \
-    Property<Type>(Name) = Property<Type>( \
-        nullptr, [this](const Type& value) { Name##_ = value; });
+#define DEFINE_WO_PROPERTY(Type, Name) \
+private:                               \
+    Type Name##_;                      \
+                                       \
+public:                                \
+    atom::meta::Property<Type> Name{   \
+        nullptr, [this](const Type& value) { Name##_ = value; }};
 
 #endif  // ATOM_META_PROPERTY_HPP

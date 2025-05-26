@@ -2,20 +2,23 @@
 #define ATOM_META_FIELD_COUNT_HPP
 
 #include <array>
+#include <type_traits>
 
 namespace atom::meta::details {
-struct Any;
 
+/**
+ * \brief Universal type that can convert to any other type for field counting
+ */
 struct Any {
     constexpr Any(int) {}
 
     template <typename T>
         requires std::is_copy_constructible_v<T>
-    operator T&();
+    constexpr operator T&() const;
 
     template <typename T>
         requires std::is_move_constructible_v<T>
-    operator T&&();
+    constexpr operator T&&() const;
 
     struct Empty {};
 
@@ -23,31 +26,63 @@ struct Any {
         requires(!std::is_copy_constructible_v<T> &&
                  !std::is_move_constructible_v<T> &&
                  !std::is_constructible_v<T, Empty>)
-    operator T();
+    constexpr operator T() const;
 };
 
+/**
+ * \brief Check if a type can be initialized with N Any objects
+ * \tparam T Type to check
+ * \tparam N Number of Any objects
+ * \return true if T can be initialized with N Any objects
+ */
 template <typename T, std::size_t N>
-consteval auto tryInitializeWithN() -> std::size_t {
+consteval auto canInitializeWithN() -> bool {
     return []<std::size_t... Is>(std::index_sequence<Is...>) {
         return requires { T{Any(Is)...}; };
     }(std::make_index_sequence<N>{});
 }
 
-template <typename T, std::size_t N = 0>
-consteval auto totalCountOfFields() -> std::size_t {
-    if constexpr (tryInitializeWithN<T, N>() &&
-                  !tryInitializeWithN<T, N + 1>()) {
-        return N;
+/**
+ * \brief Binary search to find the maximum number of fields
+ * \tparam T Type to analyze
+ * \tparam Low Lower bound
+ * \tparam High Upper bound
+ * \return Maximum number of fields that can initialize T
+ */
+template <typename T, std::size_t Low = 0, std::size_t High = 64>
+consteval auto binarySearchFieldCount() -> std::size_t {
+    if constexpr (Low == High) {
+        return Low;
     } else {
-        return totalCountOfFields<T, N + 1>();
+        constexpr std::size_t Mid = Low + (High - Low + 1) / 2;
+        if constexpr (canInitializeWithN<T, Mid>()) {
+            return binarySearchFieldCount<T, Mid, High>();
+        } else {
+            return binarySearchFieldCount<T, Low, Mid - 1>();
+        }
     }
 }
-}  // namespace atom::meta::details
 
-namespace atom::meta::details {
+/**
+ * \brief Get the total count of aggregate initialization parameters
+ * \tparam T Type to analyze
+ * \return Total number of initialization parameters
+ */
+template <typename T>
+consteval auto totalFieldCount() -> std::size_t {
+    return binarySearchFieldCount<T>();
+}
 
+/**
+ * \brief Check if type can be initialized with three parts
+ * \tparam T Type to check
+ * \tparam N1 Number of elements before aggregate
+ * \tparam N2 Number of elements in aggregate
+ * \tparam N3 Number of elements after aggregate
+ * \return true if initialization is possible
+ */
 template <typename T, std::size_t N1, std::size_t N2, std::size_t N3>
-consteval auto tryInitializeWithThreeParts() -> std::size_t {
+consteval auto canInitializeWithThreeParts() -> bool {
     return []<std::size_t... I1, std::size_t... I2, std::size_t... I3>(
                std::index_sequence<I1...>, std::index_sequence<I2...>,
                std::index_sequence<I3...>) {
@@ -56,106 +91,168 @@ consteval auto tryInitializeWithThreeParts() -> std::size_t {
            std::make_index_sequence<N3>{});
 }
 
-template <typename T, std::size_t position, std::size_t N>
-constexpr auto tryPlaceNInPos() -> bool {
-    constexpr auto Total = totalCountOfFields<T>();
+/**
+ * \brief Check if N elements can be placed at a specific position
+ * \tparam T Type to check
+ * \tparam Position Position to place elements
+ * \tparam N Number of elements to place
+ * \return true if placement is possible
+ */
+template <typename T, std::size_t Position, std::size_t N>
+consteval auto canPlaceNAtPosition() -> bool {
+    constexpr auto Total = totalFieldCount<T>();
     if constexpr (N == 0) {
         return true;
-    } else if constexpr (position + N <= Total) {
-        return tryInitializeWithThreeParts<T, position, N,
-                                           Total - position - N>();
+    } else if constexpr (Position + N <= Total) {
+        return canInitializeWithThreeParts<T, Position, N,
+                                           Total - Position - N>();
     } else {
         return false;
     }
 }
 
-template <typename T, std::size_t pos, std::size_t N = 0, std::size_t Max = 10>
-constexpr auto hasExtraElements() -> bool {
-    constexpr auto Total = totalCountOfFields<T>();
-    if constexpr (tryInitializeWithThreeParts<T, pos, N, Total - pos - 1>()) {
+/**
+ * \brief Check if position has aggregate elements (more than 1)
+ * \tparam T Type to check
+ * \tparam Position Position to check
+ * \tparam N Current test size
+ * \tparam MaxSize Maximum size to test
+ * \return true if position has aggregate elements
+ */
+template <typename T, std::size_t Position, std::size_t N = 0,
+          std::size_t MaxSize = 10>
+consteval auto hasAggregateAtPosition() -> bool {
+    constexpr auto Total = totalFieldCount<T>();
+    if constexpr (canInitializeWithThreeParts<T, Position, N,
+                                              Total - Position - 1>()) {
         return false;
-    } else if constexpr (N + 1 <= Max) {
-        return hasExtraElements<T, pos, N + 1>();
+    } else if constexpr (N + 1 <= MaxSize) {
+        return hasAggregateAtPosition<T, Position, N + 1, MaxSize>();
     } else {
         return true;
     }
 }
 
-template <typename T, std::size_t pos>
-constexpr auto searchMaxInPos() -> std::size_t {
-    constexpr auto Total = totalCountOfFields<T>();
-    if constexpr (!hasExtraElements<T, pos>()) {
+/**
+ * \brief Find maximum size that can be placed at position
+ * \tparam T Type to analyze
+ * \tparam Position Position to search
+ * \return Maximum size that fits at position
+ */
+template <typename T, std::size_t Position>
+consteval auto maxSizeAtPosition() -> std::size_t {
+    constexpr auto Total = totalFieldCount<T>();
+    if constexpr (!hasAggregateAtPosition<T, Position>()) {
         return 1;
     } else {
         std::size_t result = 0;
         [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            ((tryPlaceNInPos<T, pos, Is>() ? result = Is : 0), ...);
+            ((canPlaceNAtPosition<T, Position, Is>() ? result = Is : 0), ...);
         }(std::make_index_sequence<Total + 1>());
         return result;
     }
 }
 
+/**
+ * \brief Recursively populate array with aggregate sizes
+ * \tparam T Type to analyze
+ * \tparam N Current position
+ * \param array Array to populate
+ */
 template <typename T, std::size_t N = 0>
-constexpr auto searchAllExtraIndex(auto&& array) {
-    constexpr auto total = totalCountOfFields<T>();
-    constexpr auto value = std::max<std::size_t>(searchMaxInPos<T, N>(), 1);
-    array[N] = value;
-    if constexpr (N + value < total) {
-        searchAllExtraIndex<T, N + value>(array);
+consteval auto populateAggregateSizes(auto&& array) -> void {
+    constexpr auto total = totalFieldCount<T>();
+    constexpr auto size = std::max<std::size_t>(maxSizeAtPosition<T, N>(), 1);
+    array[N] = size;
+    if constexpr (N + size < total) {
+        populateAggregateSizes<T, N + size>(array);
     }
 }
 
+/**
+ * \brief Calculate the true field count by accounting for aggregates
+ * \tparam T Type to analyze
+ * \return True number of fields
+ */
 template <typename T>
-constexpr auto trueCountOfFields() {
-    constexpr auto max = totalCountOfFields<T>();
-    if constexpr (max == 0) {
+consteval auto trueFieldCount() -> std::size_t {
+    constexpr auto maxFields = totalFieldCount<T>();
+    if constexpr (maxFields == 0) {
         return 0;
     } else {
-        std::array<std::size_t, max> indices = {1};
-        searchAllExtraIndex<T>(indices);
-        std::size_t result = max;
+        std::array<std::size_t, maxFields> aggregateSizes{};
+        std::fill(aggregateSizes.begin(), aggregateSizes.end(), 1);
+
+        populateAggregateSizes<T>(aggregateSizes);
+
+        std::size_t fieldCount = maxFields;
         std::size_t index = 0;
-        while (index < max) {
-            auto n = indices[index];
-            result -= n - 1;
-            index += n;
+
+        while (index < maxFields) {
+            auto aggregateSize = aggregateSizes[index];
+            fieldCount -= (aggregateSize - 1);
+            index += aggregateSize;
         }
-        return result;
+
+        return fieldCount;
     }
 }
+
 }  // namespace atom::meta::details
 
 namespace atom::meta {
+
+/**
+ * \brief Type information specialization point
+ * \tparam T Type to get information for
+ */
 template <typename T>
 struct type_info;
 
 /**
- *  @brief Retrieve the count of fields of a struct
- *  @warning cannot get the count of fields of a struct which has reference
- * type member in gcc 13 because the internal error occurs in below occasion
- *  @code
- *  struct Number { operator int&(); };
- *  int& x = { Number{} };
- *
- *  internal compiler error: in reference_binding, at cp/call.cc:2020
- *  @endcode
- *
+ * \brief Concept for aggregate types
+ * \tparam T Type to check
  */
 template <typename T>
-    requires std::is_aggregate_v<T>
-consteval auto fieldCountOf() {
+concept AggregateType = std::is_aggregate_v<T>;
+
+/**
+ * \brief Retrieve the count of fields of an aggregate struct
+ *
+ * This function uses compile-time reflection techniques to determine
+ * the number of fields in an aggregate type. It handles nested aggregates
+ * and provides an accurate count of actual fields.
+ *
+ * \warning Cannot get the count of fields of a struct which has reference
+ * type members in GCC 13 due to internal compiler errors when using:
+ * \code
+ * struct Number { operator int&(); };
+ * int& x = { Number{} };
+ * \endcode
+ *
+ * \tparam T Aggregate type to analyze
+ * \return Number of fields in the aggregate type
+ */
+template <AggregateType T>
+consteval auto fieldCountOf() -> std::size_t {
     if constexpr (requires { type_info<T>::count; }) {
         return type_info<T>::count;
     } else {
-        return details::trueCountOfFields<T>();
+        return details::trueFieldCount<T>();
     }
 }
 
+/**
+ * \brief Retrieve the count of fields for non-aggregate types
+ * \tparam T Non-aggregate type
+ * \return Always returns 0 for non-aggregate types
+ */
 template <typename T>
-    requires(!std::is_aggregate_v<T>)
-consteval auto fieldCountOf() {
+    requires(!AggregateType<T>)
+consteval auto fieldCountOf() -> std::size_t {
     return 0;
 }
+
 }  // namespace atom::meta
 
-#endif  // ATOMMETA_FIELD_COUNT_HPP
+#endif  // ATOM_META_FIELD_COUNT_HPP

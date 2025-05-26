@@ -2,6 +2,8 @@
 #define ATOM_META_ANY_HPP
 
 #include <array>
+#include <bit>
+#include <cstdlib>
 #include <cstring>
 #include <functional>
 #include <sstream>
@@ -26,7 +28,6 @@ class Any {
 #ifdef TEST_F
 public:
 #endif
-    // VTable for type erasure
     struct ATOM_ALIGNAS(64) VTable {
         void (*destroy)(void*) noexcept;
         void (*copy)(const void*, void*);
@@ -40,7 +41,6 @@ public:
         size_t (*hash)(const void*) noexcept;
     };
 
-    // Default toString implementation for different types
     template <typename T>
     static auto defaultToString(const void* ptr) -> std::string {
         if constexpr (std::is_same_v<T, std::string>) {
@@ -54,25 +54,22 @@ public:
             oss << *static_cast<const T*>(ptr);
             return oss.str();
         } else {
-            std::ostringstream oss;
-            oss << "Object of type " << typeid(T).name();
-            return oss.str();
+            return "Object of type " + std::string(typeid(T).name());
         }
     }
 
-    // Default invoke implementation
     template <typename T>
     static void defaultInvoke(const void* ptr,
                               const std::function<void(const void*)>& func) {
         func(ptr);
     }
 
-    // Default foreach implementation
     template <typename T>
     static void defaultForeach(const void* ptr,
                                const std::function<void(const Any&)>& func) {
         if constexpr (Iterable<T>) {
-            for (const auto& item : *static_cast<const T*>(ptr)) {
+            const auto& container = *static_cast<const T*>(ptr);
+            for (const auto& item : container) {
                 func(Any(item));
             }
         } else {
@@ -80,28 +77,24 @@ public:
         }
     }
 
-    // Default equals implementation
     template <typename T>
     static bool defaultEquals(const void* lhs, const void* rhs) noexcept {
         if constexpr (std::equality_comparable<T>) {
             return *static_cast<const T*>(lhs) == *static_cast<const T*>(rhs);
         } else {
-            return lhs == rhs;  // Fallback to pointer comparison
+            return lhs == rhs;
         }
     }
 
-    // Default hash implementation
     template <typename T>
     static size_t defaultHash(const void* ptr) noexcept {
         if constexpr (requires(const T& t) { std::hash<T>{}(t); }) {
             return std::hash<T>{}(*static_cast<const T*>(ptr));
         } else {
-            // Fallback to pointer value as hash
             return reinterpret_cast<std::uintptr_t>(ptr);
         }
     }
 
-    // Static VTable for each type
     template <typename T>
     static constexpr VTable K_V_TABLE = {
         [](void* ptr) noexcept {
@@ -124,62 +117,53 @@ public:
         &defaultEquals<T>,
         &defaultHash<T>};
 
-    // Size of small objects that can be stored inline
     static constexpr size_t kSmallObjectSize = 3 * sizeof(void*);
 
-    // Storage for the object
     union {
         alignas(std::max_align_t) std::array<char, kSmallObjectSize> storage;
         void* ptr;
     };
 
-    // Pointer to the VTable
     const VTable* vptr_ = nullptr;
-
-    // Whether the object is stored inline
     bool is_small_ = true;
 
-    // Check if a type can be stored inline
     template <typename T>
     static constexpr bool kIsSmallObject =
         sizeof(T) <= kSmallObjectSize &&
         std::is_nothrow_move_constructible_v<T> &&
         alignof(T) <= alignof(std::max_align_t);
 
-    // Get the pointer to the stored object
     auto getPtr() noexcept -> void* {
         return is_small_ ? static_cast<void*>(storage.data()) : ptr;
     }
 
-    // Get the const pointer to the stored object
     [[nodiscard]] auto getPtr() const noexcept -> const void* {
         return is_small_ ? static_cast<const void*>(storage.data()) : ptr;
     }
 
-    // Cast the stored object to the specified type
     template <typename T>
     auto as() noexcept -> T* {
         return static_cast<T*>(getPtr());
     }
 
-    // Cast the stored object to the specified type (const version)
     template <typename T>
     [[nodiscard]] auto as() const noexcept -> const T* {
         return static_cast<const T*>(getPtr());
     }
 
-    // Allocate aligned memory
     template <typename T = void>
     static auto allocateAligned(size_t size, size_t alignment) -> T* {
-        // Ensure alignment is a power of 2
         if (alignment & (alignment - 1)) {
             alignment = std::bit_ceil(alignment);
         }
 
-        // Ensure alignment is at least sizeof(void*)
         alignment = std::max(alignment, sizeof(void*));
 
+#ifdef _WIN32
+        void* ptr = _aligned_malloc(size, alignment);
+#else
         void* ptr = std::aligned_alloc(alignment, size);
+#endif
         if (!ptr) {
             throw std::bad_alloc();
         }
@@ -202,10 +186,8 @@ public:
         if (vptr_ != nullptr) {
             try {
                 if (is_small_) {
-                    // Small object: copy directly to storage
                     std::memcpy(storage.data(), other.getPtr(), vptr_->size());
                 } else {
-                    // Large object: allocate memory and copy
                     ptr = std::malloc(vptr_->size());
                     if (ptr == nullptr) {
                         throw std::bad_alloc();
@@ -213,7 +195,6 @@ public:
                     vptr_->copy(other.getPtr(), ptr);
                 }
             } catch (...) {
-                // Clean up on error
                 if (!is_small_ && ptr != nullptr) {
                     std::free(ptr);
                     ptr = nullptr;
@@ -232,10 +213,8 @@ public:
     Any(Any&& other) noexcept : vptr_(other.vptr_), is_small_(other.is_small_) {
         if (vptr_ != nullptr) {
             if (is_small_) {
-                // For small objects, use move constructor via vtable
                 vptr_->move(other.storage.data(), storage.data());
             } else {
-                // For large objects, transfer ownership of the pointer
                 ptr = other.ptr;
                 other.ptr = nullptr;
             }
@@ -256,12 +235,10 @@ public:
 
         try {
             if constexpr (kIsSmallObject<ValueType>) {
-                // Store small objects inline
                 alignas(std::max_align_t) char* addr = storage.data();
                 new (addr) ValueType(std::forward<T>(value));
                 is_small_ = true;
             } else {
-                // Allocate memory for large objects
                 auto temp = allocateAligned<ValueType>(
                     sizeof(ValueType),
                     std::max(alignof(ValueType), alignof(std::max_align_t)));
@@ -276,7 +253,6 @@ public:
                 }
             }
 
-            // Set up vtable
             vptr_ = &K_V_TABLE<ValueType>;
         } catch (...) {
             reset();
@@ -315,10 +291,8 @@ public:
 
             if (vptr_ != nullptr) {
                 if (is_small_) {
-                    // Use move operation from vtable for small objects
                     vptr_->move(other.storage.data(), storage.data());
                 } else {
-                    // Transfer pointer ownership for large objects
                     ptr = other.ptr;
                     other.ptr = nullptr;
                 }
@@ -349,7 +323,6 @@ public:
         if (this == &other)
             return;
 
-        // Quick swap for empty objects
         if (!vptr_ && !other.vptr_)
             return;
         if (!vptr_) {
@@ -361,7 +334,6 @@ public:
             return;
         }
 
-        // Full swap needed
         Any temp(std::move(*this));
         *this = std::move(other);
         other = std::move(temp);
@@ -491,11 +463,12 @@ public:
     /**
      * @brief Check if the object is stored using small object optimization.
      * @return True if stored inline, false if dynamically allocated.
-     * @note This is primarily for demonstration purposes.
      */
     [[nodiscard]] bool isSmallObject() const noexcept { return is_small_; }
 
-    // Reset the object, freeing resources
+    /**
+     * @brief Reset the object, freeing resources.
+     */
     void reset() noexcept {
         if (vptr_ != nullptr) {
             vptr_->destroy(getPtr());

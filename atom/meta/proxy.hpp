@@ -32,17 +32,17 @@
 namespace atom::meta {
 
 /**
- * @brief 函数信息结构体，包含函数签名的元数据
+ * @brief Function information structure containing function signature metadata
  */
 struct ATOM_ALIGNAS(128) FunctionInfo {
 private:
-    std::string name_;                         // 函数名称
-    std::string returnType_;                   // 返回类型
-    std::vector<std::string> argumentTypes_;   // 参数类型
-    std::vector<std::string> parameterNames_;  // 参数名称
-    std::string hash_;                         // 哈希值
-    bool isNoexcept_{false};                   // noexcept状态
-    std::source_location location_;            // 函数源码位置
+    std::string name_;
+    std::string returnType_;
+    std::vector<std::string> argumentTypes_;
+    std::vector<std::string> parameterNames_;
+    std::string hash_;
+    bool isNoexcept_{false};
+    std::source_location location_;
 
 public:
     FunctionInfo() = default;
@@ -50,7 +50,9 @@ public:
     FunctionInfo(std::string_view name, std::string_view returnType)
         : name_(name), returnType_(returnType) {}
 
-    // 输出函数信息的日志
+    /**
+     * @brief Log function information for debugging purposes
+     */
     void logFunctionInfo() const {
 #if ATOM_ENABLE_DEBUG
         std::cout << "Function name: " << name_ << "\n";
@@ -73,48 +75,31 @@ public:
 #endif
     }
 
-    // 返回类型获取器
     [[nodiscard]] auto getReturnType() const -> const std::string& {
         return returnType_;
     }
-
-    // 参数类型获取器
     [[nodiscard]] auto getArgumentTypes() const
         -> const std::vector<std::string>& {
         return argumentTypes_;
     }
-
-    // 哈希获取器
     [[nodiscard]] auto getHash() const -> const std::string& { return hash_; }
-
-    // 名称获取器
     [[nodiscard]] auto getName() const -> const std::string& { return name_; }
-
-    // 参数名称获取器
     [[nodiscard]] auto getParameterNames() const
         -> const std::vector<std::string>& {
         return parameterNames_;
     }
-
-    // 源位置获取器
     [[nodiscard]] auto getLocation() const -> const std::source_location& {
         return location_;
     }
-
-    // noexcept状态获取器
     [[nodiscard]] bool isNoexcept() const { return isNoexcept_; }
 
-    // 设置器方法
     void setName(std::string_view name) { name_ = name; }
-
     void setReturnType(const std::string& returnType) {
         returnType_ = returnType;
     }
-
     void addArgumentType(const std::string& argumentType) {
         argumentTypes_.push_back(argumentType);
     }
-
     void setHash(const std::string& hash) { hash_ = hash; }
 
     void setParameterName(size_t index, std::string_view name) {
@@ -125,12 +110,14 @@ public:
     }
 
     void setNoexcept(bool isNoexcept) { isNoexcept_ = isNoexcept; }
-
     void setLocation(const std::source_location& location) {
         location_ = location;
     }
 
-    // 序列化为JSON
+    /**
+     * @brief Serialize function information to JSON
+     * @return JSON representation of function information
+     */
     [[nodiscard]] nlohmann::json toJson() const {
         nlohmann::json result;
         result["name"] = name_;
@@ -145,7 +132,11 @@ public:
         return result;
     }
 
-    // 从JSON反序列化
+    /**
+     * @brief Deserialize function information from JSON
+     * @param j JSON object to deserialize from
+     * @return FunctionInfo instance
+     */
     static FunctionInfo fromJson(const nlohmann::json& j) {
         FunctionInfo info;
         info.name_ = j.value("name", "");
@@ -156,12 +147,10 @@ public:
             j.value("parameter_names", std::vector<std::string>{});
         info.hash_ = j.at("hash").get<std::string>();
         info.isNoexcept_ = j.value("noexcept", false);
-        // 注意：无法完全恢复源位置信息
         return info;
     }
 };
 
-// 用于类型转换的帮助函数
 template <typename T>
 auto anyCastRef(std::any& operand) -> T&& {
     using DecayedT = std::decay_t<T>;
@@ -218,7 +207,6 @@ auto anyCastConstRef(const std::any& operand) -> const T& {
     }
 }
 
-// Forward declaration of tryConvertType to resolve the ADL issue
 template <typename T>
 bool tryConvertType(std::any& src);
 
@@ -235,7 +223,6 @@ auto anyCastHelper(std::any& operand) -> decltype(auto) {
             return anyCastVal<T>(operand);
         }
     } catch (const ProxyTypeError& e) {
-        // 尝试进行类型转换
         if (tryConvertType<T>(operand)) {
             return anyCastVal<T>(operand);
         }
@@ -256,7 +243,6 @@ auto anyCastHelper(const std::any& operand) -> decltype(auto) {
             return anyCastVal<T>(operand);
         }
     } catch (const ProxyTypeError& e) {
-        // 不能修改const引用，因此无法转换
         throw;
     }
 }
@@ -269,12 +255,16 @@ struct CanConvert<
     T, std::void_t<decltype(std::declval<T&>() = std::declval<int>())>>
     : std::true_type {};
 
-// 尝试转换类型
+/**
+ * @brief Attempt to convert between compatible types
+ * @tparam T Target type for conversion
+ * @param src Source any object to convert
+ * @return true if conversion succeeded, false otherwise
+ */
 template <typename T>
 bool tryConvertType(std::any& src) {
     const auto& typeInfo = src.type();
 
-    // 尝试常见转换
     if constexpr (std::is_integral_v<std::decay_t<T>>) {
         if (typeInfo == typeid(int)) {
             src = static_cast<T>(std::any_cast<int>(src));
@@ -313,9 +303,7 @@ bool tryConvertType(std::any& src) {
             src = static_cast<T>(std::any_cast<long>(src));
             return true;
         }
-    }
-    // 字符串转换
-    else if constexpr (std::is_same_v<std::decay_t<T>, std::string>) {
+    } else if constexpr (std::is_same_v<std::decay_t<T>, std::string>) {
         if (typeInfo == typeid(const char*)) {
             src = std::string(std::any_cast<const char*>(src));
             return true;
@@ -330,7 +318,9 @@ bool tryConvertType(std::any& src) {
 }
 
 /**
- * @brief 代理函数的基类，处理函数调用和信息收集
+ * @brief Base proxy function class handling function calls and information
+ * collection
+ * @tparam Func Function type to wrap
  */
 template <typename Func>
 class BaseProxyFunction {
@@ -339,7 +329,7 @@ protected:
     using Traits = FunctionTraits<Func>;
     static constexpr std::size_t ARITY = Traits::arity;
     FunctionInfo info_;
-    mutable std::shared_mutex mutex_;  // 用于线程安全操作的互斥锁
+    mutable std::shared_mutex mutex_;
 
 public:
     explicit BaseProxyFunction(Func&& func, FunctionInfo& info)
@@ -354,9 +344,13 @@ public:
         return info_;
     }
 
-    // 验证参数
+    /**
+     * @brief Validate function arguments against expected types
+     * @tparam Is Index sequence for parameter pack expansion
+     * @param args Arguments to validate
+     */
     template <std::size_t... Is>
-    void validateArguments(const std::vector<std::any>& args,
+    void validateArguments(std::vector<std::any>& args,
                            std::index_sequence<Is...>) {
         const bool typesMatch =
             (... &&
@@ -393,28 +387,23 @@ protected:
         info_.setReturnType(
             DemangleHelper::demangleType<typename Traits::return_type>());
         collectArgumentTypes(std::make_index_sequence<ARITY>{});
-
-        // 设置默认函数名称
         info_.setName("anonymous_function");
 
-        // 设置noexcept状态
         if constexpr (Traits::is_noexcept) {
             info_.setNoexcept(true);
         }
 
-        // 设置当前源位置
         info_.setLocation(std::source_location::current());
     }
 
     template <std::size_t... Is>
-    void collectArgumentTypes(std::index_sequence<Is...> /*unused*/) {
+    void collectArgumentTypes(std::index_sequence<Is...>) {
         (info_.addArgumentType(DemangleHelper::demangleType<
                                typename Traits::template argument_t<Is>>()),
          ...);
     }
 
     void calcFuncInfoHash() {
-        // Max: 这里我们需要检查不同编译器之间的差异
         if (!info_.getArgumentTypes().empty()) {
             std::string combinedTypes = info_.getReturnType();
             combinedTypes += info_.getName();
@@ -434,8 +423,8 @@ protected:
     }
 
     template <std::size_t... Is>
-    auto callFunction(const std::vector<std::any>& args,
-                      std::index_sequence<Is...> /*unused*/) -> std::any {
+    auto callFunction(std::vector<std::any>& args, std::index_sequence<Is...>)
+        -> std::any {
         try {
             if constexpr (std::is_void_v<typename Traits::return_type>) {
                 std::invoke(
@@ -478,8 +467,8 @@ protected:
     }
 
     template <std::size_t... Is>
-    auto callMemberFunction(const std::vector<std::any>& args,
-                            std::index_sequence<Is...> /*unused*/) -> std::any {
+    auto callMemberFunction(std::vector<std::any>& args,
+                            std::index_sequence<Is...>) -> std::any {
         try {
             auto invokeFunc = [this](auto& obj, auto&&... args) {
                 if constexpr (std::is_void_v<typename Traits::return_type>) {
@@ -524,7 +513,8 @@ protected:
 };
 
 /**
- * @brief 代理函数类，包装函数调用并处理参数
+ * @brief Proxy function class wrapping function calls and handling parameters
+ * @tparam Func Function type to wrap
  */
 template <typename Func>
 class ProxyFunction : protected BaseProxyFunction<Func> {
@@ -535,24 +525,20 @@ class ProxyFunction : protected BaseProxyFunction<Func> {
 public:
     explicit ProxyFunction(Func&& func)
         : Base(std::forward<Func>(func), Base::info_) {}
-
     explicit ProxyFunction(Func&& func, FunctionInfo& info)
         : Base(std::forward<Func>(func), info) {}
 
-    // 设置函数名称
     void setName(std::string_view name) {
         std::unique_lock lock(this->mutex_);
         this->info_.setName(name);
         this->calcFuncInfoHash();
     }
 
-    // 设置参数名称
     void setParameterName(size_t index, std::string_view name) {
         std::unique_lock lock(this->mutex_);
         this->info_.setParameterName(index, name);
     }
 
-    // 设置源位置
     void setLocation(const std::source_location& location) {
         std::unique_lock lock(this->mutex_);
         this->info_.setLocation(location);
@@ -563,6 +549,7 @@ public:
         this->logArgumentTypes();
 
         try {
+            auto mutableArgs = args;
             if constexpr (Traits::is_member_function) {
                 if (args.size() != ARITY + 1) {
                     throw ProxyArgumentError(
@@ -571,11 +558,10 @@ public:
                         std::to_string(ARITY + 1) + ", got " +
                         std::to_string(args.size()));
                 }
-                // 验证参数类型
-                this->validateArguments(args,
+                this->validateArguments(mutableArgs,
                                         std::make_index_sequence<ARITY>());
                 return this->callMemberFunction(
-                    args, std::make_index_sequence<ARITY>());
+                    mutableArgs, std::make_index_sequence<ARITY>());
             } else {
                 if (args.size() != ARITY) {
                     throw ProxyArgumentError(
@@ -583,10 +569,9 @@ public:
                         std::to_string(ARITY) + ", got " +
                         std::to_string(args.size()));
                 }
-                // 验证参数类型
-                this->validateArguments(args,
+                this->validateArguments(mutableArgs,
                                         std::make_index_sequence<ARITY>());
-                return this->callFunction(args,
+                return this->callFunction(mutableArgs,
                                           std::make_index_sequence<ARITY>());
             }
         } catch (const ProxyTypeError& e) {
@@ -642,7 +627,8 @@ public:
 };
 
 /**
- * @brief 异步代理函数类，支持异步调用
+ * @brief Async proxy function class supporting asynchronous calls
+ * @tparam Func Function type to wrap
  */
 template <typename Func>
 class AsyncProxyFunction : protected BaseProxyFunction<Func> {
@@ -653,11 +639,9 @@ class AsyncProxyFunction : protected BaseProxyFunction<Func> {
 public:
     explicit AsyncProxyFunction(Func&& func)
         : Base(std::forward<Func>(func), Base::info_) {}
-
     explicit AsyncProxyFunction(Func&& func, FunctionInfo& info)
         : Base(std::forward<Func>(func), info) {}
 
-    // 设置函数名称
     void setName(std::string_view name) {
         std::unique_lock lock(this->mutex_);
         this->info_.setName(name);
@@ -757,7 +741,9 @@ public:
 };
 
 /**
- * @brief 组合代理类，支持函数组合
+ * @brief Composed proxy class supporting function composition
+ * @tparam Func1 First function type
+ * @tparam Func2 Second function type
  */
 template <typename Func1, typename Func2>
 class ComposedProxy {
@@ -769,7 +755,6 @@ class ComposedProxy {
 public:
     ComposedProxy(Func1&& f1, Func2&& f2)
         : first_(std::forward<Func1>(f1)), second_(std::forward<Func2>(f2)) {
-        // 创建组合函数的信息
         const auto& info1 = first_.getFunctionInfo();
         const auto& info2 = second_.getFunctionInfo();
 
@@ -786,7 +771,6 @@ public:
 
     ComposedProxy(const ComposedProxy& other)
         : first_(other.first_), second_(other.second_) {}
-
     ComposedProxy(ComposedProxy&& other) noexcept
         : first_(std::move(other.first_)), second_(std::move(other.second_)) {}
 
@@ -827,7 +811,6 @@ public:
     }
 };
 
-// C++17推导指南
 template <typename Func>
 ProxyFunction(Func) -> ProxyFunction<Func>;
 
@@ -841,19 +824,36 @@ template <typename Func>
 AsyncProxyFunction(Func&&, FunctionInfo&)
     -> AsyncProxyFunction<std::decay_t<Func>>;
 
-// 工厂函数，用于创建代理
+/**
+ * @brief Factory function to create a proxy
+ * @tparam Func Function type
+ * @param func Function to wrap
+ * @return ProxyFunction instance
+ */
 template <typename Func>
 auto makeProxy(Func&& func) {
     return ProxyFunction<std::decay_t<Func>>(std::forward<Func>(func));
 }
 
-// 工厂函数，用于创建异步代理
+/**
+ * @brief Factory function to create an async proxy
+ * @tparam Func Function type
+ * @param func Function to wrap
+ * @return AsyncProxyFunction instance
+ */
 template <typename Func>
 auto makeAsyncProxy(Func&& func) {
     return AsyncProxyFunction<std::decay_t<Func>>(std::forward<Func>(func));
 }
 
-// 工厂函数，用于创建组合代理
+/**
+ * @brief Factory function to create a composed proxy
+ * @tparam Func1 First function type
+ * @tparam Func2 Second function type
+ * @param f1 First function
+ * @param f2 Second function
+ * @return ComposedProxy instance
+ */
 template <typename Func1, typename Func2>
 auto composeProxy(Func1&& f1, Func2&& f2) {
     return ComposedProxy<std::decay_t<Func1>, std::decay_t<Func2>>(

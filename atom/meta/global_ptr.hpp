@@ -1,7 +1,10 @@
 /*!
  * \file global_ptr.hpp
  * \brief Enhanced global shared pointer manager with improved cross-platform
- * support \author Max Qian <lightapt.com> \date 2023-06-17 \update 2024-03-11
+ * support
+ * \author Max Qian <lightapt.com>
+ * \date 2023-06-17
+ * \update 2024-03-11
  * \copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
@@ -30,7 +33,7 @@
 #include "atom/type/noncopyable.hpp"
 
 #define GetPtr GlobalSharedPtrManager::getInstance().getSharedPtr
-#define GetWeakPtr GlobalSharedPtrManager::getInstance().getWeakPtrFromSharedPtr
+#define GetWeakPtr GlobalSharedPtrManager::getInstance().getWeakPtr
 #define AddPtr GlobalSharedPtrManager::getInstance().addSharedPtr
 #define RemovePtr GlobalSharedPtrManager::getInstance().removeSharedPtr
 #define GetPtrOrCreate \
@@ -46,18 +49,14 @@
         THROW_OBJ_NOT_EXIST("Component: ", Constants::id);  \
     }
 
-#define GET_OR_CREATE_PTR_IMPL(variable, type, constant, capture, create_expr, \
-                               weak_ptr, deleter)                              \
-    if (auto ptr = GetPtrOrCreate<type>(constant, capture create_expr)) {      \
-        variable = weak_ptr ? std::weak_ptr(ptr) : ptr;                        \
-    } else {                                                                   \
-        THROW_UNLAWFUL_OPERATION("Failed to create " #type ".");               \
-    }
-
 #define GET_OR_CREATE_PTR_WITH_CAPTURE(variable, type, constant, capture) \
-    GET_OR_CREATE_PTR_IMPL(                                               \
-        variable, type, constant, [capture],                              \
-        { return atom::memory::makeShared<type>(capture); }, false, nullptr)
+    if (auto ptr = GetPtrOrCreate<type>(constant, [capture] {             \
+            return atom::memory::makeShared<type>(capture);               \
+        })) {                                                             \
+        variable = ptr;                                                   \
+    } else {                                                              \
+        THROW_UNLAWFUL_OPERATION("Failed to create " #type ".");          \
+    }
 
 #define GET_OR_CREATE_PTR(variable, type, constant, ...)                     \
     if (auto ptr = GetPtrOrCreate<type>(                                     \
@@ -139,8 +138,8 @@ public:
      * @return Created or retrieved shared pointer
      */
     template <typename T, typename CreatorFunc>
-    auto getOrCreateSharedPtr(std::string_view key,
-                              CreatorFunc creator) -> std::shared_ptr<T>;
+    auto getOrCreateSharedPtr(std::string_view key, CreatorFunc creator)
+        -> std::shared_ptr<T>;
 
     /**
      * @brief Get weak pointer by key
@@ -167,35 +166,6 @@ public:
     void removeSharedPtr(std::string_view key);
 
     /**
-     * @brief Add weak pointer with key
-     * @tparam T Pointer type
-     * @param key Lookup key
-     * @param ptr Weak pointer to add
-     */
-    template <typename T>
-    void addWeakPtr(std::string_view key, const std::weak_ptr<T>& ptr);
-
-    /**
-     * @brief Get shared pointer from stored weak pointer
-     * @tparam T Pointer type
-     * @param key Lookup key
-     * @return Shared pointer if weak pointer valid
-     */
-    template <typename T>
-    [[nodiscard]] auto getSharedPtrFromWeakPtr(std::string_view key)
-        -> std::shared_ptr<T>;
-
-    /**
-     * @brief Get weak pointer from stored shared pointer
-     * @tparam T Pointer type
-     * @param key Lookup key
-     * @return Weak pointer to the object
-     */
-    template <typename T>
-    [[nodiscard]] auto getWeakPtrFromSharedPtr(std::string_view key)
-        -> std::weak_ptr<T>;
-
-    /**
      * @brief Add custom deleter for key
      * @tparam T Object type
      * @param key Lookup key
@@ -204,15 +174,6 @@ public:
     template <typename T>
     void addDeleter(std::string_view key,
                     const std::function<void(T*)>& deleter);
-
-    /**
-     * @brief Delete object using custom deleter
-     * @tparam T Object type
-     * @param key Lookup key
-     * @param ptr Pointer to delete
-     */
-    template <typename T>
-    void deleteObject(std::string_view key, T* ptr);
 
     /**
      * @brief Get metadata for pointer
@@ -252,7 +213,6 @@ public:
     void printSharedPtrMap() const;
 
 private:
-    // Prevent external construction
     GlobalSharedPtrManager() = default;
 
 #if ENABLE_FASTHASH
@@ -276,24 +236,32 @@ private:
      */
     void updateMetadata(std::string_view key, const std::string& type_name,
                         bool is_weak = false, bool has_deleter = false);
+
+    /**
+     * @brief Find iterator by key efficiently
+     * @param key The key to find
+     * @return Iterator to the element or end()
+     */
+    template <typename MapType>
+    auto findByKey(MapType& map, std::string_view key) const ->
+        typename MapType::iterator;
 };
 
-// Template implementations
 template <typename T>
 auto GlobalSharedPtrManager::getSharedPtr(std::string_view key)
     -> std::optional<std::shared_ptr<T>> {
     std::shared_lock lock(mutex_);
 
-    auto iter = shared_ptr_map_.find(std::string(key));
-    if (iter != shared_ptr_map_.end()) {
+    if (auto iter = shared_ptr_map_.find(std::string(key));
+        iter != shared_ptr_map_.end()) {
         try {
             auto ptr = std::any_cast<std::shared_ptr<T>>(iter->second);
             if (auto meta_iter = metadata_map_.find(std::string(key));
                 meta_iter != metadata_map_.end()) {
-                meta_iter->second.access_count++;
+                ++meta_iter->second.access_count;
                 meta_iter->second.ref_count = ptr.use_count();
             }
-            total_access_count_++;
+            ++total_access_count_;
             return ptr;
         } catch (const std::bad_any_cast&) {
             return std::nullopt;
@@ -303,27 +271,27 @@ auto GlobalSharedPtrManager::getSharedPtr(std::string_view key)
 }
 
 template <typename T, typename CreatorFunc>
-auto GlobalSharedPtrManager::getOrCreateSharedPtr(
-    std::string_view key, CreatorFunc creator) -> std::shared_ptr<T> {
+auto GlobalSharedPtrManager::getOrCreateSharedPtr(std::string_view key,
+                                                  CreatorFunc creator)
+    -> std::shared_ptr<T> {
+    const std::string str_key{key};
     std::unique_lock lock(mutex_);
 
-    auto iter = shared_ptr_map_.find(std::string(key));
-    if (iter != shared_ptr_map_.end()) {
+    if (auto iter = shared_ptr_map_.find(str_key);
+        iter != shared_ptr_map_.end()) {
         try {
             auto ptr = std::any_cast<std::shared_ptr<T>>(iter->second);
             updateMetadata(key, typeid(T).name());
             return ptr;
         } catch (const std::bad_any_cast&) {
-            // Key exists but type mismatch - replace
             auto ptr = creator();
             iter->second = ptr;
             updateMetadata(key, typeid(T).name());
             return ptr;
         }
     } else {
-        // Create new
         auto ptr = creator();
-        shared_ptr_map_[std::string(key)] = ptr;
+        shared_ptr_map_[str_key] = ptr;
         updateMetadata(key, typeid(T).name());
         return ptr;
     }
@@ -334,16 +302,25 @@ auto GlobalSharedPtrManager::getWeakPtr(std::string_view key)
     -> std::weak_ptr<T> {
     std::shared_lock lock(mutex_);
 
-    auto iter = shared_ptr_map_.find(std::string(key));
-    if (iter != shared_ptr_map_.end()) {
+    if (auto iter = shared_ptr_map_.find(std::string(key));
+        iter != shared_ptr_map_.end()) {
         try {
-            auto wptr = std::any_cast<std::weak_ptr<T>>(iter->second);
+            if (auto shared_ptr =
+                    std::any_cast<std::shared_ptr<T>>(iter->second)) {
+                if (auto meta_iter = metadata_map_.find(std::string(key));
+                    meta_iter != metadata_map_.end()) {
+                    ++meta_iter->second.access_count;
+                }
+                ++total_access_count_;
+                return std::weak_ptr<T>(shared_ptr);
+            }
+            auto weak_ptr = std::any_cast<std::weak_ptr<T>>(iter->second);
             if (auto meta_iter = metadata_map_.find(std::string(key));
                 meta_iter != metadata_map_.end()) {
-                meta_iter->second.access_count++;
+                ++meta_iter->second.access_count;
             }
-            total_access_count_++;
-            return wptr;
+            ++total_access_count_;
+            return weak_ptr;
         } catch (const std::bad_any_cast&) {
             return std::weak_ptr<T>();
         }
@@ -360,90 +337,23 @@ void GlobalSharedPtrManager::addSharedPtr(std::string_view key,
 }
 
 template <typename T>
-void GlobalSharedPtrManager::addWeakPtr(std::string_view key,
-                                        const std::weak_ptr<T>& ptr) {
-    std::unique_lock lock(mutex_);
-    shared_ptr_map_[std::string(key)] = ptr;
-    updateMetadata(key, typeid(T).name(), true);
-}
-
-template <typename T>
-auto GlobalSharedPtrManager::getSharedPtrFromWeakPtr(std::string_view key)
-    -> std::shared_ptr<T> {
-    std::shared_lock lock(mutex_);
-
-    auto iter = shared_ptr_map_.find(std::string(key));
-    if (iter != shared_ptr_map_.end()) {
-        try {
-            auto ptr = std::any_cast<std::weak_ptr<T>>(iter->second).lock();
-            if (ptr && metadata_map_.contains(std::string(key))) {
-                metadata_map_[std::string(key)].access_count++;
-                metadata_map_[std::string(key)].ref_count = ptr.use_count();
-            }
-            total_access_count_++;
-            return ptr;
-        } catch (const std::bad_any_cast&) {
-            return std::shared_ptr<T>();
-        }
-    }
-    return std::shared_ptr<T>();
-}
-
-template <typename T>
-auto GlobalSharedPtrManager::getWeakPtrFromSharedPtr(std::string_view key)
-    -> std::weak_ptr<T> {
-    std::shared_lock lock(mutex_);
-
-    auto iter = shared_ptr_map_.find(std::string(key));
-    if (iter != shared_ptr_map_.end()) {
-        try {
-            auto ptr = std::any_cast<std::shared_ptr<T>>(iter->second);
-            if (metadata_map_.contains(std::string(key))) {
-                metadata_map_[std::string(key)].access_count++;
-            }
-            total_access_count_++;
-            return std::weak_ptr<T>(ptr);
-        } catch (const std::bad_any_cast&) {
-            return std::weak_ptr<T>();
-        }
-    }
-    return std::weak_ptr<T>();
-}
-
-template <typename T>
 void GlobalSharedPtrManager::addDeleter(
     std::string_view key, const std::function<void(T*)>& deleter) {
     std::unique_lock lock(mutex_);
 
-    auto iter = shared_ptr_map_.find(std::string(key));
-    if (iter != shared_ptr_map_.end()) {
+    if (auto iter = shared_ptr_map_.find(std::string(key));
+        iter != shared_ptr_map_.end()) {
         try {
             auto ptr = std::any_cast<std::shared_ptr<T>>(iter->second);
             ptr.reset(ptr.get(), deleter);
             iter->second = ptr;
-            if (metadata_map_.contains(std::string(key))) {
-                metadata_map_[std::string(key)].has_custom_deleter = true;
+            if (auto meta_iter = metadata_map_.find(std::string(key));
+                meta_iter != metadata_map_.end()) {
+                meta_iter->second.has_custom_deleter = true;
             }
         } catch (const std::bad_any_cast&) {
             // Ignore type mismatch
         }
-    }
-}
-
-template <typename T>
-void GlobalSharedPtrManager::deleteObject(std::string_view key, T* ptr) {
-    std::unique_lock lock(mutex_);
-
-    auto iter = shared_ptr_map_.find(std::string(key));
-    if (iter != shared_ptr_map_.end()) {
-        try {
-            auto deleter = std::any_cast<std::function<void(T*)>>(iter->second);
-            deleter(ptr);
-        } catch (const std::bad_any_cast&) {
-            delete ptr;  // Fallback to default delete
-        }
-        shared_ptr_map_.erase(iter);
-        metadata_map_.erase(std::string(key));
     }
 }
 

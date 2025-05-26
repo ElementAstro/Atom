@@ -1,12 +1,12 @@
 /*!
- * \file function_sequence.hpp
+ * \file stepper.hpp
  * \brief Advanced Function Sequence Management
- * \author Max Qian <lightapt.com>, Enhanced by [Your Name]
- * \date 2024-03-01, Updated 2024-03-13
+ * \author Max Qian <lightapt.com>, Enhanced by Claude
+ * \date 2024-03-01, Updated 2025-05-26
  */
 
-#ifndef ATOM_META_FUNCTION_SEQUENCE_HPP
-#define ATOM_META_FUNCTION_SEQUENCE_HPP
+#ifndef ATOM_META_STEPPER_HPP
+#define ATOM_META_STEPPER_HPP
 
 #include <any>
 #include <atomic>
@@ -26,15 +26,8 @@
 
 #include "atom/algorithm/hash.hpp"
 
-#ifdef ATOM_USE_BOOST
-#include <boost/any.hpp>
-#include <boost/asio.hpp>
-#include <boost/thread.hpp>
-#endif
-
 namespace atom::meta {
 
-// Forward declaration for result type
 /**
  * @brief Result wrapper with success/error state
  * @tparam T Type of the success value
@@ -42,27 +35,50 @@ namespace atom::meta {
 template <typename T>
 class Result {
 public:
-    // Create a success result
+    /**
+     * @brief Default constructor. Initializes to an error state.
+     */
+    Result() : data_(std::string("Result not initialized")) {}
+
+    /**
+     * @brief Create a success result
+     * @param value Success value
+     * @return Result with success state
+     */
     static Result<T> makeSuccess(T value) {
         return Result<T>(std::move(value));
     }
 
-    // Create an error result
+    /**
+     * @brief Create an error result
+     * @param error Error message
+     * @return Result with error state
+     */
     static Result<T> makeError(std::string error) {
         return Result<T>(std::move(error));
     }
 
-    // Check if result is success
+    /**
+     * @brief Check if result is success
+     * @return True if success, false otherwise
+     */
     [[nodiscard]] bool isSuccess() const noexcept {
         return std::holds_alternative<T>(data_);
     }
 
-    // Check if result is error
+    /**
+     * @brief Check if result is error
+     * @return True if error, false otherwise
+     */
     [[nodiscard]] bool isError() const noexcept {
         return std::holds_alternative<std::string>(data_);
     }
 
-    // Get success value (throws if error)
+    /**
+     * @brief Get success value
+     * @return Success value
+     * @throws std::runtime_error if result is error
+     */
     [[nodiscard]] const T& value() const {
         if (isError()) {
             throw std::runtime_error("Cannot get value from error result: " +
@@ -71,7 +87,11 @@ public:
         return std::get<T>(data_);
     }
 
-    // Get error message (throws if success)
+    /**
+     * @brief Get error message
+     * @return Error message
+     * @throws std::runtime_error if result is success
+     */
     [[nodiscard]] const std::string& error() const {
         if (isSuccess()) {
             throw std::runtime_error("Cannot get error from success result");
@@ -79,7 +99,11 @@ public:
         return std::get<std::string>(data_);
     }
 
-    // Get success value or a default
+    /**
+     * @brief Get success value or a default
+     * @param defaultValue Default value to return if error
+     * @return Success value or default
+     */
     [[nodiscard]] T valueOr(T defaultValue) const {
         if (isSuccess()) {
             return std::get<T>(data_);
@@ -100,9 +124,10 @@ private:
 class FunctionSequence {
 public:
     using FunctionType = std::function<std::any(std::span<const std::any>)>;
-    using ResultType = std::any;
-    using ErrorType = std::string;
 
+    /**
+     * @brief Execution statistics for monitoring performance
+     */
     struct ExecutionStats {
         std::chrono::nanoseconds totalExecutionTime{0};
         std::size_t invocationCount{0};
@@ -119,12 +144,14 @@ public:
         }
     };
 
-    enum class ExecutionPolicy {
-        Sequential,    // Execute functions sequentially
-        Parallel,      // Execute functions in parallel
-        ParallelAsync  // Execute functions asynchronously in parallel
-    };
+    /**
+     * @brief Execution policy for controlling how functions are executed
+     */
+    enum class ExecutionPolicy { Sequential, Parallel, ParallelAsync };
 
+    /**
+     * @brief Options for configuring function execution
+     */
     struct ExecutionOptions {
         std::optional<std::chrono::milliseconds> timeout = std::nullopt;
         std::optional<size_t> retryCount = std::nullopt;
@@ -134,15 +161,11 @@ public:
         std::function<void(const std::any&)> notificationCallback = nullptr;
     };
 
-    // Constructor and destructor
     FunctionSequence() = default;
-
     FunctionSequence(const FunctionSequence&) = delete;
     FunctionSequence& operator=(const FunctionSequence&) = delete;
-
     ~FunctionSequence() { clearFunctions(); }
 
-    // Function registration methods
     /**
      * @brief Register a function to be part of the sequence
      * @param func Function to register
@@ -190,12 +213,10 @@ public:
         return functions_.size();
     }
 
-    // Standard execution methods
     /**
      * @brief Run the last function with each set of arguments provided
      * @param argsBatch Vector of argument sets
      * @return Vector of results
-     * @throws Exception if no functions are registered or execution fails
      */
     [[nodiscard]] std::vector<Result<std::any>> run(
         std::span<const std::vector<std::any>> argsBatch) const {
@@ -215,7 +236,6 @@ public:
                 auto result = func(args);
                 auto endTime = std::chrono::high_resolution_clock::now();
 
-                // Update stats
                 stats_.totalExecutionTime +=
                     std::chrono::duration_cast<std::chrono::nanoseconds>(
                         endTime - startTime);
@@ -238,7 +258,6 @@ public:
      * results
      * @param argsBatch Vector of argument sets
      * @return Vector of result vectors
-     * @throws Exception if no functions are registered or execution fails
      */
     [[nodiscard]] std::vector<std::vector<Result<std::any>>> runAll(
         std::span<const std::vector<std::any>> argsBatch) const {
@@ -261,7 +280,6 @@ public:
                     auto result = func(args);
                     auto endTime = std::chrono::high_resolution_clock::now();
 
-                    // Update stats
                     stats_.totalExecutionTime +=
                         std::chrono::duration_cast<std::chrono::nanoseconds>(
                             endTime - startTime);
@@ -282,7 +300,6 @@ public:
         return resultsBatch;
     }
 
-    // Advanced execution methods with configurable options
     /**
      * @brief Execute with configurable options
      * @param argsBatch Vector of argument sets
@@ -292,17 +309,12 @@ public:
     [[nodiscard]] std::vector<Result<std::any>> execute(
         std::span<const std::vector<std::any>> argsBatch,
         const ExecutionOptions& options) const {
-        // Initialize result container
-        std::vector<Result<std::any>> results;
-
-        // Apply execution policy
         if (options.policy == ExecutionPolicy::Parallel) {
             return executeParallel(argsBatch, options);
         } else if (options.policy == ExecutionPolicy::ParallelAsync) {
             return executeParallelAsync(argsBatch, options).get();
         }
 
-        // Standard sequential execution with options
         if (options.timeout) {
             return executeWithTimeout(argsBatch, *options.timeout);
         } else if (options.retryCount) {
@@ -356,17 +368,10 @@ public:
      */
     [[nodiscard]] std::future<std::vector<Result<std::any>>> runAsync(
         std::vector<std::vector<std::any>> argsBatch) const {
-#ifdef ATOM_USE_BOOST
-        return boost::async(boost::launch::async,
-                            [this, argsBatch = std::move(argsBatch)]() mutable {
-                                return this->run(std::span(argsBatch));
-                            });
-#else
         return std::async(std::launch::async,
                           [this, argsBatch = std::move(argsBatch)]() mutable {
                               return this->run(std::span(argsBatch));
                           });
-#endif
     }
 
     /**
@@ -376,20 +381,12 @@ public:
      */
     [[nodiscard]] std::future<std::vector<std::vector<Result<std::any>>>>
     runAllAsync(std::vector<std::vector<std::any>> argsBatch) const {
-#ifdef ATOM_USE_BOOST
-        return boost::async(boost::launch::async,
-                            [this, argsBatch = std::move(argsBatch)]() mutable {
-                                return this->runAll(std::span(argsBatch));
-                            });
-#else
         return std::async(std::launch::async,
                           [this, argsBatch = std::move(argsBatch)]() mutable {
                               return this->runAll(std::span(argsBatch));
                           });
-#endif
     }
 
-    // Execution with timeout
     /**
      * @brief Run with timeout
      * @param argsBatch Vector of argument sets
@@ -399,35 +396,6 @@ public:
     [[nodiscard]] std::vector<Result<std::any>> executeWithTimeout(
         std::span<const std::vector<std::any>> argsBatch,
         std::chrono::milliseconds timeout) const {
-#ifdef ATOM_USE_BOOST
-        boost::asio::io_context io;
-        boost::asio::steady_timer timer(io, timeout);
-        std::optional<std::vector<Result<std::any>>> resultOpt;
-        std::atomic<bool> completed{false};
-
-        std::jthread ioThread([&io]() { io.run(); });
-
-        std::jthread funcThread([&]() {
-            resultOpt = run(argsBatch);
-            completed.store(true, std::memory_order_release);
-            timer.cancel();
-        });
-
-        timer.async_wait([&](const boost::system::error_code& ec) {
-            if (!ec && !completed.load(std::memory_order_acquire)) {
-                stats_.errorCount++;
-                resultOpt =
-                    std::vector<Result<std::any>>{Result<std::any>::makeError(
-                        "Function execution timed out")};
-            }
-        });
-
-        funcThread.join();
-        ioThread.join();
-
-        return resultOpt.value_or(std::vector<Result<std::any>>{
-            Result<std::any>::makeError("No result produced within timeout")});
-#else
         std::vector<std::vector<std::any>> argsCopy(argsBatch.begin(),
                                                     argsBatch.end());
         auto future = runAsync(std::move(argsCopy));
@@ -445,7 +413,6 @@ public:
             return {Result<std::any>::makeError(
                 std::string("Exception during async execution: ") + e.what())};
         }
-#endif
     }
 
     /**
@@ -457,36 +424,6 @@ public:
     [[nodiscard]] std::vector<std::vector<Result<std::any>>>
     executeAllWithTimeout(std::span<const std::vector<std::any>> argsBatch,
                           std::chrono::milliseconds timeout) const {
-#ifdef ATOM_USE_BOOST
-        boost::asio::io_context io;
-        boost::asio::steady_timer timer(io, timeout);
-        std::optional<std::vector<std::vector<Result<std::any>>>> resultOpt;
-        std::atomic<bool> completed{false};
-
-        std::jthread ioThread([&io]() { io.run(); });
-
-        std::jthread funcThread([&]() {
-            resultOpt = runAll(argsBatch);
-            completed.store(true, std::memory_order_release);
-            timer.cancel();
-        });
-
-        timer.async_wait([&](const boost::system::error_code& ec) {
-            if (!ec && !completed.load(std::memory_order_acquire)) {
-                stats_.errorCount++;
-                resultOpt = std::vector<std::vector<Result<std::any>>>{
-                    {Result<std::any>::makeError(
-                        "Function execution timed out")}};
-            }
-        });
-
-        funcThread.join();
-        ioThread.join();
-
-        return resultOpt.value_or(std::vector<std::vector<Result<std::any>>>{
-            {Result<std::any>::makeError(
-                "No result produced within timeout")}});
-#else
         std::vector<std::vector<std::any>> argsCopy(argsBatch.begin(),
                                                     argsBatch.end());
         auto future = runAllAsync(std::move(argsCopy));
@@ -504,10 +441,8 @@ public:
             return {{Result<std::any>::makeError(
                 std::string("Exception during async execution: ") + e.what())}};
         }
-#endif
     }
 
-    // Execution with retries
     /**
      * @brief Run with retries
      * @param argsBatch Vector of argument sets
@@ -539,7 +474,6 @@ public:
             }
             attempts++;
 
-            // Exponential backoff
             if (attempts < retries) {
                 std::this_thread::sleep_for(
                     std::chrono::milliseconds(100 * (1 << attempts)));
@@ -600,7 +534,6 @@ public:
         return resultsBatch;
     }
 
-    // Execution with caching
     /**
      * @brief Run with caching
      * @param argsBatch Vector of argument sets
@@ -637,7 +570,6 @@ public:
                 auto result = func(args);
                 auto endTime = std::chrono::high_resolution_clock::now();
 
-                // Update stats
                 stats_.totalExecutionTime +=
                     std::chrono::duration_cast<std::chrono::nanoseconds>(
                         endTime - startTime);
@@ -703,7 +635,6 @@ public:
                     auto result = func(args);
                     auto endTime = std::chrono::high_resolution_clock::now();
 
-                    // Update stats
                     stats_.totalExecutionTime +=
                         std::chrono::duration_cast<std::chrono::nanoseconds>(
                             endTime - startTime);
@@ -729,7 +660,6 @@ public:
         return resultsBatch;
     }
 
-    // Execution with notification
     /**
      * @brief Run with notification callback
      * @param argsBatch Vector of argument sets
@@ -750,7 +680,6 @@ public:
         return results;
     }
 
-    // Parallel execution methods
     /**
      * @brief Execute in parallel
      * @param argsBatch Vector of argument sets
@@ -760,8 +689,7 @@ public:
     [[nodiscard]] std::vector<Result<std::any>> executeParallel(
         std::span<const std::vector<std::any>> argsBatch,
         const ExecutionOptions& options) const {
-        std::vector<Result<std::any>> results;
-        results.reserve(argsBatch.size());
+        std::vector<Result<std::any>> results(argsBatch.size());
         std::shared_lock lock(mutex_);
 
         if (functions_.empty()) {
@@ -773,16 +701,14 @@ public:
         std::atomic<size_t> counter{0};
         std::atomic<size_t> errorCount{0};
 
-        // Use std::jthread for automatic joining
         std::vector<std::jthread> threads;
-        threads.reserve(
+        const size_t numThreads =
             std::min(argsBatch.size(),
-                     static_cast<size_t>(std::thread::hardware_concurrency())));
+                     static_cast<size_t>(std::thread::hardware_concurrency()));
+        threads.reserve(numThreads);
 
-        // Create worker function
         auto worker = [&]() {
             while (true) {
-                // Get next work item
                 size_t index = counter.fetch_add(1, std::memory_order_relaxed);
                 if (index >= argsBatch.size())
                     break;
@@ -792,7 +718,6 @@ public:
                     auto result = func(argsBatch[index]);
                     auto endTime = std::chrono::high_resolution_clock::now();
 
-                    // Update stats (thread-safe)
                     stats_.totalExecutionTime +=
                         std::chrono::duration_cast<std::chrono::nanoseconds>(
                             endTime - startTime);
@@ -801,7 +726,6 @@ public:
                     results[index] =
                         Result<std::any>::makeSuccess(std::move(result));
 
-                    // Apply notification if configured
                     if (options.notificationCallback &&
                         results[index].isSuccess()) {
                         options.notificationCallback(results[index].value());
@@ -815,21 +739,11 @@ public:
             }
         };
 
-        // Create and launch threads
-        for (unsigned i = 0;
-             i <
-             std::min(argsBatch.size(),
-                      static_cast<size_t>(std::thread::hardware_concurrency()));
-             ++i) {
+        for (size_t i = 0; i < numThreads; ++i) {
             threads.emplace_back(worker);
         }
 
-        // Threads will auto-join due to std::jthread
-        threads.clear();
-
-        // Update stats with error count
         stats_.errorCount += errorCount.load(std::memory_order_relaxed);
-
         return results;
     }
 
@@ -958,7 +872,6 @@ public:
             });
     }
 
-    // Cache management
     /**
      * @brief Clear the function result cache
      */
@@ -985,7 +898,6 @@ public:
         pruneCache();
     }
 
-    // Statistics and diagnostics
     /**
      * @brief Get execution statistics
      * @return Copy of current execution statistics
@@ -1021,7 +933,6 @@ public:
     }
 
 private:
-    // Member variables
     mutable std::vector<FunctionType> functions_;
     mutable std::shared_mutex mutex_;
     mutable std::unordered_map<std::string, std::any> cache_;
@@ -1029,24 +940,15 @@ private:
     mutable ExecutionStats stats_{};
     size_t maxCacheSize_{1000};
 
-    // Helper methods
-    /**
-     * @brief Generate a cache key for a set of arguments
-     * @param args Arguments to hash
-     * @param functionIndex Optional function index for multi-function caching
-     * @return String hash key
-     */
     [[nodiscard]] static std::string generateCacheKey(
         const std::vector<std::any>& args,
         std::optional<size_t> functionIndex = std::nullopt) {
         std::string key;
 
-        // Add function index to key if provided
         if (functionIndex) {
             key = "func" + std::to_string(*functionIndex) + "_";
         }
 
-        // Hash each argument and append to key
         for (const auto& arg : args) {
             key += std::to_string(algorithm::computeHash(arg)) + "_";
         }
@@ -1054,24 +956,19 @@ private:
         return key;
     }
 
-    /**
-     * @brief Prune cache if it exceeds maximum size
-     */
     void pruneCache() {
         std::unique_lock lock(cacheMutex_);
         if (cache_.size() <= maxCacheSize_)
             return;
 
-        // Simple pruning strategy: remove oldest entries
-        // In a real implementation, consider LRU or other caching strategies
         size_t itemsToRemove = cache_.size() - maxCacheSize_;
         auto it = cache_.begin();
-        for (size_t i = 0; i < itemsToRemove && it != cache_.end(); ++i, ++it) {
-            cache_.erase(it);
+        for (size_t i = 0; i < itemsToRemove && it != cache_.end(); ++i) {
+            it = cache_.erase(it);
         }
     }
 };
 
 }  // namespace atom::meta
 
-#endif  // ATOM_META_FUNCTION_SEQUENCE_HPP
+#endif  // ATOM_META_STEPPER_HPP

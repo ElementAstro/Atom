@@ -9,41 +9,38 @@
 #ifndef ATOM_META_TYPE_INFO_HPP
 #define ATOM_META_TYPE_INFO_HPP
 
-#include <bitset>           // Include for flags
-#include <concepts>         // Include for C++20 concepts
-#include <cstdlib>          // Include for std::size_t
-#include <functional>       // Include for std::hash
-#include <memory>           // Include for smart pointers
-#include <mutex>            // Include for thread safety
-#include <optional>         // Include for std::optional
-#include <ostream>          // Include for std::ostream
-#include <shared_mutex>     // Include for reader-writer lock
-#include <source_location>  // Include for diagnostics
-#include <span>             // Include for C++20 span
-#include <string>           // Include for std::string
-#include <string_view>      // Include for string_view
-#include <type_traits>      // Include for type traits
-#include <typeinfo>         // Include for type_info
-#include <unordered_map>    // Include for registry
-#include <vector>           // Include for containers
+#include <bitset>
+#include <concepts>
+#include <cstdlib>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <ostream>
+#include <shared_mutex>
+#include <source_location>
+#include <span>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <typeinfo>
+#include <unordered_map>
+#include <vector>
 
-#include "abi.hpp"  // Include for ATOM_INLINE, ATOM_CONSTEXPR, ATOM_NOEXCEPT
-#include "concept.hpp"  // Include for Pointer, SmartPointer
+#include "abi.hpp"
+#include "concept.hpp"
 
 namespace atom::meta {
 
-// Constants for bitset size, increased for additional flags
-constexpr std::size_t K_FLAG_BITSET_SIZE = 32;  // Expanded for future use
+constexpr std::size_t K_FLAG_BITSET_SIZE = 32;
 
-// Helper to remove cv-qualifiers, references, and pointers
 template <typename T>
 using BareType =
     std::remove_cv_t<std::remove_pointer_t<std::remove_reference_t<T>>>;
 
-// C++20 concept for types that can be used with TypeInfo
 template <typename T>
 concept TypeInfoCompatible = requires {
-    { typeid(T) } -> std::convertible_to<std::type_info>;
+    { typeid(T) } -> std::convertible_to<const std::type_info&>;
 };
 
 template <typename T>
@@ -69,7 +66,6 @@ struct PointerType<std::weak_ptr<T>> {
     using type = T;
 };
 
-// Added support for std::span (C++20)
 template <typename T, std::size_t Extent>
 struct PointerType<std::span<T, Extent>> {
     using type = T;
@@ -92,23 +88,23 @@ public:
                              std::to_string(location.line()) + "]") {}
 };
 
-/// \brief Compile time deduced information about a type
+/**
+ * @brief Compile time deduced information about a type
+ */
 class TypeInfo {
 public:
-    using Flags = std::bitset<K_FLAG_BITSET_SIZE>;  // Using bitset for flags
+    using Flags = std::bitset<K_FLAG_BITSET_SIZE>;
 
-    /// \brief Construct a new Type Info object
+    /**
+     * @brief Construct a new Type Info object
+     */
     constexpr TypeInfo(Flags flags, const std::type_info* typeInfo,
                        const std::type_info* bareTypeInfo) noexcept
         : mTypeInfo_(typeInfo), mBareTypeInfo_(bareTypeInfo), mFlags_(flags) {}
 
     constexpr TypeInfo() noexcept = default;
-
-    // Added move semantics
     constexpr TypeInfo(TypeInfo&& other) noexcept = default;
     constexpr TypeInfo& operator=(TypeInfo&& other) noexcept = default;
-
-    // Ensure copyable
     constexpr TypeInfo(const TypeInfo& other) noexcept = default;
     constexpr TypeInfo& operator=(const TypeInfo& other) noexcept = default;
 
@@ -118,18 +114,16 @@ public:
      * @return TypeInfo object containing information about T
      */
     template <TypeInfoCompatible T>
-    static consteval auto fromType() noexcept -> TypeInfo {
+    static constexpr auto fromType() noexcept -> TypeInfo {
         using BareT = BareType<T>;
         Flags flags;
 
-        // Basic type traits
         flags.set(IS_CONST_FLAG, std::is_const_v<std::remove_reference_t<T>>);
         flags.set(IS_REFERENCE_FLAG, std::is_reference_v<T>);
         flags.set(IS_POINTER_FLAG, Pointer<T> || Pointer<BareT> ||
                                        SmartPointer<T> || SmartPointer<BareT>);
         flags.set(IS_VOID_FLAG, std::is_void_v<T>);
 
-        // Determine if arithmetic
         if constexpr (Pointer<T> || Pointer<BareT> || SmartPointer<T> ||
                       SmartPointer<BareT>) {
             flags.set(IS_ARITHMETIC_FLAG, K_IS_ARITHMETIC_POINTER_V<T>);
@@ -137,25 +131,18 @@ public:
             flags.set(IS_ARITHMETIC_FLAG, std::is_arithmetic_v<T>);
         }
 
-        // Type categories
         flags.set(IS_ARRAY_FLAG, std::is_array_v<T>);
         flags.set(IS_ENUM_FLAG, std::is_enum_v<T>);
         flags.set(IS_CLASS_FLAG, std::is_class_v<T>);
         flags.set(IS_FUNCTION_FLAG, std::is_function_v<T>);
-
-        // Type properties
         flags.set(IS_TRIVIAL_FLAG, std::is_trivial_v<T>);
         flags.set(IS_STANDARD_LAYOUT_FLAG, std::is_standard_layout_v<T>);
         flags.set(IS_POD_FLAG,
                   std::is_trivial_v<T> && std::is_standard_layout_v<T>);
-
-        // Constructibility traits
         flags.set(IS_DEFAULT_CONSTRUCTIBLE_FLAG,
                   std::is_default_constructible_v<T>);
         flags.set(IS_MOVEABLE_FLAG, std::is_move_constructible_v<T>);
         flags.set(IS_COPYABLE_FLAG, std::is_copy_constructible_v<T>);
-
-        // C++20 new traits
         flags.set(IS_AGGREGATE_FLAG, std::is_aggregate_v<T>);
         flags.set(IS_BOUNDED_ARRAY_FLAG, std::is_bounded_array_v<T>);
         flags.set(IS_UNBOUNDED_ARRAY_FLAG, std::is_unbounded_array_v<T>);
@@ -175,18 +162,9 @@ public:
      * @return TypeInfo object containing information about T
      */
     template <typename T>
-    static auto fromInstance(const T& instance
-                             [[maybe_unused]]) noexcept -> TypeInfo {
+    static auto fromInstance(const T& instance [[maybe_unused]]) noexcept
+        -> TypeInfo {
         return fromType<T>();
-    }
-
-    template <typename T>
-    static constexpr auto fromType() noexcept -> TypeInfo {
-        // Implementation will depend on how TypeInfo is constructed
-        // This is a placeholder implementation
-        TypeInfo info;
-        // Set up the TypeInfo based on T
-        return info;
     }
 
     /**
@@ -261,7 +239,6 @@ public:
                           : "undefined";
     }
 
-    // Type property query methods
     [[nodiscard]] auto isDefaultConstructible() const noexcept -> bool {
         return mFlags_.test(IS_DEFAULT_CONSTRUCTIBLE_FLAG);
     }
@@ -310,8 +287,6 @@ public:
     [[nodiscard]] auto isUndef() const noexcept -> bool {
         return mFlags_.test(IS_UNDEF_FLAG);
     }
-
-    // C++20 additional type traits
     [[nodiscard]] auto isAggregate() const noexcept -> bool {
         return mFlags_.test(IS_AGGREGATE_FLAG);
     }
@@ -347,52 +322,57 @@ public:
     }
 
     /**
-     * @brief Serialize TypeInfo to JSON format
+     * @brief Serialize TypeInfo to JSON format (optimized version)
      * @return JSON string representation
      */
     [[nodiscard]] auto toJson() const -> std::string {
-        std::string result = "{\n";
-        result += "  \"typeName\": \"" + name() + "\",\n";
-        result += "  \"bareTypeName\": \"" + bareName() + "\",\n";
-        result += "  \"traits\": {\n";
+        static constexpr std::string_view template_str =
+            R"({"typeName":"{}","bareTypeName":"{}","traits":{})";
 
-        // Build a vector of property pairs
-        std::vector<std::pair<std::string, bool>> properties = {
-            {"isDefaultConstructible", isDefaultConstructible()},
-            {"isMoveable", isMoveable()},
-            {"isCopyable", isCopyable()},
-            {"isConst", isConst()},
-            {"isReference", isReference()},
-            {"isVoid", isVoid()},
-            {"isArithmetic", isArithmetic()},
-            {"isArray", isArray()},
-            {"isEnum", isEnum()},
-            {"isClass", isClass()},
-            {"isFunction", isFunction()},
-            {"isTrivial", isTrivial()},
-            {"isStandardLayout", isStandardLayout()},
-            {"isPod", isPod()},
-            {"isPointer", isPointer()},
-            {"isAggregate", isAggregate()},
-            {"isBoundedArray", isBoundedArray()},
-            {"isUnboundedArray", isUnboundedArray()},
-            {"isScopedEnum", isScopedEnum()},
-            {"isFinal", isFinal()},
-            {"isAbstract", isAbstract()},
-            {"isPolymorphic", isPolymorphic()},
-            {"isEmpty", isEmpty()}};
+        std::string traits;
+        traits.reserve(512);
 
-        // Add properties to JSON
+        constexpr std::array<std::pair<std::string_view, unsigned int>, 23>
+            properties = {
+                {{"isDefaultConstructible", IS_DEFAULT_CONSTRUCTIBLE_FLAG},
+                 {"isMoveable", IS_MOVEABLE_FLAG},
+                 {"isCopyable", IS_COPYABLE_FLAG},
+                 {"isConst", IS_CONST_FLAG},
+                 {"isReference", IS_REFERENCE_FLAG},
+                 {"isVoid", IS_VOID_FLAG},
+                 {"isArithmetic", IS_ARITHMETIC_FLAG},
+                 {"isArray", IS_ARRAY_FLAG},
+                 {"isEnum", IS_ENUM_FLAG},
+                 {"isClass", IS_CLASS_FLAG},
+                 {"isFunction", IS_FUNCTION_FLAG},
+                 {"isTrivial", IS_TRIVIAL_FLAG},
+                 {"isStandardLayout", IS_STANDARD_LAYOUT_FLAG},
+                 {"isPod", IS_POD_FLAG},
+                 {"isPointer", IS_POINTER_FLAG},
+                 {"isAggregate", IS_AGGREGATE_FLAG},
+                 {"isBoundedArray", IS_BOUNDED_ARRAY_FLAG},
+                 {"isUnboundedArray", IS_UNBOUNDED_ARRAY_FLAG},
+                 {"isScopedEnum", IS_SCOPED_ENUM_FLAG},
+                 {"isFinal", IS_FINAL_FLAG},
+                 {"isAbstract", IS_ABSTRACT_FLAG},
+                 {"isPolymorphic", IS_POLYMORPHIC_FLAG},
+                 {"isEmpty", IS_EMPTY_FLAG}}};
+
         for (size_t i = 0; i < properties.size(); ++i) {
-            result += "    \"" + properties[i].first +
-                      "\": " + (properties[i].second ? "true" : "false");
+            traits += "\"";
+            traits += properties[i].first;
+            traits += "\":";
+            traits += mFlags_.test(properties[i].second) ? "true" : "false";
             if (i < properties.size() - 1) {
-                result += ",";
+                traits += ",";
             }
-            result += "\n";
         }
 
-        result += "  }\n}";
+        std::string result;
+        result.reserve(name().size() + bareName().size() + traits.size() + 64);
+        result = "{\"typeName\":\"" + name() + "\",\"bareTypeName\":\"" +
+                 bareName() + "\",\"traits\":{" + traits + "}}";
+
         return result;
     }
 
@@ -406,7 +386,6 @@ private:
     const std::type_info* mBareTypeInfo_ = &typeid(void);
     Flags mFlags_ = Flags().set(IS_UNDEF_FLAG);
 
-    // Flag indices for type traits
     static constexpr unsigned int IS_CONST_FLAG = 0;
     static constexpr unsigned int IS_REFERENCE_FLAG = 1;
     static constexpr unsigned int IS_POINTER_FLAG = 2;
@@ -423,8 +402,6 @@ private:
     static constexpr unsigned int IS_DEFAULT_CONSTRUCTIBLE_FLAG = 13;
     static constexpr unsigned int IS_MOVEABLE_FLAG = 14;
     static constexpr unsigned int IS_COPYABLE_FLAG = 15;
-
-    // New C++20 flags
     static constexpr unsigned int IS_AGGREGATE_FLAG = 16;
     static constexpr unsigned int IS_BOUNDED_ARRAY_FLAG = 17;
     static constexpr unsigned int IS_UNBOUNDED_ARRAY_FLAG = 18;
@@ -433,48 +410,43 @@ private:
     static constexpr unsigned int IS_ABSTRACT_FLAG = 21;
     static constexpr unsigned int IS_POLYMORPHIC_FLAG = 22;
     static constexpr unsigned int IS_EMPTY_FLAG = 23;
-    // Flags 24-31 reserved for future expansion
 };
 
-// GetTypeInfo specializations
 template <typename T>
 struct GetTypeInfo {
-    constexpr static auto get() noexcept -> TypeInfo {
+    static constexpr auto get() noexcept -> TypeInfo {
         return TypeInfo::fromType<T>();
     }
 };
 
-// Specializations for smart pointers and references
 template <typename T>
 struct GetTypeInfo<std::shared_ptr<T>> {
-    constexpr static auto get() noexcept -> TypeInfo {
+    static constexpr auto get() noexcept -> TypeInfo {
         return TypeInfo::fromType<std::shared_ptr<T>>();
     }
 };
 
 template <typename T>
 struct GetTypeInfo<std::unique_ptr<T>> {
-    constexpr static auto get() noexcept -> TypeInfo {
+    static constexpr auto get() noexcept -> TypeInfo {
         return TypeInfo::fromType<std::unique_ptr<T>>();
     }
 };
 
 template <typename T>
 struct GetTypeInfo<std::weak_ptr<T>> {
-    constexpr static auto get() noexcept -> TypeInfo {
+    static constexpr auto get() noexcept -> TypeInfo {
         return TypeInfo::fromType<std::weak_ptr<T>>();
     }
 };
 
-// Added support for C++20 span
 template <typename T, std::size_t Extent>
 struct GetTypeInfo<std::span<T, Extent>> {
-    constexpr static auto get() noexcept -> TypeInfo {
+    static constexpr auto get() noexcept -> TypeInfo {
         return TypeInfo::fromType<std::span<T, Extent>>();
     }
 };
 
-// Reference specializations
 template <typename T>
 struct GetTypeInfo<const std::shared_ptr<T>&>
     : GetTypeInfo<std::shared_ptr<T>> {};
@@ -490,10 +462,9 @@ struct GetTypeInfo<const std::weak_ptr<T>&> : GetTypeInfo<std::weak_ptr<T>> {};
 template <typename T>
 struct GetTypeInfo<std::weak_ptr<T>&> : GetTypeInfo<std::weak_ptr<T>> {};
 
-// Reference wrapper specialization
 template <typename T>
 struct GetTypeInfo<const std::reference_wrapper<T>&> {
-    constexpr static auto get() noexcept -> TypeInfo {
+    static constexpr auto get() noexcept -> TypeInfo {
         using BareT = BareType<T>;
         return TypeInfo::fromType<BareT>();
     }
@@ -520,41 +491,38 @@ constexpr auto userType() noexcept -> TypeInfo {
     return GetTypeInfo<T>::get();
 }
 
-// Thread-safe type registry implementation
 namespace detail {
+/**
+ * @brief Thread-safe type registry implementation
+ */
 class TypeRegistry {
 public:
     using RegistryMap = std::unordered_map<std::string, TypeInfo>;
 
-    // Get singleton instance
     static TypeRegistry& getInstance() {
         static TypeRegistry instance;
         return instance;
     }
 
-    // Register a type with a name
     void registerType(std::string_view type_name, const TypeInfo& typeInfo) {
         std::unique_lock lock(mMutex);
-        mRegistry[std::string(type_name)] = typeInfo;
+        mRegistry.emplace(type_name, typeInfo);
     }
 
-    // Get TypeInfo by name
     std::optional<TypeInfo> getTypeInfo(std::string_view type_name) const {
         std::shared_lock lock(mMutex);
-        auto it = mRegistry.find(std::string(type_name));
-        if (it != mRegistry.end()) {
+        if (auto it = mRegistry.find(std::string(type_name));
+            it != mRegistry.end()) {
             return it->second;
         }
         return std::nullopt;
     }
 
-    // Check if a type is registered
     bool isTypeRegistered(std::string_view type_name) const {
         std::shared_lock lock(mMutex);
-        return mRegistry.find(std::string(type_name)) != mRegistry.end();
+        return mRegistry.contains(std::string(type_name));
     }
 
-    // Get all registered type names
     std::vector<std::string> getRegisteredTypeNames() const {
         std::shared_lock lock(mMutex);
         std::vector<std::string> names;
@@ -565,7 +533,6 @@ public:
         return names;
     }
 
-    // Clear registry (mainly for testing)
     void clear() {
         std::unique_lock lock(mMutex);
         mRegistry.clear();
@@ -573,7 +540,6 @@ public:
 
 private:
     TypeRegistry() = default;
-
     mutable std::shared_mutex mMutex;
     RegistryMap mRegistry;
 };
@@ -662,7 +628,6 @@ constexpr bool areTypesCompatible() {
 
 /**
  * @brief Type factory to create instances from type names
- * Creates objects of registered types using default construction
  */
 class TypeFactory {
 public:
@@ -674,14 +639,12 @@ public:
     template <typename BaseType = void>
     static std::shared_ptr<BaseType> createInstance(
         std::string_view type_name) {
-        // Implementation requires registration of factory functions
-        // This is a simplified version
         static std::unordered_map<std::string,
                                   std::function<std::shared_ptr<BaseType>()>>
             factories;
 
-        auto it = factories.find(std::string(type_name));
-        if (it != factories.end()) {
+        if (auto it = factories.find(std::string(type_name));
+            it != factories.end()) {
             return it->second();
         }
         return nullptr;
@@ -699,15 +662,14 @@ public:
             static std::unordered_map<
                 std::string, std::function<std::shared_ptr<BaseType>()>>
                 factories;
-            factories[std::string(type_name)] =
-                []() -> std::shared_ptr<BaseType> {
+            factories.emplace(type_name, []() -> std::shared_ptr<BaseType> {
                 if constexpr (std::is_convertible_v<T*, BaseType*> ||
                               std::is_void_v<BaseType>) {
                     return std::make_shared<T>();
                 } else {
                     return nullptr;
                 }
-            };
+            });
             registerType<T>(type_name);
         }
     }
@@ -715,13 +677,11 @@ public:
 
 }  // namespace atom::meta
 
-// Stream operator for TypeInfo
-inline auto operator<<(std::ostream& oss,
-                       const atom::meta::TypeInfo& typeInfo) -> std::ostream& {
+inline auto operator<<(std::ostream& oss, const atom::meta::TypeInfo& typeInfo)
+    -> std::ostream& {
     return oss << typeInfo.name();
 }
 
-// Hash specialization for TypeInfo
 namespace std {
 template <>
 struct hash<atom::meta::TypeInfo> {
@@ -737,4 +697,4 @@ struct hash<atom::meta::TypeInfo> {
 };
 }  // namespace std
 
-#endif  // ATOM_META_TYPE_INFO_HPP
+#endif

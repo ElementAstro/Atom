@@ -17,6 +17,8 @@
 #include <ranges>
 #include <string_view>
 #include <type_traits>
+#include <typeindex>
+#include <unordered_map>
 #include <vector>
 
 #include "atom/error/exception.hpp"
@@ -25,7 +27,6 @@ using json = nlohmann::json;
 
 namespace atom::meta {
 
-// Custom exception types
 class ProxyTypeError : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
@@ -36,7 +37,6 @@ public:
     using std::runtime_error::runtime_error;
 };
 
-// Parameter compatibility concept
 template <typename T>
 concept ArgumentCompatible =
     std::copyable<T> && !std::is_pointer_v<T> && !std::is_void_v<T>;
@@ -49,29 +49,17 @@ concept ArgumentCompatible =
  */
 class Arg {
 public:
-    Arg();
-    explicit Arg(std::string name);
-    Arg(std::string name, std::any default_value);
+    Arg() = default;
+    explicit Arg(std::string name) : name_(std::move(name)) {}
+    Arg(std::string name, std::any default_value)
+        : name_(std::move(name)), default_value_(std::move(default_value)) {}
 
-    // Template constructor
     template <ArgumentCompatible T>
     Arg(std::string name, T&& value)
         : name_(std::move(name)), default_value_(std::forward<T>(value)) {}
 
-    // Move constructor
-    Arg(Arg&& other) noexcept
-        : name_(std::move(other.name_)),
-          default_value_(std::move(other.default_value_)) {}
-
-    Arg& operator=(Arg&& other) noexcept {
-        if (this != &other) {
-            name_ = std::move(other.name_);
-            default_value_ = std::move(other.default_value_);
-        }
-        return *this;
-    }
-
-    // Copy constructor and assignment operator
+    Arg(Arg&& other) noexcept = default;
+    Arg& operator=(Arg&& other) noexcept = default;
     Arg(const Arg&) = default;
     Arg& operator=(const Arg&) = default;
 
@@ -79,20 +67,24 @@ public:
      * @brief Get the parameter name
      * @return Reference to parameter name
      */
-    [[nodiscard]] auto getName() const -> const std::string&;
+    [[nodiscard]] const std::string& getName() const noexcept { return name_; }
 
     /**
      * @brief Get the parameter type
      * @return Type information of the parameter
      */
-    [[nodiscard]] auto getType() const -> const std::type_info&;
+    [[nodiscard]] const std::type_info& getType() const noexcept {
+        return default_value_ ? default_value_->type() : typeid(void);
+    }
 
     /**
      * @brief Get the default value
      * @return Optional containing the default value if set
      */
-    [[nodiscard]] auto getDefaultValue() const
-        -> const std::optional<std::any>&;
+    [[nodiscard]] const std::optional<std::any>& getDefaultValue()
+        const noexcept {
+        return default_value_;
+    }
 
     /**
      * @brief Type-safe value setter
@@ -110,7 +102,7 @@ public:
      * @return True if parameter is of type T
      */
     template <typename T>
-    [[nodiscard]] bool isType() const {
+    [[nodiscard]] bool isType() const noexcept {
         return default_value_ && default_value_->type() == typeid(T);
     }
 
@@ -120,7 +112,7 @@ public:
      * @return Optional containing the value if cast successful
      */
     template <typename T>
-    [[nodiscard]] std::optional<T> getValueAs() const {
+    [[nodiscard]] std::optional<T> getValueAs() const noexcept {
         if (!default_value_) {
             return std::nullopt;
         }
@@ -137,22 +129,6 @@ private:
     std::optional<std::any> default_value_;
 };
 
-inline Arg::Arg() = default;
-inline Arg::Arg(std::string name) : name_(std::move(name)) {}
-
-inline Arg::Arg(std::string name, std::any default_value)
-    : name_(std::move(name)), default_value_(std::move(default_value)) {}
-
-inline auto Arg::getName() const -> const std::string& { return name_; }
-
-inline auto Arg::getType() const -> const std::type_info& {
-    return default_value_ ? default_value_->type() : typeid(void);
-}
-
-inline auto Arg::getDefaultValue() const -> const std::optional<std::any>& {
-    return default_value_;
-}
-
 /**
  * @brief Serialize std::any to JSON
  * @param j Output JSON object
@@ -160,27 +136,59 @@ inline auto Arg::getDefaultValue() const -> const std::optional<std::any>& {
  * @throws ProxyTypeError if serialization fails
  */
 inline void to_json(nlohmann::json& j, const std::any& a) {
-    try {
-        if (a.type() == typeid(int)) {
+    static const auto type_handlers = []() {
+        std::unordered_map<
+            std::type_index,
+            std::function<void(nlohmann::json&, const std::any&)>>
+            handlers;
+        handlers[std::type_index(typeid(int))] = [](nlohmann::json& j,
+                                                    const std::any& a) {
             j = std::any_cast<int>(a);
-        } else if (a.type() == typeid(float)) {
+        };
+        handlers[std::type_index(typeid(float))] = [](nlohmann::json& j,
+                                                      const std::any& a) {
             j = std::any_cast<float>(a);
-        } else if (a.type() == typeid(double)) {
+        };
+        handlers[std::type_index(typeid(double))] = [](nlohmann::json& j,
+                                                       const std::any& a) {
             j = std::any_cast<double>(a);
-        } else if (a.type() == typeid(bool)) {
+        };
+        handlers[std::type_index(typeid(bool))] = [](nlohmann::json& j,
+                                                     const std::any& a) {
             j = std::any_cast<bool>(a);
-        } else if (a.type() == typeid(std::string)) {
+        };
+        handlers[std::type_index(typeid(std::string))] = [](nlohmann::json& j,
+                                                            const std::any& a) {
             j = std::any_cast<std::string>(a);
-        } else if (a.type() == typeid(std::string_view)) {
-            j = static_cast<std::string>(std::any_cast<std::string_view>(a));
-        } else if (a.type() == typeid(const char*)) {
+        };
+        handlers[std::type_index(typeid(std::string_view))] =
+            [](nlohmann::json& j, const std::any& a) {
+                j = static_cast<std::string>(
+                    std::any_cast<std::string_view>(a));
+            };
+        handlers[std::type_index(typeid(const char*))] = [](nlohmann::json& j,
+                                                            const std::any& a) {
             j = std::any_cast<const char*>(a);
-        } else if (a.type() == typeid(std::vector<std::string>)) {
-            j = std::any_cast<std::vector<std::string>>(a);
-        } else if (a.type() == typeid(std::vector<int>)) {
-            j = std::any_cast<std::vector<int>>(a);
-        } else if (a.type() == typeid(std::vector<double>)) {
-            j = std::any_cast<std::vector<double>>(a);
+        };
+        handlers[std::type_index(typeid(std::vector<std::string>))] =
+            [](nlohmann::json& j, const std::any& a) {
+                j = std::any_cast<std::vector<std::string>>(a);
+            };
+        handlers[std::type_index(typeid(std::vector<int>))] =
+            [](nlohmann::json& j, const std::any& a) {
+                j = std::any_cast<std::vector<int>>(a);
+            };
+        handlers[std::type_index(typeid(std::vector<double>))] =
+            [](nlohmann::json& j, const std::any& a) {
+                j = std::any_cast<std::vector<double>>(a);
+            };
+        return handlers;
+    }();
+
+    try {
+        auto it = type_handlers.find(std::type_index(a.type()));
+        if (it != type_handlers.end()) {
+            it->second(j, a);
         } else {
             throw ProxyTypeError("Unsupported type for JSON serialization: " +
                                  std::string(a.type().name()));
@@ -210,20 +218,16 @@ inline void from_json(const nlohmann::json& j, std::any& a) {
         } else if (j.is_null()) {
             a = std::any{};
         } else if (j.is_array()) {
-            if (!j.empty()) {
-                if (j[0].is_string()) {
-                    a = j.get<std::vector<std::string>>();
-                } else if (j[0].is_number_integer()) {
-                    a = j.get<std::vector<int>>();
-                } else if (j[0].is_number_float()) {
-                    a = j.get<std::vector<double>>();
-                } else {
-                    throw ProxyTypeError(
-                        "Unsupported array element type in JSON");
-                }
+            if (j.empty()) {
+                a = std::vector<std::string>{};
+            } else if (j[0].is_string()) {
+                a = j.get<std::vector<std::string>>();
+            } else if (j[0].is_number_integer()) {
+                a = j.get<std::vector<int>>();
+            } else if (j[0].is_number_float()) {
+                a = j.get<std::vector<double>>();
             } else {
-                a = std::vector<std::string>{};  // Default to empty string
-                                                 // array
+                throw ProxyTypeError("Unsupported array element type in JSON");
             }
         } else {
             throw ProxyTypeError("Unsupported JSON type: " +
@@ -241,9 +245,9 @@ inline void from_json(const nlohmann::json& j, std::any& a) {
  */
 inline void to_json(nlohmann::json& j, const Arg& arg) {
     j = nlohmann::json{{"name", arg.getName()}};
-    if (arg.getDefaultValue()) {
+    if (const auto& defaultValue = arg.getDefaultValue(); defaultValue) {
         try {
-            to_json(j["default_value"], *arg.getDefaultValue());
+            to_json(j["default_value"], *defaultValue);
             j["type"] = arg.getType().name();
         } catch (const ProxyTypeError& e) {
             j["default_value"] = nullptr;
@@ -262,14 +266,14 @@ inline void to_json(nlohmann::json& j, const Arg& arg) {
 inline void from_json(const nlohmann::json& j, Arg& arg) {
     std::string name = j.at("name").get<std::string>();
 
-    std::optional<std::any> defaultValue;
-    if (!j.at("default_value").is_null()) {
+    if (const auto& defaultValueJson = j.at("default_value");
+        !defaultValueJson.is_null()) {
         std::any value;
-        from_json(j.at("default_value"), value);
-        defaultValue = value;
+        from_json(defaultValueJson, value);
+        arg = Arg(std::move(name), std::move(value));
+    } else {
+        arg = Arg(std::move(name));
     }
-
-    arg = Arg(std::move(name), defaultValue ? *defaultValue : std::any());
 }
 
 /**
@@ -279,8 +283,8 @@ inline void from_json(const nlohmann::json& j, Arg& arg) {
  */
 inline void to_json(nlohmann::json& j, const std::vector<Arg>& args) {
     j = nlohmann::json::array();
-    for (const auto& a : args) {
-        j.push_back(a);
+    for (const auto& arg : args) {
+        j.push_back(arg);
     }
 }
 
@@ -293,9 +297,9 @@ inline void from_json(const nlohmann::json& j, std::vector<Arg>& args) {
     args.clear();
     args.reserve(j.size());
 
-    for (const auto& a : j) {
+    for (const auto& jsonArg : j) {
         Arg temp;
-        from_json(a, temp);
+        from_json(jsonArg, temp);
         args.push_back(std::move(temp));
     }
 }
@@ -308,22 +312,12 @@ inline void from_json(const nlohmann::json& j, std::vector<Arg>& args) {
  */
 class FunctionParams {
 public:
-    /**
-     * @brief Default constructor for FunctionParams
-     */
     FunctionParams() = default;
-
-    /**
-     * @brief Constructs FunctionParams with a single Arg value
-     *
-     * @param arg Initial Arg to store in the parameters
-     */
     explicit FunctionParams(const Arg& arg) : params_{arg} {}
     explicit FunctionParams(Arg&& arg) : params_{std::move(arg)} {}
 
     /**
      * @brief Constructs FunctionParams from any range of Args
-     *
      * @tparam Range Type of the range
      * @param range Range of Arg values to initialize parameters
      */
@@ -332,70 +326,38 @@ public:
     explicit constexpr FunctionParams(const Range& range)
         : params_(std::ranges::begin(range), std::ranges::end(range)) {}
 
-    /**
-     * @brief Constructs FunctionParams from initializer list of Args
-     *
-     * @param ilist Initializer list of Arg values
-     */
     constexpr FunctionParams(std::initializer_list<Arg> ilist)
         : params_(ilist) {}
 
-    // Move constructor and assignment operator
-    FunctionParams(FunctionParams&& other) noexcept
-        : params_(std::move(other.params_)) {}
-
-    FunctionParams& operator=(FunctionParams&& other) noexcept {
-        if (this != &other) {
-            params_ = std::move(other.params_);
-        }
-        return *this;
-    }
-
-    // Copy constructor and assignment operator
+    FunctionParams(FunctionParams&& other) noexcept = default;
+    FunctionParams& operator=(FunctionParams&& other) noexcept = default;
     FunctionParams(const FunctionParams&) = default;
     FunctionParams& operator=(const FunctionParams&) = default;
 
     /**
      * @brief Access parameter at given index
-     *
      * @param t_i Index of parameter to access
      * @return const Arg& Parameter at given index
      * @throws std::out_of_range if index is out of range
      */
-    [[nodiscard]] auto operator[](std::size_t t_i) const -> const Arg& {
+    [[nodiscard]] const Arg& operator[](std::size_t t_i) const {
         if (t_i >= params_.size()) {
             THROW_OUT_OF_RANGE("Index out of range: " + std::to_string(t_i) +
                                " >= " + std::to_string(params_.size()));
         }
-        return params_.at(t_i);
+        return params_[t_i];
     }
 
-    /**
-     * @brief Access parameter at given index (non-const version)
-     *
-     * @param t_i Index of parameter to access
-     * @return Arg& Parameter at given index
-     * @throws std::out_of_range if index is out of range
-     */
-    [[nodiscard]] auto operator[](std::size_t t_i) -> Arg& {
+    [[nodiscard]] Arg& operator[](std::size_t t_i) {
         if (t_i >= params_.size()) {
             THROW_OUT_OF_RANGE("Index out of range: " + std::to_string(t_i) +
                                " >= " + std::to_string(params_.size()));
         }
-        return params_.at(t_i);
+        return params_[t_i];
     }
 
-    /**
-     * @brief Return beginning iterator for parameters
-     * @return Iterator to first parameter
-     */
     [[nodiscard]] auto begin() const noexcept { return params_.begin(); }
     [[nodiscard]] auto begin() noexcept { return params_.begin(); }
-
-    /**
-     * @brief Return end iterator for parameters
-     * @return Iterator past the last parameter
-     */
     [[nodiscard]] auto end() const noexcept { return params_.end(); }
     [[nodiscard]] auto end() noexcept { return params_.end(); }
 
@@ -404,19 +366,14 @@ public:
      * @return Reference to first parameter
      * @throws std::out_of_range if container is empty
      */
-    [[nodiscard]] auto front() const -> const Arg& {
+    [[nodiscard]] const Arg& front() const {
         if (params_.empty()) {
             THROW_OUT_OF_RANGE("Cannot access front() of empty FunctionParams");
         }
         return params_.front();
     }
 
-    /**
-     * @brief Return the first parameter (non-const version)
-     * @return Reference to first parameter
-     * @throws std::out_of_range if container is empty
-     */
-    [[nodiscard]] auto front() -> Arg& {
+    [[nodiscard]] Arg& front() {
         if (params_.empty()) {
             THROW_OUT_OF_RANGE("Cannot access front() of empty FunctionParams");
         }
@@ -428,45 +385,23 @@ public:
      * @return Reference to last parameter
      * @throws std::out_of_range if container is empty
      */
-    [[nodiscard]] auto back() const -> const Arg& {
+    [[nodiscard]] const Arg& back() const {
         if (params_.empty()) {
             THROW_OUT_OF_RANGE("Cannot access back() of empty FunctionParams");
         }
         return params_.back();
     }
 
-    /**
-     * @brief Return the last parameter (non-const version)
-     * @return Reference to last parameter
-     * @throws std::out_of_range if container is empty
-     */
-    [[nodiscard]] auto back() -> Arg& {
+    [[nodiscard]] Arg& back() {
         if (params_.empty()) {
             THROW_OUT_OF_RANGE("Cannot access back() of empty FunctionParams");
         }
         return params_.back();
     }
 
-    /**
-     * @brief Return count of parameters
-     * @return Number of parameters
-     */
-    [[nodiscard]] auto size() const noexcept -> std::size_t {
-        return params_.size();
-    }
+    [[nodiscard]] std::size_t size() const noexcept { return params_.size(); }
+    [[nodiscard]] bool empty() const noexcept { return params_.empty(); }
 
-    /**
-     * @brief Check if there are no parameters
-     * @return True if no parameters exist
-     */
-    [[nodiscard]] auto empty() const noexcept -> bool {
-        return params_.empty();
-    }
-
-    /**
-     * @brief Reserve memory for parameters
-     * @param capacity Number of parameters to reserve space for
-     */
     void reserve(std::size_t capacity) { params_.reserve(capacity); }
 
     /**
@@ -479,56 +414,34 @@ public:
         params_.emplace_back(std::forward<Args>(args)...);
     }
 
-    /**
-     * @brief Add parameter to the end (move version)
-     * @param arg Parameter to add
-     */
     void push_back(Arg&& arg) { params_.push_back(std::move(arg)); }
-
-    /**
-     * @brief Add parameter to the end (copy version)
-     * @param arg Parameter to add
-     */
     void push_back(const Arg& arg) { params_.push_back(arg); }
-
-    /**
-     * @brief Clear all parameters
-     */
     void clear() noexcept { params_.clear(); }
-
-    /**
-     * @brief Resize parameter container
-     * @param new_size New size of container
-     */
     void resize(std::size_t new_size) { params_.resize(new_size); }
 
     /**
      * @brief Convert parameters to vector of Args
      * @return Const reference to internal vector
      */
-    [[nodiscard]] auto toVector() const -> const std::vector<Arg>& {
+    [[nodiscard]] const std::vector<Arg>& toVector() const noexcept {
         return params_;
     }
-
-    /**
-     * @brief Convert parameters to vector of Args (non-const version)
-     * @return Reference to internal vector
-     */
-    [[nodiscard]] auto toVector() -> std::vector<Arg>& { return params_; }
+    [[nodiscard]] std::vector<Arg>& toVector() noexcept { return params_; }
 
     /**
      * @brief Convert parameters to vector of std::any
      * @return Vector containing parameter values as std::any
      */
-    [[nodiscard]] auto toAnyVector() const -> std::vector<std::any> {
+    [[nodiscard]] std::vector<std::any> toAnyVector() const {
         std::vector<std::any> anyVec;
         anyVec.reserve(params_.size());
 
         for (const auto& arg : params_) {
-            if (arg.getDefaultValue()) {
-                anyVec.push_back(*arg.getDefaultValue());
+            if (const auto& defaultValue = arg.getDefaultValue();
+                defaultValue) {
+                anyVec.push_back(*defaultValue);
             } else {
-                anyVec.push_back({});
+                anyVec.emplace_back();
             }
         }
         return anyVec;
@@ -536,72 +449,66 @@ public:
 
     /**
      * @brief Get parameter by name
-     *
      * @param name Name of parameter to get
      * @return std::optional<Arg> Parameter if found, std::nullopt otherwise
      */
-    [[nodiscard]] auto getByName(const std::string& name) const
-        -> std::optional<Arg> {
-        if (auto findTt = std::ranges::find_if(
-                params_, [&](const Arg& arg) { return arg.getName() == name; });
-            findTt != params_.end()) {
-            return *findTt;
+    [[nodiscard]] std::optional<Arg> getByName(const std::string& name) const {
+        if (auto it = std::ranges::find_if(
+                params_,
+                [&name](const Arg& arg) { return arg.getName() == name; });
+            it != params_.end()) {
+            return *it;
         }
         return std::nullopt;
     }
 
     /**
      * @brief Get parameter reference by name
-     *
      * @param name Name of parameter to get
      * @return Arg* Pointer to parameter if found, nullptr otherwise
      */
-    [[nodiscard]] auto getByNameRef(const std::string& name) -> Arg* {
+    [[nodiscard]] Arg* getByNameRef(const std::string& name) noexcept {
         auto it = std::ranges::find_if(
-            params_, [&](const Arg& arg) { return arg.getName() == name; });
+            params_, [&name](const Arg& arg) { return arg.getName() == name; });
         return it != params_.end() ? &(*it) : nullptr;
     }
 
     /**
      * @brief Slice parameters from given start index to end index
-     *
      * @param start Start index of slice
      * @param end End index of slice
      * @return FunctionParams Parameters after slicing
      * @throws std::out_of_range if slice range is invalid
      */
-    [[nodiscard]] auto slice(std::size_t start,
-                             std::size_t end) const -> FunctionParams {
+    [[nodiscard]] FunctionParams slice(std::size_t start,
+                                       std::size_t end) const {
         if (start > end || end > params_.size()) {
             THROW_OUT_OF_RANGE("Invalid slice range: [" +
                                std::to_string(start) + ", " +
                                std::to_string(end) + "] for size " +
                                std::to_string(params_.size()));
         }
-        using DifferenceType = std::make_signed_t<std::size_t>;
         return FunctionParams(std::vector<Arg>(
-            params_.begin() + static_cast<DifferenceType>(start),
-            params_.begin() + static_cast<DifferenceType>(end)));
+            params_.begin() + static_cast<std::ptrdiff_t>(start),
+            params_.begin() + static_cast<std::ptrdiff_t>(end)));
     }
 
     /**
      * @brief Filter parameters using predicate
-     *
      * @tparam Predicate Type of predicate
      * @param pred Predicate to filter parameters
      * @return FunctionParams Parameters after filtering
      */
     template <typename Predicate>
-    [[nodiscard]] auto filter(Predicate pred) const -> FunctionParams {
+    [[nodiscard]] FunctionParams filter(Predicate pred) const {
         std::vector<Arg> filtered;
         filtered.reserve(params_.size());
         std::ranges::copy_if(params_, std::back_inserter(filtered), pred);
-        return FunctionParams(filtered);
+        return FunctionParams(std::move(filtered));
     }
 
     /**
      * @brief Set parameter at given index to new Arg
-     *
      * @param index Index of parameter to set
      * @param arg New Arg to set
      * @throws std::out_of_range if index is out of range
@@ -614,13 +521,6 @@ public:
         params_[index] = arg;
     }
 
-    /**
-     * @brief Set parameter at given index to new Arg (move version)
-     *
-     * @param index Index of parameter to set
-     * @param arg New Arg to set
-     * @throws std::out_of_range if index is out of range
-     */
     void set(std::size_t index, Arg&& arg) {
         if (index >= params_.size()) {
             THROW_OUT_OF_RANGE("Index out of range: " + std::to_string(index) +
@@ -631,68 +531,59 @@ public:
 
     /**
      * @brief Get parameter value as specified type
-     *
      * @tparam T Expected return type
      * @param index Parameter index
      * @return std::optional<T> Value if successful, std::nullopt otherwise
      */
     template <typename T>
-    [[nodiscard]] auto getValueAs(size_t index) const -> std::optional<T> {
+    [[nodiscard]] std::optional<T> getValueAs(
+        std::size_t index) const noexcept {
         if (index >= params_.size()) {
             return std::nullopt;
         }
-
-        const auto& value = params_[index].getDefaultValue();
-        if (!value.has_value()) {
-            return std::nullopt;
-        }
-
-        try {
-            return std::any_cast<T>(*value);
-        } catch (const std::bad_any_cast&) {
-            return std::nullopt;
-        }
+        return params_[index].template getValueAs<T>();
     }
 
     /**
      * @brief Get value or return default if not found
-     *
      * @tparam T Expected return type
      * @param index Parameter index
      * @param defaultVal Default value to return if parameter not found
      * @return Parameter value or default value
      */
     template <typename T>
-    [[nodiscard]] auto getValue(size_t index, const T& defaultVal) const -> T {
+    [[nodiscard]] T getValue(std::size_t index,
+                             const T& defaultVal) const noexcept {
         auto result = getValueAs<T>(index);
         return result.value_or(defaultVal);
     }
 
     /**
      * @brief Get string_view for improved performance with string parameters
-     *
      * @param index Parameter index
      * @return std::optional<std::string_view> String view if parameter is
      * string-like
      */
-    [[nodiscard]] auto getStringView(size_t index) const
-        -> std::optional<std::string_view> {
+    [[nodiscard]] std::optional<std::string_view> getStringView(
+        std::size_t index) const noexcept {
         if (index >= params_.size()) {
             return std::nullopt;
         }
 
         const auto& arg = params_[index];
-        if (!arg.getDefaultValue()) {
+        const auto& defaultValue = arg.getDefaultValue();
+        if (!defaultValue) {
             return std::nullopt;
         }
 
-        const auto& value = *arg.getDefaultValue();
+        const auto& value = *defaultValue;
+        const auto& type = value.type();
 
-        if (value.type() == typeid(std::string)) {
+        if (type == typeid(std::string)) {
             return std::string_view(std::any_cast<const std::string&>(value));
-        } else if (value.type() == typeid(const char*)) {
+        } else if (type == typeid(const char*)) {
             return std::string_view(std::any_cast<const char*>(value));
-        } else if (value.type() == typeid(std::string_view)) {
+        } else if (type == typeid(std::string_view)) {
             return std::any_cast<std::string_view>(value);
         }
 
@@ -706,9 +597,7 @@ public:
     [[nodiscard]] nlohmann::json toJson() const {
         nlohmann::json result = nlohmann::json::array();
         for (const auto& arg : params_) {
-            nlohmann::json argJson;
-            to_json(argJson, arg);
-            result.push_back(argJson);
+            result.push_back(arg);
         }
         return result;
     }
@@ -726,7 +615,7 @@ public:
     }
 
 private:
-    std::vector<Arg> params_;  ///< Vector of Arg objects
+    std::vector<Arg> params_;
 };
 
 }  // namespace atom::meta

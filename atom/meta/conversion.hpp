@@ -19,6 +19,9 @@
 
 namespace atom::meta {
 
+/**
+ * @brief Exception thrown when type conversion fails
+ */
 class BadConversionException : public error::RuntimeError {
     using atom::error::RuntimeError::RuntimeError;
 };
@@ -27,16 +30,39 @@ class BadConversionException : public error::RuntimeError {
     throw BadConversionException(ATOM_FILE_NAME, ATOM_FILE_LINE, \
                                  ATOM_FUNC_NAME, __VA_ARGS__)
 
+/**
+ * @brief Base class for all type conversions
+ */
 class TypeConversionBase {
 public:
+    /**
+     * @brief Convert from source type to target type
+     * @param from The source value to convert
+     * @return The converted value
+     */
     ATOM_NODISCARD virtual auto convert(const std::any& from) const
         -> std::any = 0;
+
+    /**
+     * @brief Convert from target type back to source type
+     * @param toAny The target value to convert back
+     * @return The converted value
+     */
     ATOM_NODISCARD virtual auto convertDown(const std::any& toAny) const
         -> std::any = 0;
 
+    /**
+     * @brief Get the target type information
+     * @return Target type information
+     */
     ATOM_NODISCARD virtual auto to() const ATOM_NOEXCEPT -> const TypeInfo& {
         return toType;
     }
+
+    /**
+     * @brief Get the source type information
+     * @return Source type information
+     */
     ATOM_NODISCARD virtual auto from() const ATOM_NOEXCEPT -> const TypeInfo& {
         return fromType;
     }
@@ -49,6 +75,10 @@ public:
         return toType;
     }
 
+    /**
+     * @brief Check if this conversion is bidirectional
+     * @return true if bidirectional, false otherwise
+     */
     ATOM_NODISCARD virtual auto bidir() const ATOM_NOEXCEPT -> bool {
         return true;
     }
@@ -68,6 +98,9 @@ protected:
     TypeInfo fromType;
 };
 
+/**
+ * @brief Static conversion implementation for compile-time type casting
+ */
 template <typename From, typename To>
 class StaticConversion : public TypeConversionBase {
 public:
@@ -75,18 +108,14 @@ public:
 
     ATOM_NODISCARD auto convert(const std::any& from) const
         -> std::any override {
-        // Pointer types static conversion (upcasting)
         try {
             if constexpr (std::is_pointer_v<From> && std::is_pointer_v<To>) {
                 auto fromPtr = std::any_cast<From>(from);
                 return std::any(static_cast<To>(fromPtr));
-            }
-            // Reference types static conversion (upcasting)
-            else if constexpr (std::is_reference_v<From> &&
-                               std::is_reference_v<To>) {
+            } else if constexpr (std::is_reference_v<From> &&
+                                 std::is_reference_v<To>) {
                 auto& fromRef = std::any_cast<From&>(from);
                 return std::any(static_cast<To&>(fromRef));
-
             } else {
                 THROW_CONVERSION_ERROR("Failed to convert ", fromType.name(),
                                        " to ", toType.name());
@@ -99,18 +128,14 @@ public:
 
     ATOM_NODISCARD auto convertDown(const std::any& toAny) const
         -> std::any override {
-        // Pointer types static conversion (downcasting)
         try {
             if constexpr (std::is_pointer_v<From> && std::is_pointer_v<To>) {
                 auto toPtr = std::any_cast<To>(toAny);
                 return std::any(static_cast<From>(toPtr));
-            }
-            // Reference types static conversion (downcasting)
-            else if constexpr (std::is_reference_v<From> &&
-                               std::is_reference_v<To>) {
+            } else if constexpr (std::is_reference_v<From> &&
+                                 std::is_reference_v<To>) {
                 auto& toRef = std::any_cast<To&>(toAny);
                 return std::any(static_cast<From&>(toRef));
-
             } else {
                 THROW_CONVERSION_ERROR("Failed to convert ", toType.name(),
                                        " to ", fromType.name());
@@ -122,6 +147,9 @@ public:
     }
 };
 
+/**
+ * @brief Dynamic conversion implementation for runtime type casting
+ */
 template <typename From, typename To>
 class DynamicConversion : public TypeConversionBase {
 public:
@@ -130,7 +158,6 @@ public:
 
     ATOM_NODISCARD auto convert(const std::any& from) const
         -> std::any override {
-        // Pointer types dynamic conversion
         if constexpr (std::is_pointer_v<From> && std::is_pointer_v<To>) {
             auto fromPtr = std::any_cast<From>(from);
             auto convertedPtr = dynamic_cast<To>(fromPtr);
@@ -138,10 +165,8 @@ public:
                 throw std::bad_cast();
             }
             return std::any(convertedPtr);
-        }
-        // Reference types dynamic conversion
-        else if constexpr (std::is_reference_v<From> &&
-                           std::is_reference_v<To>) {
+        } else if constexpr (std::is_reference_v<From> &&
+                             std::is_reference_v<To>) {
             try {
                 auto& fromRef = std::any_cast<From&>(from);
                 return std::any(dynamic_cast<To&>(fromRef));
@@ -157,7 +182,6 @@ public:
 
     ATOM_NODISCARD auto convertDown(const std::any& toAny) const
         -> std::any override {
-        // Pointer types dynamic conversion
         if constexpr (std::is_pointer_v<From> && std::is_pointer_v<To>) {
             auto toPtr = std::any_cast<To>(toAny);
             auto convertedPtr = dynamic_cast<From>(toPtr);
@@ -165,10 +189,8 @@ public:
                 throw std::bad_cast();
             }
             return std::any(convertedPtr);
-        }
-        // Reference types dynamic conversion
-        else if constexpr (std::is_reference_v<From> &&
-                           std::is_reference_v<To>) {
+        } else if constexpr (std::is_reference_v<From> &&
+                             std::is_reference_v<To>) {
             try {
                 auto& toRef = std::any_cast<To&>(toAny);
                 return std::any(dynamic_cast<From&>(toRef));
@@ -183,6 +205,9 @@ public:
     }
 };
 
+/**
+ * @brief Helper function to create base class conversion
+ */
 template <typename Base, typename Derived>
 auto baseClass() -> std::shared_ptr<TypeConversionBase> {
     if constexpr (std::is_polymorphic_v<Base> &&
@@ -193,7 +218,9 @@ auto baseClass() -> std::shared_ptr<TypeConversionBase> {
     }
 }
 
-// Specialized conversion for std::vector
+/**
+ * @brief Specialized conversion for std::vector types
+ */
 template <typename From, typename To>
 class VectorConversion : public TypeConversionBase {
 public:
@@ -209,7 +236,6 @@ public:
             toVec.reserve(fromVec.size());
 
             for (const auto& elem : fromVec) {
-                // Convert each element using dynamic cast
                 auto convertedElem =
                     std::dynamic_pointer_cast<typename To::element_type>(elem);
                 if (!convertedElem) {
@@ -233,7 +259,6 @@ public:
             fromVec.reserve(toVec.size());
 
             for (const auto& elem : toVec) {
-                // Convert each element using dynamic cast
                 auto convertedElem =
                     std::dynamic_pointer_cast<typename From::element_type>(
                         elem);
@@ -251,6 +276,9 @@ public:
     }
 };
 
+/**
+ * @brief Specialized conversion for map types
+ */
 template <template <typename...> class MapType, typename K1, typename V1,
           typename K2, typename V2>
 class MapConversion : public TypeConversionBase {
@@ -306,6 +334,9 @@ public:
     }
 };
 
+/**
+ * @brief Specialized conversion for sequence types
+ */
 template <template <typename...> class SeqType, typename From, typename To>
 class SequenceConversion : public TypeConversionBase {
 public:
@@ -320,7 +351,6 @@ public:
             SeqType<To> toSeq;
 
             for (const auto& elem : fromSeq) {
-                // Convert each element using dynamic cast
                 auto convertedElem =
                     std::dynamic_pointer_cast<typename To::element_type>(elem);
                 if (!convertedElem) {
@@ -360,6 +390,9 @@ public:
     }
 };
 
+/**
+ * @brief Specialized conversion for set types
+ */
 template <template <typename...> class SetType, typename From, typename To>
 class SetConversion : public TypeConversionBase {
 public:
@@ -413,68 +446,99 @@ public:
     }
 };
 
+/**
+ * @brief Type conversion registry and manager
+ */
 class TypeConversions {
 public:
     TypeConversions() = default;
 
+    /**
+     * @brief Create a shared instance of TypeConversions
+     * @return Shared pointer to TypeConversions instance
+     */
     static auto createShared() -> std::shared_ptr<TypeConversions> {
         return std::make_shared<TypeConversions>();
     }
 
+    /**
+     * @brief Add a type conversion to the registry
+     * @param conversion The conversion to add
+     */
     void addConversion(const std::shared_ptr<TypeConversionBase>& conversion) {
         auto key = conversion->getFromType();
         conversions_[key].push_back(conversion);
     }
 
+    /**
+     * @brief Convert from one type to another with explicit type parameters
+     * @tparam To Target type
+     * @tparam From Source type
+     * @param from The value to convert
+     * @return The converted value
+     */
     template <typename To, typename From>
     [[nodiscard]] auto convert(const std::any& from) const -> std::any {
         auto fromType = userType<From>();
         auto toType = userType<To>();
 
-        if (conversions_.count(fromType)) {
-            for (const auto& conv : conversions_.at(fromType)) {
+        auto it = conversions_.find(fromType);
+        if (it != conversions_.end()) {
+            for (const auto& conv : it->second) {
                 if (conv->getToType() == toType) {
                     try {
                         return conv->convert(from);
                     } catch (const std::bad_any_cast& e) {
-                        THROW_CONVERSION_ERROR(fromType.name(), toType.name(),
-                                               e.what());
+                        THROW_CONVERSION_ERROR("Failed to convert from ",
+                                               fromType.name(), " to ",
+                                               toType.name(), ": ", e.what());
                     }
                 }
             }
         }
-        THROW_CONVERSION_ERROR(fromType.name(), toType.name());
+        THROW_CONVERSION_ERROR("No conversion found from ", fromType.name(),
+                               " to ", toType.name());
     }
-    
-    // 添加convertTo方法，通过类型推断自动处理转换
+
+    /**
+     * @brief Convert to a specific type with automatic source type deduction
+     * @tparam To Target type
+     * @param from The value to convert
+     * @return The converted value
+     */
     template <typename To>
     [[nodiscard]] auto convertTo(const std::any& from) const -> std::any {
         TypeInfo toType = userType<To>();
-        
+
         for (const auto& [fromType, convList] : conversions_) {
             for (const auto& conv : convList) {
                 if (conv->getToType() == toType) {
                     try {
                         return conv->convert(from);
                     } catch (const std::bad_any_cast&) {
-                        // 尝试下一个转换器
                         continue;
                     } catch (const BadConversionException&) {
-                        // 尝试下一个转换器
                         continue;
                     }
                 }
             }
         }
-        
-        // 如果没找到合适的转换器，抛出异常
-        THROW_CONVERSION_ERROR("无法找到从", typeid(from).name(), "到", toType.name(), "的转换器");
+
+        THROW_CONVERSION_ERROR("No conversion found from any type to ",
+                               toType.name());
     }
 
+    /**
+     * @brief Check if conversion is possible between two types
+     * @param fromTypeInfo Source type information
+     * @param toTypeInfo Target type information
+     * @return true if conversion is possible, false otherwise
+     */
     [[nodiscard]] auto canConvert(const TypeInfo& fromTypeInfo,
                                   const TypeInfo& toTypeInfo) const -> bool {
-        if (conversions_.contains(fromTypeInfo)) {
-            for (const auto& conv : conversions_.at(fromTypeInfo)) {
+        auto it = conversions_.find(fromTypeInfo);
+        if (it != conversions_.end()) {
+            for (const auto& conv : it->second) {
                 if (conv->to() == toTypeInfo) {
                     return true;
                 }
@@ -483,6 +547,11 @@ public:
         return false;
     }
 
+    /**
+     * @brief Add base class conversion for inheritance hierarchies
+     * @tparam Base Base class type
+     * @tparam Derived Derived class type
+     */
     template <typename Base, typename Derived>
     void addBaseClass() {
         addConversion(std::make_shared<DynamicConversion<Derived*, Base*>>());
@@ -492,6 +561,9 @@ public:
         }
     }
 
+    /**
+     * @brief Add map type conversion
+     */
     template <template <typename...> class MapType, typename K1, typename V1,
               typename K2, typename V2>
     void addMapConversion() {
@@ -499,6 +571,9 @@ public:
             std::make_shared<MapConversion<MapType, K1, V1, K2, V2>>());
     }
 
+    /**
+     * @brief Add vector type conversion
+     */
     template <typename From, typename To>
     void addVectorConversion() {
         addConversion(
@@ -506,6 +581,9 @@ public:
                                               std::shared_ptr<To>>>());
     }
 
+    /**
+     * @brief Add sequence type conversion
+     */
     template <template <typename...> class SeqType, typename From, typename To>
     void addSequenceConversion() {
         addConversion(
@@ -513,6 +591,9 @@ public:
                                                 std::shared_ptr<To>>>());
     }
 
+    /**
+     * @brief Add set type conversion
+     */
     template <template <typename...> class SetType, typename From, typename To>
     void addSetConversion() {
         addConversion(

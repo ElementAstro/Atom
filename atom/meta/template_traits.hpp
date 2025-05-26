@@ -12,13 +12,13 @@
 #include <concepts>
 #include <functional>
 #include <limits>
-#include <source_location>  // For better error reporting
+#include <source_location>
 #include <string>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <utility>
-#include <variant>  // For variant-related traits
+#include <variant>
 
 #include "abi.hpp"
 
@@ -28,13 +28,16 @@
 
 namespace atom::meta {
 
-// Forward declarations for interdependent components
 template <typename T>
 struct type_identity {
     using type = T;
 };
 
-// 在identity结构体中修复字符串字面量的问题 - 使用std::string_view代替
+/**
+ * @brief Identity type wrapper with value support
+ * @tparam T Type to wrap
+ * @tparam Values Optional compile-time values
+ */
 template <typename T, auto... Values>
 struct identity {
     using type = T;
@@ -49,7 +52,6 @@ struct identity {
 
     static constexpr auto value = has_value ? value_at<0>() : T{};
 
-    // Allow structured binding support
     template <std::size_t I>
     static constexpr auto get() noexcept {
         if constexpr (I == 0)
@@ -63,10 +65,8 @@ struct identity {
     }
 };
 
-// Structured binding support declarations
 }  // namespace atom::meta
 
-// Specializations for std::tuple_size and std::tuple_element
 namespace std {
 template <typename T, auto... Values>
 struct tuple_size<atom::meta::identity<T, Values...>>
@@ -81,11 +81,10 @@ struct tuple_element<I, atom::meta::identity<T, Values...>> {
 
 namespace atom::meta {
 
-//------------------------------------------------------------------------------
-// Type list operations
-//------------------------------------------------------------------------------
-
-// Type list implementation with operations
+/**
+ * @brief Type list implementation with operations
+ * @tparam Ts Types in the list
+ */
 template <typename... Ts>
 struct type_list {
     static constexpr std::size_t size = sizeof...(Ts);
@@ -99,7 +98,6 @@ struct type_list {
     template <template <typename> typename F>
     using transform = type_list<typename F<Ts>::type...>;
 
-    // Get type at index
     template <std::size_t I>
     using at = std::tuple_element_t<I, std::tuple<Ts...>>;
 
@@ -120,16 +118,14 @@ struct type_list {
             typename filter_impl<F, type_list<Filtered...>, Rest...>::type>;
     };
 
-    // Filter types based on predicate F
     template <template <typename> typename F>
     using filter = typename filter_impl<F, type_list<>, Ts...>::type;
 };
 
-//------------------------------------------------------------------------------
-// Template detection and traits
-//------------------------------------------------------------------------------
-
-// Check if a type is a template instantiation with improved diagnostics
+/**
+ * @brief Check if a type is a template instantiation
+ * @tparam T Type to check
+ */
 template <typename T>
 struct is_template : std::false_type {
     static constexpr std::string_view reason =
@@ -145,14 +141,15 @@ struct is_template<Template<Args...>> : std::true_type {
 template <typename T>
 inline constexpr bool is_template_v = is_template<T>::value;
 
-// Concept for template instantiations
 template <typename T>
 concept TemplateInstantiation = is_template_v<T>;
 
-// Extract template parameters and full name with additional metadata
+/**
+ * @brief Extract template parameters and metadata
+ * @tparam T Template type to analyze
+ */
 template <typename T>
 struct template_traits {
-    // Default implementation for non-templates with better error handling
     static_assert(is_template_v<T>,
                   "template_traits: Type must be a template instantiation");
 };
@@ -170,16 +167,13 @@ struct template_traits<Template<Args...>> {
         return pos != std::string::npos ? name.substr(0, pos) : name;
     }();
 
-    // Extract template parameters as array of demangled names
     static const inline std::array<std::string, sizeof...(Args)> arg_names = {
         DemangleHelper::demangle(typeid(Args).name())...};
 
-    // Check if the template has a specific argument type
     template <typename T>
     static constexpr bool has_arg = (std::is_same_v<T, Args> || ...);
 };
 
-// Helper alias templates with better naming
 template <typename T>
 using args_type_of = typename template_traits<T>::args_type;
 
@@ -189,7 +183,11 @@ using type_list_of = typename template_traits<T>::type_list_args;
 template <typename T>
 inline constexpr std::size_t template_arity_v = template_traits<T>::arity;
 
-// Check if a type is a specialization of a given template with diagnostics
+/**
+ * @brief Check if a type is a specialization of a given template
+ * @tparam Template Template to check against
+ * @tparam T Type to check
+ */
 template <template <typename...> typename Template, typename T>
 struct is_specialization_of : std::false_type {
     static constexpr std::string_view reason =
@@ -206,11 +204,14 @@ template <template <typename...> typename Template, typename T>
 inline constexpr bool is_specialization_of_v =
     is_specialization_of<Template, T>::value;
 
-// Concept for template specializations
 template <template <typename...> typename Template, typename T>
 concept SpecializationOf = is_specialization_of_v<Template, T>;
 
-// Extract the N-th template parameter type with bounds checking
+/**
+ * @brief Extract the N-th template parameter type
+ * @tparam N Index of parameter
+ * @tparam T Template type
+ */
 template <std::size_t N, typename T, typename = void>
 struct nth_template_arg {
     static_assert(is_template_v<T>,
@@ -223,22 +224,20 @@ struct nth_template_arg {
 template <std::size_t N, typename T>
 using template_arg_t = typename nth_template_arg<N, T>::type;
 
-//------------------------------------------------------------------------------
-// Inheritance and derived type traits
-//------------------------------------------------------------------------------
-
-// Check if a type is derived from multiple base classes with detailed feedback
+/**
+ * @brief Check if a type is derived from multiple base classes
+ * @tparam Derived Derived type
+ * @tparam Bases Base types
+ */
 template <typename Derived, typename... Bases>
 struct is_derived_from_all
     : std::conjunction<std::is_base_of<Bases, Derived>...> {
-    // For diagnostic purposes, check individual inheritance relationships
     template <typename Base>
     static constexpr bool inherits_from = std::is_base_of_v<Base, Derived>;
 
     static constexpr std::array<bool, sizeof...(Bases)> inheritance_map = {
         inherits_from<Bases>...};
 
-    // Identify which inheritance relationships are missing
     template <std::size_t... Is>
     static constexpr auto missing_bases_impl(std::index_sequence<Is...>) {
         return std::array{
@@ -265,11 +264,9 @@ template <typename Derived, typename... Bases>
 inline constexpr bool is_derived_from_all_v =
     is_derived_from_all<Derived, Bases...>::value;
 
-// Concept for multiple inheritance checking
 template <typename Derived, typename... Bases>
 concept DerivedFromAll = is_derived_from_all_v<Derived, Bases...>;
 
-// Check if a type is derived from any of the specified base classes
 template <typename Derived, typename... Bases>
 struct is_derived_from_any
     : std::disjunction<std::is_base_of<Bases, Derived>...> {};
@@ -278,15 +275,14 @@ template <typename Derived, typename... Bases>
 inline constexpr bool is_derived_from_any_v =
     is_derived_from_any<Derived, Bases...>::value;
 
-// Concept for inheritance from any base
 template <typename Derived, typename... Bases>
 concept DerivedFromAny = is_derived_from_any_v<Derived, Bases...>;
 
-//------------------------------------------------------------------------------
-// Enhanced template-of-templates detection
-//------------------------------------------------------------------------------
-
-// Check if a type is a partial specialization of a given template
+/**
+ * @brief Check if a type is a partial specialization of a given template
+ * @tparam T Type to check
+ * @tparam Template Template to check against
+ */
 template <typename T, template <typename, typename...> typename Template>
 struct is_partial_specialization_of : std::false_type {};
 
@@ -299,13 +295,11 @@ template <typename T, template <typename, typename...> typename Template>
 inline constexpr bool is_partial_specialization_of_v =
     is_partial_specialization_of<T, Template>::value;
 
-// Alias template detection
 template <typename T>
 struct is_alias_template : std::false_type {};
 
 template <template <typename...> typename Template, typename... Args>
 struct is_alias_template<Template<Args...>> : std::true_type {
-    // Attempt to detect if this is likely an alias template (not foolproof)
     static constexpr bool likely_alias = !std::is_class_v<Template<Args...>> ||
                                          !std::is_union_v<Template<Args...>>;
 };
@@ -313,7 +307,6 @@ struct is_alias_template<Template<Args...>> : std::true_type {
 template <typename T>
 inline constexpr bool is_alias_template_v = is_alias_template<T>::value;
 
-// Improved template-related concepts
 template <typename T>
 concept ClassTemplate = is_template_v<T> && std::is_class_v<T>;
 
@@ -323,7 +316,6 @@ concept FunctionTemplate = requires(T t) {
     is_template_v<T>;
 };
 
-// Extract template arguments as different containers
 template <typename T>
 using template_args_as_tuple_t = typename template_traits<T>::args_type;
 
@@ -331,17 +323,15 @@ template <typename T>
 using template_args_as_type_list_t =
     typename template_traits<T>::type_list_args;
 
-//------------------------------------------------------------------------------
-// Type sequence and parameter pack utilities
-//------------------------------------------------------------------------------
-
-// Count the number of occurrences of a type in a parameter pack with improved
-// implementation
+/**
+ * @brief Count the number of occurrences of a type in a parameter pack
+ * @tparam T Type to count
+ * @tparam Args Parameter pack
+ */
 template <typename T, typename... Args>
 constexpr std::size_t count_occurrences_v =
     (0 + ... + (std::is_same_v<T, Args> ? 1 : 0));
 
-// 修复find_first_index_v实现
 template <typename T, typename... Args>
 constexpr std::size_t find_first_index_v = []() consteval {
     constexpr std::size_t value = []<std::size_t... I>(
@@ -355,11 +345,8 @@ constexpr std::size_t find_first_index_v = []() consteval {
         return index;
     }(std::index_sequence_for<Args...>{});
 
-    // Provide useful static_assert while still returning a valid value for
-    // SFINAE
     if constexpr (value == std::numeric_limits<std::size_t>::max()) {
         if constexpr (std::is_same_v<T, void>) {
-            // Special case to avoid static_assert when used in SFINAE contexts
             return value;
         } else {
             static_assert(value != std::numeric_limits<std::size_t>::max(),
@@ -371,7 +358,6 @@ constexpr std::size_t find_first_index_v = []() consteval {
     }
 }();
 
-// 修复find_all_indices实现
 template <typename T, typename... Args>
 struct find_all_indices {
 private:
@@ -395,11 +381,10 @@ public:
     static constexpr std::size_t count = value.size();
 };
 
-//------------------------------------------------------------------------------
-// Type extraction and manipulation utilities
-//------------------------------------------------------------------------------
-
-// Extract reference wrapper or pointer types with improved safety
+/**
+ * @brief Extract reference wrapper or pointer types
+ * @tparam T Type to extract from
+ */
 template <typename T>
 struct extract_reference_wrapper {
     using type = std::conditional_t<
@@ -407,31 +392,26 @@ struct extract_reference_wrapper {
         typename std::remove_cvref_t<T>::type, std::remove_reference_t<T>>;
 };
 
-// Extract the type from a std::reference_wrapper or reference
 template <typename T>
 struct extract_reference_wrapper_type {
     using type = T;
 };
 
-// Specialization for std::reference_wrapper
 template <typename T>
 struct extract_reference_wrapper_type<std::reference_wrapper<T>> {
     using type = T;
 };
 
-// Specialization for reference types
 template <typename T>
 struct extract_reference_wrapper_type<T&> {
     using type = T;
 };
 
-// Specialization for const reference types
 template <typename T>
 struct extract_reference_wrapper_type<const T&> {
     using type = const T;
 };
 
-// Helper alias template
 template <typename T>
 using extract_reference_wrapper_type_t =
     typename extract_reference_wrapper_type<T>::type;
@@ -451,7 +431,6 @@ struct extract_pointer {
                            std::remove_pointer_t<T>>;
 };
 
-// Specialization for raw pointers
 template <typename T>
 struct extract_pointer<T*> {
     using type = T;
@@ -463,12 +442,13 @@ struct extract_pointer<T*> {
 template <typename T>
 using extract_pointer_type_t = typename extract_pointer<T>::element_type;
 
-// Extract function return type and parameter types with support for member
-// functions
+/**
+ * @brief Extract function traits including return type and parameters
+ * @tparam T Function type
+ */
 template <typename T>
 struct extract_function_traits;
 
-// Regular functions
 template <typename R, typename... Args>
 struct extract_function_traits<R(Args...)> {
     using return_type = R;
@@ -479,12 +459,10 @@ struct extract_function_traits<R(Args...)> {
     using arg_t = std::tuple_element_t<I, parameter_types>;
 };
 
-// Function pointers
 template <typename R, typename... Args>
 struct extract_function_traits<R (*)(Args...)>
     : extract_function_traits<R(Args...)> {};
 
-// Member function pointers
 template <typename C, typename R, typename... Args>
 struct extract_function_traits<R (C::*)(Args...)> {
     using class_type = C;
@@ -496,19 +474,16 @@ struct extract_function_traits<R (C::*)(Args...)> {
     using arg_t = std::tuple_element_t<I, parameter_types>;
 };
 
-// Const member function pointers
 template <typename C, typename R, typename... Args>
 struct extract_function_traits<R (C::*)(Args...) const>
     : extract_function_traits<R (C::*)(Args...)> {};
 
-// Noexcept function variants
 template <typename R, typename... Args>
 struct extract_function_traits<R(Args...) noexcept>
     : extract_function_traits<R(Args...)> {
     static constexpr bool is_noexcept = true;
 };
 
-// Functors and lambdas
 template <typename F>
 struct extract_function_traits {
 private:
@@ -532,11 +507,6 @@ template <typename T>
 using extract_function_parameters_t =
     typename extract_function_traits<T>::parameter_types;
 
-//------------------------------------------------------------------------------
-// Tuple and structured binding support detection
-//------------------------------------------------------------------------------
-
-// Enhanced tuple-like type detection
 template <class T, std::size_t I>
 concept has_tuple_element = requires {
     typename std::tuple_element_t<I, std::remove_cvref_t<T>>;
@@ -567,24 +537,14 @@ consteval bool is_tuple_like_well_formed() {
     return false;
 }
 
-// Concept for tuple-like types
 template <typename T>
 concept TupleLike = is_tuple_like_well_formed<T>();
 
-//------------------------------------------------------------------------------
-// Advanced type constraint detection
-//------------------------------------------------------------------------------
+/**
+ * @brief Enhanced constraint level enum
+ */
+enum class constraint_level { none, nontrivial, nothrow, trivial };
 
-// Enhanced constraint level enum with stronger typing
-enum class constraint_level {
-    none,        // No constraints
-    nontrivial,  // Basic operation support
-    nothrow,     // Nothrow guarantee
-    trivial      // Trivial implementation
-};
-
-// 修复拼写错误 - 替换copyability和relocatability
-// Check copy operations with detailed constraints
 template <typename T>
 consteval bool has_copy_operations(constraint_level level) {
     switch (level) {
@@ -605,7 +565,6 @@ consteval bool has_copy_operations(constraint_level level) {
     }
 }
 
-// Check move operations with improved consistency
 template <typename T>
 consteval bool has_move_operations(constraint_level level) {
     switch (level) {
@@ -627,7 +586,6 @@ consteval bool has_move_operations(constraint_level level) {
     }
 }
 
-// Check destructibility with enhanced diagnostics
 template <typename T>
 consteval bool has_destructibility(constraint_level level) {
     switch (level) {
@@ -644,7 +602,6 @@ consteval bool has_destructibility(constraint_level level) {
     }
 }
 
-// 修复概念定义，使用新的函数名
 template <typename T>
 concept Copyable = has_copy_operations<T>(constraint_level::nontrivial);
 
@@ -664,19 +621,13 @@ template <typename T>
 concept TriviallyRelocatable =
     has_move_operations<T>(constraint_level::trivial);
 
-//------------------------------------------------------------------------------
-// Template base class detection (improved)
-//------------------------------------------------------------------------------
-
 template <template <typename...> class Base, typename Derived>
 struct is_base_of_template_impl {
 private:
-    // Use SFINAE to detect if Derived can be converted to Base<U...>*
     template <typename... U>
     static constexpr std::true_type test(const Base<U...>*);
     static constexpr std::false_type test(...);
 
-    // For better diagnostics
     template <typename T>
     static auto derived_name() {
         return DemangleHelper::demangle(typeid(T).name());
@@ -702,13 +653,11 @@ public:
     }();
 };
 
-// Support multiple inheritance checking with fold expressions
 template <typename Derived, template <typename...> class... Bases>
 struct is_base_of_any_template {
     static constexpr bool value =
         (is_base_of_template_impl<Bases, Derived>::value || ...);
 
-    // Track which templates are bases
     template <template <typename...> class Base>
     static constexpr bool is_base =
         is_base_of_template_impl<Base, Derived>::value;
@@ -717,7 +666,6 @@ struct is_base_of_any_template {
         is_base<Bases>...};
 };
 
-// Variable templates for simpler interface
 template <template <typename...> class Base, typename Derived>
 inline constexpr bool is_base_of_template_v =
     is_base_of_template_impl<Base, Derived>::value;
@@ -726,18 +674,12 @@ template <typename Derived, template <typename...> class... Bases>
 inline constexpr bool is_base_of_any_template_v =
     is_base_of_any_template<Derived, Bases...>::value;
 
-// Template inheritance concepts
 template <template <typename...> class Base, typename Derived>
 concept DerivedFromTemplate = is_base_of_template_v<Base, Derived>;
 
 template <typename Derived, template <typename...> class... Bases>
 concept DerivedFromAnyTemplate = is_base_of_any_template_v<Derived, Bases...>;
 
-//------------------------------------------------------------------------------
-// New additions for thread safety, variants, and containers
-//------------------------------------------------------------------------------
-
-// Thread safety detection traits
 template <typename T>
 concept ThreadSafe = requires {
     typename T::is_thread_safe;
@@ -745,13 +687,15 @@ concept ThreadSafe = requires {
     requires T::is_thread_safe::value;
 };
 
-// Variant traits for working with std::variant
+/**
+ * @brief Variant traits for working with std::variant
+ * @tparam T Type to analyze
+ */
 template <typename T>
 struct variant_traits {
     static constexpr bool is_variant =
         is_specialization_of_v<std::variant, std::remove_cvref_t<T>>;
 
-    // Only valid if T is a variant
     template <typename U>
     static constexpr bool contains = []() {
         if constexpr (!is_variant) {
@@ -773,10 +717,12 @@ struct variant_traits {
     using alternative_t = std::variant_alternative_t<I, std::remove_cvref_t<T>>;
 };
 
-// Container traits
+/**
+ * @brief Container traits for type analysis
+ * @tparam T Type to analyze
+ */
 template <typename T>
 struct container_traits {
-    // Standard container type detection
     static constexpr bool is_container = requires(T t) {
         typename T::value_type;
         typename T::reference;
@@ -790,7 +736,6 @@ struct container_traits {
         { t.size() } -> std::same_as<typename T::size_type>;
     };
 
-    // Additional container properties
     static constexpr bool is_sequence_container =
         is_container && requires(T t) {
             { t.front() } -> std::same_as<typename T::reference>;
@@ -805,33 +750,24 @@ struct container_traits {
             } -> std::same_as<typename T::iterator>;
         };
 
-    // Fixed size check
     static constexpr bool is_fixed_size = requires(T) {
         { T::static_size } -> std::convertible_to<std::size_t>;
     };
 };
 
-//------------------------------------------------------------------------------
-// Error reporting and static diagnostics
-//------------------------------------------------------------------------------
-
-// Improved static diagnostics
 template <bool Condition, const char* Message = nullptr>
 struct static_check {
     static_assert(Condition, "Condition failed");
     static constexpr bool value = Condition;
 };
 
-// Static error with source location
 template <const char* Message, auto Location = std::source_location::current()>
 struct static_error {
-    static_assert(false,
-                  "Static error triggered");  // Use a string literal here
+    static_assert(false, "Static error triggered");
     static constexpr const char* message = Message;
     static constexpr auto location = Location;
 };
 
-// 修复type_name实现，避免返回悬空指针
 template <typename T>
 inline constexpr auto type_name = [] {
     std::string name = DemangleHelper::demangle(typeid(T).name());
@@ -841,13 +777,11 @@ inline constexpr auto type_name = [] {
 
 }  // namespace atom::meta
 
-// Additional specializations for standard library types to ensure compatibility
 namespace std {
-// Allow decomposition of atom::meta::identity
 template <size_t I, typename T, auto... Values>
 auto get(const atom::meta::identity<T, Values...>&) {
     return atom::meta::identity<T, Values...>::template get<I>();
 }
 }  // namespace std
 
-#endif  // ATOM_META_TEMPLATE_TRAITS_HPP
+#endif

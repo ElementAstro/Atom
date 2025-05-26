@@ -13,31 +13,33 @@
 #include <functional>
 #include <future>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "atom/meta/concept.hpp"
 
 namespace atom::meta {
 
+//==============================================================================
 // Core pointer and reference manipulation utilities
-//--------------------------------------------------
+//==============================================================================
 
-/**
- * @brief Get a pointer from a raw pointer
- * @tparam T The pointee type
- * @param ptr The input pointer
- * @return The same pointer
+/*!
+ * \brief Get a pointer from a raw pointer
+ * \tparam T The pointee type
+ * \param ptr The input pointer
+ * \return The same pointer
  */
 template <typename T>
 [[nodiscard]] constexpr auto getPointer(T* ptr) noexcept -> T* {
     return ptr;
 }
 
-/**
- * @brief Get a pointer from a reference_wrapper
- * @tparam T The reference type
- * @param ref The reference wrapper
- * @return Pointer to the referenced object
+/*!
+ * \brief Get a pointer from a reference_wrapper
+ * \tparam T The reference type
+ * \param ref The reference wrapper
+ * \return Pointer to the referenced object
  */
 template <typename T>
 [[nodiscard]] constexpr auto getPointer(
@@ -45,40 +47,41 @@ template <typename T>
     return &ref.get();
 }
 
-/**
- * @brief Get a pointer from an object
- * @tparam T The object type
- * @param ref The object
- * @return Pointer to the object
+/*!
+ * \brief Get a pointer from an object
+ * \tparam T The object type
+ * \param ref The object
+ * \return Pointer to the object
  */
 template <typename T>
 [[nodiscard]] constexpr auto getPointer(const T& ref) noexcept -> const T* {
     return &ref;
 }
 
-/**
- * @brief Remove const from a pointer
- * @tparam T The pointee type
- * @param ptr Const pointer
- * @return Non-const pointer
+/*!
+ * \brief Remove const from a pointer
+ * \tparam T The pointee type
+ * \param ptr Const pointer
+ * \return Non-const pointer
  */
 template <typename T>
 [[nodiscard]] constexpr auto removeConstPointer(const T* ptr) noexcept -> T* {
     return const_cast<T*>(ptr);
 }
 
+//==============================================================================
 // Primary bind_first implementation
-//----------------------------------
+//==============================================================================
 
-/**
- * @brief Bind an object to a function pointer as first argument
- * @tparam O Object type
- * @tparam Ret Return type
- * @tparam P1 First parameter type
- * @tparam Param Remaining parameter types
- * @param func Function to bind
- * @param object Object to bind as first argument
- * @return Bound function
+/*!
+ * \brief Bind an object to a function pointer as first argument
+ * \tparam O Object type
+ * \tparam Ret Return type
+ * \tparam P1 First parameter type
+ * \tparam Param Remaining parameter types
+ * \param func Function to bind
+ * \param object Object to bind as first argument
+ * \return Bound function
  */
 template <typename O, typename Ret, typename P1, typename... Param>
     requires Invocable<Ret (*)(P1, Param...), O, Param...>
@@ -88,15 +91,15 @@ template <typename O, typename Ret, typename P1, typename... Param>
     };
 }
 
-/**
- * @brief Bind an object to a member function
- * @tparam O Object type
- * @tparam Ret Return type
- * @tparam Class Class type
- * @tparam Param Parameter types
- * @param func Member function to bind
- * @param object Object to bind the function to
- * @return Bound function
+/*!
+ * \brief Bind an object to a member function
+ * \tparam O Object type
+ * \tparam Ret Return type
+ * \tparam Class Class type
+ * \tparam Param Parameter types
+ * \param func Member function to bind
+ * \param object Object to bind the function to
+ * \return Bound function
  */
 template <typename O, typename Ret, typename Class, typename... Param>
     requires Invocable<Ret (Class::*)(Param...), O, Param...>
@@ -108,15 +111,15 @@ template <typename O, typename Ret, typename Class, typename... Param>
     };
 }
 
-/**
- * @brief Bind an object to a const member function
- * @tparam O Object type
- * @tparam Ret Return type
- * @tparam Class Class type
- * @tparam Param Parameter types
- * @param func Const member function to bind
- * @param object Object to bind the function to
- * @return Bound function
+/*!
+ * \brief Bind an object to a const member function
+ * \tparam O Object type
+ * \tparam Ret Return type
+ * \tparam Class Class type
+ * \tparam Param Parameter types
+ * \param func Const member function to bind
+ * \param object Object to bind the function to
+ * \return Bound function
  */
 template <typename O, typename Ret, typename Class, typename... Param>
     requires Invocable<Ret (Class::*)(Param...) const, O, Param...>
@@ -127,15 +130,15 @@ template <typename O, typename Ret, typename Class, typename... Param>
     };
 }
 
-/**
- * @brief Bind an object to a std::function
- * @tparam O Object type
- * @tparam Ret Return type
- * @tparam P1 First parameter type
- * @tparam Param Remaining parameter types
- * @param func Function to bind
- * @param object Object to bind as first argument
- * @return Bound function
+/*!
+ * \brief Bind an object to a std::function
+ * \tparam O Object type
+ * \tparam Ret Return type
+ * \tparam P1 First parameter type
+ * \tparam Param Remaining parameter types
+ * \param func Function to bind
+ * \param object Object to bind as first argument
+ * \return Bound function
  */
 template <typename O, typename Ret, typename P1, typename... Param>
     requires Invocable<std::function<Ret(P1, Param...)>, O, Param...>
@@ -146,39 +149,13 @@ template <typename O, typename Ret, typename P1, typename... Param>
     };
 }
 
-/**
- * @brief Bind a function object and an object to a member operator()
- */
-template <typename F, typename O, typename Ret, typename Class, typename P1,
-          typename... Param>
-    requires Invocable<F, O, P1, Param...>
-[[nodiscard]] constexpr auto bindFirst(const F& funcObj, O&& object,
-                                       Ret (Class::*func)(P1, Param...) const) {
-    return [funcObj, object = std::forward<O>(object),
-            func](Param... param) -> Ret {
-        return (funcObj.*func)(object, std::forward<Param>(param)...);
-    };
-}
-
-/**
- * @brief Generic bind for function objects
- */
-template <typename F, typename O>
-    requires Invocable<F, O>
-[[nodiscard]] constexpr auto bindFirst(const F& func, O&& object) {
-    return bindFirst(func, std::forward<O>(object), &F::operator());
-}
-
-template <typename F, typename O>
-[[nodiscard]] constexpr auto bindFirst(F&& func, O&& object) {
-    return [func = std::forward<F>(func),
-            object = std::forward<O>(object)](auto&&... params) mutable {
-        return func(object, std::forward<decltype(params)>(params)...);
-    };
-}
-
-/**
- * @brief Universal reference version of bindFirst
+/*!
+ * \brief Universal reference version of bindFirst for function objects
+ * \tparam F Function object type
+ * \tparam O Object type
+ * \param func Function object to bind
+ * \param object Object to bind as first argument
+ * \return Bound function
  */
 template <typename F, typename O>
     requires Invocable<F, O>
@@ -190,18 +167,29 @@ template <typename F, typename O>
     };
 }
 
-/**
- * @brief Bind a class member variable
+/*!
+ * \brief Bind a class member variable
+ * \tparam O Object type
+ * \tparam T Member variable type
+ * \tparam Class Class type
+ * \param member Member variable pointer
+ * \param object Object to bind
+ * \return Function that returns reference to the member variable
  */
 template <typename O, typename T, typename Class>
-[[nodiscard]] constexpr auto bindMember(T Class::*member, O&& object) noexcept {
+[[nodiscard]] constexpr auto bindMember(T Class::* member,
+                                        O&& object) noexcept {
     return [member, object = std::forward<O>(object)]() -> T& {
         return removeConstPointer(getPointer(object))->*member;
     };
 }
 
-/**
- * @brief Bind a static function
+/*!
+ * \brief Bind a static function
+ * \tparam Ret Return type
+ * \tparam Param Parameter types
+ * \param func Static function to bind
+ * \return Bound function
  */
 template <typename Ret, typename... Param>
 [[nodiscard]] constexpr auto bindStatic(Ret (*func)(Param...)) noexcept {
@@ -210,11 +198,17 @@ template <typename Ret, typename... Param>
     };
 }
 
+//==============================================================================
 // Advanced binding features
-//-------------------------
+//==============================================================================
 
-/**
- * @brief Asynchronously call a bound function
+/*!
+ * \brief Asynchronously call a bound function
+ * \tparam F Function type
+ * \tparam Args Argument types
+ * \param func Function to call asynchronously
+ * \param args Arguments to pass to the function
+ * \return Future object containing the result
  */
 template <typename F, typename... Args>
 [[nodiscard]] auto asyncBindFirst(F&& func, Args&&... args) {
@@ -222,14 +216,22 @@ template <typename F, typename... Args>
                       std::forward<Args>(args)...);
 }
 
+//==============================================================================
 // Exception handling utilities
-//----------------------------
+//==============================================================================
 
-// Primary template declaration
+/*!
+ * \brief Primary template declaration for binding functor
+ * \tparam F Function type
+ */
 template <typename F>
 struct BindingFunctor;
 
-// Specialization for function pointers
+/*!
+ * \brief Specialization for function pointers
+ * \tparam ReturnType Return type of the function
+ * \tparam Args Argument types of the function
+ */
 template <typename ReturnType, typename... Args>
 struct BindingFunctor<ReturnType (*)(Args...)> {
     using FunctionType = ReturnType (*)(Args...);
@@ -243,12 +245,20 @@ struct BindingFunctor<ReturnType (*)(Args...)> {
     }
 };
 
-// Exception class for binding errors
+/*!
+ * \brief Exception class for binding errors
+ */
 class BindingException : public std::exception {
 private:
     std::string message;
 
 public:
+    /*!
+     * \brief Construct binding exception with context and location
+     * \param context Context where the error occurred
+     * \param e Original exception
+     * \param location Location where the error occurred
+     */
     BindingException(const std::string& context, const std::exception& e,
                      const std::string& location = "")
         : message(context + ": " + e.what() +
@@ -257,7 +267,17 @@ public:
     const char* what() const noexcept override { return message.c_str(); }
 };
 
-// Exception handling wrapper for bind_first
+/*!
+ * \brief Exception handling wrapper for bind_first
+ * \tparam Callable Callable type
+ * \tparam FirstArg First argument type
+ * \tparam Args Additional argument types
+ * \param callable Function to bind
+ * \param first_arg First argument to bind
+ * \param context Context for error reporting
+ * \param args Additional arguments
+ * \return Exception-safe bound function
+ */
 template <typename Callable, typename FirstArg, typename... Args>
 auto bindFirstWithExceptionHandling(Callable&& callable, FirstArg&& first_arg,
                                     const std::string& context,
@@ -275,17 +295,23 @@ auto bindFirstWithExceptionHandling(Callable&& callable, FirstArg&& first_arg,
     };
 }
 
+//==============================================================================
 // Thread-safe binding
-//-------------------
+//==============================================================================
 
-/**
- * @brief Thread-safe bindFirst using shared_ptr and mutex
+/*!
+ * \brief Thread-safe bindFirst using shared_ptr
+ * \tparam O Object type
+ * \tparam Ret Return type
+ * \tparam Param Parameter types
+ * \param func Member function to bind
+ * \param object Shared pointer to object
+ * \return Thread-safe bound function
  */
 template <typename O, typename Ret, typename... Param>
 [[nodiscard]] auto bindFirstThreadSafe(Ret (O::*func)(Param...),
                                        std::shared_ptr<O> object) {
     return [func, object](Param... param) -> Ret {
-        // Object lifetime is managed by shared_ptr
         return (object.get()->*func)(std::forward<Param>(param)...);
     };
 }

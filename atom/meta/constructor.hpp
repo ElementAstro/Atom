@@ -39,18 +39,6 @@ struct ConstructorResult;
 // ==================== Concept Definitions ====================
 
 /**
- * @brief Concept for types that are default constructible
- */
-template <typename T>
-concept DefaultConstructible = std::is_default_constructible_v<T>;
-
-/**
- * @brief Concept for types that are copy constructible
- */
-template <typename T>
-concept CopyConstructible = std::is_copy_constructible_v<T>;
-
-/**
  * @brief Concept for types that are move constructible
  */
 template <typename T>

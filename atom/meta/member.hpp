@@ -38,25 +38,24 @@ template <typename T>
 concept member_pointer = std::is_member_pointer_v<T>;
 
 /**
- * @brief Gets the offset of a member within a structure.
+ * @brief Gets the offset of a member within a structure
  */
 template <typename T, typename M>
-consteval std::size_t member_offset(M T::*member) noexcept {
-    // Using std::byte* instead of uintptr_t for better type safety
+consteval std::size_t member_offset(M T::* member) noexcept {
     return static_cast<std::size_t>(reinterpret_cast<std::ptrdiff_t>(
         &(static_cast<T const volatile*>(nullptr)->*member)));
 }
 
 /**
- * @brief Gets the size of a member within a structure.
+ * @brief Gets the size of a member within a structure
  */
 template <typename T, typename M>
-consteval std::size_t member_size(M T::*member) noexcept {
+consteval std::size_t member_size(M T::* member) noexcept {
     return sizeof((static_cast<T const volatile*>(nullptr)->*member));
 }
 
 /**
- * @brief Gets the total size of a structure.
+ * @brief Gets the total size of a structure
  */
 template <typename T>
 consteval std::size_t struct_size() noexcept {
@@ -64,16 +63,17 @@ consteval std::size_t struct_size() noexcept {
 }
 
 /**
- * @brief Gets the alignment of a member within a structure.
+ * @brief Gets the alignment of a member within a structure
  */
 template <typename T, typename M>
-consteval std::size_t member_alignment([[maybe_unused]] M T::*member) noexcept {
+consteval std::size_t member_alignment(
+    [[maybe_unused]] M T::* member) noexcept {
     return alignof(M);
 }
 
 #if ATOM_ENABLE_DEBUG
 /**
- * @brief Prints the detailed information of all members in a structure.
+ * @brief Prints the detailed information of all members in a structure
  */
 template <typename T, typename... Members>
 void print_member_info(const std::string& struct_name,
@@ -92,7 +92,7 @@ void print_member_info(const std::string& struct_name,
  * @brief Validates that a member pointer is not null
  */
 template <typename T, typename M>
-constexpr void validate_member_ptr(M T::*member_ptr,
+constexpr void validate_member_ptr(M T::* member_ptr,
                                    std::string_view operation) {
     if (member_ptr == nullptr) {
         throw member_pointer_error(
@@ -112,13 +112,12 @@ constexpr void validate_pointer(const T* ptr, std::string_view operation) {
 }
 
 /**
- * @brief Calculates the offset of a member within a structure.
+ * @brief Calculates the offset of a member within a structure
  * @throws member_pointer_error if member_ptr is null
  */
 template <typename T, typename MemberType>
-constexpr std::size_t offset_of(MemberType T::*member_ptr) {
+constexpr std::size_t offset_of(MemberType T::* member_ptr) {
     validate_member_ptr(member_ptr, "offset_of");
-
     return static_cast<std::size_t>(reinterpret_cast<std::ptrdiff_t>(
         &(static_cast<T const volatile*>(nullptr)->*member_ptr)));
 }
@@ -129,7 +128,7 @@ constexpr std::size_t offset_of(MemberType T::*member_ptr) {
  */
 template <typename Container, typename T, member_pointer MemberPtr>
 type::expected<Container*, member_pointer_error> safe_container_of(
-    T* ptr, MemberPtr Container::*member_ptr) noexcept {
+    T* ptr, MemberPtr Container::* member_ptr) noexcept {
     try {
         if (ptr == nullptr) {
             return type::unexpected(
@@ -152,11 +151,11 @@ type::expected<Container*, member_pointer_error> safe_container_of(
 }
 
 /**
- * @brief Converts a member pointer to the containing object pointer.
+ * @brief Converts a member pointer to the containing object pointer
  * @throws member_pointer_error if validation fails
  */
 template <typename T, typename MemberType>
-T* pointer_to_object(MemberType T::*member_ptr,
+T* pointer_to_object(MemberType T::* member_ptr,
                      MemberType* member_ptr_address) {
     static_assert(std::is_member_pointer_v<decltype(member_ptr)>,
                   "member_ptr must be a member pointer");
@@ -171,12 +170,11 @@ T* pointer_to_object(MemberType T::*member_ptr,
 }
 
 /**
- * @brief Converts a const member pointer to the containing const object
- * pointer.
+ * @brief Converts a const member pointer to the containing const object pointer
  * @throws member_pointer_error if validation fails
  */
 template <typename T, typename MemberType>
-const T* pointer_to_object(MemberType T::*member_ptr,
+const T* pointer_to_object(MemberType T::* member_ptr,
                            const MemberType* member_ptr_address) {
     static_assert(std::is_member_pointer_v<decltype(member_ptr)>,
                   "member_ptr must be a member pointer");
@@ -191,75 +189,36 @@ const T* pointer_to_object(MemberType T::*member_ptr,
 }
 
 /**
- * @brief Converts a member pointer to the containing container pointer.
+ * @brief Converts a member pointer to the containing container pointer
  * @throws member_pointer_error if validation fails
  */
 template <typename Container, typename T, typename MemberPtr>
-Container* container_of(T* ptr, MemberPtr Container::*member_ptr) {
+Container* container_of(T* ptr, MemberPtr Container::* member_ptr) {
     validate_pointer(ptr, "container_of");
     validate_member_ptr(member_ptr, "container_of");
 
-    Container dummy;
-    auto member_addr = &(dummy.*member_ptr);
-    auto base_addr = &dummy;
-    auto offset = reinterpret_cast<std::uintptr_t>(member_addr) -
-                  reinterpret_cast<std::uintptr_t>(base_addr);
-    return reinterpret_cast<Container*>(reinterpret_cast<char*>(ptr) - offset);
-}
-
-/**
- * @brief Converts a member pointer to the containing base class pointer,
- * supporting inheritance.
- * @throws member_pointer_error if validation fails
- */
-template <typename Base, typename Derived, typename T>
-Base* container_of(T* ptr, T Derived::*member_ptr) {
-    validate_pointer(ptr, "container_of");
-    validate_member_ptr(member_ptr, "container_of");
-
-    auto offset = reinterpret_cast<std::uintptr_t>(
-                      &(static_cast<Derived*>(nullptr)->*member_ptr)) -
-                  reinterpret_cast<std::uintptr_t>(nullptr);
-    return reinterpret_cast<Base*>(reinterpret_cast<std::uintptr_t>(ptr) -
-                                   offset);
+    std::size_t offset = offset_of(member_ptr);
+    return reinterpret_cast<Container*>(reinterpret_cast<std::byte*>(ptr) -
+                                        offset);
 }
 
 /**
  * @brief Converts a const member pointer to the containing const container
- * pointer.
+ * pointer
  * @throws member_pointer_error if validation fails
  */
 template <typename Container, typename T, typename MemberPtr>
-const Container* container_of(const T* ptr, MemberPtr Container::*member_ptr) {
+const Container* container_of(const T* ptr, MemberPtr Container::* member_ptr) {
     validate_pointer(ptr, "container_of");
     validate_member_ptr(member_ptr, "container_of");
 
-    auto offset = reinterpret_cast<std::uintptr_t>(
-                      &(static_cast<Container*>(nullptr)->*member_ptr)) -
-                  reinterpret_cast<std::uintptr_t>(nullptr);
+    std::size_t offset = offset_of(member_ptr);
     return reinterpret_cast<const Container*>(
-        reinterpret_cast<std::uintptr_t>(ptr) - offset);
+        reinterpret_cast<const std::byte*>(ptr) - offset);
 }
 
 /**
- * @brief Converts a const member pointer to the containing const base class
- * pointer.
- * @throws member_pointer_error if validation fails
- */
-template <typename Base, typename Derived, typename T>
-const Base* container_of(const T* ptr, T Derived::*member_ptr) {
-    validate_pointer(ptr, "container_of");
-    validate_member_ptr(member_ptr, "container_of");
-
-    auto offset = reinterpret_cast<std::uintptr_t>(
-                      &(static_cast<Derived*>(nullptr)->*member_ptr)) -
-                  reinterpret_cast<std::uintptr_t>(nullptr);
-    return reinterpret_cast<const Base*>(reinterpret_cast<std::uintptr_t>(ptr) -
-                                         offset);
-}
-
-/**
- * @brief Finds the container of a range of elements using C++20 ranges.
+ * @brief Finds the container of a range of elements using C++20 ranges
  */
 template <std::ranges::range Container, typename T>
 auto container_of_range(Container& container, const T* ptr)
@@ -280,7 +239,7 @@ auto container_of_range(Container& container, const T* ptr)
 
 /**
  * @brief Finds the container of elements that match a given predicate using
- * C++20 ranges.
+ * C++20 ranges
  */
 template <std::ranges::range Container, typename Predicate>
 auto container_of_if_range(Container& container, Predicate pred)
@@ -297,7 +256,7 @@ auto container_of_if_range(Container& container, Predicate pred)
  * @brief Check if a pointer points to a member of a specific object
  */
 template <typename T, typename M>
-bool is_member_of(const T* obj, const M* member_ptr, M T::*member) noexcept {
+bool is_member_of(const T* obj, const M* member_ptr, M T::* member) noexcept {
     try {
         validate_pointer(obj, "is_member_of");
         validate_pointer(member_ptr, "is_member_of");
@@ -353,16 +312,11 @@ struct memory_layout_stats {
     }
 
 private:
-    // This is a simplistic approach - accurate padding calculation
-    // would require full structure member layout analysis
     template <typename U>
     static constexpr std::size_t compute_min_size() noexcept {
         if constexpr (std::is_empty_v<U>) {
             return 0;
-        } else if constexpr (std::is_standard_layout_v<U>) {
-            return sizeof(U);
         } else {
-            // Rough estimate for non-standard layout types
             return sizeof(U);
         }
     }

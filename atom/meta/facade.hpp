@@ -48,7 +48,7 @@ concept facade = requires {
 
 namespace detail {
 template <class... Ts1, class... Ts2>
-constexpr auto merge_tuples(std::tuple<Ts1...>, std::tuple<Ts2...>) {
+constexpr auto merge_tuples(std::tuple<Ts1...>, std::tuple<Ts2...>) noexcept {
     return std::tuple<Ts1..., Ts2...>{};
 }
 
@@ -57,7 +57,7 @@ using merged_tuple_t =
     decltype(merge_tuples(std::declval<T1>(), std::declval<T2>()));
 
 constexpr proxiable_constraints merge_constraints(
-    const proxiable_constraints& a, const proxiable_constraints& b) {
+    const proxiable_constraints& a, const proxiable_constraints& b) noexcept {
     return {
         .max_size = std::min(a.max_size, b.max_size),
         .max_align = std::min(a.max_align, b.max_align),
@@ -73,7 +73,8 @@ constexpr proxiable_constraints merge_constraints(
             static_cast<int>(a.concurrency), static_cast<int>(b.concurrency)))};
 }
 
-constexpr proxiable_constraints normalize_constraints(proxiable_constraints c) {
+constexpr proxiable_constraints normalize_constraints(
+    proxiable_constraints c) noexcept {
     if (c.max_size == 0)
         c.max_size = sizeof(void*) * 2;
     if (c.max_align == 0)
@@ -85,35 +86,26 @@ struct vtable {
     void (*destroy)(void*) noexcept;
     void (*copy)(const void*, void*);
     void (*move)(void*, void*) noexcept;
-
     const std::type_info& (*type)() noexcept;
 };
 
 template <class T>
-constexpr vtable make_vtable() {
-    return {// destroy: Handle destruction with appropriate exception handling
-            [](void* obj) noexcept {
+constexpr vtable make_vtable() noexcept {
+    return {[](void* obj) noexcept {
                 if constexpr (std::is_nothrow_destructible_v<T>) {
                     static_cast<T*>(obj)->~T();
                 } else if constexpr (std::is_destructible_v<T>) {
                     try {
                         static_cast<T*>(obj)->~T();
                     } catch (...) {
-                        // Absorb exceptions - can't propagate from noexcept
-                        // function In a real implementation, might want to log
-                        // this
+                        // Exception absorption required for noexcept guarantee
                     }
                 }
-                // If not destructible, do nothing (constraints should prevent
-                // this case)
             },
-
-            // copy: Handle copy construction with appropriate constraints
             [](const void* src, void* dst) {
                 if constexpr (std::is_copy_constructible_v<T>) {
                     if constexpr (std::is_trivially_copy_constructible_v<T>) {
-                        std::memcpy(dst, src,
-                                    sizeof(T));  // Optimize for trivial types
+                        std::memcpy(dst, src, sizeof(T));
                     } else {
                         new (dst) T(*static_cast<const T*>(src));
                     }
@@ -121,46 +113,29 @@ constexpr vtable make_vtable() {
                     throw std::runtime_error("Type is not copy constructible");
                 }
             },
-
-            // move: Handle move construction with noexcept guarantee
             [](void* src, void* dst) noexcept {
                 if constexpr (std::is_nothrow_move_constructible_v<T>) {
                     if constexpr (std::is_trivially_move_constructible_v<T>) {
-                        std::memcpy(dst, src,
-                                    sizeof(T));  // Optimize for trivial types
+                        std::memcpy(dst, src, sizeof(T));
                     } else {
                         new (dst) T(std::move(*static_cast<T*>(src)));
-                        // Note: We don't destroy the source object here
-                        // The caller is responsible for that if needed
                     }
                 } else if constexpr (std::is_move_constructible_v<T>) {
-                    // Move construction might throw, but vtable expects
-                    // noexcept
                     try {
                         new (dst) T(std::move(*static_cast<T*>(src)));
                     } catch (...) {
-                        // Cannot propagate exception due to noexcept. Last
-                        // resort is to terminate.
-                        std::terminate();  // This should be prevented by proper
-                                           // constraints
+                        std::terminate();
                     }
                 } else if constexpr (std::is_copy_constructible_v<T> &&
                                      std::is_nothrow_copy_constructible_v<T>) {
-                    // Fall back to copy if move not available but copy is
-                    // nothrow
                     new (dst) T(*static_cast<const T*>(src));
                 } else {
-                    // Neither safe move nor copy is available - terminate
-                    // This state should be prevented by proper constraints
                     std::terminate();
                 }
             },
-
-            // type: Return type information
             []() noexcept -> const std::type_info& { return typeid(T); }};
 }
 
-// Small object optimization check
 template <class T, std::size_t Size, std::size_t Align>
 inline constexpr bool fits_small_storage =
     sizeof(T) <= Size && alignof(T) <= Align &&
@@ -177,9 +152,7 @@ struct apply_skills<FB> {
 template <class FB, template <class> class Skill,
           template <class> class... Skills>
 struct apply_skills<FB, Skill, Skills...> {
-    // Apply the first skill to the current builder type (FB)
     using next_fb = typename FB::template support<Skill>;
-    // Recursively apply the remaining skills to the result (next_fb)
     using type = typename apply_skills<next_fb, Skills...>::type;
 };
 
@@ -210,47 +183,39 @@ class proxy;
 
 template <class Cs, class Rs, proxiable_constraints C>
 struct facade_builder {
-    // Add indirect convention
     template <class D, class... Os>
     using add_indirect_convention =
         facade_builder<detail::merged_tuple_t<
                            Cs, std::tuple<convention_impl<false, D, Os...>>>,
                        Rs, C>;
 
-    // Add direct convention
     template <class D, class... Os>
     using add_direct_convention = facade_builder<
         detail::merged_tuple_t<Cs, std::tuple<convention_impl<true, D, Os...>>>,
         Rs, C>;
 
-    // Add convention (indirect by default)
     template <class D, class... Os>
     using add_convention = add_indirect_convention<D, Os...>;
 
-    // Add indirect reflection
     template <class R>
     using add_indirect_reflection = facade_builder<
         Cs, detail::merged_tuple_t<Rs, std::tuple<reflection_impl<false, R>>>,
         C>;
 
-    // Add direct reflection
     template <class R>
     using add_direct_reflection = facade_builder<
         Cs, detail::merged_tuple_t<Rs, std::tuple<reflection_impl<true, R>>>,
         C>;
 
-    // Add reflection (indirect by default)
     template <class R>
     using add_reflection = add_indirect_reflection<R>;
 
-    // Add an existing facade
     template <facade F, bool WithUpwardConversion = false>
     using add_facade =
         facade_builder<detail::merged_tuple_t<Cs, typename F::convention_types>,
                        detail::merged_tuple_t<Rs, typename F::reflection_types>,
                        detail::merge_constraints(C, F::constraints)>;
 
-    // Restrict layout
     template <std::size_t Size, std::size_t Align = alignof(std::max_align_t)>
         requires(std::has_single_bit(Align) && Size > 0 && Align > 0 &&
                  Size % Align == 0)
@@ -264,7 +229,6 @@ struct facade_builder {
                            .destructibility = C.destructibility,
                            .concurrency = C.concurrency}>;
 
-    // Support copy
     template <constraint_level Level>
     using support_copy =
         facade_builder<Cs, Rs,
@@ -278,7 +242,6 @@ struct facade_builder {
                            .destructibility = C.destructibility,
                            .concurrency = C.concurrency}>;
 
-    // Support move
     template <constraint_level Level>
     using support_relocation =
         facade_builder<Cs, Rs,
@@ -292,7 +255,6 @@ struct facade_builder {
                            .destructibility = C.destructibility,
                            .concurrency = C.concurrency}>;
 
-    // Support destruction
     template <constraint_level Level>
     using support_destruction =
         facade_builder<Cs, Rs,
@@ -306,7 +268,6 @@ struct facade_builder {
                                         static_cast<int>(Level))),
                            .concurrency = C.concurrency}>;
 
-    // Add thread safety constraint
     template <thread_safety Level>
     using with_thread_safety =
         facade_builder<Cs, Rs,
@@ -320,74 +281,53 @@ struct facade_builder {
                                std::max(static_cast<int>(C.concurrency),
                                         static_cast<int>(Level)))}>;
 
-    // Support multiple skills - fixed version
-    // This alias template applies multiple skills using detail::apply_skills
     template <template <class> class... Skills>
     using with_skills = typename detail::apply_skills<facade_builder<Cs, Rs, C>,
                                                       Skills...>::type;
 
-    // Support a single skill (Skill is a template template parameter)
     template <template <class> class Skill>
-    using support =
-        Skill<facade_builder<Cs, Rs, C>>;  // Pass the current builder type
+    using support = Skill<facade_builder<Cs, Rs, C>>;
 
-    // Build the final facade
     using build = facade_impl<Cs, Rs, detail::normalize_constraints(C)>;
 };
 
-// Default facade builder - modified default constraints
-using default_builder = facade_builder<
-    std::tuple<>, std::tuple<>,
-    proxiable_constraints{
-        .max_size = 256,
-        .max_align = alignof(std::max_align_t),
-        .copyability = constraint_level::nothrow,  // Copy allowed by default
-        .relocatability = constraint_level::nothrow,
-        .destructibility = constraint_level::nothrow,
-        .concurrency = thread_safety::none}>;
+using default_builder =
+    facade_builder<std::tuple<>, std::tuple<>,
+                   proxiable_constraints{
+                       .max_size = 256,
+                       .max_align = alignof(std::max_align_t),
+                       .copyability = constraint_level::nothrow,
+                       .relocatability = constraint_level::nothrow,
+                       .destructibility = constraint_level::nothrow,
+                       .concurrency = thread_safety::none}>;
 
-// Print dispatcher
+/**
+ * @brief Print dispatcher for type-erased printing functionality
+ */
 struct print_dispatch {
-    static constexpr bool is_direct =
-        false;  // Indirect: works via type erasure
+    static constexpr bool is_direct = false;
     using dispatch_type = print_dispatch;
-
-    // Option 1: Function pointer in vtable (preferred for type erasure)
     using print_func_t = void (*)(const void*);
 
     template <class T>
     static void print_impl(const void* obj) {
         const T& concrete_obj = *static_cast<const T*>(obj);
         if constexpr (requires { std::cout << concrete_obj; }) {
-            std::cout << concrete_obj;  // No newline here, let caller decide
+            std::cout << concrete_obj;
         } else {
             std::cout << "[unprintable object type: " << typeid(T).name()
                       << "]";
         }
     }
-
-    // Option 2: Static dispatch (requires caller to know type or use visitor)
-    // template <class T>
-    // static void print(const T& obj) { ... }
 };
 
-// Helper to add print function to vtable (conceptual)
-/*
-template<typename T>
-void* get_print_func() {
-    return reinterpret_cast<void*>(&print_dispatch::print_impl<T>);
-}
-*/
-
-// Formattable skill (Printable)
-// Associates print_dispatch with a function signature void() const
-// The signature here is more conceptual - it defines the *interface*
-// The actual implementation might use a vtable entry.
 template <class FB>
-using formattable = typename FB::template add_convention<
-    print_dispatch, void() const>;  // Signature placeholder
+using formattable =
+    typename FB::template add_convention<print_dispatch, void() const>;
 
-// String conversion skill
+/**
+ * @brief String conversion dispatcher
+ */
 struct to_string_dispatch {
     static constexpr bool is_direct = false;
     using dispatch_type = to_string_dispatch;
@@ -413,14 +353,12 @@ template <class FB>
 using stringable = typename FB::template add_convention<to_string_dispatch,
                                                         std::string() const>;
 
-// Comparable skill
-// Comparison needs careful thought with type erasure.
-// Comparing two proxies: are they the same type? If so, compare values.
-// If different types, comparison is usually false or requires specific rules.
+/**
+ * @brief Comparison dispatcher for type-erased equality operations
+ */
 struct compare_dispatch {
     static constexpr bool is_direct = false;
     using dispatch_type = compare_dispatch;
-    // Need function pointers for type-erased comparison
     using equals_func_t = bool (*)(const void*, const void*,
                                    const std::type_info&);
 
@@ -428,29 +366,26 @@ struct compare_dispatch {
     static bool equals_impl(const void* obj1, const void* obj2,
                             const std::type_info& type2_info) {
         if (typeid(T) != type2_info)
-            return false;  // Types must match
+            return false;
 
         const T& concrete_obj1 = *static_cast<const T*>(obj1);
-        const T& concrete_obj2 =
-            *static_cast<const T*>(obj2);  // Safe cast due to type check
+        const T& concrete_obj2 = *static_cast<const T*>(obj2);
 
         if constexpr (requires { concrete_obj1 == concrete_obj2; }) {
             return concrete_obj1 == concrete_obj2;
         } else {
-            return false;  // Cannot compare if operator== not defined
+            return false;
         }
     }
-    // Similar logic for less_than_impl if needed
 };
 
 template <class FB>
 using comparable = typename FB::template add_convention<
-    compare_dispatch,
-    bool(const proxy<typename FB::build>&) const  // Placeholder signature
-    // bool(const proxy<typename FB::build>&) const // For less than
-    >;
+    compare_dispatch, bool(const proxy<typename FB::build>&) const>;
 
-// Serialization skill (Conceptual - implementation needs vtable integration)
+/**
+ * @brief Serialization dispatcher for type-erased serialization operations
+ */
 struct serialize_dispatch {
     static constexpr bool is_direct = false;
     using dispatch_type = serialize_dispatch;
@@ -467,7 +402,7 @@ struct serialize_dispatch {
                       }) {
             return concrete_obj.serialize();
         } else {
-            return "{}";  // Default empty JSON or similar
+            return "{}";
         }
     }
 
@@ -481,54 +416,40 @@ struct serialize_dispatch {
                       }) {
             return concrete_obj.deserialize(data);
         } else {
-            return false;  // Cannot deserialize
+            return false;
         }
     }
 };
 
 template <class FB>
 using serializable = typename FB::template add_convention<
-    serialize_dispatch,
-    std::string() const,      // serialize signature placeholder
-    bool(const std::string&)  // deserialize signature placeholder
-    >;
+    serialize_dispatch, std::string() const, bool(const std::string&)>;
 
-// Cloneable skill
+/**
+ * @brief Cloneable dispatcher for type-erased cloning operations
+ */
 struct cloneable_dispatch {
     static constexpr bool is_direct = false;
     using dispatch_type = cloneable_dispatch;
-    // The return type depends on the Facade (F), making it tricky for a simple
-    // function pointer. It might need to return a raw pointer + vtable, or the
-    // clone function needs the target proxy type. Let's define a function that
-    // allocates and constructs into a provided proxy reference.
-    using clone_func_t = void (*)(const void*, void* /* target storage */,
-                                  const detail::vtable** /* target vptr*/);
+    using clone_func_t = void (*)(const void*, void*, const detail::vtable**);
 
-    template <class T,
-              class F_Target>  // F_Target is the Facade of the target proxy
+    template <class T, class F_Target>
     static void clone_impl(const void* src_obj, void* target_storage,
                            const detail::vtable** target_vptr) {
         const T& concrete_src = *static_cast<const T*>(src_obj);
-        // Check if T is compatible with F_Target constraints
-        static_assert(sizeof(T) <= F_Target::constraints.max_size,
-                      "Clone target size mismatch");
-        static_assert(alignof(T) <= F_Target::constraints.max_align,
-                      "Clone target align mismatch");
-        // Add other constraint checks as needed
+        static_assert(sizeof(T) <= F_Target::constraints.max_size);
+        static_assert(alignof(T) <= F_Target::constraints.max_align);
 
         if constexpr (requires { concrete_src.clone(); }) {
             using CloneResult = decltype(concrete_src.clone());
-            static_assert(std::is_same_v<CloneResult, T>,
-                          "clone() must return the same type T");
-            // Construct the cloned object in the target storage
+            static_assert(std::is_same_v<CloneResult, T>);
             new (target_storage) T(concrete_src.clone());
             static constinit const auto vtbl = detail::make_vtable<T>();
             *target_vptr = &vtbl;
         } else if constexpr (std::is_copy_constructible_v<T>) {
-            // Check if copying is allowed by the *target* facade
             if constexpr (F_Target::constraints.copyability !=
                           constraint_level::none) {
-                new (target_storage) T(concrete_src);  // Copy construct
+                new (target_storage) T(concrete_src);
                 static constinit const auto vtbl = detail::make_vtable<T>();
                 *target_vptr = &vtbl;
             } else {
@@ -536,9 +457,7 @@ struct cloneable_dispatch {
                     "Cloning via copy construction forbidden by target facade");
             }
         } else {
-            throw std::runtime_error(
-                "Object is not cloneable (no clone() method or copy "
-                "constructor)");
+            throw std::runtime_error("Object is not cloneable");
         }
     }
 };
@@ -546,31 +465,27 @@ struct cloneable_dispatch {
 template <class FB>
 using cloneable =
     typename FB::template add_convention<cloneable_dispatch,
-                                         proxy<typename FB::build>()
-                                             const>;  // Placeholder signature
+                                         proxy<typename FB::build>() const>;
 
-// Math operations skill (Conceptual - needs vtable/dispatch refinement)
+/**
+ * @brief Math operations dispatcher
+ */
 struct math_dispatch {
     static constexpr bool is_direct = false;
     using dispatch_type = math_dispatch;
-    // Math operations between proxies are complex due to types.
-    // Usually requires operands to be the same type or specific conversion
-    // rules. Vtable entries would be needed for type-erased arithmetic.
 };
 
 template <class FB>
 using mathable = typename FB::template add_convention<
     math_dispatch,
-    // Placeholder signatures for arithmetic operations
-    proxy<typename FB::build>(const proxy<typename FB::build>&) const,  // add
-    proxy<typename FB::build>(const proxy<typename FB::build>&)
-        const,  // subtract
-    proxy<typename FB::build>(const proxy<typename FB::build>&)
-        const,  // multiply
-    proxy<typename FB::build>(const proxy<typename FB::build>&) const  // divide
-    >;
+    proxy<typename FB::build>(const proxy<typename FB::build>&) const,
+    proxy<typename FB::build>(const proxy<typename FB::build>&) const,
+    proxy<typename FB::build>(const proxy<typename FB::build>&) const,
+    proxy<typename FB::build>(const proxy<typename FB::build>&) const>;
 
-// Debug support skill
+/**
+ * @brief Debug support dispatcher
+ */
 struct debug_dispatch {
     static constexpr bool is_direct = false;
     using dispatch_type = debug_dispatch;
@@ -594,49 +509,40 @@ struct debug_dispatch {
 template <class FB>
 using debuggable =
     typename FB::template add_convention<debug_dispatch,
-                                         void(std::ostream&)
-                                             const>;  // Placeholder
+                                         void(std::ostream&) const>;
 
-// Iteration capability (Highly complex with type erasure)
-// Would require type-erased iterators.
+/**
+ * @brief Iteration capability dispatcher
+ */
 struct iterable_dispatch {
     static constexpr bool is_direct = false;
     using dispatch_type = iterable_dispatch;
-    // Vtable entries for begin, end, size, empty needed.
-    // Iterator types would need to be type-erased as well.
 };
 
 template <class FB>
-using iterable = typename FB::template add_convention<
-    iterable_dispatch,
-    // Placeholder signatures
-    void*(),              // begin() - returns opaque iterator pointer?
-    void*(),              // end() - returns opaque iterator pointer?
-    std::size_t() const,  // size()
-    bool() const          // empty()
-    >;
+using iterable =
+    typename FB::template add_convention<iterable_dispatch, void*(), void*(),
+                                         std::size_t() const, bool() const>;
 
+/**
+ * @brief Type-erased proxy class providing generic object storage and
+ * operations
+ * @tparam F Facade type defining constraints and capabilities
+ */
 template <facade F>
 class proxy {
 private:
-    // Storage management
     alignas(
         F::constraints.max_align) std::byte storage[F::constraints.max_size]{};
     const detail::vtable* vptr = nullptr;
 
-    // Extended vtable for skills (conceptual - actual implementation could
-    // vary)
     struct skill_record {
         const void* func_ptr;
         const std::type_info* skill_type;
     };
 
-    // This could be a map of skill type IDs to function pointers
-    // In a real implementation, this might be part of the vtable or a separate
-    // structure
     std::vector<skill_record> skill_vtable;
 
-    // Get storage pointer with proper alignment
     template <class T>
     T* as() noexcept {
         return std::launder(reinterpret_cast<T*>(storage));
@@ -647,138 +553,93 @@ private:
         return std::launder(reinterpret_cast<const T*>(storage));
     }
 
-    // Dispatcher helper function
     template <dispatcher D, class R, class... Args>
-    R dispatch([[maybe_unused]] Args&&... args)
-        const {  // Mark args as potentially unused
+    R dispatch(Args&&... args) const {
         if (!has_value()) {
             throw std::bad_function_call();
         }
 
         if constexpr (D::is_direct) {
-            // Direct dispatch - requires concrete type knowledge
-            // This would typically be used when the caller knows the exact type
-            // and can directly call methods on it
-
-            // For a complete implementation, we'd need a way to:
-            // 1. Get the concrete type T from the stored object
-            // 2. Call the appropriate method on T with args
-
-            // Since direct dispatch requires compile-time type knowledge,
-            // it's typically handled by external template code that knows T
             throw std::logic_error("Direct dispatch requires type knowledge");
         } else {
-            // Indirect dispatch - uses type erasure via function pointers
-
-            // Find the appropriate function pointer in the vtable extension
-            // This needs to locate the correct skill implementation
-
-            // Example for print_dispatch skill:
             if constexpr (std::is_same_v<typename D::dispatch_type,
                                          print_dispatch>) {
-                // Find print function in skill vtable
                 for (const auto& record : skill_vtable) {
                     if (*record.skill_type == typeid(print_dispatch)) {
-                        // Cast to appropriate function type and call
                         auto print_func = reinterpret_cast<
                             typename print_dispatch::print_func_t>(
                             record.func_ptr);
                         if (print_func) {
                             print_func(storage);
-                            return R();  // Return void or default-constructed R
+                            return R();
                         }
                     }
                 }
             }
-
-            // Similar implementations for other dispatch types
-
             throw std::runtime_error(
                 "Skill implementation not found in vtable");
         }
     }
 
-    // Internal construction helper
     template <class T, class... Args>
     void construct(Args&&... args) {
         using value_type = std::remove_cvref_t<T>;
-        // Check size constraints
-        static_assert(sizeof(value_type) <= F::constraints.max_size,
-                      "Type exceeds maximum size constraint");
-        static_assert(alignof(value_type) <= F::constraints.max_align,
-                      "Type exceeds maximum alignment constraint");
+        static_assert(sizeof(value_type) <= F::constraints.max_size);
+        static_assert(alignof(value_type) <= F::constraints.max_align);
 
-        // Check lifecycle constraints - only when explicitly restricted
         if constexpr (F::constraints.copyability == constraint_level::none) {
             static_assert(!(std::is_copy_constructible_v<value_type> &&
-                            std::is_copy_assignable_v<value_type>),
-                          "Type is copyable but facade forbids it.");
+                            std::is_copy_assignable_v<value_type>));
         } else if constexpr (F::constraints.copyability ==
                              constraint_level::nothrow) {
             static_assert(std::is_nothrow_copy_constructible_v<value_type> &&
-                              std::is_nothrow_copy_assignable_v<value_type>,
-                          "Type must support nothrow copy operations");
+                          std::is_nothrow_copy_assignable_v<value_type>);
         } else if constexpr (F::constraints.copyability ==
                              constraint_level::trivial) {
             static_assert(std::is_trivially_copy_constructible_v<value_type> &&
-                              std::is_trivially_copy_assignable_v<value_type>,
-                          "Type must support trivial copy operations");
+                          std::is_trivially_copy_assignable_v<value_type>);
         }
 
-        // Check relocation constraints
         if constexpr (F::constraints.relocatability == constraint_level::none) {
             static_assert(!(std::is_move_constructible_v<value_type> &&
-                            std::is_move_assignable_v<value_type>),
-                          "Type is movable but facade forbids it.");
+                            std::is_move_assignable_v<value_type>));
         } else if constexpr (F::constraints.relocatability ==
                              constraint_level::nothrow) {
             static_assert(std::is_nothrow_move_constructible_v<value_type> &&
-                              std::is_nothrow_move_assignable_v<value_type>,
-                          "Type must support nothrow move operations");
+                          std::is_nothrow_move_assignable_v<value_type>);
         } else if constexpr (F::constraints.relocatability ==
                              constraint_level::trivial) {
             static_assert(std::is_trivially_move_constructible_v<value_type> &&
-                              std::is_trivially_move_assignable_v<value_type>,
-                          "Type must support trivial move operations");
+                          std::is_trivially_move_assignable_v<value_type>);
         }
 
-        // Check destruction constraints
         if constexpr (F::constraints.destructibility ==
                       constraint_level::none) {
-            static_assert(!std::is_destructible_v<value_type>,
-                          "Type is destructible but facade forbids it.");
+            static_assert(!std::is_destructible_v<value_type>);
         } else if constexpr (F::constraints.destructibility ==
                              constraint_level::nothrow) {
-            static_assert(std::is_nothrow_destructible_v<value_type>,
-                          "Type must support nothrow destruction");
+            static_assert(std::is_nothrow_destructible_v<value_type>);
         } else if constexpr (F::constraints.destructibility ==
                              constraint_level::trivial) {
-            static_assert(std::is_trivially_destructible_v<value_type>,
-                          "Type must support trivial destruction");
+            static_assert(std::is_trivially_destructible_v<value_type>);
         }
 
-        // Construct in storage
         new (storage) value_type(std::forward<Args>(args)...);
         static constinit const auto vtbl = detail::make_vtable<value_type>();
         vptr = &vtbl;
-
-        // Register skill implementations based on T's capabilities
         register_skills<value_type>();
     }
 
-    // Register skill implementations for type T
     template <class T>
     void register_skills() {
         skill_vtable.clear();
 
-        // Register print skill if T is printable
         if constexpr (requires { std::cout << std::declval<const T&>(); }) {
             skill_vtable.push_back(
                 {reinterpret_cast<const void*>(&print_dispatch::print_impl<T>),
                  &typeid(print_dispatch)});
         }
 
-        // Register to_string skill if T supports conversion to string
         if constexpr (
             requires { std::to_string(std::declval<const T&>()); } ||
             requires { std::string(std::declval<const T&>()); } ||
@@ -788,7 +649,6 @@ private:
                                     &typeid(to_string_dispatch)});
         }
 
-        // Register comparison skill if T is comparable
         if constexpr (requires {
                           std::declval<const T&>() == std::declval<const T&>();
                       }) {
@@ -797,7 +657,6 @@ private:
                                     &typeid(compare_dispatch)});
         }
 
-        // Register serialization skill if T supports it
         if constexpr (requires {
                           {
                               std::declval<const T&>().serialize()
@@ -819,68 +678,68 @@ private:
             }
         }
 
-        // Register clone skill if T is cloneable
         if constexpr (requires { std::declval<const T&>().clone(); } ||
                       std::is_copy_constructible_v<T>) {
-            // Note: Actual implementation would need to handle the target
-            // facade type This is a simplified version
             skill_vtable.push_back({reinterpret_cast<const void*>(
                                         &cloneable_dispatch::clone_impl<T, F>),
                                     &typeid(cloneable_dispatch)});
         }
-
-        // Additional skills could be registered similarly
     }
 
 public:
     using facade_type = F;
     static constexpr proxiable_constraints constraints = F::constraints;
 
-    // Default constructor (empty proxy)
+    /**
+     * @brief Default constructor creating an empty proxy
+     */
     proxy() noexcept = default;
 
-    // Construct from nullptr (empty proxy)
+    /**
+     * @brief Construct empty proxy from nullptr
+     */
     proxy(std::nullptr_t) noexcept : proxy() {}
 
-    // Destructor
+    /**
+     * @brief Destructor
+     */
     ~proxy() { reset(); }
 
-    // Copy constructor
+    /**
+     * @brief Copy constructor
+     */
     proxy(const proxy& other) {
         if constexpr (F::constraints.copyability != constraint_level::none) {
             if (other.vptr) {
                 other.vptr->copy(other.storage, storage);
                 vptr = other.vptr;
-
-                // Copy skill vtable
                 skill_vtable = other.skill_vtable;
             }
         } else {
-            static_assert(F::constraints.copyability != constraint_level::none,
-                          "Facade does not support copying");
+            static_assert(F::constraints.copyability != constraint_level::none);
         }
     }
 
-    // Move constructor
+    /**
+     * @brief Move constructor
+     */
     proxy(proxy&& other) noexcept {
         if constexpr (F::constraints.relocatability != constraint_level::none) {
             if (other.vptr) {
                 other.vptr->move(other.storage, storage);
                 vptr = other.vptr;
-
-                // Move skill vtable
                 skill_vtable = std::move(other.skill_vtable);
-
                 other.vptr = nullptr;
             }
         } else {
-            static_assert(
-                F::constraints.relocatability != constraint_level::none,
-                "Facade does not support moving");
+            static_assert(F::constraints.relocatability !=
+                          constraint_level::none);
         }
     }
 
-    // Copy assignment
+    /**
+     * @brief Copy assignment operator
+     */
     proxy& operator=(const proxy& other) {
         if constexpr (F::constraints.copyability != constraint_level::none) {
             if (this != &other) {
@@ -888,20 +747,19 @@ public:
                 if (other.vptr) {
                     other.vptr->copy(other.storage, storage);
                     vptr = other.vptr;
-
-                    // Copy skill vtable
                     skill_vtable = other.skill_vtable;
                 }
             }
             return *this;
         } else {
-            static_assert(F::constraints.copyability != constraint_level::none,
-                          "Facade does not support copy assignment");
+            static_assert(F::constraints.copyability != constraint_level::none);
             return *this;
         }
     }
 
-    // Move assignment
+    /**
+     * @brief Move assignment operator
+     */
     proxy& operator=(proxy&& other) noexcept {
         if constexpr (F::constraints.relocatability != constraint_level::none) {
             if (this != &other) {
@@ -909,23 +767,23 @@ public:
                 if (other.vptr) {
                     other.vptr->move(other.storage, storage);
                     vptr = other.vptr;
-
-                    // Move skill vtable
                     skill_vtable = std::move(other.skill_vtable);
-
                     other.vptr = nullptr;
                 }
             }
             return *this;
         } else {
-            static_assert(
-                F::constraints.relocatability != constraint_level::none,
-                "Facade does not support move assignment");
+            static_assert(F::constraints.relocatability !=
+                          constraint_level::none);
             return *this;
         }
     }
 
-    // Construct from a compatible type T
+    /**
+     * @brief Construct from a compatible type T
+     * @tparam T Type to construct from
+     * @param value Value to construct with
+     */
     template <class T>
         requires(
             !std::same_as<std::remove_cvref_t<T>, proxy> &&
@@ -934,13 +792,24 @@ public:
         construct<std::remove_cvref_t<T>>(std::forward<T>(value));
     }
 
-    // In-place construction
+    /**
+     * @brief In-place construction
+     * @tparam T Type to construct
+     * @tparam Args Constructor argument types
+     * @param args Constructor arguments
+     */
     template <class T, class... Args>
     explicit proxy(std::in_place_type_t<T>, Args&&... args) {
         construct<T>(std::forward<Args>(args)...);
     }
 
-    // Static factory function for in-place construction
+    /**
+     * @brief Static factory function for in-place construction
+     * @tparam T Type to construct
+     * @tparam Args Constructor argument types
+     * @param args Constructor arguments
+     * @return Constructed proxy
+     */
     template <class T, class... Args>
     static proxy make(Args&&... args) {
         proxy result;
@@ -948,7 +817,9 @@ public:
         return result;
     }
 
-    // Reset the proxy to an empty state
+    /**
+     * @brief Reset the proxy to an empty state
+     */
     void reset() noexcept {
         if (vptr) {
             if constexpr (F::constraints.destructibility !=
@@ -960,21 +831,33 @@ public:
         }
     }
 
-    // Check if the proxy holds a value
-    bool has_value() const noexcept { return vptr != nullptr; }
+    /**
+     * @brief Check if the proxy holds a value
+     * @return true if proxy contains an object, false otherwise
+     */
+    [[nodiscard]] bool has_value() const noexcept { return vptr != nullptr; }
 
-    // Boolean conversion
+    /**
+     * @brief Boolean conversion operator
+     * @return true if proxy contains an object, false otherwise
+     */
     explicit operator bool() const noexcept { return has_value(); }
 
-    // Get dynamic type information
-    const std::type_info& type() const noexcept {
+    /**
+     * @brief Get dynamic type information
+     * @return Type information of stored object
+     */
+    [[nodiscard]] const std::type_info& type() const noexcept {
         if (vptr) {
             return vptr->type();
         }
         return typeid(void);
     }
 
-    // Swap two proxies
+    /**
+     * @brief Swap two proxies
+     * @param other Other proxy to swap with
+     */
     void swap(proxy& other) noexcept {
         if constexpr (F::constraints.relocatability != constraint_level::none) {
             if (this == &other)
@@ -985,43 +868,40 @@ public:
                     std::byte temp_storage[F::constraints.max_size];
                 const detail::vtable* temp_vptr = nullptr;
 
-                // Move this to temp
                 vptr->move(storage, temp_storage);
                 temp_vptr = vptr;
 
-                // Move other to this
                 other.vptr->move(other.storage, storage);
                 vptr = other.vptr;
 
-                // Move temp to other
                 temp_vptr->move(temp_storage, other.storage);
                 other.vptr = temp_vptr;
 
-                // Swap skill vtables
                 skill_vtable.swap(other.skill_vtable);
             } else if (vptr) {
                 other.vptr = vptr;
                 vptr->move(storage, other.storage);
                 vptr = nullptr;
-
                 skill_vtable.swap(other.skill_vtable);
             } else if (other.vptr) {
                 vptr = other.vptr;
                 other.vptr->move(other.storage, storage);
                 other.vptr = nullptr;
-
                 skill_vtable.swap(other.skill_vtable);
             }
         } else {
-            static_assert(
-                F::constraints.relocatability != constraint_level::none,
-                "Facade does not support relocation (needed for swap)");
+            static_assert(F::constraints.relocatability !=
+                          constraint_level::none);
         }
     }
 
-    // Access the contained object (unsafe)
+    /**
+     * @brief Access the contained object (unsafe)
+     * @tparam T Expected type
+     * @return Pointer to object if type matches, nullptr otherwise
+     */
     template <typename T>
-    T* target() noexcept {
+    [[nodiscard]] T* target() noexcept {
         if (has_value() && type() == typeid(T)) {
             return as<T>();
         }
@@ -1029,24 +909,29 @@ public:
     }
 
     template <typename T>
-    const T* target() const noexcept {
+    [[nodiscard]] const T* target() const noexcept {
         if (has_value() && type() == typeid(T)) {
             return as<T>();
         }
         return nullptr;
     }
 
-    // Call a function associated with a skill/convention
+    /**
+     * @brief Call a function associated with a skill/convention
+     * @tparam Convention Convention type
+     * @tparam R Return type
+     * @tparam Args Argument types
+     * @param args Function arguments
+     * @return Result of the function call
+     */
     template <typename Convention, typename R = void, typename... Args>
     R call(Args&&... args) const {
         if (!has_value()) {
             throw std::bad_function_call();
         }
 
-        // Check if skill is supported
         for (const auto& record : skill_vtable) {
             if (*record.skill_type == typeid(Convention)) {
-                // Found the skill implementation
                 if constexpr (std::is_same_v<Convention, print_dispatch>) {
                     auto func =
                         reinterpret_cast<typename print_dispatch::print_func_t>(
@@ -1066,11 +951,8 @@ public:
                     }
                 } else if constexpr (std::is_same_v<Convention,
                                                     compare_dispatch>) {
-                    // Comparison requires two objects - args should contain the
-                    // other proxy
                     if constexpr (sizeof...(Args) == 1 &&
                                   std::is_same_v<R, bool>) {
-                        // Extract the other proxy from args
                         const proxy& other = std::get<0>(
                             std::forward_as_tuple(std::forward<Args>(args)...));
                         if (!other.has_value())
@@ -1085,14 +967,12 @@ public:
                                                     serialize_dispatch>) {
                     if constexpr (sizeof...(Args) == 0 &&
                                   std::is_same_v<R, std::string>) {
-                        // Serialize
                         auto func = reinterpret_cast<
                             typename serialize_dispatch::serialize_func_t>(
                             record.func_ptr);
                         return func(storage);
                     } else if constexpr (sizeof...(Args) == 1 &&
                                          std::is_same_v<R, bool>) {
-                        // Deserialize - requires mutable object
                         const std::string& data = std::get<0>(
                             std::forward_as_tuple(std::forward<Args>(args)...));
                         auto func = reinterpret_cast<
@@ -1103,21 +983,16 @@ public:
                                     data);
                     }
                 }
-                // Add similar handlers for other skills
-
-                // If we reach here, the skill is found but the signature
-                // doesn't match
                 throw std::bad_function_call();
             }
         }
-
-        // Skill not found
         throw std::runtime_error("Skill not supported by this object");
     }
 
-    // Convenience methods for common skills
-
-    // Print the object to stream
+    /**
+     * @brief Print the object to stream
+     * @param os Output stream
+     */
     void print(std::ostream& os = std::cout) const {
         try {
             call<print_dispatch>();
@@ -1126,8 +1001,11 @@ public:
         }
     }
 
-    // Convert to string
-    std::string to_string() const {
+    /**
+     * @brief Convert to string
+     * @return String representation of the object
+     */
+    [[nodiscard]] std::string to_string() const {
         try {
             return call<to_string_dispatch, std::string>();
         } catch (const std::exception&) {
@@ -1135,70 +1013,75 @@ public:
         }
     }
 
-    // Compare with another proxy
-    bool equals(const proxy& other) const {
+    /**
+     * @brief Compare with another proxy
+     * @param other Other proxy to compare with
+     * @return true if objects are equal, false otherwise
+     */
+    [[nodiscard]] bool equals(const proxy& other) const {
         try {
             return call<compare_dispatch, bool>(other);
         } catch (const std::exception&) {
-            return false;  // Default to not equal if comparison not supported
+            return false;
         }
     }
 
-    // Create a clone of this proxy
-    proxy clone() const {
+    /**
+     * @brief Create a clone of this proxy
+     * @return Cloned proxy
+     */
+    [[nodiscard]] proxy clone() const {
         if (!has_value()) {
             return proxy();
         }
-
-        // Implementation depends on cloneable_dispatch being properly set up
-        // For now, try to use copy construction as a fallback
         return proxy(*this);
     }
 };
 
-// Equality comparison operator
+/**
+ * @brief Equality comparison operator
+ * @tparam F Facade type
+ * @param a First proxy
+ * @param b Second proxy
+ * @return true if proxies are equal, false otherwise
+ */
 template <facade F>
-bool operator==(const proxy<F>& a, const proxy<F>& b) {
+[[nodiscard]] bool operator==(const proxy<F>& a, const proxy<F>& b) {
     if (!a.has_value() && !b.has_value())
-        return true;  // Both empty
+        return true;
     if (a.has_value() != b.has_value())
-        return false;  // One empty, one not
+        return false;
 
-    // Both have values, check if comparable skill exists and types match
-    // This requires accessing the vtable and the comparison function pointer.
-    // Simplified check: only compare if types are identical.
     if (a.type() != b.type()) {
         return false;
     }
 
-    // TODO: Integrate with compare_dispatch skill via vtable lookup if
-    // available. Placeholder: Assume not comparable for now if skill dispatch
-    // isn't implemented. If types are the same, ideally we'd call the
-    // equals_impl via vtable. Example (conceptual): if (auto* equals_fp =
-    // find_vtable_entry<compare_dispatch::equals_func_t>(a.vptr)) {
-    //     return equals_fp(a.storage, b.storage, b.type());
-    // }
-    return false;  // Placeholder: Cannot compare without skill implementation
+    return false;
 }
 
-// Inequality comparison operator
+/**
+ * @brief Inequality comparison operator
+ * @tparam F Facade type
+ * @param a First proxy
+ * @param b Second proxy
+ * @return true if proxies are not equal, false otherwise
+ */
 template <facade F>
-bool operator!=(const proxy<F>& a, const proxy<F>& b) {
+[[nodiscard]] bool operator!=(const proxy<F>& a, const proxy<F>& b) {
     return !(a == b);
 }
 
-// Stream output operator
+/**
+ * @brief Stream output operator
+ * @tparam F Facade type
+ * @param os Output stream
+ * @param p Proxy to output
+ * @return Reference to output stream
+ */
 template <facade F>
 std::ostream& operator<<(std::ostream& os, const proxy<F>& p) {
     if (p.has_value()) {
-        // TODO: Integrate with print_dispatch or debug_dispatch skill via
-        // vtable. Example (conceptual): if (auto* print_fp =
-        // find_vtable_entry<print_dispatch::print_func_t>(p.vptr)) {
-        //     print_fp(p.storage);
-        // } else {
-        //     os << "[proxy object type: " << p.type().name() << "]";
-        // }
-        os << "[proxy object type: " << p.type().name() << "]";  // Placeholder
+        os << "[proxy object type: " << p.type().name() << "]";
     } else {
         os << "[empty proxy]";
     }

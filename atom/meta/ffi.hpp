@@ -12,7 +12,6 @@
 #include <any>
 #include <chrono>
 #include <concepts>
-#include <expected>
 #include <format>
 #include <functional>
 #include <future>
@@ -26,8 +25,6 @@
 #include <unordered_map>
 #include <variant>
 #include <vector>
-#include "atom/macro.hpp"
-#include "atom/type/expected.hpp"
 
 #ifdef _MSC_VER
 #include <windows.h>
@@ -38,6 +35,8 @@
 #include <ffi.h>
 
 #include "atom/error/exception.hpp"
+#include "atom/macro.hpp"
+#include "atom/type/expected.hpp"
 
 #ifdef ATOM_USE_BOOST
 #include <boost/any.hpp>
@@ -47,58 +46,63 @@
 
 namespace atom::meta {
 
-// Forward declarations
 template <typename T>
 class LibraryObject;
 class DynamicLibrary;
 class CallbackRegistry;
 
-// Error handling with type::expected (C++23)
+/**
+ * \brief Enumeration of FFI error codes
+ */
 enum class FFIError {
-    None,
-    LibraryLoadFailed,
-    SymbolNotFound,
-    FunctionCallFailed,
-    InvalidArgument,
-    Timeout,
-    CallbackNotFound,
-    TypeMismatch,
-    OutOfMemory,
-    InternalError
+    None,                ///< No error occurred
+    LibraryLoadFailed,   ///< Failed to load dynamic library
+    SymbolNotFound,      ///< Symbol not found in library
+    FunctionCallFailed,  ///< Function call failed
+    InvalidArgument,     ///< Invalid argument provided
+    Timeout,             ///< Operation timed out
+    CallbackNotFound,    ///< Callback function not found
+    TypeMismatch,        ///< Type mismatch in function call
+    OutOfMemory,         ///< Out of memory
+    InternalError        ///< Internal FFI error
 };
 
+/**
+ * \brief Convert FFI error code to string representation
+ * \param error The error code to convert
+ * \return String representation of the error
+ */
 inline auto to_string(FFIError error) -> std::string {
-    switch (error) {
-        case FFIError::None:
-            return "No error";
-        case FFIError::LibraryLoadFailed:
-            return "Failed to load dynamic library";
-        case FFIError::SymbolNotFound:
-            return "Symbol not found in library";
-        case FFIError::FunctionCallFailed:
-            return "Function call failed";
-        case FFIError::InvalidArgument:
-            return "Invalid argument provided";
-        case FFIError::Timeout:
-            return "Operation timed out";
-        case FFIError::CallbackNotFound:
-            return "Callback function not found";
-        case FFIError::TypeMismatch:
-            return "Type mismatch in function call";
-        case FFIError::OutOfMemory:
-            return "Out of memory";
-        case FFIError::InternalError:
-            return "Internal FFI error";
-        default:
-            return "Unknown error";
-    }
+    static constexpr std::array<std::string_view, 10> error_strings = {
+        "No error",
+        "Failed to load dynamic library",
+        "Symbol not found in library",
+        "Function call failed",
+        "Invalid argument provided",
+        "Operation timed out",
+        "Callback function not found",
+        "Type mismatch in function call",
+        "Out of memory",
+        "Internal FFI error"};
+
+    const auto index = static_cast<size_t>(error);
+    return index < error_strings.size() ? std::string(error_strings[index])
+                                        : "Unknown error";
 }
 
+/**
+ * \brief FFI-specific exception class with enhanced error information
+ */
 class FFIException : public atom::error::Exception {
 public:
     using atom::error::Exception::Exception;
 
-    // Modern constructor with source_location
+    /**
+     * \brief Construct FFI exception with source location
+     * \param message Error message
+     * \param error_code Specific FFI error code
+     * \param location Source location where error occurred
+     */
     explicit FFIException(
         std::string_view message, FFIError error_code = FFIError::InternalError,
         std::source_location location = std::source_location::current())
@@ -107,6 +111,10 @@ public:
               std::format("{}: {}", message, to_string(error_code))),
           error_code_(error_code) {}
 
+    /**
+     * \brief Get the specific FFI error code
+     * \return The FFI error code
+     */
     [[nodiscard]] auto error_code() const noexcept -> FFIError {
         return error_code_;
     }
@@ -115,7 +123,10 @@ private:
     FFIError error_code_ = FFIError::None;
 };
 
-// Modern error handling with type::expected
+/**
+ * \brief Type alias for FFI result using expected
+ * \tparam T The expected result type
+ */
 template <typename T>
 using FFIResult = type::expected<T, FFIError>;
 
@@ -123,7 +134,10 @@ using FFIResult = type::expected<T, FFIError>;
     throw FFIException(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, \
                        __VA_ARGS__)
 
-// Type trait concepts for FFI type mapping
+/**
+ * \brief Concept for basic FFI-compatible types
+ * \tparam T Type to check
+ */
 template <typename T>
 concept FFIBasicType =
     std::is_same_v<T, int> || std::is_same_v<T, float> ||
@@ -133,17 +147,29 @@ concept FFIBasicType =
     std::is_same_v<T, int16_t> || std::is_same_v<T, int32_t> ||
     std::is_same_v<T, int64_t> || std::is_same_v<T, void>;
 
+/**
+ * \brief Concept for pointer types in FFI
+ * \tparam T Type to check
+ */
 template <typename T>
 concept FFIPointerType =
     std::is_pointer_v<T> || std::is_same_v<T, const char*> ||
     std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view>;
 
+/**
+ * \brief Concept for struct types that can be used in FFI
+ * \tparam T Type to check
+ */
 template <typename T>
 concept FFIStructType = std::is_class_v<T> && requires(T t) {
     { T::getFFITypeLayout() } -> std::convertible_to<ffi_type>;
 };
 
-// Enhanced FFI type mapping
+/**
+ * \brief Get FFI type for template parameter
+ * \tparam T The C++ type to map to FFI type
+ * \return Pointer to corresponding ffi_type
+ */
 template <typename T>
 constexpr auto getFFIType() -> ffi_type* {
     if constexpr (std::is_same_v<T, int>) {
@@ -177,32 +203,45 @@ constexpr auto getFFIType() -> ffi_type* {
     } else if constexpr (std::is_same_v<T, void>) {
         return &ffi_type_void;
     } else if constexpr (std::is_class_v<T>) {
-        // Define custom struct ffi_type here if T is a class/struct
         static ffi_type customStructType = T::getFFITypeLayout();
         return &customStructType;
     } else {
         static_assert(FFIBasicType<T> || FFIPointerType<T> || FFIStructType<T>,
                       "Unsupported type passed to getFFIType");
-        return nullptr;  // This should never be reached due to static_assert
+        return nullptr;
     }
 }
 
-// Helper to automatically generate getFFITypeLayout for classes
+/**
+ * \brief Helper to automatically generate getFFITypeLayout for classes
+ * \tparam T The class type
+ */
 template <typename T>
 struct FFITypeLayoutGenerator {
+    /**
+     * \brief Get FFI type layout for class T
+     * \return FFI type layout structure
+     */
     [[nodiscard]] static auto getFFITypeLayout() -> ffi_type {
         ffi_type layout{};
-        // Assuming T has a static method to provide the layout details
         T::defineFFITypeLayout(layout);
         return layout;
     }
 };
 
-// RAII wrapper for FFI resources
+/**
+ * \brief RAII wrapper for FFI resources with automatic cleanup
+ */
 class FFIResourceGuard {
 public:
     FFIResourceGuard() = default;
 
+    /**
+     * \brief Add a resource with custom deleter
+     * \tparam T Resource type
+     * \param resource Pointer to resource
+     * \param deleter Custom deleter function
+     */
     template <typename T>
     void addResource(T* resource, std::function<void(T*)> deleter) {
         resources_.emplace_back([resource, deleter = std::move(deleter)]() {
@@ -222,53 +261,66 @@ private:
     std::vector<std::function<void()>> resources_;
 };
 
-// Enhanced FFI wrapper with parameter validation and error handling
+/**
+ * \brief Enhanced FFI wrapper with parameter validation and error handling
+ * \tparam ReturnType Function return type
+ * \tparam Args Function argument types
+ */
 template <typename ReturnType, typename... Args>
 class FFIWrapper {
+private:
+    using ResultType = std::conditional_t<std::is_same_v<ReturnType, void>,
+                                          std::monostate, ReturnType>;
+
 public:
+    /**
+     * \brief Default constructor with validation enabled
+     */
     FFIWrapper() { initializeCIF(); }
 
-    // Explicit validation constructor
+    /**
+     * \brief Constructor with explicit validation setting
+     * \param validate Enable or disable argument validation
+     */
     explicit FFIWrapper(bool validate) : validate_(validate) {
         initializeCIF();
     }
 
-    // Move constructor
     FFIWrapper(FFIWrapper&& other) noexcept
         : cif_(other.cif_),
           argTypes_(std::move(other.argTypes_)),
           returnType_(other.returnType_),
           validate_(other.validate_) {
-        // Invalidate the other wrapper
         other.returnType_ = nullptr;
     }
 
-    // Move assignment
     auto operator=(FFIWrapper&& other) noexcept -> FFIWrapper& {
         if (this != &other) {
             cif_ = other.cif_;
             argTypes_ = std::move(other.argTypes_);
             returnType_ = other.returnType_;
             validate_ = other.validate_;
-
-            // Invalidate the other wrapper
             other.returnType_ = nullptr;
         }
         return *this;
     }
 
-    // Non-copyable
     FFIWrapper(const FFIWrapper&) = delete;
     auto operator=(const FFIWrapper&) -> FFIWrapper& = delete;
 
+    /**
+     * \brief Call function with given arguments
+     * \param funcPtr Pointer to the function to call
+     * \param args Function arguments
+     * \return Result or error
+     */
     [[nodiscard]] auto call(void* funcPtr, Args... args) const
-        -> FFIResult<std::conditional_t<std::is_same_v<ReturnType, void>,
-                                        std::monostate, ReturnType>> {
+        -> FFIResult<ResultType> {
         if (validate_ && !validateArguments(args...)) {
             return type::unexpected(FFIError::InvalidArgument);
         }
 
-        std::vector<void*> argsArray = {
+        std::array<void*, sizeof...(Args)> argsArray = {
             &const_cast<std::remove_reference_t<Args>&>(args)...};
 
         if constexpr (std::is_same_v<ReturnType, void>) {
@@ -281,12 +333,17 @@ public:
         }
     }
 
-    // Overload with timeout
+    /**
+     * \brief Call function with timeout
+     * \param funcPtr Pointer to the function to call
+     * \param timeout Maximum time to wait for function completion
+     * \param args Function arguments
+     * \return Result or error (including timeout)
+     */
     [[nodiscard]] auto callWithTimeout(void* funcPtr,
                                        std::chrono::milliseconds timeout,
                                        Args... args) const
-        -> FFIResult<std::conditional_t<std::is_same_v<ReturnType, void>,
-                                        std::monostate, ReturnType>> {
+        -> FFIResult<ResultType> {
         if (validate_ && !validateArguments(args...)) {
             return type::unexpected(FFIError::InvalidArgument);
         }
@@ -335,7 +392,7 @@ public:
 
         try {
             return future.get();
-        } catch (const std::exception& e) {
+        } catch (const std::exception&) {
             return type::unexpected(FFIError::FunctionCallFailed);
         }
 #endif
@@ -343,8 +400,10 @@ public:
 
 private:
     void initializeCIF() {
-        argTypes_.reserve(sizeof...(Args));
-        (argTypes_.push_back(getFFIType<std::remove_cvref_t<Args>>()), ...);
+        if constexpr (sizeof...(Args) > 0) {
+            argTypes_.reserve(sizeof...(Args));
+            (argTypes_.push_back(getFFIType<std::remove_cvref_t<Args>>()), ...);
+        }
         returnType_ = getFFIType<std::remove_cvref_t<ReturnType>>();
 
         if (ffi_prep_cif(&cif_, FFI_DEFAULT_ABI, sizeof...(Args), returnType_,
@@ -367,15 +426,11 @@ private:
     [[nodiscard]] static constexpr bool validateArgument(
         [[maybe_unused]] const T& arg) {
         if constexpr (std::is_pointer_v<T>) {
-            // Check for null pointers when validation is enabled
             return arg != nullptr;
         } else if constexpr (std::is_same_v<T, std::string> ||
                              std::is_same_v<T, std::string_view>) {
-            // String validation - ensure it's properly terminated and not too
-            // large
             return arg.length() < std::numeric_limits<size_t>::max() - 1;
         } else {
-            // Most basic types don't need validation
             return true;
         }
     }
@@ -386,18 +441,23 @@ private:
     bool validate_ = true;
 };
 
-// RAII wrapper for dynamic library handles
+/**
+ * \brief RAII wrapper for dynamic library handles with automatic cleanup
+ */
 class LibraryHandle {
 public:
     LibraryHandle() = default;
 
+    /**
+     * \brief Constructor that loads library immediately
+     * \param path Path to the library file
+     */
     explicit LibraryHandle(std::string_view path) {
         ATOM_UNUSED_RESULT(load(path));
     }
 
     ~LibraryHandle() { unload(); }
 
-    // Move operations
     LibraryHandle(LibraryHandle&& other) noexcept : handle_(other.handle_) {
         other.handle_ = nullptr;
     }
@@ -411,10 +471,14 @@ public:
         return *this;
     }
 
-    // Non-copyable
     LibraryHandle(const LibraryHandle&) = delete;
     auto operator=(const LibraryHandle&) -> LibraryHandle& = delete;
 
+    /**
+     * \brief Load dynamic library from path
+     * \param path Path to the library file
+     * \return Success or error
+     */
     [[nodiscard]] auto load(std::string_view path) -> FFIResult<void> {
         unload();
 
@@ -432,6 +496,9 @@ public:
         return {};
     }
 
+    /**
+     * \brief Unload the library if loaded
+     */
     void unload() {
         if (handle_ != nullptr) {
 #ifdef _MSC_VER
@@ -443,13 +510,25 @@ public:
         }
     }
 
+    /**
+     * \brief Get raw library handle
+     * \return Raw handle pointer
+     */
     [[nodiscard]] auto get() const noexcept -> void* { return handle_; }
 
+    /**
+     * \brief Check if library is loaded
+     * \return True if library is loaded
+     */
     [[nodiscard]] auto isLoaded() const noexcept -> bool {
         return handle_ != nullptr;
     }
 
-    // Get symbol
+    /**
+     * \brief Get symbol from loaded library
+     * \param name Symbol name to lookup
+     * \return Symbol pointer or error
+     */
     [[nodiscard]] auto getSymbol(std::string_view name) const
         -> FFIResult<void*> {
         if (!isLoaded()) {
@@ -474,16 +553,24 @@ private:
     void* handle_ = nullptr;
 };
 
-// Enhanced DynamicLibrary with modern C++ features
+/**
+ * \brief Enhanced DynamicLibrary with modern C++ features and performance
+ * optimizations
+ */
 class DynamicLibrary {
 public:
-    // Library loading strategies
+    /**
+     * \brief Library loading strategies
+     */
     enum class LoadStrategy {
-        Immediate,  // Load immediately
-        Lazy,       // Load on first use
-        OnDemand    // Load when explicitly requested
+        Immediate,  ///< Load immediately when DynamicLibrary is created
+        Lazy,       ///< Load on first function access
+        OnDemand    ///< Load only when explicitly requested
     };
 
+    /**
+     * \brief Configuration options for DynamicLibrary
+     */
     struct Options {
         LoadStrategy strategy = LoadStrategy::Immediate;
         bool cacheSymbols = true;
@@ -491,6 +578,11 @@ public:
         std::chrono::milliseconds defaultTimeout = std::chrono::seconds(30);
     };
 
+    /**
+     * \brief Constructor with library path and options
+     * \param libraryPath Path to the dynamic library
+     * \param options Configuration options
+     */
     explicit DynamicLibrary(std::string_view libraryPath, Options options)
         : libraryPath_(libraryPath), options_(options) {
         if (options_.strategy == LoadStrategy::Immediate) {
@@ -502,24 +594,33 @@ public:
         }
     }
 
-    // No need for custom destructor - LibraryHandle has RAII
-
-    // Non-copyable
     DynamicLibrary(const DynamicLibrary&) = delete;
     auto operator=(const DynamicLibrary&) -> DynamicLibrary& = delete;
 
+    /**
+     * \brief Load the library if not already loaded
+     * \return Success or error
+     */
     [[nodiscard]] auto loadLibrary() -> FFIResult<void> {
         std::unique_lock lock(mutex_);
         return handle_.load(libraryPath_);
     }
 
+    /**
+     * \brief Unload the library and clear function cache
+     */
     void unloadLibrary() {
         std::unique_lock lock(mutex_);
         handle_.unload();
         functionMap_.clear();
     }
 
-    // 在 getFunction 方法中
+    /**
+     * \brief Get function from library with type safety
+     * \tparam Func Function signature type
+     * \param functionName Name of the function to retrieve
+     * \return Function wrapper or error
+     */
     template <typename Func>
     [[nodiscard]] auto getFunction(std::string_view functionName)
         -> FFIResult<std::function<Func>> {
@@ -530,32 +631,36 @@ public:
             return type::unexpected(FFIError::LibraryLoadFailed);
         }
 
-        // First check if we've cached this function
         if (options_.cacheSymbols) {
-            auto it = functionMap_.find(std::string(functionName));
-            if (it != functionMap_.end()) {
+            if (auto it = functionMap_.find(std::string(functionName));
+                it != functionMap_.end()) {
                 return std::function<Func>(reinterpret_cast<Func*>(it->second));
             }
         }
 
-        // Get the symbol from the library
         auto symbolResult = handle_.getSymbol(functionName);
         if (!symbolResult) {
             return type::unexpected(symbolResult.error());
         }
 
-        // 使用 expected 的 value() 方法获取值，而不是使用 *
         void* symbol = symbolResult.value();
 
-        // Cache the symbol if caching is enabled
         if (options_.cacheSymbols) {
-            functionMap_[std::string(functionName)] = symbol;
+            functionMap_.emplace(std::string(functionName), symbol);
         }
 
         return std::function<Func>(reinterpret_cast<Func*>(symbol));
     }
 
-    // 在 callFunctionWithTimeout 方法中
+    /**
+     * \brief Call function with timeout support
+     * \tparam ReturnType Function return type
+     * \tparam Args Function argument types
+     * \param functionName Name of the function to call
+     * \param timeout Maximum time to wait for completion
+     * \param args Function arguments
+     * \return Function result or error
+     */
     template <typename ReturnType, typename... Args>
     [[nodiscard]] auto callFunctionWithTimeout(
         std::string_view functionName, std::chrono::milliseconds timeout,
@@ -566,11 +671,10 @@ public:
 
         std::shared_lock lock(mutex_);
 
-        // Get function pointer
         void* funcPtr = nullptr;
         if (options_.cacheSymbols) {
-            auto it = functionMap_.find(std::string(functionName));
-            if (it != functionMap_.end()) {
+            if (auto it = functionMap_.find(std::string(functionName));
+                it != functionMap_.end()) {
                 funcPtr = it->second;
             }
         }
@@ -581,22 +685,25 @@ public:
                 return type::unexpected(symbolResult.error());
             }
 
-            // 使用 expected 的 value() 方法获取值，而不是使用 *
             funcPtr = symbolResult.value();
 
             if (options_.cacheSymbols) {
-                functionMap_[std::string(functionName)] = funcPtr;
+                functionMap_.emplace(std::string(functionName), funcPtr);
             }
         }
 
-        // Call the function with timeout
         FFIWrapper<ReturnType, std::remove_cvref_t<Args>...> wrapper(
             options_.validateCalls);
         return wrapper.callWithTimeout(funcPtr, timeout,
                                        std::forward<Args>(args)...);
     }
 
-    // 在 addFunction 方法中
+    /**
+     * \brief Pre-load function into cache
+     * \tparam FuncType Function type signature
+     * \param functionName Name of the function to cache
+     * \return Success or error
+     */
     template <typename FuncType>
     [[nodiscard]] auto addFunction(std::string_view functionName)
         -> FFIResult<void> {
@@ -606,26 +713,31 @@ public:
 
         auto symbolResult = handle_.getSymbol(functionName);
         if (!symbolResult) {
-            // 直接传递错误对象，不需要再包装在 type::unexpected 中
-            // TODO: Fix this
-            // return FFIResult<void>(type::unexpected(symbolResult.error()));
+            return type::unexpected(symbolResult.error().error());
         }
 
-        // 使用 expected 的 value() 方法获取值，而不是使用 *
         void* funcPtr = symbolResult.value();
-        functionMap_[std::string(functionName)] = funcPtr;
+        functionMap_.emplace(std::string(functionName), funcPtr);
 
         return {};
     }
 
-    // Check if a function is loaded and present in the function map
+    /**
+     * \brief Check if function is cached
+     * \param functionName Function name to check
+     * \return True if function is in cache
+     */
     [[nodiscard]] auto hasFunction(std::string_view functionName) const
         -> bool {
         std::shared_lock lock(mutex_);
         return functionMap_.contains(std::string(functionName));
     }
 
-    // Reload the library
+    /**
+     * \brief Reload library with optional new path
+     * \param newLibraryPath Optional new library path
+     * \return Success or error
+     */
     [[nodiscard]] auto reload(const std::string& newLibraryPath = "")
         -> FFIResult<void> {
         std::unique_lock lock(mutex_);
@@ -640,7 +752,10 @@ public:
         return handle_.load(libraryPath_);
     }
 
-    // Retrieve the dynamic library handle (for advanced users)
+    /**
+     * \brief Get raw library handle for advanced usage
+     * \return Library handle or error
+     */
     [[nodiscard]] auto getHandle() const -> FFIResult<void*> {
         std::shared_lock lock(mutex_);
 
@@ -651,14 +766,22 @@ public:
         return handle_.get();
     }
 
-    // Create a library object
+    /**
+     * \brief Create managed library object
+     * \tparam T Object type to create
+     * \param factoryFuncName Name of factory function
+     * \return Library object or error
+     */
     template <typename T>
     [[nodiscard]] auto createObject(std::string_view factoryFuncName)
         -> FFIResult<LibraryObject<T>> {
         return LibraryObject<T>::create(*this, factoryFuncName);
     }
 
-    // Set new options
+    /**
+     * \brief Update library options
+     * \param options New options to apply
+     */
     void setOptions(const Options& options) {
         std::unique_lock lock(mutex_);
         options_ = options;
@@ -681,30 +804,42 @@ private:
     Options options_;
     LibraryHandle handle_;
     mutable std::shared_mutex mutex_;
-
     std::unordered_map<std::string, void*> functionMap_;
 };
 
-// Enhanced callback registry with type safety
+/**
+ * \brief Enhanced callback registry with type safety and performance
+ * optimizations
+ */
 class CallbackRegistry {
 public:
     CallbackRegistry() = default;
 
-    // Non-copyable
     CallbackRegistry(const CallbackRegistry&) = delete;
     auto operator=(const CallbackRegistry&) -> CallbackRegistry& = delete;
 
-    // Register a callback function that will be passed to an external library
+    /**
+     * \brief Register a callback function for external library use
+     * \tparam Func Function type
+     * \param callbackName Name to register callback under
+     * \param func Function to register
+     */
     template <typename Func>
     void registerCallback(std::string_view callbackName, Func&& func) {
         std::unique_lock lock(mutex_);
 
         using FuncType = std::decay_t<Func>;
-        callbackMap_[std::string(callbackName)] =
-            std::make_any<std::function<FuncType>>(std::forward<Func>(func));
+        callbackMap_.emplace(
+            std::string(callbackName),
+            std::make_any<std::function<FuncType>>(std::forward<Func>(func)));
     }
 
-    // Retrieve a registered callback
+    /**
+     * \brief Retrieve registered callback
+     * \tparam Func Expected function type
+     * \param callbackName Name of callback to retrieve
+     * \return Pointer to callback function or error
+     */
     template <typename Func>
     [[nodiscard]] auto getCallback(std::string_view callbackName)
         -> FFIResult<std::function<Func>*> {
@@ -722,34 +857,49 @@ public:
         }
     }
 
-    // Register an asynchronous callback function
+    /**
+     * \brief Register asynchronous callback function
+     * \tparam Func Function type
+     * \param callbackName Name to register callback under
+     * \param func Function to register as async
+     */
     template <typename Func>
     void registerAsyncCallback(std::string_view callbackName, Func&& func) {
         std::unique_lock lock(mutex_);
 
         using FuncType = std::decay_t<Func>;
-        callbackMap_[std::string(callbackName)] =
+        callbackMap_.emplace(
+            std::string(callbackName),
             std::make_any<std::function<FuncType>>(
                 [f = std::forward<Func>(func)](auto&&... args) {
                     return std::async(std::launch::async, f,
                                       std::forward<decltype(args)>(args)...);
-                });
+                }));
     }
 
-    // Check if a callback exists
+    /**
+     * \brief Check if callback exists
+     * \param callbackName Name of callback to check
+     * \return True if callback exists
+     */
     [[nodiscard]] auto hasCallback(std::string_view callbackName) const
         -> bool {
         std::shared_lock lock(mutex_);
         return callbackMap_.contains(std::string(callbackName));
     }
 
-    // Remove a callback
+    /**
+     * \brief Remove registered callback
+     * \param callbackName Name of callback to remove
+     */
     void removeCallback(std::string_view callbackName) {
         std::unique_lock lock(mutex_);
         callbackMap_.erase(std::string(callbackName));
     }
 
-    // Clear all callbacks
+    /**
+     * \brief Clear all registered callbacks
+     */
     void clear() {
         std::unique_lock lock(mutex_);
         callbackMap_.clear();
@@ -760,11 +910,19 @@ private:
     mutable std::shared_mutex mutex_;
 };
 
-// Enhanced LibraryObject with proper resource management
+/**
+ * \brief Enhanced LibraryObject with proper resource management and RAII
+ * \tparam T Object type managed by this wrapper
+ */
 template <typename T>
 class LibraryObject {
 public:
-    // Factory method that returns an expected
+    /**
+     * \brief Factory method to create library object
+     * \param library Reference to dynamic library
+     * \param factoryFuncName Name of factory function
+     * \return LibraryObject instance or error
+     */
     [[nodiscard]] static auto create(DynamicLibrary& library,
                                      std::string_view factoryFuncName)
         -> FFIResult<LibraryObject<T>> {
@@ -783,41 +941,38 @@ public:
         return LibraryObject<T>(object);
     }
 
-    // Constructor from raw pointer
+    /**
+     * \brief Constructor from raw pointer
+     * \param object Pointer to object to manage
+     */
     explicit LibraryObject(T* object) : object_(object) {}
 
-    // Move semantics
-    LibraryObject(LibraryObject&& other) noexcept : object_(other.object_) {
-        other.object_ = nullptr;
-    }
+    LibraryObject(LibraryObject&& other) noexcept
+        : object_(std::move(other.object_)) {}
 
     auto operator=(LibraryObject&& other) noexcept -> LibraryObject& {
         if (this != &other) {
-            if (object_) {
-                // Handle cleanup if needed
-                delete object_;
-            }
-            object_ = other.object_;
-            other.object_ = nullptr;
+            object_ = std::move(other.object_);
         }
         return *this;
     }
 
-    // No copy
     LibraryObject(const LibraryObject&) = delete;
     auto operator=(const LibraryObject&) -> LibraryObject& = delete;
 
-    // Destructor
-    ~LibraryObject() {
-        if (object_) {
-            delete object_;
-        }
-    }
-
+    /**
+     * \brief Access object member
+     * \return Pointer to managed object
+     */
     [[nodiscard]] auto operator->() const noexcept -> T* {
         return object_.get();
     }
 
+    /**
+     * \brief Dereference object
+     * \return Reference to managed object
+     * \throws FFIException if object is null
+     */
     [[nodiscard]] auto operator*() const -> T& {
         if (!object_) {
             THROW_FFI_EXCEPTION("Attempting to dereference null object",
@@ -826,9 +981,16 @@ public:
         return *object_;
     }
 
+    /**
+     * \brief Get raw pointer to managed object
+     * \return Raw pointer to object
+     */
     [[nodiscard]] auto get() const noexcept -> T* { return object_.get(); }
 
-    // Check if object is valid
+    /**
+     * \brief Check if object is valid (non-null)
+     * \return True if object is valid
+     */
     [[nodiscard]] auto isValid() const noexcept -> bool {
         return object_ != nullptr;
     }

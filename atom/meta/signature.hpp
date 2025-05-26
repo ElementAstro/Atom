@@ -8,21 +8,22 @@
 #ifndef ATOM_META_SIGNATURE_HPP
 #define ATOM_META_SIGNATURE_HPP
 
-#include <expected>  // For type::expected (C++23)
 #include <mutex>
-#include <optional>       // For std::optional
-#include <span>           // For std::span (C++20)
-#include <string>         // For std::string
-#include <string_view>    // For std::string_view
-#include <unordered_map>  // For std::unordered_map
-#include <vector>         // For std::vector
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
 
 #include "atom/type/expected.hpp"
 #include "atom/utils/cstring.hpp"
 
 namespace atom::meta {
 
-// Error handling with rich information
+/**
+ * @brief Error codes for signature parsing operations
+ */
 enum class ParsingErrorCode {
     InvalidPrefix,
     MissingFunctionName,
@@ -34,13 +35,18 @@ enum class ParsingErrorCode {
     InternalError
 };
 
+/**
+ * @brief Detailed parsing error information
+ */
 struct ParsingError {
     ParsingErrorCode code;
     std::string message;
     size_t position{0};
 };
 
-// Modifiers for function signatures with type safety
+/**
+ * @brief Function modifiers with type safety
+ */
 enum class FunctionModifier {
     None,
     Const,
@@ -51,15 +57,27 @@ enum class FunctionModifier {
     Final
 };
 
-// Documentation comment with structured information
+/**
+ * @brief Documentation comment with structured information
+ */
 struct DocComment {
     std::string_view raw;
     std::unordered_map<std::string_view, std::string_view> tags;
 
+    /**
+     * @brief Check if a tag exists
+     * @param tag Tag name to check
+     * @return True if tag exists
+     */
     [[nodiscard]] bool hasTag(std::string_view tag) const noexcept {
         return tags.contains(tag);
     }
 
+    /**
+     * @brief Get tag value
+     * @param tag Tag name
+     * @return Tag value if exists
+     */
     [[nodiscard]] std::optional<std::string_view> getTag(
         std::string_view tag) const noexcept {
         if (auto it = tags.find(tag); it != tags.end()) {
@@ -69,21 +87,36 @@ struct DocComment {
     }
 };
 
-// Parameter with rich type information
+/**
+ * @brief Parameter with type information
+ */
 struct Parameter {
     std::string_view name;
     std::string_view type;
     bool hasDefaultValue{false};
     std::optional<std::string_view> defaultValue;
 
-    // C++20 default comparison operators
     auto operator<=>(const Parameter&) const = default;
 };
 
-// Enhanced function signature with comprehensive metadata
+/**
+ * @brief Enhanced function signature with comprehensive metadata
+ */
 class FunctionSignature {
 public:
-    // Constructor with designated initializers support (C++20)
+    /**
+     * @brief Construct function signature
+     * @param name Function name
+     * @param parameters Function parameters
+     * @param returnType Return type (optional)
+     * @param modifiers Function modifiers
+     * @param docComment Documentation comment
+     * @param isTemplated Whether function is templated
+     * @param templateParams Template parameters
+     * @param isInline Whether function is inline
+     * @param isStatic Whether function is static
+     * @param isExplicit Whether constructor is explicit
+     */
     constexpr FunctionSignature(
         std::string_view name, std::span<const Parameter> parameters,
         std::optional<std::string_view> returnType,
@@ -104,53 +137,100 @@ public:
           isStatic_(isStatic),
           isExplicit_(isExplicit) {}
 
-    // Rule of five for proper resource management
     FunctionSignature(const FunctionSignature&) = default;
     FunctionSignature& operator=(const FunctionSignature&) = default;
     FunctionSignature(FunctionSignature&&) noexcept = default;
     FunctionSignature& operator=(FunctionSignature&&) noexcept = default;
     ~FunctionSignature() = default;
 
-    // Enhanced getters with nodiscard attribute
+    /**
+     * @brief Get function name
+     * @return Function name
+     */
     [[nodiscard]] constexpr auto getName() const noexcept -> std::string_view {
         return name_;
     }
+
+    /**
+     * @brief Get function parameters
+     * @return Span of parameters
+     */
     [[nodiscard]] constexpr auto getParameters() const noexcept
         -> std::span<const Parameter> {
         return parameters_;
     }
+
+    /**
+     * @brief Get return type
+     * @return Return type if specified
+     */
     [[nodiscard]] constexpr auto getReturnType() const noexcept
         -> std::optional<std::string_view> {
         return returnType_;
     }
+
+    /**
+     * @brief Get function modifiers
+     * @return Function modifiers
+     */
     [[nodiscard]] constexpr auto getModifiers() const noexcept
         -> FunctionModifier {
         return modifiers_;
     }
+
+    /**
+     * @brief Get documentation comment
+     * @return Documentation comment if available
+     */
     [[nodiscard]] constexpr auto getDocComment() const noexcept
         -> const std::optional<DocComment>& {
         return docComment_;
     }
 
-    // Additional getters for enhanced metadata
+    /**
+     * @brief Check if function is templated
+     * @return True if templated
+     */
     [[nodiscard]] constexpr bool isTemplated() const noexcept {
         return isTemplated_;
     }
+
+    /**
+     * @brief Get template parameters
+     * @return Template parameters if available
+     */
     [[nodiscard]] constexpr auto getTemplateParameters() const noexcept
         -> std::optional<std::string_view> {
         return templateParams_;
     }
+
+    /**
+     * @brief Check if function is inline
+     * @return True if inline
+     */
     [[nodiscard]] constexpr bool isInline() const noexcept { return isInline_; }
+
+    /**
+     * @brief Check if function is static
+     * @return True if static
+     */
     [[nodiscard]] constexpr bool isStatic() const noexcept { return isStatic_; }
+
+    /**
+     * @brief Check if constructor is explicit
+     * @return True if explicit
+     */
     [[nodiscard]] constexpr bool isExplicit() const noexcept {
         return isExplicit_;
     }
 
-    // String representation
+    /**
+     * @brief Convert signature to string representation
+     * @return String representation of the signature
+     */
     [[nodiscard]] std::string toString() const {
         std::string result;
 
-        // Add modifiers
         if (isStatic_)
             result += "static ";
         if (isInline_)
@@ -158,16 +238,13 @@ public:
         if (isExplicit_)
             result += "explicit ";
 
-        // Add return type if available
         if (returnType_) {
             result += std::string(*returnType_);
             result += " ";
         }
 
-        // Add name
         result += std::string(name_);
 
-        // Add parameters
         result += "(";
         bool first = true;
         for (const auto& param : parameters_) {
@@ -188,7 +265,6 @@ public:
         }
         result += ")";
 
-        // Add function modifiers
         switch (modifiers_) {
             case FunctionModifier::Const:
                 result += " const";
@@ -228,27 +304,27 @@ private:
     bool isExplicit_{false};
 };
 
-// Parse doc comments into structured format
+/**
+ * @brief Parse documentation comment into structured format
+ * @param comment Raw comment string
+ * @return Parsed documentation comment
+ */
 [[nodiscard]] inline auto parseDocComment(std::string_view comment)
     -> DocComment {
     DocComment result{comment, {}};
 
-    // Skip the opening /**
     size_t pos = comment.find("/**");
-    if (pos != std::string_view::npos) {
-        pos += 3;
-    } else {
+    if (pos == std::string_view::npos) {
         return result;
     }
+    pos += 3;
 
-    // Find tags (e.g., @param, @return, @brief)
     while (pos < comment.size()) {
         pos = comment.find('@', pos);
         if (pos == std::string_view::npos || pos + 1 >= comment.size()) {
             break;
         }
 
-        // Extract tag name
         size_t tagStart = pos + 1;
         size_t tagEnd = comment.find_first_of(" \t\n\r", tagStart);
         if (tagEnd == std::string_view::npos)
@@ -256,7 +332,6 @@ private:
 
         std::string_view tagName = comment.substr(tagStart, tagEnd - tagStart);
 
-        // Extract tag value
         size_t valueStart = comment.find_first_not_of(" \t\n\r", tagEnd);
         if (valueStart == std::string_view::npos)
             break;
@@ -279,13 +354,16 @@ private:
     return result;
 }
 
-// Parse function definition with robust error handling
+/**
+ * @brief Parse function definition with error handling
+ * @param definition Function definition string
+ * @return Parsed function signature or error
+ */
 [[nodiscard]] inline constexpr auto parseFunctionDefinition(
     const std::string_view definition) noexcept
     -> type::expected<FunctionSignature, ParsingError> {
     using enum ParsingErrorCode;
 
-    // Constants for parsing
     constexpr std::string_view DEF_PREFIX = "def ";
     constexpr std::string_view ARROW = " -> ";
     constexpr std::string_view CONST_MODIFIER = " const";
@@ -298,13 +376,11 @@ private:
     constexpr std::string_view EXPLICIT_MODIFIER = "explicit ";
     constexpr std::string_view TEMPLATE_PREFIX = "template<";
 
-    // Check for valid prefix
     if (!definition.starts_with(DEF_PREFIX)) {
         return type::unexpected(ParsingError{
             InvalidPrefix, "Function definition must start with 'def '", 0});
     }
 
-    // Check for template
     bool isTemplated = false;
     std::optional<std::string_view> templateParams;
     size_t startPos = 0;
@@ -317,7 +393,6 @@ private:
                 TEMPLATE_PREFIX.size(), templateEnd - TEMPLATE_PREFIX.size());
             startPos = templateEnd + 1;
 
-            // Find the "def" after template declaration
             startPos = definition.find(DEF_PREFIX, startPos);
             if (startPos == std::string_view::npos) {
                 return type::unexpected(ParsingError{
@@ -327,13 +402,11 @@ private:
         }
     }
 
-    // Parse function modifiers
     bool isInline = definition.find(INLINE_MODIFIER) != std::string_view::npos;
     bool isStatic = definition.find(STATIC_MODIFIER) != std::string_view::npos;
     bool isExplicit =
         definition.find(EXPLICIT_MODIFIER) != std::string_view::npos;
 
-    // Find function name
     size_t nameStart = DEF_PREFIX.size();
     size_t nameEnd = definition.find('(', nameStart);
     if (nameEnd == std::string_view::npos) {
@@ -351,7 +424,6 @@ private:
     std::string_view name =
         atom::utils::trim(definition.substr(nameStart, nameEnd - nameStart));
 
-    // Parse parameters
     size_t paramsStart = nameEnd + 1;
     size_t paramsEnd = definition.find(')', paramsStart);
     if (paramsEnd == std::string_view::npos) {
@@ -364,7 +436,6 @@ private:
     std::string_view paramsStr =
         definition.substr(paramsStart, paramsEnd - paramsStart);
 
-    // Parse return type
     size_t arrowPos = definition.find(ARROW, paramsEnd + 1);
     std::optional<std::string_view> returnType;
     if (arrowPos != std::string_view::npos) {
@@ -372,7 +443,6 @@ private:
             atom::utils::trim(definition.substr(arrowPos + ARROW.size()));
     }
 
-    // Parse function modifiers
     FunctionModifier modifiers = FunctionModifier::None;
     if (definition.find(CONST_MODIFIER) != std::string_view::npos &&
         definition.find(NOEXCEPT_MODIFIER) != std::string_view::npos) {
@@ -389,19 +459,17 @@ private:
         modifiers = FunctionModifier::Final;
     }
 
-    // Parse parameters with enhanced error handling
     std::vector<Parameter> parameters;
     size_t paramStart = 0;
 
     while (paramStart < paramsStr.size()) {
         size_t paramEnd = paramsStr.size();
         int bracketCount = 0;
-        int angleCount = 0;  // For handling template parameters like vector<T>
+        int angleCount = 0;
 
         for (size_t i = paramStart; i < paramsStr.size(); ++i) {
             char c = paramsStr[i];
 
-            // Update bracket counts
             if (c == '[')
                 ++bracketCount;
             else if (c == ']') {
@@ -424,14 +492,12 @@ private:
                 --angleCount;
             }
 
-            // Find parameter separator when not inside a bracket/template
             if (c == ',' && bracketCount == 0 && angleCount == 0) {
                 paramEnd = i;
                 break;
             }
         }
 
-        // Check for unbalanced brackets
         if (bracketCount != 0 || angleCount != 0) {
             return type::unexpected(
                 ParsingError{UnbalancedBrackets,
@@ -441,15 +507,12 @@ private:
         std::string_view param = atom::utils::trim(
             paramsStr.substr(paramStart, paramEnd - paramStart));
         if (param.empty()) {
-            // Skip empty parameters
             paramStart = paramEnd + 1;
             continue;
         }
 
-        // Parse parameter with name, type, and default value
         Parameter parameter;
 
-        // Check for default value
         size_t equalsPos = param.find('=');
         if (equalsPos != std::string_view::npos) {
             parameter.hasDefaultValue = true;
@@ -458,21 +521,19 @@ private:
             param = atom::utils::trim(param.substr(0, equalsPos));
         }
 
-        // Parse name and type
         size_t colonPos = param.find(':');
         if (colonPos != std::string_view::npos) {
             parameter.name = atom::utils::trim(param.substr(0, colonPos));
             parameter.type = atom::utils::trim(param.substr(colonPos + 1));
         } else {
             parameter.name = param;
-            parameter.type = "any";  // Default type
+            parameter.type = "any";
         }
 
         parameters.push_back(parameter);
         paramStart = paramEnd + 1;
     }
 
-    // Parse doc comment if available
     std::optional<DocComment> docComment;
     size_t docStart = definition.find("/**");
     if (docStart != std::string_view::npos) {
@@ -483,22 +544,30 @@ private:
         }
     }
 
-    // Create and return the function signature
     return FunctionSignature(name, parameters, returnType, modifiers,
                              docComment, isTemplated, templateParams, isInline,
                              isStatic, isExplicit);
 }
 
-// Signature registry for caching and managing function signatures
+/**
+ * @brief Signature registry for caching and managing function signatures
+ */
 class SignatureRegistry {
 public:
-    // Thread-safe singleton pattern
+    /**
+     * @brief Get singleton instance
+     * @return Reference to singleton instance
+     */
     static SignatureRegistry& instance() {
         static SignatureRegistry instance;
         return instance;
     }
 
-    // Register a function signature
+    /**
+     * @brief Register a function signature with caching
+     * @param signature Function signature string
+     * @return Parsed function signature or error
+     */
     template <typename Signature>
         requires std::is_convertible_v<Signature, std::string_view>
     auto registerSignature(Signature&& signature)
@@ -506,12 +575,10 @@ public:
         std::string_view sigView = signature;
         std::lock_guard lock(mutex_);
 
-        // Check cache first
         if (auto it = cache_.find(std::string(sigView)); it != cache_.end()) {
             return it->second;
         }
 
-        // Parse and cache the result
         auto result = parseFunctionDefinition(sigView);
         if (result) {
             cache_[std::string(sigView)] = result.value();
@@ -519,13 +586,18 @@ public:
         return result;
     }
 
-    // Clear the cache
+    /**
+     * @brief Clear signature cache
+     */
     void clearCache() {
         std::lock_guard lock(mutex_);
         cache_.clear();
     }
 
-    // Get statistics
+    /**
+     * @brief Get cache size
+     * @return Number of cached signatures
+     */
     [[nodiscard]] size_t getCacheSize() const {
         std::lock_guard lock(mutex_);
         return cache_.size();
