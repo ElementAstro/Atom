@@ -1,7 +1,10 @@
-/*
- * indestructible.hpp
- *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+/*!
+ * \file indestructible.hpp
+ * \brief A class template for creating objects that cannot be destructed
+ * automatically
+ * \author Max Qian <lightapt.com>
+ * \date 2023-2024
+ * \copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
 #ifndef ATOM_TYPE_INDESTRUCTIBLE_HPP
@@ -18,106 +21,146 @@
 #endif
 
 /**
- * @brief A class template for creating an object that cannot be destructed.
+ * @brief A class template for creating an object that cannot be destructed
+ * automatically
  *
- * This class template provides a way to create an object that cannot be
- * destructed. It uses a union to store the object and provides various
- * member functions to manage the object's lifetime.
+ * This class template provides a way to create an object that bypasses
+ * automatic destruction. It uses a union to store the object and provides
+ * manual lifetime management through various member functions.
  *
- * @tparam T The type of the object to create.
+ * @tparam T The type of the object to store
  */
 template <typename T>
 struct Indestructible {
+private:
     union {
-        T object;    ///< The object being stored.
-        char dummy;  ///< Dummy character used for alignment purposes.
+        T object;
+        char dummy;
     };
 
+    template <typename U>
+    static constexpr bool is_constructible_v =
+#ifdef ATOM_USE_BOOST
+        boost::is_constructible<T, U>::value;
+#else
+        std::is_constructible_v<T, U>;
+#endif
+
+    template <typename U>
+    static constexpr bool is_copy_constructible_v =
+#ifdef ATOM_USE_BOOST
+        boost::is_copy_constructible<T>::value;
+#else
+        std::is_copy_constructible_v<T>;
+#endif
+
+    template <typename U>
+    static constexpr bool is_move_constructible_v =
+#ifdef ATOM_USE_BOOST
+        boost::is_move_constructible<T>::value;
+#else
+        std::is_move_constructible_v<T>;
+#endif
+
+    static constexpr bool is_trivially_destructible_v =
+#ifdef ATOM_USE_BOOST
+        boost::is_trivially_destructible<T>::value;
+#else
+        std::is_trivially_destructible_v<T>;
+#endif
+
+    static constexpr bool is_trivially_copy_constructible_v =
+#ifdef ATOM_USE_BOOST
+        boost::is_trivially_copy_constructible<T>::value;
+#else
+        std::is_trivially_copy_constructible_v<T>;
+#endif
+
+    static constexpr bool is_trivially_move_constructible_v =
+#ifdef ATOM_USE_BOOST
+        boost::is_trivially_move_constructible<T>::value;
+#else
+        std::is_trivially_move_constructible_v<T>;
+#endif
+
+    static constexpr bool is_copy_assignable_v =
+#ifdef ATOM_USE_BOOST
+        boost::is_copy_assignable<T>::value;
+#else
+        std::is_copy_assignable_v<T>;
+#endif
+
+    static constexpr bool is_move_assignable_v =
+#ifdef ATOM_USE_BOOST
+        boost::is_move_assignable<T>::value;
+#else
+        std::is_move_assignable_v<T>;
+#endif
+
+public:
     /**
-     * @brief Constructs an Indestructible object with the provided arguments.
+     * @brief Constructs an Indestructible object with the provided arguments
      *
      * This constructor constructs the stored object using the provided
-     * arguments. It uses perfect forwarding to pass the arguments to the
-     * constructor of the stored object.
+     * arguments with perfect forwarding.
      *
-     * @tparam Args The types of the arguments to construct the object with.
-     * @param args The arguments to construct the object with.
+     * @tparam Args The types of the arguments to construct the object with
+     * @param args The arguments to construct the object with
      */
     template <typename... Args>
-#ifdef ATOM_USE_BOOST
-        requires boost::is_constructible<T, Args&&...>::value
-#else
-        requires std::is_constructible_v<T, Args&&...>
-#endif
+        requires is_constructible_v<Args&&...>
     explicit constexpr Indestructible(std::in_place_t, Args&&... args)
-        : object(std::forward<Args>(args)...) {
-    }
+        : object(std::forward<Args>(args)...) {}
 
     /**
-     * @brief Destructor.
+     * @brief Destructor
      *
-     * If T is not trivially destructible, the destructor explicitly calls the
-     * destructor of the stored object.
+     * Explicitly calls the destructor of the stored object if it is not
+     * trivially destructible.
      */
     ~Indestructible() {
-#ifdef ATOM_USE_BOOST
-        if constexpr (!boost::is_trivially_destructible<T>::value) {
-#else
-        if constexpr (!std::is_trivially_destructible_v<T>) {
-#endif
-            object.~T();
+        if constexpr (!is_trivially_destructible_v) {
+            std::destroy_at(&object);
         }
     }
 
     /**
-     * @brief Copy constructor.
+     * @brief Copy constructor
      *
-     * This constructor copies the stored object from another Indestructible
-     * object. It uses perfect forwarding to pass the other object to the
-     * constructor of the stored object.
+     * Copies the stored object from another Indestructible object.
      *
-     * @param other The other Indestructible object to copy from.
+     * @param other The other Indestructible object to copy from
      */
     Indestructible(const Indestructible& other)
-#ifdef ATOM_USE_BOOST
-        requires boost::is_copy_constructible<T>::value
-#else
-        requires std::is_copy_constructible_v<T>
-#endif
+        requires is_copy_constructible_v<T>
     {
         construct_from(other);
     }
 
     /**
-     * @brief Move constructor.
+     * @brief Move constructor
      *
-     * This constructor moves the stored object from another Indestructible
-     * object. It uses perfect forwarding to pass the other object to the
-     * constructor of the stored object.
+     * Moves the stored object from another Indestructible object.
      *
-     * @param other The other Indestructible object to move from.
+     * @param other The other Indestructible object to move from
      */
     Indestructible(Indestructible&& other) noexcept
-#ifdef ATOM_USE_BOOST
-        requires boost::is_move_constructible<T>::value
-#else
-        requires std::is_move_constructible_v<T>
-#endif
+        requires is_move_constructible_v<T>
     {
         construct_from(std::move(other));
     }
 
     /**
-     * @brief Copy assignment operator.
+     * @brief Copy assignment operator
      *
-     * This operator copies the stored object from another Indestructible
-     * object. It uses perfect forwarding to pass the other object to the
-     * assignment operator of the stored object.
+     * Copies the stored object from another Indestructible object.
      *
-     * @param other The other Indestructible object to copy from.
-     * @return A reference to this Indestructible object.
+     * @param other The other Indestructible object to copy from
+     * @return Reference to this Indestructible object
      */
-    auto operator=(const Indestructible& other) -> Indestructible& {
+    auto operator=(const Indestructible& other) -> Indestructible&
+        requires std::is_copy_assignable_v<T>
+    {
         if (this != &other) {
             assign_from(other);
         }
@@ -125,67 +168,149 @@ struct Indestructible {
     }
 
     /**
-     * @brief Move assignment operator.
+     * @brief Move assignment operator
      *
-     * This operator moves the stored object from another Indestructible
-     * object. It uses perfect forwarding to pass the other object to the
-     * assignment operator of the stored object.
+     * Moves the stored object from another Indestructible object.
      *
-     * @param other The other Indestructible object to move from.
-     * @return A reference to this Indestructible object.
+     * @param other The other Indestructible object to move from
+     * @return Reference to this Indestructible object
      */
-    auto operator=(Indestructible&& other) noexcept -> Indestructible& {
+    auto operator=(Indestructible&& other) noexcept -> Indestructible&
+        requires std::is_move_assignable_v<T>
+    {
         if (this != &other) {
             assign_from(std::move(other));
         }
         return *this;
     }
 
+    /**
+     * @brief Returns a reference to the stored object
+     * @return Reference to the stored object
+     */
+    [[nodiscard]] constexpr T& get() & noexcept { return object; }
+
+    /**
+     * @brief Returns a const reference to the stored object
+     * @return Const reference to the stored object
+     */
+    [[nodiscard]] constexpr const T& get() const& noexcept { return object; }
+
+    /**
+     * @brief Returns an rvalue reference to the stored object
+     * @return Rvalue reference to the stored object
+     */
+    [[nodiscard]] constexpr T&& get() && noexcept { return std::move(object); }
+
+    /**
+     * @brief Returns a const rvalue reference to the stored object
+     * @return Const rvalue reference to the stored object
+     */
+    [[nodiscard]] constexpr const T&& get() const&& noexcept {
+        return std::move(object);
+    }
+
+    /**
+     * @brief Accesses the stored object
+     * @return Pointer to the stored object
+     */
+    [[nodiscard]] constexpr T* operator->() noexcept { return &object; }
+    [[nodiscard]] constexpr const T* operator->() const noexcept {
+        return &object;
+    }
+
+    /**
+     * @brief Converts to reference of stored object
+     * @return Reference to the stored object
+     */
+    [[nodiscard]] constexpr operator T&() & noexcept { return object; }
+
+    /**
+     * @brief Converts to const reference of stored object
+     * @return Const reference to the stored object
+     */
+    [[nodiscard]] constexpr operator const T&() const& noexcept {
+        return object;
+    }
+
+    /**
+     * @brief Converts to rvalue reference of stored object
+     * @return Rvalue reference to the stored object
+     */
+    [[nodiscard]] constexpr operator T&&() && noexcept {
+        return std::move(object);
+    }
+
+    /**
+     * @brief Converts to const rvalue reference of stored object
+     * @return Const rvalue reference to the stored object
+     */
+    [[nodiscard]] constexpr operator const T&&() const&& noexcept {
+        return std::move(object);
+    }
+
+    /**
+     * @brief Resets the stored object with new arguments
+     *
+     * Destroys the current stored object and constructs a new object
+     * with the provided arguments using perfect forwarding.
+     *
+     * @tparam Args The types of the arguments to construct the object with
+     * @param args The arguments to construct the object with
+     */
+    template <typename... Args>
+        requires is_constructible_v<Args&&...>
+    void reset(Args&&... args) {
+        destroy();
+        std::construct_at(&object, std::forward<Args>(args)...);
+    }
+
+    /**
+     * @brief Emplaces a new object in place with the provided arguments
+     *
+     * Destroys the current stored object and constructs a new object
+     * with the provided arguments using perfect forwarding.
+     *
+     * @tparam Args The types of the arguments to construct the object with
+     * @param args The arguments to construct the object with
+     */
+    template <typename... Args>
+        requires is_constructible_v<Args&&...>
+    void emplace(Args&&... args) {
+        reset(std::forward<Args>(args)...);
+    }
+
 private:
     /**
-     * @brief Constructs the stored object from another object.
+     * @brief Constructs the stored object from another object
      *
-     * This function constructs the stored object from another object. It uses
-     * perfect forwarding to pass the other object to the constructor of the
-     * stored object.
+     * Uses optimal construction strategy based on type traits - either
+     * trivial copy via memcpy or placement new construction.
      *
-     * @tparam U The type of the other object.
-     * @param other The other object to construct from.
+     * @tparam U The type of the other object
+     * @param other The other object to construct from
      */
     template <typename U>
     void construct_from(U&& other) {
-#ifdef ATOM_USE_BOOST
-        if constexpr (boost::is_trivially_copy_constructible<T>::value ||
-                      boost::is_trivially_move_constructible<T>::value) {
-#else
-        if constexpr (std::is_trivially_copy_constructible_v<T> ||
-                      std::is_trivially_move_constructible_v<T>) {
-#endif
+        if constexpr (is_trivially_copy_constructible_v ||
+                      is_trivially_move_constructible_v) {
             std::memcpy(&object, &other.object, sizeof(T));
         } else {
-            new (&object) T(std::forward<U>(other).object);
+            std::construct_at(&object, std::forward<U>(other).object);
         }
     }
 
     /**
-     * @brief Assigns the stored object from another object.
+     * @brief Assigns the stored object from another object
      *
-     * This function assigns the stored object from another object. It uses
-     * perfect forwarding to pass the other object to the assignment operator
-     * of the stored object.
+     * Uses perfect forwarding to determine whether to copy or move assign.
      *
-     * @tparam U The type of the other object.
-     * @param other The other object to assign from.
+     * @tparam U The type of the other object
+     * @param other The other object to assign from
      */
     template <typename U>
     void assign_from(U&& other) {
-#ifdef ATOM_USE_BOOST
-        if constexpr (boost::is_copy_assignable<T>::value ||
-                      boost::is_move_assignable<T>::value) {
-#else
-        if constexpr (std::is_copy_assignable_v<T> ||
-                      std::is_move_assignable_v<T>) {
-#endif
+        if constexpr (is_copy_assignable_v || is_move_assignable_v) {
             if constexpr (std::is_rvalue_reference_v<U&&>) {
                 object = std::move(other.object);
             } else {
@@ -194,171 +319,45 @@ private:
         }
     }
 
-public:
     /**
-     * @brief Returns a reference to the stored object.
+     * @brief Destroys the stored object
      *
-     * @return Reference to the stored object.
+     * Explicitly calls the destructor of the stored object if it is not
+     * trivially destructible.
      */
-    constexpr T& get() & noexcept { return object; }
-
-    /**
-     * @brief Returns a const reference to the stored object.
-     *
-     * @return Const reference to the stored object.
-     */
-    constexpr const T& get() const& noexcept { return object; }
-
-    /**
-     * @brief Returns an rvalue reference to the stored object.
-     *
-     * @return Rvalue reference to the stored object.
-     */
-    constexpr T&& get() && noexcept { return std::move(object); }
-
-    /**
-     * @brief Returns a const rvalue reference to the stored object.
-     *
-     * @return Const rvalue reference to the stored object.
-     */
-    constexpr const T&& get() const&& noexcept { return std::move(object); }
-
-    /**
-     * @brief Accesses the stored object.
-     *
-     * @return Pointer to the stored object.
-     */
-    constexpr T* operator->() noexcept { return &object; }
-    constexpr const T* operator->() const noexcept { return &object; }
-
-    /**
-     * @brief Converts to reference of stored object.
-     *
-     * This operator converts the Indestructible object to a reference to the
-     * stored object.
-     *
-     * @return Reference to the stored object.
-     */
-    constexpr operator T&() & noexcept { return object; }
-
-    /**
-     * @brief Converts to const reference of stored object.
-     *
-     * This operator converts the Indestructible object to a const reference to
-     * the stored object.
-     *
-     * @return Const reference to the stored object.
-     */
-    constexpr operator const T&() const& noexcept { return object; }
-
-    /**
-     * @brief Converts to rvalue reference of stored object.
-     *
-     * This operator converts the Indestructible object to an rvalue reference
-     * to the stored object.
-     *
-     * @return Rvalue reference to the stored object.
-     */
-    constexpr operator T&&() && noexcept { return std::move(object); }
-
-    /**
-     * @brief Converts to const rvalue reference of stored object.
-     *
-     * This operator converts the Indestructible object to a const rvalue
-     * reference to the stored object.
-     *
-     * @return Const rvalue reference to the stored object.
-     */
-    constexpr operator const T&&() const&& noexcept {
-        return std::move(object);
-    }
-
-    /**
-     * @brief Resets the stored object with new arguments.
-     *
-     * This function destroys the current stored object and constructs a new
-     * object with the provided arguments. It uses perfect forwarding to pass
-     * the arguments to the constructor of the new object.
-     *
-     * @tparam Args The types of the arguments to construct the object with.
-     * @param args The arguments to construct the object with.
-     */
-    template <typename... Args>
-#ifdef ATOM_USE_BOOST
-        requires boost::is_constructible<T, Args&&...>::value
-#else
-        requires std::is_constructible_v<T, Args&&...>
-#endif
-    void reset(Args&&... args) {
-        destroy();
-        new (&object) T(std::forward<Args>(args)...);
-    }
-
-    /**
-     * @brief Emplaces a new object in place with the provided arguments.
-     *
-     * This function destroys the current stored object and constructs a new
-     * object with the provided arguments. It uses perfect forwarding to pass
-     * the arguments to the constructor of the new object.
-     *
-     * @tparam Args The types of the arguments to construct the object with.
-     * @param args The arguments to construct the object with.
-     */
-    template <typename... Args>
-#ifdef ATOM_USE_BOOST
-        requires boost::is_constructible<T, Args&&...>::value
-#else
-        requires std::is_constructible_v<T, Args&&...>
-#endif
-    void emplace(Args&&... args) {
-        reset(std::forward<Args>(args)...);
-    }
-
-private:
-    /**
-     * @brief Destroys the stored object.
-     *
-     * This function explicitly calls the destructor of the stored object if
-     * it is not trivially destructible.
-     */
-    void destroy() {
-#ifdef ATOM_USE_BOOST
-        if constexpr (!boost::is_trivially_destructible<T>::value) {
-#else
-        if constexpr (!std::is_trivially_destructible_v<T>) {
-#endif
-            object.~T();
+    void destroy() noexcept {
+        if constexpr (!is_trivially_destructible_v) {
+            std::destroy_at(&object);
         }
     }
 };
 
 /**
- * @brief A guard class for ensuring destruction of an object.
+ * @brief A RAII guard class for ensuring destruction of an object
  *
  * This class provides a guard that ensures the destruction of an object when
- * the guard goes out of scope. It uses the `std::destroy_at` function to
- * destroy the object.
+ * the guard goes out of scope. It uses `std::destroy_at` to destroy the object.
  *
- * @tparam T The type of the object to guard.
+ * @tparam T The type of the object to guard
  */
 template <class T>
 class destruction_guard {
 public:
     /**
-     * @brief Constructs a destruction guard for the given object.
-     *
-     * @param p Pointer to the object to guard.
+     * @brief Constructs a destruction guard for the given object
+     * @param p Pointer to the object to guard
      */
     explicit destruction_guard(T* p) noexcept : p_(p) {}
 
     destruction_guard(const destruction_guard&) = delete;
     destruction_guard& operator=(const destruction_guard&) = delete;
+    destruction_guard(destruction_guard&&) = delete;
+    destruction_guard& operator=(destruction_guard&&) = delete;
 
     /**
-     * @brief Destructor.
+     * @brief Destructor
      *
-     * This destructor destroys the guarded object using the `std::destroy_at`
-     * function.
+     * Destroys the guarded object using `std::destroy_at`.
      */
     ~destruction_guard() noexcept(
 #ifdef ATOM_USE_BOOST
@@ -371,7 +370,21 @@ public:
     }
 
 private:
-    T* p_;  ///< Pointer to the guarded object.
+    T* p_;
 };
+
+/**
+ * @brief Convenience function to create an Indestructible object
+ * @tparam T The type of object to create
+ * @tparam Args The types of constructor arguments
+ * @param args Constructor arguments
+ * @return Indestructible object containing the constructed object
+ */
+template <typename T, typename... Args>
+    requires std::is_constructible_v<T, Args&&...>
+[[nodiscard]] constexpr auto make_indestructible(Args&&... args)
+    -> Indestructible<T> {
+    return Indestructible<T>(std::in_place, std::forward<Args>(args)...);
+}
 
 #endif  // ATOM_TYPE_INDESTRUCTIBLE_HPP

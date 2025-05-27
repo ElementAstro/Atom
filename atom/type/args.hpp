@@ -3,18 +3,6 @@
  *
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  *
- * Features:
- * - Type-safe heterogeneous container
- * - Thread-safe option
- * - STL/Boost dual support
- * - Batch operations
- * - JSON serialization
- * - Advanced type checking
- * - Performance optimized
- * - Lazy evaluation
- * - Memory pool
- * - Range operations
- * - Validation support
  */
 
 #pragma once
@@ -28,20 +16,11 @@
 #define ATOM_SHARED_LOCK
 #endif
 
-/**************************************************
-
-Date: 2024-03-25
-
-Description: Enhanced Argument Container Library for C++
-
-**************************************************/
-
 #ifndef ATOM_TYPE_ARG_HPP
 #define ATOM_TYPE_ARG_HPP
 
 #include <concepts>
 #include <functional>
-#include <memory>
 #include <memory_resource>
 #include <optional>
 #include <span>
@@ -118,10 +97,14 @@ using Validator = std::function<bool(const any_type&)>;
  */
 class Args {
 public:
-    Args() : m_pool_(new std::pmr::monotonic_buffer_resource()) {}
+    using iterator = typename map_type<string_view_type, any_type>::iterator;
+    using const_iterator =
+        typename map_type<string_view_type, any_type>::const_iterator;
+
+    Args() : m_pool_(std::pmr::get_default_resource()) {}
+    explicit Args(std::pmr::memory_resource* resource) : m_pool_(resource) {}
     ~Args() = default;
 
-    // 禁止拷贝,允许移动
     Args(const Args&) = delete;
     Args& operator=(const Args&) = delete;
     Args(Args&&) = default;
@@ -251,20 +234,24 @@ public:
     auto getOr(string_view_type key, T&& default_value) const -> T {
         ATOM_SHARED_LOCK;
         if (auto it = m_data_.find(key); it != m_data_.end()) {
+            try {
 #ifdef ATOM_USE_BOOST
-            return boost::any_cast<T>(it->second);
+                return boost::any_cast<T>(it->second);
 #else
-            return std::any_cast<T>(it->second);
+                return std::any_cast<T>(it->second);
 #endif
+            } catch (...) {
+                return std::forward<T>(default_value);
+            }
         }
         return std::forward<T>(default_value);
     }
 
     /**
-     * @brief Get multiple values by keys
+     * @brief Get an optional value by key
      * @tparam T The type to retrieve
-     * @param keys Span of keys to look up
-     * @return Vector of optional values
+     * @param key The key to look up
+     * @return Optional containing the value if found and type matches
      */
     template <typename T>
     auto getOptional(string_view_type key) const -> std::optional<T> {
@@ -283,6 +270,12 @@ public:
         return std::nullopt;
     }
 
+    /**
+     * @brief Get multiple values by keys
+     * @tparam T The type to retrieve
+     * @param keys Span of keys to look up
+     * @return Vector of optional values
+     */
     template <typename T>
     auto get(std::span<const string_view_type> keys) const
         -> std::vector<std::optional<T>> {
@@ -314,7 +307,9 @@ public:
         m_validators_.erase(key);
     }
 
-    /** @brief Remove all key-value pairs */
+    /**
+     * @brief Remove all key-value pairs
+     */
     void clear() noexcept {
         ATOM_LOCK_GUARD;
         m_data_.clear();
@@ -476,14 +471,6 @@ public:
         return result;
     }
 
-public:
-    /**
-     * @brief Iterator type for Args container
-     */
-    using iterator = typename map_type<string_view_type, any_type>::iterator;
-    using const_iterator =
-        typename map_type<string_view_type, any_type>::const_iterator;
-
     /**
      * @brief Get begin iterator
      * @return Iterator to the beginning
@@ -513,11 +500,11 @@ private:
 #ifdef ATOM_THREAD_SAFE
     mutable std::shared_mutex m_mutex_;
 #endif
-    std::unique_ptr<std::pmr::memory_resource> m_pool_;
+    std::pmr::memory_resource* m_pool_;
     map_type<string_view_type, any_type> m_data_;
     map_type<string_view_type, Validator> m_validators_;
 };
 
 }  // namespace atom
 
-#endif
+#endif  // ATOM_TYPE_ARG_HPP

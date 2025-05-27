@@ -19,6 +19,7 @@ Description: Trackable Object (Optimized with C++20 features)
 #include <functional>
 #include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <utility>
 #include <vector>
 
@@ -56,7 +57,7 @@ public:
      * changes. It takes two const references: the old value and the new value.
      */
     void subscribe(std::function<void(const T&, const T&)> onChange) {
-        std::scoped_lock lock(mutex_);
+        std::unique_lock lock(mutex_);
         observers_.emplace_back(std::move(onChange));
     }
 
@@ -67,7 +68,7 @@ public:
      * changes. It takes the new value as an argument.
      */
     void setOnChangeCallback(std::function<void(const T&)> onChange) {
-        std::scoped_lock lock(mutex_);
+        std::unique_lock lock(mutex_);
         onChangeCallback_ = std::move(onChange);
     }
 
@@ -75,8 +76,9 @@ public:
      * @brief Unsubscribe all observer functions.
      */
     void unsubscribeAll() {
-        std::scoped_lock lock(mutex_);
+        std::unique_lock lock(mutex_);
         observers_.clear();
+        onChangeCallback_ = nullptr;
     }
 
     /**
@@ -85,8 +87,8 @@ public:
      * @return true if there are subscribers, false otherwise.
      */
     [[nodiscard]] auto hasSubscribers() const -> bool {
-        std::scoped_lock lock(mutex_);
-        return !observers_.empty();
+        std::shared_lock lock(mutex_);
+        return !observers_.empty() || static_cast<bool>(onChangeCallback_);
     }
 
     /**
@@ -95,7 +97,7 @@ public:
      * @return const T& A const reference to the current value.
      */
     [[nodiscard]] auto get() const -> const T& {
-        std::scoped_lock lock(mutex_);
+        std::shared_lock lock(mutex_);
         return value_;
     }
 
@@ -120,15 +122,7 @@ public:
      * @return Trackable& Reference to the trackable object.
      */
     auto operator=(T newValue) -> Trackable& {
-        std::scoped_lock lock(mutex_);
-        if (value_ != newValue) {
-            T oldValue = std::exchange(value_, std::move(newValue));
-            if (!notifyDeferred_) {
-                notifyObservers(oldValue, value_);
-            } else {
-                lastOldValue_ = std::move(oldValue);
-            }
-        }
+        updateValue(std::move(newValue));
         return *this;
     }
 
@@ -169,11 +163,13 @@ public:
      * deferNotifications(false) is called.
      */
     void deferNotifications(bool defer) {
-        std::scoped_lock lock(mutex_);
+        std::unique_lock lock(mutex_);
         notifyDeferred_ = defer;
         if (!defer && lastOldValue_.has_value()) {
-            notifyObservers(*lastOldValue_, value_);
+            auto oldValue = std::move(*lastOldValue_);
             lastOldValue_.reset();
+            lock.unlock();
+            notifyObservers(oldValue, value_);
         }
     }
 
@@ -182,23 +178,30 @@ public:
      */
     class ScopedDefer {
     public:
-        explicit ScopedDefer(Trackable* parent) : parent_(parent) {}
-        ~ScopedDefer() { parent_->deferNotifications(false); }
+        explicit ScopedDefer(Trackable* parent) : parent_(parent) {
+            if (parent_) {
+                parent_->deferNotifications(true);
+            }
+        }
 
-        // Non-copyable
+        ~ScopedDefer() {
+            if (parent_) {
+                parent_->deferNotifications(false);
+            }
+        }
+
         ScopedDefer(const ScopedDefer&) = delete;
         ScopedDefer& operator=(const ScopedDefer&) = delete;
 
-        // Movable
-        ScopedDefer(ScopedDefer&& other) noexcept : parent_(other.parent_) {
-            other.parent_ = nullptr;
-        }
+        ScopedDefer(ScopedDefer&& other) noexcept
+            : parent_(std::exchange(other.parent_, nullptr)) {}
+
         ScopedDefer& operator=(ScopedDefer&& other) noexcept {
             if (this != &other) {
-                if (parent_)
+                if (parent_) {
                     parent_->deferNotifications(false);
-                parent_ = other.parent_;
-                other.parent_ = nullptr;
+                }
+                parent_ = std::exchange(other.parent_, nullptr);
             }
             return *this;
         }
@@ -207,21 +210,49 @@ public:
         Trackable* parent_;
     };
 
-    [[nodiscard]] auto deferScoped() {
-        deferNotifications(true);
+    /**
+     * @brief Create a scoped defer object that automatically manages
+     * notification deferral.
+     *
+     * @return ScopedDefer A RAII object that manages notification deferral.
+     */
+    [[nodiscard]] auto deferScoped() -> ScopedDefer {
         return ScopedDefer(this);
     }
 
 private:
-    T value_;  ///< The stored value.
-    std::vector<std::function<void(const T&, const T&)>>
-        observers_;               ///< List of observer functions.
-    mutable std::mutex mutex_;    ///< Mutex for thread safety.
-    bool notifyDeferred_{false};  ///< Flag to control deferred notifications.
-    std::optional<T>
-        lastOldValue_;  ///< Last old value for deferred notifications.
-    std::function<void(const T&)>
-        onChangeCallback_;  ///< Callback for value changes.
+    T value_;
+    std::vector<std::function<void(const T&, const T&)>> observers_;
+    mutable std::shared_mutex mutex_;
+    bool notifyDeferred_{false};
+    std::optional<T> lastOldValue_;
+    std::function<void(const T&)> onChangeCallback_;
+
+    /**
+     * @brief Updates the value and handles notifications.
+     *
+     * @param newValue The new value to set.
+     */
+    void updateValue(T newValue) {
+        T oldValue;
+        bool shouldNotify = false;
+
+        {
+            std::unique_lock lock(mutex_);
+            if (value_ != newValue) {
+                oldValue = std::exchange(value_, std::move(newValue));
+                if (!notifyDeferred_) {
+                    shouldNotify = true;
+                } else {
+                    lastOldValue_ = oldValue;
+                }
+            }
+        }
+
+        if (shouldNotify) {
+            notifyObservers(oldValue, value_);
+        }
+    }
 
     /**
      * @brief Notifies all observers about the value change.
@@ -230,12 +261,11 @@ private:
      * @param newVal The new value.
      */
     void notifyObservers(const T& oldVal, const T& newVal) {
-        // Create copies of the observers to avoid holding the lock during
-        // callbacks
         std::vector<std::function<void(const T&, const T&)>> localObservers;
         std::function<void(const T&)> localOnChangeCallback;
+
         {
-            std::scoped_lock lock(mutex_);
+            std::shared_lock lock(mutex_);
             localObservers = observers_;
             localOnChangeCallback = onChangeCallback_;
         }
@@ -270,16 +300,27 @@ private:
      */
     template <typename Operation>
     auto applyOperation(const T& rhs, Operation operation) -> Trackable& {
-        std::scoped_lock lock(mutex_);
-        T newValue = operation(value_, rhs);
-        if (value_ != newValue) {
-            T oldValue = std::exchange(value_, std::move(newValue));
-            if (!notifyDeferred_) {
-                notifyObservers(oldValue, value_);
-            } else {
-                lastOldValue_ = std::move(oldValue);
+        T oldValue;
+        T newValue;
+        bool shouldNotify = false;
+
+        {
+            std::unique_lock lock(mutex_);
+            newValue = operation(value_, rhs);
+            if (value_ != newValue) {
+                oldValue = std::exchange(value_, newValue);
+                if (!notifyDeferred_) {
+                    shouldNotify = true;
+                } else {
+                    lastOldValue_ = oldValue;
+                }
             }
         }
+
+        if (shouldNotify) {
+            notifyObservers(oldValue, newValue);
+        }
+
         return *this;
     }
 };

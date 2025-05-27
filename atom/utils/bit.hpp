@@ -72,11 +72,11 @@ public:
  */
 template <UnsignedIntegral T>
 constexpr auto createMask(int32_t bits) -> T {
-    if (bits < 0) {
+    if (bits < 0) [[unlikely]] {
         throw BitManipulationException("Number of bits cannot be negative");
     }
 
-    if (bits >= std::numeric_limits<T>::digits) {
+    if (bits >= std::numeric_limits<T>::digits) [[unlikely]] {
         return std::numeric_limits<T>::max();
     }
     return static_cast<T>((T{1} << bits) - 1);
@@ -118,12 +118,10 @@ constexpr auto reverseBits(T value) noexcept -> T {
 #ifdef ATOM_USE_BOOST
     return boost::integer::reverse_bits(value);
 #else
-    // Optimized bit reversal algorithm for better performance
     constexpr int bits = std::numeric_limits<T>::digits;
     T result = 0;
 
     for (int i = 0; i < bits; ++i) {
-        // Extract bit and position it at the reversed position
         result |= ((value >> i) & 1) << (bits - 1 - i);
     }
 
@@ -143,12 +141,11 @@ constexpr auto reverseBits(T value) noexcept -> T {
  * @param value The value to rotate.
  * @param shift The number of positions to rotate left.
  * @return T The value after left rotation.
- * @throws BitManipulationException if shift is negative (C++20 std::rotl
- * doesn't check this)
+ * @throws BitManipulationException if shift is negative
  */
 template <UnsignedIntegral T>
 constexpr auto rotateLeft(T value, int shift) -> T {
-    if (shift < 0) {
+    if (shift < 0) [[unlikely]] {
         throw BitManipulationException(
             "Left rotation shift value cannot be negative");
     }
@@ -177,12 +174,11 @@ constexpr auto rotateLeft(T value, int shift) -> T {
  * @param value The value to rotate.
  * @param shift The number of positions to rotate right.
  * @return T The value after right rotation.
- * @throws BitManipulationException if shift is negative (C++20 std::rotr
- * doesn't check this)
+ * @throws BitManipulationException if shift is negative
  */
 template <UnsignedIntegral T>
 constexpr auto rotateRight(T value, int shift) -> T {
-    if (shift < 0) {
+    if (shift < 0) [[unlikely]] {
         throw BitManipulationException(
             "Right rotation shift value cannot be negative");
     }
@@ -235,7 +231,7 @@ template <UnsignedIntegral T>
 constexpr auto splitMask(T mask, int32_t position) -> std::pair<T, T> {
     constexpr int max_bits = std::numeric_limits<T>::digits;
 
-    if (position < 0 || position > max_bits) {
+    if (position < 0 || position > max_bits) [[unlikely]] {
         throw BitManipulationException("Split position must be between 0 and " +
                                        std::to_string(max_bits));
     }
@@ -269,7 +265,8 @@ constexpr auto splitMask(T mask, int32_t position) -> std::pair<T, T> {
  */
 template <UnsignedIntegral T>
 constexpr auto isBitSet(T value, int position) -> bool {
-    if (position < 0 || position >= std::numeric_limits<T>::digits) {
+    if (position < 0 || position >= std::numeric_limits<T>::digits)
+        [[unlikely]] {
         throw BitManipulationException("Bit position out of range");
     }
 
@@ -287,7 +284,8 @@ constexpr auto isBitSet(T value, int position) -> bool {
  */
 template <UnsignedIntegral T>
 constexpr auto setBit(T value, int position) -> T {
-    if (position < 0 || position >= std::numeric_limits<T>::digits) {
+    if (position < 0 || position >= std::numeric_limits<T>::digits)
+        [[unlikely]] {
         throw BitManipulationException("Bit position out of range");
     }
 
@@ -305,7 +303,8 @@ constexpr auto setBit(T value, int position) -> T {
  */
 template <UnsignedIntegral T>
 constexpr auto clearBit(T value, int position) -> T {
-    if (position < 0 || position >= std::numeric_limits<T>::digits) {
+    if (position < 0 || position >= std::numeric_limits<T>::digits)
+        [[unlikely]] {
         throw BitManipulationException("Bit position out of range");
     }
 
@@ -323,7 +322,8 @@ constexpr auto clearBit(T value, int position) -> T {
  */
 template <UnsignedIntegral T>
 constexpr auto toggleBit(T value, int position) -> T {
-    if (position < 0 || position >= std::numeric_limits<T>::digits) {
+    if (position < 0 || position >= std::numeric_limits<T>::digits)
+        [[unlikely]] {
         throw BitManipulationException("Bit position out of range");
     }
 
@@ -340,11 +340,9 @@ constexpr auto toggleBit(T value, int position) -> T {
  * @return uint64_t Total count of set bits.
  */
 inline auto countBitsParallel(const uint8_t* data, size_t size) -> uint64_t {
-    constexpr size_t PARALLEL_THRESHOLD =
-        1024;  // Threshold for parallel execution
+    constexpr size_t PARALLEL_THRESHOLD = 1024;
 
     if (size < PARALLEL_THRESHOLD) {
-        // For small arrays, use sequential processing
         uint64_t count = 0;
         for (size_t i = 0; i < size; ++i) {
             count += std::popcount(data[i]);
@@ -352,7 +350,6 @@ inline auto countBitsParallel(const uint8_t* data, size_t size) -> uint64_t {
         return count;
     }
 
-    // For larger arrays, use parallel processing with std::async
     const size_t num_threads = std::min(std::thread::hardware_concurrency(),
                                         static_cast<unsigned>(16));
     const size_t chunk_size = (size + num_threads - 1) / num_threads;
@@ -360,7 +357,6 @@ inline auto countBitsParallel(const uint8_t* data, size_t size) -> uint64_t {
     std::vector<std::future<uint64_t>> futures;
     futures.reserve(num_threads);
 
-    // Launch parallel tasks
     for (size_t t = 0; t < num_threads; ++t) {
         size_t begin = t * chunk_size;
         size_t end = std::min(begin + chunk_size, size);
@@ -373,35 +369,29 @@ inline auto countBitsParallel(const uint8_t* data, size_t size) -> uint64_t {
                 uint64_t count = 0;
 
 #ifdef __AVX2__
-                // Use AVX2 instructions for faster bit counting
                 for (size_t i = begin; i + 32 <= end; i += 32) {
                     __m256i chunk = _mm256_loadu_si256(
                         reinterpret_cast<const __m256i*>(data + i));
 
-                    // Count bits in each byte
                     for (int j = 0; j < 32; j++) {
                         count += std::popcount(static_cast<uint8_t>(
                             _mm256_extract_epi8(chunk, j)));
                     }
                 }
 
-                // Handle remaining bytes
                 for (size_t i = begin + ((end - begin) / 32) * 32; i < end;
                      ++i) {
                     count += std::popcount(data[i]);
                 }
 #else
-                // Fallback to standard approach
                 for (size_t i = begin; i < end; ++i) {
                     count += std::popcount(data[i]);
                 }
 #endif
-
                 return count;
             }));
     }
 
-    // Collect results
     uint64_t total_count = 0;
     for (auto& future : futures) {
         try {
@@ -466,12 +456,14 @@ auto parallelBitOp(std::span<const T> input, Op op) -> std::vector<T> {
     constexpr size_t PARALLEL_THRESHOLD = 1024;
 
     if (input.size() < PARALLEL_THRESHOLD) {
-        // For small arrays, use ranges for cleaner code
         std::ranges::transform(input, result.begin(), op);
         return result;
     }
 
-    // For larger arrays, use parallel execution
+#ifdef __cpp_lib_parallel_algorithm
+    std::transform(std::execution::par_unseq, input.begin(), input.end(),
+                   result.begin(), op);
+#else
     const size_t num_threads = std::min(std::thread::hardware_concurrency(),
                                         static_cast<unsigned>(16));
     const size_t chunk_size = (input.size() + num_threads - 1) / num_threads;
@@ -479,7 +471,6 @@ auto parallelBitOp(std::span<const T> input, Op op) -> std::vector<T> {
     std::vector<std::future<void>> futures;
     futures.reserve(num_threads);
 
-    // Launch parallel tasks
     for (size_t t = 0; t < num_threads; ++t) {
         size_t begin = t * chunk_size;
         size_t end = std::min(begin + chunk_size, input.size());
@@ -495,18 +486,11 @@ auto parallelBitOp(std::span<const T> input, Op op) -> std::vector<T> {
             }));
     }
 
-    // Wait for all tasks to complete
     for (auto& future : futures) {
         future.wait();
     }
+#endif
 
-    return result;
-}
-
-template <typename Iterator, typename BitOp>
-auto parallelBitOperation(Iterator begin, Iterator end, BitOp op) {
-    std::vector<decltype(op(*begin))> result(std::distance(begin, end));
-    std::transform(std::execution::par, begin, end, result.begin(), op);
     return result;
 }
 

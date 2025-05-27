@@ -4,40 +4,22 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2024-4-3
-
-Description: Pointer Sentinel for Atom
-
-**************************************************/
-
 #ifndef ATOM_TYPE_POINTER_HPP
 #define ATOM_TYPE_POINTER_HPP
 
 #include <atomic>
-#include <concepts>
 #include <functional>
 #include <future>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <stdexcept>
-#include <thread>
 #include <type_traits>
 #include <variant>
 
 #ifdef ATOM_USE_BOOST
 #include <boost/type_traits.hpp>
 #endif
-
-#include "atom/error/exception.hpp"
-#include "atom/macro.hpp"
-
-// Forward declaration for thread pool
-namespace atom {
-class ThreadPool;
-}
 
 /**
  * @brief Extended concept to check if a type is a pointer type, including raw
@@ -80,20 +62,29 @@ public:
 template <typename T>
 class PointerSentinel {
 private:
-    // Using std::variant to store different types of pointers
-    std::variant<std::shared_ptr<T>, std::unique_ptr<T>, std::weak_ptr<T>, T*>
-        ptr_;
+    using VariantType = std::variant<std::shared_ptr<T>, std::unique_ptr<T>,
+                                     std::weak_ptr<T>, T*>;
 
-    // Thread safety
+    VariantType ptr_;
     mutable std::shared_mutex mutex_;
-
-    // Validity tracking
     std::atomic<bool> is_valid_{false};
 
-    // Helper method to validate pointer before operations
     void validate() const {
         if (!is_valid_.load(std::memory_order_acquire)) {
             throw PointerException("Invalid pointer state");
+        }
+    }
+
+    template <typename U>
+    static auto make_safe_copy(const U& ptr) {
+        if constexpr (std::is_same_v<U, std::shared_ptr<T>>) {
+            return ptr;
+        } else if constexpr (std::is_same_v<U, std::unique_ptr<T>>) {
+            return ptr ? std::make_unique<T>(*ptr) : std::unique_ptr<T>{};
+        } else if constexpr (std::is_same_v<U, std::weak_ptr<T>>) {
+            return ptr;
+        } else {
+            return ptr ? new T(*ptr) : nullptr;
         }
     }
 
@@ -109,12 +100,11 @@ public:
      * @param p The shared pointer.
      * @throws PointerException if the pointer is null
      */
-    explicit PointerSentinel(std::shared_ptr<T> p) {
-        if (!p) {
+    explicit PointerSentinel(std::shared_ptr<T> p) : ptr_(std::move(p)) {
+        if (!std::get<std::shared_ptr<T>>(ptr_)) {
             throw PointerException(
                 "Null shared_ptr provided to PointerSentinel");
         }
-        ptr_ = std::move(p);
         is_valid_.store(true, std::memory_order_release);
     }
 
@@ -124,12 +114,11 @@ public:
      * @param p The unique pointer.
      * @throws PointerException if the pointer is null
      */
-    explicit PointerSentinel(std::unique_ptr<T>&& p) {
-        if (!p) {
+    explicit PointerSentinel(std::unique_ptr<T>&& p) : ptr_(std::move(p)) {
+        if (!std::get<std::unique_ptr<T>>(ptr_)) {
             throw PointerException(
                 "Null unique_ptr provided to PointerSentinel");
         }
-        ptr_ = std::move(p);
         is_valid_.store(true, std::memory_order_release);
     }
 
@@ -139,12 +128,11 @@ public:
      * @param p The weak pointer.
      * @throws PointerException if the weak pointer is expired
      */
-    explicit PointerSentinel(std::weak_ptr<T> p) {
-        if (p.expired()) {
+    explicit PointerSentinel(std::weak_ptr<T> p) : ptr_(std::move(p)) {
+        if (std::get<std::weak_ptr<T>>(ptr_).expired()) {
             throw PointerException(
                 "Expired weak_ptr provided to PointerSentinel");
         }
-        ptr_ = std::move(p);
         is_valid_.store(true, std::memory_order_release);
     }
 
@@ -154,12 +142,11 @@ public:
      * @param p The raw pointer.
      * @throws PointerException if the pointer is null
      */
-    explicit PointerSentinel(T* p) {
+    explicit PointerSentinel(T* p) : ptr_(p) {
         if (!p) {
             throw PointerException(
                 "Null raw pointer provided to PointerSentinel");
         }
-        ptr_ = p;
         is_valid_.store(true, std::memory_order_release);
     }
 
@@ -173,26 +160,7 @@ public:
         try {
             other.validate();
             ptr_ = std::visit(
-                [](const auto& p)
-                    -> std::variant<std::shared_ptr<T>, std::unique_ptr<T>,
-                                    std::weak_ptr<T>, T*> {
-                    using U = std::decay_t<decltype(p)>;
-
-                    if constexpr (std::is_same_v<U, std::shared_ptr<T>>) {
-                        return p;
-                    } else if constexpr (std::is_same_v<U,
-                                                        std::unique_ptr<T>>) {
-                        if (!p)
-                            return std::unique_ptr<T>{};
-                        return std::make_unique<T>(*p);
-                    } else if constexpr (std::is_same_v<U, std::weak_ptr<T>>) {
-                        return p;
-                    } else {  // Raw pointer
-                        if (!p)
-                            return static_cast<T*>(nullptr);
-                        return new T(*p);
-                    }
-                },
+                [](const auto& p) -> VariantType { return make_safe_copy(p); },
                 other.ptr_);
             is_valid_.store(other.is_valid_.load(std::memory_order_acquire),
                             std::memory_order_release);
@@ -225,7 +193,6 @@ public:
                 delete std::get<T*>(ptr_);
             }
         } catch (...) {
-            // Ensure no exceptions escape the destructor
         }
     }
 
@@ -238,10 +205,7 @@ public:
     auto operator=(const PointerSentinel& other) -> PointerSentinel& {
         if (this != &other) {
             PointerSentinel temp(other);
-            std::unique_lock lock1(mutex_, std::defer_lock);
-            std::shared_lock lock2(other.mutex_, std::defer_lock);
-            std::lock(lock1, lock2);
-
+            std::scoped_lock lock(mutex_, other.mutex_);
             std::swap(ptr_, temp.ptr_);
             is_valid_.store(temp.is_valid_.load(std::memory_order_acquire),
                             std::memory_order_release);
@@ -257,11 +221,8 @@ public:
      */
     auto operator=(PointerSentinel&& other) noexcept -> PointerSentinel& {
         if (this != &other) {
-            std::unique_lock lock1(mutex_, std::defer_lock);
-            std::unique_lock lock2(other.mutex_, std::defer_lock);
-            std::lock(lock1, lock2);
+            std::scoped_lock lock(mutex_, other.mutex_);
 
-            // Clean up current resources if needed
             if (std::holds_alternative<T*>(ptr_)) {
                 delete std::get<T*>(ptr_);
             }
@@ -304,7 +265,7 @@ public:
                         }
                         return arg;
                     } else if constexpr (std::is_same_v<U, std::weak_ptr<T>>) {
-                        auto spt = arg.lock();  // Try to lock the weak_ptr
+                        auto spt = arg.lock();
                         if (!spt) {
                             throw PointerException("Expired weak_ptr");
                         }
@@ -317,7 +278,7 @@ public:
                     }
                 },
                 ptr_);
-        } catch (const PointerException& e) {
+        } catch (const PointerException&) {
             throw;
         } catch (const std::exception& e) {
             throw PointerException(std::string("Error getting pointer: ") +
@@ -400,7 +361,7 @@ public:
                     }
                 },
                 ptr_);
-        } catch (const PointerException& e) {
+        } catch (const PointerException&) {
             throw;
         } catch (const std::exception& e) {
             throw PointerException(std::string("Invoke operation failed: ") +
@@ -451,7 +412,7 @@ public:
                     }
                 },
                 ptr_);
-        } catch (const PointerException& e) {
+        } catch (const PointerException&) {
             throw;
         } catch (const std::exception& e) {
             throw PointerException(std::string("Apply operation failed: ") +
@@ -503,7 +464,7 @@ public:
                     }
                 },
                 ptr_);
-        } catch (const PointerException& e) {
+        } catch (const PointerException&) {
             throw;
         } catch (const std::exception& e) {
             throw PointerException(std::string("ApplyVoid operation failed: ") +
@@ -547,13 +508,12 @@ public:
                         return PointerSentinel<U>(
                             std::static_pointer_cast<U>(arg));
                     } else {
-                        // Unique ptr requires special handling
                         U* raw_ptr = static_cast<U*>(arg.get());
                         return PointerSentinel<U>(std::unique_ptr<U>(raw_ptr));
                     }
                 },
                 ptr_);
-        } catch (const PointerException& e) {
+        } catch (const PointerException&) {
             throw;
         } catch (const std::exception& e) {
             throw PointerException(std::string("Type conversion failed: ") +
@@ -576,22 +536,18 @@ public:
 
             using result_type = decltype(callable(std::declval<T*>()));
 
-            // Create a copy of the pointer to ensure it remains valid
             auto copied_ptr = std::visit(
                 [](auto&& arg) -> std::shared_ptr<T> {
                     using U = std::decay_t<decltype(arg)>;
 
                     if constexpr (std::is_pointer_v<U>) {
-                        return std::shared_ptr<T>(
-                            arg, [](T*) {});  // Non-owning shared_ptr
+                        return std::shared_ptr<T>(arg, [](T*) {});
                     } else if constexpr (std::is_same_v<U, std::weak_ptr<T>>) {
                         return arg.lock();
                     } else if constexpr (std::is_same_v<U,
                                                         std::shared_ptr<T>>) {
                         return arg;
                     } else {
-                        // Make a shared copy from the unique_ptr without
-                        // transferring ownership
                         return std::shared_ptr<T>(arg.get(), [](T*) {});
                     }
                 },
@@ -608,7 +564,7 @@ public:
                                   return callable(copied_ptr.get());
                               });
 
-        } catch (const PointerException& e) {
+        } catch (const PointerException&) {
             throw;
         } catch (const std::exception& e) {
             throw PointerException(std::string("Async operation failed: ") +
@@ -635,11 +591,9 @@ public:
                 throw PointerException("Null pointer during SIMD operation");
             }
 
-            // The func should be implemented to use SIMD instructions
-            // internally
             std::forward<Func>(func)(ptr, size);
 
-        } catch (const PointerException& e) {
+        } catch (const PointerException&) {
             throw;
         } catch (const std::exception& e) {
             throw PointerException(std::string("SIMD operation failed: ") +

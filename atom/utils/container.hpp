@@ -7,12 +7,10 @@
 #include <sstream>
 #include <vector>
 
-// Include high-performance containers
 #include "atom/containers/high_performance.hpp"
 
 namespace atom::utils {
 
-// Type aliases for high-performance containers
 template <typename T>
 using HashSet = atom::containers::HashSet<T>;
 
@@ -44,7 +42,8 @@ template <typename Container1, typename Container2>
                                            typename Container2::value_type> &&
              std::regular<typename Container2::value_type> &&
              std::regular<typename Container1::value_type>
-auto isSubset(const Container1& subset, const Container2& superset) -> bool {
+constexpr auto isSubset(const Container1& subset, const Container2& superset)
+    -> bool {
     HashSet<typename Container2::value_type> set(superset.begin(),
                                                  superset.end());
     return std::ranges::all_of(
@@ -60,7 +59,7 @@ auto isSubset(const Container1& subset, const Container2& superset) -> bool {
 template <typename Container, typename T>
     requires std::ranges::input_range<Container> &&
              std::equality_comparable_with<typename Container::value_type, T>
-auto contains(const Container& container, const T& value) -> bool {
+constexpr auto contains(const Container& container, const T& value) -> bool {
     return std::ranges::find(container, value) != container.end();
 }
 
@@ -90,8 +89,8 @@ template <typename Container1, typename Container2>
              std::ranges::input_range<Container2> &&
              std::equality_comparable_with<typename Container1::value_type,
                                            typename Container2::value_type>
-auto isSubsetLinearSearch(const Container1& subset, const Container2& superset)
-    -> bool {
+constexpr auto isSubsetLinearSearch(const Container1& subset,
+                                    const Container2& superset) -> bool {
     return std::ranges::all_of(subset, [&superset](const auto& elem) {
         return contains(superset, elem);
     });
@@ -112,8 +111,7 @@ template <typename Container1, typename Container2>
              std::regular<typename Container2::value_type>
 auto isSubsetWithHashSet(const Container1& subset, const Container2& superset)
     -> bool {
-    auto supersetSet =
-        toHashSet(superset);  // Using HashSet instead of unordered_set
+    auto supersetSet = toHashSet(superset);
     return std::ranges::all_of(subset, [&supersetSet](const auto& elem) {
         return supersetSet.contains(elem);
     });
@@ -133,8 +131,11 @@ template <typename Container1, typename Container2>
                                            typename Container2::value_type>
 auto intersection(const Container1& container1, const Container2& container2) {
     Vector<typename Container1::value_type> result;
+    result.reserve(std::min(container1.size(), container2.size()));
+
+    auto set2 = toHashSet(container2);
     for (const auto& elem : container1) {
-        if (contains(container2, elem)) {
+        if (set2.contains(elem)) {
             result.push_back(elem);
         }
     }
@@ -175,8 +176,11 @@ template <typename Container1, typename Container2>
                                            typename Container2::value_type>
 auto difference(const Container1& container1, const Container2& container2) {
     Vector<typename Container1::value_type> result;
+    result.reserve(container1.size());
+
+    auto set2 = toHashSet(container2);
     for (const auto& elem : container1) {
-        if (!contains(container2, elem)) {
+        if (!set2.contains(elem)) {
             result.push_back(elem);
         }
     }
@@ -199,8 +203,7 @@ auto symmetricDifference(const Container1& container1,
                          const Container2& container2) {
     auto diff1 = difference(container1, container2);
     auto diff2 = difference(container2, container1);
-    auto result = unionSet(diff1, diff2);
-    return result;
+    return unionSet(diff1, diff2);
 }
 
 /**
@@ -215,10 +218,12 @@ template <typename Container1, typename Container2>
              std::ranges::input_range<Container2> &&
              std::equality_comparable_with<typename Container1::value_type,
                                            typename Container2::value_type>
-auto isEqual(const Container1& container1, const Container2& container2)
-    -> bool {
-    return isSubsetLinearSearch(container1, container2) &&
-           isSubsetLinearSearch(container2, container1);
+constexpr auto isEqual(const Container1& container1,
+                       const Container2& container2) -> bool {
+    if (container1.size() != container2.size()) {
+        return false;
+    }
+    return isSubsetWithHashSet(container1, container2);
 }
 
 /**
@@ -230,8 +235,9 @@ auto isEqual(const Container1& container1, const Container2& container2)
  */
 template <typename Container, typename MemberFunc>
 auto applyAndStore(const Container& source, MemberFunc memberFunc) {
-    using ReturnType = decltype((std::invoke(memberFunc, *source.begin())));
-    Vector<ReturnType> result;  // Using high-performance Vector
+    using ReturnType = decltype(std::invoke(memberFunc, *source.begin()));
+    Vector<ReturnType> result;
+    result.reserve(source.size());
 
     for (const auto& elem : source) {
         result.push_back(std::invoke(memberFunc, elem));
@@ -255,7 +261,8 @@ template <typename Container, typename MemberFunc>
              HasMemberFunc<typename Container::value_type, MemberFunc>
 auto transformToVector(const Container& source, MemberFunc memberFunc) {
     using ReturnType = decltype(std::invoke(memberFunc, *std::begin(source)));
-    Vector<ReturnType> result;  // Using high-performance Vector
+    Vector<ReturnType> result;
+    result.reserve(source.size());
 
     for (const auto& elem : source) {
         result.push_back(std::invoke(memberFunc, elem));
@@ -309,6 +316,12 @@ auto flatten(const Container& container) {
     using InnerContainer = typename Container::value_type;
     Vector<typename InnerContainer::value_type> result;
 
+    size_t totalSize = 0;
+    for (const auto& inner : container) {
+        totalSize += inner.size();
+    }
+    result.reserve(totalSize);
+
     for (const auto& inner : container) {
         result.insert(result.end(), inner.begin(), inner.end());
     }
@@ -330,6 +343,9 @@ auto zip(const Container1& container1, const Container2& container2) {
     using ValueType1 = typename Container1::value_type;
     using ValueType2 = typename Container2::value_type;
     Vector<std::pair<ValueType1, ValueType2>> result;
+
+    const auto minSize = std::min(container1.size(), container2.size());
+    result.reserve(minSize);
 
     auto it1 = container1.begin();
     auto it2 = container2.begin();
@@ -358,10 +374,8 @@ auto cartesianProduct(const Container1& container1,
                       const Container2& container2) {
     using ValueType1 = typename Container1::value_type;
     using ValueType2 = typename Container2::value_type;
-    // Use SmallVector or regular Vector based on expected size
-    using ResultType = Vector<std::pair<ValueType1, ValueType2>>;
-    ResultType result;
-    // Pre-allocate space to avoid reallocations
+    Vector<std::pair<ValueType1, ValueType2>> result;
+
     result.reserve(container1.size() * container2.size());
 
     for (const auto& elem1 : container1) {
@@ -384,6 +398,7 @@ template <typename Container, typename Predicate>
              std::predicate<Predicate, typename Container::value_type>
 auto filter(const Container& container, Predicate predicate) {
     Vector<typename Container::value_type> result;
+    result.reserve(container.size() / 2);
 
     for (const auto& elem : container) {
         if (predicate(elem)) {
@@ -408,6 +423,10 @@ auto partition(const Container& container, Predicate predicate) {
     Vector<typename Container::value_type> truePart;
     Vector<typename Container::value_type> falsePart;
 
+    const auto halfSize = container.size() / 2;
+    truePart.reserve(halfSize);
+    falsePart.reserve(halfSize);
+
     for (const auto& elem : container) {
         if (predicate(elem)) {
             truePart.push_back(elem);
@@ -416,7 +435,7 @@ auto partition(const Container& container, Predicate predicate) {
         }
     }
 
-    return std::make_pair(truePart, falsePart);
+    return std::make_pair(std::move(truePart), std::move(falsePart));
 }
 
 /**
@@ -428,7 +447,7 @@ auto partition(const Container& container, Predicate predicate) {
 template <typename Container, typename Predicate>
     requires std::ranges::input_range<Container> &&
              std::predicate<Predicate, typename Container::value_type>
-auto findIf(const Container& container, Predicate predicate)
+constexpr auto findIf(const Container& container, Predicate predicate)
     -> std::optional<typename Container::value_type> {
     for (const auto& elem : container) {
         if (predicate(elem)) {
@@ -452,10 +471,9 @@ inline auto operator""_vec(const char* str, size_t)
     atom::containers::String token;
     std::istringstream tokenStream(str);
 
-    // Split string by commas and trim whitespace
     while (std::getline(tokenStream, token, ',')) {
-        size_t start = token.find_first_not_of(" ");
-        size_t end = token.find_last_not_of(" ");
+        const auto start = token.find_first_not_of(" ");
+        const auto end = token.find_last_not_of(" ");
         if (start != std::string::npos && end != std::string::npos) {
             vec.push_back(token.substr(start, end - start + 1));
         }

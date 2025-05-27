@@ -10,14 +10,14 @@
 #include <atomic>
 #include <cassert>
 #include <concepts>
-#include <exception>
-#include <memory>
+#include <cstddef>
 #include <mutex>
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
-#ifdef ATOM_USE_BOOST;  // Added missing semicolon
-#include <boost/type_traits/aligned_storage.hpp>
+#ifdef ATOM_USE_BOOST
 #include <boost/type_traits/is_constructible.hpp>
 #include <boost/type_traits/is_nothrow_move_assignable.hpp>
 #include <boost/type_traits/is_nothrow_move_constructible.hpp>
@@ -60,12 +60,9 @@ template <typename T, ThreadSafetyPolicy Safety = ThreadSafetyPolicy::None>
 class UnshiftedPtr {
 public:
     using mutex_type = typename std::conditional<
-        Safety == ThreadSafetyPolicy::None,
-        std::monostate,  // 无需互斥锁时使用空类型
+        Safety == ThreadSafetyPolicy::None, std::monostate,
         typename std::conditional<Safety == ThreadSafetyPolicy::Mutex,
-                                  std::mutex,  // 使用标准互斥锁
-                                  std::monostate  // 原子操作模式下不需要互斥锁
-                                  >::type>::type;
+                                  std::mutex, std::monostate>::type>::type;
 
     /**
      * @brief Default constructor. Constructs the managed object using T's
@@ -123,16 +120,13 @@ public:
         try {
             destroy();
         } catch (...) {
-            // Ensure no exceptions escape destructor
             assert(false && "Exception thrown in UnshiftedPtr destructor");
         }
     }
 
-    // Disable copying by default
     UnshiftedPtr(const UnshiftedPtr&) = delete;
     auto operator=(const UnshiftedPtr&) -> UnshiftedPtr& = delete;
 
-    // Add move semantics if T supports it
     /**
      * @brief Move constructor.
      *
@@ -246,7 +240,16 @@ public:
         requires std::constructible_from<T, Args...>
 #endif
     constexpr void reset(Args&&... args) {
-        {
+        if constexpr (Safety == ThreadSafetyPolicy::None) {
+            destroy();
+            try {
+                new (&storage_) T(std::forward<Args>(args)...);
+                set_ownership_unsafe(true);
+            } catch (...) {
+                set_ownership_unsafe(false);
+                throw;
+            }
+        } else {
             std::lock_guard<mutex_type> lock(mutex_);
             destroy();
             try {
@@ -283,11 +286,18 @@ public:
      * @throws unshifted_ptr_error if the pointer doesn't own an object.
      */
     [[nodiscard]] constexpr auto release() -> T* {
-        std::lock_guard<mutex_type> lock(mutex_);
-        validate_ownership_unsafe();
-        T* ptr = get_ptr();
-        relinquish_ownership_unsafe();
-        return ptr;
+        if constexpr (Safety == ThreadSafetyPolicy::None) {
+            validate_ownership_unsafe();
+            T* ptr = get_ptr();
+            relinquish_ownership_unsafe();
+            return ptr;
+        } else {
+            std::lock_guard<mutex_type> lock(mutex_);
+            validate_ownership_unsafe();
+            T* ptr = get_ptr();
+            relinquish_ownership_unsafe();
+            return ptr;
+        }
     }
 
     /**
@@ -298,6 +308,8 @@ public:
     [[nodiscard]] constexpr auto has_value() const noexcept -> bool {
         if constexpr (Safety == ThreadSafetyPolicy::Atomic) {
             return owns_.load(std::memory_order_acquire);
+        } else if constexpr (Safety == ThreadSafetyPolicy::None) {
+            return owns_;
         } else {
             std::lock_guard<mutex_type> lock(mutex_);
             return owns_;
@@ -350,9 +362,15 @@ public:
         requires std::invocable<Func, T&>
     constexpr void apply_if(Func&& func) {
         if (has_value()) {
-            std::lock_guard<mutex_type> lock(mutex_);
-            if (owns_) {  // Double-check under lock
-                func(get());
+            if constexpr (Safety == ThreadSafetyPolicy::None) {
+                if (owns_) {
+                    func(get());
+                }
+            } else {
+                std::lock_guard<mutex_type> lock(mutex_);
+                if (owns_) {
+                    func(get());
+                }
             }
         }
     }
@@ -492,29 +510,18 @@ private:
         set_ownership_unsafe(false);
     }
 
-#ifdef ATOM_USE_BOOST
-    using StorageType =
-        typename boost::aligned_storage<sizeof(T), alignof(T)>::type;
-#else
-    using StorageType = std::aligned_storage_t<sizeof(T), alignof(T)>;
-#endif
+    alignas(T) std::byte storage_[sizeof(T)];
 
-    StorageType storage_;
-
-    // Use atomic flag for ownership in atomic safety mode
     std::conditional_t<Safety == ThreadSafetyPolicy::Atomic, std::atomic<bool>,
                        bool>
         owns_{false};
 
-    // Mutable mutex for const methods
     mutable mutex_type mutex_;
 };
 
-// Type alias for a thread-safe version
 template <typename T>
 using ThreadSafeUnshiftedPtr = UnshiftedPtr<T, ThreadSafetyPolicy::Mutex>;
 
-// Type alias for a lock-free version when possible
 template <typename T>
 using LockFreeUnshiftedPtr = UnshiftedPtr<T, ThreadSafetyPolicy::Atomic>;
 
