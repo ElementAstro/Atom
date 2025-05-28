@@ -18,7 +18,6 @@ Description: Validate aligned storage with optional Boost support
 #include <algorithm>
 #include <bit>
 #include <concepts>
-#include <cstdint>
 #include <execution>
 #include <future>
 #include <limits>
@@ -32,6 +31,7 @@ Description: Validate aligned storage with optional Boost support
 #define ATOM_SIMD_SUPPORT
 #endif
 
+#include "atom/algorithm/rust_numeric.hpp"
 #include "atom/macro.hpp"
 
 #ifdef ATOM_USE_BOOST
@@ -41,6 +41,8 @@ Description: Validate aligned storage with optional Boost support
 #endif
 
 namespace atom::utils {
+
+using namespace atom::algorithm;
 
 /**
  * @brief Concept for unsigned integral types.
@@ -71,7 +73,7 @@ public:
  * @throws BitManipulationException if bits is negative
  */
 template <UnsignedIntegral T>
-constexpr auto createMask(int32_t bits) -> T {
+constexpr auto createMask(i32 bits) -> T {
     if (bits < 0) [[unlikely]] {
         throw BitManipulationException("Number of bits cannot be negative");
     }
@@ -91,14 +93,14 @@ constexpr auto createMask(int32_t bits) -> T {
  *
  * @tparam T The unsigned integral type of the value.
  * @param value The value whose set bits are to be counted.
- * @return uint32_t The number of set bits in the value.
+ * @return u32 The number of set bits in the value.
  */
 template <UnsignedIntegral T>
-constexpr auto countBytes(T value) ATOM_NOEXCEPT -> uint32_t {
+constexpr auto countBytes(T value) ATOM_NOEXCEPT -> u32 {
 #ifdef ATOM_USE_BOOST
-    return boost::popcount(value);
+    return static_cast<u32>(boost::popcount(value));
 #else
-    return static_cast<uint32_t>(std::popcount(value));
+    return static_cast<u32>(std::popcount(value));
 #endif
 }
 
@@ -228,7 +230,7 @@ constexpr auto mergeMasks(T mask1, T mask2) ATOM_NOEXCEPT -> T {
  * @throws BitManipulationException if position is negative or exceeds bit width
  */
 template <UnsignedIntegral T>
-constexpr auto splitMask(T mask, int32_t position) -> std::pair<T, T> {
+constexpr auto splitMask(T mask, i32 position) -> std::pair<T, T> {
     constexpr int max_bits = std::numeric_limits<T>::digits;
 
     if (position < 0 || position > max_bits) [[unlikely]] {
@@ -337,54 +339,54 @@ constexpr auto toggleBit(T value, int position) -> T {
  *
  * @param data Pointer to the data array.
  * @param size Size of the array in bytes.
- * @return uint64_t Total count of set bits.
+ * @return u64 Total count of set bits.
  */
-inline auto countBitsParallel(const uint8_t* data, size_t size) -> uint64_t {
-    constexpr size_t PARALLEL_THRESHOLD = 1024;
+inline auto countBitsParallel(const u8* data, usize size) -> u64 {
+    constexpr usize PARALLEL_THRESHOLD = 1024;
 
     if (size < PARALLEL_THRESHOLD) {
-        uint64_t count = 0;
-        for (size_t i = 0; i < size; ++i) {
+        u64 count = 0;
+        for (usize i = 0; i < size; ++i) {
             count += std::popcount(data[i]);
         }
         return count;
     }
 
-    const size_t num_threads = std::min(std::thread::hardware_concurrency(),
-                                        static_cast<unsigned>(16));
-    const size_t chunk_size = (size + num_threads - 1) / num_threads;
+    const usize num_threads = std::min(std::thread::hardware_concurrency(),
+                                       static_cast<unsigned>(16));
+    const usize chunk_size = (size + num_threads - 1) / num_threads;
 
-    std::vector<std::future<uint64_t>> futures;
+    std::vector<std::future<u64>> futures;
     futures.reserve(num_threads);
 
-    for (size_t t = 0; t < num_threads; ++t) {
-        size_t begin = t * chunk_size;
-        size_t end = std::min(begin + chunk_size, size);
+    for (usize t = 0; t < num_threads; ++t) {
+        usize begin = t * chunk_size;
+        usize end = std::min(begin + chunk_size, size);
 
         if (begin >= size)
             break;
 
         futures.push_back(
-            std::async(std::launch::async, [data, begin, end]() -> uint64_t {
-                uint64_t count = 0;
+            std::async(std::launch::async, [data, begin, end]() -> u64 {
+                u64 count = 0;
 
 #ifdef __AVX2__
-                for (size_t i = begin; i + 32 <= end; i += 32) {
+                const usize vectorized_end = begin + ((end - begin) / 32) * 32;
+                for (usize i = begin; i < vectorized_end; i += 32) {
                     __m256i chunk = _mm256_loadu_si256(
                         reinterpret_cast<const __m256i*>(data + i));
 
                     for (int j = 0; j < 32; j++) {
-                        count += std::popcount(static_cast<uint8_t>(
-                            _mm256_extract_epi8(chunk, j)));
+                        count += std::popcount(
+                            static_cast<u8>(_mm256_extract_epi8(chunk, j)));
                     }
                 }
 
-                for (size_t i = begin + ((end - begin) / 32) * 32; i < end;
-                     ++i) {
+                for (usize i = vectorized_end; i < end; ++i) {
                     count += std::popcount(data[i]);
                 }
 #else
-                for (size_t i = begin; i < end; ++i) {
+                for (usize i = begin; i < end; ++i) {
                     count += std::popcount(data[i]);
                 }
 #endif
@@ -392,7 +394,7 @@ inline auto countBitsParallel(const uint8_t* data, size_t size) -> uint64_t {
             }));
     }
 
-    uint64_t total_count = 0;
+    u64 total_count = 0;
     for (auto& future : futures) {
         try {
             total_count += future.get();
@@ -453,7 +455,7 @@ template <UnsignedIntegral T, typename Op>
 auto parallelBitOp(std::span<const T> input, Op op) -> std::vector<T> {
     std::vector<T> result(input.size());
 
-    constexpr size_t PARALLEL_THRESHOLD = 1024;
+    constexpr usize PARALLEL_THRESHOLD = 1024;
 
     if (input.size() < PARALLEL_THRESHOLD) {
         std::ranges::transform(input, result.begin(), op);
@@ -464,23 +466,23 @@ auto parallelBitOp(std::span<const T> input, Op op) -> std::vector<T> {
     std::transform(std::execution::par_unseq, input.begin(), input.end(),
                    result.begin(), op);
 #else
-    const size_t num_threads = std::min(std::thread::hardware_concurrency(),
-                                        static_cast<unsigned>(16));
-    const size_t chunk_size = (input.size() + num_threads - 1) / num_threads;
+    const usize num_threads = std::min(std::thread::hardware_concurrency(),
+                                       static_cast<unsigned>(16));
+    const usize chunk_size = (input.size() + num_threads - 1) / num_threads;
 
     std::vector<std::future<void>> futures;
     futures.reserve(num_threads);
 
-    for (size_t t = 0; t < num_threads; ++t) {
-        size_t begin = t * chunk_size;
-        size_t end = std::min(begin + chunk_size, input.size());
+    for (usize t = 0; t < num_threads; ++t) {
+        usize begin = t * chunk_size;
+        usize end = std::min(begin + chunk_size, input.size());
 
         if (begin >= input.size())
             break;
 
         futures.push_back(
             std::async(std::launch::async, [&input, &result, begin, end, op]() {
-                for (size_t i = begin; i < end; ++i) {
+                for (usize i = begin; i < end; ++i) {
                     result[i] = op(input[i]);
                 }
             }));

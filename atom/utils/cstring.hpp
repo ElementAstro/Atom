@@ -212,26 +212,27 @@ constexpr auto concat(const char (&str1)[N1], const char (&str2)[N2]) {
 template <std::size_t N>
 constexpr auto trim(const char (&str)[N]) {
     std::array<char, N> result{};
+    constexpr auto WHITESPACE = " \t\n\r\f\v"sv;
 
-    auto view = std::string_view(str);
+    auto view = std::string_view(str, N - 1);
+    auto start = view.find_first_not_of(WHITESPACE);
 
-    auto start = view.find_first_not_of(' ');
     if (start == std::string_view::npos) {
-        result[0] = '\0';  // If the string contains only spaces, return an
-                           // empty string.
+        result[0] = '\0';
         return result;
     }
 
-    auto end = view.find_last_not_of(' ');
+    auto end = view.find_last_not_of(WHITESPACE);
+    auto length = end - start + 1;
 
-    std::ranges::copy(view.substr(start, end - start + 1), result.begin());
-
-    result[end - start + 1] = '\0';
+    std::copy_n(view.data() + start, length, result.begin());
+    result[length] = '\0';
 
     return result;
 }
 
-/*/ * @brief Extracts a substring from a C-style string.
+/**
+ * @brief Extracts a substring from a C-style string.
  *
  * This function extracts a substring of a specified length from a C-style
  * string, starting at a given index, and returns the new substring.
@@ -368,43 +369,23 @@ constexpr int BASE_16 = 16;
 constexpr int MIN_DIGIT = 10;
 
 /**
- * @brief Converts a character array to another array at compile-time.
+ * @brief Converts a character array to another array.
  *
- * This function creates a copy of the input character array at compile-time.
- * Useful for constexpr contexts.
+ * This function creates a copy of the input character array using
+ * optimized copy operations.
  *
  * @tparam N The size of the input character array.
  * @param input The input character array to be copied.
  * @return std::array<char, N> A new character array with the same content.
  */
 template <size_t N>
-constexpr auto charArrayToArrayConstexpr(const std::array<char, N>& input)
+constexpr auto charArrayToArray(const std::array<char, N>& input)
     -> std::array<char, N> {
     std::array<char, N> result{};
-    for (size_t i = 0; i < N; ++i) {
-        result[i] = input[i];
-    }
+    std::copy(input.begin(), input.end(), result.begin());
     return result;
 }
 
-/**
- * @brief Converts a character array to another array at runtime.
- *
- * This function creates a copy of the input character array at runtime.
- * Functionally identical to the constexpr version but designed for runtime use.
- *
- * @tparam N The size of the input character array.
- * @param input The input character array to be copied.
- * @return std::array<char, N> A new character array with the same content.
- */
-template <size_t N>
-auto charArrayToArray(const std::array<char, N>& input) -> std::array<char, N> {
-    std::array<char, N> result{};
-    std::copy_n(input.begin(), N, result.begin());
-    return result;
-}
-
-// Rest of the functions remain the same
 template <size_t N>
 constexpr auto isNegative(const std::array<char, N>& arr) -> bool {
     if constexpr (N > 1) {
@@ -414,8 +395,8 @@ constexpr auto isNegative(const std::array<char, N>& arr) -> bool {
 }
 
 template <size_t N>
-constexpr auto arrayToInt(const std::array<char, N>& arr,
-                          int base = BASE_10) -> int {
+constexpr auto arrayToInt(const std::array<char, N>& arr, int base = BASE_10)
+    -> int {
     int result = 0;
     const char* begin = arr.data();
     const char* end = arr.data() + arr.size();
@@ -430,8 +411,8 @@ constexpr auto absoluteValue(const std::array<char, N>& arr) -> int {
 }
 
 template <size_t N>
-auto convertBase(const std::array<char, N>& arr, int from_base,
-                 int to_base) -> std::string {
+auto convertBase(const std::array<char, N>& arr, int from_base, int to_base)
+    -> std::string {
     int value = arrayToInt(arr, from_base);
     std::string result;
 

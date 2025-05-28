@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <optional>
 #include <ranges>
 #include <sstream>
 #include <vector>
@@ -75,46 +76,6 @@ template <typename Container>
 auto toHashSet(const Container& container) {
     return HashSet<typename Container::value_type>(container.begin(),
                                                    container.end());
-}
-
-/**
- * @brief Checks subset relationship using linear search (less efficient).
- * @example
- *   Vector<int> a = {1, 2};
- *   Vector<int> b = {1, 2, 3};
- *   bool result = isSubsetLinearSearch(a, b); // returns true
- */
-template <typename Container1, typename Container2>
-    requires std::ranges::input_range<Container1> &&
-             std::ranges::input_range<Container2> &&
-             std::equality_comparable_with<typename Container1::value_type,
-                                           typename Container2::value_type>
-constexpr auto isSubsetLinearSearch(const Container1& subset,
-                                    const Container2& superset) -> bool {
-    return std::ranges::all_of(subset, [&superset](const auto& elem) {
-        return contains(superset, elem);
-    });
-}
-
-/**
- * @brief Checks subset relationship using HashSet (more efficient).
- * @example
- *   Vector<int> a = {1, 2};
- *   Vector<int> b = {1, 2, 3, 4};
- *   bool result = isSubsetWithHashSet(a, b); // returns true
- */
-template <typename Container1, typename Container2>
-    requires std::ranges::input_range<Container1> &&
-             std::ranges::input_range<Container2> &&
-             std::equality_comparable_with<typename Container1::value_type,
-                                           typename Container2::value_type> &&
-             std::regular<typename Container2::value_type>
-auto isSubsetWithHashSet(const Container1& subset, const Container2& superset)
-    -> bool {
-    auto supersetSet = toHashSet(superset);
-    return std::ranges::all_of(subset, [&supersetSet](const auto& elem) {
-        return supersetSet.contains(elem);
-    });
 }
 
 /**
@@ -223,7 +184,7 @@ constexpr auto isEqual(const Container1& container1,
     if (container1.size() != container2.size()) {
         return false;
     }
-    return isSubsetWithHashSet(container1, container2);
+    return isSubset(container1, container2);
 }
 
 /**
@@ -269,23 +230,6 @@ auto transformToVector(const Container& source, MemberFunc memberFunc) {
     }
 
     return result;
-}
-
-/**
- * @brief Creates unique map from container of pairs.
- * @example
- *   Vector<std::pair<int, string>> pairs = {{1,"a"}, {1,"b"}, {2,"c"}};
- *   auto uniqueMap = unique(pairs); // returns map with {1:"b", 2:"c"}
- */
-template <typename MapContainer>
-    requires std::ranges::input_range<MapContainer> && requires {
-        typename MapContainer::key_type;
-        typename MapContainer::mapped_type;
-    }
-auto unique(const MapContainer& container) {
-    HashMap<typename MapContainer::key_type, typename MapContainer::mapped_type>
-        map(container.begin(), container.end());
-    return map;
 }
 
 /**

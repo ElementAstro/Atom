@@ -74,19 +74,16 @@ auto ElapsedTimer::currentTimeMs() noexcept -> int64_t {
                    Clock::now().time_since_epoch())
             .count();
     } catch (...) {
-        // In case of any unexpected error, return 0
         return 0;
     }
 }
 
 auto ElapsedTimer::operator<=>(const ElapsedTimer& other) const noexcept
     -> std::strong_ordering {
-    // If both timers are invalid, they are considered equal
     if (!isValid() && !other.isValid()) {
         return std::strong_ordering::equal;
     }
 
-    // An invalid timer is considered less than a valid one
     if (!isValid()) {
         return std::strong_ordering::less;
     }
@@ -95,7 +92,6 @@ auto ElapsedTimer::operator<=>(const ElapsedTimer& other) const noexcept
         return std::strong_ordering::greater;
     }
 
-    // Compare the actual start times
     if (start_time_.value() < other.start_time_.value()) {
         return std::strong_ordering::less;
     } else if (start_time_.value() > other.start_time_.value()) {
@@ -107,7 +103,6 @@ auto ElapsedTimer::operator<=>(const ElapsedTimer& other) const noexcept
 
 auto ElapsedTimer::operator==(const ElapsedTimer& other) const noexcept
     -> bool {
-    // Two timers are equal if they are both invalid or have the same start time
     if (!isValid() && !other.isValid()) {
         return true;
     }
@@ -125,7 +120,6 @@ Timer::~Timer() {
     try {
         stop();
     } catch (...) {
-        // 确保析构函数不会抛出异常
     }
 }
 
@@ -137,11 +131,9 @@ Timer::Timer(Timer&& other) noexcept {
     is_single_shot_ = other.is_single_shot_.load();
     precision_mode_ = other.precision_mode_.load();
 
-    // 确保其他计时器不会执行任何操作
     other.is_active_ = false;
     other.should_stop_ = true;
 
-    // 不移动线程，因为线程不可移动
     if (other.timer_thread_.joinable()) {
         other.timer_thread_.join();
     }
@@ -155,7 +147,6 @@ Timer& Timer::operator=(Timer&& other) noexcept {
         try {
             stop();
         } catch (...) {
-            // 确保移动赋值不会抛出异常
         }
 
         std::lock_guard<std::mutex> lock(other.timer_mutex_);
@@ -165,7 +156,6 @@ Timer& Timer::operator=(Timer&& other) noexcept {
         is_single_shot_ = other.is_single_shot_.load();
         precision_mode_ = other.precision_mode_.load();
 
-        // 确保其他计时器不会执行任何操作
         other.is_active_ = false;
         other.should_stop_ = true;
 
@@ -227,7 +217,6 @@ void Timer::start() {
             "Cannot start timer without callback function");
     }
 
-    // 停止现有计时器线程（如果活动）
     if (is_active_) {
         should_stop_ = true;
         if (timer_thread_.joinable()) {
@@ -235,11 +224,9 @@ void Timer::start() {
         }
     }
 
-    // 重置标志
     should_stop_ = false;
     is_active_ = true;
 
-    // 设置下一次超时
     next_timeout_ = Clock::now() + std::chrono::milliseconds(interval_);
 
     try {
@@ -314,49 +301,38 @@ auto Timer::remainingTime() const -> int64_t {
 }
 
 void Timer::timerLoop() {
+    constexpr auto MIN_SLEEP = std::chrono::milliseconds(1);
+    constexpr auto COARSE_SLEEP = std::chrono::milliseconds(15);
+
     while (!should_stop_.load()) {
         auto now = Clock::now();
 
-        // 检查是否应该触发回调
         if (next_timeout_.has_value() && now >= next_timeout_.value()) {
-            // 调用回调
             try {
                 callback_();
-            } catch (const std::exception& e) {
-                // 记录异常但不重新抛出，以避免终止计时器线程
-                // 在实际应用中，可能需要添加日志记录
             } catch (...) {
-                // 处理非标准异常
             }
 
-            // 如果是单次触发计时器，则停止
             if (is_single_shot_.load()) {
                 is_active_ = false;
                 break;
             }
 
-            // 否则更新下一个超时时间
             next_timeout_ = now + std::chrono::milliseconds(interval_.load());
         }
 
-        // 根据精度模式决定休眠时间
         if (precision_mode_ == PrecisionMode::PRECISE) {
-            // 精确模式：短时间休眠以实现更好的精度
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            std::this_thread::sleep_for(MIN_SLEEP);
         } else {
-            // 粗略模式：更长时间休眠以降低CPU使用率
             auto sleep_time =
-                std::min(std::chrono::milliseconds(15),
+                std::min(COARSE_SLEEP,
                          std::chrono::duration_cast<std::chrono::milliseconds>(
-                             next_timeout_.value_or(
-                                 now + std::chrono::milliseconds(15)) -
-                             now));
+                             next_timeout_.value_or(now + COARSE_SLEEP) - now));
 
             if (sleep_time.count() > 0) {
                 std::this_thread::sleep_for(sleep_time);
             } else {
-                // 为了避免CPU饱和，即使在零睡眠时间的情况下也进行最小休眠
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                std::this_thread::sleep_for(MIN_SLEEP);
             }
         }
     }

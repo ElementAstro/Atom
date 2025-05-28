@@ -41,18 +41,21 @@ struct LapStatistics {
     double standardDev;  ///< Standard deviation of lap times
     size_t count;        ///< Number of laps
 
-    // Allow constexpr construction for compile-time statistics
     constexpr LapStatistics(double min = 0.0, double max = 0.0,
                             double avg = 0.0, double std = 0.0, size_t cnt = 0)
         : min(min), max(max), average(avg), standardDev(std), count(cnt) {}
 };
 
-// Concept for valid callback functions
+/**
+ * @brief Concept for valid callback functions
+ */
 template <typename T>
 concept ValidCallback =
     std::invocable<T> && std::same_as<std::invoke_result_t<T>, void>;
 
-// Error codes for StopWatcher operations
+/**
+ * @brief Error codes for StopWatcher operations
+ */
 enum class StopWatcherError {
     AlreadyRunning,
     NotRunning,
@@ -92,7 +95,6 @@ public:
      */
     ~StopWatcher();
 
-    // Delete copy operations to prevent resource sharing
     StopWatcher(const StopWatcher&) = delete;
     auto operator=(const StopWatcher&) -> StopWatcher& = delete;
 
@@ -203,8 +205,7 @@ public:
     /**
      * @brief Registers a callback to be called after specified time
      * @param callback Function to be called
-     * @param milliseconds Time in milliseconds after which callback should
-     * trigger
+     * @param milliseconds Time in milliseconds after which callback should trigger
      * @return std::expected<void, StopWatcherError> Success or error code
      * @note Thread-safe
      */
@@ -217,8 +218,7 @@ public:
 
     /**
      * @brief Records current time as a lap time
-     * @return std::expected<double, StopWatcherError> The recorded lap time in
-     * milliseconds or error
+     * @return std::expected<double, StopWatcherError> The recorded lap time in milliseconds or error
      * @note Thread-safe
      */
     [[nodiscard]] auto lap() -> std::expected<double, StopWatcherError>;
@@ -253,10 +253,8 @@ public:
     /**
      * @brief Creates a nested child stopwatch
      * @param name Name for the child stopwatch
-     * @return std::unique_ptr<StopWatcher> A new stopwatch instance that is
-     * logically a child
-     * @note The parent-child relationship is used for hierarchical timing and
-     * reporting
+     * @return std::unique_ptr<StopWatcher> A new stopwatch instance that is logically a child
+     * @note The parent-child relationship is used for hierarchical timing and reporting
      */
     [[nodiscard]] auto createChildStopWatch(std::string_view name)
         -> std::unique_ptr<StopWatcher>;
@@ -270,30 +268,22 @@ public:
     /**
      * @brief Creates a stopwatch from serialized JSON data
      * @param json JSON string with timing data
-     * @return std::unique_ptr<StopWatcher> New stopwatch initialized with the
-     * data
+     * @return std::unique_ptr<StopWatcher> New stopwatch initialized with the data
      */
     [[nodiscard]] static auto fromJson(std::string_view json)
         -> std::unique_ptr<StopWatcher>;
 
 private:
     class Impl;
-    std::unique_ptr<Impl> impl_;  ///< Implementation pointer (PIMPL idiom)
+    std::unique_ptr<Impl> impl_;
 
-    /**
-     * @brief Protected method to add a lap time during deserialization
-     * @param lapTime The lap time to add in milliseconds
-     * @note This method should only be used during deserialization
-     */
     void addLapTimeForDeserialization(double lapTime);
-
     auto registerCallbackImpl(std::function<void()> callback, int milliseconds)
         -> std::expected<void, StopWatcherError>;
 };
 
 /**
- * @brief RAII helper that automatically starts timing on construction and stops
- * on destruction
+ * @brief RAII helper that automatically starts timing on construction and stops on destruction
  */
 class ScopedStopWatch {
 public:

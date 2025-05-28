@@ -58,15 +58,10 @@ concept RandomDistribution = requires(T dist, std::mt19937& gen) {
 template <RandomEngine Engine, RandomDistribution Distribution>
 class Random {
 public:
-    using EngineType = Engine;  ///< Public type alias for the engine.
-    using DistributionType =
-        Distribution;  ///< Public type alias for the distribution.
-    using ResultType =
-        typename DistributionType::result_type;  ///< Result type produced by
-                                                 ///< the distribution.
-    using ParamType =
-        typename DistributionType::param_type;  ///< Parameter type for the
-                                                ///< distribution.
+    using EngineType = Engine;
+    using DistributionType = Distribution;
+    using ResultType = typename DistributionType::result_type;
+    using ParamType = typename DistributionType::param_type;
 
     template <typename T, typename = void>
     struct is_seedable : std::false_type {};
@@ -79,8 +74,8 @@ public:
     static constexpr bool is_seedable_v = is_seedable<T>::value;
 
 private:
-    EngineType engine_;              ///< Instance of the engine.
-    DistributionType distribution_;  ///< Instance of the distribution.
+    EngineType engine_;
+    DistributionType distribution_;
 
 public:
     /**
@@ -114,7 +109,7 @@ public:
     template <typename... Args>
         requires(!std::is_same_v<std::tuple<ResultType, ResultType>,
                                  std::tuple<std::decay_t<Args>...>> &&
-                 (sizeof...(Args) != 1 ||  // Either not exactly one argument
+                 (sizeof...(Args) != 1 ||
                   !std::is_convertible_v<
                       std::tuple_element_t<0,
                                            std::tuple<std::decay_t<Args>...>>,
@@ -257,12 +252,13 @@ public:
  *
  * @param length Length of the string to generate
  * @param charset Optional character set to use (defaults to alphanumeric)
+ * @param secure Whether to use secure random generation (default: false)
  * @return std::string Random string
  * @throws InvalidArgumentException if length is invalid
  */
 [[nodiscard]] auto generateRandomString(int length,
-                                        const std::string& charset = "")
-    -> std::string;
+                                        const std::string& charset = "",
+                                        bool secure = false) -> std::string;
 
 /**
  * @brief Shuffle elements in a container using a secure random generator

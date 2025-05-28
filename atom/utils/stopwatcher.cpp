@@ -1,20 +1,20 @@
 #include "stopwatcher.hpp"
 
-#include <algorithm>  // std::ranges
-#include <atomic>     // std::atomic for thread-safe operations
+#include <algorithm>
+#include <atomic>
 #include <chrono>
-#include <cmath>  // std::sqrt for standard deviation
+#include <cmath>
 #include <execution>
 #include <format>
 #include <iomanip>
 #include <mutex>
 #include <numeric>
-#include <ranges>  // C++20 ranges
+#include <ranges>
 #include <shared_mutex>
 #include <sstream>
 #include <vector>
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 #include "atom/type/json.hpp"
 
 namespace atom::utils {
@@ -25,19 +25,19 @@ using namespace std::literals::chrono_literals;
 ScopedStopWatch::ScopedStopWatch(std::string_view name) : stopwatch_(name) {
     auto result = stopwatch_.start();
     if (!result) {
-        LOG_F(WARNING, "Failed to start ScopedStopWatch: {}",
-              static_cast<int>(result.error()));
+        spdlog::warn("Failed to start ScopedStopWatch: {}",
+                     static_cast<int>(result.error()));
     }
 }
 
 ScopedStopWatch::~ScopedStopWatch() {
     auto result = stopwatch_.stop();
     if (result) {
-        LOG_F(INFO, "ScopedStopWatch '{}' completed in {} ms",
-              stopwatch_.getName(), stopwatch_.elapsedMilliseconds());
+        spdlog::info("ScopedStopWatch '{}' completed in {} ms",
+                     stopwatch_.getName(), stopwatch_.elapsedMilliseconds());
     } else {
-        LOG_F(WARNING, "Failed to stop ScopedStopWatch: {}",
-              static_cast<int>(result.error()));
+        spdlog::warn("Failed to stop ScopedStopWatch: {}",
+                     static_cast<int>(result.error()));
     }
 }
 
@@ -48,27 +48,28 @@ auto ScopedStopWatch::getStopWatcher() const -> const StopWatcher& {
 // Implementation of StopWatcher
 class StopWatcher::Impl {
 public:
-    Impl(std::string_view name) : name_(name) {
+    explicit Impl(std::string_view name) : name_(name) {
+        lapTimes_.reserve(128);
+        intervals_.reserve(64);
         try {
-            LOG_F(INFO, "StopWatcher '{}' initialized", name_);
+            spdlog::info("StopWatcher '{}' initialized", name_);
         } catch (...) {
-            // Ensure constructor doesn't throw, but log failure is non-fatal
         }
     }
 
     // Helper method for deserialization
     void addLapTime(double lapTime) {
-        std::unique_lock<std::shared_mutex> lock(mutex_);
+        std::unique_lock lock(mutex_);
         lapTimes_.push_back(lapTime);
     }
 
     ~Impl() { stopAutoLapThread(); }
 
     [[nodiscard]] auto start() -> std::expected<void, StopWatcherError> {
-        std::unique_lock<std::shared_mutex> lock(mutex_);
+        std::unique_lock lock(mutex_);
         try {
             if (state_ == StopWatcherState::Running) {
-                LOG_F(WARNING, "StopWatcher '{}' already running", name_);
+                spdlog::warn("StopWatcher '{}' already running", name_);
                 return std::unexpected(StopWatcherError::AlreadyRunning);
             }
 
@@ -80,7 +81,7 @@ public:
                 lapTimes_.clear();
                 intervals_.push_back(startTime_);
                 totalPausedTime_ = Duration::zero();
-                LOG_F(INFO, "StopWatcher '{}' started", name_);
+                spdlog::info("StopWatcher '{}' started", name_);
 
                 // Restart auto-lap thread if it was previously enabled
                 if (autoLapInterval_ > 0) {
@@ -89,19 +90,19 @@ public:
             }
             return {};
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Error starting StopWatcher '{}': {}", name_,
-                  e.what());
+            spdlog::error("Error starting StopWatcher '{}': {}", name_,
+                          e.what());
             THROW_STOPWATCHER_EXCEPTION(
                 std::format("Failed to start StopWatcher: {}", e.what()));
         }
     }
 
     [[nodiscard]] auto stop() -> std::expected<void, StopWatcherError> {
-        std::unique_lock<std::shared_mutex> lock(mutex_);
+        std::unique_lock lock(mutex_);
         try {
             if (state_ != StopWatcherState::Running) {
-                LOG_F(WARNING, "Attempted to stop non-running StopWatcher '{}'",
-                      name_);
+                spdlog::warn("Attempted to stop non-running StopWatcher '{}'",
+                             name_);
                 return std::unexpected(StopWatcherError::NotRunning);
             }
 
@@ -123,30 +124,30 @@ public:
                         startTime_ + std::chrono::milliseconds(interval);
                     if (stopTime >= targetTime) {
                         callback();
-                        LOG_F(INFO, "Callback executed at {} ms", interval);
+                        spdlog::info("Callback executed at {} ms", interval);
                     }
                 } catch (const std::exception& e) {
-                    LOG_F(ERROR, "Callback execution failed: {}", e.what());
+                    spdlog::error("Callback execution failed: {}", e.what());
                 }
             }
 
-            LOG_F(INFO, "StopWatcher '{}' stopped. Total time: {:.3f} ms",
-                  name_, elapsedMillisecondsInternal());
+            spdlog::info("StopWatcher '{}' stopped. Total time: {:.3f} ms",
+                         name_, elapsedMillisecondsInternal());
             return {};
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Error stopping StopWatcher '{}': {}", name_,
-                  e.what());
+            spdlog::error("Error stopping StopWatcher '{}': {}", name_,
+                          e.what());
             THROW_STOPWATCHER_EXCEPTION("Failed to stop StopWatcher: {}",
                                         e.what());
         }
     }
 
     [[nodiscard]] auto pause() -> std::expected<void, StopWatcherError> {
-        std::unique_lock<std::shared_mutex> lock(mutex_);
+        std::unique_lock lock(mutex_);
         try {
             if (state_ != StopWatcherState::Running) {
-                LOG_F(WARNING,
-                      "Attempted to pause non-running StopWatcher '{}'", name_);
+                spdlog::warn("Attempted to pause non-running StopWatcher '{}'",
+                             name_);
                 return std::unexpected(StopWatcherError::NotRunning);
             }
 
@@ -157,22 +158,23 @@ public:
             // Pause auto-lap thread
             isAutoLapActive_.store(false, std::memory_order_relaxed);
 
-            LOG_F(INFO, "StopWatcher '{}' paused at {:.3f} ms", name_,
-                  elapsedMillisecondsInternal());
+            spdlog::info("StopWatcher '{}' paused at {:.3f} ms", name_,
+                         elapsedMillisecondsInternal());
             return {};
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Error pausing StopWatcher '{}': {}", name_, e.what());
+            spdlog::error("Error pausing StopWatcher '{}': {}", name_,
+                          e.what());
             THROW_STOPWATCHER_EXCEPTION(
                 std::format("Failed to pause StopWatcher: {}", e.what()));
         }
     }
 
     [[nodiscard]] auto resume() -> std::expected<void, StopWatcherError> {
-        std::unique_lock<std::shared_mutex> lock(mutex_);
+        std::unique_lock lock(mutex_);
         try {
             if (state_ != StopWatcherState::Paused) {
-                LOG_F(WARNING,
-                      "Attempted to resume non-paused StopWatcher '{}'", name_);
+                spdlog::warn("Attempted to resume non-paused StopWatcher '{}'",
+                             name_);
                 return std::unexpected(StopWatcherError::NotPaused);
             }
 
@@ -186,18 +188,18 @@ public:
                 isAutoLapActive_.store(true, std::memory_order_relaxed);
             }
 
-            LOG_F(INFO, "StopWatcher '{}' resumed", name_);
+            spdlog::info("StopWatcher '{}' resumed", name_);
             return {};
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Error resuming StopWatcher '{}': {}", name_,
-                  e.what());
+            spdlog::error("Error resuming StopWatcher '{}': {}", name_,
+                          e.what());
             THROW_STOPWATCHER_EXCEPTION(
                 std::format("Failed to resume StopWatcher: {}", e.what()));
         }
     }
 
     void reset() {
-        std::unique_lock<std::shared_mutex> lock(mutex_);
+        std::unique_lock lock(mutex_);
         try {
             // Stop auto-lap thread
             stopAutoLapThread();
@@ -211,21 +213,21 @@ public:
             // Clear child stopwatches
             childStopWatches_.clear();
 
-            LOG_F(INFO, "StopWatcher '{}' reset", name_);
+            spdlog::info("StopWatcher '{}' reset", name_);
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Error resetting StopWatcher '{}': {}", name_,
-                  e.what());
+            spdlog::error("Error resetting StopWatcher '{}': {}", name_,
+                          e.what());
             THROW_STOPWATCHER_EXCEPTION(
                 std::format("Failed to reset StopWatcher: {}", e.what()));
         }
     }
 
     [[nodiscard]] auto lap() -> std::expected<double, StopWatcherError> {
-        std::unique_lock<std::shared_mutex> lock(mutex_);
+        std::unique_lock lock(mutex_);
         try {
             if (state_ != StopWatcherState::Running) {
-                LOG_F(WARNING,
-                      "Cannot record lap: StopWatcher '{}' not running", name_);
+                spdlog::warn("Cannot record lap: StopWatcher '{}' not running",
+                             name_);
                 return std::unexpected(StopWatcherError::NotRunning);
             }
 
@@ -234,10 +236,10 @@ public:
                                lapTime - startTime_ - totalPausedTime_)
                                .count();
             lapTimes_.push_back(elapsed);
-            LOG_F(INFO, "Lap recorded for '{}': {:.3f} ms", name_, elapsed);
+            spdlog::info("Lap recorded for '{}': {:.3f} ms", name_, elapsed);
             return elapsed;
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Error recording lap for '{}': {}", name_, e.what());
+            spdlog::error("Error recording lap for '{}': {}", name_, e.what());
             THROW_STOPWATCHER_EXCEPTION(
                 std::format("Failed to record lap: {}", e.what()));
         }
@@ -254,17 +256,17 @@ public:
     }
 
     [[nodiscard]] double elapsedMilliseconds() const {
-        std::shared_lock<std::shared_mutex> lock(mutex_);
+        std::shared_lock lock(mutex_);
         return elapsedMillisecondsInternal();
     }
 
     [[nodiscard]] double elapsedSeconds() const {
-        std::shared_lock<std::shared_mutex> lock(mutex_);
+        std::shared_lock lock(mutex_);
         return elapsedMillisecondsInternal() / K_MILLISECONDS_PER_SECOND;
     }
 
     [[nodiscard]] std::string elapsedFormatted() const {
-        std::shared_lock<std::shared_mutex> lock(mutex_);
+        std::shared_lock lock(mutex_);
         auto totalMilliseconds = elapsedMillisecondsInternal();
 
         try {
@@ -308,17 +310,17 @@ public:
     }
 
     [[nodiscard]] StopWatcherState getState() const {
-        std::shared_lock<std::shared_mutex> lock(mutex_);
+        std::shared_lock lock(mutex_);
         return state_;
     }
 
     [[nodiscard]] std::span<const double> getLapTimes() const {
-        std::shared_lock<std::shared_mutex> lock(mutex_);
+        std::shared_lock lock(mutex_);
         return std::span<const double>(lapTimes_);
     }
 
     [[nodiscard]] LapStatistics getLapStatistics() const {
-        std::shared_lock<std::shared_mutex> lock(mutex_);
+        std::shared_lock lock(mutex_);
 
         if (lapTimes_.empty()) {
             return LapStatistics{};
@@ -364,13 +366,13 @@ public:
 
             return LapStatistics{min, max, avg, stdDev, lapTimes_.size()};
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Error calculating lap statistics: {}", e.what());
+            spdlog::error("Error calculating lap statistics: {}", e.what());
             return LapStatistics{};
         }
     }
 
     [[nodiscard]] double getAverageLapTime() const {
-        std::shared_lock<std::shared_mutex> lock(mutex_);
+        std::shared_lock lock(mutex_);
         if (lapTimes_.empty()) {
             return 0.0;
         }
@@ -386,30 +388,30 @@ public:
                        static_cast<double>(lapTimes_.size());
             }
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Error calculating average lap time: {}", e.what());
+            spdlog::error("Error calculating average lap time: {}", e.what());
             return 0.0;
         }
     }
 
     [[nodiscard]] size_t getLapCount() const {
-        std::shared_lock<std::shared_mutex> lock(mutex_);
+        std::shared_lock lock(mutex_);
         return lapTimes_.size();
     }
 
     [[nodiscard]] auto registerCallback(std::function<void()> callback,
                                         int milliseconds)
         -> std::expected<void, StopWatcherError> {
-        std::unique_lock<std::shared_mutex> lock(mutex_);
+        std::unique_lock lock(mutex_);
         try {
             if (milliseconds < 0) {
-                LOG_F(ERROR, "Invalid callback interval: {} ms", milliseconds);
+                spdlog::error("Invalid callback interval: {} ms", milliseconds);
                 return std::unexpected(StopWatcherError::InvalidInterval);
             }
             callbacks_.emplace_back(std::move(callback), milliseconds);
-            LOG_F(INFO, "Callback registered for {} ms", milliseconds);
+            spdlog::info("Callback registered for {} ms", milliseconds);
             return {};
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Error registering callback: {}", e.what());
+            spdlog::error("Error registering callback: {}", e.what());
             return std::unexpected(StopWatcherError::CallbackFailed);
         }
     }
@@ -417,31 +419,32 @@ public:
     [[nodiscard]] auto enableAutoLap(int intervalMs)
         -> std::expected<void, StopWatcherError> {
         if (intervalMs <= 0) {
-            LOG_F(ERROR, "Invalid auto-lap interval: {} ms", intervalMs);
+            spdlog::error("Invalid auto-lap interval: {} ms", intervalMs);
             return std::unexpected(StopWatcherError::InvalidInterval);
         }
 
-        std::unique_lock<std::shared_mutex> lock(mutex_);
+        std::unique_lock lock(mutex_);
         autoLapInterval_ = intervalMs;
 
         if (state_ == StopWatcherState::Running) {
             startAutoLapThread();
         }
 
-        LOG_F(INFO, "Auto-lap enabled for StopWatcher '{}' with interval {} ms",
-              name_, intervalMs);
+        spdlog::info(
+            "Auto-lap enabled for StopWatcher '{}' with interval {} ms", name_,
+            intervalMs);
         return {};
     }
 
     void disableAutoLap() {
-        std::unique_lock<std::shared_mutex> lock(mutex_);
+        std::unique_lock lock(mutex_);
         stopAutoLapThread();
         autoLapInterval_ = 0;
-        LOG_F(INFO, "Auto-lap disabled for StopWatcher '{}'", name_);
+        spdlog::info("Auto-lap disabled for StopWatcher '{}'", name_);
     }
 
     [[nodiscard]] bool isRunning() const {
-        std::shared_lock<std::shared_mutex> lock(mutex_);
+        std::shared_lock lock(mutex_);
         return state_ == StopWatcherState::Running;
     }
 
@@ -452,7 +455,7 @@ public:
 
     [[nodiscard]] auto createChildStopWatch(std::string_view name)
         -> std::unique_ptr<StopWatcher> {
-        std::unique_lock<std::shared_mutex> lock(mutex_);
+        std::unique_lock lock(mutex_);
 
         std::string childName = std::format("{}:{}", name_, name);
         auto child = std::make_unique<StopWatcher>(childName);
@@ -461,13 +464,13 @@ public:
         childStopWatches_.push_back(std::weak_ptr<StopWatcher>(
             std::shared_ptr<StopWatcher>(child.release())));
 
-        LOG_F(INFO, "Created child StopWatcher '{}' for parent '{}'", childName,
-              name_);
+        spdlog::info("Created child StopWatcher '{}' for parent '{}'",
+                     childName, name_);
         return child;
     }
 
     [[nodiscard]] auto toJson() const -> std::string {
-        std::shared_lock<std::shared_mutex> lock(mutex_);
+        std::shared_lock lock(mutex_);
 
         nlohmann::json j;
         j["name"] = name_;
@@ -518,8 +521,7 @@ private:
     std::atomic<bool> isAutoLapActive_{false};
     std::jthread autoLapThread_;
 
-    mutable std::shared_mutex
-        mutex_;  // Shared mutex for reader-writer lock pattern
+    mutable std::shared_mutex mutex_;
 
     static constexpr int K_MILLISECONDS_PER_SECOND = 1000;
     static constexpr int K_SECONDS_PER_MINUTE = 60;
@@ -537,7 +539,7 @@ private:
 
         // Create a new jthread for auto-lap functionality
         autoLapThread_ = std::jthread([this](std::stop_token stoken) {
-            LOG_F(INFO, "Auto-lap thread started for StopWatcher '{}'", name_);
+            spdlog::info("Auto-lap thread started for StopWatcher '{}'", name_);
 
             while (!stoken.stop_requested()) {
                 std::this_thread::sleep_for(
@@ -550,7 +552,7 @@ private:
 
                 try {
                     // Create a temporary unique_lock only when recording a lap
-                    std::unique_lock<std::shared_mutex> lock(mutex_);
+                    std::unique_lock lock(mutex_);
 
                     if (state_ == StopWatcherState::Running) {
                         auto lapTime = Clock::now();
@@ -561,16 +563,16 @@ private:
                         lapTimes_.push_back(elapsed);
                         lock.unlock();
 
-                        LOG_F(INFO, "Auto-lap recorded for '{}': {:.3f} ms",
-                              name_, elapsed);
+                        spdlog::info("Auto-lap recorded for '{}': {:.3f} ms",
+                                     name_, elapsed);
                     }
                 } catch (const std::exception& e) {
-                    LOG_F(ERROR, "Error in auto-lap for '{}': {}", name_,
-                          e.what());
+                    spdlog::error("Error in auto-lap for '{}': {}", name_,
+                                  e.what());
                 }
             }
 
-            LOG_F(INFO, "Auto-lap thread stopped for StopWatcher '{}'", name_);
+            spdlog::info("Auto-lap thread stopped for StopWatcher '{}'", name_);
         });
     }
 
@@ -688,21 +690,21 @@ auto StopWatcher::fromJson(std::string_view json)
         // If we have lap times, initialize them
         if (j.contains("lap_times") && !j["lap_times"].empty()) {
             sw->reset();
-            [[maybe_unused]] auto temp =
-                sw->start();  // Start to set up the initial state
+            [[maybe_unused]] auto temp = sw->start();
 
             // Just add lap times without actually measuring
             for (const auto& lapTime : j["lap_times"]) {
                 sw->addLapTimeForDeserialization(lapTime.get<double>());
             }
 
-            [[maybe_unused]] auto temp_s = sw->stop();  // Put in stopped state
+            [[maybe_unused]] auto temp_s = sw->stop();
         }
 
-        LOG_F(INFO, "Created StopWatcher '{}' from JSON data", name);
+        spdlog::info("Created StopWatcher '{}' from JSON data", name);
         return sw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error deserializing StopWatcher from JSON: {}", e.what());
+        spdlog::error("Error deserializing StopWatcher from JSON: {}",
+                      e.what());
         THROW_STOPWATCHER_EXCEPTION(
             std::format("Failed to deserialize StopWatcher: {}", e.what()));
     }

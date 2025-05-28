@@ -25,11 +25,9 @@ class GetTimeException : public error::Exception {
     atom::utils::GetTimeException::rethrowNested( \
         ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, __VA_ARGS__)
 
-// Concept for string-like types
 template <typename T>
 concept StringLike = std::convertible_to<T, std::string_view>;
 
-// Forward declarations
 class QDateTime;
 
 /**
@@ -84,7 +82,12 @@ public:
      */
     [[nodiscard]] auto identifier() const noexcept -> std::string_view;
 
-    // Alias for backward compatibility
+    /**
+     * @brief Gets the time zone identifier as a string (alias for backward
+     * compatibility).
+     *
+     * @return The time zone identifier as a string.
+     */
     [[nodiscard]] auto id() const noexcept -> std::string {
         return std::string(identifier());
     }
@@ -175,36 +178,19 @@ public:
      */
     [[nodiscard]] auto isDaylightTime(const QDateTime& dateTime) const -> bool;
 
-    /**
-     * @brief Compares the current `QTimeZone` object with another `QTimeZone`
-     * object.
-     *
-     * @param other The other `QTimeZone` object to compare.
-     *
-     * @return A comparison result: less than, equal to, or greater than the
-     * `other` object.
-     *
-     * This method allows for comparison of `QTimeZone` objects using the
-     * spaceship operator (`<=>`), which supports three-way comparisons.
-     */
     auto operator<=>(const QTimeZone& other) const noexcept = delete;
 
 private:
-    std::string timeZoneId_;   ///< The identifier of the time zone.
-    std::string displayName_;  ///< Cached display name
-    std::optional<std::chrono::seconds>
-        offset_;  ///< Optional time offset from UTC.
+    std::string timeZoneId_;
+    std::string displayName_;
+    std::optional<std::chrono::seconds> offset_;
 
-    // Cache for DST calculations
     mutable std::unordered_map<time_t, bool> dstCache_;
 
-    // Helper method to initialize the timezone
     void initialize();
 };
 
 }  // namespace atom::utils
-
-#endif
 
 #ifndef ATOM_UTILS_QTIMEZONE_TPP
 #define ATOM_UTILS_QTIMEZONE_TPP
@@ -229,3 +215,5 @@ QTimeZone::QTimeZone(TZId&& timeZoneId) {
 }  // namespace atom::utils
 
 #endif  // ATOM_UTILS_QTIMEZONE_TPP
+
+#endif

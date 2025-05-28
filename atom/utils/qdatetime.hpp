@@ -9,11 +9,10 @@
 #include "atom/utils/qtimezone.hpp"
 
 namespace atom::utils {
-class QTimeZone;  // Forward declaration
+class QTimeZone;
 
 /**
- * @brief A class representing a point in time with support for various date and
- * time operations.
+ * @brief A class representing a point in time with support for various date and time operations.
  *
  * The `QDateTime` class provides functionalities to work with dates and times,
  * including creating `QDateTime` objects from strings, converting to and from
@@ -21,32 +20,34 @@ class QTimeZone;  // Forward declaration
  */
 class QDateTime {
 public:
-    /// Type alias for the clock used in this class.
     using Clock = std::chrono::system_clock;
-
-    /// Type alias for time points in the clock's timeline.
     using TimePoint = std::chrono::time_point<Clock>;
 
-    /// Exception class for date-time parsing errors
+    /**
+     * @brief Exception class for date-time parsing errors
+     */
     class ParseError : public std::runtime_error {
     public:
         explicit ParseError(const std::string& message)
             : std::runtime_error(message) {}
     };
 
-    /// Simple struct to represent a date
+    /**
+     * @brief Simple struct to represent a date
+     */
     struct Date {
         int year;
         int month;
         int day;
 
         bool operator==(const Date& other) const {
-            return year == other.year && month == other.month &&
-                   day == other.day;
+            return year == other.year && month == other.month && day == other.day;
         }
     };
 
-    /// Simple struct to represent a time
+    /**
+     * @brief Simple struct to represent a time
+     */
     struct Time {
         int hour;
         int minute;
@@ -84,8 +85,7 @@ public:
               int second = 0, int ms = 0);
 
     /**
-     * @brief Constructs a `QDateTime` object from a date-time string and
-     * format.
+     * @brief Constructs a `QDateTime` object from a date-time string and format.
      *
      * @param dateTimeString The date-time string to parse.
      * @param format The format string to use for parsing the date-time.
@@ -98,8 +98,7 @@ public:
     QDateTime(DateTimeStr&& dateTimeString, FormatStr&& format);
 
     /**
-     * @brief Constructs a `QDateTime` object from a date-time string, format,
-     * and time zone.
+     * @brief Constructs a `QDateTime` object from a date-time string, format, and time zone.
      *
      * @param dateTimeString The date-time string to parse.
      * @param format The format string to use for parsing the date-time.
@@ -118,8 +117,7 @@ public:
      *
      * @return A `QDateTime` object representing the current date and time.
      *
-     * This static method provides the current date and time based on the system
-     * clock.
+     * This static method provides the current date and time based on the system clock.
      */
     static auto currentDateTime() -> QDateTime;
 
@@ -127,71 +125,54 @@ public:
      * @brief Returns the current date and time in the specified time zone.
      *
      * @param timeZone The time zone to use for the current date and time.
-     *
-     * @return A `QDateTime` object representing the current date and time in
-     * the specified time zone.
+     * @return A `QDateTime` object representing the current date and time in the specified time zone.
      */
     static auto currentDateTime(const QTimeZone& timeZone) -> QDateTime;
 
     /**
-     * @brief Constructs a `QDateTime` object from a date-time string and
-     * format.
+     * @brief Constructs a `QDateTime` object from a date-time string and format.
      *
      * @param dateTimeString The date-time string to parse.
      * @param format The format string to use for parsing the date-time.
      * @throws ParseError if the date-time string cannot be parsed.
-     *
-     * @return A `QDateTime` object initialized from the provided date-time
-     * string and format.
+     * @return A `QDateTime` object initialized from the provided date-time string and format.
      */
     template <StringLike DateTimeStr, StringLike FormatStr>
-    static auto fromString(DateTimeStr&& dateTimeString, FormatStr&& format)
-        -> QDateTime;
+    static auto fromString(DateTimeStr&& dateTimeString, FormatStr&& format) -> QDateTime;
 
     /**
-     * @brief Constructs a `QDateTime` object from a date-time string, format,
-     * and time zone.
+     * @brief Constructs a `QDateTime` object from a date-time string, format, and time zone.
      *
      * @param dateTimeString The date-time string to parse.
      * @param format The format string to use for parsing the date-time.
      * @param timeZone The time zone to use for the date-time.
      * @throws ParseError if the date-time string cannot be parsed.
-     *
-     * @return A `QDateTime` object initialized from the provided date-time
-     * string, format, and time zone.
+     * @return A `QDateTime` object initialized from the provided date-time string, format, and time zone.
      */
     template <StringLike DateTimeStr, StringLike FormatStr>
     static auto fromString(DateTimeStr&& dateTimeString, FormatStr&& format,
                            const QTimeZone& timeZone) -> QDateTime;
 
     /**
-     * @brief Converts the `QDateTime` object to a string in the specified
-     * format.
+     * @brief Converts the `QDateTime` object to a string in the specified format.
      *
      * @param format The format string to use for the conversion.
+     * @return A string representation of the `QDateTime` object in the specified format.
      *
-     * @return A string representation of the `QDateTime` object in the
-     * specified format.
-     *
-     * This method converts the `QDateTime` object to a string according to the
-     * provided format.
+     * This method converts the `QDateTime` object to a string according to the provided format.
      */
     template <StringLike FormatStr>
     [[nodiscard]] auto toString(FormatStr&& format) const -> std::string;
 
     /**
-     * @brief Converts the `QDateTime` object to a string in the specified
-     * format and time zone.
+     * @brief Converts the `QDateTime` object to a string in the specified format and time zone.
      *
      * @param format The format string to use for the conversion.
      * @param timeZone The time zone to use for the conversion.
-     *
-     * @return A string representation of the `QDateTime` object in the
-     * specified format and time zone.
+     * @return A string representation of the `QDateTime` object in the specified format and time zone.
      */
     template <StringLike FormatStr>
-    [[nodiscard]] auto toString(FormatStr&& format,
-                                const QTimeZone& timeZone) const -> std::string;
+    [[nodiscard]] auto toString(FormatStr&& format, const QTimeZone& timeZone) const -> std::string;
 
     /**
      * @brief Converts the `QDateTime` object to a `std::time_t` value.
@@ -208,8 +189,7 @@ public:
      *
      * @return `true` if the `QDateTime` object is valid, `false` otherwise.
      *
-     * This method determines whether the `QDateTime` object represents a valid
-     * date and time.
+     * This method determines whether the `QDateTime` object represents a valid date and time.
      */
     [[nodiscard]] auto isValid() const -> bool;
 
@@ -217,9 +197,7 @@ public:
      * @brief Adds a number of days to the `QDateTime` object.
      *
      * @param days The number of days to add.
-     *
-     * @return A new `QDateTime` object representing the date and time after
-     * adding the specified number of days.
+     * @return A new `QDateTime` object representing the date and time after adding the specified number of days.
      *
      * This method creates a new `QDateTime` object by adding the specified
      * number of days to the current `QDateTime` object.
@@ -230,9 +208,7 @@ public:
      * @brief Adds a number of seconds to the `QDateTime` object.
      *
      * @param seconds The number of seconds to add.
-     *
-     * @return A new `QDateTime` object representing the date and time after
-     * adding the specified number of seconds.
+     * @return A new `QDateTime` object representing the date and time after adding the specified number of seconds.
      *
      * This method creates a new `QDateTime` object by adding the specified
      * number of seconds to the current `QDateTime` object.
@@ -240,13 +216,10 @@ public:
     [[nodiscard]] auto addSecs(int seconds) const -> QDateTime;
 
     /**
-     * @brief Computes the number of days between the current `QDateTime` object
-     * and another `QDateTime` object.
+     * @brief Computes the number of days between the current `QDateTime` object and another `QDateTime` object.
      *
      * @param other The other `QDateTime` object to compare.
-     *
-     * @return The number of days between the current `QDateTime` object and the
-     * `other` object.
+     * @return The number of days between the current `QDateTime` object and the `other` object.
      *
      * This method calculates the difference in days between the current
      * `QDateTime` object and the specified `other` object.
@@ -254,13 +227,10 @@ public:
     [[nodiscard]] auto daysTo(const QDateTime& other) const -> int;
 
     /**
-     * @brief Computes the number of seconds between the current `QDateTime`
-     * object and another `QDateTime` object.
+     * @brief Computes the number of seconds between the current `QDateTime` object and another `QDateTime` object.
      *
      * @param other The other `QDateTime` object to compare.
-     *
-     * @return The number of seconds between the current `QDateTime` object and
-     * the `other` object.
+     * @return The number of seconds between the current `QDateTime` object and the `other` object.
      *
      * This method calculates the difference in seconds between the current
      * `QDateTime` object and the specified `other` object.
@@ -271,9 +241,7 @@ public:
      * @brief Adds a number of milliseconds to the `QDateTime` object.
      *
      * @param msecs The number of milliseconds to add.
-     *
-     * @return A new `QDateTime` object representing the date and time after
-     * adding the specified number of milliseconds.
+     * @return A new `QDateTime` object representing the date and time after adding the specified number of milliseconds.
      */
     [[nodiscard]] auto addMSecs(int msecs) const -> QDateTime;
 
@@ -281,11 +249,8 @@ public:
      * @brief Adds a number of months to the `QDateTime` object.
      *
      * @param months The number of months to add.
-     *
-     * @return A new `QDateTime` object representing the date and time after
-     * adding the specified number of months.
-     * @throws std::runtime_error If the month calculation results in an invalid
-     * date.
+     * @return A new `QDateTime` object representing the date and time after adding the specified number of months.
+     * @throws std::runtime_error If the month calculation results in an invalid date.
      */
     [[nodiscard]] auto addMonths(int months) const -> QDateTime;
 
@@ -293,11 +258,8 @@ public:
      * @brief Adds a number of years to the `QDateTime` object.
      *
      * @param years The number of years to add.
-     *
-     * @return A new `QDateTime` object representing the date and time after
-     * adding the specified number of years.
-     * @throws std::runtime_error If the year calculation results in an invalid
-     * date.
+     * @return A new `QDateTime` object representing the date and time after adding the specified number of years.
+     * @throws std::runtime_error If the year calculation results in an invalid date.
      */
     [[nodiscard]] auto addYears(int years) const -> QDateTime;
 
@@ -312,8 +274,7 @@ public:
     /**
      * @brief Gets the time components of the `QDateTime` object.
      *
-     * @return A Time struct containing hour, minute, second, and millisecond
-     * components.
+     * @return A Time struct containing hour, minute, second, and millisecond components.
      * @throws std::logic_error If the `QDateTime` object is invalid.
      */
     [[nodiscard]] auto getTime() const -> Time;
@@ -341,8 +302,7 @@ public:
      * @throws std::invalid_argument If any component is out of range.
      * @throws std::logic_error If the `QDateTime` object is invalid.
      */
-    [[nodiscard]] auto setTime(int hour, int minute, int second,
-                               int ms = 0) const -> QDateTime;
+    [[nodiscard]] auto setTime(int hour, int minute, int second, int ms = 0) const -> QDateTime;
 
     /**
      * @brief Sets the time zone of the `QDateTime` object.
@@ -351,8 +311,7 @@ public:
      * @return A new `QDateTime` object with the specified time zone.
      * @throws std::logic_error If the `QDateTime` object is invalid.
      */
-    [[nodiscard]] auto setTimeZone(const QTimeZone& timeZone) const
-        -> QDateTime;
+    [[nodiscard]] auto setTimeZone(const QTimeZone& timeZone) const -> QDateTime;
 
     /**
      * @brief Gets the time zone of the `QDateTime` object.
@@ -386,8 +345,6 @@ public:
      */
     [[nodiscard]] auto toLocalTime() const -> QDateTime;
 
-    // --- Comparison Operators ---
-
     /**
      * @brief Equality comparison operator.
      * Compares the underlying time points (UTC instants).
@@ -408,8 +365,8 @@ public:
      * @brief Less than comparison operator.
      * Compares the underlying time points (UTC instants).
      * @param other The QDateTime object to compare against.
-     * @return true if this time point is earlier than the other, false
-     * otherwise. Returns false if either object is invalid.
+     * @return true if this time point is earlier than the other, false otherwise.
+     *         Returns false if either object is invalid.
      */
     bool operator<(const QDateTime& other) const;
 
@@ -417,8 +374,8 @@ public:
      * @brief Less than or equal to comparison operator.
      * Compares the underlying time points (UTC instants).
      * @param other The QDateTime object to compare against.
-     * @return true if this time point is earlier than or equal to the other,
-     * false otherwise. Returns false if either object is invalid.
+     * @return true if this time point is earlier than or equal to the other, false otherwise.
+     *         Returns false if either object is invalid.
      */
     bool operator<=(const QDateTime& other) const;
 
@@ -435,35 +392,23 @@ public:
      * @brief Greater than or equal to comparison operator.
      * Compares the underlying time points (UTC instants).
      * @param other The QDateTime object to compare against.
-     * @return true if this time point is later than or equal to the other,
-     * false otherwise. Returns false if either object is invalid.
+     * @return true if this time point is later than or equal to the other, false otherwise.
+     *         Returns false if either object is invalid.
      */
     bool operator>=(const QDateTime& other) const;
 
 private:
-    std::optional<TimePoint>
-        dateTime_;  ///< Optional time point representing the date and time
-    std::optional<QTimeZone>
-        timeZone_;  ///< Optional time zone associated with this datetime
+    std::optional<TimePoint> dateTime_;
+    std::optional<QTimeZone> timeZone_;
 
-    // Helper method to ensure valid datetime
     [[nodiscard]] auto ensureValid() const -> bool;
-
     void ensureValidOrThrow() const;
-
-    // Helper to convert time_point to tm struct based on timezone context
     [[nodiscard]] std::tm toTm() const;
-
-    // Helper method to validate date components
     static void validateDate(int year, int month, int day);
-
-    // Helper method to validate time components
     static void validateTime(int hour, int minute, int second, int ms);
 };
 
 }  // namespace atom::utils
-
-#endif
 
 #ifndef ATOM_UTILS_QDATETIME_TPP
 #define ATOM_UTILS_QDATETIME_TPP
@@ -501,8 +446,7 @@ QDateTime::QDateTime(DateTimeStr&& dateTimeString, FormatStr&& format,
     ss >> std::get_time(&t, fmtStr.c_str());
 
     if (ss.fail()) {
-        throw ParseError("Failed to parse datetime string with timezone: " +
-                         dtStr);
+        throw ParseError("Failed to parse datetime string with timezone: " + dtStr);
     }
 
     auto time = std::mktime(&t) - timeZone.offsetFromUtc(*this).count();
@@ -511,8 +455,7 @@ QDateTime::QDateTime(DateTimeStr&& dateTimeString, FormatStr&& format,
 }
 
 template <StringLike DateTimeStr, StringLike FormatStr>
-auto QDateTime::fromString(DateTimeStr&& dateTimeString, FormatStr&& format)
-    -> QDateTime {
+auto QDateTime::fromString(DateTimeStr&& dateTimeString, FormatStr&& format) -> QDateTime {
     return QDateTime(std::forward<DateTimeStr>(dateTimeString),
                      std::forward<FormatStr>(format));
 }
@@ -543,8 +486,7 @@ auto QDateTime::toString(FormatStr&& format) const -> std::string {
 }
 
 template <StringLike FormatStr>
-auto QDateTime::toString(FormatStr&& format, const QTimeZone& timeZone) const
-    -> std::string {
+auto QDateTime::toString(FormatStr&& format, const QTimeZone& timeZone) const -> std::string {
     if (!dateTime_) {
         return "";
     }
@@ -565,3 +507,5 @@ auto QDateTime::toString(FormatStr&& format, const QTimeZone& timeZone) const
 }  // namespace atom::utils
 
 #endif  // ATOM_UTILS_QDATETIME_TPP
+
+#endif

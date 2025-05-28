@@ -5,7 +5,6 @@
 #include <iostream>
 #include <string_view>
 
-
 namespace atom::utils {
 
 /**
@@ -13,22 +12,22 @@ namespace atom::utils {
  * @details ANSI color escape sequences for terminal text coloring
  */
 enum class ColorCode {
-    Black = 30,          ///< Black color
-    Red = 31,            ///< Red color
-    Green = 32,          ///< Green color
-    Yellow = 33,         ///< Yellow color
-    Blue = 34,           ///< Blue color
-    Magenta = 35,        ///< Magenta color
-    Cyan = 36,           ///< Cyan color
-    White = 37,          ///< White color
-    BrightBlack = 90,    ///< Bright black color (gray)
-    BrightRed = 91,      ///< Bright red color
-    BrightGreen = 92,    ///< Bright green color
-    BrightYellow = 93,   ///< Bright yellow color
-    BrightBlue = 94,     ///< Bright blue color
-    BrightMagenta = 95,  ///< Bright magenta color
-    BrightCyan = 96,     ///< Bright cyan color
-    BrightWhite = 97     ///< Bright white color
+    Black = 30,
+    Red = 31,
+    Green = 32,
+    Yellow = 33,
+    Blue = 34,
+    Magenta = 35,
+    Cyan = 36,
+    White = 37,
+    BrightBlack = 90,
+    BrightRed = 91,
+    BrightGreen = 92,
+    BrightYellow = 93,
+    BrightBlue = 94,
+    BrightMagenta = 95,
+    BrightCyan = 96,
+    BrightWhite = 97
 };
 
 /**
@@ -36,15 +35,15 @@ enum class ColorCode {
  * @details ANSI text formatting attributes for terminal text styling
  */
 enum class TextStyle {
-    Normal = 0,        ///< Normal text style
-    Bold = 1,          ///< Bold text style
-    Dim = 2,           ///< Dimmed text style
-    Italic = 3,        ///< Italic text style
-    Underline = 4,     ///< Underlined text style
-    Blinking = 5,      ///< Blinking text style
-    Reverse = 7,       ///< Reversed colors
-    Hidden = 8,        ///< Hidden text
-    Strikethrough = 9  ///< Strikethrough text
+    Normal = 0,
+    Bold = 1,
+    Dim = 2,
+    Italic = 3,
+    Underline = 4,
+    Blinking = 5,
+    Reverse = 7,
+    Hidden = 8,
+    Strikethrough = 9
 };
 
 /**
@@ -53,6 +52,9 @@ enum class TextStyle {
  * std::format compatibility and integration with atom::utils::print facilities
  */
 class ColorPrinter {
+private:
+    static constexpr const char* RESET_CODE = "\033[0m";
+
 public:
     /**
      * @brief Print text with specified color
@@ -63,7 +65,7 @@ public:
     static void printColored(std::string_view text, ColorCode color,
                              TextStyle style = TextStyle::Normal) {
         std::cout << "\033[" << static_cast<int>(style) << ";"
-                  << static_cast<int>(color) << "m" << text << "\033[0m";
+                  << static_cast<int>(color) << "m" << text << RESET_CODE;
     }
 
     /**
@@ -75,7 +77,7 @@ public:
     static void printColoredLine(std::string_view text, ColorCode color,
                                  TextStyle style = TextStyle::Normal) {
         printColored(text, color, style);
-        std::cout << std::endl;
+        std::cout << '\n';
     }
 
     /**
@@ -88,17 +90,10 @@ public:
     template <typename... Args>
     static void printColored(ColorCode color, TextStyle style,
                              std::string_view fmt, Args&&... args) {
-        try {
-            std::cout << "\033[" << static_cast<int>(style) << ";"
-                      << static_cast<int>(color) << "m"
-                      << std::vformat(fmt, std::make_format_args(
-                                               std::forward<Args>(args)...))
-                      << "\033[0m";
-        } catch (const std::format_error& e) {
-            std::cout << "\033[" << static_cast<int>(TextStyle::Bold) << ";"
-                      << static_cast<int>(ColorCode::Red) << "m"
-                      << "Format error: " << e.what() << "\033[0m";
-        }
+        std::cout << "\033[" << static_cast<int>(style) << ";"
+                  << static_cast<int>(color) << "m"
+                  << std::vformat(fmt, std::make_format_args(args...))
+                  << RESET_CODE;
     }
 
     /**
@@ -112,8 +107,8 @@ public:
     template <typename... Args>
     static void printColoredLine(ColorCode color, TextStyle style,
                                  std::string_view fmt, Args&&... args) {
-        printColored(color, style, fmt, std::forward<Args>(args)...);
-        std::cout << std::endl;
+        printColored(color, style, fmt, args...);
+        std::cout << '\n';
     }
 
     /**
@@ -131,8 +126,7 @@ public:
      */
     template <typename... Args>
     static void error(std::string_view fmt, Args&&... args) {
-        printColoredLine(ColorCode::Red, TextStyle::Bold, fmt,
-                         std::forward<Args>(args)...);
+        printColoredLine(ColorCode::Red, TextStyle::Bold, fmt, args...);
     }
 
     /**
@@ -150,8 +144,7 @@ public:
      */
     template <typename... Args>
     static void warning(std::string_view fmt, Args&&... args) {
-        printColoredLine(ColorCode::Yellow, TextStyle::Normal, fmt,
-                         std::forward<Args>(args)...);
+        printColoredLine(ColorCode::Yellow, TextStyle::Normal, fmt, args...);
     }
 
     /**
@@ -169,8 +162,7 @@ public:
      */
     template <typename... Args>
     static void success(std::string_view fmt, Args&&... args) {
-        printColoredLine(ColorCode::Green, TextStyle::Normal, fmt,
-                         std::forward<Args>(args)...);
+        printColoredLine(ColorCode::Green, TextStyle::Normal, fmt, args...);
     }
 
     /**
@@ -188,8 +180,7 @@ public:
      */
     template <typename... Args>
     static void info(std::string_view fmt, Args&&... args) {
-        printColoredLine(ColorCode::Cyan, TextStyle::Normal, fmt,
-                         std::forward<Args>(args)...);
+        printColoredLine(ColorCode::Cyan, TextStyle::Normal, fmt, args...);
     }
 };
 

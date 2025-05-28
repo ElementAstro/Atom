@@ -6,7 +6,6 @@
 #include <iomanip>
 #include <map>
 #include <mutex>
-#include <regex>
 #include <set>
 #include <sstream>
 #include <string>
@@ -16,13 +15,13 @@
 #include <immintrin.h>
 #endif
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 #include "atom/type/json.hpp"
 
 using json = nlohmann::json;
 
 namespace atom::utils {
-// Impl Class Implementation
+
 class Parser::Impl {
 public:
     auto parseLiteral(std::string_view input) -> std::optional<std::any>;
@@ -45,12 +44,12 @@ public:
 
 private:
     std::unordered_map<std::string, CustomParserFunc> customParsers_;
-    mutable std::mutex parserMutex_;  // Mutex for thread safety
+    mutable std::mutex parserMutex_;
 
-    static auto trim(std::string_view str) noexcept -> std::string_view;
+    static constexpr auto trim(std::string_view str) noexcept
+        -> std::string_view;
     auto fromString(std::string_view str) -> std::optional<std::any>;
 
-    // Specialized parsing functions with C++20 concepts
     template <Numeric T>
     auto parseSingleValue(std::string_view str) noexcept -> std::optional<T>;
 
@@ -72,7 +71,6 @@ private:
     static auto parseDateTime(std::string_view str)
         -> std::optional<std::chrono::system_clock::time_point>;
 
-    // SIMD optimized string processing when available
     bool containsDigitsOnly(std::string_view str) const noexcept;
     bool containsFloatingPoint(std::string_view str) const noexcept;
 };
@@ -97,7 +95,6 @@ auto Parser::parseLiteral(std::string_view input) -> std::optional<std::any> {
         isProcessing_ = false;
         THROW_PARSER_ERROR("Failed to parse literal");
     }
-    return {};
 }
 
 auto Parser::parseLiteralWithDefault(std::string_view input,
@@ -106,13 +103,13 @@ auto Parser::parseLiteralWithDefault(std::string_view input,
         auto result = parseLiteral(input);
         return result ? *result : defaultValue;
     } catch (const ParserException& e) {
-        LOG_F(WARNING, "Parser exception: {}", e.what());
+        spdlog::warn("Parser exception: {}", e.what());
         return defaultValue;
     } catch (const std::exception& e) {
-        LOG_F(WARNING, "Standard exception: {}", e.what());
+        spdlog::warn("Standard exception: {}", e.what());
         return defaultValue;
     } catch (...) {
-        LOG_F(WARNING, "Unknown exception during parsing");
+        spdlog::warn("Unknown exception during parsing");
         return defaultValue;
     }
 }
@@ -121,7 +118,7 @@ void Parser::print(const std::any& value) const {
     try {
         pImpl_->print(value);
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error printing value: {}", e.what());
+        spdlog::error("Error printing value: {}", e.what());
     }
 }
 
@@ -129,7 +126,7 @@ void Parser::logParsing(std::string_view input, const std::any& result) const {
     try {
         pImpl_->logParsing(input, result);
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error logging parsing: {}", e.what());
+        spdlog::error("Error logging parsing: {}", e.what());
     }
 }
 
@@ -140,7 +137,7 @@ auto Parser::convertToAnyVector(const Range& input) -> std::vector<std::any> {
     try {
         return pImpl_->convertToAnyVector(input);
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error converting to any vector: {}", e.what());
+        spdlog::error("Error converting to any vector: {}", e.what());
         return {};
     }
 }
@@ -166,7 +163,7 @@ void Parser::parseJson(std::string_view jsonString) const {
     try {
         pImpl_->parseJson(jsonString);
     } catch (const ParserException& e) {
-        throw;  // Re-throw parser exceptions
+        throw;
     } catch (const std::exception& e) {
         THROW_PARSER_ERROR(std::string("JSON parsing error: ") + e.what());
     }
@@ -188,7 +185,7 @@ void Parser::printCustomParsers() const {
     try {
         pImpl_->printCustomParsers();
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error printing custom parsers: {}", e.what());
+        spdlog::error("Error printing custom parsers: {}", e.what());
     }
 }
 
@@ -201,13 +198,12 @@ auto Parser::parseParallel(const std::vector<std::string>& inputs)
     }
 }
 
-// Implementation of Parser::Impl methods
-auto Parser::Impl::trim(std::string_view str) noexcept -> std::string_view {
+constexpr auto Parser::Impl::trim(std::string_view str) noexcept
+    -> std::string_view {
     const auto start = str.find_first_not_of(" \t\n\r");
     if (start == std::string_view::npos) {
         return {};
     }
-
     const auto end = str.find_last_not_of(" \t\n\r");
     return str.substr(start, end - start + 1);
 }
@@ -240,14 +236,20 @@ bool Parser::Impl::containsDigitsOnly(std::string_view str) const noexcept {
         return false;
     }
 
-#ifdef __SSE4_1__
-    // Use SIMD for faster checking of digit-only strings
-    if (str.size() >= 16) {
-        const char* data = str.data();
-        size_t len = str.size();
-        size_t i = 0;
+    size_t startPos = 0;
+    if (str[0] == '-' || str[0] == '+') {
+        if (str.size() == 1) {
+            return false;
+        }
+        startPos = 1;
+    }
 
-        // Check 16 bytes at once
+#ifdef __SSE4_1__
+    const char* data = str.data() + startPos;
+    const size_t len = str.size() - startPos;
+
+    if (len >= 16) {
+        size_t i = 0;
         for (; i + 16 <= len; i += 16) {
             __m128i chunk =
                 _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + i));
@@ -259,14 +261,16 @@ bool Parser::Impl::containsDigitsOnly(std::string_view str) const noexcept {
             }
         }
 
-        // Check remaining bytes
-        return std::all_of(data + i, data + len,
-                           [](char c) { return c >= '0' && c <= '9'; });
+        for (; i < len; ++i) {
+            if (data[i] < '0' || data[i] > '9') {
+                return false;
+            }
+        }
+        return true;
     }
 #endif
 
-    // Fallback to standard library
-    return std::ranges::all_of(str, [](char c) {
+    return std::ranges::all_of(str.substr(startPos), [](char c) {
         return std::isdigit(static_cast<unsigned char>(c));
     });
 }
@@ -276,20 +280,37 @@ bool Parser::Impl::containsFloatingPoint(std::string_view str) const noexcept {
         return false;
     }
 
-    // Quick check for decimal point and/or exponent notation
-    bool hasDecimal = str.find('.') != std::string_view::npos;
-    bool hasExponent = str.find('e') != std::string_view::npos ||
-                       str.find('E') != std::string_view::npos;
+    bool hasDecimal = false;
+    bool hasExponent = false;
+    bool hasDigit = false;
+    char prev = '\0';
 
-    if (!hasDecimal && !hasExponent) {
-        return false;
+    for (size_t i = 0; i < str.size(); ++i) {
+        char c = str[i];
+
+        if (c >= '0' && c <= '9') {
+            hasDigit = true;
+        } else if (c == '.') {
+            if (hasDecimal) {
+                return false;
+            }
+            hasDecimal = true;
+        } else if (c == 'e' || c == 'E') {
+            if (hasExponent || !hasDigit) {
+                return false;
+            }
+            hasExponent = true;
+        } else if ((c == '+' || c == '-')) {
+            if (i > 0 && prev != 'e' && prev != 'E') {
+                return false;
+            }
+        } else {
+            return false;
+        }
+        prev = c;
     }
 
-    // Validate the format - allow optional sign, digits, decimal point,
-    // exponent
-    static const std::regex floatPattern(
-        R"(^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$)");
-    return std::regex_match(std::string(str), floatPattern);
+    return hasDigit && (hasDecimal || hasExponent);
 }
 
 auto Parser::Impl::fromString(std::string_view str) -> std::optional<std::any> {
@@ -298,7 +319,6 @@ auto Parser::Impl::fromString(std::string_view str) -> std::optional<std::any> {
         return std::string{};
     }
 
-    // Fast-path checks for common types
     if (trimmed == "true") {
         return true;
     }
@@ -306,9 +326,7 @@ auto Parser::Impl::fromString(std::string_view str) -> std::optional<std::any> {
         return false;
     }
 
-    // Check for numeric types - use containsDigitsOnly for integers
     if (containsDigitsOnly(trimmed)) {
-        // Try parsing as integers of increasing size
         if (auto intValue = parseSingleValue<int>(trimmed)) {
             return *intValue;
         }
@@ -320,24 +338,20 @@ auto Parser::Impl::fromString(std::string_view str) -> std::optional<std::any> {
         }
     }
 
-    // Check for floating point
     if (containsFloatingPoint(trimmed)) {
         if (auto doubleValue = parseSingleValue<double>(trimmed)) {
             return *doubleValue;
         }
     }
 
-    // Check for single character
     if (trimmed.size() == 1 && !std::isspace(trimmed[0])) {
         return trimmed.front();
     }
 
-    // Parse date time if it matches the pattern
     if (auto dateTimeValue = parseDateTime(trimmed)) {
         return *dateTimeValue;
     }
 
-    // Default to string when all other types fail
     return std::string(trimmed);
 }
 
@@ -345,11 +359,11 @@ template <typename T>
 auto Parser::Impl::parseVectorOf(std::string_view str)
     -> std::optional<std::vector<T>> {
     if (str.empty()) {
-        return std::vector<T>{};  // Return empty vector for empty input
+        return std::vector<T>{};
     }
 
-    std::vector<T> result;
     auto tokens = split(str, ',');
+    std::vector<T> result;
     result.reserve(tokens.size());
 
     for (const auto& token : tokens) {
@@ -370,8 +384,8 @@ auto Parser::Impl::parseSetOf(std::string_view str)
         return std::set<T>{};
     }
 
-    std::set<T> result;
     auto tokens = split(str, ',');
+    std::set<T> result;
 
     for (const auto& token : tokens) {
         auto optValue = parseSingleValue<T>(trim(token));
@@ -391,8 +405,8 @@ auto Parser::Impl::parseMapOf(std::string_view str)
         return std::map<K, V>{};
     }
 
-    std::map<K, V> result;
     auto pairs = split(str, ',');
+    std::map<K, V> result;
 
     for (const auto& pair : pairs) {
         auto keyValue = split(pair, ':');
@@ -441,29 +455,26 @@ auto Parser::Impl::split(std::string_view str, char delimiter)
 auto Parser::Impl::parseLiteral(std::string_view input)
     -> std::optional<std::any> {
     try {
-        // Check custom parsers first
         std::lock_guard<std::mutex> lock(parserMutex_);
         for (const auto& [type, parserFunc] : customParsers_) {
             if (input.find(type) != std::string_view::npos) {
-                LOG_F(INFO, "Using custom parser for type: {}", type);
+                spdlog::info("Using custom parser for type: {}", type);
                 if (auto customValue = parserFunc(input)) {
-                    LOG_F(INFO, "Custom parser succeeded for input: '{}'",
-                          input);
+                    spdlog::info("Custom parser succeeded for input: '{}'",
+                                 input);
                     return customValue;
                 }
             }
         }
     } catch (const std::exception& e) {
-        LOG_F(WARNING, "Exception in custom parser: {}", e.what());
+        spdlog::warn("Exception in custom parser: {}", e.what());
     }
 
-    // Try standard parsing
     try {
         if (auto result = fromString(input)) {
             return result;
         }
 
-        // Try vector, set, map parsing
         if (auto vectorResult = parseVectorOf<int>(input)) {
             return *vectorResult;
         }
@@ -474,7 +485,7 @@ auto Parser::Impl::parseLiteral(std::string_view input)
             return *mapResult;
         }
     } catch (const std::exception& e) {
-        LOG_F(WARNING, "Exception during parsing: {}", e.what());
+        spdlog::warn("Exception during parsing: {}", e.what());
     }
 
     return std::nullopt;
@@ -482,33 +493,32 @@ auto Parser::Impl::parseLiteral(std::string_view input)
 
 void Parser::Impl::print(const std::any& value) const {
     if (!value.has_value()) {
-        LOG_F(INFO, "Parsed value: <empty>");
+        spdlog::info("Parsed value: <empty>");
         return;
     }
 
-    LOG_F(INFO, "Parsed value type: {}", value.type().name());
+    spdlog::info("Parsed value type: {}", value.type().name());
 
     try {
-        // Handle common types
         if (value.type() == typeid(int)) {
-            LOG_F(INFO, "Value: %d", std::any_cast<int>(value));
+            spdlog::info("Value: {}", std::any_cast<int>(value));
         } else if (value.type() == typeid(long)) {
-            LOG_F(INFO, "Value: %ld", std::any_cast<long>(value));
+            spdlog::info("Value: {}", std::any_cast<long>(value));
         } else if (value.type() == typeid(long long)) {
-            LOG_F(INFO, "Value: %lld", std::any_cast<long long>(value));
+            spdlog::info("Value: {}", std::any_cast<long long>(value));
         } else if (value.type() == typeid(unsigned int)) {
-            LOG_F(INFO, "Value: %u", std::any_cast<unsigned int>(value));
+            spdlog::info("Value: {}", std::any_cast<unsigned int>(value));
         } else if (value.type() == typeid(float)) {
-            LOG_F(INFO, "Value: %f", std::any_cast<float>(value));
+            spdlog::info("Value: {}", std::any_cast<float>(value));
         } else if (value.type() == typeid(double)) {
-            LOG_F(INFO, "Value: %.15g", std::any_cast<double>(value));
+            spdlog::info("Value: {:.15g}", std::any_cast<double>(value));
         } else if (value.type() == typeid(bool)) {
-            LOG_F(INFO, "Value: {}",
-                  std::any_cast<bool>(value) ? "true" : "false");
+            spdlog::info("Value: {}",
+                         std::any_cast<bool>(value) ? "true" : "false");
         } else if (value.type() == typeid(char)) {
-            LOG_F(INFO, "Value: '%c'", std::any_cast<char>(value));
+            spdlog::info("Value: '{}'", std::any_cast<char>(value));
         } else if (value.type() == typeid(std::string)) {
-            LOG_F(INFO, "Value: \"{}\"", std::any_cast<std::string>(value));
+            spdlog::info("Value: \"{}\"", std::any_cast<std::string>(value));
         } else if (value.type() ==
                    typeid(std::chrono::system_clock::time_point)) {
             auto time =
@@ -517,84 +527,70 @@ void Parser::Impl::print(const std::any& value) const {
             char buffer[64];
             std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S",
                           std::localtime(&timeT));
-            LOG_F(INFO, "Value: {}", buffer);
+            spdlog::info("Value: {}", buffer);
         } else {
-            LOG_F(INFO, "Value: <complex type>");
+            spdlog::info("Value: <unsupported type>");
         }
     } catch (const std::bad_any_cast& e) {
-        LOG_F(WARNING, "Bad any cast during printing: {}", e.what());
+        spdlog::warn("Bad any cast during printing: {}", e.what());
     } catch (const std::exception& e) {
-        LOG_F(WARNING, "Exception during printing: {}", e.what());
+        spdlog::warn("Exception during printing: {}", e.what());
     }
 }
 
 void Parser::Impl::logParsing(std::string_view input,
                               const std::any& result) const {
-    LOG_F(INFO, "Parsed input: '{}'", input);
+    spdlog::info("Parsed input: '{}'", input);
 
     if (!result.has_value()) {
-        LOG_F(INFO, "Result type: <empty>");
+        spdlog::info("Result type: <empty>");
         return;
     }
 
     try {
-        LOG_F(INFO, "Result type: {}", result.type().name());
+        spdlog::info("Result type: {}", result.type().name());
 
         if (result.type() == typeid(int)) {
-            LOG_F(INFO, "Type: int");
+            spdlog::info("Type: int");
         } else if (result.type() == typeid(long)) {
-            LOG_F(INFO, "Type: long");
+            spdlog::info("Type: long");
         } else if (result.type() == typeid(long long)) {
-            LOG_F(INFO, "Type: long long");
+            spdlog::info("Type: long long");
         } else if (result.type() == typeid(unsigned int)) {
-            LOG_F(INFO, "Type: unsigned int");
+            spdlog::info("Type: unsigned int");
         } else if (result.type() == typeid(float)) {
-            LOG_F(INFO, "Type: float");
+            spdlog::info("Type: float");
         } else if (result.type() == typeid(double)) {
-            LOG_F(INFO, "Type: double");
+            spdlog::info("Type: double");
         } else if (result.type() == typeid(bool)) {
-            LOG_F(INFO, "Type: bool");
+            spdlog::info("Type: bool");
         } else if (result.type() == typeid(char)) {
-            LOG_F(INFO, "Type: char");
+            spdlog::info("Type: char");
         } else if (result.type() == typeid(std::string)) {
-            LOG_F(INFO, "Type: string");
+            spdlog::info("Type: string");
         } else if (result.type() ==
                    typeid(std::chrono::system_clock::time_point)) {
-            LOG_F(INFO, "Type: datetime");
-        } else if (result.type() == typeid(std::vector<int>)) {
-            LOG_F(INFO, "Type: vector<int>");
-        } else if (result.type() == typeid(std::vector<float>)) {
-            LOG_F(INFO, "Type: vector<float>");
-        } else if (result.type() == typeid(std::vector<double>)) {
-            LOG_F(INFO, "Type: vector<double>");
-        } else if (result.type() == typeid(std::vector<std::string>)) {
-            LOG_F(INFO, "Type: vector<string>");
-        } else if (result.type() == typeid(std::set<int>)) {
-            LOG_F(INFO, "Type: set<int>");
-        } else if (result.type() == typeid(std::map<std::string, int>)) {
-            LOG_F(INFO, "Type: map<string, int>");
+            spdlog::info("Type: datetime");
         } else {
-            LOG_F(INFO, "Type: other");
+            spdlog::info("Type: unknown");
         }
     } catch (const std::exception& e) {
-        LOG_F(WARNING, "Exception during log parsing: {}", e.what());
+        spdlog::warn("Exception during log parsing: {}", e.what());
     }
 }
 
 auto Parser::Impl::parseDateTime(std::string_view str)
     -> std::optional<std::chrono::system_clock::time_point> {
-    if (str.empty() || str.size() < 10) {  // Basic validation
+    if (str.empty() || str.size() < 10) {
         return std::nullopt;
     }
 
     std::tm timeStruct{};
     std::istringstream ss{std::string(str)};
 
-    // Try different datetime formats
     ss >> std::get_time(&timeStruct, "%Y-%m-%d %H:%M:%S");
 
     if (ss.fail()) {
-        // Reset and try another format
         ss.clear();
         ss.str(std::string(str));
         ss >> std::get_time(&timeStruct, "%Y/%m/%d %H:%M:%S");
@@ -604,17 +600,16 @@ auto Parser::Impl::parseDateTime(std::string_view str)
         }
     }
 
-    // Validate date components
     if (timeStruct.tm_year < 0 || timeStruct.tm_mon < 0 ||
         timeStruct.tm_mon > 11 || timeStruct.tm_mday < 1 ||
         timeStruct.tm_mday > 31 || timeStruct.tm_hour < 0 ||
         timeStruct.tm_hour > 23 || timeStruct.tm_min < 0 ||
         timeStruct.tm_min > 59 || timeStruct.tm_sec < 0 ||
-        timeStruct.tm_sec > 60) {  // 60 for leap second
+        timeStruct.tm_sec > 60) {
         return std::nullopt;
     }
 
-    timeStruct.tm_isdst = -1;  // Let mktime determine DST
+    timeStruct.tm_isdst = -1;
     std::time_t timeT = std::mktime(&timeStruct);
 
     if (timeT == -1) {
@@ -630,19 +625,18 @@ void Parser::Impl::parseJson(std::string_view jsonString) const {
     }
 
     try {
-        auto json = json::parse(jsonString);
-        LOG_F(INFO, "Parsed JSON successfully");
-        LOG_F(INFO, "JSON structure: {}", json.dump(2));
+        auto jsonObj = json::parse(jsonString);
+        spdlog::info("Parsed JSON successfully");
+        spdlog::info("JSON structure: {}", jsonObj.dump(2));
 
-        // Extract and process top-level keys
-        if (json.is_object()) {
-            LOG_F(INFO, "JSON contains the following keys:");
-            for (const auto& [key, value] : json.items()) {
-                LOG_F(INFO, "Key: {}, Type: {}", key, value.type_name());
+        if (jsonObj.is_object()) {
+            spdlog::info("JSON contains the following keys:");
+            for (const auto& [key, value] : jsonObj.items()) {
+                spdlog::info("Key: {}, Type: {}", key, value.type_name());
             }
         }
     } catch (const json::parse_error& e) {
-        LOG_F(ERROR, "JSON parse error at byte {}: {}", e.byte, e.what());
+        spdlog::error("JSON parse error at byte {}: {}", e.byte, e.what());
         THROW_PARSER_ERROR(std::string("Failed to parse JSON: ") + e.what());
     } catch (const std::exception& e) {
         THROW_PARSER_ERROR(std::string("JSON processing error: ") + e.what());
@@ -660,37 +654,34 @@ void Parser::Impl::parseCsv(std::string_view csvString, char delimiter) const {
         int lineCount = 0;
         std::vector<std::vector<std::string>> parsedData;
 
-        // Process header line separately if present
         if (std::getline(stream, line)) {
             auto headers = split(line, delimiter);
-            LOG_F(INFO, "CSV Headers ({}): ", headers.size());
+            spdlog::info("CSV Headers ({}): ", headers.size());
             for (const auto& header : headers) {
-                LOG_F(INFO, "  {}", header);
+                spdlog::info("  {}", header);
             }
 
-            // Process data rows
             while (std::getline(stream, line)) {
                 lineCount++;
                 auto values = split(line, delimiter);
 
-                // Validate row length matches header
                 if (values.size() != headers.size()) {
-                    LOG_F(WARNING, "Row {} has {} fields, expected {}",
-                          lineCount, values.size(), headers.size());
+                    spdlog::warn("Row {} has {} fields, expected {}", lineCount,
+                                 values.size(), headers.size());
                 }
 
-                parsedData.push_back(values);
-                if (lineCount <= 5) {  // Log first few rows
-                    LOG_F(INFO, "Row {}: {}", lineCount, line);
+                parsedData.push_back(std::move(values));
+                if (lineCount <= 5) {
+                    spdlog::info("Row {}: {}", lineCount, line);
                     for (size_t i = 0; i < values.size() && i < headers.size();
                          ++i) {
-                        LOG_F(INFO, "  {} = {}", headers[i], values[i]);
+                        spdlog::info("  {} = {}", headers[i], values[i]);
                     }
                 }
             }
         }
 
-        LOG_F(INFO, "CSV parsed successfully. Total rows: {}", lineCount);
+        spdlog::info("CSV parsed successfully. Total rows: {}", lineCount);
     } catch (const std::exception& e) {
         THROW_PARSER_ERROR(std::string("CSV parsing error: ") + e.what());
     }
@@ -699,13 +690,13 @@ void Parser::Impl::parseCsv(std::string_view csvString, char delimiter) const {
 void Parser::Impl::registerCustomParser(std::string_view type,
                                         CustomParserFunc parser) {
     std::lock_guard<std::mutex> lock(parserMutex_);
-    customParsers_[std::string(type)] = parser;
+    customParsers_[std::string(type)] = std::move(parser);
 }
 
 void Parser::Impl::printCustomParsers() const {
     std::lock_guard<std::mutex> lock(parserMutex_);
     for (const auto& [type, parserFunc] : customParsers_) {
-        LOG_F(INFO, "Custom parser for type: {}", type);
+        spdlog::info("Custom parser for type: {}", type);
     }
 }
 
@@ -716,36 +707,31 @@ auto Parser::Impl::parseParallel(const std::vector<std::string>& inputs)
     }
 
     const size_t inputSize = inputs.size();
-    std::vector<std::any> results;
-    results.resize(inputSize);
+    std::vector<std::any> results(inputSize);
 
-    // Determine optimal number of threads based on hardware and input size
     const auto hardwareConcurrency = std::thread::hardware_concurrency();
     const auto numThreads = std::min(
         std::max(1u, hardwareConcurrency),
         static_cast<unsigned>(inputSize > 1000 ? 32 : inputSize / 32 + 1));
 
-    LOG_F(INFO, "Starting parallel parsing with {} threads for {} inputs",
-          numThreads, inputSize);
+    spdlog::info("Starting parallel parsing with {} threads for {} inputs",
+                 numThreads, inputSize);
 
     std::vector<std::thread> threads;
     threads.reserve(numThreads);
     std::atomic<size_t> nextIndex = 0;
     std::mutex resultsMutex;
 
-    // Worker function for parsing
     auto worker = [&]() {
         while (true) {
-            // Get next index to process in thread-safe manner
             size_t index = nextIndex.fetch_add(1, std::memory_order_relaxed);
             if (index >= inputSize) {
-                break;  // No more work
+                break;
             }
 
             try {
                 auto result = parseLiteral(inputs[index]);
 
-                // Store result safely
                 std::lock_guard<std::mutex> lock(resultsMutex);
                 results[index] = result
                                      ? *result
@@ -759,112 +745,18 @@ auto Parser::Impl::parseParallel(const std::vector<std::string>& inputs)
         }
     };
 
-    // Start worker threads
     for (unsigned i = 0; i < numThreads; ++i) {
         threads.emplace_back(worker);
     }
 
-    // Wait for all threads to complete
     for (auto& thread : threads) {
         thread.join();
     }
 
-    LOG_F(INFO, "Parallel parsing completed for {} inputs", inputSize);
+    spdlog::info("Parallel parsing completed for {} inputs", inputSize);
     return results;
 }
 
-#ifdef __SSE4_1__
-// SIMD optimized string processing
-bool Parser::Impl::containsDigitsOnly(std::string_view str) const noexcept {
-    if (str.empty()) {
-        return false;
-    }
-
-    // Handle sign character if present
-    size_t startPos = 0;
-    if (str[0] == '-' || str[0] == '+') {
-        if (str.size() == 1) {
-            return false;  // Just a sign character is not a valid number
-        }
-        startPos = 1;
-    }
-
-    const char* data = str.data() + startPos;
-    const size_t len = str.size() - startPos;
-    size_t i = 0;
-
-    // Check 16 bytes at once using SSE4.1
-    for (; i + 16 <= len; i += 16) {
-        __m128i chunk =
-            _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + i));
-        // Create masks for < '0' and > '9'
-        __m128i lt_zero = _mm_cmplt_epi8(chunk, _mm_set1_epi8('0'));
-        __m128i gt_nine = _mm_cmpgt_epi8(chunk, _mm_set1_epi8('9'));
-        // Combine masks and check if any out of range
-        int mask = _mm_movemask_epi8(_mm_or_si128(lt_zero, gt_nine));
-        if (mask != 0) {
-            return false;
-        }
-    }
-
-    // Handle remaining characters
-    for (; i < len; ++i) {
-        if (data[i] < '0' || data[i] > '9') {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-bool Parser::Impl::containsFloatingPoint(std::string_view str) const noexcept {
-    if (str.empty()) {
-        return false;
-    }
-
-    // Quick check for decimal point or exponent notation
-    bool hasDecimal = false;
-    bool hasExponent = false;
-    bool hasDigit = false;
-    char prev = '\0';
-
-    // First pass: simple character checking (no regex overhead)
-    for (size_t i = 0; i < str.size(); ++i) {
-        char c = str[i];
-
-        if (c >= '0' && c <= '9') {
-            hasDigit = true;
-        } else if (c == '.') {
-            // Only one decimal point allowed
-            if (hasDecimal) {
-                return false;
-            }
-            hasDecimal = true;
-        } else if (c == 'e' || c == 'E') {
-            // Only one exponent allowed, must have digit before
-            if (hasExponent || !hasDigit) {
-                return false;
-            }
-            hasExponent = true;
-        } else if ((c == '+' || c == '-')) {
-            // Sign only at start or after exponent
-            if (i > 0 && prev != 'e' && prev != 'E') {
-                return false;
-            }
-        } else {
-            // Invalid character
-            return false;
-        }
-
-        prev = c;
-    }
-
-    // Must have at least one digit
-    return hasDigit;
-}
-#endif
-
-// Implementation of convertToAnyVector
 template <std::ranges::input_range Range>
     requires std::convertible_to<std::ranges::range_value_t<Range>,
                                  std::string_view>
@@ -874,31 +766,29 @@ auto Parser::Impl::convertToAnyVector(const Range& input)
     std::vector<std::any> result;
     result.reserve(estimatedSize);
 
-    // Use parallel algorithm for large inputs
     if (estimatedSize > 100) {
         std::vector<std::string> inputStrings;
         inputStrings.reserve(estimatedSize);
 
         for (const auto& item : input) {
-            inputStrings.push_back(std::string(item));
+            inputStrings.emplace_back(item);
         }
 
         return parseParallel(inputStrings);
     }
 
-    // Sequential processing for smaller inputs
     for (const auto& str : input) {
         try {
             auto parsedValue = parseLiteral(str);
             if (parsedValue) {
                 result.push_back(*parsedValue);
             } else {
-                result.push_back(std::string("Invalid input: ") +
-                                 std::string(str));
+                result.emplace_back(std::string("Invalid input: ") +
+                                    std::string(str));
             }
         } catch (const std::exception& e) {
-            LOG_F(WARNING, "Error parsing '{}': {}", str, e.what());
-            result.push_back(std::string("Error: ") + e.what());
+            spdlog::warn("Error parsing '{}': {}", str, e.what());
+            result.emplace_back(std::string("Error: ") + e.what());
         }
     }
 

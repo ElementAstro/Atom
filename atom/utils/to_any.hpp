@@ -24,23 +24,21 @@ public:
     throw ParserException(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, \
                           __VA_ARGS__)
 
-// Numeric concept for type constraints
 template <typename T>
 concept Numeric = std::integral<T> || std::floating_point<T>;
 
-// String-like concept
 template <typename T>
 concept StringLike = std::convertible_to<T, std::string_view>;
 
 /**
  * @class Parser
- * @brief A class that provides various parsing functionalities with C++20
- * features.
+ * @brief A high-performance parser class that provides various parsing
+ * functionalities with C++20 features.
  *
  * The Parser class offers methods to parse literals, JSON, CSV, and custom
- * types with enhanced type safety using concepts. It also allows registering
- * custom parsers and provides utility functions for printing and logging parsed
- * values.
+ * types with enhanced type safety using concepts. It supports parallel
+ * processing, SIMD optimizations, and custom parser registration for
+ * extensibility.
  */
 class Parser {
 public:
@@ -48,7 +46,7 @@ public:
      * @brief Type alias for a custom parser function.
      *
      * A custom parser function takes a string_view as input and returns an
-     * optional std::any for efficiency.
+     * optional std::any.
      */
     using CustomParserFunc =
         std::function<std::optional<std::any>(std::string_view)>;
@@ -86,14 +84,14 @@ public:
                                  const std::any& defaultValue) -> std::any;
 
     /**
-     * @brief Prints the given std::any value.
+     * @brief Prints the given std::any value using spdlog.
      *
      * @param value The value to print.
      */
     void print(const std::any& value) const;
 
     /**
-     * @brief Logs the parsing result.
+     * @brief Logs the parsing result using spdlog.
      *
      * @param input The input string that was parsed.
      * @param result The result of the parsing.
@@ -153,10 +151,9 @@ public:
         -> std::vector<std::any>;
 
 private:
-    class Impl;  ///< Forward declaration of the implementation class.
-    std::unique_ptr<Impl> pImpl_;  ///< Pointer to the implementation.
-    std::atomic<bool> isProcessing_{
-        false};  ///< Atomic flag indicating if processing is ongoing.
+    class Impl;
+    std::unique_ptr<Impl> pImpl_;
+    std::atomic<bool> isProcessing_{false};
 };
 }  // namespace atom::utils
 

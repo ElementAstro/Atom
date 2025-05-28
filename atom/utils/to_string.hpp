@@ -8,28 +8,25 @@
 #define ATOM_UTILS_TO_STRING_HPP
 
 #include <array>
-#include <concepts>  // C++20 concepts
+#include <concepts>
 #include <exception>
-#include <format>  // C++20 std::format
+#include <format>
 #include <optional>
-#include <ranges>  // C++20 ranges
-#include <span>    // C++20 span
+#include <ranges>
+#include <span>
 #include <sstream>
 #include <string>
-#include <string_view>  // Prefer string_view for non-owning strings
+#include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <utility>
 #include <variant>
-#include <vector>
 
 namespace atom::utils {
 
 /**
  * @brief Concept for string types.
- *
- * This concept checks if a type is a string, const char*, char*, or
- * string_view.
+ * @details This concept checks if a type is a string, const char*, char*, or string_view.
  */
 template <typename T>
 concept StringType = std::is_same_v<std::decay_t<T>, std::string> ||
@@ -39,17 +36,14 @@ concept StringType = std::is_same_v<std::decay_t<T>, std::string> ||
 
 /**
  * @brief Concept for container types with C++20 syntax.
- *
- * This concept checks if a type has begin and end functions compatible with
- * std::ranges.
+ * @details This concept checks if a type has begin and end functions compatible with std::ranges.
  */
 template <typename T>
 concept Container = std::ranges::range<T> && !StringType<T>;
 
 /**
  * @brief Concept for map types with C++20 syntax.
- *
- * This concept checks if a type has key_type, mapped_type, and is a range.
+ * @details This concept checks if a type has key_type, mapped_type, and is a range.
  */
 template <typename T>
 concept MapType = Container<T> && requires {
@@ -59,24 +53,21 @@ concept MapType = Container<T> && requires {
 
 /**
  * @brief Concept for pointer types.
- *
- * This concept checks if a type is a pointer but not a string type.
+ * @details This concept checks if a type is a pointer but not a string type.
  */
 template <typename T>
 concept PointerType = std::is_pointer_v<T> && !StringType<T>;
 
 /**
  * @brief Concept for enum types.
- *
- * This concept checks if a type is an enum.
+ * @details This concept checks if a type is an enum.
  */
 template <typename T>
 concept EnumType = std::is_enum_v<T>;
 
 /**
  * @brief Concept for smart pointer types.
- *
- * This concept checks if a type has dereference and get methods.
+ * @details This concept checks if a type has dereference and get methods.
  */
 template <typename T>
 concept SmartPointer = requires(T smartPtr) {
@@ -85,8 +76,7 @@ concept SmartPointer = requires(T smartPtr) {
 };
 
 /**
- * @brief Concept for types that can be converted to a string using
- * std::to_string.
+ * @brief Concept for types that can be converted to a string using std::to_string.
  */
 template <typename T>
 concept HasStdToString = requires(T t) {
@@ -110,69 +100,12 @@ private:
 
 public:
     explicit ToStringException(std::string message)
-        : message_("ToString conversion error: " + std::move(message)) {}
+        : message_(std::format("ToString conversion error: {}", std::move(message))) {}
 
     [[nodiscard]] const char* what() const noexcept override {
         return message_.c_str();
     }
 };
-
-/**
- * @brief Converts a string type to std::string.
- *
- * @tparam T The type of the input value.
- * @param value The input value to be converted.
- * @return The converted std::string.
- * @throws ToStringException if conversion fails
- */
-template <StringType T>
-auto toString(T&& value) -> std::string {
-    try {
-        if constexpr (std::is_same_v<std::decay_t<T>, std::string>) {
-            return value;
-        } else if constexpr (std::is_same_v<std::decay_t<T>,
-                                            std::string_view>) {
-            return std::string(value);
-        } else {
-            // Handle null pointers for C-style strings
-            if (value == nullptr) {
-                return "null";
-            }
-            return std::string(value);
-        }
-    } catch (const std::exception& e) {
-        throw ToStringException(std::string("String conversion failed: ") +
-                                e.what());
-    }
-}
-
-/**
- * @brief Converts a char type to std::string.
- *
- * @param value The input char value to be converted.
- * @return The converted std::string.
- */
-inline auto toString(char value) -> std::string {
-    return std::string(1, value);
-}
-
-/**
- * @brief Converts an enum type to std::string.
- *
- * @tparam T The type of the input value.
- * @param value The input enum value to be converted.
- * @return The converted std::string.
- * @throws ToStringException if conversion fails
- */
-template <EnumType T>
-auto toString(T value) -> std::string {
-    try {
-        return std::to_string(static_cast<std::underlying_type_t<T>>(value));
-    } catch (const std::exception& e) {
-        throw ToStringException(std::string("Enum conversion failed: ") +
-                                e.what());
-    }
-}
 
 /**
  * @brief Forward declaration for general toString to handle recursive cases
@@ -181,8 +114,57 @@ template <typename T>
 auto toString(const T& value) -> std::string;
 
 /**
+ * @brief Converts a string type to std::string.
+ * @tparam T The type of the input value.
+ * @param value The input value to be converted.
+ * @return The converted std::string.
+ * @throws ToStringException if conversion fails
+ */
+template <StringType T>
+constexpr auto toString(T&& value) -> std::string {
+    try {
+        if constexpr (std::is_same_v<std::decay_t<T>, std::string>) {
+            return std::forward<T>(value);
+        } else if constexpr (std::is_same_v<std::decay_t<T>, std::string_view>) {
+            return std::string(value);
+        } else {
+            if (value == nullptr) {
+                return "null";
+            }
+            return std::string(value);
+        }
+    } catch (const std::exception& e) {
+        throw ToStringException(std::format("String conversion failed: {}", e.what()));
+    }
+}
+
+/**
+ * @brief Converts a char type to std::string.
+ * @param value The input char value to be converted.
+ * @return The converted std::string.
+ */
+constexpr auto toString(char value) -> std::string {
+    return std::string(1, value);
+}
+
+/**
+ * @brief Converts an enum type to std::string.
+ * @tparam T The type of the input value.
+ * @param value The input enum value to be converted.
+ * @return The converted std::string.
+ * @throws ToStringException if conversion fails
+ */
+template <EnumType T>
+constexpr auto toString(T value) -> std::string {
+    try {
+        return std::to_string(static_cast<std::underlying_type_t<T>>(value));
+    } catch (const std::exception& e) {
+        throw ToStringException(std::format("Enum conversion failed: {}", e.what()));
+    }
+}
+
+/**
  * @brief Converts a pointer type to std::string.
- *
  * @tparam T The type of the input pointer.
  * @param ptr The input pointer to be converted.
  * @return The converted std::string.
@@ -192,19 +174,16 @@ template <PointerType T>
 auto toString(T ptr) -> std::string {
     try {
         if (ptr) {
-            return std::format("Pointer({}, {})", static_cast<const void*>(ptr),
-                               toString(*ptr));
+            return std::format("Pointer({}, {})", static_cast<const void*>(ptr), toString(*ptr));
         }
         return "nullptr";
     } catch (const std::exception& e) {
-        return std::format("Pointer({}) [Error: {}]",
-                           static_cast<const void*>(ptr), e.what());
+        return std::format("Pointer({}) [Error: {}]", static_cast<const void*>(ptr), e.what());
     }
 }
 
 /**
  * @brief Converts a smart pointer type to std::string.
- *
  * @tparam T The type of the input smart pointer.
  * @param ptr The input smart pointer to be converted.
  * @return The converted std::string.
@@ -213,31 +192,18 @@ template <SmartPointer T>
 auto toString(const T& ptr) -> std::string {
     try {
         if (ptr) {
-            return std::format("SmartPointer({}, {})",
-                               static_cast<const void*>(ptr.get()),
-                               toString(*ptr));
+            return std::format("SmartPointer({}, {})", 
+                             static_cast<const void*>(ptr.get()), toString(*ptr));
         }
         return "nullptr";
     } catch (const std::exception& e) {
         return std::format("SmartPointer({}) [Error: {}]",
-                           ptr ? static_cast<const void*>(ptr.get()) : nullptr,
-                           e.what());
+                         ptr ? static_cast<const void*>(ptr.get()) : nullptr, e.what());
     }
 }
 
 /**
- * @brief Specialized implementation for std::string type
- *
- * @param value The input std::string value to be converted.
- * @return The input string itself.
- */
-inline auto toString(const std::string& value) -> std::string {
-    return value;  // Simply return the string itself
-}
-
-/**
  * @brief Converts a container type to std::string with specified separator.
- *
  * @tparam T The type of the input container.
  * @param container The input container to be converted.
  * @param separator The separator to be used between elements.
@@ -247,55 +213,53 @@ inline auto toString(const std::string& value) -> std::string {
 template <Container T>
 auto toString(const T& container, std::string_view separator) -> std::string {
     try {
-        std::ostringstream oss;
+        std::string result;
+        result.reserve(std::ranges::size(container) * 16);
 
         if constexpr (MapType<T>) {
-            oss << "{";
+            result += "{";
             bool first = true;
 
             for (const auto& [key, value] : container) {
                 if (!first) {
-                    oss << separator;
+                    result += separator;
                 }
                 first = false;
 
                 try {
-                    oss << toString(key) << ": " << toString(value);
+                    result += std::format("{}: {}", toString(key), toString(value));
                 } catch (const std::exception& e) {
-                    oss << "[Error: " << e.what() << "]";
+                    result += std::format("[Error: {}]", e.what());
                 }
             }
-            oss << "}";
+            result += "}";
         } else {
-            // Use C++20 ranges for better readability
-            oss << "[";
+            result += "[";
             bool first = true;
 
-            for (const auto& item : std::ranges::views::all(container)) {
+            for (const auto& item : container) {
                 if (!first) {
-                    oss << separator;
+                    result += separator;
                 }
                 first = false;
 
                 try {
-                    oss << toString(item);
+                    result += toString(item);
                 } catch (const std::exception& e) {
-                    oss << "[Error: " << e.what() << "]";
+                    result += std::format("[Error: {}]", e.what());
                 }
             }
-            oss << "]";
+            result += "]";
         }
 
-        return oss.str();
+        return result;
     } catch (const std::exception& e) {
-        throw ToStringException(std::string("Container conversion failed: ") +
-                                e.what());
+        throw ToStringException(std::format("Container conversion failed: {}", e.what()));
     }
 }
 
 /**
  * @brief Overload for container type with default separator.
- *
  * @tparam T The type of the input container.
  * @param container The input container to be converted.
  * @return The converted std::string.
@@ -308,14 +272,13 @@ auto toString(const T& container) -> std::string {
 
 /**
  * @brief Converts a general type to std::string.
- *
  * @tparam T The type of the input value.
  * @param value The input value to be converted.
  * @return The converted std::string.
  * @throws ToStringException if conversion fails
  */
 template <typename T>
-    requires(!StringType<T> && !Container<T> && !PointerType<T> &&
+    requires(!StringType<T> && !Container<T> && !PointerType<T> && 
              !EnumType<T> && !SmartPointer<T>)
 auto toString(const T& value) -> std::string {
     try {
@@ -328,17 +291,15 @@ auto toString(const T& value) -> std::string {
         } else {
             static_assert(HasStdToString<T> || Streamable<T>,
                           "Type cannot be converted to string");
-            return "";  // Never reached due to static_assert
+            return "";
         }
     } catch (const std::exception& e) {
-        throw ToStringException(
-            std::string("General type conversion failed: ") + e.what());
+        throw ToStringException(std::format("General type conversion failed: {}", e.what()));
     }
 }
 
 /**
  * @brief Joins multiple arguments into a single command line string.
- *
  * @tparam Args The types of the input arguments.
  * @param args The input arguments to be joined.
  * @return The joined command line string.
@@ -346,27 +307,26 @@ auto toString(const T& value) -> std::string {
  */
 template <typename... Args>
 auto joinCommandLine(const Args&... args) -> std::string {
-    try {
-        if constexpr (sizeof...(Args) == 0) {
-            return "";
-        }
+    if constexpr (sizeof...(Args) == 0) {
+        return "";
+    }
 
-        // Use C++20 format to improve performance
-        return std::format(
-            "{}",
-            std::string_view(
-                (std::ostringstream() << ... << (toString(args) + ' ')).str())
-                .substr(0,
-                        (sizeof...(args) - 1) * 2 + toString(args...).size()));
+    try {
+        std::string result;
+        result.reserve(sizeof...(args) * 32);
+        
+        bool first = true;
+        ((first ? (result += toString(args), first = false) 
+                : (result += " " + toString(args))), ...);
+        
+        return result;
     } catch (const std::exception& e) {
-        throw ToStringException(std::string("Command line joining failed: ") +
-                                e.what());
+        throw ToStringException(std::format("Command line joining failed: {}", e.what()));
     }
 }
 
 /**
  * @brief Converts an array to std::string using C++20 ranges.
- *
  * @tparam T The type of the input array.
  * @param array The input array to be converted.
  * @param separator The separator to be used between elements.
@@ -374,35 +334,33 @@ auto joinCommandLine(const Args&... args) -> std::string {
  * @throws ToStringException if conversion fails
  */
 template <Container T>
-auto toStringArray(const T& array, std::string_view separator = " ")
-    -> std::string {
+auto toStringArray(const T& array, std::string_view separator = " ") -> std::string {
     try {
-        std::ostringstream oss;
-        bool first = true;
+        std::string result;
+        result.reserve(std::ranges::size(array) * 8);
 
-        for (const auto& item : std::ranges::views::all(array)) {
+        bool first = true;
+        for (const auto& item : array) {
             if (!first) {
-                oss << separator;
+                result += separator;
             }
             first = false;
 
             try {
-                oss << toString(item);
+                result += toString(item);
             } catch (const std::exception& e) {
-                oss << "[Error: " << e.what() << "]";
+                result += std::format("[Error: {}]", e.what());
             }
         }
 
-        return oss.str();
+        return result;
     } catch (const std::exception& e) {
-        throw ToStringException(std::string("Array conversion failed: ") +
-                                e.what());
+        throw ToStringException(std::format("Array conversion failed: {}", e.what()));
     }
 }
 
 /**
  * @brief Converts a range to std::string using C++20 spans.
- *
  * @tparam Iterator The type of the input iterators.
  * @param begin The beginning iterator of the range.
  * @param end The ending iterator of the range.
@@ -411,37 +369,34 @@ auto toStringArray(const T& array, std::string_view separator = " ")
  * @throws ToStringException if conversion fails
  */
 template <typename Iterator>
-auto toStringRange(Iterator begin, Iterator end,
-                   std::string_view separator = ", ") -> std::string {
+auto toStringRange(Iterator begin, Iterator end, std::string_view separator = ", ") -> std::string {
     try {
-        std::ostringstream oss;
-        oss << "[";
-        bool first = true;
+        std::string result = "[";
+        result.reserve(std::distance(begin, end) * 16 + 2);
 
+        bool first = true;
         for (auto iter = begin; iter != end; ++iter) {
             if (!first) {
-                oss << separator;
+                result += separator;
             }
             first = false;
 
             try {
-                oss << toString(*iter);
+                result += toString(*iter);
             } catch (const std::exception& e) {
-                oss << "[Error: " << e.what() << "]";
+                result += std::format("[Error: {}]", e.what());
             }
         }
 
-        oss << "]";
-        return oss.str();
+        result += "]";
+        return result;
     } catch (const std::exception& e) {
-        throw ToStringException(std::string("Range conversion failed: ") +
-                                e.what());
+        throw ToStringException(std::format("Range conversion failed: {}", e.what()));
     }
 }
 
 /**
  * @brief Converts a std::array to std::string.
- *
  * @tparam T The type of the elements in the array.
  * @tparam N The size of the array.
  * @param array The input array to be converted.
@@ -451,18 +406,15 @@ auto toStringRange(Iterator begin, Iterator end,
 template <typename T, std::size_t N>
 auto toString(const std::array<T, N>& array) -> std::string {
     try {
-        // Use C++20 span for safety and expressiveness
         std::span<const T, N> arraySpan{array};
         return toStringRange(arraySpan.begin(), arraySpan.end());
     } catch (const std::exception& e) {
-        throw ToStringException(std::string("std::array conversion failed: ") +
-                                e.what());
+        throw ToStringException(std::format("std::array conversion failed: {}", e.what()));
     }
 }
 
 /**
  * @brief Helper function to convert a tuple to std::string.
- *
  * @tparam Tuple The type of the input tuple.
  * @tparam I The indices of the tuple elements.
  * @param tpl The input tuple to be converted.
@@ -471,47 +423,32 @@ auto toString(const std::array<T, N>& array) -> std::string {
  * @throws ToStringException if conversion fails
  */
 template <typename Tuple, std::size_t... I>
-auto tupleToStringImpl(const Tuple& tpl, std::index_sequence<I...>,
-                       std::string_view separator) -> std::string {
+auto tupleToStringImpl(const Tuple& tpl, std::index_sequence<I...>, 
+                      std::string_view separator) -> std::string {
     try {
-        std::vector<std::string> elements;
-        elements.reserve(sizeof...(I));
+        std::string result = "(";
+        result.reserve(sizeof...(I) * 16 + 2);
 
-        // Use fold expressions and try-catch for each element
-        (
-            [&elements, &tpl]() {
-                try {
-                    elements.push_back(toString(std::get<I>(tpl)));
-                } catch (const std::exception& e) {
-                    elements.push_back(std::string("[Error: ") + e.what() +
-                                       "]");
-                }
-            }(),
-            ...);
-
-        std::ostringstream oss;
-        oss << "(";
         bool first = true;
+        (((!first ? result += separator : result),
+          first = false,
+          [&result, &tpl]() {
+              try {
+                  result += toString(std::get<I>(tpl));
+              } catch (const std::exception& e) {
+                  result += std::format("[Error: {}]", e.what());
+              }
+          }()), ...);
 
-        for (const auto& elem : elements) {
-            if (!first) {
-                oss << separator;
-            }
-            first = false;
-            oss << elem;
-        }
-
-        oss << ")";
-        return oss.str();
+        result += ")";
+        return result;
     } catch (const std::exception& e) {
-        throw ToStringException(std::string("Tuple conversion failed: ") +
-                                e.what());
+        throw ToStringException(std::format("Tuple conversion failed: {}", e.what()));
     }
 }
 
 /**
  * @brief Converts a std::tuple to std::string.
- *
  * @tparam Args The types of the elements in the tuple.
  * @param tpl The input tuple to be converted.
  * @param separator The separator to be used between elements.
@@ -519,15 +456,12 @@ auto tupleToStringImpl(const Tuple& tpl, std::index_sequence<I...>,
  * @throws ToStringException if conversion fails
  */
 template <typename... Args>
-auto toString(const std::tuple<Args...>& tpl, std::string_view separator = ", ")
-    -> std::string {
-    return tupleToStringImpl(tpl, std::index_sequence_for<Args...>(),
-                             separator);
+auto toString(const std::tuple<Args...>& tpl, std::string_view separator = ", ") -> std::string {
+    return tupleToStringImpl(tpl, std::index_sequence_for<Args...>(), separator);
 }
 
 /**
  * @brief Converts a std::optional to std::string.
- *
  * @tparam T The type of the value in the optional.
  * @param opt The input optional to be converted.
  * @return The converted std::string.
@@ -545,14 +479,12 @@ auto toString(const std::optional<T>& opt) -> std::string {
         }
         return "nullopt";
     } catch (const std::exception& e) {
-        throw ToStringException(std::string("Optional conversion failed: ") +
-                                e.what());
+        throw ToStringException(std::format("Optional conversion failed: {}", e.what()));
     }
 }
 
 /**
  * @brief Converts a std::variant to std::string.
- *
  * @tparam Ts The types of the values in the variant.
  * @param var The input variant to be converted.
  * @return The converted std::string.
@@ -561,20 +493,17 @@ auto toString(const std::optional<T>& opt) -> std::string {
 template <typename... Ts>
 auto toString(const std::variant<Ts...>& var) -> std::string {
     try {
-        try {
-            return std::visit(
-                [](const auto& value) -> std::string {
-                    return toString(value);
-                },
-                var);
-        } catch (const std::bad_variant_access& e) {
-            return std::format("Variant(bad_access: {})", e.what());
-        } catch (const std::exception& e) {
-            return std::format("Variant(error: {})", e.what());
-        }
+        return std::visit([](const auto& value) -> std::string {
+            try {
+                return toString(value);
+            } catch (const std::exception& e) {
+                return std::format("Variant(error: {})", e.what());
+            }
+        }, var);
+    } catch (const std::bad_variant_access& e) {
+        return std::format("Variant(bad_access: {})", e.what());
     } catch (const std::exception& e) {
-        throw ToStringException(std::string("Variant conversion failed: ") +
-                                e.what());
+        throw ToStringException(std::format("Variant conversion failed: {}", e.what()));
     }
 }
 
