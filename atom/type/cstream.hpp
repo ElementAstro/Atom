@@ -3,10 +3,8 @@
 
 #include <algorithm>
 #include <functional>
-#include <list>
 #include <numeric>
 #include <optional>
-#include <ranges>
 #include <utility>
 #include <vector>
 
@@ -29,7 +27,7 @@ struct ContainerAccumulate {
      * @return C& The accumulated container.
      */
     auto operator()(C& dest, const C& source) const -> C& {
-        std::ranges::copy(source, std::back_inserter(dest));
+        dest.insert(dest.end(), source.begin(), source.end());
         return dest;
     }
 };
@@ -47,7 +45,7 @@ struct identity {
      * @param v The input value.
      * @return V The same value.
      */
-    auto operator()(const V& v) const -> V { return v; }
+    constexpr auto operator()(const V& v) const -> V { return v; }
 };
 
 /**
@@ -59,7 +57,8 @@ template <typename C>
 class cstream {
 public:
     using value_type = typename C::value_type;
-    using it_type = decltype(std::begin(C{}));
+    using iterator = typename C::iterator;
+    using const_iterator = typename C::const_iterator;
 
     /**
      * @brief Constructs a cstream from a container reference.
@@ -103,8 +102,6 @@ public:
      */
     explicit operator C&&() { return getMove(); }
 
-    // Operations
-
     /**
      * @brief Sorts the container.
      *
@@ -114,7 +111,7 @@ public:
      */
     template <typename BinaryFunction = std::less<value_type>>
     auto sorted(const BinaryFunction& op = {}) -> cstream<C>& {
-        std::ranges::sort(container_ref_, op);
+        std::sort(container_ref_.begin(), container_ref_.end(), op);
         return *this;
     }
 
@@ -129,8 +126,9 @@ public:
     template <typename T, typename UnaryFunction>
     auto transform(UnaryFunction transform_f) const -> cstream<T> {
         T dest;
-        std::ranges::transform(container_ref_, std::back_inserter(dest),
-                               transform_f);
+        dest.reserve(container_ref_.size());
+        std::transform(container_ref_.begin(), container_ref_.end(),
+                       std::back_inserter(dest), transform_f);
         return cstream<T>(std::move(dest));
     }
 
@@ -143,7 +141,9 @@ public:
      */
     template <typename UnaryFunction>
     auto remove(UnaryFunction remove_f) -> cstream<C>& {
-        std::erase_if(container_ref_, remove_f);
+        auto new_end = std::remove_if(container_ref_.begin(),
+                                      container_ref_.end(), remove_f);
+        container_ref_.erase(new_end, container_ref_.end());
         return *this;
     }
 
@@ -156,7 +156,9 @@ public:
      */
     template <typename ValueType>
     auto erase(const ValueType& v) -> cstream<C>& {
-        container_ref_.erase(v);
+        auto new_end =
+            std::remove(container_ref_.begin(), container_ref_.end(), v);
+        container_ref_.erase(new_end, container_ref_.end());
         return *this;
     }
 
@@ -168,8 +170,9 @@ public:
      * @return cstream<C>& The filtered stream.
      */
     template <typename UnaryFunction>
-    auto filter(UnaryFunction filter) -> cstream<C>& {
-        return remove([&](const value_type& v) { return !filter(v); });
+    auto filter(UnaryFunction filter_func) -> cstream<C>& {
+        return remove(
+            [&filter_func](const value_type& v) { return !filter_func(v); });
     }
 
     /**
@@ -181,9 +184,11 @@ public:
      * @return cstream<C> The filtered stream.
      */
     template <typename UnaryFunction>
-    auto cpFilter(UnaryFunction filter) const -> cstream<C> {
+    auto cpFilter(UnaryFunction filter_func) const -> cstream<C> {
         C c;
-        std::ranges::copy_if(container_ref_, std::back_inserter(c), filter);
+        c.reserve(container_ref_.size());
+        std::copy_if(container_ref_.begin(), container_ref_.end(),
+                     std::back_inserter(c), filter_func);
         return cstream<C>(std::move(c));
     }
 
@@ -196,10 +201,10 @@ public:
      * @return value_type The accumulated value.
      */
     template <typename UnaryFunction = std::plus<value_type>>
-    auto accumulate(value_type initial = {},
-                    UnaryFunction op = {}) const -> value_type {
-        return std::accumulate(std::begin(container_ref_),
-                               std::end(container_ref_), initial, op);
+    auto accumulate(value_type initial = {}, UnaryFunction op = {}) const
+        -> value_type {
+        return std::accumulate(container_ref_.begin(), container_ref_.end(),
+                               initial, op);
     }
 
     /**
@@ -211,7 +216,7 @@ public:
      */
     template <typename UnaryFunction>
     auto forEach(UnaryFunction f) -> cstream<C>& {
-        std::ranges::for_each(container_ref_, f);
+        std::for_each(container_ref_.begin(), container_ref_.end(), f);
         return *this;
     }
 
@@ -224,7 +229,7 @@ public:
      */
     template <typename UnaryFunction>
     auto all(UnaryFunction f) const -> bool {
-        return std::ranges::all_of(container_ref_, f);
+        return std::all_of(container_ref_.begin(), container_ref_.end(), f);
     }
 
     /**
@@ -237,7 +242,7 @@ public:
      */
     template <typename UnaryFunction>
     auto any(UnaryFunction f) const -> bool {
-        return std::ranges::any_of(container_ref_, f);
+        return std::any_of(container_ref_.begin(), container_ref_.end(), f);
     }
 
     /**
@@ -249,7 +254,7 @@ public:
      */
     template <typename UnaryFunction>
     auto none(UnaryFunction f) const -> bool {
-        return std::ranges::none_of(container_ref_, f);
+        return std::none_of(container_ref_.begin(), container_ref_.end(), f);
     }
 
     /**
@@ -257,10 +262,7 @@ public:
      *
      * @return cstream<C> The copied stream.
      */
-    auto copy() const -> cstream<C> {
-        C c(container_ref_);
-        return cstream<C>{std::move(c)};
-    }
+    auto copy() const -> cstream<C> { return cstream<C>{C(container_ref_)}; }
 
     /**
      * @brief Gets the size of the container.
@@ -280,7 +282,7 @@ public:
      */
     template <typename UnaryFunction>
     auto count(UnaryFunction f) const -> std::size_t {
-        return std::ranges::count_if(container_ref_, f);
+        return std::count_if(container_ref_.begin(), container_ref_.end(), f);
     }
 
     /**
@@ -290,7 +292,7 @@ public:
      * @return std::size_t The count of the value.
      */
     auto count(const value_type& v) const -> std::size_t {
-        return std::ranges::count(container_ref_, v);
+        return std::count(container_ref_.begin(), container_ref_.end(), v);
     }
 
     /**
@@ -300,7 +302,8 @@ public:
      * @return bool True if the container contains the value, false otherwise.
      */
     auto contains(const value_type& value) const -> bool {
-        return any([&](const value_type& v) { return value == v; });
+        return std::find(container_ref_.begin(), container_ref_.end(), value) !=
+               container_ref_.end();
     }
 
     /**
@@ -309,7 +312,7 @@ public:
      * @return value_type The minimum element.
      */
     auto min() const -> value_type {
-        return *std::ranges::min_element(container_ref_);
+        return *std::min_element(container_ref_.begin(), container_ref_.end());
     }
 
     /**
@@ -318,7 +321,7 @@ public:
      * @return value_type The maximum element.
      */
     auto max() const -> value_type {
-        return *std::ranges::max_element(container_ref_);
+        return *std::max_element(container_ref_.begin(), container_ref_.end());
     }
 
     /**
@@ -337,9 +340,10 @@ public:
      * the container is empty.
      */
     auto first() const -> std::optional<value_type> {
-        if (container_ref_.empty())
+        if (container_ref_.empty()) {
             return std::nullopt;
-        return {*std::begin(container_ref_)};
+        }
+        return {*container_ref_.begin()};
     }
 
     /**
@@ -352,13 +356,12 @@ public:
      */
     template <typename UnaryFunction>
     auto first(UnaryFunction f) const -> std::optional<value_type> {
-        auto it = std::ranges::find_if(container_ref_, f);
-        if (it == std::end(container_ref_))
+        auto it = std::find_if(container_ref_.begin(), container_ref_.end(), f);
+        if (it == container_ref_.end()) {
             return std::nullopt;
+        }
         return {*it};
     }
-
-    // New functionalities
 
     /**
      * @brief Maps the elements of the container using a function.
@@ -370,7 +373,9 @@ public:
     template <typename UnaryFunction>
     auto map(UnaryFunction f) const -> cstream<C> {
         C c;
-        std::ranges::transform(container_ref_, std::back_inserter(c), f);
+        c.reserve(container_ref_.size());
+        std::transform(container_ref_.begin(), container_ref_.end(),
+                       std::back_inserter(c), f);
         return cstream<C>(std::move(c));
     }
 
@@ -386,7 +391,7 @@ public:
         C c;
         for (const auto& item : container_ref_) {
             auto subContainer = f(item);
-            std::ranges::copy(subContainer, std::back_inserter(c));
+            c.insert(c.end(), subContainer.begin(), subContainer.end());
         }
         return cstream<C>(std::move(c));
     }
@@ -397,7 +402,7 @@ public:
      * @return cstream<C>& The stream with duplicates removed.
      */
     auto distinct() -> cstream<C>& {
-        std::ranges::sort(container_ref_);
+        std::sort(container_ref_.begin(), container_ref_.end());
         auto last = std::unique(container_ref_.begin(), container_ref_.end());
         container_ref_.erase(last, container_ref_.end());
         return *this;
@@ -409,7 +414,7 @@ public:
      * @return cstream<C>& The stream with elements reversed.
      */
     auto reverse() -> cstream<C>& {
-        std::ranges::reverse(container_ref_);
+        std::reverse(container_ref_.begin(), container_ref_.end());
         return *this;
     }
 
@@ -426,8 +431,8 @@ private:
  */
 template <typename C, typename Add = std::plus<C>>
 struct JoinAccumulate {
-    C separator;  ///< The separator to use.
-    Add adder;    ///< The addition function.
+    C separator;
+    Add adder;
 
     /**
      * @brief Joins the source container into the destination container with a
@@ -506,14 +511,15 @@ auto makeStreamCopy(const T& t) -> cstream<T> {
 /**
  * @brief Creates a cstream from a container.
  *
- * @tparam T The type of the container.
- * @param t The container.
- * @return cstream<T> The created stream.
+ * @tparam N The element type.
+ * @tparam T The pointer type.
+ * @param t The container pointer.
+ * @param size The size of the container.
+ * @return cstream<std::vector<N>> The created stream.
  */
 template <typename N, typename T = N>
 auto cpstream(const T* t, std::size_t size) -> cstream<std::vector<N>> {
-    std::vector<N> data(size);
-    std::ranges::copy_n(t, size, data.begin());
+    std::vector<N> data(t, t + size);
     return makeStream(std::move(data));
 }
 

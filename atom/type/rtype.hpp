@@ -11,6 +11,8 @@
 
 namespace atom::type {
 
+using namespace atom::meta;
+
 /**
  * @struct Field
  * @brief Represents a field in a reflectable type.
@@ -22,7 +24,7 @@ struct Field {
     using member_type = MemberType;
     const char* name;          ///< The name of the field.
     const char* description;   ///< The description of the field.
-    MemberType T::*member;     ///< Pointer to the member field.
+    MemberType T::* member;    ///< Pointer to the member field.
     bool required;             ///< Indicates if the field is required.
     MemberType default_value;  ///< The default value of the field.
     using Validator =
@@ -38,7 +40,7 @@ struct Field {
      * @param def The default value of the field (default is an empty value).
      * @param v The validator function (default is nullptr).
      */
-    Field(const char* n, const char* desc, MemberType T::*m, bool r = true,
+    Field(const char* n, const char* desc, MemberType T::* m, bool r = true,
           MemberType def = {}, Validator v = nullptr)
         : name(n),
           description(desc),
@@ -60,7 +62,7 @@ struct ComplexField {
     using member_type = MemberType;
     const char* name;          ///< The name of the field.
     const char* description;   ///< The description of the field.
-    MemberType T::*member;     ///< Pointer to the member field.
+    MemberType T::* member;    ///< Pointer to the member field.
     ReflectType reflect_type;  ///< The reflection type.
 
     /**
@@ -70,7 +72,7 @@ struct ComplexField {
      * @param m Pointer to the member field.
      * @param reflect The reflection type.
      */
-    ComplexField(const char* n, const char* desc, MemberType T::*m,
+    ComplexField(const char* n, const char* desc, MemberType T::* m,
                  ReflectType reflect)
         : name(n), description(desc), member(m), reflect_type(reflect) {}
 };
@@ -107,7 +109,8 @@ struct Reflectable {
                          typename std::decay_t<decltype(field)>::member_type;
 
                      if (it != j.end()) {
-                         if constexpr (String<MemberType> || Char<MemberType>) {
+                         if constexpr (StringType<MemberType> ||
+                                       AnyChar<MemberType>) {
                              obj.*(field.member) = it->second.as_string();
                          } else if constexpr (Number<MemberType>) {
                              obj.*(field.member) =
@@ -124,11 +127,11 @@ struct Reflectable {
                              for (const auto& item : it->second.as_array()) {
                                  (obj.*(field.member))
                                      .push_back(
-                                         static_cast<MemberType::value_type>(
+                                         static_cast<
+                                             typename MemberType::value_type>(
                                              item.as_number()));
                              }
                          } else if constexpr (std::is_class_v<MemberType>) {
-                             // Handle complex object reflection
                              obj.*(field.member) = field.reflect_type.from_json(
                                  it->second.as_object());
                          } else {
@@ -171,7 +174,8 @@ struct Reflectable {
                 (([&] {
                      using MemberType =
                          typename std::decay_t<decltype(field)>::member_type;
-                     if constexpr (String<MemberType> || Char<MemberType>) {
+                     if constexpr (StringType<MemberType> ||
+                                   AnyChar<MemberType>) {
                          j[field.name] = JsonValue(obj.*(field.member));
                      } else if constexpr (Number<MemberType>) {
                          j[field.name] = JsonValue(
@@ -188,11 +192,11 @@ struct Reflectable {
                          JsonArray arr;
                          for (const auto& item : obj.*(field.member)) {
                              arr.push_back(JsonValue(
-                                 static_cast<MemberType::value_type>(item)));
+                                 static_cast<typename MemberType::value_type>(
+                                     item)));
                          }
                          j[field.name] = JsonValue(arr);
                      } else if constexpr (std::is_class_v<MemberType>) {
-                         // Handle complex object reflection
                          j[field.name] = JsonValue(
                              field.reflect_type.to_json(obj.*(field.member)));
                      } else {
@@ -221,7 +225,8 @@ struct Reflectable {
                          typename std::decay_t<decltype(field)>::member_type;
 
                      if (it != y.end()) {
-                         if constexpr (String<MemberType> || Char<MemberType>) {
+                         if constexpr (StringType<MemberType> ||
+                                       AnyChar<MemberType>) {
                              obj.*(field.member) = it->second.as_string();
                          } else if constexpr (Number<MemberType>) {
                              obj.*(field.member) =
@@ -245,8 +250,8 @@ struct Reflectable {
                                                              value_type>(
                                                  item.as_number()));
                                  }
-                             } else if constexpr (String<typename MemberType::
-                                                             value_type>) {
+                             } else if constexpr (
+                                 StringType<typename MemberType::value_type>) {
                                  for (const auto& item :
                                       it->second.as_array()) {
                                      (obj.*(field.member))
@@ -272,8 +277,8 @@ struct Reflectable {
                                              typename MemberType::mapped_type>(
                                              item.second.as_number());
                                  }
-                             } else if constexpr (String<typename MemberType::
-                                                             mapped_type>) {
+                             } else if constexpr (
+                                 StringType<typename MemberType::mapped_type>) {
                                  for (const auto& item :
                                       it->second.as_object()) {
                                      (obj.*(field.member))[item.first] =
@@ -379,7 +384,7 @@ struct Reflectable {
  */
 template <typename T, typename MemberType>
 auto make_field(const char* name, const char* description,
-                MemberType T::*member, bool required = true,
+                MemberType T::* member, bool required = true,
                 MemberType default_value = {},
                 typename Field<T, MemberType>::Validator validator = nullptr)
     -> Field<T, MemberType> {
@@ -400,7 +405,7 @@ auto make_field(const char* name, const char* description,
  */
 template <typename T, typename MemberType, typename ReflectType>
 auto make_field(const char* name, const char* description,
-                MemberType T::*member, ReflectType reflect_type)
+                MemberType T::* member, ReflectType reflect_type)
     -> ComplexField<T, MemberType, ReflectType> {
     return ComplexField<T, MemberType, ReflectType>(name, description, member,
                                                     reflect_type);

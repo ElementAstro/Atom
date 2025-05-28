@@ -16,22 +16,43 @@
 
 namespace atom::type {
 
-// Define Boost-specific exceptions if Boost is used
 #ifdef ATOM_USE_BOOST
+/**
+ * @brief Exception class for PodVector when using Boost
+ */
 struct PodVectorException : virtual boost::exception, virtual std::exception {
     const char* what() const noexcept override { return "PodVector exception"; }
 };
 #endif
 
+/**
+ * @brief Concept to check if a type is POD (Plain Old Data)
+ * @tparam T The type to check
+ */
 template <typename T>
 concept PodType = std::is_trivial_v<T> && std::is_standard_layout_v<T>;
 
+/**
+ * @brief Concept to check if a type is a valid value type
+ * @tparam T The type to check
+ */
 template <typename T>
 concept ValueType = requires(T t) {
     { std::is_copy_constructible_v<T> };
     { std::is_move_constructible_v<T> };
 };
 
+/**
+ * @brief A high-performance vector implementation optimized for POD types
+ *
+ * This class provides a vector-like container specifically optimized for Plain
+ * Old Data types. It uses memory-efficient operations like memcpy for better
+ * performance with trivial types and supports both standard and Boost-based
+ * implementations.
+ *
+ * @tparam T The POD type to store
+ * @tparam Growth The growth factor for capacity expansion (default 2)
+ */
 template <PodType T, int Growth = 2>
 class PodVector {
 #ifdef ATOM_USE_BOOST
@@ -40,11 +61,7 @@ class PodVector {
 #endif
 
     static constexpr int SIZE_T = sizeof(T);
-    // 修改 N 的计算方式，确保至少为 1
     static constexpr int N = std::max(1, 64 / SIZE_T);
-
-    // 移除限制元素大小的断言
-    // static_assert(N >= 4, "Element size too large");
 
 private:
     int size_ = 0;
@@ -60,7 +77,9 @@ public:
     using size_type = int;
 
 #ifdef ATOM_USE_BOOST
-    // Iterator using Boost's iterator_facade
+    /**
+     * @brief Iterator implementation using Boost's iterator_facade
+     */
     class iterator
         : public boost::iterator_facade<iterator, T,
                                         boost::random_access_traversal_tag> {
@@ -83,6 +102,9 @@ public:
         T* ptr_ = nullptr;
     };
 
+    /**
+     * @brief Const iterator implementation using Boost's iterator_facade
+     */
     class const_iterator
         : public boost::iterator_facade<const_iterator, const T,
                                         boost::random_access_traversal_tag> {
@@ -105,7 +127,9 @@ public:
         const T* ptr_ = nullptr;
     };
 #else
-    // Existing iterator implementation
+    /**
+     * @brief Random access iterator for PodVector
+     */
     class iterator {
     public:
         using iterator_category = std::random_access_iterator_tag;
@@ -191,6 +215,9 @@ public:
         pointer ptr_;
     };
 
+    /**
+     * @brief Const random access iterator for PodVector
+     */
     class const_iterator {
     public:
         using iterator_category = std::random_access_iterator_tag;
@@ -277,8 +304,15 @@ public:
     };
 #endif
 
+    /**
+     * @brief Default constructor
+     */
     constexpr PodVector() noexcept = default;
 
+    /**
+     * @brief Constructs PodVector from initializer list
+     * @param il Initializer list containing elements
+     */
     constexpr PodVector(std::initializer_list<T> il)
         : size_(static_cast<int>(il.size())),
           capacity_(std::max(N, static_cast<int>(il.size()))),
@@ -294,11 +328,19 @@ public:
 #endif
     }
 
+    /**
+     * @brief Constructs PodVector with specified size
+     * @param size Initial size of the vector
+     */
     explicit constexpr PodVector(int size)
         : size_(size),
           capacity_(std::max(N, size)),
           data_(allocator_.allocate(capacity_)) {}
 
+    /**
+     * @brief Copy constructor
+     * @param other PodVector to copy from
+     */
     PodVector(const PodVector& other)
         : size_(other.size_),
           capacity_(other.capacity_),
@@ -314,11 +356,20 @@ public:
 #endif
     }
 
+    /**
+     * @brief Move constructor
+     * @param other PodVector to move from
+     */
     PodVector(PodVector&& other) noexcept
         : size_(other.size_),
           capacity_(other.capacity_),
           data_(std::exchange(other.data_, nullptr)) {}
 
+    /**
+     * @brief Move assignment operator
+     * @param other PodVector to move from
+     * @return Reference to this object
+     */
     auto operator=(PodVector&& other) noexcept -> PodVector& {
         if (this != &other) {
             if (data_ != nullptr) {
@@ -331,8 +382,16 @@ public:
         return *this;
     }
 
+    /**
+     * @brief Copy assignment operator (deleted for performance reasons)
+     */
     auto operator=(const PodVector& other) -> PodVector& = delete;
 
+    /**
+     * @brief Adds an element to the end of the vector
+     * @tparam ValueT Type of the value to add
+     * @param t Value to add
+     */
     template <typename ValueT>
     void pushBack(ValueT&& t) {
 #ifdef ATOM_USE_BOOST
@@ -352,6 +411,11 @@ public:
 #endif
     }
 
+    /**
+     * @brief Constructs an element in-place at the end of the vector
+     * @tparam Args Types of constructor arguments
+     * @param args Constructor arguments
+     */
     template <typename... Args>
     void emplaceBack(Args&&... args) {
 #ifdef ATOM_USE_BOOST
@@ -371,6 +435,10 @@ public:
 #endif
     }
 
+    /**
+     * @brief Reserves storage for at least the specified number of elements
+     * @param cap New capacity
+     */
     constexpr void reserve(int cap) {
         if (cap <= capacity_) [[likely]] {
             return;
@@ -398,65 +466,133 @@ public:
 #endif
     }
 
+    /**
+     * @brief Removes the last element
+     */
     constexpr void popBack() noexcept { size_--; }
 
+    /**
+     * @brief Removes and returns the last element
+     * @return The last element
+     */
     constexpr auto popxBack() -> T { return std::move(data_[--size_]); }
 
+    /**
+     * @brief Extends the vector with elements from another vector
+     * @param other Source vector to copy elements from
+     */
     void extend(const PodVector& other) {
         for (const auto& elem : other) {
             pushBack(elem);
         }
     }
 
+    /**
+     * @brief Extends the vector with elements from a range
+     * @param begin_ptr Pointer to the beginning of the range
+     * @param end_ptr Pointer to the end of the range
+     */
     void extend(const T* begin_ptr, const T* end_ptr) {
         for (auto it = begin_ptr; it != end_ptr; ++it) {
             pushBack(*it);
         }
     }
 
+    /**
+     * @brief Accesses element at specified index
+     * @param index Index of the element
+     * @return Reference to the element
+     */
     constexpr auto operator[](int index) -> T& { return data_[index]; }
+
+    /**
+     * @brief Accesses element at specified index (const version)
+     * @param index Index of the element
+     * @return Const reference to the element
+     */
     constexpr auto operator[](int index) const -> const T& {
         return data_[index];
     }
 
-#ifdef ATOM_USE_BOOST
+    /**
+     * @brief Returns iterator to the beginning
+     * @return Iterator to the first element
+     */
     constexpr auto begin() noexcept -> iterator { return iterator(data_); }
-    constexpr auto end() noexcept -> iterator {
-        return iterator(data_ + size_);
-    }
-    constexpr auto begin() const noexcept -> const_iterator {
-        return const_iterator(data_);
-    }
-    constexpr auto end() const noexcept -> const_iterator {
-        return const_iterator(data_ + size_);
-    }
-#else
-    constexpr auto begin() noexcept -> iterator { return iterator(data_); }
-    constexpr auto end() noexcept -> iterator {
-        return iterator(data_ + size_);
-    }
-    constexpr auto begin() const noexcept -> const_iterator {
-        return const_iterator(data_);
-    }
-    constexpr auto end() const noexcept -> const_iterator {
-        return const_iterator(data_ + size_);
-    }
-#endif
 
+    /**
+     * @brief Returns iterator to the end
+     * @return Iterator to one past the last element
+     */
+    constexpr auto end() noexcept -> iterator {
+        return iterator(data_ + size_);
+    }
+
+    /**
+     * @brief Returns const iterator to the beginning
+     * @return Const iterator to the first element
+     */
+    constexpr auto begin() const noexcept -> const_iterator {
+        return const_iterator(data_);
+    }
+
+    /**
+     * @brief Returns const iterator to the end
+     * @return Const iterator to one past the last element
+     */
+    constexpr auto end() const noexcept -> const_iterator {
+        return const_iterator(data_ + size_);
+    }
+
+    /**
+     * @brief Accesses the last element
+     * @return Reference to the last element
+     */
     constexpr auto back() -> T& { return data_[size_ - 1]; }
+
+    /**
+     * @brief Accesses the last element (const version)
+     * @return Const reference to the last element
+     */
     constexpr auto back() const -> const T& { return data_[size_ - 1]; }
 
+    /**
+     * @brief Checks if the vector is empty
+     * @return true if empty, false otherwise
+     */
     [[nodiscard]] constexpr auto empty() const noexcept -> bool {
         return size_ == 0;
     }
 
+    /**
+     * @brief Returns the number of elements
+     * @return Number of elements in the vector
+     */
     [[nodiscard]] constexpr auto size() const noexcept -> int { return size_; }
 
+    /**
+     * @brief Returns pointer to the underlying data
+     * @return Pointer to the data array
+     */
     constexpr auto data() noexcept -> T* { return data_; }
+
+    /**
+     * @brief Returns const pointer to the underlying data
+     * @return Const pointer to the data array
+     */
     constexpr auto data() const noexcept -> const T* { return data_; }
 
+    /**
+     * @brief Clears the vector content
+     */
     constexpr void clear() noexcept { size_ = 0; }
 
+    /**
+     * @brief Inserts an element at the specified position
+     * @tparam ValueT Type of the value to insert
+     * @param i Index where to insert
+     * @param val Value to insert
+     */
     template <typename ValueT>
     void insert(int i, ValueT&& val) {
 #ifdef ATOM_USE_BOOST
@@ -484,6 +620,10 @@ public:
 #endif
     }
 
+    /**
+     * @brief Erases element at the specified position
+     * @param i Index of the element to erase
+     */
     constexpr void erase(int i) {
 #ifdef ATOM_USE_BOOST
         try {
@@ -498,8 +638,15 @@ public:
 #endif
     }
 
+    /**
+     * @brief Reverses the order of elements
+     */
     constexpr void reverse() { std::ranges::reverse(data_, data_ + size_); }
 
+    /**
+     * @brief Resizes the vector to specified size
+     * @param new_size New size of the vector
+     */
     constexpr void resize(int new_size) {
         if (new_size > capacity_) {
             reserve(new_size);
@@ -507,6 +654,10 @@ public:
         size_ = new_size;
     }
 
+    /**
+     * @brief Detaches the internal data array from the vector
+     * @return Pair containing the data pointer and current size
+     */
     auto detach() noexcept -> std::pair<T*, int> {
         T* p = data_;
         int current_size = size_;
@@ -515,13 +666,15 @@ public:
         return {p, current_size};
     }
 
+    /**
+     * @brief Destructor
+     */
     ~PodVector() {
         if (data_ != nullptr) {
 #ifdef ATOM_USE_BOOST
             try {
                 allocator_.deallocate(data_, capacity_);
             } catch (...) {
-                // Suppress all exceptions in destructor
             }
 #else
             allocator_.deallocate(data_, capacity_);
@@ -529,6 +682,10 @@ public:
         }
     }
 
+    /**
+     * @brief Returns the current capacity
+     * @return Current capacity of the vector
+     */
     [[nodiscard]] constexpr auto capacity() const noexcept -> int {
         return capacity_;
     }

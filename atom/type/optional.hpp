@@ -15,19 +15,17 @@ Description: A robust implementation of optional. Using modern C++ features.
 #ifndef ATOM_TYPE_OPTIONAL_HPP
 #define ATOM_TYPE_OPTIONAL_HPP
 
-#include <atomic>        // For std::atomic
-#include <compare>       // For spaceship operator
-#include <functional>    // For std::invoke
-#include <mutex>         // For std::mutex
-#include <optional>      // For std::optional
-#include <shared_mutex>  // For std::shared_mutex
-#include <stdexcept>     // For std::runtime_error
-#include <type_traits>   // For type traits
-#include <utility>       // For std::forward
+#include <compare>
+#include <functional>
+#include <mutex>
+#include <optional>
+#include <shared_mutex>
+#include <stdexcept>
+#include <type_traits>
+#include <utility>
 
 namespace atom::type {
 
-// Custom exception types for better error handling
 class OptionalAccessError : public std::runtime_error {
 public:
     explicit OptionalAccessError(const std::string& message)
@@ -40,7 +38,6 @@ public:
         : std::runtime_error(message) {}
 };
 
-// Concepts for validating template parameters
 template <typename T>
 concept Copyable = std::is_copy_constructible_v<std::remove_cvref_t<T>>;
 
@@ -61,10 +58,14 @@ concept Movable = std::is_move_constructible_v<std::remove_cvref_t<T>>;
 template <typename T>
 class Optional {
 private:
-    mutable std::shared_mutex mutex_;  // For thread safety
+    mutable std::shared_mutex mutex_;
     std::optional<T> storage_;
-    std::atomic<bool> is_initialized_ = {
-        false};  // Atomic flag to track initialization
+
+    void check_value() const {
+        if (!storage_.has_value()) {
+            throw OptionalAccessError("Optional has no value");
+        }
+    }
 
 public:
     /**
@@ -84,7 +85,7 @@ public:
     constexpr Optional(std::nullopt_t) noexcept : storage_(std::nullopt) {}
 
     /**
-     * @brief Constructor with a const reference.
+     * @brief Constructor with a value.
      *
      * Constructs an `Optional` object containing the given value.
      *
@@ -92,24 +93,8 @@ public:
      */
     template <typename U>
         requires std::convertible_to<U, T>
-    explicit Optional(const U& value) : storage_(value) {
-        is_initialized_.store(true, std::memory_order_release);
-    }
-
-    /**
-     * @brief Constructor with an rvalue reference.
-     *
-     * Constructs an `Optional` object containing the given value, which is
-     * moved into the object.
-     *
-     * @param value The value to be moved into the object.
-     */
-    template <typename U>
-        requires std::convertible_to<U, T>
     explicit Optional(U&& value) noexcept(std::is_nothrow_constructible_v<T, U>)
-        : storage_(std::forward<U>(value)) {
-        is_initialized_.store(true, std::memory_order_release);
-    }
+        : storage_(std::forward<U>(value)) {}
 
     /**
      * @brief Copy constructor.
@@ -121,9 +106,6 @@ public:
     Optional(const Optional& other) {
         std::shared_lock lock(other.mutex_);
         storage_ = other.storage_;
-        is_initialized_.store(
-            other.is_initialized_.load(std::memory_order_acquire),
-            std::memory_order_release);
     }
 
     /**
@@ -138,10 +120,7 @@ public:
         std::is_nothrow_move_constructible_v<T>) {
         std::unique_lock lock(other.mutex_);
         storage_ = std::move(other.storage_);
-        is_initialized_.store(
-            other.is_initialized_.load(std::memory_order_acquire),
-            std::memory_order_release);
-        other.reset();  // Move the object to empty state
+        other.storage_.reset();
     }
 
     /**
@@ -162,7 +141,6 @@ public:
     Optional& operator=(std::nullopt_t) noexcept {
         std::unique_lock lock(mutex_);
         storage_ = std::nullopt;
-        is_initialized_.store(false, std::memory_order_release);
         return *this;
     }
 
@@ -178,12 +156,8 @@ public:
         if (this != &other) {
             std::unique_lock lock1(mutex_, std::defer_lock);
             std::shared_lock lock2(other.mutex_, std::defer_lock);
-            std::lock(lock1, lock2);  // Prevent deadlock
-
+            std::lock(lock1, lock2);
             storage_ = other.storage_;
-            is_initialized_.store(
-                other.is_initialized_.load(std::memory_order_acquire),
-                std::memory_order_release);
         }
         return *this;
     }
@@ -202,19 +176,15 @@ public:
         if (this != &other) {
             std::unique_lock lock1(mutex_, std::defer_lock);
             std::unique_lock lock2(other.mutex_, std::defer_lock);
-            std::lock(lock1, lock2);  // Prevent deadlock
-
+            std::lock(lock1, lock2);
             storage_ = std::move(other.storage_);
-            is_initialized_.store(
-                other.is_initialized_.load(std::memory_order_acquire),
-                std::memory_order_release);
-            other.reset();  // Move the object to empty state
+            other.storage_.reset();
         }
         return *this;
     }
 
     /**
-     * @brief Assignment operator with a const reference.
+     * @brief Assignment operator with a value.
      *
      * Assigns a new value to the `Optional` object.
      *
@@ -223,34 +193,14 @@ public:
      */
     template <typename U>
         requires std::convertible_to<U, T>
-    Optional& operator=(const U& value) {
+    Optional& operator=(U&& value) {
         std::unique_lock lock(mutex_);
         try {
-            storage_ = value;
-            is_initialized_.store(true, std::memory_order_release);
+            storage_ = std::forward<U>(value);
         } catch (const std::exception& e) {
             throw OptionalOperationError(std::string("Assignment failed: ") +
                                          e.what());
         }
-        return *this;
-    }
-
-    /**
-     * @brief Assignment operator with an rvalue reference.
-     *
-     * Assigns a new value to the `Optional` object, which is moved into the
-     * object.
-     *
-     * @param value The new value to move into the object.
-     * @return A reference to this `Optional` object.
-     */
-    template <typename U>
-        requires std::convertible_to<U, T>
-    Optional& operator=(U&& value) noexcept(
-        std::is_nothrow_assignable_v<std::optional<T>&, U>) {
-        std::unique_lock lock(mutex_);
-        storage_ = std::forward<U>(value);
-        is_initialized_.store(true, std::memory_order_release);
         return *this;
     }
 
@@ -271,7 +221,6 @@ public:
         std::unique_lock lock(mutex_);
         try {
             storage_.emplace(std::forward<Args>(args)...);
-            is_initialized_.store(true, std::memory_order_release);
             return *storage_;
         } catch (const std::exception& e) {
             throw OptionalOperationError(
@@ -285,8 +234,8 @@ public:
      * @return True if the `Optional` object contains a value, false otherwise.
      */
     [[nodiscard]] constexpr explicit operator bool() const noexcept {
-        return is_initialized_.load(std::memory_order_acquire) &&
-               storage_.has_value();
+        std::shared_lock lock(mutex_);
+        return storage_.has_value();
     }
 
     /**
@@ -297,8 +246,8 @@ public:
      * @return True if the `Optional` object contains a value, false otherwise.
      */
     [[nodiscard]] bool has_value() const noexcept {
-        return is_initialized_.load(std::memory_order_acquire) &&
-               storage_.has_value();
+        std::shared_lock lock(mutex_);
+        return storage_.has_value();
     }
 
     /**
@@ -421,10 +370,9 @@ public:
     template <typename U>
     T value_or(U&& default_value) const& {
         std::shared_lock lock(mutex_);
-        if (!has_value()) {
-            return static_cast<T>(std::forward<U>(default_value));
-        }
-        return *storage_;
+        return storage_.has_value()
+                   ? *storage_
+                   : static_cast<T>(std::forward<U>(default_value));
     }
 
     /**
@@ -441,10 +389,9 @@ public:
     template <typename U>
     T value_or(U&& default_value) && {
         std::unique_lock lock(mutex_);
-        if (!has_value()) {
-            return static_cast<T>(std::forward<U>(default_value));
-        }
-        return std::move(*storage_);
+        return storage_.has_value()
+                   ? std::move(*storage_)
+                   : static_cast<T>(std::forward<U>(default_value));
     }
 
     /**
@@ -456,7 +403,6 @@ public:
     void reset() noexcept {
         std::unique_lock lock(mutex_);
         storage_.reset();
-        is_initialized_.store(false, std::memory_order_release);
     }
 
     /**
@@ -472,11 +418,11 @@ public:
         std::shared_lock lock2(other.mutex_, std::defer_lock);
         std::lock(lock1, lock2);
 
-        if (has_value() && other.has_value()) {
+        if (storage_.has_value() && other.storage_.has_value()) {
             return *storage_ <=> *other.storage_;
-        } else if (has_value()) {
+        } else if (storage_.has_value()) {
             return std::strong_ordering::greater;
-        } else if (other.has_value()) {
+        } else if (other.storage_.has_value()) {
             return std::strong_ordering::less;
         } else {
             return std::strong_ordering::equal;
@@ -496,10 +442,10 @@ public:
         std::shared_lock lock2(other.mutex_, std::defer_lock);
         std::lock(lock1, lock2);
 
-        if (has_value() && other.has_value()) {
+        if (storage_.has_value() && other.storage_.has_value()) {
             return *storage_ == *other.storage_;
         }
-        return has_value() == other.has_value();
+        return storage_.has_value() == other.storage_.has_value();
     }
 
     /**
@@ -510,7 +456,10 @@ public:
      * @param nullopt A nullopt_t instance.
      * @return True if the `Optional` object is empty, false otherwise.
      */
-    bool operator==(std::nullopt_t) const noexcept { return !has_value(); }
+    bool operator==(std::nullopt_t) const noexcept {
+        std::shared_lock lock(mutex_);
+        return !storage_.has_value();
+    }
 
     /**
      * @brief Comparison with std::nullopt_t (three-way comparison).
@@ -521,8 +470,9 @@ public:
      * @return A three-way comparison result.
      */
     auto operator<=>(std::nullopt_t) const noexcept {
-        return has_value() ? std::strong_ordering::greater
-                           : std::strong_ordering::equal;
+        std::shared_lock lock(mutex_);
+        return storage_.has_value() ? std::strong_ordering::greater
+                                    : std::strong_ordering::equal;
     }
 
     /**
@@ -542,7 +492,7 @@ public:
         using ReturnType = std::invoke_result_t<F, T>;
 
         std::shared_lock lock(mutex_);
-        if (!has_value()) {
+        if (!storage_.has_value()) {
             return Optional<ReturnType>{};
         }
 
@@ -552,38 +502,6 @@ public:
         } catch (const std::exception& e) {
             throw OptionalOperationError(std::string("Map operation failed: ") +
                                          e.what());
-        }
-    }
-
-    /**
-     * @brief Applies a function to the contained value, if present, with SIMD
-     * optimization.
-     *
-     * This is a specialized version of map that attempts to use SIMD operations
-     * when working with numeric types or SIMD-compatible types.
-     *
-     * @tparam F The type of the function.
-     * @param f The function to apply.
-     * @return An `Optional` object containing the result of applying the
-     * function, or an empty `Optional`.
-     */
-    template <typename F>
-    auto simd_map(F&& f) const -> Optional<std::invoke_result_t<F, T>> {
-        using ReturnType = std::invoke_result_t<F, T>;
-
-        std::shared_lock lock(mutex_);
-        if (!has_value()) {
-            return Optional<ReturnType>{};
-        }
-
-        try {
-            // Here we would insert SIMD-optimized code for numeric types
-            // For now, we'll just call the function normally
-            return Optional<ReturnType>(
-                std::invoke(std::forward<F>(f), *storage_));
-        } catch (const std::exception& e) {
-            throw OptionalOperationError(
-                std::string("SIMD map operation failed: ") + e.what());
         }
     }
 
@@ -601,7 +519,7 @@ public:
     template <typename F>
     auto and_then(F&& f) const -> std::invoke_result_t<F, T> {
         std::shared_lock lock(mutex_);
-        if (!has_value()) {
+        if (!storage_.has_value()) {
             return std::invoke_result_t<F, T>();
         }
 
@@ -644,7 +562,7 @@ public:
     template <typename F>
     auto or_else(F&& f) const -> T {
         std::shared_lock lock(mutex_);
-        if (has_value()) {
+        if (storage_.has_value()) {
             return *storage_;
         }
 
@@ -654,52 +572,6 @@ public:
             throw OptionalOperationError(
                 std::string("Or_else operation failed: ") + e.what());
         }
-    }
-
-    /**
-     * @brief Applies a function to the contained value and returns a new
-     * `Optional` with the result or a default value.
-     *
-     * If the `Optional` object contains a value, applies the function to that
-     * value and returns a new `Optional` with the result. Otherwise, returns a
-     * new `Optional` containing the default value.
-     *
-     * @tparam F The type of the function.
-     * @param f The function to apply if the `Optional` is not empty.
-     * @param default_value The default value to use if the `Optional` is empty.
-     * @return An `Optional` object containing the result of applying the
-     * function, or the default value.
-     */
-    template <typename F>
-    auto transform_or(F&& f, const T& default_value) const -> Optional<T> {
-        std::shared_lock lock(mutex_);
-        if (!has_value()) {
-            return Optional<T>(default_value);
-        }
-
-        try {
-            return Optional<T>(std::invoke(std::forward<F>(f), *storage_));
-        } catch (const std::exception& e) {
-            throw OptionalOperationError(
-                std::string("Transform_or operation failed: ") + e.what());
-        }
-    }
-
-    /**
-     * @brief Applies a function to the contained value and returns the result.
-     *
-     * If the `Optional` object contains a value, applies the function to that
-     * value and returns the result. Otherwise, returns a default-constructed
-     * value.
-     *
-     * @tparam F The type of the function.
-     * @param f The function to apply.
-     * @return The result of applying the function, or a default-constructed
-     * value if the `Optional` is empty.
-     */
-    template <typename F>
-    auto flat_map(F&& f) const -> std::invoke_result_t<F, T> {
-        return and_then(std::forward<F>(f));
     }
 
     /**
@@ -714,7 +586,7 @@ public:
     template <typename F>
     Optional& if_has_value(F&& f) {
         std::shared_lock lock(mutex_);
-        if (has_value()) {
+        if (storage_.has_value()) {
             try {
                 std::invoke(std::forward<F>(f), *storage_);
             } catch (const std::exception& e) {
@@ -723,22 +595,6 @@ public:
             }
         }
         return *this;
-    }
-
-private:
-    /**
-     * @brief Checks if the `Optional` object contains a value.
-     *
-     * Throws an exception if the `Optional` is empty.
-     *
-     * @throw OptionalAccessError if the `Optional` object is empty.
-     */
-    void check_value() const {
-        // No lock here as this is called from methods that already hold the
-        // lock
-        if (!has_value()) {
-            throw OptionalAccessError("Optional has no value");
-        }
     }
 };
 

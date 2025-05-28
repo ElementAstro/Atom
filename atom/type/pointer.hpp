@@ -30,18 +30,15 @@
 template <typename T>
 concept PointerType =
 #ifdef ATOM_USE_BOOST
-    boost::is_pointer<T>::value ||
-    boost::is_same<
-        T, std::shared_ptr<typename std::remove_pointer<T>::type>>::value ||
-    boost::is_same<
-        T, std::unique_ptr<typename std::remove_pointer<T>::type>>::value ||
-    boost::is_same<T,
-                   std::weak_ptr<typename std::remove_pointer<T>::type>>::value;
+    boost::is_pointer<T>::value || requires {
+        typename T::element_type;
+        { T{}.get() } -> std::convertible_to<typename T::element_type*>;
+    };
 #else
-    std::is_pointer_v<T> ||
-    std::is_same_v<T, std::shared_ptr<typename std::remove_pointer<T>::type>> ||
-    std::is_same_v<T, std::unique_ptr<typename std::remove_pointer<T>::type>> ||
-    std::is_same_v<T, std::weak_ptr<typename std::remove_pointer<T>::type>>;
+    std::is_pointer_v<T> || requires {
+        typename T::element_type;
+        { T{}.get() } -> std::convertible_to<typename T::element_type*>;
+    };
 #endif
 
 /**
@@ -70,7 +67,7 @@ private:
     std::atomic<bool> is_valid_{false};
 
     void validate() const {
-        if (!is_valid_.load(std::memory_order_acquire)) {
+        if (!is_valid_.load(std::memory_order_acquire)) [[unlikely]] {
             throw PointerException("Invalid pointer state");
         }
     }
@@ -101,7 +98,7 @@ public:
      * @throws PointerException if the pointer is null
      */
     explicit PointerSentinel(std::shared_ptr<T> p) : ptr_(std::move(p)) {
-        if (!std::get<std::shared_ptr<T>>(ptr_)) {
+        if (!std::get<std::shared_ptr<T>>(ptr_)) [[unlikely]] {
             throw PointerException(
                 "Null shared_ptr provided to PointerSentinel");
         }
@@ -115,7 +112,7 @@ public:
      * @throws PointerException if the pointer is null
      */
     explicit PointerSentinel(std::unique_ptr<T>&& p) : ptr_(std::move(p)) {
-        if (!std::get<std::unique_ptr<T>>(ptr_)) {
+        if (!std::get<std::unique_ptr<T>>(ptr_)) [[unlikely]] {
             throw PointerException(
                 "Null unique_ptr provided to PointerSentinel");
         }
@@ -129,7 +126,7 @@ public:
      * @throws PointerException if the weak pointer is expired
      */
     explicit PointerSentinel(std::weak_ptr<T> p) : ptr_(std::move(p)) {
-        if (std::get<std::weak_ptr<T>>(ptr_).expired()) {
+        if (std::get<std::weak_ptr<T>>(ptr_).expired()) [[unlikely]] {
             throw PointerException(
                 "Expired weak_ptr provided to PointerSentinel");
         }
@@ -143,7 +140,7 @@ public:
      * @throws PointerException if the pointer is null
      */
     explicit PointerSentinel(T* p) : ptr_(p) {
-        if (!p) {
+        if (!p) [[unlikely]] {
             throw PointerException(
                 "Null raw pointer provided to PointerSentinel");
         }
@@ -165,8 +162,8 @@ public:
             is_valid_.store(other.is_valid_.load(std::memory_order_acquire),
                             std::memory_order_release);
         } catch (const std::exception& e) {
-            throw PointerException(std::string("Copy construction failed: ") +
-                                   e.what());
+            throw PointerException("Copy construction failed: " +
+                                   std::string(e.what()));
         }
     }
 
@@ -260,18 +257,18 @@ public:
                     using U = std::decay_t<decltype(arg)>;
 
                     if constexpr (std::is_pointer_v<U>) {
-                        if (!arg) {
+                        if (!arg) [[unlikely]] {
                             throw PointerException("Null raw pointer");
                         }
                         return arg;
                     } else if constexpr (std::is_same_v<U, std::weak_ptr<T>>) {
                         auto spt = arg.lock();
-                        if (!spt) {
+                        if (!spt) [[unlikely]] {
                             throw PointerException("Expired weak_ptr");
                         }
                         return spt.get();
                     } else {
-                        if (!arg) {
+                        if (!arg) [[unlikely]] {
                             throw PointerException("Null smart pointer");
                         }
                         return arg.get();
@@ -281,8 +278,8 @@ public:
         } catch (const PointerException&) {
             throw;
         } catch (const std::exception& e) {
-            throw PointerException(std::string("Error getting pointer: ") +
-                                   e.what());
+            throw PointerException("Error getting pointer: " +
+                                   std::string(e.what()));
         }
     }
 
@@ -338,21 +335,21 @@ public:
                     using U = std::decay_t<decltype(arg)>;
 
                     if constexpr (std::is_pointer_v<U>) {
-                        if (!arg) {
+                        if (!arg) [[unlikely]] {
                             throw PointerException(
                                 "Null raw pointer during invoke");
                         }
                         return ((*arg).*func)(std::forward<Args>(args)...);
                     } else if constexpr (std::is_same_v<U, std::weak_ptr<T>>) {
                         auto spt = arg.lock();
-                        if (!spt) {
+                        if (!spt) [[unlikely]] {
                             throw PointerException(
                                 "Expired weak_ptr during invoke");
                         }
                         return ((*spt.get()).*
                                 func)(std::forward<Args>(args)...);
                     } else {
-                        if (!arg) {
+                        if (!arg) [[unlikely]] {
                             throw PointerException(
                                 "Null smart pointer during invoke");
                         }
@@ -364,8 +361,8 @@ public:
         } catch (const PointerException&) {
             throw;
         } catch (const std::exception& e) {
-            throw PointerException(std::string("Invoke operation failed: ") +
-                                   e.what());
+            throw PointerException("Invoke operation failed: " +
+                                   std::string(e.what()));
         }
     }
 
@@ -388,7 +385,7 @@ public:
                     using U = std::decay_t<decltype(arg)>;
 
                     if constexpr (std::is_pointer_v<U>) {
-                        if (!arg) {
+                        if (!arg) [[unlikely]] {
                             throw PointerException(
                                 "Null raw pointer during apply");
                         }
@@ -396,14 +393,14 @@ public:
                                            arg);
                     } else if constexpr (std::is_same_v<U, std::weak_ptr<T>>) {
                         auto spt = arg.lock();
-                        if (!spt) {
+                        if (!spt) [[unlikely]] {
                             throw PointerException(
                                 "Expired weak_ptr during apply");
                         }
                         return std::invoke(std::forward<Callable>(callable),
                                            spt.get());
                     } else {
-                        if (!arg) {
+                        if (!arg) [[unlikely]] {
                             throw PointerException(
                                 "Null smart pointer during apply");
                         }
@@ -415,8 +412,8 @@ public:
         } catch (const PointerException&) {
             throw;
         } catch (const std::exception& e) {
-            throw PointerException(std::string("Apply operation failed: ") +
-                                   e.what());
+            throw PointerException("Apply operation failed: " +
+                                   std::string(e.what()));
         }
     }
 
@@ -440,7 +437,7 @@ public:
                     using U = std::decay_t<decltype(arg)>;
 
                     if constexpr (std::is_pointer_v<U>) {
-                        if (!arg) {
+                        if (!arg) [[unlikely]] {
                             throw PointerException(
                                 "Null raw pointer during applyVoid");
                         }
@@ -448,14 +445,14 @@ public:
                                     std::forward<Args>(args)...);
                     } else if constexpr (std::is_same_v<U, std::weak_ptr<T>>) {
                         auto spt = arg.lock();
-                        if (!spt) {
+                        if (!spt) [[unlikely]] {
                             throw PointerException(
                                 "Expired weak_ptr during applyVoid");
                         }
                         std::invoke(std::forward<Func>(func), spt.get(),
                                     std::forward<Args>(args)...);
                     } else {
-                        if (!arg) {
+                        if (!arg) [[unlikely]] {
                             throw PointerException(
                                 "Null smart pointer during applyVoid");
                         }
@@ -467,8 +464,8 @@ public:
         } catch (const PointerException&) {
             throw;
         } catch (const std::exception& e) {
-            throw PointerException(std::string("ApplyVoid operation failed: ") +
-                                   e.what());
+            throw PointerException("ApplyVoid operation failed: " +
+                                   std::string(e.what()));
         }
     }
 
@@ -497,7 +494,7 @@ public:
                         return PointerSentinel<U>(static_cast<U*>(arg));
                     } else if constexpr (std::is_same_v<V, std::weak_ptr<T>>) {
                         auto spt = arg.lock();
-                        if (!spt) {
+                        if (!spt) [[unlikely]] {
                             throw PointerException(
                                 "Expired weak_ptr during conversion");
                         }
@@ -516,8 +513,8 @@ public:
         } catch (const PointerException&) {
             throw;
         } catch (const std::exception& e) {
-            throw PointerException(std::string("Type conversion failed: ") +
-                                   e.what());
+            throw PointerException("Type conversion failed: " +
+                                   std::string(e.what()));
         }
     }
 
@@ -553,7 +550,7 @@ public:
                 },
                 ptr_);
 
-            if (!copied_ptr) {
+            if (!copied_ptr) [[unlikely]] {
                 throw PointerException(
                     "Could not obtain shared_ptr for async operation");
             }
@@ -567,8 +564,8 @@ public:
         } catch (const PointerException&) {
             throw;
         } catch (const std::exception& e) {
-            throw PointerException(std::string("Async operation failed: ") +
-                                   e.what());
+            throw PointerException("Async operation failed: " +
+                                   std::string(e.what()));
         }
     }
 
@@ -587,7 +584,7 @@ public:
             validate();
 
             auto* ptr = this->get();
-            if (!ptr) {
+            if (!ptr) [[unlikely]] {
                 throw PointerException("Null pointer during SIMD operation");
             }
 
@@ -596,8 +593,8 @@ public:
         } catch (const PointerException&) {
             throw;
         } catch (const std::exception& e) {
-            throw PointerException(std::string("SIMD operation failed: ") +
-                                   e.what());
+            throw PointerException("SIMD operation failed: " +
+                                   std::string(e.what()));
         }
     }
 };

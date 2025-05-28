@@ -16,22 +16,17 @@ Description: A super enhanced string class.
 #define ATOM_TYPE_STRING_HPP
 
 #include <algorithm>
-#include <atomic>
-#include <cstdarg>
 #include <execution>
 #include <format>
 #include <functional>
 #include <iostream>
-#include <mutex>
 #include <optional>
 #include <regex>
-#include <shared_mutex>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
 
-// SIMD support is optional
 #ifdef ATOM_USE_SIMD
 #include "../utils/simd_wrapper.hpp"
 #endif
@@ -69,7 +64,6 @@ public:
      * @throws StringException if memory allocation fails
      */
     explicit String(const char* str) noexcept(false) : m_data_(str ? str : "") {
-        // Validate input and handle potential allocation failure
         try {
             if (str == nullptr) {
                 m_data_.clear();
@@ -108,51 +102,21 @@ public:
         }
     }
 
-    /**
-     * @brief Copy constructor - custom implementation, not using mutex
-     */
-    String(const String& other) : m_data_(other.m_data_) {}
-
-    /**
-     * @brief Move constructor - custom implementation, not using mutex
-     */
-    String(String&& other) noexcept : m_data_(std::move(other.m_data_)) {}
-
-    /**
-     * @brief Copy assignment - custom implementation, not using mutex
-     */
-    auto operator=(const String& other) -> String& {
-        if (this != &other) {
-            m_data_ = other.m_data_;
-        }
-        return *this;
-    }
-
-    /**
-     * @brief Move assignment - custom implementation, not using mutex
-     */
-    auto operator=(String&& other) noexcept -> String& {
-        if (this != &other) {
-            m_data_ = std::move(other.m_data_);
-        }
-        return *this;
-    }
-
-    /**
-     * @brief Destructor.
-     */
+    String(const String& other) = default;
+    String(String&& other) noexcept = default;
+    String& operator=(const String& other) = default;
+    String& operator=(String&& other) noexcept = default;
     ~String() = default;
 
     /**
-     * @brief Equality comparison - custom implementation, not using mutex
+     * @brief Equality comparison operator.
      */
     auto operator==(const String& other) const noexcept -> bool {
         return m_data_ == other.m_data_;
     }
 
     /**
-     * @brief Three-way comparison (C++20) - custom implementation, not using
-     * mutex
+     * @brief Three-way comparison operator (C++20).
      */
     auto operator<=>(const String& other) const noexcept {
         return m_data_ <=> other.m_data_;
@@ -180,7 +144,6 @@ public:
         if (str == nullptr) {
             throw StringException("Attempted to concatenate with nullptr");
         }
-
         try {
             m_data_ += str;
             return *this;
@@ -284,7 +247,6 @@ public:
      */
     [[nodiscard]] auto find(const String& str, size_t pos = 0) const noexcept
         -> size_t {
-        // Boundary check
         if (pos >= m_data_.length() || str.empty()) {
             return NPOS;
         }
@@ -300,46 +262,33 @@ public:
      */
     [[nodiscard]] auto findOptimized(const String& str,
                                      size_t pos = 0) const noexcept -> size_t {
-        // For small strings or when SIMD isn't beneficial, use standard find
         if (m_data_.length() < 64 || str.length() < 2 ||
             pos >= m_data_.length()) {
             return find(str, pos);
         }
 
 #ifdef ATOM_USE_SIMD
-        // Use SIMD implementation for strings that can benefit from SIMD
         const char* haystack = m_data_.c_str() + pos;
         const char* needle = str.cStr();
         const size_t haystackLen = m_data_.length() - pos;
         const size_t needleLen = str.length();
 
-// Check if we have supported SIMD instructions
 #if defined(SIMD_HAS_AVX2) && SIMD_HAS_AVX2
-        // For strings where first character matching is beneficial
-        // Use SIMD to quickly find potential matches based on first character
         simd::int8x16_t firstCharVec = simd::Vec<int8_t, 16>(needle[0]);
         const char* current = haystack;
         const char* end = haystack + haystackLen - needleLen + 1;
 
         while (current < end) {
-            // Load 16 bytes from the haystack
             simd::int8x16_t haystackVec = simd::Vec<int8_t, 16>::loadu(
                 reinterpret_cast<const int8_t*>(current));
-
-            // Compare with the first character of needle
             auto mask = haystackVec == firstCharVec;
-
-            // Convert to bitmask
             auto bitmask = simd::VecTraits<int8_t, 16>::mask_to_vector(mask);
             unsigned int matches = static_cast<unsigned int>(
                 simd::Vec<int8_t, 16>(bitmask).horizontal_sum());
 
             if (matches) {
-                // If we found any potential matches, check them the standard
-                // way
                 for (int i = 0; i < 16 && current + i < end; ++i) {
                     if (current[i] == needle[0]) {
-                        // Check if the rest of the string matches
                         if (std::memcmp(current + i + 1, needle + 1,
                                         needleLen - 1) == 0) {
                             return (current - haystack) + pos + i;
@@ -347,59 +296,18 @@ public:
                     }
                 }
             }
-
-            // Move to the next 16 bytes
             current += 16;
         }
 
-        // Check remaining bytes
         while (current <= haystack + haystackLen - needleLen) {
             if (std::memcmp(current, needle, needleLen) == 0) {
                 return (current - haystack) + pos;
             }
             ++current;
         }
-
-        return NPOS;
-#elif defined(SIMD_HAS_SSE2) && SIMD_HAS_SSE2
-        // Simpler SSE2 implementation
-        // Similar approach but with 16-byte vectors only
-        simd::int8x16_t firstCharVec = simd::Vec<int8_t, 16>(needle[0]);
-        const char* current = haystack;
-        const char* end = haystack + haystackLen - needleLen + 1;
-
-        while (current + 16 <= end) {
-            simd::int8x16_t haystackVec = simd::Vec<int8_t, 16>::loadu(
-                reinterpret_cast<const int8_t*>(current));
-            auto mask = haystackVec == firstCharVec;
-
-            // Check for potential matches
-            for (int i = 0; i < 16; ++i) {
-                if (mask[i] &&
-                    current + i + needleLen <= haystack + haystackLen) {
-                    if (std::memcmp(current + i, needle, needleLen) == 0) {
-                        return (current - haystack) + pos + i;
-                    }
-                }
-            }
-
-            current += 16;
-        }
-
-        // Check remaining bytes
-        while (current <= haystack + haystackLen - needleLen) {
-            if (std::memcmp(current, needle, needleLen) == 0) {
-                return (current - haystack) + pos;
-            }
-            ++current;
-        }
-
         return NPOS;
 #endif
 #endif
-
-        // Fall back to standard method when SIMD is not available or not
-        // enabled
         return m_data_.find(str.m_data_, pos);
     }
 
@@ -414,7 +322,6 @@ public:
         if (oldStr.empty()) {
             return false;
         }
-
         try {
             if (size_t pos = m_data_.find(oldStr.m_data_);
                 pos != std::string::npos) {
@@ -439,14 +346,12 @@ public:
         if (oldStr.empty()) {
             throw StringException("Cannot replace empty string");
         }
-
         try {
             size_t count = 0;
             size_t pos = 0;
             const size_t oldLen = oldStr.length();
             const size_t newLen = newStr.length();
 
-            // Pre-calculate approximately how much space we'll need
             if (newLen > oldLen) {
                 size_t estimatedGrowth = 0;
                 size_t tempPos = 0;
@@ -466,82 +371,10 @@ public:
                 pos += newLen;
                 ++count;
             }
-
             return count;
         } catch (const std::bad_alloc&) {
             throw StringException(
                 "Memory allocation failed during replaceAll operation");
-        }
-    }
-
-    /**
-     * @brief Parallel replace all occurrences for very large strings.
-     * @param oldStr String to replace
-     * @param newStr Replacement string
-     * @return Number of replacements made
-     * @throws StringException if memory allocation fails or oldStr is empty
-     */
-    auto replaceAllParallel(const String& oldStr, const String& newStr)
-        -> size_t {
-        // Only use parallel algorithm for large strings
-        if (m_data_.length() < 10000 || oldStr.empty()) {
-            return replaceAll(oldStr, newStr);
-        }
-
-        try {
-            std::vector<size_t> positions;
-            std::mutex positionsMutex;
-            const size_t chunkSize = 1000;
-            const size_t numChunks =
-                (m_data_.length() + chunkSize - 1) / chunkSize;
-
-            // Find all occurrences in parallel
-            std::atomic<size_t> count{0};
-
-#pragma omp parallel for
-            for (size_t i = 0; i < numChunks; ++i) {
-                const size_t start = i * chunkSize;
-                const size_t end =
-                    std::min(start + chunkSize, m_data_.length());
-
-                size_t pos = start;
-                std::vector<size_t> localPositions;
-
-                while (pos < end) {
-                    pos = m_data_.find(oldStr.m_data_, pos);
-                    if (pos == std::string::npos || pos >= end)
-                        break;
-                    localPositions.push_back(pos);
-                    pos += oldStr.length();
-                }
-
-                count += localPositions.size();
-
-                // Merge results
-                if (!localPositions.empty()) {
-                    std::lock_guard<std::mutex> lock(positionsMutex);
-                    positions.insert(positions.end(), localPositions.begin(),
-                                     localPositions.end());
-                }
-            }
-
-            // Sort positions (they might be out of order due to parallel
-            // execution)
-            std::sort(positions.begin(), positions.end());
-
-            // Apply replacements from back to front to avoid invalidating
-            // positions
-            std::string result = m_data_;
-            for (auto it = positions.rbegin(); it != positions.rend(); ++it) {
-                result.replace(*it, oldStr.length(), newStr.m_data_);
-            }
-
-            m_data_ = std::move(result);
-            return count;
-
-        } catch (const std::bad_alloc&) {
-            throw StringException(
-                "Memory allocation failed during parallel replace operation");
         }
     }
 
@@ -554,7 +387,6 @@ public:
         try {
             String result;
             result.m_data_.reserve(m_data_.length());
-
 #ifdef ATOM_USE_BOOST
             result.m_data_ = boost::to_upper_copy(m_data_);
 #else
@@ -578,7 +410,6 @@ public:
         try {
             String result;
             result.m_data_.reserve(m_data_.length());
-
 #ifdef ATOM_USE_BOOST
             result.m_data_ = boost::to_lower_copy(m_data_);
 #else
@@ -620,7 +451,6 @@ public:
                            std::back_inserter(tokens),
                            [](const std::string& s) { return String(s); });
 #else
-            // Estimate the number of tokens to avoid reallocations
             size_t count = 1;
             size_t pos = 0;
             while ((pos = m_data_.find(delimiter.m_data_, pos)) !=
@@ -628,20 +458,15 @@ public:
                 ++count;
                 pos += delimiter.length();
             }
+            tokens.reserve(count);
 
-            // Using push_back instead of reserve due to constructor
-            // compatibility issues tokens.reserve(count);
-
-            // Perform the split
             size_t start = 0;
             size_t end = m_data_.find(delimiter.m_data_);
-
             while (end != std::string::npos) {
                 tokens.push_back(substr(start, end - start));
                 start = end + delimiter.length();
                 end = m_data_.find(delimiter.m_data_, start);
             }
-
             tokens.push_back(substr(start));
 #endif
             return tokens;
@@ -665,7 +490,6 @@ public:
                 return String();
             }
 
-            // Calculate the total size needed to avoid reallocations
             size_t totalSize = 0;
             for (const auto& s : strings) {
                 totalSize += s.length();
@@ -783,7 +607,6 @@ public:
         if (m_data_.length() != other.m_data_.length()) {
             return false;
         }
-
 #ifdef ATOM_USE_BOOST
         return boost::iequals(m_data_, other.m_data_);
 #else
@@ -805,7 +628,6 @@ public:
         if (prefix.length() > m_data_.length()) {
             return false;
         }
-
 #ifdef ATOM_USE_BOOST
         return boost::starts_with(m_data_, prefix.m_data_);
 #else
@@ -822,7 +644,6 @@ public:
         if (suffix.length() > m_data_.length()) {
             return false;
         }
-
 #ifdef ATOM_USE_BOOST
         return boost::ends_with(m_data_, suffix.m_data_);
 #else
@@ -837,9 +658,8 @@ public:
      */
     [[nodiscard]] auto contains(const String& str) const noexcept -> bool {
         if (str.empty() || m_data_.empty()) {
-            return str.empty();  // Empty string is contained in any string
+            return str.empty();
         }
-
 #ifdef ATOM_USE_BOOST
         return boost::contains(m_data_, str.m_data_);
 #else
@@ -864,18 +684,12 @@ public:
      */
     auto replace(char oldChar, char newChar) noexcept -> size_t {
         size_t count = 0;
-#ifdef ATOM_USE_BOOST
-        std::string oldStr(1, oldChar);
-        std::string newStr(1, newChar);
-        count = boost::algorithm::replace_all(m_data_, oldStr, newStr);
-#else
         for (auto& c : m_data_) {
             if (c == oldChar) {
                 c = newChar;
                 ++count;
             }
         }
-#endif
         return count;
     }
 
@@ -930,18 +744,7 @@ public:
      * @param ch Character to remove
      * @return Number of characters removed
      */
-    auto remove(char ch) noexcept -> size_t {
-        size_t count = 0;
-#ifdef ATOM_USE_BOOST
-        auto originalSize = m_data_.size();
-        m_data_.erase(std::remove(m_data_.begin(), m_data_.end(), ch),
-                      m_data_.end());
-        count = originalSize - m_data_.size();
-#else
-        count = std::erase(m_data_, ch);
-#endif
-        return count;
-    }
+    auto remove(char ch) noexcept -> size_t { return std::erase(m_data_, ch); }
 
     /**
      * @brief Remove all occurrences of a substring.
@@ -954,17 +757,14 @@ public:
             if (str.empty() || m_data_.empty()) {
                 return 0;
             }
-
             size_t count = 0;
             size_t pos = 0;
             const size_t strLen = str.length();
-
             while ((pos = m_data_.find(str.m_data_, pos)) !=
                    std::string::npos) {
                 m_data_.erase(pos, strLen);
                 ++count;
             }
-
             return count;
         } catch (const std::bad_alloc&) {
             throw StringException(
@@ -1261,21 +1061,6 @@ public:
 
 private:
     std::string m_data_;
-
-    // Thread-safe operations helpers
-    mutable std::shared_mutex m_mutex_;
-
-    // For shared locking in const methods
-    [[nodiscard]] auto getSharedLock() const
-        -> std::shared_lock<std::shared_mutex> {
-        return std::shared_lock<std::shared_mutex>(m_mutex_);
-    }
-
-    // For exclusive locking in non-const methods
-    [[nodiscard]] auto getExclusiveLock()
-        -> std::unique_lock<std::shared_mutex> {
-        return std::unique_lock<std::shared_mutex>(m_mutex_);
-    }
 };
 
 /**
@@ -1353,7 +1138,9 @@ struct hash<String> {
 }  // namespace std
 #endif
 
-// Global swap function for ADL
+/**
+ * @brief Global swap function for ADL.
+ */
 inline void swap(String& lhs, String& rhs) noexcept { lhs.swap(rhs); }
 
 #endif  // ATOM_TYPE_STRING_HPP
