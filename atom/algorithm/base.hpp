@@ -20,6 +20,7 @@ Description: A collection of algorithms for C++
 #include <ranges>
 #include <span>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "atom/type/expected.hpp"

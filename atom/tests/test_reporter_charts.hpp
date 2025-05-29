@@ -4,10 +4,13 @@
 #if defined(ATOM_USE_PYBIND11)
 
 #include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <pybind11/embed.h>
@@ -17,6 +20,12 @@
 
 #include "atom/tests/test.hpp"
 #include "atom/tests/test_reporter.hpp"
+
+#if __has_include(<nlohmann/json.hpp>)
+#include <nlohmann/json.hpp>
+#else
+#include "atom/type/json.hpp"
+#endif
 
 namespace atom::test {
 
@@ -68,13 +77,46 @@ public:
     ~ChartReporter() override {
         if (pyInitialized_) {
             try {
-                // Cleanup Python resources if needed
                 py::finalize_interpreter();
             } catch (const std::exception& e) {
                 std::cerr << "Error during Python finalization: " << e.what()
                           << std::endl;
             }
         }
+    }
+
+    ChartReporter(const ChartReporter&) = delete;
+    auto operator=(const ChartReporter&) -> ChartReporter& = delete;
+
+    ChartReporter(ChartReporter&& other) noexcept
+        : config_(std::move(other.config_)),
+          pyInitialized_(other.pyInitialized_),
+          totalTestCount_(other.totalTestCount_),
+          currentSuite_(std::move(other.currentSuite_)),
+          currentTest_(std::move(other.currentTest_)),
+          startTime_(other.startTime_),
+          endTime_(other.endTime_),
+          testStartTime_(other.testStartTime_),
+          suiteData_(std::move(other.suiteData_)),
+          stats_(std::move(other.stats_)) {
+        other.pyInitialized_ = false;
+    }
+
+    auto operator=(ChartReporter&& other) noexcept -> ChartReporter& {
+        if (this != &other) {
+            config_ = std::move(other.config_);
+            pyInitialized_ = other.pyInitialized_;
+            totalTestCount_ = other.totalTestCount_;
+            currentSuite_ = std::move(other.currentSuite_);
+            currentTest_ = std::move(other.currentTest_);
+            startTime_ = other.startTime_;
+            endTime_ = other.endTime_;
+            testStartTime_ = other.testStartTime_;
+            suiteData_ = std::move(other.suiteData_);
+            stats_ = std::move(other.stats_);
+            other.pyInitialized_ = false;
+        }
+        return *this;
     }
 
     /**
@@ -85,6 +127,7 @@ public:
         totalTestCount_ = totalTests;
         startTime_ = std::chrono::high_resolution_clock::now();
         suiteData_.clear();
+        suiteData_.reserve(totalTests / 5);
     }
 
     /**
@@ -111,25 +154,18 @@ public:
      * @param result The result of the completed test case
      */
     void onTestEnd(const TestResult& result) override {
-        auto testEndTime = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            testEndTime - testStartTime_)
-                            .count();
-
-        // Prepare test result data for charting
         nlohmann::json testData;
         testData["name"] = result.name;
         testData["duration"] = result.duration;
         testData["passed"] = result.passed;
         testData["skipped"] = result.skipped;
         testData["message"] = result.message;
-        testData["timedOut"] = result.timedOut;
+        testData["timed_out"] = result.timedOut;
 
-        // Store in suite data structure
         if (!suiteData_.contains(currentSuite_)) {
             suiteData_[currentSuite_] = nlohmann::json::array();
         }
-        suiteData_[currentSuite_].push_back(testData);
+        suiteData_[currentSuite_].emplace_back(std::move(testData));
     }
 
     /**
@@ -138,7 +174,7 @@ public:
      * @param outputPath Path where the report should be saved
      */
     void generateReport(const TestStats& stats,
-                        const std::string& outputPath) override {
+                        std::string_view outputPath) override {
         if (!pyInitialized_) {
             std::cerr << "Python interpreter not initialized, skipping chart "
                          "generation"
@@ -147,7 +183,6 @@ public:
         }
 
         try {
-            // Create the output directory if it doesn't exist
             std::filesystem::path basePath(outputPath);
             if (std::filesystem::is_directory(basePath)) {
                 basePath /= config_.outputDirectory;
@@ -157,16 +192,13 @@ public:
             }
             std::filesystem::create_directories(basePath);
 
-            // Calculate derived metrics
             calculateDerivedMetrics();
 
-            // Save test data as JSON for Python
             std::string dataFilePath = (basePath / "test_data.json").string();
             std::ofstream dataFile(dataFilePath);
             dataFile << std::setw(4) << suiteData_ << std::endl;
             dataFile.close();
 
-            // Call Python to generate charts
             generateCharts(dataFilePath, basePath.string());
 
             std::cout << "Charts and visual report generated in: " << basePath
@@ -196,15 +228,10 @@ private:
             py::initialize_interpreter();
             pyInitialized_ = true;
 
-            // Import necessary Python modules
             auto sys = py::module::import("sys");
-            auto os = py::module::import("os");
-
-            // Add current directory to Python path to find charts.py
             py::str currentDir = py::str(".");
             sys.attr("path").attr("append")(currentDir);
 
-            // Check if matplotlib is installed
             try {
                 py::module::import("matplotlib");
             } catch (const std::exception&) {
@@ -228,10 +255,11 @@ private:
      * "SuiteName.TestName"
      * @return The suite name portion
      */
-    static std::string extractSuiteName(const std::string& fullTestName) {
+    [[nodiscard]] static auto extractSuiteName(std::string_view fullTestName)
+        -> std::string {
         size_t dotPos = fullTestName.find('.');
         if (dotPos != std::string::npos) {
-            return fullTestName.substr(0, dotPos);
+            return std::string(fullTestName.substr(0, dotPos));
         }
         return "DefaultSuite";
     }
@@ -242,7 +270,7 @@ private:
     void calculateDerivedMetrics() {
         for (auto& [suite, tests] : suiteData_.items()) {
             int passCount = 0;
-            int totalTests = tests.size();
+            const int totalTests = static_cast<int>(tests.size());
 
             for (auto& test : tests) {
                 if (test["passed"].get<bool>() &&
@@ -251,12 +279,13 @@ private:
                 }
             }
 
-            // Add pass rate and other metrics to each test
+            const double passRate =
+                (totalTests > 0)
+                    ? (static_cast<double>(passCount) / totalTests) * 100.0
+                    : 0.0;
+
             for (auto& test : tests) {
-                test["passRate"] =
-                    (totalTests > 0)
-                        ? (static_cast<double>(passCount) / totalTests) * 100.0
-                        : 0.0;
+                test["passRate"] = passRate;
             }
         }
     }
@@ -269,19 +298,15 @@ private:
     void generateCharts(const std::string& dataFilePath,
                         const std::string& outputDir) {
         try {
-            // Import the charts module
             auto chartsModule = py::module::import("atom.tests.charts");
 
-            // Create a ChartGenerator object
             auto generator = chartsModule.attr("ChartGenerator")(
                 py::none(), dataFilePath, convertStyleToString(config_.style),
                 config_.darkMode);
 
-            // Configure chart generation
             if (config_.generateReport) {
                 generator.attr("generate_report")(config_.metrics, outputDir);
             } else {
-                // Generate specific chart types
                 generateSpecificCharts(generator, outputDir);
             }
         } catch (const py::error_already_set& e) {
@@ -355,7 +380,8 @@ private:
      * @param style The chart style to convert
      * @return String representation for Python
      */
-    static std::string convertStyleToString(ChartStyle style) {
+    [[nodiscard]] static constexpr auto convertStyleToString(ChartStyle style)
+        -> std::string_view {
         switch (style) {
             case ChartStyle::Seaborn:
                 return "seaborn";
@@ -383,7 +409,7 @@ private:
  * @brief Check if chart reporting is available (PyBind11 initialized)
  * @return True if chart reporting is available
  */
-[[nodiscard]] inline bool isChartReportingAvailable() {
+[[nodiscard]] inline auto isChartReportingAvailable() -> bool {
     try {
         py::gil_scoped_acquire acquire;
         auto matplotlib = py::module::import("matplotlib");

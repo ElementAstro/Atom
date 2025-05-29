@@ -125,6 +125,9 @@ private:
     E error_;
 };
 
+template <typename E>
+unexpected(E) -> unexpected<E>;
+
 /**
  * @brief The primary `expected` class template.
  *

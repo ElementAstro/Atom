@@ -40,10 +40,13 @@ static_assert(static_cast<std::int32_t>(Connectivity::Four) == 0 &&
  * @brief Concept that defines requirements for a type to be used as a grid.
  */
 template <typename T>
-concept Grid = requires(T t, usize i) {
+concept Grid = requires(T t, std::size_t i, std::size_t j) {
     { t[i] } -> std::ranges::random_access_range;
-    { t[i][i] } -> std::convertible_to<typename T::value_type::value_type>;
+    { t[i][j] } -> std::convertible_to<typename T::value_type::value_type>;
     requires std::is_default_constructible_v<T>;
+    // { t.size() } -> std::convertible_to<usize>;
+    { t.empty() } -> std::same_as<bool>;
+    // requires(!t.empty() ? t[0].size() > 0 : true);
 };
 
 /**
@@ -53,11 +56,12 @@ concept Grid = requires(T t, usize i) {
  */
 template <typename T>
 concept SIMDCompatibleGrid =
-    Grid<T> && (std::same_as<typename T::value_type::value_type, i32> ||
-                std::same_as<typename T::value_type::value_type, f32> ||
-                std::same_as<typename T::value_type::value_type, f64> ||
-                std::same_as<typename T::value_type::value_type, u8> ||
-                std::same_as<typename T::value_type::value_type, u32>);
+    Grid<T> &&
+    (std::same_as<typename T::value_type::value_type, atom::algorithm::i32> ||
+     std::same_as<typename T::value_type::value_type, atom::algorithm::f32> ||
+     std::same_as<typename T::value_type::value_type, atom::algorithm::f64> ||
+     std::same_as<typename T::value_type::value_type, atom::algorithm::u8> ||
+     std::same_as<typename T::value_type::value_type, atom::algorithm::u32>);
 
 /**
  * @concept ContiguousGrid

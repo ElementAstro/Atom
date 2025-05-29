@@ -291,6 +291,10 @@ if(ATOM_BUILD_UNIFIED_LIBRARY)
         # Link all module targets
         target_link_libraries(atom-unified INTERFACE ${ATOM_MODULE_TARGETS})
         
+        # Create an alias 'atom' that points to 'atom-unified'
+        # This allows examples and other components to link against 'atom'
+        add_library(atom ALIAS atom-unified)
+        
         # Install unified target
         install(TARGETS atom-unified
                 EXPORT atom-unified-targets

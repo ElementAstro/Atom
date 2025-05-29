@@ -6,7 +6,6 @@
 #include <iomanip>
 #include <iostream>
 #include <memory>
-#include <string>
 #include <string_view>
 #include <vector>
 
@@ -63,7 +62,7 @@ public:
      * @param outputPath Path where the report should be saved
      */
     virtual void generateReport(const TestStats& stats,
-                                const std::string& outputPath) = 0;
+                                std::string_view outputPath) = 0;
 };
 
 /**
@@ -78,8 +77,8 @@ public:
      */
     void onTestRunStart(int totalTests) override {
         std::cout << "Starting execution of " << totalTests
-                  << " test cases...\n";
-        std::cout << "======================================================\n";
+                  << " test cases...\n"
+                  << "======================================================\n";
     }
 
     /**
@@ -87,8 +86,8 @@ public:
      * @param stats Statistics collected during the test run
      */
     void onTestRunEnd(const TestStats& stats) override {
-        std::cout << "======================================================\n";
-        std::cout << "Tests completed: " << stats.totalTests << " tests, "
+        std::cout << "======================================================\n"
+                  << "Tests completed: " << stats.totalTests << " tests, "
                   << stats.passedAsserts << " passed assertions, "
                   << stats.failedAsserts << " failed assertions, "
                   << stats.skippedTests << " skipped tests\n";
@@ -141,8 +140,7 @@ public:
      * @param outputPath Path where the report should be saved (ignored)
      */
     void generateReport(const TestStats& stats,
-                        const std::string& outputPath) override {
-        // Console reporter displays results in real-time; no file report needed
+                        std::string_view outputPath) override {
         (void)stats;
         (void)outputPath;
     }
@@ -158,7 +156,11 @@ public:
      * @brief Handles test run start event (no-op)
      * @param totalTests The total number of test cases (unused)
      */
-    void onTestRunStart(int totalTests) override { (void)totalTests; }
+    void onTestRunStart(int totalTests) override {
+        (void)totalTests;
+        results_.clear();
+        results_.reserve(totalTests);
+    }
 
     /**
      * @brief Handles test run end event (no-op)
@@ -177,7 +179,7 @@ public:
      * @param result The result of the completed test case
      */
     void onTestEnd(const TestResult& result) override {
-        results_.push_back(result);
+        results_.emplace_back(result);
     }
 
     /**
@@ -186,7 +188,7 @@ public:
      * @param outputPath Path where the report should be saved
      */
     void generateReport(const TestStats& stats,
-                        const std::string& outputPath) override {
+                        std::string_view outputPath) override {
         nlohmann::json report;
         report["total_tests"] = stats.totalTests;
         report["total_asserts"] = stats.totalAsserts;
@@ -194,7 +196,8 @@ public:
         report["failed_asserts"] = stats.failedAsserts;
         report["skipped_tests"] = stats.skippedTests;
 
-        report["results"] = nlohmann::json::array();
+        auto& resultsArray = report["results"] = nlohmann::json::array();
+
         for (const auto& result : results_) {
             nlohmann::json jsonResult;
             jsonResult["name"] = result.name;
@@ -203,7 +206,7 @@ public:
             jsonResult["message"] = result.message;
             jsonResult["duration"] = result.duration;
             jsonResult["timed_out"] = result.timedOut;
-            report["results"].push_back(jsonResult);
+            resultsArray.emplace_back(std::move(jsonResult));
         }
 
         std::filesystem::path filePath(outputPath);
@@ -212,12 +215,17 @@ public:
         }
 
         std::ofstream file(filePath);
-        file << std::setw(4) << report << std::endl;
-        std::cout << "JSON report saved to: " << filePath << std::endl;
+        if (file) {
+            file << std::setw(4) << report;
+            std::cout << "JSON report saved to: " << filePath << std::endl;
+        } else {
+            std::cerr << "Failed to create JSON report at: " << filePath
+                      << std::endl;
+        }
     }
 
 private:
-    std::vector<TestResult> results_;  ///< Collected test results
+    std::vector<TestResult> results_;
 };
 
 /**
@@ -227,10 +235,13 @@ private:
 class XmlReporter : public TestReporter {
 public:
     /**
-     * @brief Handles test run start event (no-op)
-     * @param totalTests The total number of test cases (unused)
+     * @brief Handles test run start event
+     * @param totalTests The total number of test cases
      */
-    void onTestRunStart(int totalTests) override { (void)totalTests; }
+    void onTestRunStart(int totalTests) override {
+        results_.clear();
+        results_.reserve(totalTests);
+    }
 
     /**
      * @brief Handles test run end event (no-op)
@@ -249,7 +260,7 @@ public:
      * @param result The result of the completed test case
      */
     void onTestEnd(const TestResult& result) override {
-        results_.push_back(result);
+        results_.emplace_back(result);
     }
 
     /**
@@ -258,16 +269,22 @@ public:
      * @param outputPath Path where the report should be saved
      */
     void generateReport(const TestStats& stats,
-                        const std::string& outputPath) override {
+                        std::string_view outputPath) override {
         std::filesystem::path filePath(outputPath);
         if (std::filesystem::is_directory(filePath)) {
             filePath /= "test_report.xml";
         }
 
         std::ofstream file(filePath);
-        file << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
-        file << "<testsuites>\n";
-        file << "    <testsuite name=\"AtomTests\" tests=\"" << stats.totalTests
+        if (!file) {
+            std::cerr << "Failed to create XML report at: " << filePath
+                      << std::endl;
+            return;
+        }
+
+        file << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+             << "<testsuites>\n"
+             << "    <testsuite name=\"AtomTests\" tests=\"" << stats.totalTests
              << "\" failures=\"" << stats.failedAsserts << "\" skipped=\""
              << stats.skippedTests << "\">\n";
 
@@ -285,14 +302,12 @@ public:
             }
         }
 
-        file << "    </testsuite>\n";
-        file << "</testsuites>\n";
-
+        file << "    </testsuite>\n</testsuites>\n";
         std::cout << "XML report saved to: " << filePath << std::endl;
     }
 
 private:
-    std::vector<TestResult> results_;  ///< Collected test results
+    std::vector<TestResult> results_;
 };
 
 /**
@@ -303,10 +318,13 @@ private:
 class HtmlReporter : public TestReporter {
 public:
     /**
-     * @brief Handles test run start event (no-op)
-     * @param totalTests The total number of test cases (unused)
+     * @brief Handles test run start event
+     * @param totalTests The total number of test cases
      */
-    void onTestRunStart(int totalTests) override { (void)totalTests; }
+    void onTestRunStart(int totalTests) override {
+        results_.clear();
+        results_.reserve(totalTests);
+    }
 
     /**
      * @brief Handles test run end event (no-op)
@@ -325,7 +343,7 @@ public:
      * @param result The result of the completed test case
      */
     void onTestEnd(const TestResult& result) override {
-        results_.push_back(result);
+        results_.emplace_back(result);
     }
 
     /**
@@ -334,64 +352,86 @@ public:
      * @param outputPath Path where the report should be saved
      */
     void generateReport(const TestStats& stats,
-                        const std::string& outputPath) override {
+                        std::string_view outputPath) override {
         std::filesystem::path filePath(outputPath);
         if (std::filesystem::is_directory(filePath)) {
             filePath /= "test_report.html";
         }
 
         std::ofstream file(filePath);
-        file << "<!DOCTYPE html>\n";
-        file << "<html lang=\"en\">\n";
-        file << "<head>\n";
-        file << "    <meta charset=\"UTF-8\">\n";
-        file << "    <meta name=\"viewport\" content=\"width=device-width, "
-                "initial-scale=1.0\">\n";
-        file << "    <title>Atom Test Report</title>\n";
-        file << "    <style>\n";
-        file << "        body { font-family: Arial, sans-serif; margin: 0; "
-                "padding: 20px; }\n";
-        file << "        h1 { color: #333; }\n";
-        file << "        .summary { background-color: #f0f0f0; padding: 15px; "
-                "border-radius: 5px; margin-bottom: 20px; }\n";
-        file << "        .passed { color: green; }\n";
-        file << "        .failed { color: red; }\n";
-        file << "        .skipped { color: orange; }\n";
-        file << "        table { width: 100%; border-collapse: collapse; }\n";
-        file << "        th, td { text-align: left; padding: 8px; "
-                "border-bottom: 1px solid #ddd; }\n";
-        file << "        tr:hover { background-color: #f5f5f5; }\n";
-        file << "        th { background-color: #4CAF50; color: white; }\n";
-        file << "    </style>\n";
-        file << "</head>\n";
-        file << "<body>\n";
-        file << "    <h1>Atom Test Report</h1>\n";
+        if (!file) {
+            std::cerr << "Failed to create HTML report at: " << filePath
+                      << std::endl;
+            return;
+        }
 
-        file << "    <div class=\"summary\">\n";
-        file << "        <h2>Test Summary</h2>\n";
-        file << "        <p>Total Tests: " << stats.totalTests << "</p>\n";
-        file << "        <p>Total Assertions: " << stats.totalAsserts
-             << "</p>\n";
-        file << "        <p>Passed Assertions: <span class=\"passed\">"
-             << stats.passedAsserts << "</span></p>\n";
-        file << "        <p>Failed Assertions: <span class=\"failed\">"
-             << stats.failedAsserts << "</span></p>\n";
-        file << "        <p>Skipped Tests: <span class=\"skipped\">"
-             << stats.skippedTests << "</span></p>\n";
-        file << "    </div>\n";
+        writeHtmlHeader(file);
+        writeHtmlSummary(file, stats);
+        writeHtmlResults(file);
+        writeHtmlFooter(file);
 
-        file << "    <h2>Test Details</h2>\n";
-        file << "    <table>\n";
-        file << "        <tr>\n";
-        file << "            <th>Test Name</th>\n";
-        file << "            <th>Status</th>\n";
-        file << "            <th>Duration (ms)</th>\n";
-        file << "            <th>Message</th>\n";
-        file << "        </tr>\n";
+        std::cout << "HTML report saved to: " << filePath << std::endl;
+    }
+
+private:
+    std::vector<TestResult> results_;
+
+    void writeHtmlHeader(std::ofstream& file) const {
+        file << "<!DOCTYPE html>\n"
+             << "<html lang=\"en\">\n"
+             << "<head>\n"
+             << "    <meta charset=\"UTF-8\">\n"
+             << "    <meta name=\"viewport\" content=\"width=device-width, "
+                "initial-scale=1.0\">\n"
+             << "    <title>Atom Test Report</title>\n"
+             << "    <style>\n"
+             << "        body { font-family: Arial, sans-serif; margin: 0; "
+                "padding: 20px; }\n"
+             << "        h1 { color: #333; }\n"
+             << "        .summary { background-color: #f0f0f0; padding: 15px; "
+                "border-radius: 5px; margin-bottom: 20px; }\n"
+             << "        .passed { color: green; }\n"
+             << "        .failed { color: red; }\n"
+             << "        .skipped { color: orange; }\n"
+             << "        table { width: 100%; border-collapse: collapse; }\n"
+             << "        th, td { text-align: left; padding: 8px; "
+                "border-bottom: 1px solid #ddd; }\n"
+             << "        tr:hover { background-color: #f5f5f5; }\n"
+             << "        th { background-color: #4CAF50; color: white; }\n"
+             << "    </style>\n"
+             << "</head>\n"
+             << "<body>\n"
+             << "    <h1>Atom Test Report</h1>\n";
+    }
+
+    void writeHtmlSummary(std::ofstream& file, const TestStats& stats) const {
+        file << "    <div class=\"summary\">\n"
+             << "        <h2>Test Summary</h2>\n"
+             << "        <p>Total Tests: " << stats.totalTests << "</p>\n"
+             << "        <p>Total Assertions: " << stats.totalAsserts
+             << "</p>\n"
+             << "        <p>Passed Assertions: <span class=\"passed\">"
+             << stats.passedAsserts << "</span></p>\n"
+             << "        <p>Failed Assertions: <span class=\"failed\">"
+             << stats.failedAsserts << "</span></p>\n"
+             << "        <p>Skipped Tests: <span class=\"skipped\">"
+             << stats.skippedTests << "</span></p>\n"
+             << "    </div>\n";
+    }
+
+    void writeHtmlResults(std::ofstream& file) const {
+        file << "    <h2>Test Details</h2>\n"
+             << "    <table>\n"
+             << "        <tr>\n"
+             << "            <th>Test Name</th>\n"
+             << "            <th>Status</th>\n"
+             << "            <th>Duration (ms)</th>\n"
+             << "            <th>Message</th>\n"
+             << "        </tr>\n";
 
         for (const auto& result : results_) {
-            file << "        <tr>\n";
-            file << "            <td>" << result.name << "</td>\n";
+            file << "        <tr>\n"
+                 << "            <td>" << result.name << "</td>\n";
 
             if (result.skipped) {
                 file << "            <td><span "
@@ -404,20 +444,17 @@ public:
                         "class=\"failed\">FAILED</span></td>\n";
             }
 
-            file << "            <td>" << result.duration << "</td>\n";
-            file << "            <td>" << result.message << "</td>\n";
-            file << "        </tr>\n";
+            file << "            <td>" << result.duration << "</td>\n"
+                 << "            <td>" << result.message << "</td>\n"
+                 << "        </tr>\n";
         }
 
         file << "    </table>\n";
-        file << "</body>\n";
-        file << "</html>\n";
-
-        std::cout << "HTML report saved to: " << filePath << std::endl;
     }
 
-private:
-    std::vector<TestResult> results_;  ///< Collected test results
+    void writeHtmlFooter(std::ofstream& file) const {
+        file << "</body>\n</html>\n";
+    }
 };
 
 /**
@@ -425,30 +462,29 @@ private:
  * @param format Report format identifier ("console", "json", "xml", "html")
  * @return Smart pointer to the appropriate reporter implementation
  */
-[[nodiscard]] inline auto createReporter(const std::string& format)
+[[nodiscard]] inline auto createReporter(std::string_view format)
     -> std::unique_ptr<TestReporter> {
     if (format == "json") {
         return std::make_unique<JsonReporter>();
-    } else if (format == "xml") {
+    }
+    if (format == "xml") {
         return std::make_unique<XmlReporter>();
-    } else if (format == "html") {
+    }
+    if (format == "html") {
         return std::make_unique<HtmlReporter>();
     }
 #if defined(ATOM_USE_PYBIND11)
-    else if (format == "chart" || format == "charts") {
-// Include the chart reporter only if PyBind11 is available
+    if (format == "chart" || format == "charts") {
 #include "atom/tests/test_reporter_charts.hpp"
         if (isChartReportingAvailable()) {
             return createChartReporter();
-        } else {
-            std::cerr << "Chart reporting is not available. Falling back to "
-                         "HTML reporter."
-                      << std::endl;
-            return std::make_unique<HtmlReporter>();
         }
+        std::cerr << "Chart reporting is not available. Falling back to HTML "
+                     "reporter."
+                  << std::endl;
+        return std::make_unique<HtmlReporter>();
     }
 #endif
-    // Default to console reporter
     return std::make_unique<ConsoleReporter>();
 }
 

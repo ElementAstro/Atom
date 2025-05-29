@@ -12,8 +12,10 @@
 #include <mutex>
 #include <regex>
 #include <set>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -30,6 +32,11 @@ namespace atom::test {
 
 struct TestCase;
 
+/**
+ * @brief Filter tests by regex pattern
+ * @param pattern Regex pattern to match test names
+ * @return Vector of matching test cases
+ */
 auto filterTests(const std::regex& pattern) -> std::vector<TestCase>;
 
 /**
@@ -37,19 +44,30 @@ auto filterTests(const std::regex& pattern) -> std::vector<TestCase>;
  * @param tag Tag to filter by
  * @return Vector of test cases with matching tag
  */
-auto filterTestsByTag(const std::string& tag) -> std::vector<TestCase>;
+auto filterTestsByTag(std::string_view tag) -> std::vector<TestCase>;
 
+/**
+ * @brief Run a filtered subset of tests
+ * @param tests Vector of test cases to run
+ * @param retryCount Number of times to retry failed tests
+ * @param parallel Whether to run tests in parallel
+ * @param numThreads Number of threads for parallel execution
+ */
 void runTestsFiltered(const std::vector<TestCase>& tests, int retryCount = 0,
                       bool parallel = false, int numThreads = 4);
 
+/**
+ * @brief Sort tests by their dependencies
+ * @param tests Vector of test cases to sort
+ * @return Dependency-sorted vector of test cases
+ */
 auto sortTestsByDependencies(const std::vector<TestCase>& tests)
     -> std::vector<TestCase>;
 
 /**
  * @brief Test case definition structure
- * @details Represents a single test case with all metadata
  */
-struct TestCase {
+struct alignas(128) TestCase {
     std::string name;
     std::function<void()> func;
     bool skip = false;
@@ -59,10 +77,8 @@ struct TestCase {
     std::vector<std::string> tags;
 
     /**
-     * @brief Executes the test function and returns whether it passed
-     * @details This wraps the void-returning func in a try-catch block and
-     * returns success/failure
-     * @return True if the test passed, false otherwise
+     * @brief Execute the test function safely
+     * @return True if test passed, false otherwise
      */
     [[nodiscard]] bool testFunction() const noexcept {
         try {
@@ -72,33 +88,31 @@ struct TestCase {
             return false;
         }
     }
-} ATOM_ALIGNAS(128);
+};
 
 /**
- * @brief Test result information
- * @details Stores the result of running a test case
+ * @brief Test execution result
  */
-struct TestResult {
+struct alignas(64) TestResult {
     std::string name;
     bool passed;
     bool skipped;
     std::string message;
     double duration;
     bool timedOut;
-} ATOM_ALIGNAS(128);
+};
 
 /**
- * @brief Test suite structure
- * @details A collection of related test cases
+ * @brief Test suite container
  */
-struct TestSuite {
+struct alignas(64) TestSuite {
     std::string name;
     std::vector<TestCase> testCases;
-} ATOM_ALIGNAS(64);
+};
 
 /**
- * @brief Get the global test suite collection
- * @return Reference to the vector of test suites
+ * @brief Get global test suite collection
+ * @return Reference to test suites vector
  */
 ATOM_INLINE auto getTestSuites() -> std::vector<TestSuite>& {
     static std::vector<TestSuite> testSuites;
@@ -106,8 +120,8 @@ ATOM_INLINE auto getTestSuites() -> std::vector<TestSuite>& {
 }
 
 /**
- * @brief Get the global test mutex
- * @return Reference to the test mutex
+ * @brief Get global test mutex for thread safety
+ * @return Reference to test mutex
  */
 ATOM_INLINE auto getTestMutex() -> std::mutex& {
     static std::mutex testMutex;
@@ -118,19 +132,19 @@ ATOM_INLINE auto getTestMutex() -> std::mutex& {
  * @brief Register a new test case
  * @param name Test name
  * @param func Test function
- * @param async Whether to run the test asynchronously
- * @param time_limit Time limit in milliseconds (0 = no limit)
- * @param skip Whether to skip the test
- * @param dependencies Tests that this test depends on
- * @param tags Optional tags for categorizing the test
+ * @param async Run asynchronously
+ * @param time_limit Time limit in milliseconds
+ * @param skip Skip this test
+ * @param dependencies Tests this depends on
+ * @param tags Categorization tags
  */
-ATOM_INLINE void registerTest(const std::string& name,
-                              std::function<void()> func, bool async = false,
-                              double time_limit = 0.0, bool skip = false,
+ATOM_INLINE void registerTest(std::string name, std::function<void()> func,
+                              bool async = false, double time_limit = 0.0,
+                              bool skip = false,
                               std::vector<std::string> dependencies = {},
                               std::vector<std::string> tags = {}) {
-    TestCase testCase{name,           std::move(func), skip,
-                      async,          time_limit,      std::move(dependencies),
+    TestCase testCase{std::move(name), std::move(func), skip,
+                      async,           time_limit,      std::move(dependencies),
                       std::move(tags)};
 
     std::lock_guard lock(getTestMutex());
@@ -138,64 +152,59 @@ ATOM_INLINE void registerTest(const std::string& name,
     auto it = std::find_if(suites.begin(), suites.end(),
                            [](const TestSuite& s) { return s.name.empty(); });
     if (it != suites.end()) {
-        it->testCases.push_back(std::move(testCase));
+        it->testCases.emplace_back(std::move(testCase));
     } else {
-        suites.push_back({"", {std::move(testCase)}});
+        suites.emplace_back(TestSuite{"", {std::move(testCase)}});
     }
 }
 
 /**
- * @brief Register a test suite with multiple test cases
- * @param suite_name Name of the suite
+ * @brief Register a complete test suite
+ * @param suite_name Name of the test suite
  * @param cases Vector of test cases
  */
-ATOM_INLINE void registerSuite(const std::string& suite_name,
+ATOM_INLINE void registerSuite(std::string suite_name,
                                std::vector<TestCase> cases) {
     std::lock_guard lock(getTestMutex());
-    getTestSuites().push_back({suite_name, std::move(cases)});
+    getTestSuites().emplace_back(std::move(suite_name), std::move(cases));
 }
 
 /**
- * @brief Test statistics structure
- * @details Tracks aggregate statistics about test execution
+ * @brief Test execution statistics
  */
-struct TestStats {
+struct alignas(64) TestStats {
     int totalTests = 0;
     int totalAsserts = 0;
     int passedAsserts = 0;
     int failedAsserts = 0;
     int skippedTests = 0;
     std::vector<TestResult> results;
-} ATOM_ALIGNAS(64);
+};
 
 /**
- * @brief Get the global test statistics
- * @return Reference to the test statistics
+ * @brief Get global test statistics
+ * @return Reference to test statistics
  */
 ATOM_INLINE auto getTestStats() -> TestStats& {
     static TestStats stats;
     return stats;
 }
 
-/**
- * @brief Function type for test lifecycle hooks
- */
 using Hook = std::function<void()>;
 
 /**
- * @brief Test lifecycle hooks structure
- * @details Functions called at different phases of the test lifecycle
+ * @brief Test lifecycle hooks
  */
-struct Hooks {
+struct alignas(64) Hooks {
     Hook beforeEach;
     Hook afterEach;
     Hook beforeAll;
     Hook afterAll;
-} ATOM_ALIGNAS(128);
+};
 
 /**
- * @brief Get the global test hooks
- * @return Reference to the test hooks
+ * @brief Get global test hooks
+ * @return Reference to test hooks
  */
 ATOM_INLINE auto getHooks() -> Hooks& {
     static Hooks hooks;
@@ -203,36 +212,25 @@ ATOM_INLINE auto getHooks() -> Hooks& {
 }
 
 /**
- * @brief Print colored text to the console
+ * @brief Print colored console output
  * @param text Text to print
  * @param color_code ANSI color code
  */
-ATOM_INLINE void printColored(const std::string& text,
-                              const std::string& color_code) {
+ATOM_INLINE void printColored(std::string_view text,
+                              std::string_view color_code) {
     std::cout << "\033[" << color_code << "m" << text << "\033[0m";
 }
 
 /**
- * @brief High-resolution timer class
- * @details Used to measure test execution time
+ * @brief High-resolution timer for performance measurement
  */
 struct Timer {
     std::chrono::high_resolution_clock::time_point startTime;
 
-    /**
-     * @brief Construct a timer and start it
-     */
     Timer() { reset(); }
 
-    /**
-     * @brief Reset the timer to the current time
-     */
     void reset() { startTime = std::chrono::high_resolution_clock::now(); }
 
-    /**
-     * @brief Get the elapsed time in milliseconds
-     * @return Elapsed time in milliseconds
-     */
     [[nodiscard]] auto elapsed() const -> double {
         return std::chrono::duration<double, std::milli>(
                    std::chrono::high_resolution_clock::now() - startTime)
@@ -241,12 +239,12 @@ struct Timer {
 };
 
 /**
- * @brief Export test results to a file
+ * @brief Export test results to various formats
  * @param filename Base filename without extension
  * @param format Output format (json, xml, html)
  */
-ATOM_INLINE void exportResults(const std::string& filename,
-                               const std::string& format) {
+ATOM_INLINE void exportResults(std::string_view filename,
+                               std::string_view format) {
     const auto& stats = getTestStats();
     nlohmann::json jsonReport;
 
@@ -265,17 +263,19 @@ ATOM_INLINE void exportResults(const std::string& filename,
         jsonResult["message"] = result.message;
         jsonResult["duration"] = result.duration;
         jsonResult["timed_out"] = result.timedOut;
-        jsonReport["test_results"].push_back(std::move(jsonResult));
+        jsonReport["test_results"].emplace_back(std::move(jsonResult));
     }
 
+    std::string filenameStr{filename};
+
     if (format == "json") {
-        std::ofstream file(filename + ".json");
+        std::ofstream file(filenameStr + ".json");
         if (file) {
             file << jsonReport.dump(4);
-            std::cout << "Test report saved to " << filename << ".json\n";
+            std::cout << "Test report saved to " << filenameStr << ".json\n";
         }
     } else if (format == "xml") {
-        std::ofstream file(filename + ".xml");
+        std::ofstream file(filenameStr + ".xml");
         if (file) {
             file << "<?xml version=\"1.0\"?>\n<testsuite>\n"
                  << "  <total_tests>" << stats.totalTests << "</total_tests>\n"
@@ -297,10 +297,10 @@ ATOM_INLINE void exportResults(const std::string& filename,
                      << "  </testcase>\n";
             }
             file << "</testsuite>\n";
-            std::cout << "Test report saved to " << filename << ".xml\n";
+            std::cout << "Test report saved to " << filenameStr << ".xml\n";
         }
     } else if (format == "html") {
-        std::ofstream file(filename + ".html");
+        std::ofstream file(filenameStr + ".html");
         if (file) {
             file << "<!DOCTYPE html><html><head><title>Test "
                     "Report</title></head><body>\n"
@@ -319,15 +319,15 @@ ATOM_INLINE void exportResults(const std::string& filename,
                      << " (" << result.duration << " ms)</li>\n";
             }
             file << "</ul>\n</body></html>";
-            std::cout << "Test report saved to " << filename << ".html\n";
+            std::cout << "Test report saved to " << filenameStr << ".html\n";
         }
     }
 }
 
 /**
- * @brief Run a single test case
- * @param test Test case to run
- * @param retryCount Number of times to retry on failure
+ * @brief Execute a single test case
+ * @param test Test case to execute
+ * @param retryCount Number of retry attempts on failure
  */
 ATOM_INLINE void runTestCase(const TestCase& test, int retryCount = 0) {
     auto& stats = getTestStats();
@@ -402,9 +402,9 @@ ATOM_INLINE void runTestCase(const TestCase& test, int retryCount = 0) {
 }
 
 /**
- * @brief Run tests in parallel using multiple threads
- * @param tests Vector of test cases to run
- * @param numThreads Number of threads to use
+ * @brief Execute tests in parallel using thread pool
+ * @param tests Vector of test cases
+ * @param numThreads Number of worker threads
  */
 ATOM_INLINE void runTestsInParallel(const std::vector<TestCase>& tests,
                                     int numThreads = 4) {
@@ -425,16 +425,16 @@ ATOM_INLINE void runTestsInParallel(const std::vector<TestCase>& tests,
 }
 
 /**
- * @brief Run all tests with configuration options
- * @param retryCount Number of times to retry failed tests
- * @param parallel Whether to run tests in parallel
+ * @brief Execute all registered tests
+ * @param retryCount Number of retry attempts for failed tests
+ * @param parallel Enable parallel execution
  * @param numThreads Number of threads for parallel execution
  */
 ATOM_INLINE void runAllTests(int retryCount = 0, bool parallel = false,
                              int numThreads = 4);
 
 /**
- * @brief Run tests with command line arguments
+ * @brief Execute tests with command line argument parsing
  * @param argc Argument count
  * @param argv Argument vector
  */
@@ -448,7 +448,7 @@ ATOM_INLINE void runTests(int argc, char* argv[]) {
     std::string testTag;
 
     for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
+        std::string_view arg = argv[i];
         if (arg == "--retry" && i + 1 < argc) {
             retryCount = std::stoi(argv[++i]);
         } else if (arg == "--parallel" && i + 1 < argc) {
@@ -490,15 +490,10 @@ ATOM_INLINE void runTests(int argc, char* argv[]) {
 }
 
 /**
- * @brief Run tests with default settings
+ * @brief Execute tests with default configuration
  */
 ATOM_INLINE void runTests() { runTests(0, nullptr); }
 
-/**
- * @brief Filter tests by name using regex
- * @param pattern Regex pattern to match test names
- * @return Vector of matching test cases
- */
 ATOM_INLINE auto filterTests(const std::regex& pattern)
     -> std::vector<TestCase> {
     std::vector<TestCase> filtered;
@@ -512,12 +507,7 @@ ATOM_INLINE auto filterTests(const std::regex& pattern)
     return filtered;
 }
 
-/**
- * @brief Filter tests by tag
- * @param tag Tag to filter by
- * @return Vector of test cases with matching tag
- */
-ATOM_INLINE auto filterTestsByTag(const std::string& tag)
+ATOM_INLINE auto filterTestsByTag(std::string_view tag)
     -> std::vector<TestCase> {
     std::vector<TestCase> filtered;
     for (const auto& suite : getTestSuites()) {
@@ -531,13 +521,6 @@ ATOM_INLINE auto filterTestsByTag(const std::string& tag)
     return filtered;
 }
 
-/**
- * @brief Run a filtered subset of tests
- * @param tests Vector of test cases to run
- * @param retryCount Number of times to retry failed tests
- * @param parallel Whether to run tests in parallel
- * @param numThreads Number of threads for parallel execution
- */
 ATOM_INLINE void runTestsFiltered(const std::vector<TestCase>& tests,
                                   int retryCount, bool parallel,
                                   int numThreads) {
@@ -552,19 +535,14 @@ ATOM_INLINE void runTestsFiltered(const std::vector<TestCase>& tests,
     }
 
     const auto& stats = getTestStats();
-    std::cout << "============================================================="
-                 "====================\n"
-              << "Total tests: " << stats.totalTests << "\n"
-              << "Total asserts: " << stats.totalAsserts << " | "
-              << stats.passedAsserts << " passed | " << stats.failedAsserts
-              << " failed | " << stats.skippedTests << " skipped\n";
+    std::cout
+        << "=================================================================\n"
+        << "Total tests: " << stats.totalTests << "\n"
+        << "Total asserts: " << stats.totalAsserts << " | "
+        << stats.passedAsserts << " passed | " << stats.failedAsserts
+        << " failed | " << stats.skippedTests << " skipped\n";
 }
 
-/**
- * @brief Sort tests by dependencies
- * @param tests Vector of test cases to sort
- * @return Sorted vector of test cases
- */
 ATOM_INLINE auto sortTestsByDependencies(const std::vector<TestCase>& tests)
     -> std::vector<TestCase> {
     std::map<std::string, TestCase> testMap;
@@ -595,12 +573,6 @@ ATOM_INLINE auto sortTestsByDependencies(const std::vector<TestCase>& tests)
     return sortedTests;
 }
 
-/**
- * @brief Run all tests
- * @param retryCount Number of times to retry failed tests
- * @param parallel Whether to run tests in parallel
- * @param numThreads Number of threads for parallel execution
- */
 ATOM_INLINE void runAllTests(int retryCount, bool parallel, int numThreads) {
     const auto& stats = getTestStats();
     Timer globalTimer;
@@ -621,18 +593,17 @@ ATOM_INLINE void runAllTests(int retryCount, bool parallel, int numThreads) {
         }
     }
 
-    std::cout << "============================================================="
-                 "====================\n"
-              << "Total tests: " << stats.totalTests << "\n"
-              << "Total asserts: " << stats.totalAsserts << " | "
-              << stats.passedAsserts << " passed | " << stats.failedAsserts
-              << " failed | " << stats.skippedTests << " skipped\n"
-              << "Total time: " << globalTimer.elapsed() << " ms\n";
+    std::cout
+        << "=================================================================\n"
+        << "Total tests: " << stats.totalTests << "\n"
+        << "Total asserts: " << stats.totalAsserts << " | "
+        << stats.passedAsserts << " passed | " << stats.failedAsserts
+        << " failed | " << stats.skippedTests << " skipped\n"
+        << "Total time: " << globalTimer.elapsed() << " ms\n";
 }
 
 /**
- * @brief Test assertion base class
- * @details Handles basic assertion logic and statistics tracking
+ * @brief Base assertion class for test verification
  */
 struct alignas(64) Expect {
     bool result;
@@ -641,11 +612,11 @@ struct alignas(64) Expect {
     std::string message;
 
     /**
-     * @brief Construct an assertion
-     * @param result Result of the assertion
-     * @param file Source file where the assertion was made
-     * @param line Line number where the assertion was made
-     * @param msg Message describing the assertion
+     * @brief Construct an assertion with result tracking
+     * @param result Assertion result
+     * @param file Source file location
+     * @param line Line number
+     * @param msg Descriptive message
      */
     Expect(bool result, const char* file, int line, std::string msg)
         : result(result), file(file), line(line), message(std::move(msg)) {
@@ -662,10 +633,10 @@ struct alignas(64) Expect {
 };
 
 /**
- * @brief Approximate equality assertion
- * @param lhs Left-hand value
- * @param rhs Right-hand value
- * @param epsilon Maximum allowed difference
+ * @brief Approximate floating-point equality assertion
+ * @param lhs Left operand
+ * @param rhs Right operand
+ * @param epsilon Tolerance value
  * @param file Source file
  * @param line Line number
  * @return Assertion result
@@ -678,74 +649,68 @@ ATOM_INLINE auto expectApprox(double lhs, double rhs, double epsilon,
                 std::to_string(rhs)};
 }
 
-/**
- * @brief Equality assertion
- * @param lhs Left-hand value
- * @param rhs Right-hand value
- * @param file Source file
- * @param line Line number
- * @return Assertion result
- */
 template <typename T, typename U>
 auto expectEq(const T& lhs, const U& rhs, const char* file, int line)
     -> Expect {
-    return Expect(
-        lhs == rhs, file, line,
-        "Expected " + std::to_string(lhs) + " == " + std::to_string(rhs));
+    if constexpr (std::is_arithmetic_v<T> && std::is_arithmetic_v<U>) {
+        return Expect(
+            lhs == rhs, file, line,
+            "Expected " + std::to_string(lhs) + " == " + std::to_string(rhs));
+    } else {
+        std::stringstream stream;
+        stream << "Expected " << lhs << " == " << rhs;
+        return Expect(lhs == rhs, file, line, stream.str());
+    }
 }
 
-/**
- * @brief Inequality assertion
- * @param lhs Left-hand value
- * @param rhs Right-hand value
- * @param file Source file
- * @param line Line number
- * @return Assertion result
- */
 template <typename T, typename U>
 auto expectNe(const T& lhs, const U& rhs, const char* file, int line)
     -> Expect {
-    return Expect(
-        lhs != rhs, file, line,
-        "Expected " + std::to_string(lhs) + " != " + std::to_string(rhs));
+    if constexpr (std::is_arithmetic_v<T> && std::is_arithmetic_v<U>) {
+        return Expect(
+            lhs != rhs, file, line,
+            "Expected " + std::to_string(lhs) + " != " + std::to_string(rhs));
+    } else {
+        std::stringstream stream;
+        stream << "Expected " << lhs << " != " << rhs;
+        return Expect(lhs != rhs, file, line, stream.str());
+    }
 }
 
-/**
- * @brief Greater-than assertion
- * @param lhs Left-hand value
- * @param rhs Right-hand value
- * @param file Source file
- * @param line Line number
- * @return Assertion result
- */
 template <typename T, typename U>
 auto expectGt(const T& lhs, const U& rhs, const char* file, int line)
     -> Expect {
-    return Expect(
-        lhs > rhs, file, line,
-        "Expected " + std::to_string(lhs) + " > " + std::to_string(rhs));
+    if constexpr (std::is_arithmetic_v<T> && std::is_arithmetic_v<U>) {
+        return Expect(
+            lhs > rhs, file, line,
+            "Expected " + std::to_string(lhs) + " > " + std::to_string(rhs));
+    } else {
+        std::stringstream stream;
+        stream << "Expected " << lhs << " > " << rhs;
+        return Expect(lhs > rhs, file, line, stream.str());
+    }
 }
 
 /**
- * @brief String contains assertion
+ * @brief String containment assertion
  * @param str String to search in
- * @param substr Substring to search for
+ * @param substr Substring to find
  * @param file Source file
  * @param line Line number
  * @return Assertion result
  */
-ATOM_INLINE auto expectContains(const std::string& str,
-                                const std::string& substr, const char* file,
-                                int line) -> Expect {
-    bool result = str.contains(substr);
+ATOM_INLINE auto expectContains(std::string_view str, std::string_view substr,
+                                const char* file, int line) -> Expect {
+    bool result = str.find(substr) != std::string_view::npos;
     return {result, file, line,
-            "Expected \"" + str + "\" to contain \"" + substr + "\""};
+            "Expected \"" + std::string(str) + "\" to contain \"" +
+                std::string(substr) + "\""};
 }
 
 /**
- * @brief Set equality assertion
- * @param lhs Left-hand set
- * @param rhs Right-hand set
+ * @brief Set equality assertion for vectors
+ * @param lhs Left vector
+ * @param rhs Right vector
  * @param file Source file
  * @param line Line number
  * @return Assertion result
@@ -759,46 +724,34 @@ ATOM_INLINE auto expectSetEq(const std::vector<T>& lhs,
     return {lhsSet == rhsSet, file, line, "Expected sets to be equal"};
 }
 
-/**
- * @brief Less-than assertion
- * @param lhs Left-hand value
- * @param rhs Right-hand value
- * @param file Source file
- * @param line Line number
- * @return Assertion result
- */
 template <typename T, typename U>
 auto expectLt(const T& lhs, const U& rhs, const char* file, int line)
     -> Expect {
-    return Expect(
-        lhs < rhs, file, line,
-        "Expected " + std::to_string(lhs) + " < " + std::to_string(rhs));
+    if constexpr (std::is_arithmetic_v<T> && std::is_arithmetic_v<U>) {
+        return Expect(
+            lhs < rhs, file, line,
+            "Expected " + std::to_string(lhs) + " < " + std::to_string(rhs));
+    } else {
+        std::stringstream stream;
+        stream << "Expected " << lhs << " < " << rhs;
+        return Expect(lhs < rhs, file, line, stream.str());
+    }
 }
 
-/**
- * @brief Greater-than-or-equal assertion
- * @param lhs Left-hand value
- * @param rhs Right-hand value
- * @param file Source file
- * @param line Line number
- * @return Assertion result
- */
 template <typename T, typename U>
 auto expectGe(const T& lhs, const U& rhs, const char* file, int line)
     -> Expect {
-    return Expect(
-        lhs >= rhs, file, line,
-        "Expected " + std::to_string(lhs) + " >= " + std::to_string(rhs));
+    if constexpr (std::is_arithmetic_v<T> && std::is_arithmetic_v<U>) {
+        return Expect(
+            lhs >= rhs, file, line,
+            "Expected " + std::to_string(lhs) + " >= " + std::to_string(rhs));
+    } else {
+        std::stringstream stream;
+        stream << "Expected " << lhs << " >= " << rhs;
+        return Expect(lhs >= rhs, file, line, stream.str());
+    }
 }
 
-/**
- * @brief Less-than-or-equal assertion
- * @param lhs Left-hand value
- * @param rhs Right-hand value
- * @param file Source file
- * @param line Line number
- * @return Assertion result
- */
 template <typename T, typename U>
     requires std::is_convertible_v<
         decltype(std::declval<T>() <= std::declval<U>()), bool>
@@ -818,7 +771,7 @@ auto expectLe(const T& lhs, const U& rhs, const char* file, int line)
 /**
  * @brief Predicate-based assertion
  * @param value Value to test
- * @param predicate Predicate function
+ * @param predicate Test predicate
  * @param file Source file
  * @param line Line number
  * @param message Custom message
@@ -827,15 +780,16 @@ auto expectLe(const T& lhs, const U& rhs, const char* file, int line)
 template <typename T, typename Pred>
     requires std::is_invocable_r_v<bool, Pred, T>
 auto expectThat(const T& value, Pred predicate, const char* file, int line,
-                const std::string& message = "") -> Expect {
+                std::string_view message = "") -> Expect {
     bool result = predicate(value);
-    return {result, file, line,
-            message.empty() ? "Predicate failed for value" : message};
+    return {
+        result, file, line,
+        message.empty() ? "Predicate failed for value" : std::string(message)};
 }
 
 /**
- * @brief Exception assertion
- * @param func Function that should throw
+ * @brief Exception throwing assertion
+ * @param func Function expected to throw
  * @param file Source file
  * @param line Line number
  * @return Assertion result
@@ -853,49 +807,42 @@ auto expectThrows(Func&& func, const char* file, int line) -> Expect {
 }
 
 /**
- * @brief Test suite builder class
- * @details Uses RAII pattern to organize tests in suites
+ * @brief RAII test suite builder for organized test registration
  */
 class TestSuiteBuilder {
 public:
-    /**
-     * @brief Construct a test suite builder
-     * @param name Suite name
-     */
     explicit TestSuiteBuilder(std::string name) : suiteName_(std::move(name)) {}
 
-    /**
-     * @brief Destructor - registers the suite
-     */
     ~TestSuiteBuilder() {
         if (!testCases_.empty()) {
-            registerSuite(suiteName_, std::move(testCases_));
+            registerSuite(std::move(suiteName_), std::move(testCases_));
         }
     }
 
     /**
-     * @brief Add a test to the suite
+     * @brief Add test to suite with fluent interface
      * @param name Test name
      * @param func Test function
-     * @param async Whether to run asynchronously
+     * @param async Async execution flag
      * @param timeLimit Time limit in milliseconds
-     * @param skip Whether to skip the test
+     * @param skip Skip flag
      * @param dependencies Test dependencies
-     * @param tags Optional test tags
-     * @return Reference to this builder for method chaining
+     * @param tags Test tags
+     * @return Reference for method chaining
      */
     TestSuiteBuilder& addTest(std::string name, std::function<void()> func,
                               bool async = false, double timeLimit = 0.0,
                               bool skip = false,
                               std::vector<std::string> dependencies = {},
                               std::vector<std::string> tags = {}) {
-        testCases_.push_back(TestCase{.name = std::move(name),
-                                      .func = std::move(func),
-                                      .skip = skip,
-                                      .async = async,
-                                      .timeLimit = timeLimit,
-                                      .dependencies = std::move(dependencies),
-                                      .tags = std::move(tags)});
+        testCases_.emplace_back(
+            TestCase{.name = std::move(name),
+                     .func = std::move(func),
+                     .skip = skip,
+                     .async = async,
+                     .timeLimit = timeLimit,
+                     .dependencies = std::move(dependencies),
+                     .tags = std::move(tags)});
         return *this;
     }
 
@@ -931,18 +878,10 @@ private:
     atom::test::expectThrows<decltype(func), ex>(func, __FILE__, __LINE__)
 
 /**
- * @brief String literal operator for creating test cases
- *
- * Example usage:
- * ```cpp
- * "Integer equality test"_test([]() {
- *     expect_eq(1, 1);
- * });
- * ```
- *
+ * @brief String literal operator for intuitive test case creation
  * @param name Test name
- * @param size Name length (automatically deduced)
- * @return Function object for test configuration
+ * @param size String length (auto-deduced)
+ * @return Test registration function
  */
 ATOM_INLINE auto operator""_test(const char* name,
                                  [[maybe_unused]] std::size_t size) {

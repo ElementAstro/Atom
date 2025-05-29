@@ -5,6 +5,7 @@
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
 #include "atom/tests/test.hpp"
@@ -32,7 +33,7 @@ public:
      */
     void registerSuite(TestSuite suite) {
         std::lock_guard<std::mutex> lock(mutex_);
-        suites_.push_back(std::move(suite));
+        suites_.emplace_back(std::move(suite));
     }
 
     /**
@@ -40,31 +41,30 @@ public:
      * @param testCase The test case to register
      * @param suiteName Optional suite name (added to default suite if empty)
      */
-    void registerTest(TestCase testCase, const std::string& suiteName = "") {
+    void registerTest(TestCase testCase, std::string_view suiteName = {}) {
         std::lock_guard<std::mutex> lock(mutex_);
 
-        // If a suite name is specified, add the test to that suite
         if (!suiteName.empty()) {
             auto it = std::find_if(suites_.begin(), suites_.end(),
-                                   [&suiteName](const TestSuite& s) {
+                                   [suiteName](const TestSuite& s) {
                                        return s.name == suiteName;
                                    });
             if (it != suites_.end()) {
-                it->testCases.push_back(std::move(testCase));
+                it->testCases.emplace_back(std::move(testCase));
                 return;
             }
 
-            // Create new suite if it doesn't exist
-            suites_.push_back({suiteName, {std::move(testCase)}});
+            suites_.emplace_back(std::string(suiteName),
+                                 std::vector<TestCase>{std::move(testCase)});
         } else {
-            // Add to default suite (empty name)
             auto it =
                 std::find_if(suites_.begin(), suites_.end(),
                              [](const TestSuite& s) { return s.name.empty(); });
             if (it != suites_.end()) {
-                it->testCases.push_back(std::move(testCase));
+                it->testCases.emplace_back(std::move(testCase));
             } else {
-                suites_.push_back({"", {std::move(testCase)}});
+                suites_.emplace_back(
+                    "", std::vector<TestCase>{std::move(testCase)});
             }
         }
     }
@@ -81,9 +81,7 @@ public:
      * @brief Get mutable reference to all registered test suites
      * @return Mutable reference to all test suites
      */
-    auto getSuites() -> std::vector<TestSuite>& { 
-        return suites_; 
-    }
+    auto getSuites() -> std::vector<TestSuite>& { return suites_; }
 
     /**
      * @brief Clear all registered tests
@@ -101,10 +99,11 @@ public:
     [[nodiscard]] auto findTestByName(std::string_view name) const
         -> const TestCase* {
         for (const auto& suite : suites_) {
-            for (const auto& test : suite.testCases) {
-                if (test.name == name) {
-                    return &test;
-                }
+            auto it = std::find_if(
+                suite.testCases.begin(), suite.testCases.end(),
+                [name](const TestCase& test) { return test.name == name; });
+            if (it != suite.testCases.end()) {
+                return &(*it);
             }
         }
         return nullptr;
@@ -117,12 +116,10 @@ public:
      */
     [[nodiscard]] auto findSuiteByName(std::string_view name) const
         -> const TestSuite* {
-        for (const auto& suite : suites_) {
-            if (suite.name == name) {
-                return &suite;
-            }
-        }
-        return nullptr;
+        auto it = std::find_if(
+            suites_.begin(), suites_.end(),
+            [name](const TestSuite& suite) { return suite.name == name; });
+        return (it != suites_.end()) ? &(*it) : nullptr;
     }
 
     /**
@@ -133,39 +130,38 @@ public:
     [[nodiscard]] auto findTestsByTag(std::string_view tag) const
         -> std::vector<const TestCase*> {
         std::vector<const TestCase*> result;
-        
+
         for (const auto& suite : suites_) {
             for (const auto& test : suite.testCases) {
-                // Check if the tag exists in this test's tags
-                if (std::find(test.tags.begin(), test.tags.end(), tag) != test.tags.end()) {
+                if (std::find(test.tags.begin(), test.tags.end(), tag) !=
+                    test.tags.end()) {
                     result.push_back(&test);
                 }
             }
         }
-        
+
         return result;
     }
-    
+
     /**
      * @brief Get all available test tags in the registry
      * @return Vector of unique tag strings
      */
     [[nodiscard]] auto getAllTags() const -> std::vector<std::string> {
-        std::vector<std::string> allTags;
-        
+        std::unordered_set<std::string> tagSet;
+
         for (const auto& suite : suites_) {
             for (const auto& test : suite.testCases) {
-                allTags.insert(allTags.end(), test.tags.begin(), test.tags.end());
+                tagSet.insert(test.tags.begin(), test.tags.end());
             }
         }
-        
-        // Remove duplicates
+
+        std::vector<std::string> allTags(tagSet.begin(), tagSet.end());
         std::sort(allTags.begin(), allTags.end());
-        allTags.erase(std::unique(allTags.begin(), allTags.end()), allTags.end());
-        
+
         return allTags;
     }
-    
+
     /**
      * @brief Count the total number of registered test cases
      * @return Total test count
@@ -179,31 +175,138 @@ public:
     }
 
     /**
+     * @brief Get the total number of test suites
+     * @return Total suite count
+     */
+    [[nodiscard]] auto getTotalSuiteCount() const -> size_t {
+        return suites_.size();
+    }
+
+    /**
+     * @brief Check if a test case exists by name
+     * @param name Test case name
+     * @return True if the test exists, false otherwise
+     */
+    [[nodiscard]] auto hasTest(std::string_view name) const -> bool {
+        return findTestByName(name) != nullptr;
+    }
+
+    /**
+     * @brief Check if a test suite exists by name
+     * @param name Test suite name
+     * @return True if the suite exists, false otherwise
+     */
+    [[nodiscard]] auto hasSuite(std::string_view name) const -> bool {
+        return findSuiteByName(name) != nullptr;
+    }
+
+    /**
      * @brief Run all tests in a specific suite
      * @param suiteName Name of the suite to run
      * @return True if all tests passed, false otherwise
      */
-    bool runSuite(std::string_view suiteName) {
+    [[nodiscard]] auto runSuite(std::string_view suiteName) -> bool {
         const TestSuite* suite = findSuiteByName(suiteName);
         if (!suite) {
             return false;
         }
 
-        bool allPassed = true;
-        for (const auto& test : suite->testCases) {
-            allPassed &= test.testFunction();
+        return std::all_of(
+            suite->testCases.begin(), suite->testCases.end(),
+            [](const TestCase& test) { return test.testFunction(); });
+    }
+
+    /**
+     * @brief Get tests from a specific suite
+     * @param suiteName Name of the suite
+     * @return Vector of pointers to test cases in the suite
+     */
+    [[nodiscard]] auto getTestsFromSuite(std::string_view suiteName) const
+        -> std::vector<const TestCase*> {
+        const TestSuite* suite = findSuiteByName(suiteName);
+        if (!suite) {
+            return {};
         }
-        
-        return allPassed;
+
+        std::vector<const TestCase*> tests;
+        tests.reserve(suite->testCases.size());
+
+        for (const auto& test : suite->testCases) {
+            tests.push_back(&test);
+        }
+
+        return tests;
+    }
+
+    /**
+     * @brief Filter tests by multiple tags (AND logic)
+     * @param tags Vector of tags that all must be present
+     * @return Vector of test cases that include all specified tags
+     */
+    [[nodiscard]] auto findTestsByTags(const std::vector<std::string>& tags)
+        const -> std::vector<const TestCase*> {
+        if (tags.empty()) {
+            return {};
+        }
+
+        std::vector<const TestCase*> result;
+
+        for (const auto& suite : suites_) {
+            for (const auto& test : suite.testCases) {
+                bool hasAllTags = std::all_of(
+                    tags.begin(), tags.end(), [&test](const std::string& tag) {
+                        return std::find(test.tags.begin(), test.tags.end(),
+                                         tag) != test.tags.end();
+                    });
+
+                if (hasAllTags) {
+                    result.push_back(&test);
+                }
+            }
+        }
+
+        return result;
     }
 
 private:
-    std::vector<TestSuite> suites_;  ///< Collection of registered test suites
-    std::mutex mutex_;               ///< Mutex to protect test registration
+    std::vector<TestSuite> suites_;
+    mutable std::mutex mutex_;
 
-    // Private constructor ensures singleton pattern
     TestRegistry() = default;
+
+public:
+    TestRegistry(const TestRegistry&) = delete;
+    auto operator=(const TestRegistry&) -> TestRegistry& = delete;
+    TestRegistry(TestRegistry&&) = delete;
+    auto operator=(TestRegistry&&) -> TestRegistry& = delete;
 };
+
+/**
+ * @brief Global convenience functions for test registration
+ */
+
+/**
+ * @brief Register a test suite with the global registry
+ * @param suite The test suite to register
+ */
+inline void registerTestSuite(TestSuite suite) {
+    TestRegistry::instance().registerSuite(std::move(suite));
+}
+
+/**
+ * @brief Register a test case with the global registry
+ * @param testCase The test case to register
+ * @param suiteName Optional suite name
+ */
+inline void registerTestCase(TestCase testCase,
+                             std::string_view suiteName = {}) {
+    TestRegistry::instance().registerTest(std::move(testCase), suiteName);
+}
+
+/**
+ * @brief Clear all tests from the global registry
+ */
+inline void clearAllTests() { TestRegistry::instance().clear(); }
 
 }  // namespace atom::test
 

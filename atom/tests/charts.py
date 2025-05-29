@@ -55,7 +55,7 @@ def set_style(style='default', dark_mode=False):
         plt.style.use('ggplot')
     elif style == 'minimal':
         plt.style.use('seaborn-v0_8-whitegrid')
-    else:  # default
+    else:
         plt.style.use('default')
 
 
@@ -66,41 +66,55 @@ def generate_bar_chart(data, metric, output_file, show=False, style='default', d
     set_style(style, dark_mode)
 
     suites = list(data.keys())
-    metrics = [sum(result[metric] for result in suite_data) / len(suite_data)
-               for suite_data in data.values()]
 
-    # Sort data if requested
-    if sort:
-        sorted_data = sorted(zip(suites, metrics), key=lambda x: x[1])
-        suites = [item[0] for item in sorted_data]
-        metrics = [item[1] for item in sorted_data]
+    if stacked and len(next(iter(data.values()))) > 1:
+        # Handle stacked bar chart
+        plt.figure(figsize=(12, 8))
 
-    plt.figure(figsize=(12, 8))
+        # Prepare data for stacking
+        num_iterations = len(next(iter(data.values())))
+        bottom_values = np.zeros(len(suites))
 
-    if horizontal:
-        plt.barh(suites, metrics)
-        plt.xlabel(metric)
-        plt.ylabel('Suite')
+        for i in range(num_iterations):
+            iteration_values = [data[suite][i][metric] if i <
+                                len(data[suite]) else 0 for suite in suites]
+            plt.bar(suites, iteration_values,
+                    bottom=bottom_values, label=f'Iteration {i+1}')
+            bottom_values += iteration_values
+
+        plt.legend()
     else:
-        plt.bar(suites, metrics)
-        plt.xlabel('Suite')
-        plt.ylabel(metric)
+        # Regular bar chart with average values
+        metrics = [sum(result[metric] for result in suite_data) / len(suite_data)
+                   for suite_data in data.values()]
+
+        if sort:
+            sorted_data = sorted(zip(suites, metrics), key=lambda x: x[1])
+            suites = [item[0] for item in sorted_data]
+            metrics = [item[1] for item in sorted_data]
+
+        plt.figure(figsize=(12, 8))
+
+        if horizontal:
+            plt.barh(suites, metrics)
+            plt.xlabel(metric)
+            plt.ylabel('Suite')
+
+            for i, v in enumerate(metrics):
+                plt.text(v + max(metrics)*0.01, i, f"{v:.2f}", va='center')
+        else:
+            plt.bar(suites, metrics)
+            plt.xlabel('Suite')
+            plt.ylabel(metric)
+
+            for i, v in enumerate(metrics):
+                plt.text(i, v + max(metrics)*0.01, f"{v:.2f}", ha='center')
 
     chart_title = title or f'Average {metric} by Suite'
     plt.title(chart_title)
-
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.tight_layout()
 
-    # Add value labels
-    if horizontal:
-        for i, v in enumerate(metrics):
-            plt.text(v + max(metrics)*0.01, i, f"{v:.2f}", va='center')
-    else:
-        for i, v in enumerate(metrics):
-            plt.text(i, v + max(metrics)*0.01, f"{v:.2f}", ha='center')
-
-    # Save and show
     os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)
     plt.savefig(output_file, dpi=300)
     if show:
@@ -116,23 +130,22 @@ def generate_line_chart(data, metric, output_file, show=False, style='default', 
 
     plt.figure(figsize=(12, 8))
 
-    # Create unique markers for each suite
     marker_styles = ['o', 's', 'D', '^', 'v', '<',
                      '>', 'p', '*', 'h', 'H', '+', 'x', 'd']
 
-    for i, (suite, suite_data) in enumerate(data.items()):
+    for i, (suite_name, suite_data) in enumerate(data.items()):
         iterations = range(1, len(suite_data) + 1)
         metrics = [result[metric] for result in suite_data]
 
         marker = marker_styles[i % len(marker_styles)] if markers else None
 
-        plt.plot(iterations, metrics, label=suite, marker=marker, linewidth=2)
+        plt.plot(iterations, metrics, label=suite_name,
+                 marker=marker, linewidth=2)
 
         if fill:
             plt.fill_between(iterations, 0, metrics, alpha=0.1)
 
         if trend_line and len(metrics) > 1:
-            # Add trend line (linear regression)
             z = np.polyfit(iterations, metrics, 1)
             p = np.poly1d(z)
             plt.plot(iterations, p(iterations), "--", linewidth=1)
@@ -164,19 +177,17 @@ def generate_scatter_chart(data, metric_x, metric_y, output_file, show=False, st
 
     plt.figure(figsize=(12, 8))
 
-    for suite, suite_data in data.items():
+    for suite_name, suite_data in data.items():
         x = [result[metric_x] for result in suite_data]
         y = [result[metric_y] for result in suite_data]
 
         if size_metric:
-            sizes = [result[size_metric] *
-                     10 for result in suite_data]  # Scale the sizes
-            plt.scatter(x, y, s=sizes, label=suite, alpha=0.7)
+            sizes = [result[size_metric] * 10 for result in suite_data]
+            plt.scatter(x, y, s=sizes, label=suite_name, alpha=0.7)
         else:
-            plt.scatter(x, y, label=suite)
+            plt.scatter(x, y, label=suite_name)
 
         if trend_line and len(x) > 1:
-            # Add trend line
             z = np.polyfit(x, y, 1)
             p = np.poly1d(z)
             plt.plot(sorted(x), p(sorted(x)), "--", linewidth=1)
@@ -208,10 +219,7 @@ def generate_pie_chart(data, metric, output_file, show=False, style='default', d
     metrics = [sum(result[metric] for result in suite_data) / len(suite_data)
                for suite_data in data.values()]
 
-    # Create explode tuple if requested
     explodes = tuple(0.05 for _ in suites) if explode else None
-
-    # Create labels with percentages if requested
     autopct = '%1.1f%%' if percentage else None
 
     plt.pie(metrics, labels=suites, autopct=autopct, explode=explodes,
@@ -219,7 +227,6 @@ def generate_pie_chart(data, metric, output_file, show=False, style='default', d
 
     chart_title = title or f'Distribution of {metric} by Suite'
     plt.title(chart_title)
-    # Equal aspect ratio ensures that pie is drawn as a circle
     plt.axis('equal')
 
     os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)
@@ -238,7 +245,7 @@ def generate_histogram(data, metric, output_file, show=False, style='default', d
     plt.figure(figsize=(12, 8))
 
     all_metrics = []
-    for suite, suite_data in data.items():
+    for suite_data in data.values():
         metrics = [result[metric] for result in suite_data]
         all_metrics.extend(metrics)
 
@@ -269,7 +276,6 @@ def generate_heatmap(data, metrics, output_file, show=False, style='default', da
 
     suites = list(data.keys())
 
-    # Create a matrix of average values for each metric for each suite
     matrix = []
     for suite in suites:
         suite_data = data[suite]
@@ -280,7 +286,6 @@ def generate_heatmap(data, metrics, output_file, show=False, style='default', da
             row.append(avg_value)
         matrix.append(row)
 
-    # Create a custom colormap
     if dark_mode:
         cmap = LinearSegmentedColormap.from_list(
             "", ["navy", "blue", "cyan", "yellow", "red"])
@@ -288,7 +293,6 @@ def generate_heatmap(data, metrics, output_file, show=False, style='default', da
         cmap = LinearSegmentedColormap.from_list(
             "", ["green", "yellow", "red"])
 
-    # Plot heatmap
     sns.heatmap(matrix, annot=True, fmt=".2f", xticklabels=metrics,
                 yticklabels=suites, cmap=cmap)
 
@@ -307,7 +311,6 @@ def generate_all_charts(data, metrics, out_dir, show=False, style='default', dar
     """Generate all charts for given metrics."""
     os.makedirs(out_dir, exist_ok=True)
 
-    # Individual metrics charts
     for metric in metrics:
         generate_bar_chart(data, metric, os.path.join(out_dir, f'{metric}_bar.png'),
                            show=show, style=style, dark_mode=dark_mode)
@@ -321,7 +324,6 @@ def generate_all_charts(data, metrics, out_dir, show=False, style='default', dar
         generate_histogram(data, metric, os.path.join(out_dir, f'{metric}_histogram.png'),
                            show=show, style=style, dark_mode=dark_mode)
 
-    # Scatter charts for pairs of metrics
     if len(metrics) >= 2:
         for i, metric_x in enumerate(metrics[:-1]):
             for metric_y in metrics[i+1:]:
@@ -330,7 +332,6 @@ def generate_all_charts(data, metrics, out_dir, show=False, style='default', dar
                                            out_dir, f'{metric_y}_vs_{metric_x}_scatter.png'),
                                        show=show, style=style, dark_mode=dark_mode)
 
-    # Heatmap for all metrics
     generate_heatmap(data, metrics, os.path.join(out_dir, f'metrics_heatmap.png'),
                      show=show, style=style, dark_mode=dark_mode)
 
@@ -339,24 +340,21 @@ def generate_report(data, metrics, out_dir, style='default', dark_mode=False):
     """Generate an HTML report with all charts and statistics."""
     os.makedirs(out_dir, exist_ok=True)
 
-    # Generate all charts (without showing them)
     chart_dir = os.path.join(out_dir, "charts")
     generate_all_charts(data, metrics, chart_dir, False, style, dark_mode)
 
-    # Calculate statistics
     stats = {}
     for metric in metrics:
         stats[metric] = {}
-        for suite, suite_data in data.items():
+        for suite_name, suite_data in data.items():
             values = [result[metric] for result in suite_data]
-            stats[metric][suite] = {
+            stats[metric][suite_name] = {
                 'min': min(values),
                 'max': max(values),
                 'avg': sum(values) / len(values),
                 'stdev': np.std(values) if len(values) > 1 else 0
             }
 
-    # Generate HTML
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     html_content = f"""<!DOCTYPE html>
 <html>
@@ -382,7 +380,6 @@ def generate_report(data, metrics, out_dir, style='default', dark_mode=False):
         <h2>Statistics</h2>
 """
 
-    # Add statistics tables
     for metric in metrics:
         html_content += f"""
         <h3>{metric}</h3>
@@ -395,10 +392,10 @@ def generate_report(data, metrics, out_dir, style='default', dark_mode=False):
                 <th>Standard Deviation</th>
             </tr>
 """
-        for suite, values in stats[metric].items():
+        for suite_name, values in stats[metric].items():
             html_content += f"""
             <tr>
-                <td>{suite}</td>
+                <td>{suite_name}</td>
                 <td>{values['min']:.2f}</td>
                 <td>{values['max']:.2f}</td>
                 <td>{values['avg']:.2f}</td>
@@ -409,12 +406,10 @@ def generate_report(data, metrics, out_dir, style='default', dark_mode=False):
         </table>
 """
 
-    # Add charts
     html_content += """
         <h2>Charts</h2>
 """
 
-    # Add individual metric charts
     for metric in metrics:
         html_content += f"""
         <div class="chart">
@@ -438,7 +433,6 @@ def generate_report(data, metrics, out_dir, style='default', dark_mode=False):
         </div>
 """
 
-    # Add scatter charts
     if len(metrics) >= 2:
         for i, metric_x in enumerate(metrics[:-1]):
             for metric_y in metrics[i+1:]:
@@ -449,7 +443,6 @@ def generate_report(data, metrics, out_dir, style='default', dark_mode=False):
         </div>
 """
 
-    # Add heatmap
     html_content += """
         <div class="chart">
             <h3>Metrics Heatmap</h3>
@@ -460,14 +453,15 @@ def generate_report(data, metrics, out_dir, style='default', dark_mode=False):
 </html>
 """
 
-    # Write HTML to file
-    with open(os.path.join(out_dir, "report.html"), 'w', encoding='utf-8') as f:
+    report_path = os.path.join(out_dir, "report.html")
+    with open(report_path, 'w', encoding='utf-8') as f:
         f.write(html_content)
 
-    return os.path.join(out_dir, "report.html")
+    return report_path
 
 
 def main():
+    """Main function for command-line interface."""
     parser = argparse.ArgumentParser(
         description="Generate charts from JSON data.")
     parser.add_argument("json_file", help="Path to JSON file")
@@ -494,10 +488,8 @@ def main():
 
     args = parser.parse_args()
 
-    # Load data
     data = load_data(args.json_file)
 
-    # Auto-detect or use specified metrics
     if args.metrics is None:
         available_metrics = get_available_metrics(data)
         if args.list_metrics:
@@ -508,17 +500,14 @@ def main():
         args.metrics = available_metrics[:3] if available_metrics else [
             "averageDuration", "throughput", "peakMemoryUsage"]
 
-    # Generate report if requested
     if args.report:
         report_path = generate_report(
             data, args.metrics, args.out_dir, args.style, args.dark_mode)
         print(f"Report generated: {report_path}")
         return
 
-    # Create output directory if it doesn't exist
     os.makedirs(args.out_dir, exist_ok=True)
 
-    # Generate requested charts
     if args.chart_type == "bar" or args.chart_type == "all":
         for metric in args.metrics:
             output_file = os.path.join(args.out_dir, f'{metric}_bar.png')
@@ -529,8 +518,8 @@ def main():
     if args.chart_type == "line" or args.chart_type == "all":
         for metric in args.metrics:
             output_file = os.path.join(args.out_dir, f'{metric}_line.png')
-            generate_line_chart(data, metric, output_file, args.show, args.style,
-                                args.dark_mode, trend_line=args.trend_line)
+            generate_line_chart(data, metric, output_file, args.show,
+                                args.style, args.dark_mode, trend_line=args.trend_line)
             print(f"Generated: {output_file}")
 
     if args.chart_type == "scatter" or (args.chart_type == "all" and len(args.metrics) >= 2):
@@ -538,8 +527,7 @@ def main():
             output_file = os.path.join(
                 args.out_dir, f'{args.scatter_metrics[1]}_vs_{args.scatter_metrics[0]}_scatter.png')
             generate_scatter_chart(data, args.scatter_metrics[0], args.scatter_metrics[1],
-                                   output_file, args.show, args.style, args.dark_mode,
-                                   trend_line=args.trend_line)
+                                   output_file, args.show, args.style, args.dark_mode, trend_line=args.trend_line)
             print(f"Generated: {output_file}")
         else:
             for i, metric_x in enumerate(args.metrics[:-1]):
@@ -547,8 +535,7 @@ def main():
                     output_file = os.path.join(
                         args.out_dir, f'{metric_y}_vs_{metric_x}_scatter.png')
                     generate_scatter_chart(data, metric_x, metric_y, output_file,
-                                           args.show, args.style, args.dark_mode,
-                                           trend_line=args.trend_line)
+                                           args.show, args.style, args.dark_mode, trend_line=args.trend_line)
                     print(f"Generated: {output_file}")
 
     if args.chart_type == "pie" or args.chart_type == "all":
@@ -572,8 +559,9 @@ def main():
         print(f"Generated: {output_file}")
 
 
-# Python API for direct use
 class ChartGenerator:
+    """Python API for direct use."""
+
     def __init__(self, data=None, json_file=None, style='default', dark_mode=False):
         """Initialize ChartGenerator with data or JSON file."""
         if data is not None:

@@ -31,6 +31,8 @@ Description: Variable Manager
 
 #include "atom/macro.hpp"
 
+using namespace atom::meta;
+
 class VariableTypeError : public atom::error::Exception {
 public:
     using atom::error::Exception::Exception;

@@ -20,41 +20,28 @@
 namespace atom::test {
 
 /**
- * @brief Configuration options for the TestRunner.
+ * @brief Configuration options for the TestRunner
  * @details Provides detailed control over how tests are run, including
  * parallelism, retry mechanisms, output formats, etc.
  */
 struct TestRunnerConfig {
-    bool enableParallel{false};  ///< Enable parallel test execution.
-    int numThreads{static_cast<int>(
-        std::thread::hardware_concurrency())};  ///< Number of threads for
-                                                ///< parallel execution.
-                                                ///< Defaults to hardware
-                                                ///< concurrency.
-    int maxRetries{0};  ///< Maximum number of retries for failed tests.
-    bool failFast{
-        false};  ///< Stop execution immediately after the first failure.
-    std::optional<std::string>
-        outputFormat;  ///< Output format (e.g., "json", "xml", "html"). None
-                       ///< means no file report.
-    std::string outputPath;  ///< Path for the output report file.
-    std::optional<std::string>
-        testFilter;  ///< Regular expression to filter tests by name.
-    bool enableVerboseOutput{
-        false};  ///< Enable detailed console output during test execution.
-    std::chrono::milliseconds globalTimeout{
-        0};  ///< Global timeout for asynchronous tests (0 means no timeout).
-    bool shuffleTests{false};  ///< Randomize the order of test execution.
-    std::optional<uint64_t>
-        randomSeed;  ///< Seed for the random number generator used for
-                     ///< shuffling. Uses system clock if not set.
-    bool includeSkippedInReport{
-        true};  ///< Include skipped tests in the final report.
+    bool enableParallel{false};
+    int numThreads{static_cast<int>(std::thread::hardware_concurrency())};
+    int maxRetries{0};
+    bool failFast{false};
+    std::optional<std::string> outputFormat;
+    std::string outputPath;
+    std::optional<std::string> testFilter;
+    bool enableVerboseOutput{false};
+    std::chrono::milliseconds globalTimeout{0};
+    bool shuffleTests{false};
+    std::optional<uint64_t> randomSeed;
+    bool includeSkippedInReport{true};
 
     /**
-     * @brief Sets the parallel execution flag.
-     * @param enable True to enable parallel execution, false otherwise.
-     * @return Reference to the modified TestRunnerConfig object.
+     * @brief Sets the parallel execution flag
+     * @param enable True to enable parallel execution, false otherwise
+     * @return Reference to the modified TestRunnerConfig object
      */
     auto withParallel(bool enable = true) -> TestRunnerConfig& {
         enableParallel = enable;
@@ -62,9 +49,9 @@ struct TestRunnerConfig {
     }
 
     /**
-     * @brief Sets the number of threads for parallel execution.
-     * @param threads The number of threads to use.
-     * @return Reference to the modified TestRunnerConfig object.
+     * @brief Sets the number of threads for parallel execution
+     * @param threads The number of threads to use
+     * @return Reference to the modified TestRunnerConfig object
      */
     auto withThreads(int threads) -> TestRunnerConfig& {
         numThreads = threads;
@@ -72,9 +59,9 @@ struct TestRunnerConfig {
     }
 
     /**
-     * @brief Sets the maximum number of retries for failed tests.
-     * @param retries The maximum number of retries.
-     * @return Reference to the modified TestRunnerConfig object.
+     * @brief Sets the maximum number of retries for failed tests
+     * @param retries The maximum number of retries
+     * @return Reference to the modified TestRunnerConfig object
      */
     auto withRetries(int retries) -> TestRunnerConfig& {
         maxRetries = retries;
@@ -82,9 +69,9 @@ struct TestRunnerConfig {
     }
 
     /**
-     * @brief Sets the fail-fast flag.
-     * @param enable True to enable fail-fast, false otherwise.
-     * @return Reference to the modified TestRunnerConfig object.
+     * @brief Sets the fail-fast flag
+     * @param enable True to enable fail-fast, false otherwise
+     * @return Reference to the modified TestRunnerConfig object
      */
     auto withFailFast(bool enable = true) -> TestRunnerConfig& {
         failFast = enable;
@@ -92,9 +79,9 @@ struct TestRunnerConfig {
     }
 
     /**
-     * @brief Sets the output report format.
-     * @param format The desired output format (e.g., "json", "xml").
-     * @return Reference to the modified TestRunnerConfig object.
+     * @brief Sets the output report format
+     * @param format The desired output format (e.g., "json", "xml")
+     * @return Reference to the modified TestRunnerConfig object
      */
     auto withOutputFormat(std::string_view format) -> TestRunnerConfig& {
         outputFormat = std::string(format);
@@ -102,9 +89,9 @@ struct TestRunnerConfig {
     }
 
     /**
-     * @brief Sets the output path for the report file.
-     * @param path The directory or file path for the report.
-     * @return Reference to the modified TestRunnerConfig object.
+     * @brief Sets the output path for the report file
+     * @param path The directory or file path for the report
+     * @return Reference to the modified TestRunnerConfig object
      */
     auto withOutputPath(std::string_view path) -> TestRunnerConfig& {
         outputPath = std::string(path);
@@ -112,9 +99,9 @@ struct TestRunnerConfig {
     }
 
     /**
-     * @brief Sets the test filter regular expression.
-     * @param filter The regular expression to filter test names.
-     * @return Reference to the modified TestRunnerConfig object.
+     * @brief Sets the test filter regular expression
+     * @param filter The regular expression to filter test names
+     * @return Reference to the modified TestRunnerConfig object
      */
     auto withFilter(std::string_view filter) -> TestRunnerConfig& {
         testFilter = std::string(filter);
@@ -122,9 +109,9 @@ struct TestRunnerConfig {
     }
 
     /**
-     * @brief Sets the verbose output flag.
-     * @param enable True to enable verbose output, false otherwise.
-     * @return Reference to the modified TestRunnerConfig object.
+     * @brief Sets the verbose output flag
+     * @param enable True to enable verbose output, false otherwise
+     * @return Reference to the modified TestRunnerConfig object
      */
     auto withVerboseOutput(bool enable = true) -> TestRunnerConfig& {
         enableVerboseOutput = enable;
@@ -132,10 +119,9 @@ struct TestRunnerConfig {
     }
 
     /**
-     * @brief Sets the global timeout for asynchronous tests.
-     * @param timeout The global timeout duration. 0 disables the global
-     * timeout.
-     * @return Reference to the modified TestRunnerConfig object.
+     * @brief Sets the global timeout for asynchronous tests
+     * @param timeout The global timeout duration. 0 disables the global timeout
+     * @return Reference to the modified TestRunnerConfig object
      */
     auto withGlobalTimeout(std::chrono::milliseconds timeout)
         -> TestRunnerConfig& {
@@ -144,9 +130,9 @@ struct TestRunnerConfig {
     }
 
     /**
-     * @brief Sets the test shuffling flag.
-     * @param enable True to enable test shuffling, false otherwise.
-     * @return Reference to the modified TestRunnerConfig object.
+     * @brief Sets the test shuffling flag
+     * @param enable True to enable test shuffling, false otherwise
+     * @return Reference to the modified TestRunnerConfig object
      */
     auto withShuffleTests(bool enable = true) -> TestRunnerConfig& {
         shuffleTests = enable;
@@ -154,9 +140,9 @@ struct TestRunnerConfig {
     }
 
     /**
-     * @brief Sets the random seed for test shuffling.
-     * @param seed The seed value.
-     * @return Reference to the modified TestRunnerConfig object.
+     * @brief Sets the random seed for test shuffling
+     * @param seed The seed value
+     * @return Reference to the modified TestRunnerConfig object
      */
     auto withRandomSeed(uint64_t seed) -> TestRunnerConfig& {
         randomSeed = seed;
@@ -164,7 +150,9 @@ struct TestRunnerConfig {
     }
 };
 
-// Forward declaration of needed types
+/**
+ * @brief Test lifecycle hooks
+ */
 struct TestHooks {
     std::function<void()> beforeAll;
     std::function<void()> afterAll;
@@ -173,7 +161,7 @@ struct TestHooks {
 };
 
 /**
- * @brief A modern test runner class.
+ * @brief A modern test runner class
  * @details Provides a robust and flexible test execution environment,
  * supporting parallel execution, dependency sorting, test filtering, and more.
  * Uses RAII principles for resource management, adhering to modern C++ design.
@@ -181,44 +169,37 @@ struct TestHooks {
 class TestRunner {
 public:
     /**
-     * @brief Constructs a TestRunner with optional configuration.
-     * @param config The configuration settings for the test run.
+     * @brief Constructs a TestRunner with optional configuration
+     * @param config The configuration settings for the test run
      */
     explicit TestRunner(TestRunnerConfig config = {})
         : config_(std::move(config)), shouldStop_(false) {}
 
-    /**
-     * @brief Default destructor.
-     */
     ~TestRunner() = default;
 
-    // Disable copy operations
     TestRunner(const TestRunner&) = delete;
     auto operator=(const TestRunner&) -> TestRunner& = delete;
 
-    // Implement custom move operations since std::atomic is not movable
-    TestRunner(TestRunner&& other)
+    TestRunner(TestRunner&& other) noexcept
         : config_(std::move(other.config_)),
           preparedTests_(std::move(other.preparedTests_)),
           shouldStop_(other.shouldStop_.load()) {
-        // Reset the moved-from object's atomic flag
         other.shouldStop_.store(false);
     }
 
-    auto operator=(TestRunner&& other) -> TestRunner& {
+    auto operator=(TestRunner&& other) noexcept -> TestRunner& {
         if (this != &other) {
             config_ = std::move(other.config_);
             preparedTests_ = std::move(other.preparedTests_);
             shouldStop_.store(other.shouldStop_.load());
-            // Reset the moved-from object
             other.shouldStop_.store(false);
         }
         return *this;
     }
 
     /**
-     * @brief Runs all registered tests according to the configuration.
-     * @return A TestStats object containing the results of all executed tests.
+     * @brief Runs all registered tests according to the configuration
+     * @return A TestStats object containing the results of all executed tests
      */
     [[nodiscard]] auto runAll() -> TestStats {
         prepareTests();
@@ -228,16 +209,16 @@ public:
     }
 
     /**
-     * @brief Runs tests belonging to a specific suite.
-     * @param suiteName The name of the test suite to run.
+     * @brief Runs tests belonging to a specific suite
+     * @param suiteName The name of the test suite to run
      * @return A TestStats object containing the results of the executed tests
-     * in the specified suite.
+     * in the specified suite
      */
     [[nodiscard]] auto runSuite(std::string_view suiteName) -> TestStats {
         auto& suites = getTestSuites();
         std::vector<TestSuite> filteredSuites;
+        filteredSuites.reserve(suites.size());
 
-        // Filter suites by name
         std::copy_if(suites.begin(), suites.end(),
                      std::back_inserter(filteredSuites),
                      [suiteName](const TestSuite& suite) {
@@ -245,56 +226,49 @@ public:
                      });
 
         if (filteredSuites.empty()) {
-            // No suite found, return empty stats
             return {};
         }
 
-        // Temporarily replace the global suites with the filtered ones
         auto originalSuites = std::move(suites);
         suites = std::move(filteredSuites);
 
-        // Run tests for the selected suite
         prepareTests();
         executeTests();
         generateReport();
 
-        // Restore the original global suites and return the results
         auto result = getTestStats();
         suites = std::move(originalSuites);
         return result;
     }
 
     /**
-     * @brief Adds a single test case to be run.
-     * @details The test case is added to an anonymous suite.
-     * @param testCase The TestCase object to add.
-     * @return Reference to the TestRunner object for chaining.
-     * @note This method modifies the global test registry.
+     * @brief Adds a single test case to be run
+     * @details The test case is added to an anonymous suite
+     * @param testCase The TestCase object to add
+     * @return Reference to the TestRunner object for chaining
+     * @note This method modifies the global test registry
      */
     auto addTest(TestCase testCase) -> TestRunner& {
-        // Adds to the global registry, assuming getTestSuites() returns a
-        // reference
-        getTestSuites().push_back({"", {std::move(testCase)}});
+        getTestSuites().emplace_back(
+            "", std::vector<TestCase>{std::move(testCase)});
         return *this;
     }
 
     /**
-     * @brief Adds a test suite containing multiple test cases.
-     * @param suite The TestSuite object to add.
-     * @return Reference to the TestRunner object for chaining.
-     * @note This method modifies the global test registry.
+     * @brief Adds a test suite containing multiple test cases
+     * @param suite The TestSuite object to add
+     * @return Reference to the TestRunner object for chaining
+     * @note This method modifies the global test registry
      */
     auto addSuite(TestSuite suite) -> TestRunner& {
-        // Adds to the global registry, assuming getTestSuites() returns a
-        // reference
-        getTestSuites().push_back(std::move(suite));
+        getTestSuites().emplace_back(std::move(suite));
         return *this;
     }
 
     /**
-     * @brief Sets the configuration for the TestRunner.
-     * @param config The TestRunnerConfig object.
-     * @return Reference to the TestRunner object for chaining.
+     * @brief Sets the configuration for the TestRunner
+     * @param config The TestRunnerConfig object
+     * @return Reference to the TestRunner object for chaining
      */
     auto setConfig(TestRunnerConfig config) -> TestRunner& {
         config_ = std::move(config);
@@ -302,83 +276,66 @@ public:
     }
 
 private:
-    TestRunnerConfig config_;  ///< Configuration for the current test run.
-    std::vector<TestCase>
-        preparedTests_;  ///< List of tests prepared for execution (filtered,
-                         ///< sorted, shuffled).
-    std::atomic<bool> shouldStop_;  ///< Flag to signal early termination (e.g.,
-                                    ///< due to failFast).
-    std::shared_mutex
-        resultsMutex_;  ///< Mutex to protect access to shared test results.
+    TestRunnerConfig config_;
+    std::vector<TestCase> preparedTests_;
+    std::atomic<bool> shouldStop_;
+    mutable std::shared_mutex resultsMutex_;
 
-    // Helper accessor methods
     std::vector<TestSuite>& getTestSuites() {
-        // In a real implementation, this would access the TestRegistry
-        static std::vector<TestSuite> suites;
-        return suites;
+        return atom::test::getTestSuites();
     }
 
-    TestStats& getTestStats() {
-        // In a real implementation, this would access test statistics
-        static TestStats stats;
-        return stats;
-    }
+    TestStats& getTestStats() { return atom::test::getTestStats(); }
 
     TestHooks& getHooks() {
-        // In a real implementation, this would access global hooks
         static TestHooks hooks;
         return hooks;
     }
 
-    std::mutex& getTestMutex() {
-        // Mutex for synchronizing test hooks
-        static std::mutex mutex;
-        return mutex;
-    }
+    std::mutex& getTestMutex() { return atom::test::getTestMutex(); }
 
     /**
-     * @brief Prepares the test cases for execution.
+     * @brief Prepares the test cases for execution
      * @details Collects tests from registered suites, applies filters,
-     * sorts by dependencies (if implemented), and shuffles if configured.
-     * Resets the test statistics.
+     * sorts by dependencies, and shuffles if configured. Resets test
+     * statistics.
      */
     void prepareTests() {
         std::vector<TestCase> allTests;
+        size_t totalTestCount = 0;
 
-        // Collect all test cases from the registered suites
+        for (const auto& suite : getTestSuites()) {
+            totalTestCount += suite.testCases.size();
+        }
+        allTests.reserve(totalTestCount);
+
         for (const auto& suite : getTestSuites()) {
             allTests.insert(allTests.end(), suite.testCases.begin(),
                             suite.testCases.end());
         }
 
-        // Apply the name filter if provided
         if (config_.testFilter) {
             try {
-                std::regex pattern(*config_.testFilter);
+                const std::regex pattern(*config_.testFilter);
                 auto it = std::remove_if(allTests.begin(), allTests.end(),
                                          [&pattern](const TestCase& test) {
-                                             // Match the full test name against
-                                             // the regex
                                              return !std::regex_search(
                                                  test.name, pattern);
                                          });
                 allTests.erase(it, allTests.end());
             } catch (const std::regex_error& e) {
-                // Handle invalid regex pattern, e.g., log an error
                 std::cerr << "Warning: Invalid test filter regex: " << e.what()
                           << std::endl;
-                // Optionally, clear the filter or stop execution
-                // config_.testFilter.reset();
             }
         }
 
-        // Sort tests based on dependencies (Implementation needed)
-        // allTests = sortTestsByDependencies(allTests); // Placeholder
+        allTests = sortTestsByDependencies(allTests);
 
-        // Shuffle tests if enabled
         if (config_.shuffleTests) {
-            uint64_t seed = config_.randomSeed.value_or(static_cast<uint64_t>(
-                std::chrono::system_clock::now().time_since_epoch().count()));
+            const uint64_t seed = config_.randomSeed.value_or(
+                static_cast<uint64_t>(std::chrono::system_clock::now()
+                                          .time_since_epoch()
+                                          .count()));
             std::shuffle(allTests.begin(), allTests.end(),
                          std::mt19937_64(seed));
             if (config_.enableVerboseOutput) {
@@ -388,16 +345,15 @@ private:
 
         preparedTests_ = std::move(allTests);
 
-        // Reset test statistics for the new run
         auto& stats = getTestStats();
-        stats = TestStats{};  // Reset stats object
-        shouldStop_ = false;  // Reset stop flag
+        stats = TestStats{};
+        shouldStop_.store(false);
     }
 
     /**
-     * @brief Executes the prepared test cases.
-     * @details Runs the `beforeAll` hook, executes tests sequentially or in
-     * parallel based on configuration, and runs the `afterAll` hook.
+     * @brief Executes the prepared test cases
+     * @details Runs the beforeAll hook, executes tests sequentially or in
+     * parallel based on configuration, and runs the afterAll hook
      */
     void executeTests() {
         auto& hooks = getHooks();
@@ -407,16 +363,15 @@ private:
             } catch (const std::exception& e) {
                 std::cerr << "Exception in beforeAll hook: " << e.what()
                           << std::endl;
-                // Decide if execution should stop
-                shouldStop_ = true;
+                shouldStop_.store(true);
             } catch (...) {
                 std::cerr << "Unknown exception in beforeAll hook."
                           << std::endl;
-                shouldStop_ = true;
+                shouldStop_.store(true);
             }
         }
 
-        if (!shouldStop_) {
+        if (!shouldStop_.load()) {
             if (config_.enableParallel && config_.numThreads > 1 &&
                 preparedTests_.size() > 1) {
                 executeTestsInParallel();
@@ -438,13 +393,14 @@ private:
     }
 
     /**
-     * @brief Executes tests sequentially in the prepared order.
+     * @brief Executes tests sequentially in the prepared order
      */
     void executeTestsSequentially() {
         auto& hooks = getHooks();
         for (const auto& test : preparedTests_) {
-            if (shouldStop_.load())  // Check stop flag before each test
+            if (shouldStop_.load()) {
                 break;
+            }
 
             if (hooks.beforeEach) {
                 try {
@@ -452,7 +408,6 @@ private:
                 } catch (const std::exception& e) {
                     std::cerr << "Exception in beforeEach hook for test '"
                               << test.name << "': " << e.what() << std::endl;
-                    // Optionally skip the test or mark as failed
                 } catch (...) {
                     std::cerr
                         << "Unknown exception in beforeEach hook for test '"
@@ -475,36 +430,24 @@ private:
                 }
             }
 
-            // Check failFast condition after executing the test
-            if (config_.failFast) {
-                std::shared_lock lock(
-                    resultsMutex_);  // Use shared lock for reading
-                const auto& results = getTestStats().results;
-                // Check the result of the *last executed* test
-                if (!results.empty() && !results.back().passed &&
-                    !results.back().skipped) {
-                    shouldStop_ = true;  // Set atomic flag to stop other
-                                         // threads/iterations
-                    if (config_.enableVerboseOutput) {
-                        std::cout << "Fail-fast triggered by test: "
-                                  << results.back().name << std::endl;
-                    }
+            if (config_.failFast && checkFailFastCondition(test.name)) {
+                shouldStop_.store(true);
+                if (config_.enableVerboseOutput) {
+                    std::cout << "Fail-fast triggered by test: " << test.name
+                              << std::endl;
                 }
+                break;
             }
         }
     }
 
     /**
-     * @brief Executes tests in parallel using a thread pool.
+     * @brief Executes tests in parallel using a thread pool
      */
     void executeTestsInParallel() {
+        const int actualThreads = std::clamp(
+            config_.numThreads, 1, static_cast<int>(preparedTests_.size()));
         std::vector<std::thread> threads;
-        // Ensure numThreads is not greater than the number of tests or a
-        // reasonable limit
-        int actualThreads = std::min(config_.numThreads,
-                                     static_cast<int>(preparedTests_.size()));
-        actualThreads =
-            std::max(1, actualThreads);  // Ensure at least one thread
         threads.reserve(actualThreads);
 
         std::atomic<size_t> nextTestIndex{0};
@@ -512,22 +455,17 @@ private:
         auto& testMutex = getTestMutex();
 
         auto threadFunc = [this, &nextTestIndex, &hooks, &testMutex]() {
-            while (true) {
-                if (shouldStop_.load())
-                    break;  // Check stop flag before fetching next index
-
-                size_t index = nextTestIndex.fetch_add(1);
+            while (!shouldStop_.load()) {
+                const size_t index = nextTestIndex.fetch_add(1);
                 if (index >= preparedTests_.size()) {
-                    break;  // No more tests left
+                    break;
                 }
 
                 const auto& test = preparedTests_[index];
 
-                // Execute beforeEach hook (synchronized)
                 if (hooks.beforeEach) {
                     try {
-                        std::lock_guard lock(
-                            testMutex);  // Lock mutex for hook execution
+                        std::lock_guard lock(testMutex);
                         hooks.beforeEach();
                     } catch (const std::exception& e) {
                         std::cerr << "Exception in beforeEach hook for test '"
@@ -536,10 +474,8 @@ private:
                     }
                 }
 
-                // Execute the test case with potential retries
                 executeTestCase(test, config_.maxRetries);
 
-                // Execute afterEach hook (synchronized)
                 if (hooks.afterEach) {
                     try {
                         std::lock_guard lock(testMutex);
@@ -551,40 +487,21 @@ private:
                     }
                 }
 
-                // Check failFast condition after executing the test
-                if (config_.failFast) {
-                    bool shouldStopNow = false;
-                    {
-                        std::shared_lock lock(resultsMutex_);
-                        const auto& results = getTestStats().results;
-                        // Find the result for the current test
-                        for (const auto& result : results) {
-                            if (result.name == test.name && !result.passed &&
-                                !result.skipped) {
-                                shouldStopNow = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (shouldStopNow) {
-                        shouldStop_ = true;  // Signal other threads to stop
-                        if (config_.enableVerboseOutput) {
-                            std::cout
-                                << "Fail-fast triggered by test: " << test.name
-                                << std::endl;
-                        }
+                if (config_.failFast && checkFailFastCondition(test.name)) {
+                    shouldStop_.store(true);
+                    if (config_.enableVerboseOutput) {
+                        std::cout
+                            << "Fail-fast triggered by test: " << test.name
+                            << std::endl;
                     }
                 }
             }
         };
 
-        // Start worker threads
         for (int i = 0; i < actualThreads; ++i) {
             threads.emplace_back(threadFunc);
         }
 
-        // Wait for all threads to complete
         for (auto& thread : threads) {
             thread.join();
         }
@@ -596,28 +513,20 @@ private:
      * @param maxRetries Maximum number of retry attempts
      */
     void executeTestCase(const TestCase& testCase, int maxRetries) {
-        // Skip disabled tests
-        if (testCase.skip) {  // 使用 skip 而不是 disabled
+        if (testCase.skip) {
             if (config_.enableVerboseOutput) {
                 std::cout << "SKIP: " << testCase.name << " (disabled)"
                           << std::endl;
             }
-
-            // Record skipped test in results
-            std::lock_guard lock(resultsMutex_);
-            TestResult result;
-            result.name = testCase.name;
-            result.skipped = true;
-            result.message = "Test is disabled";  // 使用 message 而不是 reason
-            getTestStats().results.push_back(result);
+            recordTestResult(testCase.name, false, true, "Test is disabled");
             return;
         }
 
-        // Execute test with retry logic
         bool passed = false;
         std::string errorMessage;
 
-        for (int attempt = 0; attempt <= maxRetries; ++attempt) {
+        for (int attempt = 0; attempt <= maxRetries && !shouldStop_.load();
+             ++attempt) {
             if (attempt > 0 && config_.enableVerboseOutput) {
                 std::cout << "Retrying test: " << testCase.name << " (attempt "
                           << attempt + 1 << "/" << maxRetries + 1 << ")"
@@ -625,11 +534,8 @@ private:
             }
 
             try {
-                // Execute the test function
-                bool testPassed = testCase.testFunction();
-
-                if (testPassed) {
-                    passed = true;
+                passed = testCase.testFunction();
+                if (passed) {
                     break;
                 }
             } catch (const std::exception& e) {
@@ -645,33 +551,56 @@ private:
                               << "'" << std::endl;
                 }
             }
-
-            // Break early if we should stop
-            if (shouldStop_.load()) {
-                break;
-            }
         }
 
-        // Record test result
+        recordTestResult(testCase.name, passed, false,
+                         passed ? "" : errorMessage);
+    }
+
+    /**
+     * @brief Record the result of a test execution
+     * @param testName Name of the test
+     * @param passed Whether the test passed
+     * @param skipped Whether the test was skipped
+     * @param message Error or status message
+     */
+    void recordTestResult(const std::string& testName, bool passed,
+                          bool skipped, const std::string& message) {
         std::lock_guard lock(resultsMutex_);
-        TestResult result;
-        result.name = testCase.name;
-        result.passed = passed;
-        result.skipped = false;
-        if (!passed) {
-            result.message = errorMessage;  // 使用 message 而不是 reason
-        }
-        getTestStats().results.push_back(result);
+        auto& stats = getTestStats();
 
-        // Update statistics
-        if (passed) {
-            getTestStats()
-                .passedAsserts++;  // 使用 passedAsserts 而不是 passCount
+        TestResult result;
+        result.name = testName;
+        result.passed = passed;
+        result.skipped = skipped;
+        result.message = message;
+
+        stats.results.emplace_back(std::move(result));
+
+        if (skipped) {
+            stats.skippedTests++;
+        } else if (passed) {
+            stats.passedAsserts++;
         } else {
-            getTestStats()
-                .failedAsserts++;  // 使用 failedAsserts 而不是 failCount
+            stats.failedAsserts++;
         }
-        getTestStats().totalTests++;  // 使用 totalTests 而不是 totalCount
+        stats.totalTests++;
+    }
+
+    /**
+     * @brief Check if fail-fast condition is met for a specific test
+     * @param testName Name of the test to check
+     * @return True if fail-fast should be triggered
+     */
+    bool checkFailFastCondition(const std::string& testName) {
+        std::shared_lock lock(resultsMutex_);
+        const auto& results = getTestStats().results;
+
+        return std::any_of(results.begin(), results.end(),
+                           [&testName](const TestResult& result) {
+                               return result.name == testName &&
+                                      !result.passed && !result.skipped;
+                           });
     }
 
     /**
@@ -679,17 +608,18 @@ private:
      */
     void generateReport() {
         if (!config_.outputFormat) {
-            return;  // No report requested
+            return;
         }
 
         std::string filename = config_.outputPath;
         if (filename.empty()) {
             filename = "test_report";
-            if (*config_.outputFormat == "json") {
+            const auto& format = *config_.outputFormat;
+            if (format == "json") {
                 filename += ".json";
-            } else if (*config_.outputFormat == "xml") {
+            } else if (format == "xml") {
                 filename += ".xml";
-            } else if (*config_.outputFormat == "html") {
+            } else if (format == "html") {
                 filename += ".html";
             } else {
                 filename += ".txt";
@@ -715,107 +645,110 @@ private:
         const auto& stats = getTestStats();
 
         if (format == "json") {
-            file << "{\n";
-            file << "  \"summary\": {\n";
-            file << "    \"total\": " << stats.totalTests
-                 << ",\n";  // 使用 totalTests 而不是 totalCount
-            file << "    \"passed\": " << stats.passedAsserts
-                 << ",\n";  // 使用 passedAsserts 而不是 passCount
-            file << "    \"failed\": " << stats.failedAsserts
-                 << "\n";  // 使用 failedAsserts 而不是 failCount
-            file << "  },\n";
-            file << "  \"results\": [\n";
-
-            bool first = true;
-            for (const auto& result : stats.results) {
-                if (!first) {
-                    file << ",\n";
-                }
-                first = false;
-
-                file << "    {\n";
-                file << "      \"name\": \"" << result.name << "\",\n";
-                file << "      \"passed\": "
-                     << (result.passed ? "true" : "false") << ",\n";
-                file << "      \"skipped\": "
-                     << (result.skipped ? "true" : "false");
-                if (!result.message.empty()) {  // 使用 message 而不是 reason
-                    file << ",\n      \"reason\": \"" << result.message
-                         << "\"\n";
-                } else {
-                    file << "\n";
-                }
-                file << "    }";
-            }
-
-            file << "\n  ]\n}";
+            writeJsonReport(file, stats);
         } else if (format == "xml") {
-            file << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
-            file << "<testsuites>\n";
-            file << "  <testsuite tests=\"" << stats.totalTests
-                 << "\" failures=\"" << stats.failedAsserts
-                 << "\">\n";  // 使用 totalTests 和 failedAsserts
-
-            for (const auto& result : stats.results) {
-                file << "    <testcase name=\"" << result.name << "\"";
-                if (result.skipped) {
-                    file << ">\n      <skipped";
-                    if (!result.message
-                             .empty()) {  // 使用 message 而不是 reason
-                        file << " message=\"" << result.message << "\"";
-                    }
-                    file << "/>\n    </testcase>\n";
-                } else if (!result.passed) {
-                    file << ">\n      <failure";
-                    if (!result.message
-                             .empty()) {  // 使用 message 而不是 reason
-                        file << " message=\"" << result.message << "\"";
-                    }
-                    file << "/>\n    </testcase>\n";
-                } else {
-                    file << "/>\n";
-                }
-            }
-
-            file << "  </testsuite>\n</testsuites>";
+            writeXmlReport(file, stats);
         } else {
-            // Plain text format
-            file << "Test Report\n";
-            file << "===========\n\n";
-            file << "Summary:\n";
-            file << "  Total:  " << stats.totalTests
-                 << "\n";  // 使用 totalTests 而不是 totalCount
-            file << "  Passed: " << stats.passedAsserts
-                 << "\n";  // 使用 passedAsserts 而不是 passCount
-            file << "  Failed: " << stats.failedAsserts
-                 << "\n\n";  // 使用 failedAsserts 而不是 failCount
-            file << "Results:\n";
-
-            for (const auto& result : stats.results) {
-                if (result.skipped) {
-                    file << "  SKIP: " << result.name;
-                    if (!result.message
-                             .empty()) {  // 使用 message 而不是 reason
-                        file << " (" << result.message << ")";
-                    }
-                    file << "\n";
-                } else if (result.passed) {
-                    file << "  PASS: " << result.name << "\n";
-                } else {
-                    file << "  FAIL: " << result.name;
-                    if (!result.message
-                             .empty()) {  // 使用 message 而不是 reason
-                        file << " (" << result.message << ")";
-                    }
-                    file << "\n";
-                }
-            }
+            writeTextReport(file, stats);
         }
-
-        file.close();
 
         if (config_.enableVerboseOutput) {
             std::cout << "Test report written to: " << filename << std::endl;
+        }
+    }
+
+    /**
+     * @brief Write test results in JSON format
+     */
+    void writeJsonReport(std::ofstream& file, const TestStats& stats) {
+        file << "{\n  \"summary\": {\n"
+             << "    \"total\": " << stats.totalTests << ",\n"
+             << "    \"passed\": " << stats.passedAsserts << ",\n"
+             << "    \"failed\": " << stats.failedAsserts << "\n"
+             << "  },\n  \"results\": [\n";
+
+        bool first = true;
+        for (const auto& result : stats.results) {
+            if (!first) {
+                file << ",\n";
+            }
+            first = false;
+
+            file << "    {\n"
+                 << "      \"name\": \"" << result.name << "\",\n"
+                 << "      \"passed\": " << (result.passed ? "true" : "false")
+                 << ",\n"
+                 << "      \"skipped\": "
+                 << (result.skipped ? "true" : "false");
+
+            if (!result.message.empty()) {
+                file << ",\n      \"reason\": \"" << result.message << "\"\n";
+            } else {
+                file << "\n";
+            }
+            file << "    }";
+        }
+
+        file << "\n  ]\n}";
+    }
+
+    /**
+     * @brief Write test results in XML format
+     */
+    void writeXmlReport(std::ofstream& file, const TestStats& stats) {
+        file << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+             << "<testsuites>\n"
+             << "  <testsuite tests=\"" << stats.totalTests << "\" failures=\""
+             << stats.failedAsserts << "\">\n";
+
+        for (const auto& result : stats.results) {
+            file << "    <testcase name=\"" << result.name << "\"";
+            if (result.skipped) {
+                file << ">\n      <skipped";
+                if (!result.message.empty()) {
+                    file << " message=\"" << result.message << "\"";
+                }
+                file << "/>\n    </testcase>\n";
+            } else if (!result.passed) {
+                file << ">\n      <failure";
+                if (!result.message.empty()) {
+                    file << " message=\"" << result.message << "\"";
+                }
+                file << "/>\n    </testcase>\n";
+            } else {
+                file << "/>\n";
+            }
+        }
+
+        file << "  </testsuite>\n</testsuites>";
+    }
+
+    /**
+     * @brief Write test results in plain text format
+     */
+    void writeTextReport(std::ofstream& file, const TestStats& stats) {
+        file << "Test Report\n===========\n\n"
+             << "Summary:\n"
+             << "  Total:  " << stats.totalTests << "\n"
+             << "  Passed: " << stats.passedAsserts << "\n"
+             << "  Failed: " << stats.failedAsserts << "\n\n"
+             << "Results:\n";
+
+        for (const auto& result : stats.results) {
+            if (result.skipped) {
+                file << "  SKIP: " << result.name;
+                if (!result.message.empty()) {
+                    file << " (" << result.message << ")";
+                }
+            } else if (result.passed) {
+                file << "  PASS: " << result.name;
+            } else {
+                file << "  FAIL: " << result.name;
+                if (!result.message.empty()) {
+                    file << " (" << result.message << ")";
+                }
+            }
+            file << "\n";
         }
     }
 };
