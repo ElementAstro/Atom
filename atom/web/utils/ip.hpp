@@ -4,14 +4,6 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2025-5-17
-
-Description: IP address validation and conversion
-
-**************************************************/
-
 #ifndef ATOM_WEB_UTILS_IP_HPP
 #define ATOM_WEB_UTILS_IP_HPP
 
@@ -45,7 +37,8 @@ auto isValidIPv6(const std::string& ipAddress) -> bool;
  * @param bufSize Size of the buffer
  * @return bool True if conversion succeeded, false otherwise
  */
-auto ipToString(const struct sockaddr* addr, char* strBuf, size_t bufSize) -> bool;
+auto ipToString(const struct sockaddr* addr, char* strBuf, size_t bufSize)
+    -> bool;
 
 }  // namespace atom::web
 

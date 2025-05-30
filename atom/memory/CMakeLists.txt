@@ -28,10 +28,17 @@ target_include_directories(${LIB_NAME} INTERFACE
 )
 
 # Link dependencies
-target_link_libraries(${LIB_NAME}
-    PUBLIC
-    atom-error # Basic dependency
-)
+if(SOURCES)
+    target_link_libraries(${LIB_NAME}
+        PUBLIC
+        atom-error # Basic dependency
+    )
+else()
+    target_link_libraries(${LIB_NAME}
+        INTERFACE
+        atom-error # Basic dependency
+    )
+endif()
 
 # Add module to global target list
 get_property(ATOM_MODULE_TARGETS GLOBAL PROPERTY ATOM_MODULE_TARGETS)

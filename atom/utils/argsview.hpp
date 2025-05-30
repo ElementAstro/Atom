@@ -3,31 +3,28 @@
 
 #include <algorithm>
 #include <any>
+#include <cerrno>
+#include <climits>
 #include <filesystem>
 #include <fstream>
 #include <functional>
-#include <iomanip>  // Required for std::setprecision
+#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <optional>
 #include <ranges>
 #include <span>
 #include <sstream>
-// #include <string> // Replaced by high_performance.hpp
-// #include <string_view> // Replaced by high_performance.hpp String
 #include <thread>
 #include <type_traits>
-// #include <unordered_map> // Replaced by high_performance.hpp
 #include <utility>
-// #include <vector> // Replaced by high_performance.hpp
 
-#include "atom/containers/high_performance.hpp"  // Include high performance containers
+#include "atom/containers/high_performance.hpp"
 #include "atom/error/exception.hpp"
 #include "atom/macro.hpp"
 
 namespace atom::utils {
 
-// Use type aliases from high_performance.hpp
 using atom::containers::String;
 template <typename K, typename V>
 using HashMap = atom::containers::HashMap<K, V>;
@@ -38,10 +35,6 @@ using Vector = atom::containers::Vector<T>;
  * @class ArgumentParser
  * @brief A class for parsing command-line arguments with enhanced C++20
  * features.
- *
- * The ArgumentParser class provides functionality to define and parse
- * command-line arguments, including support for different argument types,
- * flags, subcommands, and mutually exclusive groups.
  */
 class ArgumentParser {
 public:
@@ -50,16 +43,16 @@ public:
      * @brief Enumeration of possible argument types.
      */
     enum class ArgType {
-        STRING,           /**< String argument type */
-        INTEGER,          /**< Integer argument type */
-        UNSIGNED_INTEGER, /**< Unsigned integer argument type */
-        LONG,             /**< Long integer argument type */
-        UNSIGNED_LONG,    /**< Unsigned long integer argument type */
-        FLOAT,            /**< Float argument type */
-        DOUBLE,           /**< Double argument type */
-        BOOLEAN,          /**< Boolean argument type */
-        FILEPATH,         /**< File path argument type */
-        AUTO              /**< Automatically detect argument type */
+        STRING,
+        INTEGER,
+        UNSIGNED_INTEGER,
+        LONG,
+        UNSIGNED_LONG,
+        FLOAT,
+        DOUBLE,
+        BOOLEAN,
+        FILEPATH,
+        AUTO
     };
 
     /**
@@ -67,11 +60,11 @@ public:
      * @brief Enumeration of possible nargs types.
      */
     enum class NargsType {
-        NONE,         /**< No arguments */
-        OPTIONAL,     /**< Optional argument */
-        ZERO_OR_MORE, /**< Zero or more arguments */
-        ONE_OR_MORE,  /**< One or more arguments */
-        CONSTANT      /**< Constant number of arguments */
+        NONE,
+        OPTIONAL,
+        ZERO_OR_MORE,
+        ONE_OR_MORE,
+        CONSTANT
     };
 
     /**
@@ -79,19 +72,11 @@ public:
      * @brief Structure to define the number of arguments.
      */
     struct Nargs {
-        NargsType type; /**< Type of nargs */
-        int count;      /**< Count of arguments, used if type is CONSTANT */
+        NargsType type;
+        int count;
 
-        /**
-         * @brief Default constructor initializing to NONE type and count 1.
-         */
         constexpr Nargs() noexcept : type(NargsType::NONE), count(1) {}
 
-        /**
-         * @brief Constructor with specified type and count.
-         * @param t Type of nargs.
-         * @param c Count of arguments, default is 1.
-         */
         constexpr Nargs(NargsType t, int c = 1) : type(t), count(c) {
             if (c < 0) {
                 THROW_INVALID_ARGUMENT("Nargs count cannot be negative");
@@ -99,165 +84,59 @@ public:
         }
     };
 
-    /**
-     * @brief Default constructor.
-     */
     ArgumentParser() = default;
-
-    /**
-     * @brief Constructor with program name.
-     * @param program_name Name of the program.
-     */
     explicit ArgumentParser(String program_name);
 
-    /**
-     * @brief Set the description of the program.
-     * @param description Description text.
-     */
     void setDescription(const String& description);
-
-    /**
-     * @brief Set the epilog of the program.
-     * @param epilog Epilog text.
-     */
     void setEpilog(const String& epilog);
 
-    /**
-     * @brief Add an argument to the parser.
-     * @param name Name of the argument.
-     * @param type Type of the argument.
-     * @param required Whether the argument is required.
-     * @param default_value Default value of the argument.
-     * @param help Help text for the argument.
-     * @param aliases Aliases for the argument.
-     * @param is_positional Whether the argument is positional.
-     * @param nargs Number of arguments.
-     * @throws std::invalid_argument If argument name is invalid.
-     */
     void addArgument(const String& name, ArgType type = ArgType::AUTO,
                      bool required = false, const std::any& default_value = {},
                      const String& help = "",
                      const Vector<String>& aliases = {},
                      bool is_positional = false, const Nargs& nargs = Nargs());
 
-    /**
-     * @brief Add a flag to the parser.
-     * @param name Name of the flag.
-     * @param help Help text for the flag.
-     * @param aliases Aliases for the flag.
-     * @throws std::invalid_argument If flag name is invalid.
-     */
     void addFlag(const String& name, const String& help = "",
                  const Vector<String>& aliases = {});
 
-    /**
-     * @brief Add a subcommand to the parser.
-     * @param name Name of the subcommand.
-     * @param help Help text for the subcommand.
-     * @throws std::invalid_argument If subcommand name is invalid.
-     */
     void addSubcommand(const String& name, const String& help = "");
 
-    /**
-     * @brief Add a mutually exclusive group of arguments.
-     * @param group_args Vector of argument names that are mutually exclusive.
-     * @throws std::invalid_argument If any argument in the group doesn't exist.
-     */
     void addMutuallyExclusiveGroup(const Vector<String>& group_args);
 
-    /**
-     * @brief Enable parsing arguments from a file.
-     * @param prefix Prefix to identify file arguments.
-     */
     void addArgumentFromFile(const String& prefix = "@");
 
-    /**
-     * @brief Set the delimiter for file parsing.
-     * @param delimiter Delimiter character.
-     */
     void setFileDelimiter(char delimiter);
 
-    /**
-     * @brief Parse the command-line arguments.
-     * @param argc Argument count.
-     * @param argv Argument vector.
-     * @throws std::invalid_argument For various argument parsing errors.
-     */
     void parse(int argc, std::span<const String> argv);
 
-    /**
-     * @brief Get the value of an argument.
-     * @tparam T Type of the argument value.
-     * @param name Name of the argument.
-     * @return Optional value of the argument.
-     */
     template <typename T>
     auto get(const String& name) const -> std::optional<T>;
 
-    /**
-     * @brief Get the value of a flag.
-     * @param name Name of the flag.
-     * @return Boolean value of the flag.
-     */
     auto getFlag(const String& name) const -> bool;
 
-    /**
-     * @brief Get the parser for a subcommand.
-     * @param name Name of the subcommand.
-     * @return Optional reference to the subcommand parser.
-     */
     auto getSubcommandParser(const String& name)
         -> std::optional<std::reference_wrapper<ArgumentParser>>;
 
-    /**
-     * @brief Print the help message.
-     */
     void printHelp() const;
 
-    /**
-     * @brief Add a description to the parser.
-     * @param description Description text.
-     */
     void addDescription(const String& description);
 
-    /**
-     * @brief Add an epilog to the parser.
-     * @param epilog Epilog text.
-     */
     void addEpilog(const String& epilog);
 
 private:
-    /**
-     * @struct Argument
-     * @brief Structure to define an argument.
-     */
     struct Argument {
-        ArgType type;                  /**< Type of the argument */
-        bool required;                 /**< Whether the argument is required */
-        std::any defaultValue;         /**< Default value of the argument */
-        std::optional<std::any> value; /**< Value of the argument */
-        String help;                   /**< Help text for the argument */
-        Vector<String> aliases;        /**< Aliases for the argument */
-        bool isMultivalue;  /**< Whether the argument is multivalue */
-        bool is_positional; /**< Whether the argument is positional */
-        Nargs nargs;        /**< Number of arguments */
+        ArgType type;
+        bool required;
+        std::any defaultValue;
+        std::optional<std::any> value;
+        String help;
+        Vector<String> aliases;
+        bool isMultivalue;
+        bool is_positional;
+        Nargs nargs;
 
-        /**
-         * @brief Default constructor.
-         */
         Argument() = default;
 
-        /**
-         * @brief Constructor with specified parameters.
-         * @param t Type of the argument.
-         * @param req Whether the argument is required.
-         * @param def Default value of the argument.
-         * @param hlp Help text for the argument.
-         * @param als Aliases for the argument.
-         * @param mult Whether the argument is multivalue.
-         * @param pos Whether the argument is positional.
-         * @param ng Number of arguments.
-         */
         Argument(ArgType t, bool req, std::any def, String hlp,
                  const Vector<String>& als, bool mult = false, bool pos = false,
                  const Nargs& ng = Nargs())
@@ -271,101 +150,37 @@ private:
               nargs(ng) {}
     } ATOM_ALIGNAS(128);
 
-    /**
-     * @struct Flag
-     * @brief Structure to define a flag.
-     */
     struct Flag {
-        bool value;             /**< Value of the flag */
-        String help;            /**< Help text for the flag */
-        Vector<String> aliases; /**< Aliases for the flag */
+        bool value;
+        String help;
+        Vector<String> aliases;
     } ATOM_ALIGNAS(64);
 
     struct Subcommand;
 
-    HashMap<String, Argument> arguments_; /**< Map of arguments */
-    HashMap<String, Flag> flags_;         /**< Map of flags */
-    HashMap<String, std::shared_ptr<Subcommand>>
-        subcommands_;                    /**< Map of subcommands */
-    HashMap<String, String> aliases_;    /**< Map of aliases */
-    Vector<String> positionalArguments_; /**< Vector of positional arguments */
-    String description_;                 /**< Description of the program */
-    String epilog_;                      /**< Epilog of the program */
-    String programName_;                 /**< Name of the program */
+    HashMap<String, Argument> arguments_;
+    HashMap<String, Flag> flags_;
+    HashMap<String, std::shared_ptr<Subcommand>> subcommands_;
+    HashMap<String, String> aliases_;
+    Vector<String> positionalArguments_;
+    String description_;
+    String epilog_;
+    String programName_;
+    Vector<Vector<String>> mutuallyExclusiveGroups_;
 
-    Vector<Vector<String>>
-        mutuallyExclusiveGroups_; /**< Vector of mutually exclusive groups */
+    bool enableFileParsing_ = false;
+    String filePrefix_ = "@";
+    char fileDelimiter_ = ' ';
 
-    bool enableFileParsing_ = false; /**< Enable file parsing */
-    String filePrefix_ = "@";        /**< Prefix for file arguments */
-    char fileDelimiter_ = ' ';       /**< Delimiter for file parsing */
-
-    /**
-     * @brief Detect the type of an argument from its value.
-     * @param value The value of the argument.
-     * @return The detected argument type.
-     */
     static auto detectType(const std::any& value) -> ArgType;
-
-    /**
-     * @brief Parse the value of an argument.
-     * @param type The type of the argument.
-     * @param value The value of the argument as a string.
-     * @return The parsed value as std::any.
-     * @throws std::invalid_argument If parsing fails.
-     */
     static auto parseValue(ArgType type, const String& value) -> std::any;
-
-    /**
-     * @brief Convert an argument type to a string.
-     * @param type The type of the argument.
-     * @return The argument type as a string.
-     */
-    static constexpr auto argTypeToString(ArgType type) -> const
-        char*;  // Return const char* for constexpr
-
-    /**
-     * @brief Convert a value of type std::any to a string.
-     * @param value The value to convert.
-     * @return The value as a string.
-     */
+    static constexpr auto argTypeToString(ArgType type) -> const char*;
     static auto anyToString(const std::any& value) -> String;
 
-    /**
-     * @brief Expand arguments from a file.
-     * @param argv The argument vector to expand.
-     * @throws std::runtime_error If file cannot be opened or read.
-     */
     void expandArgumentsFromFile(Vector<String>& argv);
-
-    /**
-     * @brief Validate argument name.
-     * @param name The name to validate.
-     * @throws std::invalid_argument If name is invalid.
-     */
     static void validateName(const String& name);
-
-    /**
-     * @brief Process positional arguments.
-     * @param pos_args Vector of positional arguments.
-     * @throws std::invalid_argument If required positional arguments are
-     * missing.
-     */
     void processPositionalArguments(const Vector<String>& pos_args);
-
-    /**
-     * @brief Process a file containing arguments.
-     * @param filename Name of the file to process.
-     * @return Vector of arguments from the file.
-     * @throws std::runtime_error If file cannot be opened or read.
-     */
     auto processArgumentFile(const String& filename) const -> Vector<String>;
-
-    /**
-     * @brief Parallel processing of multiple argument files.
-     * @param filenames Vector of filenames to process.
-     * @return Vector containing all arguments from all files.
-     */
     auto parallelProcessFiles(const Vector<String>& filenames) const
         -> Vector<String>;
 };
@@ -390,12 +205,10 @@ inline void ArgumentParser::validateName(const String& name) {
     if (name.empty()) {
         THROW_INVALID_ARGUMENT("Argument name cannot be empty");
     }
-    // Assuming String has find method similar to std::string
     if (name.find(' ') != String::npos) {
         THROW_INVALID_ARGUMENT("Argument name cannot contain spaces");
     }
-    // Assuming String has starts_with method or equivalent
-    if (name.rfind('-', 0) == 0) {  // Check if starts with '-'
+    if (name.starts_with('-')) {
         THROW_INVALID_ARGUMENT("Argument name cannot start with '-'");
     }
 }
@@ -413,21 +226,18 @@ inline void ArgumentParser::addArgument(
             type = ArgType::STRING;
         }
 
-        // Assuming HashMap operator[] works like std::unordered_map
         arguments_[name] =
             Argument{type,          required, default_value,
                      help,          aliases,  nargs.type != NargsType::NONE,
                      is_positional, nargs};
 
         for (const auto& alias : aliases) {
-            // Assuming HashMap has contains method
             if (aliases_.contains(alias)) {
                 THROW_INVALID_ARGUMENT("Alias '" + alias + "' is already used");
             }
             aliases_[alias] = name;
         }
     } catch (const std::exception& e) {
-        // Assuming String can be constructed from const char* and concatenated
         THROW_INVALID_ARGUMENT(String("Error adding argument: ") + e.what());
     }
 }
@@ -476,7 +286,6 @@ inline void ArgumentParser::addMutuallyExclusiveGroup(
                                        "' does not exist");
             }
         }
-        // Assuming Vector has emplace_back
         mutuallyExclusiveGroups_.emplace_back(group_args);
     } catch (const std::exception& e) {
         THROW_INVALID_ARGUMENT(
@@ -499,10 +308,8 @@ inline void ArgumentParser::parse(int argc, std::span<const String> argv) {
     }
 
     try {
-        // Convert span to vector for modification
         Vector<String> args_vector(argv.begin(), argv.end());
 
-        // Expand arguments from files
         if (enableFileParsing_) {
             expandArgumentsFromFile(args_vector);
         }
@@ -511,66 +318,52 @@ inline void ArgumentParser::parse(int argc, std::span<const String> argv) {
         Vector<String> subcommandArgs;
         Vector<String> positional_args;
 
-        // Track which mutually exclusive groups have been used
-        // Assuming std::vector<bool> is acceptable or replace with Vector<bool>
-        // if needed
         std::vector<bool> groupUsed(mutuallyExclusiveGroups_.size(), false);
 
-        // First argument is program name
         size_t i = 1;
         while (i < args_vector.size()) {
             const String& arg = args_vector[i];
 
-            // Check for subcommand
             if (subcommands_.contains(arg)) {
                 currentSubcommand = arg;
-                subcommandArgs.push_back(args_vector[0]);  // Program name
+                subcommandArgs.push_back(args_vector[0]);
                 ++i;
-                break;  // Rest of arguments go to subcommand
+                break;
             }
 
-            // Handle help flag
             if (arg == "--help" || arg == "-h") {
                 printHelp();
                 std::exit(0);
             }
 
-            // Handle optional arguments and flags
-            // Assuming String has starts_with or equivalent (using rfind)
-            if (arg.rfind("--", 0) == 0 ||
-                (arg.rfind("-", 0) == 0 && arg.size() > 1)) {
+            if (arg.starts_with("--") ||
+                (arg.starts_with("-") && arg.size() > 1)) {
                 String argName;
 
-                // Assuming String has substr method
-                if (arg.rfind("--", 0) == 0) {
+                if (arg.starts_with("--")) {
                     argName = arg.substr(2);
                 } else {
                     argName = arg.substr(1);
                 }
 
-                // Resolve aliases
                 if (aliases_.contains(argName)) {
-                    // Assuming HashMap has at method
                     argName = aliases_.at(argName);
                 }
 
-                // Check if it's a flag
                 if (flags_.contains(argName)) {
                     flags_[argName].value = true;
                     ++i;
                     continue;
                 }
 
-                // Check if it's an argument
                 if (arguments_.contains(argName)) {
                     Argument& argument = arguments_[argName];
                     Vector<String> values;
 
-                    // Handle nargs
                     int expected = 1;
                     bool isConstant = false;
                     if (argument.nargs.type == NargsType::ONE_OR_MORE) {
-                        expected = -1;  // Indicate multiple
+                        expected = -1;
                     } else if (argument.nargs.type == NargsType::ZERO_OR_MORE) {
                         expected = -1;
                     } else if (argument.nargs.type == NargsType::OPTIONAL) {
@@ -580,11 +373,9 @@ inline void ArgumentParser::parse(int argc, std::span<const String> argv) {
                         isConstant = true;
                     }
 
-                    // Collect values based on nargs
                     for (int j = 0; j < expected || expected == -1; ++j) {
                         if (i + 1 < args_vector.size() &&
-                            args_vector[i + 1].rfind("-", 0) !=
-                                0) {  // Check if next arg starts with '-'
+                            !args_vector[i + 1].starts_with("-")) {
                             values.emplace_back(args_vector[++i]);
                         } else {
                             break;
@@ -595,23 +386,19 @@ inline void ArgumentParser::parse(int argc, std::span<const String> argv) {
                                           argument.nargs.count) {
                         THROW_INVALID_ARGUMENT(
                             "Argument " + argName + " expects " +
-                            String(std::to_string(
-                                argument.nargs
-                                    .count)) +  // Convert int to String
+                            String(std::to_string(argument.nargs.count)) +
                             " value(s).");
                     }
 
                     if (values.empty() &&
                         argument.nargs.type == NargsType::OPTIONAL) {
-                        // Optional argument without a value
                         if (argument.defaultValue.has_value()) {
                             argument.value = argument.defaultValue;
                         }
                     } else if (!values.empty()) {
-                        if (expected == -1) {  // Multiple values
-                            // Store as Vector<String>
+                        if (expected == -1) {
                             argument.value = std::any(values);
-                        } else {  // Single value
+                        } else {
                             argument.value =
                                 parseValue(argument.type, values[0]);
                         }
@@ -623,23 +410,19 @@ inline void ArgumentParser::parse(int argc, std::span<const String> argv) {
 
                 THROW_INVALID_ARGUMENT("Unknown argument: " + arg);
             } else {
-                // Handle positional arguments
                 positional_args.push_back(arg);
                 ++i;
             }
         }
 
-        // Collect remaining arguments for subcommand
         while (i < args_vector.size()) {
             subcommandArgs.push_back(args_vector[i++]);
         }
 
-        // Process positional arguments
         if (!positional_args.empty()) {
             processPositionalArguments(positional_args);
         }
 
-        // Parse subcommand if present
         if (!currentSubcommand.empty() && !subcommandArgs.empty()) {
             if (auto subcommand = subcommands_[currentSubcommand]) {
                 subcommand->parser.parse(
@@ -648,7 +431,6 @@ inline void ArgumentParser::parse(int argc, std::span<const String> argv) {
             }
         }
 
-        // Validate mutually exclusive groups
         for (size_t g = 0; g < mutuallyExclusiveGroups_.size(); ++g) {
             int count = 0;
             for (const auto& arg : mutuallyExclusiveGroups_[g]) {
@@ -663,12 +445,11 @@ inline void ArgumentParser::parse(int argc, std::span<const String> argv) {
             if (count > 1) {
                 THROW_INVALID_ARGUMENT(
                     "Arguments in mutually exclusive group " +
-                    String(std::to_string(g + 1)) +  // Convert int to String
+                    String(std::to_string(g + 1)) +
                     " cannot be used together.");
             }
         }
 
-        // Check required arguments
         for (const auto& [name, argument] : arguments_) {
             if (argument.required && !argument.value.has_value() &&
                 !argument.defaultValue.has_value()) {
@@ -682,7 +463,6 @@ inline void ArgumentParser::parse(int argc, std::span<const String> argv) {
 
 inline void ArgumentParser::processPositionalArguments(
     const Vector<String>& pos_args) {
-    // Collect positional arguments
     Vector<String> positional_names;
     for (const auto& [name, arg] : arguments_) {
         if (arg.is_positional) {
@@ -696,11 +476,9 @@ inline void ArgumentParser::processPositionalArguments(
             (pos_args.size() > 1 ? " and others" : ""));
     }
 
-    // Match positional args to their definitions
     size_t pos_index = 0;
     for (const auto& name : positional_names) {
         if (pos_index >= pos_args.size()) {
-            // Check if this positional arg is required
             const auto& arg = arguments_.at(name);
             if (arg.required && !arg.defaultValue.has_value()) {
                 THROW_INVALID_ARGUMENT(
@@ -711,10 +489,8 @@ inline void ArgumentParser::processPositionalArguments(
 
         auto& arg = arguments_[name];
 
-        // Handle based on nargs type
         if (arg.nargs.type == NargsType::ONE_OR_MORE ||
             arg.nargs.type == NargsType::ZERO_OR_MORE) {
-            // Collect all remaining positional arguments for this parameter
             Vector<String> values;
             while (pos_index < pos_args.size()) {
                 values.push_back(pos_args[pos_index++]);
@@ -729,7 +505,6 @@ inline void ArgumentParser::processPositionalArguments(
                 arg.value = std::any(values);
             }
         } else if (arg.nargs.type == NargsType::CONSTANT) {
-            // Collect exact number of arguments
             Vector<String> values;
             for (int i = 0; i < arg.nargs.count && pos_index < pos_args.size();
                  ++i) {
@@ -737,21 +512,18 @@ inline void ArgumentParser::processPositionalArguments(
             }
 
             if (static_cast<int>(values.size()) != arg.nargs.count) {
-                THROW_INVALID_ARGUMENT("Positional argument " + name +
-                                       " requires exactly " +
-                                       String(std::to_string(arg.nargs.count)) +
-                                       " values");  // Convert int to String
+                THROW_INVALID_ARGUMENT(
+                    "Positional argument " + name + " requires exactly " +
+                    String(std::to_string(arg.nargs.count)) + " values");
             }
 
             arg.value = std::any(values);
         } else {
-            // Single value or optional
             String value = pos_args[pos_index++];
             arg.value = parseValue(arg.type, value);
         }
     }
 
-    // Check if there are unused positional arguments
     if (pos_index < pos_args.size()) {
         THROW_INVALID_ARGUMENT(
             "Too many positional arguments provided: " + pos_args[pos_index] +
@@ -768,40 +540,33 @@ auto ArgumentParser::get(const String& name) const -> std::optional<T> {
     const auto& arg = arguments_.at(name);
     if (arg.value.has_value()) {
         try {
-            // Handle Vector<String> case for multivalue arguments
             if constexpr (std::is_same_v<T, Vector<String>>) {
                 if (arg.value.value().type() == typeid(Vector<String>)) {
                     return std::any_cast<Vector<String>>(arg.value.value());
                 }
-                // If stored as single string, wrap in vector
                 if (arg.value.value().type() == typeid(String)) {
                     Vector<String> vec;
                     vec.push_back(std::any_cast<String>(arg.value.value()));
                     return vec;
                 }
             }
-            // Handle single value case
             return std::any_cast<T>(arg.value.value());
         } catch (const std::bad_any_cast&) {
-            // Try conversion for common types (e.g., int to String)
             if constexpr (std::is_same_v<T, String>) {
                 if (arg.value.value().type() == typeid(int)) {
                     return String(
                         std::to_string(std::any_cast<int>(arg.value.value())));
                 }
-                // Add other potential conversions if needed
             }
             return std::nullopt;
         }
     }
     if (arg.defaultValue.has_value()) {
         try {
-            // Handle Vector<String> case for default multivalue arguments
             if constexpr (std::is_same_v<T, Vector<String>>) {
                 if (arg.defaultValue.type() == typeid(Vector<String>)) {
                     return std::any_cast<Vector<String>>(arg.defaultValue);
                 }
-                // If default stored as single string, wrap in vector
                 if (arg.defaultValue.type() == typeid(String)) {
                     Vector<String> vec;
                     vec.push_back(std::any_cast<String>(arg.defaultValue));
@@ -832,7 +597,6 @@ inline auto ArgumentParser::getSubcommandParser(const String& name)
 }
 
 inline void ArgumentParser::printHelp() const {
-    // Assuming String can be streamed to std::cout
     std::cout << "Usage:\n  " << programName_ << " [options] ";
     if (!subcommands_.empty()) {
         std::cout << "<subcommand> [subcommand options]";
@@ -843,12 +607,9 @@ inline void ArgumentParser::printHelp() const {
         std::cout << description_ << "\n\n";
     }
 
-    // Options section
     if (!arguments_.empty() || !flags_.empty()) {
         std::cout << "Options:\n";
 
-        // Sort arguments for consistent output
-        // Assuming Vector can store pairs and std::ranges::sort works
         Vector<std::pair<String, const Argument*>> sorted_args;
         for (const auto& [name, arg] : arguments_) {
             if (!arg.is_positional) {
@@ -859,7 +620,6 @@ inline void ArgumentParser::printHelp() const {
             return a.first < b.first;
         });
 
-        // Print arguments
         for (const auto& [name, arg_ptr] : sorted_args) {
             const auto& argument = *arg_ptr;
             std::cout << "  --" << name;
@@ -902,7 +662,6 @@ inline void ArgumentParser::printHelp() const {
         }
     }
 
-    // Positional arguments
     Vector<String> positional;
     for (const auto& [name, argument] : arguments_) {
         if (argument.is_positional) {
@@ -986,26 +745,24 @@ inline auto ArgumentParser::detectType(const std::any& value) -> ArgType {
     if (typeInfo == typeid(bool))
         return ArgType::BOOLEAN;
     if (typeInfo == typeid(String))
-        return ArgType::STRING;  // Check for atom::containers::String
+        return ArgType::STRING;
     if (typeInfo == typeid(std::filesystem::path))
         return ArgType::FILEPATH;
-    // Add check for Vector<String> if needed for default values
     if (typeInfo == typeid(Vector<String>))
-        return ArgType::STRING;  // Treat as string for nargs
+        return ArgType::STRING;
 
-    return ArgType::STRING;  // Default fallback
+    return ArgType::STRING;
 }
 
 inline auto ArgumentParser::parseValue(ArgType type, const String& value)
     -> std::any {
     try {
-        // Assuming String has c_str() and data() methods
-        const char* str = value.c_str();  // Use c_str() for C-style functions
+        const char* str = value.c_str();
         size_t len = value.length();
 
         switch (type) {
             case ArgType::STRING:
-                return value;  // Return the original String
+                return value;
 
             case ArgType::INTEGER: {
                 char* end;
@@ -1015,7 +772,7 @@ inline auto ArgumentParser::parseValue(ArgType type, const String& value)
                 if (errno == ERANGE || val < INT_MIN || val > INT_MAX) {
                     throw std::out_of_range("Integer value out of range");
                 }
-                if (end != str + len) {  // Check if entire string was parsed
+                if (end != str + len) {
                     THROW_INVALID_ARGUMENT("Invalid integer format");
                 }
                 return static_cast<int>(val);
@@ -1024,7 +781,6 @@ inline auto ArgumentParser::parseValue(ArgType type, const String& value)
             case ArgType::UNSIGNED_INTEGER: {
                 char* end;
                 errno = 0;
-                // Check for negative sign manually
                 if (value.find('-') != String::npos) {
                     THROW_INVALID_ARGUMENT(
                         "Invalid unsigned integer format (contains '-')");
@@ -1035,7 +791,7 @@ inline auto ArgumentParser::parseValue(ArgType type, const String& value)
                     throw std::out_of_range(
                         "Unsigned integer value out of range");
                 }
-                if (end != str + len) {  // Check if entire string was parsed
+                if (end != str + len) {
                     THROW_INVALID_ARGUMENT("Invalid unsigned integer format");
                 }
                 return static_cast<unsigned int>(val);
@@ -1049,7 +805,7 @@ inline auto ArgumentParser::parseValue(ArgType type, const String& value)
                 if (errno == ERANGE) {
                     throw std::out_of_range("Long value out of range");
                 }
-                if (end != str + len) {  // Check if entire string was parsed
+                if (end != str + len) {
                     THROW_INVALID_ARGUMENT("Invalid long format");
                 }
                 return val;
@@ -1058,7 +814,6 @@ inline auto ArgumentParser::parseValue(ArgType type, const String& value)
             case ArgType::UNSIGNED_LONG: {
                 char* end;
                 errno = 0;
-                // Check for negative sign manually
                 if (value.find('-') != String::npos) {
                     THROW_INVALID_ARGUMENT(
                         "Invalid unsigned long format (contains '-')");
@@ -1068,7 +823,7 @@ inline auto ArgumentParser::parseValue(ArgType type, const String& value)
                 if (errno == ERANGE) {
                     throw std::out_of_range("Unsigned long value out of range");
                 }
-                if (end != str + len) {  // Check if entire string was parsed
+                if (end != str + len) {
                     THROW_INVALID_ARGUMENT("Invalid unsigned long format");
                 }
                 return val;
@@ -1082,7 +837,7 @@ inline auto ArgumentParser::parseValue(ArgType type, const String& value)
                 if (errno == ERANGE) {
                     throw std::out_of_range("Float value out of range");
                 }
-                if (end != str + len) {  // Check if entire string was parsed
+                if (end != str + len) {
                     THROW_INVALID_ARGUMENT("Invalid float format");
                 }
                 return val;
@@ -1096,14 +851,13 @@ inline auto ArgumentParser::parseValue(ArgType type, const String& value)
                 if (errno == ERANGE) {
                     throw std::out_of_range("Double value out of range");
                 }
-                if (end != str + len) {  // Check if entire string was parsed
+                if (end != str + len) {
                     THROW_INVALID_ARGUMENT("Invalid double format");
                 }
                 return val;
             }
 
             case ArgType::BOOLEAN:
-                // Improved boolean parsing with more options
                 if (value == "true" || value == "1" || value == "yes" ||
                     value == "y" || value == "on") {
                     return true;
@@ -1115,17 +869,14 @@ inline auto ArgumentParser::parseValue(ArgType type, const String& value)
                 THROW_INVALID_ARGUMENT("Invalid boolean value: " + value);
 
             case ArgType::FILEPATH: {
-                // Assuming filesystem::path can be constructed from String or
-                // its c_str()
                 std::filesystem::path path(value.c_str());
-                // Validate path format (basic check for null chars)
                 if (value.find('\0') != String::npos) {
                     THROW_INVALID_ARGUMENT("Path contains null characters");
                 }
                 return path;
             }
 
-            default:  // Includes ArgType::AUTO which should have been resolved
+            default:
                 return value;
         }
     } catch (const std::exception& e) {
@@ -1134,7 +885,6 @@ inline auto ArgumentParser::parseValue(ArgType type, const String& value)
     }
 }
 
-// Return const char* for constexpr compatibility
 inline constexpr auto ArgumentParser::argTypeToString(ArgType type) -> const
     char* {
     switch (type) {
@@ -1182,29 +932,23 @@ inline auto ArgumentParser::anyToString(const std::any& value) -> String {
         if (typeInfo == typeid(unsigned long))
             return String(std::to_string(std::any_cast<unsigned long>(value)));
         if (typeInfo == typeid(float)) {
-            // Use std::format if available and String is compatible, otherwise
-            // ostringstream
             std::ostringstream ss;
             ss << std::fixed << std::setprecision(6)
                << std::any_cast<float>(value);
-            return String(
-                ss.str().c_str());  // Convert std::string from ss to String
+            return String(ss.str().c_str());
         }
         if (typeInfo == typeid(double)) {
             std::ostringstream ss;
             ss << std::fixed << std::setprecision(10)
                << std::any_cast<double>(value);
-            return String(
-                ss.str().c_str());  // Convert std::string from ss to String
+            return String(ss.str().c_str());
         }
         if (typeInfo == typeid(bool))
             return std::any_cast<bool>(value) ? "true" : "false";
         if (typeInfo == typeid(std::filesystem::path)) {
-            // Assuming path.string() returns std::string, convert to String
             return String(
                 std::any_cast<std::filesystem::path>(value).string().c_str());
         }
-        // Array types
         if (typeInfo == typeid(Vector<String>)) {
             const auto& vec = std::any_cast<const Vector<String>&>(value);
             String result = "[";
@@ -1224,17 +968,13 @@ inline auto ArgumentParser::anyToString(const std::any& value) -> String {
     }
 }
 
-// 自定义文件解析实现
 inline void ArgumentParser::expandArgumentsFromFile(Vector<String>& argv) {
     try {
         Vector<String> expandedArgs;
         Vector<String> filenames;
 
-        // First pass: collect normal args and files to process
         for (const auto& arg : argv) {
-            // Assuming String has starts_with or equivalent (using rfind)
-            if (arg.rfind(filePrefix_, 0) == 0) {
-                // Assuming String has substr
+            if (arg.starts_with(filePrefix_)) {
                 String filename = arg.substr(filePrefix_.length());
                 filenames.push_back(filename);
             } else {
@@ -1242,24 +982,19 @@ inline void ArgumentParser::expandArgumentsFromFile(Vector<String>& argv) {
             }
         }
 
-        // Process files in parallel if we have multiple files
         if (!filenames.empty()) {
             Vector<String> file_args;
 
             if (filenames.size() > 1 &&
                 std::thread::hardware_concurrency() > 1) {
-                // Use parallel processing for multiple files
                 file_args = parallelProcessFiles(filenames);
             } else {
-                // Process files sequentially
                 for (const auto& filename : filenames) {
                     auto args = processArgumentFile(filename);
-                    // Assuming Vector has insert method
                     file_args.insert(file_args.end(), args.begin(), args.end());
                 }
             }
 
-            // Merge file arguments with normal arguments
             expandedArgs.insert(expandedArgs.end(), file_args.begin(),
                                 file_args.end());
         }
@@ -1275,32 +1010,26 @@ inline auto ArgumentParser::processArgumentFile(const String& filename) const
     -> Vector<String> {
     Vector<String> args;
 
-    // Assuming String has c_str() for ifstream constructor
     std::ifstream infile(filename.c_str());
     if (!infile) {
         throw std::runtime_error("Unable to open argument file: " + filename);
     }
 
-    std::string line;  // Use std::string for getline
+    std::string line;
     while (std::getline(infile, line)) {
-        // Skip empty lines and comments (assuming String has starts_with or
-        // equivalent)
-        if (line.empty() || line.rfind("#", 0) == 0) {
+        if (line.empty() || line.starts_with("#")) {
             continue;
         }
 
-        // Use std::string for istringstream processing
         std::istringstream iss(line);
-        std::string token_std;  // Use std::string for token
+        std::string token_std;
 
         while (std::getline(iss, token_std, fileDelimiter_)) {
             if (!token_std.empty()) {
-                // Trim whitespace using std::string methods
                 token_std.erase(0, token_std.find_first_not_of(" \t"));
                 token_std.erase(token_std.find_last_not_of(" \t") + 1);
 
                 if (!token_std.empty()) {
-                    // Convert std::string token back to String
                     args.emplace_back(token_std.c_str());
                 }
             }
@@ -1316,9 +1045,7 @@ inline auto ArgumentParser::parallelProcessFiles(
         std::min(static_cast<unsigned int>(filenames.size()),
                  std::thread::hardware_concurrency());
 
-    // Assuming Vector can store Vector<String>
     Vector<Vector<String>> results(filenames.size());
-    // Assuming std::vector<std::thread> is okay
     std::vector<std::thread> threads;
     threads.reserve(num_threads);
 
@@ -1327,19 +1054,15 @@ inline auto ArgumentParser::parallelProcessFiles(
             try {
                 results[i] = processArgumentFile(filenames[i]);
             } catch (const std::exception& e) {
-                // Log error but continue with other files
-                // Assuming String can be streamed to std::cerr
                 std::cerr << "Error processing file " << filenames[i] << ": "
                           << e.what() << std::endl;
             }
         }
     };
 
-    // Calculate workload per thread
     size_t files_per_thread = filenames.size() / num_threads;
     size_t remainder = filenames.size() % num_threads;
 
-    // Launch threads
     size_t start = 0;
     for (unsigned int i = 0; i < num_threads; ++i) {
         size_t end = start + files_per_thread + (i < remainder ? 1 : 0);
@@ -1347,12 +1070,10 @@ inline auto ArgumentParser::parallelProcessFiles(
         start = end;
     }
 
-    // Wait for all threads to complete
     for (auto& t : threads) {
         t.join();
     }
 
-    // Combine results
     Vector<String> combined_args;
     for (const auto& result : results) {
         combined_args.insert(combined_args.end(), result.begin(), result.end());

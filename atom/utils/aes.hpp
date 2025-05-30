@@ -4,14 +4,6 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2023-11-24
-
-Description: Simple implementation of AES encryption
-
-**************************************************/
-
 #ifndef ATOM_UTILS_AES_HPP
 #define ATOM_UTILS_AES_HPP
 
@@ -22,7 +14,6 @@ Description: Simple implementation of AES encryption
 
 namespace atom::utils {
 
-// Concepts to ensure valid input types
 template <typename T>
 concept StringLike = requires(T t) {
     { std::string_view(t) } -> std::convertible_to<std::string_view>;
@@ -39,7 +30,8 @@ concept StringLike = requires(T t) {
  * @throws std::invalid_argument If inputs are invalid
  * @throws std::runtime_error If encryption fails
  */
-[[nodiscard]] auto encryptAES(StringLike auto&& plaintext, StringLike auto&& key,
+[[nodiscard]] auto encryptAES(StringLike auto&& plaintext,
+                              StringLike auto&& key,
                               std::vector<unsigned char>& iv,
                               std::vector<unsigned char>& tag) -> std::string;
 
@@ -54,9 +46,11 @@ concept StringLike = requires(T t) {
  * @throws std::invalid_argument If inputs are invalid
  * @throws std::runtime_error If decryption fails
  */
-[[nodiscard]] auto decryptAES(StringLike auto&& ciphertext, StringLike auto&& key,
+[[nodiscard]] auto decryptAES(StringLike auto&& ciphertext,
+                              StringLike auto&& key,
                               std::span<const unsigned char> iv,
-                              std::span<const unsigned char> tag) -> std::string;
+                              std::span<const unsigned char> tag)
+    -> std::string;
 
 /**
  * @brief Compresses the input data using the Zlib library.
@@ -95,7 +89,8 @@ concept StringLike = requires(T t) {
  * @throws std::invalid_argument If input is empty
  * @throws std::runtime_error If hash calculation fails
  */
-[[nodiscard]] auto calculateSha224(const std::string& data) noexcept -> std::string;
+[[nodiscard]] auto calculateSha224(const std::string& data) noexcept
+    -> std::string;
 
 /**
  * @brief Calculates the SHA-384 hash of a string.
@@ -105,7 +100,8 @@ concept StringLike = requires(T t) {
  * @throws std::invalid_argument If input is empty
  * @throws std::runtime_error If hash calculation fails
  */
-[[nodiscard]] auto calculateSha384(const std::string& data) noexcept -> std::string;
+[[nodiscard]] auto calculateSha384(const std::string& data) noexcept
+    -> std::string;
 
 /**
  * @brief Calculates the SHA-512 hash of a string.
@@ -115,7 +111,8 @@ concept StringLike = requires(T t) {
  * @throws std::invalid_argument If input is empty
  * @throws std::runtime_error If hash calculation fails
  */
-[[nodiscard]] auto calculateSha512(const std::string& data) noexcept -> std::string;
+[[nodiscard]] auto calculateSha512(const std::string& data) noexcept
+    -> std::string;
 
 }  // namespace atom::utils
 

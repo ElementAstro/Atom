@@ -7,69 +7,68 @@
 #include "time_manager.hpp"
 #include "time_manager_impl.hpp"
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 
 namespace atom::web {
 
 TimeManager::TimeManager() : impl_(std::make_unique<TimeManagerImpl>()) {
-    LOG_F(INFO, "TimeManager constructor called");
+    spdlog::debug("TimeManager initialized successfully");
 }
 
-TimeManager::~TimeManager() { LOG_F(INFO, "TimeManager destructor called"); }
+TimeManager::~TimeManager() { spdlog::debug("TimeManager destroyed"); }
 
-// 实现移动构造函数和移动赋值运算符
 TimeManager::TimeManager(TimeManager&& other) noexcept
     : impl_(std::move(other.impl_)) {
-    LOG_F(INFO, "TimeManager move constructor called");
+    spdlog::trace("TimeManager moved");
 }
 
 TimeManager& TimeManager::operator=(TimeManager&& other) noexcept {
-    LOG_F(INFO, "TimeManager move assignment operator called");
     if (this != &other) {
         impl_ = std::move(other.impl_);
+        spdlog::trace("TimeManager move assigned");
     }
     return *this;
 }
 
 auto TimeManager::getSystemTime() -> std::time_t {
-    LOG_F(INFO, "TimeManager::getSystemTime called");
+    spdlog::trace("Getting system time");
+
     try {
         auto systemTime = impl_->getSystemTime();
-        LOG_F(INFO, "TimeManager::getSystemTime returning: {}", systemTime);
+        spdlog::trace("System time retrieved: {}", systemTime);
         return systemTime;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error in TimeManager::getSystemTime: {}", e.what());
-        throw;  // 重新抛出异常
+        spdlog::error("Failed to get system time: {}", e.what());
+        throw;
     }
 }
 
 auto TimeManager::getSystemTimePoint()
     -> std::chrono::system_clock::time_point {
-    LOG_F(INFO, "TimeManager::getSystemTimePoint called");
+    spdlog::trace("Getting system time point");
+
     try {
         auto timePoint = impl_->getSystemTimePoint();
-        LOG_F(INFO, "TimeManager::getSystemTimePoint returning time point");
+        spdlog::trace("System time point retrieved");
         return timePoint;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error in TimeManager::getSystemTimePoint: {}", e.what());
-        throw;  // 重新抛出异常
+        spdlog::error("Failed to get system time point: {}", e.what());
+        throw;
     }
 }
 
 auto TimeManager::setSystemTime(int year, int month, int day, int hour,
                                 int minute, int second) -> std::error_code {
-    LOG_F(INFO,
-          "TimeManager::setSystemTime called with values: {}-{}-{} "
-          "{}:{}:{}",
-          year, month, day, hour, minute, second);
+    spdlog::info(
+        "Setting system time to: {}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}", year,
+        month, day, hour, minute, second);
 
     auto result = impl_->setSystemTime(year, month, day, hour, minute, second);
 
     if (result) {
-        LOG_F(INFO, "TimeManager::setSystemTime failed: {}",
-              result.message().c_str());
+        spdlog::error("Failed to set system time: {}", result.message());
     } else {
-        LOG_F(INFO, "TimeManager::setSystemTime completed successfully");
+        spdlog::info("System time set successfully");
     }
 
     return result;
@@ -77,31 +76,28 @@ auto TimeManager::setSystemTime(int year, int month, int day, int hour,
 
 auto TimeManager::setSystemTimezone(std::string_view timezone)
     -> std::error_code {
-    LOG_F(INFO, "TimeManager::setSystemTimezone called with timezone: {}",
-          timezone.data());
+    spdlog::info("Setting system timezone to: {}", timezone);
 
     auto result = impl_->setSystemTimezone(timezone);
 
     if (result) {
-        LOG_F(INFO, "TimeManager::setSystemTimezone failed: {}",
-              result.message().c_str());
+        spdlog::error("Failed to set system timezone: {}", result.message());
     } else {
-        LOG_F(INFO, "TimeManager::setSystemTimezone completed successfully");
+        spdlog::info("System timezone set successfully to: {}", timezone);
     }
 
     return result;
 }
 
 auto TimeManager::syncTimeFromRTC() -> std::error_code {
-    LOG_F(INFO, "TimeManager::syncTimeFromRTC called");
+    spdlog::info("Synchronizing time from RTC");
 
     auto result = impl_->syncTimeFromRTC();
 
     if (result) {
-        LOG_F(INFO, "TimeManager::syncTimeFromRTC failed: {}",
-              result.message().c_str());
+        spdlog::error("Failed to sync time from RTC: {}", result.message());
     } else {
-        LOG_F(INFO, "TimeManager::syncTimeFromRTC completed successfully");
+        spdlog::info("Time synchronized from RTC successfully");
     }
 
     return result;
@@ -110,23 +106,22 @@ auto TimeManager::syncTimeFromRTC() -> std::error_code {
 auto TimeManager::getNtpTime(std::string_view hostname,
                              std::chrono::milliseconds timeout)
     -> std::optional<std::time_t> {
-    LOG_F(INFO, "TimeManager::getNtpTime called with hostname: {}",
-          hostname.data());
+    spdlog::debug("Getting NTP time from hostname: {} with timeout: {}ms",
+                  hostname, timeout.count());
 
     auto ntpTime = impl_->getNtpTime(hostname, timeout);
 
     if (ntpTime) {
-        LOG_F(INFO, "TimeManager::getNtpTime returning: {}", *ntpTime);
+        spdlog::info("NTP time retrieved from {}: {}", hostname, *ntpTime);
     } else {
-        LOG_F(ERROR, "TimeManager::getNtpTime failed to get time from {}",
-              hostname.data());
+        spdlog::warn("Failed to get NTP time from: {}", hostname);
     }
 
     return ntpTime;
 }
 
 void TimeManager::setImpl(std::unique_ptr<TimeManagerImpl> impl) {
-    LOG_F(INFO, "TimeManager::setImpl called");
+    spdlog::debug("Setting custom TimeManager implementation");
     impl_ = std::move(impl);
 }
 

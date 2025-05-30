@@ -1,9 +1,10 @@
 #ifndef ATOM_WEB_ADDRESS_IPV4_HPP
 #define ATOM_WEB_ADDRESS_IPV4_HPP
 
-#include "address.hpp"
 #include <cstdint>
 #include <optional>
+#include "address.hpp"
+
 
 namespace atom::web {
 
@@ -63,7 +64,7 @@ public:
         -> std::optional<int>;
 
 private:
-    uint32_t ipValue{0};  ///< Stores the IP address as an integer.
+    uint32_t ipValue{0};
 
     /**
      * @brief Converts an IP address string to an integer.

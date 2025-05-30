@@ -192,11 +192,6 @@ public:
     auto nextDiscrete(std::span<const double> weights) -> int;
 
     /**
-     * @brief Overloaded version that accepts vector
-     */
-    auto nextDiscrete(const std::vector<double>& weights) -> int;
-
-    /**
      * @brief Generates a multinomial distribution.
      * @param trials The number of trials.
      * @param probabilities The probabilities of each outcome.
@@ -204,12 +199,6 @@ public:
      * @throws std::invalid_argument if probabilities is invalid
      */
     auto nextMultinomial(int trials, std::span<const double> probabilities)
-        -> std::vector<int>;
-
-    /**
-     * @brief Overloaded version that accepts vector
-     */
-    auto nextMultinomial(int trials, const std::vector<double>& probabilities)
         -> std::vector<int>;
 
     /**
@@ -232,12 +221,16 @@ public:
     auto sample(const std::vector<T>& data, int sampleSize) -> std::vector<T>;
 
 private:
-    result_type current_;  ///< The current state of the generator.
-    std::mutex mutex_;     ///< Mutex for thread-safe operations.
+    result_type current_;
+    std::mutex mutex_;
 
-    // Thread-local variables for Gaussian generation
     static thread_local bool has_cached_gaussian_;
     static thread_local double cached_gaussian_value_;
+
+    static constexpr result_type MULTIPLIER = 1664525;
+    static constexpr result_type INCREMENT = 1013904223;
+    static constexpr result_type MODULUS = 0xFFFFFFFF;
+    static constexpr double SCALE_FACTOR = 1.0 / (1ULL << 32);
 };
 
 template <std::ranges::random_access_range Range>

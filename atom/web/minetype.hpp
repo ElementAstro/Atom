@@ -1,5 +1,5 @@
-#ifndef MIMETYPES_H
-#define MIMETYPES_H
+#ifndef ATOM_WEB_MIMETYPE_HPP
+#define ATOM_WEB_MIMETYPE_HPP
 
 #include <concepts>
 #include <memory>
@@ -18,7 +18,9 @@ public:
         : std::runtime_error(msg) {}
 };
 
-// Concept for valid path types
+/**
+ * @brief Concept for valid path types
+ */
 template <typename T>
 concept PathLike = requires(T a) {
     { std::string(a) } -> std::convertible_to<std::string>;
@@ -182,8 +184,8 @@ public:
     bool hasExtension(const std::string& extension) const;
 
 private:
-    class Impl;  ///< Forward declaration of the implementation class.
-    std::unique_ptr<Impl> pImpl;  ///< Pointer to the implementation.
+    class Impl;
+    std::unique_ptr<Impl> pImpl;
 };
 
-#endif  // MIMETYPES_H
+#endif  // ATOM_WEB_MIMETYPE_HPP

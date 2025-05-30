@@ -4,24 +4,15 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2025-5-17
-
-Description: Socket creation and management
-
-**************************************************/
-
 #ifndef ATOM_WEB_UTILS_SOCKET_HPP
 #define ATOM_WEB_UTILS_SOCKET_HPP
 
-#include <ws2tcpip.h>
 #include <chrono>
 #include <cstdint>
 
-// Define socklen_t for windows
 #ifdef _WIN32
 #include <winsock2.h>
+#include <ws2tcpip.h>
 #elif defined(__linux__) || defined(__APPLE__)
 #include <sys/socket.h>
 #endif

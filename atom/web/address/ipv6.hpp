@@ -1,10 +1,11 @@
 #ifndef ATOM_WEB_ADDRESS_IPV6_HPP
 #define ATOM_WEB_ADDRESS_IPV6_HPP
 
-#include "address.hpp"
 #include <array>
 #include <cstdint>
 #include <optional>
+#include "address.hpp"
+
 
 namespace atom::web {
 
@@ -23,7 +24,14 @@ public:
      */
     explicit IPv6(std::string_view address);
 
+    /**
+     * @brief Parses the IPv6 address string.
+     * @param address The IPv6 address string to parse.
+     * @return True if the address is successfully parsed, false otherwise.
+     * @throws InvalidAddressFormat if the address format is invalid.
+     */
     auto parse(std::string_view address) -> bool override;
+
     void printAddressType() const override;
     auto isInRange(std::string_view start, std::string_view end)
         -> bool override;
@@ -64,24 +72,30 @@ public:
     [[nodiscard]] static auto isValidIPv6(std::string_view address) -> bool;
 
 private:
-    std::array<uint16_t, 8> ipSegments{};  ///< Stores the IP address segments.
+    std::array<uint16_t, 8> ipSegments{};
 
     /**
-     * @brief Converts an IP address string to a vector of segments.
+     * @brief Converts an IP address string to an array of segments.
      * @param ipAddr The IP address string.
-     * @return The IP address as a vector of segments.
+     * @return The IP address as an array of segments.
      * @throws InvalidAddressFormat if the address format is invalid.
      */
     [[nodiscard]] auto ipToArray(std::string_view ipAddr) const
         -> std::array<uint16_t, 8>;
 
     /**
-     * @brief Converts a vector of segments to an IP address string.
+     * @brief Converts an array of segments to an IP address string.
      * @param segments The IP address segments.
      * @return The IP address string.
      */
     [[nodiscard]] auto arrayToIp(const std::array<uint16_t, 8>& segments) const
         -> std::string;
+
+    /**
+     * @brief Applies a prefix length mask to the IPv6 address segments.
+     * @param prefixLength The prefix length (0-128).
+     */
+    void applyPrefixMask(int prefixLength);
 };
 
 }  // namespace atom::web

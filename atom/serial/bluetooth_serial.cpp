@@ -1,7 +1,7 @@
 #include "bluetooth_serial.hpp"
 
 #if defined(_WIN32)
-// Windows实现在BluetoothSerialWin.cpp中
+#include "bluetooth_serial_win.hpp"
 #elif defined(__linux__)
 #include "bluetooth_serial_unix.hpp"
 #elif defined(__APPLE__)

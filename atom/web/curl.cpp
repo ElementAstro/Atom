@@ -4,14 +4,6 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2024-1-4
-
-Description: Simple HTTP client using libcurl.
-
-**************************************************/
-
 #include "curl.hpp"
 
 #ifdef USE_GNUTLS
@@ -24,9 +16,11 @@ Description: Simple HTTP client using libcurl.
 #include <condition_variable>
 #include <fstream>
 #include <stdexcept>
+#include <thread>
+
+#include <spdlog/spdlog.h>
 
 #include "atom/error/exception.hpp"
-#include "atom/log/loguru.hpp"
 
 namespace atom::web {
 
@@ -39,14 +33,12 @@ public:
 
     auto setUrl(const std::string &url) -> CurlWrapper::Impl &;
     auto setRequestMethod(const std::string &method) -> CurlWrapper::Impl &;
-    auto addHeader(const std::string &key,
-                   const std::string &value) -> CurlWrapper::Impl &;
-    auto onError(std::function<void(CURLcode)> callback) -> CurlWrapper::Impl &;
+    auto addHeader(const std::string &key, const std::string &value)
+        -> CurlWrapper::Impl &;
     auto setOnErrorCallback(std::function<void(CURLcode)> callback)
         -> CurlWrapper::Impl &;
-    auto setOnResponseCallback(std::function<void(const std::string &)>
-                                   callback) -> CurlWrapper::Impl &;
-    auto onResponse(std::function<void(const std::string &)> callback)
+    auto setOnResponseCallback(
+        std::function<void(const std::string &)> callback)
         -> CurlWrapper::Impl &;
     auto setTimeout(long timeout) -> CurlWrapper::Impl &;
     auto setFollowLocation(bool follow) -> CurlWrapper::Impl &;
@@ -62,15 +54,20 @@ public:
 private:
     CURL *handle_;
     CURLM *multiHandle_;
-    std::vector<std::string> headers_;
+    curl_slist *headersList_;
     std::function<void(CURLcode)> onErrorCallback_;
     std::function<void(const std::string &)> onResponseCallback_;
     std::mutex mutex_;
     std::condition_variable cv_;
     std::string responseData_;
+    std::string requestBody_;
+    std::unique_ptr<std::ifstream> uploadFile_;
 
     static auto writeCallback(void *contents, size_t size, size_t nmemb,
                               void *userp) -> size_t;
+    static auto readCallback(void *ptr, size_t size, size_t nmemb, void *userp)
+        -> size_t;
+    void updateHeaders();
 };
 
 CurlWrapper::CurlWrapper() : pImpl_(std::make_unique<Impl>()) {}
@@ -87,15 +84,9 @@ auto CurlWrapper::setRequestMethod(const std::string &method) -> CurlWrapper & {
     return *this;
 }
 
-auto CurlWrapper::addHeader(const std::string &key,
-                            const std::string &value) -> CurlWrapper & {
-    pImpl_->addHeader(key, value);
-    return *this;
-}
-
-auto CurlWrapper::onError(std::function<void(CURLcode)> callback)
+auto CurlWrapper::addHeader(const std::string &key, const std::string &value)
     -> CurlWrapper & {
-    pImpl_->onError(std::move(callback));
+    pImpl_->addHeader(key, value);
     return *this;
 }
 
@@ -108,12 +99,6 @@ auto CurlWrapper::setOnErrorCallback(std::function<void(CURLcode)> callback)
 auto CurlWrapper::setOnResponseCallback(
     std::function<void(const std::string &)> callback) -> CurlWrapper & {
     pImpl_->setOnResponseCallback(std::move(callback));
-    return *this;
-}
-
-auto CurlWrapper::onResponse(std::function<void(const std::string &)> callback)
-    -> CurlWrapper & {
-    pImpl_->onResponse(std::move(callback));
     return *this;
 }
 
@@ -142,8 +127,8 @@ auto CurlWrapper::setProxy(const std::string &proxy) -> CurlWrapper & {
     return *this;
 }
 
-auto CurlWrapper::setSSLOptions(bool verifyPeer,
-                                bool verifyHost) -> CurlWrapper & {
+auto CurlWrapper::setSSLOptions(bool verifyPeer, bool verifyHost)
+    -> CurlWrapper & {
     pImpl_->setSSLOptions(verifyPeer, verifyHost);
     return *this;
 }
@@ -162,35 +147,39 @@ auto CurlWrapper::setMaxDownloadSpeed(size_t speed) -> CurlWrapper & {
     return *this;
 }
 
-CurlWrapper::Impl::Impl() : multiHandle_(curl_multi_init()) {
-    LOG_F(INFO, "CurlWrapper::Impl constructor called");
+CurlWrapper::Impl::Impl()
+    : multiHandle_(curl_multi_init()), headersList_(nullptr) {
+    spdlog::info("CurlWrapper::Impl constructor called");
     curl_global_init(CURL_GLOBAL_ALL);
     handle_ = curl_easy_init();
     if (handle_ == nullptr) {
-        LOG_F(ERROR, "Failed to initialize CURL");
+        spdlog::error("Failed to initialize CURL");
         THROW_CURL_INITIALIZATION_ERROR("Failed to initialize CURL.");
     }
     curl_easy_setopt(handle_, CURLOPT_NOSIGNAL, 1L);
-    LOG_F(INFO, "CurlWrapper::Impl initialized successfully");
+    spdlog::info("CurlWrapper::Impl initialized successfully");
 }
 
 CurlWrapper::Impl::~Impl() {
-    LOG_F(INFO, "CurlWrapper::Impl destructor called");
+    spdlog::info("CurlWrapper::Impl destructor called");
+    if (headersList_) {
+        curl_slist_free_all(headersList_);
+    }
     curl_easy_cleanup(handle_);
     curl_multi_cleanup(multiHandle_);
     curl_global_cleanup();
-    LOG_F(INFO, "CurlWrapper::Impl cleaned up successfully");
+    spdlog::info("CurlWrapper::Impl cleaned up successfully");
 }
 
 auto CurlWrapper::Impl::setUrl(const std::string &url) -> CurlWrapper::Impl & {
-    LOG_F(INFO, "Setting URL: {}", url);
+    spdlog::info("Setting URL: {}", url);
     curl_easy_setopt(handle_, CURLOPT_URL, url.c_str());
     return *this;
 }
 
 auto CurlWrapper::Impl::setRequestMethod(const std::string &method)
     -> CurlWrapper::Impl & {
-    LOG_F(INFO, "Setting HTTP method: {}", method);
+    spdlog::info("Setting HTTP method: {}", method);
     if (method == "GET") {
         curl_easy_setopt(handle_, CURLOPT_HTTPGET, 1L);
     } else if (method == "POST") {
@@ -201,105 +190,118 @@ auto CurlWrapper::Impl::setRequestMethod(const std::string &method)
     return *this;
 }
 
-auto CurlWrapper::Impl::addHeader(
-    const std::string &key, const std::string &value) -> CurlWrapper::Impl & {
-    LOG_F(INFO, "Adding header: {}: {}", key, value);
-    headers_.emplace_back(key + ": " + value);
-    struct curl_slist *headersList = nullptr;
-    for (const auto &header : headers_) {
-        headersList = curl_slist_append(headersList, header.c_str());
-    }
-    curl_easy_setopt(handle_, CURLOPT_HTTPHEADER, headersList);
+auto CurlWrapper::Impl::addHeader(const std::string &key,
+                                  const std::string &value)
+    -> CurlWrapper::Impl & {
+    spdlog::info("Adding header: {}: {}", key, value);
+    std::string header = key + ": " + value;
+    headersList_ = curl_slist_append(headersList_, header.c_str());
+    updateHeaders();
     return *this;
 }
 
-auto CurlWrapper::Impl::onError(std::function<void(CURLcode)> callback)
-    -> CurlWrapper::Impl & {
-    LOG_F(INFO, "Setting onError callback");
-    onErrorCallback_ = std::move(callback);
-    return *this;
+void CurlWrapper::Impl::updateHeaders() {
+    if (headersList_) {
+        curl_easy_setopt(handle_, CURLOPT_HTTPHEADER, headersList_);
+    }
 }
 
 auto CurlWrapper::Impl::setOnErrorCallback(
     std::function<void(CURLcode)> callback) -> CurlWrapper::Impl & {
-    LOG_F(INFO, "Setting onError callback");
+    spdlog::info("Setting onError callback");
     onErrorCallback_ = std::move(callback);
     return *this;
 }
 
 auto CurlWrapper::Impl::setOnResponseCallback(
     std::function<void(const std::string &)> callback) -> CurlWrapper::Impl & {
-    LOG_F(INFO, "Setting onResponse callback");
-    onResponseCallback_ = std::move(callback);
-    return *this;
-}
-
-auto CurlWrapper::Impl::onResponse(
-    std::function<void(const std::string &)> callback) -> CurlWrapper::Impl & {
-    LOG_F(INFO, "Setting onResponse callback");
+    spdlog::info("Setting onResponse callback");
     onResponseCallback_ = std::move(callback);
     return *this;
 }
 
 auto CurlWrapper::Impl::setTimeout(long timeout) -> CurlWrapper::Impl & {
-    LOG_F(INFO, "Setting timeout: {}", timeout);
+    spdlog::info("Setting timeout: {}", timeout);
     curl_easy_setopt(handle_, CURLOPT_TIMEOUT, timeout);
     return *this;
 }
 
 auto CurlWrapper::Impl::setFollowLocation(bool follow) -> CurlWrapper::Impl & {
-    LOG_F(INFO, "Setting follow location: {}", follow ? "true" : "false");
+    spdlog::info("Setting follow location: {}", follow);
     curl_easy_setopt(handle_, CURLOPT_FOLLOWLOCATION, follow ? 1L : 0L);
     return *this;
 }
 
 auto CurlWrapper::Impl::setRequestBody(const std::string &data)
     -> CurlWrapper::Impl & {
-    LOG_F(INFO, "Setting request body");
-    curl_easy_setopt(handle_, CURLOPT_POSTFIELDS, data.c_str());
+    spdlog::info("Setting request body (size: {} bytes)", data.size());
+    requestBody_ = data;
+    curl_easy_setopt(handle_, CURLOPT_POSTFIELDS, requestBody_.c_str());
+    curl_easy_setopt(handle_, CURLOPT_POSTFIELDSIZE, requestBody_.size());
     return *this;
 }
 
 auto CurlWrapper::Impl::setUploadFile(const std::string &filePath)
     -> CurlWrapper::Impl & {
-    LOG_F(INFO, "Setting upload file: {}", filePath);
-    std::ifstream file(filePath, std::ios::binary);
-    if (!file) {
-        LOG_F(ERROR, "Failed to open file: {}", filePath);
+    spdlog::info("Setting upload file: {}", filePath);
+    uploadFile_ = std::make_unique<std::ifstream>(filePath, std::ios::binary);
+    if (!uploadFile_->is_open()) {
+        spdlog::error("Failed to open file: {}", filePath);
         throw std::runtime_error("Failed to open file for upload.");
     }
+
+    uploadFile_->seekg(0, std::ios::end);
+    auto fileSize = uploadFile_->tellg();
+    uploadFile_->seekg(0, std::ios::beg);
+
     curl_easy_setopt(handle_, CURLOPT_UPLOAD, 1L);
-    curl_easy_setopt(handle_, CURLOPT_READDATA, file.rdbuf());
+    curl_easy_setopt(handle_, CURLOPT_READFUNCTION, readCallback);
+    curl_easy_setopt(handle_, CURLOPT_READDATA, uploadFile_.get());
+    curl_easy_setopt(handle_, CURLOPT_INFILESIZE_LARGE,
+                     static_cast<curl_off_t>(fileSize));
     return *this;
+}
+
+auto CurlWrapper::Impl::readCallback(void *ptr, size_t size, size_t nmemb,
+                                     void *userp) -> size_t {
+    auto *file = static_cast<std::ifstream *>(userp);
+    if (!file || !file->is_open()) {
+        return 0;
+    }
+
+    size_t totalSize = size * nmemb;
+    file->read(static_cast<char *>(ptr), totalSize);
+    return static_cast<size_t>(file->gcount());
 }
 
 auto CurlWrapper::Impl::setProxy(const std::string &proxy)
     -> CurlWrapper::Impl & {
-    LOG_F(INFO, "Setting proxy: {}", proxy);
+    spdlog::info("Setting proxy: {}", proxy);
     curl_easy_setopt(handle_, CURLOPT_PROXY, proxy.c_str());
     return *this;
 }
 
-auto CurlWrapper::Impl::setSSLOptions(bool verifyPeer,
-                                      bool verifyHost) -> CurlWrapper::Impl & {
-    LOG_F(INFO, "Setting SSL options: verifyPeer={}, verifyHost={}", verifyPeer,
-          verifyHost);
+auto CurlWrapper::Impl::setSSLOptions(bool verifyPeer, bool verifyHost)
+    -> CurlWrapper::Impl & {
+    spdlog::info("Setting SSL options: verifyPeer={}, verifyHost={}",
+                 verifyPeer, verifyHost);
     curl_easy_setopt(handle_, CURLOPT_SSL_VERIFYPEER, verifyPeer ? 1L : 0L);
     curl_easy_setopt(handle_, CURLOPT_SSL_VERIFYHOST, verifyHost ? 2L : 0L);
     return *this;
 }
 
 auto CurlWrapper::Impl::perform() -> std::string {
-    LOG_F(INFO, "Performing synchronous request");
+    spdlog::info("Performing synchronous request");
     std::lock_guard lock(mutex_);
     responseData_.clear();
+    responseData_.reserve(4096);
 
     curl_easy_setopt(handle_, CURLOPT_WRITEFUNCTION, writeCallback);
     curl_easy_setopt(handle_, CURLOPT_WRITEDATA, &responseData_);
 
     CURLcode res = curl_easy_perform(handle_);
     if (res != CURLE_OK) {
-        LOG_F(ERROR, "CURL request failed: {}", curl_easy_strerror(res));
+        spdlog::error("CURL request failed: {}", curl_easy_strerror(res));
         if (onErrorCallback_) {
             onErrorCallback_(res);
         }
@@ -314,17 +316,18 @@ auto CurlWrapper::Impl::perform() -> std::string {
 }
 
 auto CurlWrapper::Impl::performAsync() -> CurlWrapper::Impl & {
-    LOG_F(INFO, "Performing asynchronous request");
+    spdlog::info("Performing asynchronous request");
     std::lock_guard lock(mutex_);
     responseData_.clear();
+    responseData_.reserve(4096);
 
     curl_easy_setopt(handle_, CURLOPT_WRITEFUNCTION, writeCallback);
     curl_easy_setopt(handle_, CURLOPT_WRITEDATA, &responseData_);
 
     CURLMcode multiCode = curl_multi_add_handle(multiHandle_, handle_);
     if (multiCode != CURLM_OK) {
-        LOG_F(ERROR, "curl_multi_add_handle failed: {}",
-              curl_multi_strerror(multiCode));
+        spdlog::error("curl_multi_add_handle failed: {}",
+                      curl_multi_strerror(multiCode));
         THROW_CURL_RUNTIME_ERROR("Failed to add handle to multi handle.");
     }
 
@@ -332,13 +335,13 @@ auto CurlWrapper::Impl::performAsync() -> CurlWrapper::Impl & {
         int stillRunning = 0;
         curl_multi_perform(multiHandle_, &stillRunning);
 
-        while (stillRunning != 0) {
+        while (stillRunning > 0) {
             int numfds;
             CURLMcode multiCode =
                 curl_multi_wait(multiHandle_, nullptr, 0, TIMEOUT_MS, &numfds);
             if (multiCode != CURLM_OK) {
-                LOG_F(ERROR, "curl_multi_wait failed: {}",
-                      curl_multi_strerror(multiCode));
+                spdlog::error("curl_multi_wait failed: {}",
+                              curl_multi_strerror(multiCode));
                 break;
             }
             curl_multi_perform(multiHandle_, &stillRunning);
@@ -352,11 +355,11 @@ auto CurlWrapper::Impl::performAsync() -> CurlWrapper::Impl & {
                 CURL *easyHandle = msg->easy_handle;
                 char *url = nullptr;
                 curl_easy_getinfo(easyHandle, CURLINFO_EFFECTIVE_URL, &url);
-                LOG_F(INFO, "Completed request: {}", url ? url : "unknown");
+                spdlog::info("Completed request: {}", url ? url : "unknown");
 
                 if (msg->data.result != CURLE_OK) {
-                    LOG_F(ERROR, "Async request failed: {}",
-                          curl_easy_strerror(msg->data.result));
+                    spdlog::error("Async request failed: {}",
+                                  curl_easy_strerror(msg->data.result));
                     if (onErrorCallback_) {
                         onErrorCallback_(msg->data.result);
                     }
@@ -377,10 +380,10 @@ auto CurlWrapper::Impl::performAsync() -> CurlWrapper::Impl & {
 }
 
 void CurlWrapper::Impl::waitAll() {
-    LOG_F(INFO, "Waiting for all asynchronous requests to complete");
+    spdlog::info("Waiting for all asynchronous requests to complete");
     std::unique_lock lock(mutex_);
     cv_.wait(lock);
-    LOG_F(INFO, "All asynchronous requests completed");
+    spdlog::info("All asynchronous requests completed");
 }
 
 auto CurlWrapper::Impl::writeCallback(void *contents, size_t size, size_t nmemb,
@@ -393,6 +396,7 @@ auto CurlWrapper::Impl::writeCallback(void *contents, size_t size, size_t nmemb,
 
 auto CurlWrapper::Impl::setMaxDownloadSpeed(size_t speed)
     -> CurlWrapper::Impl & {
+    spdlog::info("Setting max download speed: {} bytes/sec", speed);
     curl_easy_setopt(handle_, CURLOPT_MAX_RECV_SPEED_LARGE,
                      static_cast<curl_off_t>(speed));
     return *this;

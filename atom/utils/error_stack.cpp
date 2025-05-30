@@ -4,14 +4,6 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2023-3-29
-
-Description: Error Stack
-
-**************************************************/
-
 #include "error_stack.hpp"
 
 #include <algorithm>
@@ -21,13 +13,14 @@ Description: Error Stack
 #include <set>
 #include <sstream>
 
-#include "atom/log/loguru.hpp"
 #include "atom/utils/time.hpp"
 
 #ifdef ATOM_ERROR_STACK_USE_SERIALIZATION
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #endif
+
+#include <spdlog/spdlog.h>
 
 namespace atom::error {
 
@@ -75,7 +68,6 @@ std::string_view errorCategoryToString(ErrorCategory category) {
     }
 }
 
-// 重载输出运算符
 std::ostream& operator<<(std::ostream& os, const ErrorInfo& error) {
     try {
         os << "{\n"
@@ -126,9 +118,7 @@ std::string operator<<([[maybe_unused]] const std::string& str,
     }
 }
 
-// 构造函数和析构函数
 ErrorStack::ErrorStack() {
-    // 预先分配内存以减少重新分配
     errorStack_.reserve(128);
     compressedErrorStack_.reserve(64);
     statistics_.firstErrorTime = std::chrono::system_clock::now();
@@ -137,11 +127,9 @@ ErrorStack::ErrorStack() {
 
 ErrorStack::~ErrorStack() {
 #ifdef ATOM_ERROR_STACK_USE_BOOST_LOCKFREE
-    // 停止异步处理
     stopAsyncProcessing();
 #endif
 
-    // 清理资源
     try {
         std::lock_guard<std::mutex> lock(mutex_);
         errorStack_.clear();
@@ -151,11 +139,9 @@ ErrorStack::~ErrorStack() {
         messageErrorCount_.clear();
         errorCallbacks_.clear();
     } catch (...) {
-        // 忽略析构函数中的异常
     }
 }
 
-// 移动构造和移动赋值
 ErrorStack::ErrorStack(ErrorStack&& other) noexcept {
     std::lock_guard<std::mutex> lock1(mutex_);
     std::lock_guard<std::mutex> lock2(other.mutex_);
@@ -169,9 +155,7 @@ ErrorStack::ErrorStack(ErrorStack&& other) noexcept {
     errorCallbacks_ = std::move(other.errorCallbacks_);
 
 #ifdef ATOM_ERROR_STACK_USE_BOOST_LOCKFREE
-    // 停止另一个对象的异步处理
     other.stopAsyncProcessing();
-    // 异步队列处理需要单独处理，这里简化处理
 #endif
 }
 
@@ -189,15 +173,12 @@ ErrorStack& ErrorStack::operator=(ErrorStack&& other) noexcept {
         errorCallbacks_ = std::move(other.errorCallbacks_);
 
 #ifdef ATOM_ERROR_STACK_USE_BOOST_LOCKFREE
-        // 停止另一个对象的异步处理
         other.stopAsyncProcessing();
-        // 异步队列处理需要单独处理，这里简化处理
 #endif
     }
     return *this;
 }
 
-// 静态创建方法
 auto ErrorStack::createShared() -> std::shared_ptr<ErrorStack> {
     return std::make_shared<ErrorStack>();
 }
@@ -206,10 +187,8 @@ auto ErrorStack::createUnique() -> std::unique_ptr<ErrorStack> {
     return std::make_unique<ErrorStack>();
 }
 
-// 错误插入方法
 bool ErrorStack::insertErrorInfo(const ErrorInfo& errorInfo) {
     try {
-        // 验证输入
         if (errorInfo.errorMessage.empty()) {
             return false;
         }
@@ -224,29 +203,22 @@ bool ErrorStack::insertErrorInfo(const ErrorInfo& errorInfo) {
             });
 
         if (iter != errorStack_.end()) {
-            // 更新现有错误
             iter->timestamp = errorInfo.timestamp;
             iter->level = errorInfo.level;
             iter->category = errorInfo.category;
             iter->errorCode = errorInfo.errorCode;
 
-            // 合并metadata
             for (const auto& [key, value] : errorInfo.metadata) {
                 iter->metadata[key] = value;
             }
         } else {
-            // 添加新错误
             errorStack_.push_back(errorInfo);
-
-            // 更新统计数据
             updateStatistics(errorStack_.back());
 
-            // 触发回调
             for (const auto& callback : errorCallbacks_) {
                 try {
                     callback(errorStack_.back());
                 } catch (...) {
-                    // 忽略回调中的异常
                 }
             }
         }
@@ -259,7 +231,6 @@ bool ErrorStack::insertErrorInfo(const ErrorInfo& errorInfo) {
 }
 
 #ifdef ATOM_ERROR_STACK_USE_BOOST_LOCKFREE
-// 异步错误处理相关方法
 bool ErrorStack::insertErrorAsync(const ErrorInfo& errorInfo) {
     try {
         asyncErrorQueue_.push(errorInfo);
@@ -282,11 +253,9 @@ size_t ErrorStack::processAsyncErrors() {
 }
 
 namespace {
-// 全局线程控制变量
 std::atomic<bool> g_asyncProcessingRunning = false;
 std::thread g_asyncProcessingThread;
 
-// 异步处理线程函数
 void asyncProcessingThreadFunc(ErrorStack* stack, uint32_t intervalMs) {
     while (g_asyncProcessingRunning) {
         stack->processAsyncErrors();
@@ -300,13 +269,11 @@ void ErrorStack::startAsyncProcessing(uint32_t intervalMs) {
         asyncProcessingActive_ = true;
         g_asyncProcessingRunning = true;
 
-        // 如果已有线程在运行，先停止它
         if (g_asyncProcessingThread.joinable()) {
             g_asyncProcessingRunning = false;
             g_asyncProcessingThread.join();
         }
 
-        // 启动新的处理线程
         g_asyncProcessingThread =
             std::thread(asyncProcessingThreadFunc, this, intervalMs);
     }
@@ -321,12 +288,10 @@ void ErrorStack::stopAsyncProcessing() {
             g_asyncProcessingThread.join();
         }
 
-        // 处理剩余的错误
         processAsyncErrors();
     }
 }
 #else
-// 非Boost环境下的空实现
 bool ErrorStack::insertErrorAsync(const ErrorInfo& errorInfo) {
     return insertErrorInfo(errorInfo);
 }
@@ -334,17 +299,13 @@ bool ErrorStack::insertErrorAsync(const ErrorInfo& errorInfo) {
 size_t ErrorStack::processAsyncErrors() { return 0; }
 
 void ErrorStack::startAsyncProcessing(uint32_t) {
-    // 非Boost环境下不支持此功能
-    LOG_F(WARNING,
-          "Async error processing is not supported without Boost lockfree");
+    spdlog::warn(
+        "Async error processing is not supported without Boost lockfree");
 }
 
-void ErrorStack::stopAsyncProcessing() {
-    // 非Boost环境下不支持此功能
-}
+void ErrorStack::stopAsyncProcessing() {}
 #endif
 
-// 错误回调注册
 void ErrorStack::registerErrorCallback(ErrorCallback callback) {
     if (callback) {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -352,7 +313,6 @@ void ErrorStack::registerErrorCallback(ErrorCallback callback) {
     }
 }
 
-// 模块过滤相关方法
 void ErrorStack::clearFilteredModules() {
     std::lock_guard lock(mutex_);
     filteredModules_.clear();
@@ -364,25 +324,25 @@ void ErrorStack::printFilteredErrorStack() const {
 
         for (const auto& error : errorStack_) {
             if (!std::ranges::contains(filteredModules_, error.moduleName)) {
-                LOG_F(ERROR, "{} [{}] [{}] {}",
-                      std::string(errorLevelToString(error.level)),
-                      std::string(errorCategoryToString(error.category)),
-                      error.moduleName, error.errorMessage);
+                spdlog::error(
+                    "{} [{}] [{}] {}",
+                    std::string(errorLevelToString(error.level)),
+                    std::string(errorCategoryToString(error.category)),
+                    error.moduleName, error.errorMessage);
             }
         }
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Failed to print error stack: {}", e.what());
+        spdlog::error("Failed to print error stack: {}", e.what());
     }
 }
 
-// 错误过滤方法
 auto ErrorStack::getFilteredErrorsByModule(std::string_view moduleName) const
     -> std::vector<ErrorInfo> {
     try {
         std::lock_guard lock(mutex_);
 
         std::vector<ErrorInfo> errors;
-        errors.reserve(errorStack_.size());  // Pre-allocate for efficiency
+        errors.reserve(errorStack_.size());
 
         std::string moduleNameStr(moduleName);
         std::copy_if(errorStack_.begin(), errorStack_.end(),
@@ -395,7 +355,7 @@ auto ErrorStack::getFilteredErrorsByModule(std::string_view moduleName) const
 
         return errors;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Failed to get filtered errors: {}", e.what());
+        spdlog::error("Failed to get filtered errors: {}", e.what());
         return {};
     }
 }
@@ -406,9 +366,8 @@ auto ErrorStack::getFilteredErrorsByLevel(ErrorLevel level) const
         std::lock_guard lock(mutex_);
 
         std::vector<ErrorInfo> errors;
-        errors.reserve(errorStack_.size() / 2);  // 假设大约一半的错误会符合条件
+        errors.reserve(errorStack_.size() / 2);
 
-        // 复制所有级别大于等于指定级别且不在过滤模块列表中的错误
         std::copy_if(errorStack_.begin(), errorStack_.end(),
                      std::back_inserter(errors),
                      [level, this](const ErrorInfo& error) {
@@ -420,7 +379,7 @@ auto ErrorStack::getFilteredErrorsByLevel(ErrorLevel level) const
 
         return errors;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Failed to get errors by level: {}", e.what());
+        spdlog::error("Failed to get errors by level: {}", e.what());
         return {};
     }
 }
@@ -431,10 +390,8 @@ auto ErrorStack::getFilteredErrorsByCategory(ErrorCategory category) const
         std::lock_guard lock(mutex_);
 
         std::vector<ErrorInfo> errors;
-        errors.reserve(errorStack_.size() /
-                       5);  // 假设大约五分之一的错误属于这一类别
+        errors.reserve(errorStack_.size() / 5);
 
-        // 复制所有属于指定类别且不在过滤模块列表中的错误
         std::copy_if(errorStack_.begin(), errorStack_.end(),
                      std::back_inserter(errors),
                      [category, this](const ErrorInfo& error) {
@@ -445,7 +402,7 @@ auto ErrorStack::getFilteredErrorsByCategory(ErrorCategory category) const
 
         return errors;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Failed to get errors by category: {}", e.what());
+        spdlog::error("Failed to get errors by category: {}", e.what());
         return {};
     }
 }
@@ -457,15 +414,12 @@ auto ErrorStack::getErrorsInTimeRange(time_t start, time_t end) const
 
         std::vector<ErrorInfo> errors;
 
-        // 确保start <= end
         if (start > end) {
             std::swap(start, end);
         }
 
-        errors.reserve(errorStack_.size() /
-                       3);  // 预估大约三分之一的错误会在这个时间范围内
+        errors.reserve(errorStack_.size() / 3);
 
-        // 复制所有在指定时间范围内且不在过滤模块列表中的错误
         std::copy_if(
             errorStack_.begin(), errorStack_.end(), std::back_inserter(errors),
             [start, end, this](const ErrorInfo& error) {
@@ -476,7 +430,7 @@ auto ErrorStack::getErrorsInTimeRange(time_t start, time_t end) const
 
         return errors;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Failed to get errors in time range: {}", e.what());
+        spdlog::error("Failed to get errors in time range: {}", e.what());
         return {};
     }
 }
@@ -491,7 +445,6 @@ auto ErrorStack::getCompressedErrors() const -> std::string {
 
         std::stringstream compressedErrors;
 
-        // 改进格式，使输出更加有用
         for (const auto& error : compressedErrorStack_) {
             compressedErrors
                 << "[" << std::string(errorLevelToString(error.level)) << "] "
@@ -502,18 +455,14 @@ auto ErrorStack::getCompressedErrors() const -> std::string {
 
         return compressedErrors.str();
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Failed to get compressed errors: {}", e.what());
+        spdlog::error("Failed to get compressed errors: {}", e.what());
         return "";
     }
 }
 
 void ErrorStack::updateCompressedErrors() {
     try {
-        // No need for mutex lock as this is called from methods that already
-        // have the lock
         compressedErrorStack_.clear();
-
-        // Reserve space based on the original stack size for better performance
         compressedErrorStack_.reserve(errorStack_.size());
 
         for (const auto& error : errorStack_) {
@@ -526,7 +475,6 @@ void ErrorStack::updateCompressedErrors() {
 
             if (iter != compressedErrorStack_.end()) {
                 iter->timestamp = error.timestamp;
-                // 更新级别和类别为最新的
                 iter->level = error.level;
                 iter->category = error.category;
             } else {
@@ -536,26 +484,21 @@ void ErrorStack::updateCompressedErrors() {
 
         sortCompressedErrorStack();
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Failed to update compressed errors: {}", e.what());
-        // Attempt to recover by clearing
+        spdlog::error("Failed to update compressed errors: {}", e.what());
         compressedErrorStack_.clear();
     }
 }
 
 void ErrorStack::sortCompressedErrorStack() {
     try {
-        // 首先按错误级别排序（从高到低），然后按时间戳排序（从新到旧）
         auto comparator = [](const ErrorInfo& error1, const ErrorInfo& error2) {
-            // 优先按级别排序
             if (error1.level != error2.level) {
                 return static_cast<int>(error1.level) >
                        static_cast<int>(error2.level);
             }
-            // 同级别的按时间戳排序
             return error1.timestamp > error2.timestamp;
         };
 
-        // Using parallel execution policy for large collections
         if (compressedErrorStack_.size() > 1000) {
             std::sort(std::execution::par_unseq, compressedErrorStack_.begin(),
                       compressedErrorStack_.end(), comparator);
@@ -564,11 +507,10 @@ void ErrorStack::sortCompressedErrorStack() {
                       compressedErrorStack_.end(), comparator);
         }
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Failed to sort compressed error stack: {}", e.what());
+        spdlog::error("Failed to sort compressed error stack: {}", e.what());
     }
 }
 
-// 错误堆栈状态查询方法
 bool ErrorStack::isEmpty() const noexcept {
     std::lock_guard lock(mutex_);
     return errorStack_.empty();
@@ -596,30 +538,24 @@ std::optional<ErrorInfo> ErrorStack::getLatestError() const {
 ErrorStatistics ErrorStack::getStatistics() const {
     std::lock_guard lock(mutex_);
 
-    // 复制当前统计信息
     ErrorStatistics stats = statistics_;
 
-    // 确保topModules和topMessages是最新的
     stats.topModules.clear();
     stats.topMessages.clear();
 
-    // 将模块错误计数转化为vector以便排序
     std::vector<std::pair<std::string, size_t>> moduleCountVec;
     moduleCountVec.reserve(moduleErrorCount_.size());
     for (const auto& [module, count] : moduleErrorCount_) {
         moduleCountVec.emplace_back(module, count);
     }
 
-    // 按错误计数从高到低排序
     std::sort(moduleCountVec.begin(), moduleCountVec.end(),
               [](const auto& a, const auto& b) { return a.second > b.second; });
 
-    // 取前10个（或更少）
     size_t numToTake = std::min<size_t>(10, moduleCountVec.size());
     stats.topModules.assign(moduleCountVec.begin(),
                             moduleCountVec.begin() + numToTake);
 
-    // 同样处理错误消息
     std::vector<std::pair<std::string, size_t>> messageCountVec;
     messageCountVec.reserve(messageErrorCount_.size());
     for (const auto& [message, count] : messageErrorCount_) {
@@ -637,34 +573,23 @@ ErrorStatistics ErrorStack::getStatistics() const {
 }
 
 void ErrorStack::updateStatistics(const ErrorInfo& error) {
-    // 不需要锁，因为调用此方法的函数已经有锁了
-
-    // 更新总计数
     statistics_.totalErrors++;
 
-    // 更新按类别的计数
     size_t categoryIndex = static_cast<size_t>(error.category);
-    if (categoryIndex < 10) {  // 确保索引有效
+    if (categoryIndex < 10) {
         statistics_.errorsByCategory[categoryIndex]++;
     }
 
-    // 更新按级别的计数
     size_t levelIndex = static_cast<size_t>(error.level);
-    if (levelIndex < 5) {  // 确保索引有效
+    if (levelIndex < 5) {
         statistics_.errorsByLevel[levelIndex]++;
     }
 
-    // 更新时间戳
     auto errorTime = std::chrono::system_clock::from_time_t(error.timestamp);
     statistics_.lastErrorTime = errorTime;
 
-    // 更新模块计数
     moduleErrorCount_[error.moduleName]++;
-
-    // 更新消息计数
     messageErrorCount_[error.errorMessage]++;
-
-    // 更新唯一错误计数（使用压缩错误堆栈的大小）
     statistics_.uniqueErrors = compressedErrorStack_.size();
 }
 
@@ -673,8 +598,6 @@ void ErrorStack::clear() noexcept {
         std::lock_guard lock(mutex_);
         errorStack_.clear();
         compressedErrorStack_.clear();
-
-        // 重置统计信息
         moduleErrorCount_.clear();
         messageErrorCount_.clear();
 
@@ -682,11 +605,9 @@ void ErrorStack::clear() noexcept {
         statistics_.firstErrorTime = std::chrono::system_clock::now();
         statistics_.lastErrorTime = statistics_.firstErrorTime;
     } catch (...) {
-        // Ensure we don't throw from a noexcept function
     }
 }
 
-// 导出格式支持
 std::string ErrorStack::exportToJson() const {
     std::lock_guard lock(mutex_);
 
@@ -695,8 +616,7 @@ std::string ErrorStack::exportToJson() const {
 
     size_t count = 0;
     for (const auto& error : errorStack_) {
-        json << "  ";
-        json << error;
+        json << "  " << error;
 
         if (++count < errorStack_.size()) {
             json << ",";
@@ -742,8 +662,6 @@ std::string ErrorStack::exportToCsv(bool includeMetadata) const {
                     result.replace(pos, 1, "\"\"");
                     pos += 2;
                 }
-
-                // 用引号包围整个字段
                 result = "\"" + result + "\"";
             }
             return result;
@@ -759,7 +677,6 @@ std::string ErrorStack::exportToCsv(bool includeMetadata) const {
             << error.errorCode;
 
         if (includeMetadata) {
-            // 收集所有元数据键（与上面相同）
             std::set<std::string> allMetadataKeys;
             for (const auto& err : errorStack_) {
                 for (const auto& [key, _] : err.metadata) {
@@ -767,7 +684,6 @@ std::string ErrorStack::exportToCsv(bool includeMetadata) const {
                 }
             }
 
-            // 按顺序添加每个元数据值
             for (const auto& key : allMetadataKeys) {
                 csv << ",";
                 auto it = error.metadata.find(key);
@@ -791,14 +707,12 @@ std::vector<char> ErrorStack::serialize() const {
         std::stringstream ss;
         boost::archive::binary_oarchive oa(ss);
 
-        // 序列化当前对象
         oa << *this;
 
-        // 将stringstream转换为vector<char>
         std::string str = ss.str();
         return std::vector<char>(str.begin(), str.end());
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Failed to serialize error stack: {}", e.what());
+        spdlog::error("Failed to serialize error stack: {}", e.what());
         return {};
     }
 }
@@ -807,29 +721,24 @@ bool ErrorStack::deserialize(std::span<const char> data) {
     try {
         std::lock_guard lock(mutex_);
 
-        // 将data转换为stringstream
         std::string str(data.begin(), data.end());
         std::stringstream ss(str);
 
         boost::archive::binary_iarchive ia(ss);
 
-        // 清除当前数据
         errorStack_.clear();
         compressedErrorStack_.clear();
         filteredModules_.clear();
         moduleErrorCount_.clear();
         messageErrorCount_.clear();
 
-        // 反序列化
         ia >> *this;
 
-        // 更新统计信息
         statistics_ = ErrorStatistics{};
         statistics_.totalErrors = errorStack_.size();
         statistics_.uniqueErrors = compressedErrorStack_.size();
 
         if (!errorStack_.empty()) {
-            // 查找最早和最晚的时间戳
             auto [minIt, maxIt] =
                 std::minmax_element(errorStack_.begin(), errorStack_.end(),
                                     [](const ErrorInfo& a, const ErrorInfo& b) {
@@ -841,7 +750,6 @@ bool ErrorStack::deserialize(std::span<const char> data) {
             statistics_.lastErrorTime =
                 std::chrono::system_clock::from_time_t(maxIt->timestamp);
 
-            // 重新计算级别和类别统计
             for (const auto& error : errorStack_) {
                 size_t categoryIndex = static_cast<size_t>(error.category);
                 if (categoryIndex < 10) {
@@ -853,7 +761,6 @@ bool ErrorStack::deserialize(std::span<const char> data) {
                     statistics_.errorsByLevel[levelIndex]++;
                 }
 
-                // 更新模块计数和消息计数
                 moduleErrorCount_[error.moduleName]++;
                 messageErrorCount_[error.errorMessage]++;
             }
@@ -861,7 +768,7 @@ bool ErrorStack::deserialize(std::span<const char> data) {
 
         return true;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Failed to deserialize error stack: {}", e.what());
+        spdlog::error("Failed to deserialize error stack: {}", e.what());
         return false;
     }
 }

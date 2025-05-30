@@ -6,6 +6,7 @@
 
 #include "port.hpp"
 
+#include <algorithm>
 #include <format>
 #include <future>
 #include <memory>
@@ -13,129 +14,150 @@
 #include <regex>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#define WIN_FLAG true
 #elif defined(__linux__) || defined(__APPLE__)
 #include <arpa/inet.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <sys/socket.h>
-#include <unistd.h>  // 添加这个头文件用于 close()
-#define WIN_FLAG false
+#include <unistd.h>
+
 #endif
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 #include "atom/system/command.hpp"
 #include "socket.hpp"
 
 namespace atom::web {
 
+namespace {
+constexpr uint16_t MIN_PORT = 1;
+constexpr uint16_t MAX_PORT = 65535;
+constexpr int INVALID_SOCKET_VALUE = -1;
+
+class SocketGuard {
+public:
+    explicit SocketGuard(int socket) : socket_(socket) {}
+
+    ~SocketGuard() {
+        if (socket_ != INVALID_SOCKET_VALUE) {
+#ifdef _WIN32
+            closesocket(socket_);
+            WSACleanup();
+#else
+            ::close(socket_);
+#endif
+        }
+    }
+
+    SocketGuard(const SocketGuard&) = delete;
+    SocketGuard& operator=(const SocketGuard&) = delete;
+    SocketGuard(SocketGuard&&) = delete;
+    SocketGuard& operator=(SocketGuard&&) = delete;
+
+private:
+    int socket_;
+};
+
+auto validatePort(auto port) -> void {
+    if (port < MIN_PORT || port > MAX_PORT) {
+        throw std::invalid_argument("Port number must be between 1 and 65535");
+    }
+}
+
+auto getSystemCommand(auto port) -> std::string {
+#ifdef _WIN32
+    return std::format("netstat -ano | findstr \"LISTENING\" | findstr \"{}\"",
+                       port);
+#else
+    return std::format("lsof -i :{} -t", port);
+#endif
+}
+
+auto parseProcessId(const std::string& output) -> std::optional<int> {
+    if (output.empty()) {
+        return std::nullopt;
+    }
+
+    try {
+#ifdef _WIN32
+        std::regex pidPattern(R"(\s+(\d+)\s*$)");
+        std::smatch matches;
+        if (std::regex_search(output, matches, pidPattern) &&
+            matches.size() > 1) {
+            return std::stoi(matches[1].str());
+        }
+#else
+        std::string trimmed = output;
+        trimmed.erase(trimmed.find_last_not_of(" \n\r\t") + 1);
+        if (!trimmed.empty()) {
+            return std::stoi(trimmed);
+        }
+#endif
+    } catch (const std::exception& e) {
+        spdlog::debug("Failed to parse process ID from output '{}': {}", output,
+                      e.what());
+    }
+
+    return std::nullopt;
+}
+}  // namespace
+
 auto getProcessIDOnPort(PortNumber auto port) -> std::optional<int> {
     try {
-        if (port < 0 || port > 65535) {
-            throw std::invalid_argument("Invalid port number");
-        }
+        validatePort(port);
 
-        std::string cmd;
-#if defined(__cpp_lib_format) && __cpp_lib_format >= 201907L
-        cmd = std::format(
-            "{}{}",
-            (WIN_FLAG ? R"(netstat -ano | find "LISTENING" | find ")"
-                      : "lsof -i :{} -t"),
-            port);
-#else
-        cmd = fmt::format(
-            "{}{}",
-            (WIN_FLAG ? "netstat -ano | find \"LISTENING\" | find \""
-                      : "lsof -i :{} -t"),
-            port);
-#endif
+        std::string cmd = getSystemCommand(port);
+        spdlog::trace("Executing command: {}", cmd);
 
-        std::string pidStr = atom::system::executeCommand(
-            cmd, false, [port](const std::string& line) -> bool {
-                if (WIN_FLAG) {
-                    // For Windows, look for the line containing the port and
-                    // extract PID
-                    if (line.find(std::to_string(port)) != std::string::npos) {
-                        return true;
-                    }
-                    return false;
-                } else {
-                    // For Linux/Mac, the command directly returns PID
-                    return true;
-                }
-            });
+        std::string output = atom::system::executeCommand(cmd);
 
-        if (pidStr.empty()) {
-            return std::nullopt;
-        }
+        return parseProcessId(output);
 
-        pidStr.erase(pidStr.find_last_not_of('\n') + 1);
-
-        if (WIN_FLAG) {
-            // Extract PID from Windows netstat output format
-            std::regex pidPattern(R"(\s+(\d+)\s*)");
-            std::smatch matches;
-            if (std::regex_search(pidStr, matches, pidPattern) &&
-                matches.size() > 1) {
-                return std::stoi(matches[1].str());
-            }
-        } else {
-            // Direct PID from lsof output
-            return std::stoi(pidStr);
-        }
-
-        return std::nullopt;
     } catch (const std::invalid_argument& e) {
-        LOG_F(ERROR, "Invalid port argument: {}", e.what());
-        return std::nullopt;
+        spdlog::error("Invalid port argument: {}", e.what());
+        throw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error getting process ID on port {}: {}", port, e.what());
+        spdlog::error("Error getting process ID on port {}: {}", port,
+                      e.what());
         return std::nullopt;
     }
 }
 
 auto isPortInUse(PortNumber auto port) -> bool {
     try {
-        if (port < 0 || port > 65535) {
-            throw std::invalid_argument("Invalid port number");
-        }
+        validatePort(port);
 
         if (!initializeWindowsSocketAPI()) {
-            LOG_F(ERROR, "Failed to initialize Windows Socket API");
-            return true;  // Assume port in use if we can't check properly
+            spdlog::error("Failed to initialize Windows Socket API");
+            return true;
         }
 
         int sockfd = createSocket();
         if (sockfd < 0) {
-            LOG_F(ERROR, "Failed to create socket for port check");
-            return true;  // Assume port in use if we can't create socket
+            spdlog::error("Failed to create socket for port check");
+            return true;
         }
 
-        auto socketGuard = [](void* ptr) {
-            int fd = static_cast<int>(reinterpret_cast<intptr_t>(ptr));
-#ifdef _WIN32
-            closesocket(fd);
-            WSACleanup();
-#else
-            ::close(fd);
-#endif
-        };
-
-        std::unique_ptr<void, decltype(socketGuard)> socketCloser(
-            reinterpret_cast<void*>(static_cast<intptr_t>(sockfd)),
-            socketGuard);
+        SocketGuard guard(sockfd);
 
         bool inUse = !bindSocket(sockfd, static_cast<uint16_t>(port));
+        spdlog::trace("Port {} is {}", port, inUse ? "in use" : "available");
+
         return inUse;
+
     } catch (const std::invalid_argument& e) {
-        LOG_F(ERROR, "Invalid port argument: {}", e.what());
+        spdlog::error("Invalid port argument: {}", e.what());
         throw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error checking if port {} is in use: {}", port, e.what());
+        spdlog::error("Error checking if port {} is in use: {}", port,
+                      e.what());
         return true;
     }
 }
@@ -147,40 +169,53 @@ auto isPortInUseAsync(PortNumber auto port) -> std::future<bool> {
 
 auto checkAndKillProgramOnPort(PortNumber auto port) -> bool {
     try {
-        if (port < 0 || port > 65535) {
-            throw std::invalid_argument("Invalid port number");
-        }
+        validatePort(port);
 
-        if (isPortInUse(port)) {
-            auto processID = getProcessIDOnPort(port);
-            if (!processID) {
-                LOG_F(INFO, "No process found using port {}", port);
-                return false;
-            }
-
-            std::string killCmd;
-#if defined(_WIN32)
-            killCmd = std::format("taskkill /F /PID {}", *processID);
-#else
-            killCmd = std::format("kill -9 {}", *processID);
-#endif
-            LOG_F(INFO, "Killing process {} on port {}", *processID, port);
-            [[maybe_unused]] std::string result =
-                atom::system::executeCommand(killCmd);
-
-            // Wait a bit for the process to be killed
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-            return !isPortInUse(port);
-        } else {
-            LOG_F(INFO, "Port {} is not in use", port);
+        if (!isPortInUse(port)) {
+            spdlog::info("Port {} is not in use", port);
             return false;
         }
+
+        auto processID = getProcessIDOnPort(port);
+        if (!processID) {
+            spdlog::info("No process found using port {}", port);
+            return false;
+        }
+
+        std::string killCmd;
+#ifdef _WIN32
+        killCmd = std::format("taskkill /F /PID {}", *processID);
+#else
+        killCmd = std::format("kill -9 {}", *processID);
+#endif
+
+        spdlog::info("Killing process {} on port {}", *processID, port);
+
+        try {
+            static_cast<void>(atom::system::executeCommand(killCmd));
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+            bool killed = !isPortInUse(port);
+            if (killed) {
+                spdlog::info("Successfully killed process {} on port {}",
+                             *processID, port);
+            } else {
+                spdlog::warn("Failed to kill process {} on port {}", *processID,
+                             port);
+            }
+            return killed;
+
+        } catch (const std::exception& e) {
+            spdlog::error("Failed to execute kill command: {}", e.what());
+            return false;
+        }
+
     } catch (const std::invalid_argument& e) {
-        LOG_F(ERROR, "Invalid port argument: {}", e.what());
-        return false;
+        spdlog::error("Invalid port argument: {}", e.what());
+        throw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error checking port {}: {}", port, e.what());
+        spdlog::error("Error checking and killing program on port {}: {}", port,
+                      e.what());
         return false;
     }
 }
@@ -188,33 +223,25 @@ auto checkAndKillProgramOnPort(PortNumber auto port) -> bool {
 auto scanPort(const std::string& host, uint16_t port,
               std::chrono::milliseconds timeout) -> bool {
     try {
+        if (host.empty()) {
+            spdlog::error("Host cannot be empty");
+            return false;
+        }
+
         if (!initializeWindowsSocketAPI()) {
-            LOG_F(ERROR, "Failed to initialize Windows Socket API");
+            spdlog::error("Failed to initialize Windows Socket API");
             return false;
         }
 
         int sockfd = createSocket();
         if (sockfd < 0) {
-            LOG_F(ERROR, "Failed to create socket for port scan");
+            spdlog::error("Failed to create socket for port scan");
             return false;
         }
 
-        auto socketGuard = [](void* ptr) {
-            int fd = static_cast<int>(reinterpret_cast<intptr_t>(ptr));
-#ifdef _WIN32
-            closesocket(fd);
-            WSACleanup();
-#else
-            ::close(fd);
-#endif
-        };
-
-        std::unique_ptr<void, decltype(socketGuard)> socketCloser(
-            reinterpret_cast<void*>(static_cast<intptr_t>(sockfd)),
-            socketGuard);
+        SocketGuard guard(sockfd);
 
         struct addrinfo hints{};
-        memset(&hints, 0, sizeof(hints));
         hints.ai_family = AF_UNSPEC;
         hints.ai_socktype = SOCK_STREAM;
 
@@ -222,30 +249,27 @@ auto scanPort(const std::string& host, uint16_t port,
         int ret = getaddrinfo(host.c_str(), std::to_string(port).c_str(),
                               &hints, &result);
         if (ret != 0) {
-            LOG_F(ERROR, "Failed to resolve host '{}': {}", host,
-                  gai_strerror(ret));
+            spdlog::error("Failed to resolve host '{}': {}", host,
+                          gai_strerror(ret));
             return false;
         }
 
-        auto addrInfoGuard = [](void* ptr) {
-            if (ptr) {
-                freeaddrinfo(static_cast<struct addrinfo*>(ptr));
-            }
-        };
-
-        std::unique_ptr<void, decltype(addrInfoGuard)> addrInfoCloser(
-            result, addrInfoGuard);
+        std::unique_ptr<struct addrinfo, decltype(&freeaddrinfo)> addrGuard(
+            result, freeaddrinfo);
 
         for (struct addrinfo* p = result; p != nullptr; p = p->ai_next) {
             if (connectWithTimeout(sockfd, p->ai_addr, p->ai_addrlen,
                                    timeout)) {
+                spdlog::trace("Port {} on host '{}' is open", port, host);
                 return true;
             }
         }
 
+        spdlog::trace("Port {} on host '{}' is closed", port, host);
         return false;
+
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Port scan error: {}", e.what());
+        spdlog::error("Port scan error for {}:{}: {}", host, port, e.what());
         return false;
     }
 }
@@ -254,24 +278,39 @@ auto scanPortRange(const std::string& host, uint16_t startPort,
                    uint16_t endPort, std::chrono::milliseconds timeout)
     -> std::vector<uint16_t> {
     std::vector<uint16_t> openPorts;
+
     try {
         if (startPort > endPort) {
-            LOG_F(
-                ERROR,
+            throw std::invalid_argument(std::format(
                 "Invalid port range: start port {} is greater than end port {}",
-                startPort, endPort);
-            return openPorts;
+                startPort, endPort));
         }
+
+        if (host.empty()) {
+            throw std::invalid_argument("Host cannot be empty");
+        }
+
+        const size_t portCount = endPort - startPort + 1;
+        openPorts.reserve(std::min(portCount, size_t{100}));
+
+        spdlog::debug("Scanning {} ports on host '{}' from {} to {}", portCount,
+                      host, startPort, endPort);
 
         for (uint16_t port = startPort; port <= endPort; ++port) {
             if (scanPort(host, port, timeout)) {
                 openPorts.push_back(port);
-                LOG_F(INFO, "Port {} on host '{}' is open", port, host);
+                spdlog::info("Found open port {} on host '{}'", port, host);
             }
         }
+
+        spdlog::debug("Scan completed: found {} open ports on host '{}'",
+                      openPorts.size(), host);
+
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Port range scan error: {}", e.what());
+        spdlog::error("Port range scan error for {}:{}-{}: {}", host, startPort,
+                      endPort, e.what());
     }
+
     return openPorts;
 }
 

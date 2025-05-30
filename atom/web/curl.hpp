@@ -4,14 +4,6 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2024-1-4
-
-Description: Simple HTTP client using libcurl.
-
-**************************************************/
-
 #ifndef ATOM_WEB_CURL_HPP
 #define ATOM_WEB_CURL_HPP
 
@@ -63,15 +55,8 @@ public:
      * @param value The header value.
      * @return Reference to the CurlWrapper object.
      */
-    auto addHeader(const std::string &key,
-                   const std::string &value) -> CurlWrapper &;
-
-    /**
-     * @brief Sets the callback function to be called on error.
-     * @param callback The callback function to set.
-     * @return Reference to the CurlWrapper object.
-     */
-    auto onError(std::function<void(CURLcode)> callback) -> CurlWrapper &;
+    auto addHeader(const std::string &key, const std::string &value)
+        -> CurlWrapper &;
 
     /**
      * @brief Sets the callback function to be called on error.
@@ -88,14 +73,6 @@ public:
      */
     auto setOnResponseCallback(
         std::function<void(const std::string &)> callback) -> CurlWrapper &;
-
-    /**
-     * @brief Sets the callback function to be called on response.
-     * @param callback The callback function to set.
-     * @return Reference to the CurlWrapper object.
-     */
-    auto onResponse(std::function<void(const std::string &)> callback)
-        -> CurlWrapper &;
 
     /**
      * @brief Sets the timeout for the HTTP request.

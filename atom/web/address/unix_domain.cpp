@@ -1,41 +1,91 @@
 #include "unix_domain.hpp"
 
-#ifdef _WIN32
-#include <WS2tcpip.h>
-#include <WinSock2.h>
-#else
-#include <arpa/inet.h>
-#endif
-
+#include <algorithm>
 #include <bitset>
 #include <iomanip>
-#include <regex>
 #include <sstream>
 #include <string>
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 
 namespace atom::web {
 
+namespace {
 #ifdef _WIN32
-[[maybe_unused]] constexpr int UNIX_DOMAIN_PATH_MAX_LENGTH = MAX_PATH;
+constexpr size_t UNIX_DOMAIN_PATH_MAX_LENGTH = 260;  // MAX_PATH
+constexpr std::string_view NAMED_PIPE_PREFIX = "\\\\.\\pipe\\";
 #else
-constexpr int UNIX_DOMAIN_PATH_MAX_LENGTH = 108;
+constexpr size_t UNIX_DOMAIN_PATH_MAX_LENGTH = 108;
 #endif
 
-auto UnixDomain::isValidPath(std::string_view path) -> bool {
-#ifdef _WIN32
-    // Windows命名管道路径格式检查
-    static const std::regex namedPipeRegex(R"(\\\\\.\\pipe\\[^\\/:*?"<>|]+)");
-    // 检查是否是Windows命名管道格式
-    if (std::regex_match(path.begin(), path.end(), namedPipeRegex)) {
-        return true;
+constexpr std::string_view INVALID_PATH_CHARS = "<>:\"|?*";
+
+/**
+ * @brief Check if character is valid for a Unix domain socket path
+ */
+auto isValidPathChar(char c) -> bool {
+    if (c < 32 || c > 126) {
+        return false;
     }
-    // 普通路径检查
-    return !path.empty() && path.length() < MAX_PATH;
-#else
-    return !path.empty() && path.length() < UNIX_DOMAIN_PATH_MAX_LENGTH;
+
+    return INVALID_PATH_CHARS.find(c) == std::string_view::npos;
+}
+
+#ifdef _WIN32
+/**
+ * @brief Validate Windows named pipe path format
+ */
+auto isValidNamedPipePath(std::string_view path) -> bool {
+    if (!path.starts_with(NAMED_PIPE_PREFIX)) {
+        return false;
+    }
+
+    auto pipeName = path.substr(NAMED_PIPE_PREFIX.length());
+    if (pipeName.empty()) {
+        return false;
+    }
+
+    return std::all_of(pipeName.begin(), pipeName.end(),
+                       [](char c) { return isValidPathChar(c) && c != '\\'; });
+}
 #endif
+}  // namespace
+
+auto UnixDomain::fastIsValidPath(std::string_view path) -> bool {
+    if (path.empty() || path.length() >= UNIX_DOMAIN_PATH_MAX_LENGTH) {
+        return false;
+    }
+
+#ifdef _WIN32
+    if (path.starts_with(NAMED_PIPE_PREFIX)) {
+        return isValidNamedPipePath(path);
+    }
+
+    if (path.length() >= 3 && path[1] == ':' &&
+        (path[2] == '\\' || path[2] == '/')) {
+        return std::all_of(path.begin(), path.end(), isValidPathChar);
+    }
+
+    return std::all_of(path.begin(), path.end(), isValidPathChar);
+#else
+    if (!path.starts_with('/')) {
+        return false;
+    }
+
+    return std::all_of(path.begin(), path.end(), isValidPathChar);
+#endif
+}
+
+auto UnixDomain::isValidPath(std::string_view path) -> bool {
+    return fastIsValidPath(path);
+}
+
+auto UnixDomain::getDirectoryPath(std::string_view path) -> std::string {
+    size_t pos = path.find_last_of("/\\");
+    if (pos == std::string_view::npos) {
+        return "";
+    }
+    return std::string(path.substr(0, pos + 1));
 }
 
 UnixDomain::UnixDomain(std::string_view path) {
@@ -47,17 +97,21 @@ UnixDomain::UnixDomain(std::string_view path) {
 auto UnixDomain::parse(std::string_view path) -> bool {
     try {
         if (!isValidPath(path)) {
-            LOG_F(ERROR, "Invalid Unix domain socket path: {}", path);
+            spdlog::error("Invalid Unix domain socket path: {}", path);
             return false;
         }
 
         addressStr = std::string(path);
+        spdlog::trace("Successfully parsed Unix domain socket path: {}", path);
         return true;
+
     } catch (const std::exception& e) {
 #ifdef _WIN32
-        LOG_F(ERROR, "Exception parsing Windows Named Pipe path: {}", e.what());
+        spdlog::error("Exception parsing Windows Named Pipe path '{}': {}",
+                      path, e.what());
 #else
-        LOG_F(ERROR, "Exception parsing Unix domain socket path: {}", e.what());
+        spdlog::error("Exception parsing Unix domain socket path '{}': {}",
+                      path, e.what());
 #endif
         return false;
     }
@@ -65,35 +119,34 @@ auto UnixDomain::parse(std::string_view path) -> bool {
 
 void UnixDomain::printAddressType() const {
 #ifdef _WIN32
-    LOG_F(INFO, "Address type: Windows Named Pipe or Unix Domain Socket");
+    spdlog::info("Address type: Windows Named Pipe or Unix Domain Socket");
 #else
-    LOG_F(INFO, "Address type: Unix Domain Socket");
+    spdlog::info("Address type: Unix Domain Socket");
 #endif
 }
 
 auto UnixDomain::isInRange(std::string_view start, std::string_view end)
     -> bool {
     try {
-        // For Unix domain sockets, we'll consider lexicographical ordering of
-        // paths This is different from IP ranges but provides a consistent
-        // behavior
-
         if (start.empty() || end.empty()) {
             throw AddressRangeError("Empty range boundaries");
         }
 
-        // Check if the range is valid (start <= end lexicographically)
         if (start > end) {
             throw AddressRangeError("Invalid range: start path > end path");
         }
 
-        // Check if the current path is in the lexicographical range
-        return (addressStr >= start) && (addressStr <= end);
+        bool inRange = (addressStr >= start) && (addressStr <= end);
+        spdlog::trace("Unix domain socket range check: {} in [{}, {}] = {}",
+                      addressStr, start, end, inRange);
+        return inRange;
+
     } catch (const AddressRangeError& e) {
-        LOG_F(ERROR, "Range error for Unix domain socket: {}", e.what());
+        spdlog::error("Range error for Unix domain socket: {}", e.what());
         throw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in Unix domain socket range check: {}", e.what());
+        spdlog::error("Exception in Unix domain socket range check: {}",
+                      e.what());
         return false;
     }
 }
@@ -101,27 +154,34 @@ auto UnixDomain::isInRange(std::string_view start, std::string_view end)
 auto UnixDomain::toBinary() const -> std::string {
     try {
         std::string binaryStr;
+        binaryStr.reserve(addressStr.length() * 8);
+
         for (unsigned char c : addressStr) {
             std::bitset<8> bits(c);
             binaryStr += bits.to_string();
         }
+
         return binaryStr;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in Unix domain socket binary conversion: {}", e.what());
+        spdlog::error("Exception in Unix domain socket binary conversion: {}",
+                      e.what());
         return "";
     }
 }
 
 auto UnixDomain::toHex() const -> std::string {
     try {
-        std::stringstream ss;
-        ss << std::hex;
+        std::ostringstream oss;
+        oss << std::hex << std::setfill('0');
+
         for (unsigned char c : addressStr) {
-            ss << std::setw(2) << std::setfill('0') << static_cast<int>(c);
+            oss << std::setw(2) << static_cast<unsigned int>(c);
         }
-        return ss.str();
+
+        return oss.str();
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in Unix domain socket hex conversion: {}", e.what());
+        spdlog::error("Exception in Unix domain socket hex conversion: {}",
+                      e.what());
         return "";
     }
 }
@@ -132,14 +192,15 @@ auto UnixDomain::isEqual(const Address& other) const -> bool {
             return false;
         }
 
-        const UnixDomain* unixDomainOther = dynamic_cast<const UnixDomain*>(&other);
+        const auto* unixDomainOther = dynamic_cast<const UnixDomain*>(&other);
         if (!unixDomainOther) {
             return false;
         }
 
         return addressStr == unixDomainOther->addressStr;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in Unix domain socket equality check: {}", e.what());
+        spdlog::error("Exception in Unix domain socket equality check: {}",
+                      e.what());
         return false;
     }
 }
@@ -148,30 +209,31 @@ auto UnixDomain::getType() const -> std::string_view { return "UnixDomain"; }
 
 auto UnixDomain::getNetworkAddress([[maybe_unused]] std::string_view mask) const
     -> std::string {
-    // Unix域套接字没有网络地址的概念，但我们可以返回路径的目录部分作为"网络"
     try {
-        size_t pos = addressStr.find_last_of("/\\");
-        if (pos == std::string::npos) {
-            return "";
-        }
-        return addressStr.substr(0, pos + 1);
+        std::string directory = getDirectoryPath(addressStr);
+        spdlog::trace("Unix domain socket network address (directory): {}",
+                      directory);
+        return directory;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in Unix domain socket network address calculation: {}", e.what());
+        spdlog::error(
+            "Exception in Unix domain socket network address calculation: {}",
+            e.what());
         return "";
     }
 }
 
 auto UnixDomain::getBroadcastAddress(
     [[maybe_unused]] std::string_view mask) const -> std::string {
-    // Unix域套接字没有广播地址的概念，但我们可以返回目录下的通配符路径
     try {
-        size_t pos = addressStr.find_last_of("/\\");
-        if (pos == std::string::npos) {
-            return addressStr + "/*";
-        }
-        return addressStr.substr(0, pos + 1) + "*";
+        std::string directory = getDirectoryPath(addressStr);
+        std::string broadcast = directory.empty() ? "*" : directory + "*";
+        spdlog::trace("Unix domain socket broadcast address (wildcard): {}",
+                      broadcast);
+        return broadcast;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in Unix domain socket broadcast address calculation: {}", e.what());
+        spdlog::error(
+            "Exception in Unix domain socket broadcast address calculation: {}",
+            e.what());
         return "";
     }
 }
@@ -179,29 +241,32 @@ auto UnixDomain::getBroadcastAddress(
 auto UnixDomain::isSameSubnet(const Address& other,
                               [[maybe_unused]] std::string_view mask) const
     -> bool {
-    // 对于Unix域套接字，我们可以检查两个路径是否在同一目录
     try {
         if (other.getType() != "UnixDomain") {
             return false;
         }
 
-        const UnixDomain* unixDomainOther = dynamic_cast<const UnixDomain*>(&other);
+        const auto* unixDomainOther = dynamic_cast<const UnixDomain*>(&other);
         if (!unixDomainOther) {
             return false;
         }
 
-        // 获取两个路径的目录部分
-        size_t pos1 = addressStr.find_last_of("/\\");
-        size_t pos2 = unixDomainOther->addressStr.find_last_of("/\\");
+        std::string directory1 = getDirectoryPath(addressStr);
+        std::string directory2 = getDirectoryPath(unixDomainOther->addressStr);
 
-        // 如果任一路径没有目录部分，则不在同一子网
-        if (pos1 == std::string::npos || pos2 == std::string::npos) {
+        if (directory1.empty() || directory2.empty()) {
             return false;
         }
 
-        return addressStr.substr(0, pos1) == unixDomainOther->addressStr.substr(0, pos2);
+        bool sameSubnet = directory1 == directory2;
+        spdlog::trace(
+            "Unix domain socket subnet check: {} and {} in same directory: {}",
+            addressStr, unixDomainOther->addressStr, sameSubnet);
+        return sameSubnet;
+
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in Unix domain socket subnet check: {}", e.what());
+        spdlog::error("Exception in Unix domain socket subnet check: {}",
+                      e.what());
         return false;
     }
 }

@@ -4,35 +4,32 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2023-11-24
-
-Description: Simple implementation of AES encryption
-
-**************************************************/
-
 #include "aes.hpp"
 
 #include <array>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
-#include <memory>
 #include <sstream>
 #include <string_view>
 
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <zlib.h>
-#include <filesystem>
+
+#include <spdlog/spdlog.h>
 
 #include "atom/error/exception.hpp"
-#include "atom/log/loguru.hpp"
 
 namespace atom::utils {
 
-// RAII wrapper for EVP_CIPHER_CTX
+constexpr size_t ZLIB_BUFFER_SIZE = 32768;
+constexpr size_t FILE_BUFFER_SIZE = 16384;
+constexpr size_t AES_IV_SIZE = 12;
+constexpr size_t AES_TAG_SIZE = 16;
+constexpr size_t MIN_KEY_SIZE = 16;
+
 class CipherContext {
 public:
     CipherContext() : ctx_(EVP_CIPHER_CTX_new()) {
@@ -49,15 +46,15 @@ public:
 
     EVP_CIPHER_CTX* get() const noexcept { return ctx_; }
 
-    // Prevent copying
     CipherContext(const CipherContext&) = delete;
     CipherContext& operator=(const CipherContext&) = delete;
+    CipherContext(CipherContext&&) = delete;
+    CipherContext& operator=(CipherContext&&) = delete;
 
 private:
     EVP_CIPHER_CTX* ctx_;
 };
 
-// RAII wrapper for EVP_MD_CTX
 class MessageDigestContext {
 public:
     MessageDigestContext() : ctx_(EVP_MD_CTX_new()) {
@@ -74,89 +71,122 @@ public:
 
     EVP_MD_CTX* get() const noexcept { return ctx_; }
 
-    // Prevent copying
     MessageDigestContext(const MessageDigestContext&) = delete;
     MessageDigestContext& operator=(const MessageDigestContext&) = delete;
+    MessageDigestContext(MessageDigestContext&&) = delete;
+    MessageDigestContext& operator=(MessageDigestContext&&) = delete;
 
 private:
     EVP_MD_CTX* ctx_;
 };
 
+class ZlibStream {
+public:
+    explicit ZlibStream(bool isInflate) : isInflate_(isInflate) {
+        std::memset(&stream_, 0, sizeof(stream_));
+        if (isInflate_) {
+            if (inflateInit(&stream_) != Z_OK) {
+                THROW_RUNTIME_ERROR("Failed to initialize decompression");
+            }
+        } else {
+            if (deflateInit(&stream_, Z_BEST_COMPRESSION) != Z_OK) {
+                THROW_RUNTIME_ERROR("Failed to initialize compression");
+            }
+        }
+    }
+
+    ~ZlibStream() noexcept {
+        if (isInflate_) {
+            inflateEnd(&stream_);
+        } else {
+            deflateEnd(&stream_);
+        }
+    }
+
+    z_stream& get() noexcept { return stream_; }
+
+    ZlibStream(const ZlibStream&) = delete;
+    ZlibStream& operator=(const ZlibStream&) = delete;
+    ZlibStream(ZlibStream&&) = delete;
+    ZlibStream& operator=(ZlibStream&&) = delete;
+
+private:
+    z_stream stream_;
+    bool isInflate_;
+};
+
 auto encryptAES(StringLike auto&& plaintext_arg, StringLike auto&& key_arg,
-                std::vector<unsigned char>& iv,
-                std::vector<unsigned char>& tag) -> std::string {
-    std::string_view plaintext = plaintext_arg;
-    std::string_view key = key_arg;
+                std::vector<unsigned char>& iv, std::vector<unsigned char>& tag)
+    -> std::string {
+    const std::string_view plaintext = plaintext_arg;
+    const std::string_view key = key_arg;
 
-    LOG_F(INFO, "Starting AES encryption");
+    spdlog::info("Starting AES encryption");
 
-    // Input validation
     if (plaintext.empty()) {
-        LOG_F(ERROR, "Plaintext is empty");
+        spdlog::error("Plaintext is empty");
         THROW_INVALID_ARGUMENT("Plaintext cannot be empty");
     }
 
-    if (key.empty() || key.length() < 16) {
-        LOG_F(ERROR, "Key is invalid (must be at least 16 bytes)");
+    if (key.empty() || key.length() < MIN_KEY_SIZE) {
+        spdlog::error("Key is invalid (must be at least {} bytes)",
+                      MIN_KEY_SIZE);
         THROW_INVALID_ARGUMENT("Key is invalid (must be at least 16 bytes)");
     }
 
     try {
         CipherContext ctx;
 
-        // Prepare IV (12 bytes for GCM is recommended)
-        iv.resize(12);
-        if (RAND_bytes(iv.data(), iv.size()) != 1) {
-            LOG_F(ERROR, "Failed to generate IV");
+        iv.resize(AES_IV_SIZE);
+        if (RAND_bytes(iv.data(), static_cast<int>(iv.size())) != 1) {
+            spdlog::error("Failed to generate IV");
             THROW_RUNTIME_ERROR("Failed to generate IV");
         }
 
-        // Initialize encryption context
         if (EVP_EncryptInit_ex(
                 ctx.get(), EVP_aes_256_gcm(), nullptr,
                 reinterpret_cast<const unsigned char*>(key.data()),
                 iv.data()) != 1) {
-            LOG_F(ERROR, "Failed to initialize encryption context");
+            spdlog::error("Failed to initialize encryption context");
             THROW_RUNTIME_ERROR("Failed to initialize encryption context");
         }
 
-        // Allocate buffer for ciphertext with proper size
-        std::vector<unsigned char> ciphertext(plaintext.length() +
-                                              EVP_MAX_BLOCK_LENGTH);
+        std::string ciphertext;
+        ciphertext.reserve(plaintext.length() + EVP_MAX_BLOCK_LENGTH);
 
-        int len;
+        std::vector<unsigned char> buffer(plaintext.length() +
+                                          EVP_MAX_BLOCK_LENGTH);
+        int len = 0;
+
         if (EVP_EncryptUpdate(
-                ctx.get(), ciphertext.data(), &len,
+                ctx.get(), buffer.data(), &len,
                 reinterpret_cast<const unsigned char*>(plaintext.data()),
                 static_cast<int>(plaintext.length())) != 1) {
-            LOG_F(ERROR, "Encryption failed");
+            spdlog::error("Encryption failed");
             THROW_RUNTIME_ERROR("Encryption failed");
         }
 
         int ciphertextLen = len;
 
-        if (EVP_EncryptFinal_ex(ctx.get(), ciphertext.data() + len, &len) !=
-            1) {
-            LOG_F(ERROR, "Final encryption step failed");
+        if (EVP_EncryptFinal_ex(ctx.get(), buffer.data() + len, &len) != 1) {
+            spdlog::error("Final encryption step failed");
             THROW_RUNTIME_ERROR("Final encryption step failed");
         }
 
         ciphertextLen += len;
 
-        // Get authentication tag
-        tag.resize(16);  // GCM tag is 16 bytes
+        tag.resize(AES_TAG_SIZE);
         if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_GET_TAG,
                                 static_cast<int>(tag.size()),
                                 tag.data()) != 1) {
-            LOG_F(ERROR, "Failed to get tag");
+            spdlog::error("Failed to get tag");
             THROW_RUNTIME_ERROR("Failed to get tag");
         }
 
-        LOG_F(INFO, "AES encryption completed successfully");
-        return std::string(ciphertext.begin(),
-                           ciphertext.begin() + ciphertextLen);
+        spdlog::info("AES encryption completed successfully");
+        return std::string(buffer.begin(), buffer.begin() + ciphertextLen);
     } catch (const std::exception& ex) {
-        LOG_F(ERROR, "Exception in encryptAES: %s", ex.what());
+        spdlog::error("Exception in encryptAES: {}", ex.what());
         throw;
     }
 }
@@ -164,29 +194,29 @@ auto encryptAES(StringLike auto&& plaintext_arg, StringLike auto&& key_arg,
 auto decryptAES(StringLike auto&& ciphertext_arg, StringLike auto&& key_arg,
                 std::span<const unsigned char> iv,
                 std::span<const unsigned char> tag) -> std::string {
-    std::string_view ciphertext = ciphertext_arg;
-    std::string_view key = key_arg;
+    const std::string_view ciphertext = ciphertext_arg;
+    const std::string_view key = key_arg;
 
-    LOG_F(INFO, "Starting AES decryption");
+    spdlog::info("Starting AES decryption");
 
-    // Input validation
     if (ciphertext.empty()) {
-        LOG_F(ERROR, "Ciphertext is empty");
+        spdlog::error("Ciphertext is empty");
         THROW_INVALID_ARGUMENT("Ciphertext cannot be empty");
     }
 
-    if (key.empty() || key.length() < 16) {
-        LOG_F(ERROR, "Key is invalid (must be at least 16 bytes)");
+    if (key.empty() || key.length() < MIN_KEY_SIZE) {
+        spdlog::error("Key is invalid (must be at least {} bytes)",
+                      MIN_KEY_SIZE);
         THROW_INVALID_ARGUMENT("Key is invalid (must be at least 16 bytes)");
     }
 
-    if (iv.size() != 12) {
-        LOG_F(ERROR, "IV size is invalid (must be 12 bytes)");
+    if (iv.size() != AES_IV_SIZE) {
+        spdlog::error("IV size is invalid (must be {} bytes)", AES_IV_SIZE);
         THROW_INVALID_ARGUMENT("IV size is invalid (must be 12 bytes)");
     }
 
-    if (tag.size() != 16) {
-        LOG_F(ERROR, "Tag size is invalid (must be 16 bytes)");
+    if (tag.size() != AES_TAG_SIZE) {
+        spdlog::error("Tag size is invalid (must be {} bytes)", AES_TAG_SIZE);
         THROW_INVALID_ARGUMENT("Tag size is invalid (must be 16 bytes)");
     }
 
@@ -197,217 +227,185 @@ auto decryptAES(StringLike auto&& ciphertext_arg, StringLike auto&& key_arg,
                 ctx.get(), EVP_aes_256_gcm(), nullptr,
                 reinterpret_cast<const unsigned char*>(key.data()),
                 iv.data()) != 1) {
-            LOG_F(ERROR, "Failed to initialize decryption context");
+            spdlog::error("Failed to initialize decryption context");
             THROW_RUNTIME_ERROR("Failed to initialize decryption context");
         }
 
-        // Allocate buffer for plaintext
-        std::vector<unsigned char> plaintext(ciphertext.length() +
-                                             EVP_MAX_BLOCK_LENGTH);
+        std::vector<unsigned char> buffer(ciphertext.length() +
+                                          EVP_MAX_BLOCK_LENGTH);
+        int len = 0;
 
-        int len;
         if (EVP_DecryptUpdate(
-                ctx.get(), plaintext.data(), &len,
+                ctx.get(), buffer.data(), &len,
                 reinterpret_cast<const unsigned char*>(ciphertext.data()),
                 static_cast<int>(ciphertext.length())) != 1) {
-            LOG_F(ERROR, "Decryption failed");
+            spdlog::error("Decryption failed");
             THROW_RUNTIME_ERROR("Decryption failed");
         }
 
         int plaintextLen = len;
 
-        // Set expected tag value
         if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_TAG,
                                 static_cast<int>(tag.size()),
                                 const_cast<unsigned char*>(tag.data())) != 1) {
-            LOG_F(ERROR, "Failed to set tag");
+            spdlog::error("Failed to set tag");
             THROW_RUNTIME_ERROR("Failed to set tag");
         }
 
-        // Verify the tag and finalize decryption
-        int ret = EVP_DecryptFinal_ex(ctx.get(), plaintext.data() + len, &len);
-        if (ret <= 0) {
-            LOG_F(ERROR,
-                  "Authentication failed or final decryption step failed");
+        if (EVP_DecryptFinal_ex(ctx.get(), buffer.data() + len, &len) <= 0) {
+            spdlog::error(
+                "Authentication failed or final decryption step failed");
             THROW_RUNTIME_ERROR(
                 "Authentication failed or final decryption step failed");
         }
 
         plaintextLen += len;
 
-        LOG_F(INFO, "AES decryption completed successfully");
-        return std::string(plaintext.begin(), plaintext.begin() + plaintextLen);
+        spdlog::info("AES decryption completed successfully");
+        return std::string(buffer.begin(), buffer.begin() + plaintextLen);
     } catch (const std::exception& ex) {
-        LOG_F(ERROR, "Exception in decryptAES: %s", ex.what());
+        spdlog::error("Exception in decryptAES: {}", ex.what());
         throw;
     }
 }
 
 auto compress(StringLike auto&& data_arg) -> std::string {
-    std::string_view data = data_arg;
-    LOG_F(INFO, "Starting compression");
+    const std::string_view data = data_arg;
+    spdlog::info("Starting compression");
 
     if (data.empty()) {
-        LOG_F(ERROR, "Input data is empty");
+        spdlog::error("Input data is empty");
         THROW_INVALID_ARGUMENT("Input data is empty.");
     }
 
     try {
-        z_stream zstream{};
-        if (deflateInit(&zstream, Z_BEST_COMPRESSION) != Z_OK) {
-            LOG_F(ERROR, "Failed to initialize compression");
-            THROW_RUNTIME_ERROR("Failed to initialize compression.");
-        }
+        ZlibStream zstream(false);
+        auto& stream = zstream.get();
 
-        // RAII cleanup for zlib stream
-        auto cleanupDeflate = [&zstream]() noexcept { deflateEnd(&zstream); };
-        std::unique_ptr<z_stream, decltype(cleanupDeflate)> streamGuard(
-            &zstream, cleanupDeflate);
-
-        zstream.next_in =
+        stream.next_in =
             reinterpret_cast<Bytef*>(const_cast<char*>(data.data()));
-        zstream.avail_in = static_cast<uInt>(data.size());
+        stream.avail_in = static_cast<uInt>(data.size());
 
-        int ret;
-        constexpr size_t BUFFER_SIZE = 32768;
-        std::array<char, BUFFER_SIZE> outbuffer{};
         std::string compressed;
-        compressed.reserve(
-            data.size());  // Pre-allocate to avoid frequent reallocations
+        compressed.reserve(data.size() / 2);
+
+        std::array<char, ZLIB_BUFFER_SIZE> buffer{};
+        int ret;
 
         do {
-            zstream.next_out = reinterpret_cast<Bytef*>(outbuffer.data());
-            zstream.avail_out = outbuffer.size();
+            stream.next_out = reinterpret_cast<Bytef*>(buffer.data());
+            stream.avail_out = static_cast<uInt>(buffer.size());
 
-            ret = deflate(&zstream, Z_FINISH);
+            ret = deflate(&stream, Z_FINISH);
             if (ret == Z_STREAM_ERROR) {
-                LOG_F(ERROR, "Compression error during deflation");
+                spdlog::error("Compression error during deflation");
                 THROW_RUNTIME_ERROR("Compression error during deflation.");
             }
 
-            // Append the output to the compressed string
-            compressed.append(outbuffer.data(),
-                              outbuffer.size() - zstream.avail_out);
+            compressed.append(buffer.data(), buffer.size() - stream.avail_out);
         } while (ret == Z_OK);
 
         if (ret != Z_STREAM_END) {
-            LOG_F(ERROR, "Compression did not finish successfully");
+            spdlog::error("Compression did not finish successfully");
             THROW_RUNTIME_ERROR("Compression did not finish successfully.");
         }
 
-        LOG_F(INFO,
-              "Compression completed successfully: %zu bytes -> %zu bytes",
-              data.size(), compressed.size());
+        spdlog::info("Compression completed successfully: {} bytes -> {} bytes",
+                     data.size(), compressed.size());
         return compressed;
     } catch (const std::exception& ex) {
-        LOG_F(ERROR, "Exception in compress: %s", ex.what());
+        spdlog::error("Exception in compress: {}", ex.what());
         throw;
     }
 }
 
 auto decompress(StringLike auto&& data_arg) -> std::string {
-    std::string_view data = data_arg;
-    LOG_F(INFO, "Starting decompression");
+    const std::string_view data = data_arg;
+    spdlog::info("Starting decompression");
 
     if (data.empty()) {
-        LOG_F(ERROR, "Input data is empty");
+        spdlog::error("Input data is empty");
         THROW_INVALID_ARGUMENT("Input data is empty.");
     }
 
     try {
-        z_stream zstream{};
-        if (inflateInit(&zstream) != Z_OK) {
-            LOG_F(ERROR, "Failed to initialize decompression");
-            THROW_RUNTIME_ERROR("Failed to initialize decompression.");
-        }
+        ZlibStream zstream(true);
+        auto& stream = zstream.get();
 
-        // RAII cleanup for zlib stream
-        auto cleanupInflate = [&zstream]() noexcept { inflateEnd(&zstream); };
-        std::unique_ptr<z_stream, decltype(cleanupInflate)> streamGuard(
-            &zstream, cleanupInflate);
-
-        zstream.next_in =
+        stream.next_in =
             reinterpret_cast<Bytef*>(const_cast<char*>(data.data()));
-        zstream.avail_in = static_cast<uInt>(data.size());
+        stream.avail_in = static_cast<uInt>(data.size());
 
-        int ret;
-        constexpr size_t BUFFER_SIZE = 32768;
-        std::array<char, BUFFER_SIZE> outbuffer{};
         std::string decompressed;
-        decompressed.reserve(data.size() * 2);  // Estimate decompressed size
+        decompressed.reserve(data.size() * 3);
+
+        std::array<char, ZLIB_BUFFER_SIZE> buffer{};
+        int ret;
 
         do {
-            zstream.next_out = reinterpret_cast<Bytef*>(outbuffer.data());
-            zstream.avail_out = outbuffer.size();
+            stream.next_out = reinterpret_cast<Bytef*>(buffer.data());
+            stream.avail_out = static_cast<uInt>(buffer.size());
 
-            ret = inflate(&zstream, Z_NO_FLUSH);
+            ret = inflate(&stream, Z_NO_FLUSH);
             if (ret < 0) {
-                LOG_F(ERROR, "Decompression error during inflation: %d", ret);
+                spdlog::error("Decompression error during inflation: {}", ret);
                 THROW_RUNTIME_ERROR("Decompression error during inflation.");
             }
 
-            // Append the output to the decompressed string
-            decompressed.append(outbuffer.data(),
-                                outbuffer.size() - zstream.avail_out);
-
-            // Check if we need to expand buffer for large decompressed data
-            if (ret == Z_OK && zstream.avail_out == 0) {
-                decompressed.reserve(decompressed.capacity() * 2);
-            }
+            decompressed.append(buffer.data(),
+                                buffer.size() - stream.avail_out);
         } while (ret == Z_OK);
 
         if (ret != Z_STREAM_END) {
-            LOG_F(ERROR, "Decompression did not finish successfully");
+            spdlog::error("Decompression did not finish successfully");
             THROW_RUNTIME_ERROR("Decompression did not finish successfully.");
         }
 
-        LOG_F(INFO,
-              "Decompression completed successfully: %zu bytes -> %zu bytes",
-              data.size(), decompressed.size());
+        spdlog::info(
+            "Decompression completed successfully: {} bytes -> {} bytes",
+            data.size(), decompressed.size());
         return decompressed;
     } catch (const std::exception& ex) {
-        LOG_F(ERROR, "Exception in decompress: %s", ex.what());
+        spdlog::error("Exception in decompress: {}", ex.what());
         throw;
     }
 }
 
 auto calculateSha256(StringLike auto&& filename_arg) -> std::string {
-    std::string_view filename = filename_arg;
-    LOG_F(INFO, "Calculating SHA-256 for file: %s", filename.data());
+    const std::string_view filename = filename_arg;
+    spdlog::info("Calculating SHA-256 for file: {}", filename);
 
     try {
         if (filename.empty()) {
-            LOG_F(ERROR, "Filename is empty");
+            spdlog::error("Filename is empty");
             THROW_INVALID_ARGUMENT("Filename cannot be empty");
         }
 
-        if (!std::filesystem::exists(std::filesystem::path(std::string(filename)))) {
-            LOG_F(ERROR, "File does not exist: %s", filename.data());
+        const std::filesystem::path filepath(filename);
+        if (!std::filesystem::exists(filepath)) {
+            spdlog::error("File does not exist: {}", filename);
             return "";
         }
 
-        std::ifstream file(filename.data(), std::ios::binary);
+        std::ifstream file(filepath, std::ios::binary);
         if (!file || !file.good()) {
-            LOG_F(ERROR, "Failed to open file: %s", filename.data());
+            spdlog::error("Failed to open file: {}", filename);
             THROW_RUNTIME_ERROR("Failed to open file");
         }
 
         MessageDigestContext mdctx;
 
         if (EVP_DigestInit_ex(mdctx.get(), EVP_sha256(), nullptr) != 1) {
-            LOG_F(ERROR, "Failed to initialize digest context");
+            spdlog::error("Failed to initialize digest context");
             THROW_RUNTIME_ERROR("Failed to initialize digest context");
         }
 
-        constexpr size_t BUFFER_SIZE =
-            16384;  // Increased buffer size for performance
-        std::vector<char> buffer(BUFFER_SIZE);
+        std::array<char, FILE_BUFFER_SIZE> buffer{};
 
-        // Process file in chunks
         while (file.read(buffer.data(), buffer.size())) {
             if (EVP_DigestUpdate(mdctx.get(), buffer.data(), buffer.size()) !=
                 1) {
-                LOG_F(ERROR, "Failed to update digest");
+                spdlog::error("Failed to update digest");
                 THROW_RUNTIME_ERROR("Failed to update digest");
             }
         }
@@ -415,7 +413,7 @@ auto calculateSha256(StringLike auto&& filename_arg) -> std::string {
         if (file.gcount() > 0) {
             if (EVP_DigestUpdate(mdctx.get(), buffer.data(), file.gcount()) !=
                 1) {
-                LOG_F(ERROR, "Failed to update digest with remaining data");
+                spdlog::error("Failed to update digest with remaining data");
                 THROW_RUNTIME_ERROR(
                     "Failed to update digest with remaining data");
             }
@@ -424,22 +422,20 @@ auto calculateSha256(StringLike auto&& filename_arg) -> std::string {
         std::array<unsigned char, EVP_MAX_MD_SIZE> hash{};
         unsigned int hashLen = 0;
         if (EVP_DigestFinal_ex(mdctx.get(), hash.data(), &hashLen) != 1) {
-            LOG_F(ERROR, "Failed to finalize digest");
+            spdlog::error("Failed to finalize digest");
             THROW_RUNTIME_ERROR("Failed to finalize digest");
         }
 
-        // Convert to hexadecimal string
-        std::ostringstream sha256Val;
-        sha256Val << std::hex << std::setfill('0');
-
+        std::ostringstream oss;
+        oss << std::hex << std::setfill('0');
         for (unsigned int i = 0; i < hashLen; ++i) {
-            sha256Val << std::setw(2) << static_cast<int>(hash[i]);
+            oss << std::setw(2) << static_cast<int>(hash[i]);
         }
 
-        LOG_F(INFO, "SHA-256 calculation completed successfully");
-        return sha256Val.str();
+        spdlog::info("SHA-256 calculation completed successfully");
+        return oss.str();
     } catch (const std::exception& ex) {
-        LOG_F(ERROR, "Exception in calculateSha256: %s", ex.what());
+        spdlog::error("Exception in calculateSha256: {}", ex.what());
         throw;
     }
 }
@@ -448,27 +444,25 @@ auto calculateHash(const std::string& data,
                    const EVP_MD* (*hashFunction)()) noexcept -> std::string {
     try {
         if (data.empty()) {
-            LOG_F(WARNING, "Empty data provided for hash calculation");
+            spdlog::warn("Empty data provided for hash calculation");
             return "";
         }
-
-        LOG_F(INFO, "Calculating hash using custom hash function");
 
         MessageDigestContext context;
         const EVP_MD* messageDigest = hashFunction();
 
         if (!messageDigest) {
-            LOG_F(ERROR, "Invalid hash function");
+            spdlog::error("Invalid hash function");
             return "";
         }
 
         if (EVP_DigestInit_ex(context.get(), messageDigest, nullptr) != 1) {
-            LOG_F(ERROR, "Failed to initialize digest");
+            spdlog::error("Failed to initialize digest");
             return "";
         }
 
         if (EVP_DigestUpdate(context.get(), data.c_str(), data.size()) != 1) {
-            LOG_F(ERROR, "Failed to update digest");
+            spdlog::error("Failed to update digest");
             return "";
         }
 
@@ -477,37 +471,35 @@ auto calculateHash(const std::string& data,
 
         if (EVP_DigestFinal_ex(context.get(), hash.data(), &lengthOfHash) !=
             1) {
-            LOG_F(ERROR, "Failed to finalize digest");
+            spdlog::error("Failed to finalize digest");
             return "";
         }
 
-        std::stringstream stringStream;
-        stringStream << std::hex << std::setfill('0');
-
+        std::ostringstream oss;
+        oss << std::hex << std::setfill('0');
         for (unsigned int i = 0; i < lengthOfHash; ++i) {
-            stringStream << std::setw(2) << static_cast<int>(hash[i]);
+            oss << std::setw(2) << static_cast<int>(hash[i]);
         }
 
-        LOG_F(INFO, "Hash calculation completed successfully");
-        return stringStream.str();
+        return oss.str();
     } catch (const std::exception& ex) {
-        LOG_F(ERROR, "Exception in calculateHash: %s", ex.what());
+        spdlog::error("Exception in calculateHash: {}", ex.what());
         return "";
     }
 }
 
 auto calculateSha224(const std::string& data) noexcept -> std::string {
-    LOG_F(INFO, "Calculating SHA-224 hash");
+    spdlog::info("Calculating SHA-224 hash");
     return calculateHash(data, EVP_sha224);
 }
 
 auto calculateSha384(const std::string& data) noexcept -> std::string {
-    LOG_F(INFO, "Calculating SHA-384 hash");
+    spdlog::info("Calculating SHA-384 hash");
     return calculateHash(data, EVP_sha384);
 }
 
 auto calculateSha512(const std::string& data) noexcept -> std::string {
-    LOG_F(INFO, "Calculating SHA-512 hash");
+    spdlog::info("Calculating SHA-512 hash");
     return calculateHash(data, EVP_sha512);
 }
 

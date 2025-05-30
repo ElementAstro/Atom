@@ -14,7 +14,6 @@
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#define close closesocket
 #ifdef _MSC_VER
 #pragma comment(lib, "Ws2_32.lib")
 #endif
@@ -26,31 +25,66 @@
 #include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <cstdio>
+#include <cerrno>
 #endif
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 
 namespace atom::web {
 
-// ====== Windows Socket API Initialization ======
+namespace {
+constexpr size_t ERROR_BUFFER_SIZE = 256;
+
+auto getLastErrorMessage() -> std::string {
+    std::array<char, ERROR_BUFFER_SIZE> buffer{};
+
+#ifdef _WIN32
+    int error = WSAGetLastError();
+    strerror_s(buffer.data(), buffer.size(), error);
+    return std::format("Error {}: {}", error, buffer.data());
+#else
+    int error = errno;
+    strerror_r(error, buffer.data(), buffer.size());
+    return std::format("Error {}: {}", error, buffer.data());
+#endif
+}
+}  // namespace
 
 auto initializeWindowsSocketAPI() -> bool {
 #ifdef _WIN32
+    static bool initialized = false;
+    if (initialized) {
+        return true;
+    }
+
     try {
         WSADATA wsaData;
         int ret = WSAStartup(MAKEWORD(2, 2), &wsaData);
         if (ret != 0) {
-            throw std::runtime_error(
-                std::format("WSAStartup failed with error: {}", ret));
+            std::string errorMsg =
+                std::format("WSAStartup failed with error: {}", ret);
+            spdlog::error(errorMsg);
+            throw std::runtime_error(errorMsg);
         }
+
+        if (LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 2) {
+            WSACleanup();
+            std::string errorMsg = "Requested Winsock version not supported";
+            spdlog::error(errorMsg);
+            throw std::runtime_error(errorMsg);
+        }
+
+        initialized = true;
+        spdlog::debug("Windows Socket API initialized successfully");
         return true;
+
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Failed to initialize Windows Socket API: {}", e.what());
+        spdlog::error("Failed to initialize Windows Socket API: {}", e.what());
         return false;
     }
-#endif
+#else
     return true;
+#endif
 }
 
 auto createSocket() -> int {
@@ -58,18 +92,25 @@ auto createSocket() -> int {
         int sockfd =
             static_cast<int>(socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
         if (sockfd < 0) {
-            std::array<char, 256> buf{};
-#ifdef _WIN32
-            strerror_s(buf.data(), buf.size(), errno);
-#else
-            snprintf(buf.data(), buf.size(), "%s", strerror(errno));
-#endif
-            throw std::runtime_error(
-                std::format("Socket creation failed: {}", buf.data()));
+            std::string errorMsg = std::format("Socket creation failed: {}",
+                                               getLastErrorMessage());
+            spdlog::error(errorMsg);
+            throw std::runtime_error(errorMsg);
         }
+
+        int reuseAddr = 1;
+        if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR,
+                       reinterpret_cast<const char*>(&reuseAddr),
+                       sizeof(reuseAddr)) != 0) {
+            spdlog::warn("Failed to set SO_REUSEADDR: {}",
+                         getLastErrorMessage());
+        }
+
+        spdlog::trace("Socket created successfully with fd: {}", sockfd);
         return sockfd;
+
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Failed to create socket: {}", e.what());
+        spdlog::error("Failed to create socket: {}", e.what());
 #ifdef _WIN32
         WSACleanup();
 #endif
@@ -79,6 +120,11 @@ auto createSocket() -> int {
 
 auto bindSocket(int sockfd, uint16_t port) -> bool {
     try {
+        if (sockfd < 0) {
+            spdlog::error("Invalid socket file descriptor: {}", sockfd);
+            return false;
+        }
+
         struct sockaddr_in addr{};
         std::memset(&addr, 0, sizeof(addr));
         addr.sin_family = AF_INET;
@@ -87,36 +133,55 @@ auto bindSocket(int sockfd, uint16_t port) -> bool {
 
         if (bind(sockfd, reinterpret_cast<struct sockaddr*>(&addr),
                  sizeof(addr)) != 0) {
-            std::array<char, 256> buf{};
-#ifdef _WIN32
-            strerror_s(buf.data(), buf.size(), errno);
-#else
-            snprintf(buf.data(), buf.size(), "%s", strerror(errno));
-#endif
-            LOG_F(ERROR, "Failed to bind socket: {}", buf.data());
+            std::string errorMsg = getLastErrorMessage();
+            spdlog::error("Failed to bind socket to port {}: {}", port,
+                          errorMsg);
             return false;
         }
+
+        spdlog::trace("Socket bound successfully to port {}", port);
         return true;
+
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Failed to bind socket: {}", e.what());
+        spdlog::error("Exception in bindSocket: {}", e.what());
         return false;
     }
 }
 
 auto setSocketNonBlocking(int sockfd) -> bool {
     try {
+        if (sockfd < 0) {
+            spdlog::error("Invalid socket file descriptor: {}", sockfd);
+            return false;
+        }
+
 #ifdef _WIN32
         unsigned long mode = 1;
-        return ioctlsocket(sockfd, FIONBIO, &mode) == 0;
+        if (ioctlsocket(sockfd, FIONBIO, &mode) != 0) {
+            spdlog::error("Failed to set socket non-blocking: {}",
+                          getLastErrorMessage());
+            return false;
+        }
 #else
         int flags = fcntl(sockfd, F_GETFL, 0);
         if (flags == -1) {
+            spdlog::error("Failed to get socket flags: {}",
+                          getLastErrorMessage());
             return false;
         }
-        return fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) != -1;
+
+        if (fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) == -1) {
+            spdlog::error("Failed to set socket non-blocking: {}",
+                          getLastErrorMessage());
+            return false;
+        }
 #endif
+
+        spdlog::trace("Socket set to non-blocking mode successfully");
+        return true;
+
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Failed to set socket non-blocking: {}", e.what());
+        spdlog::error("Exception in setSocketNonBlocking: {}", e.what());
         return false;
     }
 }
@@ -125,38 +190,48 @@ auto connectWithTimeout(int sockfd, const struct sockaddr* addr,
                         socklen_t addrlen, std::chrono::milliseconds timeout)
     -> bool {
     try {
+        if (sockfd < 0 || !addr) {
+            spdlog::error("Invalid parameters: sockfd={}, addr={}", sockfd,
+                          static_cast<const void*>(addr));
+            return false;
+        }
+
         if (!setSocketNonBlocking(sockfd)) {
-            LOG_F(ERROR,
-                  "Failed to set socket non-blocking for connect timeout");
+            spdlog::error(
+                "Failed to set socket non-blocking for connect timeout");
             return false;
         }
 
         int ret = connect(sockfd, addr, addrlen);
         if (ret == 0) {
+            spdlog::trace("Connected immediately without timeout");
             return true;
         }
 
 #ifdef _WIN32
-        if (WSAGetLastError() != WSAEWOULDBLOCK) {
+        int error = WSAGetLastError();
+        if (error != WSAEWOULDBLOCK) {
+            spdlog::error("Connect failed immediately: {}",
+                          getLastErrorMessage());
             return false;
         }
-#else
-        if (errno != EINPROGRESS) {
-            return false;
-        }
-#endif
 
-#ifdef _WIN32
         fd_set writefds;
         FD_ZERO(&writefds);
-        FD_SET(sockfd, &writefds);
+        FD_SET(static_cast<SOCKET>(sockfd), &writefds);
 
         struct timeval tv;
         tv.tv_sec = static_cast<long>(timeout.count() / 1000);
         tv.tv_usec = static_cast<long>((timeout.count() % 1000) * 1000);
 
-        ret = select(sockfd + 1, nullptr, &writefds, nullptr, &tv);
+        ret = select(0, nullptr, &writefds, nullptr, &tv);
 #else
+        if (errno != EINPROGRESS) {
+            spdlog::error("Connect failed immediately: {}",
+                          getLastErrorMessage());
+            return false;
+        }
+
         struct pollfd pfd;
         pfd.fd = sockfd;
         pfd.events = POLLOUT;
@@ -164,18 +239,35 @@ auto connectWithTimeout(int sockfd, const struct sockaddr* addr,
         ret = poll(&pfd, 1, static_cast<int>(timeout.count()));
 #endif
 
-        if (ret <= 0) {
+        if (ret < 0) {
+            spdlog::error("Select/poll failed during connect: {}",
+                          getLastErrorMessage());
+            return false;
+        } else if (ret == 0) {
+            spdlog::debug("Connect timeout after {} ms", timeout.count());
             return false;
         }
 
-        int error = 0;
-        socklen_t len = sizeof(error);
+        int socketError = 0;
+        socklen_t len = sizeof(socketError);
         ret = getsockopt(sockfd, SOL_SOCKET, SO_ERROR,
-                         reinterpret_cast<char*>(&error), &len);
+                         reinterpret_cast<char*>(&socketError), &len);
 
-        return ret == 0 && error == 0;
+        if (ret != 0) {
+            spdlog::error("getsockopt failed: {}", getLastErrorMessage());
+            return false;
+        }
+
+        if (socketError != 0) {
+            spdlog::error("Socket error during connect: {}", socketError);
+            return false;
+        }
+
+        spdlog::trace("Connected successfully with timeout");
+        return true;
+
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Connect with timeout failed: {}", e.what());
+        spdlog::error("Exception in connectWithTimeout: {}", e.what());
         return false;
     }
 }

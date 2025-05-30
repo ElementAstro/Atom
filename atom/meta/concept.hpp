@@ -9,6 +9,7 @@
 #ifndef ATOM_META_CONCEPT_HPP
 #define ATOM_META_CONCEPT_HPP
 
+#include <complex>
 #include <concepts>
 #include <deque>
 #include <functional>
@@ -16,6 +17,7 @@
 #include <memory>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 #if __cplusplus < 202002L
 #error "C++20 is required for this library"
@@ -252,7 +254,6 @@ concept UnsignedInteger = std::is_integral_v<T> && std::is_unsigned_v<T>;
 template <typename T>
 concept Number = Arithmetic<T>;
 
-#if __has_include(<complex>)
 /*!
  * \brief Concept for complex number types
  * \tparam T Type to check
@@ -262,7 +263,6 @@ concept ComplexNumber = requires {
     typename T::value_type;
     requires std::is_same_v<T, std::complex<typename T::value_type>>;
 };
-#endif
 
 /*!
  * \brief Concept for char type
@@ -299,6 +299,11 @@ concept Char32 = std::is_same_v<T, char32_t>;
 template <typename T>
 concept AnyChar = Char<T> || WChar<T> || Char16<T> || Char32<T>;
 
+// Forward declaration for custom String type
+namespace atom::containers {
+class String;
+}
+
 /*!
  * \brief Concept for string types
  * \tparam T Type to check
@@ -307,7 +312,8 @@ template <typename T>
 concept StringType =
     std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view> ||
     std::is_same_v<T, std::wstring> || std::is_same_v<T, std::u8string> ||
-    std::is_same_v<T, std::u16string> || std::is_same_v<T, std::u32string>;
+    std::is_same_v<T, std::u16string> || std::is_same_v<T, std::u32string> ||
+    std::is_same_v<T, atom::containers::String>;
 
 /*!
  * \brief Concept for built-in types
@@ -337,7 +343,9 @@ concept Pointer = std::is_pointer_v<T>;
 template <typename T>
 concept UniquePointer = requires {
     typename T::element_type;
-    requires std::is_same_v<T, std::unique_ptr<typename T::element_type>>;
+    requires std::is_same_v<T, std::unique_ptr<typename T::element_type>> ||
+                 std::is_same_v<T, std::unique_ptr<typename T::element_type,
+                                                   typename T::deleter_type>>;
 };
 
 /*!

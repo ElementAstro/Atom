@@ -37,11 +37,14 @@ public:
     /**
      * @brief Checks if the Unix domain socket address is within a specified
      * range.
-     * @param start The start of the range (not applicable for Unix domain
-     * sockets).
-     * @param end The end of the range (not applicable for Unix domain sockets).
-     * @return Always returns false as ranges are not applicable for Unix domain
-     * sockets.
+     *
+     * For Unix domain sockets, this performs lexicographical comparison of
+     * paths.
+     *
+     * @param start The start of the range.
+     * @param end The end of the range.
+     * @return True if the path is within the lexicographical range, false
+     * otherwise.
      * @override
      */
     auto isInRange(std::string_view start, std::string_view end)
@@ -66,16 +69,18 @@ public:
 
     /**
      * @brief Gets the type of the address (Unix Domain).
-     * @return A string_view representing the address type ("unixdomain").
+     * @return A string_view representing the address type ("UnixDomain").
      * @override
      */
     [[nodiscard]] auto getType() const -> std::string_view override;
 
     /**
      * @brief Gets the network address given a subnet mask.
+     *
+     * For Unix domain sockets, returns the directory portion of the path.
+     *
      * @param mask The subnet mask (not applicable for Unix domain sockets).
-     * @return An empty string as network addresses are not applicable for Unix
-     * domain sockets.
+     * @return The directory portion of the path.
      * @override
      */
     [[nodiscard]] auto getNetworkAddress(std::string_view mask) const
@@ -83,9 +88,12 @@ public:
 
     /**
      * @brief Gets the broadcast address given a subnet mask.
+     *
+     * For Unix domain sockets, returns a wildcard pattern in the same
+     * directory.
+     *
      * @param mask The subnet mask (not applicable for Unix domain sockets).
-     * @return An empty string as broadcast addresses are not applicable for
-     * Unix domain sockets.
+     * @return A wildcard pattern in the directory.
      * @override
      */
     [[nodiscard]] auto getBroadcastAddress(std::string_view mask) const
@@ -93,10 +101,12 @@ public:
 
     /**
      * @brief Checks if two addresses are in the same subnet.
+     *
+     * For Unix domain sockets, checks if paths are in the same directory.
+     *
      * @param other The other address to compare with.
      * @param mask The subnet mask (not applicable for Unix domain sockets).
-     * @return Always returns false as subnets are not applicable for Unix
-     * domain sockets.
+     * @return True if paths are in the same directory, false otherwise.
      * @override
      */
     [[nodiscard]] auto isSameSubnet(const Address& other,
@@ -117,6 +127,22 @@ public:
      * @return True if the path is valid, false otherwise.
      */
     [[nodiscard]] static auto isValidPath(std::string_view path) -> bool;
+
+private:
+    /**
+     * @brief Fast path validation without regex.
+     * @param path The path to validate.
+     * @return True if the path is valid, false otherwise.
+     */
+    [[nodiscard]] static auto fastIsValidPath(std::string_view path) -> bool;
+
+    /**
+     * @brief Gets the directory portion of a path.
+     * @param path The full path.
+     * @return The directory portion, or empty string if no directory.
+     */
+    [[nodiscard]] static auto getDirectoryPath(std::string_view path)
+        -> std::string;
 };
 
 }  // namespace atom::web

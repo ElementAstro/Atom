@@ -4,14 +4,6 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2025-5-17
-
-Description: Port management and scanning functions
-
-**************************************************/
-
 #ifndef ATOM_WEB_UTILS_PORT_HPP
 #define ATOM_WEB_UTILS_PORT_HPP
 

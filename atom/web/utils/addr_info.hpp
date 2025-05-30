@@ -4,14 +4,6 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2025-5-17
-
-Description: Address information handling functions
-
-**************************************************/
-
 #ifndef ATOM_WEB_UTILS_ADDR_INFO_HPP
 #define ATOM_WEB_UTILS_ADDR_INFO_HPP
 
@@ -39,15 +31,6 @@ namespace atom::web {
  *
  * @throws std::invalid_argument if src is nullptr
  * @throws std::runtime_error if memory allocation fails
- *
- * @code
- * struct addrinfo* src = ...;
- * std::unique_ptr<struct addrinfo, decltype(&freeaddrinfo)> dst(nullptr,
- * freeaddrinfo); if (atom::web::dumpAddrInfo(&dst, src) == 0) { std::cout <<
- * "Address information dumped successfully." << std::endl; } else { std::cout
- * << "Failed to dump address information." << std::endl;
- * }
- * @endcode
  */
 auto dumpAddrInfo(
     std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)>& dst,
@@ -61,12 +44,6 @@ auto dumpAddrInfo(
  * @param addrInfo Address information.
  * @param jsonFormat If `true`, output in JSON format.
  * @return String representation of address information.
- *
- * @code
- * struct addrinfo* addrInfo = ...;
- * std::string addrStr = atom::web::addrInfoToString(addrInfo, true);
- * std::cout << addrStr << std::endl;
- * @endcode
  *
  * @throws std::invalid_argument if addrInfo is nullptr
  */
@@ -83,17 +60,7 @@ auto addrInfoToString(const struct addrinfo* addrInfo, bool jsonFormat = false)
  * @return Smart pointer to the address information.
  *
  * @throws std::runtime_error if getaddrinfo fails
- * @throws std::invalid_argument if hostname or service is empty
- *
- * @code
- * try {
- *     auto addrInfo = atom::web::getAddrInfo("www.google.com", "http");
- *     std::cout << "Address information retrieved successfully." << std::endl;
- *     // No need to manually free, handled by smart pointer
- * } catch (const std::exception& e) {
- *     std::cout << "Error: " << e.what() << std::endl;
- * }
- * @endcode
+ * @throws std::invalid_argument if hostname is empty
  */
 auto getAddrInfo(const std::string& hostname, const std::string& service)
     -> std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)>;
@@ -108,17 +75,6 @@ auto getAddrInfo(const std::string& hostname, const std::string& service)
  * @return `true` if the structures are equal, `false` otherwise.
  *
  * @throws std::invalid_argument if either addrInfo1 or addrInfo2 is nullptr
- *
- * @code
- * struct addrinfo* addrInfo1 = ...;
- * struct addrinfo* addrInfo2 = ...;
- * if (atom::web::compareAddrInfo(addrInfo1, addrInfo2)) {
- *     std::cout << "Address information structures are equal." << std::endl;
- * } else {
- *     std::cout << "Address information structures are not equal." <<
- * std::endl;
- * }
- * @endcode
  */
 auto compareAddrInfo(const struct addrinfo* addrInfo1,
                      const struct addrinfo* addrInfo2) -> bool;
@@ -133,20 +89,6 @@ auto compareAddrInfo(const struct addrinfo* addrInfo1,
  * @return Filtered address information (smart pointer).
  *
  * @throws std::invalid_argument if addrInfo is nullptr
- *
- * @code
- * try {
- *     auto addrInfo = atom::web::getAddrInfo("www.google.com", "http");
- *     auto filtered = atom::web::filterAddrInfo(addrInfo.get(), AF_INET);
- *     if (filtered) {
- *         std::cout << "Filtered address information retrieved successfully."
- * << std::endl; } else { std::cout << "No address information matched the
- * filter." << std::endl;
- *     }
- * } catch (const std::exception& e) {
- *     std::cout << "Error: " << e.what() << std::endl;
- * }
- * @endcode
  */
 auto filterAddrInfo(const struct addrinfo* addrInfo, int family)
     -> std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)>;
@@ -160,20 +102,6 @@ auto filterAddrInfo(const struct addrinfo* addrInfo, int family)
  * @return Sorted address information (smart pointer).
  *
  * @throws std::invalid_argument if addrInfo is nullptr
- *
- * @code
- * try {
- *     auto addrInfo = atom::web::getAddrInfo("www.google.com", "http");
- *     auto sorted = atom::web::sortAddrInfo(addrInfo.get());
- *     if (sorted) {
- *         std::cout << "Sorted address information retrieved successfully." <<
- * std::endl; } else { std::cout << "Failed to sort address information." <<
- * std::endl;
- *     }
- * } catch (const std::exception& e) {
- *     std::cout << "Error: " << e.what() << std::endl;
- * }
- * @endcode
  */
 auto sortAddrInfo(const struct addrinfo* addrInfo)
     -> std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)>;

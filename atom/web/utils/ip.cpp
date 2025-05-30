@@ -18,47 +18,86 @@
 #include <sys/socket.h>
 #endif
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 
 namespace atom::web {
 
 auto isValidIPv4(const std::string& ipAddress) -> bool {
-    try {
-        struct sockaddr_in sa;
-        return inet_pton(AF_INET, ipAddress.c_str(), &(sa.sin_addr)) == 1;
-    } catch (const std::exception& e) {
-        LOG_F(ERROR, "IPv4 validation error: {}", e.what());
+    if (ipAddress.empty() || ipAddress.length() > 15) {
         return false;
     }
+
+    struct sockaddr_in sa;
+    int result = inet_pton(AF_INET, ipAddress.c_str(), &(sa.sin_addr));
+
+    if (result != 1) {
+        spdlog::trace("Invalid IPv4 address format: {}", ipAddress);
+        return false;
+    }
+
+    return true;
 }
 
 auto isValidIPv6(const std::string& ipAddress) -> bool {
-    try {
-        struct sockaddr_in6 sa;
-        return inet_pton(AF_INET6, ipAddress.c_str(), &(sa.sin6_addr)) == 1;
-    } catch (const std::exception& e) {
-        LOG_F(ERROR, "IPv6 validation error: {}", e.what());
+    if (ipAddress.empty() || ipAddress.length() > 45) {
         return false;
     }
+
+    struct sockaddr_in6 sa;
+    int result = inet_pton(AF_INET6, ipAddress.c_str(), &(sa.sin6_addr));
+
+    if (result != 1) {
+        spdlog::trace("Invalid IPv6 address format: {}", ipAddress);
+        return false;
+    }
+
+    return true;
 }
 
 auto ipToString(const struct sockaddr* addr, char* strBuf, size_t bufSize)
     -> bool {
     if (!addr || !strBuf || bufSize == 0) {
+        spdlog::debug("Invalid parameters passed to ipToString");
         return false;
     }
 
     const void* src = nullptr;
-    if (addr->sa_family == AF_INET) {
-        src = &(reinterpret_cast<const struct sockaddr_in*>(addr))->sin_addr;
-    } else if (addr->sa_family == AF_INET6) {
-        src = &(reinterpret_cast<const struct sockaddr_in6*>(addr))->sin6_addr;
-    } else {
+    int family = addr->sa_family;
+
+    switch (family) {
+        case AF_INET: {
+            if (bufSize < INET_ADDRSTRLEN) {
+                spdlog::warn("Buffer too small for IPv4 address conversion");
+                return false;
+            }
+            src =
+                &(reinterpret_cast<const struct sockaddr_in*>(addr))->sin_addr;
+            break;
+        }
+        case AF_INET6: {
+            if (bufSize < INET6_ADDRSTRLEN) {
+                spdlog::warn("Buffer too small for IPv6 address conversion");
+                return false;
+            }
+            src = &(reinterpret_cast<const struct sockaddr_in6*>(addr))
+                       ->sin6_addr;
+            break;
+        }
+        default:
+            spdlog::debug("Unsupported address family: {}", family);
+            return false;
+    }
+
+    const char* result =
+        inet_ntop(family, src, strBuf, static_cast<socklen_t>(bufSize));
+
+    if (!result) {
+        spdlog::error("Failed to convert IP address to string, errno: {}",
+                      errno);
         return false;
     }
 
-    return inet_ntop(addr->sa_family, src, strBuf,
-                    static_cast<socklen_t>(bufSize)) != nullptr;
+    return true;
 }
 
 }  // namespace atom::web

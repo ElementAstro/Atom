@@ -5,8 +5,8 @@
 #include <fstream>
 #include <numeric>
 
+#include <spdlog/spdlog.h>
 #include "atom/error/exception.hpp"
-#include "atom/log/loguru.hpp"
 
 #ifdef __AVX2__
 #include <immintrin.h>
@@ -18,12 +18,11 @@
 
 namespace atom::utils {
 
-// Initialize thread-local storage for Gaussian generation
 thread_local bool LCG::has_cached_gaussian_ = false;
 thread_local double LCG::cached_gaussian_value_ = 0.0;
 
 LCG::LCG(result_type seed) noexcept : current_(seed) {
-    LOG_F(INFO, "LCG initialized with seed: %u", seed);
+    spdlog::info("LCG initialized with seed: {}", seed);
 }
 
 auto LCG::next() noexcept -> result_type {
@@ -41,9 +40,7 @@ auto LCG::next() noexcept -> result_type {
 void LCG::seed(result_type new_seed) noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     current_ = new_seed;
-    LOG_F(INFO, "LCG reseeded with new seed: %u", new_seed);
-
-    // Reset cached Gaussian
+    spdlog::info("LCG reseeded with new seed: {}", new_seed);
     has_cached_gaussian_ = false;
 }
 
@@ -52,14 +49,13 @@ void LCG::saveState(const std::string& filename) {
     try {
         std::ofstream file(filename, std::ios::binary);
         if (!file) {
-            LOG_F(ERROR, "Failed to open file for saving state: {}",
-                  filename.c_str());
+            spdlog::error("Failed to open file for saving state: {}", filename);
             THROW_RUNTIME_ERROR("Failed to open file for saving state");
         }
         file.write(reinterpret_cast<char*>(&current_), sizeof(current_));
-        LOG_F(INFO, "LCG state saved to file: {}", filename.c_str());
+        spdlog::info("LCG state saved to file: {}", filename);
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception during save state: {}", e.what());
+        spdlog::error("Exception during save state: {}", e.what());
         throw;
     }
 }
@@ -69,32 +65,29 @@ void LCG::loadState(const std::string& filename) {
     try {
         std::ifstream file(filename, std::ios::binary);
         if (!file) {
-            LOG_F(ERROR, "Failed to open file for loading state: {}",
-                  filename.c_str());
+            spdlog::error("Failed to open file for loading state: {}",
+                          filename);
             THROW_RUNTIME_ERROR("Failed to open file for loading state");
         }
         file.read(reinterpret_cast<char*>(&current_), sizeof(current_));
 
         // Verify read was successful
         if (!file) {
-            LOG_F(ERROR, "Failed to read data from state file: {}",
-                  filename.c_str());
+            spdlog::error("Failed to read data from state file: {}", filename);
             THROW_RUNTIME_ERROR("Failed to read data from state file");
         }
 
-        LOG_F(INFO, "LCG state loaded from file: {}", filename.c_str());
-
-        // Reset cached Gaussian
+        spdlog::info("LCG state loaded from file: {}", filename);
         has_cached_gaussian_ = false;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception during load state: {}", e.what());
+        spdlog::error("Exception during load state: {}", e.what());
         throw;
     }
 }
 
 auto LCG::nextInt(int min, int max) -> int {
     if (min > max) {
-        LOG_F(ERROR, "Invalid argument: min ({}) > max ({})", min, max);
+        spdlog::error("Invalid argument: min ({}) > max ({})", min, max);
         THROW_INVALID_ARGUMENT("Min should be less than or equal to Max");
     }
 
@@ -102,8 +95,8 @@ auto LCG::nextInt(int min, int max) -> int {
     if (max - min < 1000) {
         int result = min + static_cast<int>(
                                next() % (static_cast<uint64_t>(max) - min + 1));
-        LOG_F(9, "LCG generated next int: {} (range: [{}, {}])", result, min,
-              max);
+        spdlog::trace("LCG generated next int: {} (range: [{}, {}])", result,
+                      min, max);
         return result;
     }
 
@@ -114,13 +107,14 @@ auto LCG::nextInt(int min, int max) -> int {
     // Ensure bounds (due to floating point precision issues)
     result = std::clamp(result, min, max);
 
-    LOG_F(9, "LCG generated next int: {} (range: [{}, {}])", result, min, max);
+    spdlog::trace("LCG generated next int: {} (range: [{}, {}])", result, min,
+                  max);
     return result;
 }
 
 auto LCG::nextDouble(double min, double max) -> double {
     if (min >= max) {
-        LOG_F(ERROR, "Invalid argument: min ({}) >= max ({})", min, max);
+        spdlog::error("Invalid argument: min ({}) >= max ({})", min, max);
         THROW_INVALID_ARGUMENT("Min should be less than Max");
     }
 
@@ -129,8 +123,8 @@ auto LCG::nextDouble(double min, double max) -> double {
     double uniform = static_cast<double>(next()) * SCALE_FACTOR;
 
     double result = min + uniform * (max - min);
-    LOG_F(9, "LCG generated next double: {} (range: [{}, {}])", result, min,
-          max);
+    spdlog::trace("LCG generated next double: {} (range: [{}, {}])", result,
+                  min, max);
     return result;
 }
 
@@ -139,7 +133,7 @@ void LCG::validateProbability(double probability, bool allowZeroOne) {
                                 : (probability > 0.0 && probability < 1.0);
 
     if (!valid) {
-        LOG_F(ERROR, "Invalid probability value: {}", probability);
+        spdlog::error("Invalid probability value: {}", probability);
         THROW_INVALID_ARGUMENT("Probability should be in range [0, 1]");
     }
 }
@@ -147,14 +141,14 @@ void LCG::validateProbability(double probability, bool allowZeroOne) {
 auto LCG::nextBernoulli(double probability) -> bool {
     validateProbability(probability);
     bool result = nextDouble() < probability;
-    LOG_F(9, "LCG generated next Bernoulli: {} (probability: {})",
-          result ? "true" : "false", probability);
+    spdlog::trace("LCG generated next Bernoulli: {} (probability: {})", result,
+                  probability);
     return result;
 }
 
 auto LCG::nextGaussian(double mean, double stddev) -> double {
     if (stddev <= 0.0) {
-        LOG_F(ERROR, "Invalid standard deviation: {}", stddev);
+        spdlog::error("Invalid standard deviation: {}", stddev);
         THROW_INVALID_ARGUMENT("Standard deviation must be positive");
     }
 
@@ -162,9 +156,9 @@ auto LCG::nextGaussian(double mean, double stddev) -> double {
     if (has_cached_gaussian_) {
         has_cached_gaussian_ = false;
         double result = cached_gaussian_value_ * stddev + mean;
-        LOG_F(9,
-              "LCG generated next Gaussian (cached): {} (mean: {}, stddev: {})",
-              result, mean, stddev);
+        spdlog::trace(
+            "LCG generated next Gaussian (cached): {} (mean: {}, stddev: {})",
+            result, mean, stddev);
         return result;
     }
 
@@ -185,14 +179,14 @@ auto LCG::nextGaussian(double mean, double stddev) -> double {
     has_cached_gaussian_ = true;
 
     double result = radius * std::cos(theta) * stddev + mean;
-    LOG_F(9, "LCG generated next Gaussian: {} (mean: {}, stddev: {})", result,
-          mean, stddev);
+    spdlog::trace("LCG generated next Gaussian: {} (mean: {}, stddev: {})",
+                  result, mean, stddev);
     return result;
 }
 
 auto LCG::nextPoisson(double lambda) -> int {
     if (lambda <= 0.0) {
-        LOG_F(ERROR, "Invalid argument: lambda ({}) <= 0", lambda);
+        spdlog::error("Invalid argument: lambda ({}) <= 0", lambda);
         THROW_INVALID_ARGUMENT("Lambda should be greater than 0");
     }
 
@@ -204,25 +198,25 @@ auto LCG::nextPoisson(double lambda) -> int {
         do {
             ++count;
             product *= nextDouble();
-        } while (product > expLambda &&
-                 count < 1000);  // Safeguard against infinite loops
+        } while (product > expLambda && count < 1000);
 
         int result = count - 1;
-        LOG_F(9, "LCG generated next Poisson: {} (lambda: {})", result, lambda);
+        spdlog::trace("LCG generated next Poisson: {} (lambda: {})", result,
+                      lambda);
         return result;
     }
 
     // For larger lambda, use normal approximation with continuity correction
     double x = nextGaussian(lambda, std::sqrt(lambda));
     int result = std::max(0, static_cast<int>(std::floor(x + 0.5)));
-    LOG_F(9, "LCG generated next Poisson (approx): {} (lambda: {})", result,
-          lambda);
+    spdlog::trace("LCG generated next Poisson (approx): {} (lambda: {})",
+                  result, lambda);
     return result;
 }
 
 auto LCG::nextExponential(double lambda) -> double {
     if (lambda <= 0.0) {
-        LOG_F(ERROR, "Invalid argument: lambda ({}) <= 0", lambda);
+        spdlog::error("Invalid argument: lambda ({}) <= 0", lambda);
         THROW_INVALID_ARGUMENT("Lambda should be greater than 0");
     }
 
@@ -233,7 +227,8 @@ auto LCG::nextExponential(double lambda) -> double {
     } while (u == 0.0);
 
     double result = -std::log(u) / lambda;
-    LOG_F(9, "LCG generated next Exponential: {} (lambda: {})", result, lambda);
+    spdlog::trace("LCG generated next Exponential: {} (lambda: {})", result,
+                  lambda);
     return result;
 }
 
@@ -248,15 +243,15 @@ auto LCG::nextGeometric(double probability) -> int {
 
     int result =
         static_cast<int>(std::ceil(std::log(u) / std::log(1.0 - probability)));
-    LOG_F(9, "LCG generated next Geometric: {} (probability: {})", result,
-          probability);
+    spdlog::trace("LCG generated next Geometric: {} (probability: {})", result,
+                  probability);
     return result;
 }
 
 auto LCG::nextGamma(double shape, double scale) -> double {
     if (shape <= 0.0 || scale <= 0.0) {
-        LOG_F(ERROR, "Invalid argument: shape ({}) <= 0 or scale ({}) <= 0",
-              shape, scale);
+        spdlog::error("Invalid argument: shape ({}) <= 0 or scale ({}) <= 0",
+                      shape, scale);
         THROW_INVALID_ARGUMENT("Shape and scale must be greater than 0");
     }
 
@@ -318,19 +313,19 @@ auto LCG::nextGamma(double shape, double scale) -> double {
             }
         }
 
-        LOG_F(9, "LCG generated next Gamma: {} (shape: {}, scale: {})", result,
-              shape, scale);
+        spdlog::trace("LCG generated next Gamma: {} (shape: {}, scale: {})",
+                      result, shape, scale);
         return result;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in Gamma generation: {}", e.what());
+        spdlog::error("Exception in Gamma generation: {}", e.what());
         throw;
     }
 }
 
 auto LCG::nextBeta(double alpha, double beta) -> double {
     if (alpha <= 0.0 || beta <= 0.0) {
-        LOG_F(ERROR, "Invalid argument: alpha ({}) <= 0 or beta ({}) <= 0",
-              alpha, beta);
+        spdlog::error("Invalid argument: alpha ({}) <= 0 or beta ({}) <= 0",
+                      alpha, beta);
         THROW_INVALID_ARGUMENT("Alpha and Beta must be greater than 0");
     }
 
@@ -345,34 +340,34 @@ auto LCG::nextBeta(double alpha, double beta) -> double {
         double gammaBeta = nextGamma(beta, 1.0);
 
         double result = gammaAlpha / (gammaAlpha + gammaBeta);
-        LOG_F(9, "LCG generated next Beta: {} (alpha: {}, beta: {})", result,
-              alpha, beta);
+        spdlog::trace("LCG generated next Beta: {} (alpha: {}, beta: {})",
+                      result, alpha, beta);
         return result;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in Beta generation: {}", e.what());
+        spdlog::error("Exception in Beta generation: {}", e.what());
         throw;
     }
 }
 
 auto LCG::nextChiSquared(double degreesOfFreedom) -> double {
     if (degreesOfFreedom <= 0.0) {
-        LOG_F(ERROR, "Invalid degrees of freedom: {}", degreesOfFreedom);
+        spdlog::error("Invalid degrees of freedom: {}", degreesOfFreedom);
         THROW_INVALID_ARGUMENT("Degrees of freedom must be positive");
     }
 
     double result = nextGamma(degreesOfFreedom / 2.0, 2.0);
-    LOG_F(9, "LCG generated next Chi-Squared: {} (degrees of freedom: {})",
-          result, degreesOfFreedom);
+    spdlog::trace("LCG generated next Chi-Squared: {} (degrees of freedom: {})",
+                  result, degreesOfFreedom);
     return result;
 }
 
 auto LCG::nextHypergeometric(int total, int success, int draws) -> int {
     if (success > total || draws > total || success < 0 || draws < 0 ||
         total < 0) {
-        LOG_F(ERROR,
-              "Invalid parameters for hypergeometric distribution: total ({}), "
-              "success ({}), draws ({})",
-              total, success, draws);
+        spdlog::error(
+            "Invalid parameters for hypergeometric distribution: total ({}), "
+            "success ({}), draws ({})",
+            total, success, draws);
         THROW_INVALID_ARGUMENT(
             "Invalid parameters for hypergeometric distribution");
     }
@@ -403,10 +398,10 @@ auto LCG::nextHypergeometric(int total, int success, int draws) -> int {
                 --remainingTotal;
             }
 
-            LOG_F(9,
-                  "LCG generated next Hypergeometric: {} (total: {}, success: "
-                  "{}, draws: {})",
-                  successCount, total, success, draws);
+            spdlog::trace(
+                "LCG generated next Hypergeometric: {} (total: {}, success: "
+                "{}, draws: {})",
+                successCount, total, success, draws);
             return successCount;
         }
         // Use exact method for small N
@@ -447,44 +442,43 @@ auto LCG::nextHypergeometric(int total, int success, int draws) -> int {
             for (int k = 0; k <= std::min(draws, success); ++k) {
                 cumulative += pmf[k];
                 if (u <= cumulative) {
-                    LOG_F(9,
-                          "LCG generated next Hypergeometric: {} (total: {}, "
-                          "success: {}, draws: {})",
-                          k, total, success, draws);
+                    spdlog::trace(
+                        "LCG generated next Hypergeometric: {} (total: {}, "
+                        "success: {}, draws: {})",
+                        k, total, success, draws);
                     return k;
                 }
             }
 
-            // Fallback in case of numerical issues
-            LOG_F(9,
-                  "LCG generated next Hypergeometric (fallback): {} (total: "
-                  "{}, success: {}, draws: {})",
-                  std::min(draws, success), total, success, draws);
+            spdlog::trace(
+                "LCG generated next Hypergeometric (fallback): {} (total: "
+                "{}, success: {}, draws: {})",
+                std::min(draws, success), total, success, draws);
             return std::min(draws, success);
         }
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in Hypergeometric generation: {}", e.what());
+        spdlog::error("Exception in Hypergeometric generation: {}", e.what());
         throw;
     }
 }
 
 auto LCG::nextDiscrete(std::span<const double> weights) -> int {
     if (weights.empty()) {
-        LOG_F(ERROR, "Empty weights vector provided to nextDiscrete");
+        spdlog::error("Empty weights vector provided to nextDiscrete");
         THROW_INVALID_ARGUMENT("Weights vector cannot be empty");
     }
 
     for (size_t i = 0; i < weights.size(); ++i) {
         if (weights[i] < 0.0) {
-            LOG_F(ERROR, "Negative weight found at index {}: {}", i,
-                  weights[i]);
+            spdlog::error("Negative weight found at index {}: {}", i,
+                          weights[i]);
             THROW_INVALID_ARGUMENT("Weights must be non-negative");
         }
     }
 
     double sum = std::accumulate(weights.begin(), weights.end(), 0.0);
     if (sum <= 0.0) {
-        LOG_F(ERROR, "Sum of weights is not positive: {}", sum);
+        spdlog::error("Sum of weights is not positive: {}", sum);
         THROW_INVALID_ARGUMENT("Sum of weights must be positive");
     }
 
@@ -494,25 +488,24 @@ auto LCG::nextDiscrete(std::span<const double> weights) -> int {
     for (size_t i = 0; i < weights.size(); ++i) {
         cumulative += weights[i];
         if (randValue < cumulative) {
-            LOG_F(9, "LCG generated next Discrete: {} (weights index: {})",
-                  static_cast<int>(i), i);
+            spdlog::trace("LCG generated next Discrete: {} (weights index: {})",
+                          static_cast<int>(i), i);
             return static_cast<int>(i);
         }
     }
-    LOG_F(9, "LCG generated next Discrete: {} (weights index: {})",
-          static_cast<int>(weights.size() - 1), weights.size() - 1);
+    spdlog::trace("LCG generated next Discrete: {} (weights index: {})",
+                  static_cast<int>(weights.size() - 1), weights.size() - 1);
     return static_cast<int>(weights.size() - 1);
 }
 
-auto LCG::nextMultinomial(int trials, const std::vector<double>& probabilities)
+auto LCG::nextMultinomial(int trials, std::span<const double> probabilities)
     -> std::vector<int> {
     std::vector<int> counts(probabilities.size(), 0);
     for (int i = 0; i < trials; ++i) {
         int idx = nextDiscrete(probabilities);
         counts[idx]++;
     }
-    LOG_F(
-        9,
+    spdlog::trace(
         "LCG generated next Multinomial: trials ({}), probabilities size ({})",
         trials, probabilities.size());
     return counts;

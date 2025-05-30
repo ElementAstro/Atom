@@ -66,9 +66,9 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 # =============================================================================
 
 # Global build options
-option(ATOM_BUILD_EXAMPLES "Build examples" ON)
+option(ATOM_BUILD_EXAMPLES "Build examples" OFF)
 option(ATOM_BUILD_EXAMPLES_SELECTIVE "Enable selective building of example modules" OFF)
-option(ATOM_BUILD_TESTS "Build tests" ON)
+option(ATOM_BUILD_TESTS "Build tests" OFF)
 option(ATOM_BUILD_TESTS_SELECTIVE "Enable selective building of test modules" OFF)
 option(ATOM_BUILD_PYTHON_BINDINGS "Build Python bindings" OFF)
 option(ATOM_BUILD_DOCS "Build documentation" OFF)
