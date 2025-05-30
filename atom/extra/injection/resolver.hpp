@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 #include "common.hpp"
 #include "inject.hpp"
@@ -107,13 +108,12 @@ public:
      * @return The instantiated type.
      */
     T resolve(const Context<SymbolTypes...>& context) override {
-        return std::make_from_tuple<U>(
-            InjectableA<U>::template resolve(context));
+        return std::make_from_tuple<U>(InjectableA<U>::resolve(context));
     }
 };
 
 /**
- * @class AutoResolver<std::unique_ptr<T>, U, SymbolTypes...>
+ * @class AutoResolver specialization for std::unique_ptr
  * @brief A resolver that automatically resolves dependencies for a unique
  * pointer type.
  * @tparam T The type of the dependency.
@@ -137,12 +137,12 @@ public:
                 return std::make_unique<U>(
                     std::forward<decltype(deps)>(deps)...);
             },
-            InjectableA<U>::template resolve(context));
+            InjectableA<U>::resolve(context));
     }
 };
 
 /**
- * @class AutoResolver<std::shared_ptr<T>, U, SymbolTypes...>
+ * @class AutoResolver specialization for std::shared_ptr
  * @brief A resolver that automatically resolves dependencies for a shared
  * pointer type.
  * @tparam T The type of the dependency.
@@ -166,7 +166,7 @@ public:
                 return std::make_shared<U>(
                     std::forward<decltype(deps)>(deps)...);
             },
-            InjectableA<U>::template resolve(context));
+            InjectableA<U>::resolve(context));
     }
 };
 

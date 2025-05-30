@@ -1,6 +1,10 @@
 #pragma once
 
-// Common ASIO includes that work with both standalone and Boost ASIO
+/**
+ * @file asio_compatibility.hpp
+ * @brief Compatibility layer for using either standalone or Boost ASIO
+ */
+
 #ifdef USE_BOOST_ASIO
 #include <boost/asio.hpp>
 #include <boost/asio/awaitable.hpp>
@@ -27,7 +31,9 @@ namespace net = asio;
 using error_code = asio::error_code;
 #endif
 
-// Common ASIO typedefs and using declarations
+/**
+ * @brief Common ASIO type aliases and namespace imports
+ */
 using tcp = net::ip::tcp;
 using udp = net::ip::udp;
 using net::co_spawn;
@@ -35,7 +41,6 @@ using net::detached;
 using net::use_awaitable;
 using net::this_coro::executor;
 
-// SSL support
 #ifdef USE_SSL
 using ssl_context = net::ssl::context;
 #ifdef USE_BOOST_ASIO
@@ -45,11 +50,17 @@ namespace ssl = net::ssl;
 #endif
 #endif
 
-// Common utilities for async operations
+/**
+ * @brief Result tuple type for async operations
+ */
 template <typename T>
 using result_tuple = std::tuple<error_code, T>;
 
-// Helper for async operations
+/**
+ * @brief Helper for wrapping async operations to return result tuples
+ * @param op The async operation to wrap
+ * @return Wrapped operation returning a tuple of (error_code, result)
+ */
 template <typename AsyncOperation>
 auto as_tuple_awaitable(AsyncOperation&& op) {
     return std::forward<AsyncOperation>(op)(

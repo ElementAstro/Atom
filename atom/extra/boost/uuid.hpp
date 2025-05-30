@@ -13,71 +13,67 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace atom::extra::boost {
+
 constexpr size_t UUID_SIZE = 16;
-constexpr int BASE64_RESERVE_SIZE = 22;
-constexpr int SHIFT_40 = 40;
-constexpr int SHIFT_32 = 32;
-constexpr int SHIFT_24 = 24;
-constexpr int SHIFT_16 = 16;
-constexpr int SHIFT_8 = 8;
-constexpr int BASE64_MASK = 63;
-constexpr int BASE64_SHIFT_18 = 18;
-constexpr int BASE64_SHIFT_12 = 12;
-constexpr int BASE64_SHIFT_6 = 6;
+constexpr size_t BASE64_ENCODED_SIZE = 22;
 constexpr uint64_t TIMESTAMP_DIVISOR = 10000000;
 constexpr uint64_t UUID_EPOCH = 0x01B21DD213814000L;
 
 /**
- * @class UUID
- * @brief A wrapper class for Boost.UUID providing various UUID operations.
+ * @brief High-performance wrapper for Boost.UUID with enhanced functionality
  */
 class UUID {
 private:
-    ::boost::uuids::uuid uuid_;  ///< The Boost.UUID object.
+    ::boost::uuids::uuid uuid_;
 
 public:
     /**
-     * @brief Default constructor that generates a random UUID (v4).
+     * @brief Default constructor that generates a random UUID (v4)
      */
     UUID() : uuid_(::boost::uuids::random_generator()()) {}
 
     /**
-     * @brief Constructs a UUID from a string representation.
-     * @param str The string representation of the UUID.
+     * @brief Constructs UUID from string representation
+     * @param str String representation of the UUID
      */
-    explicit UUID(const std::string& str)
-        : uuid_(::boost::uuids::string_generator()(str)) {}
+    explicit UUID(std::string_view str)
+        : uuid_(::boost::uuids::string_generator()(std::string(str))) {}
 
     /**
-     * @brief Constructs a UUID from a Boost.UUID object.
-     * @param uuid The Boost.UUID object.
+     * @brief Constructs UUID from Boost.UUID object
+     * @param uuid The Boost.UUID object
      */
-    explicit UUID(const ::boost::uuids::uuid& uuid) : uuid_(uuid) {}
+    explicit constexpr UUID(const ::boost::uuids::uuid& uuid) noexcept
+        : uuid_(uuid) {}
 
     /**
-     * @brief Converts the UUID to a string representation.
-     * @return The string representation of the UUID.
+     * @brief Converts UUID to string representation
+     * @return String representation of the UUID
      */
-    [[nodiscard]] auto toString() const -> std::string {
+    [[nodiscard]] std::string toString() const {
         return ::boost::uuids::to_string(uuid_);
     }
 
     /**
-     * @brief Checks if the UUID is nil (all zeros).
-     * @return True if the UUID is nil, false otherwise.
+     * @brief Checks if UUID is nil (all zeros)
+     * @return True if UUID is nil
      */
-    [[nodiscard]] auto isNil() const -> bool { return uuid_.is_nil(); }
+    [[nodiscard]] constexpr bool isNil() const noexcept {
+        return uuid_.is_nil();
+    }
 
     /**
-     * @brief Compares this UUID with another UUID.
-     * @param other The other UUID to compare.
-     * @return The result of the comparison.
+     * @brief Three-way comparison operator
+     * @param other UUID to compare with
+     * @return Comparison result
      */
-    auto operator<=>(const UUID& other) const -> std::strong_ordering {
-        if (uuid_ < other.uuid_) {
+    constexpr std::strong_ordering operator<=>(
+        const UUID& other) const noexcept {
+        if (uuid_ < other.uuid_) [[likely]] {
             return std::strong_ordering::less;
         }
         if (uuid_ > other.uuid_) {
@@ -87,38 +83,41 @@ public:
     }
 
     /**
-     * @brief Checks if this UUID is equal to another UUID.
-     * @param other The other UUID to compare.
-     * @return True if the UUIDs are equal, false otherwise.
+     * @brief Equality comparison operator
+     * @param other UUID to compare with
+     * @return True if UUIDs are equal
      */
-    auto operator==(const UUID& other) const -> bool {
+    constexpr bool operator==(const UUID& other) const noexcept {
         return uuid_ == other.uuid_;
     }
 
     /**
-     * @brief Formats the UUID as a string enclosed in curly braces.
-     * @return The formatted string.
+     * @brief Formats UUID with curly braces
+     * @return Formatted string
      */
-    [[nodiscard]] auto format() const -> std::string {
+    [[nodiscard]] std::string format() const {
         return std::format("{{{}}}", toString());
     }
 
     /**
-     * @brief Converts the UUID to a vector of bytes.
-     * @return The vector of bytes representing the UUID.
+     * @brief Converts UUID to byte vector
+     * @return Vector of bytes representing the UUID
      */
-    [[nodiscard]] auto toBytes() const -> std::vector<uint8_t> {
-        return {uuid_.begin(), uuid_.end()};
+    [[nodiscard]] std::vector<uint8_t> toBytes() const {
+        std::vector<uint8_t> result;
+        result.reserve(UUID_SIZE);
+        result.assign(uuid_.begin(), uuid_.end());
+        return result;
     }
 
     /**
-     * @brief Constructs a UUID from a span of bytes.
-     * @param bytes The span of bytes.
-     * @return The constructed UUID.
-     * @throws std::invalid_argument if the span size is not 16 bytes.
+     * @brief Constructs UUID from byte span
+     * @param bytes Span of bytes (must be exactly 16 bytes)
+     * @return Constructed UUID
+     * @throws std::invalid_argument if span size is not 16 bytes
      */
-    static auto fromBytes(const std::span<const uint8_t>& bytes) -> UUID {
-        if (bytes.size() != UUID_SIZE) {
+    static UUID fromBytes(std::span<const uint8_t> bytes) {
+        if ((bytes.size() != UUID_SIZE)) [[unlikely]] {
             throw std::invalid_argument("UUID must be exactly 16 bytes");
         }
         ::boost::uuids::uuid uuid;
@@ -127,174 +126,180 @@ public:
     }
 
     /**
-     * @brief Converts the UUID to a 64-bit unsigned integer.
-     * @return The 64-bit unsigned integer representation of the UUID.
+     * @brief Converts UUID to 64-bit unsigned integer
+     * @return 64-bit representation of the UUID
      */
-    [[nodiscard]] auto toUint64() const -> uint64_t {
+    [[nodiscard]] uint64_t toUint64() const {
         return ::boost::lexical_cast<uint64_t>(uuid_);
     }
 
     /**
-     * @brief Gets the DNS namespace UUID.
-     * @return The DNS namespace UUID.
+     * @brief Gets DNS namespace UUID
+     * @return DNS namespace UUID
      */
-    static auto namespaceDNS() -> UUID {
+    static constexpr UUID namespaceDNS() noexcept {
         return UUID(::boost::uuids::ns::dns());
     }
 
     /**
-     * @brief Gets the URL namespace UUID.
-     * @return The URL namespace UUID.
+     * @brief Gets URL namespace UUID
+     * @return URL namespace UUID
      */
-    static auto namespaceURL() -> UUID {
+    static constexpr UUID namespaceURL() noexcept {
         return UUID(::boost::uuids::ns::url());
     }
 
     /**
-     * @brief Gets the OID namespace UUID.
-     * @return The OID namespace UUID.
+     * @brief Gets OID namespace UUID
+     * @return OID namespace UUID
      */
-    static auto namespaceOID() -> UUID {
+    static constexpr UUID namespaceOID() noexcept {
         return UUID(::boost::uuids::ns::oid());
     }
 
     /**
-     * @brief Generates a version 3 (MD5) UUID based on a namespace UUID and a
-     * name.
-     * @param namespace_uuid The namespace UUID.
-     * @param name The name.
-     * @return The generated UUID.
+     * @brief Generates version 3 (MD5) UUID
+     * @param namespace_uuid Namespace UUID
+     * @param name Name to hash
+     * @return Generated UUID
      */
-    static auto v3(const UUID& namespace_uuid,
-                   const std::string& name) -> UUID {
-        return UUID(::boost::uuids::name_generator(namespace_uuid.uuid_)(name));
+    static UUID v3(const UUID& namespace_uuid, std::string_view name) {
+        return UUID(::boost::uuids::name_generator(namespace_uuid.uuid_)(
+            std::string(name)));
     }
 
     /**
-     * @brief Generates a version 5 (SHA-1) UUID based on a namespace UUID and a
-     * name.
-     * @param namespace_uuid The namespace UUID.
-     * @param name The name.
-     * @return The generated UUID.
+     * @brief Generates version 5 (SHA-1) UUID
+     * @param namespace_uuid Namespace UUID
+     * @param name Name to hash
+     * @return Generated UUID
      */
-    static auto v5(const UUID& namespace_uuid,
-                   const std::string& name) -> UUID {
+    static UUID v5(const UUID& namespace_uuid, std::string_view name) {
         ::boost::uuids::name_generator_sha1 gen(namespace_uuid.uuid_);
-        return UUID(gen(name));
+        return UUID(gen(std::string(name)));
     }
 
     /**
-     * @brief Gets the version of the UUID.
-     * @return The version of the UUID.
+     * @brief Gets UUID version
+     * @return Version number
      */
-    [[nodiscard]] auto version() const -> int { return uuid_.version(); }
+    [[nodiscard]] constexpr int version() const noexcept {
+        return uuid_.version();
+    }
 
     /**
-     * @brief Gets the variant of the UUID.
-     * @return The variant of the UUID.
+     * @brief Gets UUID variant
+     * @return Variant number
      */
-    [[nodiscard]] auto variant() const -> int { return uuid_.variant(); }
+    [[nodiscard]] constexpr int variant() const noexcept {
+        return uuid_.variant();
+    }
 
     /**
-     * @brief Generates a version 1 (timestamp-based) UUID.
-     * @return The generated UUID.
+     * @brief Generates version 1 (timestamp-based) UUID
+     * @return Generated UUID
      */
-    [[nodiscard]] static auto v1() -> UUID {
-        static ::boost::uuids::basic_random_generator<std::mt19937> gen;
+    [[nodiscard]] static UUID v1() {
+        static thread_local ::boost::uuids::basic_random_generator<std::mt19937>
+            gen;
         return UUID(gen());
     }
 
     /**
-     * @brief Generates a version 4 (random) UUID.
-     * @return The generated UUID.
+     * @brief Generates version 4 (random) UUID
+     * @return Generated UUID
      */
-    [[nodiscard]] static auto v4() -> UUID {
-        return {};  // Default constructor already generates v4 UUID
-    }
+    [[nodiscard]] static UUID v4() noexcept { return UUID{}; }
 
     /**
-     * @brief Converts the UUID to a Base64 string representation.
-     * @return The Base64 string representation of the UUID.
+     * @brief Converts UUID to Base64 string
+     * @return Base64 string representation
      */
-    [[nodiscard]] auto toBase64() const -> std::string {
-        static const char* basE64Chars =
+    [[nodiscard]] std::string toBase64() const {
+        static constexpr char base64_chars[] =
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
         std::string result;
-        result.reserve(BASE64_RESERVE_SIZE);
+        result.reserve(BASE64_ENCODED_SIZE);
 
         auto bytes = toBytes();
         for (size_t i = 0; i < bytes.size(); i += 3) {
             uint32_t num =
-                (bytes[i] << SHIFT_16) |
-                (i + 1 < bytes.size() ? bytes[i + 1] << SHIFT_8 : 0) |
-                (i + 2 < bytes.size() ? bytes[i + 2] : 0);
-            result += basE64Chars[(num >> BASE64_SHIFT_18) & BASE64_MASK];
-            result += basE64Chars[(num >> BASE64_SHIFT_12) & BASE64_MASK];
-            result += basE64Chars[(num >> BASE64_SHIFT_6) & BASE64_MASK];
-            result += basE64Chars[num & BASE64_MASK];
+                (static_cast<uint32_t>(bytes[i]) << 16) |
+                (i + 1 < bytes.size() ? static_cast<uint32_t>(bytes[i + 1]) << 8
+                                      : 0) |
+                (i + 2 < bytes.size() ? static_cast<uint32_t>(bytes[i + 2])
+                                      : 0);
+
+            result += base64_chars[(num >> 18) & 63];
+            result += base64_chars[(num >> 12) & 63];
+            result += base64_chars[(num >> 6) & 63];
+            result += base64_chars[num & 63];
         }
-        result.resize(BASE64_RESERVE_SIZE);  // Remove padding
+
+        result.resize(BASE64_ENCODED_SIZE);
         return result;
     }
 
     /**
-     * @brief Gets the timestamp from a version 1 UUID.
-     * @return The timestamp as a std::chrono::system_clock::time_point.
-     * @throws std::runtime_error if the UUID is not version 1.
+     * @brief Gets timestamp from version 1 UUID
+     * @return Timestamp as time_point
+     * @throws std::runtime_error if UUID is not version 1
      */
-    [[nodiscard]] auto getTimestamp() const
-        -> std::chrono::system_clock::time_point {
-        if (version() != 1) {
+    [[nodiscard]] std::chrono::system_clock::time_point getTimestamp() const {
+        if ((version() != 1)) [[unlikely]] {
             throw std::runtime_error(
                 "Timestamp is only available for version 1 UUIDs");
         }
-        uint64_t timestamp = ((uint64_t)uuid_.data[6] << SHIFT_40) |
-                             ((uint64_t)uuid_.data[7] << SHIFT_32) |
-                             ((uint64_t)uuid_.data[4] << SHIFT_24) |
-                             ((uint64_t)uuid_.data[5] << SHIFT_16) |
-                             ((uint64_t)uuid_.data[0] << SHIFT_8) |
-                             (uint64_t)uuid_.data[1];
-        return std::chrono::system_clock::from_time_t(static_cast<std::time_t>(
-            timestamp / TIMESTAMP_DIVISOR - UUID_EPOCH / TIMESTAMP_DIVISOR));
+
+        uint64_t timestamp = (static_cast<uint64_t>(uuid_.data[6]) << 40) |
+                             (static_cast<uint64_t>(uuid_.data[7]) << 32) |
+                             (static_cast<uint64_t>(uuid_.data[4]) << 24) |
+                             (static_cast<uint64_t>(uuid_.data[5]) << 16) |
+                             (static_cast<uint64_t>(uuid_.data[0]) << 8) |
+                             static_cast<uint64_t>(uuid_.data[1]);
+
+        auto time_since_epoch = (timestamp - UUID_EPOCH) / TIMESTAMP_DIVISOR;
+        return std::chrono::system_clock::from_time_t(
+            static_cast<std::time_t>(time_since_epoch));
     }
 
     /**
-     * @brief Hash function for UUIDs.
-     * @tparam H The hash function type.
-     * @param h The hash function.
-     * @param uuid The UUID to hash.
-     * @return The hash value.
+     * @brief Hash function for Abseil containers
+     * @tparam H Hash function type
+     * @param h Hash function
+     * @param uuid UUID to hash
+     * @return Hash value
      */
     template <typename H>
-    friend auto abslHashValue(H h, const UUID& uuid) -> H {
+    friend H abslHashValue(H h, const UUID& uuid) noexcept {
         return H::combine(std::move(h), uuid.uuid_);
     }
 
     /**
-     * @brief Gets the underlying Boost.UUID object.
-     * @return The Boost.UUID object.
+     * @brief Gets underlying Boost.UUID object
+     * @return Reference to Boost.UUID object
      */
-    [[nodiscard]] auto getUUID() const -> const ::boost::uuids::uuid& {
+    [[nodiscard]] constexpr const ::boost::uuids::uuid& getUUID()
+        const noexcept {
         return uuid_;
     }
 };
+
 }  // namespace atom::extra::boost
 
 namespace std {
+
 /**
- * @brief Specialization of std::hash for UUID.
+ * @brief Hash specialization for UUID
  */
 template <>
 struct hash<atom::extra::boost::UUID> {
-    /**
-     * @brief Hash function for UUIDs.
-     * @param uuid The UUID to hash.
-     * @return The hash value.
-     */
-    auto operator()(const atom::extra::boost::UUID& uuid) const -> size_t {
+    size_t operator()(const atom::extra::boost::UUID& uuid) const noexcept {
         return ::boost::hash<::boost::uuids::uuid>()(uuid.getUUID());
     }
 };
+
 }  // namespace std
 
 #endif

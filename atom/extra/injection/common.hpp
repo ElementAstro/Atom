@@ -2,7 +2,7 @@
 
 #include <concepts>
 #include <functional>
-#include <memory>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -35,7 +35,7 @@ concept Symbolic = requires { typename T::value; };
 template <typename T>
 concept Injectable = requires {
     {
-        T::template resolve(std::declval<const Context<>&>())
+        T::resolve(std::declval<const Context<>&>())
     } -> std::convertible_to<std::tuple<>>;
 };
 

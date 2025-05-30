@@ -1,5 +1,10 @@
 #pragma once
 
+/**
+ * @file sse_event.hpp
+ * @brief Server-Sent Events (SSE) event handling and management
+ */
+
 #include <spdlog/spdlog.h>
 #include <zlib.h>
 #include <chrono>
@@ -11,12 +16,15 @@
 #include <unordered_map>
 #include <vector>
 
-// Common utilities
 #ifdef USE_COMPRESSION
-std::string compress_data(const std::string& data) {
-    z_stream zs;
-    memset(&zs, 0, sizeof(zs));
-
+/**
+ * @brief Compresses data using zlib
+ * @param data The data to compress
+ * @return Compressed data string
+ * @throws std::runtime_error on compression failure
+ */
+inline std::string compress_data(const std::string& data) {
+    z_stream zs{};
     if (deflateInit(&zs, Z_BEST_COMPRESSION) != Z_OK) {
         throw std::runtime_error("Failed to initialize zlib deflate");
     }
@@ -24,34 +32,36 @@ std::string compress_data(const std::string& data) {
     zs.next_in = reinterpret_cast<Bytef*>(const_cast<char*>(data.data()));
     zs.avail_in = static_cast<uInt>(data.size());
 
-    int ret;
-    char outbuffer[32768];
     std::string compressed;
+    compressed.reserve(data.size());
+    char outbuffer[32768];
 
     do {
         zs.next_out = reinterpret_cast<Bytef*>(outbuffer);
         zs.avail_out = sizeof(outbuffer);
 
-        ret = deflate(&zs, Z_FINISH);
+        if (deflate(&zs, Z_FINISH) == Z_STREAM_ERROR) {
+            deflateEnd(&zs);
+            throw std::runtime_error("Zlib compression error");
+        }
 
         if (compressed.size() < zs.total_out) {
             compressed.append(outbuffer, zs.total_out - compressed.size());
         }
-    } while (ret == Z_OK);
+    } while (zs.avail_out == 0);
 
     deflateEnd(&zs);
-
-    if (ret != Z_STREAM_END) {
-        throw std::runtime_error("Error during zlib compression");
-    }
-
     return compressed;
 }
 
-std::string decompress_data(const std::string& data) {
-    z_stream zs;
-    memset(&zs, 0, sizeof(zs));
-
+/**
+ * @brief Decompresses zlib compressed data
+ * @param data The compressed data
+ * @return Decompressed data string
+ * @throws std::runtime_error on decompression failure
+ */
+inline std::string decompress_data(const std::string& data) {
+    z_stream zs{};
     if (inflateInit(&zs) != Z_OK) {
         throw std::runtime_error("Failed to initialize zlib inflate");
     }
@@ -59,32 +69,29 @@ std::string decompress_data(const std::string& data) {
     zs.next_in = reinterpret_cast<Bytef*>(const_cast<char*>(data.data()));
     zs.avail_in = static_cast<uInt>(data.size());
 
-    int ret;
-    char outbuffer[32768];
     std::string decompressed;
+    decompressed.reserve(data.size() * 2);
+    char outbuffer[32768];
 
     do {
         zs.next_out = reinterpret_cast<Bytef*>(outbuffer);
         zs.avail_out = sizeof(outbuffer);
 
-        ret = inflate(&zs, Z_NO_FLUSH);
+        if (inflate(&zs, Z_NO_FLUSH) == Z_STREAM_ERROR) {
+            inflateEnd(&zs);
+            throw std::runtime_error("Zlib decompression error");
+        }
 
         if (decompressed.size() < zs.total_out) {
             decompressed.append(outbuffer, zs.total_out - decompressed.size());
         }
-    } while (ret == Z_OK);
+    } while (zs.avail_out == 0);
 
     inflateEnd(&zs);
-
-    if (ret != Z_STREAM_END) {
-        throw std::runtime_error("Error during zlib decompression");
-    }
-
     return decompressed;
 }
 #endif
 
-// C++20 concept for serializable event types
 template <typename T>
 concept Serializable = requires(T t) {
     { t.serialize() } -> std::convertible_to<std::string>;
@@ -98,15 +105,16 @@ concept EventType = Serializable<T> && requires(T t) {
     { t.timestamp() } -> std::convertible_to<uint64_t>;
 };
 
-// Enhanced Event class with additional metadata
+/**
+ * @brief Represents a Server-Sent Event with metadata and payload
+ */
 class Event {
 public:
     Event(std::string id, std::string event_type, std::string data)
         : id_(std::move(id)),
           event_type_(std::move(event_type)),
           data_(std::move(data)),
-          timestamp_(
-              std::chrono::system_clock::now().time_since_epoch().count()) {}
+          timestamp_(std::chrono::system_clock::now().time_since_epoch().count()) {}
 
     Event(std::string id, std::string event_type, std::string data,
           std::unordered_map<std::string, std::string> meta)
@@ -114,43 +122,33 @@ public:
           event_type_(std::move(event_type)),
           data_(std::move(data)),
           metadata_(std::move(meta)),
-          timestamp_(
-              std::chrono::system_clock::now().time_since_epoch().count()) {}
+          timestamp_(std::chrono::system_clock::now().time_since_epoch().count()) {}
 
     Event(std::string id, std::string event_type, nlohmann::json json_data)
         : id_(std::move(id)),
           event_type_(std::move(event_type)),
           data_(json_data.dump()),
-          timestamp_(
-              std::chrono::system_clock::now().time_since_epoch().count()),
+          timestamp_(std::chrono::system_clock::now().time_since_epoch().count()),
           is_json_(true) {}
 
     virtual ~Event() = default;
 
-    // Accessors
-    [[nodiscard]] const std::string& id() const { return id_; }
-    [[nodiscard]] const std::string& event_type() const { return event_type_; }
-    [[nodiscard]] const std::string& data() const { return data_; }
-    [[nodiscard]] uint64_t timestamp() const { return timestamp_; }
-    [[nodiscard]] bool is_json() const { return is_json_; }
-    [[nodiscard]] bool is_compressed() const { return is_compressed_; }
+    [[nodiscard]] const std::string& id() const noexcept { return id_; }
+    [[nodiscard]] const std::string& event_type() const noexcept { return event_type_; }
+    [[nodiscard]] const std::string& data() const noexcept { return data_; }
+    [[nodiscard]] uint64_t timestamp() const noexcept { return timestamp_; }
+    [[nodiscard]] bool is_json() const noexcept { return is_json_; }
+    [[nodiscard]] bool is_compressed() const noexcept { return is_compressed_; }
 
-    // Get metadata value
-    [[nodiscard]] std::optional<std::string> get_metadata(
-        const std::string& key) const {
+    [[nodiscard]] std::optional<std::string> get_metadata(const std::string& key) const {
         auto it = metadata_.find(key);
-        if (it != metadata_.end()) {
-            return it->second;
-        }
-        return std::nullopt;
+        return it != metadata_.end() ? std::optional{it->second} : std::nullopt;
     }
 
-    // Add metadata
-    void add_metadata(const std::string& key, const std::string& value) {
-        metadata_[key] = value;
+    void add_metadata(std::string key, std::string value) {
+        metadata_.emplace(std::move(key), std::move(value));
     }
 
-    // Parse JSON data (if applicable)
     [[nodiscard]] nlohmann::json parse_json() const {
         if (!is_json_) {
             throw std::runtime_error("Event data is not JSON");
@@ -158,7 +156,6 @@ public:
         return nlohmann::json::parse(data_);
     }
 
-    // Compress the event data
     void compress() {
 #ifdef USE_COMPRESSION
         if (!is_compressed_) {
@@ -171,84 +168,66 @@ public:
 #endif
     }
 
-    // Decompress the event data
     void decompress() {
 #ifdef USE_COMPRESSION
         if (is_compressed_) {
             data_ = decompress_data(data_);
             is_compressed_ = false;
-
-            auto it = metadata_.find("compressed");
-            if (it != metadata_.end()) {
-                metadata_.erase(it);
-            }
+            metadata_.erase("compressed");
         }
 #else
         SPDLOG_WARN("Decompression requested but not available");
 #endif
     }
 
-    // Serialize the event for SSE transmission
     [[nodiscard]] std::string serialize() const {
         std::string result;
+        result.reserve(data_.size() + 100);
 
-        // Add event ID
         if (!id_.empty()) {
             result += "id: " + id_ + "\n";
         }
 
-        // Add event type
         if (!event_type_.empty()) {
             result += "event: " + event_type_ + "\n";
         }
 
-        // Add metadata as commented fields
         for (const auto& [key, value] : metadata_) {
             result += ": " + key + "=" + value + "\n";
         }
 
-        // Add compressed flag if needed
         if (is_compressed_) {
             result += ": compressed=true\n";
         }
 
-        // Add JSON flag if needed
         if (is_json_) {
             result += ": content-type=application/json\n";
         }
 
-        // Add data, handling multiline data properly
-        // Use C++20 ranges to process multiline data
         if (is_compressed_) {
-            // Encode compressed data in base64
             result += "data: <compressed binary data>\n";
         } else {
             for (const auto& line : std::views::split(data_, '\n')) {
-                std::string line_str(line.begin(), line.end());
-                result += "data: " + line_str + "\n";
+                result += "data: ";
+                result.append(line.begin(), line.end());
+                result += "\n";
             }
         }
 
-        // Empty line to finish the event
         result += "\n";
-
         return result;
     }
 
-    // Create an event from serialized SSE data
-    static std::optional<Event> deserialize(
-        const std::vector<std::string>& lines) {
+    static std::optional<Event> deserialize(const std::vector<std::string>& lines) {
         std::string id;
-        std::string event_type = "message";  // Default type
+        std::string event_type = "message";
         std::string data;
         std::unordered_map<std::string, std::string> metadata;
         bool is_json = false;
         bool is_compressed = false;
 
         for (const auto& line : lines) {
-            if (line.empty()) {
-                continue;
-            }
+            if (line.empty()) continue;
 
             if (line.starts_with("id:")) {
                 id = line.substr(3);
@@ -265,24 +244,20 @@ public:
                 if (!line_data.empty() && line_data[0] == ' ') {
                     line_data = line_data.substr(1);
                 }
-
                 if (!data.empty()) {
                     data += "\n";
                 }
                 data += line_data;
             } else if (line.starts_with(":")) {
-                // Parse metadata from comment
                 std::string comment = line.substr(1);
                 if (!comment.empty() && comment[0] == ' ') {
                     comment = comment.substr(1);
                 }
 
-                // Check for key=value format
                 size_t equals_pos = comment.find('=');
                 if (equals_pos != std::string::npos) {
                     std::string key = comment.substr(0, equals_pos);
                     std::string value = comment.substr(equals_pos + 1);
-
                     metadata[key] = value;
 
                     if (key == "content-type" && value == "application/json") {
@@ -294,69 +269,55 @@ public:
             }
         }
 
-        // Return nullopt if we don't have enough data
         if (id.empty() || data.empty()) {
             return std::nullopt;
         }
 
-        // Create event
         Event event(id, event_type, data, metadata);
-
-        // Set JSON flag if applicable
-        if (is_json) {
-            event.is_json_ = true;
-        }
-
-        // Set compressed flag if applicable
-        if (is_compressed) {
-            event.is_compressed_ = true;
-        }
-
+        event.is_json_ = is_json;
+        event.is_compressed_ = is_compressed;
         return event;
     }
 
 private:
     std::string id_;
     std::string event_type_;
-    mutable std::string data_;  // mutable to allow compression/decompression
+    mutable std::string data_;
     std::unordered_map<std::string, std::string> metadata_;
     uint64_t timestamp_;
     bool is_json_ = false;
     bool is_compressed_ = false;
 };
 
-// Specialized event types
-class MessageEvent : public Event {
+class MessageEvent final : public Event {
 public:
-    MessageEvent(const std::string& id, const std::string& message)
-        : Event(id, "message", message) {}
+    MessageEvent(std::string id, std::string message)
+        : Event(std::move(id), "message", std::move(message)) {}
 };
 
-class UpdateEvent : public Event {
+class UpdateEvent final : public Event {
 public:
-    UpdateEvent(const std::string& id, const std::string& data)
-        : Event(id, "update", data) {}
+    UpdateEvent(std::string id, std::string data)
+        : Event(std::move(id), "update", std::move(data)) {}
 
-    UpdateEvent(const std::string& id, const nlohmann::json& json_data)
-        : Event(id, "update", json_data) {}
+    UpdateEvent(std::string id, const nlohmann::json& json_data)
+        : Event(std::move(id), "update", json_data) {}
 };
 
-class AlertEvent : public Event {
+class AlertEvent final : public Event {
 public:
-    AlertEvent(const std::string& id, const std::string& alert,
-               const std::string& severity = "info")
-        : Event(id, "alert", alert) {
-        add_metadata("severity", severity);
+    AlertEvent(std::string id, std::string alert, std::string severity = "info")
+        : Event(std::move(id), "alert", std::move(alert)) {
+        add_metadata("severity", std::move(severity));
     }
 };
 
-class HeartbeatEvent : public Event {
+class HeartbeatEvent final : public Event {
 public:
     HeartbeatEvent()
-        : Event("heartbeat-" + std::to_string(std::chrono::system_clock::now()
-                                                  .time_since_epoch()
-                                                  .count()),
-                "heartbeat",
-                std::string("ping"))  // 显式指定使用 std::string 构造函数
-    {}
+        : Event(
+              "heartbeat-" +
+              std::to_string(std::chrono::system_clock::now().time_since_epoch().count()),
+              "heartbeat",
+              "ping") {}
 };

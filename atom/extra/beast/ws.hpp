@@ -15,7 +15,7 @@
 #include <string>
 #include <string_view>
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>  // Changed from loguru.hpp
 
 namespace beast = boost::beast;
 namespace net = boost::asio;
@@ -51,12 +51,13 @@ concept JsonCompletionHandler = requires(T h, beast::error_code ec, json j) {
  * @brief A WebSocket client class for managing WebSocket connections and
  * communication.
  */
-class WSClient : public std::enable_shared_from_this<WSClient> {  // 添加继承
+class WSClient : public std::enable_shared_from_this<WSClient> {
 public:
     /**
      * @brief Constructs a WSClient with the given I/O context.
      * @param ioc The I/O context to use for asynchronous operations.
-     * @throws std::invalid_argument If the I/O context is invalid.
+     * @throws std::bad_alloc If memory allocation fails for internal
+     * components.
      */
     explicit WSClient(net::io_context& ioc);
 
@@ -71,7 +72,7 @@ public:
     ~WSClient() noexcept;
 
     /**
-     * @brief Sets the timeout duration for the WebSocket operations.
+     * @brief Sets the timeout duration for WebSocket operations.
      * @param timeout The timeout duration in seconds.
      */
     void setTimeout(std::chrono::seconds timeout) noexcept;
@@ -80,14 +81,15 @@ public:
      * @brief Sets the reconnection options.
      * @param retries The number of reconnection attempts.
      * @param interval The interval between reconnection attempts in seconds.
-     * @throws std::invalid_argument If retries is negative or interval is zero.
+     * @throws std::invalid_argument If retries is negative or interval is
+     * non-positive.
      */
     void setReconnectOptions(int retries, std::chrono::seconds interval);
 
     /**
      * @brief Sets the interval for sending ping messages.
      * @param interval The ping interval in seconds.
-     * @throws std::invalid_argument If interval is zero or negative.
+     * @throws std::invalid_argument If interval is non-positive.
      */
     void setPingInterval(std::chrono::seconds interval);
 
@@ -133,7 +135,8 @@ public:
      * @param host The server host.
      * @param port The server port.
      * @param handler The handler to call when the operation completes.
-     * @throws std::invalid_argument If host or port is invalid.
+     * @throws std::invalid_argument If host or port is invalid (synchronous
+     * check).
      */
     template <CompletionHandler ConnectHandler>
     void asyncConnect(std::string_view host, std::string_view port,
@@ -143,7 +146,6 @@ public:
      * @brief Asynchronously sends a message to the WebSocket server.
      * @param message The message to send.
      * @param handler The handler to call when the operation completes.
-     * @throws std::logic_error If not connected.
      */
     template <DataCompletionHandler WriteHandler>
     void asyncSend(std::string_view message, WriteHandler&& handler);
@@ -151,7 +153,6 @@ public:
     /**
      * @brief Asynchronously receives a message from the WebSocket server.
      * @param handler The handler to call when the operation completes.
-     * @throws std::logic_error If not connected.
      */
     template <ReadCompletionHandler ReadHandler>
     void asyncReceive(ReadHandler&& handler);
@@ -167,7 +168,6 @@ public:
      * @brief Asynchronously sends a JSON object to the WebSocket server.
      * @param jdata The JSON object to send.
      * @param handler The handler to call when the operation completes.
-     * @throws std::logic_error If not connected.
      */
     void asyncSendJson(
         const json& jdata,
@@ -176,7 +176,6 @@ public:
     /**
      * @brief Asynchronously receives a JSON object from the WebSocket server.
      * @param handler The handler to call when the operation completes.
-     * @throws std::logic_error If not connected.
      */
     template <JsonCompletionHandler JsonHandler>
     void asyncReceiveJson(JsonHandler&& handler);
@@ -189,38 +188,33 @@ private:
 
     /**
      * @brief Handles connection errors and retries if necessary.
-     * @param ec The error code.
-     * @param handler The handler to call when the operation completes.
+     * @param ec The error code from the failed connection attempt.
+     * @param handler The handler to call when the reconnection process
+     * completes or fails definitively.
      */
     template <CompletionHandler ConnectHandler>
     void handleConnectError(beast::error_code ec, ConnectHandler&& handler);
 
     /**
-     * @brief Validate connection parameters
+     * @brief Validates connection parameters.
      * @param host The server host.
      * @param port The server port.
-     * @throws std::invalid_argument If parameters are invalid
+     * @throws std::invalid_argument If parameters are invalid.
      */
     void validateConnectionParams(std::string_view host,
                                   std::string_view port) const;
 
-    std::shared_ptr<tcp::resolver>
-        resolver_;  ///< The resolver for DNS lookups.
-    std::shared_ptr<websocket::stream<tcp::socket>>
-        ws_;  ///< The WebSocket stream.
-    std::shared_ptr<net::steady_timer>
-        ping_timer_;  ///< The timer for sending ping messages.
-    std::chrono::seconds timeout_{
-        30};  ///< The timeout duration for WebSocket operations.
-    std::chrono::seconds ping_interval_{
-        10};  ///< The interval for sending ping messages.
-    std::chrono::seconds reconnect_interval_{
-        5};                ///< The interval between reconnection attempts.
-    int max_retries_ = 3;  ///< The maximum number of reconnection attempts.
-    int retry_count_ = 0;  ///< The current number of reconnection attempts.
-    bool is_connected_ = false;  ///< Connection status flag
-    std::string last_host_;      ///< Last used host for reconnection
-    std::string last_port_;      ///< Last used port for reconnection
+    std::shared_ptr<tcp::resolver> resolver_;
+    std::shared_ptr<websocket::stream<tcp::socket>> ws_;
+    std::shared_ptr<net::steady_timer> ping_timer_;
+    std::chrono::seconds timeout_{30};
+    std::chrono::seconds ping_interval_{10};
+    std::chrono::seconds reconnect_interval_{5};
+    int max_retries_ = 3;
+    int retry_count_ = 0;
+    bool is_connected_ = false;
+    std::string last_host_;
+    std::string last_port_;
 };
 
 template <CompletionHandler ConnectHandler>
@@ -229,50 +223,59 @@ void WSClient::asyncConnect(std::string_view host, std::string_view port,
     try {
         validateConnectionParams(host, port);
 
-        // Store for potential reconnection
         last_host_ = host;
         last_port_ = port;
-
         retry_count_ = 0;
+
         resolver_->async_resolve(
             std::string(host), std::string(port),
             [this, self = shared_from_this(),
              handler = std::forward<ConnectHandler>(handler)](
-                beast::error_code ec, tcp::resolver::results_type results) {
+                beast::error_code ec,
+                tcp::resolver::results_type results) mutable {
                 if (ec) {
-                    handleConnectError(ec, handler);
+                    handleConnectError(ec, std::move(handler));
                     return;
                 }
 
                 beast::get_lowest_layer(*ws_).async_connect(
                     results, [this, self = shared_from_this(),
-                              handler = std::move(handler), results](
+                              handler = std::move(handler),
+                              host_str = std::string(
+                                  last_host_)](  // Capture host for handshake
                                  beast::error_code ec,
-                                 tcp::resolver::results_type::endpoint_type) {
+                                 // The specific endpoint isn't used directly
+                                 // here, but its presence indicates successful
+                                 // connection to one of the resolved endpoints.
+                                 const tcp::resolver::results_type::
+                                     endpoint_type& /*ep*/) mutable {
                         if (ec) {
-                            handleConnectError(ec, handler);
+                            handleConnectError(ec, std::move(handler));
                             return;
                         }
 
-                        // 使用获取到的远程主机名进行握手
-                        std::string host = beast::get_lowest_layer(*ws_)
-                                               .remote_endpoint()
-                                               .address()
-                                               .to_string();
-                        ws_->async_handshake(host, "/",
-                                             [this, self = shared_from_this(),
-                                              handler = std::move(handler)](
-                                                 beast::error_code ec) {
-                                                 if (!ec) {
-                                                     is_connected_ = true;
-                                                     startPing();
-                                                 }
-                                                 handler(ec);
-                                             });
+                        // Perform the WebSocket handshake
+                        // Use the original host string for the Host HTTP
+                        // header.
+                        ws_->async_handshake(
+                            host_str, "/",
+                            [this, self = shared_from_this(),
+                             handler = std::move(handler)](
+                                beast::error_code ec) mutable {
+                                if (!ec) {
+                                    is_connected_ = true;
+                                    startPing();
+                                } else {
+                                    // If handshake fails, treat it as a
+                                    // connection error for retry logic
+                                    handleConnectError(ec, std::move(handler));
+                                    return;
+                                }
+                                handler(ec);
+                            });
                     });
             });
-    } catch (const std::exception& e) {
-        // 使用正确的错误码
+    } catch (const std::invalid_argument& /*e*/) {
         net::post(ws_->get_executor(),
                   [handler = std::forward<ConnectHandler>(handler)]() mutable {
                       handler(beast::error_code{net::error::invalid_argument,
@@ -318,10 +321,9 @@ void WSClient::asyncReceive(ReadHandler&& handler) {
 
     auto buffer = std::make_shared<beast::flat_buffer>();
     ws_->async_read(
-        *buffer,
-        [buffer, handler = std::forward<ReadHandler>(handler),
-         self = shared_from_this()](beast::error_code ec,
-                                    std::size_t) {  // 未使用的参数去掉名称
+        *buffer, [buffer, handler = std::forward<ReadHandler>(handler),
+                  self = shared_from_this()](beast::error_code ec,
+                                             std::size_t /*bytes_read*/) {
             if (ec) {
                 handler(ec, "");
             } else {
@@ -333,18 +335,26 @@ void WSClient::asyncReceive(ReadHandler&& handler) {
 template <CompletionHandler CloseHandler>
 void WSClient::asyncClose(CloseHandler&& handler) {
     if (!is_connected_) {
-        net::post(ws_->get_executor(),
-                  [handler = std::forward<CloseHandler>(handler)]() mutable {
-                      handler(beast::error_code());
-                  });
+        net::post(
+            ws_->get_executor(),
+            [handler = std::forward<CloseHandler>(handler)]() mutable {
+                handler(beast::error_code());  // No error if already closed
+            });
         return;
     }
 
     ws_->async_close(websocket::close_code::normal,
                      [this, handler = std::forward<CloseHandler>(handler),
                       self = shared_from_this()](beast::error_code ec) {
-                         if (!ec) {
-                             is_connected_ = false;
+                         // is_connected_ should be set to false regardless of
+                         // error during close, as the intention was to close.
+                         is_connected_ = false;
+                         if (ping_timer_) {  // Cancel timer if it's active
+                             // The cancel() method here is expected to take no
+                             // arguments and might throw on error. If error
+                             // handling for cancel itself is needed, a
+                             // try-catch block can be added.
+                             ping_timer_->cancel();
                          }
                          handler(ec);
                      });
@@ -372,9 +382,12 @@ void WSClient::asyncReceiveJson(JsonHandler&& handler) {
                 auto jdata = json::parse(message);
                 handler(ec, std::move(jdata));
             } catch (const json::parse_error& e) {
-                handler(beast::error_code{static_cast<int>(e.id),
-                                          beast::generic_category()},
-                        json{});
+                // Use a more specific error category if available, or generic
+                handler(
+                    beast::error_code{
+                        e.id, beast::generic_category()},  // json::parse_error
+                                                           // provides an id
+                    json{});
             }
         }
     });
@@ -383,33 +396,54 @@ void WSClient::asyncReceiveJson(JsonHandler&& handler) {
 template <CompletionHandler ConnectHandler>
 void WSClient::handleConnectError(beast::error_code ec,
                                   ConnectHandler&& handler) {
+    is_connected_ = false;  // Ensure connection status is false
     if (retry_count_ < max_retries_) {
         ++retry_count_;
-        LOG_F(INFO, "Failed to connect: {}. Retrying in {} seconds...",
-              ec.message(), reconnect_interval_.count());
+        spdlog::warn(
+            "Connection failed: {}. Retrying attempt {}/{} in {} seconds...",
+            ec.message(), retry_count_, max_retries_,
+            reconnect_interval_.count());
 
-        if (ws_->is_open()) {
+        // Ensure the socket is closed before attempting to reconnect
+        if (ws_ && ws_->is_open()) {
             beast::error_code close_ec;
-            auto result =
-                ws_->next_layer().close(close_ec);  // 保存返回值避免警告
-            (void)result;                           // 显式地忽略返回值
+            // beast::get_lowest_layer(*ws_).close(close_ec); // For TCP socket
+            // For websocket stream, close the websocket layer first if needed,
+            // but typically closing the underlying TCP socket is sufficient if
+            // handshake didn't complete. If handshake completed and then
+            // failed, ws_->close() would be more appropriate. Since this is a
+            // connect error, the TCP layer is likely the one to close.
+            close_ec = beast::get_lowest_layer(*ws_).close(close_ec);
+            if (close_ec &&
+                close_ec !=
+                    net::error::not_connected) {  // Don't log "not connected"
+                                                  // as an error here
+                spdlog::debug("Error closing socket before retry: {}",
+                              close_ec.message());
+            }
         }
+        // Re-initialize the websocket stream for a fresh connection attempt
+        ws_ = std::make_shared<websocket::stream<tcp::socket>>(
+            net::make_strand(ping_timer_->get_executor()));
 
         ping_timer_->expires_after(reconnect_interval_);
-        ping_timer_->async_wait(
-            [this, self = shared_from_this(),
-             handler = std::forward<ConnectHandler>(handler)](
-                beast::error_code wait_ec) mutable {
-                if (!wait_ec) {
-                    asyncConnect(last_host_, last_port_,
-                                 std::forward<ConnectHandler>(handler));
-                } else {
-                    handler(wait_ec);
-                }
-            });
+        ping_timer_->async_wait([this, self = shared_from_this(),
+                                 handler =
+                                     std::forward<ConnectHandler>(handler)](
+                                    beast::error_code wait_ec) mutable {
+            if (!wait_ec) {
+                // Use previously stored host and port for retry
+                asyncConnect(last_host_, last_port_,
+                             std::forward<ConnectHandler>(handler));
+            } else {
+                spdlog::error("Reconnect timer failed: {}", wait_ec.message());
+                handler(wait_ec);  // Pass timer error to original handler
+            }
+        });
     } else {
-        LOG_F(INFO, "Failed to connect: {}. Giving up.", ec.message());
-        handler(ec);
+        spdlog::error("Failed to connect after {} retries: {}. Giving up.",
+                      max_retries_, ec.message());
+        handler(ec);  // Pass the last connection error
     }
 }
 

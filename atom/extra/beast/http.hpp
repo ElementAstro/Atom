@@ -4,7 +4,6 @@
 #include <atomic>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/steady_timer.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
@@ -12,13 +11,12 @@
 #include <chrono>
 #include <concepts>
 #include <fstream>
-#include <iostream>
 #include <memory>
 #include <nlohmann/json.hpp>
-#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <tuple>
 #include <unordered_map>
 #include <vector>
@@ -29,7 +27,6 @@ namespace net = boost::asio;
 using tcp = boost::asio::ip::tcp;
 using json = nlohmann::json;
 
-// Concepts for handlers
 template <typename T>
 concept HttpResponseHandler =
     requires(T h, beast::error_code ec, http::response<http::string_body> res) {
@@ -53,6 +50,9 @@ concept FileCompletionHandler =
         { h(ec, success) } -> std::same_as<void>;
     };
 
+/**
+ * @brief HTTP client for making synchronous and asynchronous HTTP requests.
+ */
 class HttpClient : public std::enable_shared_from_this<HttpClient> {
 public:
     /**
@@ -62,14 +62,10 @@ public:
      */
     explicit HttpClient(net::io_context& ioc);
 
-    // Prevent copy construction and assignment
     HttpClient(const HttpClient&) = delete;
     HttpClient& operator=(const HttpClient&) = delete;
-
-    // Allow move construction and assignment
     HttpClient(HttpClient&&) noexcept = default;
-    // 删除隐式定义的移动赋值运算符，解决了TCP流不可移动的问题
-    // HttpClient& operator=(HttpClient&&) noexcept = default;
+    HttpClient& operator=(HttpClient&&) = delete;
 
     ~HttpClient() noexcept = default;
 
@@ -104,12 +100,12 @@ public:
      * @throws beast::system_error On connection or request failure
      */
     template <class Body = http::string_body>
-    auto request(http::verb method, std::string_view host,
-                 std::string_view port, std::string_view target,
-                 int version = 11, std::string_view content_type = "",
-                 std::string_view body = "",
-                 const std::unordered_map<std::string, std::string>& headers =
-                     {}) -> http::response<Body>;
+    auto request(
+        http::verb method, std::string_view host, std::string_view port,
+        std::string_view target, int version = 11,
+        std::string_view content_type = "", std::string_view body = "",
+        const std::unordered_map<std::string, std::string>& headers = {})
+        -> http::response<Body>;
 
     /**
      * @brief Sends an asynchronous HTTP request.
@@ -283,26 +279,23 @@ public:
                            ResponseHandler&& handler);
 
 private:
-    tcp::resolver resolver_;    ///< The resolver for DNS lookups.
-    beast::tcp_stream stream_;  ///< The TCP stream for HTTP communication.
-    std::unordered_map<std::string, std::string>
-        default_headers_;  ///< Default headers for all requests.
-    std::chrono::seconds timeout_{
-        30};  ///< The timeout duration for HTTP operations.
+    tcp::resolver resolver_;
+    beast::tcp_stream stream_;
+    std::unordered_map<std::string, std::string> default_headers_;
+    std::chrono::seconds timeout_{30};
 };
 
 template <class Body>
-auto HttpClient::request(http::verb method, std::string_view host,
-                         std::string_view port, std::string_view target,
-                         int version, std::string_view content_type,
-                         std::string_view body,
-                         const std::unordered_map<std::string, std::string>&
-                             headers) -> http::response<Body> {
+auto HttpClient::request(
+    http::verb method, std::string_view host, std::string_view port,
+    std::string_view target, int version, std::string_view content_type,
+    std::string_view body,
+    const std::unordered_map<std::string, std::string>& headers)
+    -> http::response<Body> {
     if (host.empty() || port.empty()) {
         throw std::invalid_argument("Host and port must not be empty");
     }
 
-    // 修复：正确初始化 HTTP 请求
     http::request<http::string_body> req;
     req.method(method);
     req.target(std::string(target));
@@ -330,7 +323,6 @@ auto HttpClient::request(http::verb method, std::string_view host,
     auto const results =
         resolver_.resolve(std::string(host), std::string(port));
     stream_.connect(results);
-
     stream_.expires_after(timeout_);
 
     http::write(stream_, req);
@@ -340,9 +332,15 @@ auto HttpClient::request(http::verb method, std::string_view host,
     http::read(stream_, buffer, res);
 
     beast::error_code ec;
-    // 修复：处理返回值
-    auto result = stream_.socket().shutdown(tcp::socket::shutdown_both, ec);
-    (void)result;  // 显式忽略返回值
+    // Gracefully close the socket - failures are logged but non-fatal since we
+    // have the response Attempt graceful shutdown, ignore any errors since we
+    // already have the response
+    stream_.socket().shutdown(tcp::socket::shutdown_both, ec);
+    if (ec && ec != beast::errc::not_connected) {
+        // Log the error, but don't throw as we already have the response.
+        // Consider using a logger like spdlog here if available.
+        // std::cerr << "Shutdown failed: " << ec.message() << std::endl;
+    }
 
     return res;
 }
@@ -384,15 +382,16 @@ void HttpClient::asyncRequest(
     resolver_.async_resolve(
         std::string(host), std::string(port),
         [this, req, handler = std::forward<ResponseHandler>(handler)](
-            beast::error_code ec, tcp::resolver::results_type results) {
+            beast::error_code ec, tcp::resolver::results_type results) mutable {
             if (ec) {
                 return handler(ec, {});
             }
 
             stream_.async_connect(
-                results, [this, req, handler = std::move(handler)](
-                             beast::error_code ec,
-                             tcp::resolver::results_type::endpoint_type) {
+                results,
+                [this, req, handler = std::move(handler)](
+                    beast::error_code ec,
+                    tcp::resolver::results_type::endpoint_type) mutable {
                     if (ec) {
                         return handler(ec, {});
                     }
@@ -402,7 +401,7 @@ void HttpClient::asyncRequest(
                     http::async_write(
                         stream_, *req,
                         [this, req, handler = std::move(handler)](
-                            beast::error_code ec, std::size_t) {
+                            beast::error_code ec, std::size_t) mutable {
                             if (ec) {
                                 return handler(ec, {});
                             }
@@ -415,12 +414,18 @@ void HttpClient::asyncRequest(
                                 stream_, *buffer, *res,
                                 [this, res, buffer,
                                  handler = std::move(handler)](
-                                    beast::error_code ec, std::size_t) {
+                                    beast::error_code ec, std::size_t) mutable {
                                     beast::error_code shutdown_ec;
-                                    auto result = stream_.socket().shutdown(
+                                    stream_.socket().shutdown(
                                         tcp::socket::shutdown_both,
                                         shutdown_ec);
-                                    (void)result;  // 显式忽略返回值
+                                    // If there's no previous error but shutdown
+                                    // failed, report the shutdown error
+                                    if (!ec && shutdown_ec &&
+                                        shutdown_ec !=
+                                            beast::errc::not_connected) {
+                                        ec = shutdown_ec;
+                                    }
                                     handler(ec, std::move(*res));
                                 });
                         });
@@ -436,7 +441,8 @@ void HttpClient::asyncJsonRequest(
     asyncRequest<http::string_body>(
         method, host, port, target,
         [handler = std::forward<ResponseHandler>(handler)](
-            beast::error_code ec, http::response<http::string_body> res) {
+            beast::error_code ec,
+            http::response<http::string_body> res) mutable {
             if (ec) {
                 handler(ec, {});
             } else {
@@ -464,24 +470,20 @@ auto HttpClient::requestWithRetry(
         throw std::invalid_argument("Host and port must not be empty");
     }
 
-    beast::error_code ec;
-    http::response<Body> response;
     for (int attempt = 0; attempt < retry_count; ++attempt) {
         try {
-            response = request<Body>(method, host, port, target, version,
-                                     content_type, body, headers);
-            // If no exception was thrown, return the response
-            return response;
+            return request<Body>(method, host, port, target, version,
+                                 content_type, body, headers);
         } catch (const beast::system_error& e) {
-            ec = e.code();
-            std::cerr << "Request attempt " << (attempt + 1)
-                      << " failed: " << ec.message() << std::endl;
             if (attempt + 1 == retry_count) {
-                throw;  // Throw the exception if this was the last retry
+                throw;
             }
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(100 * (1 << attempt)));
         }
     }
-    return response;
+
+    throw std::runtime_error("All retry attempts failed");
 }
 
 template <class Body>
@@ -490,6 +492,8 @@ std::vector<http::response<Body>> HttpClient::batchRequest(
                                  std::string>>& requests,
     const std::unordered_map<std::string, std::string>& headers) {
     std::vector<http::response<Body>> responses;
+    responses.reserve(requests.size());
+
     for (const auto& [method, host, port, target] : requests) {
         if (host.empty() || port.empty()) {
             throw std::invalid_argument("Host and port must not be empty");
@@ -498,11 +502,7 @@ std::vector<http::response<Body>> HttpClient::batchRequest(
         try {
             responses.push_back(
                 request<Body>(method, host, port, target, 11, "", "", headers));
-        } catch (const std::exception& e) {
-            std::cerr << "Batch request failed for " << target << ": "
-                      << e.what() << std::endl;
-            // Push an empty response if an exception occurs (or handle as
-            // needed)
+        } catch (const std::exception&) {
             responses.emplace_back();
         }
     }
@@ -517,7 +517,10 @@ void HttpClient::asyncBatchRequest(
     const std::unordered_map<std::string, std::string>& headers) {
     auto responses =
         std::make_shared<std::vector<http::response<http::string_body>>>();
-    auto remaining = std::make_shared<std::atomic<int>>(requests.size());
+    auto remaining =
+        std::make_shared<std::atomic<int>>(static_cast<int>(requests.size()));
+
+    responses->reserve(requests.size());
 
     for (const auto& [method, host, port, target] : requests) {
         if (host.empty() || port.empty()) {
@@ -529,10 +532,7 @@ void HttpClient::asyncBatchRequest(
             [handler, responses, remaining](
                 beast::error_code ec, http::response<http::string_body> res) {
                 if (ec) {
-                    std::cerr << "Error during batch request: " << ec.message()
-                              << std::endl;
-                    responses
-                        ->emplace_back();  // Empty response in case of error
+                    responses->emplace_back();
                 } else {
                     responses->emplace_back(std::move(res));
                 }
@@ -558,21 +558,20 @@ void HttpClient::asyncDownloadFile(std::string_view host, std::string_view port,
     asyncRequest<http::string_body>(
         http::verb::get, host, port, target,
         [filepath, handler = std::forward<ResponseHandler>(handler)](
-            beast::error_code ec, http::response<http::string_body> res) {
+            beast::error_code ec,
+            http::response<http::string_body> res) mutable {
             if (ec) {
                 handler(ec, false);
             } else {
                 std::ofstream outFile(std::string(filepath), std::ios::binary);
                 if (!outFile) {
-                    std::cerr << "Failed to open file for writing: " << filepath
-                              << std::endl;
                     handler(beast::error_code{}, false);
                     return;
                 }
                 outFile << res.body();
-                handler({}, true);  // Download successful
+                handler({}, true);
             }
         });
 }
 
-#endif  // ATOM_EXTRA_BEAST_HTTP_HPP
+#endif

@@ -3,6 +3,8 @@
 #include "common.hpp"
 #include "resolver.hpp"
 
+#include <algorithm>
+
 namespace atom::extra {
 
 /**
