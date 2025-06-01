@@ -14,13 +14,15 @@
 #include <optional>
 #include <shared_mutex>
 #include <source_location>
+#include <stdexcept>
+#include <string>
 #include <typeinfo>
 
 #include "atom/containers/high_performance.hpp"
 
 #ifdef _MSC_VER
-#include <windows.h>
 #include <dbghelp.h>
+#include <windows.h>
 #pragma comment(lib, "dbghelp.lib")
 #else
 #include <cxxabi.h>
@@ -35,9 +37,10 @@
 
 namespace atom::meta {
 
-using atom::containers::HashMap;
-using atom::containers::String;
-using atom::containers::Vector;
+// Use the correct namespace path and ensure types are complete
+using HashMap = containers::HashMap<containers::String, containers::String>;
+using String = containers::String;
+using Vector = containers::Vector<containers::String>;
 
 /*!
  * \brief Configuration options for the ABI utilities
@@ -54,7 +57,9 @@ struct AbiConfig {
 class AbiException : public std::runtime_error {
 public:
     explicit AbiException(const String& message)
-        : std::runtime_error(message.c_str()) {}
+        : std::runtime_error(std::string(message.begin(), message.end())) {}
+
+    explicit AbiException(const char* message) : std::runtime_error(message) {}
 };
 
 /*!
@@ -97,7 +102,7 @@ public:
 
             if (location) {
                 demangled += " (";
-                demangled += location->file_name();
+                demangled += String(location->file_name());
                 demangled += ":";
                 demangled += String(std::to_string(location->line()));
                 demangled += ")";
@@ -117,10 +122,10 @@ public:
      * \return A vector of demangled names
      */
     static auto demangleMany(
-        const Vector<std::string_view>& mangled_names,
+        const containers::Vector<std::string_view>& mangled_names,
         const std::optional<std::source_location>& location = std::nullopt)
-        -> Vector<String> {
-        Vector<String> demangledNames;
+        -> Vector {
+        Vector demangledNames;
         demangledNames.reserve(mangled_names.size());
 
         for (const auto& name : mangled_names) {
@@ -305,11 +310,13 @@ private:
      * \param indent_level Indentation level for visualization
      * \return A string containing the hierarchical visualization
      */
-    static auto visualizeType(const String& type_name, int indent_level = 0) -> String {
+    static auto visualizeType(const String& type_name, int indent_level = 0)
+        -> String {
         String indent(indent_level * 4, ' ');
         String result;
 
-        std::string type_name_std = std::string(type_name.begin(), type_name.end());
+        std::string type_name_std =
+            std::string(type_name.begin(), type_name.end());
 
         static const std::regex templateRegex(R"((\w+)<(.*)>)");
         static const std::regex functionRegex(R"((.*)\s*->\s*(.*))");
@@ -321,7 +328,8 @@ private:
         std::smatch match;
 
         if (std::regex_match(type_name_std, match, templateRegex)) {
-            result += indent + "`-- " + String(match[1].str()) + " [template]\n";
+            result +=
+                indent + "`-- " + String(match[1].str()) + " [template]\n";
             String params = String(match[2].str());
             result += visualizeTemplateParams(params, indent_level + 1);
         } else if (std::regex_match(type_name_std, match, functionRegex)) {
@@ -329,7 +337,8 @@ private:
             String params = String(match[1].str());
             String returnType = String(match[2].str());
             result += indent + "    `-- return: ";
-            result += visualizeType(returnType, indent_level + 1).substr((indent_level + 1) * 4);
+            result += visualizeType(returnType, indent_level + 1)
+                          .substr((indent_level + 1) * 4);
         } else if (std::regex_match(type_name_std, match, ptrRegex)) {
             result += indent + "`-- pointer to\n";
             result += visualizeType(String(match[1].str()), indent_level + 1);
@@ -340,7 +349,8 @@ private:
             result += indent + "`-- const\n";
             result += visualizeType(String(match[2].str()), indent_level + 1);
         } else if (std::regex_match(type_name_std, match, arrayRegex)) {
-            String sizeStr = match[2].matched ? String(match[2].str()) : String("unknown");
+            String sizeStr =
+                match[2].matched ? String(match[2].str()) : String("unknown");
             result += indent + "`-- array [size=" + sizeStr + "]\n";
             result += visualizeType(String(match[1].str()), indent_level + 1);
         } else if (std::regex_match(type_name_std, match, namespaceRegex)) {
@@ -359,7 +369,8 @@ private:
      * \param indent_level Indentation level
      * \return A visualization of the template parameters
      */
-    static auto visualizeTemplateParams(const String& params, int indent_level) -> String {
+    static auto visualizeTemplateParams(const String& params, int indent_level)
+        -> String {
         String indent(indent_level * 4, ' ');
         String result;
         int paramIndex = 0;
@@ -387,11 +398,14 @@ private:
                     --parentheses;
             }
 
-            if (c == ',' && angleBrackets == 0 && parentheses == 0 && !inQuotes) {
+            if (c == ',' && angleBrackets == 0 && parentheses == 0 &&
+                !inQuotes) {
                 String prefix = String("├── ");
-                result += indent + prefix + String(std::to_string(paramIndex++)) + ": ";
+                result += indent + prefix +
+                          String(std::to_string(paramIndex++)) + ": ";
                 String paramType = params.substr(start, i - start);
-                result += visualizeType(paramType, indent_level + 1).substr(indent.length() + 4);
+                result += visualizeType(paramType, indent_level + 1)
+                              .substr(indent.length() + 4);
                 start = i + 1;
             }
         }
@@ -399,7 +413,8 @@ private:
         String prefix = String("└── ");
         result += indent + prefix + String(std::to_string(paramIndex)) + ": ";
         String paramType = params.substr(start);
-        result += visualizeType(paramType, indent_level + 1).substr(indent.length() + 4);
+        result += visualizeType(paramType, indent_level + 1)
+                      .substr(indent.length() + 4);
 
         return result;
     }
@@ -410,7 +425,8 @@ private:
      * \param indent_level Indentation level
      * \return A visualization of the function parameters
      */
-    static auto visualizeFunctionParams(const String& params, int indent_level) -> String {
+    static auto visualizeFunctionParams(const String& params, int indent_level)
+        -> String {
         if (params.empty()) {
             return String(indent_level * 4, ' ') + "    (no parameters)\n";
         }
@@ -442,20 +458,25 @@ private:
                     --parentheses;
             }
 
-            if (c == ',' && angleBrackets == 0 && parentheses == 0 && !inQuotes) {
+            if (c == ',' && angleBrackets == 0 && parentheses == 0 &&
+                !inQuotes) {
                 String prefix = String("├── ");
-                result += indent + prefix + "param " + String(std::to_string(paramIndex++)) + ": ";
+                result += indent + prefix + "param " +
+                          String(std::to_string(paramIndex++)) + ": ";
                 String paramType = params.substr(start, i - start);
-                result += visualizeType(paramType, indent_level + 1).substr(indent.length() + 4);
+                result += visualizeType(paramType, indent_level + 1)
+                              .substr(indent.length() + 4);
                 start = i + 1;
             }
         }
 
         if (!params.empty()) {
             String prefix = String("└── ");
-            result += indent + prefix + "param " + String(std::to_string(paramIndex)) + ": ";
+            result += indent + prefix + "param " +
+                      String(std::to_string(paramIndex)) + ": ";
             String paramType = params.substr(start);
-            result += visualizeType(paramType, indent_level + 1).substr(indent.length() + 4);
+            result += visualizeType(paramType, indent_level + 1)
+                          .substr(indent.length() + 4);
         }
 
         return result;
@@ -463,7 +484,7 @@ private:
 #endif
 
 private:
-    static inline HashMap<String, String> cache_;
+    static inline HashMap cache_;
     static inline std::shared_mutex cacheMutex_;
 };
 

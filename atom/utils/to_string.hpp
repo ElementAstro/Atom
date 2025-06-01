@@ -139,6 +139,15 @@ constexpr auto toString(T&& value) -> std::string {
 }
 
 /**
+ * @brief Explicit overload for const std::string& to resolve linker issues.
+ * @param value The input string value to be converted.
+ * @return The converted std::string.
+ */
+inline auto toString(const std::string& value) -> std::string {
+    return value;
+}
+
+/**
  * @brief Converts a char type to std::string.
  * @param value The input char value to be converted.
  * @return The converted std::string.

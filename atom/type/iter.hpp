@@ -1,16 +1,10 @@
-/*
- * iter.hpp
- *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+/*!
+ * \file iter.hpp
+ * \brief High-performance iterator utilities and adapters
+ * \author Max Qian <lightapt.com>
+ * \date 2024-4-26
+ * \copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
-
-/*************************************************
-
-Date: 2024-4-26
-
-Description: Some iterators
-
-**************************************************/
 
 #ifndef ATOM_EXPERIMENTAL_ITERATOR_HPP
 #define ATOM_EXPERIMENTAL_ITERATOR_HPP
@@ -26,10 +20,9 @@ Description: Some iterators
 #include <iostream>
 #endif
 
-/**
- * @brief An iterator that returns pointers to the elements of another iterator.
- *
- * @tparam IteratorT The type of the underlying iterator.
+/*!
+ * \brief An iterator that returns pointers to the elements of another iterator
+ * \tparam IteratorT The type of the underlying iterator
  */
 template <typename IteratorT>
 class PointerIterator {
@@ -41,96 +34,87 @@ public:
     using reference = value_type&;
 
 private:
-    IteratorT iter_;  ///< The underlying iterator.
+    IteratorT iter_;
 
 public:
-    PointerIterator() = default;
+    constexpr PointerIterator() = default;
 
-    /**
-     * @brief Constructs a PointerIterator from an underlying iterator.
-     *
-     * @param iterator The underlying iterator.
+    /*!
+     * \brief Constructs a PointerIterator from an underlying iterator
+     * \param iterator The underlying iterator
      */
-    explicit PointerIterator(IteratorT iterator) : iter_(std::move(iterator)) {}
+    constexpr explicit PointerIterator(IteratorT iterator) noexcept(
+        std::is_nothrow_move_constructible_v<IteratorT>)
+        : iter_(std::move(iterator)) {}
 
-    /**
-     * @brief Dereferences the iterator to return a pointer to the element.
-     *
-     * @return A pointer to the element.
+    /*!
+     * \brief Dereferences the iterator to return a pointer to the element
+     * \return A pointer to the element
      */
-    auto operator*() const -> value_type { return &*iter_; }
+    constexpr auto operator*() const noexcept -> value_type { return &*iter_; }
 
-    /**
-     * @brief Pre-increment operator.
-     *
-     * @return Reference to the incremented iterator.
+    /*!
+     * \brief Pre-increment operator
+     * \return Reference to the incremented iterator
      */
-    auto operator++() -> PointerIterator& {
+    constexpr auto operator++() noexcept -> PointerIterator& {
         ++iter_;
         return *this;
     }
 
-    /**
-     * @brief Post-increment operator.
-     *
-     * @return A copy of the iterator before incrementing.
+    /*!
+     * \brief Post-increment operator
+     * \return A copy of the iterator before incrementing
      */
-    auto operator++(int) -> PointerIterator {
-        PointerIterator tmp = *this;
+    constexpr auto operator++(int) noexcept -> PointerIterator {
+        auto tmp = *this;
         ++(*this);
         return tmp;
     }
 
-    /**
-     * @brief Equality operator.
-     *
-     * @param other The other iterator to compare with.
-     * @return True if the iterators are equal, false otherwise.
+    /*!
+     * \brief Equality comparison operator
+     * \param other The other iterator to compare with
+     * \return True if the iterators are equal, false otherwise
      */
-    auto operator==(const PointerIterator& other) const -> bool = default;
-
-    /**
-     * @brief Inequality operator.
-     *
-     * @param other The other iterator to compare with.
-     * @return True if the iterators are not equal, false otherwise.
-     */
-    auto operator!=(const PointerIterator& other) const -> bool = default;
+    constexpr auto operator==(const PointerIterator& other) const noexcept
+        -> bool = default;
 };
 
-/**
- * @brief Creates a range of PointerIterator from two iterators.
- *
- * @tparam IteratorT The type of the underlying iterator.
- * @param begin The beginning of the range.
- * @param end The end of the range.
- * @return A pair of PointerIterator representing the range.
+/*!
+ * \brief Creates a range of PointerIterator from two iterators
+ * \tparam IteratorT The type of the underlying iterator
+ * \param begin The beginning of the range
+ * \param end The end of the range
+ * \return A pair of PointerIterator representing the range
  */
 template <typename IteratorT>
-auto makePointerRange(IteratorT begin, IteratorT end) {
+constexpr auto makePointerRange(IteratorT begin, IteratorT end) noexcept {
     return std::make_pair(PointerIterator<IteratorT>(begin),
                           PointerIterator<IteratorT>(end));
 }
 
-/**
- * @brief Processes a container by erasing elements pointed to by the iterators.
- *
- * @tparam ContainerT The type of the container.
- * @param container The container to process.
+/*!
+ * \brief Processes a container by erasing elements pointed to by the iterators
+ * \tparam ContainerT The type of the container
+ * \param container The container to process
  */
 template <typename ContainerT>
 void processContainer(ContainerT& container) {
+    if (container.size() <= 2)
+        return;
+
     auto beginIter = std::next(container.begin());
     auto endIter = std::prev(container.end());
 
     std::vector<std::optional<typename ContainerT::value_type*>> ptrs;
+    ptrs.reserve(std::distance(beginIter, endIter));
+
     auto ptrPair = makePointerRange(beginIter, endIter);
-#pragma unroll
     for (auto iter = ptrPair.first; iter != ptrPair.second; ++iter) {
         ptrs.push_back(*iter);
     }
 
-#pragma unroll
     for (auto& ptrOpt : ptrs) {
         if (ptrOpt) {
             auto ptr = *ptrOpt;
@@ -146,10 +130,9 @@ void processContainer(ContainerT& container) {
     }
 }
 
-/**
- * @brief An iterator that increments the underlying iterator early.
- *
- * @tparam I The type of the underlying iterator.
+/*!
+ * \brief An iterator that increments the underlying iterator early
+ * \tparam I The type of the underlying iterator
  */
 template <std::input_or_output_iterator I>
 class EarlyIncIterator {
@@ -160,88 +143,75 @@ public:
     using pointer = void;
     using reference = void;
 
-    EarlyIncIterator() = default;
+    constexpr EarlyIncIterator() = default;
 
-    /**
-     * @brief Constructs an EarlyIncIterator from an underlying iterator.
-     *
-     * @param iterator The underlying iterator.
+    /*!
+     * \brief Constructs an EarlyIncIterator from an underlying iterator
+     * \param iterator The underlying iterator
      */
-    explicit EarlyIncIterator(I iterator) : current_(iterator) {}
+    constexpr explicit EarlyIncIterator(I iterator) noexcept(
+        std::is_nothrow_move_constructible_v<I>)
+        : current_(std::move(iterator)) {}
 
-    /**
-     * @brief Pre-increment operator.
-     *
-     * @return Reference to the incremented iterator.
+    /*!
+     * \brief Pre-increment operator
+     * \return Reference to the incremented iterator
      */
-    auto operator++() -> EarlyIncIterator& {
+    constexpr auto operator++() noexcept -> EarlyIncIterator& {
         ++current_;
         return *this;
     }
 
-    /**
-     * @brief Post-increment operator.
-     *
-     * @return A copy of the iterator before incrementing.
+    /*!
+     * \brief Post-increment operator
+     * \return A copy of the iterator before incrementing
      */
-    auto operator++(int) -> EarlyIncIterator {
-        EarlyIncIterator tmp = *this;
+    constexpr auto operator++(int) noexcept -> EarlyIncIterator {
+        auto tmp = *this;
         ++current_;
         return tmp;
     }
 
-    /**
-     * @brief Equality operator.
-     *
-     * @param iter1 The first iterator to compare.
-     * @param iter2 The second iterator to compare.
-     * @return True if the iterators are equal, false otherwise.
+    /*!
+     * \brief Equality comparison operator
+     * \param iter1 The first iterator to compare
+     * \param iter2 The second iterator to compare
+     * \return True if the iterators are equal, false otherwise
      */
-    friend auto operator==(const EarlyIncIterator& iter1,
-                           const EarlyIncIterator& iter2) -> bool {
+    friend constexpr auto operator==(const EarlyIncIterator& iter1,
+                                     const EarlyIncIterator& iter2) noexcept
+        -> bool {
         return iter1.current_ == iter2.current_;
     }
 
-    /**
-     * @brief Inequality operator.
-     *
-     * @param iter1 The first iterator to compare.
-     * @param iter2 The second iterator to compare.
-     * @return True if the iterators are not equal, false otherwise.
+    /*!
+     * \brief Dereferences the iterator
+     * \return The value pointed to by the underlying iterator
      */
-    friend auto operator!=(const EarlyIncIterator& iter1,
-                           const EarlyIncIterator& iter2) -> bool {
-        return !(iter1 == iter2);
+    constexpr auto operator*() const noexcept(noexcept(*std::declval<I>())) {
+        return *current_;
     }
 
-    /**
-     * @brief Dereferences the iterator.
-     *
-     * @return The value pointed to by the underlying iterator.
-     */
-    auto operator*() const { return *current_; }
-
 private:
-    I current_{};  ///< The underlying iterator.
+    I current_{};
 };
 
-/**
- * @brief Creates an EarlyIncIterator from an underlying iterator.
- *
- * @tparam I The type of the underlying iterator.
- * @param iterator The underlying iterator.
- * @return An EarlyIncIterator.
+/*!
+ * \brief Creates an EarlyIncIterator from an underlying iterator
+ * \tparam I The type of the underlying iterator
+ * \param iterator The underlying iterator
+ * \return An EarlyIncIterator
  */
 template <std::input_or_output_iterator I>
-auto makeEarlyIncIterator(I iterator) -> EarlyIncIterator<I> {
-    return EarlyIncIterator<I>(iterator);
+constexpr auto makeEarlyIncIterator(I iterator) noexcept
+    -> EarlyIncIterator<I> {
+    return EarlyIncIterator<I>(std::move(iterator));
 }
 
-/**
- * @brief An iterator that applies a transformation function to the elements.
- *
- * @tparam IteratorT The type of the underlying iterator.
- * @tparam FuncT The type of the transformation function.
+/*!
+ * \brief An iterator that applies a transformation function to the elements
+ * \tparam IteratorT The type of the underlying iterator
+ * \tparam FuncT The type of the transformation function
  */
 template <typename IteratorT, typename FuncT>
 class TransformIterator {
@@ -256,99 +226,82 @@ public:
     using reference = value_type;
 
 private:
-    IteratorT iter_;  ///< The underlying iterator.
-    FuncT func_;      ///< The transformation function.
+    IteratorT iter_;
+    FuncT func_;
 
 public:
-    TransformIterator() : iter_(), func_() {}
+    constexpr TransformIterator() = default;
 
-    /**
-     * @brief Constructs a TransformIterator from an underlying iterator and a
-     * transformation function.
-     *
-     * @param iterator The underlying iterator.
-     * @param function The transformation function.
+    /*!
+     * \brief Constructs a TransformIterator from an underlying iterator and a
+     * transformation function
+     * \param iterator The underlying iterator
+     * \param function The transformation function
      */
-    TransformIterator(IteratorT iterator, FuncT function)
-        : iter_(iterator), func_(function) {}
+    constexpr TransformIterator(IteratorT iterator, FuncT function) noexcept(
+        std::is_nothrow_move_constructible_v<IteratorT> &&
+        std::is_nothrow_move_constructible_v<FuncT>)
+        : iter_(std::move(iterator)), func_(std::move(function)) {}
 
-    /**
-     * @brief Dereferences the iterator and applies the transformation function.
-     *
-     * @return The transformed value.
+    /*!
+     * \brief Dereferences the iterator and applies the transformation function
+     * \return The transformed value
      */
-    auto operator*() const -> reference { return func_(*iter_); }
+    constexpr auto operator*() const noexcept(noexcept(func_(*iter_)))
+        -> reference {
+        return func_(*iter_);
+    }
 
-    /**
-     * @brief Returns a pointer to the transformed value.
-     *
-     * @return A pointer to the transformed value.
+    /*!
+     * \brief Pre-increment operator
+     * \return Reference to the incremented iterator
      */
-    auto operator->() const -> pointer { return &(operator*()); }
-
-    /**
-     * @brief Pre-increment operator.
-     *
-     * @return Reference to the incremented iterator.
-     */
-    auto operator++() -> TransformIterator& {
+    constexpr auto operator++() noexcept -> TransformIterator& {
         ++iter_;
         return *this;
     }
 
-    /**
-     * @brief Post-increment operator.
-     *
-     * @return A copy of the iterator before incrementing.
+    /*!
+     * \brief Post-increment operator
+     * \return A copy of the iterator before incrementing
      */
-    auto operator++(int) -> TransformIterator {
-        TransformIterator tmp = *this;
+    constexpr auto operator++(int) noexcept -> TransformIterator {
+        auto tmp = *this;
         ++iter_;
         return tmp;
     }
 
-    /**
-     * @brief Equality operator.
-     *
-     * @param other The other iterator to compare with.
-     * @return True if the iterators are equal, false otherwise.
+    /*!
+     * \brief Equality comparison operator
+     * \param other The other iterator to compare with
+     * \return True if the iterators are equal, false otherwise
      */
-    auto operator==(const TransformIterator& other) const -> bool {
+    constexpr auto operator==(const TransformIterator& other) const noexcept
+        -> bool {
         return iter_ == other.iter_;
-    }
-
-    /**
-     * @brief Inequality operator.
-     *
-     * @param other The other iterator to compare with.
-     * @return True if the iterators are not equal, false otherwise.
-     */
-    auto operator!=(const TransformIterator& other) const -> bool {
-        return !(*this == other);
     }
 };
 
-/**
- * @brief Creates a TransformIterator from an underlying iterator and a
- * transformation function.
- *
- * @tparam IteratorT The type of the underlying iterator.
- * @tparam FuncT The type of the transformation function.
- * @param iterator The underlying iterator.
- * @param function The transformation function.
- * @return A TransformIterator.
+/*!
+ * \brief Creates a TransformIterator from an underlying iterator and a
+ * transformation function
+ * \tparam IteratorT The type of the underlying iterator
+ * \tparam FuncT The type of the transformation function
+ * \param iterator The underlying iterator
+ * \param function The transformation function
+ * \return A TransformIterator
  */
 template <typename IteratorT, typename FuncT>
-auto makeTransformIterator(IteratorT iterator, FuncT function)
+constexpr auto makeTransformIterator(IteratorT iterator, FuncT function)
     -> TransformIterator<IteratorT, FuncT> {
-    return TransformIterator<IteratorT, FuncT>(iterator, function);
+    return TransformIterator<IteratorT, FuncT>(std::move(iterator),
+                                               std::move(function));
 }
 
-/**
- * @brief An iterator that filters elements based on a predicate.
- *
- * @tparam IteratorT The type of the underlying iterator.
- * @tparam PredicateT The type of the predicate.
+/*!
+ * \brief An iterator that filters elements based on a predicate
+ * \tparam IteratorT The type of the underlying iterator
+ * \tparam PredicateT The type of the predicate
  */
 template <typename IteratorT, typename PredicateT>
 class FilterIterator {
@@ -365,90 +318,83 @@ private:
     IteratorT end_;
     PredicateT pred_;
 
-    /**
-     * @brief Advances the iterator to the next element that satisfies the
-     * predicate.
-     */
-    void satisfyPredicate() {
-#pragma unroll
+    constexpr void satisfyPredicate() {
         while (iter_ != end_ && !pred_(*iter_)) {
             ++iter_;
         }
     }
 
 public:
-    FilterIterator() : iter_(), end_(), pred_() {}
-    FilterIterator(IteratorT iter, IteratorT end, PredicateT pred)
-        : iter_(iter), end_(end), pred_(pred) {
+    constexpr FilterIterator() = default;
+
+    /*!
+     * \brief Constructs a FilterIterator
+     * \param iter The underlying iterator
+     * \param end The end of the range
+     * \param pred The predicate
+     */
+    constexpr FilterIterator(IteratorT iter, IteratorT end, PredicateT pred)
+        : iter_(std::move(iter)), end_(std::move(end)), pred_(std::move(pred)) {
         satisfyPredicate();
     }
 
-    auto operator*() const -> reference { return *iter_; }
-    auto operator->() const -> pointer { return &(operator*()); }
+    constexpr auto operator*() const noexcept -> reference { return *iter_; }
 
-    /**
-     * @brief Pre-increment operator.
-     *
-     * @return Reference to the incremented iterator.
+    constexpr auto operator->() const noexcept -> pointer {
+        return std::addressof(*iter_);
+    }
+
+    /*!
+     * \brief Pre-increment operator
+     * \return Reference to the incremented iterator
      */
-    auto operator++() -> FilterIterator& {
+    constexpr auto operator++() -> FilterIterator& {
         ++iter_;
         satisfyPredicate();
         return *this;
     }
 
-    /**
-     * @brief Post-increment operator.
-     *
-     * @return A copy of the iterator before incrementing.
+    /*!
+     * \brief Post-increment operator
+     * \return A copy of the iterator before incrementing
      */
-    auto operator++(int) -> FilterIterator {
-        FilterIterator tmp = *this;
+    constexpr auto operator++(int) -> FilterIterator {
+        auto tmp = *this;
         ++*this;
         return tmp;
     }
 
-    /**
-     * @brief Equality operator.
-     *
-     * @param other The other iterator to compare with.
-     * @return True if the iterators are equal, false otherwise.
+    /*!
+     * \brief Equality comparison operator
+     * \param other The other iterator to compare with
+     * \return True if the iterators are equal, false otherwise
      */
-    auto operator==(const FilterIterator& other) const -> bool {
+    constexpr auto operator==(const FilterIterator& other) const noexcept
+        -> bool {
         return iter_ == other.iter_;
-    }
-
-    /**
-     * @brief Inequality operator.
-     *
-     * @param other The other iterator to compare with.
-     * @return True if the iterators are not equal, false otherwise.
-     */
-    auto operator!=(const FilterIterator& other) const -> bool {
-        return !(*this == other);
     }
 };
 
-/**
- * @brief Creates a FilterIterator from an underlying iterator and a predicate.
- *
- * @tparam IteratorT The type of the underlying iterator.
- * @tparam PredicateT The type of the predicate.
- * @param iter The underlying iterator.
- * @param end The end of the range.
- * @param pred The predicate.
- * @return A FilterIterator.
+/*!
+ * \brief Creates a FilterIterator from an underlying iterator and a predicate
+ * \tparam IteratorT The type of the underlying iterator
+ * \tparam PredicateT The type of the predicate
+ * \param iter The underlying iterator
+ * \param end The end of the range
+ * \param pred The predicate
+ * \return A FilterIterator
  */
 template <typename IteratorT, typename PredicateT>
-auto makeFilterIterator(IteratorT iter, IteratorT end, PredicateT pred)
+constexpr auto makeFilterIterator(IteratorT iter, IteratorT end,
+                                  PredicateT pred)
     -> FilterIterator<IteratorT, PredicateT> {
-    return FilterIterator<IteratorT, PredicateT>(iter, end, pred);
+    return FilterIterator<IteratorT, PredicateT>(
+        std::move(iter), std::move(end), std::move(pred));
 }
 
-/**
- * @brief An iterator that reverses the direction of another iterator.
- *
- * @tparam IteratorT The type of the underlying iterator.
+/*!
+ * \brief An iterator that reverses the direction of another iterator
+ * \tparam IteratorT The type of the underlying iterator
  */
 template <typename IteratorT>
 class ReverseIterator {
@@ -465,48 +411,62 @@ private:
     IteratorT current_;
 
 public:
-    ReverseIterator() : current_() {}
-    explicit ReverseIterator(IteratorT iterator) : current_(iterator) {}
+    constexpr ReverseIterator() = default;
 
-    auto base() const -> IteratorT { return current_; }
-    auto operator*() const -> reference {
-        IteratorT tmp = current_;
+    /*!
+     * \brief Constructs a ReverseIterator from an underlying iterator
+     * \param iterator The underlying iterator
+     */
+    constexpr explicit ReverseIterator(IteratorT iterator) noexcept(
+        std::is_nothrow_move_constructible_v<IteratorT>)
+        : current_(std::move(iterator)) {}
+
+    /*!
+     * \brief Gets the base iterator
+     * \return The underlying iterator
+     */
+    constexpr auto base() const noexcept -> IteratorT { return current_; }
+
+    constexpr auto operator*() const noexcept -> reference {
+        auto tmp = current_;
         return *--tmp;
     }
-    auto operator->() const -> pointer { return &(operator*()); }
-    auto operator++() -> ReverseIterator& {
+
+    constexpr auto operator->() const noexcept -> pointer {
+        return std::addressof(operator*());
+    }
+
+    constexpr auto operator++() noexcept -> ReverseIterator& {
         --current_;
         return *this;
     }
-    auto operator++(int) -> ReverseIterator {
-        ReverseIterator tmp = *this;
+
+    constexpr auto operator++(int) noexcept -> ReverseIterator {
+        auto tmp = *this;
         --current_;
         return tmp;
     }
-    auto operator--() -> ReverseIterator& {
+
+    constexpr auto operator--() noexcept -> ReverseIterator& {
         ++current_;
         return *this;
     }
-    auto operator--(int) -> ReverseIterator {
-        ReverseIterator tmp = *this;
+
+    constexpr auto operator--(int) noexcept -> ReverseIterator {
+        auto tmp = *this;
         ++current_;
         return tmp;
     }
 
-    auto operator==(const ReverseIterator& iter) const -> bool {
+    constexpr auto operator==(const ReverseIterator& iter) const noexcept
+        -> bool {
         return current_ == iter.current_;
-    }
-    auto operator!=(const ReverseIterator& iter) const -> bool {
-        return !(*this == iter);
     }
 };
 
-/**
- * @brief Creates a ReverseIterator from an underlying iterator.
- *
- * @tparam IteratorT The type of the underlying iterator.
- * @param iterator The underlying iterator.
- * @return A ReverseIterator.
+/*!
+ * \brief An iterator that zips multiple iterators together
+ * \tparam Iterators The types of the underlying iterators
  */
 template <typename... Iterators>
 class ZipIterator {
@@ -522,46 +482,74 @@ private:
     std::tuple<Iterators...> iterators_;
 
     template <std::size_t... Indices>
-    auto dereference(std::index_sequence<Indices...>) const -> value_type {
+    constexpr auto dereference(std::index_sequence<Indices...>) const noexcept
+        -> value_type {
         return std::make_tuple(*std::get<Indices>(iterators_)...);
     }
 
     template <std::size_t... Indices>
-    void increment(std::index_sequence<Indices...>) {
+    constexpr void increment(std::index_sequence<Indices...>) noexcept {
         (++std::get<Indices>(iterators_), ...);
     }
 
 public:
-    ZipIterator() = default;
-    explicit ZipIterator(Iterators... its) : iterators_(its...) {}
+    constexpr ZipIterator() = default;
 
-    auto operator*() const -> value_type {
+    /*!
+     * \brief Constructs a ZipIterator from multiple iterators
+     * \param its The underlying iterators
+     */
+    constexpr explicit ZipIterator(Iterators... its) noexcept(
+        (std::is_nothrow_move_constructible_v<Iterators> && ...))
+        : iterators_(std::move(its)...) {}
+
+    /*!
+     * \brief Dereferences all iterators and returns a tuple of their values
+     * \return A tuple containing the values from all iterators
+     */
+    constexpr auto operator*() const noexcept -> value_type {
         return dereference(std::index_sequence_for<Iterators...>{});
     }
 
-    auto operator++() -> ZipIterator& {
+    /*!
+     * \brief Pre-increment operator
+     * \return Reference to the incremented iterator
+     */
+    constexpr auto operator++() noexcept -> ZipIterator& {
         increment(std::index_sequence_for<Iterators...>{});
         return *this;
     }
 
-    auto operator++(int) -> ZipIterator {
-        ZipIterator tmp = *this;
+    /*!
+     * \brief Post-increment operator
+     * \return A copy of the iterator before incrementing
+     */
+    constexpr auto operator++(int) noexcept -> ZipIterator {
+        auto tmp = *this;
         ++(*this);
         return tmp;
     }
 
-    auto operator==(const ZipIterator& other) const -> bool {
+    /*!
+     * \brief Equality comparison operator
+     * \param other The other iterator to compare with
+     * \return True if the iterators are equal, false otherwise
+     */
+    constexpr auto operator==(const ZipIterator& other) const noexcept -> bool {
         return iterators_ == other.iterators_;
-    }
-
-    auto operator!=(const ZipIterator& other) const -> bool {
-        return !(*this == other);
     }
 };
 
+/*!
+ * \brief Creates a ZipIterator from multiple iterators
+ * \tparam Iterators The types of the underlying iterators
+ * \param its The underlying iterators
+ * \return A ZipIterator
+ */
 template <typename... Iterators>
-auto makeZipIterator(Iterators... its) -> ZipIterator<Iterators...> {
-    return ZipIterator<Iterators...>(its...);
+constexpr auto makeZipIterator(Iterators... its) noexcept
+    -> ZipIterator<Iterators...> {
+    return ZipIterator<Iterators...>(std::move(its)...);
 }
 
 #endif  // ATOM_EXPERIMENTAL_ITERATOR_HPP

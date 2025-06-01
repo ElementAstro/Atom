@@ -411,7 +411,7 @@ protected:
                 combinedTypes += argType;
             }
             info_.setHash(
-                std::to_string(atom::algorithm::computeHash(combinedTypes)));
+                std::to_string(algorithm::computeHash(combinedTypes)));
         }
     }
 

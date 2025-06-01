@@ -18,8 +18,6 @@ Description: Variable Manager
 #include <any>
 #include <span>
 
-#include "config.hpp"
-
 #if ENABLE_FASTHASH
 #include "emhash/hash_table8.hpp"
 #endif
@@ -30,8 +28,6 @@ Description: Variable Manager
 #include "atom/type/trackable.hpp"
 
 #include "atom/macro.hpp"
-
-using namespace atom::meta;
 
 class VariableTypeError : public atom::error::Exception {
 public:

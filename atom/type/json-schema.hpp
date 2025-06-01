@@ -45,7 +45,7 @@ struct ValidationError {
     ValidationError() = default;
 
     ValidationError(std::string msg, std::string p = "", std::string sp = "",
-                    std::string is = "", std::string ec = "")
+                    std::string is = "", std::string ec = "") noexcept
         : message(std::move(msg)),
           path(std::move(p)),
           schema_path(std::move(sp)),
@@ -101,13 +101,13 @@ class SchemaManager;
  */
 class JsonValidator {
 public:
-    using Format_validator = std::function<bool(const std::string&)>;
+    using FormatValidator = std::function<bool(std::string_view)>;
 
     /**
      * @brief Constructor
      * @param options Validation options
      */
-    explicit JsonValidator(ValidationOptions options = {})
+    explicit JsonValidator(ValidationOptions options = {}) noexcept
         : options_(std::move(options)) {
         initializeFormatValidators();
     }
@@ -118,10 +118,10 @@ public:
      * @param id Optional schema ID
      * @throws SchemaValidationException if schema is invalid
      */
-    void setRootSchema(const json& schema_json, const std::string& id = "") {
+    void setRootSchema(const json& schema_json, std::string_view id = "") {
         std::lock_guard<std::mutex> lock(mutex_);
         root_schema_ = schema_json;
-        schema_id_ = id.empty() ? extractId(schema_json) : id;
+        schema_id_ = id.empty() ? extractId(schema_json) : std::string(id);
 
         resetState();
 
@@ -194,7 +194,7 @@ public:
      * @param validator Function that validates strings against this format
      */
     void registerFormatValidator(std::string format_name,
-                                 Format_validator validator) {
+                                 FormatValidator validator) {
         std::lock_guard<std::mutex> lock(mutex_);
         format_validators_[std::move(format_name)] = std::move(validator);
     }
@@ -203,7 +203,7 @@ public:
      * @brief Links this validator with a schema manager for $ref resolution
      * @param manager Pointer to schema manager
      */
-    void setSchemaManager(std::shared_ptr<SchemaManager> manager) {
+    void setSchemaManager(std::shared_ptr<SchemaManager> manager) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         schema_manager_ = std::move(manager);
     }
@@ -228,7 +228,7 @@ public:
      * @brief Updates validation options
      * @param options New validation options
      */
-    void setOptions(ValidationOptions options) {
+    void setOptions(ValidationOptions options) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         options_ = std::move(options);
     }
@@ -238,12 +238,12 @@ private:
     std::string schema_id_;
     std::vector<ValidationError> errors_;
     ValidationOptions options_;
-    std::unordered_map<std::string, Format_validator> format_validators_;
+    std::unordered_map<std::string, FormatValidator> format_validators_;
     std::weak_ptr<SchemaManager> schema_manager_;
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
 
     std::unordered_map<std::string, json> uri_to_schema_map_;
-    std::unordered_map<std::string, std::regex> regex_cache_;
+    mutable std::unordered_map<std::string, std::regex> regex_cache_;
 
     std::atomic<size_t> current_recursion_depth_{0};
     std::atomic<size_t> current_ref_depth_{0};
@@ -251,7 +251,7 @@ private:
     /**
      * @brief Resets the validator state
      */
-    void resetState() {
+    void resetState() noexcept {
         errors_.clear();
         uri_to_schema_map_.clear();
         regex_cache_.clear();
@@ -260,7 +260,7 @@ private:
     /**
      * @brief Resets only the validation state (errors and counters)
      */
-    void resetValidationState() {
+    void resetValidationState() noexcept {
         errors_.clear();
         current_recursion_depth_ = 0;
         current_ref_depth_ = 0;
@@ -273,10 +273,12 @@ private:
      */
     [[nodiscard]] std::string extractId(const json& schema) const {
         if (schema.is_object()) {
-            if (schema.contains("$id"))
-                return schema["$id"].get<std::string>();
-            if (schema.contains("id"))
-                return schema["id"].get<std::string>();
+            if (auto it = schema.find("$id");
+                it != schema.end() && it->is_string())
+                return it->get<std::string>();
+            if (auto it = schema.find("id");
+                it != schema.end() && it->is_string())
+                return it->get<std::string>();
         }
         return "";
     }
@@ -285,36 +287,39 @@ private:
      * @brief Detect schema version from schema
      * @param schema Schema to analyze
      */
-    void detectSchemaVersion(const json& schema) {
-        if (schema.is_object()) {
-            if (schema.contains("$schema")) {
-                const std::string& schema_uri =
-                    schema["$schema"].get<std::string>();
+    void detectSchemaVersion(const json& schema) noexcept {
+        if (!schema.is_object()) {
+            options_.schema_version = SchemaVersion::DRAFT2020_12;
+            return;
+        }
 
-                if (schema_uri.find("draft/2020-12") != std::string::npos) {
-                    options_.schema_version = SchemaVersion::DRAFT2020_12;
-                } else if (schema_uri.find("draft/2019-09") !=
-                           std::string::npos) {
-                    options_.schema_version = SchemaVersion::DRAFT2019_09;
-                } else if (schema_uri.find("draft-07") != std::string::npos) {
-                    options_.schema_version = SchemaVersion::DRAFT7;
-                } else if (schema_uri.find("draft-06") != std::string::npos) {
-                    options_.schema_version = SchemaVersion::DRAFT6;
-                } else if (schema_uri.find("draft-04") != std::string::npos) {
-                    options_.schema_version = SchemaVersion::DRAFT4;
-                } else {
-                    options_.schema_version = SchemaVersion::DRAFT2020_12;
-                }
-                return;
-            }
+        if (auto it = schema.find("$schema");
+            it != schema.end() && it->is_string()) {
+            std::string_view schema_uri = it->get_ref<const std::string&>();
 
-            if (schema.contains("$id")) {
+            if (schema_uri.find("draft/2020-12") != std::string_view::npos) {
+                options_.schema_version = SchemaVersion::DRAFT2020_12;
+            } else if (schema_uri.find("draft/2019-09") !=
+                       std::string_view::npos) {
+                options_.schema_version = SchemaVersion::DRAFT2019_09;
+            } else if (schema_uri.find("draft-07") != std::string_view::npos) {
                 options_.schema_version = SchemaVersion::DRAFT7;
-            } else if (schema.contains("id")) {
+            } else if (schema_uri.find("draft-06") != std::string_view::npos) {
+                options_.schema_version = SchemaVersion::DRAFT6;
+            } else if (schema_uri.find("draft-04") != std::string_view::npos) {
                 options_.schema_version = SchemaVersion::DRAFT4;
             } else {
                 options_.schema_version = SchemaVersion::DRAFT2020_12;
             }
+            return;
+        }
+
+        if (schema.contains("$id")) {
+            options_.schema_version = SchemaVersion::DRAFT7;
+        } else if (schema.contains("id")) {
+            options_.schema_version = SchemaVersion::DRAFT4;
+        } else {
+            options_.schema_version = SchemaVersion::DRAFT2020_12;
         }
     }
 
@@ -337,15 +342,16 @@ private:
         if (schema.is_object()) {
             std::string id = extractId(schema);
             if (!id.empty()) {
-                uri_to_schema_map_[id] = schema;
+                uri_to_schema_map_[std::move(id)] = schema;
             }
 
-            if (schema.contains("pattern")) {
+            if (auto it = schema.find("pattern");
+                it != schema.end() && it->is_string()) {
+                const std::string& pattern = it->get_ref<const std::string&>();
                 try {
-                    const std::string& pattern =
-                        schema["pattern"].get<std::string>();
                     regex_cache_[pattern] = std::regex(pattern);
                 } catch (const std::exception&) {
+                    // Ignore invalid patterns during compilation
                 }
             }
 
@@ -388,8 +394,8 @@ private:
      * @throws SchemaValidationException when validation cannot continue
      */
     void validateSchema(const json& instance, const json& schema,
-                        const std::string& instance_path,
-                        const std::string& schema_path) {
+                        std::string_view instance_path,
+                        std::string_view schema_path) {
         if (++current_recursion_depth_ > options_.max_recursion_depth) {
             throw SchemaValidationException("Maximum recursion depth exceeded");
         }
@@ -442,8 +448,8 @@ private:
      * @brief Validates a reference ($ref keyword)
      */
     void validateReference(const json& instance, const json& schema,
-                           const std::string& instance_path,
-                           const std::string& schema_path) {
+                           std::string_view instance_path,
+                           std::string_view schema_path) {
         if (++current_ref_depth_ > options_.max_reference_depth) {
             addError("Maximum reference depth exceeded", instance_path,
                      schema_path);
@@ -451,29 +457,33 @@ private:
             return;
         }
 
-        const std::string& ref = schema["$ref"].get<std::string>();
+        const std::string& ref = schema["$ref"].get_ref<const std::string&>();
 
         if (ref.starts_with("#")) {
             json referenced_schema =
                 resolvePointer(root_schema_, ref.substr(1));
             if (!referenced_schema.is_null()) {
+                std::string new_schema_path =
+                    std::string(schema_path) + "/" + ref;
                 validateSchema(instance, referenced_schema, instance_path,
-                               schema_path + "/" + ref);
+                               new_schema_path);
             } else {
+                std::string error_path = std::string(schema_path) + "/$ref";
                 addError("Invalid reference: " + ref, instance_path,
-                         schema_path + "/$ref");
+                         error_path);
             }
         } else {
             auto manager = schema_manager_.lock();
+            std::string error_path = std::string(schema_path) + "/$ref";
             if (manager) {
                 addError("External references not yet implemented: " + ref,
-                         instance_path, schema_path + "/$ref");
+                         instance_path, error_path);
             } else {
                 addError(
                     "Cannot resolve external reference without schema "
                     "manager: " +
                         ref,
-                    instance_path, schema_path + "/$ref");
+                    instance_path, error_path);
             }
         }
 
@@ -483,12 +493,12 @@ private:
     /**
      * @brief Helper to add an error with error code
      */
-    void addError(const std::string& message, const std::string& instance_path,
-                  const std::string& schema_path,
-                  const std::string& error_code = "") {
-        std::string snippet;
-        errors_.emplace_back(message, instance_path, schema_path, snippet,
-                             error_code);
+    void addError(std::string_view message, std::string_view instance_path,
+                  std::string_view schema_path,
+                  std::string_view error_code = "") {
+        errors_.emplace_back(std::string(message), std::string(instance_path),
+                             std::string(schema_path), "",
+                             std::string(error_code));
     }
 
     /**
@@ -497,12 +507,13 @@ private:
      * @param pointer JSON pointer (without the leading #)
      * @return Referenced JSON or null if not found
      */
-    json resolvePointer(const json& doc, const std::string& pointer) {
+    json resolvePointer(const json& doc,
+                        std::string_view pointer) const noexcept {
         if (pointer.empty() || pointer == "/")
             return doc;
 
         try {
-            return doc.at(json::json_pointer(pointer));
+            return doc.at(json::json_pointer(std::string(pointer)));
         } catch (const std::exception&) {
             return nullptr;
         }
@@ -512,16 +523,16 @@ private:
      * @brief Validates type keyword
      */
     void validateType(const json& instance, const json& schema,
-                      const std::string& instance_path,
-                      const std::string& schema_path) {
-        if (!schema.contains("type"))
+                      std::string_view instance_path,
+                      std::string_view schema_path) {
+        auto it = schema.find("type");
+        if (it == schema.end())
             return;
 
-        const auto& type_spec = schema["type"];
-
-        if (!validateTypeValue(instance, type_spec)) {
-            addError("Type mismatch, expected: " + typeToString(type_spec),
-                     instance_path, schema_path + "/type", "type");
+        if (!validateTypeValue(instance, *it)) {
+            std::string error_path = std::string(schema_path) + "/type";
+            addError("Type mismatch, expected: " + typeToString(*it),
+                     instance_path, error_path, "type");
         }
     }
 
@@ -531,12 +542,14 @@ private:
     [[nodiscard]] bool validateTypeValue(const json& instance,
                                          const json& type_spec) const noexcept {
         if (type_spec.is_string()) {
-            return checkTypeString(instance, type_spec.get<std::string>());
+            return checkTypeString(instance,
+                                   type_spec.get_ref<const std::string&>());
         }
         if (type_spec.is_array()) {
             for (const auto& type : type_spec) {
                 if (type.is_string() &&
-                    checkTypeString(instance, type.get<std::string>())) {
+                    checkTypeString(instance,
+                                    type.get_ref<const std::string&>())) {
                     return true;
                 }
             }
@@ -593,221 +606,265 @@ private:
      * @brief Validates object-specific keywords
      */
     void validateObject(const json& instance, const json& schema,
-                        const std::string& instance_path,
-                        const std::string& schema_path) {
-        if (schema.contains("required")) {
-            const auto& required = schema["required"];
-            for (const auto& prop_name : required) {
+                        std::string_view instance_path,
+                        std::string_view schema_path) {
+        if (auto it = schema.find("required");
+            it != schema.end() && it->is_array()) {
+            for (const auto& prop_name : *it) {
                 if (!instance.contains(prop_name)) {
+                    std::string error_path =
+                        std::string(schema_path) + "/required";
                     addError("Missing required property: " +
                                  prop_name.get<std::string>(),
-                             instance_path, schema_path + "/required",
-                             "required");
+                             instance_path, error_path, "required");
                 }
             }
         }
 
-        if (schema.contains("properties")) {
-            const auto& properties = schema["properties"];
-            for (const auto& [prop_name, prop_schema] : properties.items()) {
+        if (auto it = schema.find("properties");
+            it != schema.end() && it->is_object()) {
+            for (const auto& [prop_name, prop_schema] : it->items()) {
                 if (instance.contains(prop_name)) {
                     std::string prop_path =
-                        instance_path.empty() ? prop_name
-                                              : instance_path + "/" + prop_name;
+                        instance_path.empty()
+                            ? prop_name
+                            : std::string(instance_path) + "/" + prop_name;
+                    std::string new_schema_path =
+                        std::string(schema_path) + "/properties/" + prop_name;
                     validateSchema(instance[prop_name], prop_schema, prop_path,
-                                   schema_path + "/properties/" + prop_name);
+                                   new_schema_path);
                 }
             }
         }
 
-        if (schema.contains("patternProperties")) {
-            const auto& pattern_props = schema["patternProperties"];
+        validatePatternProperties(instance, schema, instance_path, schema_path);
+        validateAdditionalProperties(instance, schema, instance_path,
+                                     schema_path);
+        validatePropertyNames(instance, schema, instance_path, schema_path);
+        validatePropertyCounts(instance, schema, instance_path, schema_path);
+        validateDependencies(instance, schema, instance_path, schema_path);
+    }
 
-            for (const auto& [pattern_str, pattern_schema] :
-                 pattern_props.items()) {
-                std::regex pattern;
+    /**
+     * @brief Validates pattern properties
+     */
+    void validatePatternProperties(const json& instance, const json& schema,
+                                   std::string_view instance_path,
+                                   std::string_view schema_path) {
+        auto it = schema.find("patternProperties");
+        if (it == schema.end() || !it->is_object())
+            return;
 
-                auto it = regex_cache_.find(pattern_str);
-                if (it != regex_cache_.end()) {
-                    pattern = it->second;
-                } else {
-                    try {
-                        pattern = std::regex(pattern_str);
-                        regex_cache_[pattern_str] = pattern;
-                    } catch (const std::regex_error&) {
-                        addError(
-                            "Invalid regex pattern: " + pattern_str,
-                            instance_path,
-                            schema_path + "/patternProperties/" + pattern_str,
-                            "patternProperties");
-                        continue;
-                    }
-                }
-
-                for (const auto& [prop_name, prop_value] : instance.items()) {
-                    if (std::regex_search(prop_name, pattern)) {
-                        std::string prop_path =
-                            instance_path.empty()
-                                ? prop_name
-                                : instance_path + "/" + prop_name;
-                        validateSchema(
-                            prop_value, pattern_schema, prop_path,
-                            schema_path + "/patternProperties/" + pattern_str);
-                    }
-                }
-            }
-        }
-
-        if (schema.contains("additionalProperties")) {
-            const auto& additional_props = schema["additionalProperties"];
+        for (const auto& [pattern_str, pattern_schema] : it->items()) {
+            std::regex pattern =
+                getOrCompileRegex(pattern_str, instance_path, schema_path);
 
             for (const auto& [prop_name, prop_value] : instance.items()) {
-                bool validated = false;
-
-                if (schema.contains("properties") &&
-                    schema["properties"].contains(prop_name)) {
-                    validated = true;
+                if (std::regex_search(prop_name, pattern)) {
+                    std::string prop_path =
+                        instance_path.empty()
+                            ? prop_name
+                            : std::string(instance_path) + "/" + prop_name;
+                    std::string new_schema_path = std::string(schema_path) +
+                                                  "/patternProperties/" +
+                                                  pattern_str;
+                    validateSchema(prop_value, pattern_schema, prop_path,
+                                   new_schema_path);
                 }
+            }
+        }
+    }
 
-                if (!validated && schema.contains("patternProperties")) {
-                    for (const auto& [pattern_str, _] :
-                         schema["patternProperties"].items()) {
-                        auto it = regex_cache_.find(pattern_str);
-                        std::regex pattern;
+    /**
+     * @brief Gets or compiles a regex pattern
+     */
+    std::regex getOrCompileRegex(const std::string& pattern_str,
+                                 std::string_view instance_path,
+                                 std::string_view schema_path) {
+        auto it = regex_cache_.find(pattern_str);
+        if (it != regex_cache_.end()) {
+            return it->second;
+        }
 
-                        if (it != regex_cache_.end()) {
-                            pattern = it->second;
-                        } else {
-                            try {
-                                pattern = std::regex(pattern_str);
-                                regex_cache_[pattern_str] = pattern;
-                            } catch (const std::regex_error&) {
-                                continue;
+        try {
+            std::regex pattern(pattern_str);
+            regex_cache_[pattern_str] = pattern;
+            return pattern;
+        } catch (const std::regex_error&) {
+            std::string error_path =
+                std::string(schema_path) + "/patternProperties/" + pattern_str;
+            addError("Invalid regex pattern: " + pattern_str, instance_path,
+                     error_path, "patternProperties");
+            return std::regex(".*");  // Fallback regex that matches everything
+        }
+    }
+
+    /**
+     * @brief Validates additional properties
+     */
+    void validateAdditionalProperties(const json& instance, const json& schema,
+                                      std::string_view instance_path,
+                                      std::string_view schema_path) {
+        auto it = schema.find("additionalProperties");
+        if (it == schema.end())
+            return;
+
+        for (const auto& [prop_name, prop_value] : instance.items()) {
+            bool validated = false;
+
+            // Check if validated by properties
+            if (auto props_it = schema.find("properties");
+                props_it != schema.end() && props_it->contains(prop_name)) {
+                validated = true;
+            }
+
+            // Check if validated by pattern properties
+            if (!validated) {
+                if (auto pattern_it = schema.find("patternProperties");
+                    pattern_it != schema.end() && pattern_it->is_object()) {
+                    for (const auto& [pattern_str, _] : pattern_it->items()) {
+                        try {
+                            std::regex pattern = getOrCompileRegex(
+                                pattern_str, instance_path, schema_path);
+                            if (std::regex_search(prop_name, pattern)) {
+                                validated = true;
+                                break;
                             }
-                        }
-
-                        if (std::regex_search(prop_name, pattern)) {
-                            validated = true;
-                            break;
+                        } catch (const std::regex_error&) {
+                            continue;
                         }
                     }
                 }
+            }
 
-                if (!validated) {
-                    if (additional_props.is_boolean() &&
-                        additional_props == false) {
-                        addError(
-                            "Additional property not allowed: " + prop_name,
-                            instance_path,
-                            schema_path + "/additionalProperties",
-                            "additionalProperties");
-                    } else if (additional_props.is_object()) {
-                        std::string prop_path =
-                            instance_path.empty()
-                                ? prop_name
-                                : instance_path + "/" + prop_name;
-                        validateSchema(prop_value, additional_props, prop_path,
-                                       schema_path + "/additionalProperties");
-                    }
+            if (!validated) {
+                if (it->is_boolean() && *it == false) {
+                    std::string error_path =
+                        std::string(schema_path) + "/additionalProperties";
+                    addError("Additional property not allowed: " + prop_name,
+                             instance_path, error_path, "additionalProperties");
+                } else if (it->is_object()) {
+                    std::string prop_path =
+                        instance_path.empty()
+                            ? prop_name
+                            : std::string(instance_path) + "/" + prop_name;
+                    std::string error_path =
+                        std::string(schema_path) + "/additionalProperties";
+                    validateSchema(prop_value, *it, prop_path, error_path);
                 }
             }
         }
+    }
 
-        if (schema.contains("propertyNames") &&
-            schema["propertyNames"].is_object()) {
-            const auto& prop_names_schema = schema["propertyNames"];
+    /**
+     * @brief Validates property names
+     */
+    void validatePropertyNames(const json& instance, const json& schema,
+                               std::string_view instance_path,
+                               std::string_view schema_path) {
+        auto it = schema.find("propertyNames");
+        if (it == schema.end() || !it->is_object())
+            return;
 
-            for (const auto& [prop_name, _] : instance.items()) {
-                json prop_name_json = prop_name;
-                std::string pseudo_path = instance_path + "/{propertyName}";
-                validateSchema(prop_name_json, prop_names_schema, pseudo_path,
-                               schema_path + "/propertyNames");
-            }
+        for (const auto& [prop_name, _] : instance.items()) {
+            json prop_name_json = prop_name;
+            std::string pseudo_path =
+                std::string(instance_path) + "/{propertyName}";
+            std::string error_path =
+                std::string(schema_path) + "/propertyNames";
+            validateSchema(prop_name_json, *it, pseudo_path, error_path);
         }
+    }
 
-        if (schema.contains("minProperties")) {
-            const auto min_props = schema["minProperties"].get<std::size_t>();
+    /**
+     * @brief Validates property count constraints
+     */
+    void validatePropertyCounts(const json& instance, const json& schema,
+                                std::string_view instance_path,
+                                std::string_view schema_path) {
+        if (auto it = schema.find("minProperties");
+            it != schema.end() && it->is_number_unsigned()) {
+            const auto min_props = it->get<std::size_t>();
             if (instance.size() < min_props) {
+                std::string error_path =
+                    std::string(schema_path) + "/minProperties";
                 addError("Object has too few properties, minimum: " +
                              std::to_string(min_props),
-                         instance_path, schema_path + "/minProperties",
-                         "minProperties");
+                         instance_path, error_path, "minProperties");
             }
         }
 
-        if (schema.contains("maxProperties")) {
-            const auto max_props = schema["maxProperties"].get<std::size_t>();
+        if (auto it = schema.find("maxProperties");
+            it != schema.end() && it->is_number_unsigned()) {
+            const auto max_props = it->get<std::size_t>();
             if (instance.size() > max_props) {
+                std::string error_path =
+                    std::string(schema_path) + "/maxProperties";
                 addError("Object has too many properties, maximum: " +
                              std::to_string(max_props),
-                         instance_path, schema_path + "/maxProperties",
-                         "maxProperties");
+                         instance_path, error_path, "maxProperties");
             }
         }
-
-        validateDependencies(instance, schema, instance_path, schema_path);
     }
 
     /**
      * @brief Validates dependencies/dependentRequired/dependentSchemas keywords
      */
     void validateDependencies(const json& instance, const json& schema,
-                              const std::string& instance_path,
-                              const std::string& schema_path) {
-        if (schema.contains("dependencies")) {
-            const auto& dependencies = schema["dependencies"];
-
-            for (const auto& [prop_name, dependency] : dependencies.items()) {
+                              std::string_view instance_path,
+                              std::string_view schema_path) {
+        // Legacy dependencies keyword
+        if (auto it = schema.find("dependencies");
+            it != schema.end() && it->is_object()) {
+            for (const auto& [prop_name, dependency] : it->items()) {
                 if (instance.contains(prop_name)) {
+                    std::string dep_path =
+                        std::string(schema_path) + "/dependencies/" + prop_name;
                     if (dependency.is_array()) {
                         for (const auto& required_prop : dependency) {
                             if (!instance.contains(required_prop)) {
-                                addError(
-                                    "Missing dependency: " +
-                                        required_prop.get<std::string>(),
-                                    instance_path,
-                                    schema_path + "/dependencies/" + prop_name,
-                                    "dependencies");
+                                addError("Missing dependency: " +
+                                             required_prop.get<std::string>(),
+                                         instance_path, dep_path,
+                                         "dependencies");
                             }
                         }
                     } else if (dependency.is_object()) {
-                        validateSchema(
-                            instance, dependency, instance_path,
-                            schema_path + "/dependencies/" + prop_name);
+                        validateSchema(instance, dependency, instance_path,
+                                       dep_path);
                     }
                 }
             }
         }
 
-        if (schema.contains("dependentRequired")) {
-            const auto& dependent_required = schema["dependentRequired"];
-
-            for (const auto& [prop_name, required_props] :
-                 dependent_required.items()) {
+        // Draft 2019-09+ dependentRequired
+        if (auto it = schema.find("dependentRequired");
+            it != schema.end() && it->is_object()) {
+            for (const auto& [prop_name, required_props] : it->items()) {
                 if (instance.contains(prop_name) && required_props.is_array()) {
+                    std::string dep_path = std::string(schema_path) +
+                                           "/dependentRequired/" + prop_name;
                     for (const auto& required_prop : required_props) {
                         if (!instance.contains(required_prop)) {
-                            addError(
-                                "Missing dependent property: " +
-                                    required_prop.get<std::string>(),
-                                instance_path,
-                                schema_path + "/dependentRequired/" + prop_name,
-                                "dependentRequired");
+                            addError("Missing dependent property: " +
+                                         required_prop.get<std::string>(),
+                                     instance_path, dep_path,
+                                     "dependentRequired");
                         }
                     }
                 }
             }
         }
 
-        if (schema.contains("dependentSchemas")) {
-            const auto& dependent_schemas = schema["dependentSchemas"];
-
-            for (const auto& [prop_name, dep_schema] :
-                 dependent_schemas.items()) {
+        // Draft 2019-09+ dependentSchemas
+        if (auto it = schema.find("dependentSchemas");
+            it != schema.end() && it->is_object()) {
+            for (const auto& [prop_name, dep_schema] : it->items()) {
                 if (instance.contains(prop_name)) {
-                    validateSchema(
-                        instance, dep_schema, instance_path,
-                        schema_path + "/dependentSchemas/" + prop_name);
+                    std::string dep_path = std::string(schema_path) +
+                                           "/dependentSchemas/" + prop_name;
+                    validateSchema(instance, dep_schema, instance_path,
+                                   dep_path);
                 }
             }
         }
@@ -817,165 +874,206 @@ private:
      * @brief Validates array-specific keywords
      */
     void validateArray(const json& instance, const json& schema,
-                       const std::string& instance_path,
-                       const std::string& schema_path) {
-        if (schema.contains("items")) {
-            const auto& items = schema["items"];
+                       std::string_view instance_path,
+                       std::string_view schema_path) {
+        validateArrayItems(instance, schema, instance_path, schema_path);
+        validateArrayContains(instance, schema, instance_path, schema_path);
+        validateArrayConstraints(instance, schema, instance_path, schema_path);
+    }
 
-            if (items.is_object()) {
-                for (std::size_t i = 0; i < instance.size(); ++i) {
-                    std::string item_path =
-                        instance_path + "/" + std::to_string(i);
-                    validateSchema(instance[i], items, item_path,
-                                   schema_path + "/items");
-                }
-            } else if (items.is_array()) {
-                for (std::size_t i = 0;
-                     i < std::min(items.size(), instance.size()); ++i) {
-                    std::string item_path =
-                        instance_path + "/" + std::to_string(i);
-                    validateSchema(instance[i], items[i], item_path,
-                                   schema_path + "/items/" + std::to_string(i));
-                }
+    /**
+     * @brief Validates array items
+     */
+    void validateArrayItems(const json& instance, const json& schema,
+                            std::string_view instance_path,
+                            std::string_view schema_path) {
+        // Handle prefixItems (Draft 2020-12)
+        if (auto prefix_it = schema.find("prefixItems");
+            prefix_it != schema.end() && prefix_it->is_array()) {
+            const auto& prefix_items = *prefix_it;
+            for (std::size_t i = 0;
+                 i < std::min(prefix_items.size(), instance.size()); ++i) {
+                std::string item_path =
+                    std::string(instance_path) + "/" + std::to_string(i);
+                std::string item_schema_path = std::string(schema_path) +
+                                               "/prefixItems/" +
+                                               std::to_string(i);
+                validateSchema(instance[i], prefix_items[i], item_path,
+                               item_schema_path);
+            }
 
-                if (instance.size() > items.size() &&
-                    schema.contains("additionalItems")) {
-                    const auto& additional_items = schema["additionalItems"];
-
-                    if (additional_items.is_boolean() &&
-                        additional_items == false) {
+            // Handle additional items beyond prefixItems
+            if (instance.size() > prefix_items.size()) {
+                if (auto items_it = schema.find("items");
+                    items_it != schema.end()) {
+                    if (items_it->is_boolean() && *items_it == false) {
+                        std::string error_path =
+                            std::string(schema_path) + "/items";
                         addError("Additional items not allowed", instance_path,
-                                 schema_path + "/additionalItems",
-                                 "additionalItems");
-                    } else if (additional_items.is_object()) {
-                        for (std::size_t i = items.size(); i < instance.size();
-                             ++i) {
-                            std::string item_path =
-                                instance_path + "/" + std::to_string(i);
-                            validateSchema(instance[i], additional_items,
-                                           item_path,
-                                           schema_path + "/additionalItems");
+                                 error_path, "items");
+                    } else if (items_it->is_object()) {
+                        for (std::size_t i = prefix_items.size();
+                             i < instance.size(); ++i) {
+                            std::string item_path = std::string(instance_path) +
+                                                    "/" + std::to_string(i);
+                            std::string error_path =
+                                std::string(schema_path) + "/items";
+                            validateSchema(instance[i], *items_it, item_path,
+                                           error_path);
                         }
                     }
                 }
             }
         }
+        // Handle legacy items keyword
+        else if (auto items_it = schema.find("items");
+                 items_it != schema.end()) {
+            if (items_it->is_object()) {
+                for (std::size_t i = 0; i < instance.size(); ++i) {
+                    std::string item_path =
+                        std::string(instance_path) + "/" + std::to_string(i);
+                    std::string error_path =
+                        std::string(schema_path) + "/items";
+                    validateSchema(instance[i], *items_it, item_path,
+                                   error_path);
+                }
+            } else if (items_it->is_array()) {
+                for (std::size_t i = 0;
+                     i < std::min(items_it->size(), instance.size()); ++i) {
+                    std::string item_path =
+                        std::string(instance_path) + "/" + std::to_string(i);
+                    std::string item_schema_path = std::string(schema_path) +
+                                                   "/items/" +
+                                                   std::to_string(i);
+                    validateSchema(instance[i], (*items_it)[i], item_path,
+                                   item_schema_path);
+                }
 
-        if (schema.contains("prefixItems") &&
-            schema["prefixItems"].is_array()) {
-            const auto& prefix_items = schema["prefixItems"];
-
-            for (std::size_t i = 0;
-                 i < std::min(prefix_items.size(), instance.size()); ++i) {
-                std::string item_path = instance_path + "/" + std::to_string(i);
-                validateSchema(
-                    instance[i], prefix_items[i], item_path,
-                    schema_path + "/prefixItems/" + std::to_string(i));
-            }
-
-            if (instance.size() > prefix_items.size() &&
-                schema.contains("items")) {
-                const auto& items = schema["items"];
-
-                if (items.is_boolean()) {
-                    if (items == false) {
-                        addError("Additional items not allowed", instance_path,
-                                 schema_path + "/items", "items");
-                    }
-                } else if (items.is_object()) {
-                    for (std::size_t i = prefix_items.size();
-                         i < instance.size(); ++i) {
-                        std::string item_path =
-                            instance_path + "/" + std::to_string(i);
-                        validateSchema(instance[i], items, item_path,
-                                       schema_path + "/items");
+                // Handle additionalItems
+                if (instance.size() > items_it->size()) {
+                    if (auto add_items_it = schema.find("additionalItems");
+                        add_items_it != schema.end()) {
+                        if (add_items_it->is_boolean() &&
+                            *add_items_it == false) {
+                            std::string error_path =
+                                std::string(schema_path) + "/additionalItems";
+                            addError("Additional items not allowed",
+                                     instance_path, error_path,
+                                     "additionalItems");
+                        } else if (add_items_it->is_object()) {
+                            for (std::size_t i = items_it->size();
+                                 i < instance.size(); ++i) {
+                                std::string item_path =
+                                    std::string(instance_path) + "/" +
+                                    std::to_string(i);
+                                std::string error_path =
+                                    std::string(schema_path) +
+                                    "/additionalItems";
+                                validateSchema(instance[i], *add_items_it,
+                                               item_path, error_path);
+                            }
+                        }
                     }
                 }
             }
         }
+    }
 
-        if (schema.contains("contains")) {
-            const auto& contains_schema = schema["contains"];
-            bool any_valid = false;
+    /**
+     * @brief Validates array contains keyword
+     */
+    void validateArrayContains(const json& instance, const json& schema,
+                               std::string_view instance_path,
+                               std::string_view schema_path) {
+        auto contains_it = schema.find("contains");
+        if (contains_it == schema.end())
+            return;
 
-            std::size_t valid_count = 0;
-            std::size_t min_contains = 1;
-            std::size_t max_contains = std::numeric_limits<std::size_t>::max();
+        std::size_t valid_count = 0;
+        std::size_t min_contains = 1;
+        std::size_t max_contains = std::numeric_limits<std::size_t>::max();
 
-            if (schema.contains("minContains") &&
-                schema["minContains"].is_number_unsigned()) {
-                min_contains = schema["minContains"].get<std::size_t>();
-            }
+        if (auto it = schema.find("minContains");
+            it != schema.end() && it->is_number_unsigned()) {
+            min_contains = it->get<std::size_t>();
+        }
 
-            if (schema.contains("maxContains") &&
-                schema["maxContains"].is_number_unsigned()) {
-                max_contains = schema["maxContains"].get<std::size_t>();
-            }
+        if (auto it = schema.find("maxContains");
+            it != schema.end() && it->is_number_unsigned()) {
+            max_contains = it->get<std::size_t>();
+        }
 
-            for (std::size_t i = 0; i < instance.size(); ++i) {
-                std::size_t error_count = errors_.size();
+        for (std::size_t i = 0; i < instance.size(); ++i) {
+            std::size_t error_count = errors_.size();
+            std::string item_path =
+                std::string(instance_path) + "/" + std::to_string(i);
+            std::string error_path = std::string(schema_path) + "/contains";
 
-                std::string item_path = instance_path + "/" + std::to_string(i);
-                validateSchema(instance[i], contains_schema, item_path,
-                               schema_path + "/contains");
+            validateSchema(instance[i], *contains_it, item_path, error_path);
 
-                if (errors_.size() == error_count) {
-                    any_valid = true;
-                    valid_count++;
-
-                    errors_.resize(error_count);
-
-                    if (valid_count >= max_contains) {
-                        break;
-                    }
-                } else {
-                    errors_.resize(error_count);
-                }
-            }
-
-            if (instance.size() > 0 &&
-                (!any_valid || valid_count < min_contains)) {
-                addError(
-                    "Array doesn't contain required number of matching items "
-                    "(min: " +
-                        std::to_string(min_contains) + ")",
-                    instance_path, schema_path + "/contains", "contains");
-            }
-
-            if (valid_count > max_contains) {
-                addError("Array contains too many matching items (max: " +
-                             std::to_string(max_contains) + ")",
-                         instance_path, schema_path + "/maxContains",
-                         "maxContains");
+            if (errors_.size() == error_count) {
+                valid_count++;
+                if (valid_count >= max_contains)
+                    break;
+            } else {
+                errors_.resize(error_count);
             }
         }
 
-        if (schema.contains("minItems")) {
-            const auto min_items = schema["minItems"].get<std::size_t>();
+        if (instance.size() > 0 && valid_count < min_contains) {
+            std::string error_path = std::string(schema_path) + "/contains";
+            addError(
+                "Array doesn't contain required number of matching items "
+                "(min: " +
+                    std::to_string(min_contains) + ")",
+                instance_path, error_path, "contains");
+        }
+
+        if (valid_count > max_contains) {
+            std::string error_path = std::string(schema_path) + "/maxContains";
+            addError("Array contains too many matching items (max: " +
+                         std::to_string(max_contains) + ")",
+                     instance_path, error_path, "maxContains");
+        }
+    }
+
+    /**
+     * @brief Validates array constraints (minItems, maxItems, uniqueItems)
+     */
+    void validateArrayConstraints(const json& instance, const json& schema,
+                                  std::string_view instance_path,
+                                  std::string_view schema_path) {
+        if (auto it = schema.find("minItems");
+            it != schema.end() && it->is_number_unsigned()) {
+            const auto min_items = it->get<std::size_t>();
             if (instance.size() < min_items) {
+                std::string error_path = std::string(schema_path) + "/minItems";
                 addError("Array has too few items, minimum: " +
                              std::to_string(min_items),
-                         instance_path, schema_path + "/minItems", "minItems");
+                         instance_path, error_path, "minItems");
             }
         }
 
-        if (schema.contains("maxItems")) {
-            const auto max_items = schema["maxItems"].get<std::size_t>();
+        if (auto it = schema.find("maxItems");
+            it != schema.end() && it->is_number_unsigned()) {
+            const auto max_items = it->get<std::size_t>();
             if (instance.size() > max_items) {
+                std::string error_path = std::string(schema_path) + "/maxItems";
                 addError("Array has too many items, maximum: " +
                              std::to_string(max_items),
-                         instance_path, schema_path + "/maxItems", "maxItems");
+                         instance_path, error_path, "maxItems");
             }
         }
 
-        if (schema.contains("uniqueItems") &&
-            schema["uniqueItems"].get<bool>()) {
+        if (auto it = schema.find("uniqueItems");
+            it != schema.end() && it->is_boolean() && it->get<bool>()) {
             std::set<json> unique_items;
             for (std::size_t i = 0; i < instance.size(); ++i) {
-                const auto& item = instance[i];
-                if (!unique_items.insert(item).second) {
+                if (!unique_items.insert(instance[i]).second) {
+                    std::string error_path =
+                        std::string(schema_path) + "/uniqueItems";
                     addError("Array items must be unique", instance_path,
-                             schema_path + "/uniqueItems", "uniqueItems");
+                             error_path, "uniqueItems");
                     break;
                 }
             }
@@ -986,79 +1084,74 @@ private:
      * @brief Validates string-specific keywords
      */
     void validateString(const json& instance, const json& schema,
-                        const std::string& instance_path,
-                        const std::string& schema_path) {
-        const std::string& str = instance.get<std::string>();
+                        std::string_view instance_path,
+                        std::string_view schema_path) {
+        const std::string& str = instance.get_ref<const std::string&>();
 
-        if (schema.contains("minLength")) {
-            const auto min_length = schema["minLength"].get<std::size_t>();
+        if (auto it = schema.find("minLength");
+            it != schema.end() && it->is_number_unsigned()) {
+            const auto min_length = it->get<std::size_t>();
             if (str.length() < min_length) {
+                std::string error_path =
+                    std::string(schema_path) + "/minLength";
                 addError("String is too short, minimum length: " +
                              std::to_string(min_length),
-                         instance_path, schema_path + "/minLength",
-                         "minLength");
+                         instance_path, error_path, "minLength");
             }
         }
 
-        if (schema.contains("maxLength")) {
-            const auto max_length = schema["maxLength"].get<std::size_t>();
+        if (auto it = schema.find("maxLength");
+            it != schema.end() && it->is_number_unsigned()) {
+            const auto max_length = it->get<std::size_t>();
             if (str.length() > max_length) {
+                std::string error_path =
+                    std::string(schema_path) + "/maxLength";
                 addError("String is too long, maximum length: " +
                              std::to_string(max_length),
-                         instance_path, schema_path + "/maxLength",
-                         "maxLength");
+                         instance_path, error_path, "maxLength");
             }
         }
 
-        if (schema.contains("pattern")) {
-            const std::string& pattern_str =
-                schema["pattern"].get<std::string>();
-
-            std::regex pattern;
-            auto it = regex_cache_.find(pattern_str);
-
-            if (it != regex_cache_.end()) {
-                pattern = it->second;
-            } else {
-                try {
-                    pattern = std::regex(pattern_str);
-                    regex_cache_[pattern_str] = pattern;
-                } catch (const std::regex_error&) {
-                    addError("Invalid regex pattern: " + pattern_str,
-                             instance_path, schema_path + "/pattern",
-                             "pattern");
-                    return;
-                }
-            }
+        if (auto it = schema.find("pattern");
+            it != schema.end() && it->is_string()) {
+            const std::string& pattern_str = it->get_ref<const std::string&>();
+            std::regex pattern =
+                getOrCompileRegex(pattern_str, instance_path, schema_path);
 
             if (!std::regex_search(str, pattern)) {
+                std::string error_path = std::string(schema_path) + "/pattern";
                 addError("String does not match pattern: " + pattern_str,
-                         instance_path, schema_path + "/pattern", "pattern");
+                         instance_path, error_path, "pattern");
             }
         }
 
-        if (!options_.ignore_format && schema.contains("format")) {
-            const std::string& format = schema["format"].get<std::string>();
-            validateFormat(str, format, instance_path, schema_path);
+        if (!options_.ignore_format) {
+            if (auto it = schema.find("format");
+                it != schema.end() && it->is_string()) {
+                const std::string& format = it->get_ref<const std::string&>();
+                validateFormat(str, format, instance_path, schema_path);
+            }
         }
     }
 
     /**
      * @brief Validates a string against a format
      */
-    void validateFormat(const std::string& str, const std::string& format,
-                        const std::string& instance_path,
-                        const std::string& schema_path) {
-        auto it = format_validators_.find(format);
+    void validateFormat(std::string_view str, std::string_view format,
+                        std::string_view instance_path,
+                        std::string_view schema_path) {
+        auto it = format_validators_.find(std::string(format));
 
         if (it != format_validators_.end()) {
             if (!it->second(str)) {
-                addError("String does not match format: " + format,
-                         instance_path, schema_path + "/format", "format");
+                std::string error_path = std::string(schema_path) + "/format";
+                addError("String does not match format: " + std::string(format),
+                         instance_path, error_path, "format");
             }
         } else if (!options_.allow_undefined_formats) {
-            addError("Unknown format: " + format, instance_path,
-                     schema_path + "/format", "format");
+            std::string error_path = std::string(schema_path) + "/format";
+            addError("Unknown format: " + std::string(format), instance_path,
+                     error_path, "format");
         }
     }
 
@@ -1066,87 +1159,96 @@ private:
      * @brief Validates number-specific keywords
      */
     void validateNumber(const json& instance, const json& schema,
-                        const std::string& instance_path,
-                        const std::string& schema_path) {
+                        std::string_view instance_path,
+                        std::string_view schema_path) {
         const auto num_value = instance.get<double>();
 
-        if (schema.contains("minimum")) {
-            const auto minimum = schema["minimum"].get<double>();
+        if (auto it = schema.find("minimum");
+            it != schema.end() && it->is_number()) {
+            const auto minimum = it->get<double>();
             if (num_value < minimum) {
+                std::string error_path = std::string(schema_path) + "/minimum";
                 addError(
                     "Value is less than minimum: " + std::to_string(minimum),
-                    instance_path, schema_path + "/minimum", "minimum");
+                    instance_path, error_path, "minimum");
             }
         }
 
-        if (schema.contains("exclusiveMinimum") && schema.contains("minimum")) {
-            if (schema["exclusiveMinimum"].is_boolean() &&
-                schema["exclusiveMinimum"].get<bool>()) {
-                const auto minimum = schema["minimum"].get<double>();
-                if (num_value <= minimum) {
+        if (auto it = schema.find("exclusiveMinimum"); it != schema.end()) {
+            if (it->is_boolean() && it->get<bool>()) {
+                if (auto min_it = schema.find("minimum");
+                    min_it != schema.end() && min_it->is_number()) {
+                    const auto minimum = min_it->get<double>();
+                    if (num_value <= minimum) {
+                        std::string error_path =
+                            std::string(schema_path) + "/exclusiveMinimum";
+                        addError(
+                            "Value must be greater than exclusive minimum: " +
+                                std::to_string(minimum),
+                            instance_path, error_path, "exclusiveMinimum");
+                    }
+                }
+            } else if (it->is_number()) {
+                const auto ex_minimum = it->get<double>();
+                if (num_value <= ex_minimum) {
+                    std::string error_path =
+                        std::string(schema_path) + "/exclusiveMinimum";
                     addError("Value must be greater than exclusive minimum: " +
-                                 std::to_string(minimum),
-                             instance_path, schema_path + "/exclusiveMinimum",
-                             "exclusiveMinimum");
+                                 std::to_string(ex_minimum),
+                             instance_path, error_path, "exclusiveMinimum");
                 }
             }
         }
 
-        if (schema.contains("exclusiveMinimum") &&
-            schema["exclusiveMinimum"].is_number()) {
-            const auto ex_minimum = schema["exclusiveMinimum"].get<double>();
-            if (num_value <= ex_minimum) {
-                addError("Value must be greater than exclusive minimum: " +
-                             std::to_string(ex_minimum),
-                         instance_path, schema_path + "/exclusiveMinimum",
-                         "exclusiveMinimum");
-            }
-        }
-
-        if (schema.contains("maximum")) {
-            const auto maximum = schema["maximum"].get<double>();
+        if (auto it = schema.find("maximum");
+            it != schema.end() && it->is_number()) {
+            const auto maximum = it->get<double>();
             if (num_value > maximum) {
+                std::string error_path = std::string(schema_path) + "/maximum";
                 addError(
                     "Value is greater than maximum: " + std::to_string(maximum),
-                    instance_path, schema_path + "/maximum", "maximum");
+                    instance_path, error_path, "maximum");
             }
         }
 
-        if (schema.contains("exclusiveMaximum") && schema.contains("maximum")) {
-            if (schema["exclusiveMaximum"].is_boolean() &&
-                schema["exclusiveMaximum"].get<bool>()) {
-                const auto maximum = schema["maximum"].get<double>();
-                if (num_value >= maximum) {
+        if (auto it = schema.find("exclusiveMaximum"); it != schema.end()) {
+            if (it->is_boolean() && it->get<bool>()) {
+                if (auto max_it = schema.find("maximum");
+                    max_it != schema.end() && max_it->is_number()) {
+                    const auto maximum = max_it->get<double>();
+                    if (num_value >= maximum) {
+                        std::string error_path =
+                            std::string(schema_path) + "/exclusiveMaximum";
+                        addError("Value must be less than exclusive maximum: " +
+                                     std::to_string(maximum),
+                                 instance_path, error_path, "exclusiveMaximum");
+                    }
+                }
+            } else if (it->is_number()) {
+                const auto ex_maximum = it->get<double>();
+                if (num_value >= ex_maximum) {
+                    std::string error_path =
+                        std::string(schema_path) + "/exclusiveMaximum";
                     addError("Value must be less than exclusive maximum: " +
-                                 std::to_string(maximum),
-                             instance_path, schema_path + "/exclusiveMaximum",
-                             "exclusiveMaximum");
+                                 std::to_string(ex_maximum),
+                             instance_path, error_path, "exclusiveMaximum");
                 }
             }
         }
 
-        if (schema.contains("exclusiveMaximum") &&
-            schema["exclusiveMaximum"].is_number()) {
-            const auto ex_maximum = schema["exclusiveMaximum"].get<double>();
-            if (num_value >= ex_maximum) {
-                addError("Value must be less than exclusive maximum: " +
-                             std::to_string(ex_maximum),
-                         instance_path, schema_path + "/exclusiveMaximum",
-                         "exclusiveMaximum");
-            }
-        }
-
-        if (schema.contains("multipleOf")) {
-            const auto multiple = schema["multipleOf"].get<double>();
-
+        if (auto it = schema.find("multipleOf");
+            it != schema.end() && it->is_number()) {
+            const auto multiple = it->get<double>();
             const auto quotient = num_value / multiple;
             const auto rounded = std::round(quotient);
 
             constexpr double epsilon = 1e-10;
             if (std::abs(quotient - rounded) > epsilon) {
+                std::string error_path =
+                    std::string(schema_path) + "/multipleOf";
                 addError(
                     "Value is not a multiple of: " + std::to_string(multiple),
-                    instance_path, schema_path + "/multipleOf", "multipleOf");
+                    instance_path, error_path, "multipleOf");
             }
         }
     }
@@ -1155,38 +1257,36 @@ private:
      * @brief Validates enum keyword
      */
     void validateEnum(const json& instance, const json& schema,
-                      const std::string& instance_path,
-                      const std::string& schema_path) {
-        if (schema.contains("enum")) {
-            const auto& enum_values = schema["enum"];
-            bool valid = false;
+                      std::string_view instance_path,
+                      std::string_view schema_path) {
+        auto it = schema.find("enum");
+        if (it == schema.end() || !it->is_array())
+            return;
 
-            for (const auto& value : enum_values) {
-                if (instance == value) {
-                    valid = true;
-                    break;
-                }
-            }
-
-            if (!valid) {
-                addError("Value not found in enumeration", instance_path,
-                         schema_path + "/enum", "enum");
-            }
+        for (const auto& value : *it) {
+            if (instance == value)
+                return;
         }
+
+        std::string error_path = std::string(schema_path) + "/enum";
+        addError("Value not found in enumeration", instance_path, error_path,
+                 "enum");
     }
 
     /**
      * @brief Validates const keyword
      */
     void validateConst(const json& instance, const json& schema,
-                       const std::string& instance_path,
-                       const std::string& schema_path) {
-        if (schema.contains("const")) {
-            const auto& const_value = schema["const"];
-            if (instance != const_value) {
-                addError("Value does not match const value", instance_path,
-                         schema_path + "/const", "const");
-            }
+                       std::string_view instance_path,
+                       std::string_view schema_path) {
+        auto it = schema.find("const");
+        if (it == schema.end())
+            return;
+
+        if (instance != *it) {
+            std::string error_path = std::string(schema_path) + "/const";
+            addError("Value does not match const value", instance_path,
+                     error_path, "const");
         }
     }
 
@@ -1194,26 +1294,30 @@ private:
      * @brief Validates conditional keywords (if/then/else)
      */
     void validateConditionals(const json& instance, const json& schema,
-                              const std::string& instance_path,
-                              const std::string& schema_path) {
-        if (schema.contains("if") && schema["if"].is_object()) {
-            const auto& if_schema = schema["if"];
+                              std::string_view instance_path,
+                              std::string_view schema_path) {
+        auto if_it = schema.find("if");
+        if (if_it == schema.end() || !if_it->is_object())
+            return;
 
-            std::vector<ValidationError> temp_errors = errors_;
-            errors_.clear();
+        std::vector<ValidationError> temp_errors = std::move(errors_);
+        errors_.clear();
 
-            validateSchema(instance, if_schema, instance_path,
-                           schema_path + "/if");
-            bool condition_passed = errors_.empty();
+        std::string if_path = std::string(schema_path) + "/if";
+        validateSchema(instance, *if_it, instance_path, if_path);
+        bool condition_passed = errors_.empty();
 
-            errors_ = temp_errors;
+        errors_ = std::move(temp_errors);
 
-            if (condition_passed && schema.contains("then")) {
-                validateSchema(instance, schema["then"], instance_path,
-                               schema_path + "/then");
-            } else if (!condition_passed && schema.contains("else")) {
-                validateSchema(instance, schema["else"], instance_path,
-                               schema_path + "/else");
+        if (condition_passed) {
+            if (auto then_it = schema.find("then"); then_it != schema.end()) {
+                std::string then_path = std::string(schema_path) + "/then";
+                validateSchema(instance, *then_it, instance_path, then_path);
+            }
+        } else {
+            if (auto else_it = schema.find("else"); else_it != schema.end()) {
+                std::string else_path = std::string(schema_path) + "/else";
+                validateSchema(instance, *else_it, instance_path, else_path);
             }
         }
     }
@@ -1222,115 +1326,131 @@ private:
      * @brief Validates combination keywords (allOf/anyOf/oneOf/not)
      */
     void validateCombinations(const json& instance, const json& schema,
-                              const std::string& instance_path,
-                              const std::string& schema_path) {
-        if (schema.contains("allOf") && schema["allOf"].is_array()) {
-            const auto& all_of = schema["allOf"];
-            for (std::size_t i = 0; i < all_of.size(); ++i) {
-                validateSchema(instance, all_of[i], instance_path,
-                               schema_path + "/allOf/" + std::to_string(i));
-            }
+                              std::string_view instance_path,
+                              std::string_view schema_path) {
+        validateAllOf(instance, schema, instance_path, schema_path);
+        validateAnyOf(instance, schema, instance_path, schema_path);
+        validateOneOf(instance, schema, instance_path, schema_path);
+        validateNot(instance, schema, instance_path, schema_path);
+    }
+
+    /**
+     * @brief Validates allOf keyword
+     */
+    void validateAllOf(const json& instance, const json& schema,
+                       std::string_view instance_path,
+                       std::string_view schema_path) {
+        auto it = schema.find("allOf");
+        if (it == schema.end() || !it->is_array())
+            return;
+
+        for (std::size_t i = 0; i < it->size(); ++i) {
+            std::string sub_path =
+                std::string(schema_path) + "/allOf/" + std::to_string(i);
+            validateSchema(instance, (*it)[i], instance_path, sub_path);
         }
+    }
 
-        if (schema.contains("anyOf") && schema["anyOf"].is_array()) {
-            const auto& any_of = schema["anyOf"];
+    /**
+     * @brief Validates anyOf keyword
+     */
+    void validateAnyOf(const json& instance, const json& schema,
+                       std::string_view instance_path,
+                       std::string_view schema_path) {
+        auto it = schema.find("anyOf");
+        if (it == schema.end() || !it->is_array())
+            return;
 
-            std::vector<ValidationError> original_errors = errors_;
+        std::vector<ValidationError> original_errors = std::move(errors_);
+        errors_.clear();
+
+        for (std::size_t i = 0; i < it->size(); ++i) {
+            std::vector<ValidationError> schema_errors = std::move(errors_);
             errors_.clear();
 
-            bool valid = false;
+            std::string sub_path =
+                std::string(schema_path) + "/anyOf/" + std::to_string(i);
+            validateSchema(instance, (*it)[i], instance_path, sub_path);
 
-            for (std::size_t i = 0; i < any_of.size(); ++i) {
-                std::vector<ValidationError> schema_errors = errors_;
-                errors_.clear();
+            if (errors_.empty()) {
+                errors_ = std::move(original_errors);
+                return;
+            }
 
-                validateSchema(instance, any_of[i], instance_path,
-                               schema_path + "/anyOf/" + std::to_string(i));
+            if (i == 0 || errors_.size() < schema_errors.size()) {
+                schema_errors = std::move(errors_);
+            }
+            errors_ = std::move(schema_errors);
+        }
 
-                if (errors_.empty()) {
-                    valid = true;
-                    errors_.clear();
+        errors_ = std::move(original_errors);
+        std::string error_path = std::string(schema_path) + "/anyOf";
+        addError("Value does not match any schema in anyOf", instance_path,
+                 error_path, "anyOf");
+    }
+
+    /**
+     * @brief Validates oneOf keyword
+     */
+    void validateOneOf(const json& instance, const json& schema,
+                       std::string_view instance_path,
+                       std::string_view schema_path) {
+        auto it = schema.find("oneOf");
+        if (it == schema.end() || !it->is_array())
+            return;
+
+        std::vector<ValidationError> original_errors = std::move(errors_);
+        int valid_count = 0;
+
+        for (std::size_t i = 0; i < it->size(); ++i) {
+            errors_.clear();
+            std::string sub_path =
+                std::string(schema_path) + "/oneOf/" + std::to_string(i);
+            validateSchema(instance, (*it)[i], instance_path, sub_path);
+
+            if (errors_.empty()) {
+                valid_count++;
+                if (valid_count > 1)
                     break;
-                }
-
-                if (i == 0 || errors_.size() < schema_errors.size()) {
-                    schema_errors = std::move(errors_);
-                }
-
-                errors_ = std::move(schema_errors);
-            }
-
-            if (valid) {
-                errors_ = original_errors;
-            } else {
-                std::vector<ValidationError> anyof_errors = errors_;
-                errors_ = original_errors;
-                errors_.emplace_back("Value does not match any schema in anyOf",
-                                     instance_path, schema_path + "/anyOf",
-                                     "anyOf");
             }
         }
 
-        if (schema.contains("oneOf") && schema["oneOf"].is_array()) {
-            const auto& one_of = schema["oneOf"];
+        errors_ = std::move(original_errors);
+        std::string error_path = std::string(schema_path) + "/oneOf";
 
-            std::vector<ValidationError> original_errors = errors_;
-            int valid_count = 0;
-            std::size_t first_match_index = 0;
-
-            std::vector<std::vector<ValidationError>> sub_errors_list;
-
-            for (std::size_t i = 0; i < one_of.size(); ++i) {
-                errors_.clear();
-
-                validateSchema(instance, one_of[i], instance_path,
-                               schema_path + "/oneOf/" + std::to_string(i));
-
-                if (errors_.empty()) {
-                    valid_count++;
-                    if (valid_count == 1) {
-                        first_match_index = i;
-                    }
-                    if (valid_count > 1) {
-                        break;
-                    }
-                } else {
-                    sub_errors_list.push_back(std::move(errors_));
-                }
-            }
-
-            errors_ = std::move(original_errors);
-
-            if (valid_count == 0) {
-                addError(
-                    "Value does not match exactly one schema in oneOf (matched "
-                    "0)",
-                    instance_path, schema_path + "/oneOf", "oneOf");
-            } else if (valid_count > 1) {
-                addError(
-                    "Value matches more than one schema in oneOf (matched " +
-                        std::to_string(valid_count) + ")",
-                    instance_path, schema_path + "/oneOf", "oneOf");
-            }
+        if (valid_count == 0) {
+            addError(
+                "Value does not match exactly one schema in oneOf (matched 0)",
+                instance_path, error_path, "oneOf");
+        } else if (valid_count > 1) {
+            addError("Value matches more than one schema in oneOf (matched " +
+                         std::to_string(valid_count) + ")",
+                     instance_path, error_path, "oneOf");
         }
+    }
 
-        if (schema.contains("not") && schema["not"].is_object()) {
-            const auto& not_schema = schema["not"];
+    /**
+     * @brief Validates not keyword
+     */
+    void validateNot(const json& instance, const json& schema,
+                     std::string_view instance_path,
+                     std::string_view schema_path) {
+        auto it = schema.find("not");
+        if (it == schema.end() || !it->is_object())
+            return;
 
-            std::vector<ValidationError> original_errors = errors_;
-            errors_.clear();
+        std::vector<ValidationError> original_errors = std::move(errors_);
+        errors_.clear();
 
-            validateSchema(instance, not_schema, instance_path,
-                           schema_path + "/not");
+        std::string not_path = std::string(schema_path) + "/not";
+        validateSchema(instance, *it, instance_path, not_path);
 
-            bool not_valid = !errors_.empty();
-            errors_ = original_errors;
+        bool not_valid = !errors_.empty();
+        errors_ = std::move(original_errors);
 
-            if (!not_valid) {
-                errors_.emplace_back(
-                    "Value should not validate against schema in 'not'",
-                    instance_path, schema_path + "/not", "not");
-            }
+        if (!not_valid) {
+            addError("Value should not validate against schema in 'not'",
+                     instance_path, not_path, "not");
         }
     }
 
@@ -1338,73 +1458,55 @@ private:
      * @brief Initialize standard format validators
      */
     void initializeFormatValidators() {
-        registerFormatValidator("date-time", [](const std::string& s) {
-            std::regex date_time_regex(
+        registerFormatValidator("date-time", [](std::string_view s) {
+            static const std::regex date_time_regex(
                 R"(^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)$)");
-            return std::regex_match(s, date_time_regex);
+            return std::regex_match(s.begin(), s.end(), date_time_regex);
         });
 
-        registerFormatValidator("date", [](const std::string& s) {
-            std::regex date_regex(R"(^\d{4}-\d\d-\d\d$)");
-            return std::regex_match(s, date_regex);
+        registerFormatValidator("date", [](std::string_view s) {
+            static const std::regex date_regex(R"(^\d{4}-\d\d-\d\d$)");
+            return std::regex_match(s.begin(), s.end(), date_regex);
         });
 
-        registerFormatValidator("time", [](const std::string& s) {
-            std::regex time_regex(R"(^\d\d:\d\d:\d\d(\.\d+)?$)");
-            return std::regex_match(s, time_regex);
+        registerFormatValidator("time", [](std::string_view s) {
+            static const std::regex time_regex(R"(^\d\d:\d\d:\d\d(\.\d+)?$)");
+            return std::regex_match(s.begin(), s.end(), time_regex);
         });
 
-        registerFormatValidator("email", [](const std::string& s) {
-            std::regex email_regex(
+        registerFormatValidator("email", [](std::string_view s) {
+            static const std::regex email_regex(
                 R"(^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$)");
-            return std::regex_match(s, email_regex);
+            return std::regex_match(s.begin(), s.end(), email_regex);
         });
 
-        registerFormatValidator("idn-email", [](const std::string& s) {
-            std::regex email_regex(
-                R"(^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$)");
-            return std::regex_match(s, email_regex);
-        });
-
-        registerFormatValidator("uri", [](const std::string& s) {
-            std::regex uri_regex(
+        registerFormatValidator("uri", [](std::string_view s) {
+            static const std::regex uri_regex(
                 R"(^[a-zA-Z][a-zA-Z0-9+.-]*://(?:[a-zA-Z0-9-._~!$&'()*+,;=:]|%[0-9a-fA-F]{2})*$)");
-            return std::regex_match(s, uri_regex);
+            return std::regex_match(s.begin(), s.end(), uri_regex);
         });
 
-        registerFormatValidator("uri-reference", [](const std::string& s) {
-            std::regex uri_ref_regex(
-                R"(^(?:[a-zA-Z][a-zA-Z0-9+.-]*:|)(?://?)?(?:[a-zA-Z0-9-._~!$&'()*+,;=:]|%[0-9a-fA-F]{2})*$)");
-            return std::regex_match(s, uri_ref_regex);
-        });
-
-        registerFormatValidator("ipv4", [](const std::string& s) {
-            std::regex ipv4_regex(
+        registerFormatValidator("ipv4", [](std::string_view s) {
+            static const std::regex ipv4_regex(
                 R"(^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$)");
-            return std::regex_match(s, ipv4_regex);
+            return std::regex_match(s.begin(), s.end(), ipv4_regex);
         });
 
-        registerFormatValidator("ipv6", [](const std::string& s) {
-            std::regex ipv6_regex(
-                R"(^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|::(?:[0-9a-fA-F]{1,4}:){0-6}[0-9a-fA-F]{1,4}|[0-9a-fA-F]{1,4}::(?:[0-9a-fA-F]{1,4}:){0-5}[0-9a-fA-F]{1,4}|[0-9a-fA-F]{1,4}:[0-9a-fA-F]{1,4}::(?:[0-9a-fA-F]{1,4}:){0-4}[0-9a-fA-F]{1,4}$)");
-            return std::regex_match(s, ipv6_regex);
-        });
-
-        registerFormatValidator("hostname", [](const std::string& s) {
-            std::regex hostname_regex(
+        registerFormatValidator("hostname", [](std::string_view s) {
+            static const std::regex hostname_regex(
                 R"(^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$)");
-            return std::regex_match(s, hostname_regex);
+            return std::regex_match(s.begin(), s.end(), hostname_regex);
         });
 
-        registerFormatValidator("uuid", [](const std::string& s) {
-            std::regex uuid_regex(
+        registerFormatValidator("uuid", [](std::string_view s) {
+            static const std::regex uuid_regex(
                 R"(^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$)");
-            return std::regex_match(s, uuid_regex);
+            return std::regex_match(s.begin(), s.end(), uuid_regex);
         });
 
-        registerFormatValidator("regex", [](const std::string& s) {
+        registerFormatValidator("regex", [](std::string_view s) {
             try {
-                std::regex re(s);
+                std::regex re(s.begin(), s.end());
                 return true;
             } catch (const std::regex_error&) {
                 return false;
@@ -1422,7 +1524,7 @@ public:
      * @brief Constructor
      * @param options Validation options to use for schemas
      */
-    explicit SchemaManager(ValidationOptions options = {})
+    explicit SchemaManager(ValidationOptions options = {}) noexcept
         : options_(std::move(options)) {}
 
     /**
@@ -1432,20 +1534,14 @@ public:
      * schema)
      * @return true if schema was added successfully
      */
-    bool addSchema(const json& schema, const std::string& id = "") {
-        if (!schema.is_object()) {
+    bool addSchema(const json& schema, std::string_view id = "") {
+        if (!schema.is_object())
             return false;
-        }
 
-        std::string schema_id = id;
+        std::string schema_id =
+            id.empty() ? extractSchemaId(schema) : std::string(id);
         if (schema_id.empty()) {
-            if (schema.contains("$id")) {
-                schema_id = schema["$id"].get<std::string>();
-            } else if (schema.contains("id")) {
-                schema_id = schema["id"].get<std::string>();
-            } else {
-                schema_id = "schema_" + std::to_string(next_id_++);
-            }
+            schema_id = "schema_" + std::to_string(next_id_++);
         }
 
         std::lock_guard<std::mutex> lock(mutex_);
@@ -1455,7 +1551,6 @@ public:
         validator->setSchemaManager(shared_from_this());
 
         validators_[schema_id] = validator;
-
         indexSubschemas(schema, schema_id);
 
         return true;
@@ -1467,15 +1562,11 @@ public:
      * @param schema_id ID of the schema to validate against
      * @return true if validation passes
      */
-    bool validate(const json& data, const std::string& schema_id) {
+    bool validate(const json& data, std::string_view schema_id) {
         std::lock_guard<std::mutex> lock(mutex_);
 
-        auto it = validators_.find(schema_id);
-        if (it == validators_.end()) {
-            return false;
-        }
-
-        return it->second->validate(data);
+        auto it = validators_.find(std::string(schema_id));
+        return it != validators_.end() && it->second->validate(data);
     }
 
     /**
@@ -1483,15 +1574,12 @@ public:
      * @param schema_id ID of the schema
      * @return Vector of validation errors or empty vector if schema not found
      */
-    std::vector<ValidationError> getErrors(const std::string& schema_id) {
+    std::vector<ValidationError> getErrors(std::string_view schema_id) {
         std::lock_guard<std::mutex> lock(mutex_);
 
-        auto it = validators_.find(schema_id);
-        if (it == validators_.end()) {
-            return {};
-        }
-
-        return it->second->getErrors();
+        auto it = validators_.find(std::string(schema_id));
+        return it != validators_.end() ? it->second->getErrors()
+                                       : std::vector<ValidationError>{};
     }
 
     /**
@@ -1499,15 +1587,11 @@ public:
      * @param schema_id ID of the schema
      * @return Schema JSON or null if not found
      */
-    json getSchema(const std::string& schema_id) {
+    json getSchema(std::string_view schema_id) {
         std::lock_guard<std::mutex> lock(mutex_);
 
-        auto it = schema_map_.find(schema_id);
-        if (it == schema_map_.end()) {
-            return nullptr;
-        }
-
-        return it->second;
+        auto it = schema_map_.find(std::string(schema_id));
+        return it != schema_map_.end() ? it->second : json(nullptr);
     }
 
     /**
@@ -1515,15 +1599,11 @@ public:
      * @param schema_id ID of the schema
      * @return Shared pointer to validator or null if not found
      */
-    std::shared_ptr<JsonValidator> getValidator(const std::string& schema_id) {
+    std::shared_ptr<JsonValidator> getValidator(std::string_view schema_id) {
         std::lock_guard<std::mutex> lock(mutex_);
 
-        auto it = validators_.find(schema_id);
-        if (it == validators_.end()) {
-            return nullptr;
-        }
-
-        return it->second;
+        auto it = validators_.find(std::string(schema_id));
+        return it != validators_.end() ? it->second : nullptr;
     }
 
     /**
@@ -1536,10 +1616,9 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
 
         if (ref.starts_with("#")) {
-            auto it = schema_map_.find(base_id);
-            if (it == schema_map_.end()) {
+            auto it = schema_map_.find(std::string(base_id));
+            if (it == schema_map_.end())
                 return nullptr;
-            }
 
             try {
                 return it->second.at(json::json_pointer(ref.substr(1)));
@@ -1569,7 +1648,7 @@ public:
             }
         }
 
-        auto it = schema_map_.find(ref);
+        auto it = schema_map_.find(std::string(ref));
         if (it == schema_map_.end()) {
             return nullptr;
         }
@@ -1583,6 +1662,23 @@ private:
     ValidationOptions options_;
     std::mutex mutex_;
     std::atomic<size_t> next_id_{0};
+
+    /**
+     * @brief Extract schema ID from schema
+     * @param schema Schema to extract ID from
+     * @return Schema ID or empty string if not found
+     */
+    [[nodiscard]] static std::string extractSchemaId(const json& schema) {
+        if (schema.is_object()) {
+            if (auto it = schema.find("$id");
+                it != schema.end() && it->is_string())
+                return it->get<std::string>();
+            if (auto it = schema.find("id");
+                it != schema.end() && it->is_string())  // Draft 4
+                return it->get<std::string>();
+        }
+        return "";
+    }
 
     /**
      * @brief Index subschemas for $ref resolution

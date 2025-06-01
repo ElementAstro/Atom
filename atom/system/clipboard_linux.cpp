@@ -42,9 +42,7 @@ public:
         }
     }
 
-    bool open() override { return m_display != nullptr; }
-
-    void close() override {
+    bool open() override { return m_display != nullptr; }    void close() noexcept override {
         // 在X11实现中，不需要显式关闭剪贴板
     }
 
@@ -128,28 +126,24 @@ public:
         XFree(data);
 
         return result;
-    }
-
-    bool setData(unsigned int format,
+    }    bool setData(ClipboardFormat format,
                  std::span<const std::byte> data) override {
         if (!m_display)
             return false;
 
         // 保存数据以备后续请求
-        m_customData[format] = std::vector<std::byte>(data.begin(), data.end());
+        m_customData[format.value] = std::vector<std::byte>(data.begin(), data.end());
 
         // 在X11中处理自定义数据格式需要更复杂的实现
         // 暂时只针对一些常见格式实现
         return true;
-    }
-
-    std::optional<std::vector<std::byte>> getData(
-        unsigned int format) override {
+    }    std::optional<std::vector<std::byte>> getData(
+        ClipboardFormat format) override {
         if (!m_display)
             return std::nullopt;
 
         // 如果我们拥有格式，直接返回
-        auto it = m_customData.find(format);
+        auto it = m_customData.find(format.value);
         if (it != m_customData.end()) {
             return it->second;
         }
@@ -565,10 +559,8 @@ public:
 
         XFree(data);
         return hasImageFormat;
-    }
-
-    std::vector<unsigned int> getAvailableFormats() override {
-        std::vector<unsigned int> formats;
+    }    std::vector<ClipboardFormat> getAvailableFormats() override {
+        std::vector<ClipboardFormat> formats;
 
         if (!m_display)
             return formats;
@@ -608,23 +600,19 @@ public:
         }
 
         // 获取原子列表
-        Atom *atoms = reinterpret_cast<Atom *>(data);
-
-        for (unsigned long i = 0; i < nitems; ++i) {
+        Atom *atoms = reinterpret_cast<Atom *>(data);        for (unsigned long i = 0; i < nitems; ++i) {
             // 使用Atom值作为format ID
-            formats.push_back(static_cast<unsigned int>(atoms[i]));
+            formats.push_back(ClipboardFormat{static_cast<unsigned int>(atoms[i])});
         }
 
         XFree(data);
         return formats;
-    }
-
-    std::optional<std::string> getFormatName(unsigned int format) override {
+    }    std::optional<std::string> getFormatName(ClipboardFormat format) override {
         if (!m_display)
             return std::nullopt;
 
         // 转换为X11 Atom
-        Atom atom = static_cast<Atom>(format);
+        Atom atom = static_cast<Atom>(format.value);
 
         // 获取Atom名称
         char *name = XGetAtomName(m_display, atom);
@@ -664,11 +652,11 @@ std::unique_ptr<Clipboard::Impl> Clipboard::Impl::create() {
 }
 
 // 静态格式注册方法
-unsigned int Clipboard::Impl::registerFormat(std::string_view formatName) {
+ClipboardFormat Clipboard::Impl::registerFormat(std::string_view formatName) {
     // 获取X display
     Display *display = XOpenDisplay(nullptr);
     if (!display)
-        return 0;
+        return ClipboardFormat{0};
 
     // 创建一个Atom
     Atom atom = XInternAtom(display, formatName.data(), False);
@@ -676,7 +664,7 @@ unsigned int Clipboard::Impl::registerFormat(std::string_view formatName) {
     // 关闭display
     XCloseDisplay(display);
 
-    return static_cast<unsigned int>(atom);
+    return ClipboardFormat{static_cast<unsigned int>(atom)};
 }
 
 }  // namespace clip

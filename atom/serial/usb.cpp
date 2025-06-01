@@ -208,7 +208,7 @@ UsbOperation UsbDevice::controlTransfer(uint8_t request_type, uint8_t request,
                                         unsigned int timeout) {
     ensureOpen();
 
-    auto transfer = std::make_shared<UsbTransfer>(context_);
+    auto transfer = std::make_shared<UsbTransfer>();
     transfer->prepareControl(handle_, request_type, request, value, index, data,
                              timeout);
 
@@ -228,7 +228,7 @@ UsbOperation UsbDevice::bulkWrite(unsigned char endpoint,
                                   unsigned int timeout) {
     ensureOpen();
 
-    auto transfer = std::make_shared<UsbTransfer>(context_);
+    auto transfer = std::make_shared<UsbTransfer>();
     transfer->prepareBulkWrite(handle_, endpoint, data, timeout);
 
     co_await transfer->submit();
@@ -247,7 +247,7 @@ UsbOperation UsbDevice::bulkRead(unsigned char endpoint,
                                  unsigned int timeout) {
     ensureOpen();
 
-    auto transfer = std::make_shared<UsbTransfer>(context_);
+    auto transfer = std::make_shared<UsbTransfer>();
     transfer->prepareBulkRead(handle_, endpoint, data, timeout);
 
     co_await transfer->submit();

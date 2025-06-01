@@ -69,10 +69,10 @@ RateLimiter::~RateLimiter() noexcept {
         // Ensure all waiting coroutines are resumed to avoid hanging coroutines
         for (auto& [_, waiters_queue] : waiters_) {
             while (!waiters_queue.empty()) {
-                auto handle = waiters_queue.front();
+                auto waiter_info = waiters_queue.front();
                 waiters_queue.pop_front();
                 lock.unlock();
-                handle.resume();
+                waiter_info.handle.resume();
                 lock.lock();
             }
         }
@@ -236,7 +236,7 @@ void RateLimiter::Awaiter::await_suspend(std::coroutine_handle<> handle) {
 #else
         if (limiter_.paused_.load(std::memory_order_acquire) ||
             limiter_.requests_[function_name_].size() >= settings.maxRequests) {
-            limiter_.waiters_[function_name_].emplace_back(handle);
+            limiter_.waiters_[function_name_].emplace_back(handle, this);
             limiter_.rejected_requests_[function_name_].fetch_add(
                 1, std::memory_order_relaxed);
             was_rejected_ = true;
@@ -548,7 +548,7 @@ void RateLimiter::processWaiters() {
                 auto waiter = wait_queue.front();
                 wait_queue.pop_front();
                 req_list.emplace_back(std::chrono::steady_clock::now());
-                waiters_to_process.emplace_back(function_name, waiter);
+                waiters_to_process.emplace_back(function_name, waiter.handle);
             }
         }
 #endif
@@ -606,7 +606,7 @@ void RateLimiter::asioProcessWaiters() {
                 auto waiter = wait_queue.front();
                 wait_queue.pop_front();
                 req_list.emplace_back(std::chrono::steady_clock::now());
-                waiters_to_process.emplace_back(function_name, waiter);
+                waiters_to_process.emplace_back(function_name, waiter.handle);
             }
         }
 #endif
@@ -669,7 +669,7 @@ void RateLimiter::optimizedProcessWaiters() {
                 auto waiter = wait_queue.front();
                 wait_queue.pop_front();
                 req_list.emplace_back(std::chrono::steady_clock::now());
-                waiters_to_process.emplace_back(function_name, waiter);
+                waiters_to_process.emplace_back(function_name, waiter.handle);
             }
         }
 #endif
@@ -748,7 +748,7 @@ void RateLimiter::optimizedProcessWaiters() {
                 auto waiter = wait_queue.front();
                 wait_queue.pop_front();
                 req_list.emplace_back(std::chrono::steady_clock::now());
-                waiters_to_process.emplace_back(function_name, waiter);
+                waiters_to_process.emplace_back(function_name, waiter.handle);
             }
         }
 #endif
@@ -830,7 +830,7 @@ void RateLimiter::optimizedProcessWaiters() {
                 auto waiter = wait_queue.front();
                 wait_queue.pop_front();
                 req_list.emplace_back(std::chrono::steady_clock::now());
-                waiters_to_process.emplace_back(function_name, waiter);
+                waiters_to_process.emplace_back(function_name, waiter.handle);
 #if !defined(ATOM_USE_ASIO)
                 waitersReady_.fetch_sub(1, std::memory_order_relaxed);
 #endif

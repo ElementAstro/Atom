@@ -1,8 +1,6 @@
 #ifndef ATOM_COMMAND_DISPATCH_HPP
 #define ATOM_COMMAND_DISPATCH_HPP
 
-#include "config.hpp"
-
 #include <atomic>
 #include <shared_mutex>
 #include <span>

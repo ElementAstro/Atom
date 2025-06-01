@@ -15,7 +15,6 @@ Description: Basic Component Definition
 #ifndef ATOM_COMPONENT_HPP
 #define ATOM_COMPONENT_HPP
 
-#include "config.hpp"
 #include "dispatch.hpp"
 #include "module_macro.hpp"
 #include "var.hpp"

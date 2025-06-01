@@ -12,23 +12,20 @@
  */
 struct alignas(64) CronJob {
 public:
-    std::string time_;         ///< Scheduled time for the Cron job.
-    std::string command_;      ///< Command to be executed by the Cron job.
-    bool enabled_;             ///< Status of the Cron job.
-    std::string category_;     ///< Category of the Cron job for organization.
-    std::string description_;  ///< Description of what the job does.
-    std::chrono::system_clock::time_point created_at_;  ///< Creation timestamp.
-    std::chrono::system_clock::time_point
-        last_run_;         ///< Last execution timestamp.
-    int run_count_;        ///< Number of times this job has been executed.
-    int priority_;         ///< Priority of the job (1-10, 1 is highest)
-    int max_retries_;      ///< Maximum number of retries on failure
-    int current_retries_;  ///< Current retry count
-    bool
-        one_time_;  ///< If true, job will be deleted after successful execution
+    std::string time_;
+    std::string command_;
+    bool enabled_;
+    std::string category_;
+    std::string description_;
+    std::chrono::system_clock::time_point created_at_;
+    std::chrono::system_clock::time_point last_run_;
+    int run_count_;
+    int priority_;
+    int max_retries_;
+    int current_retries_;
+    bool one_time_;
     std::vector<std::pair<std::chrono::system_clock::time_point, bool>>
-        execution_history_;  ///< History of executions with status
-                             ///< (true=success, false=failure)
+        execution_history_;
 
     /**
      * @brief Constructs a new CronJob object.
@@ -52,7 +49,9 @@ public:
           priority_(5),
           max_retries_(0),
           current_retries_(0),
-          one_time_(false) {}
+          one_time_(false) {
+        execution_history_.reserve(100);
+    }
 
     /**
      * @brief Converts the CronJob object to a JSON representation.
@@ -78,14 +77,6 @@ public:
      * @param success Whether the execution was successful.
      */
     void recordExecution(bool success);
-};
-
-/**
- * @brief Special cron expressions mapped to standard format
- */
-struct SpecialCronExpression {
-    std::string name;
-    std::string expression;
 };
 
 /**
@@ -117,6 +108,26 @@ public:
      * @return True if the job was added successfully, false otherwise.
      */
     auto createCronJob(const CronJob& job) -> bool;
+
+    /**
+     * @brief Creates a new job with a special time expression.
+     * @param specialTime Special time expression (e.g., @daily, @weekly).
+     * @param command The command to execute.
+     * @param enabled Whether the job is enabled.
+     * @param category The category of the job.
+     * @param description The description of the job.
+     * @param priority The priority of the job.
+     * @param maxRetries Maximum number of retries.
+     * @param oneTime Whether this is a one-time job.
+     * @return True if successful, false otherwise.
+     */
+    auto createJobWithSpecialTime(const std::string& specialTime,
+                                  const std::string& command,
+                                  bool enabled = true,
+                                  const std::string& category = "default",
+                                  const std::string& description = "",
+                                  int priority = 5, int maxRetries = 0,
+                                  bool oneTime = false) -> bool;
 
     /**
      * @brief Validates a cron expression.
@@ -342,51 +353,17 @@ public:
      */
     auto getJobsByPriority() -> std::vector<CronJob>;
 
-    /**
-     * @brief Creates a new job with a special time expression.
-     * @param specialTime Special time expression (e.g., @daily, @weekly).
-     * @param command The command to execute.
-     * @param enabled Whether the job is enabled.
-     * @param category The category of the job.
-     * @param description The description of the job.
-     * @param priority The priority of the job.
-     * @param maxRetries Maximum number of retries.
-     * @param oneTime Whether this is a one-time job.
-     * @return True if successful, false otherwise.
-     */
-    auto createJobWithSpecialTime(const std::string& specialTime,
-                                  const std::string& command,
-                                  bool enabled = true,
-                                  const std::string& category = "default",
-                                  const std::string& description = "",
-                                  int priority = 5, int maxRetries = 0,
-                                  bool oneTime = false) -> bool;
-
-    /**
-     * @brief Handles job failure and retries if configured.
-     * @param id The unique identifier of the job.
-     * @return True if a retry was scheduled, false otherwise.
-     */
-    auto handleJobFailure(const std::string& id) -> bool;
-
 private:
     std::vector<CronJob> jobs_;
     std::unordered_map<std::string, size_t> jobIndex_;
+    std::unordered_map<std::string, std::vector<size_t>> categoryIndex_;
 
     static const std::unordered_map<std::string, std::string>
         specialExpressions_;
 
-    /**
-     * @brief Refreshes the job index map for fast lookups.
-     */
     void refreshJobIndex();
-
-    /**
-     * @brief Validates a CronJob object.
-     * @param job The CronJob to validate.
-     * @return True if the job is valid, false otherwise.
-     */
     auto validateJob(const CronJob& job) -> bool;
+    auto handleJobFailure(const std::string& id) -> bool;
 };
 
 #endif  // CRONJOB_H

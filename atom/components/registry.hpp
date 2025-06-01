@@ -26,7 +26,6 @@ Description: Component Registry for Managing Component Lifecycle
 #include <vector>
 
 #include "component.hpp"
-#include "config.hpp"
 
 #include "atom/log/loguru.hpp"
 

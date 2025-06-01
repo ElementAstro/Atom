@@ -266,7 +266,7 @@ void DownloadManager::Impl::start(size_t thread_count, size_t download_speed) {
 
         spdlog::info(
             "Started DownloadManager with {} threads, speed limit: {} bytes/s",
-            threadCount_, download_speed);
+            threadCount_.load(), download_speed);
 
     } catch (const std::exception& e) {
         running_ = false;

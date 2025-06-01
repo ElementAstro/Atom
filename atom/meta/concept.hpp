@@ -18,12 +18,11 @@
 #include <string>
 #include <type_traits>
 #include <vector>
+#include "atom/containers/high_performance.hpp"
 
 #if __cplusplus < 202002L
 #error "C++20 is required for this library"
 #endif
-
-namespace atom::meta {
 
 //==============================================================================
 // Function Concepts
@@ -298,11 +297,6 @@ concept Char32 = std::is_same_v<T, char32_t>;
  */
 template <typename T>
 concept AnyChar = Char<T> || WChar<T> || Char16<T> || Char32<T>;
-
-// Forward declaration for custom String type
-namespace atom::containers {
-class String;
-}
 
 /*!
  * \brief Concept for string types
@@ -586,7 +580,5 @@ concept Promise = requires(T& obj) {
  */
 template <typename T>
 concept AsyncResult = Future<T> || Promise<T>;
-
-}  // namespace atom::meta
 
 #endif  // ATOM_META_CONCEPT_HPP

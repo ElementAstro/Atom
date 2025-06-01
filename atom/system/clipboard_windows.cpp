@@ -111,7 +111,7 @@ public:
         return m_isOpen;
     }
 
-    void close() override {
+    void close() noexcept override {
         if (m_isOpen) {
             if (!CloseClipboard()) {
                 // Get the last error message for debugging
@@ -235,9 +235,7 @@ public:
             }
             return std::nullopt;
         }
-    }
-
-    bool setData(unsigned int format,
+    }    bool setData(ClipboardFormat format,
                  std::span<const std::byte> data) override {
         try {
             if (!open())
@@ -296,10 +294,8 @@ public:
             }
             return false;
         }
-    }
-
-    std::optional<std::vector<std::byte>> getData(
-        unsigned int format) override {
+    }    std::optional<std::vector<std::byte>> getData(
+        ClipboardFormat format) override {
         try {
             if (!open())
                 return std::nullopt;
@@ -346,7 +342,7 @@ public:
         }
     }
 
-    bool containsFormat(unsigned int format) override {
+    bool containsFormat(ClipboardFormat format) override {
         try {
             if (!open())
                 return false;
@@ -658,20 +654,37 @@ public:
     }
 #endif
 
-    bool hasText() override { return containsFormat(CF_TEXT); }
+    bool hasText() override { return containsFormat(ClipboardFormat{CF_TEXT}); }
 
-    bool hasImage() override { return containsFormat(CF_BITMAP); }
+    bool hasImage() override { return containsFormat(ClipboardFormat{CF_BITMAP}); }
 
-    std::vector<unsigned int> getAvailableFormats() override {
+    // ============================================================================
+    // Change Monitoring Implementation
+    // ============================================================================
+    
+    bool hasChanged() const override {
+        // Windows doesn't provide built-in change detection, 
+        // so we'll use a simple sequence number approach
+        DWORD currentSequence = GetClipboardSequenceNumber();
+        if (currentSequence != m_lastSequenceNumber) {
+            m_lastSequenceNumber = currentSequence;
+            return true;
+        }
+        return false;
+    }
+    
+    void updateChangeCount() override {
+        m_lastSequenceNumber = GetClipboardSequenceNumber();
+    }std::vector<ClipboardFormat> getAvailableFormats() override {
         try {
             if (!open())
                 return {};
 
-            std::vector<unsigned int> formats;
+            std::vector<ClipboardFormat> formats;
             UINT format = 0;
 
             while ((format = EnumClipboardFormats(format)) != 0) {
-                formats.push_back(format);
+                formats.push_back(ClipboardFormat{format});
             }
 
             close();
@@ -684,16 +697,14 @@ public:
             }
             return {};
         }
-    }
-
-    std::optional<std::string> getFormatName(unsigned int format) override {
+    }    std::optional<std::string> getFormatName(ClipboardFormat format) override {
         try {
             char name[256] = {0};
-            int result = GetClipboardFormatNameA(format, name, sizeof(name));
+            int result = GetClipboardFormatNameA(format.value, name, sizeof(name));
 
             if (result == 0) {
                 // Handle standard formats
-                switch (format) {
+                switch (format.value) {
                     case CF_TEXT:
                         return "CF_TEXT";
                     case CF_BITMAP:
@@ -727,20 +738,20 @@ public:
                     case CF_LOCALE:
                         return "CF_LOCALE";
                     case CF_DIBV5:
-                        return "CF_DIBV5";
-                    default:
-                        return std::format("Unknown Format ({})", format);
+                        return "CF_DIBV5";                    default:
+                        return std::format("Unknown Format ({})", format.value);
                 }
             }
 
             return std::string(name);
         } catch (const std::exception& e) {
-            return std::format("Error Format ({})", format);
+            return std::format("Error Format ({})", format.value);
         }
     }
 
 private:
     bool m_isOpen = false;
+    mutable DWORD m_lastSequenceNumber = 0;
 };
 
 // Static factory method
@@ -749,8 +760,8 @@ std::unique_ptr<Clipboard::Impl> Clipboard::Impl::create() {
 }
 
 // Static format registration method
-unsigned int Clipboard::Impl::registerFormat(std::string_view formatName) {
-    return RegisterClipboardFormatA(formatName.data());
+ClipboardFormat Clipboard::Impl::registerFormat(std::string_view formatName) {
+    return ClipboardFormat{RegisterClipboardFormatA(formatName.data())};
 }
 
 }  // namespace clip

@@ -26,6 +26,7 @@ set(SOURCES
     stopwatcher.cpp
     time.cpp
     to_any.cpp
+    to_string.cpp
     utf.cpp
     uuid.cpp
     valid_string.cpp
