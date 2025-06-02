@@ -13,20 +13,21 @@ Description: System Information Module - CPU Common Implementation
 **************************************************/
 
 #include "common.hpp"
+#include <spdlog/spdlog.h>
 #include <regex>
+
 
 namespace atom::system {
 
 namespace {
-// Cache variables with a validity duration
 std::mutex g_cacheMutex;
 std::chrono::steady_clock::time_point g_lastCacheRefresh;
-const std::chrono::seconds g_cacheValidDuration(
-    5);  // Cache valid for 5 seconds
+constexpr std::chrono::seconds g_cacheValidDuration{5};
 
-// Cached CPU info
 std::atomic<bool> g_cacheInitialized{false};
 CpuInfo g_cpuInfoCache;
+
+}  // anonymous namespace
 
 /**
  * @brief Converts a string to bytes
@@ -105,10 +106,6 @@ bool needsCacheRefresh() {
     return !g_cacheInitialized || elapsed > g_cacheValidDuration;
 }
 
-}  // anonymous namespace
-
-// Common implementation of CPU functions that are not platform-specific
-
 auto cpuArchitectureToString(CpuArchitecture arch) -> std::string {
     switch (arch) {
         case CpuArchitecture::X86:
@@ -158,7 +155,7 @@ auto cpuVendorToString(CpuVendor vendor) -> std::string {
 }
 
 void refreshCpuInfo() {
-    LOG_F(INFO, "Manually refreshing CPU info cache");
+    spdlog::info("Manually refreshing CPU info cache");
     {
         std::lock_guard<std::mutex> lock(g_cacheMutex);
         g_lastCacheRefresh = std::chrono::steady_clock::time_point::min();
@@ -167,24 +164,26 @@ void refreshCpuInfo() {
 
     // Force a refresh by calling getCpuInfo()
     [[maybe_unused]] auto result = getCpuInfo();
-    LOG_F(INFO, "CPU info cache refreshed");
+    spdlog::info("CPU info cache refreshed");
 }
 
-// Common implementation for getCpuInfo that calls all relevant functions
+/**
+ * @brief Get comprehensive CPU information
+ * @return CpuInfo structure with all available CPU details
+ */
 auto getCpuInfo() -> CpuInfo {
-    LOG_F(INFO, "Starting getCpuInfo function");
+    spdlog::debug("Starting getCpuInfo function");
 
     if (!needsCacheRefresh()) {
         std::lock_guard<std::mutex> lock(g_cacheMutex);
         if (g_cacheInitialized) {
-            LOG_F(INFO, "Using cached CPU info");
+            spdlog::debug("Using cached CPU info");
             return g_cpuInfoCache;
         }
     }
 
     CpuInfo info;
 
-    // Basic information
     info.model = getCPUModel();
     info.identifier = getProcessorIdentifier();
     info.architecture = getCpuArchitecture();
@@ -193,30 +192,19 @@ auto getCpuInfo() -> CpuInfo {
     info.numPhysicalCores = getNumberOfPhysicalCores();
     info.numLogicalCores = getNumberOfLogicalCores();
 
-    // Frequencies
     info.baseFrequency = getProcessorFrequency();
     info.maxFrequency = getMaxProcessorFrequency();
 
-    // Socket information
     info.socketType = getCpuSocketType();
 
-    // Temperature and usage
     info.temperature = getCurrentCpuTemperature();
     info.usage = getCurrentCpuUsage();
 
-    // Cache sizes
     info.caches = getCacheSizes();
-
-    // Power information
     info.power = getCpuPowerInfo();
-
-    // CPU flags
     info.flags = getCpuFeatureFlags();
-
-    // Load average
     info.loadAverage = getCpuLoadAverage();
 
-    // Instruction set
     switch (info.architecture) {
         case CpuArchitecture::X86_64:
             info.instructionSet = "x86-64";
@@ -244,8 +232,8 @@ auto getCpuInfo() -> CpuInfo {
             break;
     }
 
-    // Parse family/model/stepping from identifier if possible
-    std::regex cpuIdRegex(".*Family (\\d+) Model (\\d+) Stepping (\\d+).*");
+    static const std::regex cpuIdRegex(
+        ".*Family (\\d+) Model (\\d+) Stepping (\\d+).*");
     std::smatch match;
 
     if (std::regex_search(info.identifier, match, cpuIdRegex) &&
@@ -255,8 +243,8 @@ auto getCpuInfo() -> CpuInfo {
             info.model_id = std::stoi(match[2]);
             info.stepping = std::stoi(match[3]);
         } catch (const std::exception& e) {
-            LOG_F(WARNING, "Error parsing CPU family/model/stepping: {}",
-                  e.what());
+            spdlog::warn("Error parsing CPU family/model/stepping: {}",
+                         e.what());
             info.family = 0;
             info.model_id = 0;
             info.stepping = 0;
@@ -267,13 +255,12 @@ auto getCpuInfo() -> CpuInfo {
         info.stepping = 0;
     }
 
-    // Get per-core information
-    std::vector<float> coreUsages = getPerCoreCpuUsage();
-    std::vector<float> coreTemps = getPerCoreCpuTemperature();
-    std::vector<double> coreFreqs = getPerCoreFrequencies();
-    std::vector<std::string> coreGovernors = getPerCoreScalingGovernors();
+    const auto coreUsages = getPerCoreCpuUsage();
+    const auto coreTemps = getPerCoreCpuTemperature();
+    const auto coreFreqs = getPerCoreFrequencies();
+    const auto coreGovernors = getPerCoreScalingGovernors();
 
-    int numCores = info.numLogicalCores;
+    const int numCores = info.numLogicalCores;
     info.cores.resize(numCores);
 
     for (int i = 0; i < numCores; ++i) {
@@ -291,7 +278,6 @@ auto getCpuInfo() -> CpuInfo {
                                      : "Unknown";
     }
 
-    // Update cache
     {
         std::lock_guard<std::mutex> lock(g_cacheMutex);
         g_cpuInfoCache = info;
@@ -299,13 +285,17 @@ auto getCpuInfo() -> CpuInfo {
         g_cacheInitialized = true;
     }
 
-    LOG_F(INFO, "Finished getCpuInfo function");
+    spdlog::debug("Finished getCpuInfo function");
     return info;
 }
 
-// Implementation for isCpuFeatureSupported that relies on cached feature flags
+/**
+ * @brief Check if a specific CPU feature is supported
+ * @param feature The CPU feature to check for support
+ * @return CpuFeatureSupport indicating the support status
+ */
 auto isCpuFeatureSupported(const std::string& feature) -> CpuFeatureSupport {
-    LOG_F(INFO, "Checking if CPU feature {} is supported", feature);
+    spdlog::debug("Checking if CPU feature {} is supported", feature);
 
     std::string featureLower = feature;
     std::transform(featureLower.begin(), featureLower.end(),
@@ -314,40 +304,35 @@ auto isCpuFeatureSupported(const std::string& feature) -> CpuFeatureSupport {
 
     const auto flags = getCpuFeatureFlags();
 
-    // Direct match
     auto it = std::find(flags.begin(), flags.end(), featureLower);
     if (it != flags.end()) {
-        LOG_F(INFO, "Feature {} is directly supported", feature);
+        spdlog::debug("Feature {} is directly supported", feature);
         return CpuFeatureSupport::SUPPORTED;
     }
 
-    // Handle special cases and aliases
     if (featureLower == "avx512") {
-        // Check for any AVX-512 variant
         for (const auto& flag : flags) {
             if (flag.find("avx512") != std::string::npos) {
-                LOG_F(INFO, "AVX-512 feature is supported via {}", flag);
+                spdlog::debug("AVX-512 feature is supported via {}", flag);
                 return CpuFeatureSupport::SUPPORTED;
             }
         }
     } else if (featureLower == "vt" || featureLower == "virtualization") {
-        // Check for Intel VT-x or AMD-V
         for (const auto& flag : flags) {
             if (flag == "vmx" || flag == "svm") {
-                LOG_F(INFO, "Virtualization is supported via {}", flag);
+                spdlog::debug("Virtualization is supported via {}", flag);
                 return CpuFeatureSupport::SUPPORTED;
             }
         }
     } else if (featureLower == "aes") {
-        // Check for AES-NI
         auto aesni = std::find(flags.begin(), flags.end(), "aes");
         if (aesni != flags.end()) {
-            LOG_F(INFO, "AES is supported via AES-NI");
+            spdlog::debug("AES is supported via AES-NI");
             return CpuFeatureSupport::SUPPORTED;
         }
     }
 
-    LOG_F(INFO, "Feature {} is not supported", feature);
+    spdlog::debug("Feature {} is not supported", feature);
     return CpuFeatureSupport::NOT_SUPPORTED;
 }
 

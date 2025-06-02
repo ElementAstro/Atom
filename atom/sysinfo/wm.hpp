@@ -6,16 +6,25 @@
 #include "atom/macro.hpp"
 
 namespace atom::system {
+
+/**
+ * @brief Contains system desktop environment and window manager information.
+ */
 struct SystemInfo {
-    std::string desktopEnvironment;  // DE: Fluent
-    std::string windowManager;       // WM: Desktop Window Manager
-    std::string wmTheme;  // WM Theme: Oem - Blue (System: Light, Apps: Light)
-    std::string icons;    // Icons: Recycle Bin
-    std::string font;     // Font: Microsoft YaHei UI (12pt)
-    std::string cursor;   // Cursor: Windows Default (32px)
+    std::string desktopEnvironment;  //!< Desktop environment (e.g., Fluent, GNOME, KDE)
+    std::string windowManager;       //!< Window manager (e.g., Desktop Window Manager, i3, bspwm)
+    std::string wmTheme;            //!< Window manager theme information
+    std::string icons;              //!< Icon theme or icon information
+    std::string font;               //!< System font information
+    std::string cursor;             //!< Cursor theme information
 } ATOM_ALIGNAS(128);
 
-auto getSystemInfo() -> SystemInfo;
+/**
+ * @brief Retrieves system desktop environment and window manager information.
+ * @return SystemInfo structure containing desktop environment details
+ */
+[[nodiscard]] auto getSystemInfo() -> SystemInfo;
+
 }  // namespace atom::system
 
 #endif

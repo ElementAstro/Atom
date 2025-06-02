@@ -4,305 +4,349 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2024-2-21
-
-Description: System Information Module - Linux WiFi Implementation
-
-**************************************************/
-
 #ifdef __linux__
 
 #include "linux.hpp"
+#include <arpa/inet.h>
+#include <ifaddrs.h>
+#include <netinet/in.h>
+#include <spdlog/spdlog.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <cstdio>
+#include <fstream>
+#include <iterator>
+#include <memory>
+#include <sstream>
+
 
 namespace atom::system::linux {
 
 auto isConnectedToInternet_impl() -> bool {
-    LOG_F(INFO, "Checking internet connection");
-    bool connected = false;
+    spdlog::debug("Checking internet connection");
+
+    static constexpr const char* TEST_HOST = "8.8.8.8";
+    static constexpr int TEST_PORT = 80;
+
     int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock != -1) {
-        struct sockaddr_in server;
-        server.sin_family = AF_INET;
-        server.sin_port = htons(80);
-        if (inet_pton(AF_INET, "8.8.8.8", &(server.sin_addr)) != -1) {
-            if (connect(sock, (struct sockaddr*)&server, sizeof(server)) != -1) {
-                connected = true;
-                LOG_F(INFO, "Connected to internet");
-            } else {
-                LOG_F(ERROR, "Failed to connect to internet");
-            }
-            close(sock);
-        } else {
-            LOG_F(ERROR, "inet_pton failed");
-            close(sock);
-        }
-    } else {
-        LOG_F(ERROR, "Failed to create socket");
+    if (sock == -1) {
+        spdlog::error("Failed to create socket");
+        return false;
     }
+
+    struct timeval timeout;
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+
+    struct sockaddr_in server{};
+    server.sin_family = AF_INET;
+    server.sin_port = htons(TEST_PORT);
+
+    bool connected = false;
+    if (inet_pton(AF_INET, TEST_HOST, &server.sin_addr) == 1) {
+        connected =
+            connect(sock, (struct sockaddr*)&server, sizeof(server)) == 0;
+    }
+
+    close(sock);
+
+    spdlog::debug("Internet connection: {}",
+                  connected ? "available" : "unavailable");
     return connected;
 }
 
 auto getCurrentWifi_impl() -> std::string {
-    LOG_F(INFO, "Getting current WiFi connection");
-    std::string wifiName;
+    spdlog::debug("Getting current WiFi connection");
 
     std::ifstream file("/proc/net/wireless");
+    if (!file.is_open()) {
+        spdlog::debug("No wireless interfaces found");
+        return {};
+    }
+
     std::string line;
+    std::getline(file, line);
+    std::getline(file, line);
+
     while (std::getline(file, line)) {
-        if (line.find(":") != std::string::npos) {
-            std::istringstream iss(line);
-            std::vector<std::string> tokens(
-                std::istream_iterator<std::string>{iss},
-                std::istream_iterator<std::string>());
-            if (tokens.size() >= 2 && tokens[1] != "off/any" &&
-                tokens[1] != "any") {
-                std::string interface = tokens[0];
-                interface = interface.substr(0, interface.find(':'));
-                
-                // Try to find the SSID for this interface
-                std::string cmd = "iwgetid " + interface + " -r 2>/dev/null";
-                FILE* pipe = popen(cmd.c_str(), "r");
-                if (pipe) {
-                    char buffer[128];
-                    if (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-                        wifiName = buffer;
-                        // Remove trailing newline if present
-                        if (!wifiName.empty() && wifiName[wifiName.length()-1] == '\n') {
-                            wifiName.erase(wifiName.length()-1);
-                        }
-                    }
-                    pclose(pipe);
+        if (line.find(':') == std::string::npos)
+            continue;
+
+        std::string interface = line.substr(0, line.find(':'));
+        interface.erase(0, interface.find_first_not_of(" \t"));
+        interface.erase(interface.find_last_not_of(" \t") + 1);
+
+        std::string cmd = "iwgetid " + interface + " -r 2>/dev/null";
+        std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"),
+                                                      pclose);
+
+        if (pipe) {
+            char buffer[128];
+            if (fgets(buffer, sizeof(buffer), pipe.get())) {
+                std::string wifiName = buffer;
+                if (!wifiName.empty() && wifiName.back() == '\n') {
+                    wifiName.pop_back();
                 }
-                
+
                 if (!wifiName.empty()) {
-                    break;
+                    spdlog::debug("Current WiFi: {}", wifiName);
+                    return wifiName;
                 }
             }
         }
     }
 
-    LOG_F(INFO, "Current WiFi: {}", wifiName);
-    return wifiName;
+    spdlog::debug("No active WiFi connection found");
+    return {};
 }
 
 auto getCurrentWiredNetwork_impl() -> std::string {
-    LOG_F(INFO, "Getting current wired network connection");
-    std::string wiredNetworkName;
+    spdlog::debug("Getting current wired network connection");
 
-    std::ifstream file("/sys/class/net");
+    static const std::vector<std::string> wiredPrefixes = {"en", "eth", "em"};
+
+    std::ifstream netDir("/proc/net/dev");
+    if (!netDir.is_open()) {
+        spdlog::error("Failed to open /proc/net/dev");
+        return {};
+    }
+
     std::string line;
-    while (std::getline(file, line)) {
-        if (line != "." && line != "..") {
-            std::string path = "/sys/class/net/" + line + "/operstate";
-            std::ifstream operStateFile(path);
-            if (operStateFile.is_open()) {
-                std::string state;
-                std::getline(operStateFile, state);
-                
-                // Check if this is a wired interface (typically eth0, enp0s3, etc.)
-                if (state == "up" && (line.substr(0, 2) == "en" || line.substr(0, 3) == "eth")) {
-                    wiredNetworkName = line;
-                    break;
-                }
+    std::getline(netDir, line);
+    std::getline(netDir, line);
+
+    while (std::getline(netDir, line)) {
+        if (line.find(':') == std::string::npos)
+            continue;
+
+        std::string interface = line.substr(0, line.find(':'));
+        interface.erase(0, interface.find_first_not_of(" \t"));
+
+        bool isWired = false;
+        for (const auto& prefix : wiredPrefixes) {
+            if (interface.substr(0, prefix.length()) == prefix) {
+                isWired = true;
+                break;
+            }
+        }
+
+        if (!isWired)
+            continue;
+
+        std::string statePath = "/sys/class/net/" + interface + "/operstate";
+        std::ifstream stateFile(statePath);
+        if (stateFile.is_open()) {
+            std::string state;
+            std::getline(stateFile, state);
+            if (state == "up") {
+                spdlog::debug("Current wired network: {}", interface);
+                return interface;
             }
         }
     }
-    
-    LOG_F(INFO, "Current wired network: {}", wiredNetworkName);
-    return wiredNetworkName;
+
+    spdlog::debug("No active wired connection found");
+    return {};
 }
 
 auto isHotspotConnected_impl() -> bool {
-    LOG_F(INFO, "Checking if connected to a hotspot");
-    bool isConnected = false;
+    spdlog::debug("Checking if connected to a hotspot");
 
-    std::ifstream file("/proc/net/dev");
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(
+        popen("iw dev 2>/dev/null | grep -A 2 Interface | grep -i 'type ap'",
+              "r"),
+        pclose);
+
+    if (pipe) {
+        char buffer[128];
+        if (fgets(buffer, sizeof(buffer), pipe.get())) {
+            spdlog::debug("Hotspot detected: AP mode interface found");
+            return true;
+        }
+    }
+
+    pipe.reset(popen("iwconfig 2>/dev/null | grep -i 'mode:master'", "r"));
+    if (pipe) {
+        char buffer[128];
+        if (fgets(buffer, sizeof(buffer), pipe.get())) {
+            spdlog::debug("Hotspot detected: master mode interface found");
+            return true;
+        }
+    }
+
+    spdlog::debug("No hotspot connection detected");
+    return false;
+}
+
+auto getHostIPs_impl() -> std::vector<std::string> {
+    spdlog::debug("Getting host IP addresses");
+
+    std::vector<std::string> hostIPs;
+    ifaddrs* ifaddr;
+
+    if (getifaddrs(&ifaddr) == -1) {
+        spdlog::error("getifaddrs failed");
+        return hostIPs;
+    }
+
+    std::unique_ptr<ifaddrs, decltype(&freeifaddrs)> ifaddrGuard(ifaddr,
+                                                                 freeifaddrs);
+
+    for (ifaddrs* ifa = ifaddr; ifa != nullptr; ifa = ifa->ifa_next) {
+        if (!ifa->ifa_addr)
+            continue;
+
+        int family = ifa->ifa_addr->sa_family;
+        if (family != AF_INET && family != AF_INET6)
+            continue;
+
+        char ipstr[INET6_ADDRSTRLEN];
+        void* addr;
+
+        if (family == AF_INET) {
+            addr = &((struct sockaddr_in*)ifa->ifa_addr)->sin_addr;
+        } else {
+            addr = &((struct sockaddr_in6*)ifa->ifa_addr)->sin6_addr;
+        }
+
+        if (inet_ntop(family, addr, ipstr, sizeof(ipstr))) {
+            std::string ip = ipstr;
+            if (ip != "127.0.0.1" && ip != "::1") {
+                hostIPs.emplace_back(std::move(ip));
+                spdlog::debug("Found IP address: {}", hostIPs.back());
+            }
+        }
+    }
+
+    return hostIPs;
+}
+
+auto getInterfaceNames_impl() -> std::vector<std::string> {
+    spdlog::debug("Getting interface names");
+
+    std::vector<std::string> interfaceNames;
+    ifaddrs* ifaddr;
+
+    if (getifaddrs(&ifaddr) == -1) {
+        spdlog::error("getifaddrs failed");
+        return interfaceNames;
+    }
+
+    std::unique_ptr<ifaddrs, decltype(&freeifaddrs)> ifaddrGuard(ifaddr,
+                                                                 freeifaddrs);
+
+    for (ifaddrs* ifa = ifaddr; ifa != nullptr; ifa = ifa->ifa_next) {
+        if (ifa->ifa_name) {
+            std::string name = ifa->ifa_name;
+            if (std::find(interfaceNames.begin(), interfaceNames.end(), name) ==
+                interfaceNames.end()) {
+                interfaceNames.emplace_back(std::move(name));
+                spdlog::debug("Found interface: {}", interfaceNames.back());
+            }
+        }
+    }
+
+    return interfaceNames;
+}
+
+auto measurePing_impl(const std::string& host, int timeout) -> float {
+    spdlog::debug("Measuring ping to host: {}, timeout: {} ms", host, timeout);
+
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "ping -c 1 -W %d %s 2>/dev/null",
+             std::max(1, timeout / 1000), host.c_str());
+
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+    if (!pipe) {
+        spdlog::error("Failed to execute ping command");
+        return -1.0f;
+    }
+
+    char buffer[512];
+    while (fgets(buffer, sizeof(buffer), pipe.get())) {
+        char* timePos = strstr(buffer, "time=");
+        if (timePos) {
+            timePos += 5;
+            float latency = std::strtof(timePos, nullptr);
+            spdlog::debug("Ping successful, latency: {:.1f} ms", latency);
+            return latency;
+        }
+    }
+
+    spdlog::error("Ping failed for host: {}", host);
+    return -1.0f;
+}
+
+auto getNetworkStats_impl() -> NetworkStats {
+    spdlog::debug("Getting network statistics");
+
+    NetworkStats stats{};
+
+    std::ifstream netdev("/proc/net/dev");
+    if (!netdev.is_open()) {
+        spdlog::error("Failed to open /proc/net/dev");
+        return stats;
+    }
+
     std::string line;
-    while (std::getline(file, line)) {
-        if (line.find(":") != std::string::npos) {
-            std::istringstream iss(line);
-            std::vector<std::string> tokens(
-                std::istream_iterator<std::string>{iss},
-                std::istream_iterator<std::string>());
-            constexpr int WIFI_INDEX = 5;
-            if (tokens.size() >= 17 &&
-                tokens[1].substr(0, WIFI_INDEX) == "wlx00") {
-                // This is a typical pattern for USB WiFi adapters often used as hotspots
-                isConnected = true;
+    std::getline(netdev, line);
+    std::getline(netdev, line);
+
+    unsigned long long totalBytesRecv = 0, totalBytesSent = 0;
+
+    while (std::getline(netdev, line)) {
+        if (line.find(':') == std::string::npos)
+            continue;
+
+        std::string interface = line.substr(0, line.find(':'));
+        interface.erase(0, interface.find_first_not_of(" \t"));
+
+        if (interface == "lo")
+            continue;
+
+        std::istringstream iss(line.substr(line.find(':') + 1));
+        unsigned long long recv, sent, dummy;
+
+        iss >> recv >> dummy >> dummy >> dummy >> dummy >> dummy >> dummy >>
+            dummy >> sent;
+
+        totalBytesRecv += recv;
+        totalBytesSent += sent;
+    }
+
+    stats.downloadSpeed = totalBytesRecv / (1024.0 * 1024.0);
+    stats.uploadSpeed = totalBytesSent / (1024.0 * 1024.0);
+
+    stats.latency = measurePing_impl("8.8.8.8", 1000);
+
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(
+        popen("iwconfig 2>/dev/null | grep 'Signal level'", "r"), pclose);
+
+    if (pipe) {
+        char buffer[128];
+        while (fgets(buffer, sizeof(buffer), pipe.get())) {
+            char* levelPos = strstr(buffer, "Signal level=");
+            if (levelPos) {
+                levelPos += 13;
+                stats.signalStrength = std::strtof(levelPos, nullptr);
                 break;
             }
         }
     }
 
-    // Additional check using iw command
-    if (!isConnected) {
-        FILE* pipe = popen("iw dev | grep -A 2 Interface | grep -i 'type ap'", "r");
-        if (pipe) {
-            char buffer[128];
-            if (fgets(buffer, sizeof(buffer), pipe) != NULL) {
-                // If we found any AP mode interfaces, hotspot is likely enabled
-                isConnected = true;
-            }
-            pclose(pipe);
-        }
-    }
-    
-    LOG_F(INFO, "Hotspot connected: {}", isConnected ? "yes" : "no");
-    return isConnected;
-}
+    stats.packetLoss = 0.0;
 
-auto getHostIPs_impl() -> std::vector<std::string> {
-    LOG_F(INFO, "Getting host IP addresses");
-    std::vector<std::string> hostIPs;
-
-    ifaddrs* ifaddr;
-
-    if (getifaddrs(&ifaddr) == -1) {
-        LOG_F(ERROR, "getifaddrs failed");
-        return hostIPs;
-    }
-
-    for (ifaddrs* ifa = ifaddr; ifa != nullptr; ifa = ifa->ifa_next) {
-        if (ifa->ifa_addr == nullptr) {
-            continue;
-        }
-
-        int family = ifa->ifa_addr->sa_family;
-        if (family == AF_INET || family == AF_INET6) {
-            std::array<char, INET6_ADDRSTRLEN> ipstr{};
-            void* addr;
-
-            if (family == AF_INET) {
-                addr = &((struct sockaddr_in*)ifa->ifa_addr)->sin_addr;
-            } else {
-                addr = &((struct sockaddr_in6*)ifa->ifa_addr)->sin6_addr;
-            }
-
-            inet_ntop(family, addr, ipstr.data(), ipstr.size());
-            hostIPs.emplace_back(ipstr.data());
-            LOG_F(INFO, "Found IP address: {}", ipstr.data());
-        }
-    }
-
-    freeifaddrs(ifaddr);
-    return hostIPs;
-}
-
-auto getInterfaceNames_impl() -> std::vector<std::string> {
-    LOG_F(INFO, "Getting interface names");
-    std::vector<std::string> interfaceNames;
-    IF_ADDRS allAddrs = nullptr;
-
-    if (atom::system::getAddresses(AF_UNSPEC, &allAddrs) != 0) {
-        LOG_F(ERROR, "getAddresses failed");
-        return interfaceNames;
-    }
-
-    for (auto* addr = allAddrs; addr != nullptr; addr = addr->ifa_next) {
-        if (addr->ifa_name != nullptr) {
-            interfaceNames.emplace_back(addr->ifa_name);
-            LOG_F(INFO, "Found interface: {}", addr->ifa_name);
-        }
-    }
-
-    if (allAddrs != nullptr) {
-        atom::system::freeAddresses(allAddrs);
-    }
-    return interfaceNames;
-}
-
-auto measurePing_impl(const std::string& host, int timeout) -> float {
-    LOG_F(INFO, "Measuring ping to host: {}, timeout: {} ms", host, timeout);
-    float latency = -1.0f;
-
-    // Linux下使用系统命令实现ping
-    char cmd[100];
-    snprintf(cmd, sizeof(cmd), "ping -c 1 -W %d %s 2>/dev/null", timeout / 1000,
-             host.c_str());
-
-    FILE* pipe = popen(cmd, "r");
-    if (pipe) {
-        char buffer[512];
-        while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-            if (strstr(buffer, "time=") || strstr(buffer, "time ")) {
-                char* timePos = strstr(buffer, "time=");
-                if (!timePos) {
-                    timePos = strstr(buffer, "time ");
-                }
-                if (timePos) {
-                    timePos += 5; // Skip "time=" or "time "
-                    latency = std::strtof(timePos, nullptr);
-                }
-            }
-        }
-        pclose(pipe);
-    }
-
-    if (latency < 0) {
-        LOG_F(ERROR, "Ping failed for host: {}", host);
-    } else {
-        LOG_F(INFO, "Ping successful, latency: {:.2f} ms", latency);
-    }
-
-    return latency;
-}
-
-auto getNetworkStats_impl() -> NetworkStats {
-    LOG_F(INFO, "Getting network statistics");
-    NetworkStats stats{};
-
-    // 读取/proc/net/dev获取网络统计信息
-    std::ifstream netdev("/proc/net/dev");
-    std::string line;
-    unsigned long long bytesRecv = 0, bytesSent = 0;
-
-    while (std::getline(netdev, line)) {
-        if (line.find(':') != std::string::npos) {
-            std::istringstream iss(line.substr(line.find(':') + 1));
-            unsigned long long recv, send;
-            iss >> recv >> std::ws >> send;
-            bytesRecv += recv;
-            bytesSent += send;
-        }
-    }
-
-    // These aren't actual speeds but rather total bytes - 
-    // for speed we'd need to measure over time
-    stats.downloadSpeed = bytesRecv / 1024.0 / 1024;  // Convert to MB
-    stats.uploadSpeed = bytesSent / 1024.0 / 1024;
-
-    // 测量网络延迟
-    std::string host = "8.8.8.8";
-    int timeout = 1000;
-    stats.latency = measurePing_impl(host, timeout);
-
-    // 使用iwconfig获取信号强度
-    FILE* pipe = popen("iwconfig 2>/dev/null | grep 'Signal level'", "r");
-    if (pipe) {
-        char buffer[128];
-        while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-            if (strstr(buffer, "Signal level=")) {
-                char* levelPos = strstr(buffer, "Signal level=");
-                if (levelPos) {
-                    levelPos += 13; // Skip "Signal level="
-                    stats.signalStrength = std::strtof(levelPos, nullptr);
-                }
-            }
-        }
-        pclose(pipe);
-    }
-
-    LOG_F(INFO,
-          "Network stats - Download: {:.2f} MB/s, Upload: {:.2f} MB/s, "
-          "Latency: {:.1f} ms, Signal: {:.1f} dBm",
-          stats.downloadSpeed, stats.uploadSpeed, stats.latency,
-          stats.signalStrength);
+    spdlog::debug(
+        "Network stats - Download: {:.2f} MB/s, Upload: {:.2f} MB/s, "
+        "Latency: {:.1f} ms, Signal: {:.1f} dBm",
+        stats.downloadSpeed, stats.uploadSpeed, stats.latency,
+        stats.signalStrength);
 
     return stats;
 }
 
-} // namespace atom::system::linux
+}  // namespace atom::system::linux
 
-#endif // __linux__
+#endif  // __linux__

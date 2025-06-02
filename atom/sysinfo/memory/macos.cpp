@@ -24,7 +24,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
-
+#include <unordered_map>
 
 namespace atom::system::macos {
 
@@ -35,7 +35,7 @@ constexpr double DEFAULT_MAX_BANDWIDTH_GBPS = 25.6;
 
 class PipeDeleter {
 public:
-    void operator()(FILE* pipe) const {
+    void operator()(FILE* pipe) const noexcept {
         if (pipe) {
             pclose(pipe);
         }
@@ -44,14 +44,46 @@ public:
 
 using PipePtr = std::unique_ptr<FILE, PipeDeleter>;
 
+struct SysctlCache {
+    std::unordered_map<std::string, unsigned long long> cache;
+    std::chrono::steady_clock::time_point lastUpdate;
+    static constexpr std::chrono::seconds CACHE_DURATION{5};
+
+    auto getValue(const std::string& name) -> unsigned long long {
+        const auto now = std::chrono::steady_clock::now();
+        if (now - lastUpdate > CACHE_DURATION) {
+            cache.clear();
+            lastUpdate = now;
+        }
+
+        auto it = cache.find(name);
+        if (it != cache.end()) {
+            return it->second;
+        }
+
+        size_t size = sizeof(unsigned long long);
+        unsigned long long value = 0;
+        if (sysctlbyname(name.c_str(), &value, &size, nullptr, 0) == 0) {
+            cache[name] = value;
+            return value;
+        }
+
+        spdlog::error("Failed to get sysctl value for {}", name);
+        return 0;
+    }
+};
+
+thread_local SysctlCache sysctlCache;
+
 auto executePipeCommand(const std::string& command) -> std::string {
     PipePtr pipe(popen(command.c_str(), "r"));
     if (!pipe) {
         throw std::runtime_error("Failed to execute command: " + command);
     }
 
-    char buffer[256];
     std::string result;
+    result.reserve(256);
+    char buffer[256];
     while (fgets(buffer, sizeof(buffer), pipe.get()) != nullptr) {
         result += buffer;
     }
@@ -60,37 +92,48 @@ auto executePipeCommand(const std::string& command) -> std::string {
 }
 
 auto parseMemoryValue(const std::string& value) -> unsigned long long {
-    double numValue;
-    char unit;
-    if (sscanf(value.c_str(), "%lf%c", &numValue, &unit) == 2) {
-        switch (unit) {
-            case 'M':
-            case 'm':
-                return static_cast<unsigned long long>(numValue * MB_TO_BYTES);
-            case 'G':
-            case 'g':
-                return static_cast<unsigned long long>(numValue * MB_TO_BYTES *
-                                                       1024);
-            case 'K':
-            case 'k':
-                return static_cast<unsigned long long>(numValue * 1024);
-            default:
-                break;
-        }
+    if (value.empty())
+        return 0;
+
+    const char* str = value.c_str();
+    char* endPtr;
+    const double numValue = std::strtod(str, &endPtr);
+
+    if (endPtr == str)
+        return 0;
+
+    switch (*endPtr) {
+        case 'G':
+        case 'g':
+            return static_cast<unsigned long long>(numValue * MB_TO_BYTES *
+                                                   1024);
+        case 'M':
+        case 'm':
+            return static_cast<unsigned long long>(numValue * MB_TO_BYTES);
+        case 'K':
+        case 'k':
+            return static_cast<unsigned long long>(numValue * 1024);
+        default:
+            return static_cast<unsigned long long>(numValue);
     }
-    return static_cast<unsigned long long>(std::stoull(value));
 }
 
-auto getSysctlValue(const std::string& name) -> unsigned long long {
-    try {
-        const auto command = "sysctl -n " + name;
-        const auto result = executePipeCommand(command);
-        return std::stoull(result);
-    } catch (const std::exception& e) {
-        spdlog::error("Failed to get sysctl value for {}: {}", name, e.what());
-        return 0;
-    }
+auto getTaskInfo()
+    -> std::pair<task_basic_info_data_t, task_events_info_data_t> {
+    task_basic_info_data_t basicInfo{};
+    task_events_info_data_t eventsInfo{};
+
+    mach_msg_type_number_t count = TASK_BASIC_INFO_COUNT;
+    task_info(mach_task_self(), TASK_BASIC_INFO,
+              reinterpret_cast<task_info_t>(&basicInfo), &count);
+
+    count = TASK_EVENTS_INFO_COUNT;
+    task_info(mach_task_self(), TASK_EVENTS_INFO,
+              reinterpret_cast<task_info_t>(&eventsInfo), &count);
+
+    return {basicInfo, eventsInfo};
 }
+
 }  // namespace
 
 auto getMemoryUsage() -> float {
@@ -122,7 +165,7 @@ auto getMemoryUsage() -> float {
 auto getTotalMemorySize() -> unsigned long long {
     spdlog::debug("Getting total memory size");
 
-    const auto totalMemorySize = getSysctlValue("hw.memsize");
+    const auto totalMemorySize = sysctlCache.getValue("hw.memsize");
     spdlog::debug("Total memory size: {} bytes", totalMemorySize);
     return totalMemorySize;
 }
@@ -132,7 +175,7 @@ auto getAvailableMemorySize() -> unsigned long long {
 
     try {
         const auto result = executePipeCommand(
-            "vm_stat | grep 'Pages free:' | awk '{print $3}' | tr -d '.'");
+            "vm_stat | awk '/Pages free:/ {print $3}' | tr -d '.'");
         const auto freePages = std::stoull(result);
         const auto availableMemorySize = freePages * PAGE_SIZE_BYTES;
 
@@ -156,26 +199,18 @@ auto getPhysicalMemoryInfo() -> MemoryInfo::MemorySlot {
 
         try {
             const auto typeResult = executePipeCommand(
-                "system_profiler SPMemoryDataType | grep 'Type:' | head -n 1 | "
-                "awk -F': ' '{print $2}' | tr -d '\\n\\r'");
-            if (!typeResult.empty()) {
-                slot.type = typeResult;
-            } else {
-                slot.type = "DDR";
-            }
+                "system_profiler SPMemoryDataType | awk -F': ' '/Type:/ {print "
+                "$2; exit}' | tr -d '\\n\\r'");
+            slot.type = typeResult.empty() ? "DDR" : typeResult;
         } catch (...) {
             slot.type = "DDR";
         }
 
         try {
             const auto speedResult = executePipeCommand(
-                "system_profiler SPMemoryDataType | grep 'Speed:' | head -n 1 "
-                "| awk -F': ' '{print $2}' | tr -d '\\n\\r'");
-            if (!speedResult.empty()) {
-                slot.clockSpeed = speedResult;
-            } else {
-                slot.clockSpeed = "Unknown";
-            }
+                "system_profiler SPMemoryDataType | awk -F': ' '/Speed:/ "
+                "{print $2; exit}' | tr -d '\\n\\r'");
+            slot.clockSpeed = speedResult.empty() ? "Unknown" : speedResult;
         } catch (...) {
             slot.clockSpeed = "Unknown";
         }
@@ -226,35 +261,11 @@ auto getVirtualMemoryUsed() -> unsigned long long {
 }
 
 auto getSwapMemoryTotal() -> unsigned long long {
-    spdlog::debug("Getting total swap memory size");
-
-    try {
-        const auto result = executePipeCommand(
-            "sysctl vm.swapusage | awk '{print $4}' | tr -d ','");
-        const auto swapMemoryTotal = parseMemoryValue(result);
-
-        spdlog::debug("Swap memory total: {} bytes", swapMemoryTotal);
-        return swapMemoryTotal;
-    } catch (const std::exception& e) {
-        spdlog::error("Error getting swap memory total: {}", e.what());
-        return 0;
-    }
+    return getVirtualMemoryMax();
 }
 
 auto getSwapMemoryUsed() -> unsigned long long {
-    spdlog::debug("Getting used swap memory size");
-
-    try {
-        const auto result = executePipeCommand(
-            "sysctl vm.swapusage | awk '{print $7}' | tr -d ','");
-        const auto swapMemoryUsed = parseMemoryValue(result);
-
-        spdlog::debug("Swap memory used: {} bytes", swapMemoryUsed);
-        return swapMemoryUsed;
-    } catch (const std::exception& e) {
-        spdlog::error("Error getting swap memory used: {}", e.what());
-        return 0;
-    }
+    return getVirtualMemoryUsed();
 }
 
 auto getCommittedMemory() -> size_t {
@@ -299,28 +310,15 @@ auto getDetailedMemoryStats() -> MemoryInfo {
             (info.totalPhysicalMemory - info.availablePhysicalMemory) +
             info.swapMemoryUsed;
 
-        task_basic_info_data_t taskInfo{};
-        mach_msg_type_number_t count = TASK_BASIC_INFO_COUNT;
-        if (task_info(mach_task_self(), TASK_BASIC_INFO,
-                      reinterpret_cast<task_info_t>(&taskInfo),
-                      &count) == KERN_SUCCESS) {
-            info.workingSetSize = taskInfo.resident_size;
-            info.peakWorkingSetSize = taskInfo.resident_size;
-        }
-
-        task_events_info_data_t eventsInfo{};
-        count = TASK_EVENTS_INFO_COUNT;
-        if (task_info(mach_task_self(), TASK_EVENTS_INFO,
-                      reinterpret_cast<task_info_t>(&eventsInfo),
-                      &count) == KERN_SUCCESS) {
-            info.pageFaultCount = eventsInfo.faults;
-        }
+        const auto [basicInfo, eventsInfo] = getTaskInfo();
+        info.workingSetSize = basicInfo.resident_size;
+        info.peakWorkingSetSize = basicInfo.resident_size;
+        info.pageFaultCount = eventsInfo.faults;
 
         info.quotaPagedPoolUsage = 0;
         info.quotaPeakPagedPoolUsage = 0;
 
-        const auto slot = getPhysicalMemoryInfo();
-        info.slots.push_back(slot);
+        info.slots.push_back(getPhysicalMemoryInfo());
 
         spdlog::debug("Detailed memory statistics retrieved successfully");
 
@@ -334,54 +332,26 @@ auto getDetailedMemoryStats() -> MemoryInfo {
 auto getPeakWorkingSetSize() -> size_t {
     spdlog::debug("Getting peak working set size");
 
-    task_basic_info_data_t taskInfo{};
-    mach_msg_type_number_t count = TASK_BASIC_INFO_COUNT;
-
-    if (task_info(mach_task_self(), TASK_BASIC_INFO,
-                  reinterpret_cast<task_info_t>(&taskInfo),
-                  &count) == KERN_SUCCESS) {
-        spdlog::debug("Peak working set size: {} bytes",
-                      taskInfo.resident_size);
-        return taskInfo.resident_size;
-    }
-
-    spdlog::error("Failed to get peak working set size");
-    return 0;
+    const auto [basicInfo, _] = getTaskInfo();
+    spdlog::debug("Peak working set size: {} bytes", basicInfo.resident_size);
+    return basicInfo.resident_size;
 }
 
 auto getCurrentWorkingSetSize() -> size_t {
     spdlog::debug("Getting current working set size");
 
-    task_basic_info_data_t taskInfo{};
-    mach_msg_type_number_t count = TASK_BASIC_INFO_COUNT;
-
-    if (task_info(mach_task_self(), TASK_BASIC_INFO,
-                  reinterpret_cast<task_info_t>(&taskInfo),
-                  &count) == KERN_SUCCESS) {
-        spdlog::debug("Current working set size: {} bytes",
-                      taskInfo.resident_size);
-        return taskInfo.resident_size;
-    }
-
-    spdlog::error("Failed to get current working set size");
-    return 0;
+    const auto [basicInfo, _] = getTaskInfo();
+    spdlog::debug("Current working set size: {} bytes",
+                  basicInfo.resident_size);
+    return basicInfo.resident_size;
 }
 
 auto getPageFaultCount() -> size_t {
     spdlog::debug("Getting page fault count");
 
-    task_events_info_data_t eventsInfo{};
-    mach_msg_type_number_t count = TASK_EVENTS_INFO_COUNT;
-
-    if (task_info(mach_task_self(), TASK_EVENTS_INFO,
-                  reinterpret_cast<task_info_t>(&eventsInfo),
-                  &count) == KERN_SUCCESS) {
-        spdlog::debug("Page fault count: {}", eventsInfo.faults);
-        return eventsInfo.faults;
-    }
-
-    spdlog::error("Failed to get page fault count");
-    return 0;
+    const auto [_, eventsInfo] = getTaskInfo();
+    spdlog::debug("Page fault count: {}", eventsInfo.faults);
+    return eventsInfo.faults;
 }
 
 auto getMemoryLoadPercentage() -> double {
@@ -411,9 +381,7 @@ auto getMemoryPerformance() -> MemoryPerformance {
         std::vector<int> testData(TEST_SIZE);
 
         const auto writeStart = std::chrono::high_resolution_clock::now();
-        for (int i = 0; i < TEST_SIZE; ++i) {
-            testData[i] = i;
-        }
+        std::iota(testData.begin(), testData.end(), 0);
         const auto writeEnd = std::chrono::high_resolution_clock::now();
 
         const auto writeTime =
@@ -423,8 +391,8 @@ auto getMemoryPerformance() -> MemoryPerformance {
 
         volatile int sum = 0;
         const auto readStart = std::chrono::high_resolution_clock::now();
-        for (int i = 0; i < TEST_SIZE; ++i) {
-            sum += testData[i];
+        for (const auto& value : testData) {
+            sum += value;
         }
         const auto readEnd = std::chrono::high_resolution_clock::now();
 
@@ -469,8 +437,7 @@ auto getSystemCacheInfo() -> CacheInfo {
 
     try {
         const auto result = executePipeCommand(
-            "vm_stat | grep 'Pages wired down:' | awk '{print $4}' | tr -d "
-            "'.'");
+            "vm_stat | awk '/Pages wired down:/ {print $4}' | tr -d '.'");
         const auto wiredPages = std::stoull(result);
 
         cacheInfo.totalSize = wiredPages * PAGE_SIZE_BYTES;

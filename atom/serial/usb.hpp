@@ -11,6 +11,7 @@
 #define ATOM_SERIAL_USB_HPP
 
 #include <libusb-1.0/libusb.h>
+#include <spdlog/spdlog.h>
 #include <atomic>
 #include <concepts>
 #include <coroutine>
@@ -79,9 +80,6 @@ struct UsbOperation {
      * @brief Promise type for the UsbOperation coroutine
      */
     struct promise_type {
-        /**
-         * @brief Creates the return object for the coroutine
-         */
         UsbOperation get_return_object() {
             return UsbOperation{handle_type::from_promise(*this)};
         }
@@ -91,14 +89,22 @@ struct UsbOperation {
         void return_void() {}
         void unhandled_exception() { exception_ptr = std::current_exception(); }
 
-        std::exception_ptr exception_ptr;  ///< Stores any unhandled exceptions
+        std::exception_ptr exception_ptr;
     };
 
-    handle_type handle;  ///< Coroutine handle
+    handle_type handle;
 
     explicit UsbOperation(handle_type h) : handle(h) {}
     UsbOperation(const UsbOperation&) = delete;
     UsbOperation& operator=(const UsbOperation&) = delete;
+    UsbOperation(UsbOperation&& other) noexcept : handle(std::exchange(other.handle, {})) {}
+    UsbOperation& operator=(UsbOperation&& other) noexcept {
+        if (this != &other) {
+            if (handle) handle.destroy();
+            handle = std::exchange(other.handle, {});
+        }
+        return *this;
+    }
 
     ~UsbOperation() {
         if (handle) {
@@ -161,13 +167,13 @@ public:
     struct SubmitAwaiter {
         UsbTransfer& transfer;
 
-        bool await_ready() const noexcept { return transfer.completed_; }
+        bool await_ready() const noexcept { return transfer.completed_.load(); }
 
         void await_suspend(std::coroutine_handle<> handle) {
             transfer.completion_handle_ = handle;
             int result = libusb_submit_transfer(transfer.transfer_);
             if (result != LIBUSB_SUCCESS) {
-                transfer.completed_ = true;
+                transfer.completed_.store(true);
                 transfer.status_ = LIBUSB_TRANSFER_ERROR;
                 handle.resume();
             }
@@ -196,9 +202,9 @@ public:
 
 private:
     libusb_transfer* transfer_;
-    bool completed_;
+    std::atomic<bool> completed_;
     libusb_transfer_status status_;
-    int actual_length_{0};
+    std::atomic<int> actual_length_{0};
     unsigned char setup_buffer_[LIBUSB_CONTROL_SETUP_SIZE + 256];
     std::vector<uint8_t> data_copy_;
     const unsigned char* data_buffer_;
@@ -221,7 +227,11 @@ public:
     UsbContext(const UsbContext&) = delete;
     UsbContext& operator=(const UsbContext&) = delete;
 
-    auto getDevices() -> std::vector<std::shared_ptr<UsbDevice>> ;
+    /**
+     * @brief Gets list of available USB devices
+     * @return Vector of shared pointers to USB devices
+     */
+    std::vector<std::shared_ptr<UsbDevice>> getDevices();
 
     /**
      * @brief Starts hotplug detection with the given handler
@@ -236,7 +246,7 @@ public:
                                "Hotplug not supported on this platform");
         }
 
-        if (hotplug_running_) {
+        if (hotplug_running_.load()) {
             return;
         }
 
@@ -260,6 +270,7 @@ public:
                         (event == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED);
                     self->hotplug_handler_(*dev, arrived);
                 } catch (const std::exception& ex) {
+                    spdlog::error("Hotplug callback error: {}", ex.what());
                 }
                 return 0;
             },
@@ -269,14 +280,15 @@ public:
             throw UsbException(result, "Failed to register hotplug callback");
         }
 
-        hotplug_running_ = true;
+        hotplug_running_.store(true);
         hotplug_thread_ = std::thread([this]() {
             try {
-                while (hotplug_running_) {
+                while (hotplug_running_.load()) {
                     libusb_handle_events(context_);
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
             } catch (const std::exception& ex) {
+                spdlog::error("Hotplug thread error: {}", ex.what());
             }
         });
     }
@@ -294,7 +306,6 @@ public:
 
 private:
     libusb_context* context_{nullptr};
-
     std::atomic<bool> hotplug_running_;
     std::thread hotplug_thread_;
     libusb_hotplug_callback_handle hotplug_handle_{-1};

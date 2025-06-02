@@ -17,7 +17,9 @@ Description: System Information Module - Disk Information
 #include "atom/sysinfo/disk/disk_util.hpp"
 
 #include <chrono>
+#include <fstream>
 #include <mutex>
+#include <sstream>
 #include <unordered_map>
 
 #ifdef _WIN32
@@ -25,68 +27,68 @@ Description: System Information Module - Disk Information
 #elif __linux__
 #include <sys/stat.h>
 #include <sys/statfs.h>
-
 #elif __APPLE__
 #include <CoreFoundation/CoreFoundation.h>
 #include <DiskArbitration/DiskArbitration.h>
 #include <IOKit/IOBSD.h>
 #include <IOKit/storage/IOStorageDeviceCharacteristics.h>
 #include <sys/mount.h>
-
 #elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
 #include <sys/disk.h>
 #include <sys/mount.h>
-
 #endif
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 
 namespace atom::system {
 
-// Cache map to store drive info with expiration time
-static std::mutex g_cacheMutex;
-static std::unordered_map<
-    std::string, std::pair<DiskInfo, std::chrono::steady_clock::time_point>>
+namespace {
+std::mutex g_cacheMutex;
+std::unordered_map<std::string,
+                   std::pair<DiskInfo, std::chrono::steady_clock::time_point>>
     g_diskInfoCache;
-static const auto CACHE_EXPIRATION = std::chrono::minutes(5);
+constexpr auto CACHE_EXPIRATION = std::chrono::minutes(5);
 
-/**
- * @brief Clears expired cache entries
- */
 void clearExpiredCache() {
     std::lock_guard<std::mutex> lock(g_cacheMutex);
-    auto now = std::chrono::steady_clock::now();
+    const auto now = std::chrono::steady_clock::now();
 
-    // Use C++20 erase_if for cleaner removal
     std::erase_if(g_diskInfoCache, [now](const auto& item) {
         return (now - item.second.second) > CACHE_EXPIRATION;
     });
 }
 
-/**
- * @brief Gets disk information with caching
- */
+std::string trimString(const std::string& str) {
+    const auto start = str.find_first_not_of(" \t\n\r\f\v");
+    if (start == std::string::npos) {
+        return "";
+    }
+    const auto end = str.find_last_not_of(" \t\n\r\f\v");
+    return str.substr(start, end - start + 1);
+}
+
+}  // anonymous namespace
+
 DiskInfo getDiskInfoCached(const std::string& path) {
     clearExpiredCache();
 
     {
         std::lock_guard<std::mutex> lock(g_cacheMutex);
-        auto it = g_diskInfoCache.find(path);
+        const auto it = g_diskInfoCache.find(path);
         if (it != g_diskInfoCache.end() &&
             (std::chrono::steady_clock::now() - it->second.second) <=
                 CACHE_EXPIRATION) {
+            spdlog::debug("Using cached disk info for path: {}", path);
             return it->second.first;
         }
     }
 
-    // Cache miss - compute new info
+    spdlog::debug("Computing new disk info for path: {}", path);
     DiskInfo info;
     info.path = path;
 
-    // Fill file system type
     info.fsType = getFileSystemType(path);
 
-    // Get space information
 #ifdef _WIN32
     ULARGE_INTEGER totalSpace, freeSpace;
     if (GetDiskFreeSpaceExA(path.c_str(), nullptr, &totalSpace, &freeSpace)) {
@@ -94,18 +96,19 @@ DiskInfo getDiskInfoCached(const std::string& path) {
         info.freeSpace = freeSpace.QuadPart;
         info.usagePercent = static_cast<float>(
             calculateDiskUsagePercentage(info.totalSpace, info.freeSpace));
+    } else {
+        spdlog::warn("Failed to get disk space for path: {}", path);
     }
 
-    // Check if removable
-    UINT driveType = GetDriveTypeA(path.c_str());
+    const UINT driveType = GetDriveTypeA(path.c_str());
     info.isRemovable = (driveType == DRIVE_REMOVABLE);
 
-    // Get physical device path and model
     char volumeName[MAX_PATH] = {0};
     if (GetVolumeNameForVolumeMountPointA(path.c_str(), volumeName, MAX_PATH)) {
         info.devicePath = volumeName;
         info.model = getDriveModel(path);
     }
+
 #elif __linux__
     struct statfs stats{};
     if (statfs(path.c_str(), &stats) == 0) {
@@ -113,30 +116,31 @@ DiskInfo getDiskInfoCached(const std::string& path) {
         info.freeSpace = static_cast<uint64_t>(stats.f_bfree) * stats.f_bsize;
         info.usagePercent = static_cast<float>(
             calculateDiskUsagePercentage(info.totalSpace, info.freeSpace));
+    } else {
+        spdlog::warn("Failed to get filesystem stats for path: {}", path);
     }
 
-    // Try to find device path
     std::ifstream mountInfo("/proc/mounts");
-    std::string line;
-    while (std::getline(mountInfo, line)) {
-        if (line.find(path) != std::string::npos) {
-            std::istringstream iss(line);
-            iss >> info.devicePath;
-            break;
+    if (mountInfo.is_open()) {
+        std::string line;
+        while (std::getline(mountInfo, line)) {
+            if (line.find(path) != std::string::npos) {
+                std::istringstream iss(line);
+                iss >> info.devicePath;
+                break;
+            }
         }
     }
 
-    // Check if removable and get model
     if (!info.devicePath.empty()) {
-        // Extract device name
         std::string deviceName = info.devicePath;
-        size_t lastSlash = deviceName.find_last_of('/');
+        const size_t lastSlash = deviceName.find_last_of('/');
         if (lastSlash != std::string::npos) {
             deviceName = deviceName.substr(lastSlash + 1);
         }
 
-        // Check if removable by looking at /sys/block/<device>/removable
-        std::string removablePath = "/sys/block/" + deviceName + "/removable";
+        const std::string removablePath =
+            "/sys/block/" + deviceName + "/removable";
         std::ifstream removableFile(removablePath);
         std::string value;
         if (removableFile.is_open() && std::getline(removableFile, value)) {
@@ -145,6 +149,7 @@ DiskInfo getDiskInfoCached(const std::string& path) {
 
         info.model = getDriveModel(info.devicePath);
     }
+
 #elif __APPLE__
     struct statfs stats{};
     if (statfs(path.c_str(), &stats) == 0) {
@@ -153,32 +158,32 @@ DiskInfo getDiskInfoCached(const std::string& path) {
         info.usagePercent = static_cast<float>(
             calculateDiskUsagePercentage(info.totalSpace, info.freeSpace));
         info.devicePath = stats.f_mntfromname;
+    } else {
+        spdlog::warn("Failed to get filesystem stats for path: {}", path);
     }
 
-    // Get model and check if removable using IOKit
     if (!info.devicePath.empty()) {
-        // Extract disk identifier (e.g., 'disk1' from '/dev/disk1')
         std::string diskName = info.devicePath;
-        size_t lastSlash = diskName.find_last_of('/');
+        const size_t lastSlash = diskName.find_last_of('/');
         if (lastSlash != std::string::npos) {
             diskName = diskName.substr(lastSlash + 1);
         }
 
         info.model = getDriveModel(info.devicePath);
 
-        // Check if removable
-        DASessionRef session = DASessionCreate(kCFAllocatorDefault);
+        const DASessionRef session = DASessionCreate(kCFAllocatorDefault);
         if (session) {
-            DADiskRef disk = DADiskCreateFromBSDName(kCFAllocatorDefault,
-                                                     session, diskName.c_str());
+            const DADiskRef disk = DADiskCreateFromBSDName(
+                kCFAllocatorDefault, session, diskName.c_str());
             if (disk) {
-                CFDictionaryRef diskDesc = DADiskCopyDescription(disk);
+                const CFDictionaryRef diskDesc = DADiskCopyDescription(disk);
                 if (diskDesc) {
-                    // Check if ejectable/removable
-                    CFBooleanRef ejectable = (CFBooleanRef)CFDictionaryGetValue(
-                        diskDesc, kDADiskDescriptionMediaEjectableKey);
-                    CFBooleanRef removable = (CFBooleanRef)CFDictionaryGetValue(
-                        diskDesc, kDADiskDescriptionMediaRemovableKey);
+                    const CFBooleanRef ejectable =
+                        static_cast<CFBooleanRef>(CFDictionaryGetValue(
+                            diskDesc, kDADiskDescriptionMediaEjectableKey));
+                    const CFBooleanRef removable =
+                        static_cast<CFBooleanRef>(CFDictionaryGetValue(
+                            diskDesc, kDADiskDescriptionMediaRemovableKey));
 
                     info.isRemovable =
                         (ejectable && CFBooleanGetValue(ejectable)) ||
@@ -191,6 +196,7 @@ DiskInfo getDiskInfoCached(const std::string& path) {
             CFRelease(session);
         }
     }
+
 #elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
     struct statfs stats{};
     if (statfs(path.c_str(), &stats) == 0) {
@@ -199,52 +205,55 @@ DiskInfo getDiskInfoCached(const std::string& path) {
         info.usagePercent = static_cast<float>(
             calculateDiskUsagePercentage(info.totalSpace, info.freeSpace));
         info.devicePath = stats.f_mntfromname;
+    } else {
+        spdlog::warn("Failed to get filesystem stats for path: {}", path);
     }
 
-    // For BSD, we simplify by just setting the model to the device name
-    // A more complete implementation would use ioctls to get media info
     info.model = info.devicePath;
-
-    // Simple check for removable media (not comprehensive)
     info.isRemovable =
         (info.devicePath.find("da") == 0 || info.devicePath.find("cd") == 0 ||
          info.devicePath.find("md") == 0);
 #endif
 
-    // Cache the result
     {
         std::lock_guard<std::mutex> lock(g_cacheMutex);
         g_diskInfoCache[path] = {info, std::chrono::steady_clock::now()};
     }
 
+    spdlog::debug("Disk info computed for path: {}, model: {}, usage: {:.2f}%",
+                  path, info.model, info.usagePercent);
     return info;
 }
 
 std::vector<DiskInfo> getDiskInfo(bool includeRemovable) {
+    spdlog::debug("Getting disk info, includeRemovable: {}", includeRemovable);
+
     std::vector<DiskInfo> result;
-    auto drives =
-        getAvailableDrives(true);  // Get all drives including removable
+    const auto drives = getAvailableDrives(true);
+    result.reserve(drives.size());
 
     for (const auto& drive : drives) {
         DiskInfo info = getDiskInfoCached(drive);
 
-        // Filter based on removable setting
         if (!includeRemovable && info.isRemovable) {
+            spdlog::debug("Skipping removable drive: {}", drive);
             continue;
         }
 
-        result.push_back(info);
+        result.push_back(std::move(info));
     }
 
+    spdlog::debug("Found {} disk(s)", result.size());
     return result;
 }
 
 std::vector<std::pair<std::string, float>> getDiskUsage() {
+    spdlog::debug("Getting disk usage information");
+
     std::vector<std::pair<std::string, float>> diskUsage;
+    const auto diskInfo = getDiskInfo(true);
 
-    // Get full disk info and convert to the simplified format
-    auto diskInfo = getDiskInfo(true);
-
+    diskUsage.reserve(diskInfo.size());
     for (const auto& info : diskInfo) {
         diskUsage.emplace_back(info.path, info.usagePercent);
     }
@@ -253,27 +262,26 @@ std::vector<std::pair<std::string, float>> getDiskUsage() {
 }
 
 std::string getDriveModel(const std::string& drivePath) {
+    spdlog::debug("Getting drive model for: {}", drivePath);
+
     std::string model;
 
 #ifdef _WIN32
-    // Create physical drive path if it's a logical drive
     std::string physicalDrivePath = drivePath;
     if (drivePath.size() == 2 && drivePath[1] == ':') {
         physicalDrivePath += '\\';
     }
 
-    HANDLE hDevice = CreateFileA(physicalDrivePath.c_str(), GENERIC_READ,
-                                 FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-                                 OPEN_EXISTING, 0, nullptr);
+    const HANDLE hDevice = CreateFileA(physicalDrivePath.c_str(), GENERIC_READ,
+                                       FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                       nullptr, OPEN_EXISTING, 0, nullptr);
 
     if (hDevice != INVALID_HANDLE_VALUE) {
-        // Get storage property
-        STORAGE_PROPERTY_QUERY query;
-        ZeroMemory(&query, sizeof(query));
+        STORAGE_PROPERTY_QUERY query{};
         query.PropertyId = StorageDeviceProperty;
         query.QueryType = PropertyStandardQuery;
 
-        STORAGE_DESCRIPTOR_HEADER header = {0};
+        STORAGE_DESCRIPTOR_HEADER header{};
         DWORD bytesReturned = 0;
         if (DeviceIoControl(hDevice, IOCTL_STORAGE_QUERY_PROPERTY, &query,
                             sizeof(query), &header, sizeof(header),
@@ -282,52 +290,52 @@ std::string getDriveModel(const std::string& drivePath) {
             if (DeviceIoControl(hDevice, IOCTL_STORAGE_QUERY_PROPERTY, &query,
                                 sizeof(query), buffer.data(), buffer.size(),
                                 &bytesReturned, nullptr)) {
-                auto* desc =
+                const auto* desc =
                     reinterpret_cast<STORAGE_DEVICE_DESCRIPTOR*>(buffer.data());
+
+                std::string vendor, product;
                 if (desc->VendorIdOffset != 0) {
-                    std::string vendor = buffer.data() + desc->VendorIdOffset;
-                    if (!vendor.empty()) {
-                        model = vendor;
-                    }
+                    vendor = trimString(buffer.data() + desc->VendorIdOffset);
                 }
                 if (desc->ProductIdOffset != 0) {
-                    std::string product = buffer.data() + desc->ProductIdOffset;
-                    if (!product.empty()) {
-                        if (!model.empty()) {
-                            model += " ";
-                        }
-                        model += product;
-                    }
+                    product = trimString(buffer.data() + desc->ProductIdOffset);
+                }
+
+                if (!vendor.empty() && !product.empty()) {
+                    model = vendor + " " + product;
+                } else if (!product.empty()) {
+                    model = product;
+                } else if (!vendor.empty()) {
+                    model = vendor;
                 }
             }
         }
         CloseHandle(hDevice);
     }
+
 #elif __APPLE__
-    // For Apple, use IOKit to get drive model
-    DASessionRef session = DASessionCreate(kCFAllocatorDefault);
-    if (session != nullptr) {
-        // Extract disk identifier (e.g., 'disk1' from '/dev/disk1')
+    const DASessionRef session = DASessionCreate(kCFAllocatorDefault);
+    if (session) {
         std::string diskName = drivePath;
-        size_t lastSlash = diskName.find_last_of('/');
+        const size_t lastSlash = diskName.find_last_of('/');
         if (lastSlash != std::string::npos) {
             diskName = diskName.substr(lastSlash + 1);
         }
 
-        DADiskRef disk = DADiskCreateFromBSDName(kCFAllocatorDefault, session,
-                                                 diskName.c_str());
-        if (disk != nullptr) {
-            CFDictionaryRef diskDesc = DADiskCopyDescription(disk);
-            if (diskDesc != nullptr) {
-                // Get model string
-                CFStringRef modelRef = (CFStringRef)CFDictionaryGetValue(
-                    diskDesc, kDADiskDescriptionDeviceModelKey);
-                if (modelRef != nullptr) {
+        const DADiskRef disk = DADiskCreateFromBSDName(
+            kCFAllocatorDefault, session, diskName.c_str());
+        if (disk) {
+            const CFDictionaryRef diskDesc = DADiskCopyDescription(disk);
+            if (diskDesc) {
+                const CFStringRef modelRef =
+                    static_cast<CFStringRef>(CFDictionaryGetValue(
+                        diskDesc, kDADiskDescriptionDeviceModelKey));
+                if (modelRef) {
                     char modelBuffer[256];
                     if (CFStringGetCString(modelRef, modelBuffer,
                                            sizeof(modelBuffer),
                                            kCFStringEncodingUTF8)) {
-                        model = modelBuffer;
+                        model = trimString(modelBuffer);
                     }
                 }
                 CFRelease(diskDesc);
@@ -336,61 +344,40 @@ std::string getDriveModel(const std::string& drivePath) {
         }
         CFRelease(session);
     }
+
 #elif __linux__
-    // Extract device name from path
     std::string deviceName = drivePath;
-    size_t lastSlash = deviceName.find_last_of('/');
+    const size_t lastSlash = deviceName.find_last_of('/');
     if (lastSlash != std::string::npos) {
         deviceName = deviceName.substr(lastSlash + 1);
     }
 
-    // First try /sys/block/{device}/device/model
-    std::string modelPath = "/sys/block/" + deviceName + "/device/model";
-    std::ifstream modelFile(modelPath);
-    if (modelFile.is_open()) {
-        std::getline(modelFile, model);
-        // Trim whitespace
-        model.erase(model.find_last_not_of(" \t\n\r\f\v") + 1);
-        model.erase(0, model.find_first_not_of(" \t\n\r\f\v"));
-    } else {
-        // If we can't directly access by device name, try with partitions
-        // (e.g., sda1 -> sda)
-        std::string baseDevice = deviceName;
-        for (int i = deviceName.length() - 1; i >= 0; --i) {
-            if (!isdigit(deviceName[i])) {
-                baseDevice = deviceName.substr(0, i + 1);
-                break;
-            }
-        }
-        if (baseDevice != deviceName) {
-            modelPath = "/sys/block/" + baseDevice + "/device/model";
-            std::ifstream baseModelFile(modelPath);
-            if (baseModelFile.is_open()) {
-                std::getline(baseModelFile, model);
-                // Trim whitespace
-                model.erase(model.find_last_not_of(" \t\n\r\f\v") + 1);
-                model.erase(0, model.find_first_not_of(" \t\n\r\f\v"));
-            }
+    std::string baseDevice = deviceName;
+    for (int i = deviceName.length() - 1; i >= 0; --i) {
+        if (!isdigit(deviceName[i])) {
+            baseDevice = deviceName.substr(0, i + 1);
+            break;
         }
     }
 
-    // If still empty, try vendor + model
+    const std::string modelPath = "/sys/block/" + baseDevice + "/device/model";
+    std::ifstream modelFile(modelPath);
+    if (modelFile.is_open() && std::getline(modelFile, model)) {
+        model = trimString(model);
+    }
+
     if (model.empty()) {
-        std::string vendorPath = "/sys/block/" + deviceName + "/device/vendor";
+        const std::string vendorPath =
+            "/sys/block/" + baseDevice + "/device/vendor";
         std::ifstream vendorFile(vendorPath);
         std::string vendor;
         if (vendorFile.is_open() && std::getline(vendorFile, vendor)) {
-            // Trim whitespace
-            vendor.erase(vendor.find_last_not_of(" \t\n\r\f\v") + 1);
-            vendor.erase(0, vendor.find_first_not_of(" \t\n\r\f\v"));
+            vendor = trimString(vendor);
 
-            // Try again for model
+            modelFile.clear();
             modelFile.open(modelPath);
             if (modelFile.is_open() && std::getline(modelFile, model)) {
-                // Trim whitespace
-                model.erase(model.find_last_not_of(" \t\n\r\f\v") + 1);
-                model.erase(0, model.find_first_not_of(" \t\n\r\f\v"));
-
+                model = trimString(model);
                 model = vendor + " " + model;
             } else {
                 model = vendor;
@@ -398,37 +385,24 @@ std::string getDriveModel(const std::string& drivePath) {
         }
     }
 
-    // If still empty, use device name
     if (model.empty()) {
         model = deviceName;
     }
+
 #elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-// For BSD systems, use camcontrol (FreeBSD)
-#ifdef __FreeBSD__
-    // We would use camcontrol here if we needed it
-    // For simplicity, we're using just the device name
     std::string deviceName = drivePath;
-    size_t lastSlash = deviceName.find_last_of('/');
+    const size_t lastSlash = deviceName.find_last_of('/');
     if (lastSlash != std::string::npos) {
         deviceName = deviceName.substr(lastSlash + 1);
     }
     model = deviceName;
 #endif
 
-    // If model is still empty, use device name
-    if (model.empty()) {
-        std::string deviceName = drivePath;
-        size_t lastSlash = deviceName.find_last_of('/');
-        if (lastSlash != std::string::npos) {
-            deviceName = deviceName.substr(lastSlash + 1);
-        }
-        model = deviceName;
-    }
-#endif
-
-    // If model is still empty after all attempts
     if (model.empty()) {
         model = "Unknown Device";
+        spdlog::warn("Could not determine model for drive: {}", drivePath);
+    } else {
+        spdlog::debug("Drive model for {}: {}", drivePath, model);
     }
 
     return model;

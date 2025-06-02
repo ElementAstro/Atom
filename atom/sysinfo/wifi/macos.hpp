@@ -22,16 +22,58 @@ Description: System Information Module - macOS WiFi Implementation
 
 namespace atom::system::macos {
 
-// Platform-specific implementations for macOS
+/**
+ * @brief Get the current WiFi network name
+ * @return Current WiFi SSID or empty string if not connected
+ */
 auto getCurrentWifi_impl() -> std::string;
+
+/**
+ * @brief Get the current wired network adapter name
+ * @return Current wired network adapter description or empty string if not
+ * connected
+ */
 auto getCurrentWiredNetwork_impl() -> std::string;
+
+/**
+ * @brief Check if connected to a mobile hotspot
+ * @return True if connected to a hotspot, false otherwise
+ */
 auto isHotspotConnected_impl() -> bool;
+
+/**
+ * @brief Get all IP addresses of the local host
+ * @return Vector of IP address strings (IPv4 and IPv6)
+ */
 auto getHostIPs_impl() -> std::vector<std::string>;
+
+/**
+ * @brief Get all network interface names
+ * @return Vector of network interface names
+ */
 auto getInterfaceNames_impl() -> std::vector<std::string>;
+
+/**
+ * @brief Get comprehensive network statistics
+ * @return NetworkStats structure with speed, latency, and signal information
+ */
 auto getNetworkStats_impl() -> NetworkStats;
+
+/**
+ * @brief Check internet connectivity by connecting to a reliable host
+ * @return True if internet is accessible, false otherwise
+ */
 auto isConnectedToInternet_impl() -> bool;
 
-} // namespace atom::system::macos
+/**
+ * @brief Measure ping latency to a specific host
+ * @param host Target hostname or IP address
+ * @param timeout Timeout in milliseconds
+ * @return Ping latency in milliseconds, -1.0 if failed
+ */
+auto measurePing_impl(const std::string& host, int timeout) -> float;
 
-#endif // __APPLE__
-#endif // ATOM_SYSTEM_MODULE_WIFI_MACOS_HPP
+}  // namespace atom::system::macos
+
+#endif  // __APPLE__
+#endif  // ATOM_SYSTEM_MODULE_WIFI_MACOS_HPP

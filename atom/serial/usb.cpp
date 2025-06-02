@@ -4,6 +4,7 @@
 #include <sstream>
 
 namespace atom::serial {
+
 UsbTransfer::UsbTransfer()
     : transfer_(libusb_alloc_transfer(0)),
       completed_(false),
@@ -15,11 +16,10 @@ UsbTransfer::UsbTransfer()
 
 UsbTransfer::~UsbTransfer() {
     if (transfer_) {
-        if (!completed_) {
+        if (!completed_.load()) {
             libusb_cancel_transfer(transfer_);
         }
         libusb_free_transfer(transfer_);
-        transfer_ = nullptr;
     }
 }
 
@@ -29,12 +29,15 @@ void UsbTransfer::prepareControl(libusb_device_handle* handle,
                                  std::span<uint8_t> data,
                                  unsigned int timeout) {
     data_buffer_ = data.data();
-    buffer_length_ = data.size();
+    buffer_length_ = static_cast<int>(data.size());
 
     libusb_fill_control_setup(setup_buffer_, request_type, request, value,
-                              index, data.size());
+                              index, static_cast<uint16_t>(data.size()));
 
-    memcpy(setup_buffer_ + LIBUSB_CONTROL_SETUP_SIZE, data.data(), data.size());
+    if (!data.empty()) {
+        std::memcpy(setup_buffer_ + LIBUSB_CONTROL_SETUP_SIZE, data.data(),
+                    data.size());
+    }
 
     libusb_fill_control_transfer(transfer_, handle, setup_buffer_,
                                  &UsbTransfer::transferCallback, this, timeout);
@@ -44,9 +47,10 @@ void UsbTransfer::prepareBulkWrite(libusb_device_handle* handle,
                                    unsigned char endpoint,
                                    std::span<const uint8_t> data,
                                    unsigned int timeout) {
+    data_copy_.reserve(data.size());
     data_copy_.assign(data.begin(), data.end());
     data_buffer_ = data_copy_.data();
-    buffer_length_ = data_copy_.size();
+    buffer_length_ = static_cast<int>(data_copy_.size());
 
     libusb_fill_bulk_transfer(
         transfer_, handle, endpoint, const_cast<unsigned char*>(data_buffer_),
@@ -58,27 +62,27 @@ void UsbTransfer::prepareBulkRead(libusb_device_handle* handle,
                                   std::span<uint8_t> data,
                                   unsigned int timeout) {
     data_buffer_ = data.data();
-    buffer_length_ = data.size();
+    buffer_length_ = static_cast<int>(data.size());
 
     libusb_fill_bulk_transfer(transfer_, handle, endpoint, data.data(),
-                              data.size(), &UsbTransfer::transferCallback, this,
-                              timeout);
+                              buffer_length_, &UsbTransfer::transferCallback,
+                              this, timeout);
 }
 
 UsbTransfer::SubmitAwaiter UsbTransfer::submit() {
-    completed_ = false;
+    completed_.store(false);
     return SubmitAwaiter{*this};
 }
 
 libusb_transfer_status UsbTransfer::getStatus() const { return status_; }
 
-int UsbTransfer::getActualLength() const { return actual_length_; }
+int UsbTransfer::getActualLength() const { return actual_length_.load(); }
 
 void UsbTransfer::transferCallback(libusb_transfer* transfer) {
     auto* self = static_cast<UsbTransfer*>(transfer->user_data);
     self->status_ = static_cast<libusb_transfer_status>(transfer->status);
-    self->actual_length_ = transfer->actual_length;
-    self->completed_ = true;
+    self->actual_length_.store(transfer->actual_length);
+    self->completed_.store(true);
 
     if (self->completion_handle_) {
         self->completion_handle_.resume();
@@ -90,14 +94,16 @@ UsbContext::UsbContext() : hotplug_running_(false) {
     if (result != LIBUSB_SUCCESS) {
         throw UsbException(result, "Failed to initialize libusb context");
     }
+    spdlog::debug("USB context initialized successfully");
 }
 
 UsbContext::~UsbContext() {
     stopHotplugDetection();
     libusb_exit(context_);
+    spdlog::debug("USB context destroyed");
 }
 
-auto UsbContext::getDevices() -> std::vector<std::shared_ptr<UsbDevice>> {
+std::vector<std::shared_ptr<UsbDevice>> UsbContext::getDevices() {
     libusb_device** device_list;
     ssize_t count = libusb_get_device_list(context_, &device_list);
 
@@ -107,24 +113,28 @@ auto UsbContext::getDevices() -> std::vector<std::shared_ptr<UsbDevice>> {
     }
 
     std::vector<std::shared_ptr<UsbDevice>> devices;
+    devices.reserve(static_cast<size_t>(count));
+
     for (ssize_t i = 0; i < count; ++i) {
         try {
-            devices.push_back(
+            devices.emplace_back(
                 std::make_shared<UsbDevice>(*this, device_list[i]));
         } catch (const UsbException& ex) {
+            spdlog::warn("Failed to create device wrapper: {}", ex.what());
         }
     }
 
     libusb_free_device_list(device_list, 1);
+    spdlog::debug("Found {} USB devices", devices.size());
     return devices;
 }
 
 void UsbContext::stopHotplugDetection() {
-    if (!hotplug_running_) {
+    if (!hotplug_running_.load()) {
         return;
     }
 
-    hotplug_running_ = false;
+    hotplug_running_.store(false);
 
     if (hotplug_thread_.joinable()) {
         hotplug_thread_.join();
@@ -134,6 +144,8 @@ void UsbContext::stopHotplugDetection() {
         libusb_hotplug_deregister_callback(context_, hotplug_handle_);
         hotplug_handle_ = -1;
     }
+
+    spdlog::debug("Hotplug detection stopped");
 }
 
 libusb_context* UsbContext::getNativeContext() const { return context_; }
@@ -149,7 +161,6 @@ UsbDevice::~UsbDevice() {
     close();
     if (device_) {
         libusb_unref_device(device_);
-        device_ = nullptr;
     }
 }
 
@@ -166,12 +177,19 @@ void UsbDevice::open() {
     if (result != LIBUSB_SUCCESS) {
         throw UsbException(result, "Failed to open device");
     }
+    spdlog::debug("USB device opened successfully");
 }
 
 void UsbDevice::close() {
     if (handle_) {
+        for (int interface_num : claimed_interfaces_) {
+            releaseInterface(interface_num);
+        }
+        claimed_interfaces_.clear();
+
         libusb_close(handle_);
         handle_ = nullptr;
+        spdlog::debug("USB device closed");
     }
 }
 
@@ -185,6 +203,7 @@ void UsbDevice::claimInterface(int interface_number) {
     }
 
     claimed_interfaces_.push_back(interface_number);
+    spdlog::debug("Interface {} claimed", interface_number);
 }
 
 void UsbDevice::releaseInterface(int interface_number) {
@@ -194,12 +213,16 @@ void UsbDevice::releaseInterface(int interface_number) {
 
     int result = libusb_release_interface(handle_, interface_number);
     if (result != LIBUSB_SUCCESS) {
+        spdlog::warn("Failed to release interface {}: {}", interface_number,
+                     libusb_error_name(result));
     }
 
-    claimed_interfaces_.erase(
-        std::remove(claimed_interfaces_.begin(), claimed_interfaces_.end(),
-                    interface_number),
-        claimed_interfaces_.end());
+    auto it = std::find(claimed_interfaces_.begin(), claimed_interfaces_.end(),
+                        interface_number);
+    if (it != claimed_interfaces_.end()) {
+        claimed_interfaces_.erase(it);
+    }
+    spdlog::debug("Interface {} released", interface_number);
 }
 
 UsbOperation UsbDevice::controlTransfer(uint8_t request_type, uint8_t request,
@@ -275,39 +298,43 @@ std::string UsbDevice::getDescription() const {
     uint8_t bus = libusb_get_bus_number(device_);
     uint8_t address = libusb_get_device_address(device_);
 
-    char manufacturer[256] = {0};
-    char product[256] = {0};
+    std::string manufacturer, product;
 
     if (handle_) {
+        constexpr size_t STRING_DESC_SIZE = 256;
+        unsigned char buffer[STRING_DESC_SIZE];
+
         if (desc.iManufacturer) {
-            libusb_get_string_descriptor_ascii(
-                handle_, desc.iManufacturer,
-                reinterpret_cast<unsigned char*>(manufacturer),
-                sizeof(manufacturer) - 1);
+            if (libusb_get_string_descriptor_ascii(handle_, desc.iManufacturer,
+                                                   buffer,
+                                                   STRING_DESC_SIZE) > 0) {
+                manufacturer = reinterpret_cast<char*>(buffer);
+            }
         }
 
         if (desc.iProduct) {
-            libusb_get_string_descriptor_ascii(
-                handle_, desc.iProduct,
-                reinterpret_cast<unsigned char*>(product), sizeof(product) - 1);
+            if (libusb_get_string_descriptor_ascii(
+                    handle_, desc.iProduct, buffer, STRING_DESC_SIZE) > 0) {
+                product = reinterpret_cast<char*>(buffer);
+            }
         }
     }
 
-    std::stringstream ss;
+    std::ostringstream ss;
     ss << "USB Device " << static_cast<int>(bus) << ":"
        << static_cast<int>(address) << " [" << std::hex << std::setw(4)
        << std::setfill('0') << desc.idVendor << ":" << std::hex << std::setw(4)
        << std::setfill('0') << desc.idProduct << std::dec << "]";
 
-    if (manufacturer[0] || product[0]) {
+    if (!manufacturer.empty() || !product.empty()) {
         ss << " - ";
-        if (manufacturer[0]) {
+        if (!manufacturer.empty()) {
             ss << manufacturer;
         }
-        if (manufacturer[0] && product[0]) {
+        if (!manufacturer.empty() && !product.empty()) {
             ss << " ";
         }
-        if (product[0]) {
+        if (!product.empty()) {
             ss << product;
         }
     }
@@ -334,4 +361,5 @@ void UsbDevice::ensureOpen() {
         throw UsbException(LIBUSB_ERROR_NO_DEVICE, "Device not open");
     }
 }
+
 }  // namespace atom::serial

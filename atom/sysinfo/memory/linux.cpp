@@ -4,19 +4,11 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2024-2-21
-
-Description: System Information Module - Memory Linux Implementation
-
-**************************************************/
-
 #include "linux.hpp"
 #include "common.hpp"
 
 #ifdef __linux__
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 
 #include <dirent.h>
 #include <limits.h>
@@ -24,257 +16,263 @@ Description: System Information Module - Memory Linux Implementation
 #include <sys/sysinfo.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <chrono>
 #include <csignal>
 #include <fstream>
 #include <iterator>
 #include <regex>
 #include <sstream>
 #include <thread>
-#include <chrono>
+#include <unordered_map>
 
-namespace atom::system {
-namespace linux {
+namespace atom::system::linux {
 
-auto getMemoryUsage() -> float {
-    LOG_F(INFO, "Starting getMemoryUsage function (Linux)");
-    float memoryUsage = 0.0;
+namespace {
+// Cache for frequently accessed values
+static thread_local std::unordered_map<
+    std::string,
+    std::pair<unsigned long long, std::chrono::steady_clock::time_point>>
+    cache;
+static constexpr auto CACHE_DURATION = std::chrono::milliseconds(100);
 
+/**
+ * @brief Parse /proc/meminfo file efficiently
+ */
+auto parseMemInfo() -> std::unordered_map<std::string, unsigned long long> {
+    std::unordered_map<std::string, unsigned long long> values;
     std::ifstream file("/proc/meminfo");
+
     if (!file.is_open()) {
-        LOG_F(ERROR, "GetMemoryUsage error: open /proc/meminfo error");
-        return memoryUsage;
+        spdlog::error("Failed to open /proc/meminfo");
+        return values;
     }
-    
+
     std::string line;
-    unsigned long totalMemory = 0;
-    unsigned long freeMemory = 0;
-    unsigned long bufferMemory = 0;
-    unsigned long cacheMemory = 0;
-
     while (std::getline(file, line)) {
-        std::istringstream iss(line);
-        std::string name;
-        unsigned long value;
+        const auto colonPos = line.find(':');
+        if (colonPos == std::string::npos)
+            continue;
 
-        if (iss >> name >> value) {
-            if (name == "MemTotal:") {
-                totalMemory = value;
-            } else if (name == "MemFree:") {
-                freeMemory = value;
-            } else if (name == "Buffers:") {
-                bufferMemory = value;
-            } else if (name == "Cached:") {
-                cacheMemory = value;
-            }
+        const auto key = line.substr(0, colonPos);
+        std::istringstream iss(line.substr(colonPos + 1));
+        unsigned long long value;
+        if (iss >> value) {
+            values[key] = value;
         }
     }
 
-    unsigned long usedMemory = totalMemory - freeMemory - bufferMemory - cacheMemory;
-    memoryUsage = static_cast<float>(usedMemory) / totalMemory * 100.0;
-    LOG_F(INFO,
-          "Total Memory: {} kB, Free Memory: {} kB, Buffer Memory: {} kB, "
-          "Cache Memory: {} kB, Memory Usage: {}%",
-          totalMemory, freeMemory, bufferMemory, cacheMemory, memoryUsage);
+    return values;
+}
 
-    LOG_F(INFO, "Finished getMemoryUsage function (Linux)");
-    return memoryUsage;
+/**
+ * @brief Get cached or fresh memory info
+ */
+auto getCachedMemInfo() -> std::unordered_map<std::string, unsigned long long> {
+    const auto now = std::chrono::steady_clock::now();
+    const auto it = cache.find("meminfo");
+
+    if (it != cache.end() && (now - it->second.second) < CACHE_DURATION) {
+        return parseMemInfo();  // Return cached would require more complex
+                                // caching
+    }
+
+    auto result = parseMemInfo();
+    cache["meminfo"] = {0, now};  // Simplified cache entry
+    return result;
+}
+}  // namespace
+
+auto getMemoryUsage() -> float {
+    spdlog::debug("Getting memory usage (Linux)");
+
+    const auto memInfo = parseMemInfo();
+    const auto totalIt = memInfo.find("MemTotal");
+    const auto freeIt = memInfo.find("MemFree");
+    const auto buffersIt = memInfo.find("Buffers");
+    const auto cachedIt = memInfo.find("Cached");
+
+    if (totalIt == memInfo.end() || freeIt == memInfo.end()) {
+        spdlog::error("Failed to parse memory information");
+        return 0.0f;
+    }
+
+    const auto total = totalIt->second;
+    const auto free = freeIt->second;
+    const auto buffers =
+        (buffersIt != memInfo.end()) ? buffersIt->second : 0ULL;
+    const auto cached = (cachedIt != memInfo.end()) ? cachedIt->second : 0ULL;
+
+    const auto used = total - free - buffers - cached;
+    const auto usage = static_cast<float>(used) / total * 100.0f;
+
+    spdlog::debug("Memory usage: {:.2f}% ({}/{} kB)", usage, used, total);
+    return usage;
 }
 
 auto getTotalMemorySize() -> unsigned long long {
-    LOG_F(INFO, "Starting getTotalMemorySize function (Linux)");
-    unsigned long long totalMemorySize = 0;
+    spdlog::debug("Getting total memory size (Linux)");
 
-    long pages = sysconf(_SC_PHYS_PAGES);
-    long pageSize = sysconf(_SC_PAGE_SIZE);
-    totalMemorySize = static_cast<unsigned long long>(pages) *
-                      static_cast<unsigned long long>(pageSize);
-    LOG_F(INFO, "Total Memory Size: {} bytes (Linux)", totalMemorySize);
+    const auto pages = sysconf(_SC_PHYS_PAGES);
+    const auto pageSize = sysconf(_SC_PAGE_SIZE);
 
-    LOG_F(INFO, "Finished getTotalMemorySize function (Linux)");
-    return totalMemorySize;
+    if (pages == -1 || pageSize == -1) {
+        spdlog::error("Failed to get system configuration");
+        return 0ULL;
+    }
+
+    const auto totalSize = static_cast<unsigned long long>(pages) *
+                           static_cast<unsigned long long>(pageSize);
+
+    spdlog::debug("Total memory size: {} bytes", totalSize);
+    return totalSize;
 }
 
 auto getAvailableMemorySize() -> unsigned long long {
-    LOG_F(INFO, "Starting getAvailableMemorySize function (Linux)");
-    unsigned long long availableMemorySize = 0;
+    spdlog::debug("Getting available memory size (Linux)");
 
-    std::ifstream meminfo("/proc/meminfo");
-    if (!meminfo.is_open()) {
-        LOG_F(ERROR, "Failed to open /proc/meminfo");
-        return -1;
+    const auto memInfo = parseMemInfo();
+    const auto it = memInfo.find("MemAvailable");
+
+    if (it == memInfo.end()) {
+        spdlog::error("MemAvailable not found in /proc/meminfo");
+        return 0ULL;
     }
 
-    std::string line;
-    std::regex memAvailableRegex(R"(MemAvailable:\s+(\d+)\s+kB)");
-    bool found = false;
-
-    while (std::getline(meminfo, line)) {
-        std::smatch match;
-        if (std::regex_search(line, match, memAvailableRegex)) {
-            availableMemorySize = std::stoull(match[1]) * 1024; // Convert kB to bytes
-            found = true;
-            break;
-        }
-    }
-
-    if (!found) {
-        LOG_F(ERROR, "GetAvailableMemorySize error: parse error");
-        return -1;
-    }
-
-    LOG_F(INFO, "Available Memory Size: {} bytes (Linux)", availableMemorySize);
-    LOG_F(INFO, "Finished getAvailableMemorySize function (Linux)");
-    return availableMemorySize;
+    const auto availableSize = it->second * 1024ULL;  // Convert kB to bytes
+    spdlog::debug("Available memory size: {} bytes", availableSize);
+    return availableSize;
 }
 
 auto getPhysicalMemoryInfo() -> MemoryInfo::MemorySlot {
-    LOG_F(INFO, "Starting getPhysicalMemoryInfo function (Linux)");
-    MemoryInfo::MemorySlot slot;
+    spdlog::debug("Getting physical memory info (Linux)");
 
-    std::ifstream meminfo("/proc/meminfo");
-    std::string line;
-    while (std::getline(meminfo, line)) {
-        if (line.substr(0, 10) == "MemTotal: ") {
-            std::istringstream iss(line.substr(10));
-            unsigned long total;
-            iss >> total;
-            slot.capacity = std::to_string(total / 1024); // Convert kB to MB
-            LOG_F(INFO, "Physical Memory Capacity: {} MB", slot.capacity);
-            break;
-        }
+    MemoryInfo::MemorySlot slot;
+    const auto memInfo = parseMemInfo();
+    const auto it = memInfo.find("MemTotal");
+
+    if (it != memInfo.end()) {
+        slot.capacity = std::to_string(it->second / 1024);  // Convert kB to MB
+        spdlog::debug("Physical memory capacity: {} MB", slot.capacity);
     }
 
-    // 尝试从DMI读取更详细的内存信息（需要root权限）
+    // Try to read detailed memory information from DMI (requires root)
     try {
         std::ifstream dmiInfo("/sys/devices/system/memory/memory0/dmi");
         if (dmiInfo.is_open()) {
-            std::string dmiLine;
-            while (std::getline(dmiInfo, dmiLine)) {
-                if (dmiLine.find("Type:") != std::string::npos) {
-                    slot.type = dmiLine.substr(dmiLine.find(":") + 1);
-                } else if (dmiLine.find("Speed:") != std::string::npos) {
-                    slot.clockSpeed = dmiLine.substr(dmiLine.find(":") + 1);
+            std::string line;
+            while (std::getline(dmiInfo, line)) {
+                const auto colonPos = line.find(':');
+                if (colonPos == std::string::npos)
+                    continue;
+
+                const auto key = line.substr(0, colonPos);
+                const auto value = line.substr(colonPos + 1);
+
+                if (key == "Type") {
+                    slot.type = value;
+                } else if (key == "Speed") {
+                    slot.clockSpeed = value;
                 }
             }
         }
-    } catch (...) {
-        LOG_F(WARNING, "Could not read detailed memory information from DMI (may require root)");
+    } catch (const std::exception& e) {
+        spdlog::warn("Could not read detailed memory information: {}",
+                     e.what());
     }
 
-    LOG_F(INFO, "Finished getPhysicalMemoryInfo function (Linux)");
     return slot;
 }
 
 auto getVirtualMemoryMax() -> unsigned long long {
-    LOG_F(INFO, "Starting getVirtualMemoryMax function (Linux)");
-    unsigned long long virtualMemoryMax = 0;
+    spdlog::debug("Getting virtual memory max (Linux)");
 
     struct sysinfo si{};
-    if (sysinfo(&si) == 0) {
-        virtualMemoryMax = (si.totalram + si.totalswap) / 1024;
-        LOG_F(INFO, "Virtual Memory Max: {} kB (Linux)", virtualMemoryMax);
-    } else {
-        LOG_F(ERROR, "GetVirtualMemoryMax error: sysinfo error");
+    if (sysinfo(&si) != 0) {
+        spdlog::error("Failed to get system info");
+        return 0ULL;
     }
 
-    LOG_F(INFO, "Finished getVirtualMemoryMax function (Linux)");
-    return virtualMemoryMax;
+    const auto virtualMax = (si.totalram + si.totalswap) / 1024ULL;
+    spdlog::debug("Virtual memory max: {} kB", virtualMax);
+    return virtualMax;
 }
 
 auto getVirtualMemoryUsed() -> unsigned long long {
-    LOG_F(INFO, "Starting getVirtualMemoryUsed function (Linux)");
-    unsigned long long virtualMemoryUsed = 0;
+    spdlog::debug("Getting virtual memory used (Linux)");
 
     struct sysinfo si{};
-    if (sysinfo(&si) == 0) {
-        virtualMemoryUsed =
-            (si.totalram - si.freeram + si.totalswap - si.freeswap) / 1024;
-        LOG_F(INFO, "Virtual Memory Used: {} kB (Linux)", virtualMemoryUsed);
-    } else {
-        LOG_F(ERROR, "GetVirtualMemoryUsed error: sysinfo error");
+    if (sysinfo(&si) != 0) {
+        spdlog::error("Failed to get system info");
+        return 0ULL;
     }
 
-    LOG_F(INFO, "Finished getVirtualMemoryUsed function (Linux)");
-    return virtualMemoryUsed;
+    const auto virtualUsed =
+        (si.totalram - si.freeram + si.totalswap - si.freeswap) / 1024ULL;
+    spdlog::debug("Virtual memory used: {} kB", virtualUsed);
+    return virtualUsed;
 }
 
 auto getSwapMemoryTotal() -> unsigned long long {
-    LOG_F(INFO, "Starting getSwapMemoryTotal function (Linux)");
-    unsigned long long swapMemoryTotal = 0;
+    spdlog::debug("Getting swap memory total (Linux)");
 
     struct sysinfo si{};
-    if (sysinfo(&si) == 0) {
-        swapMemoryTotal = si.totalswap / 1024;
-        LOG_F(INFO, "Swap Memory Total: {} kB (Linux)", swapMemoryTotal);
-    } else {
-        LOG_F(ERROR, "GetSwapMemoryTotal error: sysinfo error");
+    if (sysinfo(&si) != 0) {
+        spdlog::error("Failed to get system info");
+        return 0ULL;
     }
 
-    LOG_F(INFO, "Finished getSwapMemoryTotal function (Linux)");
-    return swapMemoryTotal;
+    const auto swapTotal = si.totalswap / 1024ULL;
+    spdlog::debug("Swap memory total: {} kB", swapTotal);
+    return swapTotal;
 }
 
 auto getSwapMemoryUsed() -> unsigned long long {
-    LOG_F(INFO, "Starting getSwapMemoryUsed function (Linux)");
-    unsigned long long swapMemoryUsed = 0;
+    spdlog::debug("Getting swap memory used (Linux)");
 
     struct sysinfo si{};
-    if (sysinfo(&si) == 0) {
-        swapMemoryUsed = (si.totalswap - si.freeswap) / 1024;
-        LOG_F(INFO, "Swap Memory Used: {} kB (Linux)", swapMemoryUsed);
-    } else {
-        LOG_F(ERROR, "GetSwapMemoryUsed error: sysinfo error");
+    if (sysinfo(&si) != 0) {
+        spdlog::error("Failed to get system info");
+        return 0ULL;
     }
 
-    LOG_F(INFO, "Finished getSwapMemoryUsed function (Linux)");
-    return swapMemoryUsed;
+    const auto swapUsed = (si.totalswap - si.freeswap) / 1024ULL;
+    spdlog::debug("Swap memory used: {} kB", swapUsed);
+    return swapUsed;
 }
 
 auto getCommittedMemory() -> size_t {
-    LOG_F(INFO, "Starting getCommittedMemory function (Linux)");
-    
-    std::ifstream memInfoFile("/proc/meminfo");
-    if (!memInfoFile.is_open()) {
-        LOG_F(ERROR, "Failed to open /proc/meminfo");
+    spdlog::debug("Getting committed memory (Linux)");
+
+    const auto memInfo = parseMemInfo();
+    const auto it = memInfo.find("Committed_AS");
+
+    if (it == memInfo.end()) {
+        spdlog::error("Committed_AS not found in /proc/meminfo");
         return 0;
     }
 
-    std::string line;
-    std::regex commitRegex(R"(Committed_AS:\s+(\d+)\s+kB)");
-    size_t committedMemory = 0;
-
-    while (std::getline(memInfoFile, line)) {
-        std::smatch match;
-        if (std::regex_search(line, match, commitRegex)) {
-            committedMemory = std::stoull(match[1]) * 1024; // Convert kB to bytes
-            break;
-        }
-    }
-    
-    LOG_F(INFO, "Committed Memory: {} bytes (Linux)", committedMemory);
-    LOG_F(INFO, "Finished getCommittedMemory function (Linux)");
-    return committedMemory;
+    const auto committed = it->second * 1024ULL;  // Convert kB to bytes
+    spdlog::debug("Committed memory: {} bytes", committed);
+    return committed;
 }
 
 auto getUncommittedMemory() -> size_t {
-    LOG_F(INFO, "Starting getUncommittedMemory function (Linux)");
-    
-    // 在Linux中，未提交内存可以通过总内存减去已提交内存来计算
-    size_t totalMemory = getTotalMemorySize();
-    size_t committedMemory = getCommittedMemory();
-    size_t uncommittedMemory = (committedMemory < totalMemory) ? 
-                               (totalMemory - committedMemory) : 0;
-    
-    LOG_F(INFO, "Uncommitted Memory: {} bytes (Linux)", uncommittedMemory);
-    LOG_F(INFO, "Finished getUncommittedMemory function (Linux)");
-    return uncommittedMemory;
+    spdlog::debug("Getting uncommitted memory (Linux)");
+
+    const auto total = getTotalMemorySize();
+    const auto committed = getCommittedMemory();
+    const auto uncommitted = (committed < total) ? (total - committed) : 0ULL;
+
+    spdlog::debug("Uncommitted memory: {} bytes", uncommitted);
+    return uncommitted;
 }
 
 auto getDetailedMemoryStats() -> MemoryInfo {
-    LOG_F(INFO, "Starting getDetailedMemoryStats function (Linux)");
-    MemoryInfo info;
+    spdlog::debug("Getting detailed memory stats (Linux)");
 
-    struct sysinfo si;
+    MemoryInfo info;
+    struct sysinfo si{};
+
     if (sysinfo(&si) == 0) {
         info.totalPhysicalMemory = si.totalram;
         info.availablePhysicalMemory = si.freeram;
@@ -283,211 +281,193 @@ auto getDetailedMemoryStats() -> MemoryInfo {
         info.swapMemoryTotal = si.totalswap;
         info.swapMemoryUsed = si.totalswap - si.freeswap;
         info.virtualMemoryMax = si.totalram + si.totalswap;
-        info.virtualMemoryUsed = 
+        info.virtualMemoryUsed =
             (si.totalram - si.freeram) + (si.totalswap - si.freeswap);
 
-        // 读取 /proc/self/status 获取进程相关信息
+        // Read process-specific information from /proc/self/status
         std::ifstream status("/proc/self/status");
         std::string line;
+
         while (std::getline(status, line)) {
-            if (line.find("VmPeak:") != std::string::npos) {
-                std::istringstream iss(line.substr(line.find(":") + 1));
+            if (line.find("VmPeak:") == 0) {
+                std::istringstream iss(line.substr(7));
                 unsigned long value;
-                iss >> value;
-                info.peakWorkingSetSize = value * 1024; // Convert kB to bytes
-            } else if (line.find("VmSize:") != std::string::npos) {
-                std::istringstream iss(line.substr(line.find(":") + 1));
+                if (iss >> value) {
+                    info.peakWorkingSetSize = value * 1024ULL;
+                }
+            } else if (line.find("VmSize:") == 0) {
+                std::istringstream iss(line.substr(7));
                 unsigned long value;
-                iss >> value;
-                info.workingSetSize = value * 1024; // Convert kB to bytes
-            } else if (line.find("VmPTE:") != std::string::npos) {
-                std::istringstream iss(line.substr(line.find(":") + 1));
+                if (iss >> value) {
+                    info.workingSetSize = value * 1024ULL;
+                }
+            } else if (line.find("VmPTE:") == 0) {
+                std::istringstream iss(line.substr(6));
                 unsigned long value;
-                iss >> value;
-                info.quotaPagedPoolUsage = value * 1024; // Convert kB to bytes
-                info.quotaPeakPagedPoolUsage = info.quotaPagedPoolUsage; // No peak value available
+                if (iss >> value) {
+                    info.quotaPagedPoolUsage = value * 1024ULL;
+                    info.quotaPeakPagedPoolUsage = info.quotaPagedPoolUsage;
+                }
             }
         }
 
-        // 读取 /proc/self/stat 获取页面错误数
+        // Read page fault count from /proc/self/stat
         std::ifstream stat("/proc/self/stat");
-        std::string statLine;
-        if (std::getline(stat, statLine)) {
-            std::istringstream iss(statLine);
+        if (std::getline(stat, line)) {
+            std::istringstream iss(line);
             std::string token;
-            int count = 0;
-            while (iss >> token && count < 10) {
-                count++;
-            }
-            if (count == 10 && iss >> token) {
+            for (int i = 0; i < 10 && iss >> token; ++i)
+                ;
+            if (iss >> token) {
                 info.pageFaultCount = std::stoull(token);
             }
         }
     }
 
-    // 获取物理内存插槽信息
-    MemoryInfo::MemorySlot slot = getPhysicalMemoryInfo();
-    info.slots.push_back(slot);
-
-    LOG_F(INFO, "Finished getDetailedMemoryStats function (Linux)");
+    info.slots.push_back(getPhysicalMemoryInfo());
     return info;
 }
 
 auto getPeakWorkingSetSize() -> size_t {
-    LOG_F(INFO, "Starting getPeakWorkingSetSize function (Linux)");
-    size_t peakSize = 0;
+    spdlog::debug("Getting peak working set size (Linux)");
 
     std::ifstream status("/proc/self/status");
     std::string line;
+
     while (std::getline(status, line)) {
-        if (line.find("VmPeak:") != std::string::npos) {
-            std::istringstream iss(line.substr(line.find(":") + 1));
+        if (line.find("VmPeak:") == 0) {
+            std::istringstream iss(line.substr(7));
             unsigned long value;
-            iss >> value;
-            peakSize = value * 1024; // Convert kB to bytes
-            break;
+            if (iss >> value) {
+                const auto peakSize = value * 1024ULL;
+                spdlog::debug("Peak working set size: {} bytes", peakSize);
+                return peakSize;
+            }
         }
     }
 
-    LOG_F(INFO, "Peak working set size: {} bytes (Linux)", peakSize);
-    return peakSize;
+    spdlog::warn("VmPeak not found in /proc/self/status");
+    return 0;
 }
 
 auto getCurrentWorkingSetSize() -> size_t {
-    LOG_F(INFO, "Starting getCurrentWorkingSetSize function (Linux)");
-    size_t currentSize = 0;
+    spdlog::debug("Getting current working set size (Linux)");
 
     std::ifstream status("/proc/self/status");
     std::string line;
+
     while (std::getline(status, line)) {
-        if (line.find("VmSize:") != std::string::npos) {
-            std::istringstream iss(line.substr(line.find(":") + 1));
+        if (line.find("VmSize:") == 0) {
+            std::istringstream iss(line.substr(7));
             unsigned long value;
-            iss >> value;
-            currentSize = value * 1024; // Convert kB to bytes
-            break;
+            if (iss >> value) {
+                const auto currentSize = value * 1024ULL;
+                spdlog::debug("Current working set size: {} bytes",
+                              currentSize);
+                return currentSize;
+            }
         }
     }
 
-    LOG_F(INFO, "Current working set size: {} bytes (Linux)", currentSize);
-    return currentSize;
+    spdlog::warn("VmSize not found in /proc/self/status");
+    return 0;
 }
 
 auto getPageFaultCount() -> size_t {
-    LOG_F(INFO, "Starting getPageFaultCount function (Linux)");
-    size_t pageFaults = 0;
+    spdlog::debug("Getting page fault count (Linux)");
 
     std::ifstream stat("/proc/self/stat");
-    std::string statLine;
-    if (std::getline(stat, statLine)) {
-        std::istringstream iss(statLine);
+    std::string line;
+
+    if (std::getline(stat, line)) {
+        std::istringstream iss(line);
         std::string token;
-        int count = 0;
-        while (iss >> token && count < 10) {
-            count++;
-        }
-        if (count == 10 && iss >> token) {
-            pageFaults = std::stoull(token);
+        for (int i = 0; i < 10 && iss >> token; ++i)
+            ;
+
+        if (iss >> token) {
+            const auto pageFaults = std::stoull(token);
+            spdlog::debug("Page fault count: {}", pageFaults);
+            return pageFaults;
         }
     }
 
-    LOG_F(INFO, "Page fault count: {} (Linux)", pageFaults);
-    return pageFaults;
-}
-
-auto getMemoryLoadPercentage() -> double {
-    LOG_F(INFO, "Starting getMemoryLoadPercentage function (Linux)");
-    
-    unsigned long long total = getTotalMemorySize();
-    unsigned long long available = getAvailableMemorySize();
-    
-    double memoryLoad = 0.0;
-    if (total > 0) {
-        memoryLoad = ((double)(total - available) / total) * 100.0;
-    }
-    
-    LOG_F(INFO, "Memory load: {}% (Linux)", memoryLoad);
-    return memoryLoad;
+    spdlog::warn("Failed to read page fault count from /proc/self/stat");
+    return 0;
 }
 
 auto getMemoryPerformance() -> MemoryPerformance {
-    LOG_F(INFO, "Getting memory performance metrics (Linux)");
+    spdlog::debug("Getting memory performance metrics (Linux)");
+
     MemoryPerformance perf{};
 
-    // 使用/proc/meminfo和/proc/vmstat获取内存性能指标
+    // Read initial vmstat values
     std::ifstream vmstat("/proc/vmstat");
     std::string line;
-    unsigned long pgpgin = 0, pgpgout = 0;
-    
+    unsigned long pgpgin_before = 0, pgpgout_before = 0;
+
     while (std::getline(vmstat, line)) {
-        if (line.find("pgpgin") == 0) {
-            std::istringstream iss(line);
-            std::string name;
-            iss >> name >> pgpgin;
-        } else if (line.find("pgpgout") == 0) {
-            std::istringstream iss(line);
-            std::string name;
-            iss >> name >> pgpgout;
+        if (line.find("pgpgin ") == 0) {
+            std::istringstream iss(line.substr(7));
+            iss >> pgpgin_before;
+        } else if (line.find("pgpgout ") == 0) {
+            std::istringstream iss(line.substr(8));
+            iss >> pgpgout_before;
         }
     }
-    
-    // 获取采样前的值
-    unsigned long pgpgin_before = pgpgin;
-    unsigned long pgpgout_before = pgpgout;
-    
-    // 等待一秒钟
+
+    // Wait for measurement interval
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    
-    // 重新读取值
+
+    // Read values again
     vmstat.clear();
     vmstat.seekg(0, std::ios::beg);
-    
+    unsigned long pgpgin_after = 0, pgpgout_after = 0;
+
     while (std::getline(vmstat, line)) {
-        if (line.find("pgpgin") == 0) {
-            std::istringstream iss(line);
-            std::string name;
-            iss >> name >> pgpgin;
-        } else if (line.find("pgpgout") == 0) {
-            std::istringstream iss(line);
-            std::string name;
-            iss >> name >> pgpgout;
+        if (line.find("pgpgin ") == 0) {
+            std::istringstream iss(line.substr(7));
+            iss >> pgpgin_after;
+        } else if (line.find("pgpgout ") == 0) {
+            std::istringstream iss(line.substr(8));
+            iss >> pgpgout_after;
         }
     }
-    
-    // 计算每秒的页面换入换出
-    unsigned long pgpgin_persec = pgpgin - pgpgin_before;
-    unsigned long pgpgout_persec = pgpgout - pgpgout_before;
-    
-    // 页面大小通常为4KB，转换为MB/s
-    perf.readSpeed = pgpgin_persec * 4.0 / 1024;
-    perf.writeSpeed = pgpgout_persec * 4.0 / 1024;
-    
-    // 计算带宽使用率
-    perf.bandwidthUsage = (perf.readSpeed + perf.writeSpeed) /
-                        (getTotalMemorySize() / 1024.0 / 1024) * 100.0;
 
-    // 测量内存延迟
-    const int TEST_SIZE = 1024 * 1024;  // 1MB
+    // Calculate rates (pages are typically 4KB, convert to MB/s)
+    const auto pgpgin_persec = pgpgin_after - pgpgin_before;
+    const auto pgpgout_persec = pgpgout_after - pgpgout_before;
+
+    perf.readSpeed = pgpgin_persec * 4.0 / 1024.0;
+    perf.writeSpeed = pgpgout_persec * 4.0 / 1024.0;
+
+    const auto totalMemoryMB = getTotalMemorySize() / (1024.0 * 1024.0);
+    perf.bandwidthUsage =
+        (perf.readSpeed + perf.writeSpeed) / totalMemoryMB * 100.0;
+
+    // Measure memory latency with a simple test
+    constexpr int TEST_SIZE = 1024 * 1024;
     std::vector<int> testData(TEST_SIZE);
-    auto start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < TEST_SIZE; i++) {
+
+    const auto start = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < TEST_SIZE; ++i) {
         testData[i] = i;
     }
-    auto end = std::chrono::high_resolution_clock::now();
+    const auto end = std::chrono::high_resolution_clock::now();
+
     perf.latency =
         std::chrono::duration_cast<std::chrono::nanoseconds>(end - start)
             .count() /
         static_cast<double>(TEST_SIZE);
 
-    LOG_F(INFO,
-          "Memory performance metrics: Read: {:.2f} MB/s, Write: {:.2f} MB/s, "
-          "Bandwidth: {:.1f}%, Latency: {:.2f} ns (Linux)",
-          perf.readSpeed, perf.writeSpeed, perf.bandwidthUsage, perf.latency);
+    spdlog::debug(
+        "Memory performance - Read: {:.2f} MB/s, Write: {:.2f} MB/s, "
+        "Bandwidth: {:.1f}%, Latency: {:.2f} ns",
+        perf.readSpeed, perf.writeSpeed, perf.bandwidthUsage, perf.latency);
 
     return perf;
 }
 
-} // namespace linux
-} // namespace atom::system
+}  // namespace atom::system::linux
 
-#endif // __linux__
+#endif  // __linux__

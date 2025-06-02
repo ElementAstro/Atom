@@ -6,83 +6,128 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <string>
+#include <string_view>
+#include <thread>
 
 #ifdef _WIN32
-// clang-format off
-#include <windows.h>
 #include <intrin.h>
 #include <tchar.h>
-#include <fstream>
-#include <cstdlib>
-// clang-format on
+#include <windows.h>
 #else
 #include <cpuid.h>
 #include <sys/utsname.h>
 #include <unistd.h>
-#include <fstream>
 #endif
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 
 namespace atom::system {
+
+namespace {
 constexpr int CPUID_HYPERVISOR = 0x40000000;
 constexpr int CPUID_FEATURES = 1;
 constexpr int VENDOR_STRING_LENGTH = 12;
 constexpr int BIOS_INFO_LENGTH = 256;
 constexpr int HYPERVISOR_PRESENT_BIT = 31;
-constexpr int TIME_DRIFT_UPPER_BOUND = 1005;
-constexpr int TIME_DRIFT_LOWER_BOUND = 995;
+constexpr int TIME_DRIFT_UPPER_BOUND = 1050;
+constexpr int TIME_DRIFT_LOWER_BOUND = 950;
 
-// 获取 Hypervisor 厂商信息
+/**
+ * @brief Executes a system command and returns the output as a string
+ * @param command The command to execute
+ * @return Command output or empty string on failure
+ */
+auto executeCommand(std::string_view command) -> std::string {
+    std::array<char, 128> buffer;
+    std::string result;
+
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.data(), "r"),
+                                                  pclose);
+
+    if (!pipe) {
+        spdlog::error("Failed to execute command: {}", command);
+        return {};
+    }
+
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+        result += buffer.data();
+    }
+
+    return result;
+}
+
+/**
+ * @brief Checks if a string contains any of the virtualization keywords
+ * @param text The text to search
+ * @return True if virtualization keywords are found
+ */
+auto containsVMKeywords(std::string_view text) -> bool {
+    constexpr std::array<std::string_view, 8> vmKeywords = {
+        "VMware", "VirtualBox", "QEMU",      "Xen",
+        "KVM",    "Hyper-V",    "Parallels", "VirtIO"};
+
+    std::string lowerText;
+    lowerText.reserve(text.size());
+    std::transform(text.begin(), text.end(), std::back_inserter(lowerText),
+                   [](char c) { return std::tolower(c); });
+
+    return std::any_of(
+        vmKeywords.begin(), vmKeywords.end(),
+        [&lowerText](std::string_view keyword) {
+            std::string lowerKeyword;
+            lowerKeyword.reserve(keyword.size());
+            std::transform(keyword.begin(), keyword.end(),
+                           std::back_inserter(lowerKeyword),
+                           [](char c) { return std::tolower(c); });
+            return lowerText.find(lowerKeyword) != std::string::npos;
+        });
+}
+}  // namespace
+
 auto getHypervisorVendor() -> std::string {
-    LOG_F(INFO, "Starting getHypervisorVendor function");
+    spdlog::debug("Getting hypervisor vendor information");
     std::array<unsigned int, 4> cpuInfo = {0};
 
 #ifdef _WIN32
-    __cpuid(reinterpret_cast<int*>(cpuInfo.data()),
-            CPUID_HYPERVISOR);  // Hypervisor CPUID
+    __cpuid(reinterpret_cast<int*>(cpuInfo.data()), CPUID_HYPERVISOR);
 #else
     __get_cpuid(CPUID_HYPERVISOR, &cpuInfo[0], &cpuInfo[1], &cpuInfo[2],
                 &cpuInfo[3]);
 #endif
 
     std::array<char, VENDOR_STRING_LENGTH + 1> vendor = {0};
-    std::copy(reinterpret_cast<const char*>(&cpuInfo[1]),
-              reinterpret_cast<const char*>(&cpuInfo[1]) + 4, vendor.begin());
-    std::copy(reinterpret_cast<const char*>(&cpuInfo[2]),
-              reinterpret_cast<const char*>(&cpuInfo[2]) + 4,
-              vendor.begin() + 4);
-    std::copy(reinterpret_cast<const char*>(&cpuInfo[3]),
-              reinterpret_cast<const char*>(&cpuInfo[3]) + 4,
-              vendor.begin() + 8);
+    std::memcpy(vendor.data(), &cpuInfo[1], 4);
+    std::memcpy(vendor.data() + 4, &cpuInfo[2], 4);
+    std::memcpy(vendor.data() + 8, &cpuInfo[3], 4);
 
     std::string vendorStr(vendor.data());
-    LOG_F(INFO, "Hypervisor vendor: {}", vendorStr);
+    spdlog::debug("Hypervisor vendor: {}", vendorStr);
     return vendorStr;
 }
 
-// 使用 CPUID 指令检测是否在虚拟机中运行
 auto isVirtualMachine() -> bool {
-    LOG_F(INFO, "Starting isVirtualMachine function");
+    spdlog::debug("Checking if running in virtual machine using CPUID");
     std::array<unsigned int, 4> cpuInfo = {0};
 
 #ifdef _WIN32
-    __cpuid(reinterpret_cast<int*>(cpuInfo.data()),
-            CPUID_FEATURES);  // 调用 CPUID 指令，取页码 1
+    __cpuid(reinterpret_cast<int*>(cpuInfo.data()), CPUID_FEATURES);
 #else
     __get_cpuid(CPUID_FEATURES, &cpuInfo[0], &cpuInfo[1], &cpuInfo[2],
                 &cpuInfo[3]);
 #endif
 
     bool isVM = static_cast<bool>(cpuInfo[2] & (1u << HYPERVISOR_PRESENT_BIT));
-    LOG_F(INFO, "Is virtual machine: {}", isVM);
+    spdlog::debug("Virtual machine detected via CPUID: {}", isVM);
     return isVM;
 }
 
-// 检查 BIOS 信息以识别虚拟机
 auto checkBIOS() -> bool {
-    LOG_F(INFO, "Starting checkBIOS function");
+    spdlog::debug("Checking BIOS information for virtualization signs");
+
 #ifdef _WIN32
     HKEY hKey;
     std::array<TCHAR, BIOS_INFO_LENGTH> biosInfo;
@@ -91,349 +136,304 @@ auto checkBIOS() -> bool {
     if (RegOpenKeyEx(HKEY_LOCAL_MACHINE,
                      _T("HARDWARE\\DESCRIPTION\\System\\BIOS"), 0, KEY_READ,
                      &hKey) == ERROR_SUCCESS) {
+        struct RegKeyCloser {
+            HKEY key;
+            ~RegKeyCloser() { RegCloseKey(key); }
+        } keyCloser{hKey};
+
         if (RegQueryValueEx(hKey, _T("SystemManufacturer"), nullptr, nullptr,
                             reinterpret_cast<LPBYTE>(biosInfo.data()),
                             &bufSize) == ERROR_SUCCESS) {
             std::string bios(biosInfo.data());
-            LOG_F(INFO, "BIOS SystemManufacturer: {}", bios);
-            if (bios.find("VMware") != std::string::npos ||
-                bios.find("VirtualBox") != std::string::npos ||
-                bios.find("QEMU") != std::string::npos) {
-                return true;
-            }
+            spdlog::debug("BIOS SystemManufacturer: {}", bios);
+            return containsVMKeywords(bios);
         }
-        RegCloseKey(hKey);
     }
 #else
     std::ifstream file("/sys/class/dmi/id/product_name");
-    std::string biosInfo;
     if (file.is_open()) {
+        std::string biosInfo;
         std::getline(file, biosInfo);
-        file.close();
-        LOG_F(INFO, "BIOS product name: {}", biosInfo);
-        if (biosInfo.find("VMware") != std::string::npos ||
-            biosInfo.find("VirtualBox") != std::string::npos ||
-            biosInfo.find("QEMU") != std::string::npos) {
-            return true;
-        }
+        spdlog::debug("BIOS product name: {}", biosInfo);
+        return containsVMKeywords(biosInfo);
     }
 #endif
     return false;
 }
 
-// 检查网络适配器，常见的虚拟机适配器如 "VMware Virtual Ethernet Adapter"
+auto parseNetworkAdapterOutput(const std::string& output) -> bool {
+    constexpr std::array<std::string_view, 5> vmNetKeywords = {
+        "virbr", "vbox", "vmnet", "veth", "docker"};
+
+    return std::any_of(vmNetKeywords.begin(), vmNetKeywords.end(),
+                       [&output](std::string_view keyword) {
+                           return output.find(keyword) != std::string::npos;
+                       }) ||
+           containsVMKeywords(output);
+}
+
 auto checkNetworkAdapter() -> bool {
-    LOG_F(INFO, "Starting checkNetworkAdapter function");
+    spdlog::debug("Checking network adapters for virtualization indicators");
+
 #ifdef _WIN32
-    std::system("ipconfig /all > network_info.txt");
-    std::ifstream netFile("network_info.txt");
-    std::string line;
-    if (netFile.is_open()) {
-        while (std::getline(netFile, line)) {
-            LOG_F(INFO, "Network adapter info: {}", line);
-            if (line.find("VMware") != std::string::npos ||
-                line.find("VirtualBox") != std::string::npos) {
-                return true;
-            }
-        }
-        netFile.close();
-    }
-    if (remove("network_info.txt") != 0) {
-        LOG_F(ERROR, "Error deleting temporary file network_info.txt");
-    }
+    std::string output = executeCommand("ipconfig /all");
 #else
-    std::system("ip a > network_info.txt");
-    std::ifstream netFile("network_info.txt");
-    std::string line;
-    if (netFile.is_open()) {
-        while (std::getline(netFile, line)) {
-            LOG_F(INFO, "Network adapter info: {}", line);
-            if (line.find("virbr") != std::string::npos ||
-                line.find("vbox") != std::string::npos ||
-                line.find("vmnet") != std::string::npos) {
-                return true;
-            }
-        }
-        netFile.close();
-    }
-    if (remove("network_info.txt") != 0) {
-        LOG_F(ERROR, "Error deleting temporary file network_info.txt");
+    std::string output = executeCommand("ip link show");
+    if (output.empty()) {
+        output = executeCommand("cat /proc/net/dev");
     }
 #endif
-    return false;
+
+    return parseNetworkAdapterOutput(output);
 }
 
-// 检查磁盘信息：虚拟机常用的磁盘标识
 auto checkDisk() -> bool {
-    LOG_F(INFO, "Starting checkDisk function");
+    spdlog::debug("Checking disk information for virtualization signs");
+
 #ifdef _WIN32
-    std::system("wmic diskdrive get caption > disk_info.txt");
-    std::ifstream diskFile("disk_info.txt");
-    std::string line;
-    if (diskFile.is_open()) {
-        while (std::getline(diskFile, line)) {
-            LOG_F(INFO, "Disk info: {}", line);
-            if (line.find("VMware") != std::string::npos ||
-                line.find("VirtualBox") != std::string::npos ||
-                line.find("QEMU") != std::string::npos) {
-                return true;
-            }
-        }
-        diskFile.close();
-    }
-    if (remove("disk_info.txt") != 0) {
-        LOG_F(ERROR, "Error deleting temporary file disk_info.txt");
-    }
+    std::string output = executeCommand("wmic diskdrive get caption,model");
 #else
-    std::system("lsblk -o NAME,MODEL > disk_info.txt");
-    std::ifstream diskFile("disk_info.txt");
-    std::string line;
-    if (diskFile.is_open()) {
-        while (std::getline(diskFile, line)) {
-            LOG_F(INFO, "Disk info: {}", line);
-            if (line.find("VMware") != std::string::npos ||
-                line.find("VirtualBox") != std::string::npos ||
-                line.find("QEMU") != std::string::npos) {
-                return true;
-            }
-        }
-        diskFile.close();
-    }
-    if (remove("disk_info.txt") != 0) {
-        LOG_F(ERROR, "Error deleting temporary file disk_info.txt");
+    std::string output = executeCommand("lsblk -o NAME,MODEL");
+    if (output.empty()) {
+        output = executeCommand("cat /proc/partitions");
     }
 #endif
-    return false;
+
+    return containsVMKeywords(output);
 }
 
-// 检查显卡设备，虚拟机通常使用特定的显卡
 auto checkGraphicsCard() -> bool {
-    LOG_F(INFO, "Starting checkGraphicsCard function");
+    spdlog::debug("Checking graphics card for virtualization indicators");
+
 #ifdef _WIN32
-    std::system("wmic path win32_videocontroller get caption > gpu_info.txt");
-    std::ifstream gpuFile("gpu_info.txt");
-    std::string line;
-    if (gpuFile.is_open()) {
-        while (std::getline(gpuFile, line)) {
-            LOG_F(INFO, "Graphics card info: {}", line);
-            if (line.find("VMware") != std::string::npos ||
-                line.find("VirtualBox") != std::string::npos ||
-                line.find("QEMU") != std::string::npos) {
-                return true;
-            }
-        }
-        gpuFile.close();
-    }
-    if (remove("gpu_info.txt") != 0) {
-        LOG_F(ERROR, "Error deleting temporary file gpu_info.txt");
-    }
+    std::string output =
+        executeCommand("wmic path win32_videocontroller get caption");
 #else
-    std::system("lspci | grep VGA > gpu_info.txt");
-    std::ifstream gpuFile("gpu_info.txt");
-    std::string line;
-    if (gpuFile.is_open()) {
-        while (std::getline(gpuFile, line)) {
-            LOG_F(INFO, "Graphics card info: {}", line);
-            if (line.find("VMware") != std::string::npos ||
-                line.find("VirtualBox") != std::string::npos ||
-                line.find("QEMU") != std::string::npos) {
-                return true;
-            }
-        }
-        gpuFile.close();
-    }
-    if (remove("gpu_info.txt") != 0) {
-        LOG_F(ERROR, "Error deleting temporary file gpu_info.txt");
+    std::string output = executeCommand("lspci | grep -i vga");
+    if (output.empty()) {
+        output = executeCommand(
+            "cat /proc/driver/nvidia/cards 2>/dev/null || echo ''");
     }
 #endif
-    return false;
+
+    return containsVMKeywords(output);
 }
 
-// 检查系统中是否存在常见的虚拟机进程
 auto checkProcesses() -> bool {
-    LOG_F(INFO, "Starting checkProcesses function");
+    spdlog::debug("Checking for virtualization-related processes");
+
 #ifdef _WIN32
-    std::system("tasklist > process_info.txt");
-    std::ifstream procFile("process_info.txt");
-    std::string line;
-    if (procFile.is_open()) {
-        while (std::getline(procFile, line)) {
-            LOG_F(INFO, "Process info: {}", line);
-            if (line.find("vmtoolsd.exe") != std::string::npos ||
-                line.find("VBoxService.exe") != std::string::npos ||
-                line.find("qemu-ga") != std::string::npos) {
-                return true;
-            }
-        }
-        procFile.close();
-    }
-    if (remove("process_info.txt") != 0) {
-        LOG_F(ERROR, "Error deleting temporary file process_info.txt");
-    }
+    std::string output = executeCommand("tasklist");
+    constexpr std::array<std::string_view, 4> vmProcesses = {
+        "vmtoolsd.exe", "VBoxService.exe", "qemu-ga", "xenservice"};
 #else
-    std::system("ps aux > process_info.txt");
-    std::ifstream procFile("process_info.txt");
-    std::string line;
-    if (procFile.is_open()) {
-        while (std::getline(procFile, line)) {
-            LOG_F(INFO, "Process info: {}", line);
-            if (line.find("vmtoolsd") != std::string::npos ||
-                line.find("VBoxService") != std::string::npos ||
-                line.find("qemu-ga") != std::string::npos) {
-                return true;
-            }
-        }
-        procFile.close();
-    }
-    if (remove("process_info.txt") != 0) {
-        LOG_F(ERROR, "Error deleting temporary file process_info.txt");
-    }
+    std::string output = executeCommand("ps aux");
+    constexpr std::array<std::string_view, 4> vmProcesses = {
+        "vmtoolsd", "VBoxService", "qemu-ga", "xenstore"};
 #endif
-    return false;
+
+    return std::any_of(vmProcesses.begin(), vmProcesses.end(),
+                       [&output](std::string_view process) {
+                           return output.find(process) != std::string::npos;
+                       });
 }
 
-// 检查 PCI 总线设备是否为虚拟化设备
 auto checkPCIBus() -> bool {
-    LOG_F(INFO, "Starting checkPCIBus function");
+    spdlog::debug("Checking PCI bus for virtualization devices");
+
 #ifdef _WIN32
-    std::system("wmic path Win32_PnPEntity get Name > pci_info.txt");
-    std::ifstream pciFile("pci_info.txt");
+    std::string output = executeCommand("wmic path Win32_PnPEntity get Name");
 #else
-    std::system("lspci > pci_info.txt");  // 在 Linux 上使用 lspci
-    std::ifstream pciFile("pci_info.txt");
+    std::string output = executeCommand("lspci");
 #endif
-    std::string line;
-    if (pciFile.is_open()) {
-        while (std::getline(pciFile, line)) {
-            LOG_F(INFO, "PCI bus info: {}", line);
-            if (line.find("VMware") != std::string::npos ||
-                line.find("VirtualBox") != std::string::npos ||
-                line.find("QEMU") != std::string::npos ||
-                line.find("Xen") != std::string::npos ||
-                line.find("KVM") != std::string::npos) {
-                return true;
-            }
-        }
-        pciFile.close();
-    }
-    if (remove("pci_info.txt") != 0) {
-        LOG_F(ERROR, "Error deleting temporary file pci_info.txt");
-    }
-    return false;
+
+    return containsVMKeywords(output);
 }
 
-// 检测系统时间的跳动和偏移，虚拟机的时间管理可能存在问题
 auto checkTimeDrift() -> bool {
-    LOG_F(INFO, "Starting checkTimeDrift function");
-    // 获取两次系统时间，检测它们的差值是否合理
+    spdlog::debug("Checking for time drift anomalies");
+
     auto start = std::chrono::high_resolution_clock::now();
-#ifdef _WIN32
-    Sleep(1000);  // 暂停 1 秒
-#else
-    std::this_thread::sleep_for(std::chrono::seconds(1));  // 暂停 1 秒
-#endif
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     auto end = std::chrono::high_resolution_clock::now();
+
     auto duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
             .count();
 
-    // 如果时间跳动太大，可能是虚拟机中常见的时间管理问题
     bool timeDrift =
         duration > TIME_DRIFT_UPPER_BOUND || duration < TIME_DRIFT_LOWER_BOUND;
-    LOG_F(INFO, "Time drift detected: {}", timeDrift);
+    spdlog::debug("Time drift detected: {} (duration: {}ms)", timeDrift,
+                  duration);
     return timeDrift;
 }
 
-auto checkCPUCores() -> bool {
-    LOG_F(INFO, "Starting checkCPUCores function");
-    int cores = getNumberOfLogicalCores();
-    LOG_F(INFO, "CPU cores detected: {}", cores);
-    return (cores <= 2 || (cores & (cores - 1)) == 0);
-}
-
-auto checkMemoryConfiguration() -> bool {
-    LOG_F(INFO, "Starting checkMemoryConfiguration function");
-    auto totalMem = getTotalMemorySize();
-    double memGB = static_cast<double>(totalMem) / (1024 * 1024 * 1024);
-    LOG_F(INFO, "Total physical memory: {:.2f} GB", memGB);
-
-    return (memGB <= 4.0 ||
-            std::abs(std::log2(memGB) - std::round(std::log2(memGB))) < 0.01);
-}
-
 auto isDockerContainer() -> bool {
-    LOG_F(INFO, "Starting isDockerContainer function");
+    spdlog::debug("Checking for Docker container environment");
+
 #ifdef _WIN32
     return false;
 #else
+    if (std::filesystem::exists("/.dockerenv")) {
+        spdlog::debug("Docker environment file found");
+        return true;
+    }
+
     std::ifstream cgroup("/proc/1/cgroup");
-    std::string line;
     if (cgroup.is_open()) {
+        std::string line;
         while (std::getline(cgroup, line)) {
             if (line.find("docker") != std::string::npos) {
-                LOG_F(INFO, "Docker container detected");
+                spdlog::debug("Docker container detected in cgroup");
                 return true;
             }
         }
     }
 
-    std::ifstream dockerEnv("/.dockerenv");
-    if (dockerEnv.good()) {
-        LOG_F(INFO, "Docker environment file found");
-        return true;
-    }
-#endif
     return false;
+#endif
 }
 
 auto getVirtualizationConfidence() -> double {
-    LOG_F(INFO, "Starting getVirtualizationConfidence function");
-    int evidence = 0;
-    int totalChecks = 0;
+    spdlog::debug("Calculating virtualization confidence score");
 
-    if (isVirtualMachine())
-        evidence++;
-    totalChecks++;
+    struct Check {
+        std::function<bool()> func;
+        double weight;
+        std::string name;
+    };
 
-    if (checkBIOS())
-        evidence++;
-    totalChecks++;
+    std::array<Check, 8> checks = {{{isVirtualMachine, 0.25, "CPUID"},
+                                    {checkBIOS, 0.20, "BIOS"},
+                                    {checkNetworkAdapter, 0.10, "Network"},
+                                    {checkDisk, 0.15, "Disk"},
+                                    {checkGraphicsCard, 0.10, "Graphics"},
+                                    {checkProcesses, 0.05, "Processes"},
+                                    {checkPCIBus, 0.10, "PCI Bus"},
+                                    {checkTimeDrift, 0.05, "Time Drift"}}};
 
-    if (checkNetworkAdapter())
-        evidence++;
-    totalChecks++;
+    double totalWeight = 0.0;
+    double evidenceWeight = 0.0;
 
-    if (checkDisk())
-        evidence++;
-    totalChecks++;
+    for (const auto& check : checks) {
+        totalWeight += check.weight;
+        try {
+            if (check.func()) {
+                evidenceWeight += check.weight;
+                spdlog::debug("Virtualization indicator found: {}", check.name);
+            }
+        } catch (const std::exception& e) {
+            spdlog::warn("Error in {} check: {}", check.name, e.what());
+        }
+    }
 
-    if (checkGraphicsCard())
-        evidence++;
-    totalChecks++;
-
-    if (checkProcesses())
-        evidence++;
-    totalChecks++;
-
-    if (checkPCIBus())
-        evidence++;
-    totalChecks++;
-
-    if (checkTimeDrift())
-        evidence++;
-    totalChecks++;
-
-    if (checkCPUCores())
-        evidence++;
-    totalChecks++;
-
-    if (checkMemoryConfiguration())
-        evidence++;
-    totalChecks++;
-
-    double confidence = static_cast<double>(evidence) / totalChecks;
-    LOG_F(INFO, "Virtualization confidence: {:.2f}", confidence);
+    double confidence = evidenceWeight / totalWeight;
+    spdlog::info("Virtualization confidence score: {:.2f}", confidence);
     return confidence;
+}
+
+auto getVirtualizationType() -> std::string {
+    spdlog::debug("Determining virtualization type");
+
+    std::string vendor = getHypervisorVendor();
+
+    if (vendor.find("VMware") != std::string::npos) {
+        return "VMware";
+    }
+    if (vendor.find("VBoxVBox") != std::string::npos) {
+        return "VirtualBox";
+    }
+    if (vendor.find("Microsoft") != std::string::npos) {
+        return "Hyper-V";
+    }
+    if (vendor.find("KVMKVMKVM") != std::string::npos) {
+        return "KVM";
+    }
+    if (vendor.find("XenVMMXen") != std::string::npos) {
+        return "Xen";
+    }
+
+    if (checkBIOS() || checkPCIBus()) {
+        std::string output;
+#ifdef _WIN32
+        output = executeCommand("wmic computersystem get manufacturer,model");
+#else
+        output = executeCommand("cat /sys/class/dmi/id/product_name");
+#endif
+
+        if (containsVMKeywords(output)) {
+            if (output.find("VMware") != std::string::npos)
+                return "VMware";
+            if (output.find("VirtualBox") != std::string::npos)
+                return "VirtualBox";
+            if (output.find("QEMU") != std::string::npos)
+                return "QEMU/KVM";
+            if (output.find("Xen") != std::string::npos)
+                return "Xen";
+        }
+    }
+
+    return "Unknown";
+}
+
+auto isContainer() -> bool {
+    spdlog::debug("Checking for container environment");
+
+    if (isDockerContainer()) {
+        return true;
+    }
+
+#ifndef _WIN32
+    std::ifstream cgroup("/proc/1/cgroup");
+    if (cgroup.is_open()) {
+        std::string line;
+        while (std::getline(cgroup, line)) {
+            if (line.find("lxc") != std::string::npos ||
+                line.find("docker") != std::string::npos ||
+                line.find("kubepods") != std::string::npos) {
+                return true;
+            }
+        }
+    }
+
+    return std::filesystem::exists("/run/.containerenv") ||
+           std::filesystem::exists("/.dockerenv");
+#endif
+
+    return false;
+}
+
+auto getContainerType() -> std::string {
+    spdlog::debug("Determining container type");
+
+    if (!isContainer()) {
+        return "";
+    }
+
+    if (isDockerContainer()) {
+        return "Docker";
+    }
+
+#ifndef _WIN32
+    std::ifstream cgroup("/proc/1/cgroup");
+    if (cgroup.is_open()) {
+        std::string line;
+        while (std::getline(cgroup, line)) {
+            if (line.find("lxc") != std::string::npos) {
+                return "LXC";
+            }
+            if (line.find("kubepods") != std::string::npos) {
+                return "Kubernetes";
+            }
+        }
+    }
+
+    if (std::filesystem::exists("/run/.containerenv")) {
+        return "Podman";
+    }
+#endif
+
+    return "Unknown Container";
 }
 
 }  // namespace atom::system

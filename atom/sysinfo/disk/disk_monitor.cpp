@@ -16,6 +16,9 @@ Description: System Information Module - Disk Monitoring
 #include "atom/sysinfo/disk/disk_security.hpp"
 
 #include <atomic>
+#include <thread>
+#include <unordered_map>
+#include <unordered_set>
 
 #ifdef _WIN32
 // clang-format off
@@ -27,178 +30,148 @@ Description: System Information Module - Disk Monitoring
 #include <sys/inotify.h>
 #include <unistd.h>
 #include <csignal>
+#include <cstring>
 #elif __APPLE__
 #include <CoreFoundation/CoreFoundation.h>
 #include <DiskArbitration/DiskArbitration.h>
 #include <IOKit/storage/IOStorageDeviceCharacteristics.h>
 #endif
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 
 namespace atom::system {
 
-// Atomic flag for device monitoring
-static std::atomic_bool g_monitoringActive = false;
+static std::atomic_bool g_monitoringActive{false};
 
 struct MonitorContext {
     SecurityPolicy securityPolicy;
     std::function<void(const StorageDevice&)> callback;
 };
 
-static LRESULT CALLBACK DeviceMonitorWndProc(HWND hwnd, UINT msg, WPARAM wParam,
-                                             LPARAM lParam) {
-    // 获取关联的上下文数据
+#ifdef _WIN32
+static LRESULT CALLBACK DeviceMonitorWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     MonitorContext* context = nullptr;
     if (msg == WM_CREATE) {
-        // 窗口创建时保存上下文
-        CREATESTRUCT* cs = reinterpret_cast<CREATESTRUCT*>(lParam);
+        const CREATESTRUCT* cs = reinterpret_cast<CREATESTRUCT*>(lParam);
         context = reinterpret_cast<MonitorContext*>(cs->lpCreateParams);
-        SetWindowLongPtr(hwnd, GWLP_USERDATA,
-                         reinterpret_cast<LONG_PTR>(context));
+        SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(context));
     } else {
-        // 获取之前保存的上下文
-        context = reinterpret_cast<MonitorContext*>(
-            GetWindowLongPtr(hwnd, GWLP_USERDATA));
+        context = reinterpret_cast<MonitorContext*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
     }
 
-    if (msg == WM_DEVICECHANGE && context) {
-        if (wParam == DBT_DEVICEARRIVAL) {
-            // A device was inserted
-            DEV_BROADCAST_HDR* header =
-                reinterpret_cast<DEV_BROADCAST_HDR*>(lParam);
-            if (header->dbch_devicetype == DBT_DEVTYP_VOLUME) {
-                DEV_BROADCAST_VOLUME* vol =
-                    reinterpret_cast<DEV_BROADCAST_VOLUME*>(header);
+    if (msg == WM_DEVICECHANGE && context && wParam == DBT_DEVICEARRIVAL) {
+        const DEV_BROADCAST_HDR* header = reinterpret_cast<DEV_BROADCAST_HDR*>(lParam);
+        if (header->dbch_devicetype == DBT_DEVTYP_VOLUME) {
+            const DEV_BROADCAST_VOLUME* vol = reinterpret_cast<DEV_BROADCAST_VOLUME*>(lParam);
 
-                // Convert the volume mask to a drive letter
-                char driveLetter = 'A';
-                DWORD mask = vol->dbcv_unitmask;
-                while (!(mask & 1)) {
-                    mask >>= 1;
-                    driveLetter++;
-                }
+            char driveLetter = 'A';
+            DWORD mask = vol->dbcv_unitmask;
+            while (!(mask & 1)) {
+                mask >>= 1;
+                driveLetter++;
+            }
 
-                // Create the drive path
-                std::string drivePath = std::string(1, driveLetter) + ":\\";
+            const std::string drivePath = std::string(1, driveLetter) + ":\\";
 
-                // Create a device object
-                StorageDevice device;
-                device.devicePath = drivePath;
-                device.isRemovable =
-                    (GetDriveTypeA(drivePath.c_str()) == DRIVE_REMOVABLE);
+            StorageDevice device;
+            device.devicePath = drivePath;
+            device.isRemovable = (GetDriveTypeA(drivePath.c_str()) == DRIVE_REMOVABLE);
 
-                // Apply security policy
+            try {
                 if (context->securityPolicy == SecurityPolicy::READ_ONLY) {
                     setDiskReadOnly(drivePath);
-                } else if (context->securityPolicy ==
-                           SecurityPolicy::SCAN_BEFORE_USE) {
+                } else if (context->securityPolicy == SecurityPolicy::SCAN_BEFORE_USE) {
                     scanDiskForThreats(drivePath);
                 }
 
-                // Invoke callback
                 context->callback(device);
+            } catch (const std::exception& e) {
+                spdlog::error("Error processing device insertion for {}: {}", drivePath, e.what());
             }
         }
     }
     return DefWindowProcA(hwnd, msg, wParam, lParam);
 }
+#endif
 
-// Device monitoring implementation
-std::future<void> startDeviceMonitoring(
-    std::function<void(const StorageDevice&)> callback,
-    SecurityPolicy securityPolicy) {
-    // Create atomic flag to control monitoring thread
+std::future<void> startDeviceMonitoring(std::function<void(const StorageDevice&)> callback,
+                                       SecurityPolicy securityPolicy) {
     g_monitoringActive = true;
 
-    // Create the future that will run the monitoring
-    return std::async(std::launch::async, [callback, securityPolicy]() {
-#ifdef _WIN32
-        // Windows implementation using WM_DEVICECHANGE
-        // This requires a window handle, so typically is done in the main UI
-        // thread Here we create a hidden window for monitoring
+    return std::async(std::launch::async, [callback = std::move(callback), securityPolicy]() {
+        spdlog::info("Starting device monitoring with security policy: {}", static_cast<int>(securityPolicy));
 
-        // First, register a window class
-        WNDCLASSEXA wc = {};
+#ifdef _WIN32
+        WNDCLASSEXA wc{};
         wc.cbSize = sizeof(WNDCLASSEXA);
         wc.lpfnWndProc = DeviceMonitorWndProc;
-        wc.hInstance = GetModuleHandleA(NULL);
+        wc.hInstance = GetModuleHandleA(nullptr);
         wc.lpszClassName = "DeviceMonitorClass";
 
         if (!RegisterClassExA(&wc)) {
-            LOG_F(ERROR, "Failed to register window class");
+            spdlog::error("Failed to register window class: {}", GetLastError());
             return;
         }
 
-        // Create a hidden window
-        HWND hwnd = CreateWindowExA(0, "DeviceMonitorClass", "DeviceMonitor", 0,
-                                    0, 0, 0, 0, HWND_MESSAGE, NULL,
-                                    GetModuleHandleA(NULL), NULL);
+        MonitorContext context{securityPolicy, callback};
+        const HWND hwnd = CreateWindowExA(0, "DeviceMonitorClass", "DeviceMonitor", 0,
+                                         0, 0, 0, 0, HWND_MESSAGE, nullptr,
+                                         GetModuleHandleA(nullptr), &context);
         if (!hwnd) {
-            LOG_F(ERROR, "Failed to create hidden window");
+            spdlog::error("Failed to create hidden window: {}", GetLastError());
+            UnregisterClassA("DeviceMonitorClass", GetModuleHandleA(nullptr));
             return;
         }
 
-        // Register for device notifications
-        DEV_BROADCAST_DEVICEINTERFACE notificationFilter = {};
+        DEV_BROADCAST_DEVICEINTERFACE notificationFilter{};
         notificationFilter.dbcc_size = sizeof(notificationFilter);
         notificationFilter.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
 
-        HDEVNOTIFY hDevNotify = RegisterDeviceNotificationA(
-            hwnd, &notificationFilter, DEVICE_NOTIFY_WINDOW_HANDLE);
+        const HDEVNOTIFY hDevNotify = RegisterDeviceNotificationA(hwnd, &notificationFilter, DEVICE_NOTIFY_WINDOW_HANDLE);
 
         if (!hDevNotify) {
-            LOG_F(ERROR, "Failed to register for device notifications");
+            spdlog::error("Failed to register for device notifications: {}", GetLastError());
             DestroyWindow(hwnd);
+            UnregisterClassA("DeviceMonitorClass", GetModuleHandleA(nullptr));
             return;
         }
 
-        // Message loop
         MSG msg;
         while (g_monitoringActive && GetMessageA(&msg, hwnd, 0, 0)) {
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
         }
 
-        // Cleanup
         UnregisterDeviceNotification(hDevNotify);
         DestroyWindow(hwnd);
-        UnregisterClassA("DeviceMonitorClass", GetModuleHandleA(NULL));
+        UnregisterClassA("DeviceMonitorClass", GetModuleHandleA(nullptr));
 
 #elif __linux__
-        // Linux implementation using libudev for monitoring device insertion
         struct udev* udev = udev_new();
         if (!udev) {
-            LOG_F(ERROR, "Failed to create udev object");
+            spdlog::error("Failed to create udev object");
             return;
         }
-        
-        // Create monitor for block devices
+
         struct udev_monitor* monitor = udev_monitor_new_from_netlink(udev, "udev");
-        udev_monitor_filter_add_match_subsystem_devtype(monitor, "block", NULL);
+        udev_monitor_filter_add_match_subsystem_devtype(monitor, "block", nullptr);
         udev_monitor_enable_receiving(monitor);
-        
-        // Get the file descriptor for polling
-        int fd = udev_monitor_get_fd(monitor);
-        
-        // Setup polling
-        fd_set readfds;
-        
-        // Track existing devices to detect new ones
+
+        const int fd = udev_monitor_get_fd(monitor);
         std::unordered_set<std::string> existingDevices;
-        
-        // Scan for existing devices first
+
         struct udev_enumerate* enumerate = udev_enumerate_new(udev);
         udev_enumerate_add_match_subsystem(enumerate, "block");
         udev_enumerate_add_match_property(enumerate, "DEVTYPE", "disk");
         udev_enumerate_scan_devices(enumerate);
-        
+
         struct udev_list_entry* devices = udev_enumerate_get_list_entry(enumerate);
         struct udev_list_entry* entry;
-        
+
         udev_list_entry_foreach(entry, devices) {
             const char* path = udev_list_entry_get_name(entry);
             struct udev_device* dev = udev_device_new_from_syspath(udev, path);
-            
+
             if (dev) {
                 const char* devnode = udev_device_get_devnode(dev);
                 if (devnode) {
@@ -208,45 +181,37 @@ std::future<void> startDeviceMonitoring(
             }
         }
         udev_enumerate_unref(enumerate);
-        
-        // Monitor for new devices
+
+        fd_set readfds;
         while (g_monitoringActive) {
             FD_ZERO(&readfds);
             FD_SET(fd, &readfds);
-            
-            // Use select with a timeout to check flag periodically
-            struct timeval tv;
-            tv.tv_sec = 1;
-            tv.tv_usec = 0;
-            
-            int ret = select(fd + 1, &readfds, NULL, NULL, &tv);
-            
+
+            struct timeval tv{1, 0};
+            const int ret = select(fd + 1, &readfds, nullptr, nullptr, &tv);
+
             if (ret > 0 && FD_ISSET(fd, &readfds)) {
                 struct udev_device* dev = udev_monitor_receive_device(monitor);
                 if (dev) {
                     const char* action = udev_device_get_action(dev);
                     const char* devnode = udev_device_get_devnode(dev);
                     const char* devtype = udev_device_get_devtype(dev);
-                    
+
                     if (action && devnode && devtype && 
                         strcmp(action, "add") == 0 && 
                         strcmp(devtype, "disk") == 0 &&
                         existingDevices.find(devnode) == existingDevices.end()) {
                         
-                        // This is a new device
                         existingDevices.insert(devnode);
-                        
-                        // Create device object
+
                         StorageDevice device;
                         device.devicePath = devnode;
-                        
-                        // Get device properties
-                        struct udev_device* parent = udev_device_get_parent_with_subsystem_devtype(
-                            dev, "block", "disk");
+
+                        struct udev_device* parent = udev_device_get_parent_with_subsystem_devtype(dev, "block", "disk");
                         if (parent) {
                             const char* vendor = udev_device_get_property_value(parent, "ID_VENDOR");
                             const char* model = udev_device_get_property_value(parent, "ID_MODEL");
-                            
+
                             if (vendor && model) {
                                 device.model = std::string(vendor) + " " + model;
                             } else if (model) {
@@ -254,220 +219,201 @@ std::future<void> startDeviceMonitoring(
                             } else {
                                 device.model = devnode;
                             }
-                            
-                            const char* serial = udev_device_get_property_value(parent, "ID_SERIAL");
-                            if (serial) {
+
+                            if (const char* serial = udev_device_get_property_value(parent, "ID_SERIAL")) {
                                 device.serialNumber = serial;
                             }
-                            
-                            const char* removable = udev_device_get_sysattr_value(parent, "removable");
-                            if (removable) {
+
+                            if (const char* removable = udev_device_get_sysattr_value(parent, "removable")) {
                                 device.isRemovable = (strcmp(removable, "1") == 0);
                             }
-                            
-                            const char* size = udev_device_get_sysattr_value(parent, "size");
-                            if (size) {
-                                device.sizeBytes = std::stoull(size) * 512;
+
+                            if (const char* size = udev_device_get_sysattr_value(parent, "size")) {
+                                try {
+                                    device.sizeBytes = std::stoull(size) * 512;
+                                } catch (const std::exception& e) {
+                                    spdlog::warn("Failed to parse device size for {}: {}", devnode, e.what());
+                                }
                             }
                         }
-                        
-                        // Apply security policy
-                        if (securityPolicy == SecurityPolicy::READ_ONLY) {
-                            setDiskReadOnly(devnode);
-                        } else if (securityPolicy == SecurityPolicy::WHITELIST_ONLY) {
-                            if (!device.serialNumber.empty() && 
-                                !isDeviceInWhitelist(device.serialNumber)) {
-                                continue;  // Skip callback if not in whitelist
-                            }
-                        } else if (securityPolicy == SecurityPolicy::SCAN_BEFORE_USE) {
-                            // Wait for device to be mounted
-                            std::this_thread::sleep_for(std::chrono::seconds(2));
-                            
-                            // Find mount point
-                            std::string mountPoint;
-                            FILE* mtab = fopen("/proc/mounts", "r");
-                            if (mtab) {
-                                char line[256];
-                                while (fgets(line, sizeof(line), mtab) != NULL) {
-                                    if (strstr(line, devnode) != NULL) {
-                                        char* token = strtok(line, " \t");
-                                        if (token) token = strtok(NULL, " \t");  // Skip device
-                                        if (token) {
-                                            mountPoint = token;
+
+                        try {
+                            if (securityPolicy == SecurityPolicy::READ_ONLY) {
+                                setDiskReadOnly(devnode);
+                            } else if (securityPolicy == SecurityPolicy::WHITELIST_ONLY) {
+                                if (!device.serialNumber.empty() && !isDeviceInWhitelist(device.serialNumber)) {
+                                    spdlog::info("Device {} not in whitelist, skipping", devnode);
+                                    udev_device_unref(dev);
+                                    continue;
+                                }
+                            } else if (securityPolicy == SecurityPolicy::SCAN_BEFORE_USE) {
+                                std::this_thread::sleep_for(std::chrono::seconds(2));
+
+                                std::string mountPoint;
+                                std::ifstream mtab("/proc/mounts");
+                                std::string line;
+                                while (std::getline(mtab, line)) {
+                                    if (line.find(devnode) != std::string::npos) {
+                                        std::istringstream iss(line);
+                                        std::string device, mount;
+                                        iss >> device >> mount;
+                                        if (device == devnode) {
+                                            mountPoint = mount;
                                             break;
                                         }
                                     }
                                 }
-                                fclose(mtab);
+
+                                if (!mountPoint.empty()) {
+                                    scanDiskForThreats(mountPoint);
+                                }
                             }
-                            
-                            if (!mountPoint.empty()) {
-                                scanDiskForThreats(mountPoint);
-                            }
+
+                            callback(device);
+                        } catch (const std::exception& e) {
+                            spdlog::error("Error processing device insertion for {}: {}", devnode, e.what());
                         }
-                        
-                        // Invoke callback
-                        callback(device);
                     }
                     udev_device_unref(dev);
                 }
             }
         }
-        
+
         udev_monitor_unref(monitor);
         udev_unref(udev);
 
 #elif __APPLE__
-        // macOS implementation using DiskArbitration framework
-        DASessionRef session = DASessionCreate(kCFAllocatorDefault);
+        const DASessionRef session = DASessionCreate(kCFAllocatorDefault);
         if (!session) {
-            LOG_F(ERROR, "Failed to create DiskArbitration session");
+            spdlog::error("Failed to create DiskArbitration session");
             return;
         }
-        
-        // Set up the run loop
+
         DASessionScheduleWithRunLoop(session, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
-        
-        // Track existing devices to detect new ones
-        std::unordered_set<std::string> existingDevices;
-        
-        // Register callbacks for disk appearance
+
+        struct CallbackContext {
+            std::function<void(const StorageDevice&)> callback;
+            SecurityPolicy securityPolicy;
+        };
+
+        auto contextPtr = std::make_unique<CallbackContext>(CallbackContext{callback, securityPolicy});
+
         DARegisterDiskAppearedCallback(
-            session, NULL,
+            session, nullptr,
             [](DADiskRef disk, void* context) {
-                auto callback = reinterpret_cast<std::function<void(const StorageDevice&)>*>(context);
-                
-                // Get disk information
-                CFDictionaryRef description = DADiskCopyDescription(disk);
+                const auto* ctx = static_cast<CallbackContext*>(context);
+
+                const CFDictionaryRef description = DADiskCopyDescription(disk);
                 if (!description) return;
-                
-                // Get device path
-                CFStringRef bsdNameRef = (CFStringRef)CFDictionaryGetValue(
-                    description, kDADiskDescriptionMediaBSDNameKey);
+
+                const CFStringRef bsdNameRef = static_cast<CFStringRef>(
+                    CFDictionaryGetValue(description, kDADiskDescriptionMediaBSDNameKey));
                 if (!bsdNameRef) {
                     CFRelease(description);
                     return;
                 }
-                
+
                 char bsdName[128];
                 if (!CFStringGetCString(bsdNameRef, bsdName, sizeof(bsdName), kCFStringEncodingUTF8)) {
                     CFRelease(description);
                     return;
                 }
-                
-                std::string devicePath = "/dev/";
-                devicePath += bsdName;
-                
-                // Check if this is a whole disk (not a partition)
-                CFBooleanRef wholeMediaRef = (CFBooleanRef)CFDictionaryGetValue(
-                    description, kDADiskDescriptionMediaWholeKey);
+
+                const CFBooleanRef wholeMediaRef = static_cast<CFBooleanRef>(
+                    CFDictionaryGetValue(description, kDADiskDescriptionMediaWholeKey));
                 if (!wholeMediaRef || !CFBooleanGetValue(wholeMediaRef)) {
                     CFRelease(description);
                     return;
                 }
-                
-                // Create device object
+
                 StorageDevice device;
-                device.devicePath = devicePath;
-                
-                // Get model
-                CFStringRef modelRef = (CFStringRef)CFDictionaryGetValue(
-                    description, kDADiskDescriptionDeviceModelKey);
-                if (modelRef) {
+                device.devicePath = "/dev/" + std::string(bsdName);
+
+                if (const CFStringRef modelRef = static_cast<CFStringRef>(
+                    CFDictionaryGetValue(description, kDADiskDescriptionDeviceModelKey))) {
                     char model[256];
                     if (CFStringGetCString(modelRef, model, sizeof(model), kCFStringEncodingUTF8)) {
                         device.model = model;
                     }
                 }
-                
-                // Get size
-                CFNumberRef sizeRef = (CFNumberRef)CFDictionaryGetValue(
-                    description, kDADiskDescriptionMediaSizeKey);
-                if (sizeRef) {
+
+                if (const CFNumberRef sizeRef = static_cast<CFNumberRef>(
+                    CFDictionaryGetValue(description, kDADiskDescriptionMediaSizeKey))) {
                     CFNumberGetValue(sizeRef, kCFNumberSInt64Type, &device.sizeBytes);
                 }
-                
-                // Check if removable
-                CFBooleanRef removableRef = (CFBooleanRef)CFDictionaryGetValue(
-                    description, kDADiskDescriptionMediaRemovableKey);
-                if (removableRef) {
+
+                if (const CFBooleanRef removableRef = static_cast<CFBooleanRef>(
+                    CFDictionaryGetValue(description, kDADiskDescriptionMediaRemovableKey))) {
                     device.isRemovable = CFBooleanGetValue(removableRef);
                 }
-                
-                // Get serial number
-                CFStringRef serialRef = (CFStringRef)CFDictionaryGetValue(
-                    description, kIOPropertySerialNumberKey);
-                if (serialRef) {
+
+                if (const CFStringRef serialRef = static_cast<CFStringRef>(
+                    CFDictionaryGetValue(description, kIOPropertySerialNumberKey))) {
                     char serial[128];
                     if (CFStringGetCString(serialRef, serial, sizeof(serial), kCFStringEncodingUTF8)) {
                         device.serialNumber = serial;
                     }
                 }
-                
+
                 CFRelease(description);
-                
-                // Apply security policy
-                auto secPolicy = *reinterpret_cast<SecurityPolicy*>(context + sizeof(callback));
-                if (secPolicy == SecurityPolicy::READ_ONLY) {
-                    setDiskReadOnly(devicePath);
-                } else if (secPolicy == SecurityPolicy::WHITELIST_ONLY) {
-                    if (!device.serialNumber.empty() && 
-                        !isDeviceInWhitelist(device.serialNumber)) {
-                        return;  // Skip callback if not in whitelist
+
+                try {
+                    if (ctx->securityPolicy == SecurityPolicy::READ_ONLY) {
+                        setDiskReadOnly(device.devicePath);
+                    } else if (ctx->securityPolicy == SecurityPolicy::WHITELIST_ONLY) {
+                        if (!device.serialNumber.empty() && !isDeviceInWhitelist(device.serialNumber)) {
+                            return;
+                        }
                     }
+
+                    ctx->callback(device);
+                } catch (const std::exception& e) {
+                    spdlog::error("Error processing device insertion for {}: {}", device.devicePath, e.what());
                 }
-                
-                // Invoke callback
-                (*callback)(device);
             },
-            &callback);
-        
-        // Run loop
+            contextPtr.get());
+
         while (g_monitoringActive) {
             CFRunLoopRunInMode(kCFRunLoopDefaultMode, 1.0, false);
         }
-        
-        // Clean up
+
         DASessionUnscheduleFromRunLoop(session, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
         CFRelease(session);
 
 #else
-        // Generic fallback implementation using polling
         std::unordered_map<std::string, StorageDevice> knownDevices;
-        
-        // Initialize with currently available devices
+
         auto currentDevices = getStorageDevices(true);
         for (const auto& device : currentDevices) {
             knownDevices[device.devicePath] = device;
         }
-        
-        // Poll periodically for new devices
+
         while (g_monitoringActive) {
             std::this_thread::sleep_for(std::chrono::seconds(2));
-            
+
             currentDevices = getStorageDevices(true);
             for (const auto& device : currentDevices) {
                 if (knownDevices.find(device.devicePath) == knownDevices.end()) {
-                    // This is a new device
                     knownDevices[device.devicePath] = device;
-                    
-                    // Apply security policy
-                    if (securityPolicy == SecurityPolicy::READ_ONLY) {
-                        setDiskReadOnly(device.devicePath);
-                    } else if (securityPolicy == SecurityPolicy::WHITELIST_ONLY) {
-                        if (!device.serialNumber.empty() && 
-                            !isDeviceInWhitelist(device.serialNumber)) {
-                            continue;  // Skip callback if not in whitelist
+
+                    try {
+                        if (securityPolicy == SecurityPolicy::READ_ONLY) {
+                            setDiskReadOnly(device.devicePath);
+                        } else if (securityPolicy == SecurityPolicy::WHITELIST_ONLY) {
+                            if (!device.serialNumber.empty() && !isDeviceInWhitelist(device.serialNumber)) {
+                                continue;
+                            }
                         }
+
+                        callback(device);
+                    } catch (const std::exception& e) {
+                        spdlog::error("Error processing device insertion for {}: {}", device.devicePath, e.what());
                     }
-                    
-                    // Invoke callback
-                    callback(device);
                 }
             }
         }
 #endif
-        LOG_F(INFO, "Device monitoring stopped");
+        spdlog::info("Device monitoring stopped");
     });
 }
 

@@ -78,6 +78,22 @@ extern const std::chrono::seconds g_cacheValidDuration;
 extern std::atomic<bool> g_cacheInitialized;
 extern CpuInfo g_cpuInfoCache;
 
+}  // anonymous namespace
+
+// Platform-specific function declarations - these will be implemented in
+// platform-specific files
+
+#ifdef _WIN32
+// Windows-specific function declarations
+#elif defined(__linux__)
+// Linux-specific function declarations
+#elif defined(__APPLE__)
+// macOS-specific function declarations
+#elif defined(__FreeBSD__)
+// FreeBSD-specific function declarations
+#endif
+
+// Forward declarations for functions implemented in common.cpp
 /**
  * @brief Converts a string to bytes
  * @param str String like "8K" or "4M"
@@ -93,21 +109,6 @@ size_t stringToBytes(const std::string& str);
 CpuVendor getVendorFromString(const std::string& vendorId);
 
 bool needsCacheRefresh();
-
-}  // anonymous namespace
-
-// Platform-specific function declarations - these will be implemented in
-// platform-specific files
-
-#ifdef _WIN32
-// Windows-specific function declarations
-#elif defined(__linux__)
-// Linux-specific function declarations
-#elif defined(__APPLE__)
-// macOS-specific function declarations
-#elif defined(__FreeBSD__)
-// FreeBSD-specific function declarations
-#endif
 
 }  // namespace atom::system
 

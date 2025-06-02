@@ -102,16 +102,11 @@ auto getCurrentWorkingSetSize() -> size_t;
 auto getPageFaultCount() -> size_t;
 
 /**
- * @brief Get system memory load percentage
- * @return Memory load as percentage (0.0 - 100.0)
- */
-auto getMemoryLoadPercentage() -> double;
-
-/**
  * @brief Get memory performance metrics
  * @return MemoryPerformance structure with performance data
  */
 auto getMemoryPerformance() -> MemoryPerformance;
+
 }  // namespace atom::system::linux
 
 #endif  // __linux__

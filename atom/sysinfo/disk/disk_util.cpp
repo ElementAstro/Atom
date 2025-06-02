@@ -14,6 +14,8 @@ Description: System Information Module - Disk Utilities
 
 #include "atom/sysinfo/disk/disk_util.hpp"
 
+#include <sstream>
+
 #ifdef _WIN32
 #include <windows.h>
 #elif __linux__ || __ANDROID__
@@ -27,17 +29,72 @@ Description: System Information Module - Disk Utilities
 #include <sys/statvfs.h>
 #endif
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 
 namespace atom::system {
 
+namespace {
+#ifdef __linux__ || __ANDROID__
+struct FilesystemTypeInfo {
+    uint32_t magic;
+    const char* name;
+};
+
+constexpr FilesystemTypeInfo FILESYSTEM_TYPES[] = {
+    {0xEF53, "ext4"},          {0x6969, "nfs"},        {0xFF534D42, "cifs"},
+    {0x4d44, "vfat"},          {0x5346544E, "ntfs"},   {0x52654973, "reiserfs"},
+    {0x01021994, "tmpfs"},     {0x58465342, "xfs"},    {0xF15F, "ecryptfs"},
+    {0x65735546, "fuse"},      {0x9123683E, "btrfs"},  {0x73717368, "squashfs"},
+    {0x794c7630, "overlayfs"}, {0x72b6, "jffs2"},      {0x24051905, "ubifs"},
+    {0x47504653, "gpfs"},      {0x64626720, "debugfs"}};
+
+const char* getFilesystemName(uint32_t fsType) {
+    for (const auto& info : FILESYSTEM_TYPES) {
+        if (info.magic == fsType) {
+            return info.name;
+        }
+    }
+    return nullptr;
+}
+
+std::string getFilesystemFromProcMounts(const std::string& path) {
+    std::ifstream mounts("/proc/mounts");
+    if (!mounts.is_open()) {
+        return "Unknown";
+    }
+
+    std::string line;
+    while (std::getline(mounts, line)) {
+        if (line.find(path) != std::string::npos) {
+            std::istringstream iss(line);
+            std::string devicePath, mountPoint, fsType;
+            iss >> devicePath >> mountPoint >> fsType;
+
+            if (mountPoint == path && !fsType.empty()) {
+                return fsType;
+            }
+        }
+    }
+    return "Unknown";
+}
+#endif
+}  // namespace
+
 double calculateDiskUsagePercentage(uint64_t totalSpace, uint64_t freeSpace) {
-    // Guard against division by zero
     if (totalSpace == 0) {
+        spdlog::warn("Total space is zero, returning 0% usage");
         return 0.0;
     }
 
-    uint64_t usedSpace = totalSpace - freeSpace;
+    if (freeSpace > totalSpace) {
+        spdlog::warn(
+            "Free space ({} bytes) exceeds total space ({} bytes), returning "
+            "0% usage",
+            freeSpace, totalSpace);
+        return 0.0;
+    }
+
+    const uint64_t usedSpace = totalSpace - freeSpace;
     return (static_cast<double>(usedSpace) / static_cast<double>(totalSpace)) *
            100.0;
 }
@@ -46,98 +103,81 @@ std::string getFileSystemType(const std::string& path) {
 #ifdef _WIN32
     char fileSystemNameBuffer[MAX_PATH] = {0};
 
-    // Make sure the path ends with a backslash
     std::string rootPath = path;
     if (rootPath.back() != '\\') {
         rootPath += '\\';
     }
 
-    if (!GetVolumeInformationA(rootPath.c_str(), NULL, 0, NULL, NULL, NULL,
-                               fileSystemNameBuffer,
+    if (!GetVolumeInformationA(rootPath.c_str(), nullptr, 0, nullptr, nullptr,
+                               nullptr, fileSystemNameBuffer,
                                sizeof(fileSystemNameBuffer))) {
-        LOG_F(ERROR, "Failed to get file system type for %s: %d", path.c_str(),
-              GetLastError());
+        spdlog::error("Failed to get file system type for {}: {}", path,
+                      GetLastError());
         return "Unknown";
     }
-    return std::string(fileSystemNameBuffer);
+
+    const std::string result(fileSystemNameBuffer);
+    spdlog::debug("File system type for {}: {}", path, result);
+    return result;
 
 #elif __linux__ || __ANDROID__
-    struct statfs buffer;
+    struct statfs buffer{};
     if (statfs(path.c_str(), &buffer) != 0) {
-        LOG_F(ERROR, "Failed to get file system type for %s", path.c_str());
+        spdlog::error("Failed to get file system type for {}: {}", path,
+                      strerror(errno));
         return "Unknown";
     }
 
-    // Map filesystem type to string
-    switch (buffer.f_type) {
-        case 0xEF53:
-            return "ext4";
-        case 0x6969:
-            return "nfs";
-        case 0xFF534D42:
-            return "cifs";
-        case 0x4d44:
-            return "vfat";
-        case 0x5346544E:
-            return "ntfs";
-        case 0x52654973:
-            return "reiserfs";
-        case 0x01021994:
-            return "tmpfs";
-        case 0x58465342:
-            return "xfs";
-        case 0xF15F:
-            return "ecryptfs";
-        case 0x65735546:
-            return "fuse";
-        case 0x9123683E:
-            return "btrfs";
-        default:
-            // Try to get from /proc/mounts for unrecognized types
-            std::ifstream mounts("/proc/mounts");
-            std::string line;
-            while (std::getline(mounts, line)) {
-                if (line.find(path) != std::string::npos) {
-                    std::string devicePath, mountPoint, fsType;
-                    std::istringstream iss(line);
-                    iss >> devicePath >> mountPoint >> fsType;
-                    if (!fsType.empty()) {
-                        return fsType;
-                    }
-                }
-            }
-            return "Unknown";
+    if (const char* fsName = getFilesystemName(buffer.f_type)) {
+        spdlog::debug("File system type for {}: {}", path, fsName);
+        return fsName;
     }
+
+    const std::string result = getFilesystemFromProcMounts(path);
+    if (result != "Unknown") {
+        spdlog::debug("File system type for {} from /proc/mounts: {}", path,
+                      result);
+        return result;
+    }
+
+    spdlog::warn("Unknown file system type for {} (magic: 0x{:x})", path,
+                 buffer.f_type);
+    return "Unknown";
 
 #elif __APPLE__
-    struct statfs buffer;
+    struct statfs buffer{};
     if (statfs(path.c_str(), &buffer) != 0) {
-        LOG_F(ERROR, "Failed to get file system type for %s", path.c_str());
+        spdlog::error("Failed to get file system type for {}: {}", path,
+                      strerror(errno));
         return "Unknown";
     }
 
-    // macOS returns filesystem type directly
-    return buffer.f_fstypename;
+    const std::string result(buffer.f_fstypename);
+    spdlog::debug("File system type for {}: {}", path, result);
+    return result;
 
 #elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-    struct statfs buffer;
+    struct statfs buffer{};
     if (statfs(path.c_str(), &buffer) != 0) {
-        LOG_F(ERROR, "Failed to get file system type for %s", path.c_str());
+        spdlog::error("Failed to get file system type for {}: {}", path,
+                      strerror(errno));
         return "Unknown";
     }
 
-    return buffer.f_fstypename;
+    const std::string result(buffer.f_fstypename);
+    spdlog::debug("File system type for {}: {}", path, result);
+    return result;
 
 #else
-    // Generic fallback for other Unix systems
-    struct statvfs buffer;
+    struct statvfs buffer{};
     if (statvfs(path.c_str(), &buffer) != 0) {
-        LOG_F(ERROR, "Failed to get file system type for %s", path.c_str());
+        spdlog::error("Failed to get file system type for {}: {}", path,
+                      strerror(errno));
         return "Unknown";
     }
 
-    // Unfortunately statvfs doesn't provide filesystem type directly
-    // We would need to check /etc/mtab or similar
+    spdlog::warn(
+        "File system type detection not fully implemented for this platform");
     return "Unknown";
 #endif
 }

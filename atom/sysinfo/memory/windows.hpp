@@ -112,6 +112,7 @@ auto getMemoryLoadPercentage() -> double;
  * @return MemoryPerformance structure with performance data
  */
 auto getMemoryPerformance() -> MemoryPerformance;
+
 }  // namespace atom::system::windows
 
 #endif  // _WIN32

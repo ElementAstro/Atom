@@ -112,6 +112,25 @@ auto getMemoryLoadPercentage() -> double;
  * @return MemoryPerformance structure with performance data
  */
 auto getMemoryPerformance() -> MemoryPerformance;
+
+/**
+ * @brief Get memory bandwidth usage percentage
+ * @return Bandwidth usage as percentage (0.0 - 100.0)
+ */
+auto getMemoryBandwidthUsage() -> double;
+
+/**
+ * @brief Get system cache information
+ * @return CacheInfo structure with cache details
+ */
+auto getSystemCacheInfo() -> CacheInfo;
+
+/**
+ * @brief Get current memory pressure level
+ * @return MemoryPressureLevel enumeration value
+ */
+auto getMemoryPressureLevel() -> MemoryPressureLevel;
+
 }  // namespace atom::system::macos
 
 #endif  // __APPLE__
