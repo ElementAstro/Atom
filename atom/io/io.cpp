@@ -4,14 +4,6 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2023-4-3
-
-Description: IO
-
-**************************************************/
-
 #include "io.hpp"
 
 #include <algorithm>
@@ -19,8 +11,8 @@ Description: IO
 #include <regex>
 #include <string_view>
 
+#include <spdlog/spdlog.h>
 #include "atom/error/exception.hpp"
-#include "atom/log/loguru.hpp"
 #include "atom/type/json.hpp"
 
 #ifdef __linux
@@ -44,8 +36,8 @@ namespace atom::io {
 
 // These non-templated functions are kept in the .cpp file
 auto convertToLinuxPath(std::string_view windows_path) -> std::string {
-    LOG_F(INFO, "convertToLinuxPath called with windows_path: {}",
-          windows_path);
+    spdlog::info("convertToLinuxPath called with windows_path: {}",
+                 windows_path);
 
     try {
         std::string linuxPath(windows_path);
@@ -56,16 +48,16 @@ auto convertToLinuxPath(std::string_view windows_path) -> std::string {
             linuxPath[0] = std::tolower(linuxPath[0]);
         }
 
-        LOG_F(INFO, "Converted to Linux path: {}", linuxPath);
+        spdlog::info("Converted to Linux path: {}", linuxPath);
         return linuxPath;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error converting to Linux path: {}", e.what());
+        spdlog::error("Error converting to Linux path: {}", e.what());
         return std::string(windows_path);
     }
 }
 
 auto convertToWindowsPath(std::string_view linux_path) -> std::string {
-    LOG_F(INFO, "convertToWindowsPath called with linux_path: {}", linux_path);
+    spdlog::info("convertToWindowsPath called with linux_path: {}", linux_path);
 
     try {
         std::string windowsPath(linux_path);
@@ -77,16 +69,16 @@ auto convertToWindowsPath(std::string_view linux_path) -> std::string {
             windowsPath[0] = std::toupper(windowsPath[0]);
         }
 
-        LOG_F(INFO, "Converted to Windows path: {}", windowsPath);
+        spdlog::info("Converted to Windows path: {}", windowsPath);
         return windowsPath;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error converting to Windows path: {}", e.what());
+        spdlog::error("Error converting to Windows path: {}", e.what());
         return std::string(linux_path);
     }
 }
 
 auto normPath(std::string_view raw_path) -> std::string {
-    LOG_F(INFO, "normPath called with raw_path: {}", raw_path);
+    spdlog::info("normPath called with raw_path: {}", raw_path);
 
     try {
         // Normalize path separators first
@@ -130,57 +122,57 @@ auto normPath(std::string_view raw_path) -> std::string {
             result = preferred_separator == '/' ? "/" : "C:\\";
         }
 
-        LOG_F(INFO, "Normalized path: {}", result);
+        spdlog::info("Normalized path: {}", result);
         return result;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error normalizing path: {}", e.what());
+        spdlog::error("Error normalizing path: {}", e.what());
         return std::string(raw_path);
     }
 }
 
 auto isFolderNameValid(std::string_view folderName) -> bool {
-    LOG_F(INFO, "isFolderNameValid called with folderName: {}", folderName);
+    spdlog::info("isFolderNameValid called with folderName: {}", folderName);
 
     try {
         if (folderName.empty()) {
-            LOG_F(WARNING, "Empty folder name is invalid");
+            spdlog::warn("Empty folder name is invalid");
             return false;
         }
 
         bool result = std::regex_match(folderName.begin(), folderName.end(),
                                        FOLDER_NAME_REGEX);
-        LOG_F(INFO, "isFolderNameValid returning: {}", result);
+        spdlog::info("isFolderNameValid returning: {}", result);
         return result;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error checking folder name validity: {}", e.what());
+        spdlog::error("Error checking folder name validity: {}", e.what());
         return false;
     }
 }
 
 auto isFileNameValid(std::string_view fileName) -> bool {
-    LOG_F(INFO, "isFileNameValid called with fileName: {}", fileName);
+    spdlog::info("isFileNameValid called with fileName: {}", fileName);
 
     try {
         if (fileName.empty()) {
-            LOG_F(WARNING, "Empty file name is invalid");
+            spdlog::warn("Empty file name is invalid");
             return false;
         }
 
         bool result =
             std::regex_match(fileName.begin(), fileName.end(), FILE_NAME_REGEX);
-        LOG_F(INFO, "isFileNameValid returning: {}", result);
+        spdlog::info("isFileNameValid returning: {}", result);
         return result;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error checking file name validity: {}", e.what());
+        spdlog::error("Error checking file name validity: {}", e.what());
         return false;
     }
 }
 
 auto getExecutableNameFromPath(std::string_view path) -> std::string {
-    LOG_F(INFO, "getExecutableNameFromPath called with path: {}", path);
+    spdlog::info("getExecutableNameFromPath called with path: {}", path);
 
     if (path.empty()) {
-        LOG_F(ERROR, "The provided path is empty");
+        spdlog::error("The provided path is empty");
         THROW_INVALID_ARGUMENT("The provided path is empty");
     }
 
@@ -198,24 +190,24 @@ auto getExecutableNameFromPath(std::string_view path) -> std::string {
         if (lastSlashPos == std::string_view::npos) {
             // No path separator, treat the whole string as filename
             if (path.find('.') == std::string_view::npos) {
-                LOG_F(ERROR,
-                      "The provided path does not contain a valid file name "
-                      "with extension");
+                spdlog::error(
+                    "The provided path does not contain a valid file name "
+                    "with extension");
                 THROW_INVALID_ARGUMENT(
                     "The provided path does not contain a valid file name with "
                     "extension");
             }
-            LOG_F(INFO, "Returning path as file name: {}", path);
+            spdlog::info("Returning path as file name: {}", path);
             return std::string(path);
         }
 
         std::string fileName(path.substr(lastSlashPos + 1));
-        LOG_F(INFO, "Extracted file name: {}", fileName);
+        spdlog::info("Extracted file name: {}", fileName);
 
         if (fileName.empty()) {
-            LOG_F(ERROR,
-                  "The provided path ends with a separator and contains no "
-                  "file name");
+            spdlog::error(
+                "The provided path ends with a separator and contains no "
+                "file name");
             THROW_INVALID_ARGUMENT(
                 "The provided path ends with a separator and contains no file "
                 "name");
@@ -223,19 +215,19 @@ auto getExecutableNameFromPath(std::string_view path) -> std::string {
 
         size_t dotPos = fileName.find_last_of('.');
         if (dotPos == std::string::npos) {
-            LOG_F(ERROR, "The file name does not contain an extension");
+            spdlog::error("The file name does not contain an extension");
             THROW_INVALID_ARGUMENT(
                 "The file name does not contain an extension");
         }
 
-        LOG_F(INFO, "Returning file name: {}", fileName);
+        spdlog::info("Returning file name: {}", fileName);
         return fileName;
     } catch (const atom::error::Exception& e) {
         // Pass through our custom exceptions
         throw;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Unexpected error in getExecutableNameFromPath: {}",
-              e.what());
+        spdlog::error("Unexpected error in getExecutableNameFromPath: {}",
+                      e.what());
         THROW_RUNTIME_ERROR(std::string("Error extracting executable name: ") +
                             e.what());
     }

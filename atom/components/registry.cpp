@@ -16,8 +16,6 @@ Description: Registry Pattern Implementation
 
 #include <algorithm>
 #include <chrono>
-#include <filesystem>
-#include <thread>
 
 #include "atom/utils/to_string.hpp"
 #include "spdlog/spdlog.h"
@@ -37,12 +35,11 @@ void Registry::registerModule(const std::string& name,
     spdlog::info("Registering module: {}", name);
     module_initializers_[name] = std::move(init_func);
 
-    // Create basic component metadata
     if (!componentInfos_.contains(name)) {
         ComponentInfo info;
         info.name = name;
         info.loadTime = std::chrono::system_clock::now();
-        componentInfos_[name] = info;
+        componentInfos_[name] = std::move(info);
     }
 }
 
@@ -58,20 +55,18 @@ void Registry::addInitializer(const std::string& name,
 
     spdlog::info("Adding initializer for component: {}", name);
 
-    // Create component instance
     initializers_[name] = std::make_shared<Component>(name);
     initializers_[name]->initFunc = std::move(init_func);
     initializers_[name]->cleanupFunc = std::move(cleanup_func);
 
-    // Update component metadata
     if (metadata.has_value()) {
-        componentInfos_[name] = *metadata;
+        componentInfos_[name] = std::move(*metadata);
         componentInfos_[name].loadTime = std::chrono::system_clock::now();
     } else if (!componentInfos_.contains(name)) {
         ComponentInfo info;
         info.name = name;
         info.loadTime = std::chrono::system_clock::now();
-        componentInfos_[name] = info;
+        componentInfos_[name] = std::move(info);
     }
 
     componentInfos_[name].isInitialized = false;
@@ -100,7 +95,6 @@ void Registry::addDependency(const std::string& name,
     if (isOptional) {
         optionalDependencies_[name].insert(dependency);
 
-        // Add to component metadata
         if (componentInfos_.contains(name)) {
             auto& deps = componentInfos_[name].optionalDeps;
             if (std::find(deps.begin(), deps.end(), dependency) == deps.end()) {
@@ -110,7 +104,6 @@ void Registry::addDependency(const std::string& name,
     } else {
         dependencies_[name].insert(dependency);
 
-        // Add to component metadata
         if (componentInfos_.contains(name)) {
             auto& deps = componentInfos_[name].dependencies;
             if (std::find(deps.begin(), deps.end(), dependency) == deps.end()) {
@@ -126,16 +119,13 @@ void Registry::initializeAll(bool forceReload) {
 
     if (forceReload) {
         spdlog::info("Force reloading all components");
-        // Clear all initialization states
         for (auto& [name, info] : componentInfos_) {
             info.isInitialized = false;
         }
     }
 
-    // Determine initialization order
     determineInitializationOrder();
 
-    // Initialize components in order
     for (const auto& name : initializationOrder_) {
         std::unordered_set<std::string> initStack;
         spdlog::info("Initializing component: {}", name);
@@ -144,7 +134,6 @@ void Registry::initializeAll(bool forceReload) {
         initializeComponent(name, initStack);
         auto endTime = std::chrono::high_resolution_clock::now();
 
-        // Update performance statistics
         if (componentInfos_.contains(name)) {
             componentInfos_[name].stats.initTime =
                 std::chrono::duration_cast<std::chrono::microseconds>(
@@ -159,7 +148,6 @@ void Registry::cleanupAll(bool force) {
     std::unique_lock lock(mutex_);
     spdlog::info("Cleaning up all components");
 
-    // Clean up in reverse order of initialization
     for (const auto& name : std::ranges::reverse_view(initializationOrder_)) {
         if (!componentInfos_.contains(name) ||
             !componentInfos_[name].isInitialized) {
@@ -176,7 +164,6 @@ void Registry::cleanupAll(bool force) {
             component->cleanupFunc();
             componentInfos_[name].isInitialized = false;
 
-// Trigger component unload event
 #if ENABLE_EVENT_SYSTEM
             atom::components::Event event;
             event.name = "component.unloaded";
@@ -197,7 +184,6 @@ void Registry::cleanupAll(bool force) {
     }
 
     if (force) {
-        // Force clear all component resources
         spdlog::info("Force clearing all component resources");
         initializers_.clear();
         for (auto& [name, info] : componentInfos_) {
@@ -208,7 +194,7 @@ void Registry::cleanupAll(bool force) {
     spdlog::info("All components cleaned up successfully");
 }
 
-auto Registry::isInitialized(const std::string& name) const -> bool {
+bool Registry::isInitialized(const std::string& name) const {
     std::shared_lock lock(mutex_);
 
     if (!componentInfos_.contains(name)) {
@@ -218,7 +204,7 @@ auto Registry::isInitialized(const std::string& name) const -> bool {
     return componentInfos_.at(name).isInitialized;
 }
 
-auto Registry::isEnabled(const std::string& name) const -> bool {
+bool Registry::isEnabled(const std::string& name) const {
     std::shared_lock lock(mutex_);
 
     if (!componentInfos_.contains(name)) {
@@ -239,13 +225,11 @@ bool Registry::enableComponent(const std::string& name, bool enable) {
     componentInfos_[name].isEnabled = enable;
     spdlog::info("{} component: {}", enable ? "Enabled" : "Disabled", name);
 
-// Trigger component enable/disable event
 #if ENABLE_EVENT_SYSTEM
     atom::components::Event event;
     event.name = enable ? "component.enabled" : "component.disabled";
     event.source = name;
     event.timestamp = std::chrono::steady_clock::now();
-    // Trigger event outside lock to avoid deadlock
     lock.unlock();
     triggerEvent(event);
 #endif
@@ -260,12 +244,11 @@ void Registry::reinitializeComponent(const std::string& name,
 
     if (!initializers_.contains(name)) {
         spdlog::error("Cannot reinitialize non-existent component: {}", name);
-        THROW_OBJ_NOT_EXIST("Component not registered: {}", name);
+        THROW_REGISTRY_EXCEPTION("Component not registered: {}", name);
     }
 
     auto startTime = std::chrono::high_resolution_clock::now();
 
-    // If initialized, clean up first
     if (componentInfos_[name].isInitialized &&
         initializers_[name]->cleanupFunc) {
         try {
@@ -276,25 +259,21 @@ void Registry::reinitializeComponent(const std::string& name,
         componentInfos_[name].isInitialized = false;
     }
 
-    // If dependencies need to be reloaded
     if (reloadDependencies) {
         auto deps = dependencies_[name];
         for (const auto& dep : deps) {
             if (initializers_.contains(dep)) {
-                reinitializeComponent(dep, false);  // Avoid circular dependency
+                reinitializeComponent(dep, false);
             }
         }
     }
 
-    // Get module initialization function
     auto it = module_initializers_.find(name);
     if (it != module_initializers_.end()) {
-        // Create new component instance
         auto component = std::make_shared<Component>(name);
         it->second(*component);
-        initializers_[name] = component;
+        initializers_[name] = std::move(component);
 
-        // Mark as initialized
         componentInfos_[name].isInitialized = true;
         componentInfos_[name].lastUsed = std::chrono::system_clock::now();
 
@@ -303,19 +282,18 @@ void Registry::reinitializeComponent(const std::string& name,
             std::chrono::duration_cast<std::chrono::microseconds>(endTime -
                                                                   startTime);
 
-// Trigger component reload event
 #if ENABLE_EVENT_SYSTEM
         atom::components::Event event;
         event.name = "component.reloaded";
         event.source = name;
         event.timestamp = std::chrono::steady_clock::now();
-        lock.unlock();  // Release lock to avoid deadlock
+        lock.unlock();
         triggerEvent(event);
 #endif
     } else {
         spdlog::error("No initializer function found for component: {}", name);
-        THROW_OBJ_UNINITIALIZED("No initializer function for component: {}",
-                                name);
+        THROW_REGISTRY_EXCEPTION("No initializer function for component: {}",
+                                 name);
     }
 }
 
@@ -325,11 +303,10 @@ auto Registry::getComponent(const std::string& name) const
 
     if (!initializers_.contains(name)) {
         spdlog::error("Component not registered: {}", name);
-        THROW_OBJ_NOT_EXIST("Component not registered: {}", name);
+        THROW_REGISTRY_EXCEPTION("Component not registered: {}", name);
     }
 
     if (componentInfos_.contains(name)) {
-        // Update last used time
         auto& info = const_cast<ComponentInfo&>(componentInfos_.at(name));
         info.lastUsed = std::chrono::system_clock::now();
     }
@@ -342,19 +319,15 @@ auto Registry::getOrLoadComponent(const std::string& name)
     {
         std::shared_lock readLock(mutex_);
 
-        // Check if component is already loaded
         if (initializers_.contains(name) && componentInfos_.contains(name) &&
             componentInfos_[name].isInitialized) {
-            // Update last used time
             componentInfos_[name].lastUsed = std::chrono::system_clock::now();
             return initializers_[name];
         }
     }
 
-    // Component needs to be loaded
     std::unique_lock writeLock(mutex_);
 
-    // Re-check to avoid loading by another thread while acquiring write lock
     if (initializers_.contains(name) && componentInfos_.contains(name) &&
         componentInfos_[name].isInitialized) {
         componentInfos_[name].lastUsed = std::chrono::system_clock::now();
@@ -363,13 +336,11 @@ auto Registry::getOrLoadComponent(const std::string& name)
 
     spdlog::info("Lazy loading component: {}", name);
 
-    // Check if this component is registered
     if (!module_initializers_.contains(name)) {
         spdlog::error("Cannot lazy load unregistered component: {}", name);
-        THROW_OBJ_NOT_EXIST("Component not registered: {}", name);
+        THROW_REGISTRY_EXCEPTION("Component not registered: {}", name);
     }
 
-    // Check if dependencies are satisfied
     auto [satisfied, missingDeps] = checkDependenciesSatisfied(name);
     if (!satisfied) {
         spdlog::error(
@@ -379,24 +350,21 @@ auto Registry::getOrLoadComponent(const std::string& name)
             "Cannot load component {} due to missing dependencies", name);
     }
 
-    // Initialize component
     std::unordered_set<std::string> initStack;
     auto startTime = std::chrono::high_resolution_clock::now();
     initializeComponent(name, initStack);
     auto endTime = std::chrono::high_resolution_clock::now();
 
-    // Update performance statistics
     componentInfos_[name].stats.initTime =
         std::chrono::duration_cast<std::chrono::microseconds>(endTime -
                                                               startTime);
 
-// Trigger component load event
 #if ENABLE_EVENT_SYSTEM
     atom::components::Event event;
     event.name = "component.loaded";
     event.source = name;
     event.timestamp = std::chrono::steady_clock::now();
-    writeLock.unlock();  // Release lock to avoid deadlock
+    writeLock.unlock();
     triggerEvent(event);
 #endif
 
@@ -407,6 +375,7 @@ auto Registry::getAllComponents() const
     -> std::vector<std::shared_ptr<Component>> {
     std::shared_lock lock(mutex_);
     std::vector<std::shared_ptr<Component>> components;
+    components.reserve(initializers_.size());
 
     for (const auto& [name, component] : initializers_) {
         if (component && componentInfos_.contains(name) &&
@@ -438,7 +407,7 @@ auto Registry::getComponentInfo(const std::string& name) const
 
     if (!componentInfos_.contains(name)) {
         spdlog::error("Component info not found: {}", name);
-        THROW_OBJ_NOT_EXIST("Component info not found: {}", name);
+        THROW_REGISTRY_EXCEPTION("Component info not found: {}", name);
     }
 
     return componentInfos_.at(name);
@@ -454,16 +423,12 @@ bool Registry::updateComponentInfo(const std::string& name,
         return false;
     }
 
-    // Keep some non-modifiable fields
     ComponentInfo newInfo = info;
-    newInfo.name = name;  // Name cannot be modified
-    newInfo.loadTime =
-        componentInfos_[name].loadTime;  // Load time cannot be modified
-    newInfo.isInitialized =
-        componentInfos_[name]
-            .isInitialized;  // Initialization state cannot be directly modified
+    newInfo.name = name;
+    newInfo.loadTime = componentInfos_[name].loadTime;
+    newInfo.isInitialized = componentInfos_[name].isInitialized;
 
-    componentInfos_[name] = newInfo;
+    componentInfos_[name] = std::move(newInfo);
     spdlog::info("Updated component info for: {}", name);
 
     return true;
@@ -481,14 +446,9 @@ bool Registry::loadComponentFromFile(const std::string& path) {
     std::string name = fs::path(path).stem().string();
     spdlog::info("Loading component from file: {} (name: {})", path, name);
 
-    // Record file timestamp for hot reload detection
     componentFileTimestamps_[name] = fs::last_write_time(path);
 
-    // TODO: Implement dynamic library loading
-    // Dynamic library loading logic needs to be implemented here based on
-    // actual requirements
     spdlog::warn("Dynamic library loading not implemented yet");
-
     return true;
 #else
     spdlog::error("Hot reload not enabled, cannot load component from file");
@@ -501,14 +461,13 @@ bool Registry::watchComponentChanges(bool enable) {
     std::unique_lock lock(mutex_);
 
     if (enable == watchingForChanges_) {
-        return true;  // Already in the desired state
+        return true;
     }
 
     if (enable) {
         spdlog::info("Starting component file watcher");
         watchingForChanges_ = true;
 
-        // Start file monitoring thread
         fileWatcherFuture_ = std::async(std::launch::async, [this]() {
             namespace fs = std::filesystem;
 
@@ -516,7 +475,6 @@ bool Registry::watchComponentChanges(bool enable) {
                 {
                     std::shared_lock lock(mutex_);
 
-                    // Check if any registered component files have changed
                     for (auto& [name, lastTime] : componentFileTimestamps_) {
                         if (!componentInfos_.contains(name) ||
                             !componentInfos_.at(name).isHotReload) {
@@ -524,7 +482,7 @@ bool Registry::watchComponentChanges(bool enable) {
                         }
 
                         try {
-                            std::string path =
+                            const std::string& path =
                                 componentInfos_.at(name).configPath;
                             if (path.empty() || !fs::exists(path)) {
                                 continue;
@@ -537,12 +495,9 @@ bool Registry::watchComponentChanges(bool enable) {
                                     path);
                                 lastTime = currentTime;
 
-                                // Need to release shared lock and acquire
-                                // exclusive lock to reload component
                                 lock.unlock();
                                 reinitializeComponent(name, false);
-                                lock = std::shared_lock(
-                                    mutex_);  // Re-acquire lock
+                                lock = std::shared_lock(mutex_);
                             }
                         } catch (const std::exception& e) {
                             spdlog::error("Error checking component file: {}",
@@ -551,7 +506,6 @@ bool Registry::watchComponentChanges(bool enable) {
                     }
                 }
 
-                // Sleep for a period to avoid frequent checks
                 std::this_thread::sleep_for(std::chrono::seconds(2));
             }
         });
@@ -559,7 +513,6 @@ bool Registry::watchComponentChanges(bool enable) {
         spdlog::info("Stopping component file watcher");
         watchingForChanges_ = false;
 
-        // Wait for monitoring thread to finish
         if (fileWatcherFuture_.valid()) {
             fileWatcherFuture_.wait();
         }
@@ -580,7 +533,6 @@ bool Registry::removeComponent(const std::string& name) {
         return false;
     }
 
-    // Check if other components depend on this component
     std::vector<std::string> dependents;
     for (const auto& [compName, deps] : dependencies_) {
         if (deps.contains(name) && compName != name) {
@@ -595,7 +547,6 @@ bool Registry::removeComponent(const std::string& name) {
         return false;
     }
 
-    // Clean up component resources first
     if (componentInfos_[name].isInitialized &&
         initializers_[name]->cleanupFunc) {
         try {
@@ -605,14 +556,12 @@ bool Registry::removeComponent(const std::string& name) {
         }
     }
 
-    // Remove component registration information
     initializers_.erase(name);
     module_initializers_.erase(name);
     dependencies_.erase(name);
     optionalDependencies_.erase(name);
     componentInfos_.erase(name);
 
-    // Remove from initialization order
     auto it = std::find(initializationOrder_.begin(),
                         initializationOrder_.end(), name);
     if (it != initializationOrder_.end()) {
@@ -620,19 +569,17 @@ bool Registry::removeComponent(const std::string& name) {
     }
 
 #if ENABLE_HOT_RELOAD
-    // Remove file monitoring information
     componentFileTimestamps_.erase(name);
 #endif
 
     spdlog::info("Component removed: {}", name);
 
-// Trigger component removal event
 #if ENABLE_EVENT_SYSTEM
     atom::components::Event event;
     event.name = "component.removed";
     event.source = name;
     event.timestamp = std::chrono::steady_clock::now();
-    lock.unlock();  // Release lock to avoid deadlock
+    lock.unlock();
     triggerEvent(event);
 #endif
 
@@ -681,7 +628,6 @@ bool Registry::unsubscribeFromEvent(
     spdlog::info("Unsubscribed from event '{}' with ID {}", eventName,
                  callbackId);
 
-    // If no more subscriptions, remove the entire entry
     if (subs.empty()) {
         eventSubscriptions_.erase(it);
     }
@@ -690,20 +636,19 @@ bool Registry::unsubscribeFromEvent(
 }
 
 void Registry::triggerEvent(const atom::components::Event& event) {
-    // Copy callback list to avoid deadlock when calling callbacks
     std::vector<atom::components::EventCallback> callbacks;
 
     {
         std::shared_lock lock(mutex_);
         auto it = eventSubscriptions_.find(event.name);
         if (it != eventSubscriptions_.end()) {
+            callbacks.reserve(it->second.size());
             for (const auto& sub : it->second) {
                 callbacks.push_back(sub.callback);
             }
         }
     }
 
-    // Call all callbacks
     for (const auto& callback : callbacks) {
         try {
             callback(event);
@@ -735,7 +680,6 @@ bool Registry::hasCircularDependency(const std::string& name,
 
 void Registry::initializeComponent(
     const std::string& name, std::unordered_set<std::string>& init_stack) {
-    // If already initialized, skip
     if (componentInfos_.contains(name) && componentInfos_[name].isInitialized) {
         if (init_stack.contains(name)) {
             THROW_REGISTRY_EXCEPTION(
@@ -746,13 +690,11 @@ void Registry::initializeComponent(
         return;
     }
 
-    // Check if component is disabled
     if (componentInfos_.contains(name) && !componentInfos_[name].isEnabled) {
         spdlog::info("Skipping disabled component: {}", name);
         return;
     }
 
-    // Check for circular dependency
     if (init_stack.contains(name)) {
         THROW_REGISTRY_EXCEPTION(
             "Circular dependency detected while initializing: {}", name);
@@ -760,12 +702,10 @@ void Registry::initializeComponent(
 
     init_stack.insert(name);
 
-    // Initialize all dependencies
     for (const auto& dep : dependencies_[name]) {
         initializeComponent(dep, init_stack);
     }
 
-    // Try to initialize optional dependencies
     for (const auto& dep : optionalDependencies_[name]) {
         if (module_initializers_.contains(dep)) {
             try {
@@ -774,13 +714,10 @@ void Registry::initializeComponent(
                 spdlog::warn(
                     "Failed to initialize optional dependency {} for {}: {}",
                     dep, name, e.what());
-                // Failure to initialize optional dependency does not affect the
-                // current component
             }
         }
     }
 
-    // Initialize current component
     if (auto it = module_initializers_.find(name);
         it != module_initializers_.end()) {
         if (!initializers_.contains(name)) {
@@ -793,14 +730,12 @@ void Registry::initializeComponent(
             it->second(*initializers_[name]);
             auto endTime = std::chrono::high_resolution_clock::now();
 
-            // Update performance statistics
             if (componentInfos_.contains(name)) {
                 componentInfos_[name].stats.loadTime =
                     std::chrono::duration_cast<std::chrono::microseconds>(
                         endTime - startTime);
             }
 
-            // Mark as initialized
             if (initializers_[name]->initialize()) {
                 spdlog::info("Component initialized successfully: {}", name);
                 componentInfos_[name].isInitialized = true;
@@ -832,35 +767,32 @@ void Registry::determineInitializationOrder() {
 
     std::function<void(const std::string&)> visit =
         [&](const std::string& name) {
-            if (!visited.contains(name)) {
-                visited.insert(name);
-
-                // First, visit all dependencies of this component
-                for (const auto& dep : dependencies_[name]) {
-                    if (module_initializers_.contains(dep)) {
-                        visit(dep);
-                    } else {
-                        spdlog::warn(
-                            "Dependency '{}' not found for component '{}'", dep,
-                            name);
-                    }
-                }
-
-                // Then, try to visit optional dependencies
-                for (const auto& dep : optionalDependencies_[name]) {
-                    if (module_initializers_.contains(dep)) {
-                        visit(dep);
-                    }
-                }
-
-                // Finally, add this component to the initialization order
-                initializationOrder_.push_back(name);
+            if (visited.contains(name)) {
+                return;
             }
+
+            visited.insert(name);
+
+            for (const auto& dep : dependencies_[name]) {
+                if (module_initializers_.contains(dep)) {
+                    visit(dep);
+                } else {
+                    spdlog::warn("Dependency '{}' not found for component '{}'",
+                                 dep, name);
+                }
+            }
+
+            for (const auto& dep : optionalDependencies_[name]) {
+                if (module_initializers_.contains(dep)) {
+                    visit(dep);
+                }
+            }
+
+            initializationOrder_.push_back(name);
         };
 
-    // Ensure all registered components are added to the initialization order
-    for (const auto& pair : module_initializers_) {
-        visit(pair.first);
+    for (const auto& [name, _] : module_initializers_) {
+        visit(name);
     }
 
     spdlog::info("Determined initialization order: {}",
@@ -871,7 +803,6 @@ std::tuple<bool, std::vector<std::string>> Registry::checkDependenciesSatisfied(
     const std::string& name) {
     std::vector<std::string> missingDeps;
 
-    // Check required dependencies
     for (const auto& dep : dependencies_[name]) {
         if (!module_initializers_.contains(dep)) {
             missingDeps.push_back(dep);
@@ -889,7 +820,6 @@ std::tuple<bool, std::vector<std::string>> Registry::checkConflicts(
         return {false, {"Component not found"}};
     }
 
-    // Check conflicting components
     for (const auto& conflict : componentInfos_[name].conflicts) {
         if (module_initializers_.contains(conflict) &&
             componentInfos_.contains(conflict) &&

@@ -16,7 +16,6 @@ Description: Component Registry for Managing Component Lifecycle
 #define ATOM_COMPONENT_REGISTRY_HPP
 
 #include <chrono>
-#include <future>
 #include <memory>
 #include <optional>
 #include <shared_mutex>
@@ -25,9 +24,8 @@ Description: Component Registry for Managing Component Lifecycle
 #include <unordered_set>
 #include <vector>
 
+#include "atom/error/exception.hpp"
 #include "component.hpp"
-
-#include "atom/log/loguru.hpp"
 
 class Component;
 
@@ -40,36 +38,40 @@ class Component;
 class Registry {
 public:
     /**
+     * @brief Component performance statistics
+     */
+    struct ComponentStats {
+        std::chrono::microseconds initTime{0};
+        std::chrono::microseconds loadTime{0};
+        uint64_t commandCount{0};
+        uint64_t eventCount{0};
+        uint64_t callCount{0};
+    };
+
+    /**
      * @brief Component metadata structure
      */
     struct ComponentInfo {
-        std::string name;         // Component name
-        std::string version;      // Component version
-        std::string description;  // Component description
-        std::string author;       // Component author
-        std::string license;      // Component license
-        std::string configPath;   // Component configuration file path
-        std::chrono::system_clock::time_point loadTime;  // Load time
-        std::chrono::system_clock::time_point lastUsed;  // Last used time
-        bool isInitialized{false};  // Whether it has been initialized
-        bool isEnabled{true};       // Whether it is enabled
-        bool isAutoLoad{false};     // Whether to autoload
-        bool isLazyLoad{false};     // Whether to lazy load
-        bool isHotReload{false};    // Whether hot reload is supported
+        std::string name;
+        std::string version;
+        std::string description;
+        std::string author;
+        std::string license;
+        std::string configPath;
+        std::chrono::system_clock::time_point loadTime;
+        std::chrono::system_clock::time_point lastUsed;
+        bool isInitialized{false};
+        bool isEnabled{true};
+        bool isAutoLoad{false};
+        bool isLazyLoad{false};
+        bool isHotReload{false};
 
-        std::vector<std::string> dependencies;  // Dependent components
-        std::vector<std::string> conflicts;     // Conflicting components
-        std::vector<std::string> optionalDeps;  // Optional dependencies
-        std::vector<std::string> provides;      // Provided features
+        std::vector<std::string> dependencies;
+        std::vector<std::string> conflicts;
+        std::vector<std::string> optionalDeps;
+        std::vector<std::string> provides;
 
-        // Performance statistics
-        struct {
-            std::chrono::microseconds initTime{0};  // Initialization time
-            std::chrono::microseconds loadTime{0};  // Load time
-            uint64_t commandCount{0};               // Number of commands
-            uint64_t eventCount{0};                 // Number of events
-            uint64_t callCount{0};                  // Number of calls
-        } stats;
+        ComponentStats stats;
     };
 
     /**
@@ -82,12 +84,12 @@ public:
 
     /**
      * @brief Get the singleton instance of the registry
+     * @return Registry& Singleton instance
      */
     static auto instance() -> Registry&;
 
     /**
      * @brief Register a module and its initialization function
-     *
      * @param name Module name
      * @param init_func Initialization function
      */
@@ -95,7 +97,6 @@ public:
 
     /**
      * @brief Add a component initializer
-     *
      * @param name Component name
      * @param init_func Initialization function
      * @param cleanup_func Cleanup function
@@ -107,7 +108,6 @@ public:
 
     /**
      * @brief Add a component dependency
-     *
      * @param name The component that depends on another
      * @param dependency The component being depended on
      * @param isOptional Whether it is an optional dependency
@@ -117,37 +117,32 @@ public:
 
     /**
      * @brief Initialize all components
-     *
      * @param forceReload Whether to force reload
      */
     void initializeAll(bool forceReload = false);
 
     /**
      * @brief Clean up all component resources
-     *
      * @param force Whether to force cleanup
      */
     void cleanupAll(bool force = false);
 
     /**
      * @brief Check if a component is initialized
-     *
      * @param name Component name
      * @return bool Whether it is initialized
      */
-    [[nodiscard]] auto isInitialized(const std::string& name) const -> bool;
+    [[nodiscard]] bool isInitialized(const std::string& name) const;
 
     /**
      * @brief Check if a component is enabled
-     *
      * @param name Component name
      * @return bool Whether it is enabled
      */
-    [[nodiscard]] auto isEnabled(const std::string& name) const -> bool;
+    [[nodiscard]] bool isEnabled(const std::string& name) const;
 
     /**
-     * @brief Enable a component
-     *
+     * @brief Enable or disable a component
      * @param name Component name
      * @param enable Whether to enable
      * @return bool Whether the operation was successful
@@ -156,7 +151,6 @@ public:
 
     /**
      * @brief Reinitialize a component
-     *
      * @param name Component name
      * @param reloadDependencies Whether to reload dependencies
      */
@@ -165,17 +159,15 @@ public:
 
     /**
      * @brief Get a component instance
-     *
      * @param name Component name
      * @return std::shared_ptr<Component> Component instance
-     * @throws ObjectNotExist Thrown if the component does not exist
+     * @throws RegistryException Thrown if the component does not exist
      */
     [[nodiscard]] auto getComponent(const std::string& name) const
         -> std::shared_ptr<Component>;
 
     /**
      * @brief Get or load a component (supports lazy loading)
-     *
      * @param name Component name
      * @return std::shared_ptr<Component> Component instance
      */
@@ -184,7 +176,6 @@ public:
 
     /**
      * @brief Get all component instances
-     *
      * @return std::vector<std::shared_ptr<Component>> All component instances
      */
     [[nodiscard]] auto getAllComponents() const
@@ -192,24 +183,21 @@ public:
 
     /**
      * @brief Get all component names
-     *
      * @return std::vector<std::string> All component names
      */
     [[nodiscard]] auto getAllComponentNames() const -> std::vector<std::string>;
 
     /**
      * @brief Get component metadata
-     *
      * @param name Component name
      * @return const ComponentInfo& Component metadata
-     * @throws ObjectNotExist Thrown if the component does not exist
+     * @throws RegistryException Thrown if the component does not exist
      */
     [[nodiscard]] auto getComponentInfo(const std::string& name) const
         -> const ComponentInfo&;
 
     /**
      * @brief Update component metadata
-     *
      * @param name Component name
      * @param info New metadata
      * @return bool Whether the update was successful
@@ -219,7 +207,6 @@ public:
 
     /**
      * @brief Load a component from the file system
-     *
      * @param path Component path
      * @return bool Whether loading was successful
      */
@@ -227,24 +214,21 @@ public:
 
     /**
      * @brief Monitor component file changes for hot reloading
-     *
      * @param enable Whether to enable monitoring
      * @return bool Whether the operation was successful
      */
     bool watchComponentChanges(bool enable = true);
 
     /**
-     * @brief Unload a component
-     *
+     * @brief Remove a component
      * @param name Component name
-     * @return bool Whether unloading was successful
+     * @return bool Whether removal was successful
      */
     bool removeComponent(const std::string& name);
 
 #if ENABLE_EVENT_SYSTEM
     /**
      * @brief Subscribe to a component event
-     *
      * @param eventName Event name
      * @param callback Callback function
      * @return EventCallbackId Event callback ID
@@ -254,7 +238,6 @@ public:
 
     /**
      * @brief Unsubscribe from a component event
-     *
      * @param eventName Event name
      * @param callbackId Event callback ID
      * @return bool Whether the operation was successful
@@ -264,7 +247,6 @@ public:
 
     /**
      * @brief Trigger a component event
-     *
      * @param event Event object
      */
     void triggerEvent(const atom::components::Event& event);
@@ -276,79 +258,40 @@ private:
     Registry(const Registry&) = delete;
     Registry& operator=(const Registry&) = delete;
 
-    /**
-     * @brief Check for circular dependencies
-     *
-     * @param name Component name
-     * @param dependency Name of the dependent component
-     * @return bool Whether a circular dependency exists
-     */
     bool hasCircularDependency(const std::string& name,
                                const std::string& dependency);
 
-    /**
-     * @brief Initialize a component
-     *
-     * @param name Component name
-     * @param init_stack Initialization stack
-     */
     void initializeComponent(const std::string& name,
                              std::unordered_set<std::string>& init_stack);
 
-    /**
-     * @brief Determine the component initialization order
-     */
     void determineInitializationOrder();
 
-    /**
-     * @brief Check if component dependencies are satisfied
-     *
-     * @param name Component name
-     * @return std::tuple<bool, std::vector<std::string>> Whether satisfied and
-     * list of unsatisfied dependencies
-     */
     std::tuple<bool, std::vector<std::string>> checkDependenciesSatisfied(
         const std::string& name);
 
-    /**
-     * @brief Check for component conflicts
-     *
-     * @param name Component name
-     * @return std::tuple<bool, std::vector<std::string>> Whether there is a
-     * conflict and list of conflicting components
-     */
     std::tuple<bool, std::vector<std::string>> checkConflicts(
         const std::string& name);
 
-    mutable std::shared_mutex mutex_;  // Mutex for thread safety
+    mutable std::shared_mutex mutex_;
 
-// Use container type selected by configuration
 #if ENABLE_FASTHASH
-    emhash::HashMap<std::string, std::shared_ptr<Component>>
-        initializers_;  // Component instance map
-    emhash::HashMap<std::string, ComponentInfo>
-        componentInfos_;  // Component metadata
-    emhash::HashMap<std::string, Component::InitFunc>
-        module_initializers_;  // Module initialization functions
+    emhash::HashMap<std::string, std::shared_ptr<Component>> initializers_;
+    emhash::HashMap<std::string, ComponentInfo> componentInfos_;
+    emhash::HashMap<std::string, Component::InitFunc> module_initializers_;
+    emhash::HashMap<std::string, emhash::HashSet<std::string>> dependencies_;
     emhash::HashMap<std::string, emhash::HashSet<std::string>>
-        dependencies_;  // Component dependencies
-    emhash::HashMap<std::string, emhash::HashSet<std::string>>
-        optionalDependencies_;  // Optional dependencies
+        optionalDependencies_;
 #else
-    std::unordered_map<std::string, std::shared_ptr<Component>>
-        initializers_;  // Component instance map
-    std::unordered_map<std::string, ComponentInfo>
-        componentInfos_;  // Component metadata
-    std::unordered_map<std::string, Component::InitFunc>
-        module_initializers_;  // Module initialization functions
+    std::unordered_map<std::string, std::shared_ptr<Component>> initializers_;
+    std::unordered_map<std::string, ComponentInfo> componentInfos_;
+    std::unordered_map<std::string, Component::InitFunc> module_initializers_;
     std::unordered_map<std::string, std::unordered_set<std::string>>
-        dependencies_;  // Component dependencies
+        dependencies_;
     std::unordered_map<std::string, std::unordered_set<std::string>>
-        optionalDependencies_;  // Optional dependencies
+        optionalDependencies_;
 #endif
 
-    std::vector<std::string>
-        initializationOrder_;  // Component initialization order
+    std::vector<std::string> initializationOrder_;
 
 #if ENABLE_EVENT_SYSTEM
     struct EventSubscription {
@@ -369,12 +312,10 @@ private:
 #endif
 };
 
-// Macro for convenient component registration
 #define REGISTER_COMPONENT(name, func) \
     static bool registered_##name =    \
         (Registry::instance().registerModule(#name, func), true)
 
-// Helper macro to define component dependencies
 #define DECLARE_COMPONENT_DEPENDENCIES(name, ...)          \
     std::vector<std::string> name::getNeededComponents() { \
         return {__VA_ARGS__};                              \

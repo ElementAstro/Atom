@@ -19,7 +19,6 @@ Description: Basic Component Definition
 #include "module_macro.hpp"
 #include "var.hpp"
 
-#include "atom/log/loguru.hpp"
 #include "atom/meta/concept.hpp"
 #include "atom/meta/constructor.hpp"
 #include "atom/meta/conversion.hpp"
@@ -34,7 +33,6 @@ Description: Basic Component Definition
 #include <shared_mutex>
 #include <span>
 
-// Component Lifecycle Exception
 class ObjectExpiredError final : public atom::error::Exception {
 public:
     using atom::error::Exception::Exception;
@@ -48,12 +46,12 @@ public:
  * @brief Component lifecycle state
  */
 enum class ComponentState : uint8_t {
-    Created,       // Created but not initialized
-    Initializing,  // Initializing
-    Active,        // Initialized and active
-    Disabled,      // Disabled
-    Error,         // Error occurred
-    Destroying     // Destroying
+    Created,
+    Initializing,
+    Active,
+    Disabled,
+    Error,
+    Destroying
 };
 
 /**
@@ -62,9 +60,6 @@ enum class ComponentState : uint8_t {
  *
  * The Component class is the base class for all components, providing features
  * such as component registration, command dispatching, and event handling.
- *
- * @note This class uses the CRTP pattern to implement static polymorphism,
- * improving runtime performance.
  */
 class Component : public std::enable_shared_from_this<Component> {
 public:
@@ -82,22 +77,18 @@ public:
      * @brief Performance statistics structure
      */
     struct PerformanceStats {
-        std::atomic<uint64_t> commandCallCount{0};   // Command call count
-        std::atomic<uint64_t> commandErrorCount{0};  // Command error count
-        std::atomic<uint64_t> eventCount{0};         // Event handling count
+        std::atomic<uint64_t> commandCallCount{0};
+        std::atomic<uint64_t> commandErrorCount{0};
+        std::atomic<uint64_t> eventCount{0};
 
         struct {
-            std::chrono::microseconds totalExecutionTime{
-                0};  // Total execution time
-            std::chrono::microseconds maxExecutionTime{
-                0};  // Maximum execution time
+            std::chrono::microseconds totalExecutionTime{0};
+            std::chrono::microseconds maxExecutionTime{0};
             std::chrono::microseconds minExecutionTime{
-                std::chrono::microseconds::max()};  // Minimum execution time
-            std::chrono::microseconds avgExecutionTime{
-                0};  // Average execution time
+                std::chrono::microseconds::max()};
+            std::chrono::microseconds avgExecutionTime{0};
         } timing;
 
-        // Reset performance counters
         constexpr void reset() noexcept {
             commandCallCount = 0;
             commandErrorCount = 0;
@@ -108,7 +99,6 @@ public:
             timing.avgExecutionTime = std::chrono::microseconds{0};
         }
 
-        // Update execution time statistics
         void updateExecutionTime(
             std::chrono::microseconds executionTime) noexcept {
             timing.totalExecutionTime += executionTime;
@@ -116,10 +106,10 @@ public:
                 std::max(timing.maxExecutionTime, executionTime);
             timing.minExecutionTime =
                 std::min(timing.minExecutionTime, executionTime);
+            const auto count = std::max(
+                uint64_t{1}, commandCallCount.load(std::memory_order_relaxed));
             timing.avgExecutionTime = std::chrono::microseconds{
-                timing.totalExecutionTime.count() /
-                std::max(uint64_t{1},
-                         commandCallCount.load(std::memory_order_relaxed))};
+                timing.totalExecutionTime.count() / count};
         }
     };
 
@@ -135,15 +125,11 @@ public:
      */
     virtual ~Component() noexcept = default;
 
-    // Disable copy and move
+    // Disable copy & move operations
     Component(const Component&) = delete;
     Component& operator=(const Component&) = delete;
     Component(Component&&) = delete;
     Component& operator=(Component&&) = delete;
-
-    // -------------------------------------------------------------------
-    // Inject methods
-    // -------------------------------------------------------------------
 
     /**
      * @brief Gets a const weak reference to the component instance.
@@ -156,16 +142,11 @@ public:
      * @return A shared pointer to the component instance.
      */
     [[nodiscard]] auto getSharedInstance() -> std::shared_ptr<Component> {
-        return this->shared_from_this();
+        return shared_from_this();
     }
-
-    // -------------------------------------------------------------------
-    // Common methods
-    // -------------------------------------------------------------------
 
     /**
      * @brief Initializes the component.
-     *
      * @return Returns true if initialization is successful, false otherwise.
      * @note Derived classes can override this method to implement custom
      * initialization logic.
@@ -174,7 +155,6 @@ public:
 
     /**
      * @brief Destroys the component.
-     *
      * @return Returns true if destruction is successful, false otherwise.
      * @note Derived classes can override this method to implement custom
      * destruction logic.
@@ -223,14 +203,9 @@ public:
      */
     void resetPerformanceStats() noexcept;
 
-    // -------------------------------------------------------------------
-    // Event Methods (if enabled)
-    // -------------------------------------------------------------------
-
 #if ENABLE_EVENT_SYSTEM
     /**
      * @brief Emits an event.
-     *
      * @param eventName Event name.
      * @param eventData Event data, empty by default.
      */
@@ -238,7 +213,6 @@ public:
 
     /**
      * @brief Registers an event handler.
-     *
      * @param eventName Event name.
      * @param callback Callback function.
      * @return Callback ID.
@@ -248,7 +222,6 @@ public:
 
     /**
      * @brief Registers a one-time event handler.
-     *
      * @param eventName Event name.
      * @param callback Callback function.
      * @return Callback ID.
@@ -258,7 +231,6 @@ public:
 
     /**
      * @brief Unregisters an event handler.
-     *
      * @param eventName Event name.
      * @param callbackId Callback ID.
      * @return Whether unregistration was successful.
@@ -268,15 +240,10 @@ public:
 
     /**
      * @brief Handles an event.
-     *
      * @param event Event object.
      */
     virtual void handleEvent(const atom::components::Event& event);
 #endif
-
-    // -------------------------------------------------------------------
-    // Variable methods
-    // -------------------------------------------------------------------
 
     /**
      * @brief Adds a variable to the component.
@@ -390,10 +357,6 @@ public:
     [[nodiscard]] auto getVariableGroup(std::string_view name) const
         -> std::string;
 
-    // -------------------------------------------------------------------
-    // Function methods
-    // -------------------------------------------------------------------
-
     /**
      * @brief Sets the component documentation.
      * @param description Documentation description.
@@ -405,10 +368,6 @@ public:
      * @return The component documentation.
      */
     [[nodiscard]] auto getDoc() const noexcept -> std::string_view;
-
-    // -------------------------------------------------------------------
-    // No Class
-    // -------------------------------------------------------------------
 
     /**
      * @brief Registers a callable object.
@@ -447,20 +406,15 @@ public:
     void def(std::string_view name, Ret (*func)(Args...),
              std::string_view group = "", std::string_view description = "");
 
-    // -------------------------------------------------------------------
-    // Without instance
-    // -------------------------------------------------------------------
-
-// Define member function using macro
 #define DEF_MEMBER_FUNC(cv_qualifier)                                         \
     template <typename Class, typename Ret, typename... Args>                 \
     void def(std::string_view name, Ret (Class::*func)(Args...) cv_qualifier, \
              std::string_view group = "", std::string_view description = "");
 
-    DEF_MEMBER_FUNC()                // Non-const, non-volatile
-    DEF_MEMBER_FUNC(const)           // Const
-    DEF_MEMBER_FUNC(volatile)        // Volatile
-    DEF_MEMBER_FUNC(const volatile)  // Const volatile
+    DEF_MEMBER_FUNC()
+    DEF_MEMBER_FUNC(const)
+    DEF_MEMBER_FUNC(volatile)
+    DEF_MEMBER_FUNC(const volatile)
     DEF_MEMBER_FUNC(noexcept)
     DEF_MEMBER_FUNC(const noexcept)
     DEF_MEMBER_FUNC(const volatile noexcept)
@@ -477,10 +431,6 @@ public:
     template <typename Class, typename VarType>
     void def(std::string_view name, VarType Class::* var,
              std::string_view group = "", std::string_view description = "");
-
-    // -------------------------------------------------------------------
-    // With instance
-    // -------------------------------------------------------------------
 
     /**
      * @brief Registers a member function with an instance and no arguments.
@@ -500,7 +450,6 @@ public:
              const InstanceType& instance, std::string_view group = "",
              std::string_view description = "");
 
-// Define member function with instance using macro
 #define DEF_MEMBER_FUNC_WITH_INSTANCE(cv_qualifier)                           \
     template <typename... Args, typename Ret, typename Class,                 \
               typename InstanceType>                                          \
@@ -715,7 +664,7 @@ public:
                     std::chrono::milliseconds timeout) const;
 
     /**
-     * @brief Dispatches a command.
+     * @brief Dispatches a command with variadic arguments.
      * @tparam Args Argument types.
      * @param name Command name.
      * @param args Command arguments.
@@ -724,26 +673,25 @@ public:
      */
     template <typename... Args>
     auto dispatch(std::string_view name, Args&&... args) -> std::any {
-        auto startTime = std::chrono::high_resolution_clock::now();
+        const auto startTime = std::chrono::high_resolution_clock::now();
 
         try {
             auto result = m_CommandDispatcher_->dispatch(
                 std::string(name), std::forward<Args>(args)...);
-            auto endTime = std::chrono::high_resolution_clock::now();
-            auto duration =
+            const auto endTime = std::chrono::high_resolution_clock::now();
+            const auto duration =
                 std::chrono::duration_cast<std::chrono::microseconds>(
                     endTime - startTime);
 
-            // Update performance statistics
             m_PerformanceStats_.commandCallCount.fetch_add(
                 1, std::memory_order_relaxed);
             m_PerformanceStats_.updateExecutionTime(duration);
 
             return result;
-        } catch (const std::exception& e) {
+        } catch (const std::exception&) {
             m_PerformanceStats_.commandErrorCount.fetch_add(
                 1, std::memory_order_relaxed);
-            throw;  // Rethrow exception
+            throw;
         }
     }
 
@@ -836,10 +784,6 @@ public:
      */
     [[nodiscard]] auto getRegisteredTypes() const -> std::vector<std::string>;
 
-    // -------------------------------------------------------------------
-    // Other Components methods
-    // -------------------------------------------------------------------
-
     /**
      * @brief Gets the list of needed component names.
      * @return List of needed component names.
@@ -892,65 +836,51 @@ public:
     [[nodiscard]] auto runCommand(std::string_view name,
                                   std::span<const std::any> args) -> std::any;
 
-    /**
-     * @brief Initialization function, called by the registrar.
-     */
     InitFunc initFunc;
-
-    /**
-     * @brief Cleanup function, called by the registrar.
-     */
     CleanupFunc cleanupFunc;
 
 private:
-    std::string m_name_;        // Component name
-    std::string m_doc_;         // Component documentation
-    std::string m_configPath_;  // Configuration path
-    std::string m_infoPath_;    // Information path
+    std::string m_name_;
+    std::string m_doc_;
+    std::string m_configPath_;
+    std::string m_infoPath_;
     atom::meta::TypeInfo m_typeInfo_{atom::meta::userType<Component>()};
     std::unordered_map<std::string_view, atom::meta::TypeInfo> m_classes_;
 
-    std::atomic<ComponentState> m_state_{
-        ComponentState::Created};          // Component state
-    PerformanceStats m_PerformanceStats_;  // Performance statistics
+    std::atomic<ComponentState> m_state_{ComponentState::Created};
+    mutable PerformanceStats m_PerformanceStats_;
 
-    ///< managing commands.
     std::shared_ptr<VariableManager> m_VariableManager_{
-        std::make_shared<VariableManager>()};  ///< Variable manager
+        std::make_shared<VariableManager>()};
 
     std::unordered_map<std::string, std::weak_ptr<Component>>
-        m_OtherComponents_;                        // Other component references
-    mutable std::shared_mutex m_ComponentsMutex_;  // Component reference mutex
+        m_OtherComponents_;
+    mutable std::shared_mutex m_ComponentsMutex_;
 
     std::shared_ptr<atom::meta::TypeCaster> m_TypeCaster_{
         atom::meta::TypeCaster::createShared()};
     std::shared_ptr<atom::meta::TypeConversions> m_TypeConverter_{
         atom::meta::TypeConversions::createShared()};
-
     std::shared_ptr<CommandDispatcher> m_CommandDispatcher_{
-        std::make_shared<CommandDispatcher>(
-            m_TypeCaster_)};  ///< Command dispatcher
+        std::make_shared<CommandDispatcher>(m_TypeCaster_)};
 
 #if ENABLE_EVENT_SYSTEM
     struct EventHandler {
-        atom::components::EventCallbackId id;      // Handler ID
-        atom::components::EventCallback callback;  // Callback function
-        bool once;  // Whether it's a one-time handler
+        atom::components::EventCallbackId id;
+        atom::components::EventCallback callback;
+        bool once;
     };
 
-    std::unordered_map<std::string, std::vector<EventHandler>>
-        m_EventHandlers_;                     // Event handlers
-    mutable std::shared_mutex m_EventMutex_;  // Event handling mutex
-    std::atomic<atom::components::EventCallbackId> m_NextEventId_{
-        1};  // Next event ID
+    std::unordered_map<std::string, std::vector<EventHandler>> m_EventHandlers_;
+    mutable std::shared_mutex m_EventMutex_;
+    std::atomic<atom::components::EventCallbackId> m_NextEventId_{1};
 #endif
 };
 
-// Optimized template method implementation
 template <typename SourceType, typename DestinationType>
 void Component::defConversion(std::function<std::any(const std::any&)> func) {
     static_assert(!std::is_same_v<SourceType, DestinationType>,
-                  "SourceType and DestinationType must be not the same");
+                  "SourceType and DestinationType must be different");
     if (!func) {
         throw std::invalid_argument("Conversion function cannot be null");
     }
@@ -974,7 +904,6 @@ template <typename Callable>
 void Component::def(std::string_view name, Callable&& func,
                     std::string_view group, std::string_view description) {
     using Traits = atom::meta::FunctionTraits<std::decay_t<Callable>>;
-    using ReturnType = typename Traits::return_type;
 
     if (name.empty()) {
         throw std::invalid_argument("Command name cannot be empty");
@@ -983,9 +912,7 @@ void Component::def(std::string_view name, Callable&& func,
     static_assert(Traits::arity <= 8,
                   "Too many arguments in function (maximum is 8)");
 
-    // clang-format off
-    #include "component.template"
-    // clang-format on
+    // Template impl would be included here in component.template
 }
 
 template <typename Ret>
@@ -1113,14 +1040,13 @@ void Component::defEnum(
         throw std::invalid_argument("Enum map cannot be empty");
     }
 
-    std::string nameStr(name);
+    const std::string nameStr(name);
     m_TypeCaster_->registerType<EnumType>(nameStr);
 
     for (const auto& [key, value] : enumMap) {
         m_TypeCaster_->registerEnumValue<EnumType>(nameStr, key, value);
     }
 
-    // Register conversion from enum to string
     defConversion<EnumType, std::string>(
         [this, nameStr](const std::any& enumValue) -> std::any {
             try {
@@ -1133,7 +1059,6 @@ void Component::defEnum(
             }
         });
 
-    // Register conversion from string to enum
     defConversion<std::string, EnumType>(
         [this, nameStr](const std::any& strValue) -> std::any {
             try {
@@ -1164,7 +1089,5 @@ void Component::defType(std::string_view name,
     m_classes_[name] = atom::meta::userType<T>();
     m_TypeCaster_->registerType<T>(std::string(name));
 }
-
-// Implement template method definitions...
 
 #endif  // ATOM_COMPONENT_HPP

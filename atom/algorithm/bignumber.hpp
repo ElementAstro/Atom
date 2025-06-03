@@ -34,14 +34,10 @@ public:
     template <std::integral T>
     constexpr explicit BigNumber(T number) noexcept;
 
-    // Support move semantics
     BigNumber(BigNumber&& other) noexcept = default;
     BigNumber& operator=(BigNumber&& other) noexcept = default;
-
-    // Support copy semantics
     BigNumber(const BigNumber&) = default;
     BigNumber& operator=(const BigNumber&) = default;
-
     ~BigNumber() = default;
 
     /**
@@ -64,14 +60,6 @@ public:
      * @return The result of the multiplication.
      */
     [[nodiscard]] auto multiply(const BigNumber& other) const -> BigNumber;
-
-    /**
-     * @brief Optimizes multiplication using the Karatsuba algorithm.
-     * @param other The BigNumber to multiply by.
-     * @return The result of the multiplication.
-     */
-    [[nodiscard]] auto multiplyKaratsuba(const BigNumber& other) const
-        -> BigNumber;
 
     /**
      * @brief Divides by another BigNumber.
@@ -189,60 +177,47 @@ public:
      */
     [[nodiscard]] auto abs() const -> BigNumber;
 
-    // Operator overloading
-    friend auto operator<<(std::ostream& os,
-                           const BigNumber& num) -> std::ostream&;
-
-    friend auto operator+(const BigNumber& b1,
-                          const BigNumber& b2) -> BigNumber {
+    friend auto operator<<(std::ostream& os, const BigNumber& num)
+        -> std::ostream&;
+    friend auto operator+(const BigNumber& b1, const BigNumber& b2)
+        -> BigNumber {
         return b1.add(b2);
     }
-
-    friend auto operator-(const BigNumber& b1,
-                          const BigNumber& b2) -> BigNumber {
+    friend auto operator-(const BigNumber& b1, const BigNumber& b2)
+        -> BigNumber {
         return b1.subtract(b2);
     }
-
-    friend auto operator*(const BigNumber& b1,
-                          const BigNumber& b2) -> BigNumber {
+    friend auto operator*(const BigNumber& b1, const BigNumber& b2)
+        -> BigNumber {
         return b1.multiply(b2);
     }
-
-    friend auto operator/(const BigNumber& b1,
-                          const BigNumber& b2) -> BigNumber {
+    friend auto operator/(const BigNumber& b1, const BigNumber& b2)
+        -> BigNumber {
         return b1.divide(b2);
     }
-
     friend auto operator^(const BigNumber& b1, int b2) -> BigNumber {
         return b1.pow(b2);
     }
-
-    friend auto operator==(const BigNumber& b1,
-                           const BigNumber& b2) noexcept -> bool {
+    friend auto operator==(const BigNumber& b1, const BigNumber& b2) noexcept
+        -> bool {
         return b1.equals(b2);
     }
-
     friend auto operator>(const BigNumber& b1, const BigNumber& b2) -> bool;
-
     friend auto operator<(const BigNumber& b1, const BigNumber& b2) -> bool {
         return !(b1 == b2) && !(b1 > b2);
     }
-
     friend auto operator>=(const BigNumber& b1, const BigNumber& b2) -> bool {
         return b1 > b2 || b1 == b2;
     }
-
     friend auto operator<=(const BigNumber& b1, const BigNumber& b2) -> bool {
         return b1 < b2 || b1 == b2;
     }
 
-    // Compound assignment operators
     auto operator+=(const BigNumber& other) -> BigNumber&;
     auto operator-=(const BigNumber& other) -> BigNumber&;
     auto operator*=(const BigNumber& other) -> BigNumber&;
     auto operator/=(const BigNumber& other) -> BigNumber&;
 
-    // Prefix and postfix increment/decrement operators
     auto operator++() -> BigNumber&;
     auto operator--() -> BigNumber&;
     auto operator++(int) -> BigNumber;
@@ -264,55 +239,31 @@ public:
      */
     auto operator[](size_t index) const -> uint8_t { return at(index); }
 
-    // Add support for parallel computation
-    [[nodiscard]] auto parallelMultiply(const BigNumber& other) const
-        -> BigNumber;
-
 private:
-    bool isNegative_;              ///< Whether the number is negative.
-    std::vector<uint8_t> digits_;  ///< Digit storage, least significant digit
-                                   ///< first, most significant digit last.
+    bool isNegative_;
+    std::vector<uint8_t> digits_;
 
-    /**
-     * @brief Validates if a string is a valid number.
-     * @param str The string to validate.
-     * @throws std::invalid_argument If the string is not a valid number.
-     */
     static void validateString(std::string_view str);
-
     void validate() const;
-
-    /**
-     * @brief Initializes the digit vector from a string.
-     * @param str The number string.
-     */
     void initFromString(std::string_view str);
 
-    /**
-     * @brief Recursive implementation of the Karatsuba multiplication
-     * algorithm.
-     * @param a The data of the first BigNumber.
-     * @param b The data of the second BigNumber.
-     * @return The result of the calculation.
-     */
+    [[nodiscard]] auto multiplyKaratsuba(const BigNumber& other) const
+        -> BigNumber;
     static std::vector<uint8_t> karatsubaMultiply(std::span<const uint8_t> a,
                                                   std::span<const uint8_t> b);
 };
 
-// Implementation of the constructor for integer types
 template <std::integral T>
 constexpr BigNumber::BigNumber(T number) noexcept : isNegative_(number < 0) {
-    // Handle the special case of 0
     if (number == 0) {
         digits_.push_back(0);
         return;
     }
 
-    // Convert to positive for processing
     auto absNumber =
         static_cast<std::make_unsigned_t<T>>(number < 0 ? -number : number);
+    digits_.reserve(20);
 
-    // Extract digits one by one
     while (absNumber > 0) {
         digits_.push_back(static_cast<uint8_t>(absNumber % 10));
         absNumber /= 10;
@@ -330,6 +281,7 @@ constexpr auto BigNumber::at(size_t index) const -> uint8_t {
     }
     return digits_[index];
 }
+
 }  // namespace atom::algorithm
 
 #endif  // ATOM_ALGORITHM_BIGNUMBER_HPP

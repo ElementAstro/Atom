@@ -3,12 +3,14 @@
 
 #include <zlib.h>
 #include <array>
+#include <atomic>
 #include <concepts>
-#include <coroutine>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <vector>
 
+#include <spdlog/spdlog.h>
 #include <asio.hpp>
 
 namespace fs = std::filesystem;
@@ -22,17 +24,15 @@ using StreamHandle = asio::posix::stream_descriptor;
 
 namespace atom::async::io {
 
-// File size concept to enforce size restrictions
 template <typename T>
 concept FileSizeType = std::integral<T> || std::floating_point<T>;
 
-// Path validator concept
 template <typename T>
 concept PathLike = requires(T t) {
     { std::filesystem::path(t) } -> std::same_as<std::filesystem::path>;
 };
 
-constexpr std::size_t CHUNK = 16384;
+constexpr std::size_t CHUNK = 32768;
 
 /**
  * @brief Base class for compression operations.
@@ -171,17 +171,6 @@ private:
     std::size_t total_bytes_processed_ = 0;  ///< Total bytes processed.
 };
 
-// C++20 awaitable compression task
-struct CompressionAwaitable {
-    struct promise_type {
-        CompressionAwaitable get_return_object() { return {}; }
-        std::suspend_never initial_suspend() noexcept { return {}; }
-        std::suspend_never final_suspend() noexcept { return {}; }
-        void return_void() {}
-        void unhandled_exception() {}
-    };
-};
-
 /**
  * @brief Base class for decompression operations.
  */
@@ -296,15 +285,9 @@ private:
     fs::path current_file_;    ///< The current file being decompressed.
 };
 
-/**
- * @brief Base class for ZIP operations.
- */
 class ZipOperation {
 public:
     virtual ~ZipOperation() noexcept = default;
-    /**
-     * @brief Starts the ZIP operation.
-     */
     virtual void start() = 0;
 };
 
@@ -341,7 +324,8 @@ private:
     asio::io_context& io_context_;       ///< The ASIO I/O context.
     std::string zip_file_;               ///< The path to the ZIP file.
     std::vector<std::string> fileList_;  ///< List of files in the ZIP archive.
-    mutable std::mutex fileListMutex_;  ///< Mutex for thread-safe access to fileList_
+    mutable std::mutex
+        fileListMutex_;  ///< Mutex for thread-safe access to fileList_
 };
 
 /**

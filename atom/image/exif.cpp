@@ -1,5 +1,6 @@
 #include "exif.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
@@ -7,7 +8,7 @@
 #include <sstream>
 #include <vector>
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 
 namespace atom::image {
 
@@ -21,6 +22,7 @@ constexpr int GPS_COORDINATE_SIZE = 24;
 constexpr int RATIONAL_SIZE = 8;
 constexpr int EXIF_MARKER = 0xFFE1;
 constexpr int TIFF_LITTLE_ENDIAN = 0x4949;
+constexpr size_t MAX_BUFFER_SIZE = 100 * 1024 * 1024;
 
 ExifParser::ExifParser(const std::string& filename) : m_filename(filename) {}
 
@@ -74,11 +76,13 @@ auto ExifParser::parseIFD(const std::byte* data, bool isLittleEndian,
     uint16_t entryCount =
         isLittleEndian ? readUint16Le(data) : readUint16Be(data);
     data += 2;
+
     for (int i = 0; i < entryCount; ++i) {
         if (data + IFD_ENTRY_SIZE > tiffStart + bufferSize) {
-            LOG_F(ERROR, "Invalid IFD entry position, out of bounds.");
+            spdlog::error("Invalid IFD entry position, out of bounds");
             return false;
         }
+
         uint16_t tag = isLittleEndian ? readUint16Le(data) : readUint16Be(data);
         uint16_t type =
             isLittleEndian ? readUint16Le(data + 2) : readUint16Be(data + 2);
@@ -94,7 +98,7 @@ auto ExifParser::parseIFD(const std::byte* data, bool isLittleEndian,
                 (count <= 4) ? reinterpret_cast<const std::byte*>(&valueOffset)
                              : (tiffStart + valueOffset);
             if (valuePtr + count - 1 > tiffStart + bufferSize) {
-                LOG_F(ERROR, "Invalid string offset, out of bounds.");
+                spdlog::error("Invalid string offset, out of bounds");
                 continue;
             }
             value =
@@ -104,7 +108,7 @@ auto ExifParser::parseIFD(const std::byte* data, bool isLittleEndian,
         } else if (type == 5 && count == 1) {
             if (tiffStart + valueOffset + RATIONAL_SIZE >
                 tiffStart + bufferSize) {
-                LOG_F(ERROR, "Invalid rational offset, out of bounds.");
+                spdlog::error("Invalid rational offset, out of bounds");
                 continue;
             }
             double rationalValue =
@@ -113,7 +117,7 @@ auto ExifParser::parseIFD(const std::byte* data, bool isLittleEndian,
         } else if (tag == 0x0002 || tag == 0x0004) {
             if (tiffStart + valueOffset + GPS_COORDINATE_SIZE >
                 tiffStart + bufferSize) {
-                LOG_F(ERROR, "Invalid GPS coordinate offset, out of bounds.");
+                spdlog::error("Invalid GPS coordinate offset, out of bounds");
                 continue;
             }
             value = parseGPSCoordinate(tiffStart + valueOffset, isLittleEndian);
@@ -123,37 +127,37 @@ auto ExifParser::parseIFD(const std::byte* data, bool isLittleEndian,
 
         switch (tag) {
             case 0x010F:
-                m_exifData.cameraMake = value;
+                m_exifData.cameraMake = std::move(value);
                 break;
             case 0x0110:
-                m_exifData.cameraModel = value;
+                m_exifData.cameraModel = std::move(value);
                 break;
             case 0x9003:
-                m_exifData.dateTime = value;
+                m_exifData.dateTime = std::move(value);
                 break;
             case 0x829A:
-                m_exifData.exposureTime = value;
+                m_exifData.exposureTime = std::move(value);
                 break;
             case 0x829D:
-                m_exifData.fNumber = value;
+                m_exifData.fNumber = std::move(value);
                 break;
             case 0x8827:
-                m_exifData.isoSpeed = value;
+                m_exifData.isoSpeed = std::move(value);
                 break;
             case 0x920A:
-                m_exifData.focalLength = value;
+                m_exifData.focalLength = std::move(value);
                 break;
             case 0x0112:
                 m_exifData.orientation = parseOrientation(data, isLittleEndian);
                 break;
             case 0x0103:
-                m_exifData.compression = value;
+                m_exifData.compression = std::move(value);
                 break;
             case 0xA001:
                 m_exifData.colorSpace = parseColorSpace(data, isLittleEndian);
                 break;
             case 0x0131:
-                m_exifData.software = value;
+                m_exifData.software = std::move(value);
                 break;
             default:
                 break;
@@ -197,28 +201,35 @@ auto ExifParser::parseOrientation(const std::byte* data, bool isLittleEndian)
 auto ExifParser::parse() -> bool {
     std::ifstream file(m_filename, std::ios::binary);
     if (!file.is_open()) {
-        LOG_F(ERROR, "Cannot open file: {}", m_filename);
+        spdlog::error("Cannot open file: {}", m_filename);
         return false;
     }
 
     std::vector<char> charBuffer((std::istreambuf_iterator<char>(file)),
                                  std::istreambuf_iterator<char>());
-    std::vector<std::byte> buffer(charBuffer.size());
-    std::transform(
-        charBuffer.begin(), charBuffer.end(), buffer.begin(),
-        [](char c) { return std::byte{static_cast<unsigned char>(c)}; });
     file.close();
+
+    if (charBuffer.size() > MAX_BUFFER_SIZE) {
+        spdlog::error("File too large: {} bytes", charBuffer.size());
+        return false;
+    }
+
+    std::vector<std::byte> buffer;
+    buffer.reserve(charBuffer.size());
+    std::transform(
+        charBuffer.begin(), charBuffer.end(), std::back_inserter(buffer),
+        [](char c) { return std::byte{static_cast<unsigned char>(c)}; });
 
     if (buffer.size() < 2 || buffer[0] != std::byte{0xFF} ||
         buffer[1] != std::byte{0xD8}) {
-        LOG_F(ERROR, "Not a valid JPEG file!");
+        spdlog::error("Not a valid JPEG file: {}", m_filename);
         return false;
     }
 
     size_t pos = 2;
     while (pos < buffer.size()) {
         if (pos + 4 > buffer.size()) {
-            LOG_F(ERROR, "Unexpected end of file while searching for markers.");
+            spdlog::error("Unexpected end of file while searching for markers");
             return false;
         }
 
@@ -227,8 +238,8 @@ auto ExifParser::parse() -> bool {
             uint16_t segmentLength = readUint16Be(&buffer[pos + 2]);
 
             if (pos + 2 + segmentLength > buffer.size()) {
-                LOG_F(ERROR,
-                      "Invalid segment length, segment exceeds file bounds.");
+                spdlog::error(
+                    "Invalid segment length, segment exceeds file bounds");
                 return false;
             }
 
@@ -242,9 +253,10 @@ auto ExifParser::parse() -> bool {
                 uint32_t ifdOffset = isLittleEndian
                                          ? readUint32Le(&tiffHeader[4])
                                          : readUint32Be(&tiffHeader[4]);
+
                 if (tiffHeader + ifdOffset > &buffer[pos] + segmentLength) {
-                    LOG_F(ERROR,
-                          "Invalid IFD offset, exceeds EXIF data bounds.");
+                    spdlog::error(
+                        "Invalid IFD offset, exceeds EXIF data bounds");
                     return false;
                 }
 
@@ -263,17 +275,30 @@ auto ExifParser::parse() -> bool {
 auto ExifParser::getExifData() const -> const ExifData& { return m_exifData; }
 
 void ExifParser::optimize() {
-    // 优化内存对齐
-    if (!m_exifData.cameraMake.empty()) {
-        m_exifData.cameraMake.shrink_to_fit();
-    }
-    // ... 对其他字符串字段进行同样的优化
+    auto shrinkIfNotEmpty = [](std::string& str) {
+        if (!str.empty()) {
+            str.shrink_to_fit();
+        }
+    };
+
+    shrinkIfNotEmpty(m_exifData.cameraMake);
+    shrinkIfNotEmpty(m_exifData.cameraModel);
+    shrinkIfNotEmpty(m_exifData.dateTime);
+    shrinkIfNotEmpty(m_exifData.exposureTime);
+    shrinkIfNotEmpty(m_exifData.fNumber);
+    shrinkIfNotEmpty(m_exifData.isoSpeed);
+    shrinkIfNotEmpty(m_exifData.focalLength);
+    shrinkIfNotEmpty(m_exifData.orientation);
+    shrinkIfNotEmpty(m_exifData.compression);
+    shrinkIfNotEmpty(m_exifData.imageWidth);
+    shrinkIfNotEmpty(m_exifData.imageHeight);
+    shrinkIfNotEmpty(m_exifData.colorSpace);
+    shrinkIfNotEmpty(m_exifData.software);
 }
 
 bool ExifParser::validateData() const {
-    // 验证必要字段
     if (m_exifData.dateTime.empty()) {
-        LOG_F(WARNING, "Missing required DateTime field");
+        spdlog::warn("Missing required DateTime field");
         return false;
     }
     return true;
@@ -290,18 +315,10 @@ bool ExifParser::validateBufferBounds(const std::byte* ptr, size_t size) const {
         return false;
     }
 
-    // Check if the buffer is within valid range
-    // Typically this would compare against the bounds of a larger buffer
-    // Since we don't have the full buffer context here, we'll implement a basic
-    // check that ensures the pointer is not null and size is reasonable
-
-    if (size == 0 || size > 100 * 1024 * 1024) {  // Arbitrary max size (100MB)
-        LOG_F(ERROR, "Invalid buffer size: {}", size);
+    if (size == 0 || size > MAX_BUFFER_SIZE) {
+        spdlog::error("Invalid buffer size: {}", size);
         return false;
     }
-
-    // In a real implementation, we would check:
-    // return ptr >= bufferStart && ptr + size <= bufferEnd;
 
     return true;
 }
@@ -312,24 +329,14 @@ GpsCoordinate GpsCoordinate::fromDecimalDegrees(double decimal,
                                                 bool isLatitude) noexcept {
     GpsCoordinate coord;
 
-    // 确定方向
-    if (isLatitude) {
-        coord.direction = decimal >= 0 ? 'N' : 'S';
-    } else {
-        coord.direction = decimal >= 0 ? 'E' : 'W';
-    }
+    coord.direction =
+        isLatitude ? (decimal >= 0 ? 'N' : 'S') : (decimal >= 0 ? 'E' : 'W');
 
-    // 使用绝对值进行计算
     double absDecimal = std::abs(decimal);
-
-    // 提取度
     coord.degrees = static_cast<double>(static_cast<int>(absDecimal));
 
-    // 提取分
     double remaining = (absDecimal - coord.degrees) * 60.0;
     coord.minutes = static_cast<double>(static_cast<int>(remaining));
-
-    // 提取秒
     coord.seconds = (remaining - coord.minutes) * 60.0;
 
     return coord;
@@ -346,42 +353,35 @@ std::string GpsCoordinate::toString() const {
 std::string ExifParser::serialize() const {
     std::stringstream ss;
 
-    // 序列化基本信息
-    ss << m_filename << "\n";
+    ss << m_filename << "\n"
+       << m_exifData.cameraMake << "\n"
+       << m_exifData.cameraModel << "\n"
+       << m_exifData.dateTime << "\n"
+       << m_exifData.exposureTime << "\n"
+       << m_exifData.fNumber << "\n"
+       << m_exifData.isoSpeed << "\n"
+       << m_exifData.focalLength << "\n";
 
-    // 序列化各个EXIF字段
-    ss << m_exifData.cameraMake << "\n";
-    ss << m_exifData.cameraModel << "\n";
-    ss << m_exifData.dateTime << "\n";
-    ss << m_exifData.exposureTime << "\n";
-    ss << m_exifData.fNumber << "\n";
-    ss << m_exifData.isoSpeed << "\n";
-    ss << m_exifData.focalLength << "\n";
-
-    // 序列化GPS坐标
     ss << (m_exifData.gpsLatitude.has_value() ? "1" : "0") << "\n";
     if (m_exifData.gpsLatitude.has_value()) {
-        ss << m_exifData.gpsLatitude->degrees << " ";
-        ss << m_exifData.gpsLatitude->minutes << " ";
-        ss << m_exifData.gpsLatitude->seconds << " ";
-        ss << m_exifData.gpsLatitude->direction << "\n";
+        const auto& lat = *m_exifData.gpsLatitude;
+        ss << lat.degrees << " " << lat.minutes << " " << lat.seconds << " "
+           << lat.direction << "\n";
     }
 
     ss << (m_exifData.gpsLongitude.has_value() ? "1" : "0") << "\n";
     if (m_exifData.gpsLongitude.has_value()) {
-        ss << m_exifData.gpsLongitude->degrees << " ";
-        ss << m_exifData.gpsLongitude->minutes << " ";
-        ss << m_exifData.gpsLongitude->seconds << " ";
-        ss << m_exifData.gpsLongitude->direction << "\n";
+        const auto& lon = *m_exifData.gpsLongitude;
+        ss << lon.degrees << " " << lon.minutes << " " << lon.seconds << " "
+           << lon.direction << "\n";
     }
 
-    // 序列化额外字段
-    ss << m_exifData.orientation << "\n";
-    ss << m_exifData.compression << "\n";
-    ss << m_exifData.imageWidth << "\n";
-    ss << m_exifData.imageHeight << "\n";
-    ss << m_exifData.colorSpace << "\n";
-    ss << m_exifData.software << "\n";
+    ss << m_exifData.orientation << "\n"
+       << m_exifData.compression << "\n"
+       << m_exifData.imageWidth << "\n"
+       << m_exifData.imageHeight << "\n"
+       << m_exifData.colorSpace << "\n"
+       << m_exifData.software << "\n";
 
     return ss.str();
 }
@@ -390,11 +390,9 @@ std::unique_ptr<ExifParser> ExifParser::deserialize(const std::string& data) {
     std::stringstream ss(data);
     std::string line;
 
-    // 读取文件名
     std::getline(ss, line);
     auto parser = std::make_unique<ExifParser>(line);
 
-    // 读取EXIF字段
     std::getline(ss, parser->m_exifData.cameraMake);
     std::getline(ss, parser->m_exifData.cameraModel);
     std::getline(ss, parser->m_exifData.dateTime);
@@ -403,21 +401,14 @@ std::unique_ptr<ExifParser> ExifParser::deserialize(const std::string& data) {
     std::getline(ss, parser->m_exifData.isoSpeed);
     std::getline(ss, parser->m_exifData.focalLength);
 
-    // 读取GPS坐标
     std::getline(ss, line);
     if (line == "1") {
         GpsCoordinate latitude;
         std::getline(ss, line);
         std::stringstream coordStream(line);
-
-        coordStream >> latitude.degrees;
-        coordStream >> latitude.minutes;
-        coordStream >> latitude.seconds;
-        coordStream >> latitude.direction;
-
+        coordStream >> latitude.degrees >> latitude.minutes >>
+            latitude.seconds >> latitude.direction;
         parser->m_exifData.gpsLatitude = latitude;
-    } else {
-        parser->m_exifData.gpsLatitude = std::nullopt;
     }
 
     std::getline(ss, line);
@@ -425,18 +416,11 @@ std::unique_ptr<ExifParser> ExifParser::deserialize(const std::string& data) {
         GpsCoordinate longitude;
         std::getline(ss, line);
         std::stringstream coordStream(line);
-
-        coordStream >> longitude.degrees;
-        coordStream >> longitude.minutes;
-        coordStream >> longitude.seconds;
-        coordStream >> longitude.direction;
-
+        coordStream >> longitude.degrees >> longitude.minutes >>
+            longitude.seconds >> longitude.direction;
         parser->m_exifData.gpsLongitude = longitude;
-    } else {
-        parser->m_exifData.gpsLongitude = std::nullopt;
     }
 
-    // 读取额外字段
     std::getline(ss, parser->m_exifData.orientation);
     std::getline(ss, parser->m_exifData.compression);
     std::getline(ss, parser->m_exifData.imageWidth);

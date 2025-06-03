@@ -5,7 +5,6 @@
 #include <format>
 #include <map>
 #include <mutex>
-#include <queue>
 #include <shared_mutex>
 #include <stdexcept>
 #include <string>
@@ -13,7 +12,7 @@
 #include <thread>
 #include <vector>
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -36,20 +35,20 @@ const socket_t INVALID_SOCKVAL = -1;
 
 namespace atom::connection {
 
-// Custom exceptions
 class SocketException : public std::runtime_error {
 public:
     explicit SocketException(const std::string& msg)
         : std::runtime_error(msg) {}
 };
 
-// Buffer pool for efficient memory management
 class BufferPool {
 public:
-    explicit BufferPool(size_t bufferSize, size_t initialPoolSize = 16)
+    explicit BufferPool(size_t bufferSize, size_t initialPoolSize = 32)
         : bufferSize_(bufferSize) {
+        buffers_.reserve(initialPoolSize);
         for (size_t i = 0; i < initialPoolSize; ++i) {
-            buffers_.push(std::make_unique<std::vector<char>>(bufferSize));
+            buffers_.emplace_back(
+                std::make_unique<std::vector<char>>(bufferSize));
         }
     }
 
@@ -58,8 +57,8 @@ public:
         if (buffers_.empty()) {
             return std::make_unique<std::vector<char>>(bufferSize_);
         }
-        auto buffer = std::move(buffers_.front());
-        buffers_.pop();
+        auto buffer = std::move(buffers_.back());
+        buffers_.pop_back();
         return buffer;
     }
 
@@ -68,27 +67,24 @@ public:
             return;
 
         std::lock_guard<std::mutex> lock(mutex_);
-        // Only keep a reasonable number of buffers in the pool
         if (buffers_.size() < maxPoolSize_) {
             buffer->clear();
-            buffers_.push(std::move(buffer));
+            buffers_.emplace_back(std::move(buffer));
         }
-        // If we exceed max pool size, the buffer will be destroyed
     }
 
 private:
     size_t bufferSize_;
-    std::queue<std::unique_ptr<std::vector<char>>> buffers_;
+    std::vector<std::unique_ptr<std::vector<char>>> buffers_;
     std::mutex mutex_;
-    const size_t maxPoolSize_ = 100;  // Prevent unbounded growth
+    const size_t maxPoolSize_ = 128;
 };
 
-// Client connection class
 class ClientConnection {
 public:
-    ClientConnection(socket_t socket, const std::string& address, int id)
+    ClientConnection(socket_t socket, std::string address, int id)
         : socket_(socket),
-          address_(address),
+          address_(std::move(address)),
           id_(id),
           connected_(true),
           lastActivity_(std::chrono::steady_clock::now()),
@@ -98,28 +94,26 @@ public:
     ~ClientConnection() { disconnect(); }
 
     [[nodiscard]] bool isConnected() const noexcept {
-        return connected_.load();
+        return connected_.load(std::memory_order_acquire);
     }
 
     [[nodiscard]] socket_t getSocket() const noexcept { return socket_; }
-
     [[nodiscard]] const std::string& getAddress() const noexcept {
         return address_;
     }
-
     [[nodiscard]] int getId() const noexcept { return id_; }
 
     [[nodiscard]] std::chrono::steady_clock::time_point getLastActivity()
         const noexcept {
-        return lastActivity_.load();
+        return lastActivity_.load(std::memory_order_acquire);
     }
 
     [[nodiscard]] uint64_t getBytesReceived() const noexcept {
-        return bytesReceived_.load();
+        return bytesReceived_.load(std::memory_order_acquire);
     }
 
     [[nodiscard]] uint64_t getBytesSent() const noexcept {
-        return bytesSent_.load();
+        return bytesSent_.load(std::memory_order_acquire);
     }
 
     [[nodiscard]] std::chrono::steady_clock::time_point getConnectedTime()
@@ -128,39 +122,35 @@ public:
     }
 
     void updateActivity() noexcept {
-        lastActivity_.store(std::chrono::steady_clock::now());
+        lastActivity_.store(std::chrono::steady_clock::now(),
+                            std::memory_order_release);
     }
 
     bool send(std::string_view message) {
         if (!isConnected())
             return false;
 
-        try {
-            std::lock_guard<std::mutex> lock(writeMutex_);
-            int bytesSent = ::send(socket_, message.data(), message.size(), 0);
-            if (bytesSent <= 0) {
-                LOG_F(ERROR, "Failed to send message to client {}", id_);
-                return false;
-            }
-
-            bytesSent_ += bytesSent;
-            updateActivity();
-            return true;
-        } catch (const std::exception& e) {
-            LOG_F(ERROR, "Exception sending message to client {}: {}", id_,
-                  e.what());
+        std::lock_guard<std::mutex> lock(writeMutex_);
+        const int bytesSent = ::send(socket_, message.data(),
+                                     static_cast<int>(message.size()), 0);
+        if (bytesSent <= 0) {
+            spdlog::error("Failed to send message to client {}", id_);
             return false;
         }
+
+        bytesSent_.fetch_add(bytesSent, std::memory_order_relaxed);
+        updateActivity();
+        return true;
     }
 
     void recordReceivedData(size_t bytes) {
-        bytesReceived_ += bytes;
+        bytesReceived_.fetch_add(bytes, std::memory_order_relaxed);
         updateActivity();
     }
 
     void disconnect() {
-        if (!connected_.exchange(false))
-            return;  // Already disconnected
+        if (!connected_.exchange(false, std::memory_order_acq_rel))
+            return;
 
         std::lock_guard<std::mutex> lock(writeMutex_);
 #ifdef _WIN32
@@ -168,7 +158,7 @@ public:
 #else
         close(socket_);
 #endif
-        LOG_F(INFO, "Client disconnected: {} (ID: {})", address_, id_);
+        spdlog::info("Client disconnected: {} (ID: {})", address_, id_);
     }
 
 private:
@@ -179,7 +169,7 @@ private:
     std::atomic<std::chrono::steady_clock::time_point> lastActivity_;
     std::atomic<uint64_t> bytesReceived_;
     std::atomic<uint64_t> bytesSent_;
-    std::chrono::steady_clock::time_point connectedTime_ =
+    const std::chrono::steady_clock::time_point connectedTime_ =
         std::chrono::steady_clock::now();
     std::mutex writeMutex_;
 };
@@ -203,174 +193,125 @@ public:
         try {
             stop();
         } catch (...) {
-            // Ensure no exceptions escape destructor
-            LOG_F(ERROR, "Exception caught in SocketHubImpl destructor");
+            spdlog::error("Exception in SocketHubImpl destructor");
         }
     }
 
-    // Prevent copying
     SocketHubImpl(const SocketHubImpl&) = delete;
     SocketHubImpl& operator=(const SocketHubImpl&) = delete;
 
     void start(int port) {
-        // Validate port number
         if (port <= 0 || port > 65535) {
-            throw std::invalid_argument(
-                std::format("Invalid port number: {}", port));
+            throw std::invalid_argument(std::format("Invalid port: {}", port));
         }
 
-        if (running_.load()) {
-            LOG_F(WARNING, "SocketHub is already running.");
+        if (running_.load(std::memory_order_acquire)) {
+            spdlog::warn("SocketHub already running");
             return;
         }
 
-        try {
-            if (!initWinsock()) {
-                throw SocketException("Failed to initialize socket library");
-            }
+        if (!initWinsock()) {
+            throw SocketException("Failed to initialize socket library");
+        }
 
-            serverSocket_ = socket(AF_INET, SOCK_STREAM, 0);
-            if (serverSocket_ == INVALID_SOCKVAL) {
-                throw SocketException("Failed to create server socket");
-            }
-
-            // Set socket to non-blocking mode
-#ifdef _WIN32
-            u_long mode = 1;
-            if (ioctlsocket(serverSocket_, FIONBIO, &mode) != 0) {
-                throw SocketException("Failed to set non-blocking mode");
-            }
-#else
-            int flags = fcntl(serverSocket_, F_GETFL, 0);
-            if (flags == -1 ||
-                fcntl(serverSocket_, F_SETFL, flags | O_NONBLOCK) == -1) {
-                throw SocketException("Failed to set non-blocking mode");
-            }
-#endif
-
-            // Enable address reuse
-            int opt = 1;
-            if (setsockopt(serverSocket_, SOL_SOCKET, SO_REUSEADDR,
-                           reinterpret_cast<const char*>(&opt),
-                           sizeof(opt)) < 0) {
-                throw SocketException("Failed to set socket options");
-            }
-
-            // Set TCP_NODELAY to disable Nagle's algorithm
-            if (setsockopt(serverSocket_, IPPROTO_TCP, TCP_NODELAY,
-                           reinterpret_cast<const char*>(&opt),
-                           sizeof(opt)) < 0) {
-                LOG_F(WARNING, "Failed to set TCP_NODELAY");
-            }
-
-            sockaddr_in serverAddress{};
-            serverAddress.sin_family = AF_INET;
-            serverAddress.sin_addr.s_addr = INADDR_ANY;
-            serverAddress.sin_port = htons(static_cast<uint16_t>(port));
+        serverSocket_ = socket(AF_INET, SOCK_STREAM, 0);
+        if (serverSocket_ == INVALID_SOCKVAL) {
+            throw SocketException("Failed to create server socket");
+        }
 
 #ifdef _WIN32
-            if (bind(serverSocket_, reinterpret_cast<sockaddr*>(&serverAddress),
-                     sizeof(serverAddress)) == SOCKET_ERROR)
+        u_long mode = 1;
+        if (ioctlsocket(serverSocket_, FIONBIO, &mode) != 0) {
+            throw SocketException("Failed to set non-blocking mode");
+        }
 #else
-            if (bind(serverSocket_, reinterpret_cast<sockaddr*>(&serverAddress),
-                     sizeof(serverAddress)) < 0)
+        const int flags = fcntl(serverSocket_, F_GETFL, 0);
+        if (flags == -1 ||
+            fcntl(serverSocket_, F_SETFL, flags | O_NONBLOCK) == -1) {
+            throw SocketException("Failed to set non-blocking mode");
+        }
 #endif
-            {
-                throw SocketException(std::format(
-                    "Failed to bind server socket: {}", strerror(errno)));
-            }
 
-#ifdef _WIN32
-            if (listen(serverSocket_, maxConnections_) == SOCKET_ERROR)
-#else
-            if (listen(serverSocket_, maxConnections_) < 0)
-#endif
-            {
-                throw SocketException(std::format(
-                    "Failed to listen on server socket: {}", strerror(errno)));
-            }
+        int opt = 1;
+        if (setsockopt(serverSocket_, SOL_SOCKET, SO_REUSEADDR,
+                       reinterpret_cast<const char*>(&opt), sizeof(opt)) < 0) {
+            throw SocketException("Failed to set SO_REUSEADDR");
+        }
+
+        if (setsockopt(serverSocket_, IPPROTO_TCP, TCP_NODELAY,
+                       reinterpret_cast<const char*>(&opt), sizeof(opt)) < 0) {
+            spdlog::warn("Failed to set TCP_NODELAY");
+        }
+
+        sockaddr_in serverAddress{};
+        serverAddress.sin_family = AF_INET;
+        serverAddress.sin_addr.s_addr = INADDR_ANY;
+        serverAddress.sin_port = htons(static_cast<uint16_t>(port));
+
+        if (bind(serverSocket_, reinterpret_cast<sockaddr*>(&serverAddress),
+                 sizeof(serverAddress)) < 0) {
+            throw SocketException(std::format("Failed to bind to port {}: {}",
+                                              port, strerror(errno)));
+        }
+
+        if (listen(serverSocket_, maxConnections_) < 0) {
+            throw SocketException(
+                std::format("Failed to listen: {}", strerror(errno)));
+        }
 
 #ifdef __linux__
-            epoll_fd_ = epoll_create1(0);
-            if (epoll_fd_ == -1) {
-                throw SocketException("Failed to create epoll file descriptor");
-            }
+        epoll_fd_ = epoll_create1(EPOLL_CLOEXEC);
+        if (epoll_fd_ == -1) {
+            throw SocketException("Failed to create epoll");
+        }
 
-            struct epoll_event event;
-            event.events =
-                EPOLLIN | EPOLLET;  // Edge-triggered for better performance
-            event.data.fd = serverSocket_;
-            if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, serverSocket_, &event) ==
-                -1) {
-                throw SocketException("Failed to add server socket to epoll");
-            }
+        epoll_event event{};
+        event.events = EPOLLIN | EPOLLET;
+        event.data.fd = serverSocket_;
+        if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, serverSocket_, &event) == -1) {
+            throw SocketException("Failed to add server socket to epoll");
+        }
 #endif
 
-            serverPort_ = port;
-            running_.store(true);
-            DLOG_F(INFO, "SocketHub started on port {}", port);
+        serverPort_ = port;
+        running_.store(true, std::memory_order_release);
+        spdlog::info("SocketHub started on port {}", port);
 
-            // Start the accept thread with exception handling
-            acceptThread_ = std::jthread([this](std::stop_token stoken) {
-                try {
-                    acceptConnections(stoken);
-                } catch (const std::exception& e) {
-                    LOG_F(ERROR, "Exception in accept thread: {}", e.what());
-                    running_.store(false);
-                }
-            });
+        acceptThread_ = std::jthread(
+            [this](std::stop_token stoken) { acceptConnections(stoken); });
 
-            // Start timeout checker thread
-            timeoutThread_ = std::jthread([this](std::stop_token stoken) {
-                try {
-                    checkClientTimeouts(stoken);
-                } catch (const std::exception& e) {
-                    LOG_F(ERROR, "Exception in timeout thread: {}", e.what());
-                }
-            });
-        } catch (const std::exception& e) {
-            cleanupResources();
-            LOG_F(ERROR, "Failed to start SocketHub: {}", e.what());
-            throw;
-        }
+        timeoutThread_ = std::jthread(
+            [this](std::stop_token stoken) { checkClientTimeouts(stoken); });
     }
 
     void stop() noexcept {
-        if (!running_.exchange(false)) {
-            return;  // Already stopped
+        if (!running_.exchange(false, std::memory_order_acq_rel))
+            return;
+
+        spdlog::info("Stopping SocketHub...");
+
+        if (acceptThread_.joinable()) {
+            acceptThread_.request_stop();
+        }
+        if (timeoutThread_.joinable()) {
+            timeoutThread_.request_stop();
         }
 
-        try {
-            LOG_F(INFO, "Stopping SocketHub...");
+        cleanupResources();
 
-            if (acceptThread_.joinable()) {
-                acceptThread_.request_stop();
-            }
-
-            if (timeoutThread_.joinable()) {
-                timeoutThread_.request_stop();
-            }
-
-            cleanupResources();
-
-            if (acceptThread_.joinable()) {
-                acceptThread_.join();
-            }
-
-            if (timeoutThread_.joinable()) {
-                timeoutThread_.join();
-            }
-
-            DLOG_F(INFO, "SocketHub stopped successfully.");
-        } catch (const std::exception& e) {
-            LOG_F(ERROR, "Error during SocketHub shutdown: {}", e.what());
+        if (acceptThread_.joinable()) {
+            acceptThread_.join();
         }
+        if (timeoutThread_.joinable()) {
+            timeoutThread_.join();
+        }
+
+        spdlog::info("SocketHub stopped");
     }
 
     void addMessageHandler(std::function<void(std::string_view)> handler) {
         if (!handler) {
-            throw std::invalid_argument(
-                "Invalid message handler (null function)");
+            throw std::invalid_argument("Invalid message handler");
         }
         std::lock_guard<std::mutex> lock(handlerMutex_);
         messageHandler_ = std::move(handler);
@@ -378,8 +319,7 @@ public:
 
     void addConnectHandler(std::function<void(int, std::string_view)> handler) {
         if (!handler) {
-            throw std::invalid_argument(
-                "Invalid connect handler (null function)");
+            throw std::invalid_argument("Invalid connect handler");
         }
         std::lock_guard<std::mutex> lock(handlerMutex_);
         connectHandler_ = std::move(handler);
@@ -388,15 +328,14 @@ public:
     void addDisconnectHandler(
         std::function<void(int, std::string_view)> handler) {
         if (!handler) {
-            throw std::invalid_argument(
-                "Invalid disconnect handler (null function)");
+            throw std::invalid_argument("Invalid disconnect handler");
         }
         std::lock_guard<std::mutex> lock(handlerMutex_);
         disconnectHandler_ = std::move(handler);
     }
 
     size_t broadcast(std::string_view message) {
-        if (message.empty() || !running_.load()) {
+        if (message.empty() || !running_.load(std::memory_order_acquire)) {
             return 0;
         }
 
@@ -405,7 +344,7 @@ public:
 
         for (const auto& [_, client] : clients_) {
             if (client && client->isConnected() && client->send(message)) {
-                successCount++;
+                ++successCount;
             }
         }
 
@@ -413,18 +352,14 @@ public:
     }
 
     bool sendTo(int clientId, std::string_view message) {
-        if (message.empty() || !running_.load()) {
+        if (message.empty() || !running_.load(std::memory_order_acquire)) {
             return false;
         }
 
         std::shared_lock<std::shared_mutex> lock(clientsMutex_);
-
-        auto it = clients_.find(clientId);
-        if (it != clients_.end() && it->second && it->second->isConnected()) {
-            return it->second->send(message);
-        }
-
-        return false;
+        const auto it = clients_.find(clientId);
+        return it != clients_.end() && it->second &&
+               it->second->isConnected() && it->second->send(message);
     }
 
     std::vector<ClientInfo> getConnectedClients() const {
@@ -434,13 +369,12 @@ public:
 
         for (const auto& [id, client] : clients_) {
             if (client && client->isConnected()) {
-                ClientInfo info;
-                info.id = client->getId();
-                info.address = client->getAddress();
-                info.connectedTime = client->getConnectedTime();
-                info.bytesReceived = client->getBytesReceived();
-                info.bytesSent = client->getBytesSent();
-                result.push_back(info);
+                result.emplace_back(
+                    ClientInfo{.id = client->getId(),
+                               .address = client->getAddress(),
+                               .connectedTime = client->getConnectedTime(),
+                               .bytesReceived = client->getBytesReceived(),
+                               .bytesSent = client->getBytesSent()});
             }
         }
 
@@ -449,23 +383,18 @@ public:
 
     size_t getClientCount() const noexcept {
         std::shared_lock<std::shared_mutex> lock(clientsMutex_);
-        size_t count = 0;
-
-        for (const auto& [_, client] : clients_) {
-            if (client && client->isConnected()) {
-                count++;
-            }
-        }
-
-        return count;
+        return std::count_if(
+            clients_.begin(), clients_.end(), [](const auto& pair) {
+                return pair.second && pair.second->isConnected();
+            });
     }
 
     void setClientTimeout(std::chrono::seconds timeout) {
         if (timeout.count() > 0) {
             clientTimeout_ = timeout;
-            LOG_F(INFO, "Client timeout set to {} seconds", timeout.count());
+            spdlog::info("Client timeout set to {} seconds", timeout.count());
         } else {
-            LOG_F(WARNING, "Invalid timeout value");
+            spdlog::warn("Invalid timeout value");
         }
     }
 
@@ -476,9 +405,8 @@ public:
     [[nodiscard]] int getPort() const noexcept { return serverPort_; }
 
 private:
-    static constexpr int maxConnections_ =
-        128;                                  // Maximum concurrent connections
-    static constexpr int bufferSize_ = 8192;  // Receive buffer size
+    static constexpr int maxConnections_ = 1024;
+    static constexpr int bufferSize_ = 16384;
 
     std::atomic<bool> running_{false};
     socket_t serverSocket_{INVALID_SOCKVAL};
@@ -493,11 +421,9 @@ private:
     int epoll_fd_{INVALID_SOCKVAL};
 #endif
 
-    // Client management
     std::map<int, std::shared_ptr<ClientConnection>> clients_;
     mutable std::shared_mutex clientsMutex_;
 
-    // Event handlers
     std::function<void(std::string_view)> messageHandler_;
     std::function<void(int, std::string_view)> connectHandler_;
     std::function<void(int, std::string_view)> disconnectHandler_;
@@ -506,12 +432,10 @@ private:
     bool initWinsock() {
 #ifdef _WIN32
         WSADATA wsaData;
-        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-            LOG_F(ERROR, "Failed to initialize Winsock.");
-            return false;
-        }
-#endif
+        return WSAStartup(MAKEWORD(2, 2), &wsaData) == 0;
+#else
         return true;
+#endif
     }
 
     void cleanupWinsock() noexcept {
@@ -521,244 +445,234 @@ private:
     }
 
     void closeSocket(socket_t socket) noexcept {
-        try {
 #ifdef _WIN32
-            closesocket(socket);
+        closesocket(socket);
 #else
-            close(socket);
+        close(socket);
 #endif
-        } catch (...) {
-            LOG_F(ERROR, "Exception caught while closing socket");
-        }
     }
 
     void acceptConnections(std::stop_token stoken) {
 #ifdef __linux__
         std::vector<epoll_event> events(maxConnections_);
 
-        while (!stoken.stop_requested() && running_.load()) {
-            int numEvents =
-                epoll_wait(epoll_fd_, events.data(), events.size(), 100);
+        while (!stoken.stop_requested() &&
+               running_.load(std::memory_order_acquire)) {
+            const int numEvents = epoll_wait(
+                epoll_fd_, events.data(), static_cast<int>(events.size()), 100);
 
             if (numEvents < 0) {
-                if (errno == EINTR) {
-                    continue;  // Interrupted, try again
-                }
-                LOG_F(ERROR, "epoll_wait failed: {}", strerror(errno));
+                if (errno == EINTR)
+                    continue;
+                spdlog::error("epoll_wait failed: {}", strerror(errno));
                 break;
             }
 
-            for (int i = 0; i < numEvents; i++) {
-                // New connection on server socket
+            for (int i = 0; i < numEvents; ++i) {
                 if (events[i].data.fd == serverSocket_) {
                     acceptNewConnections();
                     continue;
                 }
 
-                socket_t clientSocket = events[i].data.fd;
-
-                // Find client by socket
-                std::shared_ptr<ClientConnection> client;
-                {
-                    std::shared_lock<std::shared_mutex> lock(clientsMutex_);
-                    for (const auto& [_, c] : clients_) {
-                        if (c && c->getSocket() == clientSocket) {
-                            client = c;
-                            break;
-                        }
-                    }
-                }
-
-                if (!client) {
-                    // Client not found, remove from epoll
-                    epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, clientSocket, nullptr);
-                    continue;
-                }
-
-                if (events[i].events & EPOLLIN) {
-                    handleClientData(client);
-                }
-
-                if (events[i].events & (EPOLLHUP | EPOLLERR)) {
-                    client->disconnect();
-                    disconnectClient(client->getId());
-                }
+                handleClientSocket(events[i]);
             }
         }
 #else
-        // Windows/other select-based event loop
-        fd_set readfds;
-        timeval timeout{0, 100000};  // 100ms timeout
+        selectEventLoop(stoken);
+#endif
+    }
 
-        while (!stoken.stop_requested() && running_.load()) {
+#ifdef __linux__
+    void handleClientSocket(const epoll_event& event) {
+        const socket_t clientSocket = event.data.fd;
+
+        std::shared_ptr<ClientConnection> client;
+        {
+            std::shared_lock<std::shared_mutex> lock(clientsMutex_);
+            const auto it = std::find_if(clients_.begin(), clients_.end(),
+                                         [clientSocket](const auto& pair) {
+                                             return pair.second &&
+                                                    pair.second->getSocket() ==
+                                                        clientSocket;
+                                         });
+            if (it != clients_.end()) {
+                client = it->second;
+            }
+        }
+
+        if (!client) {
+            epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, clientSocket, nullptr);
+            return;
+        }
+
+        if (event.events & EPOLLIN) {
+            handleClientData(client);
+        }
+
+        if (event.events & (EPOLLHUP | EPOLLERR)) {
+            client->disconnect();
+            disconnectClient(client->getId());
+        }
+    }
+#else
+    void selectEventLoop(std::stop_token stoken) {
+        while (!stoken.stop_requested() &&
+               running_.load(std::memory_order_acquire)) {
+            fd_set readfds;
             FD_ZERO(&readfds);
             FD_SET(serverSocket_, &readfds);
 
-            // Add client sockets to select set
             socket_t maxSocket = serverSocket_;
             std::vector<std::shared_ptr<ClientConnection>> activeClients;
+
             {
                 std::shared_lock<std::shared_mutex> lock(clientsMutex_);
                 activeClients.reserve(clients_.size());
                 for (const auto& [_, client] : clients_) {
                     if (client && client->isConnected()) {
-                        socket_t sock = client->getSocket();
+                        const socket_t sock = client->getSocket();
                         FD_SET(sock, &readfds);
                         activeClients.push_back(client);
-                        if (sock > maxSocket) {
+                        if (sock > maxSocket)
                             maxSocket = sock;
-                        }
                     }
                 }
             }
 
-            // Wait for activity
-            int activity =
-                select(maxSocket + 1, &readfds, nullptr, nullptr, &timeout);
+            timeval timeout{0, 100000};
+            const int activity = select(static_cast<int>(maxSocket + 1),
+                                        &readfds, nullptr, nullptr, &timeout);
 
             if (activity < 0) {
-                if (errno == EINTR) {
-                    continue;  // Interrupted, try again
-                }
-                LOG_F(ERROR, "select failed: {}", strerror(errno));
+                if (errno == EINTR)
+                    continue;
+                spdlog::error("select failed: {}", strerror(errno));
                 break;
             }
 
-            // New connection on server socket
             if (FD_ISSET(serverSocket_, &readfds)) {
                 acceptNewConnections();
             }
 
-            // Check client sockets for activity
             for (const auto& client : activeClients) {
-                if (client && client->isConnected()) {
-                    socket_t sock = client->getSocket();
-                    if (FD_ISSET(sock, &readfds)) {
-                        handleClientData(client);
-                    }
+                if (client && client->isConnected() &&
+                    FD_ISSET(client->getSocket(), &readfds)) {
+                    handleClientData(client);
                 }
             }
         }
-#endif
     }
+#endif
 
     void acceptNewConnections() {
-        // Accept multiple connections at once for better performance
-        for (int i = 0; i < 16 && running_.load(); ++i) {
+        for (int i = 0; i < 32 && running_.load(std::memory_order_acquire);
+             ++i) {
             sockaddr_in clientAddress{};
             socklen_t clientAddressLength = sizeof(clientAddress);
 
-            socket_t clientSocket = accept(
+            const socket_t clientSocket = accept(
                 serverSocket_, reinterpret_cast<sockaddr*>(&clientAddress),
                 &clientAddressLength);
 
             if (clientSocket == INVALID_SOCKVAL) {
 #ifdef _WIN32
-                int error = WSAGetLastError();
-                if (error == WSAEWOULDBLOCK)
-                    break;  // No more connections waiting
+                if (WSAGetLastError() == WSAEWOULDBLOCK)
+                    break;
 #else
                 if (errno == EAGAIN || errno == EWOULDBLOCK)
-                    break;  // No more connections waiting
+                    break;
 #endif
-                if (running_.load()) {
-                    LOG_F(ERROR, "Failed to accept client connection");
+                if (running_.load(std::memory_order_acquire)) {
+                    spdlog::error("Failed to accept connection");
                 }
                 break;
             }
 
-            // Set client socket to non-blocking mode
-#ifdef _WIN32
-            u_long mode = 1;
-            if (ioctlsocket(clientSocket, FIONBIO, &mode) != 0) {
-                LOG_F(ERROR,
-                      "Failed to set client socket to non-blocking mode");
+            if (!configureClientSocket(clientSocket)) {
                 closeSocket(clientSocket);
                 continue;
             }
-#else
-            int flags = fcntl(clientSocket, F_GETFL, 0);
-            if (flags == -1 ||
-                fcntl(clientSocket, F_SETFL, flags | O_NONBLOCK) == -1) {
-                LOG_F(ERROR,
-                      "Failed to set client socket to non-blocking mode");
-                closeSocket(clientSocket);
-                continue;
-            }
-#endif
 
-            // Set TCP_NODELAY to disable Nagle's algorithm
-            int opt = 1;
-            if (setsockopt(clientSocket, IPPROTO_TCP, TCP_NODELAY,
-                           reinterpret_cast<const char*>(&opt),
-                           sizeof(opt)) < 0) {
-                LOG_F(WARNING, "Failed to set TCP_NODELAY on client socket");
-            }
-
-            // Get client IP address
             char clientIp[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, &(clientAddress.sin_addr), clientIp,
+            inet_ntop(AF_INET, &clientAddress.sin_addr, clientIp,
                       INET_ADDRSTRLEN);
-            std::string clientAddrStr =
+            const std::string clientAddr =
                 std::format("{}:{}", clientIp, ntohs(clientAddress.sin_port));
-            int clientId = nextClientId_++;
+            const int clientId =
+                nextClientId_.fetch_add(1, std::memory_order_relaxed);
 
-            // Check if max connections reached
-            {
-                std::shared_lock<std::shared_mutex> lock(clientsMutex_);
-                size_t activeClients = 0;
-                for (const auto& [_, client] : clients_) {
-                    if (client && client->isConnected()) {
-                        activeClients++;
-                    }
-                }
-
-                if (activeClients >= maxConnections_) {
-                    LOG_F(WARNING,
-                          "Maximum connections reached, rejecting client");
-                    closeSocket(clientSocket);
-                    continue;
-                }
+            if (!checkConnectionLimit()) {
+                spdlog::warn("Max connections reached, rejecting client");
+                closeSocket(clientSocket);
+                continue;
             }
 
-            LOG_F(INFO, "New client connected: {} (ID: {})", clientAddrStr,
-                  clientId);
+            spdlog::info("New client: {} (ID: {})", clientAddr, clientId);
 
-            // Create client connection
             auto client = std::make_shared<ClientConnection>(
-                clientSocket, clientAddrStr, clientId);
+                clientSocket, clientAddr, clientId);
 
 #ifdef __linux__
-            // Add to epoll
-            epoll_event event;
+            epoll_event event{};
             event.events = EPOLLIN | EPOLLET;
             event.data.fd = clientSocket;
             if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, clientSocket, &event) ==
                 -1) {
-                LOG_F(ERROR, "Failed to add client socket to epoll");
+                spdlog::error("Failed to add client to epoll");
                 continue;
             }
 #endif
 
-            // Add to clients map
             {
                 std::unique_lock<std::shared_mutex> lock(clientsMutex_);
                 clients_[clientId] = client;
             }
 
-            // Notify connect handler
             {
                 std::lock_guard<std::mutex> lock(handlerMutex_);
                 if (connectHandler_) {
                     try {
-                        connectHandler_(clientId, clientAddrStr);
+                        connectHandler_(clientId, clientAddr);
                     } catch (const std::exception& e) {
-                        LOG_F(ERROR, "Exception in connect handler: {}",
-                              e.what());
+                        spdlog::error("Connect handler exception: {}",
+                                      e.what());
                     }
                 }
             }
         }
+    }
+
+    bool configureClientSocket(socket_t clientSocket) {
+#ifdef _WIN32
+        u_long mode = 1;
+        if (ioctlsocket(clientSocket, FIONBIO, &mode) != 0) {
+            spdlog::error("Failed to set client socket non-blocking");
+            return false;
+        }
+#else
+        const int flags = fcntl(clientSocket, F_GETFL, 0);
+        if (flags == -1 ||
+            fcntl(clientSocket, F_SETFL, flags | O_NONBLOCK) == -1) {
+            spdlog::error("Failed to set client socket non-blocking");
+            return false;
+        }
+#endif
+
+        int opt = 1;
+        if (setsockopt(clientSocket, IPPROTO_TCP, TCP_NODELAY,
+                       reinterpret_cast<const char*>(&opt), sizeof(opt)) < 0) {
+            spdlog::warn("Failed to set TCP_NODELAY on client socket");
+        }
+
+        return true;
+    }
+
+    bool checkConnectionLimit() {
+        std::shared_lock<std::shared_mutex> lock(clientsMutex_);
+        return std::count_if(
+                   clients_.begin(), clients_.end(), [](const auto& pair) {
+                       return pair.second && pair.second->isConnected();
+                   }) < maxConnections_;
     }
 
     void handleClientData(std::shared_ptr<ClientConnection> client) {
@@ -766,41 +680,36 @@ private:
             return;
 
         auto buffer = bufferPool_->acquire();
-        socket_t sock = client->getSocket();
+        const socket_t sock = client->getSocket();
 
-        int bytesRead = recv(sock, buffer->data(), buffer->size(), 0);
+        const int bytesRead =
+            recv(sock, buffer->data(), static_cast<int>(buffer->size()), 0);
 
         if (bytesRead > 0) {
-            // Update client stats
             client->recordReceivedData(bytesRead);
 
-            // Process message
-            std::string_view message(buffer->data(), bytesRead);
+            const std::string_view message(buffer->data(), bytesRead);
             std::lock_guard<std::mutex> lock(handlerMutex_);
             if (messageHandler_) {
                 try {
                     messageHandler_(message);
                 } catch (const std::exception& e) {
-                    LOG_F(ERROR, "Exception in message handler: {}", e.what());
+                    spdlog::error("Message handler exception: {}", e.what());
                 }
             }
         } else if (bytesRead == 0) {
-            // Client closed connection
             client->disconnect();
             disconnectClient(client->getId());
         } else {
-            // Check if error is non-blocking related
 #ifdef _WIN32
-            int error = WSAGetLastError();
-            if (error != WSAEWOULDBLOCK) {
-                LOG_F(ERROR, "Error receiving data from client: {}", error);
+            if (WSAGetLastError() != WSAEWOULDBLOCK) {
+                spdlog::error("Client read error: {}", WSAGetLastError());
                 client->disconnect();
                 disconnectClient(client->getId());
             }
 #else
             if (errno != EAGAIN && errno != EWOULDBLOCK) {
-                LOG_F(ERROR, "Error receiving data from client: {}",
-                      strerror(errno));
+                spdlog::error("Client read error: {}", strerror(errno));
                 client->disconnect();
                 disconnectClient(client->getId());
             }
@@ -813,60 +722,52 @@ private:
     void disconnectClient(int clientId) {
         std::string clientAddr;
 
-        // Capture client address before removal
         {
             std::shared_lock<std::shared_mutex> lock(clientsMutex_);
-            auto it = clients_.find(clientId);
+            const auto it = clients_.find(clientId);
             if (it != clients_.end() && it->second) {
                 clientAddr = it->second->getAddress();
             }
         }
 
-        // Remove client
         {
             std::unique_lock<std::shared_mutex> lock(clientsMutex_);
             clients_.erase(clientId);
         }
 
-        // Notify handler
         if (!clientAddr.empty()) {
             std::lock_guard<std::mutex> lock(handlerMutex_);
             if (disconnectHandler_) {
                 try {
                     disconnectHandler_(clientId, clientAddr);
                 } catch (const std::exception& e) {
-                    LOG_F(ERROR, "Exception in disconnect handler: {}",
-                          e.what());
+                    spdlog::error("Disconnect handler exception: {}", e.what());
                 }
             }
         }
     }
 
     void checkClientTimeouts(std::stop_token stoken) {
-        while (!stoken.stop_requested() && running_.load()) {
-            // Check every second
+        while (!stoken.stop_requested() &&
+               running_.load(std::memory_order_acquire)) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
 
-            auto now = std::chrono::steady_clock::now();
+            const auto now = std::chrono::steady_clock::now();
             std::vector<std::shared_ptr<ClientConnection>> timeoutClients;
 
-            // Identify timed out clients
             {
                 std::shared_lock<std::shared_mutex> lock(clientsMutex_);
                 for (const auto& [_, client] : clients_) {
-                    if (client && client->isConnected()) {
-                        auto lastActivity = client->getLastActivity();
-                        if (now - lastActivity > clientTimeout_) {
-                            timeoutClients.push_back(client);
-                        }
+                    if (client && client->isConnected() &&
+                        (now - client->getLastActivity()) > clientTimeout_) {
+                        timeoutClients.push_back(client);
                     }
                 }
             }
 
-            // Disconnect timed out clients
             for (auto& client : timeoutClients) {
-                LOG_F(INFO, "Client timed out: {} (ID: {})",
-                      client->getAddress(), client->getId());
+                spdlog::info("Client timeout: {} (ID: {})",
+                             client->getAddress(), client->getId());
                 client->disconnect();
                 disconnectClient(client->getId());
             }
@@ -875,7 +776,6 @@ private:
 
     void cleanupResources() noexcept {
         try {
-            // Delete all clients
             {
                 std::unique_lock<std::shared_mutex> lock(clientsMutex_);
                 clients_.clear();
@@ -896,12 +796,10 @@ private:
             cleanupWinsock();
             serverPort_ = 0;
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Exception during resource cleanup: {}", e.what());
+            spdlog::error("Resource cleanup error: {}", e.what());
         }
     }
 };
-
-// SocketHub implementation
 
 SocketHub::SocketHub() : impl_(std::make_unique<SocketHubImpl>()) {}
 

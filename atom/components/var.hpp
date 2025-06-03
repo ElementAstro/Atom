@@ -22,13 +22,15 @@ Description: Variable Manager
 #include "emhash/hash_table8.hpp"
 #endif
 
+#include <spdlog/spdlog.h>
 #include "atom/error/exception.hpp"
-#include "atom/log/loguru.hpp"
+#include "atom/macro.hpp"
 #include "atom/meta/concept.hpp"
 #include "atom/type/trackable.hpp"
 
-#include "atom/macro.hpp"
-
+/**
+ * @brief Exception for variable type errors
+ */
 class VariableTypeError : public atom::error::Exception {
 public:
     using atom::error::Exception::Exception;
@@ -38,8 +40,21 @@ public:
     throw VariableTypeError(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, \
                             __VA_ARGS__)
 
+/**
+ * @brief Manages variables with tracking, validation, and serialization
+ * capabilities
+ */
 class VariableManager {
 public:
+    /**
+     * @brief Add a variable with initial value
+     * @tparam T Variable type (must be copy constructible)
+     * @param name Variable name
+     * @param initialValue Initial value
+     * @param description Variable description
+     * @param alias Variable alias
+     * @param group Variable group
+     */
     template <typename T>
         requires std::is_copy_constructible_v<T>
     void addVariable(const std::string& name, T initialValue,
@@ -47,6 +62,17 @@ public:
                      const std::string& alias = "",
                      const std::string& group = "");
 
+    /**
+     * @brief Add a variable bound to a member pointer
+     * @tparam T Variable type (must be copy constructible)
+     * @tparam C Class type
+     * @param name Variable name
+     * @param memberPointer Pointer to class member
+     * @param instance Class instance
+     * @param description Variable description
+     * @param alias Variable alias
+     * @param group Variable group
+     */
     template <typename T, typename C>
         requires std::is_copy_constructible_v<T>
     void addVariable(const std::string& name, T C::* memberPointer, C& instance,
@@ -54,43 +80,116 @@ public:
                      const std::string& alias = "",
                      const std::string& group = "");
 
+    /**
+     * @brief Set range constraints for arithmetic variables
+     * @tparam T Arithmetic type
+     * @param name Variable name
+     * @param min Minimum value
+     * @param max Maximum value
+     */
     template <Arithmetic T>
     void setRange(const std::string& name, T min, T max);
 
+    /**
+     * @brief Set string options for string variables
+     * @param name Variable name
+     * @param options Available string options
+     */
     void setStringOptions(const std::string& name,
                           std::span<const std::string> options);
 
+    /**
+     * @brief Get trackable variable by name
+     * @tparam T Variable type
+     * @param name Variable name or alias
+     * @return Shared pointer to trackable variable
+     */
     template <typename T>
     [[nodiscard]] auto getVariable(const std::string& name)
         -> std::shared_ptr<Trackable<T>>;
 
+    /**
+     * @brief Set variable value (C-string overload)
+     * @param name Variable name
+     * @param newValue New value
+     */
     void setValue(const std::string& name, const char* newValue);
 
+    /**
+     * @brief Set variable value
+     * @tparam T Variable type
+     * @param name Variable name
+     * @param newValue New value
+     */
     template <typename T>
     void setValue(const std::string& name, T newValue);
 
+    /**
+     * @brief Check if variable exists
+     * @param name Variable name or alias
+     * @return True if variable exists
+     */
     [[nodiscard]] bool has(const std::string& name) const;
 
+    /**
+     * @brief Get variable description
+     * @param name Variable name or alias
+     * @return Variable description
+     */
     [[nodiscard]] std::string getDescription(const std::string& name) const;
 
+    /**
+     * @brief Get variable alias or primary name
+     * @param name Variable name or alias
+     * @return Alias if name is primary, primary name if name is alias
+     */
     [[nodiscard]] std::string getAlias(const std::string& name) const;
 
+    /**
+     * @brief Get variable group
+     * @param name Variable name or alias
+     * @return Variable group
+     */
     [[nodiscard]] std::string getGroup(const std::string& name) const;
 
-    // New functionalities
+    /**
+     * @brief Remove variable by name or alias
+     * @param name Variable name or alias
+     */
     void removeVariable(const std::string& name);
+
+    /**
+     * @brief Get all primary variable names
+     * @return Vector of primary variable names
+     */
     [[nodiscard]] std::vector<std::string> getAllVariables() const;
 
-    // 批量操作方法
+    /**
+     * @brief Execute function for each variable
+     * @tparam Func Function type
+     * @param func Function to execute
+     */
     template <typename Func>
     void forEachVariable(Func&& func) const;
 
-    // 按组获取变量名称
+    /**
+     * @brief Get variables by group
+     * @param group Group name
+     * @return Vector of primary variable names in group
+     */
     [[nodiscard]] std::vector<std::string> getVariablesByGroup(
         const std::string& group) const;
 
-    // 导出/导入变量配置
+    /**
+     * @brief Export variables to JSON file
+     * @param filePath Output file path
+     */
     void exportVariablesToJson(const std::string& filePath) const;
+
+    /**
+     * @brief Import variables from JSON file
+     * @param filePath Input file path
+     */
     void importVariablesFromJson(const std::string& filePath);
 
 private:
@@ -130,29 +229,28 @@ void VariableManager::addVariable(const std::string& name, T initialValue,
                                   const std::string& description,
                                   const std::string& alias,
                                   const std::string& group) {
-    LOG_F(INFO, "Adding variable: {}", name);
+    spdlog::info("Adding variable: {}", name);
+
     if (variables_.contains(name)) {
-        LOG_F(WARNING, "Variable already exists: {}", name);
+        spdlog::warn("Variable already exists: {}", name);
         THROW_OBJ_ALREADY_EXIST(name);
     }
 
-    auto trackable = std::make_shared<Trackable<T>>(initialValue);
+    auto trackable = std::make_shared<Trackable<T>>(std::move(initialValue));
     variables_[name] = {trackable, description, alias, group};
 
-    // 添加到组映射
     if (!group.empty()) {
         groups_[group].insert(name);
     }
 
     if (!alias.empty()) {
-        LOG_F(INFO, "Adding alias '{}' for variable '{}'", alias, name);
+        spdlog::info("Adding alias '{}' for variable '{}'", alias, name);
         if (variables_.contains(alias)) {
-            LOG_F(WARNING,
-                  "Variable with name '{}' already exists, not adding alias",
-                  alias);
+            spdlog::warn(
+                "Variable with name '{}' already exists, not adding alias",
+                alias);
         } else {
             variables_[alias] = variables_[name];
-            // 也添加别名到组映射
             if (!group.empty()) {
                 groups_[group].insert(alias);
             }
@@ -166,9 +264,10 @@ void VariableManager::addVariable(const std::string& name, T C::* memberPointer,
                                   C& instance, const std::string& description,
                                   const std::string& alias,
                                   const std::string& group) {
-    LOG_F(INFO, "Adding member variable: {}", name);
+    spdlog::info("Adding member variable: {}", name);
+
     if (variables_.contains(name)) {
-        LOG_F(WARNING, "Variable already exists: {}", name);
+        spdlog::warn("Variable already exists: {}", name);
         THROW_OBJ_ALREADY_EXIST(name);
     }
 
@@ -179,20 +278,18 @@ void VariableManager::addVariable(const std::string& name, T C::* memberPointer,
 
     variables_[name] = {trackable, description, alias, group};
 
-    // 添加到组映射
     if (!group.empty()) {
         groups_[group].insert(name);
     }
 
     if (!alias.empty()) {
-        LOG_F(INFO, "Adding alias '{}' for variable '{}'", alias, name);
+        spdlog::info("Adding alias '{}' for variable '{}'", alias, name);
         if (variables_.contains(alias)) {
-            LOG_F(WARNING,
-                  "Variable with name '{}' already exists, not adding alias",
-                  alias);
+            spdlog::warn(
+                "Variable with name '{}' already exists, not adding alias",
+                alias);
         } else {
             variables_[alias] = variables_[name];
-            // 也添加别名到组映射
             if (!group.empty()) {
                 groups_[group].insert(alias);
             }
@@ -202,9 +299,10 @@ void VariableManager::addVariable(const std::string& name, T C::* memberPointer,
 
 template <Arithmetic T>
 void VariableManager::setRange(const std::string& name, T min, T max) {
-    LOG_F(INFO, "Setting range for variable: {} [{}, {}]", name, min, max);
+    spdlog::info("Setting range for variable: {} [{}, {}]", name, min, max);
+
     if (!variables_.contains(name)) {
-        LOG_F(WARNING, "Variable not found: {}", name);
+        spdlog::warn("Variable not found: {}", name);
         THROW_OBJ_NOT_EXIST(name);
     }
 
@@ -218,26 +316,28 @@ void VariableManager::setRange(const std::string& name, T min, T max) {
     auto trackableVar =
         std::any_cast<std::shared_ptr<Trackable<T>>>(variables_[name].variable);
 
-    trackableVar->subscribe(
-        [min, max]([[maybe_unused]] const T& oldValue, const T& newValue) {
-            if (newValue < min || newValue > max) {
-                THROW_INVALID_ARGUMENT("Value {} out of range [{}, {}]",
-                                       newValue, min, max);
-            }
-        });
+    trackableVar->subscribe([min, max, name]([[maybe_unused]] const T& oldValue,
+                                             const T& newValue) {
+        if (newValue < min || newValue > max) {
+            THROW_INVALID_ARGUMENT(
+                "Value {} out of range [{}, {}] for variable '{}'", newValue,
+                min, max, name);
+        }
+    });
 }
 
 template <typename T>
 auto VariableManager::getVariable(const std::string& name)
     -> std::shared_ptr<Trackable<T>> {
-    LOG_F(INFO, "Getting variable: {}", name);
-    auto it = variables_.find(name);
-    if (it != variables_.end()) {
+    spdlog::debug("Getting variable: {}", name);
+
+    if (auto it = variables_.find(name); it != variables_.end()) {
         try {
             return std::any_cast<std::shared_ptr<Trackable<T>>>(
                 it->second.variable);
         } catch (const std::bad_any_cast& e) {
-            LOG_F(ERROR, "Type mismatch for variable '{}': {}", name, e.what());
+            spdlog::error("Type mismatch for variable '{}': {}", name,
+                          e.what());
             THROW_TYPE_ERROR("Type mismatch for variable '{}': {}", name,
                              e.what());
         }
@@ -249,21 +349,22 @@ auto VariableManager::getVariable(const std::string& name)
                 return std::any_cast<std::shared_ptr<Trackable<T>>>(
                     value.variable);
             } catch (const std::bad_any_cast& e) {
-                LOG_F(ERROR, "Type mismatch for variable alias '{}': {}", name,
-                      e.what());
+                spdlog::error("Type mismatch for variable alias '{}': {}", name,
+                              e.what());
                 THROW_TYPE_ERROR("Type mismatch for variable alias '{}': {}",
                                  name, e.what());
             }
         }
     }
 
-    LOG_F(ERROR, "Variable not found: {}", name);
+    spdlog::error("Variable not found: {}", name);
     THROW_OBJ_NOT_EXIST(name);
 }
 
 template <typename T>
 void VariableManager::setValue(const std::string& name, T newValue) {
-    LOG_F(INFO, "Setting value for variable: {}", name);
+    spdlog::debug("Setting value for variable: {}", name);
+
     auto var = getVariable<T>(name);
 
     auto rangeIt = ranges_.find(name);
@@ -276,16 +377,16 @@ void VariableManager::setValue(const std::string& name, T newValue) {
 
             if (auto* rangePtr = std::any_cast<Range>(&rangeIt->second)) {
                 if (newValue < rangePtr->min || newValue > rangePtr->max) {
-                    LOG_F(ERROR,
-                          "Value {} out of range [{}, {}] for variable '{}'",
-                          newValue, rangePtr->min, rangePtr->max, name);
+                    spdlog::error(
+                        "Value {} out of range [{}, {}] for variable '{}'",
+                        newValue, rangePtr->min, rangePtr->max, name);
                     THROW_INVALID_ARGUMENT(
                         "Value {} out of range [{}, {}] for variable '{}'",
                         newValue, rangePtr->min, rangePtr->max, name);
                 }
             }
         } catch (const std::bad_any_cast&) {
-            LOG_F(WARNING, "Failed to cast range for variable '{}'", name);
+            spdlog::warn("Failed to cast range for variable '{}'", name);
         }
     }
 
@@ -295,15 +396,15 @@ void VariableManager::setValue(const std::string& name, T newValue) {
             const auto& options = optionsIt->second;
             if (std::find(options.begin(), options.end(), newValue) ==
                 options.end()) {
-                LOG_F(ERROR, "Invalid option '{}' for variable '{}'", newValue,
-                      name);
+                spdlog::error("Invalid option '{}' for variable '{}'", newValue,
+                              name);
                 THROW_INVALID_ARGUMENT("Invalid option '{}' for variable '{}'",
                                        newValue, name);
             }
         }
     }
 
-    *var = newValue;
+    *var = std::move(newValue);
 }
 
 template <typename Func>

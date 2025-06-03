@@ -4,14 +4,6 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2023-10-27
-
-Description: A XML reader class using tinyxml2.
-
-**************************************************/
-
 #ifndef ATOM_UTILS_XML_HPP
 #define ATOM_UTILS_XML_HPP
 
@@ -30,11 +22,9 @@ Description: A XML reader class using tinyxml2.
 
 namespace atom::utils {
 
-// Concept to ensure string-like types
 template <typename T>
 concept StringLike = std::convertible_to<T, std::string_view>;
 
-// Result type that can hold a value or an error
 template <typename T>
 using Result = std::variant<T, std::string>;
 
@@ -101,31 +91,6 @@ public:
                          std::string_view childElementName) const -> bool;
 
     /**
-     * @brief Returns the text value of the specified child element of the
-     * specified parent element.
-     *
-     * @param parentElementName The name of the parent element.
-     * @param childElementName The name of the child element.
-     * @return The text value of the child element or an error message.
-     */
-    auto getChildElementText(std::string_view parentElementName,
-                             std::string_view childElementName) const
-        -> Result<std::string>;
-
-    /**
-     * @brief Returns the value of the specified attribute of the specified
-     * child element of the specified parent element.
-     *
-     * @param parentElementName The name of the parent element.
-     * @param childElementName The name of the child element.
-     * @param attributeName The name of the attribute.
-     * @return The value of the attribute or an error message.
-     */
-    auto getChildElementAttributeValue(
-        std::string_view parentElementName, std::string_view childElementName,
-        std::string_view attributeName) const -> Result<std::string>;
-
-    /**
      * @brief Returns the text value of the element specified by a given path.
      *
      * @param path The path to the element.
@@ -157,31 +122,6 @@ public:
                                std::string_view childElementName) const -> bool;
 
     /**
-     * @brief Returns the text value of the child element with the specified
-     * name of the element specified by a given path.
-     *
-     * @param path The path to the parent element.
-     * @param childElementName The name of the child element.
-     * @return The text value of the child element or an error message.
-     */
-    auto getChildElementTextByPath(std::string_view path,
-                                   std::string_view childElementName) const
-        -> Result<std::string>;
-
-    /**
-     * @brief Returns the value of the specified attribute of the child element
-     * with the specified name of the element specified by a given path.
-     *
-     * @param path The path to the parent element.
-     * @param childElementName The name of the child element.
-     * @param attributeName The name of the attribute.
-     * @return The value of the attribute or an error message.
-     */
-    auto getChildElementAttributeValueByPath(
-        std::string_view path, std::string_view childElementName,
-        std::string_view attributeName) const -> Result<std::string>;
-
-    /**
      * @brief Saves the XML document to the specified file.
      *
      * @param filePath The path to save the XML document to.
@@ -200,24 +140,12 @@ public:
 
 private:
     mutable tinyxml2::XMLDocument doc_;
-    mutable std::mutex mutex_;  // For thread safety
+    mutable std::mutex mutex_;
 
-    /**
-     * @brief Returns a pointer to the element specified by a given path.
-     *
-     * @param path The path to the element.
-     * @return A pointer to the element or nullptr if not found.
-     */
     auto getElementByPath(std::string_view path) const -> tinyxml2::XMLElement*;
-
-    /**
-     * @brief Validates that the XML path is well-formed.
-     *
-     * @param path The path to validate.
-     * @return true if the path is valid, false otherwise.
-     */
     static auto isValidPath(std::string_view path) -> bool;
 };
+
 }  // namespace atom::utils
 
 #endif

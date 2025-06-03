@@ -12,7 +12,9 @@
 
 namespace atom::connection {
 
-// Error codes for UDP operations
+/**
+ * @brief Error codes for UDP operations
+ */
 enum class UdpError {
     SocketCreationFailed,
     BindFailed,
@@ -24,7 +26,6 @@ enum class UdpError {
 };
 
 /**
- * @concept MessageHandlerCallable
  * @brief Concept that defines the requirements for a message handler function.
  */
 template <typename T>
@@ -34,8 +35,11 @@ concept MessageHandlerCallable =
     };
 
 /**
- * @class UdpSocketHub
- * @brief Represents a hub for managing UDP sockets and message handling.
+ * @brief A hub for managing UDP sockets and message handling.
+ *
+ * This class provides a high-level interface for UDP socket operations,
+ * including listening for incoming messages and sending messages to specific
+ * addresses and ports.
  */
 class UdpSocketHub {
 public:
@@ -49,7 +53,7 @@ public:
         std::function<void(const std::string&, const std::string&, int)>;
 
     /**
-     * @brief Constructor.
+     * @brief Default constructor.
      */
     UdpSocketHub();
 
@@ -122,8 +126,8 @@ private:
     void addMessageHandlerImpl(MessageHandler handler);
     void removeMessageHandlerImpl(MessageHandler handler);
 
-    class Impl; /**< Forward declaration of the implementation class. */
-    std::unique_ptr<Impl> impl_; /**< Pointer to the implementation object. */
+    class Impl;
+    std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace atom::connection

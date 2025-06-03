@@ -36,8 +36,8 @@ Description: Compressor using ZLib and MiniZip-ng
 #endif
 
 #include "atom/containers/high_performance.hpp"
-#include "atom/log/loguru.hpp"
 #include "atom/type/json.hpp"
+#include <spdlog/spdlog.h>
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
@@ -45,9 +45,23 @@ using json = nlohmann::json;
 namespace {
 constexpr size_t DEFAULT_CHUNK_SIZE = 16384;
 
+// Helper function to calculate compression ratio
+inline double calculateCompressionRatio(size_t compressed_size, size_t original_size) {
+    if (original_size > 0) {
+        return static_cast<double>(compressed_size) / static_cast<double>(original_size);
+    }
+    return 0.0;
+}
+
+// Helper function to get compression ratio percentage for display
+inline double getCompressionPercentage(double compression_ratio) {
+    return (compression_ratio > 0.0) ? (1.0 - compression_ratio) * 100.0 : 0.0;
+}
+
 class ZStreamGuard {
     z_stream stream_;
     bool initialized_{false};
+    bool is_inflate_{false};
 
 public:
     ZStreamGuard() noexcept {
@@ -58,28 +72,32 @@ public:
 
     ~ZStreamGuard() {
         if (initialized_) {
-            deflateEnd(&stream_);
+            if (is_inflate_) {
+                inflateEnd(&stream_);
+            } else {
+                deflateEnd(&stream_);
+            }
         }
     }
 
     // Initialize for compression
-    bool initDeflate(int level) {
-        int ret = deflateInit(&stream_, level);
+    bool initDeflate(int level, int windowBits = 7) {
+        int ret = deflateInit2(&stream_, level, Z_DEFLATED, windowBits, 
+                              8, Z_DEFAULT_STRATEGY);
         if (ret == Z_OK) {
             initialized_ = true;
+            is_inflate_ = false;
             return true;
         }
         return false;
     }
 
     // Initialize for decompression
-    bool initInflate(int windowBits = 15) {
+    bool initInflate(int windowBits = 7) {
         int ret = inflateInit2(&stream_, windowBits);
         if (ret == Z_OK) {
             initialized_ = true;
-            // NOTE: Destructor calls deflateEnd. This is incorrect if
-            // initInflate was called. Consider separate guards or logic in
-            // destructor.
+            is_inflate_ = true;
             return true;
         }
         return false;
@@ -88,10 +106,11 @@ public:
     // End the stream explicitly if needed before destruction
     void endStream() {
         if (initialized_) {
-            // Decide based on initialization type or add separate methods
-            // Assuming deflate for now
-            // If used for inflate, this needs adjustment.
-            deflateEnd(&stream_);
+            if (is_inflate_) {
+                inflateEnd(&stream_);
+            } else {
+                deflateEnd(&stream_);
+            }
             initialized_ = false;
         }
     }
@@ -254,7 +273,7 @@ CompressionResult compressFile(std::string_view file_path_sv,
         }
         result.success = true;
 
-        LOG_F(INFO, "{} -> {} (ratio: {:.2f}%)", input_path.string(),
+        spdlog::info("{} -> {} (ratio: {:.2f}%)", input_path.string(),
               output_path.string(),
               (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
                                         : 0.0));
@@ -262,7 +281,7 @@ CompressionResult compressFile(std::string_view file_path_sv,
     } catch (const std::exception& e) {
         result.error_message =
             String("Exception during compression: ") + e.what();
-        LOG_F(ERROR, "{}", result.error_message);
+        spdlog::error("{}", result.error_message);
     }
 
     return result;
@@ -354,7 +373,7 @@ CompressionResult decompressFile(
         }
         result.success = true;
 
-        LOG_F(INFO, "Successfully decompressed {} -> {} (ratio: {:.2f}%)",
+        spdlog::info("Successfully decompressed {} -> {} (ratio: {:.2f}%)",
               input_path.string(), output_path.string(),
               (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
                                         : 0.0));
@@ -362,7 +381,7 @@ CompressionResult decompressFile(
     } catch (const std::exception& e) {
         result.error_message =
             String("Exception during decompression: ") + e.what();
-        LOG_F(ERROR, "{}", result.error_message);
+        spdlog::error("{}", result.error_message);
     }
 
     return result;
@@ -448,7 +467,7 @@ CompressionResult compressFolder(std::string_view folder_path_sv,
                     zi.tmz_date.tm_sec = tm_local->tm_sec;
                 }
             } catch (...) {
-                LOG_F(WARNING, "Could not get valid timestamp for file: {}",
+                spdlog::warn("Could not get valid timestamp for file: {}",
                       file_path.string());
             }
 
@@ -551,7 +570,7 @@ CompressionResult compressFolder(std::string_view folder_path_sv,
         }
         result.success = true;
 
-        LOG_F(INFO, "Successfully compressed folder {} -> {} (ratio: {:.2f}%)",
+        spdlog::info("Successfully compressed folder {} -> {} (ratio: {:.2f}%)",
               input_dir.string(), zip_fs_path.string(),
               (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
                                         : 0.0));
@@ -559,7 +578,7 @@ CompressionResult compressFolder(std::string_view folder_path_sv,
     } catch (const std::exception& e) {
         result.error_message =
             String("Exception during folder compression: ") + e.what();
-        LOG_F(ERROR, "{}", result.error_message);
+        spdlog::error("{}", result.error_message);
     }
 
     return result;
@@ -616,7 +635,7 @@ CompressionResult extractZip(std::string_view zip_path_sv,
             // Handle case where zip might be empty but not necessarily an error
             if (gi.number_entry == 0) {
                 result.success = true;
-                LOG_F(INFO, "ZIP file is empty: {}", zip_fs_path.string());
+                spdlog::info("ZIP file is empty: {}", zip_fs_path.string());
                 return result;  // unz_guard handles closing
             }
             result.error_message = "Failed to go to first file in ZIP";
@@ -711,7 +730,7 @@ CompressionResult extractZip(std::string_view zip_path_sv,
 
             // Close current file in ZIP
             if (unzCloseCurrentFile(unz) != UNZ_OK) {
-                LOG_F(WARNING, "Failed to close current file in ZIP: {}",
+                spdlog::warn("Failed to close current file in ZIP: {}",
                       filename);
                 // Continue to next file? Or treat as error? Let's log and
                 // continue for now.
@@ -721,7 +740,7 @@ CompressionResult extractZip(std::string_view zip_path_sv,
             // This requires converting unz_file_info64 time to
             // fs::file_time_type
 
-            LOG_F(INFO, "Extracted: {}", filename);
+            spdlog::info("Extracted: {}", filename);
 
         } while (unzGoToNextFile(unz) == UNZ_OK);
 
@@ -738,13 +757,13 @@ CompressionResult extractZip(std::string_view zip_path_sv,
             result.compression_ratio = 0.0;
         }
 
-        LOG_F(INFO, "Successfully extracted {} files from {} -> {}",
+        spdlog::info("Successfully extracted {} files from {} -> {}",
               gi.number_entry, zip_fs_path.string(), output_dir.string());
 
     } catch (const std::exception& e) {
         result.error_message =
             String("Exception during extraction: ") + e.what();
-        LOG_F(ERROR, "{}", result.error_message);
+        spdlog::error("{}", result.error_message);
         // unz_guard handles closing if unz was opened
     }
 
@@ -799,7 +818,7 @@ CompressionResult createZip(std::string_view source_path_sv,
                     zi.tmz_date.tm_sec = tm_local->tm_sec;
                 }
             } catch (...) {
-                LOG_F(WARNING, "Could not get valid timestamp for file: {}",
+                spdlog::warn("Could not get valid timestamp for file: {}",
                       source_path.string());
             }
 
@@ -888,14 +907,14 @@ CompressionResult createZip(std::string_view source_path_sv,
                 result.compression_ratio = 0.0;
             }
             result.success = true;
-            LOG_F(INFO, "Successfully created ZIP {} from file {}",
+            spdlog::info("Successfully created ZIP {} from file {}",
                   zip_fs_path.string(), source_path.string());
 
         } catch (const std::exception& e) {
             result.error_message =
                 String("Exception during single file zip creation: ") +
                 e.what();
-            LOG_F(ERROR, "{}", result.error_message);
+            spdlog::error("{}", result.error_message);
             // zip_file unique_ptr handles closing if zip_file_handle was opened
         }
         return result;
@@ -914,7 +933,7 @@ Vector<ZipFileInfo> listZipContents(std::string_view zip_path_sv) {
         // Open ZIP file
         unz = unzOpen64(zip_fs_path.string().c_str());
         if (!unz) {
-            LOG_F(ERROR, "Failed to open ZIP file: {}", zip_fs_path.string());
+            spdlog::error("Failed to open ZIP file: {}", zip_fs_path.string());
             return result_vec;
         }
         std::unique_ptr<void, UnzipCloser> unz_guard(unz);
@@ -922,7 +941,7 @@ Vector<ZipFileInfo> listZipContents(std::string_view zip_path_sv) {
         // Get global info
         unz_global_info64 gi;
         if (unzGetGlobalInfo64(unz, &gi) != UNZ_OK) {
-            LOG_F(ERROR, "Failed to get ZIP file info for {}",
+            spdlog::error("Failed to get ZIP file info for {}",
                   zip_fs_path.string());
             return result_vec;
         }
@@ -934,7 +953,7 @@ Vector<ZipFileInfo> listZipContents(std::string_view zip_path_sv) {
         if (unzGoToFirstFile(unz) != UNZ_OK) {
             if (gi.number_entry == 0)
                 return result_vec;  // Empty zip is ok
-            LOG_F(ERROR, "Failed to go to first file in ZIP: {}",
+            spdlog::error("Failed to go to first file in ZIP: {}",
                   zip_fs_path.string());
             return result_vec;  // unz_guard handles closing
         }
@@ -947,7 +966,7 @@ Vector<ZipFileInfo> listZipContents(std::string_view zip_path_sv) {
             if (unzGetCurrentFileInfo64(unz, &file_info, filename_c,
                                         sizeof(filename_c), nullptr, 0, nullptr,
                                         0) != UNZ_OK) {
-                LOG_F(ERROR, "Failed to get file info in ZIP: {}",
+                spdlog::error("Failed to get file info in ZIP: {}",
                       zip_fs_path.string());
                 continue;  // Skip this entry
             }
@@ -980,11 +999,11 @@ Vector<ZipFileInfo> listZipContents(std::string_view zip_path_sv) {
 
         } while (unzGoToNextFile(unz) == UNZ_OK);
 
-        LOG_F(INFO, "Listed {} files in ZIP: {}", result_vec.size(),
+        spdlog::info("Listed {} files in ZIP: {}", result_vec.size(),
               zip_fs_path.string());
 
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in listZipContents: {}", e.what());
+        spdlog::error("Exception in listZipContents: {}", e.what());
         result_vec.clear();  // Clear results on exception
         // unz_guard handles closing if unz was opened
     }
@@ -1000,7 +1019,7 @@ bool fileExistsInZip(std::string_view zip_path_sv,
         // Open ZIP file
         unz = unzOpen64(zip_fs_path.string().c_str());
         if (!unz) {
-            LOG_F(ERROR, "Failed to open ZIP file: {}", zip_fs_path.string());
+            spdlog::error("Failed to open ZIP file: {}", zip_fs_path.string());
             return false;
         }
         std::unique_ptr<void, UnzipCloser> unz_guard(unz);
@@ -1011,7 +1030,7 @@ bool fileExistsInZip(std::string_view zip_path_sv,
         // docs)
         if (unzLocateFile(unz, file_path_sv.data(), 2) != UNZ_OK) {
             // File not found is not necessarily an error, just return false
-            // LOG_F(INFO, "File not found in ZIP: {}", file_path_sv.data());
+            // File not found in ZIP
             return false;  // unz_guard handles closing
         }
 
@@ -1019,7 +1038,7 @@ bool fileExistsInZip(std::string_view zip_path_sv,
         return true;  // unz_guard handles closing
 
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in fileExistsInZip: {}", e.what());
+        spdlog::error("Exception in fileExistsInZip: {}", e.what());
         // unz_guard handles closing if unz was opened
         return false;
     }
@@ -1107,7 +1126,7 @@ CompressionResult removeFromZip(std::string_view zip_path_sv,
             // Skip the file to be removed
             // Need exact match, consider case sensitivity and path separators
             if (current_filename == String(file_path_to_remove_sv)) {
-                LOG_F(INFO, "Skipping file for removal: {}",
+                spdlog::info("Skipping file for removal: {}",
                       current_filename.c_str());
                 continue;
             }
@@ -1205,7 +1224,7 @@ CompressionResult removeFromZip(std::string_view zip_path_sv,
 
             // Close current file entries
             if (unzCloseCurrentFile(src_zip_handle) != UNZ_OK) {
-                LOG_F(WARNING, "Failed to close current file in source ZIP: {}",
+                spdlog::warn("Failed to close current file in source ZIP: {}",
                       current_filename.c_str());
                 // Continue?
             }
@@ -1227,13 +1246,13 @@ CompressionResult removeFromZip(std::string_view zip_path_sv,
         fs::rename(temp_zip_fs_path, zip_fs_path);  // Rename temp to original
 
         result.success = true;
-        LOG_F(INFO, "Successfully removed {} from ZIP file {}",
+        spdlog::info("Successfully removed {} from ZIP file {}",
               file_path_to_remove_sv.data(), zip_path_sv.data());
 
     } catch (const std::exception& e) {
         result.error_message =
             String("Exception during file removal from ZIP: ") + e.what();
-        LOG_F(ERROR, "{}", result.error_message.c_str());
+        spdlog::error("{}", result.error_message.c_str());
         // Guards handle closing
         // Clean up temp file if it exists
         if (fs::exists(temp_zip_fs_path)) {
@@ -1247,7 +1266,7 @@ CompressionResult removeFromZip(std::string_view zip_path_sv,
 std::optional<size_t> getZipSize(std::string_view zip_path_sv) {
     try {
         if (zip_path_sv.empty()) {
-            LOG_F(ERROR, "Empty ZIP path provided to getZipSize");
+            spdlog::error("Empty ZIP path provided to getZipSize");
             return std::nullopt;
         }
 
@@ -1262,16 +1281,16 @@ std::optional<size_t> getZipSize(std::string_view zip_path_sv) {
         std::error_code ec;
         size_t size = fs::file_size(zip_fs_path, ec);
         if (ec) {
-            LOG_F(ERROR, "Failed to get file size for {}: {}",
+            spdlog::error("Failed to get file size for {}: {}",
                   zip_fs_path.string().c_str(), ec.message().c_str());
             return std::nullopt;
         }
-        // LOG_F(INFO, "ZIP file size: {} bytes", size); // Optional logging
+        // ZIP file size calculation complete
         return size;
 
     } catch (const std::exception& e) {
         // Catch potential filesystem exceptions
-        LOG_F(ERROR, "Exception in getZipSize for {}: {}", zip_path_sv.data(),
+        spdlog::error("Exception in getZipSize for {}: {}", zip_path_sv.data(),
               e.what());
         return std::nullopt;
     }
@@ -1532,7 +1551,7 @@ CompressionResult compressFileInSlices(std::string_view file_path_sv,
         manifest_file.close();
 
         result.success = true;
-        LOG_F(INFO, "Successfully created {} slices for {} (ratio: {:.2f}%)",
+        spdlog::info("Successfully created {} slices for {} (ratio: {:.2f}%)",
               num_slices, file_path_sv.data(),
               (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
                                         : 0.0));
@@ -1540,7 +1559,7 @@ CompressionResult compressFileInSlices(std::string_view file_path_sv,
     } catch (const std::exception& e) {
         result.error_message =
             String("Exception in slice compression: ") + e.what();
-        LOG_F(ERROR, "{}", result.error_message.c_str());
+        spdlog::error("{}", result.error_message.c_str());
         // Consider cleanup
     }
 
@@ -1750,7 +1769,7 @@ CompressionResult mergeCompressedSlices(
         }
         result.success = true;
 
-        LOG_F(INFO, "Successfully merged {} slices into {} (ratio: {:.2f}%)",
+        spdlog::info("Successfully merged {} slices into {} (ratio: {:.2f}%)",
               slice_files.size(), output_path_sv.data(),
               (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
                                         : 0.0));
@@ -1758,7 +1777,7 @@ CompressionResult mergeCompressedSlices(
     } catch (const std::exception& e) {
         result.error_message =
             String("Exception in slice merging: ") + e.what();
-        LOG_F(ERROR, "{}", result.error_message.c_str());
+        spdlog::error("{}", result.error_message.c_str());
         // Clean up output file?
         try {
             fs::remove(fs::path(output_path_sv));
@@ -1892,7 +1911,7 @@ CompressionResult createBackup(std::string_view source_path_sv,
                 result.compressed_size =
                     result.original_size;  // No compression
                 result.compression_ratio = 1.0;
-                LOG_F(INFO,
+                spdlog::info(
                       "Successfully created uncompressed backup: {} -> {}",
                       source_path_sv.data(), backup_path_sv.data());
             }
@@ -1902,7 +1921,7 @@ CompressionResult createBackup(std::string_view source_path_sv,
         result.success = false;
         result.error_message =
             String("Exception during backup creation: ") + e.what();
-        LOG_F(ERROR, "{}", result.error_message.c_str());
+        spdlog::error("{}", result.error_message.c_str());
     }
     return result;
 }
@@ -1987,8 +2006,7 @@ CompressionResult restoreFromBackup(
                 result.original_size =
                     result.compressed_size;  // No compression
                 result.compression_ratio = 1.0;
-                LOG_F(
-                    INFO,
+                spdlog::info(
                     "Successfully restored from uncompressed backup: {} -> {}",
                     backup_path_sv.data(), restore_path_sv.data());
             }
@@ -1998,7 +2016,7 @@ CompressionResult restoreFromBackup(
         result.success = false;
         result.error_message =
             String("Exception during backup restoration: ") + e.what();
-        LOG_F(ERROR, "{}", result.error_message.c_str());
+        spdlog::error("{}", result.error_message.c_str());
     }
     return result;
 }
@@ -2037,17 +2055,38 @@ std::pair<CompressionResult, Vector<unsigned char>> compressData(
         compressed_data.resize(
             compressed_bound);  // Resize Vector<unsigned char>
 
-        // Compress data using zlib's compress2
-        uLongf actual_compressed_size =
-            compressed_bound;  // Pass size of buffer
-        int ret = compress2(
-            reinterpret_cast<Bytef*>(
-                compressed_data.data()),  // Pointer to buffer
-            &actual_compressed_size,  // Pointer to store actual compressed size
-            reinterpret_cast<const Bytef*>(data_ptr),  // Pointer to input data
-            data_size,     // Input data size in bytes
-            options.level  // Compression level
-        );
+        // Use advanced deflate with specified window_bits instead of simple compress2
+        z_stream zs{};
+        zs.zalloc = Z_NULL;
+        zs.zfree = Z_NULL;
+        zs.opaque = Z_NULL;
+        zs.avail_in = static_cast<uInt>(data_size);
+        zs.next_in = const_cast<Bytef*>(reinterpret_cast<const Bytef*>(data_ptr));
+        zs.avail_out = static_cast<uInt>(compressed_bound);
+        zs.next_out = reinterpret_cast<Bytef*>(compressed_data.data());
+        
+        // Initialize deflate with window_bits from options
+        int ret = deflateInit2(&zs, options.level, Z_DEFLATED, options.window_bits, 
+                              8, Z_DEFAULT_STRATEGY);
+        if (ret != Z_OK) {
+            compression_result.error_message = getZlibErrorMessage(ret);
+            return result_pair;
+        }
+        
+        // Use RAII for zstream cleanup
+        std::unique_ptr<z_stream, decltype(&deflateEnd)> deflate_guard(&zs, deflateEnd);
+        
+        // Perform compression in one step
+        ret = deflate(&zs, Z_FINISH);
+        
+        if (ret != Z_STREAM_END) {
+            compression_result.error_message = 
+                String("Compression failed: ") + getZlibErrorMessage(ret);
+            return result_pair;
+        }
+        
+        // Use actual bytes written
+        uLongf actual_compressed_size = zs.total_out;
 
         if (ret != Z_OK) {
             compression_result.error_message =
@@ -2059,27 +2098,20 @@ std::pair<CompressionResult, Vector<unsigned char>> compressData(
         // Resize buffer to actual compressed size
         compressed_data.resize(actual_compressed_size);
         compression_result.compressed_size = actual_compressed_size;
-        if (compression_result.original_size > 0) {
-            compression_result.compression_ratio =
-                static_cast<double>(actual_compressed_size) /
-                static_cast<double>(compression_result.original_size);
-        } else {
-            compression_result.compression_ratio = 0.0;
-        }
+        compression_result.compression_ratio = calculateCompressionRatio(
+            actual_compressed_size, compression_result.original_size);
 
         compression_result.success = true;
 
-        LOG_F(INFO,
+        spdlog::info(
               "Successfully compressed {} bytes to {} bytes (ratio: {:.2f}%)",
               compression_result.original_size, actual_compressed_size,
-              (compression_result.original_size > 0
-                   ? (1.0 - compression_result.compression_ratio) * 100
-                   : 0.0));
+              getCompressionPercentage(compression_result.compression_ratio));
 
     } catch (const std::exception& e) {
         compression_result.error_message =
             String("Exception during data compression: ") + e.what();
-        LOG_F(ERROR, "{}", compression_result.error_message.c_str());
+        spdlog::error("{}", compression_result.error_message.c_str());
         compressed_data.clear();  // Ensure data is cleared on exception
     }
 
@@ -2112,11 +2144,44 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
 
         compression_result.compressed_size = compressed_data_size;
 
-        // Initial buffer size estimation
-        size_t buffer_size =
-            (expected_size > 0) ? expected_size : compressed_data_size * 4;
-        if (buffer_size == 0)
-            buffer_size = 1024;  // Minimum buffer size
+        // Optimized buffer size estimation
+        // For small inputs, allocate a minimum buffer
+        // For larger inputs with known expected size, use that
+        // For larger inputs with unknown size, use a multiplier based on compression type detection
+        size_t buffer_size = 0;
+        if (expected_size > 0) {
+            // If we know the expected size, allocate exactly that
+            buffer_size = expected_size;
+        } else {
+            // Try to detect compression type from header bytes for better buffer estimation
+            if (compressed_data_size >= 2) {
+                const unsigned char* header = reinterpret_cast<const unsigned char*>(compressed_data_ptr);
+                
+                // Check for gzip magic signature (0x1F, 0x8B)
+                if (header[0] == 0x1F && header[1] == 0x8B) {
+                    // Gzip typically has 2:1 to 10:1 compression ratio
+                    buffer_size = compressed_data_size * 5;
+                }
+                // Check for zlib header (first byte bits 0-3 is 8 for deflate, bits 4-7 for window size)
+                else if ((header[0] & 0x0F) == 0x08) {
+                    // Zlib typically has similar compression ratio to gzip
+                    buffer_size = compressed_data_size * 5;
+                }
+                else {
+                    // Unknown format, use conservative 4:1 ratio
+                    buffer_size = compressed_data_size * 4;
+                }
+            } else {
+                // Very small input, allocate a modest buffer
+                buffer_size = 4096;
+            }
+        }
+        
+        // Ensure minimum buffer size
+        if (buffer_size < 1024) {
+            buffer_size = 1024;
+        }
+        
         decompressed_data.resize(buffer_size);
 
         // Use z_stream for more control, especially for potential resizing
@@ -2130,10 +2195,27 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
             reinterpret_cast<const Bytef*>(compressed_data_ptr));
 
         // Initialize for decompression (inflate)
-        // windowBits = 15 (auto-detect header), add 32 for gzip, add 16 for
-        // zlib Use 15 + 32 for gzip/zlib auto-detection Use -15 for raw deflate
-        // if no header expected
-        int windowBits = 15 + 32;  // Auto detect zlib/gzip header
+        // Use window_bits from options (context7 = 7)
+        // For gzip/zlib auto-detection, add 32 (15+32)
+        // For raw deflate with no header, use negative value (-15)
+        int windowBits = options.window_bits;
+        
+        // Auto-detect based on header bytes if possible
+        if (compressed_data_size >= 2) {
+            const unsigned char* header = reinterpret_cast<const unsigned char*>(compressed_data_ptr);
+            // Check for gzip magic signature (0x1F, 0x8B)
+            if (header[0] == 0x1F && header[1] == 0x8B) {
+                // Need at least 15 or add 16 for gzip
+                windowBits = std::max(15, abs(windowBits)) + 16;
+            }
+            // Check for zlib header
+            else if ((header[0] & 0x0F) == 0x08) {
+                // Use absolute value to ensure positive window bits for zlib
+                windowBits = std::max(8, abs(windowBits));
+            }
+            // If not recognized, use as-is (for raw deflate)
+        }
+        
         int ret = inflateInit2(&zs, windowBits);
         if (ret != Z_OK) {
             compression_result.error_message = getZlibErrorMessage(ret);
@@ -2152,15 +2234,39 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
                                                    zs.total_out);
 
             if (zs.avail_out == 0) {
-                // Buffer is full, resize it
+                // Buffer is full, resize it with an optimized growth strategy
                 size_t old_size = decompressed_data.size();
-                size_t new_size = old_size * 2;  // Double the buffer size
-                if (new_size <= old_size) {      // Check for overflow
+                
+                // Smart growth strategy:
+                // - For small buffers (<64KB): double the size
+                // - For medium buffers (64KB-1MB): grow by 50%
+                // - For large buffers (>1MB): grow by 25% or a fixed chunk (1MB), whichever is larger
+                size_t new_size;
+                if (old_size < 65536) {
+                    new_size = old_size * 2;
+                } else if (old_size < 1048576) {
+                    new_size = old_size + (old_size / 2);
+                } else {
+                    size_t increment = std::max(old_size / 4, size_t(1048576));
+                    new_size = old_size + increment;
+                }
+                
+                // Check for overflow
+                if (new_size <= old_size) {
                     compression_result.error_message =
                         "Decompression buffer size overflow";
                     return result_pair;  // inflate_guard handles cleanup
                 }
-                decompressed_data.resize(new_size);
+                
+                // Allocate new buffer
+                try {
+                    decompressed_data.resize(new_size);
+                } catch (const std::bad_alloc&) {
+                    compression_result.error_message =
+                        "Memory allocation failed during decompression";
+                    return result_pair;
+                }
+                
                 // Update stream pointers after resize
                 zs.avail_out =
                     static_cast<uInt>(decompressed_data.size() - zs.total_out);
@@ -2212,8 +2318,7 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
             // ok if the buffer was just right, but often indicates truncated
             // data if the original size wasn't known. Let's consider it
             // successful if input is consumed and no error occurred.
-            LOG_F(
-                WARNING,
+            spdlog::warn(
                 "Decompression finished with code {} (Z_STREAM_END is {}), but "
                 "all input consumed.",
                 inflate_ret, Z_STREAM_END);
@@ -2224,27 +2329,20 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
         decompressed_data.resize(actual_decompressed_size);
 
         compression_result.original_size = actual_decompressed_size;
-        if (compression_result.original_size > 0) {
-            compression_result.compression_ratio =
-                static_cast<double>(compression_result.compressed_size) /
-                static_cast<double>(compression_result.original_size);
-        } else {
-            compression_result.compression_ratio = 0.0;
-        }
+        compression_result.compression_ratio = calculateCompressionRatio(
+            compression_result.compressed_size, actual_decompressed_size);
 
         compression_result.success = true;
 
-        LOG_F(INFO,
+        spdlog::info(
               "Successfully decompressed {} bytes to {} bytes (ratio: {:.2f}%)",
               compression_result.compressed_size, actual_decompressed_size,
-              (compression_result.original_size > 0
-                   ? (1.0 - compression_result.compression_ratio) * 100
-                   : 0.0));
+              getCompressionPercentage(compression_result.compression_ratio));
 
     } catch (const std::exception& e) {
         compression_result.error_message =
             String("Exception during data decompression: ") + e.what();
-        LOG_F(ERROR, "{}", compression_result.error_message.c_str());
+        spdlog::error("{}", compression_result.error_message.c_str());
         decompressed_data.clear();
     }
 

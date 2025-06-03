@@ -4,8 +4,8 @@
 #include <cassert>
 #include <vector>
 
+#include <spdlog/spdlog.h>
 #include "atom/error/exception.hpp"
-#include "atom/log/loguru.hpp"
 
 #ifdef ATOM_USE_BOOST
 #include <boost/multiprecision/cpp_int.hpp>
@@ -18,7 +18,7 @@ BigNumber::BigNumber(std::string_view number) {
         validateString(number);
         initFromString(number);
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in BigNumber constructor: {}", e.what());
+        spdlog::error("Exception in BigNumber constructor: {}", e.what());
         throw;
     }
 }
@@ -55,7 +55,9 @@ void BigNumber::initFromString(std::string_view str) {
         return;
     }
 
+    digits_.clear();
     digits_.reserve(str.size() - nonZeroPos);
+
     for (auto it = str.rbegin(); it != str.rend() - nonZeroPos; ++it) {
         if (*it != '-') {
             digits_.push_back(static_cast<uint8_t>(*it - '0'));
@@ -88,9 +90,23 @@ auto BigNumber::setString(std::string_view newStr) -> BigNumber& {
         initFromString(newStr);
         return *this;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in setString: {}", e.what());
+        spdlog::error("Exception in setString: {}", e.what());
         throw;
     }
+}
+
+auto BigNumber::negate() const -> BigNumber {
+    BigNumber result = *this;
+    if (!(digits_.size() == 1 && digits_[0] == 0)) {
+        result.isNegative_ = !isNegative_;
+    }
+    return result;
+}
+
+auto BigNumber::abs() const -> BigNumber {
+    BigNumber result = *this;
+    result.isNegative_ = false;
+    return result;
 }
 
 auto BigNumber::trimLeadingZeros() const noexcept -> BigNumber {
@@ -113,7 +129,7 @@ auto BigNumber::trimLeadingZeros() const noexcept -> BigNumber {
 
 auto BigNumber::add(const BigNumber& other) const -> BigNumber {
     try {
-        LOG_F(INFO, "Adding {} and {}", toString(), other.toString());
+        spdlog::debug("Adding {} and {}", toString(), other.toString());
 
 #ifdef ATOM_USE_BOOST
         boost::multiprecision::cpp_int num1(toString());
@@ -134,13 +150,14 @@ auto BigNumber::add(const BigNumber& other) const -> BigNumber {
 
         const auto& a = digits_;
         const auto& b = other.digits_;
+        const size_t maxSize = std::max(a.size(), b.size());
 
-        result.digits_.reserve(std::max(a.size(), b.size()) + 1);
+        result.digits_.reserve(maxSize + 1);
 
         uint8_t carry = 0;
         size_t i = 0;
 
-        while (i < a.size() || i < b.size() || carry) {
+        while (i < maxSize || carry) {
             uint8_t sum = carry;
             if (i < a.size())
                 sum += a[i];
@@ -152,18 +169,18 @@ auto BigNumber::add(const BigNumber& other) const -> BigNumber {
             ++i;
         }
 
-        LOG_F(INFO, "Result of addition: {}", result.toString());
+        spdlog::debug("Result of addition: {}", result.toString());
         return result;
 #endif
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in BigNumber::add: {}", e.what());
+        spdlog::error("Exception in BigNumber::add: {}", e.what());
         throw;
     }
 }
 
 auto BigNumber::subtract(const BigNumber& other) const -> BigNumber {
     try {
-        LOG_F(INFO, "Subtracting {} from {}", other.toString(), toString());
+        spdlog::debug("Subtracting {} from {}", other.toString(), toString());
 
 #ifdef ATOM_USE_BOOST
         boost::multiprecision::cpp_int num1(toString());
@@ -171,15 +188,12 @@ auto BigNumber::subtract(const BigNumber& other) const -> BigNumber {
         boost::multiprecision::cpp_int result = num1 - num2;
         return BigNumber(result.str());
 #else
-        // 处理符号不同的情况
         if (isNegative_ != other.isNegative_) {
             if (isNegative_) {
-                // (-a) - b = -(a + b)
                 BigNumber result = abs().add(other);
                 result.isNegative_ = true;
                 return result;
             } else {
-                // a - (-b) = a + b
                 return add(other.abs());
             }
         }
@@ -209,7 +223,6 @@ auto BigNumber::subtract(const BigNumber& other) const -> BigNumber {
         result.digits_.reserve(a.size());
 
         int borrow = 0;
-
         for (size_t i = 0; i < a.size(); ++i) {
             int diff = a[i] - borrow;
             if (i < b.size())
@@ -234,18 +247,18 @@ auto BigNumber::subtract(const BigNumber& other) const -> BigNumber {
             result.isNegative_ = false;
         }
 
-        LOG_F(INFO, "Result of subtraction: {}", result.toString());
+        spdlog::debug("Result of subtraction: {}", result.toString());
         return result;
 #endif
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in BigNumber::subtract: {}", e.what());
+        spdlog::error("Exception in BigNumber::subtract: {}", e.what());
         throw;
     }
 }
 
 auto BigNumber::multiply(const BigNumber& other) const -> BigNumber {
     try {
-        LOG_F(INFO, "Multiplying {} and {}", toString(), other.toString());
+        spdlog::debug("Multiplying {} and {}", toString(), other.toString());
 
 #ifdef ATOM_USE_BOOST
         boost::multiprecision::cpp_int num1(toString());
@@ -262,10 +275,9 @@ auto BigNumber::multiply(const BigNumber& other) const -> BigNumber {
             return multiplyKaratsuba(other);
         }
 
-        // 结果的符号
         bool resultNegative = isNegative_ != other.isNegative_;
-
-        std::vector<uint8_t> result(digits_.size() + other.digits_.size(), 0);
+        const size_t resultSize = digits_.size() + other.digits_.size();
+        std::vector<uint8_t> result(resultSize, 0);
 
         for (size_t i = 0; i < digits_.size(); ++i) {
             uint8_t carry = 0;
@@ -275,7 +287,6 @@ auto BigNumber::multiply(const BigNumber& other) const -> BigNumber {
                     digits_[i] *
                         (j < other.digits_.size() ? other.digits_[j] : 0) +
                     carry;
-
                 result[i + j] = product % 10;
                 carry = product / 10;
             }
@@ -293,22 +304,21 @@ auto BigNumber::multiply(const BigNumber& other) const -> BigNumber {
             resultNum.digits_.push_back(0);
         }
 
-        LOG_F(INFO, "Result of multiplication: {}", resultNum.toString());
+        spdlog::debug("Result of multiplication: {}", resultNum.toString());
         return resultNum;
 #endif
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in BigNumber::multiply: {}", e.what());
+        spdlog::error("Exception in BigNumber::multiply: {}", e.what());
         throw;
     }
 }
 
 auto BigNumber::multiplyKaratsuba(const BigNumber& other) const -> BigNumber {
     try {
-        LOG_F(INFO, "Using Karatsuba algorithm to multiply {} and {}",
-              toString(), other.toString());
+        spdlog::debug("Using Karatsuba algorithm to multiply {} and {}",
+                      toString(), other.toString());
 
         bool resultNegative = isNegative_ != other.isNegative_;
-
         std::vector<uint8_t> result =
             karatsubaMultiply(std::span<const uint8_t>(digits_),
                               std::span<const uint8_t>(other.digits_));
@@ -323,7 +333,8 @@ auto BigNumber::multiplyKaratsuba(const BigNumber& other) const -> BigNumber {
 
         return resultNum;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in BigNumber::multiplyKaratsuba: {}", e.what());
+        spdlog::error("Exception in BigNumber::multiplyKaratsuba: {}",
+                      e.what());
         throw;
     }
 }
@@ -337,7 +348,6 @@ std::vector<uint8_t> BigNumber::karatsubaMultiply(std::span<const uint8_t> a,
             for (size_t j = 0; j < b.size() || carry; ++j) {
                 uint16_t product =
                     result[i + j] + a[i] * (j < b.size() ? b[j] : 0) + carry;
-
                 result[i + j] = product % 10;
                 carry = product / 10;
             }
@@ -346,7 +356,6 @@ std::vector<uint8_t> BigNumber::karatsubaMultiply(std::span<const uint8_t> a,
         while (!result.empty() && result.back() == 0) {
             result.pop_back();
         }
-
         return result;
     }
 
@@ -359,8 +368,7 @@ std::vector<uint8_t> BigNumber::karatsubaMultiply(std::span<const uint8_t> a,
     std::span<const uint8_t> low1(a.data(), m);
     std::span<const uint8_t> high1(a.data() + m, a.size() - m);
 
-    std::span<const uint8_t> low2;
-    std::span<const uint8_t> high2;
+    std::span<const uint8_t> low2, high2;
 
     if (b.size() <= m) {
         low2 = b;
@@ -400,7 +408,6 @@ std::vector<uint8_t> BigNumber::karatsubaMultiply(std::span<const uint8_t> a,
         result[i] %= 10;
     }
 
-    // 移除尾随的零
     while (!result.empty() && result.back() == 0) {
         result.pop_back();
     }
@@ -410,20 +417,20 @@ std::vector<uint8_t> BigNumber::karatsubaMultiply(std::span<const uint8_t> a,
 
 auto BigNumber::divide(const BigNumber& other) const -> BigNumber {
     try {
-        LOG_F(INFO, "Dividing {} by {}", toString(), other.toString());
+        spdlog::debug("Dividing {} by {}", toString(), other.toString());
 
 #ifdef ATOM_USE_BOOST
         boost::multiprecision::cpp_int num1(toString());
         boost::multiprecision::cpp_int num2(other.toString());
         if (num2 == 0) {
-            LOG_F(ERROR, "Division by zero");
+            spdlog::error("Division by zero");
             THROW_INVALID_ARGUMENT("Division by zero");
         }
         boost::multiprecision::cpp_int result = num1 / num2;
         return BigNumber(result.str());
 #else
         if (other.equals(BigNumber("0"))) {
-            LOG_F(ERROR, "Division by zero");
+            spdlog::error("Division by zero");
             THROW_INVALID_ARGUMENT("Division by zero");
         }
 
@@ -450,18 +457,18 @@ auto BigNumber::divide(const BigNumber& other) const -> BigNumber {
             quotient = quotient.negate();
         }
 
-        LOG_F(INFO, "Result of division: {}", quotient.toString());
+        spdlog::debug("Result of division: {}", quotient.toString());
         return quotient;
 #endif
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in BigNumber::divide: {}", e.what());
+        spdlog::error("Exception in BigNumber::divide: {}", e.what());
         throw;
     }
 }
 
 auto BigNumber::pow(int exponent) const -> BigNumber {
     try {
-        LOG_F(INFO, "Raising {} to the power of {}", toString(), exponent);
+        spdlog::debug("Raising {} to the power of {}", toString(), exponent);
 
 #ifdef ATOM_USE_BOOST
         boost::multiprecision::cpp_int base(toString());
@@ -470,7 +477,7 @@ auto BigNumber::pow(int exponent) const -> BigNumber {
         return BigNumber(result.str());
 #else
         if (exponent < 0) {
-            LOG_F(ERROR, "Negative exponents are not supported");
+            spdlog::error("Negative exponents are not supported");
             THROW_INVALID_ARGUMENT("Negative exponents are not supported");
         }
         if (exponent == 0) {
@@ -479,8 +486,10 @@ auto BigNumber::pow(int exponent) const -> BigNumber {
         if (exponent == 1) {
             return *this;
         }
+
         BigNumber result("1");
         BigNumber base = *this;
+
         while (exponent != 0) {
             if (exponent & 1) {
                 result = result.multiply(base);
@@ -490,31 +499,31 @@ auto BigNumber::pow(int exponent) const -> BigNumber {
                 base = base.multiply(base);
             }
         }
-        LOG_F(INFO, "Result of exponentiation: {}", result.toString());
+
+        spdlog::debug("Result of exponentiation: {}", result.toString());
         return result;
 #endif
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in BigNumber::pow: {}", e.what());
+        spdlog::error("Exception in BigNumber::pow: {}", e.what());
         throw;
     }
 }
 
 auto operator>(const BigNumber& b1, const BigNumber& b2) -> bool {
     try {
-        LOG_F(INFO, "Comparing if {} > {}", b1.toString(), b2.toString());
+        spdlog::debug("Comparing if {} > {}", b1.toString(), b2.toString());
 
 #ifdef ATOM_USE_BOOST
         boost::multiprecision::cpp_int num1(b1.toString());
         boost::multiprecision::cpp_int num2(b2.toString());
         return num1 > num2;
 #else
-        if (b1.isNegative_ || b2.isNegative_) {
-            if (b1.isNegative_ && b2.isNegative_) {
-                LOG_F(INFO, "Both numbers are negative. Flipping comparison.");
-                return atom::algorithm::BigNumber(b2).abs() >
-                       atom::algorithm::BigNumber(b1).abs();
-            }
-            return b1.isNegative_ < b2.isNegative_;
+        if (b1.isNegative_ != b2.isNegative_) {
+            return !b1.isNegative_ && b2.isNegative_;
+        }
+
+        if (b1.isNegative_ && b2.isNegative_) {
+            return b2.abs() > b1.abs();
         }
 
         BigNumber b1Trimmed = b1.trimLeadingZeros();
@@ -523,28 +532,77 @@ auto operator>(const BigNumber& b1, const BigNumber& b2) -> bool {
         if (b1Trimmed.digits_.size() != b2Trimmed.digits_.size()) {
             return b1Trimmed.digits_.size() > b2Trimmed.digits_.size();
         }
-        return b1Trimmed.digits_ > b2Trimmed.digits_;
+
+        for (auto it1 = b1Trimmed.digits_.rbegin(),
+                  it2 = b2Trimmed.digits_.rbegin();
+             it1 != b1Trimmed.digits_.rend() && it2 != b2Trimmed.digits_.rend();
+             ++it1, ++it2) {
+            if (*it1 != *it2) {
+                return *it1 > *it2;
+            }
+        }
+        return false;
 #endif
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Exception in operator>: {}", e.what());
+        spdlog::error("Exception in operator>: {}", e.what());
         throw;
     }
+}
+
+auto operator<<(std::ostream& os, const BigNumber& num) -> std::ostream& {
+    return os << num.toString();
+}
+
+auto BigNumber::operator+=(const BigNumber& other) -> BigNumber& {
+    *this = add(other);
+    return *this;
+}
+
+auto BigNumber::operator-=(const BigNumber& other) -> BigNumber& {
+    *this = subtract(other);
+    return *this;
+}
+
+auto BigNumber::operator*=(const BigNumber& other) -> BigNumber& {
+    *this = multiply(other);
+    return *this;
+}
+
+auto BigNumber::operator/=(const BigNumber& other) -> BigNumber& {
+    *this = divide(other);
+    return *this;
+}
+
+auto BigNumber::operator++() -> BigNumber& {
+    *this = add(BigNumber("1"));
+    return *this;
+}
+
+auto BigNumber::operator--() -> BigNumber& {
+    *this = subtract(BigNumber("1"));
+    return *this;
+}
+
+auto BigNumber::operator++(int) -> BigNumber {
+    BigNumber temp = *this;
+    ++(*this);
+    return temp;
+}
+
+auto BigNumber::operator--(int) -> BigNumber {
+    BigNumber temp = *this;
+    --(*this);
+    return temp;
 }
 
 void BigNumber::validate() const {
     if (digits_.empty()) {
         THROW_INVALID_ARGUMENT("Empty string is not a valid number");
     }
-    size_t start = 0;
-    if (isNegative_) {
-        if (digits_.size() == 1) {
-            THROW_INVALID_ARGUMENT("Invalid number format");
-        }
-        start = 1;
-    }
-    for (size_t i = start; i < digits_.size(); ++i) {
-        if (std::isdigit(digits_[i]) == 0) {
-            THROW_INVALID_ARGUMENT("Invalid character in number string");
+
+    for (uint8_t digit : digits_) {
+        if (digit > 9) {
+            THROW_INVALID_ARGUMENT("Invalid digit in number");
         }
     }
 }

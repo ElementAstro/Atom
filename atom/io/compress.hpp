@@ -50,7 +50,8 @@ struct CompressionResult {
  * @brief Basic compression options
  */
 struct CompressionOptions {
-    int level{-1};             ///< Compression level (-1 = default, 0-9)
+    int level{-1};       ///< Compression level (-1 = default, 0-9)
+    int window_bits{7};  ///< Window bits for compression context (context7)
     size_t chunk_size{16384};  ///< Processing chunk size
     bool use_parallel{true};   ///< Whether to use parallel processing
     size_t num_threads{
@@ -68,7 +69,8 @@ struct DecompressionOptions {
     size_t num_threads{
         std::thread::hardware_concurrency()};  ///< Number of parallel threads
     bool verify_checksum{true};                ///< Whether to verify checksum
-    String password;  ///< Decryption password (if needed)
+    int window_bits{7};  ///< Window bits for decompression context (context7)
+    String password;     ///< Decryption password (if needed)
 };
 
 /**

@@ -13,7 +13,9 @@
 
 namespace atom::utils {
 
-// Concept for valid duration types
+/**
+ * @brief Concept for valid duration types
+ */
 template <typename T>
 concept DurationType = requires(T t) {
     {
@@ -114,11 +116,9 @@ public:
      */
     ~QProcess() noexcept;
 
-    // Prevent copying to avoid resource management issues
     QProcess(const QProcess&) = delete;
     QProcess& operator=(const QProcess&) = delete;
 
-    // Allow moving
     QProcess(QProcess&&) noexcept;
     QProcess& operator=(QProcess&&) noexcept;
 
@@ -157,9 +157,10 @@ public:
                  std::convertible_to<std::ranges::range_value_t<R>, const char*>
     void setEnvironment(const R& env) {
         std::vector<std::string> env_vector;
+        env_vector.reserve(std::ranges::size(env));
         for (const auto& item : env) {
             validateEnvironmentVariable(item);
-            env_vector.push_back(std::string(item));
+            env_vector.emplace_back(item);
         }
         setEnvironmentImpl(std::move(env_vector));
     }
@@ -190,8 +191,9 @@ public:
         }
 
         std::vector<std::string> args_vector;
+        args_vector.reserve(std::ranges::size(args));
         for (const auto& arg : args) {
-            args_vector.push_back(std::string(arg));
+            args_vector.emplace_back(arg);
         }
         startImpl(std::string(program), std::move(args_vector));
     }
@@ -214,8 +216,9 @@ public:
         }
 
         std::vector<std::string> args_vector;
+        args_vector.reserve(std::ranges::size(args));
         for (const auto& arg : args) {
-            args_vector.push_back(std::string(arg));
+            args_vector.emplace_back(arg);
         }
         return startDetachedImpl(std::string(program), std::move(args_vector));
     }
@@ -421,10 +424,8 @@ public:
         ReadyReadStandardErrorCallback callback);
 
 private:
-    // Validate environment variable format
     static void validateEnvironmentVariable(std::string_view var);
 
-    // Implementation methods for template functions
     void setEnvironmentImpl(std::vector<std::string>&& env);
     void startImpl(std::string&& program, std::vector<std::string>&& args);
     bool startDetachedImpl(std::string&& program,
@@ -432,8 +433,8 @@ private:
     auto waitForStartedImpl(int timeoutMs) -> bool;
     auto waitForFinishedImpl(int timeoutMs) -> bool;
 
-    class Impl;  ///< Forward declaration of the implementation class
-    std::unique_ptr<Impl> impl_;  ///< Pointer to the implementation details
+    class Impl;
+    std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace atom::utils

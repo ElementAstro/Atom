@@ -4,14 +4,6 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2023-4-3
-
-Description: IO
-
-**************************************************/
-
 #ifndef ATOM_IO_IO_HPP
 #define ATOM_IO_IO_HPP
 
@@ -33,7 +25,7 @@ Description: IO
 #include <unordered_map>
 #include <vector>
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 #include "atom/macro.hpp"
 #include "atom/type/json.hpp"
 
@@ -75,7 +67,8 @@ struct CreateDirectoriesOptions {
 enum class PathType { NOT_EXISTS, REGULAR_FILE, DIRECTORY, SYMLINK, OTHER };
 
 /**
- * @brief Creates a directory with the specified path.
+ * @brief Creates directories recursively with the specified base path and
+ * subdirectories.
  *
  * @param basePath The base path of the directory to create.
  * @param subdirs The subdirectories to create.
@@ -83,18 +76,19 @@ enum class PathType { NOT_EXISTS, REGULAR_FILE, DIRECTORY, SYMLINK, OTHER };
  * @return True if the operation was successful, false otherwise.
  */
 template <PathLike P, typename String = std::string>
-auto createDirectoriesRecursive(
-    const P& basePath, const std::vector<String>& subdirs,
-    const CreateDirectoriesOptions& options = {}) -> bool;
+auto createDirectoriesRecursive(const P& basePath,
+                                const std::vector<String>& subdirs,
+                                const CreateDirectoriesOptions& options = {})
+    -> bool;
 
 /**
- * @brief Creates a directory with the specified path.
+ * @brief Creates a directory with date-based path under root directory.
  *
- * @param date The directory to create.
+ * @param date The date-based directory name to create.
  * @param rootDir The root directory of the directory to create.
  */
 template <PathLike P1, PathLike P2>
-void createDirectory(const P1& date, const P2& rootDir);
+void createDateDirectory(const P1& date, const P2& rootDir);
 
 /**
  * @brief Removes an empty directory with the specified path.
@@ -126,8 +120,8 @@ template <PathLike P, typename String = std::string>
  * @return True if the operation was successful, false otherwise.
  */
 template <PathLike P1, PathLike P2>
-[[nodiscard]] auto renameDirectory(const P1& old_path,
-                                   const P2& new_path) -> bool;
+[[nodiscard]] auto renameDirectory(const P1& old_path, const P2& new_path)
+    -> bool;
 
 /**
  * @brief Moves a directory from one path to another.
@@ -137,8 +131,8 @@ template <PathLike P1, PathLike P2>
  * @return True if the operation was successful, false otherwise.
  */
 template <PathLike P1, PathLike P2>
-[[nodiscard]] auto moveDirectory(const P1& old_path,
-                                 const P2& new_path) -> bool;
+[[nodiscard]] auto moveDirectory(const P1& old_path, const P2& new_path)
+    -> bool;
 
 /**
  * @brief Copies a file from source path to destination path.
@@ -187,8 +181,8 @@ template <PathLike P>
  * @return True if the operation was successful, false otherwise.
  */
 template <PathLike P1, PathLike P2>
-[[nodiscard]] auto createSymlink(const P1& target_path,
-                                 const P2& symlink_path) -> bool;
+[[nodiscard]] auto createSymlink(const P1& target_path, const P2& symlink_path)
+    -> bool;
 
 /**
  * @brief Removes a symbolic link with the specified path.
@@ -365,9 +359,10 @@ enum class FileOption { PATH, NAME };
  * @remark The file type is checked by the file extension.
  */
 template <PathLike P>
-[[nodiscard]] auto checkFileTypeInFolder(
-    const P& folderPath, std::span<const std::string> fileTypes,
-    FileOption fileOption) -> std::vector<std::string>;
+[[nodiscard]] auto checkFileTypeInFolder(const P& folderPath,
+                                         std::span<const std::string> fileTypes,
+                                         FileOption fileOption)
+    -> std::vector<std::string>;
 
 /**
  * @brief Check whether the specified file exists and is executable.
@@ -476,8 +471,8 @@ auto countLinesInFile(const P& filePath) -> std::optional<int>;
  * @return std::vector<fs::path> Paths to found executable files
  */
 template <PathLike P>
-auto searchExecutableFiles(const P& dir,
-                           std::string_view searchStr) -> std::vector<fs::path>;
+auto searchExecutableFiles(const P& dir, std::string_view searchStr)
+    -> std::vector<fs::path>;
 
 /**
  * @brief Classify files in a directory by extension
@@ -492,74 +487,56 @@ auto classifyFiles(const P& directory)
 
 }  // namespace atom::io
 
-#endif
-
-/*
- * io_impl.hpp
- *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
- */
-
-/*************************************************
-
-Date: 2024-7-7
-
-Description: IO template implementations
-
-**************************************************/
-
-#ifndef ATOM_IO_IO_IMPL_HPP
-#define ATOM_IO_IO_IMPL_HPP
-
 namespace atom::io {
 
 template <PathLike P>
 [[nodiscard]] auto createDirectory(const P& path) -> bool {
-    LOG_F(INFO, "createDirectory called with path: {}",
-          fs::path(path).string());
+    spdlog::info("createDirectory called with path: {}",
+                 fs::path(path).string());
     const auto& pathStr = fs::path(path).string();
     if (pathStr.empty()) {
-        LOG_F(ERROR, "createDirectory: Invalid empty path");
+        spdlog::error("createDirectory: Invalid empty path");
         return false;
     }
 
     try {
         bool result = fs::create_directory(path);
-        LOG_F(INFO, "Directory created: {}", fs::path(path).string());
+        spdlog::info("Directory created: {}", fs::path(path).string());
         return result;
     } catch (const fs::filesystem_error& e) {
-        LOG_F(ERROR, "Failed to create directory {}: {}",
-              fs::path(path).string(), e.what());
+        spdlog::error("Failed to create directory {}: {}",
+                      fs::path(path).string(), e.what());
         return false;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Unexpected error creating directory {}: {}",
-              fs::path(path).string(), e.what());
+        spdlog::error("Unexpected error creating directory {}: {}",
+                      fs::path(path).string(), e.what());
         return false;
     } catch (...) {
-        LOG_F(ERROR, "Unknown error creating directory {}",
-              fs::path(path).string());
+        spdlog::error("Unknown error creating directory {}",
+                      fs::path(path).string());
         return false;
     }
 }
 
 template <PathLike P, typename String>
-auto createDirectoriesRecursive(
-    const P& basePath, const std::vector<String>& subdirs,
-    const CreateDirectoriesOptions& options) -> bool {
-    LOG_F(INFO, "createDirectoriesRecursive called with basePath: {}",
-          fs::path(basePath).string());
+auto createDirectoriesRecursive(const P& basePath,
+                                const std::vector<String>& subdirs,
+                                const CreateDirectoriesOptions& options)
+    -> bool {
+    spdlog::info("createDirectoriesRecursive called with basePath: {}",
+                 fs::path(basePath).string());
 
     fs::path basePathFs(basePath);
     if (!fs::exists(basePathFs)) {
         try {
             if (!options.dryRun && !fs::create_directories(basePathFs)) {
-                LOG_F(ERROR, "Failed to create base directory {}",
-                      basePathFs.string());
+                spdlog::error("Failed to create base directory {}",
+                              basePathFs.string());
                 return false;
             }
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Error creating base directory {}: {}",
-                  basePathFs.string(), e.what());
+            spdlog::error("Error creating base directory {}: {}",
+                          basePathFs.string(), e.what());
             return false;
         }
     }
@@ -571,20 +548,20 @@ auto createDirectoriesRecursive(
             auto fullPath = basePathFs / subdir;
             if (fs::exists(fullPath) && fs::is_directory(fullPath)) {
                 if (options.verbose) {
-                    LOG_F(INFO, "Directory already exists: {}",
-                          fullPath.string());
+                    spdlog::info("Directory already exists: {}",
+                                 fullPath.string());
                 }
                 continue;
             }
 
             if (!options.dryRun && !fs::create_directories(fullPath)) {
-                LOG_F(ERROR, "Failed to create directory {}",
-                      fullPath.string());
+                spdlog::error("Failed to create directory {}",
+                              fullPath.string());
                 return false;
             }
 
             if (options.verbose) {
-                LOG_F(INFO, "Created directory: {}", fullPath.string());
+                spdlog::info("Created directory: {}", fullPath.string());
             }
             options.onCreate(fullPath.string());
             if (options.delay > 0) {
@@ -592,21 +569,21 @@ auto createDirectoriesRecursive(
                     std::chrono::milliseconds(options.delay));
             }
         }
-        LOG_F(INFO, "createDirectoriesRecursive completed");
+        spdlog::info("createDirectoriesRecursive completed");
         return true;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error in createDirectoriesRecursive: {}", e.what());
+        spdlog::error("Error in createDirectoriesRecursive: {}", e.what());
         return false;
     } catch (...) {
-        LOG_F(ERROR, "Unknown error in createDirectoriesRecursive");
+        spdlog::error("Unknown error in createDirectoriesRecursive");
         return false;
     }
 }
 
 template <PathLike P1, PathLike P2>
-void createDirectory(const P1& date, const P2& rootDir) {
-    LOG_F(INFO, "createDirectory called with date: {}, rootDir: {}",
-          std::string(date), fs::path(rootDir).string());
+void createDateDirectory(const P1& date, const P2& rootDir) {
+    spdlog::info("createDateDirectory called with date: {}, rootDir: {}",
+                 std::string(date), fs::path(rootDir).string());
 
     try {
         fs::path dir(rootDir);
@@ -614,24 +591,24 @@ void createDirectory(const P1& date, const P2& rootDir) {
 
         if (!fs::exists(dir)) {
             fs::create_directories(dir);
-            LOG_F(INFO, "Directory created: {}", dir.string());
+            spdlog::info("Directory created: {}", dir.string());
         } else {
-            LOG_F(INFO, "Directory already exists: {}", dir.string());
+            spdlog::info("Directory already exists: {}", dir.string());
         }
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error in createDirectory: {}", e.what());
+        spdlog::error("Error in createDateDirectory: {}", e.what());
     } catch (...) {
-        LOG_F(ERROR, "Unknown error in createDirectory");
+        spdlog::error("Unknown error in createDateDirectory");
     }
 }
 
 template <PathLike P>
 [[nodiscard]] auto removeDirectory(const P& path) -> bool {
-    LOG_F(INFO, "removeDirectory called with path: {}",
-          fs::path(path).string());
+    spdlog::info("removeDirectory called with path: {}",
+                 fs::path(path).string());
     const auto& pathStr = fs::path(path).string();
     if (pathStr.empty()) {
-        LOG_F(ERROR, "removeDirectory: Invalid empty path");
+        spdlog::error("removeDirectory: Invalid empty path");
         return false;
     }
 
@@ -639,21 +616,22 @@ template <PathLike P>
         std::error_code ec;
         std::uintmax_t count = fs::remove_all(path, ec);
         if (ec) {
-            LOG_F(ERROR, "Failed to remove directory {}: {}", pathStr,
-                  ec.message());
+            spdlog::error("Failed to remove directory {}: {}", pathStr,
+                          ec.message());
             return false;
         }
-        LOG_F(INFO, "Directory removed: {} (removed {} items)", pathStr, count);
+        spdlog::info("Directory removed: {} (removed {} items)", pathStr,
+                     count);
         return true;
     } catch (const fs::filesystem_error& e) {
-        LOG_F(ERROR, "Failed to remove directory {}: {}", pathStr, e.what());
+        spdlog::error("Failed to remove directory {}: {}", pathStr, e.what());
         return false;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Unexpected error removing directory {}: {}", pathStr,
-              e.what());
+        spdlog::error("Unexpected error removing directory {}: {}", pathStr,
+                      e.what());
         return false;
     } catch (...) {
-        LOG_F(ERROR, "Unknown error removing directory {}", pathStr);
+        spdlog::error("Unknown error removing directory {}", pathStr);
         return false;
     }
 }
@@ -662,12 +640,12 @@ template <PathLike P, typename String>
 [[nodiscard]] auto removeDirectoriesRecursive(
     const P& basePath, const std::vector<String>& subdirs,
     const CreateDirectoriesOptions& options) -> bool {
-    LOG_F(INFO, "removeDirectoriesRecursive called with basePath: {}",
-          fs::path(basePath).string());
+    spdlog::info("removeDirectoriesRecursive called with basePath: {}",
+                 fs::path(basePath).string());
 
     fs::path basePathFs(basePath);
     if (!fs::exists(basePathFs)) {
-        LOG_F(WARNING, "Base path does not exist: {}", basePathFs.string());
+        spdlog::warn("Base path does not exist: {}", basePathFs.string());
         return false;
     }
 
@@ -679,8 +657,8 @@ template <PathLike P, typename String>
             auto fullPath = basePathFs / subdir;
             if (!fs::exists(fullPath)) {
                 if (options.verbose) {
-                    LOG_F(INFO, "Directory does not exist: {}",
-                          fullPath.string());
+                    spdlog::info("Directory does not exist: {}",
+                                 fullPath.string());
                 }
                 continue;
             }
@@ -690,22 +668,22 @@ template <PathLike P, typename String>
                     std::error_code ec;
                     std::uintmax_t count = fs::remove_all(fullPath, ec);
                     if (ec) {
-                        LOG_F(ERROR, "Failed to delete directory {}: {}",
-                              fullPath.string(), ec.message());
+                        spdlog::error("Failed to delete directory {}: {}",
+                                      fullPath.string(), ec.message());
                         success = false;
                         continue;
                     }
                     if (options.verbose) {
-                        LOG_F(INFO, "Deleted directory: {} (removed {} items)",
-                              fullPath.string(), count);
+                        spdlog::info("Deleted directory: {} (removed {} items)",
+                                     fullPath.string(), count);
                     }
                 } else if (options.verbose) {
-                    LOG_F(INFO, "Would delete directory: {} (dry run)",
-                          fullPath.string());
+                    spdlog::info("Would delete directory: {} (dry run)",
+                                 fullPath.string());
                 }
             } catch (const fs::filesystem_error& e) {
-                LOG_F(ERROR, "Failed to delete directory {}: {}",
-                      fullPath.string(), e.what());
+                spdlog::error("Failed to delete directory {}: {}",
+                              fullPath.string(), e.what());
                 success = false;
                 continue;
             }
@@ -717,34 +695,34 @@ template <PathLike P, typename String>
             }
         }
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error in removeDirectoriesRecursive: {}", e.what());
+        spdlog::error("Error in removeDirectoriesRecursive: {}", e.what());
         return false;
     }
 
-    LOG_F(INFO, "removeDirectoriesRecursive completed with status: {}",
-          success);
+    spdlog::info("removeDirectoriesRecursive completed with status: {}",
+                 success);
     return success;
 }
 
 template <PathLike P1, PathLike P2>
-[[nodiscard]] auto renameDirectory(const P1& old_path,
-                                   const P2& new_path) -> bool {
-    LOG_F(INFO, "renameDirectory called with old_path: {}, new_path: {}",
-          fs::path(old_path).string(), fs::path(new_path).string());
+[[nodiscard]] auto renameDirectory(const P1& old_path, const P2& new_path)
+    -> bool {
+    spdlog::info("renameDirectory called with old_path: {}, new_path: {}",
+                 fs::path(old_path).string(), fs::path(new_path).string());
     return moveDirectory(old_path, new_path);
 }
 
 template <PathLike P1, PathLike P2>
-[[nodiscard]] auto moveDirectory(const P1& old_path,
-                                 const P2& new_path) -> bool {
-    LOG_F(INFO, "moveDirectory called with old_path: {}, new_path: {}",
-          fs::path(old_path).string(), fs::path(new_path).string());
+[[nodiscard]] auto moveDirectory(const P1& old_path, const P2& new_path)
+    -> bool {
+    spdlog::info("moveDirectory called with old_path: {}, new_path: {}",
+                 fs::path(old_path).string(), fs::path(new_path).string());
 
     const auto& oldPathStr = fs::path(old_path).string();
     const auto& newPathStr = fs::path(new_path).string();
 
     if (oldPathStr.empty() || newPathStr.empty()) {
-        LOG_F(ERROR, "moveDirectory: Invalid empty path");
+        spdlog::error("moveDirectory: Invalid empty path");
         return false;
     }
 
@@ -752,54 +730,54 @@ template <PathLike P1, PathLike P2>
         std::error_code ec;
         fs::rename(old_path, new_path, ec);
         if (ec) {
-            LOG_F(ERROR, "Failed to move directory from {} to {}: {}",
-                  oldPathStr, newPathStr, ec.message());
+            spdlog::error("Failed to move directory from {} to {}: {}",
+                          oldPathStr, newPathStr, ec.message());
 
             // Fall back to copy and delete if rename fails (e.g., across file
             // systems)
             fs::copy(old_path, new_path, fs::copy_options::recursive, ec);
             if (ec) {
-                LOG_F(ERROR, "Failed to copy directory from {} to {}: {}",
-                      oldPathStr, newPathStr, ec.message());
+                spdlog::error("Failed to copy directory from {} to {}: {}",
+                              oldPathStr, newPathStr, ec.message());
                 return false;
             }
 
             fs::remove_all(old_path, ec);
             if (ec) {
-                LOG_F(WARNING,
-                      "Failed to remove original directory {} after copy: {}",
-                      oldPathStr, ec.message());
+                spdlog::warn(
+                    "Failed to remove original directory {} after copy: {}",
+                    oldPathStr, ec.message());
                 // We still succeeded in copying, so return true
             }
         }
 
-        LOG_F(INFO, "Directory moved from {} to {}", oldPathStr, newPathStr);
+        spdlog::info("Directory moved from {} to {}", oldPathStr, newPathStr);
         return true;
     } catch (const fs::filesystem_error& e) {
-        LOG_F(ERROR, "Failed to move directory from {} to {}: {}", oldPathStr,
-              newPathStr, e.what());
+        spdlog::error("Failed to move directory from {} to {}: {}", oldPathStr,
+                      newPathStr, e.what());
         return false;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Unexpected error moving directory from {} to {}: {}",
-              oldPathStr, newPathStr, e.what());
+        spdlog::error("Unexpected error moving directory from {} to {}: {}",
+                      oldPathStr, newPathStr, e.what());
         return false;
     } catch (...) {
-        LOG_F(ERROR, "Unknown error moving directory from {} to {}", oldPathStr,
-              newPathStr);
+        spdlog::error("Unknown error moving directory from {} to {}",
+                      oldPathStr, newPathStr);
         return false;
     }
 }
 
 template <PathLike P1, PathLike P2>
 [[nodiscard]] auto copyFile(const P1& src_path, const P2& dst_path) -> bool {
-    LOG_F(INFO, "copyFile called with src_path: {}, dst_path: {}",
-          fs::path(src_path).string(), fs::path(dst_path).string());
+    spdlog::info("copyFile called with src_path: {}, dst_path: {}",
+                 fs::path(src_path).string(), fs::path(dst_path).string());
 
     const auto& srcPathStr = fs::path(src_path).string();
     const auto& dstPathStr = fs::path(dst_path).string();
 
     if (srcPathStr.empty() || dstPathStr.empty()) {
-        LOG_F(ERROR, "copyFile: Invalid empty path");
+        spdlog::error("copyFile: Invalid empty path");
         return false;
     }
 
@@ -810,8 +788,8 @@ template <PathLike P1, PathLike P2>
             std::error_code ec;
             fs::create_directories(dstDir, ec);
             if (ec) {
-                LOG_F(ERROR, "Failed to create destination directory {}: {}",
-                      dstDir.string(), ec.message());
+                spdlog::error("Failed to create destination directory {}: {}",
+                              dstDir.string(), ec.message());
                 return false;
             }
         }
@@ -820,24 +798,24 @@ template <PathLike P1, PathLike P2>
         fs::copy_file(src_path, dst_path, fs::copy_options::overwrite_existing,
                       ec);
         if (ec) {
-            LOG_F(ERROR, "Failed to copy file from {} to {}: {}", srcPathStr,
-                  dstPathStr, ec.message());
+            spdlog::error("Failed to copy file from {} to {}: {}", srcPathStr,
+                          dstPathStr, ec.message());
             return false;
         }
 
-        LOG_F(INFO, "File copied from {} to {}", srcPathStr, dstPathStr);
+        spdlog::info("File copied from {} to {}", srcPathStr, dstPathStr);
         return true;
     } catch (const fs::filesystem_error& e) {
-        LOG_F(ERROR, "Failed to copy file from {} to {}: {}", srcPathStr,
-              dstPathStr, e.what());
+        spdlog::error("Failed to copy file from {} to {}: {}", srcPathStr,
+                      dstPathStr, e.what());
         return false;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Unexpected error copying file from {} to {}: {}",
-              srcPathStr, dstPathStr, e.what());
+        spdlog::error("Unexpected error copying file from {} to {}: {}",
+                      srcPathStr, dstPathStr, e.what());
         return false;
     } catch (...) {
-        LOG_F(ERROR, "Unknown error copying file from {} to {}", srcPathStr,
-              dstPathStr);
+        spdlog::error("Unknown error copying file from {} to {}", srcPathStr,
+                      dstPathStr);
         return false;
     }
 }
@@ -849,14 +827,14 @@ template <PathLike P1, PathLike P2>
 
 template <PathLike P1, PathLike P2>
 [[nodiscard]] auto renameFile(const P1& old_path, const P2& new_path) -> bool {
-    LOG_F(INFO, "renameFile called with old_path: {}, new_path: {}",
-          fs::path(old_path).string(), fs::path(new_path).string());
+    spdlog::info("renameFile called with old_path: {}, new_path: {}",
+                 fs::path(old_path).string(), fs::path(new_path).string());
 
     const auto& oldPathStr = fs::path(old_path).string();
     const auto& newPathStr = fs::path(new_path).string();
 
     if (oldPathStr.empty() || newPathStr.empty()) {
-        LOG_F(ERROR, "renameFile: Invalid empty path");
+        spdlog::error("renameFile: Invalid empty path");
         return false;
     }
 
@@ -868,59 +846,58 @@ template <PathLike P1, PathLike P2>
         if (!newDir.empty() && !fs::exists(newDir)) {
             fs::create_directories(newDir, ec);
             if (ec) {
-                LOG_F(ERROR, "Failed to create destination directory {}: {}",
-                      newDir.string(), ec.message());
+                spdlog::error("Failed to create destination directory {}: {}",
+                              newDir.string(), ec.message());
                 return false;
             }
         }
 
         fs::rename(old_path, new_path, ec);
         if (ec) {
-            LOG_F(ERROR, "Failed to rename file from {} to {}: {}", oldPathStr,
-                  newPathStr, ec.message());
+            spdlog::error("Failed to rename file from {} to {}: {}", oldPathStr,
+                          newPathStr, ec.message());
 
             // Fall back to copy and delete if rename fails (e.g., across file
             // systems)
             fs::copy_file(old_path, new_path,
                           fs::copy_options::overwrite_existing, ec);
             if (ec) {
-                LOG_F(ERROR, "Failed to copy file from {} to {}: {}",
-                      oldPathStr, newPathStr, ec.message());
+                spdlog::error("Failed to copy file from {} to {}: {}",
+                              oldPathStr, newPathStr, ec.message());
                 return false;
             }
 
             fs::remove(old_path, ec);
             if (ec) {
-                LOG_F(WARNING,
-                      "Failed to remove original file {} after copy: {}",
-                      oldPathStr, ec.message());
+                spdlog::warn("Failed to remove original file {} after copy: {}",
+                             oldPathStr, ec.message());
                 // We still succeeded in copying, so continue
             }
         }
 
-        LOG_F(INFO, "File renamed from {} to {}", oldPathStr, newPathStr);
+        spdlog::info("File renamed from {} to {}", oldPathStr, newPathStr);
         return true;
     } catch (const fs::filesystem_error& e) {
-        LOG_F(ERROR, "Failed to rename file from {} to {}: {}", oldPathStr,
-              newPathStr, e.what());
+        spdlog::error("Failed to rename file from {} to {}: {}", oldPathStr,
+                      newPathStr, e.what());
         return false;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Unexpected error renaming file from {} to {}: {}",
-              oldPathStr, newPathStr, e.what());
+        spdlog::error("Unexpected error renaming file from {} to {}: {}",
+                      oldPathStr, newPathStr, e.what());
         return false;
     } catch (...) {
-        LOG_F(ERROR, "Unknown error renaming file from {} to {}", oldPathStr,
-              newPathStr);
+        spdlog::error("Unknown error renaming file from {} to {}", oldPathStr,
+                      newPathStr);
         return false;
     }
 }
 
 template <PathLike P>
 [[nodiscard]] auto removeFile(const P& path) -> bool {
-    LOG_F(INFO, "removeFile called with path: {}", fs::path(path).string());
+    spdlog::info("removeFile called with path: {}", fs::path(path).string());
     const auto& pathStr = fs::path(path).string();
     if (pathStr.empty()) {
-        LOG_F(ERROR, "removeFile: Invalid empty path");
+        spdlog::error("removeFile: Invalid empty path");
         return false;
     }
 
@@ -928,35 +905,37 @@ template <PathLike P>
         std::error_code ec;
         bool result = fs::remove(path, ec);
         if (ec) {
-            LOG_F(ERROR, "Failed to remove file {}: {}", pathStr, ec.message());
+            spdlog::error("Failed to remove file {}: {}", pathStr,
+                          ec.message());
             return false;
         }
-        LOG_F(INFO, "File removed: {}", pathStr);
+        spdlog::info("File removed: {}", pathStr);
         return result;
     } catch (const fs::filesystem_error& e) {
-        LOG_F(ERROR, "Failed to remove file {}: {}", pathStr, e.what());
+        spdlog::error("Failed to remove file {}: {}", pathStr, e.what());
         return false;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Unexpected error removing file {}: {}", pathStr,
-              e.what());
+        spdlog::error("Unexpected error removing file {}: {}", pathStr,
+                      e.what());
         return false;
     } catch (...) {
-        LOG_F(ERROR, "Unknown error removing file {}", pathStr);
+        spdlog::error("Unknown error removing file {}", pathStr);
         return false;
     }
 }
 
 template <PathLike P1, PathLike P2>
-[[nodiscard]] auto createSymlink(const P1& target_path,
-                                 const P2& symlink_path) -> bool {
-    LOG_F(INFO, "createSymlink called with target_path: {}, symlink_path: {}",
-          fs::path(target_path).string(), fs::path(symlink_path).string());
+[[nodiscard]] auto createSymlink(const P1& target_path, const P2& symlink_path)
+    -> bool {
+    spdlog::info("createSymlink called with target_path: {}, symlink_path: {}",
+                 fs::path(target_path).string(),
+                 fs::path(symlink_path).string());
 
     const auto& targetPathStr = fs::path(target_path).string();
     const auto& symlinkPathStr = fs::path(symlink_path).string();
 
     if (targetPathStr.empty() || symlinkPathStr.empty()) {
-        LOG_F(ERROR, "createSymlink: Invalid empty path");
+        spdlog::error("createSymlink: Invalid empty path");
         return false;
     }
 
@@ -967,8 +946,9 @@ template <PathLike P1, PathLike P2>
             std::error_code ec;
             fs::create_directories(symlinkDir, ec);
             if (ec) {
-                LOG_F(ERROR, "Failed to create symlink parent directory {}: {}",
-                      symlinkDir.string(), ec.message());
+                spdlog::error(
+                    "Failed to create symlink parent directory {}: {}",
+                    symlinkDir.string(), ec.message());
                 return false;
             }
         }
@@ -976,25 +956,25 @@ template <PathLike P1, PathLike P2>
         std::error_code ec;
         fs::create_symlink(target_path, symlink_path, ec);
         if (ec) {
-            LOG_F(ERROR, "Failed to create symlink from {} to {}: {}",
-                  targetPathStr, symlinkPathStr, ec.message());
+            spdlog::error("Failed to create symlink from {} to {}: {}",
+                          targetPathStr, symlinkPathStr, ec.message());
             return false;
         }
 
-        LOG_F(INFO, "Symlink created from {} to {}", targetPathStr,
-              symlinkPathStr);
+        spdlog::info("Symlink created from {} to {}", targetPathStr,
+                     symlinkPathStr);
         return true;
     } catch (const fs::filesystem_error& e) {
-        LOG_F(ERROR, "Failed to create symlink from {} to {}: {}",
-              targetPathStr, symlinkPathStr, e.what());
+        spdlog::error("Failed to create symlink from {} to {}: {}",
+                      targetPathStr, symlinkPathStr, e.what());
         return false;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Unexpected error creating symlink from {} to {}: {}",
-              targetPathStr, symlinkPathStr, e.what());
+        spdlog::error("Unexpected error creating symlink from {} to {}: {}",
+                      targetPathStr, symlinkPathStr, e.what());
         return false;
     } catch (...) {
-        LOG_F(ERROR, "Unknown error creating symlink from {} to {}",
-              targetPathStr, symlinkPathStr);
+        spdlog::error("Unknown error creating symlink from {} to {}",
+                      targetPathStr, symlinkPathStr);
         return false;
     }
 }
@@ -1006,40 +986,40 @@ template <PathLike P>
 
 template <PathLike P>
 [[nodiscard]] auto fileSize(const P& path) -> std::uintmax_t {
-    LOG_F(INFO, "fileSize called with path: {}", fs::path(path).string());
+    spdlog::info("fileSize called with path: {}", fs::path(path).string());
     const auto& pathStr = fs::path(path).string();
 
     try {
         std::error_code ec;
         std::uintmax_t size = fs::file_size(path, ec);
         if (ec) {
-            LOG_F(ERROR, "Failed to get file size of {}: {}", pathStr,
-                  ec.message());
+            spdlog::error("Failed to get file size of {}: {}", pathStr,
+                          ec.message());
             return 0;
         }
-        LOG_F(INFO, "File size of {}: {}", pathStr, size);
+        spdlog::info("File size of {}: {}", pathStr, size);
         return size;
     } catch (const fs::filesystem_error& e) {
-        LOG_F(ERROR, "Failed to get file size of {}: {}", pathStr, e.what());
+        spdlog::error("Failed to get file size of {}: {}", pathStr, e.what());
         return 0;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Unexpected error getting file size of {}: {}", pathStr,
-              e.what());
+        spdlog::error("Unexpected error getting file size of {}: {}", pathStr,
+                      e.what());
         return 0;
     } catch (...) {
-        LOG_F(ERROR, "Unknown error getting file size of {}", pathStr);
+        spdlog::error("Unknown error getting file size of {}", pathStr);
         return 0;
     }
 }
 
 template <PathLike P>
 auto truncateFile(const P& path, std::streamsize size) -> bool {
-    LOG_F(INFO, "truncateFile called with path: {}, size: {}",
-          fs::path(path).string(), size);
+    spdlog::info("truncateFile called with path: {}, size: {}",
+                 fs::path(path).string(), size);
     const auto& pathStr = fs::path(path).string();
 
     if (pathStr.empty() || size < 0) {
-        LOG_F(ERROR, "truncateFile: Invalid arguments");
+        spdlog::error("truncateFile: Invalid arguments");
         return false;
     }
 
@@ -1047,7 +1027,7 @@ auto truncateFile(const P& path, std::streamsize size) -> bool {
         std::ofstream file(pathStr,
                            std::ios::out | std::ios::binary | std::ios::trunc);
         if (!file.is_open()) {
-            LOG_F(ERROR, "Failed to open file for truncation: {}", pathStr);
+            spdlog::error("Failed to open file for truncation: {}", pathStr);
             return false;
         }
 
@@ -1056,17 +1036,17 @@ auto truncateFile(const P& path, std::streamsize size) -> bool {
         file.close();
 
         if (file.fail()) {
-            LOG_F(ERROR, "Failed to truncate file {}: I/O error", pathStr);
+            spdlog::error("Failed to truncate file {}: I/O error", pathStr);
             return false;
         }
 
-        LOG_F(INFO, "File truncated: {}", pathStr);
+        spdlog::info("File truncated: {}", pathStr);
         return true;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error truncating file {}: {}", pathStr, e.what());
+        spdlog::error("Error truncating file {}: {}", pathStr, e.what());
         return false;
     } catch (...) {
-        LOG_F(ERROR, "Unknown error truncating file {}", pathStr);
+        spdlog::error("Unknown error truncating file {}", pathStr);
         return false;
     }
 }
@@ -1074,15 +1054,15 @@ auto truncateFile(const P& path, std::streamsize size) -> bool {
 // Function to walk through directories and apply a callback
 inline void walk(const fs::path& root, bool recursive,
                  const std::function<void(const fs::path&)>& callback) {
-    LOG_F(INFO, "walk called with root: {}, recursive: {}", root.string(),
-          recursive);
+    spdlog::info("walk called with root: {}, recursive: {}", root.string(),
+                 recursive);
 
     try {
         std::error_code ec;
         for (const auto& entry : fs::directory_iterator(root, ec)) {
             if (ec) {
-                LOG_F(ERROR, "Error traversing directory {}: {}", root.string(),
-                      ec.message());
+                spdlog::error("Error traversing directory {}: {}",
+                              root.string(), ec.message());
                 continue;
             }
 
@@ -1092,23 +1072,24 @@ inline void walk(const fs::path& root, bool recursive,
                 if (!ec) {
                     walk(entry.path(), recursive, callback);
                 } else {
-                    LOG_F(ERROR, "Error checking if {} is directory: {}",
-                          entry.path().string(), ec.message());
+                    spdlog::error("Error checking if {} is directory: {}",
+                                  entry.path().string(), ec.message());
                 }
             }
         }
 
-        LOG_F(INFO, "walk completed for root: {}", root.string());
+        spdlog::info("walk completed for root: {}", root.string());
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error walking directory {}: {}", root.string(), e.what());
+        spdlog::error("Error walking directory {}: {}", root.string(),
+                      e.what());
     }
 }
 
 // Helper function to build JSON structure
-inline auto buildJsonStructure(const fs::path& root,
-                               bool recursive) -> nlohmann::json {
-    LOG_F(INFO, "buildJsonStructure called with root: {}, recursive: {}",
-          root.string(), recursive);
+inline auto buildJsonStructure(const fs::path& root, bool recursive)
+    -> nlohmann::json {
+    spdlog::info("buildJsonStructure called with root: {}, recursive: {}",
+                 root.string(), recursive);
 
     nlohmann::json folder = {{"path", root.generic_string()},
                              {"directories", nlohmann::json::array()},
@@ -1127,33 +1108,33 @@ inline auto buildJsonStructure(const fs::path& root,
             }
         });
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error building JSON structure for {}: {}", root.string(),
-              e.what());
+        spdlog::error("Error building JSON structure for {}: {}", root.string(),
+                      e.what());
     }
 
-    LOG_F(INFO, "buildJsonStructure completed for root: {}", root.string());
+    spdlog::info("buildJsonStructure completed for root: {}", root.string());
     return folder;
 }
 
 template <PathLike P>
 [[nodiscard]] auto jwalk(const P& root) -> std::string {
-    LOG_F(INFO, "jwalk called with root: {}", fs::path(root).string());
+    spdlog::info("jwalk called with root: {}", fs::path(root).string());
     fs::path rootPath(root);
 
     try {
         if (!isFolderExists(rootPath)) {
-            LOG_F(WARNING, "Folder does not exist: {}", rootPath.string());
+            spdlog::warn("Folder does not exist: {}", rootPath.string());
             return "";
         }
 
         std::string result = buildJsonStructure(rootPath, true).dump();
-        LOG_F(INFO, "jwalk completed for root: {}", rootPath.string());
+        spdlog::info("jwalk completed for root: {}", rootPath.string());
         return result;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error in jwalk for {}: {}", rootPath.string(), e.what());
+        spdlog::error("Error in jwalk for {}: {}", rootPath.string(), e.what());
         return "";
     } catch (...) {
-        LOG_F(ERROR, "Unknown error in jwalk for {}", rootPath.string());
+        spdlog::error("Unknown error in jwalk for {}", rootPath.string());
         return "";
     }
 }
@@ -1161,145 +1142,146 @@ template <PathLike P>
 template <PathLike P>
 void fwalk(const P& root,
            const std::function<void(const fs::path&)>& callback) {
-    LOG_F(INFO, "fwalk called with root: {}", fs::path(root).string());
+    spdlog::info("fwalk called with root: {}", fs::path(root).string());
 
     try {
         fs::path rootPath(root);
         walk(rootPath, true, callback);
-        LOG_F(INFO, "fwalk completed for root: {}", rootPath.string());
+        spdlog::info("fwalk completed for root: {}", rootPath.string());
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error in fwalk for {}: {}", fs::path(root).string(),
-              e.what());
+        spdlog::error("Error in fwalk for {}: {}", fs::path(root).string(),
+                      e.what());
     } catch (...) {
-        LOG_F(ERROR, "Unknown error in fwalk for {}", fs::path(root).string());
+        spdlog::error("Unknown error in fwalk for {}", fs::path(root).string());
     }
 }
 
 template <PathLike P>
 [[nodiscard]] auto isFolderExists(const P& folderPath) -> bool {
-    LOG_F(INFO, "isFolderExists called with folderPath: {}",
-          fs::path(folderPath).string());
+    spdlog::info("isFolderExists called with folderPath: {}",
+                 fs::path(folderPath).string());
 
     try {
         fs::path path(folderPath);
         std::error_code ec;
         bool result = fs::exists(path, ec) && fs::is_directory(path, ec);
         if (ec) {
-            LOG_F(ERROR, "Error checking if folder exists {}: {}",
-                  path.string(), ec.message());
+            spdlog::error("Error checking if folder exists {}: {}",
+                          path.string(), ec.message());
             return false;
         }
 
-        LOG_F(INFO, "isFolderExists returning: {}", result);
+        spdlog::info("isFolderExists returning: {}", result);
         return result;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error in isFolderExists for {}: {}",
-              fs::path(folderPath).string(), e.what());
+        spdlog::error("Error in isFolderExists for {}: {}",
+                      fs::path(folderPath).string(), e.what());
         return false;
     }
 }
 
 template <PathLike P>
 [[nodiscard]] auto isFileExists(const P& filePath) -> bool {
-    LOG_F(INFO, "isFileExists called with filePath: {}",
-          fs::path(filePath).string());
+    spdlog::info("isFileExists called with filePath: {}",
+                 fs::path(filePath).string());
 
     try {
         fs::path path(filePath);
         std::error_code ec;
         bool result = fs::exists(path, ec) && fs::is_regular_file(path, ec);
         if (ec) {
-            LOG_F(ERROR, "Error checking if file exists {}: {}", path.string(),
-                  ec.message());
+            spdlog::error("Error checking if file exists {}: {}", path.string(),
+                          ec.message());
             return false;
         }
 
-        LOG_F(INFO, "isFileExists returning: {}", result);
+        spdlog::info("isFileExists returning: {}", result);
         return result;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error in isFileExists for {}: {}",
-              fs::path(filePath).string(), e.what());
+        spdlog::error("Error in isFileExists for {}: {}",
+                      fs::path(filePath).string(), e.what());
         return false;
     }
 }
 
 template <PathLike P>
 [[nodiscard]] auto isFolderEmpty(const P& folderPath) -> bool {
-    LOG_F(INFO, "isFolderEmpty called with folderPath: {}",
-          fs::path(folderPath).string());
+    spdlog::info("isFolderEmpty called with folderPath: {}",
+                 fs::path(folderPath).string());
 
     try {
         fs::path path(folderPath);
         if (!isFolderExists(path)) {
-            LOG_F(WARNING, "Folder does not exist: {}", path.string());
+            spdlog::warn("Folder does not exist: {}", path.string());
             return false;
         }
 
         std::error_code ec;
         bool result = fs::is_empty(path, ec);
         if (ec) {
-            LOG_F(ERROR, "Error checking if folder is empty {}: {}",
-                  path.string(), ec.message());
+            spdlog::error("Error checking if folder is empty {}: {}",
+                          path.string(), ec.message());
             return false;
         }
 
-        LOG_F(INFO, "isFolderEmpty returning: {}", result);
+        spdlog::info("isFolderEmpty returning: {}", result);
         return result;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error in isFolderEmpty for {}: {}",
-              fs::path(folderPath).string(), e.what());
+        spdlog::error("Error in isFolderEmpty for {}: {}",
+                      fs::path(folderPath).string(), e.what());
         return false;
     }
 }
 
 template <PathLike P>
 [[nodiscard]] auto isAbsolutePath(const P& path) -> bool {
-    LOG_F(INFO, "isAbsolutePath called with path: {}", fs::path(path).string());
+    spdlog::info("isAbsolutePath called with path: {}",
+                 fs::path(path).string());
 
     try {
         bool result = fs::path(path).is_absolute();
-        LOG_F(INFO, "isAbsolutePath returning: {}", result);
+        spdlog::info("isAbsolutePath returning: {}", result);
         return result;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error in isAbsolutePath for {}: {}",
-              fs::path(path).string(), e.what());
+        spdlog::error("Error in isAbsolutePath for {}: {}",
+                      fs::path(path).string(), e.what());
         return false;
     }
 }
 
 template <PathLike P>
 [[nodiscard]] auto changeWorkingDirectory(const P& directoryPath) -> bool {
-    LOG_F(INFO, "changeWorkingDirectory called with directoryPath: {}",
-          fs::path(directoryPath).string());
+    spdlog::info("changeWorkingDirectory called with directoryPath: {}",
+                 fs::path(directoryPath).string());
 
     try {
         fs::path path(directoryPath);
         if (!isFolderExists(path)) {
-            LOG_F(ERROR, "Directory does not exist: {}", path.string());
+            spdlog::error("Directory does not exist: {}", path.string());
             return false;
         }
 
         std::error_code ec;
         fs::current_path(path, ec);
         if (ec) {
-            LOG_F(ERROR, "Failed to change working directory to {}: {}",
-                  path.string(), ec.message());
+            spdlog::error("Failed to change working directory to {}: {}",
+                          path.string(), ec.message());
             return false;
         }
 
-        LOG_F(INFO, "Changed working directory to: {}", path.string());
+        spdlog::info("Changed working directory to: {}", path.string());
         return true;
     } catch (const fs::filesystem_error& e) {
-        LOG_F(ERROR, "Failed to change working directory to {}: {}",
-              fs::path(directoryPath).string(), e.what());
+        spdlog::error("Failed to change working directory to {}: {}",
+                      fs::path(directoryPath).string(), e.what());
         return false;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Unexpected error changing working directory to {}: {}",
-              fs::path(directoryPath).string(), e.what());
+        spdlog::error("Unexpected error changing working directory to {}: {}",
+                      fs::path(directoryPath).string(), e.what());
         return false;
     } catch (...) {
-        LOG_F(ERROR, "Unknown error changing working directory to {}",
-              fs::path(directoryPath).string());
+        spdlog::error("Unknown error changing working directory to {}",
+                      fs::path(directoryPath).string());
         return false;
     }
 }
@@ -1307,22 +1289,22 @@ template <PathLike P>
 template <PathLike P>
 [[nodiscard]] std::pair<std::string, std::string> getFileTimes(
     const P& filePath) {
-    LOG_F(INFO, "getFileTimes called with filePath: {}",
-          fs::path(filePath).string());
+    spdlog::info("getFileTimes called with filePath: {}",
+                 fs::path(filePath).string());
     std::pair<std::string, std::string> fileTimes;
 
     try {
         fs::path path(filePath);
         if (!fs::exists(path)) {
-            LOG_F(ERROR, "File does not exist: {}", path.string());
+            spdlog::error("File does not exist: {}", path.string());
             return fileTimes;
         }
 
         std::error_code ec;
         auto writeTime = fs::last_write_time(path, ec);
         if (ec) {
-            LOG_F(ERROR, "Error getting last write time for {}: {}",
-                  path.string(), ec.message());
+            spdlog::error("Error getting last write time for {}: {}",
+                          path.string(), ec.message());
             return fileTimes;
         }
 
@@ -1356,44 +1338,45 @@ template <PathLike P>
         fileTimes.second = ss.str();
 #endif
 
-        LOG_F(INFO, "getFileTimes returning: modification time: {}",
-              fileTimes.second);
+        spdlog::info("getFileTimes returning: modification time: {}",
+                     fileTimes.second);
         return fileTimes;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error getting file times for {}: {}",
-              fs::path(filePath).string(), e.what());
+        spdlog::error("Error getting file times for {}: {}",
+                      fs::path(filePath).string(), e.what());
         return fileTimes;
     }
 }
 
 template <PathLike P>
-[[nodiscard]] auto checkFileTypeInFolder(
-    const P& folderPath, std::span<const std::string> fileTypes,
-    FileOption fileOption) -> std::vector<std::string> {
-    LOG_F(INFO, "checkFileTypeInFolder called with folderPath: {}",
-          fs::path(folderPath).string());
+[[nodiscard]] auto checkFileTypeInFolder(const P& folderPath,
+                                         std::span<const std::string> fileTypes,
+                                         FileOption fileOption)
+    -> std::vector<std::string> {
+    spdlog::info("checkFileTypeInFolder called with folderPath: {}",
+                 fs::path(folderPath).string());
 
     std::vector<std::string> files;
 
     try {
         fs::path path(folderPath);
         if (!isFolderExists(path)) {
-            LOG_F(ERROR, "Folder does not exist: {}", path.string());
+            spdlog::error("Folder does not exist: {}", path.string());
             return files;
         }
 
         std::error_code ec;
         for (const auto& entry : fs::directory_iterator(path, ec)) {
             if (ec) {
-                LOG_F(ERROR, "Error iterating directory {}: {}", path.string(),
-                      ec.message());
+                spdlog::error("Error iterating directory {}: {}", path.string(),
+                              ec.message());
                 continue;
             }
 
             if (entry.is_regular_file(ec)) {
                 if (ec) {
-                    LOG_F(ERROR, "Error checking if {} is regular file: {}",
-                          entry.path().string(), ec.message());
+                    spdlog::error("Error checking if {} is regular file: {}",
+                                  entry.path().string(), ec.message());
                     continue;
                 }
 
@@ -1407,21 +1390,21 @@ template <PathLike P>
             }
         }
     } catch (const fs::filesystem_error& ex) {
-        LOG_F(ERROR, "Failed to check files in folder {}: {}",
-              fs::path(folderPath).string(), ex.what());
+        spdlog::error("Failed to check files in folder {}: {}",
+                      fs::path(folderPath).string(), ex.what());
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Unexpected error checking files in folder {}: {}",
-              fs::path(folderPath).string(), e.what());
+        spdlog::error("Unexpected error checking files in folder {}: {}",
+                      fs::path(folderPath).string(), e.what());
     }
 
-    LOG_F(INFO, "checkFileTypeInFolder returning {} files", files.size());
+    spdlog::info("checkFileTypeInFolder returning {} files", files.size());
     return files;
 }
 
 template <PathLike P1, PathLike P2>
 auto isExecutableFile(const P1& fileName, const P2& fileExt) -> bool {
-    LOG_F(INFO, "isExecutableFile called with fileName: {}, fileExt: {}",
-          fs::path(fileName).string(), std::string(fileExt));
+    spdlog::info("isExecutableFile called with fileName: {}, fileExt: {}",
+                 fs::path(fileName).string(), std::string(fileExt));
 
     try {
 #ifdef _WIN32
@@ -1430,19 +1413,19 @@ auto isExecutableFile(const P1& fileName, const P2& fileExt) -> bool {
         fs::path filePath = fileName;
 #endif
 
-        LOG_F(INFO, "Checking file '{}'.", filePath.string());
+        spdlog::info("Checking file '{}'.", filePath.string());
         std::error_code ec;
 
         // Check if file exists and is regular
         if (!fs::exists(filePath, ec) || ec) {
-            LOG_F(WARNING, "The file '{}' does not exist: {}",
-                  filePath.string(), ec ? ec.message() : "");
+            spdlog::warn("The file '{}' does not exist: {}", filePath.string(),
+                         ec ? ec.message() : "");
             return false;
         }
 
         if (!fs::is_regular_file(filePath, ec) || ec) {
-            LOG_F(WARNING, "The path '{}' is not a regular file: {}",
-                  filePath.string(), ec ? ec.message() : "");
+            spdlog::warn("The path '{}' is not a regular file: {}",
+                         filePath.string(), ec ? ec.message() : "");
             return false;
         }
 
@@ -1450,48 +1433,47 @@ auto isExecutableFile(const P1& fileName, const P2& fileExt) -> bool {
         // On Unix-like systems, check execute permissions
         fs::perms p = fs::status(filePath, ec).permissions();
         if (ec) {
-            LOG_F(WARNING, "Error getting permissions for '{}': {}",
-                  filePath.string(), ec.message());
+            spdlog::warn("Error getting permissions for '{}': {}",
+                         filePath.string(), ec.message());
             return false;
         }
 
         if ((p & fs::perms::owner_exec) == fs::perms::none) {
-            LOG_F(WARNING, "The file '{}' is not executable.",
-                  filePath.string());
+            spdlog::warn("The file '{}' is not executable.", filePath.string());
             return false;
         }
 #endif
 
-        LOG_F(INFO, "The file '{}' exists and is executable.",
-              filePath.string());
+        spdlog::info("The file '{}' exists and is executable.",
+                     filePath.string());
         return true;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error checking if file is executable {}: {}",
-              fs::path(fileName).string(), e.what());
+        spdlog::error("Error checking if file is executable {}: {}",
+                      fs::path(fileName).string(), e.what());
         return false;
     }
 }
 
 template <PathLike P>
 auto getFileSize(const P& filePath) -> std::size_t {
-    LOG_F(INFO, "getFileSize called with filePath: {}",
-          fs::path(filePath).string());
+    spdlog::info("getFileSize called with filePath: {}",
+                 fs::path(filePath).string());
 
     try {
         fs::path path(filePath);
         std::error_code ec;
         std::size_t size = fs::file_size(path, ec);
         if (ec) {
-            LOG_F(ERROR, "Error getting file size for {}: {}", path.string(),
-                  ec.message());
+            spdlog::error("Error getting file size for {}: {}", path.string(),
+                          ec.message());
             return 0;
         }
 
-        LOG_F(INFO, "getFileSize returning: {}", size);
+        spdlog::info("getFileSize returning: {}", size);
         return size;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error getting file size for {}: {}",
-              fs::path(filePath).string(), e.what());
+        spdlog::error("Error getting file size for {}: {}",
+                      fs::path(filePath).string(), e.what());
         return 0;
     }
 }
@@ -1506,28 +1488,27 @@ auto getFileSize(const P& filePath) -> std::size_t {
 template <PathLike P1, PathLike P2>
 void splitFile(const P1& filePath, std::size_t chunkSize,
                const P2& outputPattern) {
-    LOG_F(
-        INFO,
+    spdlog::info(
         "splitFile called with filePath: {}, chunkSize: {}, outputPattern: {}",
         fs::path(filePath).string(), chunkSize, std::string(outputPattern));
 
     try {
         fs::path path(filePath);
         if (!fs::exists(path)) {
-            LOG_F(ERROR, "File does not exist: {}", path.string());
+            spdlog::error("File does not exist: {}", path.string());
             return;
         }
 
         std::ifstream inputFile(path, std::ios::binary);
         if (!inputFile) {
-            LOG_F(ERROR, "Failed to open file: {}", path.string());
+            spdlog::error("Failed to open file: {}", path.string());
             return;
         }
 
         std::size_t fileSize = getFileSize(path);
         if (fileSize == 0) {
-            LOG_F(ERROR, "File is empty or couldn't determine size: {}",
-                  path.string());
+            spdlog::error("File is empty or couldn't determine size: {}",
+                          path.string());
             return;
         }
 
@@ -1546,15 +1527,15 @@ void splitFile(const P1& filePath, std::size_t chunkSize,
 
             std::ofstream outputFile(partFileName.str(), std::ios::binary);
             if (!outputFile) {
-                LOG_F(ERROR, "Failed to create part file: {}",
-                      partFileName.str());
+                spdlog::error("Failed to create part file: {}",
+                              partFileName.str());
                 return;
             }
 
             std::size_t bytesToRead = std::min(chunkSize, remainingSize);
             inputFile.read(buffer.get(), bytesToRead);
             if (inputFile.fail() && !inputFile.eof()) {
-                LOG_F(ERROR, "Error reading from file: {}", path.string());
+                spdlog::error("Error reading from file: {}", path.string());
                 return;
             }
 
@@ -1564,21 +1545,22 @@ void splitFile(const P1& filePath, std::size_t chunkSize,
             ++partNumber;
         }
 
-        LOG_F(INFO, "File split into {} parts", partNumber);
+        spdlog::info("File split into {} parts", partNumber);
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error splitting file {}: {}", fs::path(filePath).string(),
-              e.what());
+        spdlog::error("Error splitting file {}: {}",
+                      fs::path(filePath).string(), e.what());
     } catch (...) {
-        LOG_F(ERROR, "Unknown error splitting file {}",
-              fs::path(filePath).string());
+        spdlog::error("Unknown error splitting file {}",
+                      fs::path(filePath).string());
     }
 }
 
 template <PathLike P>
 void mergeFiles(const P& outputFilePath,
                 std::span<const std::string> partFiles) {
-    LOG_F(INFO, "mergeFiles called with outputFilePath: {}, partFiles size: {}",
-          fs::path(outputFilePath).string(), partFiles.size());
+    spdlog::info(
+        "mergeFiles called with outputFilePath: {}, partFiles size: {}",
+        fs::path(outputFilePath).string(), partFiles.size());
 
     try {
         fs::path outPath(outputFilePath);
@@ -1589,15 +1571,15 @@ void mergeFiles(const P& outputFilePath,
             std::error_code ec;
             fs::create_directories(outDir, ec);
             if (ec) {
-                LOG_F(ERROR, "Failed to create output directory {}: {}",
-                      outDir.string(), ec.message());
+                spdlog::error("Failed to create output directory {}: {}",
+                              outDir.string(), ec.message());
                 return;
             }
         }
 
         std::ofstream outputFile(outPath, std::ios::binary);
         if (!outputFile) {
-            LOG_F(ERROR, "Failed to create output file: {}", outPath.string());
+            spdlog::error("Failed to create output file: {}", outPath.string());
             return;
         }
 
@@ -1609,7 +1591,7 @@ void mergeFiles(const P& outputFilePath,
         for (const auto& partFile : partFiles) {
             std::ifstream inputFile(partFile, std::ios::binary);
             if (!inputFile) {
-                LOG_F(ERROR, "Failed to open part file: {}", partFile);
+                spdlog::error("Failed to open part file: {}", partFile);
                 return;
             }
 
@@ -1619,71 +1601,69 @@ void mergeFiles(const P& outputFilePath,
                 if (bytesRead > 0) {
                     outputFile.write(buffer.get(), bytesRead);
                     if (outputFile.fail()) {
-                        LOG_F(ERROR, "Error writing to output file: {}",
-                              outPath.string());
+                        spdlog::error("Error writing to output file: {}",
+                                      outPath.string());
                         return;
                     }
                 }
             }
         }
 
-        LOG_F(INFO, "Files merged successfully into {}", outPath.string());
+        spdlog::info("Files merged successfully into {}", outPath.string());
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error merging files to {}: {}",
-              fs::path(outputFilePath).string(), e.what());
+        spdlog::error("Error merging files to {}: {}",
+                      fs::path(outputFilePath).string(), e.what());
     } catch (...) {
-        LOG_F(ERROR, "Unknown error merging files to {}",
-              fs::path(outputFilePath).string());
+        spdlog::error("Unknown error merging files to {}",
+                      fs::path(outputFilePath).string());
     }
 }
 
 template <PathLike P1, PathLike P2>
 void quickSplit(const P1& filePath, int numChunks, const P2& outputPattern) {
-    LOG_F(
-        INFO,
+    spdlog::info(
         "quickSplit called with filePath: {}, numChunks: {}, outputPattern: {}",
         fs::path(filePath).string(), numChunks, std::string(outputPattern));
 
     try {
         fs::path path(filePath);
         if (!fs::exists(path)) {
-            LOG_F(ERROR, "File does not exist: {}", path.string());
+            spdlog::error("File does not exist: {}", path.string());
             return;
         }
 
         std::size_t fileSize = getFileSize(path);
         if (fileSize == 0) {
-            LOG_F(ERROR, "File is empty or couldn't determine size: {}",
-                  path.string());
+            spdlog::error("File is empty or couldn't determine size: {}",
+                          path.string());
             return;
         }
 
         std::size_t chunkSize = calculateChunkSize(fileSize, numChunks);
-        LOG_F(INFO, "Calculated chunk size: {} bytes for {} chunks", chunkSize,
-              numChunks);
+        spdlog::info("Calculated chunk size: {} bytes for {} chunks", chunkSize,
+                     numChunks);
 
         splitFile(path, chunkSize, outputPattern);
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error in quickSplit for {}: {}",
-              fs::path(filePath).string(), e.what());
+        spdlog::error("Error in quickSplit for {}: {}",
+                      fs::path(filePath).string(), e.what());
     } catch (...) {
-        LOG_F(ERROR, "Unknown error in quickSplit for {}",
-              fs::path(filePath).string());
+        spdlog::error("Unknown error in quickSplit for {}",
+                      fs::path(filePath).string());
     }
 }
 
 template <PathLike P1, PathLike P2>
 void quickMerge(const P1& outputFilePath, const P2& partPattern,
                 int numChunks) {
-    LOG_F(INFO,
-          "quickMerge called with outputFilePath: {}, partPattern: {}, "
-          "numChunks: {}",
-          fs::path(outputFilePath).string(), std::string(partPattern),
-          numChunks);
+    spdlog::info(
+        "quickMerge called with outputFilePath: {}, partPattern: {}, "
+        "numChunks: {}",
+        fs::path(outputFilePath).string(), std::string(partPattern), numChunks);
 
     try {
         if (numChunks <= 0) {
-            LOG_F(ERROR, "Invalid number of chunks: {}", numChunks);
+            spdlog::error("Invalid number of chunks: {}", numChunks);
             return;
         }
 
@@ -1698,17 +1678,17 @@ void quickMerge(const P1& outputFilePath, const P2& partPattern,
 
         mergeFiles(outputFilePath, partFiles);
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error in quickMerge for {}: {}",
-              fs::path(outputFilePath).string(), e.what());
+        spdlog::error("Error in quickMerge for {}: {}",
+                      fs::path(outputFilePath).string(), e.what());
     } catch (...) {
-        LOG_F(ERROR, "Unknown error in quickMerge for {}",
-              fs::path(outputFilePath).string());
+        spdlog::error("Unknown error in quickMerge for {}",
+                      fs::path(outputFilePath).string());
     }
 }
 
 template <PathLike P>
 auto checkPathType(const P& path) -> PathType {
-    LOG_F(INFO, "checkPathType called with path: {}", fs::path(path).string());
+    spdlog::info("checkPathType called with path: {}", fs::path(path).string());
 
     try {
         fs::path fsPath(path);
@@ -1716,16 +1696,16 @@ auto checkPathType(const P& path) -> PathType {
 
         if (!fs::exists(fsPath, ec)) {
             if (ec) {
-                LOG_F(ERROR, "Error checking if path exists {}: {}",
-                      fsPath.string(), ec.message());
+                spdlog::error("Error checking if path exists {}: {}",
+                              fsPath.string(), ec.message());
             }
             return PathType::NOT_EXISTS;
         }
 
         if (fs::is_regular_file(fsPath, ec)) {
             if (ec) {
-                LOG_F(ERROR, "Error checking if path is regular file {}: {}",
-                      fsPath.string(), ec.message());
+                spdlog::error("Error checking if path is regular file {}: {}",
+                              fsPath.string(), ec.message());
                 return PathType::OTHER;
             }
             return PathType::REGULAR_FILE;
@@ -1733,8 +1713,8 @@ auto checkPathType(const P& path) -> PathType {
 
         if (fs::is_directory(fsPath, ec)) {
             if (ec) {
-                LOG_F(ERROR, "Error checking if path is directory {}: {}",
-                      fsPath.string(), ec.message());
+                spdlog::error("Error checking if path is directory {}: {}",
+                              fsPath.string(), ec.message());
                 return PathType::OTHER;
             }
             return PathType::DIRECTORY;
@@ -1742,8 +1722,8 @@ auto checkPathType(const P& path) -> PathType {
 
         if (fs::is_symlink(fsPath, ec)) {
             if (ec) {
-                LOG_F(ERROR, "Error checking if path is symlink {}: {}",
-                      fsPath.string(), ec.message());
+                spdlog::error("Error checking if path is symlink {}: {}",
+                              fsPath.string(), ec.message());
                 return PathType::OTHER;
             }
             return PathType::SYMLINK;
@@ -1751,32 +1731,32 @@ auto checkPathType(const P& path) -> PathType {
 
         return PathType::OTHER;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error in checkPathType for {}: {}",
-              fs::path(path).string(), e.what());
+        spdlog::error("Error in checkPathType for {}: {}",
+                      fs::path(path).string(), e.what());
         return PathType::OTHER;
     }
 }
 
 template <PathLike P>
 auto countLinesInFile(const P& filePath) -> std::optional<int> {
-    LOG_F(INFO, "countLinesInFile called with filePath: {}",
-          fs::path(filePath).string());
+    spdlog::info("countLinesInFile called with filePath: {}",
+                 fs::path(filePath).string());
 
     try {
         fs::path path(filePath);
         if (!fs::exists(path)) {
-            LOG_F(ERROR, "File does not exist: {}", path.string());
+            spdlog::error("File does not exist: {}", path.string());
             return std::nullopt;
         }
 
         if (!fs::is_regular_file(path)) {
-            LOG_F(ERROR, "Path is not a regular file: {}", path.string());
+            spdlog::error("Path is not a regular file: {}", path.string());
             return std::nullopt;
         }
 
         std::ifstream file(path);
         if (!file) {
-            LOG_F(ERROR, "Failed to open file: {}", path.string());
+            spdlog::error("Failed to open file: {}", path.string());
             return std::nullopt;
         }
 
@@ -1790,15 +1770,15 @@ auto countLinesInFile(const P& filePath) -> std::optional<int> {
         }
 
         if (file.bad()) {
-            LOG_F(ERROR, "Error reading file: {}", path.string());
+            spdlog::error("Error reading file: {}", path.string());
             return std::nullopt;
         }
 
-        LOG_F(INFO, "File {} has {} lines", path.string(), lineCount);
+        spdlog::info("File {} has {} lines", path.string(), lineCount);
         return lineCount;
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error counting lines in {}: {}",
-              fs::path(filePath).string(), e.what());
+        spdlog::error("Error counting lines in {}: {}",
+                      fs::path(filePath).string(), e.what());
         return std::nullopt;
     }
 }
@@ -1806,32 +1786,32 @@ auto countLinesInFile(const P& filePath) -> std::optional<int> {
 template <PathLike P>
 auto searchExecutableFiles(const P& dir, std::string_view searchStr)
     -> std::vector<fs::path> {
-    LOG_F(INFO, "searchExecutableFiles called with dir: {}, searchStr: {}",
-          fs::path(dir).string(), std::string(searchStr));
+    spdlog::info("searchExecutableFiles called with dir: {}, searchStr: {}",
+                 fs::path(dir).string(), std::string(searchStr));
 
     std::vector<fs::path> matchedFiles;
 
     try {
         fs::path dirPath(dir);
         if (!fs::exists(dirPath) || !fs::is_directory(dirPath)) {
-            LOG_F(ERROR, "Directory does not exist or is not a directory: {}",
-                  dirPath.string());
+            spdlog::error("Directory does not exist or is not a directory: {}",
+                          dirPath.string());
             return matchedFiles;
         }
 
         std::error_code ec;
         for (const auto& entry : fs::directory_iterator(dirPath, ec)) {
             if (ec) {
-                LOG_F(ERROR, "Error iterating directory {}: {}",
-                      dirPath.string(), ec.message());
+                spdlog::error("Error iterating directory {}: {}",
+                              dirPath.string(), ec.message());
                 continue;
             }
 
             // Check if the entry is a regular file
             if (entry.is_regular_file(ec)) {
                 if (ec) {
-                    LOG_F(ERROR, "Error checking if {} is a regular file: {}",
-                          entry.path().string(), ec.message());
+                    spdlog::error("Error checking if {} is a regular file: {}",
+                                  entry.path().string(), ec.message());
                     continue;
                 }
 
@@ -1841,17 +1821,17 @@ auto searchExecutableFiles(const P& dir, std::string_view searchStr)
                     const auto& fileName = entry.path().filename().string();
                     if (fileName.find(searchStr) != std::string::npos) {
                         matchedFiles.push_back(entry.path());
-                        LOG_F(INFO, "Found matching executable file: {}",
-                              entry.path().string());
+                        spdlog::info("Found matching executable file: {}",
+                                     entry.path().string());
                     }
                 }
             }
         }
 
-        LOG_F(INFO, "Found {} matching executable files", matchedFiles.size());
+        spdlog::info("Found {} matching executable files", matchedFiles.size());
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error searching for executable files in {}: {}",
-              fs::path(dir).string(), e.what());
+        spdlog::error("Error searching for executable files in {}: {}",
+                      fs::path(dir).string(), e.what());
     }
 
     return matchedFiles;
@@ -1860,31 +1840,31 @@ auto searchExecutableFiles(const P& dir, std::string_view searchStr)
 template <PathLike P>
 auto classifyFiles(const P& directory)
     -> std::unordered_map<std::string, std::vector<std::string>> {
-    LOG_F(INFO, "classifyFiles called with directory: {}",
-          fs::path(directory).string());
+    spdlog::info("classifyFiles called with directory: {}",
+                 fs::path(directory).string());
 
     std::unordered_map<std::string, std::vector<std::string>> fileMap;
 
     try {
         fs::path dirPath(directory);
         if (!fs::exists(dirPath) || !fs::is_directory(dirPath)) {
-            LOG_F(ERROR, "Directory does not exist or is not a directory: {}",
-                  dirPath.string());
+            spdlog::error("Directory does not exist or is not a directory: {}",
+                          dirPath.string());
             return fileMap;
         }
 
         std::error_code ec;
         for (const auto& entry : fs::directory_iterator(dirPath, ec)) {
             if (ec) {
-                LOG_F(ERROR, "Error iterating directory {}: {}",
-                      dirPath.string(), ec.message());
+                spdlog::error("Error iterating directory {}: {}",
+                              dirPath.string(), ec.message());
                 continue;
             }
 
             if (entry.is_regular_file(ec)) {
                 if (ec) {
-                    LOG_F(ERROR, "Error checking if {} is a regular file: {}",
-                          entry.path().string(), ec.message());
+                    spdlog::error("Error checking if {} is a regular file: {}",
+                                  entry.path().string(), ec.message());
                     continue;
                 }
 
@@ -1898,13 +1878,13 @@ auto classifyFiles(const P& directory)
         }
 
         // Use modern C++20 features to report on the classification
-        LOG_F(INFO, "Classified files into {} categories:", fileMap.size());
+        spdlog::info("Classified files into {} categories:", fileMap.size());
         for (const auto& [ext, files] : fileMap) {
-            LOG_F(INFO, "  - {} files with extension '{}'", files.size(), ext);
+            spdlog::info("  - {} files with extension '{}'", files.size(), ext);
         }
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error classifying files in {}: {}",
-              fs::path(directory).string(), e.what());
+        spdlog::error("Error classifying files in {}: {}",
+                      fs::path(directory).string(), e.what());
     }
 
     return fileMap;
@@ -1912,4 +1892,4 @@ auto classifyFiles(const P& directory)
 
 }  // namespace atom::io
 
-#endif  // ATOM_IO_IO_IMPL_HPP
+#endif

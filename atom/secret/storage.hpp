@@ -52,15 +52,6 @@ public:
     static std::unique_ptr<SecureStorage> create(std::string_view appName);
 };
 
-#if defined(_WIN32)
-class WindowsSecureStorage;
-#elif defined(__APPLE__)
-class MacSecureStorage;
-#elif defined(__linux__)
-class LinuxSecureStorage;
-#endif
-class FileSecureStorage;
-
 }  // namespace atom::secret
 
 #endif  // ATOM_SECRET_STORAGE_HPP

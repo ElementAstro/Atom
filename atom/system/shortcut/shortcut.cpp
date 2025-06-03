@@ -59,15 +59,10 @@ std::string Shortcut::toString() const {
     } else if (vkCode == VK_DOWN) {
         ss << "Down";
     } else {
-        // For letters and numbers
-        char keyChar[2] = {0, 0};
-
-        // Get the character representation
         if ((vkCode >= '0' && vkCode <= '9') ||
             (vkCode >= 'A' && vkCode <= 'Z')) {
-            keyChar[0] = static_cast<char>(vkCode);
+            ss << static_cast<char>(vkCode);
         } else {
-            // Try to convert virtual key code to character
             BYTE keyboardState[256] = {0};
             if (ctrl)
                 keyboardState[VK_CONTROL] = 0x80;
@@ -78,33 +73,22 @@ std::string Shortcut::toString() const {
 
             WORD result = 0;
             if (ToAscii(vkCode, 0, keyboardState, &result, 0) == 1) {
-                keyChar[0] = static_cast<char>(result & 0xFF);
+                ss << static_cast<char>(result & 0xFF);
             } else {
-                // Fall back to hexadecimal for unknown keys
                 ss << "0x" << std::hex << vkCode;
-                return ss.str();
-            }
-        }
-
-        ss << keyChar;
+            }        }
     }
 
     return ss.str();
 }
 
 size_t Shortcut::hash() const {
-    // Combine hash values for all fields
     std::size_t h = 0;
-
-    // Incorporate key code
     h ^= std::hash<uint32_t>{}(vkCode) + 0x9e3779b9 + (h << 6) + (h >> 2);
-
-    // Incorporate modifier keys
     h ^= std::hash<bool>{}(ctrl) + 0x9e3779b9 + (h << 6) + (h >> 2);
     h ^= std::hash<bool>{}(alt) + 0x9e3779b9 + (h << 6) + (h >> 2);
     h ^= std::hash<bool>{}(shift) + 0x9e3779b9 + (h << 6) + (h >> 2);
     h ^= std::hash<bool>{}(win) + 0x9e3779b9 + (h << 6) + (h >> 2);
-
     return h;
 }
 

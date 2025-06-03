@@ -2,10 +2,10 @@
 #define ATOM_IMAGE_EXIF_HPP
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
-#include <memory>
 
 namespace atom::image {
 
@@ -27,19 +27,30 @@ struct GpsCoordinate {
     double degrees;
     double minutes;
     double seconds;
-    char direction;  // 'N', 'S', 'E', or 'W'
+    char direction;
 
-    // Convert to decimal degrees
+    /**
+     * @brief Convert to decimal degrees
+     * @return Decimal degree representation
+     */
     [[nodiscard]] double toDecimalDegrees() const noexcept {
         double value = degrees + minutes / 60.0 + seconds / 3600.0;
         return (direction == 'S' || direction == 'W') ? -value : value;
     }
 
-    // Create from decimal degrees
+    /**
+     * @brief Create from decimal degrees
+     * @param decimal Decimal degree value
+     * @param isLatitude True if latitude, false if longitude
+     * @return GpsCoordinate instance
+     */
     [[nodiscard]] static GpsCoordinate fromDecimalDegrees(
         double decimal, bool isLatitude) noexcept;
 
-    // Convert to string representation
+    /**
+     * @brief Convert to string representation
+     * @return String representation of GPS coordinate
+     */
     [[nodiscard]] std::string toString() const;
 };
 
@@ -48,25 +59,21 @@ struct GpsCoordinate {
  * @brief Structure to hold EXIF data for an image.
  */
 struct alignas(128) ExifData {
-    std::string cameraMake;    ///< The make of the camera.
-    std::string cameraModel;   ///< The model of the camera.
-    std::string dateTime;      ///< The date and time when the photo was taken.
-    std::string exposureTime;  ///< The exposure time of the photo.
-    std::string fNumber;       ///< The f-number (aperture) of the photo.
-    std::string isoSpeed;      ///< The ISO speed of the photo.
-    std::string focalLength;   ///< The focal length of the lens.
-    std::optional<GpsCoordinate>
-        gpsLatitude;  ///< The GPS latitude where the photo was taken.
-    std::optional<GpsCoordinate>
-        gpsLongitude;  ///< The GPS longitude where the photo was taken.
-
-    // Additional fields
-    std::string orientation;    ///< Image orientation
-    std::string compression;    ///< Compression method
-    std::string imageWidth;     ///< Image width
-    std::string imageHeight;    ///< Image height
-    std::string colorSpace;     ///< Color space
-    std::string software;       ///< Processing software
+    std::string cameraMake;
+    std::string cameraModel;
+    std::string dateTime;
+    std::string exposureTime;
+    std::string fNumber;
+    std::string isoSpeed;
+    std::string focalLength;
+    std::optional<GpsCoordinate> gpsLatitude;
+    std::optional<GpsCoordinate> gpsLongitude;
+    std::string orientation;
+    std::string compression;
+    std::string imageWidth;
+    std::string imageHeight;
+    std::string colorSpace;
+    std::string software;
 };
 
 /**
@@ -93,20 +100,36 @@ public:
      */
     [[nodiscard]] auto getExifData() const -> const ExifData&;
 
-    // Virtual destructor
     virtual ~ExifParser() = default;
 
-    // Optimization method
+    /**
+     * @brief Optimize memory usage of EXIF data
+     */
     virtual void optimize();
 
-    // Validate data integrity
+    /**
+     * @brief Validate data integrity
+     * @return True if data is valid, false otherwise
+     */
     [[nodiscard]] bool validateData() const;
 
-    // Clone interface
+    /**
+     * @brief Clone the parser instance
+     * @return Unique pointer to cloned parser
+     */
     [[nodiscard]] virtual std::unique_ptr<ExifParser> clone() const;
 
-    // Serialization interface
+    /**
+     * @brief Serialize EXIF data to string
+     * @return Serialized string representation
+     */
     [[nodiscard]] virtual std::string serialize() const;
+
+    /**
+     * @brief Deserialize EXIF data from string
+     * @param data Serialized data string
+     * @return Unique pointer to ExifParser instance
+     */
     static std::unique_ptr<ExifParser> deserialize(const std::string& data);
 
 protected:
@@ -129,8 +152,8 @@ protected:
      * format.
      * @return The parsed GPS coordinate as a string.
      */
-    auto parseGPSCoordinate(const std::byte* data,
-                            bool isLittleEndian) -> std::string;
+    auto parseGPSCoordinate(const std::byte* data, bool isLittleEndian)
+        -> std::string;
 
     /**
      * @brief Parses a rational number from the EXIF data.
@@ -169,19 +192,27 @@ protected:
      */
     auto readUint32Le(const std::byte* data) -> uint32_t;
 
-    // Validate buffer bounds
+    /**
+     * @brief Validate buffer bounds
+     * @param ptr Pointer to validate
+     * @param size Size to validate
+     * @return True if bounds are valid, false otherwise
+     */
     virtual bool validateBufferBounds(const std::byte* ptr, size_t size) const;
 
-    // Clear EXIF data
+    /**
+     * @brief Clear EXIF data
+     */
     virtual void clearExifData();
 
 private:
-    std::string m_filename;  ///< The name of the file to parse.
-    ExifData m_exifData;     ///< The structure to hold the parsed EXIF data.
+    std::string m_filename;
+    ExifData m_exifData;
 
-    // Private helper methods
-    auto parseColorSpace(const std::byte* data, bool isLittleEndian) -> std::string;
-    auto parseOrientation(const std::byte* data, bool isLittleEndian) -> std::string;
+    auto parseColorSpace(const std::byte* data, bool isLittleEndian)
+        -> std::string;
+    auto parseOrientation(const std::byte* data, bool isLittleEndian)
+        -> std::string;
 };
 
 }  // namespace atom::image

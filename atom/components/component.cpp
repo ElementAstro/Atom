@@ -16,9 +16,8 @@ Description: Basic Component Definition
 
 #include "dispatch.hpp"
 #include "registry.hpp"
-#include "spdlog/spdlog.h"  // Replaced loguru with spdlog
+#include "spdlog/spdlog.h"
 
-#include <algorithm>
 #include <cassert>
 #include <chrono>
 
@@ -31,14 +30,10 @@ Component::Component(std::string name) : m_name_(std::move(name)) {
 }
 
 auto Component::getInstance() const -> std::weak_ptr<const Component> {
-    // spdlog::trace("Entering function: {}", __func__); // Removed
-    // LOG_SCOPE_FUNCTION
     return shared_from_this();
 }
 
 auto Component::initialize() -> bool {
-    // spdlog::trace("Entering function: {}", __func__); // Removed
-    // LOG_SCOPE_FUNCTION
     spdlog::info("Initializing component: {}", m_name_);
 
     setState(ComponentState::Initializing);
@@ -62,7 +57,6 @@ auto Component::initialize() -> bool {
 
     setState(ComponentState::Active);
 
-// Trigger component initialization event
 #if ENABLE_EVENT_SYSTEM
     emitEvent("component.initialized");
 #endif
@@ -71,8 +65,6 @@ auto Component::initialize() -> bool {
 }
 
 auto Component::destroy() -> bool {
-    // spdlog::trace("Entering function: {}", __func__); // Removed
-    // LOG_SCOPE_FUNCTION
     spdlog::info("Destroying component: {}", m_name_);
 
     setState(ComponentState::Destroying);
@@ -95,7 +87,6 @@ auto Component::destroy() -> bool {
     // Clean up resources
     clearOtherComponents();
 
-// Trigger component destruction event
 #if ENABLE_EVENT_SYSTEM
     emitEvent("component.destroyed");
 #endif
@@ -110,7 +101,7 @@ auto Component::getTypeInfo() const noexcept -> atom::meta::TypeInfo {
 }
 
 void Component::setTypeInfo(atom::meta::TypeInfo typeInfo) noexcept {
-    m_typeInfo_ = typeInfo;
+    m_typeInfo_ = std::move(typeInfo);
 }
 
 auto Component::getState() const noexcept -> ComponentState {
@@ -125,7 +116,6 @@ void Component::setState(ComponentState state) noexcept {
     spdlog::info("Component '{}' state changed: {} -> {}", m_name_,
                  static_cast<int>(oldState), static_cast<int>(state));
 
-// Trigger state change event
 #if ENABLE_EVENT_SYSTEM
     try {
         atom::components::Event event;
@@ -141,7 +131,6 @@ void Component::setState(ComponentState state) noexcept {
         event.data = StateChange{oldState, state};
         handleEvent(event);
     } catch (const std::exception& e) {
-        // Do not let event handling exceptions affect state setting
         spdlog::error("Failed to handle state change event: {}", e.what());
     }
 #endif
@@ -154,7 +143,7 @@ auto Component::getPerformanceStats() const noexcept
 
 void Component::resetPerformanceStats() noexcept {
     m_PerformanceStats_.reset();
-    spdlog::info("Reset performance stats for component: {}", m_name_);
+    spdlog::debug("Reset performance stats for component: {}", m_name_);
 }
 
 #if ENABLE_EVENT_SYSTEM
@@ -165,7 +154,7 @@ void Component::emitEvent(std::string_view eventName, std::any eventData) {
     event.source = m_name_;
     event.timestamp = std::chrono::steady_clock::now();
 
-    spdlog::info("Component '{}' emitting event: {}", m_name_, eventName);
+    spdlog::debug("Component '{}' emitting event: {}", m_name_, eventName);
 
     // Update statistics
     m_PerformanceStats_.eventCount.fetch_add(1, std::memory_order_relaxed);
@@ -187,17 +176,18 @@ atom::components::EventCallbackId Component::on(
 
     std::unique_lock<std::shared_mutex> lock(m_EventMutex_);
 
+    const atom::components::EventCallbackId nextId = m_NextEventId_++;
     EventHandler handler{
-        m_NextEventId_++, std::move(callback),
+        nextId, std::move(callback),
         false  // Not one-time
     };
 
     m_EventHandlers_[std::string(eventName)].push_back(std::move(handler));
 
-    spdlog::info("Component '{}' registered handler for event '{}' with ID {}",
-                 m_name_, eventName, handler.id);
+    spdlog::debug("Component '{}' registered handler for event '{}' with ID {}",
+                  m_name_, eventName, nextId);
 
-    return handler.id;
+    return nextId;
 }
 
 atom::components::EventCallbackId Component::once(
@@ -210,18 +200,19 @@ atom::components::EventCallbackId Component::once(
 
     std::unique_lock<std::shared_mutex> lock(m_EventMutex_);
 
+    const atom::components::EventCallbackId nextId = m_NextEventId_++;
     EventHandler handler{
-        m_NextEventId_++, std::move(callback),
+        nextId, std::move(callback),
         true  // One-time
     };
 
     m_EventHandlers_[std::string(eventName)].push_back(std::move(handler));
 
-    spdlog::info(
+    spdlog::debug(
         "Component '{}' registered one-time handler for event '{}' with ID {}",
-        m_name_, eventName, handler.id);
+        m_name_, eventName, nextId);
 
-    return handler.id;
+    return nextId;
 }
 
 bool Component::off(std::string_view eventName,
@@ -254,7 +245,7 @@ bool Component::off(std::string_view eventName,
         m_EventHandlers_.erase(it);
     }
 
-    spdlog::info(
+    spdlog::debug(
         "Component '{}' unregistered handler with ID {} for event '{}'",
         m_name_, callbackId, eventName);
 
@@ -295,13 +286,13 @@ void Component::handleEvent(const atom::components::Event& event) {
         off(event.name, id);
     }
 
-    spdlog::info("Component '{}' handled event '{}' from source '{}'", m_name_,
-                 event.name, event.source);
+    spdlog::debug("Component '{}' handled event '{}' from source '{}'", m_name_,
+                  event.name, event.source);
 }
 #endif
 
 void Component::addAlias(std::string_view name, std::string_view alias) const {
-    spdlog::info("Adding alias '{}' for command '{}'", alias, name);
+    spdlog::debug("Adding alias '{}' for command '{}'", alias, name);
     bool result =
         m_CommandDispatcher_->addAlias(std::string(name), std::string(alias));
     if (!result) {
@@ -310,7 +301,7 @@ void Component::addAlias(std::string_view name, std::string_view alias) const {
 }
 
 void Component::addGroup(std::string_view name, std::string_view group) const {
-    spdlog::info("Adding command '{}' to group '{}'", name, group);
+    spdlog::debug("Adding command '{}' to group '{}'", name, group);
     bool result =
         m_CommandDispatcher_->addGroup(std::string(name), std::string(group));
     if (!result) {
@@ -320,8 +311,8 @@ void Component::addGroup(std::string_view name, std::string_view group) const {
 
 void Component::setTimeout(std::string_view name,
                            std::chrono::milliseconds timeout) const {
-    spdlog::info("Setting timeout for command '{}': {} ms", name,
-                 timeout.count());
+    spdlog::debug("Setting timeout for command '{}': {} ms", name,
+                  timeout.count());
     bool result = m_CommandDispatcher_->setTimeout(std::string(name), timeout);
     if (!result) {
         spdlog::warn("Failed to set timeout for command '{}'", name);
@@ -329,7 +320,7 @@ void Component::setTimeout(std::string_view name,
 }
 
 void Component::removeCommand(std::string_view name) const {
-    spdlog::info("Removing command '{}'", name);
+    spdlog::debug("Removing command '{}'", name);
     bool result = m_CommandDispatcher_->removeCommand(std::string(name));
     if (!result) {
         spdlog::warn("Failed to remove command '{}'", name);
@@ -362,11 +353,7 @@ auto Component::getCommandArgAndReturnType(std::string_view name)
     return m_CommandDispatcher_->getCommandArgAndReturnType(std::string(name));
 }
 
-auto Component::getNeededComponents() -> std::vector<std::string> {
-    // Default implementation returns an empty list
-    // Derived classes can override this method to specify dependencies
-    return {};
-}
+auto Component::getNeededComponents() -> std::vector<std::string> { return {}; }
 
 void Component::addOtherComponent(std::string_view name,
                                   const std::weak_ptr<Component>& component) {
@@ -381,39 +368,42 @@ void Component::addOtherComponent(std::string_view name,
             std::string("Cannot add expired component: ") + std::string(name));
     }
 
-    std::unique_lock<std::shared_mutex> lock(m_ComponentsMutex_);
-
     std::string nameStr(name);
-    if (m_OtherComponents_.contains(nameStr)) {
-        spdlog::warn("Replacing existing component '{}'", name);
+    {
+        std::unique_lock<std::shared_mutex> lock(m_ComponentsMutex_);
+
+        if (m_OtherComponents_.contains(nameStr)) {
+            spdlog::warn("Replacing existing component '{}'", name);
+        }
+
+        m_OtherComponents_[nameStr] = component;
     }
 
-    spdlog::info("Adding component '{}' to '{}'", name, m_name_);
-    m_OtherComponents_[nameStr] = component;
+    spdlog::info("Added component '{}' to '{}'", name, m_name_);
 
 #if ENABLE_EVENT_SYSTEM
-    // Trigger component dependency added event
     emitEvent("component.dependency_added", nameStr);
 #endif
 }
 
 void Component::removeOtherComponent(std::string_view name) noexcept {
-    std::unique_lock<std::shared_mutex> lock(m_ComponentsMutex_);
-
-    spdlog::info("Removing component '{}' from '{}'", name, m_name_);
-
-    // Check if the component exists
     std::string nameStr(name);
-    if (!m_OtherComponents_.contains(nameStr)) {
-        spdlog::warn("Component '{}' not found in '{}'", name, m_name_);
-        return;
+    {
+        std::unique_lock<std::shared_mutex> lock(m_ComponentsMutex_);
+
+        // Check if the component exists
+        if (!m_OtherComponents_.contains(nameStr)) {
+            spdlog::warn("Component '{}' not found in '{}'", name, m_name_);
+            return;
+        }
+
+        m_OtherComponents_.erase(nameStr);
     }
 
-    m_OtherComponents_.erase(nameStr);
+    spdlog::info("Removed component '{}' from '{}'", name, m_name_);
 
 #if ENABLE_EVENT_SYSTEM
     try {
-        // Trigger component dependency removed event
         emitEvent("component.dependency_removed", nameStr);
     } catch (...) {
         // Ignore event handling exceptions
@@ -422,14 +412,15 @@ void Component::removeOtherComponent(std::string_view name) noexcept {
 }
 
 void Component::clearOtherComponents() noexcept {
-    std::unique_lock<std::shared_mutex> lock(m_ComponentsMutex_);
+    {
+        std::unique_lock<std::shared_mutex> lock(m_ComponentsMutex_);
+        m_OtherComponents_.clear();
+    }
 
-    spdlog::info("Clearing all components from '{}'", m_name_);
-    m_OtherComponents_.clear();
+    spdlog::info("Cleared all components from '{}'", m_name_);
 
 #if ENABLE_EVENT_SYSTEM
     try {
-        // Trigger component dependencies cleared event
         emitEvent("component.dependencies_cleared");
     } catch (...) {
         // Ignore event handling exceptions
@@ -439,9 +430,9 @@ void Component::clearOtherComponents() noexcept {
 
 auto Component::getOtherComponent(std::string_view name)
     -> std::weak_ptr<Component> {
+    std::string nameStr(name);
     std::shared_lock<std::shared_mutex> lock(m_ComponentsMutex_);
 
-    std::string nameStr(name);
     auto it = m_OtherComponents_.find(nameStr);
     if (it != m_OtherComponents_.end()) {
         if (it->second.expired()) {
@@ -501,9 +492,15 @@ auto Component::dispatch(std::string_view name,
     auto startTime = std::chrono::high_resolution_clock::now();
 
     try {
-        std::vector<std::any> argsVec(args.begin(), args.end());
-        auto result =
-            m_CommandDispatcher_->dispatch(std::string(name), argsVec);
+        // Optimize for the common case of no arguments
+        std::any result;
+        if (args.empty()) {
+            result = m_CommandDispatcher_->dispatch(std::string(name));
+        } else {
+            std::vector<std::any> argsVec(args.begin(), args.end());
+            result = m_CommandDispatcher_->dispatch(std::string(name), argsVec);
+        }
+
         auto endTime = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
             endTime - startTime);
@@ -519,7 +516,7 @@ auto Component::dispatch(std::string_view name,
         stats.commandErrorCount.fetch_add(1, std::memory_order_relaxed);
 
         spdlog::error("Error dispatching command '{}': {}", name, e.what());
-        throw;  // Rethrow exception
+        throw;
     }
 }
 
@@ -533,8 +530,14 @@ auto Component::runCommand(std::string_view name,
     try {
         // First, try to run the command in this component
         if (has(name)) {
-            std::vector<std::any> argsVec(args.begin(), args.end());
-            auto result = m_CommandDispatcher_->dispatch(nameStr, argsVec);
+            std::any result;
+            if (args.empty()) {
+                result = m_CommandDispatcher_->dispatch(nameStr);
+            } else {
+                std::vector<std::any> argsVec(args.begin(), args.end());
+                result = m_CommandDispatcher_->dispatch(nameStr, argsVec);
+            }
+
             auto endTime = std::chrono::high_resolution_clock::now();
             auto duration =
                 std::chrono::duration_cast<std::chrono::microseconds>(
@@ -550,49 +553,62 @@ auto Component::runCommand(std::string_view name,
 
         // If the command is not found in this component, try to find it in
         // other components
-        std::shared_lock<std::shared_mutex> lock(m_ComponentsMutex_);
         std::vector<std::string> expiredComponents;
 
-        for (const auto& [key, value] : m_OtherComponents_) {
-            if (value.expired()) {
-                spdlog::warn("Component '{}' has expired", key);
-                expiredComponents.push_back(key);
-                continue;
-            }
+        // Use a lambda to avoid code duplication
+        auto tryRunCommandInOtherComponents = [&]() -> std::optional<std::any> {
+            std::shared_lock<std::shared_mutex> lock(m_ComponentsMutex_);
 
-            auto component = value.lock();
-            if (component->has(name)) {
-                try {
-                    spdlog::info("Running command '{}' in other component '{}'",
-                                 name, key);
-                    std::vector<std::any> argsVec(args.begin(), args.end());
-                    auto result = component->dispatch(name, argsVec);
-                    auto endTime = std::chrono::high_resolution_clock::now();
-                    auto duration =
-                        std::chrono::duration_cast<std::chrono::microseconds>(
-                            endTime - startTime);
+            for (const auto& [key, value] : m_OtherComponents_) {
+                if (value.expired()) {
+                    spdlog::warn("Component '{}' has expired", key);
+                    expiredComponents.push_back(key);
+                    continue;
+                }
 
-                    // Update performance statistics
-                    m_PerformanceStats_.commandCallCount.fetch_add(
-                        1, std::memory_order_relaxed);
-                    m_PerformanceStats_.updateExecutionTime(duration);
+                auto component = value.lock();
+                if (component->has(name)) {
+                    try {
+                        spdlog::info(
+                            "Running command '{}' in other component '{}'",
+                            name, key);
 
-                    return result;
-                } catch (const std::exception& e) {
-                    spdlog::error(
-                        "Error running command '{}' in component '{}': {}",
-                        name, key, e.what());
-                    m_PerformanceStats_.commandErrorCount.fetch_add(
-                        1, std::memory_order_relaxed);
-                    throw;  // Rethrow exception
+                        std::any result;
+                        if (args.empty()) {
+                            result = component->dispatch(name, {});
+                        } else {
+                            result = component->dispatch(name, args);
+                        }
+
+                        auto endTime =
+                            std::chrono::high_resolution_clock::now();
+                        auto duration = std::chrono::duration_cast<
+                            std::chrono::microseconds>(endTime - startTime);
+
+                        // Update performance statistics
+                        m_PerformanceStats_.commandCallCount.fetch_add(
+                            1, std::memory_order_relaxed);
+                        m_PerformanceStats_.updateExecutionTime(duration);
+
+                        return result;
+                    } catch (const std::exception& e) {
+                        spdlog::error(
+                            "Error running command '{}' in component '{}': {}",
+                            name, key, e.what());
+                        m_PerformanceStats_.commandErrorCount.fetch_add(
+                            1, std::memory_order_relaxed);
+                        throw;
+                    }
                 }
             }
+            return std::nullopt;
+        };
+
+        if (auto result = tryRunCommandInOtherComponents()) {
+            return *result;
         }
 
-        // Release shared lock
-        lock.unlock();
-
-        // Acquire unique lock to clean up expired components
+        // Clean up expired components if needed
         if (!expiredComponents.empty()) {
             std::unique_lock<std::shared_mutex> uniqueLock(m_ComponentsMutex_);
             for (const auto& key : expiredComponents) {
@@ -607,12 +623,10 @@ auto Component::runCommand(std::string_view name,
             ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME,
             "Command '{}' not found in '{}' or any of its dependencies",
             nameStr, m_name_);
-    } catch (const std::exception& e) {
+    } catch (const std::exception&) {
         // Update error statistics
         m_PerformanceStats_.commandErrorCount.fetch_add(
             1, std::memory_order_relaxed);
-
-        // Rethrow exception
         throw;
     }
 }

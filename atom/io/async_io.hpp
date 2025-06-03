@@ -7,372 +7,446 @@
 #include <filesystem>
 #include <functional>
 #include <future>
+#include <memory>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #ifdef ATOM_USE_ASIO
 #include <asio.hpp>
-#else
-#include <atomic>
-#include <condition_variable>
-#include <queue>
-#include <thread>
 #endif
+
+#include <spdlog/spdlog.h>
+#include "atom/async/pool.hpp"
 
 namespace atom::async::io {
 
-// Concept for valid path string
+/**
+ * @brief Concept for valid path string types
+ */
 template <typename T>
 concept PathString = std::convertible_to<T, std::string> ||
-                     std::convertible_to<T, std::filesystem::path>;
+                     std::convertible_to<T, std::filesystem::path> ||
+                     std::convertible_to<T, std::string_view>;
 
-// Result type for async operations
+/**
+ * @brief Context for managing async operations with cancellation support
+ */
+class AsyncContext {
+public:
+    AsyncContext() = default;
+
+    /**
+     * @brief Checks if the context has been cancelled
+     * @return True if cancelled, false otherwise
+     */
+    [[nodiscard]] bool is_cancelled() const noexcept {
+        return cancelled_.load();
+    }
+
+    /**
+     * @brief Cancels all operations using this context
+     */
+    void cancel() noexcept { cancelled_.store(true); }
+
+    /**
+     * @brief Resets the cancellation state
+     */
+    void reset() noexcept { cancelled_.store(false); }
+
+private:
+    std::atomic<bool> cancelled_{false};
+};
+
+/**
+ * @brief Result type for async operations with enhanced error handling
+ */
 template <typename T>
 struct AsyncResult {
     bool success{false};
     std::string error_message;
     T value{};
+
+    /**
+     * @brief Creates a successful result
+     */
+    static AsyncResult<T> success_result(T&& val) {
+        AsyncResult<T> result;
+        result.success = true;
+        result.value = std::move(val);
+        return result;
+    }
+
+    /**
+     * @brief Creates a failed result
+     */
+    static AsyncResult<T> error_result(std::string_view error) {
+        AsyncResult<T> result;
+        result.success = false;
+        result.error_message = error;
+        return result;
+    }
 };
 
 template <>
 struct AsyncResult<void> {
     bool success{false};
     std::string error_message;
+
+    /**
+     * @brief Creates a successful result
+     */
+    static AsyncResult<void> success_result() {
+        AsyncResult<void> result;
+        result.success = true;
+        return result;
+    }
+
+    /**
+     * @brief Creates a failed result
+     */
+    static AsyncResult<void> error_result(std::string_view error) {
+        AsyncResult<void> result;
+        result.success = false;
+        result.error_message = error;
+        return result;
+    }
 };
 
-// Forward declaration for coroutine task
 template <typename T>
 class [[nodiscard]] Task;
 
-#ifndef ATOM_USE_ASIO
-class ThreadPool {
-public:
-    explicit ThreadPool(size_t threads = std::thread::hardware_concurrency());
-    ~ThreadPool();
-
-    template <typename F>
-    void post(F&& func);
-
-private:
-    std::vector<std::thread> workers_;
-    std::queue<std::function<void()>> tasks_;
-    std::mutex queue_mutex_;
-    std::condition_variable condition_;
-    std::atomic<bool> stop_;
-};
-#endif
+// Use the existing high-performance thread pool from atom::async namespace
+using ThreadPool = atom::async::ThreadPool;
 
 /**
- * @brief Class for performing asynchronous file operations.
+ * @brief High-performance asynchronous file operations with context support
  */
 class AsyncFile {
 public:
 #ifdef ATOM_USE_ASIO
     /**
-     * @brief Constructs an AsyncFile object.
-     * @param io_context The ASIO I/O context.
+     * @brief Constructs an AsyncFile object with ASIO context
+     * @param io_context The ASIO I/O context
+     * @param context Optional async context for cancellation support
      */
-    explicit AsyncFile(asio::io_context& io_context) noexcept;
+    explicit AsyncFile(
+        asio::io_context& io_context,
+        std::shared_ptr<AsyncContext> context = nullptr) noexcept;
 #else
     /**
-     * @brief Constructs an AsyncFile object.
+     * @brief Constructs an AsyncFile object with thread pool
+     * @param context Optional async context for cancellation support
      */
-    explicit AsyncFile() noexcept;
+    explicit AsyncFile(
+        std::shared_ptr<AsyncContext> context = nullptr) noexcept;
 #endif
 
     /**
-     * @brief Asynchronously reads the content of a file.
-     * @param filename The name of the file to read.
-     * @param callback The callback function to call with the file content.
-     * @throws std::invalid_argument If the filename is empty.
+     * @brief Asynchronously reads file content with optimal performance
+     * @param filename Path to the file to read
+     * @param callback Callback function for the result
      */
-    void asyncRead(
-        PathString auto&& filename,
-        const std::function<void(AsyncResult<std::string>)>& callback);
+    void asyncRead(PathString auto&& filename,
+                   std::function<void(AsyncResult<std::string>)> callback);
 
     /**
-     * @brief Asynchronously writes content to a file.
-     * @param filename The name of the file to write to.
-     * @param content The content to write to the file.
-     * @param callback The callback function to call with the result of the
-     * operation.
-     * @throws std::invalid_argument If the filename is empty.
+     * @brief Asynchronously writes content to a file
+     * @param filename Path to the file to write
+     * @param content Content to write as byte span
+     * @param callback Callback function for the result
      */
     void asyncWrite(PathString auto&& filename, std::span<const char> content,
-                    const std::function<void(AsyncResult<void>)>& callback);
+                    std::function<void(AsyncResult<void>)> callback);
 
     /**
-     * @brief Asynchronously deletes a file.
-     * @param filename The name of the file to delete.
-     * @param callback The callback function to call with the result of the
-     * operation.
-     * @throws std::invalid_argument If the filename is empty.
+     * @brief Asynchronously deletes a file
+     * @param filename Path to the file to delete
+     * @param callback Callback function for the result
      */
     void asyncDelete(PathString auto&& filename,
-                     const std::function<void(AsyncResult<void>)>& callback);
+                     std::function<void(AsyncResult<void>)> callback);
 
     /**
-     * @brief Asynchronously copies a file.
-     * @param src The source file path.
-     * @param dest The destination file path.
-     * @param callback The callback function to call with the result of the
-     * operation.
-     * @throws std::invalid_argument If either path is empty.
+     * @brief Asynchronously copies a file with optimized buffering
+     * @param src Source file path
+     * @param dest Destination file path
+     * @param callback Callback function for the result
      */
     void asyncCopy(PathString auto&& src, PathString auto&& dest,
-                   const std::function<void(AsyncResult<void>)>& callback);
+                   std::function<void(AsyncResult<void>)> callback);
 
     /**
-     * @brief Asynchronously reads the content of a file with a timeout.
-     * @param filename The name of the file to read.
-     * @param timeoutMs The timeout in milliseconds.
-     * @param callback The callback function to call with the file content.
-     * @throws std::invalid_argument If the filename is empty or timeout is
-     * invalid.
+     * @brief Asynchronously moves/renames a file
+     * @param src Source file path
+     * @param dest Destination file path
+     * @param callback Callback function for the result
+     */
+    void asyncMove(PathString auto&& src, PathString auto&& dest,
+                   std::function<void(AsyncResult<void>)> callback);
+
+    /**
+     * @brief Asynchronously reads file with timeout support
+     * @param filename Path to the file to read
+     * @param timeout Maximum time to wait for completion
+     * @param callback Callback function for the result
      */
     void asyncReadWithTimeout(
-        PathString auto&& filename, std::chrono::milliseconds timeoutMs,
-        const std::function<void(AsyncResult<std::string>)>& callback);
+        PathString auto&& filename, std::chrono::milliseconds timeout,
+        std::function<void(AsyncResult<std::string>)> callback);
 
     /**
-     * @brief Asynchronously reads the content of multiple files.
-     * @param files The list of files to read.
-     * @param callback The callback function to call with the content of the
-     * files.
-     * @throws std::invalid_argument If the file list is empty.
+     * @brief Efficiently reads multiple files in parallel
+     * @param files List of file paths to read
+     * @param callback Callback function for the results
      */
     void asyncBatchRead(
-        const std::vector<std::string>& files,
-        const std::function<void(AsyncResult<std::vector<std::string>>)>&
-            callback);
+        std::span<const std::string> files,
+        std::function<void(AsyncResult<std::vector<std::string>>)> callback);
 
     /**
-     * @brief Asynchronously retrieves the status of a file.
-     * @param filename The name of the file.
-     * @param callback The callback function to call with the file status.
-     * @throws std::invalid_argument If the filename is empty.
+     * @brief Asynchronously retrieves file status information
+     * @param filename Path to the file
+     * @param callback Callback function for the file status
      */
     void asyncStat(
         PathString auto&& filename,
-        const std::function<void(AsyncResult<std::filesystem::file_status>)>&
+        std::function<void(AsyncResult<std::filesystem::file_status>)>
             callback);
 
     /**
-     * @brief Asynchronously moves a file.
-     * @param src The source file path.
-     * @param dest The destination file path.
-     * @param callback The callback function to call with the result of the
-     * operation.
-     * @throws std::invalid_argument If either path is empty.
-     */
-    void asyncMove(PathString auto&& src, PathString auto&& dest,
-                   const std::function<void(AsyncResult<void>)>& callback);
-
-    /**
-     * @brief Asynchronously changes the permissions of a file.
-     * @param filename The name of the file.
-     * @param perms The new permissions.
-     * @param callback The callback function to call with the result of the
-     * operation.
-     * @throws std::invalid_argument If the filename is empty.
+     * @brief Asynchronously changes file permissions
+     * @param filename Path to the file
+     * @param perms New permissions to set
+     * @param callback Callback function for the result
      */
     void asyncChangePermissions(
         PathString auto&& filename, std::filesystem::perms perms,
-        const std::function<void(AsyncResult<void>)>& callback);
+        std::function<void(AsyncResult<void>)> callback);
 
     /**
-     * @brief Asynchronously creates a directory.
-     * @param path The path of the directory to create.
-     * @param callback The callback function to call with the result of the
-     * operation.
-     * @throws std::invalid_argument If the path is empty.
-     */
-    void asyncCreateDirectory(
-        PathString auto&& path,
-        const std::function<void(AsyncResult<void>)>& callback);
-
-    /**
-     * @brief Asynchronously checks if a file exists.
-     * @param filename The name of the file.
-     * @param callback The callback function to call with the result of the
-     * check.
-     * @throws std::invalid_argument If the filename is empty.
+     * @brief Asynchronously checks if a file exists
+     * @param filename Path to the file
+     * @param callback Callback function for the existence check result
      */
     void asyncExists(PathString auto&& filename,
-                     const std::function<void(AsyncResult<bool>)>& callback);
+                     std::function<void(AsyncResult<bool>)> callback);
 
     /**
-     * @brief Coroutine-based asynchronous file read.
-     * @param filename The name of the file to read.
-     * @return A Task that will complete with the file content.
+     * @brief Coroutine-based file reading with enhanced performance
+     * @param filename Path to the file to read
+     * @return Task that completes with file content
      */
     [[nodiscard]] Task<AsyncResult<std::string>> readFile(
         PathString auto&& filename);
 
     /**
-     * @brief Coroutine-based asynchronous file write.
-     * @param filename The name of the file to write to.
-     * @param content The content to write.
-     * @return A Task that will complete when the operation is done.
+     * @brief Coroutine-based file writing with enhanced performance
+     * @param filename Path to the file to write
+     * @param content Content to write as byte span
+     * @return Task that completes when write operation finishes
      */
     [[nodiscard]] Task<AsyncResult<void>> writeFile(
         PathString auto&& filename, std::span<const char> content);
 
-private:
-#ifdef ATOM_USE_ASIO
-    asio::io_context& io_context_;  ///< The ASIO I/O context.
-    std::shared_ptr<asio::steady_timer>
-        timer_;  ///< Smart pointer to timer for operations.
-#else
-    ThreadPool thread_pool_;
-#endif
-
-    static constexpr int kSimulateSlowReadingMs =
-        100;  ///< Simulated slow reading time in milliseconds.
+    /**
+     * @brief Asynchronously creates a directory (consolidated functionality)
+     * @param path Path of the directory to create
+     * @param callback Callback function for the result
+     */
+    void asyncCreateDirectory(PathString auto&& path,
+                              std::function<void(AsyncResult<void>)> callback);
 
     /**
-     * @brief Validates a file path.
-     * @param path The path to validate.
-     * @return True if the path is valid, false otherwise.
+     * @brief Asynchronously removes a directory (consolidated functionality)
+     * @param path Path of the directory to remove
+     * @param callback Callback function for the result
      */
-    static bool validatePath(const std::string& path) noexcept;
+    void asyncRemoveDirectory(PathString auto&& path,
+                              std::function<void(AsyncResult<void>)> callback);
+
+    /**
+     * @brief Asynchronously lists directory contents (consolidated
+     * functionality)
+     * @param path Path of the directory to list
+     * @param callback Callback function for the directory contents
+     */
+    void asyncListDirectory(
+        PathString auto&& path,
+        std::function<void(AsyncResult<std::vector<std::filesystem::path>>)>
+            callback);
+
+    /**
+     * @brief Coroutine-based directory listing
+     * @param path Path of the directory to list
+     * @return Task that completes with directory contents
+     */
+    [[nodiscard]] Task<AsyncResult<std::vector<std::filesystem::path>>>
+    listDirectory(PathString auto&& path);
+
+private:
+#ifdef ATOM_USE_ASIO
+    asio::io_context& io_context_;
+    std::shared_ptr<asio::steady_timer> timer_;
+#else
+    std::shared_ptr<ThreadPool> thread_pool_;
+#endif
+
+    std::shared_ptr<AsyncContext> context_;
+    std::shared_ptr<spdlog::logger> logger_;
+
+    /**
+     * @brief Validates a path for security and format
+     * @param path Path to validate
+     * @return True if valid, false otherwise
+     */
+    static bool validatePath(std::string_view path) noexcept;
+
+    /**
+     * @brief Converts path-like types to string efficiently
+     * @param path Path to convert
+     * @return String representation of the path
+     */
+    template <PathString T>
+    static std::string toString(T&& path);
 
 #ifndef ATOM_USE_ASIO
     template <typename F>
     void scheduleTimeout(std::chrono::milliseconds timeout, F&& callback);
 #endif
+
+    /**
+     * @brief Generic async operation executor with context support
+     */
+    template <typename F>
+    void executeAsync(F&& operation);
 };
 
 /**
- * @brief Class for performing asynchronous directory operations.
+ * @brief Legacy AsyncDirectory interface for backward compatibility
+ * @deprecated Use AsyncFile methods instead for unified interface
  */
-class AsyncDirectory {
+class [[deprecated("Use AsyncFile for unified file/directory operations")]]
+AsyncDirectory {
 public:
 #ifdef ATOM_USE_ASIO
-    /**
-     * @brief Constructs an AsyncDirectory object.
-     * @param io_context The ASIO I/O context.
-     */
     explicit AsyncDirectory(asio::io_context& io_context) noexcept;
 #else
-    /**
-     * @brief Constructs an AsyncDirectory object.
-     */
     explicit AsyncDirectory() noexcept;
 #endif
 
-    /**
-     * @brief Asynchronously creates a directory.
-     * @param path The path of the directory to create.
-     * @param callback The callback function to call with the result of the
-     * operation.
-     * @throws std::invalid_argument If the path is empty.
-     */
     void asyncCreate(PathString auto&& path,
-                     const std::function<void(AsyncResult<void>)>& callback);
-
-    /**
-     * @brief Asynchronously removes a directory.
-     * @param path The path of the directory to remove.
-     * @param callback The callback function to call with the result of the
-     * operation.
-     * @throws std::invalid_argument If the path is empty.
-     */
+                     std::function<void(AsyncResult<void>)> callback);
     void asyncRemove(PathString auto&& path,
-                     const std::function<void(AsyncResult<void>)>& callback);
-
-    /**
-     * @brief Asynchronously lists the contents of a directory.
-     * @param path The path of the directory.
-     * @param callback The callback function to call with the list of contents.
-     * @throws std::invalid_argument If the path is empty.
-     */
+                     std::function<void(AsyncResult<void>)> callback);
     void asyncListContents(
         PathString auto&& path,
-        const std::function<
-            void(AsyncResult<std::vector<std::filesystem::path>>)>& callback);
-
-    /**
-     * @brief Asynchronously checks if a directory exists.
-     * @param path The path of the directory.
-     * @param callback The callback function to call with the result of the
-     * check.
-     * @throws std::invalid_argument If the path is empty.
-     */
+        std::function<void(AsyncResult<std::vector<std::filesystem::path>>)>
+            callback);
     void asyncExists(PathString auto&& path,
-                     const std::function<void(AsyncResult<bool>)>& callback);
-
-    /**
-     * @brief Coroutine-based asynchronous directory listing.
-     * @param path The path of the directory to list.
-     * @return A Task that will complete with the directory contents.
-     */
+                     std::function<void(AsyncResult<bool>)> callback);
     [[nodiscard]] Task<AsyncResult<std::vector<std::filesystem::path>>>
     listContents(PathString auto&& path);
 
 private:
-#ifdef ATOM_USE_ASIO
-    asio::io_context& io_context_;  ///< The ASIO I/O context.
-#else
-    ThreadPool thread_pool_;
-#endif
-
-    /**
-     * @brief Validates a directory path.
-     * @param path The path to validate.
-     * @return True if the path is valid, false otherwise.
-     */
-    static bool validateDirectoryPath(const std::string& path) noexcept;
+    std::unique_ptr<AsyncFile> file_impl_;
 };
 
-// Simple coroutine Task implementation
+/**
+ * @brief High-performance coroutine Task implementation with cancellation
+ * support
+ */
 template <typename T>
 class [[nodiscard]] Task {
 public:
-    // Define promise type for the coroutine
     struct promise_type {
         std::promise<T> promise;
+        std::weak_ptr<AsyncContext> context;
 
-        Task get_return_object() noexcept { return Task(promise.get_future()); }
+        Task get_return_object() noexcept {
+            return Task(promise.get_future(), context.lock());
+        }
 
         std::suspend_never initial_suspend() noexcept { return {}; }
         std::suspend_never final_suspend() noexcept { return {}; }
 
         void return_value(T value) noexcept {
-            promise.set_value(std::move(value));
+            if (auto ctx = context.lock(); !ctx || !ctx->is_cancelled()) {
+                promise.set_value(std::move(value));
+            }
         }
 
         void unhandled_exception() noexcept {
             try {
                 std::rethrow_exception(std::current_exception());
             } catch (const std::exception& e) {
-                // Create a failed result with the exception message
                 T failed_result;
                 if constexpr (std::is_same_v<T, AsyncResult<void>>) {
-                    failed_result.success = false;
-                    failed_result.error_message = e.what();
+                    failed_result = AsyncResult<void>::error_result(e.what());
                 } else {
-                    failed_result.success = false;
-                    failed_result.error_message = e.what();
+                    failed_result =
+                        AsyncResult<typename T::value_type>::error_result(
+                            e.what());
                 }
                 promise.set_value(std::move(failed_result));
             }
         }
+
+        void set_context(std::shared_ptr<AsyncContext> ctx) { context = ctx; }
     };
 
-    explicit Task(std::future<T> future) noexcept
-        : future_(std::move(future)) {}
+    explicit Task(std::future<T> future,
+                  std::shared_ptr<AsyncContext> ctx = nullptr) noexcept
+        : future_(std::move(future)), context_(std::move(ctx)) {}
 
+    /**
+     * @brief Gets the result, blocking if necessary
+     * @return The task result
+     */
     T get() { return future_.get(); }
-    bool is_ready() const noexcept {
+
+    /**
+     * @brief Checks if the task is ready without blocking
+     * @return True if ready, false otherwise
+     */
+    [[nodiscard]] bool is_ready() const noexcept {
         return future_.wait_for(std::chrono::seconds(0)) ==
                std::future_status::ready;
     }
 
+    /**
+     * @brief Waits for the task to complete with timeout
+     * @param timeout Maximum time to wait
+     * @return Future status
+     */
+    template <typename Rep, typename Period>
+    [[nodiscard]] std::future_status wait_for(
+        const std::chrono::duration<Rep, Period>& timeout) const {
+        return future_.wait_for(timeout);
+    }
+
+    /**
+     * @brief Cancels the task if context is available
+     */
+    void cancel() {
+        if (context_) {
+            context_->cancel();
+        }
+    }
+
+    /**
+     * @brief Checks if the task is cancelled
+     * @return True if cancelled, false otherwise
+     */
+    [[nodiscard]] bool is_cancelled() const noexcept {
+        return context_ && context_->is_cancelled();
+    }
+
 private:
     std::future<T> future_;
+    std::shared_ptr<AsyncContext> context_;
 };
 
 }  // namespace atom::async::io

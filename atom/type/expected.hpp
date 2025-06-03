@@ -95,6 +95,32 @@ private:
 template <typename E>
 class unexpected {
 public:
+
+/**
+     * @brief Constructs an unexpected from an unexpected<Error<E>>
+     * (unwrapping).
+     *
+     * @tparam U The inner error type
+     * @param other The unexpected<Error<U>> to unwrap
+     */
+    template <typename U>
+        requires std::same_as<E, U>
+    constexpr unexpected(const unexpected<Error<U>>& other) noexcept(
+        std::is_nothrow_copy_constructible_v<E>)
+        : error_(other.error().error()) {}
+
+    /**
+     * @brief Constructs an unexpected from an unexpected<Error<E>> (unwrapping,
+     * move version).
+     *
+     * @tparam U The inner error type
+     * @param other The unexpected<Error<U>> to unwrap
+     */
+    template <typename U>
+        requires std::same_as<E, U>
+    constexpr unexpected(unexpected<Error<U>>&& other) noexcept(
+        std::is_nothrow_move_constructible_v<E>)
+        : error_(std::move(other).error().error()) {}
     /**
      * @brief Constructs an unexpected error value.
      *
@@ -106,6 +132,8 @@ public:
     constexpr explicit unexpected(U&& error) noexcept(
         std::is_nothrow_constructible_v<E, U>)
         : error_(std::forward<U>(error)) {}
+
+    
 
     /**
      * @brief Gets a const reference to the error value.

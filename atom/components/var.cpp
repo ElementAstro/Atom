@@ -5,131 +5,117 @@
 
 #include "atom/error/exception.hpp"
 #include "atom/type/json.hpp"
-#include "spdlog/spdlog.h"  // Replaced loguru with spdlog
+#include "spdlog/spdlog.h"
 
 void VariableManager::setValue(const std::string& name, const char* newValue) {
-    spdlog::info("Setting value for variable: {}", name);
+    spdlog::debug("Setting value for variable: {}", name);
     setValue(name, std::string(newValue));
 }
 
 auto VariableManager::has(const std::string& name) const -> bool {
-    spdlog::info("Checking if variable exists: {}", name);
-    // Check primary name first
+    spdlog::debug("Checking if variable exists: {}", name);
+
     if (variables_.contains(name)) {
         return true;
     }
-    // Check if the name provided is an alias for another variable
-    for (const auto& [key, value] : variables_) {
-        if (value.alias == name) {
-            return true;  // Found an alias matching the name
-        }
-    }
-    return false;  // Not found as primary name or alias
+
+    return std::any_of(
+        variables_.begin(), variables_.end(),
+        [&name](const auto& pair) { return pair.second.alias == name; });
 }
 
 auto VariableManager::getDescription(const std::string& name) const
     -> std::string {
-    spdlog::info("Getting description for variable: {}", name);
+    spdlog::debug("Getting description for variable: {}", name);
+
     if (auto it = variables_.find(name); it != variables_.end()) {
         return it->second.description;
     }
-    // Check if the name is an alias
+
     for (const auto& [key, value] : variables_) {
         if (value.alias == name) {
-            return value
-                .description;  // Return description of the original variable
+            return value.description;
         }
     }
+
     spdlog::warn("Variable or alias not found: {}", name);
-    return "";  // Return empty string if not found
+    return "";
 }
 
 auto VariableManager::getAlias(const std::string& name) const -> std::string {
-    spdlog::info("Getting alias for variable: {}", name);
+    spdlog::debug("Getting alias for variable: {}", name);
+
     if (auto it = variables_.find(name); it != variables_.end()) {
-        // If 'name' is a primary variable name, return its alias
         return it->second.alias;
     }
-    // If 'name' might be an alias itself, find the primary variable name
+
     for (const auto& [key, value] : variables_) {
         if (value.alias == name) {
-            // 'name' is an alias, return the primary variable name 'key'
             return key;
         }
     }
+
     spdlog::warn("Variable or alias not found: {}", name);
-    return "";  // Return empty string if not found
+    return "";
 }
 
 auto VariableManager::getGroup(const std::string& name) const -> std::string {
-    spdlog::info("Getting group for variable: {}", name);
+    spdlog::debug("Getting group for variable: {}", name);
+
     if (auto it = variables_.find(name); it != variables_.end()) {
         return it->second.group;
     }
-    // Check if the name is an alias
+
     for (const auto& [key, value] : variables_) {
         if (value.alias == name) {
-            return value.group;  // Return group of the original variable
+            return value.group;
         }
     }
+
     spdlog::warn("Variable or alias not found: {}", name);
-    return "";  // Return empty string if not found
+    return "";
 }
 
 void VariableManager::removeVariable(const std::string& name) {
     spdlog::info("Removing variable: {}", name);
 
-    // Find the variable by primary name
     auto it = variables_.find(name);
     if (it != variables_.end()) {
         const auto& info = it->second;
 
-        // Remove from group mapping if it belongs to one
         if (!info.group.empty()) {
             auto groupIt = groups_.find(info.group);
             if (groupIt != groups_.end()) {
-                groupIt->second.erase(name);  // Erase the primary name
-                // If the variable had an alias, remove the alias from the group
-                // too
+                groupIt->second.erase(name);
                 if (!info.alias.empty()) {
                     groupIt->second.erase(info.alias);
                 }
-                // If the group becomes empty, remove the group entry
                 if (groupIt->second.empty()) {
                     groups_.erase(groupIt);
                 }
             }
         }
 
-        // Remove associated range and string options
         ranges_.erase(name);
         stringOptions_.erase(name);
 
-        // If the variable has an alias, remove the alias entry as well
         if (!info.alias.empty()) {
             variables_.erase(info.alias);
-            ranges_.erase(info.alias);  // Also remove potential alias entries
-                                        // in other maps
+            ranges_.erase(info.alias);
             stringOptions_.erase(info.alias);
         }
 
-        // Finally, remove the primary variable entry
         variables_.erase(it);
-
     } else {
-        // Check if 'name' is an alias
         std::string primaryNameToRemove;
-        std::string aliasToRemove = name;  // The name provided is the alias
-        for (auto const& [primaryName, info] : variables_) {
-            if (info.alias == aliasToRemove) {
+        for (const auto& [primaryName, info] : variables_) {
+            if (info.alias == name) {
                 primaryNameToRemove = primaryName;
                 break;
             }
         }
 
         if (!primaryNameToRemove.empty()) {
-            // Found the primary variable associated with the alias, call
-            // removeVariable with the primary name
             removeVariable(primaryNameToRemove);
         } else {
             spdlog::warn("Variable or alias not found: {}", name);
@@ -138,21 +124,16 @@ void VariableManager::removeVariable(const std::string& name) {
 }
 
 auto VariableManager::getAllVariables() const -> std::vector<std::string> {
-    spdlog::info("Getting all primary variables");
+    spdlog::debug("Getting all primary variables");
+
     std::vector<std::string> variableNames;
-    variableNames.reserve(variables_.size());  // Reserve might be slightly more
-                                               // than needed if aliases exist
+    variableNames.reserve(variables_.size());
+
     for (const auto& [name, info] : variables_) {
-        // Only add primary variable names (those whose name is not an alias of
-        // another)
-        bool isAlias = false;
-        for (const auto& [otherName, otherInfo] : variables_) {
-            // Check if 'name' exists as an alias in any other VariableInfo
-            if (name != otherName && otherInfo.alias == name) {
-                isAlias = true;
-                break;
-            }
-        }
+        bool isAlias = std::any_of(
+            variables_.begin(), variables_.end(), [&name](const auto& pair) {
+                return pair.first != name && pair.second.alias == name;
+            });
         if (!isAlias) {
             variableNames.push_back(name);
         }
@@ -162,35 +143,30 @@ auto VariableManager::getAllVariables() const -> std::vector<std::string> {
 
 auto VariableManager::getVariablesByGroup(const std::string& group) const
     -> std::vector<std::string> {
-    spdlog::info("Getting variables for group: {}", group);
+    spdlog::debug("Getting variables for group: {}", group);
+
     std::vector<std::string> result;
 
     auto it = groups_.find(group);
     if (it != groups_.end()) {
         result.reserve(it->second.size());
 
-        // Find all primary variable names in the group
         for (const auto& name : it->second) {
-            // Check if name is a primary variable (not just an alias)
             auto varIt = variables_.find(name);
             if (varIt != variables_.end()) {
-                // Check if this name isn't an alias of another variable
-                bool isAlias = false;
-                for (const auto& [primaryName, info] : variables_) {
-                    if (primaryName != name && info.alias == name) {
-                        isAlias = true;
-                        break;
-                    }
-                }
+                bool isAlias = std::any_of(variables_.begin(), variables_.end(),
+                                           [&name](const auto& pair) {
+                                               return pair.first != name &&
+                                                      pair.second.alias == name;
+                                           });
 
                 if (!isAlias) {
-                    // This is a primary variable name, add it to the result
                     result.push_back(name);
                 }
             }
         }
     } else {
-        spdlog::info("Group not found: {}", group);
+        spdlog::debug("Group not found: {}", group);
     }
 
     return result;
@@ -202,26 +178,20 @@ void VariableManager::exportVariablesToJson(const std::string& filePath) const {
     nlohmann::json jsonData;
 
     for (const auto& [name, info] : variables_) {
-        // Check if the current 'name' is an alias. If so, skip it.
-        // We only want to export primary variables.
-        bool isAlias = false;
-        for (const auto& [otherName, otherInfo] : variables_) {
-            if (name != otherName && otherInfo.alias == name) {
-                isAlias = true;
-                break;
-            }
-        }
+        bool isAlias = std::any_of(
+            variables_.begin(), variables_.end(), [&name](const auto& pair) {
+                return pair.first != name && pair.second.alias == name;
+            });
         if (isAlias) {
-            continue;  // Skip aliases, export only primary variables
+            continue;
         }
 
         nlohmann::json varData;
         varData["description"] = info.description;
-        varData["alias"] = info.alias;  // Export the alias if it exists
+        varData["alias"] = info.alias;
         varData["group"] = info.group;
 
         try {
-            // Use if-else if structure for type checking
             if (info.variable.type() ==
                 typeid(std::shared_ptr<Trackable<int>>)) {
                 auto ptr = std::any_cast<std::shared_ptr<Trackable<int>>>(
@@ -265,12 +235,9 @@ void VariableManager::exportVariablesToJson(const std::string& filePath) const {
             varData["value"] = nullptr;
         }
 
-        // Export range if it exists
         auto rangeIt = ranges_.find(name);
         if (rangeIt != ranges_.end()) {
             try {
-                // Check the type stored in varData, not info.variable.type()
-                // again
                 std::string currentType = varData["type"];
                 if (currentType == "int") {
                     struct Range {
@@ -303,8 +270,6 @@ void VariableManager::exportVariablesToJson(const std::string& filePath) const {
                         varData["max"] = rangePtr->max;
                     }
                 }
-                // No range for bool or string typically, but handle potential
-                // bad_any_cast
             } catch (const std::bad_any_cast&) {
                 spdlog::warn(
                     "Failed to cast range for variable '{}' with type '{}'",
@@ -312,10 +277,8 @@ void VariableManager::exportVariablesToJson(const std::string& filePath) const {
             }
         }
 
-        // Export string options if they exist
         auto optionsIt = stringOptions_.find(name);
         if (optionsIt != stringOptions_.end()) {
-            // Ensure the type is actually string before exporting options
             if (varData["type"] == "string") {
                 varData["options"] = optionsIt->second;
             } else {
@@ -326,23 +289,20 @@ void VariableManager::exportVariablesToJson(const std::string& filePath) const {
             }
         }
 
-        jsonData[name] = varData;  // Add data for the primary variable name
+        jsonData[name] = varData;
     }
 
     try {
         std::ofstream file(filePath);
         if (!file) {
             spdlog::error("Failed to open file for writing: {}", filePath);
-            // Consider throwing an exception or returning a bool/status code
             return;
         }
-        file << jsonData.dump(4);  // Use 4 spaces for indentation
-        file.close();              // Ensure file is closed
+        file << jsonData.dump(4);
+        file.close();
         spdlog::info("Successfully exported variables to {}", filePath);
     } catch (const std::exception& e) {
-        // Catch potential exceptions during file writing or JSON dumping
         spdlog::error("Failed to export variables to JSON: {}", e.what());
-        // Consider re-throwing or returning an error status
     }
 }
 
@@ -352,20 +312,18 @@ void VariableManager::importVariablesFromJson(const std::string& filePath) {
     std::ifstream file(filePath);
     if (!file) {
         spdlog::error("Failed to open file for reading: {}", filePath);
-        // Consider throwing an exception or returning a bool/status code
         return;
     }
 
     nlohmann::json jsonData;
     try {
         file >> jsonData;
-        file.close();  // Close the file after reading
+        file.close();
     } catch (const nlohmann::json::parse_error& e) {
         spdlog::error("Failed to parse JSON file '{}': {}", filePath, e.what());
-        file.close();  // Ensure file is closed even on error
-        return;        // Stop import if JSON is invalid
-    } catch (
-        const std::exception& e) {  // Catch other potential ifstream errors
+        file.close();
+        return;
+    } catch (const std::exception& e) {
         spdlog::error("Failed read from file '{}': {}", filePath, e.what());
         file.close();
         return;
@@ -376,7 +334,6 @@ void VariableManager::importVariablesFromJson(const std::string& filePath) {
             const std::string& name = it.key();
             const nlohmann::json& varData = it.value();
 
-            // Basic validation of varData structure
             if (!varData.is_object() || !varData.contains("type") ||
                 !varData.contains("value")) {
                 spdlog::warn(
@@ -389,13 +346,10 @@ void VariableManager::importVariablesFromJson(const std::string& filePath) {
             std::string alias = varData.value("alias", "");
             std::string group = varData.value("group", "");
 
-            // Check if the variable 'name' or its potential 'alias' already
-            // exists
             bool nameExists = has(name);
             bool aliasExists = !alias.empty() && has(alias);
 
             if (nameExists) {
-                // Variable exists, update its value
                 spdlog::info("Variable '{}' already exists, updating value.",
                              name);
                 try {
@@ -410,15 +364,11 @@ void VariableManager::importVariablesFromJson(const std::string& filePath) {
                     } else if (type == "string") {
                         setValue<std::string>(
                             name, varData["value"].get<std::string>());
-                        // Re-apply string options if they exist in JSON, even
-                        // for existing vars
                         if (varData.contains("options")) {
                             try {
                                 std::vector<std::string> options =
                                     varData["options"]
                                         .get<std::vector<std::string>>();
-                                // Use the public setStringOptions which handles
-                                // validation
                                 setStringOptions(name, options);
                             } catch (const std::exception& e) {
                                 spdlog::warn(
@@ -433,27 +383,17 @@ void VariableManager::importVariablesFromJson(const std::string& filePath) {
                             "cannot update value.",
                             type, name);
                     }
-                    // Note: We don't update description, alias, group, or range
-                    // for existing variables here. Decide if this is the
-                    // desired behavior. If updates are needed, add logic here.
-
-                } catch (const std::exception&
-                             e) {  // Catch errors during setValue (type
-                                   // mismatch, range error, etc.)
+                } catch (const std::exception& e) {
                     spdlog::error(
                         "Failed to update value for variable '{}': {}", name,
                         e.what());
                 }
             } else if (aliasExists) {
-                // The primary name doesn't exist, but the alias does. This is a
-                // conflict.
                 spdlog::warn(
                     "Skipping import for variable '{}': its alias '{}' already "
                     "exists as a variable or alias.",
                     name, alias);
             } else {
-                // Variable does not exist and alias (if provided) doesn't
-                // conflict, add it.
                 spdlog::info("Adding new variable '{}' from JSON.", name);
                 try {
                     if (type == "int") {
@@ -490,8 +430,6 @@ void VariableManager::importVariablesFromJson(const std::string& filePath) {
                             std::vector<std::string> options =
                                 varData["options"]
                                     .get<std::vector<std::string>>();
-                            // Use the public setStringOptions which handles
-                            // validation
                             setStringOptions(name, options);
                         }
                     } else {
@@ -500,20 +438,12 @@ void VariableManager::importVariablesFromJson(const std::string& filePath) {
                             "import.",
                             type, name);
                     }
-                } catch (const std::exception&
-                             e) {  // Catch errors during addVariable, setRange,
-                                   // setStringOptions
+                } catch (const std::exception& e) {
                     spdlog::error("Failed to add variable '{}' from JSON: {}",
                                   name, e.what());
-                    // Consider if partial addition should be rolled back
-                    // (tricky without transactions) If addVariable succeeded
-                    // but setRange/setStringOptions failed, the variable exists
-                    // but is incomplete. We might need to remove the partially
-                    // added variable.
-                    if (has(name)) {  // Check if addVariable succeeded before
-                                      // the error
+                    if (has(name)) {
                         try {
-                            removeVariable(name);  // Attempt cleanup
+                            removeVariable(name);
                             spdlog::info(
                                 "Cleaned up partially added variable '{}'",
                                 name);
@@ -530,24 +460,20 @@ void VariableManager::importVariablesFromJson(const std::string& filePath) {
         spdlog::info("Finished importing variables from JSON file: {}",
                      filePath);
     } catch (const std::exception& e) {
-        // Catch errors during the loop (e.g., JSON access errors not caught
-        // earlier)
         spdlog::error("An error occurred during JSON import process: {}",
                       e.what());
     }
 }
 
-// Definition for setStringOptions using std::span
 void VariableManager::setStringOptions(const std::string& name,
                                        std::span<const std::string> options) {
     spdlog::info("Setting string options for variable: {}", name);
 
-    // Find the variable, considering aliases
     std::string primaryName = name;
     std::shared_ptr<Trackable<std::string>> trackableVar = nullptr;
     auto it = variables_.find(name);
+
     if (it != variables_.end()) {
-        // 'name' is the primary name
         try {
             trackableVar =
                 std::any_cast<std::shared_ptr<Trackable<std::string>>>(
@@ -557,7 +483,6 @@ void VariableManager::setStringOptions(const std::string& name,
             THROW_TYPE_ERROR("Variable '{}' is not of type string.", name);
         }
     } else {
-        // Check if 'name' is an alias
         bool foundAlias = false;
         for (const auto& [p_name, info] : variables_) {
             if (info.alias == name) {
@@ -565,7 +490,7 @@ void VariableManager::setStringOptions(const std::string& name,
                     trackableVar =
                         std::any_cast<std::shared_ptr<Trackable<std::string>>>(
                             info.variable);
-                    primaryName = p_name;  // Store the primary name
+                    primaryName = p_name;
                     foundAlias = true;
                     break;
                 } catch (const std::bad_any_cast&) {
@@ -586,21 +511,15 @@ void VariableManager::setStringOptions(const std::string& name,
         }
     }
 
-    // Store options using the primary name
     stringOptions_[primaryName].assign(options.begin(), options.end());
 
-    // Validate the current value against the new options
     const std::string& currentValue = trackableVar->get();
-    const auto& opts =
-        stringOptions_[primaryName];  // Use primary name to get options
+    const auto& opts = stringOptions_[primaryName];
     if (std::find(opts.begin(), opts.end(), currentValue) == opts.end()) {
         spdlog::error(
             "Current value '{}' is not valid with the new options for variable "
             "'{}'.",
             currentValue, primaryName);
-        // Decide on behavior: throw, reset to default, log warning? Throwing
-        // seems consistent. Clear the options we just set because the state is
-        // invalid.
         stringOptions_.erase(primaryName);
         THROW_INVALID_ARGUMENT(
             "Current value '{}' is not valid with the new options for variable "
@@ -608,32 +527,19 @@ void VariableManager::setStringOptions(const std::string& name,
             currentValue, primaryName);
     }
 
-    // Subscribe to future changes using the primary name for map access
-    // Use a capture list that copies necessary data or uses stable references.
-    // Capturing 'this' and 'primaryName' (by value) is safe.
     trackableVar->subscribe(
         [this, primaryName]([[maybe_unused]] const std::string& oldValue,
                             const std::string& newValue) {
-            // Use primaryName to access the options map inside the lambda
             const auto& currentOpts = stringOptions_[primaryName];
             if (std::find(currentOpts.begin(), currentOpts.end(), newValue) ==
                 currentOpts.end()) {
-                // Throw using the original name/alias the user interacted with
-                // might be better, but requires capturing 'name' too. Let's
-                // stick to primaryName for consistency internally.
                 THROW_INVALID_ARGUMENT("Invalid option '{}' for variable '{}'",
                                        newValue, primaryName);
             }
         });
+
     spdlog::info(
         "Successfully set string options for variable '{}' (primary name: "
         "'{}')",
         name, primaryName);
 }
-
-// Note: Template function definitions should typically reside in the header
-// file (var.hpp) unless they are explicitly instantiated in the .cpp file for
-// all required types. Since the definitions for addVariable, setRange,
-// getVariable, setValue<T>, forEachVariable are already in var.hpp according to
-// the provided context, they should remain there. This .cpp file should only
-// contain definitions for non-template member functions.

@@ -12,6 +12,9 @@ else()
     add_compile_options(-Wall -Wextra -pedantic)
 endif()
 
+# Find and link spdlog
+find_package(spdlog REQUIRED)
+
 # Create shared library
 add_library(shortcut_detector SHARED
     detector.cpp
@@ -30,10 +33,11 @@ target_include_directories(shortcut_detector
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-# Link against required Windows libraries
+# Link against required libraries
 target_link_libraries(shortcut_detector
     PRIVATE
         psapi
+        spdlog::spdlog
 )
 
 # Create static library version
@@ -56,6 +60,7 @@ target_include_directories(shortcut_detector_static
 target_link_libraries(shortcut_detector_static
     PRIVATE
         psapi
+        spdlog::spdlog
 )
 
 # Example executable
@@ -66,6 +71,24 @@ add_executable(shortcut_detector_example
 target_link_libraries(shortcut_detector_example
     PRIVATE
         shortcut_detector
+)
+
+# Create test executable
+add_executable(test_shortcut_detector test_shortcut_detector.cpp)
+
+# Link the test against the static library
+target_link_libraries(test_shortcut_detector
+    PRIVATE
+        shortcut_detector_static
+        psapi
+        user32
+        spdlog::spdlog
+)
+
+# Set include directories for test
+target_include_directories(test_shortcut_detector
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 # Installation rules

@@ -35,9 +35,7 @@
 #ifdef ATOM_USE_ASIO
 #include <asio/post.hpp>
 #include <asio/thread_pool.hpp>
-// Assuming atom::async::internal::get_asio_thread_pool() is available
-// from "atom/async/future.hpp" or a similar common header.
-#include "atom/async/future.hpp"  // Ensure this provides get_asio_thread_pool
+#include "atom/async/future.hpp"
 #endif
 
 namespace atom::async {
@@ -73,25 +71,24 @@ concept CancellableCallable = Callable<F> && requires(F f) {
 };
 
 /**
- * @brief A rate limiter class to control the rate of function executions.
+ * @brief A high-performance rate limiter class to control the rate of function
+ * executions.
  */
 class RateLimiter {
 public:
     /**
-     * @brief Settings for the rate limiter.
+     * @brief Settings for the rate limiter with validation.
      */
     struct Settings {
-        size_t maxRequests;  ///< Maximum number of requests allowed in the time
-                             ///< window.
-        std::chrono::seconds
-            timeWindow;  ///< The time window in which maxRequests are allowed.
+        size_t maxRequests;
+        std::chrono::seconds timeWindow;
 
         /**
          * @brief Constructor for Settings with validation.
-         * @param max_requests Maximum number of requests.
+         * @param max_requests Maximum number of requests allowed in the time
+         * window.
          * @param time_window Duration of the time window.
-         * @throws std::invalid_argument if parameters are invalid (e.g.,
-         * max_requests is 0 or time_window is zero/negative).
+         * @throws std::invalid_argument if parameters are invalid.
          */
         explicit Settings(
             size_t max_requests = 5,
@@ -109,25 +106,23 @@ public:
     };
 
     /**
-     * @brief Constructor for RateLimiter.
+     * @brief Default constructor for RateLimiter.
      */
     RateLimiter() noexcept;
 
     /**
-     * @brief Destructor.
+     * @brief Destructor that properly cleans up resources.
      */
     ~RateLimiter() noexcept;
 
-    // Move constructor and assignment operator
     RateLimiter(RateLimiter&&) noexcept;
     RateLimiter& operator=(RateLimiter&&) noexcept;
 
-    // Copy operations are deleted
     RateLimiter(const RateLimiter&) = delete;
     RateLimiter& operator=(const RateLimiter&) = delete;
 
     /**
-     * @brief Awaiter class for handling coroutines.
+     * @brief Awaiter class for handling coroutines with optimized suspension.
      */
     class [[nodiscard]] Awaiter {
     public:
@@ -140,25 +135,24 @@ public:
 
         /**
          * @brief Checks if the awaiter is ready.
-         * @return Always returns false to suspend.
+         * @return Always returns false to suspend and check rate limit.
          */
         [[nodiscard]] auto await_ready() const noexcept -> bool;
 
         /**
-         * @brief Suspends the coroutine and enqueues it.
-         * @param handle Coroutine handle.
+         * @brief Suspends the coroutine and enqueues it for rate limiting.
+         * @param handle Coroutine handle to suspend.
          */
         void await_suspend(std::coroutine_handle<> handle);
 
         /**
-         * @brief Resumes the coroutine.
-         * @throws RateLimitExceededException if rate limit was exceeded (though
-         * this is typically checked before allowing resumption).
+         * @brief Resumes the coroutine after rate limit check.
+         * @throws RateLimitExceededException if rate limit was exceeded.
          */
         void await_resume();
 
     private:
-        friend class RateLimiter;  // Allow RateLimiter to set was_rejected_
+        friend class RateLimiter;
         RateLimiter& limiter_;
         std::string function_name_;
         bool was_rejected_ = false;
@@ -167,13 +161,12 @@ public:
     /**
      * @brief Acquires the rate limiter for a specific function.
      * @param function_name Name of the function to be rate-limited.
-     * @return An Awaiter object.
+     * @return An Awaiter object for coroutine suspension.
      */
     [[nodiscard]] Awaiter acquire(std::string_view function_name);
 
     /**
-     * @brief Acquires rate limiters in batch for multiple functions (C++20
-     * range).
+     * @brief Acquires rate limiters in batch for multiple functions.
      * @param function_names A range of function names.
      * @return A vector of Awaiter objects.
      */
@@ -187,11 +180,8 @@ public:
         }
 
         for (const auto& name : function_names) {
-            awaiters.emplace_back(
-                *this, std::string(name));  // Pass *this for the limiter
+            awaiters.emplace_back(*this, std::string(name));
         }
-        // Note: The awaiters are returned, but actual acquisition/suspension
-        // happens when co_await is used on them.
         return awaiters;
     }
 
@@ -206,28 +196,22 @@ public:
                           std::chrono::seconds time_window);
 
     /**
-     * @brief Sets rate limits for multiple functions in batch using C++20 span.
-     * @param settings A span of pairs, where each pair contains a function name
-     * and its rate limit settings.
+     * @brief Sets rate limits for multiple functions in batch.
+     * @param settings_list A span of pairs containing function names and their
+     * settings.
      */
     void setFunctionLimits(
         std::span<const std::pair<std::string_view, Settings>> settings_list);
 
     /**
-     * @brief Pauses the rate limiter. No new requests will be processed until
-     * resumed.
+     * @brief Pauses the rate limiter, preventing new request processing.
      */
     void pause() noexcept;
 
     /**
-     * @brief Resumes the rate limiter and processes any pending requests.
+     * @brief Resumes the rate limiter and processes pending requests.
      */
     void resume();
-
-    /**
-     * @brief Prints the log of requests (for debugging).
-     */
-    void printLog() const noexcept;
 
     /**
      * @brief Gets the number of rejected requests for a specific function.
@@ -240,7 +224,7 @@ public:
     /**
      * @brief Resets the rate limit counter and rejected count for a specific
      * function.
-     * @param function_name The name of the function.
+     * @param function_name The name of the function to reset.
      */
     void resetFunction(std::string_view function_name);
 
@@ -250,234 +234,79 @@ public:
     void resetAll() noexcept;
 
     /**
-     * @brief Processes waiting coroutines. Public for manual triggering if not
-     * using automated mechanisms.
+     * @brief Processes waiting coroutines manually.
      */
     void processWaiters();
 
-#if !defined(TEST_F) && \
-    !defined(TEST)  // For testing purposes, members might be public
 private:
-#endif
     void cleanup(std::string_view function_name,
                  const std::chrono::seconds& time_window);
-    void
-    triggerProcessingMechanism();  // Internal helper to signal/post processing
 
 #ifdef ATOM_USE_ASIO
-    std::atomic<bool> processing_posted_{false};
-    void postProcessWaitersTask();
-#else
-// Platform-specific synchronization primitives
-#if defined(ATOM_PLATFORM_WINDOWS)
-    CONDITION_VARIABLE resumeCondition_{};
-    CRITICAL_SECTION resumeLock_{};
-    // A dedicated thread would typically wait on resumeCondition_ and call
-    // processWaiters. Or, optimizedProcessWaiters (if defined) would be this
-    // logic.
-#elif defined(ATOM_PLATFORM_MACOS)
-    dispatch_semaphore_t resume_semaphore_gcd_{nullptr};
-    // A GCD block would wait on resume_semaphore_gcd_ and dispatch
-    // processWaiters.
-#elif defined(ATOM_PLATFORM_LINUX)
-    sem_t resumeSemaphore_{};
-    // A dedicated thread would typically wait on resumeSemaphore_ and call
-    // processWaiters.
-#endif
-    // The optimizedProcessWaiters methods declared below are assumed to be part
-    // of the non-Asio processing mechanism if they were fully implemented.
+    void asioProcessWaiters();
+    mutable asio::thread_pool asio_pool_;
 #endif
 
-// These seem to be intended as platform-specific ways to run processWaiters.
-// If ATOM_USE_ASIO is defined, these are not strictly needed as Asio handles
-// the execution context.
-#ifndef ATOM_USE_ASIO
-#if defined(ATOM_PLATFORM_WINDOWS)
-    void optimizedProcessWaiters();  // Example: Waits on resumeCondition_ then
-                                     // calls processWaiters()
+#ifdef ATOM_PLATFORM_WINDOWS
+    void optimizedProcessWaiters();
+    CONDITION_VARIABLE resumeCondition_{};
+    CRITICAL_SECTION resumeLock_{};
 #elif defined(ATOM_PLATFORM_MACOS)
-    void optimizedProcessWaiters();  // Example: Waits on resume_semaphore_gcd_
-                                     // then calls processWaiters()
+    void optimizedProcessWaiters();
 #elif defined(ATOM_PLATFORM_LINUX)
-    void optimizedProcessWaiters();  // Example: Waits on resumeSemaphore_ then
-                                     // calls processWaiters()
-#endif
+    void optimizedProcessWaiters();
+    sem_t resumeSemaphore_{};
+    std::atomic<int> waitersReady_{0};
 #endif
 
 #ifdef ATOM_USE_BOOST_LOCKFREE
-    struct RequestEntry {
-        std::chrono::steady_clock::time_point timestamp;
-        RequestEntry() = default;
-        explicit RequestEntry(std::chrono::steady_clock::time_point time)
-            : timestamp(time) {}
-    };
-    struct WaiterEntry {
-        std::coroutine_handle<> handle;
-        std::string function_name_ref;  // To know which function this waiter
-                                        // belongs to for Awaiter::was_rejected_
-        Awaiter* awaiter_ptr;  // Pointer to the awaiter to set was_rejected_
+    using LockfreeRequestQueue =
+        boost::lockfree::queue<std::chrono::steady_clock::time_point>;
+    using LockfreeWaiterQueue = boost::lockfree::queue<std::coroutine_handle<>>;
 
-        WaiterEntry() = default;
-        explicit WaiterEntry(std::coroutine_handle<> h, std::string name_ref,
-                             Awaiter* apt)
-            : handle(h),
-              function_name_ref(std::move(name_ref)),
-              awaiter_ptr(apt) {}
-    };
-    class LockfreeRequestQueue {
-    public:
-        LockfreeRequestQueue() : m_queue(128) {}  // Default capacity
-
-        void push(const std::chrono::steady_clock::time_point& time) {
-            RequestEntry entry(time);
-            while (!m_queue.push(entry)) {
-                std::this_thread::yield();
-            }
-        }
-        bool pop(std::chrono::steady_clock::time_point& time) {
-            RequestEntry entry;
-            if (m_queue.pop(entry)) {
-                time = entry.timestamp;
-                return true;
-            }
-            return false;
-        }
-        bool empty() const { return m_queue.empty(); }
-        void clear() {
-            RequestEntry entry;
-            while (m_queue.pop(entry)) {
-            }
-        }
-        size_t size_approx() const { return m_queue.read_available(); }
-
-    private:
-        boost::lockfree::queue<RequestEntry> m_queue;
-    };
-    class LockfreeWaiterQueue {
-    public:
-        LockfreeWaiterQueue() : m_queue(128) {}  // Default capacity
-
-        void push(std::coroutine_handle<> handle, std::string func_name,
-                  Awaiter* apt) {
-            WaiterEntry entry(handle, std::move(func_name), apt);
-            while (!m_queue.push(entry)) {
-                std::this_thread::yield();
-            }
-        }
-        bool pop(std::coroutine_handle<>& handle, std::string& func_name,
-                 Awaiter*& apt) {
-            WaiterEntry entry;
-            if (m_queue.pop(entry)) {
-                handle = entry.handle;
-                func_name = std::move(entry.function_name_ref);
-                apt = entry.awaiter_ptr;
-                return true;
-            }
-            return false;
-        }
-        bool empty() const { return m_queue.empty(); }
-        size_t size_approx() const { return m_queue.read_available(); }
-
-    private:
-        boost::lockfree::queue<WaiterEntry> m_queue;
-    };
-
-    std::unordered_map<std::string, Settings> settings_;
     std::unordered_map<std::string, LockfreeRequestQueue> requests_;
-    std::unordered_map<std::string, LockfreeWaiterQueue>
-        waiters_;  // Keyed by function name
-    
-    // Atomic counter for waiters ready to be processed
-    std::atomic<int> waitersReady_{0};
-    
-    // Thread-safe queue for waiters that are ready to be processed
-    class GlobalWaiterQueue {
-    public:
-        GlobalWaiterQueue() : m_queue(256) {}
-        
-        void push(std::coroutine_handle<> handle, std::string func_name, Awaiter* apt) {
-            WaiterEntry entry(handle, std::move(func_name), apt);
-            while (!m_queue.push(entry)) {
-                std::this_thread::yield();
-            }
-        }
-        
-        bool pop(std::coroutine_handle<>& handle, std::string& func_name, Awaiter*& apt) {
-            WaiterEntry entry;
-            if (m_queue.pop(entry)) {
-                handle = entry.handle;
-                func_name = std::move(entry.function_name_ref);
-                apt = entry.awaiter_ptr;
-                return true;
-            }
-            return false;
-        }
-        
-        bool empty() const { return m_queue.empty(); }
-        size_t size_approx() const { return m_queue.read_available(); }
-        
-    private:
-        boost::lockfree::queue<WaiterEntry> m_queue;
-    };
-    
-    // Global queue for ready waiters
-    GlobalWaiterQueue globalWaiters_;
-    
-    // Processer thread
-    std::jthread processorThread_;
-    std::atomic<bool> running_{true};
-    
-    // SPSC queue for fast inter-thread signaling
-    boost::lockfree::spsc_queue<char> signalQueue_{1024};
+    std::unordered_map<std::string, LockfreeWaiterQueue> waiters_;
 #else
     struct WaiterInfo {
         std::coroutine_handle<> handle;
-        Awaiter* awaiter_ptr;  // To set was_rejected_
+        Awaiter* awaiter_ptr;
 
         WaiterInfo(std::coroutine_handle<> h, Awaiter* apt)
             : handle(h), awaiter_ptr(apt) {}
     };
-    std::unordered_map<std::string, Settings> settings_;
+
     std::unordered_map<std::string,
                        std::deque<std::chrono::steady_clock::time_point>>
         requests_;
-    std::unordered_map<std::string, std::deque<WaiterInfo>>
-        waiters_;  // Keyed by function name
+    std::unordered_map<std::string, std::deque<WaiterInfo>> waiters_;
 #endif
 
-    std::unordered_map<std::string,
-                       std::deque<std::chrono::steady_clock::time_point>>
-        log_;
+    std::unordered_map<std::string, Settings> settings_;
     std::unordered_map<std::string, std::atomic<size_t>> rejected_requests_;
     std::atomic<bool> paused_ = false;
-    mutable std::shared_mutex
-        mutex_;  // Using a read-write lock for better concurrent performance
+    mutable std::shared_mutex mutex_;
 };
 
-
 /**
- * @class RateLimiterSingleton
- * @brief Singleton rate limiter, providing a global access point.
+ * @brief Singleton rate limiter providing global access point.
  */
 class RateLimiterSingleton {
 public:
     /**
-     * @brief Gets the singleton instance.
-     * @return Reference to the RateLimiter.
+     * @brief Gets the singleton instance using Meyer's singleton pattern.
+     * @return Reference to the global RateLimiter instance.
      */
     static RateLimiter& instance() {
-        static RateLimiter limiter_instance;  // Meyers' Singleton
+        static RateLimiter limiter_instance;
         return limiter_instance;
     }
 
-    // Construction and copying are prohibited
     RateLimiterSingleton() = delete;
     RateLimiterSingleton(const RateLimiterSingleton&) = delete;
     RateLimiterSingleton& operator=(const RateLimiterSingleton&) = delete;
     RateLimiterSingleton(RateLimiterSingleton&&) = delete;
     RateLimiterSingleton& operator=(RateLimiterSingleton&&) = delete;
 };
-
 
 }  // namespace atom::async
 

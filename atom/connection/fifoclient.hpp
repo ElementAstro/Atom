@@ -31,7 +31,9 @@ Description: FIFO Client
 
 namespace atom::connection {
 
-// Error codes specific to FIFO operations
+/**
+ * @brief Error codes specific to FIFO operations
+ */
 enum class FifoError {
     OpenFailed,
     ReadFailed,
@@ -70,31 +72,14 @@ struct ClientStats {
  * @brief Configuration options for the FIFO client
  */
 struct ClientConfig {
-    // Buffer size for read operations
     size_t read_buffer_size = 4096;
-
-    // Maximum message size that can be sent
-    size_t max_message_size = 1024 * 1024;  // 1MB default
-
-    // Enable automatic reconnection on connection loss
+    size_t max_message_size = 1024 * 1024;
     bool auto_reconnect = true;
-
-    // Maximum reconnection attempts before giving up
     int max_reconnect_attempts = 5;
-
-    // Delay between reconnection attempts
     std::chrono::milliseconds reconnect_delay{500};
-
-    // Default timeout for operations if not specified
     std::optional<std::chrono::milliseconds> default_timeout{5000};
-
-    // Enable data compression for large messages
     bool enable_compression = false;
-
-    // Minimum message size for compression to be applied
     size_t compression_threshold = 1024;
-
-    // Enable data encryption
     bool enable_encryption = false;
 };
 
@@ -165,7 +150,6 @@ public:
      */
     FifoClient& operator=(FifoClient&& other) noexcept;
 
-    // Disable copying
     FifoClient(const FifoClient&) = delete;
     FifoClient& operator=(const FifoClient&) = delete;
 
@@ -249,10 +233,10 @@ public:
     /**
      * @brief Writes multiple messages to the FIFO.
      *
-     * @param messages Vector of messages to send
-     * @param timeout Optional timeout for each write operation
-     * @return type::expected<std::size_t, std::error_code> Total number of
-     * bytes written or error
+     * @param messages Vector of messages to write
+     * @param timeout Optional timeout for the write operation
+     * @return type::expected<std::size_t, std::error_code> Total bytes written
+     * or an error
      */
     auto writeMultiple(
         const std::vector<std::string>& messages,
@@ -262,17 +246,12 @@ public:
     /**
      * @brief Reads data from the FIFO.
      *
-     * @param maxSize Maximum number of bytes to read
-     * @param timeout Optional timeout for the read operation, in milliseconds.
-     *                If not provided, the default from configuration is used.
-     * @return type::expected<std::string, std::error_code> The data read or an
+     * @param maxSize Maximum size to read (0 for default buffer size)
+     * @param timeout Optional timeout for the read operation
+     * @return type::expected<std::string, std::error_code> The read data or an
      * error
-     *
-     * This method will read data from the FIFO. If a timeout is specified,
-     * it will return an error if the operation cannot complete within the
-     * specified time.
      */
-    auto read(std::size_t maxSize = 0,  // 0 means use config.read_buffer_size
+    auto read(std::size_t maxSize = 0,
               std::optional<std::chrono::milliseconds> timeout = std::nullopt)
         -> type::expected<std::string, std::error_code>;
 
@@ -280,42 +259,38 @@ public:
      * @brief Reads data from the FIFO asynchronously.
      *
      * @param callback Function to call when the read completes or fails
-     * @param maxSize Maximum number of bytes to read
+     * @param maxSize Maximum size to read (0 for default buffer size)
      * @param timeout Optional timeout for the read operation
      * @return int Identifier for the asynchronous operation
      */
     int readAsync(
-        OperationCallback callback,
-        std::size_t maxSize = 0,  // 0 means use config.read_buffer_size
+        OperationCallback callback, std::size_t maxSize = 0,
         std::optional<std::chrono::milliseconds> timeout = std::nullopt);
 
     /**
      * @brief Reads data from the FIFO asynchronously with future.
      *
-     * @param maxSize Maximum number of bytes to read
+     * @param maxSize Maximum size to read (0 for default buffer size)
      * @param timeout Optional timeout for the read operation
      * @return std::future<type::expected<std::string, std::error_code>> Future
      * with result
      */
     std::future<type::expected<std::string, std::error_code>>
     readAsyncWithFuture(
-        std::size_t maxSize = 0,  // 0 means use config.read_buffer_size
+        std::size_t maxSize = 0,
         std::optional<std::chrono::milliseconds> timeout = std::nullopt);
 
     /**
      * @brief Checks if the FIFO is currently open.
      *
-     * @return true if the FIFO is open, false otherwise.
-     *
-     * This method can be used to determine if the FIFO client is ready for
-     * operations.
+     * @return bool True if the FIFO is open, false otherwise
      */
     [[nodiscard]] auto isOpen() const noexcept -> bool;
 
     /**
-     * @brief Gets the path of the FIFO.
+     * @brief Gets the FIFO path.
      *
-     * @return std::string_view The path of the FIFO.
+     * @return std::string_view The FIFO path
      */
     [[nodiscard]] auto getPath() const noexcept -> std::string_view;
 
@@ -324,56 +299,50 @@ public:
      *
      * @param timeout Optional timeout for the open operation
      * @return type::expected<void, std::error_code> Success or error
-     *
-     * This method is useful for reconnecting after a connection was closed.
      */
     auto open(std::optional<std::chrono::milliseconds> timeout = std::nullopt)
         -> type::expected<void, std::error_code>;
 
     /**
-     * @brief Closes the FIFO.
-     *
-     * This method closes the FIFO and releases any associated resources.
-     * It is good practice to call this when you are done using the FIFO
-     * to ensure proper cleanup.
+     * @brief Closes the FIFO connection.
      */
     void close() noexcept;
 
     /**
-     * @brief Registers a callback for connection status changes.
+     * @brief Registers a connection status callback.
      *
      * @param callback Function to call when connection status changes
-     * @return int Identifier for the callback registration
+     * @return int Callback identifier
      */
     int registerConnectionCallback(ConnectionCallback callback);
 
     /**
-     * @brief Unregisters a previously registered connection callback.
+     * @brief Unregisters a connection status callback.
      *
-     * @param id The identifier returned by registerConnectionCallback
-     * @return bool True if callback was successfully unregistered
+     * @param id Callback identifier
+     * @return bool True if successfully unregistered, false otherwise
      */
     bool unregisterConnectionCallback(int id);
 
     /**
      * @brief Gets the current client configuration.
      *
-     * @return The current client configuration
+     * @return ClientConfig Current configuration
      */
     [[nodiscard]] ClientConfig getConfig() const;
 
     /**
      * @brief Updates the client configuration.
      *
-     * @param config New configuration settings
-     * @return True if configuration was updated successfully
+     * @param config New configuration
+     * @return bool True if successfully updated, false otherwise
      */
     bool updateConfig(const ClientConfig& config);
 
     /**
-     * @brief Gets current client statistics.
+     * @brief Gets client statistics.
      *
-     * @return Statistics about client operation
+     * @return ClientStats Current statistics
      */
     [[nodiscard]] ClientStats getStatistics() const;
 
@@ -383,27 +352,26 @@ public:
     void resetStatistics();
 
     /**
-     * @brief Cancels an ongoing asynchronous operation.
+     * @brief Cancels an asynchronous operation.
      *
-     * @param id The identifier of the operation to cancel
-     * @return bool True if operation was successfully canceled
+     * @param id Operation identifier
+     * @return bool True if successfully cancelled, false otherwise
      */
     bool cancelOperation(int id);
 
 private:
-    struct Impl;  ///< Forward declaration of the implementation details.
-    std::unique_ptr<Impl> m_impl;  ///< Pointer to the implementation, using
-                                   ///< PImpl idiom for encapsulation.
+    struct Impl;
+    std::unique_ptr<Impl> m_impl;
 };
 
-// Template implementation
 template <WritableData T>
 auto FifoClient::write(const T& data,
                        std::optional<std::chrono::milliseconds> timeout)
     -> type::expected<std::size_t, std::error_code> {
-    return write(std::string_view(reinterpret_cast<const char*>(data.data()),
-                                  data.size()),
-                 timeout);
+    auto span = std::span(data);
+    std::string_view str_data(reinterpret_cast<const char*>(span.data()),
+                              span.size());
+    return write(str_data, timeout);
 }
 
 }  // namespace atom::connection
