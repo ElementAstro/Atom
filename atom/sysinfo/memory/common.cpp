@@ -1,24 +1,19 @@
-/*
- * common.cpp
+/**
+ * @file common.cpp
+ * @brief Common implementation for memory information module
  *
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2024-2-21
-
-Description: System Information Module - Memory Common Implementation
-
-**************************************************/
-
 #include "common.hpp"
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <iomanip>
 #include <sstream>
 #include <thread>
 #include <vector>
+#include "atom/log/loguru.hpp"
 #include "memory.hpp"
 
 
@@ -30,64 +25,70 @@ Description: System Information Module - Memory Common Implementation
 namespace atom::system {
 namespace internal {
 
-// 监控线程控制变量初始化
 std::atomic<bool> g_monitoringActive(false);
 
-// 将字节转换为可读的大小字符串
 auto formatByteSize(unsigned long long bytes) -> std::string {
-    static const char* units[] = {"B", "KB", "MB", "GB", "TB", "PB", "EB"};
+    static constexpr const char* UNITS[] = {"B",  "KB", "MB", "GB",
+                                            "TB", "PB", "EB"};
+    static constexpr int MAX_UNIT_INDEX = 6;
+
+    if (bytes == 0)
+        return "0 B";
+
     int unitIndex = 0;
     double size = static_cast<double>(bytes);
 
-    while (size >= 1024.0 && unitIndex < 6) {
+    while (size >= 1024.0 && unitIndex < MAX_UNIT_INDEX) {
         size /= 1024.0;
-        unitIndex++;
+        ++unitIndex;
     }
 
-    std::stringstream ss;
-    ss << std::fixed << std::setprecision(2) << size << " " << units[unitIndex];
-    return ss.str();
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(2) << size << " "
+        << UNITS[unitIndex];
+    return oss.str();
 }
 
-// 执行内存性能的基准测试
 auto benchmarkMemoryPerformance(size_t testSizeBytes) -> double {
-    // 分配内存并执行读写操作来测试性能
-    std::vector<char> testBuffer(testSizeBytes);
+    if (testSizeBytes == 0)
+        return 0.0;
 
-    // 记录开始时间
-    auto start = std::chrono::high_resolution_clock::now();
+    std::vector<char> testBuffer;
+    testBuffer.reserve(testSizeBytes);
+    testBuffer.resize(testSizeBytes);
 
-    // 写测试
-    for (size_t i = 0; i < testSizeBytes; i++) {
-        testBuffer[i] = static_cast<char>(i & 0xFF);
+    const auto start = std::chrono::high_resolution_clock::now();
+
+    // Write test - use memset for better performance
+    std::fill(testBuffer.begin(), testBuffer.end(), static_cast<char>(0xAA));
+
+    // Read test - prevent compiler optimization
+    volatile char sum = 0;
+    for (const auto& byte : testBuffer) {
+        sum += byte;
     }
 
-    // 读测试
-    volatile char sum = 0;  // 防止编译器优化掉读取操作
-    for (size_t i = 0; i < testSizeBytes; i++) {
-        sum += testBuffer[i];
-    }
+    const auto end = std::chrono::high_resolution_clock::now();
+    const auto duration = std::chrono::duration<double>(end - start).count();
 
-    // 记录结束时间
-    auto end = std::chrono::high_resolution_clock::now();
+    if (duration <= 0.0)
+        return 0.0;
 
-    // 计算每秒处理的数据量 (以MB/s为单位)
-    double seconds = std::chrono::duration<double>(end - start).count();
-    double mbProcessed = static_cast<double>(testSizeBytes * 2) /
-                         (1024 * 1024);  // *2 因为读和写
-    double throughput = mbProcessed / seconds;
+    constexpr double BYTES_TO_MB = 1.0 / (1024.0 * 1024.0);
+    const double mbProcessed =
+        static_cast<double>(testSizeBytes * 2) * BYTES_TO_MB;
 
-    return throughput;  // 返回MB/s
+    return mbProcessed / duration;
 }
 
 }  // namespace internal
 
-// 实现部分通用函数
-
-// 监控函数实现
+/**
+ * @brief Starts continuous memory monitoring with callback
+ * @param callback Function to be called with memory information updates
+ */
 auto startMemoryMonitoring(std::function<void(const MemoryInfo&)> callback)
     -> void {
-    // 如果已经在监控中，直接返回
     if (internal::g_monitoringActive.exchange(true)) {
         LOG_F(WARNING, "Memory monitoring is already active");
         return;
@@ -95,17 +96,11 @@ auto startMemoryMonitoring(std::function<void(const MemoryInfo&)> callback)
 
     LOG_F(INFO, "Starting memory monitoring");
 
-    // 启动监控线程
-    std::thread monitorThread([callback]() {
-        while (internal::g_monitoringActive) {
+    std::thread monitorThread([callback = std::move(callback)]() {
+        while (internal::g_monitoringActive.load()) {
             try {
-                // 获取内存信息
-                MemoryInfo info = getDetailedMemoryStats();
-
-                // 调用回调函数
+                const auto info = getDetailedMemoryStats();
                 callback(info);
-
-                // 每秒更新一次
                 std::this_thread::sleep_for(std::chrono::seconds(1));
             } catch (const std::exception& e) {
                 LOG_F(ERROR, "Error in memory monitoring thread: %s", e.what());
@@ -115,11 +110,12 @@ auto startMemoryMonitoring(std::function<void(const MemoryInfo&)> callback)
         LOG_F(INFO, "Memory monitoring stopped");
     });
 
-    // 分离线程，让它在后台运行
     monitorThread.detach();
 }
 
-// 停止监控
+/**
+ * @brief Stops memory monitoring
+ */
 auto stopMemoryMonitoring() -> void {
     bool expected = true;
     if (internal::g_monitoringActive.compare_exchange_strong(expected, false)) {
@@ -129,20 +125,23 @@ auto stopMemoryMonitoring() -> void {
     }
 }
 
-// 获取内存时间线
+/**
+ * @brief Collects memory usage timeline over specified duration
+ * @param duration Time period to collect samples
+ * @return Vector of memory information samples
+ */
 auto getMemoryTimeline(std::chrono::minutes duration)
     -> std::vector<MemoryInfo> {
     LOG_F(INFO, "Collecting memory timeline for %ld minutes", duration.count());
 
     std::vector<MemoryInfo> timeline;
-    auto endTime = std::chrono::steady_clock::now() + duration;
+    timeline.reserve(static_cast<size_t>(duration.count() * 60));
+
+    const auto endTime = std::chrono::steady_clock::now() + duration;
 
     while (std::chrono::steady_clock::now() < endTime) {
         try {
-            MemoryInfo info = getDetailedMemoryStats();
-            timeline.push_back(info);
-
-            // 每秒采样一次
+            timeline.emplace_back(getDetailedMemoryStats());
             std::this_thread::sleep_for(std::chrono::seconds(1));
         } catch (const std::exception& e) {
             LOG_F(ERROR, "Error collecting memory timeline: %s", e.what());
@@ -154,32 +153,26 @@ auto getMemoryTimeline(std::chrono::minutes duration)
     return timeline;
 }
 
-// 内存泄漏检测 (简易实现)
+/**
+ * @brief Performs basic memory leak detection
+ * @return Vector of potential memory leak descriptions
+ */
 auto detectMemoryLeaks() -> std::vector<std::string> {
     LOG_F(INFO, "Starting memory leak detection");
     std::vector<std::string> leaks;
 
-    // 这里只是一个简单的示例实现，真正的内存泄漏检测需要更复杂的工具
-    // 比如在Windows上使用ETW或在Linux上用valgrind等专业工具
-
-    // 获取当前内存使用情况
-    MemoryInfo before = getDetailedMemoryStats();
-
-    // 等待一段时间
+    const auto before = getDetailedMemoryStats();
     std::this_thread::sleep_for(std::chrono::seconds(5));
+    const auto after = getDetailedMemoryStats();
 
-    // 再次获取内存使用情况
-    MemoryInfo after = getDetailedMemoryStats();
-
-    // 如果内存占用持续增长，可能存在泄漏
-    if (after.workingSetSize >
-        before.workingSetSize + 1024 * 1024) {  // 增加了超过1MB
-        std::stringstream ss;
-        ss << "Potential memory leak detected: Working set increased by "
-           << internal::formatByteSize(after.workingSetSize -
-                                       before.workingSetSize)
-           << " in 5 seconds";
-        leaks.push_back(ss.str());
+    constexpr unsigned long long LEAK_THRESHOLD = 1024 * 1024;  // 1MB
+    if (after.workingSetSize > before.workingSetSize + LEAK_THRESHOLD) {
+        std::ostringstream oss;
+        oss << "Potential memory leak detected: Working set increased by "
+            << internal::formatByteSize(after.workingSetSize -
+                                        before.workingSetSize)
+            << " in 5 seconds";
+        leaks.emplace_back(oss.str());
     }
 
     LOG_F(INFO, "Memory leak detection completed, found %zu potential issues",
@@ -187,67 +180,58 @@ auto detectMemoryLeaks() -> std::vector<std::string> {
     return leaks;
 }
 
-// 内存碎片分析 (简易实现)
+/**
+ * @brief Calculates memory fragmentation percentage
+ * @return Fragmentation percentage (0-100)
+ */
 auto getMemoryFragmentation() -> double {
     LOG_F(INFO, "Calculating memory fragmentation");
 
-    // 实际的内存碎片分析需要访问底层内存分配器的数据
-    // 这里提供一个简化的估算方法
+    const auto total = getTotalMemorySize();
+    const auto available = getAvailableMemorySize();
 
-    // 获取当前可用内存和总内存
-    auto total = getTotalMemorySize();
-    auto available = getAvailableMemorySize();
-    auto used = total - available;
+    if (available == 0)
+        return 0.0;
 
-    // 分配一大块内存，看能分配多少
     size_t allocatableSize = 0;
     try {
-        // 尝试分配的最大大小
-        const size_t MAX_ALLOC_SIZE = 1024 * 1024 * 100;  // 100 MB
+        constexpr size_t MAX_ALLOC_SIZE = 100 * 1024 * 1024;  // 100 MB
         std::vector<char> testAlloc;
-        testAlloc.reserve(MAX_ALLOC_SIZE);
+        testAlloc.reserve(std::min(MAX_ALLOC_SIZE, available));
         allocatableSize = testAlloc.capacity();
     } catch (...) {
-        // 分配失败的情况下，尝试更小的分配
         allocatableSize = 0;
     }
 
-    // 碎片率计算：(理论可用内存 - 实际可分配内存) / 理论可用内存
-    double fragmentation = 0.0;
-    if (available > 0) {
-        fragmentation = 1.0 - (static_cast<double>(allocatableSize) /
-                               static_cast<double>(available));
-        fragmentation =
-            std::max(0.0, std::min(fragmentation, 1.0));  // 限制在 0-1 范围
-    }
+    const double fragmentation = std::max(
+        0.0, std::min(1.0, 1.0 - (static_cast<double>(allocatableSize) /
+                                  static_cast<double>(available))));
 
+    const double fragmentationPercent = fragmentation * 100.0;
     LOG_F(INFO, "Memory fragmentation estimated at %.2f%%",
-          fragmentation * 100.0);
-    return fragmentation * 100.0;  // 返回百分比
+          fragmentationPercent);
+    return fragmentationPercent;
 }
 
-// 优化内存使用
+/**
+ * @brief Attempts to optimize memory usage
+ * @return True if optimization was successful
+ */
 auto optimizeMemoryUsage() -> bool {
     LOG_F(INFO, "Attempting to optimize memory usage");
 
     bool success = false;
 
 #ifdef _WIN32
-    // Windows平台的内存优化
     try {
-        // 尝试强制垃圾回收
-        SetProcessWorkingSetSize(GetCurrentProcess(), -1, -1);
-        success = true;
+        success = SetProcessWorkingSetSize(GetCurrentProcess(), -1, -1) != 0;
     } catch (...) {
         LOG_F(ERROR, "Failed to optimize memory on Windows");
     }
 #elif defined(__linux__)
-    // Linux平台的内存优化
     try {
-        // 尝试释放缓存的内存页
-        FILE* fp = fopen("/proc/self/oom_score_adj", "w");
-        if (fp) {
-            fprintf(fp, "500\n");  // 增加OOM killer的优先级
+        if (auto fp = fopen("/proc/self/oom_score_adj", "w")) {
+            fprintf(fp, "500\n");
             fclose(fp);
             success = true;
         }
@@ -260,59 +244,64 @@ auto optimizeMemoryUsage() -> bool {
     return success;
 }
 
-// 分析内存瓶颈
+/**
+ * @brief Analyzes system for memory bottlenecks
+ * @return Vector of bottleneck descriptions
+ */
 auto analyzeMemoryBottlenecks() -> std::vector<std::string> {
     LOG_F(INFO, "Analyzing memory bottlenecks");
 
     std::vector<std::string> bottlenecks;
+    const auto perf = getMemoryPerformance();
+    const auto info = getDetailedMemoryStats();
 
-    // 获取内存性能指标
-    MemoryPerformance perf = getMemoryPerformance();
-    MemoryInfo info = getDetailedMemoryStats();
-
-    // 内存使用率过高
+    // High memory usage
     if (info.memoryLoadPercentage > 90.0) {
-        bottlenecks.push_back(
-            "High memory usage: " +
-            std::to_string(static_cast<int>(info.memoryLoadPercentage)) +
-            "% of physical memory is in use.");
+        std::ostringstream oss;
+        oss << "High memory usage: "
+            << static_cast<int>(info.memoryLoadPercentage)
+            << "% of physical memory is in use";
+        bottlenecks.emplace_back(oss.str());
     }
 
-    // 交换空间使用率过高
+    // High swap usage
     if (info.swapMemoryTotal > 0) {
-        double swapUsagePercent = static_cast<double>(info.swapMemoryUsed) /
-                                  info.swapMemoryTotal * 100.0;
+        const double swapUsagePercent =
+            (static_cast<double>(info.swapMemoryUsed) / info.swapMemoryTotal) *
+            100.0;
         if (swapUsagePercent > 50.0) {
-            bottlenecks.push_back(
-                "High swap usage: " +
-                std::to_string(static_cast<int>(swapUsagePercent)) +
-                "% of swap space is in use, which may indicate insufficient "
-                "RAM.");
+            std::ostringstream oss;
+            oss << "High swap usage: " << static_cast<int>(swapUsagePercent)
+                << "% of swap space is in use, indicating insufficient RAM";
+            bottlenecks.emplace_back(oss.str());
         }
     }
 
-    // 内存延迟过高
-    if (perf.latency > 100.0) {  // 假设100纳秒是一个阈值
-        bottlenecks.push_back(
-            "High memory latency: " +
-            std::to_string(static_cast<int>(perf.latency)) +
-            " ns, which may slow down memory-intensive operations.");
+    // High memory latency
+    constexpr double LATENCY_THRESHOLD = 100.0;
+    if (perf.latency > LATENCY_THRESHOLD) {
+        std::ostringstream oss;
+        oss << "High memory latency: " << static_cast<int>(perf.latency)
+            << " ns, may slow memory-intensive operations";
+        bottlenecks.emplace_back(oss.str());
     }
 
-    // 内存带宽使用率过高
+    // High bandwidth usage
     if (perf.bandwidthUsage > 80.0) {
-        bottlenecks.push_back(
-            "High memory bandwidth usage: " +
-            std::to_string(static_cast<int>(perf.bandwidthUsage)) +
-            "%, which may indicate memory bandwidth bottleneck.");
+        std::ostringstream oss;
+        oss << "High memory bandwidth usage: "
+            << static_cast<int>(perf.bandwidthUsage)
+            << "%, indicating potential bandwidth bottleneck";
+        bottlenecks.emplace_back(oss.str());
     }
 
-    // 检查内存碎片率
-    double fragPercent = getMemoryFragmentation();
+    // High fragmentation
+    const double fragPercent = getMemoryFragmentation();
     if (fragPercent > 30.0) {
-        bottlenecks.push_back("High memory fragmentation: " +
-                              std::to_string(static_cast<int>(fragPercent)) +
-                              "%, which may cause memory allocation failures.");
+        std::ostringstream oss;
+        oss << "High memory fragmentation: " << static_cast<int>(fragPercent)
+            << "%, may cause allocation failures";
+        bottlenecks.emplace_back(oss.str());
     }
 
     LOG_F(INFO, "Memory bottleneck analysis completed, found %zu issues",

@@ -11,35 +11,40 @@
 #ifndef ATOM_SYSTEM_MODULE_MEMORY_COMMON_HPP
 #define ATOM_SYSTEM_MODULE_MEMORY_COMMON_HPP
 
-#include <string>
-#include <vector>
+#include <atomic>
 #include <chrono>
 #include <functional>
-#include <atomic>
+#include <string>
+#include <vector>
 
-// 引入必要的日志库
+
 #include "atom/log/loguru.hpp"
 
 namespace atom::system {
 
-// 声明前置
 struct MemoryInfo;
 struct MemoryPerformance;
 
-// 内部工具函数
 namespace internal {
 
-// 监控线程控制变量
 extern std::atomic<bool> g_monitoringActive;
 
-// 将字节转换为可读的大小字符串 (KB, MB, GB等)
+/**
+ * @brief Converts bytes to human-readable size string (KB, MB, GB, etc.)
+ * @param bytes Number of bytes to convert
+ * @return Formatted size string with appropriate unit
+ */
 auto formatByteSize(unsigned long long bytes) -> std::string;
 
-// 计算内存性能的基准测试
+/**
+ * @brief Benchmarks memory performance by measuring read/write throughput
+ * @param testSizeBytes Size of test buffer in bytes (default: 1MB)
+ * @return Memory throughput in MB/s
+ */
 auto benchmarkMemoryPerformance(size_t testSizeBytes = 1024 * 1024) -> double;
 
-} // namespace internal
+}  // namespace internal
 
-} // namespace atom::system
+}  // namespace atom::system
 
-#endif // ATOM_SYSTEM_MODULE_MEMORY_COMMON_HPP
+#endif  // ATOM_SYSTEM_MODULE_MEMORY_COMMON_HPP

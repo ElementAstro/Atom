@@ -2,6 +2,10 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <mutex>
+#include <thread>
+#include <unordered_map>
 
 #ifdef _WIN32
 // clang-format off
@@ -27,16 +31,19 @@
 #include <unistd.h>
 #include <cstring>
 #include <fstream>
+#include <sstream>
 #endif
 
 #include "atom/error/exception.hpp"
-#include "atom/log/loguru.hpp"
 #include "atom/macro.hpp"
 #include "atom/system/command.hpp"
 #include "atom/utils/string.hpp"
 #include "atom/utils/to_string.hpp"
 
+#include <spdlog/spdlog.h>
+
 namespace atom::system {
+
 class NetworkInterface::NetworkInterfaceImpl {
 public:
     std::string name;
@@ -55,35 +62,38 @@ public:
 NetworkInterface::NetworkInterface(std::string name,
                                    std::vector<std::string> addresses,
                                    std::string mac, bool isUp)
-    : impl_(
-          std::make_unique<NetworkInterfaceImpl>(name, addresses, mac, isUp)) {}
+    : impl_(std::make_shared<NetworkInterfaceImpl>(
+          std::move(name), std::move(addresses), std::move(mac), isUp)) {}
 
-[[nodiscard]] auto NetworkInterface::getName() const -> const std::string& {
+auto NetworkInterface::getName() const -> const std::string& {
     return impl_->name;
 }
-[[nodiscard]] auto NetworkInterface::getAddresses() const
-    -> const std::vector<std::string>& {
+
+auto NetworkInterface::getAddresses() const -> const std::vector<std::string>& {
     return impl_->addresses;
 }
+
 auto NetworkInterface::getAddresses() -> std::vector<std::string>& {
     return impl_->addresses;
 }
-[[nodiscard]] auto NetworkInterface::getMac() const -> const std::string& {
+
+auto NetworkInterface::getMac() const -> const std::string& {
     return impl_->mac;
 }
-[[nodiscard]] auto NetworkInterface::isUp() const -> bool {
-    return impl_->isUp;
-}
+
+auto NetworkInterface::isUp() const -> bool { return impl_->isUp; }
 
 class NetworkManager::NetworkManagerImpl {
 public:
     std::mutex mtx_;
-    bool running_{true};
+    std::atomic<bool> running_{true};
 #ifdef _WIN32
     WSADATA wsaData_;
 #endif
 };
-NetworkManager::NetworkManager() {
+
+NetworkManager::NetworkManager()
+    : impl_(std::make_unique<NetworkManagerImpl>()) {
 #ifdef _WIN32
     if (WSAStartup(MAKEWORD(2, 2), &impl_->wsaData_) != 0) {
         THROW_RUNTIME_ERROR("WSAStartup failed");
@@ -101,14 +111,15 @@ NetworkManager::~NetworkManager() {
 auto NetworkManager::getNetworkInterfaces() -> std::vector<NetworkInterface> {
     std::lock_guard lock(impl_->mtx_);
     std::vector<NetworkInterface> interfaces;
+    interfaces.reserve(8);
 
 #ifdef _WIN32
-    ULONG outBufLen = 15000;
+    constexpr ULONG initialBufferSize = 15000;
+    ULONG outBufLen = initialBufferSize;
     std::vector<BYTE> buffer(outBufLen);
-    ULONG flags = GAA_FLAG_INCLUDE_PREFIX;
-    PIP_ADAPTER_ADDRESSES pAddresses =
-        reinterpret_cast<PIP_ADAPTER_ADDRESSES>(buffer.data());
-    ULONG family = AF_UNSPEC;
+    constexpr ULONG flags = GAA_FLAG_INCLUDE_PREFIX;
+    auto* pAddresses = reinterpret_cast<PIP_ADAPTER_ADDRESSES>(buffer.data());
+    constexpr ULONG family = AF_UNSPEC;
 
     DWORD dwRetVal =
         GetAdaptersAddresses(family, flags, nullptr, pAddresses, &outBufLen);
@@ -124,26 +135,27 @@ auto NetworkManager::getNetworkInterfaces() -> std::vector<NetworkInterface> {
                             std::to_string(dwRetVal));
     }
 
-    for (PIP_ADAPTER_ADDRESSES pCurrAddresses = pAddresses;
-         pCurrAddresses != nullptr; pCurrAddresses = pCurrAddresses->Next) {
+    for (auto* pCurrAddresses = pAddresses; pCurrAddresses != nullptr;
+         pCurrAddresses = pCurrAddresses->Next) {
         std::vector<std::string> ips;
-        for (PIP_ADAPTER_UNICAST_ADDRESS pUnicast =
-                 pCurrAddresses->FirstUnicastAddress;
+        ips.reserve(4);
+
+        for (auto* pUnicast = pCurrAddresses->FirstUnicastAddress;
              pUnicast != nullptr; pUnicast = pUnicast->Next) {
-            char ipStr[INET6_ADDRSTRLEN];
-            int result = getnameinfo(pUnicast->Address.lpSockaddr,
-                                     pUnicast->Address.iSockaddrLength, ipStr,
-                                     sizeof(ipStr), nullptr, 0, NI_NUMERICHOST);
-            if (result != 0) {
-                continue;
+            std::array<char, INET6_ADDRSTRLEN> ipStr{};
+            int result = getnameinfo(
+                pUnicast->Address.lpSockaddr, pUnicast->Address.iSockaddrLength,
+                ipStr.data(), ipStr.size(), nullptr, 0, NI_NUMERICHOST);
+            if (result == 0) {
+                ips.emplace_back(ipStr.data());
             }
-            ips.emplace_back(ipStr);
         }
 
         bool isUp = (pCurrAddresses->OperStatus == IfOperStatusUp);
-        interfaces.emplace_back(
-            pCurrAddresses->AdapterName, ips,
-            getMacAddress(pCurrAddresses->AdapterName).value_or("N/A"), isUp);
+        auto macAddr =
+            getMacAddress(pCurrAddresses->AdapterName).value_or("N/A");
+        interfaces.emplace_back(pCurrAddresses->AdapterName, std::move(ips),
+                                std::move(macAddr), isUp);
     }
 #else
     struct ifaddrs* ifAddrStruct = nullptr;
@@ -151,34 +163,30 @@ auto NetworkManager::getNetworkInterfaces() -> std::vector<NetworkInterface> {
         THROW_RUNTIME_ERROR("getifaddrs failed");
     }
 
-    std::unordered_map<std::string, NetworkInterface> ifaceMap;
+    std::unordered_map<std::string, std::vector<std::string> > interfaceIPs;
+    std::unordered_map<std::string, bool> interfaceStatus;
 
-    for (struct ifaddrs* ifa = ifAddrStruct; ifa != nullptr;
-         ifa = ifa->ifa_next) {
-        if ((ifa->ifa_addr != nullptr) && ifa->ifa_addr->sa_family == AF_INET) {
+    for (auto* ifa = ifAddrStruct; ifa != nullptr; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr && ifa->ifa_addr->sa_family == AF_INET) {
             std::string name = ifa->ifa_name;
-            char address[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, &((struct sockaddr_in*)ifa->ifa_addr)->sin_addr,
-                      address, sizeof(address));
+            std::array<char, INET_ADDRSTRLEN> address{};
 
-            if (ifaceMap.find(name) == ifaceMap.end()) {
-                bool isUp = (ifa->ifa_flags & IFF_UP) != 0;
-                ifaceMap.emplace(
-                    name, NetworkInterface(
-                              name, std::vector<std::string>{address},
-                              getMacAddress(name).value_or("N/A"), isUp));
-            } else {
-                // TODO: Fix this
-                // ifaceMap[name].getAddresses().emplace_back(address);
-            }
+            inet_ntop(AF_INET, &((struct sockaddr_in*)ifa->ifa_addr)->sin_addr,
+                      address.data(), address.size());
+
+            interfaceIPs[name].emplace_back(address.data());
+            interfaceStatus[name] = (ifa->ifa_flags & IFF_UP) != 0;
         }
     }
 
     freeifaddrs(ifAddrStruct);
 
-    interfaces.reserve(ifaceMap.size());
-    for (const auto& pair : ifaceMap) {
-        interfaces.push_back(pair.second);
+    interfaces.reserve(interfaceIPs.size());
+    for (auto& [name, ips] : interfaceIPs) {
+        auto macAddr = getMacAddress(name).value_or("N/A");
+        bool isUp = interfaceStatus[name];
+        interfaces.emplace_back(std::move(name), std::move(ips),
+                                std::move(macAddr), isUp);
     }
 #endif
 
@@ -189,54 +197,39 @@ auto NetworkManager::getMacAddress(const std::string& interfaceName)
     -> std::optional<std::string> {
 #ifdef _WIN32
     ULONG outBufLen = sizeof(IP_ADAPTER_ADDRESSES);
-    PIP_ADAPTER_ADDRESSES pAddresses =
-        reinterpret_cast<PIP_ADAPTER_ADDRESSES>(malloc(outBufLen));
-    if (!pAddresses) {
-        THROW_RUNTIME_ERROR(
-            "Memory allocation failed for MAC address retrieval");
-    }
+    auto pAddresses = std::unique_ptr<BYTE[]>(new BYTE[outBufLen]);
+    auto* pAdapterAddresses =
+        reinterpret_cast<PIP_ADAPTER_ADDRESSES>(pAddresses.get());
 
-    DWORD dwRetVal =
-        GetAdaptersAddresses(AF_UNSPEC, 0, nullptr, pAddresses, &outBufLen);
+    DWORD dwRetVal = GetAdaptersAddresses(AF_UNSPEC, 0, nullptr,
+                                          pAdapterAddresses, &outBufLen);
     if (dwRetVal == ERROR_BUFFER_OVERFLOW) {
-        free(pAddresses);
-        pAddresses = reinterpret_cast<PIP_ADAPTER_ADDRESSES>(malloc(outBufLen));
-        if (!pAddresses) {
-            THROW_RUNTIME_ERROR(
-                "Memory allocation failed for MAC address retrieval");
-        }
-        dwRetVal =
-            GetAdaptersAddresses(AF_UNSPEC, 0, nullptr, pAddresses, &outBufLen);
+        pAddresses = std::unique_ptr<BYTE[]>(new BYTE[outBufLen]);
+        pAdapterAddresses =
+            reinterpret_cast<PIP_ADAPTER_ADDRESSES>(pAddresses.get());
+        dwRetVal = GetAdaptersAddresses(AF_UNSPEC, 0, nullptr,
+                                        pAdapterAddresses, &outBufLen);
     }
 
     if (dwRetVal != NO_ERROR) {
-        free(pAddresses);
         THROW_RUNTIME_ERROR("GetAdaptersAddresses failed with error: " +
                             std::to_string(dwRetVal));
     }
 
-    std::optional<std::string> mac = std::nullopt;
-    for (PIP_ADAPTER_ADDRESSES pCurr = pAddresses; pCurr != nullptr;
+    for (auto* pCurr = pAdapterAddresses; pCurr != nullptr;
          pCurr = pCurr->Next) {
-        if (interfaceName == pCurr->AdapterName) {
-            if (pCurr->PhysicalAddressLength == 0) {
-                break;
-            }
-            std::array<char, 18> macAddress;
-            snprintf(macAddress.data(), macAddress.size(),
-                     "%02X-%02X-%02X-%02X-%02X-%02X", pCurr->PhysicalAddress[0],
-                     pCurr->PhysicalAddress[1], pCurr->PhysicalAddress[2],
-                     pCurr->PhysicalAddress[3], pCurr->PhysicalAddress[4],
-                     pCurr->PhysicalAddress[5]);
-            mac = std::string(macAddress.data());
-            break;
+        if (interfaceName == pCurr->AdapterName &&
+            pCurr->PhysicalAddressLength > 0) {
+            return std::format(
+                "{:02X}-{:02X}-{:02X}-{:02X}-{:02X}-{:02X}",
+                pCurr->PhysicalAddress[0], pCurr->PhysicalAddress[1],
+                pCurr->PhysicalAddress[2], pCurr->PhysicalAddress[3],
+                pCurr->PhysicalAddress[4], pCurr->PhysicalAddress[5]);
         }
     }
-
-    free(pAddresses);
-    return mac;
+    return std::nullopt;
 #else
-    int socketFd = ::socket(AF_INET, SOCK_DGRAM, 0);
+    int socketFd = socket(AF_INET, SOCK_DGRAM, 0);
     if (socketFd < 0) {
         THROW_RUNTIME_ERROR(
             "Failed to create socket for MAC address retrieval");
@@ -245,37 +238,33 @@ auto NetworkManager::getMacAddress(const std::string& interfaceName)
     struct ifreq ifr{};
     std::strncpy(ifr.ifr_name, interfaceName.c_str(), IFNAMSIZ - 1);
 
-    if (::ioctl(socketFd, SIOCGIFHWADDR, &ifr) < 0) {
-        ::close(socketFd);
-        THROW_RUNTIME_ERROR("ioctl SIOCGIFHWADDR failed for interface: " +
-                            interfaceName);
+    if (ioctl(socketFd, SIOCGIFHWADDR, &ifr) < 0) {
+        close(socketFd);
+        return std::nullopt;
     }
-    ::close(socketFd);
+    close(socketFd);
 
     const auto* mac = reinterpret_cast<unsigned char*>(ifr.ifr_hwaddr.sa_data);
-    std::string macAddress =
-        std::format("{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0], mac[1],
-                    mac[2], mac[3], mac[4], mac[5]);
-    return macAddress;
+    return std::format("{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0],
+                       mac[1], mac[2], mac[3], mac[4], mac[5]);
 #endif
 }
 
 auto NetworkManager::isInterfaceUp(const std::string& interfaceName) -> bool {
     auto interfaces = getNetworkInterfaces();
-    for (const auto& iface : interfaces) {
-        if (iface.getName() == interfaceName) {
-            return iface.isUp();
-        }
-    }
-    return false;
+    auto it = std::find_if(interfaces.begin(), interfaces.end(),
+                           [&interfaceName](const auto& iface) {
+                               return iface.getName() == interfaceName;
+                           });
+    return it != interfaces.end() && it->isUp();
 }
 
 void NetworkManager::enableInterface(const std::string& interfaceName) {
 #ifdef _WIN32
-    MIB_IFROW ifRow;
-    memset(&ifRow, 0, sizeof(MIB_IFROW));
-    strncpy(reinterpret_cast<char*>(ifRow.wszName), interfaceName.c_str(),
-            MAX_ADAPTER_NAME_LENGTH + 4);
+    MIB_IFROW ifRow{};
+    strncpy_s(reinterpret_cast<char*>(ifRow.wszName),
+              MAX_ADAPTER_NAME_LENGTH + 4, interfaceName.c_str(),
+              interfaceName.size());
 
     if (GetIfEntry(&ifRow) == NO_ERROR) {
         ifRow.dwAdminStatus = MIB_IF_ADMIN_STATUS_UP;
@@ -286,10 +275,8 @@ void NetworkManager::enableInterface(const std::string& interfaceName) {
         THROW_RUNTIME_ERROR("Failed to get interface entry: " + interfaceName);
     }
 #else
-    // Enable interface on Linux (requires sudo)
     std::string command = "sudo ip link set " + interfaceName + " up";
-    int ret = executeCommandWithStatus(command).second;
-    if (ret != 0) {
+    if (executeCommandWithStatus(command).second != 0) {
         THROW_RUNTIME_ERROR("Failed to enable interface: " + interfaceName);
     }
 #endif
@@ -297,8 +284,7 @@ void NetworkManager::enableInterface(const std::string& interfaceName) {
 
 void NetworkManager::disableInterface(const std::string& interfaceName) {
 #ifdef _WIN32
-    MIB_IFROW ifRow;
-    memset(&ifRow, 0, sizeof(MIB_IFROW));
+    MIB_IFROW ifRow{};
     strncpy_s(reinterpret_cast<char*>(ifRow.wszName),
               MAX_ADAPTER_NAME_LENGTH + 4, interfaceName.c_str(),
               interfaceName.size());
@@ -313,10 +299,8 @@ void NetworkManager::disableInterface(const std::string& interfaceName) {
         THROW_RUNTIME_ERROR("Failed to get interface entry: " + interfaceName);
     }
 #else
-    // Disable interface on Linux (requires sudo)
     std::string command = "sudo ip link set " + interfaceName + " down";
-    int ret = std::system(command.c_str());
-    if (ret != 0) {
+    if (executeCommandWithStatus(command).second != 0) {
         THROW_RUNTIME_ERROR("Failed to disable interface: " + interfaceName);
     }
 #endif
@@ -324,9 +308,8 @@ void NetworkManager::disableInterface(const std::string& interfaceName) {
 
 auto NetworkManager::resolveDNS(const std::string& hostname) -> std::string {
     struct addrinfo hints{};
-    struct addrinfo* res;
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET;  // IPv4
+    struct addrinfo* res = nullptr;
+    hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
 
     int ret = getaddrinfo(hostname.c_str(), nullptr, &hints, &res);
@@ -335,7 +318,7 @@ auto NetworkManager::resolveDNS(const std::string& hostname) -> std::string {
                             gai_strerror(ret));
     }
 
-    std::array<char, INET_ADDRSTRLEN> ipStr;
+    std::array<char, INET_ADDRSTRLEN> ipStr{};
     inet_ntop(AF_INET, &((struct sockaddr_in*)res->ai_addr)->sin_addr,
               ipStr.data(), ipStr.size());
     freeaddrinfo(res);
@@ -344,20 +327,20 @@ auto NetworkManager::resolveDNS(const std::string& hostname) -> std::string {
 
 auto NetworkManager::getDNSServers() -> std::vector<std::string> {
     std::vector<std::string> dnsServers;
+    dnsServers.reserve(4);
+
 #ifdef _WIN32
     DWORD bufLen = 0;
     GetNetworkParams(nullptr, &bufLen);
-    std::unique_ptr<BYTE[]> buffer(new BYTE[bufLen]);
-    FIXED_INFO* pFixedInfo = reinterpret_cast<FIXED_INFO*>(buffer.get());
+    auto buffer = std::make_unique<BYTE[]>(bufLen);
+    auto* pFixedInfo = reinterpret_cast<FIXED_INFO*>(buffer.get());
 
     if (GetNetworkParams(pFixedInfo, &bufLen) != NO_ERROR) {
         THROW_RUNTIME_ERROR("GetNetworkParams failed");
     }
 
-    IP_ADDR_STRING* pAddr = &pFixedInfo->DnsServerList;
-    while (pAddr) {
+    for (auto* pAddr = &pFixedInfo->DnsServerList; pAddr; pAddr = pAddr->Next) {
         dnsServers.emplace_back(pAddr->IpAddress.String);
-        pAddr = pAddr->Next;
     }
 #else
     std::ifstream resolvFile("/etc/resolv.conf");
@@ -367,12 +350,11 @@ auto NetworkManager::getDNSServers() -> std::vector<std::string> {
 
     std::string line;
     while (std::getline(resolvFile, line)) {
-        if (line.compare(0, 10, "nameserver") == 0) {
+        if (line.starts_with("nameserver")) {
             std::istringstream iss(line);
-            std::string keyword;
-            std::string ip;
+            std::string keyword, ip;
             if (iss >> keyword >> ip) {
-                dnsServers.emplace_back(ip);
+                dnsServers.emplace_back(std::move(ip));
             }
         }
     }
@@ -382,16 +364,11 @@ auto NetworkManager::getDNSServers() -> std::vector<std::string> {
 
 void NetworkManager::setDNSServers(const std::vector<std::string>& dnsServers) {
 #ifdef _WIN32
-    // Windows-specific DNS server setting
-    // This implementation sets DNS servers for all adapters
-    // For more granular control, iterate through adapters and set individually
-
     ULONG outBufLen = 15000;
     std::vector<BYTE> buffer(outBufLen);
-    PIP_ADAPTER_ADDRESSES pAddresses =
-        reinterpret_cast<PIP_ADAPTER_ADDRESSES>(buffer.data());
-    ULONG family = AF_UNSPEC;
-    ULONG flags = GAA_FLAG_INCLUDE_PREFIX;
+    auto* pAddresses = reinterpret_cast<PIP_ADAPTER_ADDRESSES>(buffer.data());
+    constexpr ULONG family = AF_UNSPEC;
+    constexpr ULONG flags = GAA_FLAG_INCLUDE_PREFIX;
 
     DWORD dwRetVal =
         GetAdaptersAddresses(family, flags, nullptr, pAddresses, &outBufLen);
@@ -407,20 +384,8 @@ void NetworkManager::setDNSServers(const std::vector<std::string>& dnsServers) {
                             std::to_string(dwRetVal));
     }
 
-    for (PIP_ADAPTER_ADDRESSES pCurrAddresses = pAddresses;
-         pCurrAddresses != nullptr; pCurrAddresses = pCurrAddresses->Next) {
-        std::vector<IP_ADDRESS_STRING> dnsList;
-        for (const auto& dns : dnsServers) {
-            IP_ADDRESS_STRING dnsAddr;
-            memset(&dnsAddr, 0, sizeof(IP_ADDRESS_STRING));
-            strncpy_s(dnsAddr.String, dns.c_str(), sizeof(dnsAddr.String) - 1);
-            dnsList.emplace_back(dnsAddr);
-        }
-
-        // Allocate and set DNS servers
-        // Note: This is a simplified implementation. Proper implementation
-        // requires more detailed handling.
-        // Use netsh command as a workaround for setting DNS servers
+    for (auto* pCurrAddresses = pAddresses; pCurrAddresses != nullptr;
+         pCurrAddresses = pCurrAddresses->Next) {
         std::wstring command =
             L"netsh interface ip set dns name=\"" +
             std::wstring(pCurrAddresses->FriendlyName) + L"\" static " +
@@ -428,16 +393,13 @@ void NetworkManager::setDNSServers(const std::vector<std::string>& dnsServers) {
                  ? L"none"
                  : std::wstring(dnsServers[0].begin(), dnsServers[0].end()));
 
-        int result =
-            executeCommandWithStatus(atom::utils::wstringToString(command))
-                .second;
-        if (result != 0) {
+        if (executeCommandWithStatus(atom::utils::wstringToString(command))
+                .second != 0) {
             THROW_RUNTIME_ERROR("Failed to set DNS servers for adapter: " +
                                 std::string(pCurrAddresses->AdapterName));
         }
 
-        // 设置额外的 DNS 服务器
-        for (size_t i = 1; i < dnsServers.size(); i++) {
+        for (size_t i = 1; i < dnsServers.size(); ++i) {
             std::wstring addCommand =
                 L"netsh interface ip add dns name=\"" +
                 std::wstring(pCurrAddresses->FriendlyName) + L"\" " +
@@ -448,21 +410,17 @@ void NetworkManager::setDNSServers(const std::vector<std::string>& dnsServers) {
         }
     }
 #else
-    // Check if NetworkManager is running
-    if (executeCommandSimple("pgrep NetworkManager > /dev/null")) {
-        // Use NetworkManager to set DNS servers
+    if (executeCommandSimple("pgrep NetworkManager > /dev/null") == 0) {
         for (const auto& dns : dnsServers) {
             std::string command = "nmcli device modify eth0 ipv4.dns " + dns;
-            int ret = executeCommandWithStatus(command).second;
-            if (ret != 0) {
+            if (executeCommandWithStatus(command).second != 0) {
                 THROW_RUNTIME_ERROR("Failed to set DNS server: " + dns);
             }
         }
-        if (executeCommandSimple("nmcli connection reload")) {
+        if (executeCommandSimple("nmcli connection reload") != 0) {
             THROW_RUNTIME_ERROR("Failed to reload NetworkManager connection");
         }
     } else {
-        // Fallback to modifying /etc/resolv.conf directly
         std::ofstream resolvFile("/etc/resolv.conf", std::ios::trunc);
         if (!resolvFile.is_open()) {
             THROW_RUNTIME_ERROR("Failed to open /etc/resolv.conf for writing");
@@ -471,18 +429,15 @@ void NetworkManager::setDNSServers(const std::vector<std::string>& dnsServers) {
         for (const auto& dns : dnsServers) {
             resolvFile << "nameserver " << dns << "\n";
         }
-
-        resolvFile.close();
     }
 #endif
 }
 
 void NetworkManager::addDNSServer(const std::string& dns) {
     auto dnsServers = getDNSServers();
-    // Check if DNS already exists
     if (std::find(dnsServers.begin(), dnsServers.end(), dns) !=
         dnsServers.end()) {
-        LOG_F(INFO, "DNS server {} already exists.", dns);
+        spdlog::info("DNS server {} already exists", dns);
         return;
     }
     dnsServers.emplace_back(dns);
@@ -493,7 +448,7 @@ void NetworkManager::removeDNSServer(const std::string& dns) {
     auto dnsServers = getDNSServers();
     auto it = std::remove(dnsServers.begin(), dnsServers.end(), dns);
     if (it == dnsServers.end()) {
-        LOG_F(INFO, "DNS server {} not found.", dns);
+        spdlog::info("DNS server {} not found", dns);
         return;
     }
     dnsServers.erase(it, dnsServers.end());
@@ -502,26 +457,23 @@ void NetworkManager::removeDNSServer(const std::string& dns) {
 
 void NetworkManager::monitorConnectionStatus() {
     std::thread([this]() {
-        while (impl_->running_) {
-            std::this_thread::sleep_for(std::chrono::seconds(5));
+        constexpr auto sleepDuration = std::chrono::seconds(5);
+        while (impl_->running_.load()) {
+            std::this_thread::sleep_for(sleepDuration);
             std::lock_guard lock(impl_->mtx_);
             try {
                 auto interfaces = getNetworkInterfaces();
-                LOG_F(INFO, "----- Network Interfaces Status -----");
+                spdlog::info("----- Network Interfaces Status -----");
                 for (const auto& iface : interfaces) {
-                    LOG_F(INFO,
-                          "Interface: {} | Status: {} | IPs: {} | MAC: {}",
-                          iface.getName(), iface.isUp() ? "Up" : "Down",
-                          atom::utils::toString(iface.getAddresses()),
-                          iface.getMac());
-                    for (const auto& ip : iface.getAddresses()) {
-                        LOG_F(INFO, "IP: {}", ip);
-                    }
-                    LOG_F(INFO, "MAC: {}", iface.getMac());
+                    spdlog::info(
+                        "Interface: {} | Status: {} | IPs: {} | MAC: {}",
+                        iface.getName(), iface.isUp() ? "Up" : "Down",
+                        atom::utils::toString(iface.getAddresses()),
+                        iface.getMac());
                 }
-                LOG_F(INFO, "--------------------------------------");
+                spdlog::info("--------------------------------------");
             } catch (const std::exception& e) {
-                LOG_F(ERROR, "Error in monitorConnectionStatus: {}", e.what());
+                spdlog::error("Error in monitorConnectionStatus: {}", e.what());
             }
         }
     }).detach();
@@ -530,10 +482,12 @@ void NetworkManager::monitorConnectionStatus() {
 auto NetworkManager::getInterfaceStatus(const std::string& interfaceName)
     -> std::string {
     auto interfaces = getNetworkInterfaces();
-    for (const auto& iface : interfaces) {
-        if (iface.getName() == interfaceName) {
-            return iface.isUp() ? "Up" : "Down";
-        }
+    auto it = std::find_if(interfaces.begin(), interfaces.end(),
+                           [&interfaceName](const auto& iface) {
+                               return iface.getName() == interfaceName;
+                           });
+    if (it != interfaces.end()) {
+        return it->isUp() ? "Up" : "Down";
     }
     THROW_RUNTIME_ERROR("Interface not found: " + interfaceName);
 }
@@ -544,56 +498,63 @@ auto parseAddressPort(const std::string& addressPort)
     if (colonPos != std::string::npos) {
         std::string address = addressPort.substr(0, colonPos);
         int port = std::stoi(addressPort.substr(colonPos + 1));
-        return {address, port};
+        return {std::move(address), port};
     }
     return {"", 0};
 }
 
 auto getNetworkConnections(int pid) -> std::vector<NetworkConnection> {
     std::vector<NetworkConnection> connections;
+    connections.reserve(16);
 
 #ifdef _WIN32
-    // Windows: Use GetExtendedTcpTable to get TCP connections.
     MIB_TCPTABLE_OWNER_PID* pTCPInfo = nullptr;
     DWORD dwSize = 0;
     GetExtendedTcpTable(nullptr, &dwSize, false, AF_INET,
                         TCP_TABLE_OWNER_PID_ALL, 0);
-    pTCPInfo = (MIB_TCPTABLE_OWNER_PID*)malloc(dwSize);
+
+    auto tcpBuffer = std::make_unique<BYTE[]>(dwSize);
+    pTCPInfo = reinterpret_cast<MIB_TCPTABLE_OWNER_PID*>(tcpBuffer.get());
+
     if (GetExtendedTcpTable(pTCPInfo, &dwSize, false, AF_INET,
                             TCP_TABLE_OWNER_PID_ALL, 0) == NO_ERROR) {
         for (DWORD i = 0; i < pTCPInfo->dwNumEntries; ++i) {
             if (static_cast<int>(pTCPInfo->table[i].dwOwningPid) == pid) {
                 NetworkConnection conn;
                 conn.protocol = "TCP";
-                conn.localAddress =
-                    inet_ntoa(*(in_addr*)&pTCPInfo->table[i].dwLocalAddr);
-                conn.localPort = ntohs((u_short)pTCPInfo->table[i].dwLocalPort);
-                conn.remoteAddress =
-                    inet_ntoa(*(in_addr*)&pTCPInfo->table[i].dwRemoteAddr);
-                conn.remotePort =
-                    ntohs((u_short)pTCPInfo->table[i].dwRemotePort);
-                connections.push_back(conn);
-                LOG_F(INFO, "Found TCP connection: Local {}:{} -> Remote {}:{}",
-                      conn.localAddress, conn.localPort, conn.remoteAddress,
-                      conn.remotePort);
+                conn.localAddress = inet_ntoa(*reinterpret_cast<in_addr*>(
+                    &pTCPInfo->table[i].dwLocalAddr));
+                conn.localPort =
+                    ntohs(static_cast<u_short>(pTCPInfo->table[i].dwLocalPort));
+                conn.remoteAddress = inet_ntoa(*reinterpret_cast<in_addr*>(
+                    &pTCPInfo->table[i].dwRemoteAddr));
+                conn.remotePort = ntohs(
+                    static_cast<u_short>(pTCPInfo->table[i].dwRemotePort));
+                connections.emplace_back(std::move(conn));
+
+                spdlog::info(
+                    "Found TCP connection: Local {}:{} -> Remote {}:{}",
+                    conn.localAddress, conn.localPort, conn.remoteAddress,
+                    conn.remotePort);
             }
         }
     } else {
-        LOG_F(ERROR, "Failed to get TCP table. Error: {}", GetLastError());
+        spdlog::error("Failed to get TCP table. Error: {}", GetLastError());
     }
-    free(pTCPInfo);
 
 #elif __APPLE__
-    // macOS: Use `lsof` to get network connections.
-    std::array<char, 128> buffer;
+    std::array<char, 128> buffer{};
     std::string command = "lsof -i -n -P | grep " + std::to_string(pid);
-    FILE* pipe = popen(command.c_str(), "r");
+
+    auto pipe = std::unique_ptr<FILE, decltype(&pclose)>(
+        popen(command.c_str(), "r"), pclose);
+
     if (!pipe) {
-        LOG_F(ERROR, "Failed to run lsof command.");
+        spdlog::error("Failed to run lsof command");
         return connections;
     }
 
-    while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
         std::istringstream iss(buffer.data());
         std::string proto, local, remote, ignore;
         iss >> ignore >> ignore >> ignore >> proto >> local >> remote;
@@ -601,49 +562,49 @@ auto getNetworkConnections(int pid) -> std::vector<NetworkConnection> {
         auto [localAddr, localPort] = parseAddressPort(local);
         auto [remoteAddr, remotePort] = parseAddressPort(remote);
 
-        connections.push_back(
-            {proto, localAddr, remoteAddr, localPort, remotePort});
-        LOG_F(INFO, "Found {} connection: Local {}:{} -> Remote {}:{}", proto,
-              localAddr, localPort, remoteAddr, remotePort);
-    }
-    pclose(pipe);
+        connections.emplace_back(
+            NetworkConnection{std::move(proto), std::move(localAddr),
+                              std::move(remoteAddr), localPort, remotePort});
 
-#elif __linux__ || __ANDROID__
-    // Linux/Android: Parse /proc/<pid>/net/tcp and /proc/<pid>/net/udp.
+        spdlog::info("Found {} connection: Local {}:{} -> Remote {}:{}", proto,
+                     localAddr, localPort, remoteAddr, remotePort);
+    }
+
+#else
     for (const auto& [protocol, path] :
-         {std::pair{"TCP", "net/tcp"}, {"UDP", "net/udp"}}) {
+         std::array{std::pair{"TCP", "net/tcp"}, {"UDP", "net/udp"}}) {
         std::ifstream netFile("/proc/" + std::to_string(pid) + "/" + path);
         if (!netFile.is_open()) {
-            LOG_F(ERROR, "Failed to open: /proc/{}/{}", pid, path);
+            spdlog::error("Failed to open: /proc/{}/{}", pid, path);
             continue;
         }
 
         std::string line;
-        std::getline(netFile, line);  // Skip header line.
+        std::getline(netFile, line);
 
         while (std::getline(netFile, line)) {
             std::istringstream iss(line);
-            std::string localAddress;
-            std::string remoteAddress;
-            std::string ignore;
-            int state;
-            int inode;
+            std::string localAddress, remoteAddress, ignore;
+            int state, inode;
 
-            // Parse the fields from the /proc file.
             iss >> ignore >> localAddress >> remoteAddress >> std::hex >>
                 state >> ignore >> ignore >> ignore >> inode;
 
             auto [localAddr, localPort] = parseAddressPort(localAddress);
             auto [remoteAddr, remotePort] = parseAddressPort(remoteAddress);
 
-            connections.push_back(
-                {protocol, localAddr, remoteAddr, localPort, remotePort});
-            LOG_F(INFO, "Found {} connection: Local {}:{} -> Remote {}:{}",
-                  protocol, localAddr, localPort, remoteAddr, remotePort);
+            connections.emplace_back(NetworkConnection{
+                protocol, std::move(localAddr), std::move(remoteAddr),
+                localPort, remotePort});
+
+            spdlog::info("Found {} connection: Local {}:{} -> Remote {}:{}",
+                         protocol, localAddr, localPort, remoteAddr,
+                         remotePort);
         }
     }
 #endif
 
     return connections;
 }
+
 }  // namespace atom::system

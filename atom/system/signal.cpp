@@ -14,13 +14,13 @@
 constexpr size_t DEFAULT_QUEUE_SIZE = 1000;
 #endif
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 
 constexpr int SLEEP_DURATION_MS = 10;
 
 auto SignalHandlerWithPriority::operator<(
     const SignalHandlerWithPriority& other) const noexcept -> bool {
-    return priority > other.priority;  // Higher priority handlers run first
+    return priority > other.priority;
 }
 
 auto SignalHandlerRegistry::getInstance() -> SignalHandlerRegistry& {
@@ -37,12 +37,11 @@ int SignalHandlerRegistry::setSignalHandler(SignalID signal,
     handlers_[signal].emplace(handler, priority, handlerName);
     handlerRegistry_[handlerId] = {signal, handler};
 
-    // Update statistics - 使用插入或赋值确保始终存在，避免竞争条件
     signalStats_.try_emplace(signal);
 
     auto previousHandler = std::signal(signal, signalDispatcher);
     if (previousHandler == SIG_ERR) {
-        LOG_F(ERROR, "Error setting signal handler for signal {}", signal);
+        spdlog::error("Error setting signal handler for signal {}", signal);
     }
 
     return handlerId;
@@ -74,15 +73,14 @@ bool SignalHandlerRegistry::removeSignalHandlerById(int handlerId) {
                 handlers_.erase(handlerIterator);
                 auto previousHandler = std::signal(signal, SIG_DFL);
                 if (previousHandler == SIG_ERR) {
-                    LOG_F(ERROR, "Error resetting signal handler for signal {}",
-                          signal);
+                    spdlog::error(
+                        "Error resetting signal handler for signal {}", signal);
                 }
             }
             return true;
         }
     }
 
-    // Handler not found in set, still remove from registry
     handlerRegistry_.erase(handlerId);
     return false;
 }
@@ -99,7 +97,6 @@ bool SignalHandlerRegistry::removeSignalHandler(SignalID signal,
                        handler.target<void(SignalID)>();
             });
         if (handlerWithPriority != handlerIterator->second.end()) {
-            // Also remove from handler registry
             for (auto it = handlerRegistry_.begin();
                  it != handlerRegistry_.end();) {
                 if (it->second.first == signal &&
@@ -116,8 +113,8 @@ bool SignalHandlerRegistry::removeSignalHandler(SignalID signal,
                 handlers_.erase(handlerIterator);
                 auto previousHandler = std::signal(signal, SIG_DFL);
                 if (previousHandler == SIG_ERR) {
-                    LOG_F(ERROR, "Error resetting signal handler for signal {}",
-                          signal);
+                    spdlog::error(
+                        "Error resetting signal handler for signal {}", signal);
                 }
             }
             return true;
@@ -143,27 +140,23 @@ int SignalHandlerRegistry::processAllPendingSignals(
     const auto startTime = std::chrono::steady_clock::now();
     int processed = 0;
 
-    // Process all signals that have registered handlers
     for (const auto& [signal, handlers] : handlers_) {
         if (hasHandlersForSignal(signal)) {
-            // Check timeout if specified
             if (timeout.count() > 0) {
                 auto elapsed = std::chrono::steady_clock::now() - startTime;
                 if (elapsed >= timeout) {
-                    LOG_F(INFO,
-                          "Signal processing timeout reached after processing "
-                          "{} signals",
-                          processed);
+                    spdlog::info(
+                        "Signal processing timeout reached after processing {} "
+                        "signals",
+                        processed);
                     break;
                 }
             }
 
             try {
-                // Execute all handlers for this signal
                 for (const auto& handler : handlers) {
                     if (executeHandlerWithTimeout(handler.handler, signal)) {
                         processed++;
-                        // Update statistics
                         auto it = signalStats_.find(signal);
                         if (it != signalStats_.end()) {
                             it->second.processed.fetch_add(
@@ -172,9 +165,9 @@ int SignalHandlerRegistry::processAllPendingSignals(
                                 std::chrono::steady_clock::now();
                         }
                     } else {
-                        LOG_F(WARNING,
-                              "Handler timed out while processing signal {}",
-                              signal);
+                        spdlog::warn(
+                            "Handler timed out while processing signal {}",
+                            signal);
                         auto it = signalStats_.find(signal);
                         if (it != signalStats_.end()) {
                             it->second.handlerErrors.fetch_add(
@@ -183,8 +176,8 @@ int SignalHandlerRegistry::processAllPendingSignals(
                     }
                 }
             } catch (const std::exception& e) {
-                LOG_F(ERROR, "Exception in signal handler for signal {}: {}",
-                      signal, e.what());
+                spdlog::error("Exception in signal handler for signal {}: {}",
+                              signal, e.what());
                 auto it = signalStats_.find(signal);
                 if (it != signalStats_.end()) {
                     it->second.handlerErrors.fetch_add(
@@ -240,13 +233,11 @@ bool SignalHandlerRegistry::executeHandlerWithTimeout(
 
     auto futureTask = std::async(std::launch::async,
                                  [&handler, signal]() { handler(signal); });
-
     auto status = futureTask.wait_for(handlerTimeout_);
     return status == std::future_status::ready;
 }
 
 SignalHandlerRegistry::SignalHandlerRegistry() = default;
-
 SignalHandlerRegistry::~SignalHandlerRegistry() = default;
 
 void SignalHandlerRegistry::signalDispatcher(int signal) {
@@ -258,7 +249,6 @@ void SignalHandlerRegistry::signalDispatcher(int signal) {
             it->second.received.fetch_add(1, std::memory_order_relaxed);
             it->second.lastReceived = std::chrono::steady_clock::now();
         } else {
-            // 需要升级锁才能修改集合
             lock.unlock();
             std::unique_lock writeLock(registry.mutex_);
             auto& stats = registry.signalStats_[signal];
@@ -267,10 +257,8 @@ void SignalHandlerRegistry::signalDispatcher(int signal) {
         }
     }
 
-    // Forward to safe manager if available
     SafeSignalManager::safeSignalDispatcher(signal);
 
-    // Immediate handling for critical signals
     std::shared_lock lock(registry.mutex_);
     auto handlerIterator = registry.handlers_.find(signal);
     if (handlerIterator != registry.handlers_.end()) {
@@ -286,9 +274,9 @@ void SignalHandlerRegistry::signalDispatcher(int signal) {
                         std::chrono::steady_clock::now();
                 }
             } catch (const std::exception& e) {
-                LOG_F(ERROR,
-                      "Exception in direct signal handler for signal {}: {}",
-                      signal, e.what());
+                spdlog::error(
+                    "Exception in direct signal handler for signal {}: {}",
+                    signal, e.what());
 
                 auto statsIt = registry.signalStats_.find(signal);
                 if (statsIt != registry.signalStats_.end()) {
@@ -310,11 +298,8 @@ auto SignalHandlerRegistry::getStandardCrashSignals() -> std::set<SignalID> {
 
 SafeSignalManager::SafeSignalManager(size_t threadCount, size_t queueSize)
     : maxQueueSize_(queueSize) {
-    // 启动工作线程前先配置队列大小
 #ifdef ATOM_USE_BOOST
-    // 使用Boost的无锁队列不需要额外操作
 #else
-    // signalQueue_.reserve(queueSize);
 #endif
 
     workerThreads_.reserve(threadCount);
@@ -324,22 +309,21 @@ SafeSignalManager::SafeSignalManager(size_t threadCount, size_t queueSize)
         });
     }
 
-    LOG_F(INFO,
-          "SafeSignalManager initialized with {} worker threads and queue size "
-          "{}",
-          threadCount, queueSize);
+    spdlog::info(
+        "SafeSignalManager initialized with {} worker threads and queue size "
+        "{}",
+        threadCount, queueSize);
 }
 
 SafeSignalManager::~SafeSignalManager() {
     keepRunning_ = false;
-    clearSignalQueue();  // Clear queue to avoid deadlocks
+    clearSignalQueue();
 
-    // Wake up any sleeping threads - C++20 jthread自动处理停止和join
 #ifndef ATOM_USE_BOOST
     queueCondition_.notify_all();
 #endif
 
-    LOG_F(INFO, "SafeSignalManager shutting down");
+    spdlog::info("SafeSignalManager shutting down");
 }
 
 int SafeSignalManager::addSafeSignalHandler(SignalID signal,
@@ -351,13 +335,12 @@ int SafeSignalManager::addSafeSignalHandler(SignalID signal,
     safeHandlers_[signal].emplace(handler, priority, handlerName);
     handlerRegistry_[handlerId] = {signal, handler};
 
-    // Update statistics
     std::unique_lock statsLock(statsMutex_);
     signalStats_.try_emplace(signal, SignalStats{});
 
-    LOG_F(INFO,
-          "Added safe signal handler for signal {} with priority {} and ID {}",
-          signal, priority, handlerId);
+    spdlog::info(
+        "Added safe signal handler for signal {} with priority {} and ID {}",
+        signal, priority, handlerId);
 
     return handlerId;
 }
@@ -388,12 +371,11 @@ bool SafeSignalManager::removeSafeSignalHandlerById(int handlerId) {
                 safeHandlers_.erase(handlerIterator);
             }
 
-            LOG_F(INFO, "Removed safe signal handler with ID {}", handlerId);
+            spdlog::info("Removed safe signal handler with ID {}", handlerId);
             return true;
         }
     }
 
-    // Handler not found in set, still remove from registry
     handlerRegistry_.erase(handlerId);
     return false;
 }
@@ -410,7 +392,6 @@ bool SafeSignalManager::removeSafeSignalHandler(SignalID signal,
                        handler.target<void(SignalID)>();
             });
         if (handlerWithPriority != handlerIterator->second.end()) {
-            // Also remove from handler registry
             for (auto it = handlerRegistry_.begin();
                  it != handlerRegistry_.end();) {
                 if (it->second.first == signal &&
@@ -427,7 +408,7 @@ bool SafeSignalManager::removeSafeSignalHandler(SignalID signal,
                 safeHandlers_.erase(handlerIterator);
             }
 
-            LOG_F(INFO, "Removed safe signal handler for signal {}", signal);
+            spdlog::info("Removed safe signal handler for signal {}", signal);
             return true;
         }
     }
@@ -453,7 +434,6 @@ bool SafeSignalManager::queueSignal(SignalID signal) {
             it->second.received.fetch_add(1, std::memory_order_relaxed);
             it->second.lastReceived = std::chrono::steady_clock::now();
         } else {
-            // 需要升级锁才能修改集合
             statsLock.unlock();
             std::unique_lock writeLock(statsMutex_);
             auto& stats = signalStats_[signal];
@@ -466,7 +446,7 @@ bool SafeSignalManager::queueSignal(SignalID signal) {
     if (!pushed) {
         std::unique_lock statsLock(statsMutex_);
         signalStats_[signal].dropped.fetch_add(1, std::memory_order_relaxed);
-        LOG_F(WARNING, "Signal queue full, dropping signal {}", signal);
+        spdlog::warn("Signal queue full, dropping signal {}", signal);
     }
     return pushed;
 #else
@@ -491,7 +471,7 @@ bool SafeSignalManager::queueSignal(SignalID signal) {
     if (signalQueue_.size() >= maxQueueSize_) {
         std::unique_lock statsLock(statsMutex_);
         signalStats_[signal].dropped.fetch_add(1, std::memory_order_relaxed);
-        LOG_F(WARNING, "Signal queue full, dropping signal {}", signal);
+        spdlog::warn("Signal queue full, dropping signal {}", signal);
         return false;
     }
 
@@ -550,17 +530,17 @@ bool SafeSignalManager::setWorkerThreadCount(size_t threadCount) {
         });
     }
 
-    LOG_F(INFO, "Changed worker thread count to {}", threadCount);
+    spdlog::info("Changed worker thread count to {}", threadCount);
     return true;
 }
 
 void SafeSignalManager::setMaxQueueSize(size_t size) {
 #ifdef ATOM_USE_BOOST
-    LOG_F(WARNING, "Cannot change queue size for Boost lockfree queue");
+    spdlog::warn("Cannot change queue size for Boost lockfree queue");
 #else
     std::unique_lock lock(queueMutex_);
     maxQueueSize_ = size;
-    LOG_F(INFO, "Changed maximum queue size to {}", size);
+    spdlog::info("Changed maximum queue size to {}", size);
 #endif
 }
 
@@ -571,14 +551,14 @@ int SafeSignalManager::clearSignalQueue() {
     while (signalQueue_.pop(signal)) {
         cleared++;
     }
-    LOG_F(INFO, "Cleared signal queue, removed approximately {} signals",
-          cleared);
+    spdlog::info("Cleared signal queue, removed approximately {} signals",
+                 cleared);
     return cleared;
 #else
     std::unique_lock lock(queueMutex_);
     int cleared = static_cast<int>(signalQueue_.size());
     signalQueue_.clear();
-    LOG_F(INFO, "Cleared signal queue, removed {} signals", cleared);
+    spdlog::info("Cleared signal queue, removed {} signals", cleared);
     return cleared;
 #endif
 }
@@ -621,9 +601,10 @@ void SafeSignalManager::processSignals(std::stop_token stopToken) {
             if (handlerIterator != safeHandlers_.end()) {
                 for (const auto& handler : handlerIterator->second) {
                     try {
-                        LOG_F(INFO, "Processing signal {} with handler {}",
-                              signal.value(),
-                              handler.name.empty() ? "unnamed" : handler.name);
+                        spdlog::info(
+                            "Processing signal {} with handler {}",
+                            signal.value(),
+                            handler.name.empty() ? "unnamed" : handler.name);
                         handler.handler(signal.value());
 
                         std::shared_lock statsLock(statsMutex_);
@@ -635,10 +616,10 @@ void SafeSignalManager::processSignals(std::stop_token stopToken) {
                                 std::chrono::steady_clock::now();
                         }
                     } catch (const std::exception& e) {
-                        LOG_F(ERROR,
-                              "Exception in safe signal handler for signal {}: "
-                              "{}",
-                              signal.value(), e.what());
+                        spdlog::error(
+                            "Exception in safe signal handler for signal {}: "
+                            "{}",
+                            signal.value(), e.what());
 
                         std::shared_lock statsLock(statsMutex_);
                         auto statsIt = signalStats_.find(signal.value());
@@ -661,7 +642,7 @@ void installPlatformSpecificHandlers() {
     [[maybe_unused]] auto windowsHandlerIds =
         SignalHandlerRegistry::getInstance().setStandardCrashHandlerSignals(
             [](int signal) {
-                LOG_F(ERROR, "Caught signal {} on Windows", signal);
+                spdlog::error("Caught signal {} on Windows", signal);
             },
             100, "PlatformCrashHandler-Windows");
 
@@ -669,7 +650,7 @@ void installPlatformSpecificHandlers() {
         SafeSignalManager::getInstance().addSafeSignalHandler(
             SIGBREAK,
             []([[maybe_unused]] int signal) {
-                LOG_F(WARNING, "Caught SIGBREAK on Windows");
+                spdlog::warn("Caught SIGBREAK on Windows");
             },
             90, "Windows-SIGBREAK-Handler");
 
@@ -677,7 +658,7 @@ void installPlatformSpecificHandlers() {
     [[maybe_unused]] auto posixHandlerIds =
         SignalHandlerRegistry::getInstance().setStandardCrashHandlerSignals(
             [](int signal) {
-                LOG_F(ERROR, "Caught signal {} on POSIX system", signal);
+                spdlog::error("Caught signal {} on POSIX system", signal);
             },
             100, "PlatformCrashHandler-POSIX");
 
@@ -685,43 +666,38 @@ void installPlatformSpecificHandlers() {
         SafeSignalManager::getInstance().addSafeSignalHandler(
             SIGHUP,
             [](int signal) {
-                LOG_F(INFO, "Caught SIGHUP - reloading configuration");
+                spdlog::info("Caught SIGHUP - reloading configuration");
             },
             80, "POSIX-SIGHUP-Handler");
 
     [[maybe_unused]] auto sigusr1HandlerId =
         SafeSignalManager::getInstance().addSafeSignalHandler(
             SIGUSR1,
-            [](int signal) { LOG_F(INFO, "Caught SIGUSR1 - custom action"); },
+            [](int signal) { spdlog::info("Caught SIGUSR1 - custom action"); },
             80, "POSIX-SIGUSR1-Handler");
 #endif
 
-    // 两个平台共用的处理器
     [[maybe_unused]] auto sigtermHandlerId =
         SafeSignalManager::getInstance().addSafeSignalHandler(
             SIGTERM,
             []([[maybe_unused]] int signal) {
-                LOG_F(WARNING, "Caught SIGTERM - preparing for shutdown");
+                spdlog::warn("Caught SIGTERM - preparing for shutdown");
             },
             100, "Common-SIGTERM-Handler");
 }
 
 void initializeSignalSystem(size_t workerThreadCount, size_t queueSize) {
-    // 使用指定参数初始化安全信号管理器
     auto& manager = SafeSignalManager::getInstance();
 
-    // 配置工作线程和队列大小
     manager.setWorkerThreadCount(workerThreadCount);
     manager.setMaxQueueSize(queueSize);
 
-    // 在注册表中设置处理器超时
     SignalHandlerRegistry::getInstance().setHandlerTimeout(
         std::chrono::milliseconds(2000));
 
-    // 安装平台特定处理器
     installPlatformSpecificHandlers();
 
-    LOG_F(INFO,
-          "Signal system initialized with {} worker threads and queue size {}",
-          workerThreadCount, queueSize);
+    spdlog::info(
+        "Signal system initialized with {} worker threads and queue size {}",
+        workerThreadCount, queueSize);
 }

@@ -22,7 +22,7 @@ Description: System Information Module - GPU
 // clang-format on
 #elif defined(__APPLE__)
 #include <CoreGraphics/CoreGraphics.h>
-#include <IOKit/IOKitLib.h>  // Added for IOKit functionalities
+#include <IOKit/IOKitLib.h>
 #elif defined(__linux__)
 #include <X11/Xlib.h>
 #if __has_include(<X11/extensions/Xrandr.h>)
@@ -31,140 +31,123 @@ Description: System Information Module - GPU
 #include <fstream>
 #endif
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 
 namespace atom::system {
 
 auto getGPUInfo() -> std::string {
-    LOG_F(INFO, "Starting getGPUInfo function");
+    spdlog::info("Starting GPU information retrieval");
     std::string gpuInfo;
 
 #ifdef _WIN32
-    if (IsWindows10OrGreater()) {
-        LOG_F(INFO, "Windows 10 or greater detected");
-        HDEVINFO deviceInfoSet =
-            SetupDiGetClassDevsA(nullptr, "DISPLAY", nullptr, DIGCF_PRESENT);
-        if (deviceInfoSet == INVALID_HANDLE_VALUE) {
-            LOG_F(ERROR, "Failed to get GPU information: INVALID_HANDLE_VALUE");
-            return "Failed to get GPU information.";
-        }
-
-        SP_DEVINFO_DATA deviceInfoData;
-        deviceInfoData.cbSize = sizeof(SP_DEVINFO_DATA);
-        for (DWORD i = 0;
-             SetupDiEnumDeviceInfo(deviceInfoSet, i, &deviceInfoData) != 0;
-             ++i) {
-            CHAR buffer[4096];
-            DWORD dataSize = sizeof(buffer);
-            if (SetupDiGetDeviceRegistryPropertyA(
-                    deviceInfoSet, &deviceInfoData, SPDRP_DEVICEDESC, nullptr,
-                    (PBYTE)buffer, dataSize, nullptr) != 0) {
-                if (!gpuInfo.empty()) {
-                    gpuInfo += "\n";
-                }
-                gpuInfo += buffer;
-                LOG_F(INFO, "GPU Info: {}", buffer);
-            }
-        }
-        SetupDiDestroyDeviceInfoList(deviceInfoSet);
-    } else {
-        gpuInfo =
-            "Windows version is not supported for GPU information retrieval.";
-        LOG_F(
-            WARNING,
-            "Windows version is not supported for GPU information retrieval.");
+    if (!IsWindows10OrGreater()) {
+        spdlog::warn(
+            "Windows version not supported for GPU information retrieval");
+        return "Windows version not supported for GPU information retrieval";
     }
+
+    HDEVINFO deviceInfoSet =
+        SetupDiGetClassDevsA(nullptr, "DISPLAY", nullptr, DIGCF_PRESENT);
+    if (deviceInfoSet == INVALID_HANDLE_VALUE) {
+        spdlog::error("Failed to get GPU device information set");
+        return "Failed to get GPU information";
+    }
+
+    SP_DEVINFO_DATA deviceInfoData{};
+    deviceInfoData.cbSize = sizeof(SP_DEVINFO_DATA);
+
+    for (DWORD i = 0; SetupDiEnumDeviceInfo(deviceInfoSet, i, &deviceInfoData);
+         ++i) {
+        CHAR buffer[4096];
+        DWORD dataSize = sizeof(buffer);
+
+        if (SetupDiGetDeviceRegistryPropertyA(
+                deviceInfoSet, &deviceInfoData, SPDRP_DEVICEDESC, nullptr,
+                reinterpret_cast<PBYTE>(buffer), dataSize, nullptr)) {
+            if (!gpuInfo.empty()) {
+                gpuInfo += "\n";
+            }
+            gpuInfo += buffer;
+            spdlog::debug("Found GPU: {}", buffer);
+        }
+    }
+    SetupDiDestroyDeviceInfoList(deviceInfoSet);
+
 #elif defined(__linux__)
-    LOG_F(INFO, "Linux detected");
     std::ifstream file("/proc/driver/nvidia/gpus/0/information");
-    if (file) {
+    if (file.is_open()) {
         std::string line;
         while (std::getline(file, line)) {
             if (!gpuInfo.empty()) {
                 gpuInfo += "\n";
             }
             gpuInfo += line;
-            LOG_F(INFO, "GPU Info: {}", line);
         }
-        file.close();
+        spdlog::debug("Retrieved GPU info from NVIDIA driver");
     } else {
-        gpuInfo = "Failed to open GPU information file.";
-        LOG_F(ERROR, "Failed to open GPU information file.");
+        spdlog::warn("Failed to open NVIDIA GPU information file");
+        gpuInfo = "GPU information not available";
     }
+
 #elif defined(__APPLE__)
-    LOG_F(INFO, "macOS detected for getGPUInfo");
     io_iterator_t iterator;
-    kern_return_t kr;
-    CFMutableDictionaryRef matchDict;
+    CFMutableDictionaryRef matchDict = IOServiceMatching("IOPCIDevice");
 
-    matchDict = IOServiceMatching("IOPCIDevice");
-    if (matchDict == nullptr) {
-        LOG_F(
-            ERROR,
-            "IOServiceMatching failed to create a dictionary for IOPCIDevice.");
-        return "Failed to get GPU information (IOServiceMatching).";
+    if (!matchDict) {
+        spdlog::error("Failed to create IOPCIDevice matching dictionary");
+        return "Failed to get GPU information";
     }
 
-    kr = IOServiceGetMatchingServices(kIOMasterPortDefault, matchDict,
-                                      &iterator);
+    kern_return_t kr = IOServiceGetMatchingServices(kIOMasterPortDefault,
+                                                    matchDict, &iterator);
     if (kr != KERN_SUCCESS) {
-        LOG_F(ERROR, "IOServiceGetMatchingServices failed: {}", kr);
-        // matchDict is not consumed by IOServiceGetMatchingServices on failure,
-        // and should be released. However, to maintain consistency with other
-        // parts of the codebase that don't strictly handle all such releases
-        // on error paths for simple return, we omit CFRelease(matchDict) here.
-        return "Failed to get GPU information (IOServiceGetMatchingServices).";
+        spdlog::error("IOServiceGetMatchingServices failed with error: {}", kr);
+        return "Failed to get GPU information";
     }
 
     io_service_t service;
     std::string gpuNames;
-    char buffer[256];  // For CFStringGetCString fallback
+    constexpr size_t bufferSize = 256;
+    char buffer[bufferSize];
 
     while ((service = IOIteratorNext(iterator)) != IO_OBJECT_NULL) {
         CFTypeRef classCodeProp = IORegistryEntryCreateCFProperty(
             service, CFSTR("class-code"), kCFAllocatorDefault, 0);
+
         bool isDisplayController = false;
-        if (classCodeProp != nullptr) {
-            if (CFGetTypeID(classCodeProp) == CFDataGetTypeID()) {
-                CFDataRef classCodeData = (CFDataRef)classCodeProp;
-                if (CFDataGetLength(classCodeData) > 0) {
-                    const UInt8* bytes = CFDataGetBytePtr(classCodeData);
-                    // PCI Base Class 0x03 is for Display Controllers.
-                    // The class-code property in IORegistry is typically an
-                    // array of bytes where the first byte represents the Base
-                    // Class.
-                    if (bytes[0] == 0x03) {
-                        isDisplayController = true;
-                    }
+        if (classCodeProp && CFGetTypeID(classCodeProp) == CFDataGetTypeID()) {
+            CFDataRef classCodeData = static_cast<CFDataRef>(classCodeProp);
+            if (CFDataGetLength(classCodeData) > 0) {
+                const UInt8* bytes = CFDataGetBytePtr(classCodeData);
+                if (bytes[0] == 0x03) {
+                    isDisplayController = true;
                 }
             }
+        }
+
+        if (classCodeProp) {
             CFRelease(classCodeProp);
         }
 
         if (isDisplayController) {
             CFTypeRef modelProp = IORegistryEntryCreateCFProperty(
                 service, CFSTR("model"), kCFAllocatorDefault, 0);
-            if (modelProp != nullptr) {
-                if (CFGetTypeID(modelProp) == CFStringGetTypeID()) {
-                    const char* modelStr = CFStringGetCStringPtr(
-                        (CFStringRef)modelProp, kCFStringEncodingUTF8);
-                    if (modelStr) {
-                        if (!gpuNames.empty()) {
-                            gpuNames += "\n";
-                        }
-                        gpuNames += modelStr;
-                    } else {
-                        // Fallback if direct CString pointer is null
-                        if (CFStringGetCString((CFStringRef)modelProp, buffer,
-                                               sizeof(buffer),
+
+            if (modelProp && CFGetTypeID(modelProp) == CFStringGetTypeID()) {
+                CFStringRef modelStr = static_cast<CFStringRef>(modelProp);
+                const char* cStr =
+                    CFStringGetCStringPtr(modelStr, kCFStringEncodingUTF8);
+
+                if (cStr || CFStringGetCString(modelStr, buffer, bufferSize,
                                                kCFStringEncodingUTF8)) {
-                            if (!gpuNames.empty()) {
-                                gpuNames += "\n";
-                            }
-                            gpuNames += buffer;
-                        }
+                    if (!gpuNames.empty()) {
+                        gpuNames += "\n";
                     }
+                    gpuNames += cStr ? cStr : buffer;
                 }
+            }
+
+            if (modelProp) {
                 CFRelease(modelProp);
             }
         }
@@ -172,38 +155,28 @@ auto getGPUInfo() -> std::string {
     }
     IOObjectRelease(iterator);
 
-    if (!gpuNames.empty()) {
-        gpuInfo = gpuNames;
-        LOG_F(INFO, "macOS GPU Info: {}", gpuInfo);
-    } else {
-        gpuInfo = "No identifiable GPU model found on macOS.";
-        LOG_F(WARNING,
-              "No identifiable GPU model found on macOS via IOKit PCI "
-              "iteration.");
-    }
+    gpuInfo = gpuNames.empty() ? "No GPU found" : gpuNames;
+    spdlog::debug("macOS GPU info: {}", gpuInfo);
+
 #else
-    gpuInfo = "GPU information retrieval is not supported on this platform.";
-    LOG_F(WARNING,
-          "GPU information retrieval is not supported on this platform.");
+    gpuInfo = "GPU information not supported on this platform";
+    spdlog::warn("GPU information retrieval not supported on this platform");
 #endif
 
-    LOG_F(INFO, "Finished getGPUInfo function");
+    spdlog::info("GPU information retrieval completed");
     return gpuInfo;
 }
 
 #ifdef _WIN32
+namespace {
 auto getMonitorModel(const DISPLAY_DEVICE& displayDevice) -> std::string {
-    LOG_F(INFO, "Getting monitor model: {}", displayDevice.DeviceString);
-    return {displayDevice.DeviceString};
+    return std::string(displayDevice.DeviceString);
 }
 
 void getMonitorResolutionAndRefreshRate(const std::string& deviceName,
                                         int& width, int& height,
                                         int& refreshRate) {
-    LOG_F(INFO, "Getting monitor resolution and refresh rate for device: {}",
-          deviceName);
-    DEVMODE devMode;
-    ZeroMemory(&devMode, sizeof(devMode));
+    DEVMODE devMode{};
     devMode.dmSize = sizeof(devMode);
 
     if (EnumDisplaySettings(deviceName.c_str(), ENUM_CURRENT_SETTINGS,
@@ -211,77 +184,75 @@ void getMonitorResolutionAndRefreshRate(const std::string& deviceName,
         width = static_cast<int>(devMode.dmPelsWidth);
         height = static_cast<int>(devMode.dmPelsHeight);
         refreshRate = static_cast<int>(devMode.dmDisplayFrequency);
-        LOG_F(INFO, "Resolution: {}x{}, Refresh Rate: {}", width, height,
-              refreshRate);
+        spdlog::debug("Monitor resolution: {}x{} @ {}Hz", width, height,
+                      refreshRate);
     } else {
-        LOG_F(ERROR, "Failed to get display settings for device: {}",
-              deviceName);
+        spdlog::error("Failed to get display settings for device: {}",
+                      deviceName);
+        width = height = refreshRate = 0;
     }
 }
+}  // namespace
 
 auto getAllMonitorsInfo() -> std::vector<MonitorInfo> {
-    LOG_F(INFO, "Starting getAllMonitorsInfo function");
+    spdlog::info("Starting monitor information retrieval");
     std::vector<MonitorInfo> monitors;
-    DISPLAY_DEVICE displayDevice;
-    displayDevice.cb = sizeof(displayDevice);
-    int deviceIndex = 0;
 
-    while (EnumDisplayDevices(nullptr, deviceIndex, &displayDevice, 0)) {
-        if ((displayDevice.StateFlags & DISPLAY_DEVICE_ACTIVE) != 0u) {
+    DISPLAY_DEVICE displayDevice{};
+    displayDevice.cb = sizeof(displayDevice);
+
+    for (int deviceIndex = 0;
+         EnumDisplayDevices(nullptr, deviceIndex, &displayDevice, 0);
+         ++deviceIndex) {
+        if (displayDevice.StateFlags & DISPLAY_DEVICE_ACTIVE) {
             MonitorInfo info;
             info.model = getMonitorModel(displayDevice);
             info.identifier = std::string(displayDevice.DeviceName);
 
-            int width = 0;
-            int height = 0;
-            int refreshRate = 0;
-            getMonitorResolutionAndRefreshRate(displayDevice.DeviceName, width,
-                                               height, refreshRate);
+            getMonitorResolutionAndRefreshRate(displayDevice.DeviceName,
+                                               info.width, info.height,
+                                               info.refreshRate);
 
-            info.width = width;
-            info.height = height;
-            info.refreshRate = refreshRate;
-
-            monitors.push_back(info);
-            LOG_F(INFO,
-                  "Monitor Info - Model: {}, Identifier: {}, Resolution: "
-                  "{}x{}, Refresh Rate: {}",
-                  info.model, info.identifier, info.width, info.height,
-                  info.refreshRate);
+            monitors.emplace_back(std::move(info));
+            spdlog::debug("Found monitor: {} ({}x{} @ {}Hz)", info.model,
+                          info.width, info.height, info.refreshRate);
         }
-        deviceIndex++;
+
         ZeroMemory(&displayDevice, sizeof(displayDevice));
         displayDevice.cb = sizeof(displayDevice);
     }
 
-    LOG_F(INFO, "Finished getAllMonitorsInfo function");
+    spdlog::info("Monitor information retrieval completed, found {} monitors",
+                 monitors.size());
     return monitors;
 }
 
-#elif __linux__
+#elif defined(__linux__)
 auto getAllMonitorsInfo() -> std::vector<MonitorInfo> {
-    LOG_F(INFO, "Starting getAllMonitorsInfo function");
+    spdlog::info("Starting Linux monitor information retrieval");
     std::vector<MonitorInfo> monitors;
 
 #if __has_include(<X11/extensions/Xrandr.h>)
     Display* display = XOpenDisplay(nullptr);
-    if (display == nullptr) {
-        LOG_F(ERROR, "Unable to open X display");
+    if (!display) {
+        spdlog::error("Unable to open X display");
         return monitors;
     }
+
     Window root = DefaultRootWindow(display);
     XRRScreenResources* screenRes = XRRGetScreenResources(display, root);
-    if (screenRes == nullptr) {
+    if (!screenRes) {
         XCloseDisplay(display);
-        LOG_F(ERROR, "Unable to get screen resources");
+        spdlog::error("Unable to get X screen resources");
         return monitors;
     }
 
     for (int i = 0; i < screenRes->noutput; ++i) {
         XRROutputInfo* outputInfo =
             XRRGetOutputInfo(display, screenRes, screenRes->outputs[i]);
-        if (outputInfo == nullptr ||
-            outputInfo->connection == RR_Disconnected) {
+        if (!outputInfo || outputInfo->connection == RR_Disconnected) {
+            if (outputInfo)
+                XRRFreeOutputInfo(outputInfo);
             continue;
         }
 
@@ -293,42 +264,61 @@ auto getAllMonitorsInfo() -> std::vector<MonitorInfo> {
             XRRCrtcInfo* crtcInfo =
                 XRRGetCrtcInfo(display, screenRes, outputInfo->crtc);
             if (crtcInfo) {
-                info.width = crtcInfo->width;
-                info.height = crtcInfo->height;
-                info.refreshRate = static_cast<int>(
-                    crtcInfo->mode == None ? 0 : crtcInfo->rotation);
+                info.width = static_cast<int>(crtcInfo->width);
+                info.height = static_cast<int>(crtcInfo->height);
+
+                if (crtcInfo->mode != None) {
+                    for (int j = 0; j < screenRes->nmode; ++j) {
+                        if (screenRes->modes[j].id == crtcInfo->mode) {
+                            const XRRModeInfo& mode = screenRes->modes[j];
+                            info.refreshRate = static_cast<int>(
+                                static_cast<double>(mode.dotClock) /
+                                (static_cast<double>(mode.hTotal) *
+                                 mode.vTotal));
+                            break;
+                        }
+                    }
+                }
+
                 XRRFreeCrtcInfo(crtcInfo);
-                LOG_F(INFO,
-                      "Monitor Info - Model: {}, Identifier: {}, Resolution: "
-                      "{}x{}, Refresh Rate: {}",
-                      info.model, info.identifier, info.width, info.height,
-                      info.refreshRate);
+                spdlog::debug("Found Linux monitor: {} ({}x{} @ {}Hz)",
+                              info.model, info.width, info.height,
+                              info.refreshRate);
             }
         }
 
-        monitors.push_back(info);
+        monitors.emplace_back(std::move(info));
         XRRFreeOutputInfo(outputInfo);
     }
 
     XRRFreeScreenResources(screenRes);
     XCloseDisplay(display);
-    LOG_F(INFO, "Finished getAllMonitorsInfo function");
+    spdlog::info(
+        "Linux monitor information retrieval completed, found {} monitors",
+        monitors.size());
 #else
-    LOG_F(ERROR, "Xrandr extension not found");
+    spdlog::error("Xrandr extension not available");
 #endif
     return monitors;
 }
 
-#elif __APPLE__
+#elif defined(__APPLE__)
 auto getAllMonitorsInfo() -> std::vector<MonitorInfo> {
-    LOG_F(INFO, "Starting getAllMonitorsInfo function");
+    spdlog::info("Starting macOS monitor information retrieval");
     std::vector<MonitorInfo> monitors;
 
     uint32_t displayCount;
     CGGetActiveDisplayList(0, nullptr, &displayCount);
+
+    if (displayCount == 0) {
+        spdlog::warn("No active displays found");
+        return monitors;
+    }
+
     std::vector<CGDirectDisplayID> displays(displayCount);
     CGGetActiveDisplayList(displayCount, displays.data(), &displayCount);
 
+    monitors.reserve(displayCount);
     for (uint32_t i = 0; i < displayCount; ++i) {
         CGDirectDisplayID displayID = displays[i];
         MonitorInfo info;
@@ -336,21 +326,33 @@ auto getAllMonitorsInfo() -> std::vector<MonitorInfo> {
         info.identifier = std::to_string(displayID);
         info.width = static_cast<int>(CGDisplayPixelsWide(displayID));
         info.height = static_cast<int>(CGDisplayPixelsHigh(displayID));
-        info.refreshRate = static_cast<int>(
-            CGDisplayModeGetRefreshRate(CGDisplayCopyDisplayMode(displayID)));
 
-        info.model = "Unknown";
+        CGDisplayModeRef mode = CGDisplayCopyDisplayMode(displayID);
+        if (mode) {
+            info.refreshRate =
+                static_cast<int>(CGDisplayModeGetRefreshRate(mode));
+            CGDisplayModeRelease(mode);
+        }
 
-        monitors.push_back(info);
-        LOG_F(INFO,
-              "Monitor Info - Identifier: {}, Resolution: {}x{}, Refresh Rate: "
-              "{}",
-              info.identifier, info.width, info.height, info.refreshRate);
+        info.model = "Display";
+        monitors.emplace_back(std::move(info));
+
+        spdlog::debug("Found macOS monitor: {} ({}x{} @ {}Hz)", info.identifier,
+                      info.width, info.height, info.refreshRate);
     }
 
-    LOG_F(INFO, "Finished getAllMonitorsInfo function");
+    spdlog::info(
+        "macOS monitor information retrieval completed, found {} monitors",
+        monitors.size());
     return monitors;
 }
 
+#else
+auto getAllMonitorsInfo() -> std::vector<MonitorInfo> {
+    spdlog::warn(
+        "Monitor information retrieval not supported on this platform");
+    return {};
+}
 #endif
+
 }  // namespace atom::system

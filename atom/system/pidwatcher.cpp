@@ -4,14 +4,6 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2024-2-17
-
-Description: PID Watcher
-
-**************************************************/
-
 #include "pidwatcher.hpp"
 
 #include <algorithm>
@@ -25,14 +17,14 @@ Description: PID Watcher
 #ifdef _WIN32
 // clang-format off
 #include <windows.h>
-#include <psapi.h>
 #include <pdh.h>
 #include <pdhmsg.h>
+#include <psapi.h>
 #include <tlhelp32.h>
+// clang-format on
 #ifdef _MSC_VER
 #pragma comment(lib, "pdh.lib")
 #endif
-// clang-format on
 #else
 #include <dirent.h>
 #include <fcntl.h>
@@ -43,45 +35,34 @@ Description: PID Watcher
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+namespace fs = std::filesystem;
 #endif
 
-#include "atom/log/loguru.hpp"
-#include "atom/utils/string.hpp"
+#include <spdlog/spdlog.h>
 
-namespace fs = std::filesystem;
+using namespace std::chrono_literals;
 
 namespace atom::system {
+
 PidWatcher::PidWatcher()
-    : running_(false),
-      monitoring_(false),
-      watchdog_healthy_(true),
-      monitor_interval_(std::chrono::milliseconds(1000)),
-      max_updates_per_second_(10),
-      update_count_(0) {
-    LOG_F(INFO, "PidWatcher constructor called");
-    rate_limit_start_time_ = std::chrono::steady_clock::now();
+    : rate_limit_start_time_(std::chrono::steady_clock::now()) {
+    spdlog::info("PidWatcher initialized");
 }
 
 PidWatcher::PidWatcher(const MonitorConfig& config)
-    : running_(false),
-      monitoring_(false),
-      watchdog_healthy_(true),
-      global_config_(config),
+    : global_config_(config),
       monitor_interval_(config.update_interval),
-      max_updates_per_second_(10),
-      update_count_(0) {
-    LOG_F(INFO, "PidWatcher constructor called with config (interval: {} ms)",
-          config.update_interval.count());
-    rate_limit_start_time_ = std::chrono::steady_clock::now();
+      rate_limit_start_time_(std::chrono::steady_clock::now()) {
+    spdlog::info("PidWatcher initialized with config (interval: {} ms)",
+                 config.update_interval.count());
 }
 
 PidWatcher::~PidWatcher() {
-    LOG_F(INFO, "PidWatcher destructor called");
     stop();
+    spdlog::info("PidWatcher destroyed");
 }
 
 PidWatcher& PidWatcher::setExitCallback(ProcessCallback callback) {
-    LOG_F(INFO, "Setting exit callback");
     std::lock_guard lock(mutex_);
     exit_callback_ = std::move(callback);
     return *this;
@@ -89,8 +70,6 @@ PidWatcher& PidWatcher::setExitCallback(ProcessCallback callback) {
 
 PidWatcher& PidWatcher::setMonitorFunction(ProcessCallback callback,
                                            std::chrono::milliseconds interval) {
-    LOG_F(INFO, "Setting monitor function with interval: {} ms",
-          interval.count());
     std::lock_guard lock(mutex_);
     monitor_callback_ = std::move(callback);
     monitor_interval_ = interval;
@@ -98,14 +77,12 @@ PidWatcher& PidWatcher::setMonitorFunction(ProcessCallback callback,
 }
 
 PidWatcher& PidWatcher::setMultiProcessCallback(MultiProcessCallback callback) {
-    LOG_F(INFO, "Setting multi-process callback");
     std::lock_guard lock(mutex_);
     multi_process_callback_ = std::move(callback);
     return *this;
 }
 
 PidWatcher& PidWatcher::setErrorCallback(ErrorCallback callback) {
-    LOG_F(INFO, "Setting error callback");
     std::lock_guard lock(mutex_);
     error_callback_ = std::move(callback);
     return *this;
@@ -113,7 +90,6 @@ PidWatcher& PidWatcher::setErrorCallback(ErrorCallback callback) {
 
 PidWatcher& PidWatcher::setResourceLimitCallback(
     ResourceLimitCallback callback) {
-    LOG_F(INFO, "Setting resource limit callback");
     std::lock_guard lock(mutex_);
     resource_limit_callback_ = std::move(callback);
     return *this;
@@ -121,48 +97,45 @@ PidWatcher& PidWatcher::setResourceLimitCallback(
 
 PidWatcher& PidWatcher::setProcessCreateCallback(
     ProcessCreateCallback callback) {
-    LOG_F(INFO, "Setting process create callback");
     std::lock_guard lock(mutex_);
     process_create_callback_ = std::move(callback);
     return *this;
 }
 
 PidWatcher& PidWatcher::setProcessFilter(ProcessFilter filter) {
-    LOG_F(INFO, "Setting process filter");
     std::lock_guard lock(mutex_);
     process_filter_ = std::move(filter);
     return *this;
 }
 
-auto PidWatcher::getPidByName(const std::string& name) const -> pid_t {
-    LOG_F(INFO, "Getting PID by name: {}", name);
+pid_t PidWatcher::getPidByName(const std::string& name) const {
 #ifdef _WIN32
-    DWORD pidList[1024];
-    DWORD cbNeeded;
-    if (EnumProcesses(pidList, sizeof(pidList), &cbNeeded)) {
-        for (unsigned int i = 0; i < cbNeeded / sizeof(DWORD); i++) {
-            HANDLE processHandle = OpenProcess(
-                PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pidList[i]);
-            if (processHandle != nullptr) {
-                char filename[MAX_PATH];
-                if (GetModuleFileNameEx(processHandle, nullptr, filename,
-                                        MAX_PATH)) {
-                    std::string processName = strrchr(filename, '\\') + 1;
-                    if (processName == name) {
-                        CloseHandle(processHandle);
-                        LOG_F(INFO, "Found PID: {} for name: {}", pidList[i],
-                              name);
-                        return pidList[i];
-                    }
+    DWORD pid_list[1024];
+    DWORD cb_needed;
+    if (!EnumProcesses(pid_list, sizeof(pid_list), &cb_needed)) {
+        return 0;
+    }
+
+    for (unsigned int i = 0; i < cb_needed / sizeof(DWORD); i++) {
+        HANDLE process_handle = OpenProcess(
+            PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid_list[i]);
+        if (process_handle != nullptr) {
+            char filename[MAX_PATH];
+            if (GetModuleFileNameEx(process_handle, nullptr, filename,
+                                    MAX_PATH)) {
+                std::string process_name =
+                    std::filesystem::path(filename).filename().string();
+                if (process_name == name) {
+                    CloseHandle(process_handle);
+                    return pid_list[i];
                 }
-                CloseHandle(processHandle);
             }
+            CloseHandle(process_handle);
         }
     }
 #else
     DIR* dir = opendir("/proc");
     if (!dir) {
-        LOG_F(ERROR, "Failed to open /proc directory");
         if (error_callback_) {
             error_callback_("Failed to open /proc directory", errno);
         }
@@ -171,19 +144,13 @@ auto PidWatcher::getPidByName(const std::string& name) const -> pid_t {
 
     struct dirent* entry;
     while ((entry = readdir(dir)) != nullptr) {
-        if (entry->d_type != DT_DIR) {
+        if (entry->d_type != DT_DIR ||
+            !std::all_of(entry->d_name, entry->d_name + strlen(entry->d_name),
+                         ::isdigit)) {
             continue;
         }
 
-        // Check if directory name is a number (PID)
-        if (!std::all_of(entry->d_name, entry->d_name + strlen(entry->d_name),
-                         [](char c) { return std::isdigit(c); })) {
-            continue;
-        }
-
-        std::string proc_dir_path = std::string("/proc/") + entry->d_name;
-
-        // Check command line
+        std::string proc_dir_path = "/proc/" + std::string(entry->d_name);
         std::ifstream cmdline_file(proc_dir_path + "/cmdline");
         if (!cmdline_file.is_open()) {
             continue;
@@ -191,61 +158,52 @@ auto PidWatcher::getPidByName(const std::string& name) const -> pid_t {
 
         std::string cmdline;
         std::getline(cmdline_file, cmdline);
-
-        // Handle null bytes in cmdline
         std::replace(cmdline.begin(), cmdline.end(), '\0', ' ');
 
-        // Extract executable name from path
         size_t pos = cmdline.find_last_of('/');
         std::string proc_name =
             (pos != std::string::npos) ? cmdline.substr(pos + 1) : cmdline;
-        // Trim whitespace
-        proc_name = atom::utils::trim(proc_name);
 
-        if (proc_name == name) {
+        if (proc_name.find(name) == 0) {
             closedir(dir);
-            pid_t found_pid = std::stoi(entry->d_name);
-            LOG_F(INFO, "Found PID: {} for name: {}", found_pid, name);
-            return found_pid;
+            return std::stoi(entry->d_name);
         }
     }
     closedir(dir);
 #endif
-    LOG_F(WARNING, "PID not found for name: {}", name);
     return 0;
 }
 
-auto PidWatcher::getPidsByName(const std::string& name) const
-    -> std::vector<pid_t> {
-    LOG_F(INFO, "Getting all PIDs by name: {}", name);
+std::vector<pid_t> PidWatcher::getPidsByName(const std::string& name) const {
     std::vector<pid_t> results;
+    results.reserve(16);
 
 #ifdef _WIN32
-    DWORD pidList[1024];
-    DWORD cbNeeded;
-    if (EnumProcesses(pidList, sizeof(pidList), &cbNeeded)) {
-        for (unsigned int i = 0; i < cbNeeded / sizeof(DWORD); i++) {
-            HANDLE processHandle = OpenProcess(
-                PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pidList[i]);
-            if (processHandle != nullptr) {
-                char filename[MAX_PATH];
-                if (GetModuleFileNameEx(processHandle, nullptr, filename,
-                                        MAX_PATH)) {
-                    std::string processName = strrchr(filename, '\\') + 1;
-                    if (processName == name) {
-                        results.push_back(pidList[i]);
-                        LOG_F(INFO, "Found PID: {} for name: {}", pidList[i],
-                              name);
-                    }
+    DWORD pid_list[1024];
+    DWORD cb_needed;
+    if (!EnumProcesses(pid_list, sizeof(pid_list), &cb_needed)) {
+        return results;
+    }
+
+    for (unsigned int i = 0; i < cb_needed / sizeof(DWORD); i++) {
+        HANDLE process_handle = OpenProcess(
+            PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid_list[i]);
+        if (process_handle != nullptr) {
+            char filename[MAX_PATH];
+            if (GetModuleFileNameEx(process_handle, nullptr, filename,
+                                    MAX_PATH)) {
+                std::string process_name =
+                    std::filesystem::path(filename).filename().string();
+                if (process_name == name) {
+                    results.push_back(pid_list[i]);
                 }
-                CloseHandle(processHandle);
             }
+            CloseHandle(process_handle);
         }
     }
 #else
     DIR* dir = opendir("/proc");
     if (!dir) {
-        LOG_F(ERROR, "Failed to open /proc directory");
         if (error_callback_) {
             error_callback_("Failed to open /proc directory", errno);
         }
@@ -254,19 +212,13 @@ auto PidWatcher::getPidsByName(const std::string& name) const
 
     struct dirent* entry;
     while ((entry = readdir(dir)) != nullptr) {
-        if (entry->d_type != DT_DIR) {
+        if (entry->d_type != DT_DIR ||
+            !std::all_of(entry->d_name, entry->d_name + strlen(entry->d_name),
+                         ::isdigit)) {
             continue;
         }
 
-        // Check if directory name is a number (PID)
-        if (!std::all_of(entry->d_name, entry->d_name + strlen(entry->d_name),
-                         [](char c) { return std::isdigit(c); })) {
-            continue;
-        }
-
-        std::string proc_dir_path = std::string("/proc/") + entry->d_name;
-
-        // Check command line
+        std::string proc_dir_path = "/proc/" + std::string(entry->d_name);
         std::ifstream cmdline_file(proc_dir_path + "/cmdline");
         if (!cmdline_file.is_open()) {
             continue;
@@ -274,31 +226,23 @@ auto PidWatcher::getPidsByName(const std::string& name) const
 
         std::string cmdline;
         std::getline(cmdline_file, cmdline);
-
-        // Handle null bytes in cmdline
         std::replace(cmdline.begin(), cmdline.end(), '\0', ' ');
 
-        // Extract executable name from path
         size_t pos = cmdline.find_last_of('/');
         std::string proc_name =
             (pos != std::string::npos) ? cmdline.substr(pos + 1) : cmdline;
-        // Trim whitespace
-        proc_name = atom::utils::trim(proc_name);
 
-        if (proc_name == name) {
-            pid_t found_pid = std::stoi(entry->d_name);
-            results.push_back(found_pid);
-            LOG_F(INFO, "Found PID: {} for name: {}", found_pid, name);
+        if (proc_name.find(name) == 0) {
+            results.push_back(std::stoi(entry->d_name));
         }
     }
     closedir(dir);
 #endif
 
-    LOG_F(INFO, "Found {} processes with name: {}", results.size(), name);
     return results;
 }
 
-auto PidWatcher::getProcessInfo(pid_t pid) -> std::optional<ProcessInfo> {
+std::optional<ProcessInfo> PidWatcher::getProcessInfo(pid_t pid) {
     std::lock_guard lock(mutex_);
 
     auto it = monitored_processes_.find(pid);
@@ -306,7 +250,6 @@ auto PidWatcher::getProcessInfo(pid_t pid) -> std::optional<ProcessInfo> {
         return it->second;
     }
 
-    // Process not in our monitored list, try to get info directly
     ProcessInfo info;
     info.pid = pid;
 
@@ -314,27 +257,21 @@ auto PidWatcher::getProcessInfo(pid_t pid) -> std::optional<ProcessInfo> {
     HANDLE process_handle =
         OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
     if (process_handle == NULL) {
-        LOG_F(WARNING, "Failed to open process {}", pid);
         return std::nullopt;
     }
 
-    // Get process name
     char process_name[MAX_PATH];
     if (GetModuleFileNameEx(process_handle, NULL, process_name, MAX_PATH) ==
         0) {
-        LOG_F(WARNING, "Failed to get process name for {}", pid);
         CloseHandle(process_handle);
         return std::nullopt;
     }
-    info.name = strrchr(process_name, '\\') + 1;
-
-    // Get command line
+    info.name = std::filesystem::path(process_name).filename().string();
     info.command_line = getProcessCommandLine(pid);
 
-    // Get parent PID using toolhelp snapshot
     HANDLE h = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (h != INVALID_HANDLE_VALUE) {
-        PROCESSENTRY32 pe = {};
+        PROCESSENTRY32 pe{};
         pe.dwSize = sizeof(PROCESSENTRY32);
         if (Process32First(h, &pe)) {
             do {
@@ -347,10 +284,9 @@ auto PidWatcher::getProcessInfo(pid_t pid) -> std::optional<ProcessInfo> {
         CloseHandle(h);
     }
 
-    // Get thread count
     h = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
     if (h != INVALID_HANDLE_VALUE) {
-        THREADENTRY32 te = {};
+        THREADENTRY32 te{};
         te.dwSize = sizeof(THREADENTRY32);
         info.thread_count = 0;
         if (Thread32First(h, &te)) {
@@ -363,32 +299,24 @@ auto PidWatcher::getProcessInfo(pid_t pid) -> std::optional<ProcessInfo> {
         CloseHandle(h);
     }
 
-    // Check if process is running
     DWORD exit_code;
     GetExitCodeProcess(process_handle, &exit_code);
     info.running = (exit_code == STILL_ACTIVE);
     info.status = info.running ? ProcessStatus::RUNNING : ProcessStatus::DEAD;
 
-    // Get memory usage
     PROCESS_MEMORY_COUNTERS_EX pmc;
     if (GetProcessMemoryInfo(process_handle, (PROCESS_MEMORY_COUNTERS*)&pmc,
                              sizeof(pmc))) {
-        info.memory_usage = pmc.WorkingSetSize / 1024;  // Convert to KB
-        info.virtual_memory = pmc.PrivateUsage / 1024;  // Convert to KB
+        info.memory_usage = pmc.WorkingSetSize / 1024;
+        info.virtual_memory = pmc.PrivateUsage / 1024;
     }
 
-    // Get process priority
     info.priority = GetPriorityClass(process_handle);
-
     CloseHandle(process_handle);
 
-    // Get I/O stats
     info.io_stats = getProcessIOStats(pid);
-
-    // Get CPU usage
     info.cpu_usage = getProcessCpuUsage(pid);
 
-    // Get process start time
     FILETIME creation_time, exit_time, kernel_time, user_time;
     process_handle = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
     if (process_handle != NULL) {
@@ -397,15 +325,10 @@ auto PidWatcher::getProcessInfo(pid_t pid) -> std::optional<ProcessInfo> {
             ULARGE_INTEGER li;
             li.LowPart = creation_time.dwLowDateTime;
             li.HighPart = creation_time.dwHighDateTime;
-            // Convert Windows FILETIME to Unix epoch time
-            auto epoch_diff =
-                116444736000000000ULL;  // Difference between Windows epoch and
-                                        // Unix epoch
-            auto unix_time =
-                (li.QuadPart - epoch_diff) / 10000000ULL;  // Convert to seconds
+            auto epoch_diff = 116444736000000000ULL;
+            auto unix_time = (li.QuadPart - epoch_diff) / 10000000ULL;
             info.start_time = std::chrono::system_clock::from_time_t(unix_time);
 
-            // Calculate uptime
             auto now = std::chrono::system_clock::now();
             info.uptime = std::chrono::duration_cast<std::chrono::milliseconds>(
                 now - info.start_time);
@@ -413,11 +336,9 @@ auto PidWatcher::getProcessInfo(pid_t pid) -> std::optional<ProcessInfo> {
         CloseHandle(process_handle);
     }
 
-    // Get child processes
     info.child_processes = getChildProcesses(pid);
 
 #else
-    // Check if process exists
     std::string proc_path = "/proc/" + std::to_string(pid);
     if (!fs::exists(proc_path)) {
         return std::nullopt;
@@ -425,45 +346,43 @@ auto PidWatcher::getProcessInfo(pid_t pid) -> std::optional<ProcessInfo> {
 
     info.running = true;
 
-    // Get process name from command line
     std::ifstream cmdline_file(proc_path + "/cmdline");
     if (cmdline_file.is_open()) {
         std::string cmdline;
         std::getline(cmdline_file, cmdline);
-
-        // Store full command line
         info.command_line = cmdline;
 
-        // Replace null bytes with spaces for display
         std::string display_cmdline = cmdline;
         std::replace(display_cmdline.begin(), display_cmdline.end(), '\0', ' ');
 
-        // Extract executable name from cmdline
         size_t pos = display_cmdline.find_last_of('/');
         info.name = (pos != std::string::npos) ? display_cmdline.substr(pos + 1)
                                                : display_cmdline;
-        info.name = atom::utils::trim(info.name);
+
+        if (auto space_pos = info.name.find(' ');
+            space_pos != std::string::npos) {
+            info.name = info.name.substr(0, space_pos);
+        }
     }
 
-    // Get process status, parent PID and other details
     std::ifstream status_file(proc_path + "/status");
     if (status_file.is_open()) {
         std::string line;
         while (std::getline(status_file, line)) {
-            if (line.compare(0, 6, "VmRSS:") == 0) {
+            if (line.starts_with("VmRSS:")) {
                 std::istringstream iss(line.substr(6));
                 iss >> info.memory_usage;
-            } else if (line.compare(0, 7, "VmSize:") == 0) {
+            } else if (line.starts_with("VmSize:")) {
                 std::istringstream iss(line.substr(7));
                 iss >> info.virtual_memory;
-            } else if (line.compare(0, 5, "PPid:") == 0) {
+            } else if (line.starts_with("PPid:")) {
                 std::istringstream iss(line.substr(5));
                 iss >> info.parent_pid;
-            } else if (line.compare(0, 8, "Threads:") == 0) {
+            } else if (line.starts_with("Threads:")) {
                 std::istringstream iss(line.substr(8));
                 iss >> info.thread_count;
-            } else if (line.compare(0, 6, "State:") == 0) {
-                char state_char = line.substr(7, 1)[0];
+            } else if (line.starts_with("State:")) {
+                char state_char = line[7];
                 switch (state_char) {
                     case 'R':
                         info.status = ProcessStatus::RUNNING;
@@ -490,15 +409,13 @@ auto PidWatcher::getProcessInfo(pid_t pid) -> std::optional<ProcessInfo> {
         }
     }
 
-    // Get username
     info.username = getProcessUsername(pid);
 
-    // Get shared memory
     std::ifstream smaps_file(proc_path + "/smaps");
     if (smaps_file.is_open()) {
         std::string line;
         while (std::getline(smaps_file, line)) {
-            if (line.compare(0, 8, "Shared_C") == 0) {
+            if (line.starts_with("Shared_C")) {
                 std::istringstream iss(
                     line.substr(line.find_first_of("0123456789")));
                 size_t shared;
@@ -508,61 +425,51 @@ auto PidWatcher::getProcessInfo(pid_t pid) -> std::optional<ProcessInfo> {
         }
     }
 
-    // Get process priority (nice value)
     std::ifstream stat_file(proc_path + "/stat");
     if (stat_file.is_open()) {
         std::string stat_content;
         std::getline(stat_file, stat_content);
 
-        // Parse stat file - nice value is the 19th field
         std::istringstream iss(stat_content);
         std::string value;
         for (int i = 0; i < 18; i++) {
             iss >> value;
         }
-        iss >> info.priority;  // nice value
+        iss >> info.priority;
     }
 
-    // Get process start time
     struct stat stat_buf;
     if (stat(proc_path.c_str(), &stat_buf) == 0) {
         info.start_time =
             std::chrono::system_clock::from_time_t(stat_buf.st_ctime);
-
-        // Calculate uptime
         auto now = std::chrono::system_clock::now();
         info.uptime = std::chrono::duration_cast<std::chrono::milliseconds>(
             now - info.start_time);
     }
 
-    // Get CPU usage
     info.cpu_usage = getProcessCpuUsage(pid);
-
-    // Get I/O stats
     info.io_stats = getProcessIOStats(pid);
-
-    // Get child processes
     info.child_processes = getChildProcesses(pid);
 #endif
 
     return info;
 }
 
-auto PidWatcher::getAllProcesses() -> std::vector<ProcessInfo> {
+std::vector<ProcessInfo> PidWatcher::getAllProcesses() {
     std::vector<ProcessInfo> result;
+    result.reserve(256);
 
 #ifdef _WIN32
     DWORD process_ids[1024], bytes_needed, num_processes;
     if (!EnumProcesses(process_ids, sizeof(process_ids), &bytes_needed)) {
-        LOG_F(ERROR, "Failed to enumerate processes");
+        spdlog::error("Failed to enumerate processes");
         return result;
     }
 
     num_processes = bytes_needed / sizeof(DWORD);
     for (unsigned int i = 0; i < num_processes; i++) {
         if (process_ids[i] != 0) {
-            auto info = getProcessInfo(process_ids[i]);
-            if (info) {
+            if (auto info = getProcessInfo(process_ids[i])) {
                 result.push_back(*info);
             }
         }
@@ -570,20 +477,18 @@ auto PidWatcher::getAllProcesses() -> std::vector<ProcessInfo> {
 #else
     DIR* dir = opendir("/proc");
     if (!dir) {
-        LOG_F(ERROR, "Failed to open /proc directory");
+        spdlog::error("Failed to open /proc directory");
         return result;
     }
 
     struct dirent* entry;
     while ((entry = readdir(dir)) != nullptr) {
-        // Skip non-numeric directories (not processes)
         if (entry->d_type != DT_DIR || !std::isdigit(entry->d_name[0])) {
             continue;
         }
 
         pid_t pid = std::stoi(entry->d_name);
-        auto info = getProcessInfo(pid);
-        if (info) {
+        if (auto info = getProcessInfo(pid)) {
             result.push_back(*info);
         }
     }
@@ -594,13 +499,14 @@ auto PidWatcher::getAllProcesses() -> std::vector<ProcessInfo> {
     return result;
 }
 
-auto PidWatcher::getChildProcesses(pid_t pid) const -> std::vector<pid_t> {
+std::vector<pid_t> PidWatcher::getChildProcesses(pid_t pid) const {
     std::vector<pid_t> children;
+    children.reserve(16);
 
 #ifdef _WIN32
     HANDLE h = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (h != INVALID_HANDLE_VALUE) {
-        PROCESSENTRY32 pe = {};
+        PROCESSENTRY32 pe{};
         pe.dwSize = sizeof(PROCESSENTRY32);
 
         if (Process32First(h, &pe)) {
@@ -620,7 +526,6 @@ auto PidWatcher::getChildProcesses(pid_t pid) const -> std::vector<pid_t> {
 
     struct dirent* entry;
     while ((entry = readdir(dir)) != nullptr) {
-        // Skip non-numeric directories (not processes)
         if (entry->d_type != DT_DIR || !std::isdigit(entry->d_name[0])) {
             continue;
         }
@@ -633,7 +538,7 @@ auto PidWatcher::getChildProcesses(pid_t pid) const -> std::vector<pid_t> {
         if (status_file.is_open()) {
             std::string line;
             while (std::getline(status_file, line)) {
-                if (line.compare(0, 5, "PPid:") == 0) {
+                if (line.starts_with("PPid:")) {
                     std::istringstream iss(line.substr(5));
                     pid_t ppid;
                     iss >> ppid;
@@ -653,54 +558,41 @@ auto PidWatcher::getChildProcesses(pid_t pid) const -> std::vector<pid_t> {
     return children;
 }
 
-auto PidWatcher::start(const std::string& name, const MonitorConfig* config)
-    -> bool {
-    LOG_F(INFO, "Starting PidWatcher for process name: {}", name);
+bool PidWatcher::start(const std::string& name, const MonitorConfig* config) {
     std::lock_guard lock(mutex_);
-
-    if (running_ && !monitored_processes_.empty()) {
-        LOG_F(INFO, "Watcher already running with {} processes",
-              monitored_processes_.size());
-    }
 
     pid_t pid = getPidByName(name);
     if (pid == 0) {
-        LOG_F(ERROR, "Failed to get PID for {}", name);
+        spdlog::error("Failed to get PID for {}", name);
         if (error_callback_) {
             error_callback_("Failed to get PID for " + name, ESRCH);
         }
         return false;
     }
 
-    // Check if we're already monitoring this process
-    if (monitored_processes_.find(pid) != monitored_processes_.end()) {
-        LOG_F(INFO, "Already monitoring process {} ({})", pid, name);
+    if (monitored_processes_.contains(pid)) {
+        spdlog::info("Already monitoring process {} ({})", pid, name);
         return true;
     }
 
-    // Initialize process info
     ProcessInfo info;
     info.pid = pid;
     info.name = name;
     info.running = true;
     info.start_time = std::chrono::system_clock::now();
 
-    // Get more detailed info right away
-    auto detailed_info = getProcessInfo(pid);
-    if (detailed_info) {
+    if (auto detailed_info = getProcessInfo(pid)) {
         info = *detailed_info;
     }
 
-    // Apply process-specific configuration if provided
     if (config) {
         process_configs_[pid] = *config;
     }
 
     monitored_processes_[pid] = info;
 
-    // Set primary PID if this is the first process
     if (monitored_processes_.size() == 1) {
-        pid_ = pid;
+        primary_pid_ = pid;
     }
 
     if (!running_) {
@@ -708,18 +600,6 @@ auto PidWatcher::start(const std::string& name, const MonitorConfig* config)
         monitoring_ = true;
         watchdog_healthy_ = true;
 
-        // Start all monitoring threads
-#if __cplusplus >= 202002L
-        monitor_thread_ = std::jthread(&PidWatcher::monitorThread, this);
-        exit_thread_ = std::jthread(&PidWatcher::exitThread, this);
-        multi_monitor_thread_ =
-            std::jthread(&PidWatcher::multiMonitorThread, this);
-        resource_monitor_thread_ =
-            std::jthread(&PidWatcher::resourceMonitorThread, this);
-        auto_restart_thread_ =
-            std::jthread(&PidWatcher::autoRestartThread, this);
-        watchdog_thread_ = std::jthread(&PidWatcher::watchdogThread, this);
-#else
         monitor_thread_ = std::thread(&PidWatcher::monitorThread, this);
         exit_thread_ = std::thread(&PidWatcher::exitThread, this);
         multi_monitor_thread_ =
@@ -729,30 +609,21 @@ auto PidWatcher::start(const std::string& name, const MonitorConfig* config)
         auto_restart_thread_ =
             std::thread(&PidWatcher::autoRestartThread, this);
         watchdog_thread_ = std::thread(&PidWatcher::watchdogThread, this);
-#endif
     } else {
-        // Notify threads about new process
         monitor_cv_.notify_one();
         multi_monitor_cv_.notify_one();
         resource_monitor_cv_.notify_one();
     }
 
-    LOG_F(INFO, "PidWatcher started for process name: {}", name);
+    spdlog::info("PidWatcher started for process: {}", name);
     return true;
 }
 
-auto PidWatcher::startByPid(pid_t pid, const MonitorConfig* config) -> bool {
-    LOG_F(INFO, "Starting PidWatcher for PID: {}", pid);
+bool PidWatcher::startByPid(pid_t pid, const MonitorConfig* config) {
     std::lock_guard lock(mutex_);
 
-    if (running_ && !monitored_processes_.empty()) {
-        LOG_F(INFO, "Watcher already running with {} processes",
-              monitored_processes_.size());
-    }
-
-    // Check if process exists
     if (!isProcessRunning(pid)) {
-        LOG_F(ERROR, "Process with PID {} does not exist", pid);
+        spdlog::error("Process with PID {} does not exist", pid);
         if (error_callback_) {
             error_callback_(
                 "Process with PID " + std::to_string(pid) + " does not exist",
@@ -761,16 +632,14 @@ auto PidWatcher::startByPid(pid_t pid, const MonitorConfig* config) -> bool {
         return false;
     }
 
-    // Check if we're already monitoring this process
-    if (monitored_processes_.find(pid) != monitored_processes_.end()) {
-        LOG_F(INFO, "Already monitoring process {}", pid);
+    if (monitored_processes_.contains(pid)) {
+        spdlog::info("Already monitoring process {}", pid);
         return true;
     }
 
-    // Initialize process info
     auto info_opt = getProcessInfo(pid);
     if (!info_opt) {
-        LOG_F(ERROR, "Failed to get info for PID {}", pid);
+        spdlog::error("Failed to get info for PID {}", pid);
         if (error_callback_) {
             error_callback_("Failed to get info for PID " + std::to_string(pid),
                             EINVAL);
@@ -778,18 +647,14 @@ auto PidWatcher::startByPid(pid_t pid, const MonitorConfig* config) -> bool {
         return false;
     }
 
-    ProcessInfo info = *info_opt;
-
-    // Apply process-specific configuration if provided
     if (config) {
         process_configs_[pid] = *config;
     }
 
-    monitored_processes_[pid] = info;
+    monitored_processes_[pid] = *info_opt;
 
-    // Set primary PID if this is the first process
     if (monitored_processes_.size() == 1) {
-        pid_ = pid;
+        primary_pid_ = pid;
     }
 
     if (!running_) {
@@ -797,18 +662,6 @@ auto PidWatcher::startByPid(pid_t pid, const MonitorConfig* config) -> bool {
         monitoring_ = true;
         watchdog_healthy_ = true;
 
-        // Start all monitoring threads
-#if __cplusplus >= 202002L
-        monitor_thread_ = std::jthread(&PidWatcher::monitorThread, this);
-        exit_thread_ = std::jthread(&PidWatcher::exitThread, this);
-        multi_monitor_thread_ =
-            std::jthread(&PidWatcher::multiMonitorThread, this);
-        resource_monitor_thread_ =
-            std::jthread(&PidWatcher::resourceMonitorThread, this);
-        auto_restart_thread_ =
-            std::jthread(&PidWatcher::autoRestartThread, this);
-        watchdog_thread_ = std::jthread(&PidWatcher::watchdogThread, this);
-#else
         monitor_thread_ = std::thread(&PidWatcher::monitorThread, this);
         exit_thread_ = std::thread(&PidWatcher::exitThread, this);
         multi_monitor_thread_ =
@@ -818,22 +671,18 @@ auto PidWatcher::startByPid(pid_t pid, const MonitorConfig* config) -> bool {
         auto_restart_thread_ =
             std::thread(&PidWatcher::autoRestartThread, this);
         watchdog_thread_ = std::thread(&PidWatcher::watchdogThread, this);
-#endif
     } else {
-        // Notify threads about new process
         monitor_cv_.notify_one();
         multi_monitor_cv_.notify_one();
         resource_monitor_cv_.notify_one();
     }
 
-    LOG_F(INFO, "PidWatcher started for PID: {}", pid);
+    spdlog::info("PidWatcher started for PID: {}", pid);
     return true;
 }
 
-auto PidWatcher::startMultiple(const std::vector<std::string>& process_names,
-                               const MonitorConfig* config) -> size_t {
-    LOG_F(INFO, "Starting PidWatcher for multiple processes (count: {})",
-          process_names.size());
+size_t PidWatcher::startMultiple(const std::vector<std::string>& process_names,
+                                 const MonitorConfig* config) {
     std::lock_guard lock(mutex_);
 
     size_t success_count = 0;
@@ -841,51 +690,44 @@ auto PidWatcher::startMultiple(const std::vector<std::string>& process_names,
     for (const auto& name : process_names) {
         pid_t pid = getPidByName(name);
         if (pid == 0) {
-            LOG_F(WARNING, "Failed to get PID for {}", name);
+            spdlog::warn("Failed to get PID for {}", name);
             if (error_callback_) {
                 error_callback_("Failed to get PID for " + name, ESRCH);
             }
             continue;
         }
 
-        // Skip already monitored processes
-        if (monitored_processes_.find(pid) != monitored_processes_.end()) {
-            LOG_F(INFO, "Already monitoring process {} ({})", pid, name);
+        if (monitored_processes_.contains(pid)) {
+            spdlog::info("Already monitoring process {} ({})", pid, name);
             success_count++;
             continue;
         }
 
-        // Initialize process info
         ProcessInfo info;
         info.pid = pid;
         info.name = name;
         info.running = true;
         info.start_time = std::chrono::system_clock::now();
 
-        // Get more detailed info right away
-        auto detailed_info = getProcessInfo(pid);
-        if (detailed_info) {
+        if (auto detailed_info = getProcessInfo(pid)) {
             info = *detailed_info;
         }
 
-        // Apply process-specific configuration if provided
         if (config) {
             process_configs_[pid] = *config;
         }
 
-        // Apply filter if set
         if (process_filter_ && !process_filter_(info)) {
-            LOG_F(INFO, "Process {}/{} filtered out by custom filter", pid,
-                  name);
+            spdlog::info("Process {}/{} filtered out by custom filter", pid,
+                         name);
             continue;
         }
 
         monitored_processes_[pid] = info;
         success_count++;
 
-        // Set primary PID if this is the first process
         if (monitored_processes_.size() == 1) {
-            pid_ = pid;
+            primary_pid_ = pid;
         }
     }
 
@@ -894,18 +736,6 @@ auto PidWatcher::startMultiple(const std::vector<std::string>& process_names,
         monitoring_ = true;
         watchdog_healthy_ = true;
 
-        // Start all monitoring threads
-#if __cplusplus >= 202002L
-        monitor_thread_ = std::jthread(&PidWatcher::monitorThread, this);
-        exit_thread_ = std::jthread(&PidWatcher::exitThread, this);
-        multi_monitor_thread_ =
-            std::jthread(&PidWatcher::multiMonitorThread, this);
-        resource_monitor_thread_ =
-            std::jthread(&PidWatcher::resourceMonitorThread, this);
-        auto_restart_thread_ =
-            std::jthread(&PidWatcher::autoRestartThread, this);
-        watchdog_thread_ = std::jthread(&PidWatcher::watchdogThread, this);
-#else
         monitor_thread_ = std::thread(&PidWatcher::monitorThread, this);
         exit_thread_ = std::thread(&PidWatcher::exitThread, this);
         multi_monitor_thread_ =
@@ -915,28 +745,22 @@ auto PidWatcher::startMultiple(const std::vector<std::string>& process_names,
         auto_restart_thread_ =
             std::thread(&PidWatcher::autoRestartThread, this);
         watchdog_thread_ = std::thread(&PidWatcher::watchdogThread, this);
-#endif
     } else if (success_count > 0) {
-        // Notify threads about new processes
         monitor_cv_.notify_one();
         multi_monitor_cv_.notify_one();
         resource_monitor_cv_.notify_one();
     }
 
-    LOG_F(INFO, "Started monitoring {} processes out of {}", success_count,
-          process_names.size());
-
+    spdlog::info("Started monitoring {} processes out of {}", success_count,
+                 process_names.size());
     return success_count;
 }
 
 void PidWatcher::stop() {
-    LOG_F(INFO, "Stopping PidWatcher");
-
     {
         std::lock_guard lock(mutex_);
 
         if (!running_) {
-            LOG_F(INFO, "PidWatcher is not running");
             return;
         }
 
@@ -944,7 +768,6 @@ void PidWatcher::stop() {
         monitoring_ = false;
         watchdog_healthy_ = false;
 
-        // Notify all threads to exit
         exit_cv_.notify_all();
         monitor_cv_.notify_all();
         multi_monitor_cv_.notify_all();
@@ -956,27 +779,20 @@ void PidWatcher::stop() {
         process_configs_.clear();
     }
 
-    // Join all threads
-    if (monitor_thread_.joinable()) {
+    if (monitor_thread_.joinable())
         monitor_thread_.join();
-    }
-    if (exit_thread_.joinable()) {
+    if (exit_thread_.joinable())
         exit_thread_.join();
-    }
-    if (multi_monitor_thread_.joinable()) {
+    if (multi_monitor_thread_.joinable())
         multi_monitor_thread_.join();
-    }
-    if (resource_monitor_thread_.joinable()) {
+    if (resource_monitor_thread_.joinable())
         resource_monitor_thread_.join();
-    }
-    if (auto_restart_thread_.joinable()) {
+    if (auto_restart_thread_.joinable())
         auto_restart_thread_.join();
-    }
-    if (watchdog_thread_.joinable()) {
+    if (watchdog_thread_.joinable())
         watchdog_thread_.join();
-    }
 
-    LOG_F(INFO, "PidWatcher stopped");
+    spdlog::info("PidWatcher stopped");
 }
 
 bool PidWatcher::stopProcess(pid_t pid) {
@@ -984,31 +800,25 @@ bool PidWatcher::stopProcess(pid_t pid) {
 
     auto it = monitored_processes_.find(pid);
     if (it == monitored_processes_.end()) {
-        LOG_F(WARNING, "Process {} is not being monitored", pid);
+        spdlog::warn("Process {} is not being monitored", pid);
         return false;
     }
 
-    LOG_F(INFO, "Stopping monitoring for process {} ({})", pid,
-          it->second.name);
+    spdlog::info("Stopping monitoring for process {} ({})", pid,
+                 it->second.name);
 
-    // Remove from configurations
     process_configs_.erase(pid);
-
-    // Remove from monitored processes
     monitored_processes_.erase(it);
 
-    // If this was the primary process, update primary PID
-    if (pid_ == pid && !monitored_processes_.empty()) {
-        pid_ = monitored_processes_.begin()->first;
-        LOG_F(INFO, "Updated primary PID to {}", pid_);
+    if (primary_pid_ == pid && !monitored_processes_.empty()) {
+        primary_pid_ = monitored_processes_.begin()->first;
+        spdlog::info("Updated primary PID to {}", primary_pid_.load());
     }
 
-    // If this was the last process, stop all threads
     if (monitored_processes_.empty()) {
         running_ = false;
         monitoring_ = false;
 
-        // Notify all threads to exit
         exit_cv_.notify_all();
         monitor_cv_.notify_all();
         multi_monitor_cv_.notify_all();
@@ -1019,69 +829,61 @@ bool PidWatcher::stopProcess(pid_t pid) {
     return true;
 }
 
-auto PidWatcher::switchToProcess(const std::string& name) -> bool {
+bool PidWatcher::switchToProcess(const std::string& name) {
     std::lock_guard lock(mutex_);
 
     if (!running_) {
-        LOG_F(ERROR, "Not running.");
+        spdlog::error("Not running");
         return false;
     }
 
     pid_t new_pid = getPidByName(name);
     if (new_pid == 0) {
-        LOG_F(ERROR, "Failed to get PID for {}", name);
+        spdlog::error("Failed to get PID for {}", name);
         if (error_callback_) {
             error_callback_("Failed to get PID for " + name, ESRCH);
         }
         return false;
     }
 
-    // If already monitoring this process in multi-mode, make it primary
-    if (monitored_processes_.find(new_pid) != monitored_processes_.end()) {
-        LOG_F(INFO, "Already monitoring process {} ({}), making primary",
-              new_pid, name);
-        pid_ = new_pid;
+    if (monitored_processes_.contains(new_pid)) {
+        spdlog::info("Already monitoring process {} ({}), making primary",
+                     new_pid, name);
+        primary_pid_ = new_pid;
         return true;
     }
 
-    // Initialize process info
     ProcessInfo info;
     info.pid = new_pid;
     info.name = name;
     info.running = true;
     info.start_time = std::chrono::system_clock::now();
 
-    // Get more detailed info right away
-    auto detailed_info = getProcessInfo(new_pid);
-    if (detailed_info) {
+    if (auto detailed_info = getProcessInfo(new_pid)) {
         info = *detailed_info;
     }
 
-    // Update primary PID
-    pid_ = new_pid;
-
-    // Add to monitored processes
+    primary_pid_ = new_pid;
     monitored_processes_[new_pid] = info;
 
-    // Notify threads
     monitor_cv_.notify_one();
     multi_monitor_cv_.notify_one();
     resource_monitor_cv_.notify_one();
 
-    LOG_F(INFO, "PidWatcher switched to process name: {}", name);
+    spdlog::info("PidWatcher switched to process: {}", name);
     return true;
 }
 
-auto PidWatcher::switchToProcessById(pid_t pid) -> bool {
+bool PidWatcher::switchToProcessById(pid_t pid) {
     std::lock_guard lock(mutex_);
 
     if (!running_) {
-        LOG_F(ERROR, "Not running.");
+        spdlog::error("Not running");
         return false;
     }
 
     if (!isProcessRunning(pid)) {
-        LOG_F(ERROR, "Process {} is not running", pid);
+        spdlog::error("Process {} is not running", pid);
         if (error_callback_) {
             error_callback_(
                 "Process " + std::to_string(pid) + " is not running", ESRCH);
@@ -1089,17 +891,15 @@ auto PidWatcher::switchToProcessById(pid_t pid) -> bool {
         return false;
     }
 
-    // If already monitoring this process, make it primary
-    if (monitored_processes_.find(pid) != monitored_processes_.end()) {
-        LOG_F(INFO, "Already monitoring process {}, making primary", pid);
-        pid_ = pid;
+    if (monitored_processes_.contains(pid)) {
+        spdlog::info("Already monitoring process {}, making primary", pid);
+        primary_pid_ = pid;
         return true;
     }
 
-    // Get process info
     auto info_opt = getProcessInfo(pid);
     if (!info_opt) {
-        LOG_F(ERROR, "Failed to get info for process {}", pid);
+        spdlog::error("Failed to get info for process {}", pid);
         if (error_callback_) {
             error_callback_(
                 "Failed to get info for process " + std::to_string(pid),
@@ -1108,18 +908,14 @@ auto PidWatcher::switchToProcessById(pid_t pid) -> bool {
         return false;
     }
 
-    // Update primary PID
-    pid_ = pid;
-
-    // Add to monitored processes
+    primary_pid_ = pid;
     monitored_processes_[pid] = *info_opt;
 
-    // Notify threads
     monitor_cv_.notify_one();
     multi_monitor_cv_.notify_one();
     resource_monitor_cv_.notify_one();
 
-    LOG_F(INFO, "PidWatcher switched to process ID: {}", pid);
+    spdlog::info("PidWatcher switched to PID: {}", pid);
     return true;
 }
 
@@ -1130,7 +926,7 @@ bool PidWatcher::isActive() const {
 
 bool PidWatcher::isMonitoring(pid_t pid) const {
     std::lock_guard lock(mutex_);
-    return monitored_processes_.find(pid) != monitored_processes_.end();
+    return monitored_processes_.contains(pid);
 }
 
 bool PidWatcher::isProcessRunning(pid_t pid) const {
@@ -1144,37 +940,32 @@ bool PidWatcher::isProcessRunning(pid_t pid) const {
     CloseHandle(process);
     return status == WAIT_TIMEOUT;
 #else
-    // Send signal 0 to check if process exists
     return kill(pid, 0) == 0;
 #endif
 }
 
 double PidWatcher::getProcessCpuUsage(pid_t pid) const {
 #ifdef _WIN32
-    // Windows implementation using PDH
-    static PDH_HQUERY cpuQuery = NULL;
-    static PDH_HCOUNTER cpuTotal = NULL;
+    static PDH_HQUERY cpu_query = NULL;
+    static PDH_HCOUNTER cpu_total = NULL;
 
-    if (cpuQuery == NULL) {
-        PdhOpenQuery(NULL, 0, &cpuQuery);
-        std::string counterPath =
+    if (cpu_query == NULL) {
+        PdhOpenQuery(NULL, 0, &cpu_query);
+        std::string counter_path =
             "\\Process(" + std::to_string(pid) + ")\\% Processor Time";
-        PdhAddEnglishCounter(cpuQuery, counterPath.c_str(), 0, &cpuTotal);
-        PdhCollectQueryData(cpuQuery);
-
-        // Need to wait for second call to get an actual value
+        PdhAddEnglishCounter(cpu_query, counter_path.c_str(), 0, &cpu_total);
+        PdhCollectQueryData(cpu_query);
         return 0.0;
     }
 
-    PDH_FMT_COUNTERVALUE counterVal;
-    PdhCollectQueryData(cpuQuery);
-    PdhGetFormattedCounterValue(cpuTotal, PDH_FMT_DOUBLE, NULL, &counterVal);
+    PDH_FMT_COUNTERVALUE counter_val;
+    PdhCollectQueryData(cpu_query);
+    PdhGetFormattedCounterValue(cpu_total, PDH_FMT_DOUBLE, NULL, &counter_val);
 
-    return counterVal.doubleValue;
+    return counter_val.doubleValue;
 #else
     std::string proc_path = "/proc/" + std::to_string(pid);
 
-    // Check if process exists
     if (!fs::exists(proc_path)) {
         return -1.0;
     }
@@ -1183,7 +974,6 @@ double PidWatcher::getProcessCpuUsage(pid_t pid) const {
     auto it = cpu_usage_data_.find(pid);
     bool first_call = (it == cpu_usage_data_.end());
 
-    // Read process stats
     std::ifstream stat_file(proc_path + "/stat");
     if (!stat_file.is_open()) {
         return -1.0;
@@ -1194,21 +984,20 @@ double PidWatcher::getProcessCpuUsage(pid_t pid) const {
     std::istringstream iss(line);
 
     std::vector<std::string> stat_values;
+    stat_values.reserve(20);
     std::string value;
-    while (iss >> value) {
+    while (iss >> value && stat_values.size() < 17) {
         stat_values.push_back(value);
     }
 
-    if (stat_values.size() < 17) {
+    if (stat_values.size() < 15) {
         return -1.0;
     }
 
-    // Get user and system time
-    unsigned long long utime = std::stoull(stat_values[13]);
-    unsigned long long stime = std::stoull(stat_values[14]);
-    unsigned long long total_time = utime + stime;
+    uint64_t utime = std::stoull(stat_values[13]);
+    uint64_t stime = std::stoull(stat_values[14]);
+    uint64_t total_time = utime + stime;
 
-    // Read system stats
     std::ifstream proc_stat("/proc/stat");
     if (!proc_stat.is_open()) {
         return -1.0;
@@ -1218,17 +1007,16 @@ double PidWatcher::getProcessCpuUsage(pid_t pid) const {
     iss = std::istringstream(line);
 
     std::string cpu_label;
-    unsigned long long user, nice, system, idle, iowait, irq, softirq, steal;
+    uint64_t user, nice, system, idle, iowait, irq, softirq, steal;
     iss >> cpu_label >> user >> nice >> system >> idle >> iowait >> irq >>
         softirq >> steal;
 
-    unsigned long long total_cpu_time =
+    uint64_t total_cpu_time =
         user + nice + system + idle + iowait + irq + softirq + steal;
 
     auto now = std::chrono::steady_clock::now();
 
     if (first_call) {
-        // First call, just store values
         CPUUsageData data;
         data.lastTotalUser = user;
         data.lastTotalUserLow = nice;
@@ -1238,10 +1026,8 @@ double PidWatcher::getProcessCpuUsage(pid_t pid) const {
         cpu_usage_data_[pid] = data;
         return 0.0;
     } else {
-        // Calculate CPU usage
         CPUUsageData& last = cpu_usage_data_[pid];
 
-        // If update was too recent, return last value
         if (std::chrono::duration_cast<std::chrono::milliseconds>(
                 now - last.last_update)
                 .count() < 200) {
@@ -1258,7 +1044,6 @@ double PidWatcher::getProcessCpuUsage(pid_t pid) const {
                                    last.lastTotalSys + last.lastTotalIdle));
         }
 
-        // Update stored values
         last.lastTotalUser = user;
         last.lastTotalUserLow = nice;
         last.lastTotalSys = system;
@@ -1281,7 +1066,7 @@ size_t PidWatcher::getProcessMemoryUsage(pid_t pid) const {
     PROCESS_MEMORY_COUNTERS pmc;
     if (GetProcessMemoryInfo(process, &pmc, sizeof(pmc))) {
         CloseHandle(process);
-        return pmc.WorkingSetSize / 1024;  // Convert to KB
+        return pmc.WorkingSetSize / 1024;
     }
 
     CloseHandle(process);
@@ -1295,7 +1080,7 @@ size_t PidWatcher::getProcessMemoryUsage(pid_t pid) const {
 
     std::string line;
     while (std::getline(status_file, line)) {
-        if (line.compare(0, 6, "VmRSS:") == 0) {
+        if (line.starts_with("VmRSS:")) {
             std::istringstream iss(line.substr(6));
             size_t memory_kb;
             iss >> memory_kb;
@@ -1337,7 +1122,7 @@ unsigned int PidWatcher::getProcessThreadCount(pid_t pid) const {
 
     std::string line;
     while (std::getline(status_file, line)) {
-        if (line.compare(0, 8, "Threads:") == 0) {
+        if (line.starts_with("Threads:")) {
             std::istringstream iss(line.substr(8));
             unsigned int thread_count;
             iss >> thread_count;
@@ -1354,9 +1139,6 @@ ProcessIOStats PidWatcher::getProcessIOStats(pid_t pid) {
     std::lock_guard lock(mutex_);
 
 #ifdef _WIN32
-    // Windows doesn't have a straightforward API for per-process I/O stats
-    // We can use IO_COUNTERS from GetProcessIoCounters but it may not work on
-    // all Windows versions
     HANDLE process = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
     if (process == NULL) {
         return stats;
@@ -1367,14 +1149,11 @@ ProcessIOStats PidWatcher::getProcessIOStats(pid_t pid) {
         stats.read_bytes = io_counters.ReadTransferCount;
         stats.write_bytes = io_counters.WriteTransferCount;
 
-        // Calculate rates by comparing with previous measurements
         auto it = prev_io_stats_.find(pid);
         if (it != prev_io_stats_.end()) {
             auto now = std::chrono::steady_clock::now();
             auto last = it->second;
-            auto time_diff =
-                now -
-                std::chrono::steady_clock::now();  // Need to store timestamps
+            auto time_diff = now - last.last_update;
 
             double seconds = std::chrono::duration<double>(time_diff).count();
             if (seconds > 0) {
@@ -1383,6 +1162,7 @@ ProcessIOStats PidWatcher::getProcessIOStats(pid_t pid) {
                 stats.write_rate =
                     (stats.write_bytes - last.write_bytes) / seconds;
             }
+            stats.last_update = now;
         }
 
         prev_io_stats_[pid] = stats;
@@ -1399,27 +1179,24 @@ ProcessIOStats PidWatcher::getProcessIOStats(pid_t pid) {
     std::string line;
     uint64_t prev_read = 0, prev_write = 0;
 
-    // Get previous values if they exist
     auto it = prev_io_stats_.find(pid);
     if (it != prev_io_stats_.end()) {
         prev_read = it->second.read_bytes;
         prev_write = it->second.write_bytes;
     }
 
-    // Parse current IO values
     while (std::getline(io_file, line)) {
-        if (line.compare(0, 10, "read_bytes") == 0) {
+        if (line.starts_with("read_bytes")) {
             std::istringstream iss(
                 line.substr(line.find_first_of("0123456789")));
             iss >> stats.read_bytes;
-        } else if (line.compare(0, 11, "write_bytes") == 0) {
+        } else if (line.starts_with("write_bytes")) {
             std::istringstream iss(
                 line.substr(line.find_first_of("0123456789")));
             iss >> stats.write_bytes;
         }
     }
 
-    // Calculate rates
     auto now = std::chrono::steady_clock::now();
     auto last_it = last_update_time_.find(pid);
     if (last_it != last_update_time_.end()) {
@@ -1433,7 +1210,6 @@ ProcessIOStats PidWatcher::getProcessIOStats(pid_t pid) {
         }
     }
 
-    // Store for next calculation
     prev_io_stats_[pid] = stats;
     last_update_time_[pid] = now;
 #endif
@@ -1466,8 +1242,8 @@ ProcessStatus PidWatcher::getProcessStatus(pid_t pid) const {
 
     std::string line;
     while (std::getline(status_file, line)) {
-        if (line.compare(0, 6, "State:") == 0) {
-            char state_char = line.substr(7, 1)[0];
+        if (line.starts_with("State:")) {
+            char state_char = line[7];
             switch (state_char) {
                 case 'R':
                     return ProcessStatus::RUNNING;
@@ -1507,12 +1283,10 @@ std::chrono::milliseconds PidWatcher::getProcessUptime(pid_t pid) const {
 
     CloseHandle(process);
 
-    // Convert FILETIME to system time
     ULARGE_INTEGER create_time_li;
     create_time_li.LowPart = creation_time.dwLowDateTime;
     create_time_li.HighPart = creation_time.dwHighDateTime;
 
-    // Get current system time
     FILETIME current_time;
     GetSystemTimeAsFileTime(&current_time);
 
@@ -1520,11 +1294,8 @@ std::chrono::milliseconds PidWatcher::getProcessUptime(pid_t pid) const {
     current_time_li.LowPart = current_time.dwLowDateTime;
     current_time_li.HighPart = current_time.dwHighDateTime;
 
-    // Calculate difference in 100-nanosecond intervals
     uint64_t diff = current_time_li.QuadPart - create_time_li.QuadPart;
 
-    // Convert to milliseconds (1 unit = 100ns, so divide by 10000 for
-    // milliseconds)
     return std::chrono::milliseconds(diff / 10000);
 #else
     std::string stat_path = "/proc/" + std::to_string(pid) + "/stat";
@@ -1537,7 +1308,6 @@ std::chrono::milliseconds PidWatcher::getProcessUptime(pid_t pid) const {
     std::getline(stat_file, content);
     stat_file.close();
 
-    // Get system uptime
     std::ifstream uptime_file("/proc/uptime");
     if (!uptime_file.is_open()) {
         return std::chrono::milliseconds(0);
@@ -1547,7 +1317,6 @@ std::chrono::milliseconds PidWatcher::getProcessUptime(pid_t pid) const {
     uptime_file >> system_uptime;
     uptime_file.close();
 
-    // Parse stat file to get start time (field 22)
     std::istringstream iss(content);
     std::string field;
 
@@ -1558,7 +1327,6 @@ std::chrono::milliseconds PidWatcher::getProcessUptime(pid_t pid) const {
     unsigned long long start_time;
     iss >> start_time;
 
-    // Convert clock ticks to seconds
     long clock_ticks = sysconf(_SC_CLK_TCK);
     if (clock_ticks <= 0) {
         return std::chrono::milliseconds(0);
@@ -1575,7 +1343,7 @@ std::chrono::milliseconds PidWatcher::getProcessUptime(pid_t pid) const {
 pid_t PidWatcher::launchProcess(const std::string& command,
                                 const std::vector<std::string>& args,
                                 bool auto_monitor) {
-    LOG_F(INFO, "Launching process: {}", command);
+    spdlog::info("Launching process: {}", command);
 
 #ifdef _WIN32
     std::string cmd_line = command;
@@ -1590,10 +1358,9 @@ pid_t PidWatcher::launchProcess(const std::string& command,
     si.cb = sizeof(si);
     ZeroMemory(&pi, sizeof(pi));
 
-    // Create the process
     if (!CreateProcess(NULL, const_cast<char*>(cmd_line.c_str()), NULL, NULL,
                        FALSE, 0, NULL, NULL, &si, &pi)) {
-        LOG_F(ERROR, "CreateProcess failed: {}", GetLastError());
+        spdlog::error("CreateProcess failed: {}", GetLastError());
         if (error_callback_) {
             error_callback_("Failed to launch process: " + command,
                             GetLastError());
@@ -1601,9 +1368,8 @@ pid_t PidWatcher::launchProcess(const std::string& command,
         return 0;
     }
 
-    LOG_F(INFO, "Process launched with PID: {}", pi.dwProcessId);
+    spdlog::info("Process launched with PID: {}", pi.dwProcessId);
 
-    // Close handles
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
 
@@ -1612,8 +1378,7 @@ pid_t PidWatcher::launchProcess(const std::string& command,
     pid_t new_pid = fork();
 
     if (new_pid < 0) {
-        // Fork failed
-        LOG_F(ERROR, "Fork failed: {}", strerror(errno));
+        spdlog::error("Fork failed: {}", strerror(errno));
         if (error_callback_) {
             error_callback_("Fork failed when launching process: " + command,
                             errno);
@@ -1622,8 +1387,6 @@ pid_t PidWatcher::launchProcess(const std::string& command,
     }
 
     if (new_pid == 0) {
-        // Child process
-        // Prepare arguments for execv
         std::vector<char*> c_args;
         c_args.push_back(const_cast<char*>(command.c_str()));
 
@@ -1632,26 +1395,20 @@ pid_t PidWatcher::launchProcess(const std::string& command,
         }
         c_args.push_back(nullptr);
 
-        // Execute the command
         execvp(command.c_str(), c_args.data());
 
-        // If execvp returns, it failed
         exit(EXIT_FAILURE);
     }
 
-    // Parent process
-    LOG_F(INFO, "Process launched with PID: {}", new_pid);
+    spdlog::info("Process launched with PID: {}", new_pid);
 #endif
 
-    // Notify about process creation
     if (process_create_callback_) {
         process_create_callback_(new_pid, command);
     }
 
-    // Start monitoring if requested
     if (auto_monitor) {
         std::thread([this, new_pid]() {
-            // Wait a moment for the process to initialize
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
             this->startByPid(new_pid);
         }).detach();
@@ -1661,13 +1418,13 @@ pid_t PidWatcher::launchProcess(const std::string& command,
 }
 
 bool PidWatcher::terminateProcess(pid_t pid, bool force) {
-    LOG_F(INFO, "Terminating process: {} (force: {})", pid, force);
+    spdlog::info("Terminating process: {} (force: {})", pid, force);
 
 #ifdef _WIN32
     HANDLE process = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
     if (process == NULL) {
-        LOG_F(ERROR, "Failed to open process for termination: {}",
-              GetLastError());
+        spdlog::error("Failed to open process for termination: {}",
+                      GetLastError());
         if (error_callback_) {
             error_callback_("Failed to open process for termination",
                             GetLastError());
@@ -1679,7 +1436,7 @@ bool PidWatcher::terminateProcess(pid_t pid, bool force) {
     CloseHandle(process);
 
     if (!result) {
-        LOG_F(ERROR, "Failed to terminate process: {}", GetLastError());
+        spdlog::error("Failed to terminate process: {}", GetLastError());
         if (error_callback_) {
             error_callback_("Failed to terminate process", GetLastError());
         }
@@ -1688,7 +1445,7 @@ bool PidWatcher::terminateProcess(pid_t pid, bool force) {
 #else
     int signal_num = force ? SIGKILL : SIGTERM;
     if (kill(pid, signal_num) != 0) {
-        LOG_F(ERROR, "Failed to send signal to process: {}", strerror(errno));
+        spdlog::error("Failed to send signal to process: {}", strerror(errno));
         if (error_callback_) {
             error_callback_("Failed to send signal to process", errno);
         }
@@ -1696,17 +1453,14 @@ bool PidWatcher::terminateProcess(pid_t pid, bool force) {
     }
 #endif
 
-    LOG_F(INFO, "Signal sent to process {} successfully", pid);
+    spdlog::info("Signal sent to process {} successfully", pid);
 
-    // If we're monitoring this process, keep monitoring until it exits
     if (isMonitoring(pid)) {
         std::thread([this, pid]() {
-            // Check if process has exited every 100ms for up to 5 seconds
             for (int i = 0; i < 50; i++) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 if (!isProcessRunning(pid)) {
-                    // Process has exited, update our records
-                    std::lock_guard lock(mutex_);
+                    std::lock_guard lock(this->mutex_);
                     auto it = monitored_processes_.find(pid);
                     if (it != monitored_processes_.end()) {
                         it->second.running = false;
@@ -1726,27 +1480,25 @@ bool PidWatcher::setResourceLimits(pid_t pid, const ResourceLimits& limits) {
 
     auto it = process_configs_.find(pid);
     if (it == process_configs_.end()) {
-        // Create a default config if none exists
         process_configs_[pid] = global_config_;
     }
 
-    // Update resource limits
     process_configs_[pid].resource_limits = limits;
 
-    LOG_F(INFO, "Set resource limits for process {}: CPU {}%, Memory {} KB",
-          pid, limits.max_cpu_percent, limits.max_memory_kb);
+    spdlog::info("Set resource limits for process {}: CPU {}%, Memory {} KB",
+                 pid, limits.max_cpu_percent, limits.max_memory_kb);
 
     return true;
 }
 
 bool PidWatcher::setProcessPriority(pid_t pid, int priority) {
-    LOG_F(INFO, "Setting process {} priority to {}", pid, priority);
+    spdlog::info("Setting process {} priority to {}", pid, priority);
 
 #ifdef _WIN32
     HANDLE process = OpenProcess(PROCESS_SET_INFORMATION, FALSE, pid);
     if (process == NULL) {
-        LOG_F(ERROR, "Failed to open process for priority change: {}",
-              GetLastError());
+        spdlog::error("Failed to open process for priority change: {}",
+                      GetLastError());
         if (error_callback_) {
             error_callback_("Failed to open process for priority change",
                             GetLastError());
@@ -1754,7 +1506,6 @@ bool PidWatcher::setProcessPriority(pid_t pid, int priority) {
         return false;
     }
 
-    // Map nice value to Windows priority class
     DWORD priority_class;
     if (priority <= -15) {
         priority_class = REALTIME_PRIORITY_CLASS;
@@ -1774,7 +1525,7 @@ bool PidWatcher::setProcessPriority(pid_t pid, int priority) {
     CloseHandle(process);
 
     if (!result) {
-        LOG_F(ERROR, "Failed to set process priority: {}", GetLastError());
+        spdlog::error("Failed to set process priority: {}", GetLastError());
         if (error_callback_) {
             error_callback_("Failed to set process priority", GetLastError());
         }
@@ -1782,7 +1533,7 @@ bool PidWatcher::setProcessPriority(pid_t pid, int priority) {
     }
 #else
     if (setpriority(PRIO_PROCESS, pid, priority) != 0) {
-        LOG_F(ERROR, "Failed to set process priority: {}", strerror(errno));
+        spdlog::error("Failed to set process priority: {}", strerror(errno));
         if (error_callback_) {
             error_callback_("Failed to set process priority", errno);
         }
@@ -1790,7 +1541,6 @@ bool PidWatcher::setProcessPriority(pid_t pid, int priority) {
     }
 #endif
 
-    // Update process info if we're monitoring this process
     {
         std::lock_guard lock(mutex_);
         auto it = monitored_processes_.find(pid);
@@ -1799,7 +1549,7 @@ bool PidWatcher::setProcessPriority(pid_t pid, int priority) {
         }
     }
 
-    LOG_F(INFO, "Successfully set process {} priority to {}", pid, priority);
+    spdlog::info("Successfully set process {} priority to {}", pid, priority);
     return true;
 }
 
@@ -1809,37 +1559,32 @@ bool PidWatcher::configureAutoRestart(pid_t pid, bool enable,
 
     auto it = process_configs_.find(pid);
     if (it == process_configs_.end()) {
-        // Create a default config if none exists
         process_configs_[pid] = global_config_;
     }
 
-    // Update auto-restart configuration
     process_configs_[pid].auto_restart = enable;
     process_configs_[pid].max_restart_attempts = max_attempts;
 
-    // Reset restart attempts counter if enabling
     if (enable) {
         restart_attempts_[pid] = 0;
     } else {
         restart_attempts_.erase(pid);
     }
 
-    LOG_F(INFO, "{} auto-restart for process {} (max attempts: {})",
-          enable ? "Enabled" : "Disabled", pid, max_attempts);
+    spdlog::info("{} auto-restart for process {} (max attempts: {})",
+                 enable ? "Enabled" : "Disabled", pid, max_attempts);
 
-    // Ensure auto-restart thread is running
     auto_restart_cv_.notify_one();
 
     return true;
 }
 
 pid_t PidWatcher::restartProcess(pid_t pid) {
-    LOG_F(INFO, "Restarting process: {}", pid);
+    spdlog::info("Restarting process: {}", pid);
 
-    // Get process info to save command line before terminating
     auto info_opt = getProcessInfo(pid);
     if (!info_opt) {
-        LOG_F(ERROR, "Failed to get process info for restart");
+        spdlog::error("Failed to get process info for restart");
         if (error_callback_) {
             error_callback_("Failed to get process info for restart", EINVAL);
         }
@@ -1848,16 +1593,14 @@ pid_t PidWatcher::restartProcess(pid_t pid) {
 
     std::string command = info_opt->command_line;
 
-    // Terminate the process
     if (!terminateProcess(pid, false)) {
-        LOG_F(WARNING, "Failed to terminate process, trying with force");
+        spdlog::warn("Failed to terminate process, trying with force");
         if (!terminateProcess(pid, true)) {
-            LOG_F(ERROR, "Failed to terminate process even with force");
+            spdlog::error("Failed to terminate process even with force");
             return 0;
         }
     }
 
-    // Wait for process to fully terminate
     for (int i = 0; i < 50; i++) {
         if (!isProcessRunning(pid)) {
             break;
@@ -1866,12 +1609,10 @@ pid_t PidWatcher::restartProcess(pid_t pid) {
     }
 
     if (isProcessRunning(pid)) {
-        LOG_F(ERROR, "Process {} did not terminate in time", pid);
+        spdlog::error("Process {} did not terminate in time", pid);
         return 0;
     }
 
-    // Launch new process with same command line
-    // Parse command line into command and args
     std::vector<std::string> args;
     std::stringstream ss(command);
     std::string item;
@@ -1887,7 +1628,6 @@ pid_t PidWatcher::restartProcess(pid_t pid) {
         }
     }
 
-    // Launch with same monitoring settings
     MonitorConfig config;
     {
         std::lock_guard lock(mutex_);
@@ -1901,27 +1641,26 @@ pid_t PidWatcher::restartProcess(pid_t pid) {
 
     pid_t new_pid = launchProcess(cmd, args, false);
     if (new_pid == 0) {
-        LOG_F(ERROR, "Failed to restart process");
+        spdlog::error("Failed to restart process");
         return 0;
     }
 
-    // Start monitoring with same configuration
     if (!startByPid(new_pid, &config)) {
-        LOG_F(WARNING, "Failed to start monitoring restarted process");
+        spdlog::warn("Failed to start monitoring restarted process");
     }
 
-    LOG_F(INFO, "Process restarted with new PID: {}", new_pid);
+    spdlog::info("Process restarted with new PID: {}", new_pid);
     return new_pid;
 }
 
 bool PidWatcher::dumpProcessInfo(pid_t pid, bool detailed,
                                  const std::string& output_file) {
-    LOG_F(INFO, "Dumping process info for PID: {} (detailed: {})", pid,
-          detailed);
+    spdlog::info("Dumping process info for PID: {} (detailed: {})", pid,
+                 detailed);
 
     auto info_opt = getProcessInfo(pid);
     if (!info_opt) {
-        LOG_F(ERROR, "Failed to get process info for dumping");
+        spdlog::error("Failed to get process info for dumping");
         if (error_callback_) {
             error_callback_("Failed to get process info for dumping", EINVAL);
         }
@@ -1998,7 +1737,6 @@ bool PidWatcher::dumpProcessInfo(pid_t pid, bool detailed,
             }
         }
 
-        // Include monitoring configuration if available
         std::lock_guard lock(mutex_);
         auto config_it = process_configs_.find(pid);
         if (config_it != process_configs_.end()) {
@@ -2023,20 +1761,18 @@ bool PidWatcher::dumpProcessInfo(pid_t pid, bool detailed,
     std::string dump = oss.str();
 
     if (output_file.empty()) {
-        // Log the information
-        LOG_F(INFO, "%s", dump.c_str());
+        spdlog::info("{}", dump);
     } else {
-        // Write to file
         std::ofstream file(output_file);
         if (!file.is_open()) {
-            LOG_F(ERROR, "Failed to open output file: {}", output_file);
+            spdlog::error("Failed to open output file: {}", output_file);
             if (error_callback_) {
                 error_callback_("Failed to open output file", errno);
             }
             return false;
         }
         file << dump;
-        LOG_F(INFO, "Process information dumped to {}", output_file);
+        spdlog::info("Process information dumped to {}", output_file);
     }
 
     return true;
@@ -2051,8 +1787,8 @@ PidWatcher::getMonitoringStats() const {
 PidWatcher& PidWatcher::setRateLimiting(unsigned int max_updates_per_second) {
     std::lock_guard lock(mutex_);
     max_updates_per_second_ = std::max(1u, max_updates_per_second);
-    LOG_F(INFO, "Set rate limiting to {} updates per second",
-          max_updates_per_second_);
+    spdlog::info("Set rate limiting to {} updates per second",
+                 max_updates_per_second_.load());
     return *this;
 }
 
@@ -2062,31 +1798,25 @@ bool PidWatcher::checkRateLimit() {
         now - rate_limit_start_time_);
 
     if (elapsed.count() >= 1) {
-        // Reset counter for new period
         rate_limit_start_time_ = now;
         update_count_ = 1;
         return true;
     } else if (update_count_ < max_updates_per_second_) {
-        // Within rate limit
         update_count_++;
         return true;
     } else {
-        // Rate limit exceeded
         return false;
     }
 }
 
 void PidWatcher::monitorChildProcesses(pid_t parent_pid) {
-    // Get child processes
     std::vector<pid_t> children = getChildProcesses(parent_pid);
 
     for (pid_t child_pid : children) {
-        // Skip if already monitoring this child
         if (isMonitoring(child_pid)) {
             continue;
         }
 
-        // Get config for parent process
         MonitorConfig child_config;
         {
             std::lock_guard lock(mutex_);
@@ -2098,12 +1828,10 @@ void PidWatcher::monitorChildProcesses(pid_t parent_pid) {
             }
         }
 
-        // Start monitoring child
-        LOG_F(INFO, "Auto-monitoring child process {} of parent {}", child_pid,
-              parent_pid);
+        spdlog::info("Auto-monitoring child process {} of parent {}", child_pid,
+                     parent_pid);
         startByPid(child_pid, &child_config);
 
-        // Recursively monitor grandchildren if configured
         if (child_config.monitor_children) {
             monitorChildProcesses(child_pid);
         }
@@ -2112,7 +1840,6 @@ void PidWatcher::monitorChildProcesses(pid_t parent_pid) {
 
 std::string PidWatcher::getProcessUsername([[maybe_unused]] pid_t pid) const {
 #ifdef _WIN32
-    // Windows doesn't have a straightforward API for this in C++
     return "";
 #else
     std::string proc_path = "/proc/" + std::to_string(pid) + "/status";
@@ -2123,12 +1850,11 @@ std::string PidWatcher::getProcessUsername([[maybe_unused]] pid_t pid) const {
 
     std::string line;
     while (std::getline(status_file, line)) {
-        if (line.compare(0, 4, "Uid:") == 0) {
+        if (line.starts_with("Uid:")) {
             std::istringstream iss(line.substr(4));
             uid_t uid;
-            iss >> uid;  // Read real UID
+            iss >> uid;
 
-            // Convert UID to username
             struct passwd* pw = getpwuid(uid);
             if (pw) {
                 return pw->pw_name;
@@ -2149,10 +1875,6 @@ std::string PidWatcher::getProcessCommandLine(pid_t pid) const {
         return "";
     }
 
-    // Windows doesn't provide easy access to command line args
-    // GetCommandLine only returns the command line of the current process
-
-    // We can get the executable path
     char filename[MAX_PATH];
     if (GetModuleFileNameEx(process, NULL, filename, MAX_PATH)) {
         CloseHandle(process);
@@ -2171,7 +1893,6 @@ std::string PidWatcher::getProcessCommandLine(pid_t pid) const {
     std::string cmdline;
     std::getline(cmdline_file, cmdline);
 
-    // Replace null bytes with spaces for display
     for (char& c : cmdline) {
         if (c == '\0')
             c = ' ';
@@ -2204,11 +1925,11 @@ void PidWatcher::updateIOStats(pid_t pid, ProcessIOStats& stats) const {
 
     std::string line;
     while (std::getline(io_file, line)) {
-        if (line.compare(0, 10, "read_bytes") == 0) {
+        if (line.starts_with("read_bytes")) {
             std::istringstream iss(
                 line.substr(line.find_first_of("0123456789")));
             iss >> stats.read_bytes;
-        } else if (line.compare(0, 11, "write_bytes") == 0) {
+        } else if (line.starts_with("write_bytes")) {
             std::istringstream iss(
                 line.substr(line.find_first_of("0123456789")));
             iss >> stats.write_bytes;
@@ -2222,24 +1943,22 @@ void PidWatcher::checkResourceLimits(pid_t pid, const ProcessInfo& info) {
 
     auto config_it = process_configs_.find(pid);
     if (config_it == process_configs_.end()) {
-        return;  // No specific config for this process
+        return;
     }
 
     const auto& limits = config_it->second.resource_limits;
     bool limit_exceeded = false;
 
-    // Check CPU limit
     if (limits.max_cpu_percent > 0.0 &&
         info.cpu_usage > limits.max_cpu_percent) {
-        LOG_F(WARNING, "Process {} exceeded CPU limit: {:.2f}% > {:.2f}%", pid,
-              info.cpu_usage, limits.max_cpu_percent);
+        spdlog::warn("Process {} exceeded CPU limit: {:.2f}% > {:.2f}%", pid,
+                     info.cpu_usage, limits.max_cpu_percent);
         limit_exceeded = true;
     }
 
-    // Check memory limit
     if (limits.max_memory_kb > 0 && info.memory_usage > limits.max_memory_kb) {
-        LOG_F(WARNING, "Process {} exceeded memory limit: {} KB > {} KB", pid,
-              info.memory_usage, limits.max_memory_kb);
+        spdlog::warn("Process {} exceeded memory limit: {} KB > {} KB", pid,
+                     info.memory_usage, limits.max_memory_kb);
         limit_exceeded = true;
     }
 
@@ -2252,22 +1971,18 @@ ProcessInfo PidWatcher::updateProcessInfo(pid_t pid) {
     ProcessInfo info;
     info.pid = pid;
 
-    // Find existing info if available
     auto it = monitored_processes_.find(pid);
     if (it != monitored_processes_.end()) {
         info = it->second;
     }
 
-    // Check if process is running
     info.running = isProcessRunning(pid);
 
     if (info.running) {
-        // Get detailed process info
         auto detailed_info = getProcessInfo(pid);
         if (detailed_info) {
             info = *detailed_info;
         } else {
-            // Basic update if detailed info failed
             info.cpu_usage = getProcessCpuUsage(pid);
             info.memory_usage = getProcessMemoryUsage(pid);
             info.thread_count = getProcessThreadCount(pid);
@@ -2275,7 +1990,6 @@ ProcessInfo PidWatcher::updateProcessInfo(pid_t pid) {
             updateIOStats(pid, info.io_stats);
         }
 
-        // Update monitoring statistics
         monitoring_stats_[pid]["cpu_usage"] = info.cpu_usage;
         monitoring_stats_[pid]["memory_kb"] =
             static_cast<double>(info.memory_usage);
@@ -2289,14 +2003,13 @@ ProcessInfo PidWatcher::updateProcessInfo(pid_t pid) {
         info.status = ProcessStatus::DEAD;
     }
 
-    // Update in the map
     monitored_processes_[pid] = info;
 
     return info;
 }
 
 void PidWatcher::monitorThread() {
-    LOG_F(INFO, "Monitor thread started");
+    spdlog::info("Monitor thread started");
     while (true) {
         std::unique_lock lock(mutex_);
 
@@ -2305,22 +2018,19 @@ void PidWatcher::monitorThread() {
         }
 
         if (!running_) {
-            LOG_F(INFO, "Monitor thread exiting");
+            spdlog::info("Monitor thread exiting");
             break;
         }
 
-        // Check rate limit
         if (!checkRateLimit()) {
             lock.unlock();
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             continue;
         }
 
-        // Update process info
-        ProcessInfo info = updateProcessInfo(pid_);
+        ProcessInfo info = updateProcessInfo(primary_pid_);
 
-        // Check if we should monitor child processes
-        auto config_it = process_configs_.find(pid_);
+        auto config_it = process_configs_.find(primary_pid_);
         bool monitor_children = false;
         if (config_it != process_configs_.end()) {
             monitor_children = config_it->second.monitor_children;
@@ -2330,19 +2040,20 @@ void PidWatcher::monitorThread() {
 
         if (monitor_children && info.running) {
             lock.unlock();
-            monitorChildProcesses(pid_);
+            monitorChildProcesses(primary_pid_);
             lock.lock();
         }
 
         if (monitor_callback_ && info.running) {
-            LOG_F(INFO, "Executing monitor callback for PID {}", pid_);
+            spdlog::info("Executing monitor callback for PID {}",
+                         primary_pid_.load());
             lock.unlock();
             monitor_callback_(info);
             lock.lock();
         }
 
         if (!info.running) {
-            LOG_F(INFO, "Process {} has exited", pid_);
+            spdlog::info("Process {} has exited", primary_pid_.load());
 
             if (exit_callback_) {
                 lock.unlock();
@@ -2350,26 +2061,22 @@ void PidWatcher::monitorThread() {
                 lock.lock();
             }
 
-            // Process has exited
             if (monitored_processes_.size() <= 1) {
-                // No more processes to monitor
                 running_ = false;
                 monitoring_ = false;
                 break;
             } else {
-                // Remove this process and continue monitoring others
-                monitored_processes_.erase(pid_);
+                monitored_processes_.erase(primary_pid_);
 
-                // Switch to another process if available
                 if (!monitored_processes_.empty()) {
                     auto first_proc = monitored_processes_.begin();
-                    pid_ = first_proc->first;
-                    LOG_F(INFO, "Switching primary monitor to PID {}", pid_);
+                    primary_pid_ = first_proc->first;
+                    spdlog::info("Switching primary monitor to PID {}",
+                                 primary_pid_.load());
                 }
             }
         }
 
-        // Signal watchdog that we're healthy
         watchdog_healthy_ = true;
 
         lock.unlock();
@@ -2380,27 +2087,26 @@ void PidWatcher::monitorThread() {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
-    LOG_F(INFO, "Monitor thread exited");
+    spdlog::info("Monitor thread exited");
 }
 
 void PidWatcher::exitThread() {
-    LOG_F(INFO, "Exit thread started");
+    spdlog::info("Exit thread started");
     while (true) {
         std::unique_lock lock(mutex_);
 
         if (!running_) {
-            LOG_F(INFO, "Exit thread exiting");
+            spdlog::info("Exit thread exiting");
             break;
         }
 
         exit_cv_.wait_for(lock, std::chrono::seconds(1));
 
         if (!running_) {
-            LOG_F(INFO, "Exit thread exiting");
+            spdlog::info("Exit thread exiting");
             break;
         }
 
-        // Check all monitored processes for exits
         std::vector<pid_t> exited_processes;
 
         for (auto& pair : monitored_processes_) {
@@ -2408,110 +2114,94 @@ void PidWatcher::exitThread() {
             ProcessInfo& info = pair.second;
 
             if (info.running && !isProcessRunning(current_pid)) {
-                LOG_F(INFO, "Process {} has exited", current_pid);
+                spdlog::info("Process {} has exited", current_pid);
                 info.running = false;
                 info.status = ProcessStatus::DEAD;
 
-                // Call exit callback
                 if (exit_callback_) {
                     lock.unlock();
                     exit_callback_(info);
                     lock.lock();
                 }
 
-                // Mark for removal
                 exited_processes.push_back(current_pid);
             }
         }
 
-        // Remove exited processes
         for (pid_t pid : exited_processes) {
-            // Don't actually remove here - let auto-restart thread handle it
-            // Just mark as not running for now
             auto it = monitored_processes_.find(pid);
             if (it != monitored_processes_.end()) {
                 it->second.running = false;
                 it->second.status = ProcessStatus::DEAD;
 
-                // If this was the primary process, update primary PID
-                if (pid_ == pid && monitored_processes_.size() > 1) {
-                    // Find first running process
+                if (primary_pid_ == pid && monitored_processes_.size() > 1) {
                     bool found = false;
                     for (auto& pair : monitored_processes_) {
                         if (pair.first != pid && pair.second.running) {
-                            pid_ = pair.first;
+                            primary_pid_ = pair.first;
                             found = true;
-                            LOG_F(INFO, "Switching primary monitor to PID {}",
-                                  pid_);
+                            spdlog::info("Switching primary monitor to PID {}",
+                                         primary_pid_.load());
                             break;
                         }
                     }
 
                     if (!found) {
-                        // No running processes, use first in map
                         auto it = monitored_processes_.begin();
                         if (it->first != pid) {
-                            pid_ = it->first;
+                            primary_pid_ = it->first;
                         } else if (monitored_processes_.size() > 1) {
-                            pid_ = std::next(it)->first;
+                            primary_pid_ = std::next(it)->first;
                         }
-                        LOG_F(INFO,
-                              "No running processes, switching primary monitor "
-                              "to PID {}",
-                              pid_);
+                        spdlog::info(
+                            "No running processes, switching primary monitor "
+                            "to PID {}",
+                            primary_pid_.load());
                     }
                 }
             }
         }
 
-        // Notify auto-restart thread
-        if (!exited_processes.empty()) {
-            auto_restart_cv_.notify_one();
-        }
+        auto_restart_cv_.notify_one();
 
-        // Signal watchdog that we're healthy
         watchdog_healthy_ = true;
     }
-    LOG_F(INFO, "Exit thread exited");
+    spdlog::info("Exit thread exited");
 }
 
 void PidWatcher::multiMonitorThread() {
-    LOG_F(INFO, "Multi-monitor thread started");
+    spdlog::info("Multi-monitor thread started");
 
     while (true) {
         std::unique_lock lock(mutex_);
 
         if (!running_ || monitored_processes_.empty()) {
-            LOG_F(INFO, "Multi-monitor thread exiting");
+            spdlog::info("Multi-monitor thread exiting");
             break;
         }
 
         multi_monitor_cv_.wait_for(lock, monitor_interval_);
 
         if (!running_ || monitored_processes_.empty()) {
-            LOG_F(INFO, "Multi-monitor thread exiting");
+            spdlog::info("Multi-monitor thread exiting");
             break;
         }
 
-        // Check rate limit
         if (!checkRateLimit()) {
             continue;
         }
 
-        // Update all processes and create vector of info
         std::vector<ProcessInfo> process_infos;
 
         for (auto& pair : monitored_processes_) {
             pid_t current_pid = pair.first;
 
-            // Skip processes that are known to be not running
             if (!pair.second.running) {
                 continue;
             }
 
             ProcessInfo info = updateProcessInfo(current_pid);
 
-            // Check if we should monitor child processes
             auto config_it = process_configs_.find(current_pid);
             bool monitor_children = false;
             if (config_it != process_configs_.end()) {
@@ -2529,80 +2219,73 @@ void PidWatcher::multiMonitorThread() {
             process_infos.push_back(info);
         }
 
-        // Call multi-process callback if set
         if (multi_process_callback_ && !process_infos.empty()) {
             lock.unlock();
             multi_process_callback_(process_infos);
             lock.lock();
         }
 
-        // Signal watchdog that we're healthy
         watchdog_healthy_ = true;
     }
 
-    LOG_F(INFO, "Multi-monitor thread exited");
+    spdlog::info("Multi-monitor thread exited");
 }
 
 void PidWatcher::resourceMonitorThread() {
-    LOG_F(INFO, "Resource monitor thread started");
+    spdlog::info("Resource monitor thread started");
 
     while (true) {
         std::unique_lock lock(mutex_);
 
         if (!running_ || monitored_processes_.empty()) {
-            LOG_F(INFO, "Resource monitor thread exiting");
+            spdlog::info("Resource monitor thread exiting");
             break;
         }
 
         resource_monitor_cv_.wait_for(lock, std::chrono::seconds(1));
 
         if (!running_ || monitored_processes_.empty()) {
-            LOG_F(INFO, "Resource monitor thread exiting");
+            spdlog::info("Resource monitor thread exiting");
             break;
         }
 
-        // Check each process against its resource limits
         for (auto& pair : monitored_processes_) {
             pid_t current_pid = pair.first;
             const ProcessInfo& info = pair.second;
 
-            // Skip processes that are not running
             if (!info.running) {
                 continue;
             }
 
-            // Check resource limits
             lock.unlock();
             checkResourceLimits(current_pid, info);
             lock.lock();
         }
 
-        // Signal watchdog that we're healthy
         watchdog_healthy_ = true;
     }
 
-    LOG_F(INFO, "Resource monitor thread exited");
+    spdlog::info("Resource monitor thread exited");
 }
 
 void PidWatcher::autoRestartThread() {
-    LOG_F(INFO, "Auto-restart thread started");
+    spdlog::info("Auto-restart thread started");
 
     while (true) {
         std::unique_lock lock(mutex_);
 
         if (!running_) {
-            LOG_F(INFO, "Auto-restart thread exiting");
+            spdlog::info("Auto-restart thread exiting");
             break;
         }
 
         auto_restart_cv_.wait_for(lock, std::chrono::seconds(1));
 
         if (!running_) {
-            LOG_F(INFO, "Auto-restart thread exiting");
+            spdlog::info("Auto-restart thread exiting");
             break;
         }
 
-        // Check for processes that need restarting
         std::vector<pid_t> to_restart;
         std::vector<pid_t> to_remove;
 
@@ -2611,7 +2294,6 @@ void PidWatcher::autoRestartThread() {
             const ProcessInfo& info = pair.second;
 
             if (!info.running) {
-                // Check if auto-restart is enabled for this process
                 auto config_it = process_configs_.find(current_pid);
                 bool auto_restart = false;
                 int max_attempts = 3;
@@ -2625,110 +2307,92 @@ void PidWatcher::autoRestartThread() {
                 }
 
                 if (auto_restart) {
-                    // Check restart attempts
                     int attempts = restart_attempts_[current_pid];
                     if (attempts < max_attempts) {
-                        // Schedule for restart
                         to_restart.push_back(current_pid);
                         restart_attempts_[current_pid]++;
                     } else {
-                        // Max attempts reached, remove from monitoring
-                        LOG_F(WARNING,
-                              "Process {} reached max restart attempts ({}), "
-                              "removing from monitoring",
-                              current_pid, max_attempts);
                         to_remove.push_back(current_pid);
                     }
                 } else {
-                    // No auto-restart, remove from monitoring
                     to_remove.push_back(current_pid);
                 }
             }
         }
 
-        // Release lock before performing restarts
         lock.unlock();
 
-        // Restart processes
         for (pid_t pid : to_restart) {
-            LOG_F(INFO, "Auto-restarting process {}", pid);
+            spdlog::info("Auto-restarting process {}", pid);
             pid_t new_pid = restartProcess(pid);
 
             if (new_pid == 0) {
-                LOG_F(ERROR, "Failed to auto-restart process {}", pid);
+                spdlog::error("Failed to auto-restart process {}", pid);
             } else {
-                LOG_F(INFO, "Process {} restarted as PID {}", pid, new_pid);
+                spdlog::info("Process {} restarted as PID {}", pid, new_pid);
             }
         }
 
         lock.lock();
 
-        // Remove processes that shouldn't be monitored anymore
         for (pid_t pid : to_remove) {
             monitored_processes_.erase(pid);
             process_configs_.erase(pid);
             restart_attempts_.erase(pid);
 
-            // If this was the primary process, update primary PID
-            if (pid_ == pid && !monitored_processes_.empty()) {
-                pid_ = monitored_processes_.begin()->first;
-                LOG_F(INFO, "Switching primary monitor to PID {}", pid_);
+            if (primary_pid_ == pid && !monitored_processes_.empty()) {
+                primary_pid_ = monitored_processes_.begin()->first;
+                spdlog::info("Switching primary monitor to PID {}",
+                             primary_pid_.load());
             }
         }
 
-        // Check if we should exit
         if (monitored_processes_.empty()) {
             running_ = false;
             monitoring_ = false;
             break;
         }
 
-        // Signal watchdog that we're healthy
         watchdog_healthy_ = true;
     }
 
-    LOG_F(INFO, "Auto-restart thread exited");
+    spdlog::info("Auto-restart thread exited");
 }
 
 void PidWatcher::watchdogThread() {
-    LOG_F(INFO, "Watchdog thread started");
+    spdlog::info("Watchdog thread started");
 
     int unhealthy_count = 0;
-    const int max_unhealthy_count = 3;  // How many times watchdog can find
-                                        // system unhealthy before taking action
+    const int max_unhealthy_count = 3;
 
     while (true) {
         std::unique_lock lock(mutex_);
 
         if (!running_) {
-            LOG_F(INFO, "Watchdog thread exiting");
+            spdlog::info("Watchdog thread exiting");
             break;
         }
 
-        // Wait for next check interval
         watchdog_cv_.wait_for(lock, std::chrono::seconds(5));
 
         if (!running_) {
-            LOG_F(INFO, "Watchdog thread exiting");
+            spdlog::info("Watchdog thread exiting");
             break;
         }
 
         if (!watchdog_healthy_) {
             unhealthy_count++;
-            LOG_F(WARNING, "Watchdog detected unhealthy state ({}/{})",
-                  unhealthy_count, max_unhealthy_count);
+            spdlog::warn("Watchdog detected unhealthy state ({}/{})",
+                         unhealthy_count, max_unhealthy_count);
 
             if (unhealthy_count >= max_unhealthy_count) {
-                LOG_F(ERROR,
-                      "Watchdog detected system hung, attempting recovery");
+                spdlog::error(
+                    "Watchdog detected system hung, attempting recovery");
 
-                // Try to recover by restarting threads
                 bool need_restart = false;
 
-                // Stop threads
                 running_ = false;
 
-                // Notify all threads to exit
                 exit_cv_.notify_all();
                 monitor_cv_.notify_all();
                 multi_monitor_cv_.notify_all();
@@ -2737,10 +2401,8 @@ void PidWatcher::watchdogThread() {
 
                 lock.unlock();
 
-                // Wait for threads to exit
                 std::this_thread::sleep_for(std::chrono::seconds(1));
 
-                // Join any joinable threads
                 if (monitor_thread_.joinable()) {
                     try {
                         monitor_thread_.join();
@@ -2784,25 +2446,12 @@ void PidWatcher::watchdogThread() {
                 lock.lock();
 
                 if (need_restart && !monitored_processes_.empty()) {
-                    // Restart monitoring
-                    LOG_F(INFO, "Watchdog restarting monitoring system");
+                    spdlog::info("Watchdog restarting monitoring system");
                     running_ = true;
                     monitoring_ = true;
                     watchdog_healthy_ = true;
                     unhealthy_count = 0;
 
-                    // Start all monitoring threads
-#if __cplusplus >= 202002L
-                    monitor_thread_ =
-                        std::jthread(&PidWatcher::monitorThread, this);
-                    exit_thread_ = std::jthread(&PidWatcher::exitThread, this);
-                    multi_monitor_thread_ =
-                        std::jthread(&PidWatcher::multiMonitorThread, this);
-                    resource_monitor_thread_ =
-                        std::jthread(&PidWatcher::resourceMonitorThread, this);
-                    auto_restart_thread_ =
-                        std::jthread(&PidWatcher::autoRestartThread, this);
-#else
                     monitor_thread_ =
                         std::thread(&PidWatcher::monitorThread, this);
                     exit_thread_ = std::thread(&PidWatcher::exitThread, this);
@@ -2812,11 +2461,9 @@ void PidWatcher::watchdogThread() {
                         std::thread(&PidWatcher::resourceMonitorThread, this);
                     auto_restart_thread_ =
                         std::thread(&PidWatcher::autoRestartThread, this);
-#endif
                 } else {
-                    // Something is very wrong, shutdown
-                    LOG_F(ERROR,
-                          "Watchdog cannot recover, shutting down PidWatcher");
+                    spdlog::error(
+                        "Watchdog cannot recover, shutting down PidWatcher");
                     running_ = false;
                     monitoring_ = false;
                     monitored_processes_.clear();
@@ -2824,16 +2471,15 @@ void PidWatcher::watchdogThread() {
                 }
             }
         } else {
-            // System is healthy, reset counter
             if (unhealthy_count > 0) {
-                LOG_F(INFO, "Watchdog detected system recovered");
+                spdlog::info("Watchdog detected system recovered");
             }
             unhealthy_count = 0;
-            watchdog_healthy_ = false;  // Reset for next interval
+            watchdog_healthy_ = false;
         }
     }
 
-    LOG_F(INFO, "Watchdog thread exited");
+    spdlog::info("Watchdog thread exited");
 }
 
 }  // namespace atom::system

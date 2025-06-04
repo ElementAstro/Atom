@@ -19,26 +19,30 @@ Description: System Information Module - GPU
 #include <vector>
 
 namespace atom::system {
+
 /**
- * @brief Get GPU information
- * @return std::string GPU information
+ * @brief Get GPU information from the system
+ * @return std::string GPU information as a formatted string
  */
 [[nodiscard]] auto getGPUInfo() -> std::string;
 
+/**
+ * @brief Structure containing monitor information
+ */
 struct alignas(128) MonitorInfo {
-    std::string model;
-    std::string identifier;
-    int width{0};
-    int height{0};
-    int refreshRate{0};
+    std::string model;       ///< Monitor model name
+    std::string identifier;  ///< Monitor identifier
+    int width{0};            ///< Screen width in pixels
+    int height{0};           ///< Screen height in pixels
+    int refreshRate{0};      ///< Refresh rate in Hz
 };
 
 /**
- * @brief Get all monitors information
- * @return std::vector<MonitorInfo> All monitors information
+ * @brief Get information for all connected monitors
+ * @return std::vector<MonitorInfo> Vector containing all monitor information
  */
-[[nodiscard]]
-auto getAllMonitorsInfo() -> std::vector<MonitorInfo>;
+[[nodiscard]] auto getAllMonitorsInfo() -> std::vector<MonitorInfo>;
+
 }  // namespace atom::system
 
 #endif

@@ -15,8 +15,8 @@
 #include <type_traits>
 #include <vector>
 
+#include <spdlog/spdlog.h>
 #include "atom/error/exception.hpp"
-#include "atom/log/loguru.hpp"
 #include "atom/macro.hpp"
 #include "atom/meta/concept.hpp"
 #include "atom/type/noncopyable.hpp"
@@ -28,13 +28,16 @@
 #else
 #include <errno.h>
 #include <fcntl.h>
+#include <semaphore.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 #endif
 
 namespace atom::connection {
+
 /**
  * @brief Exception class for shared memory errors.
  */
@@ -105,7 +108,7 @@ public:
     }
 
 private:
-    ErrorCode code_{ErrorCode::UNKNOWN};  ///< The specific error code.
+    ErrorCode code_{ErrorCode::UNKNOWN};
 };
 
 #define THROW_SHARED_MEMORY_ERROR_WITH_CODE(message, code) \
@@ -120,13 +123,14 @@ private:
     atom::connection::SharedMemoryException::rethrowNested( \
         ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, __VA_ARGS__)
 
-// Header structure stored at the beginning of shared memory
+/**
+ * @brief Header structure stored at the beginning of shared memory
+ */
 struct SharedMemoryHeader {
-    std::atomic_flag accessLock;    ///< Access lock
-    std::atomic<std::size_t> size;  ///< Data size
-    std::atomic<uint64_t> version;  ///< Data version number
-    std::atomic<bool> initialized;  ///< Initialization flag
-    // Additional metadata can be added here...
+    std::atomic_flag accessLock;
+    std::atomic<std::size_t> size;
+    std::atomic<uint64_t> version;
+    std::atomic<bool> initialized;
 };
 
 /**
@@ -138,7 +142,6 @@ struct SharedMemoryHeader {
 template <TriviallyCopyable T>
 class SharedMemory : public NonCopyable {
 public:
-    /// Type definition for change callback functions.
     using ChangeCallback = std::function<void(const T&)>;
 
     /**
@@ -247,8 +250,9 @@ public:
      */
     template <typename U>
     ATOM_NODISCARD auto readPartial(
-        std::size_t offset, std::chrono::milliseconds timeout =
-                                std::chrono::milliseconds(0)) const -> U;
+        std::size_t offset,
+        std::chrono::milliseconds timeout = std::chrono::milliseconds(0)) const
+        -> U;
 
     /**
      * @brief Tries to read data from shared memory without throwing exceptions.
@@ -318,9 +322,9 @@ public:
      * @param timeout The operation timeout.
      * @return A future indicating the completion of the operation.
      */
-    auto writeAsync(const T& data,
-                    std::chrono::milliseconds timeout =
-                        std::chrono::milliseconds(0)) -> std::future<void>;
+    auto writeAsync(const T& data, std::chrono::milliseconds timeout =
+                                       std::chrono::milliseconds(0))
+        -> std::future<void>;
 
     /**
      * @brief Registers a change callback.
@@ -372,88 +376,45 @@ public:
     }
 
 private:
-    std::string name_;       ///< The name of the shared memory.
-    std::size_t totalSize_;  ///< The total size of the shared memory.
+    std::string name_;
+    std::size_t totalSize_;
 
 #ifdef _WIN32
-    HANDLE handle_;       ///< Windows handle for the shared memory.
-    HANDLE changeEvent_;  ///< Windows event object for change notifications.
+    HANDLE handle_{nullptr};
+    HANDLE changeEvent_{nullptr};
 #else
-    int fd_{-1};  ///< File descriptor for the shared memory.
-    sem_t* semId_{
-        SEM_FAILED};  ///< POSIX semaphore for cross-process synchronization.
+    int fd_{-1};
+    sem_t* semId_{SEM_FAILED};
 #endif
 
-    void* buffer_;                ///< Pointer to the shared memory buffer.
-    SharedMemoryHeader* header_;  ///< Pointer to the shared memory header.
-    mutable std::mutex mutex_;    ///< Mutex for synchronizing access.
-    mutable std::condition_variable
-        changeCondition_;  ///< Condition variable for change notifications.
-    bool is_creator_;      ///< Flag indicating if the current process is the
-                           ///< creator.
-    mutable uint64_t lastKnownVersion_{0};  ///< Last known version of the data.
+    void* buffer_{nullptr};
+    SharedMemoryHeader* header_{nullptr};
+    mutable std::mutex mutex_;
+    mutable std::condition_variable changeCondition_;
+    bool isCreator_{false};
+    mutable uint64_t lastKnownVersion_{0};
 
-    std::vector<std::pair<std::size_t, ChangeCallback>>
-        changeCallbacks_;            ///< List of registered change callbacks.
-    std::size_t nextCallbackId_{1};  ///< Next callback ID to assign.
-    mutable std::mutex
-        callbackMutex_;  ///< Mutex for synchronizing callback access.
+    std::vector<std::pair<std::size_t, ChangeCallback>> changeCallbacks_;
+    std::size_t nextCallbackId_{1};
+    mutable std::mutex callbackMutex_;
 
-    std::thread watchThread_;  ///< Thread for watching for changes.
-    std::atomic<bool> stopWatching_{false};  ///< Flag to stop the watch thread.
+    std::jthread watchThread_;
+    std::atomic<bool> stopWatching_{false};
 
-    /**
-     * @brief Unmaps the shared memory.
-     */
-    void unmap();
-
-    /**
-     * @brief Maps the shared memory.
-     *
-     * @param create Whether to create new shared memory.
-     * @param size The size of the shared memory.
-     */
+    void unmap() noexcept;
     void mapMemory(bool create, std::size_t size);
-
-    /**
-     * @brief Notifies listeners of data changes.
-     *
-     * @param data The new data.
-     */
     void notifyListeners(const T& data);
-
-    /**
-     * @brief Starts the watch thread.
-     */
     void startWatchThread();
-
-    /**
-     * @brief Watches for changes in the shared memory.
-     */
     void watchForChanges();
-
-    /**
-     * @brief Platform-specific initialization.
-     */
     void platformSpecificInit();
-
-    /**
-     * @brief Platform-specific cleanup.
-     */
-    void platformSpecificCleanup();
-
-    /**
-     * @brief Gets the detailed message for the last error.
-     *
-     * @return The error message.
-     */
+    void platformSpecificCleanup() noexcept;
     static std::string getLastErrorMessage();
 };
 
 template <TriviallyCopyable T>
 SharedMemory<T>::SharedMemory(std::string_view name, bool create,
                               const std::optional<T>& initialData)
-    : name_(name), buffer_(nullptr), header_(nullptr), is_creator_(create) {
+    : name_(name), isCreator_(create) {
     totalSize_ = sizeof(SharedMemoryHeader) + sizeof(T);
 
     try {
@@ -466,9 +427,9 @@ SharedMemory<T>::SharedMemory(std::string_view name, bool create,
                     std::memcpy(getDataPtr(), &(*initialData), sizeof(T));
                     header_->initialized.store(true, std::memory_order_release);
                     header_->version.fetch_add(1, std::memory_order_release);
-                    DLOG_F(INFO,
-                           "Initialized shared memory '{}' with initial data",
-                           name_.c_str());
+                    spdlog::info(
+                        "Initialized shared memory '{}' with initial data",
+                        name_);
                 },
                 std::chrono::milliseconds(100));
         }
@@ -483,7 +444,6 @@ SharedMemory<T>::SharedMemory(std::string_view name, bool create,
 
 template <TriviallyCopyable T>
 SharedMemory<T>::~SharedMemory() {
-    // 停止监视线程
     stopWatching_ = true;
     if (watchThread_.joinable()) {
         watchThread_.join();
@@ -497,36 +457,36 @@ template <TriviallyCopyable T>
 void SharedMemory<T>::platformSpecificInit() {
 #ifdef _WIN32
     std::string eventName = name_ + "_event";
-    changeEvent_ = CreateEventA(NULL, TRUE, FALSE, eventName.c_str());
+    changeEvent_ = CreateEventA(nullptr, TRUE, FALSE, eventName.c_str());
     if (!changeEvent_) {
-        DLOG_F(WARNING, "Failed to create change event for shared memory: {}",
-               getLastErrorMessage().c_str());
+        spdlog::warn("Failed to create change event for shared memory: {}",
+                     getLastErrorMessage());
     }
 #else
     std::string semName = "/" + name_ + "_sem";
     semId_ = sem_open(semName.c_str(), O_CREAT, 0666, 0);
     if (semId_ == SEM_FAILED) {
-        DLOG_F(WARNING, "Failed to create semaphore for shared memory: {}",
-               strerror(errno));
-        // Keep semId_ as SEM_FAILED rather than assigning an integer to it
+        spdlog::warn("Failed to create semaphore for shared memory: {}",
+                     strerror(errno));
     }
 #endif
 }
 
 template <TriviallyCopyable T>
-void SharedMemory<T>::platformSpecificCleanup() {
+void SharedMemory<T>::platformSpecificCleanup() noexcept {
 #ifdef _WIN32
     if (changeEvent_) {
         CloseHandle(changeEvent_);
-        changeEvent_ = NULL;
+        changeEvent_ = nullptr;
     }
 #else
     if (semId_ != SEM_FAILED) {
         std::string semName = "/" + name_ + "_sem";
         sem_close(semId_);
-        if (is_creator_) {
+        if (isCreator_) {
             sem_unlink(semName.c_str());
         }
+        semId_ = SEM_FAILED;
     }
 #endif
 }
@@ -542,8 +502,8 @@ std::string SharedMemory<T>::getLastErrorMessage() {
     size_t size = FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
             FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&buffer,
-        0, NULL);
+        nullptr, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        reinterpret_cast<LPSTR>(&buffer), 0, nullptr);
 
     std::string message(buffer, size);
     LocalFree(buffer);
@@ -554,7 +514,7 @@ std::string SharedMemory<T>::getLastErrorMessage() {
 }
 
 template <TriviallyCopyable T>
-void SharedMemory<T>::unmap() {
+void SharedMemory<T>::unmap() noexcept {
 #ifdef _WIN32
     if (buffer_) {
         UnmapViewOfFile(buffer_);
@@ -562,7 +522,7 @@ void SharedMemory<T>::unmap() {
     }
     if (handle_) {
         CloseHandle(handle_);
-        handle_ = NULL;
+        handle_ = nullptr;
     }
 #else
     if (buffer_ != nullptr) {
@@ -571,10 +531,10 @@ void SharedMemory<T>::unmap() {
     }
     if (fd_ != -1) {
         close(fd_);
-        fd_ = -1;
-        if (is_creator_) {
+        if (isCreator_) {
             shm_unlink(name_.c_str());
         }
+        fd_ = -1;
     }
 #endif
     header_ = nullptr;
@@ -610,7 +570,7 @@ void SharedMemory<T>::mapMemory(bool create, std::size_t size) {
     buffer_ = MapViewOfFile(handle_, FILE_MAP_ALL_ACCESS, 0, 0, size);
     if (buffer_ == nullptr) {
         CloseHandle(handle_);
-        handle_ = NULL;
+        handle_ = nullptr;
         THROW_SHARED_MEMORY_ERROR_WITH_CODE(
             "Failed to map view of file: " + name_ + " - " +
                 getLastErrorMessage(),
@@ -661,10 +621,8 @@ void SharedMemory<T>::mapMemory(bool create, std::size_t size) {
     }
 #endif
 
-    // 设置头部指针
     header_ = static_cast<SharedMemoryHeader*>(buffer_);
 
-    // 如果是创建者，初始化头部
     if (create) {
         new (header_) SharedMemoryHeader();
         header_->size.store(sizeof(T), std::memory_order_release);
@@ -679,13 +637,12 @@ template <TriviallyCopyable T>
 void SharedMemory<T>::resize(std::size_t newSize) {
     std::size_t totalNewSize = sizeof(SharedMemoryHeader) + newSize;
 
-    if (!is_creator_) {
+    if (!isCreator_) {
         THROW_SHARED_MEMORY_ERROR_WITH_CODE(
             "Only the creator can resize shared memory",
             SharedMemoryException::ErrorCode::ACCESS_DENIED);
     }
 
-    // 获取当前数据的副本
     T currentData;
     bool wasInitialized = false;
 
@@ -694,7 +651,6 @@ void SharedMemory<T>::resize(std::size_t newSize) {
         wasInitialized = true;
     }
 
-    // 解除映射，重新创建
     unmap();
 
 #ifdef _WIN32
@@ -711,7 +667,7 @@ void SharedMemory<T>::resize(std::size_t newSize) {
     buffer_ = MapViewOfFile(handle_, FILE_MAP_ALL_ACCESS, 0, 0, totalNewSize);
     if (buffer_ == nullptr) {
         CloseHandle(handle_);
-        handle_ = NULL;
+        handle_ = nullptr;
         THROW_SHARED_MEMORY_ERROR_WITH_CODE(
             "Failed to remap view of file: " + name_ + " - " +
                 getLastErrorMessage(),
@@ -745,13 +701,11 @@ void SharedMemory<T>::resize(std::size_t newSize) {
     }
 #endif
 
-    // 重新初始化头部
     header_ = static_cast<SharedMemoryHeader*>(buffer_);
     new (header_) SharedMemoryHeader();
     header_->size.store(newSize, std::memory_order_release);
     header_->version.store(0, std::memory_order_release);
 
-    // 如果之前有数据，恢复数据
     if (wasInitialized) {
         std::size_t copySize = std::min(newSize, sizeof(T));
         std::memcpy(getDataPtr(), &currentData, copySize);
@@ -762,8 +716,7 @@ void SharedMemory<T>::resize(std::size_t newSize) {
     }
 
     totalSize_ = totalNewSize;
-    DLOG_F(INFO, "Shared memory '{}' resized to %zu bytes", name_.c_str(),
-           newSize);
+    spdlog::info("Shared memory '{}' resized to {} bytes", name_, newSize);
 }
 
 template <TriviallyCopyable T>
@@ -787,8 +740,9 @@ ATOM_NODISCARD bool SharedMemory<T>::exists(std::string_view name) {
 
 template <TriviallyCopyable T>
 template <typename Func>
-auto SharedMemory<T>::withLock(Func&& func, std::chrono::milliseconds timeout)
-    const -> decltype(std::forward<Func>(func)()) {
+auto SharedMemory<T>::withLock(Func&& func,
+                               std::chrono::milliseconds timeout) const
+    -> decltype(std::forward<Func>(func)()) {
     std::unique_lock lock(mutex_);
     auto startTime = std::chrono::steady_clock::now();
 
@@ -823,16 +777,12 @@ void SharedMemory<T>::write(const T& data, std::chrono::milliseconds timeout,
                             bool notifyListeners) {
     withLock(
         [&]() {
-            // 复制数据到共享内存
             std::memcpy(getDataPtr(), &data, sizeof(T));
-
-            // 更新元数据
             header_->initialized.store(true, std::memory_order_release);
             header_->version.fetch_add(1, std::memory_order_release);
-            DLOG_F(INFO, "Data written to shared memory: {} (version %lu)",
-                   name_.c_str(), header_->version.load());
+            spdlog::debug("Data written to shared memory: {} (version {})",
+                          name_, header_->version.load());
 
-        // 通知其他进程
 #ifdef _WIN32
             if (changeEvent_) {
                 SetEvent(changeEvent_);
@@ -846,11 +796,8 @@ void SharedMemory<T>::write(const T& data, std::chrono::milliseconds timeout,
         },
         timeout);
 
-    // 通知本地监听器
     if (notifyListeners) {
         notifyListeners(data);
-
-        // 通知任何等待变更的线程
         changeCondition_.notify_all();
     }
 }
@@ -868,10 +815,8 @@ auto SharedMemory<T>::read(std::chrono::milliseconds timeout) const -> T {
             std::memcpy(&data, getDataPtr(), sizeof(T));
             lastKnownVersion_ =
                 header_->version.load(std::memory_order_acquire);
-
-            DLOG_F(INFO, "Data read from shared memory: {} (version %lu)",
-                   name_.c_str(), lastKnownVersion_);
-
+            spdlog::debug("Data read from shared memory: {} (version {})",
+                          name_, lastKnownVersion_);
             return data;
         },
         timeout);
@@ -884,10 +829,8 @@ void SharedMemory<T>::clear() {
             std::memset(getDataPtr(), 0, sizeof(T));
             header_->version.fetch_add(1, std::memory_order_release);
             header_->initialized.store(false, std::memory_order_release);
+            spdlog::info("Shared memory cleared: {}", name_);
 
-            DLOG_F(INFO, "Shared memory cleared: {}", name_.c_str());
-
-        // 通知其他进程
 #ifdef _WIN32
             if (changeEvent_) {
                 SetEvent(changeEvent_);
@@ -901,7 +844,6 @@ void SharedMemory<T>::clear() {
         },
         std::chrono::milliseconds(0));
 
-    // 通知本地监听器和等待线程
     changeCondition_.notify_all();
 }
 
@@ -927,7 +869,7 @@ auto SharedMemory<T>::getVersion() const ATOM_NOEXCEPT -> uint64_t {
 
 template <TriviallyCopyable T>
 auto SharedMemory<T>::isCreator() const ATOM_NOEXCEPT -> bool {
-    return is_creator_;
+    return isCreator_;
 }
 
 template <TriviallyCopyable T>
@@ -954,17 +896,13 @@ void SharedMemory<T>::writePartial(const U& data, std::size_t offset,
         [&]() {
             std::memcpy(static_cast<char*>(getDataPtr()) + offset, &data,
                         sizeof(U));
-
-            // 确保设置初始化标志并增加版本号
             header_->initialized.store(true, std::memory_order_release);
             header_->version.fetch_add(1, std::memory_order_release);
+            spdlog::debug(
+                "Partial data written to shared memory: {} (offset: {}, size: "
+                "{})",
+                name_, offset, sizeof(U));
 
-            DLOG_F(INFO,
-                   "Partial data written to shared memory: {} (offset: %zu, "
-                   "size: %zu)",
-                   name_.c_str(), offset, sizeof(U));
-
-        // 通知其他进程
 #ifdef _WIN32
             if (changeEvent_) {
                 SetEvent(changeEvent_);
@@ -978,14 +916,14 @@ void SharedMemory<T>::writePartial(const U& data, std::size_t offset,
         },
         timeout);
 
-    // 只在部分写入后通知，如果需要监听整个对象的变更
     changeCondition_.notify_all();
 }
 
 template <TriviallyCopyable T>
 template <typename U>
-auto SharedMemory<T>::readPartial(
-    std::size_t offset, std::chrono::milliseconds timeout) const -> U {
+auto SharedMemory<T>::readPartial(std::size_t offset,
+                                  std::chrono::milliseconds timeout) const
+    -> U {
     static_assert(std::is_trivially_copyable_v<U>,
                   "U must be trivially copyable");
 
@@ -1007,12 +945,10 @@ auto SharedMemory<T>::readPartial(
             U data;
             std::memcpy(&data, static_cast<const char*>(getDataPtr()) + offset,
                         sizeof(U));
-
-            DLOG_F(INFO,
-                   "Partial data read from shared memory: {} (offset: %zu, "
-                   "size: %zu)",
-                   name_.c_str(), offset, sizeof(U));
-
+            spdlog::debug(
+                "Partial data read from shared memory: {} (offset: {}, size: "
+                "{})",
+                name_, offset, sizeof(U));
             return data;
         },
         timeout);
@@ -1024,8 +960,8 @@ auto SharedMemory<T>::tryRead(std::chrono::milliseconds timeout) const
     try {
         return read(timeout);
     } catch (const SharedMemoryException& e) {
-        LOG_F(WARNING, "Try read failed: {} ({})", e.what(),
-              e.getErrorCodeString().c_str());
+        spdlog::warn("Try read failed: {} ({})", e.what(),
+                     e.getErrorCodeString());
         return std::nullopt;
     }
 }
@@ -1044,15 +980,11 @@ void SharedMemory<T>::writeSpan(std::span<const std::byte> data,
     withLock(
         [&]() {
             std::memcpy(getDataPtr(), data.data(), data.size_bytes());
-
-            // 确保设置初始化标志并增加版本号
             header_->initialized.store(true, std::memory_order_release);
             header_->version.fetch_add(1, std::memory_order_release);
+            spdlog::debug("Span data written to shared memory: {} (size: {})",
+                          name_, data.size_bytes());
 
-            DLOG_F(INFO, "Span data written to shared memory: {} (size: %zu)",
-                   name_.c_str(), data.size_bytes());
-
-        // 通知其他进程
 #ifdef _WIN32
             if (changeEvent_) {
                 SetEvent(changeEvent_);
@@ -1066,7 +998,6 @@ void SharedMemory<T>::writeSpan(std::span<const std::byte> data,
         },
         timeout);
 
-    // 通知本地监听器和等待线程
     changeCondition_.notify_all();
 }
 
@@ -1083,10 +1014,8 @@ auto SharedMemory<T>::readSpan(std::span<std::byte> data,
 
             std::size_t bytesToRead = std::min(data.size_bytes(), sizeof(T));
             std::memcpy(data.data(), getDataPtr(), bytesToRead);
-
-            DLOG_F(INFO, "Span data read from shared memory: {} (size: %zu)",
-                   name_.c_str(), bytesToRead);
-
+            spdlog::debug("Span data read from shared memory: {} (size: {})",
+                          name_, bytesToRead);
             return bytesToRead;
         },
         timeout);
@@ -1100,8 +1029,9 @@ auto SharedMemory<T>::readAsync(std::chrono::milliseconds timeout)
 }
 
 template <TriviallyCopyable T>
-auto SharedMemory<T>::writeAsync(
-    const T& data, std::chrono::milliseconds timeout) -> std::future<void> {
+auto SharedMemory<T>::writeAsync(const T& data,
+                                 std::chrono::milliseconds timeout)
+    -> std::future<void> {
     return std::async(std::launch::async,
                       [this, data, timeout]() { this->write(data, timeout); });
 }
@@ -1135,9 +1065,9 @@ void SharedMemory<T>::notifyListeners(const T& data) {
         try {
             callback(data);
         } catch (const std::exception& e) {
-            LOG_F(ERROR,
-                  "Exception in change callback for shared memory {}: {}",
-                  name_.c_str(), e.what());
+            spdlog::error(
+                "Exception in change callback for shared memory {}: {}", name_,
+                e.what());
         }
     }
 }
@@ -1147,14 +1077,12 @@ auto SharedMemory<T>::waitForChange(std::chrono::milliseconds timeout) -> bool {
     std::unique_lock<std::mutex> lock(mutex_);
     uint64_t currentVersion = header_->version.load(std::memory_order_acquire);
 
-    // 如果版本已经变化，立即返回
     if (currentVersion != lastKnownVersion_) {
         lastKnownVersion_ = currentVersion;
         return true;
     }
 
     if (timeout == std::chrono::milliseconds(0)) {
-        // 永久等待
         changeCondition_.wait(lock, [this, currentVersion]() {
             return header_->version.load(std::memory_order_acquire) !=
                    currentVersion;
@@ -1162,7 +1090,6 @@ auto SharedMemory<T>::waitForChange(std::chrono::milliseconds timeout) -> bool {
         lastKnownVersion_ = header_->version.load(std::memory_order_acquire);
         return true;
     } else {
-        // 限时等待
         bool changed =
             changeCondition_.wait_for(lock, timeout, [this, currentVersion]() {
                 return header_->version.load(std::memory_order_acquire) !=
@@ -1179,7 +1106,8 @@ auto SharedMemory<T>::waitForChange(std::chrono::milliseconds timeout) -> bool {
 
 template <TriviallyCopyable T>
 void SharedMemory<T>::startWatchThread() {
-    watchThread_ = std::thread([this]() { this->watchForChanges(); });
+    watchThread_ = std::jthread(
+        [this](std::stop_token stoken) { this->watchForChanges(); });
 }
 
 template <TriviallyCopyable T>
@@ -1187,7 +1115,6 @@ void SharedMemory<T>::watchForChanges() {
     while (!stopWatching_) {
 #ifdef _WIN32
         if (changeEvent_) {
-            // 等待事件，最多100毫秒
             if (WaitForSingleObject(changeEvent_, 100) == WAIT_OBJECT_0) {
                 uint64_t currentVersion =
                     header_->version.load(std::memory_order_acquire);
@@ -1197,14 +1124,14 @@ void SharedMemory<T>::watchForChanges() {
                         notifyListeners(data);
                         changeCondition_.notify_all();
                     } catch (const std::exception& e) {
-                        LOG_F(ERROR, "Exception while reading changed data: {}",
-                              e.what());
+                        spdlog::error(
+                            "Exception while reading changed data: {}",
+                            e.what());
                     }
                 }
                 ResetEvent(changeEvent_);
             }
         } else {
-            // 如果没有事件，每100ms轮询一次
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             uint64_t currentVersion =
                 header_->version.load(std::memory_order_acquire);
@@ -1215,18 +1142,16 @@ void SharedMemory<T>::watchForChanges() {
                     changeCondition_.notify_all();
                     lastKnownVersion_ = currentVersion;
                 } catch (const std::exception& e) {
-                    LOG_F(ERROR, "Exception while reading changed data: {}",
-                          e.what());
+                    spdlog::error("Exception while reading changed data: {}",
+                                  e.what());
                 }
             }
         }
 #else
         if (semId_ != SEM_FAILED) {
-            // 使用超时的sem_wait
             struct timespec ts;
             clock_gettime(CLOCK_REALTIME, &ts);
-            ts.tv_sec += 0;
-            ts.tv_nsec += 100 * 1000000;  // 100ms
+            ts.tv_nsec += 100 * 1000000;
             if (ts.tv_nsec >= 1000000000) {
                 ts.tv_sec += 1;
                 ts.tv_nsec -= 1000000000;
@@ -1242,15 +1167,15 @@ void SharedMemory<T>::watchForChanges() {
                         changeCondition_.notify_all();
                         lastKnownVersion_ = currentVersion;
                     } catch (const std::exception& e) {
-                        LOG_F(ERROR, "Exception while reading changed data: {}",
-                              e.what());
+                        spdlog::error(
+                            "Exception while reading changed data: {}",
+                            e.what());
                     }
                 }
             } else if (errno != ETIMEDOUT) {
-                LOG_F(WARNING, "sem_timedwait failed: {}", strerror(errno));
+                spdlog::warn("sem_timedwait failed: {}", strerror(errno));
             }
         } else {
-            // 如果没有信号量，每100ms轮询一次
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             uint64_t currentVersion =
                 header_->version.load(std::memory_order_acquire);
@@ -1261,8 +1186,8 @@ void SharedMemory<T>::watchForChanges() {
                     changeCondition_.notify_all();
                     lastKnownVersion_ = currentVersion;
                 } catch (const std::exception& e) {
-                    LOG_F(ERROR, "Exception while reading changed data: {}",
-                          e.what());
+                    spdlog::error("Exception while reading changed data: {}",
+                                  e.what());
                 }
             }
         }

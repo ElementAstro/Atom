@@ -70,10 +70,8 @@ public:
     [[nodiscard]] auto isUp() const -> bool;
 
 private:
-    class NetworkInterfaceImpl;  ///< Forward declaration of the implementation
-                                 ///< class.
-    std::shared_ptr<NetworkInterfaceImpl>
-        impl_;  ///< Pointer to the implementation.
+    class NetworkInterfaceImpl;
+    std::shared_ptr<NetworkInterfaceImpl> impl_;
 };
 
 /**
@@ -154,10 +152,8 @@ public:
     static void removeDNSServer(const std::string& dns);
 
 private:
-    class NetworkManagerImpl;  ///< Forward declaration of the implementation
-                               ///< class.
-    std::unique_ptr<NetworkManagerImpl>
-        impl_;  ///< Pointer to the implementation.
+    class NetworkManagerImpl;
+    std::unique_ptr<NetworkManagerImpl> impl_;
 
     /**
      * @brief Gets the MAC address of a network interface.

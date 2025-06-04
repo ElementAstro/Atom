@@ -3,6 +3,8 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <deque>
 #include <functional>
 #include <map>
 #include <set>
@@ -13,7 +15,6 @@
 #include <vector>
 
 #if defined(_WIN32) || defined(_WIN64)
-#include <csignal>
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -22,7 +23,6 @@
 #include <csignal>
 #endif
 
-// 可选的Boost支持
 #ifdef ATOM_USE_BOOST
 #include <boost/container/small_vector.hpp>
 #include <boost/lockfree/queue.hpp>
@@ -232,47 +232,30 @@ private:
     SignalHandlerRegistry();
     ~SignalHandlerRegistry();
 
-    // Prevent copying and moving
     SignalHandlerRegistry(const SignalHandlerRegistry&) = delete;
     SignalHandlerRegistry& operator=(const SignalHandlerRegistry&) = delete;
     SignalHandlerRegistry(SignalHandlerRegistry&&) = delete;
     SignalHandlerRegistry& operator=(SignalHandlerRegistry&&) = delete;
 
     static void signalDispatcher(int signal);
-
     [[nodiscard]] static auto getStandardCrashSignals() -> std::set<SignalID>;
 
-    std::atomic<int> nextHandlerId_{
-        1};  ///< Counter for generating unique handler IDs
+    std::atomic<int> nextHandlerId_{1};
 
-    // 使用PMR内存资源优化内存分配
 #ifdef ATOM_USE_PMR
-    std::pmr::monotonic_buffer_resource memResource_{1024 *
-                                                     1024};  // 1MB buffer
+    std::pmr::monotonic_buffer_resource memResource_{1024 * 1024};
     std::pmr::unordered_map<int, std::pair<SignalID, SignalHandler>>
-        handlerRegistry_{
-            &memResource_};  ///< Map of handler IDs to signal/handler
+        handlerRegistry_{&memResource_};
 #else
     std::unordered_map<int, std::pair<SignalID, SignalHandler>>
-        handlerRegistry_;  ///< Map of handler IDs to signal/handler
+        handlerRegistry_;
 #endif
 
-    // 使用读写锁优化并发访问，多个读取器可以同时访问
     mutable std::shared_mutex mutex_;
     std::map<SignalID, std::set<SignalHandlerWithPriority>> handlers_;
-    std::unordered_map<SignalID, SignalStats>
-        signalStats_;  ///< Statistics for each signal
-    std::chrono::milliseconds handlerTimeout_{
-        1000};  ///< Default timeout for handlers (1 second)
+    std::unordered_map<SignalID, SignalStats> signalStats_;
+    std::chrono::milliseconds handlerTimeout_{1000};
 };
-
-#ifndef SAFE_SIGNAL_MANAGER_H
-#define SAFE_SIGNAL_MANAGER_H
-
-#include <atomic>
-#include <condition_variable>
-#include <deque>
-#include <vector>
 
 /**
  * @brief Class to safely manage and dispatch signals with separate thread
@@ -300,7 +283,6 @@ public:
      */
     ~SafeSignalManager();
 
-    // 阻止复制和移动
     SafeSignalManager(const SafeSignalManager&) = delete;
     SafeSignalManager& operator=(const SafeSignalManager&) = delete;
     SafeSignalManager(SafeSignalManager&&) = delete;
@@ -413,42 +395,33 @@ private:
      */
     void processSignals(std::stop_token stopToken);
 
-    std::atomic<bool> keepRunning_{
-        true};  ///< Flag to control the running state
-    std::atomic<int> nextHandlerId_{
-        1};  ///< Counter for generating unique handler IDs
+    std::atomic<bool> keepRunning_{true};
+    std::atomic<int> nextHandlerId_{1};
 
 #ifdef ATOM_USE_PMR
-    std::pmr::monotonic_buffer_resource handlerMemResource_{
-        1024 * 1024};  // 1MB buffer
+    std::pmr::monotonic_buffer_resource handlerMemResource_{1024 * 1024};
     std::pmr::unordered_map<int, std::pair<SignalID, SignalHandler>>
         handlerRegistry_{&handlerMemResource_};
 #else
     std::unordered_map<int, std::pair<SignalID, SignalHandler>>
-        handlerRegistry_;  ///< Map of handler IDs to signal/handler
+        handlerRegistry_;
 #endif
 
-    std::map<SignalID, std::set<SignalHandlerWithPriority>>
-        safeHandlers_;  ///< Map of signal IDs to handlers
+    std::map<SignalID, std::set<SignalHandlerWithPriority>> safeHandlers_;
 
 #ifdef ATOM_USE_BOOST
     boost::lockfree::queue<int> signalQueue_{1024};
     size_t maxQueueSize_{1024};
 #else
-    std::deque<int> signalQueue_;  ///< Queue of signals to be processed
-    size_t maxQueueSize_;          ///< Maximum size of the signal queue
-    mutable std::shared_mutex
-        queueMutex_;  ///< Mutex for synchronizing access to the signal queue
-    std::condition_variable_any
-        queueCondition_;  ///< Condition variable for signaling queue changes
+    std::deque<int> signalQueue_;
+    size_t maxQueueSize_;
+    mutable std::shared_mutex queueMutex_;
+    std::condition_variable_any queueCondition_;
 #endif
 
-    std::vector<std::jthread>
-        workerThreads_;  ///< Threads for processing signals
-
-    std::unordered_map<SignalID, SignalStats>
-        signalStats_;                       ///< Statistics for each signal
-    mutable std::shared_mutex statsMutex_;  ///< Mutex for signal stats
+    std::vector<std::jthread> workerThreads_;
+    std::unordered_map<SignalID, SignalStats> signalStats_;
+    mutable std::shared_mutex statsMutex_;
 };
 
 /**
@@ -465,5 +438,4 @@ void installPlatformSpecificHandlers();
 void initializeSignalSystem(size_t workerThreadCount = 1,
                             size_t queueSize = 1000);
 
-#endif  // SAFE_SIGNAL_MANAGER_H
 #endif  // SIGNAL_HANDLER_H
