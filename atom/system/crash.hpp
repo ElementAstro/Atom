@@ -19,23 +19,29 @@ Description: Crash Report
 
 namespace atom::system {
 /**
- * @brief 保存崩溃日志
- * @param error_msg 崩溃日志详细信息
- *
- * 该函数用于保存程序崩溃时的日志信息，方便后续调试和分析。
- *
- * @note
- * 调用该函数前需要确保崩溃日志已经被记录下来，否则调用该函数不会有任何效果。
- *
+ * @brief Save crash log with detailed system information
  * @param error_msg The detailed information of the crash log.
  *
  * This function is used to save the log information when the program crashes,
- * which is helpful for further debugging and analysis.
+ * which is helpful for further debugging and analysis. The function automatically
+ * collects system information, stack traces, environment variables, and creates
+ * crash dump files (on Windows).
  *
- * @note Make sure the crash log has been recorded before calling this function,
- * otherwise calling this function will have no effect.
+ * @note Make sure the crash log directory is writable before calling this function.
+ * On Windows, this function will also create a minidump file for advanced debugging.
  */
 void saveCrashLog(std::string_view error_msg);
+
+/**
+ * @brief Get comprehensive system information for crash reports
+ * @return A formatted string containing system information including OS, CPU, memory, and disk usage
+ *
+ * This function collects detailed system information that is useful for crash analysis,
+ * including operating system details, CPU usage and specifications, memory status,
+ * and disk usage information.
+ */
+[[nodiscard]] auto getSystemInfo() -> std::string;
+
 }  // namespace atom::system
 
 #endif

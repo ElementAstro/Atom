@@ -559,4 +559,8 @@ void TimeManagerImpl::updateTimeCache() {
     cached_time_ = std::chrono::system_clock::to_time_t(last_update_);
 }
 
+bool TimeManagerImpl::hasAdminPrivileges() const {
+    return atom::system::isRoot();
+}
+
 }  // namespace atom::web

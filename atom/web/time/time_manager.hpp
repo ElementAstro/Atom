@@ -124,6 +124,13 @@ public:
      */
     void setImpl(std::unique_ptr<TimeManagerImpl> impl);
 
+    /**
+     * @brief Checks if the current process has administrative/root privileges.
+     *
+     * @return true if the process has admin/root privileges, false otherwise
+     */
+    bool hasAdminPrivileges() const;
+
 private:
     std::unique_ptr<TimeManagerImpl> impl_;
 };

@@ -29,103 +29,151 @@ using HKEY = HKEY__*;
 namespace atom::system {
 
 /**
- * @brief 获取指定注册表键下的所有子键名称。
- * @param hRootKey 根键句柄。
- * @param subKey 指定键的名称，可以包括多个嵌套的键，用反斜杠分隔。
- * @param subKeys 子键名称的字符串向量。
- * @return true 表示成功，false 表示失败。
+ * @brief Gets all subkey names under the specified registry key.
+ * @param hRootKey Root key handle.
+ * @param subKey The name of the specified key, which can include multiple
+ * nested keys separated by backslashes.
+ * @param subKeys Vector of subkey name strings.
+ * @return true if successful, false if failed.
  */
 [[nodiscard]] auto getRegistrySubKeys(HKEY hRootKey, std::string_view subKey,
                                       std::vector<std::string>& subKeys)
     -> bool;
 
 /**
- * @brief 获取指定注册表键下的所有值名称和数据。
- * @param hRootKey 根键句柄。
- * @param subKey 指定键的名称，可以包括多个嵌套的键，用反斜杠分隔。
- * @param values 名称和数据的字符串对向量。
- * @return true 表示成功，false 表示失败。
+ * @brief Gets all value names and data under the specified registry key.
+ * @param hRootKey Root key handle.
+ * @param subKey The name of the specified key, which can include multiple
+ * nested keys separated by backslashes.
+ * @param values Vector of string pairs containing names and data.
+ * @return true if successful, false if failed.
  */
 [[nodiscard]] auto getRegistryValues(
     HKEY hRootKey, std::string_view subKey,
     std::vector<std::pair<std::string, std::string>>& values) -> bool;
 
 /**
- * @brief 修改指定注册表键下的指定值的数据。
- * @param hRootKey 根键句柄。
- * @param subKey 指定键的名称，可以包括多个嵌套的键，用反斜杠分隔。
- * @param valueName 要修改的值的名称。
- * @param newValue 新的值数据。
- * @return true 表示成功，false 表示失败。
+ * @brief Modifies the data of a specified value under the specified registry
+ * key.
+ * @param hRootKey Root key handle.
+ * @param subKey The name of the specified key, which can include multiple
+ * nested keys separated by backslashes.
+ * @param valueName The name of the value to modify.
+ * @param newValue The new value data.
+ * @return true if successful, false if failed.
  */
 [[nodiscard]] auto modifyRegistryValue(HKEY hRootKey, std::string_view subKey,
                                        std::string_view valueName,
                                        std::string_view newValue) -> bool;
 
 /**
- * @brief 删除指定注册表键及其所有子键。
- * @param hRootKey 根键句柄。
- * @param subKey 要删除的键的名称，可以包括多个嵌套的键，用反斜杠分隔。
- * @return true 表示成功，false 表示失败。
+ * @brief Deletes the specified registry key and all its subkeys.
+ * @param hRootKey Root key handle.
+ * @param subKey The name of the key to delete, which can include multiple
+ * nested keys separated by backslashes.
+ * @return true if successful, false if failed.
  */
-[[nodiscard]] auto deleteRegistrySubKey(HKEY hRootKey,
-                                        std::string_view subKey) -> bool;
+[[nodiscard]] auto deleteRegistrySubKey(HKEY hRootKey, std::string_view subKey)
+    -> bool;
 
 /**
- * @brief 删除指定注册表键下的指定值。
- * @param hRootKey 根键句柄。
- * @param subKey 指定键的名称，可以包括多个嵌套的键，用反斜杠分隔。
- * @param valueName 要删除的值的名称。
- * @return true 表示成功，false 表示失败。
+ * @brief Deletes the specified value under the specified registry key.
+ * @param hRootKey Root key handle.
+ * @param subKey The name of the specified key, which can include multiple
+ * nested keys separated by backslashes.
+ * @param valueName The name of the value to delete.
+ * @return true if successful, false if failed.
  */
 [[nodiscard]] auto deleteRegistryValue(HKEY hRootKey, std::string_view subKey,
                                        std::string_view valueName) -> bool;
 
 /**
- * @brief 递归枚举指定注册表键下的所有子键和值。
- * @param hRootKey 根键句柄。
- * @param subKey 指定键的名称，可以包括多个嵌套的键，用反斜杠分隔。
+ * @brief Recursively enumerates all subkeys and values under the specified
+ * registry key.
+ * @param hRootKey Root key handle.
+ * @param subKey The name of the specified key, which can include multiple
+ * nested keys separated by backslashes.
  */
 void recursivelyEnumerateRegistrySubKeys(HKEY hRootKey,
                                          std::string_view subKey);
 
 /**
- * @brief 备份指定注册表键及其所有子键和值。
- * @param hRootKey 根键句柄。
- * @param subKey 要备份的键的名称，可以包括多个嵌套的键，用反斜杠分隔。
- * @param backupFilePath 备份文件的完整路径。
- * @return true 表示成功，false 表示失败。
+ * @brief Backs up the specified registry key and all its subkeys and values.
+ * @param hRootKey Root key handle.
+ * @param subKey The name of the key to back up, which can include multiple
+ * nested keys separated by backslashes.
+ * @param backupFilePath The full path of the backup file.
+ * @return true if successful, false if failed.
  */
 [[nodiscard]] auto backupRegistry(HKEY hRootKey, std::string_view subKey,
                                   std::string_view backupFilePath) -> bool;
 
 /**
- * @brief 在指定注册表键下递归查找包含指定字符串的子键名称。
- * @param hRootKey 根键句柄。
- * @param subKey 指定键的名称，可以包括多个嵌套的键，用反斜杠分隔。
- * @param searchKey 要查找的字符串。
+ * @brief Recursively searches for subkey names containing the specified string
+ * under the specified registry key.
+ * @param hRootKey Root key handle.
+ * @param subKey The name of the specified key, which can include multiple
+ * nested keys separated by backslashes.
+ * @param searchKey The string to search for.
+ * @param foundKeys Vector to store found key paths.
  */
 void findRegistryKey(HKEY hRootKey, std::string_view subKey,
-                     std::string_view searchKey);
+                     std::string_view searchKey,
+                     std::vector<std::string>& foundKeys);
 
 /**
- * @brief 在指定注册表键下递归查找包含指定字符串的值名称和数据。
- * @param hRootKey 根键句柄。
- * @param subKey 指定键的名称，可以包括多个嵌套的键，用反斜杠分隔。
- * @param searchValue 要查找的字符串。
+ * @brief Recursively searches for value names and data containing the specified
+ * string under the specified registry key.
+ * @param hRootKey Root key handle.
+ * @param subKey The name of the specified key, which can include multiple
+ * nested keys separated by backslashes.
+ * @param searchValue The string to search for.
+ * @param foundValues Vector to store found value information.
  */
-void findRegistryValue(HKEY hRootKey, std::string_view subKey,
-                       std::string_view searchValue);
+void findRegistryValue(
+    HKEY hRootKey, std::string_view subKey, std::string_view searchValue,
+    std::vector<std::pair<std::string, std::string>>& foundValues);
 
 /**
- * @brief 导出指定注册表键及其所有子键和值为 REG 文件。
- * @param hRootKey 根键句柄。
- * @param subKey 要导出的键的名称，可以包括多个嵌套的键，用反斜杠分隔。
- * @param exportFilePath 导出文件的完整路径。
- * @return true 表示成功，false 表示失败。
+ * @brief Exports the specified registry key and all its subkeys and values as a
+ * REG file.
+ * @param hRootKey Root key handle.
+ * @param subKey The name of the key to export, which can include multiple
+ * nested keys separated by backslashes.
+ * @param exportFilePath The full path of the export file.
+ * @return true if successful, false if failed.
  */
 [[nodiscard]] auto exportRegistry(HKEY hRootKey, std::string_view subKey,
                                   std::string_view exportFilePath) -> bool;
+
+/**
+ * @brief Creates a new registry key.
+ * @param hRootKey Root key handle.
+ * @param subKey The name of the key to create.
+ * @return true if successful, false if failed.
+ */
+[[nodiscard]] auto createRegistryKey(HKEY hRootKey, std::string_view subKey)
+    -> bool;
+
+/**
+ * @brief Checks if a registry key exists.
+ * @param hRootKey Root key handle.
+ * @param subKey The name of the key to check.
+ * @return true if key exists, false otherwise.
+ */
+[[nodiscard]] auto registryKeyExists(HKEY hRootKey, std::string_view subKey)
+    -> bool;
+
+/**
+ * @brief Gets the type of a registry value.
+ * @param hRootKey Root key handle.
+ * @param subKey The name of the key containing the value.
+ * @param valueName The name of the value.
+ * @return The registry value type, or 0 if failed.
+ */
+[[nodiscard]] auto getRegistryValueType(HKEY hRootKey, std::string_view subKey,
+                                        std::string_view valueName)
+    -> unsigned long;
 
 }  // namespace atom::system
 

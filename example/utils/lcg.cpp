@@ -1,128 +1,113 @@
+#include "atom/utils/lcg.hpp"
+#include <fmt/format.h>
+#include <spdlog/spdlog.h>
 #include <cmath>
-#include <iomanip>
-#include <iostream>
 #include <map>
 #include <numeric>
 #include <string>
 #include <thread>
 #include <vector>
 
-#include "atom/log/loguru.hpp"
-#include "atom/utils/lcg.hpp"
-
-// Helper function to print statistics of generated values
+/**
+ * @brief Print statistics of generated values
+ */
 template <typename T>
 void printStatistics(const std::vector<T>& values, const std::string& title) {
     if (values.empty()) {
-        std::cout << "No data to analyze for " << title << std::endl;
+        spdlog::info("No data to analyze for {}", title);
         return;
     }
-
-    // Calculate mean
     double sum = std::accumulate(values.begin(), values.end(), 0.0);
     double mean = sum / values.size();
-
-    // Calculate variance and standard deviation
     double variance = 0.0;
     for (const auto& value : values) {
         variance += (value - mean) * (value - mean);
     }
     variance /= values.size();
     double stdDev = std::sqrt(variance);
-
-    // Calculate min and max
     auto [minIt, maxIt] = std::minmax_element(values.begin(), values.end());
-
-    // Output statistics
-    std::cout << "=== " << title << " Statistics ===" << std::endl;
-    std::cout << "Count: " << values.size() << std::endl;
-    std::cout << "Min: " << *minIt << std::endl;
-    std::cout << "Max: " << *maxIt << std::endl;
-    std::cout << "Mean: " << mean << std::endl;
-    std::cout << "Standard Deviation: " << stdDev << std::endl;
-    std::cout << "=======================" << std::endl << std::endl;
+    spdlog::info("=== {} Statistics ===", title);
+    spdlog::info("Count: {}", values.size());
+    spdlog::info("Min: {}", *minIt);
+    spdlog::info("Max: {}", *maxIt);
+    spdlog::info("Mean: {}", mean);
+    spdlog::info("Standard Deviation: {}", stdDev);
+    spdlog::info("=======================\n");
 }
 
-// Helper function to demonstrate multithreaded random generation
+/**
+ * @brief Demonstrate multithreaded random generation
+ */
 void runInMultipleThreads(atom::utils::LCG& lcg, int threadCount) {
-    std::cout << "\n=== Multithreading Example ===" << std::endl;
-
+    spdlog::info("\n=== Multithreading Example ===");
     std::vector<std::thread> threads;
     std::vector<std::vector<double>> threadResults(threadCount);
 
-    // Create threads that generate random numbers
     for (int i = 0; i < threadCount; ++i) {
         threads.emplace_back([&lcg, i, &threadResults]() {
             std::vector<double> results;
+            results.reserve(1000);
             for (int j = 0; j < 1000; ++j) {
                 results.push_back(lcg.nextDouble());
             }
-            threadResults[i] = results;
-            std::cout << "Thread " << i << " completed generating "
-                      << results.size() << " random numbers" << std::endl;
+            threadResults[i] = std::move(results);
+            spdlog::info("Thread {} completed generating 1000 random numbers",
+                         i);
         });
     }
-
-    // Join all threads
     for (auto& thread : threads) {
         thread.join();
     }
-
-    // Calculate statistics for each thread's results
     for (int i = 0; i < threadCount; ++i) {
         printStatistics(threadResults[i],
                         "Thread " + std::to_string(i) + " Results");
     }
-
-    std::cout << "All threads completed successfully" << std::endl;
+    spdlog::info("All threads completed successfully");
 }
 
-// Helper function to test statistical distributions
+/**
+ * @brief Test statistical distributions
+ */
 void testDistributions(atom::utils::LCG& lcg) {
-    std::cout << "\n=== Statistical Distributions Examples ===" << std::endl;
-
+    spdlog::info("\n=== Statistical Distributions Examples ===");
     const int sampleSize = 10000;
 
-    // Test Gaussian distribution
     {
         std::vector<double> gaussianSamples;
+        gaussianSamples.reserve(sampleSize);
         for (int i = 0; i < sampleSize; ++i) {
             gaussianSamples.push_back(lcg.nextGaussian(10.0, 2.0));
         }
         printStatistics(gaussianSamples,
                         "Gaussian Distribution (mean=10, stddev=2)");
     }
-
-    // Test Exponential distribution
     {
         std::vector<double> expSamples;
+        expSamples.reserve(sampleSize);
         for (int i = 0; i < sampleSize; ++i) {
             expSamples.push_back(lcg.nextExponential(0.5));
         }
         printStatistics(expSamples, "Exponential Distribution (lambda=0.5)");
     }
-
-    // Test Poisson distribution
     {
         std::vector<double> poissonSamples;
+        poissonSamples.reserve(sampleSize);
         for (int i = 0; i < sampleSize; ++i) {
             poissonSamples.push_back(lcg.nextPoisson(5.0));
         }
         printStatistics(poissonSamples, "Poisson Distribution (lambda=5)");
     }
-
-    // Test Beta distribution
     {
         std::vector<double> betaSamples;
+        betaSamples.reserve(sampleSize);
         for (int i = 0; i < sampleSize; ++i) {
             betaSamples.push_back(lcg.nextBeta(2.0, 5.0));
         }
         printStatistics(betaSamples, "Beta Distribution (alpha=2, beta=5)");
     }
-
-    // Test Gamma distribution
     {
         std::vector<double> gammaSamples;
+        gammaSamples.reserve(sampleSize);
         for (int i = 0; i < sampleSize; ++i) {
             gammaSamples.push_back(lcg.nextGamma(2.0, 1.5));
         }
@@ -131,13 +116,13 @@ void testDistributions(atom::utils::LCG& lcg) {
     }
 }
 
-// Helper function to demonstrate discrete distributions
+/**
+ * @brief Demonstrate discrete distributions
+ */
 void testDiscreteDistributions(atom::utils::LCG& lcg) {
-    std::cout << "\n=== Discrete Distributions Examples ===" << std::endl;
-
+    spdlog::info("\n=== Discrete Distributions Examples ===");
     const int sampleSize = 10000;
 
-    // Test Bernoulli distribution
     {
         int trueCount = 0;
         for (int i = 0; i < sampleSize; ++i) {
@@ -147,247 +132,159 @@ void testDiscreteDistributions(atom::utils::LCG& lcg) {
         }
         double observedProbability =
             static_cast<double>(trueCount) / sampleSize;
-        std::cout << "Bernoulli Distribution (p=0.7):" << std::endl;
-        std::cout << "True count: " << trueCount << " out of " << sampleSize
-                  << std::endl;
-        std::cout << "Observed probability: " << observedProbability
-                  << std::endl
-                  << std::endl;
+        spdlog::info("Bernoulli Distribution (p=0.7):");
+        spdlog::info("True count: {} out of {}", trueCount, sampleSize);
+        spdlog::info("Observed probability: {}\n", observedProbability);
     }
-
-    // Test Geometric distribution
     {
         std::vector<double> geometricSamples;
+        geometricSamples.reserve(sampleSize);
         for (int i = 0; i < sampleSize; ++i) {
             geometricSamples.push_back(lcg.nextGeometric(0.3));
         }
         printStatistics(geometricSamples, "Geometric Distribution (p=0.3)");
     }
-
-    // Test Chi-Squared distribution
     {
         std::vector<double> chiSquaredSamples;
+        chiSquaredSamples.reserve(sampleSize);
         for (int i = 0; i < sampleSize; ++i) {
             chiSquaredSamples.push_back(lcg.nextChiSquared(4.0));
         }
         printStatistics(chiSquaredSamples, "Chi-Squared Distribution (df=4)");
     }
-
-    // Test Hypergeometric distribution
     {
         std::vector<double> hypergeometricSamples;
+        hypergeometricSamples.reserve(sampleSize);
         for (int i = 0; i < sampleSize; ++i) {
             hypergeometricSamples.push_back(lcg.nextHypergeometric(50, 20, 10));
         }
         printStatistics(hypergeometricSamples,
                         "Hypergeometric Distribution (N=50, K=20, n=10)");
     }
-
-    // Test Discrete distribution with weights
     {
         std::vector<double> weights = {10.0, 20.0, 5.0, 15.0, 25.0};
         std::map<int, int> discreteResults;
-
         for (int i = 0; i < sampleSize; ++i) {
             int outcome = lcg.nextDiscrete(weights);
             discreteResults[outcome]++;
         }
-
-        std::cout << "Discrete Distribution with weights [10, 20, 5, 15, 25]:"
-                  << std::endl;
+        spdlog::info("Discrete Distribution with weights [10, 20, 5, 15, 25]:");
         for (const auto& [outcome, count] : discreteResults) {
             double percentage = 100.0 * count / sampleSize;
-            std::cout << "Outcome " << outcome << ": " << count << " times ("
-                      << std::fixed << std::setprecision(2) << percentage
-                      << "%)" << std::endl;
+            spdlog::info("Outcome {}: {} times ({:.2f}%)", outcome, count,
+                         percentage);
         }
-        std::cout << std::endl;
+        spdlog::info("");
     }
-
-    // Test Multinomial distribution
     {
         std::vector<double> probabilities = {0.2, 0.5, 0.3};
         auto multinomialResult = lcg.nextMultinomial(1000, probabilities);
-
-        std::cout << "Multinomial Distribution (n=1000, p=[0.2, 0.5, 0.3]):"
-                  << std::endl;
+        spdlog::info("Multinomial Distribution (n=1000, p=[0.2, 0.5, 0.3]):");
         for (size_t i = 0; i < multinomialResult.size(); ++i) {
             double percentage = 100.0 * multinomialResult[i] / 1000;
-            std::cout << "Category " << i << ": " << multinomialResult[i]
-                      << " occurrences (" << std::fixed << std::setprecision(2)
-                      << percentage << "%)" << std::endl;
+            spdlog::info("Category {}: {} occurrences ({:.2f}%)", i,
+                         multinomialResult[i], percentage);
         }
-        std::cout << std::endl;
+        spdlog::info("");
     }
 }
 
-// Demonstrate array/collection operations
+/**
+ * @brief Demonstrate array/collection operations
+ */
 void testCollectionOperations(atom::utils::LCG& lcg) {
-    std::cout << "\n=== Collection Operations Examples ===" << std::endl;
-
-    // Test shuffle
+    spdlog::info("\n=== Collection Operations Examples ===");
     {
         std::vector<int> numbers(10);
-        std::iota(numbers.begin(), numbers.end(), 1);  // Fill with 1-10
-
-        std::cout << "Original vector: ";
-        for (int n : numbers) {
-            std::cout << n << " ";
-        }
-        std::cout << std::endl;
-
+        std::iota(numbers.begin(), numbers.end(), 1);
         lcg.shuffle(numbers);
-
-        std::cout << "Shuffled vector: ";
-        for (int n : numbers) {
-            std::cout << n << " ";
-        }
-        std::cout << std::endl << std::endl;
     }
-
-    // Test sample
     {
         std::vector<std::string> items = {
             "apple", "banana", "cherry",   "date", "elderberry",
             "fig",   "grape",  "honeydew", "kiwi", "lemon"};
-
-        std::cout << "Original items: ";
-        for (const auto& item : items) {
-            std::cout << item << " ";
-        }
-        std::cout << std::endl;
-
         auto samples = lcg.sample(items, 5);
-
-        std::cout << "Sampled items (5): ";
-        for (const auto& item : samples) {
-            std::cout << item << " ";
-        }
-        std::cout << std::endl << std::endl;
     }
 }
 
-// Demonstrate state saving and loading
+/**
+ * @brief Demonstrate state saving and loading
+ */
 void testStateSaving(atom::utils::LCG& lcg) {
-    std::cout << "\n=== State Saving/Loading Example ===" << std::endl;
-
-    // Generate some random numbers
+    spdlog::info("\n=== State Saving/Loading Example ===");
     std::vector<double> originalSequence;
     for (int i = 0; i < 5; ++i) {
         double value = lcg.nextDouble();
         originalSequence.push_back(value);
-        std::cout << "Original value " << i << ": " << value << std::endl;
+        spdlog::info("Original value {}: {}", i, value);
     }
-
-    // Save state
     const std::string stateFile = "lcg_state.bin";
     lcg.saveState(stateFile);
-    std::cout << "LCG state saved to " << stateFile << std::endl;
-
-    // Generate more random numbers (diverging sequence)
+    spdlog::info("LCG state saved to {}", stateFile);
     for (int i = 0; i < 5; ++i) {
-        std::cout << "Diverged value " << i << ": " << lcg.nextDouble()
-                  << std::endl;
+        spdlog::info("Diverged value {}: {}", i, lcg.nextDouble());
     }
-
-    // Load state back
     lcg.loadState(stateFile);
-    std::cout << "LCG state loaded from " << stateFile << std::endl;
-
-    // Generate the same sequence again
+    spdlog::info("LCG state loaded from {}", stateFile);
     std::vector<double> restoredSequence;
     for (int i = 0; i < 5; ++i) {
         double value = lcg.nextDouble();
         restoredSequence.push_back(value);
-        std::cout << "Restored value " << i << ": " << value << std::endl;
+        spdlog::info("Restored value {}: {}", i, value);
     }
-
-    // Verify sequences match
-    bool sequencesMatch = true;
-    for (size_t i = 0; i < originalSequence.size(); ++i) {
-        if (originalSequence[i] != restoredSequence[i]) {
-            sequencesMatch = false;
-            break;
-        }
-    }
-
-    std::cout << "Sequences match: " << (sequencesMatch ? "Yes" : "No")
-              << std::endl;
-
-    // Clean up
+    bool sequencesMatch =
+        std::equal(originalSequence.begin(), originalSequence.end(),
+                   restoredSequence.begin());
+    spdlog::info("Sequences match: {}", sequencesMatch ? "Yes" : "No");
     std::remove(stateFile.c_str());
 }
 
-// Main function with LCG usage examples
+/**
+ * @brief Main function with LCG usage examples
+ */
 int main() {
-    std::cout << "===============================================" << std::endl;
-    std::cout << "LCG (Linear Congruential Generator) Usage Examples"
-              << std::endl;
-    std::cout << "===============================================" << std::endl;
+    spdlog::info("===============================================");
+    spdlog::info("LCG (Linear Congruential Generator) Usage Examples");
+    spdlog::info("===============================================");
 
-    // Create LCG with default seed (based on current time)
     atom::utils::LCG lcg;
-    std::cout << "Created LCG with default seed (time-based)" << std::endl;
-
-    // Create LCG with specific seed for reproducible results
+    spdlog::info("Created LCG with default seed (time-based)");
     const uint32_t specificSeed = 12345;
     atom::utils::LCG lcgWithSeed(specificSeed);
-    std::cout << "Created LCG with specific seed: " << specificSeed << std::endl
-              << std::endl;
+    spdlog::info("Created LCG with specific seed: {}", specificSeed);
 
-    // Basic random number generation
-    std::cout << "=== Basic Random Number Generation ===" << std::endl;
-    std::cout << "Raw random number: " << lcg.next() << std::endl;
-    std::cout << "Random int (0-100): " << lcg.nextInt(0, 100) << std::endl;
-    std::cout << "Random double (0-1): " << lcg.nextDouble() << std::endl;
-    std::cout << "Random double (5-10): " << lcg.nextDouble(5.0, 10.0)
-              << std::endl;
-    std::cout << "Random boolean (50% probability): "
-              << (lcg.nextBernoulli() ? "true" : "false") << std::endl;
-    std::cout << "Random boolean (80% probability): "
-              << (lcg.nextBernoulli(0.8) ? "true" : "false") << std::endl;
-    std::cout << std::endl;
+    spdlog::info("=== Basic Random Number Generation ===");
+    spdlog::info("Raw random number: {}", lcg.next());
+    spdlog::info("Random int (0-100): {}", lcg.nextInt(0, 100));
+    spdlog::info("Random double (0-1): {}", lcg.nextDouble());
+    spdlog::info("Random double (5-10): {}", lcg.nextDouble(5.0, 10.0));
+    spdlog::info("Random boolean (50% probability): {}",
+                 lcg.nextBernoulli() ? "true" : "false");
+    spdlog::info("Random boolean (80% probability): {}",
+                 lcg.nextBernoulli(0.8) ? "true" : "false");
 
-    // Test all statistical distributions
     testDistributions(lcg);
-
-    // Test discrete distributions
     testDiscreteDistributions(lcg);
-
-    // Test collection operations
     testCollectionOperations(lcg);
-
-    // Test state saving and loading
     testStateSaving(lcgWithSeed);
-
-    // Test multithreading
     runInMultipleThreads(lcg, 4);
 
-    std::cout << "\n=== Error Handling Examples ===" << std::endl;
-
-    // Demonstrate error handling with try-catch blocks
+    spdlog::info("\n=== Error Handling Examples ===");
     try {
-        // This should throw an exception (min > max)
         lcg.nextInt(100, 50);
     } catch (const std::exception& e) {
-        std::cout << "Expected error caught: " << e.what() << std::endl;
+        spdlog::info("Expected error caught: {}", e.what());
     }
-
     try {
-        // This should throw an exception (invalid probability)
         lcg.nextBernoulli(2.0);
     } catch (const std::exception& e) {
-        std::cout << "Expected error caught: " << e.what() << std::endl;
+        spdlog::info("Expected error caught: {}", e.what());
     }
-
     try {
-        // This should throw an exception (negative lambda)
         lcg.nextGamma(-1.0, 1.0);
     } catch (const std::exception& e) {
-        std::cout << "Expected error caught: " << e.what() << std::endl;
+        spdlog::info("Expected error caught: {}", e.what());
     }
-
-    std::cout << "\nAll LCG examples completed successfully!" << std::endl;
-
+    spdlog::info("\nAll LCG examples completed successfully!");
     return 0;
 }

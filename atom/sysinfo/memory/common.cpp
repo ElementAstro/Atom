@@ -6,6 +6,7 @@
  */
 
 #include "common.hpp"
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -13,7 +14,8 @@
 #include <sstream>
 #include <thread>
 #include <vector>
-#include "atom/log/loguru.hpp"
+
+#include <spdlog/spdlog.h>
 #include "memory.hpp"
 
 
@@ -32,8 +34,9 @@ auto formatByteSize(unsigned long long bytes) -> std::string {
                                             "TB", "PB", "EB"};
     static constexpr int MAX_UNIT_INDEX = 6;
 
-    if (bytes == 0)
+    if (bytes == 0) {
         return "0 B";
+    }
 
     int unitIndex = 0;
     double size = static_cast<double>(bytes);
@@ -50,19 +53,16 @@ auto formatByteSize(unsigned long long bytes) -> std::string {
 }
 
 auto benchmarkMemoryPerformance(size_t testSizeBytes) -> double {
-    if (testSizeBytes == 0)
+    if (testSizeBytes == 0) {
         return 0.0;
+    }
 
-    std::vector<char> testBuffer;
-    testBuffer.reserve(testSizeBytes);
-    testBuffer.resize(testSizeBytes);
+    std::vector<char> testBuffer(testSizeBytes);
 
     const auto start = std::chrono::high_resolution_clock::now();
 
-    // Write test - use memset for better performance
     std::fill(testBuffer.begin(), testBuffer.end(), static_cast<char>(0xAA));
 
-    // Read test - prevent compiler optimization
     volatile char sum = 0;
     for (const auto& byte : testBuffer) {
         sum += byte;
@@ -71,8 +71,9 @@ auto benchmarkMemoryPerformance(size_t testSizeBytes) -> double {
     const auto end = std::chrono::high_resolution_clock::now();
     const auto duration = std::chrono::duration<double>(end - start).count();
 
-    if (duration <= 0.0)
+    if (duration <= 0.0) {
         return 0.0;
+    }
 
     constexpr double BYTES_TO_MB = 1.0 / (1024.0 * 1024.0);
     const double mbProcessed =
@@ -83,18 +84,14 @@ auto benchmarkMemoryPerformance(size_t testSizeBytes) -> double {
 
 }  // namespace internal
 
-/**
- * @brief Starts continuous memory monitoring with callback
- * @param callback Function to be called with memory information updates
- */
 auto startMemoryMonitoring(std::function<void(const MemoryInfo&)> callback)
     -> void {
     if (internal::g_monitoringActive.exchange(true)) {
-        LOG_F(WARNING, "Memory monitoring is already active");
+        spdlog::warn("Memory monitoring is already active");
         return;
     }
 
-    LOG_F(INFO, "Starting memory monitoring");
+    spdlog::info("Starting memory monitoring");
 
     std::thread monitorThread([callback = std::move(callback)]() {
         while (internal::g_monitoringActive.load()) {
@@ -103,39 +100,33 @@ auto startMemoryMonitoring(std::function<void(const MemoryInfo&)> callback)
                 callback(info);
                 std::this_thread::sleep_for(std::chrono::seconds(1));
             } catch (const std::exception& e) {
-                LOG_F(ERROR, "Error in memory monitoring thread: %s", e.what());
+                spdlog::error("Error in memory monitoring thread: {}",
+                              e.what());
                 break;
             }
         }
-        LOG_F(INFO, "Memory monitoring stopped");
+        spdlog::info("Memory monitoring stopped");
     });
 
     monitorThread.detach();
 }
 
-/**
- * @brief Stops memory monitoring
- */
 auto stopMemoryMonitoring() -> void {
     bool expected = true;
     if (internal::g_monitoringActive.compare_exchange_strong(expected, false)) {
-        LOG_F(INFO, "Stopping memory monitoring");
+        spdlog::info("Stopping memory monitoring");
     } else {
-        LOG_F(WARNING, "Memory monitoring is not active");
+        spdlog::warn("Memory monitoring is not active");
     }
 }
 
-/**
- * @brief Collects memory usage timeline over specified duration
- * @param duration Time period to collect samples
- * @return Vector of memory information samples
- */
 auto getMemoryTimeline(std::chrono::minutes duration)
     -> std::vector<MemoryInfo> {
-    LOG_F(INFO, "Collecting memory timeline for %ld minutes", duration.count());
+    spdlog::info("Collecting memory timeline for {} minutes", duration.count());
 
+    const size_t reserveSize = static_cast<size_t>(duration.count() * 60);
     std::vector<MemoryInfo> timeline;
-    timeline.reserve(static_cast<size_t>(duration.count() * 60));
+    timeline.reserve(reserveSize);
 
     const auto endTime = std::chrono::steady_clock::now() + duration;
 
@@ -144,21 +135,17 @@ auto getMemoryTimeline(std::chrono::minutes duration)
             timeline.emplace_back(getDetailedMemoryStats());
             std::this_thread::sleep_for(std::chrono::seconds(1));
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Error collecting memory timeline: %s", e.what());
+            spdlog::error("Error collecting memory timeline: {}", e.what());
             break;
         }
     }
 
-    LOG_F(INFO, "Collected %zu memory samples", timeline.size());
+    spdlog::info("Collected {} memory samples", timeline.size());
     return timeline;
 }
 
-/**
- * @brief Performs basic memory leak detection
- * @return Vector of potential memory leak descriptions
- */
 auto detectMemoryLeaks() -> std::vector<std::string> {
-    LOG_F(INFO, "Starting memory leak detection");
+    spdlog::info("Starting memory leak detection");
     std::vector<std::string> leaks;
 
     const auto before = getDetailedMemoryStats();
@@ -166,38 +153,35 @@ auto detectMemoryLeaks() -> std::vector<std::string> {
     const auto after = getDetailedMemoryStats();
 
     constexpr unsigned long long LEAK_THRESHOLD = 1024 * 1024;  // 1MB
+
     if (after.workingSetSize > before.workingSetSize + LEAK_THRESHOLD) {
-        std::ostringstream oss;
-        oss << "Potential memory leak detected: Working set increased by "
-            << internal::formatByteSize(after.workingSetSize -
-                                        before.workingSetSize)
-            << " in 5 seconds";
-        leaks.emplace_back(oss.str());
+        const auto sizeDiff = after.workingSetSize - before.workingSetSize;
+        leaks.emplace_back(
+            "Potential memory leak detected: Working set increased by " +
+            internal::formatByteSize(sizeDiff) + " in 5 seconds");
     }
 
-    LOG_F(INFO, "Memory leak detection completed, found %zu potential issues",
-          leaks.size());
+    spdlog::info("Memory leak detection completed, found {} potential issues",
+                 leaks.size());
     return leaks;
 }
 
-/**
- * @brief Calculates memory fragmentation percentage
- * @return Fragmentation percentage (0-100)
- */
 auto getMemoryFragmentation() -> double {
-    LOG_F(INFO, "Calculating memory fragmentation");
+    spdlog::info("Calculating memory fragmentation");
 
     const auto total = getTotalMemorySize();
     const auto available = getAvailableMemorySize();
 
-    if (available == 0)
+    if (available == 0) {
         return 0.0;
+    }
 
     size_t allocatableSize = 0;
     try {
         constexpr size_t MAX_ALLOC_SIZE = 100 * 1024 * 1024;  // 100 MB
+        const size_t testSize = std::min(MAX_ALLOC_SIZE, available);
         std::vector<char> testAlloc;
-        testAlloc.reserve(std::min(MAX_ALLOC_SIZE, available));
+        testAlloc.reserve(testSize);
         allocatableSize = testAlloc.capacity();
     } catch (...) {
         allocatableSize = 0;
@@ -208,104 +192,91 @@ auto getMemoryFragmentation() -> double {
                                   static_cast<double>(available))));
 
     const double fragmentationPercent = fragmentation * 100.0;
-    LOG_F(INFO, "Memory fragmentation estimated at %.2f%%",
-          fragmentationPercent);
+    spdlog::info("Memory fragmentation estimated at {:.2f}%",
+                 fragmentationPercent);
     return fragmentationPercent;
 }
 
-/**
- * @brief Attempts to optimize memory usage
- * @return True if optimization was successful
- */
 auto optimizeMemoryUsage() -> bool {
-    LOG_F(INFO, "Attempting to optimize memory usage");
+    spdlog::info("Attempting to optimize memory usage");
 
     bool success = false;
 
 #ifdef _WIN32
     try {
-        success = SetProcessWorkingSetSize(GetCurrentProcess(), -1, -1) != 0;
+        success = SetProcessWorkingSetSize(GetCurrentProcess(),
+                                           static_cast<SIZE_T>(-1),
+                                           static_cast<SIZE_T>(-1)) != 0;
     } catch (...) {
-        LOG_F(ERROR, "Failed to optimize memory on Windows");
+        spdlog::error("Failed to optimize memory on Windows");
     }
 #elif defined(__linux__)
     try {
-        if (auto fp = fopen("/proc/self/oom_score_adj", "w")) {
+        if (auto* fp = fopen("/proc/self/oom_score_adj", "w")) {
             fprintf(fp, "500\n");
             fclose(fp);
             success = true;
         }
     } catch (...) {
-        LOG_F(ERROR, "Failed to optimize memory on Linux");
+        spdlog::error("Failed to optimize memory on Linux");
     }
 #endif
 
-    LOG_F(INFO, "Memory optimization %s", success ? "succeeded" : "failed");
+    spdlog::info("Memory optimization {}", success ? "succeeded" : "failed");
     return success;
 }
 
-/**
- * @brief Analyzes system for memory bottlenecks
- * @return Vector of bottleneck descriptions
- */
 auto analyzeMemoryBottlenecks() -> std::vector<std::string> {
-    LOG_F(INFO, "Analyzing memory bottlenecks");
+    spdlog::info("Analyzing memory bottlenecks");
 
     std::vector<std::string> bottlenecks;
     const auto perf = getMemoryPerformance();
     const auto info = getDetailedMemoryStats();
 
-    // High memory usage
     if (info.memoryLoadPercentage > 90.0) {
-        std::ostringstream oss;
-        oss << "High memory usage: "
-            << static_cast<int>(info.memoryLoadPercentage)
-            << "% of physical memory is in use";
-        bottlenecks.emplace_back(oss.str());
+        bottlenecks.emplace_back(
+            "High memory usage: " +
+            std::to_string(static_cast<int>(info.memoryLoadPercentage)) +
+            "% of physical memory is in use");
     }
 
-    // High swap usage
     if (info.swapMemoryTotal > 0) {
         const double swapUsagePercent =
             (static_cast<double>(info.swapMemoryUsed) / info.swapMemoryTotal) *
             100.0;
+
         if (swapUsagePercent > 50.0) {
-            std::ostringstream oss;
-            oss << "High swap usage: " << static_cast<int>(swapUsagePercent)
-                << "% of swap space is in use, indicating insufficient RAM";
-            bottlenecks.emplace_back(oss.str());
+            bottlenecks.emplace_back(
+                "High swap usage: " +
+                std::to_string(static_cast<int>(swapUsagePercent)) +
+                "% of swap space is in use, indicating insufficient RAM");
         }
     }
 
-    // High memory latency
     constexpr double LATENCY_THRESHOLD = 100.0;
     if (perf.latency > LATENCY_THRESHOLD) {
-        std::ostringstream oss;
-        oss << "High memory latency: " << static_cast<int>(perf.latency)
-            << " ns, may slow memory-intensive operations";
-        bottlenecks.emplace_back(oss.str());
+        bottlenecks.emplace_back(
+            "High memory latency: " +
+            std::to_string(static_cast<int>(perf.latency)) +
+            " ns, may slow memory-intensive operations");
     }
 
-    // High bandwidth usage
     if (perf.bandwidthUsage > 80.0) {
-        std::ostringstream oss;
-        oss << "High memory bandwidth usage: "
-            << static_cast<int>(perf.bandwidthUsage)
-            << "%, indicating potential bandwidth bottleneck";
-        bottlenecks.emplace_back(oss.str());
+        bottlenecks.emplace_back(
+            "High memory bandwidth usage: " +
+            std::to_string(static_cast<int>(perf.bandwidthUsage)) +
+            "%, indicating potential bandwidth bottleneck");
     }
 
-    // High fragmentation
     const double fragPercent = getMemoryFragmentation();
     if (fragPercent > 30.0) {
-        std::ostringstream oss;
-        oss << "High memory fragmentation: " << static_cast<int>(fragPercent)
-            << "%, may cause allocation failures";
-        bottlenecks.emplace_back(oss.str());
+        bottlenecks.emplace_back("High memory fragmentation: " +
+                                 std::to_string(static_cast<int>(fragPercent)) +
+                                 "%, may cause allocation failures");
     }
 
-    LOG_F(INFO, "Memory bottleneck analysis completed, found %zu issues",
-          bottlenecks.size());
+    spdlog::info("Memory bottleneck analysis completed, found {} issues",
+                 bottlenecks.size());
     return bottlenecks;
 }
 

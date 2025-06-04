@@ -125,4 +125,8 @@ void TimeManager::setImpl(std::unique_ptr<TimeManagerImpl> impl) {
     impl_ = std::move(impl);
 }
 
+bool TimeManager::hasAdminPrivileges() const {
+    return impl_->hasAdminPrivileges();
+}
+
 }  // namespace atom::web

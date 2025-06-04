@@ -21,7 +21,6 @@ Description: Quote manager for crash report.
 #include <unordered_map>
 #include <utility>
 #include <vector>
-#include "atom/macro.hpp"
 
 namespace atom::system {
 /**
@@ -49,35 +48,39 @@ public:
      *
      * @return The text of the quote.
      */
-    ATOM_NODISCARD auto getText() const -> std::string { return text_; }
+    [[nodiscard]] auto getText() const -> const std::string& { return text_; }
 
     /**
      * @brief Gets the author of the quote.
      *
      * @return The author of the quote.
      */
-    ATOM_NODISCARD auto getAuthor() const -> std::string { return author_; }
+    [[nodiscard]] auto getAuthor() const -> const std::string& {
+        return author_;
+    }
 
     /**
      * @brief Gets the category of the quote.
      *
      * @return The category of the quote.
      */
-    ATOM_NODISCARD auto getCategory() const -> std::string { return category_; }
+    [[nodiscard]] auto getCategory() const -> const std::string& {
+        return category_;
+    }
 
     /**
      * @brief Gets the year of the quote.
      *
      * @return The year of the quote.
      */
-    ATOM_NODISCARD auto getYear() const -> int { return year_; }
+    [[nodiscard]] auto getYear() const -> int { return year_; }
 
     /**
      * @brief Sets the category of the quote.
      *
      * @param category The new category.
      */
-    void setCategory(const std::string &category) { category_ = category; }
+    void setCategory(std::string category) { category_ = std::move(category); }
 
     /**
      * @brief Sets the year of the quote.
@@ -93,7 +96,7 @@ public:
      * output.
      * @return Formatted quote string.
      */
-    ATOM_NODISCARD auto toString(bool includeMetadata = false) const
+    [[nodiscard]] auto toString(bool includeMetadata = false) const
         -> std::string;
 
     /**
@@ -102,7 +105,7 @@ public:
      * @param other The quote to compare with.
      * @return True if quotes are equal, false otherwise.
      */
-    bool operator==(const Quote &other) const {
+    bool operator==(const Quote& other) const {
         return text_ == other.text_ && author_ == other.author_;
     }
 
@@ -128,7 +131,7 @@ public:
      *
      * @param filename The file to load quotes from.
      */
-    explicit QuoteManager(const std::string &filename);
+    explicit QuoteManager(const std::string& filename);
 
     /**
      * @brief Adds a quote to the collection.
@@ -136,7 +139,7 @@ public:
      * @param quote The quote to add.
      * @return True if added successfully, false otherwise.
      */
-    bool addQuote(const Quote &quote);
+    bool addQuote(const Quote& quote);
 
     /**
      * @brief Adds multiple quotes to the collection.
@@ -144,7 +147,7 @@ public:
      * @param quotes Vector of quotes to add.
      * @return Number of quotes successfully added.
      */
-    size_t addQuotes(const std::vector<Quote> &quotes);
+    size_t addQuotes(const std::vector<Quote>& quotes);
 
     /**
      * @brief Removes a quote from the collection.
@@ -152,7 +155,7 @@ public:
      * @param quote The quote to remove.
      * @return True if removed successfully, false if not found.
      */
-    bool removeQuote(const Quote &quote);
+    bool removeQuote(const Quote& quote);
 
     /**
      * @brief Removes quotes by author.
@@ -160,14 +163,7 @@ public:
      * @param author The author whose quotes should be removed.
      * @return Number of quotes removed.
      */
-    size_t removeQuotesByAuthor(const std::string &author);
-
-#ifdef DEBUG
-    /**
-     * @brief Displays all quotes in the collection.
-     */
-    void displayQuotes() const;
-#endif
+    size_t removeQuotesByAuthor(const std::string& author);
 
     /**
      * @brief Shuffles the quotes in the collection.
@@ -186,7 +182,7 @@ public:
      * @param append Whether to append to existing quotes or replace them.
      * @return True if loaded successfully, false otherwise.
      */
-    bool loadQuotesFromJson(const std::string &filename, bool append = false);
+    bool loadQuotesFromJson(const std::string& filename, bool append = false);
 
     /**
      * @brief Saves quotes to a JSON file.
@@ -194,7 +190,7 @@ public:
      * @param filename The JSON file to save quotes to.
      * @return True if saved successfully, false otherwise.
      */
-    bool saveQuotesToJson(const std::string &filename) const;
+    bool saveQuotesToJson(const std::string& filename) const;
 
     /**
      * @brief Searches for quotes containing a keyword.
@@ -203,8 +199,8 @@ public:
      * @param caseSensitive Whether the search should be case-sensitive.
      * @return A vector of quotes containing the keyword.
      */
-    ATOM_NODISCARD auto searchQuotes(const std::string &keyword,
-                                     bool caseSensitive = false) const
+    [[nodiscard]] auto searchQuotes(const std::string& keyword,
+                                    bool caseSensitive = false) const
         -> std::vector<Quote>;
 
     /**
@@ -213,7 +209,7 @@ public:
      * @param author The name of the author to filter by.
      * @return A vector of quotes by the specified author.
      */
-    ATOM_NODISCARD auto filterQuotesByAuthor(const std::string &author) const
+    [[nodiscard]] auto filterQuotesByAuthor(const std::string& author) const
         -> std::vector<Quote>;
 
     /**
@@ -222,8 +218,8 @@ public:
      * @param category The category to filter by.
      * @return A vector of quotes in the specified category.
      */
-    ATOM_NODISCARD auto filterQuotesByCategory(
-        const std::string &category) const -> std::vector<Quote>;
+    [[nodiscard]] auto filterQuotesByCategory(const std::string& category) const
+        -> std::vector<Quote>;
 
     /**
      * @brief Filters quotes by year.
@@ -231,8 +227,7 @@ public:
      * @param year The year to filter by.
      * @return A vector of quotes from the specified year.
      */
-    ATOM_NODISCARD auto filterQuotesByYear(int year) const
-        -> std::vector<Quote>;
+    [[nodiscard]] auto filterQuotesByYear(int year) const -> std::vector<Quote>;
 
     /**
      * @brief Filters quotes using a custom filter function.
@@ -240,8 +235,8 @@ public:
      * @param filterFunc The function to use for filtering.
      * @return A vector of quotes that pass the filter.
      */
-    ATOM_NODISCARD auto filterQuotes(
-        std::function<bool(const Quote &)> filterFunc) const
+    [[nodiscard]] auto filterQuotes(
+        std::function<bool(const Quote&)> filterFunc) const
         -> std::vector<Quote>;
 
     /**
@@ -249,35 +244,35 @@ public:
      *
      * @return A random quote formatted as string, or empty string if no quotes.
      */
-    ATOM_NODISCARD auto getRandomQuote() const -> std::string;
+    [[nodiscard]] auto getRandomQuote() const -> std::string;
 
     /**
      * @brief Gets a random quote from the collection as a Quote object.
      *
      * @return An optional containing a random Quote, or empty if no quotes.
      */
-    ATOM_NODISCARD auto getRandomQuoteObject() const -> std::optional<Quote>;
+    [[nodiscard]] auto getRandomQuoteObject() const -> std::optional<Quote>;
 
     /**
      * @brief Gets the number of quotes in the collection.
      *
      * @return The number of quotes.
      */
-    ATOM_NODISCARD auto size() const -> size_t { return quotes_.size(); }
+    [[nodiscard]] auto size() const -> size_t { return quotes_.size(); }
 
     /**
      * @brief Checks if the collection is empty.
      *
      * @return True if empty, false otherwise.
      */
-    ATOM_NODISCARD auto empty() const -> bool { return quotes_.empty(); }
+    [[nodiscard]] auto empty() const -> bool { return quotes_.empty(); }
 
     /**
      * @brief Gets all quotes in the collection.
      *
      * @return A vector containing all quotes.
      */
-    ATOM_NODISCARD auto getAllQuotes() const -> const std::vector<Quote> & {
+    [[nodiscard]] auto getAllQuotes() const -> const std::vector<Quote>& {
         return quotes_;
     }
 
@@ -294,7 +289,7 @@ private:
     /**
      * @brief Checks if caches need to be rebuilt.
      */
-    bool needCacheRebuild() const;
+    [[nodiscard]] bool needCacheRebuild() const;
 
     mutable bool cacheValid_ = false;
 };

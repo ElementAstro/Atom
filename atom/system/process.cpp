@@ -57,12 +57,15 @@
 #error "Unknown platform"
 #endif
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 
 namespace atom::system {
 
 constexpr int BUFFER_SIZE = 1024;
-namespace {
+
+/**
+ * @brief Manages process monitoring tasks
+ */
 class ProcessMonitorManager {
 public:
     static ProcessMonitorManager &getInstance() {
@@ -70,6 +73,13 @@ public:
         return instance;
     }
 
+    /**
+     * @brief Start monitoring a process for status changes
+     * @param pid Process ID to monitor
+     * @param callback Function to call when status changes
+     * @param intervalMs Monitoring interval in milliseconds
+     * @return Monitor ID for tracking this monitoring task
+     */
     int startMonitoring(int pid,
                         std::function<void(int, const std::string &)> callback,
                         unsigned int intervalMs) {
@@ -90,7 +100,6 @@ public:
                         std::this_thread::sleep_for(
                             std::chrono::milliseconds(intervalMs));
                     } catch (const std::exception &e) {
-                        // 进程可能已经结束
                         callback(pid, "Terminated");
                         break;
                     }
@@ -104,6 +113,11 @@ public:
         return monitorId;
     }
 
+    /**
+     * @brief Stop monitoring a process
+     * @param monitorId Monitor ID returned by startMonitoring
+     * @return True if monitoring was successfully stopped
+     */
     bool stopMonitoring(int monitorId) {
         std::lock_guard<std::mutex> lock(mutex_);
         auto it = tasks_.find(monitorId);
@@ -143,7 +157,9 @@ private:
     std::unordered_map<int, bool> stopFlags_;
 };
 
-// 资源监控管理器
+/**
+ * @brief Manages resource monitoring for processes
+ */
 class ResourceMonitorManager {
 public:
     static ResourceMonitorManager &getInstance() {
@@ -151,6 +167,15 @@ public:
         return instance;
     }
 
+    /**
+     * @brief Start monitoring a specific resource type for a process
+     * @param pid Process ID to monitor
+     * @param resourceType Type of resource to monitor (cpu, memory, etc.)
+     * @param threshold Threshold value to trigger callback
+     * @param callback Function to call when threshold is exceeded
+     * @param intervalMs Monitoring interval in milliseconds
+     * @return Monitor ID for tracking this monitoring task
+     */
     int startMonitoring(
         int pid, const std::string &resourceType, double threshold,
         std::function<void(int, const std::string &, double)> callback,
@@ -158,40 +183,45 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
         int monitorId = nextMonitorId_++;
 
-        auto task = std::async(std::launch::async, [this, pid, resourceType,
-                                                    threshold, callback,
-                                                    intervalMs, monitorId]() {
-            while (!shouldStop(monitorId)) {
-                try {
-                    double currentValue = -1;
-                    if (resourceType == "cpu") {
-                        currentValue = getProcessCpuUsage(pid);
-                    } else if (resourceType == "memory") {
-                        currentValue =
-                            static_cast<double>(getProcessMemoryUsage(pid));
-                    }
-                    // 可以扩展其他资源类型监控
+        auto task =
+            std::async(std::launch::async, [this, pid, resourceType, threshold,
+                                            callback, intervalMs, monitorId]() {
+                while (!shouldStop(monitorId)) {
+                    try {
+                        double currentValue = -1;
+                        if (resourceType == "cpu") {
+                            currentValue = getProcessCpuUsage(pid);
+                        } else if (resourceType == "memory") {
+                            currentValue =
+                                static_cast<double>(getProcessMemoryUsage(pid));
+                        }
 
-                    if (currentValue >= threshold) {
-                        callback(pid, resourceType, currentValue);
-                    }
+                        if (currentValue >= threshold) {
+                            callback(pid, resourceType, currentValue);
+                        }
 
-                    std::this_thread::sleep_for(
-                        std::chrono::milliseconds(intervalMs));
-                } catch (const std::exception &e) {
-                    LOG_F(ERROR, "Exception in resource monitor: {}", e.what());
-                    break;
+                        std::this_thread::sleep_for(
+                            std::chrono::milliseconds(intervalMs));
+                    } catch (const std::exception &e) {
+                        spdlog::error("Exception in resource monitor: {}",
+                                      e.what());
+                        break;
+                    }
                 }
-            }
 
-            std::lock_guard<std::mutex> taskLock(mutex_);
-            resourceTasks_.erase(monitorId);
-        });
+                std::lock_guard<std::mutex> taskLock(mutex_);
+                resourceTasks_.erase(monitorId);
+            });
 
         resourceTasks_[monitorId] = std::move(task);
         return monitorId;
     }
 
+    /**
+     * @brief Stop resource monitoring
+     * @param monitorId Monitor ID returned by startMonitoring
+     * @return True if monitoring was successfully stopped
+     */
     bool stopMonitoring(int monitorId) {
         std::lock_guard<std::mutex> lock(mutex_);
         auto it = resourceTasks_.find(monitorId);
@@ -203,8 +233,7 @@ public:
     }
 
 private:
-    ResourceMonitorManager()
-        : nextMonitorId_(1000) {}  // 从1000开始，区别于普通监控
+    ResourceMonitorManager() : nextMonitorId_(1000) {}
 
     bool shouldStop(int monitorId) {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -221,7 +250,9 @@ private:
     std::unordered_map<int, bool> stopFlags_;
 };
 
-// 性能历史记录管理器
+/**
+ * @brief Manages performance history collection for processes
+ */
 class PerformanceHistoryManager {
 public:
     static PerformanceHistoryManager &getInstance() {
@@ -229,6 +260,13 @@ public:
         return instance;
     }
 
+    /**
+     * @brief Collect performance history for a process
+     * @param pid Process ID to monitor
+     * @param duration Duration to collect data
+     * @param intervalMs Collection interval in milliseconds
+     * @return Performance history data
+     */
     PerformanceHistory collectHistory(int pid, std::chrono::seconds duration,
                                       unsigned int intervalMs) {
         PerformanceHistory history;
@@ -243,7 +281,6 @@ public:
                 point.cpuUsage = getProcessCpuUsage(pid);
                 point.memoryUsage = getProcessMemoryUsage(pid);
 
-                // 这里可以添加获取IO统计信息的代码
                 auto resources = getProcessResources(pid);
                 point.ioReadBytes = resources.ioRead;
                 point.ioWriteBytes = resources.ioWrite;
@@ -253,8 +290,8 @@ public:
                 std::this_thread::sleep_for(
                     std::chrono::milliseconds(intervalMs));
             } catch (const std::exception &e) {
-                LOG_F(ERROR, "Exception collecting performance history: {}",
-                      e.what());
+                spdlog::error("Exception collecting performance history: {}",
+                              e.what());
                 break;
             }
         }
@@ -262,9 +299,10 @@ public:
         return history;
     }
 };
-}  // namespace
 
-// 保存性能计数器信息的结构体
+/**
+ * @brief CPU usage tracking structure for performance monitoring
+ */
 struct CpuUsageTracker {
 #ifdef _WIN32
     struct ProcessCpuInfo {
@@ -315,7 +353,7 @@ auto getAllProcesses() -> std::vector<std::pair<int, std::string>> {
 
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snapshot == INVALID_HANDLE_VALUE) {
-        LOG_F(ERROR, "Failed to create process snapshot");
+        spdlog::error("Failed to create process snapshot");
         return processes;
     }
 
@@ -350,7 +388,7 @@ auto getAllProcesses() -> std::vector<std::pair<int, std::string>> {
 
     DIR *procDir = opendir("/proc");
     if (procDir == nullptr) {
-        LOG_F(ERROR, "Failed to open /proc directory");
+        spdlog::error("Failed to open /proc directory");
         return processes;
     }
 
@@ -392,13 +430,13 @@ std::vector<std::pair<int, std::string>> getAllProcesses() {
     size_t length = 0;
 
     if (sysctl(mib, 4, nullptr, &length, nullptr, 0) == -1) {
-        LOG_F(ERROR, "Failed to get process info length");
+        spdlog::error("Failed to get process info length");
         return processes;
     }
 
     auto procBuf = std::make_unique<kinfo_proc[]>(length / sizeof(kinfo_proc));
     if (sysctl(mib, 4, procBuf.get(), &length, nullptr, 0) == -1) {
-        LOG_F(ERROR, "Failed to get process info");
+        spdlog::error("Failed to get process info");
         return processes;
     }
 
@@ -427,12 +465,12 @@ auto getLatestLogFile(const std::string &folderPath) -> std::string {
             }
         }
     } catch (const fs::filesystem_error &e) {
-        LOG_F(ERROR, "Error accessing directory {}: {}", folderPath, e.what());
+        spdlog::error("Error accessing directory {}: {}", folderPath, e.what());
         return "";
     }
 
     if (logFiles.empty()) {
-        LOG_F(WARNING, "No log files found in directory {}", folderPath);
+        spdlog::warn("No log files found in directory {}", folderPath);
         return "";
     }
 
@@ -442,18 +480,18 @@ auto getLatestLogFile(const std::string &folderPath) -> std::string {
             try {
                 return fs::last_write_time(a) < fs::last_write_time(b);
             } catch (const fs::filesystem_error &e) {
-                LOG_F(ERROR, "Error comparing file times: {}", e.what());
+                spdlog::error("Error comparing file times: {}", e.what());
                 return false;
             }
         });
 
     if (latestFile == logFiles.end()) {
-        LOG_F(ERROR, "Failed to determine the latest log file in directory {}",
-              folderPath);
+        spdlog::error("Failed to determine the latest log file in directory {}",
+                      folderPath);
         return "";
     }
 
-    LOG_F(INFO, "Latest log file found: {}", latestFile->string());
+    spdlog::info("Latest log file found: {}", latestFile->string());
     return latestFile->string();
 }
 
@@ -461,7 +499,6 @@ auto getProcessInfo(int pid) -> Process {
     Process info;
     info.pid = pid;
 
-    // 获取进程位置
 #ifdef _WIN32
     HANDLE hProcess =
         OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
@@ -482,10 +519,8 @@ auto getProcessInfo(int pid) -> Process {
     }
 #endif
 
-    // 获取进程名称
     info.name = fs::path(info.path).filename().string();
 
-    // 获取进程状态
     info.status = "Unknown";
 #ifdef _WIN32
     if (hProcess != nullptr) {
@@ -529,7 +564,7 @@ auto getProcessInfoByName(const std::string &processName)
 #ifdef _WIN32
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snap == INVALID_HANDLE_VALUE) {
-        LOG_F(ERROR, "Unable to create toolhelp snapshot.");
+        spdlog::error("Unable to create toolhelp snapshot.");
         return processes;
     }
 
@@ -538,7 +573,7 @@ auto getProcessInfoByName(const std::string &processName)
 
     if (!Process32FirstW(snap, &entry)) {
         CloseHandle(snap);
-        LOG_F(ERROR, "Unable to get the first process.");
+        spdlog::error("Unable to get the first process.");
         return processes;
     }
 
@@ -555,7 +590,7 @@ auto getProcessInfoByName(const std::string &processName)
     std::string cmd = "pgrep -fl " + processName;
     auto [output, status] = executeCommandWithStatus(cmd);
     if (status != 0) {
-        LOG_F(ERROR, "Failed to find process with name '{}'.", processName);
+        spdlog::error("Failed to find process with name '{}'.", processName);
         return processes;
     }
 
@@ -709,14 +744,14 @@ auto createProcessAsUser(const std::string &command, const std::string &user,
                    atom::utils::StringToLPSTR(password),
                    LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_DEFAULT,
                    &tokenHandle) == 0) {
-        LOG_F(ERROR, "LogonUser failed with error: {}", GetLastError());
+        spdlog::error("LogonUser failed with error: {}", GetLastError());
         return false;
     }
 
     if (DuplicateTokenEx(tokenHandle, TOKEN_ALL_ACCESS, nullptr,
                          SecurityImpersonation, TokenPrimary,
                          &newTokenHandle) == 0) {
-        LOG_F(ERROR, "DuplicateTokenEx failed with error: {}", GetLastError());
+        spdlog::error("DuplicateTokenEx failed with error: {}", GetLastError());
         return false;
     }
 
@@ -724,11 +759,11 @@ auto createProcessAsUser(const std::string &command, const std::string &user,
                              atom::utils::StringToLPWSTR(command), nullptr,
                              nullptr, FALSE, 0, nullptr, nullptr, &startupInfo,
                              &processInfo) == 0) {
-        LOG_F(ERROR, "CreateProcessAsUser failed with error: {}",
-              GetLastError());
+        spdlog::error("CreateProcessAsUser failed with error: {}",
+                      GetLastError());
         return false;
     }
-    LOG_F(INFO, "Process created successfully!");
+    spdlog::info("Process created successfully!");
     result = true;
     WaitForSingleObject(processInfo.hProcess, INFINITE);
 
@@ -736,35 +771,35 @@ auto createProcessAsUser(const std::string &command, const std::string &user,
 #else
     pid_t pid = fork();
     if (pid < 0) {
-        LOG_F(ERROR, "Fork failed");
+        spdlog::error("Fork failed");
         return false;
     } else if (pid == 0) {
         struct passwd *pw = getpwnam(user.c_str());
         if (pw == nullptr) {
-            LOG_F(ERROR, "Failed to get user information for {}", user);
+            spdlog::error("Failed to get user information for {}", user);
             exit(EXIT_FAILURE);
         }
 
         if (setgid(pw->pw_gid) != 0) {
-            LOG_F(ERROR, "Failed to set group ID");
+            spdlog::error("Failed to set group ID");
             exit(EXIT_FAILURE);
         }
         if (setuid(pw->pw_uid) != 0) {
-            LOG_F(ERROR, "Failed to set user ID");
+            spdlog::error("Failed to set user ID");
             exit(EXIT_FAILURE);
         }
         execl("/bin/sh", "sh", "-c", command.c_str(), (char *)nullptr);
-        LOG_F(ERROR, "Failed to execute command");
+        spdlog::error("Failed to execute command");
         exit(EXIT_FAILURE);
     } else {
         int status;
         waitpid(pid, &status, 0);
         if (WIFEXITED(status)) {
-            LOG_F(INFO, "Process exited with status {}",
-                  std::to_string(WEXITSTATUS(status)));
+            spdlog::info("Process exited with status {}",
+                         std::to_string(WEXITSTATUS(status)));
             return WEXITSTATUS(status) == 0;
         }
-        LOG_F(ERROR, "Process did not exit normally");
+        spdlog::error("Process did not exit normally");
         return false;
     }
 #endif
@@ -775,7 +810,7 @@ auto getProcessIdByName(const std::string &processName) -> std::vector<int> {
 #ifdef _WIN32
     HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnapshot == INVALID_HANDLE_VALUE) {
-        LOG_F(ERROR, "Failed to create snapshot!");
+        spdlog::error("Failed to create snapshot!");
         return pids;
     }
 
@@ -810,7 +845,7 @@ auto getProcessIdByName(const std::string &processName) -> std::vector<int> {
             }
         }
     } catch (const std::exception &e) {
-        LOG_F(ERROR, "Error reading /proc directory: {}", e.what());
+        spdlog::error("Error reading /proc directory: {}", e.what());
     }
 #elif defined(__APPLE__)
     int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
@@ -818,13 +853,13 @@ auto getProcessIdByName(const std::string &processName) -> std::vector<int> {
     size_t size = 0;
 
     if (sysctl(mib, 4, nullptr, &size, nullptr, 0) == -1) {
-        LOG_F(ERROR, "Failed to get process size.");
+        spdlog::error("Failed to get process size.");
         return pids;
     }
 
     processList = new kinfo_proc[size / sizeof(struct kinfo_proc)];
     if (sysctl(mib, 4, processList, &size, nullptr, 0) == -1) {
-        LOG_F(ERROR, "Failed to get process list.");
+        spdlog::error("Failed to get process list.");
         delete[] processList;
         return pids;
     }
@@ -847,7 +882,11 @@ auto getProcessIdByName(const std::string &processName) -> std::vector<int> {
 }
 
 #ifdef _WIN32
-// Get current user privileges on Windows systems
+/**
+ * @brief Get current user privileges on Windows systems
+ * @param pid Process ID (currently unused in Windows implementation)
+ * @return PrivilegesInfo structure containing user privilege information
+ */
 auto getWindowsPrivileges(int pid) -> PrivilegesInfo {
     PrivilegesInfo info;
     HANDLE tokenHandle = nullptr;
@@ -856,12 +895,11 @@ auto getWindowsPrivileges(int pid) -> PrivilegesInfo {
     std::array<char, BUFFER_SIZE> username;
     auto usernameLen = static_cast<DWORD>(username.size());
 
-    // Get the username
     if (GetUserNameA(username.data(), &usernameLen) != 0) {
         info.username = username.data();
-        LOG_F(INFO, "Current User: {}", info.username);
+        spdlog::info("Current User: {}", info.username);
     } else {
-        LOG_F(ERROR, "Failed to get username. Error: {}", GetLastError());
+        spdlog::error("Failed to get username. Error: {}", GetLastError());
     }
 
     // Open the access token of the specified process
@@ -878,7 +916,7 @@ auto getWindowsPrivileges(int pid) -> PrivilegesInfo {
             if (privileges != nullptr &&
                 GetTokenInformation(tokenHandle, TokenPrivileges, privileges,
                                     tokenInfoLength, &tokenInfoLength) != 0) {
-                LOG_F(INFO, "Privileges:");
+                spdlog::info("Privileges:");
                 for (DWORD i = 0; i < privileges->PrivilegeCount; ++i) {
                     LUID_AND_ATTRIBUTES laa = privileges->Privileges[i];
                     std::array<char, BUFFER_SIZE> privilegeName;
@@ -894,25 +932,26 @@ auto getWindowsPrivileges(int pid) -> PrivilegesInfo {
                                 ? " - Enabled"
                                 : " - Disabled";
                         info.privileges.push_back(privilege);
-                        LOG_F(INFO, "  {}", privilege);
+                        spdlog::info("  {}", privilege);
                     } else {
-                        LOG_F(ERROR,
-                              "Failed to lookup privilege name. Error: {}",
-                              GetLastError());
+                        spdlog::error(
+                            "Failed to lookup privilege name. Error: {}",
+                            GetLastError());
                     }
                 }
             } else {
-                LOG_F(ERROR, "Failed to get token information. Error: {}",
-                      GetLastError());
+                spdlog::error("Failed to get token information. Error: {}",
+                              GetLastError());
             }
             free(privileges);
         } else {
-            LOG_F(ERROR, "Failed to get token information length. Error: {}",
-                  GetLastError());
+            spdlog::error("Failed to get token information length. Error: {}",
+                          GetLastError());
         }
         CloseHandle(tokenHandle);
     } else {
-        LOG_F(ERROR, "Failed to open process token. Error: {}", GetLastError());
+        spdlog::error("Failed to open process token. Error: {}",
+                      GetLastError());
     }
 
     // Check if the user is an administrator
@@ -925,12 +964,12 @@ auto getWindowsPrivileges(int pid) -> PrivilegesInfo {
         CheckTokenMembership(nullptr, administratorsGroup, &isAdmin);
         FreeSid(administratorsGroup);
     } else {
-        LOG_F(ERROR, "Failed to allocate and initialize SID. Error: {}",
-              GetLastError());
+        spdlog::error("Failed to allocate and initialize SID. Error: {}",
+                      GetLastError());
     }
     info.isAdmin = isAdmin != 0;
-    LOG_F(INFO, "User has {}Administrator privileges.",
-          info.isAdmin ? "" : "no ");
+    spdlog::info("User has {}Administrator privileges.",
+                 info.isAdmin ? "" : "no ");
 
     return info;
 }
@@ -944,7 +983,7 @@ auto getPosixPrivileges(pid_t pid) -> PrivilegesInfo {
     // Read UID and GID from /proc/[pid]/status
     std::ifstream statusFile(procPath + "/status");
     if (!statusFile) {
-        LOG_F(ERROR, "Failed to open /proc/{}/status", pid);
+        spdlog::error("Failed to open /proc/{}/status", pid);
         return info;
     }
 
@@ -973,37 +1012,35 @@ auto getPosixPrivileges(pid_t pid) -> PrivilegesInfo {
 
     if (pw != nullptr) {
         info.username = pw->pw_name;
-        LOG_F(INFO, "User: {} (UID: {})", info.username, uid);
+        spdlog::info("User: {} (UID: {})", info.username, uid);
     } else {
-        LOG_F(ERROR, "Failed to get user information for UID: {}", uid);
+        spdlog::error("Failed to get user information for UID: {}", uid);
     }
     if (gr != nullptr) {
         info.groupname = gr->gr_name;
-        LOG_F(INFO, "Group: {} (GID: {})", info.groupname, gid);
+        spdlog::info("Group: {} (GID: {})", info.groupname, gid);
     } else {
-        LOG_F(ERROR, "Failed to get group information for GID: {}", gid);
+        spdlog::error("Failed to get group information for GID: {}", gid);
     }
 
     // Display effective user and group IDs
     if (uid != euid) {
         struct passwd *epw = getpwuid(euid);
         if (epw != nullptr) {
-            LOG_F(INFO, "Effective User: {} (EUID: {})", epw->pw_name, euid);
+            spdlog::info("Effective User: {} (EUID: {})", epw->pw_name, euid);
         } else {
-            LOG_F(ERROR,
-                  "Failed to get effective user information for EUID: {}",
-                  euid);
+            spdlog::error(
+                "Failed to get effective user information for EUID: {}", euid);
         }
     }
 
     if (gid != egid) {
         struct group *egr = getgrgid(egid);
         if (egr != nullptr) {
-            LOG_F(INFO, "Effective Group: {} (EGID: {})", egr->gr_name, egid);
+            spdlog::info("Effective Group: {} (EGID: {})", egr->gr_name, egid);
         } else {
-            LOG_F(ERROR,
-                  "Failed to get effective group information for EGID: {}",
-                  egid);
+            spdlog::error(
+                "Failed to get effective group information for EGID: {}", egid);
         }
     }
 
@@ -1015,11 +1052,11 @@ auto getPosixPrivileges(pid_t pid) -> PrivilegesInfo {
         while (std::getline(capFile, capLine)) {
             if (capLine.find("CapEff:") == 0) {
                 info.privileges.push_back(capLine);
-                LOG_F(INFO, "Capabilities: {}", capLine);
+                spdlog::info("Capabilities: {}", capLine);
             }
         }
     } else {
-        LOG_F(ERROR, "Failed to open /proc/{}/status", pid);
+        spdlog::error("Failed to open /proc/{}/status", pid);
     }
 #endif
 
@@ -1032,7 +1069,7 @@ auto getProcessCpuUsage(int pid) -> double {
     std::lock_guard<std::mutex> lock(CpuUsageTracker::getMutex());
     auto &trackers = CpuUsageTracker::getTrackers();
 
-    // 初始化或获取进程追踪器
+    // Initialize or get process tracker
     if (trackers.find(pid) == trackers.end()) {
         SYSTEM_INFO sysInfo;
         FILETIME ftime, fsys, fuser;
@@ -1056,7 +1093,7 @@ auto getProcessCpuUsage(int pid) -> double {
         memcpy(&info.lastUserCPU, &fuser, sizeof(FILETIME));
 
         trackers[pid] = info;
-        return 0.0;  // 第一次调用返回0
+        return 0.0;  // First call returns 0
     }
 
     auto &info = trackers[pid];
@@ -1067,7 +1104,7 @@ auto getProcessCpuUsage(int pid) -> double {
     GetSystemTimeAsFileTime(&ftime);
     memcpy(&now, &ftime, sizeof(FILETIME));
 
-    // 确保进程句柄有效
+    // Ensure process handle is valid
     if (info.hProcess == NULL) {
         info.hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
                                     FALSE, pid);
@@ -1079,7 +1116,7 @@ auto getProcessCpuUsage(int pid) -> double {
     if (!GetProcessTimes(info.hProcess, &ftime, &ftime, &fsys, &fuser)) {
         CloseHandle(info.hProcess);
         info.hProcess = NULL;
-        trackers.erase(pid);  // 清理无效追踪器
+        trackers.erase(pid);  // Clean up invalid tracker
         return -1.0;
     }
 
@@ -1101,74 +1138,70 @@ auto getProcessCpuUsage(int pid) -> double {
     std::lock_guard<std::mutex> lock(CpuUsageTracker::getMutex());
     auto &trackers = CpuUsageTracker::getTrackers();
 
-    // 初始化或获取进程追踪器
-    if (trackers.find(pid) == trackers.end()) {
-        FILE *file;
+    // 初始化或获取进程追踪�?    if (trackers.find(pid) == trackers.end()) {
+    FILE *file;
 
-        CpuUsageTracker::ProcessCpuInfo info;
-        struct tms timeSample;
+    CpuUsageTracker::ProcessCpuInfo info;
+    struct tms timeSample;
 
-        info.lastCPU = times(&timeSample);
-        info.lastSysCPU = timeSample.tms_stime;
-        info.lastUserCPU = timeSample.tms_utime;
+    info.lastCPU = times(&timeSample);
+    info.lastSysCPU = timeSample.tms_stime;
+    info.lastUserCPU = timeSample.tms_utime;
 
-        file = fopen("/proc/stat", "r");
-        if (file == nullptr) {
-            return -1.0;
-        }
-
-        unsigned long user, nice, sys, idle;
-        if (fscanf(file, "cpu %lu %lu %lu %lu", &user, &nice, &sys, &idle) !=
-            4) {
-            fclose(file);
-            return -1.0;
-        }
-        fclose(file);
-
-        info.lastTotalUser = user + nice;
-        info.lastTotalUserLow = nice;
-        info.lastTotalSys = sys;
-        info.lastTotalIdle = idle;
-
-        info.numProcessors = sysconf(_SC_NPROCESSORS_ONLN);
-
-        trackers[pid] = info;
-        return 0.0;  // 第一次调用返回0
+    file = fopen("/proc/stat", "r");
+    if (file == nullptr) {
+        return -1.0;
     }
 
-    auto &info = trackers[pid];
-    FILE *file;
-    double percent;
-    struct tms timeSample;
-    clock_t now;
-
-    // 检查进程是否存在
-    std::string procPath = "/proc/" + std::to_string(pid) + "/stat";
-    file = fopen(procPath.c_str(), "r");
-    if (file == nullptr) {
-        trackers.erase(pid);  // 清理无效追踪器
+    unsigned long user, nice, sys, idle;
+    if (fscanf(file, "cpu %lu %lu %lu %lu", &user, &nice, &sys, &idle) != 4) {
+        fclose(file);
         return -1.0;
     }
     fclose(file);
 
-    now = times(&timeSample);
-    if (now <= info.lastCPU || timeSample.tms_stime < info.lastSysCPU ||
-        timeSample.tms_utime < info.lastUserCPU) {
-        // 溢出检测
-        percent = 0.0;
-    } else {
-        percent = (timeSample.tms_stime - info.lastSysCPU) +
-                  (timeSample.tms_utime - info.lastUserCPU);
-        percent /= (now - info.lastCPU);
-        percent /= info.numProcessors;
-        percent *= 100;
-    }
+    info.lastTotalUser = user + nice;
+    info.lastTotalUserLow = nice;
+    info.lastTotalSys = sys;
+    info.lastTotalIdle = idle;
 
-    info.lastCPU = now;
-    info.lastSysCPU = timeSample.tms_stime;
-    info.lastUserCPU = timeSample.tms_utime;
+    info.numProcessors = sysconf(_SC_NPROCESSORS_ONLN);
 
-    return percent;
+    trackers[pid] = info;
+    return 0.0;  // 第一次调用返�?
+}
+
+auto &info = trackers[pid];
+FILE *file;
+double percent;
+struct tms timeSample;
+clock_t now;
+
+// 检查进程是否存�?    std::string procPath = "/proc/" + std::to_string(pid) +
+// "/stat";
+file = fopen(procPath.c_str(), "r");
+if (file == nullptr) {
+    trackers.erase(pid);  // 清理无效追踪�?        return -1.0;
+}
+fclose(file);
+
+now = times(&timeSample);
+if (now <= info.lastCPU || timeSample.tms_stime < info.lastSysCPU ||
+    timeSample.tms_utime < info.lastUserCPU) {
+    // 溢出检�?        percent = 0.0;
+} else {
+    percent = (timeSample.tms_stime - info.lastSysCPU) +
+              (timeSample.tms_utime - info.lastUserCPU);
+    percent /= (now - info.lastCPU);
+    percent /= info.numProcessors;
+    percent *= 100;
+}
+
+info.lastCPU = now;
+info.lastSysCPU = timeSample.tms_stime;
+info.lastUserCPU = timeSample.tms_utime;
+
+return percent;
 #elif defined(__APPLE__)
     // macOS实现
     task_t task;
@@ -1222,7 +1255,7 @@ auto getProcessCpuUsage(int pid) -> double {
 #else
     return -1.0;
 #endif
-}
+}  // namespace
 
 auto getProcessMemoryUsage(int pid) -> std::size_t {
 #ifdef _WIN32
@@ -1236,7 +1269,7 @@ auto getProcessMemoryUsage(int pid) -> std::size_t {
     if (GetProcessMemoryInfo(hProcess, (PROCESS_MEMORY_COUNTERS *)&pmc,
                              sizeof(pmc))) {
         CloseHandle(hProcess);
-        return pmc.WorkingSetSize;  // 返回实际物理内存使用量
+        return pmc.WorkingSetSize;
     }
 
     CloseHandle(hProcess);
@@ -1251,8 +1284,7 @@ auto getProcessMemoryUsage(int pid) -> std::size_t {
     std::size_t size, resident, shared, text, lib, data, dt;
     statmFile >> size >> resident >> shared >> text >> lib >> data >> dt;
 
-    // 计算实际物理内存（RSS）
-    long pageSize = sysconf(_SC_PAGESIZE);
+    // 计算实际物理内存（RSS�?    long pageSize = sysconf(_SC_PAGESIZE);
     return resident * pageSize;
 #elif defined(__APPLE__)
     task_t task;
@@ -1277,7 +1309,7 @@ auto setProcessPriority(int pid, ProcessPriority priority) -> bool {
 #ifdef _WIN32
     HANDLE hProcess = OpenProcess(PROCESS_SET_INFORMATION, FALSE, pid);
     if (hProcess == NULL) {
-        LOG_F(ERROR, "无法打开进程: PID={}", pid);
+        spdlog::error("Failed to open process: PID={}", pid);
         return false;
     }
 
@@ -1306,8 +1338,8 @@ auto setProcessPriority(int pid, ProcessPriority priority) -> bool {
     CloseHandle(hProcess);
 
     if (!result) {
-        LOG_F(ERROR, "SetPriorityClass failed: PID={}, error code={}", pid,
-              GetLastError());
+        spdlog::error("SetPriorityClass failed: PID={}, error code={}", pid,
+                      GetLastError());
         return false;
     }
 
@@ -1338,8 +1370,8 @@ auto setProcessPriority(int pid, ProcessPriority priority) -> bool {
 
     int result = setpriority(which, pid, prio);
     if (result == -1) {
-        LOG_F(ERROR, "设置进程优先级失败: PID={}, 错误={}", pid,
-              strerror(errno));
+        spdlog::error("Failed to set process priority: PID={}, error={}", pid,
+                      strerror(errno));
         return false;
     }
 
@@ -1353,7 +1385,7 @@ auto getProcessPriority(int pid) -> std::optional<ProcessPriority> {
 #ifdef _WIN32
     HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
     if (hProcess == NULL) {
-        LOG_F(ERROR, "Failed to open process: PID={}", pid);
+        spdlog::error("Failed to open process: PID={}", pid);
         return std::nullopt;
     }
 
@@ -1361,8 +1393,8 @@ auto getProcessPriority(int pid) -> std::optional<ProcessPriority> {
     CloseHandle(hProcess);
 
     if (priorityClass == 0) {
-        LOG_F(ERROR, "Failed to get process priority: PID={}, error code={}",
-              pid, GetLastError());
+        spdlog::error("Failed to get process priority: PID={}, error code={}",
+                      pid, GetLastError());
         return std::nullopt;
     }
 
@@ -1386,8 +1418,8 @@ auto getProcessPriority(int pid) -> std::optional<ProcessPriority> {
     int prio = getpriority(which, pid);
 
     if (errno != 0) {
-        LOG_F(ERROR, "Failed to get process priority: PID={}, error={}", pid,
-              strerror(errno));
+        spdlog::error("Failed to get process priority: PID={}, error={}", pid,
+                      strerror(errno));
         return std::nullopt;
     }
 
@@ -1412,8 +1444,8 @@ auto getChildProcesses(int pid) -> std::vector<int> {
 #ifdef _WIN32
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnap == INVALID_HANDLE_VALUE) {
-        LOG_F(ERROR, "Failed to create process snapshot: error code={}",
-              GetLastError());
+        spdlog::error("Failed to create process snapshot: error code={}",
+                      GetLastError());
         return children;
     }
 
@@ -1421,8 +1453,8 @@ auto getChildProcesses(int pid) -> std::vector<int> {
     pe32.dwSize = sizeof(PROCESSENTRY32);
 
     if (!Process32First(hSnap, &pe32)) {
-        LOG_F(ERROR, "Failed to get first process: error code={}",
-              GetLastError());
+        spdlog::error("Failed to get first process: error code={}",
+                      GetLastError());
         CloseHandle(hSnap);
         return children;
     }
@@ -1437,7 +1469,7 @@ auto getChildProcesses(int pid) -> std::vector<int> {
 #elif defined(__linux__)
     DIR *procDir = opendir("/proc");
     if (procDir == nullptr) {
-        LOG_F(ERROR, "Failed to open /proc directory");
+        spdlog::error("Failed to open /proc directory");
         return children;
     }
 
@@ -1488,8 +1520,8 @@ auto getChildProcesses(int pid) -> std::vector<int> {
     std::size_t size;
 
     if (sysctl(mib, 4, nullptr, &size, nullptr, 0) < 0) {
-        LOG_F(ERROR, "Failed to get process list size: error={}",
-              strerror(errno));
+        spdlog::error("Failed to get process list size: error={}",
+                      strerror(errno));
         return children;
     }
 
@@ -1497,7 +1529,7 @@ auto getChildProcesses(int pid) -> std::vector<int> {
                                                sizeof(struct kinfo_proc));
 
     if (sysctl(mib, 4, processList.data(), &size, nullptr, 0) < 0) {
-        LOG_F(ERROR, "Failed to get process list: error={}", strerror(errno));
+        spdlog::error("Failed to get process list: error={}", strerror(errno));
         return children;
     }
 
@@ -1516,14 +1548,14 @@ auto getProcessStartTime(int pid)
 #ifdef _WIN32
     HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
     if (hProcess == NULL) {
-        LOG_F(ERROR, "Failed to open process: PID={}", pid);
+        spdlog::error("Failed to open process: PID={}", pid);
         return std::nullopt;
     }
 
     FILETIME ftCreate, ftExit, ftKernel, ftUser;
     if (!GetProcessTimes(hProcess, &ftCreate, &ftExit, &ftKernel, &ftUser)) {
-        LOG_F(ERROR, "Failed to get process times: PID={}, error code={}", pid,
-              GetLastError());
+        spdlog::error("Failed to get process times: PID={}, error code={}", pid,
+                      GetLastError());
         CloseHandle(hProcess);
         return std::nullopt;
     }
@@ -1545,7 +1577,7 @@ auto getProcessStartTime(int pid)
     std::string statPath = "/proc/" + std::to_string(pid) + "/stat";
     std::ifstream statFile(statPath);
     if (!statFile) {
-        LOG_F(ERROR, "Failed to open process stat file: {}", statPath);
+        spdlog::error("Failed to open process stat file: {}", statPath);
         return std::nullopt;
     }
 
@@ -1563,7 +1595,7 @@ auto getProcessStartTime(int pid)
 
     std::ifstream uptimeFile("/proc/uptime");
     if (!uptimeFile) {
-        LOG_F(ERROR, "Failed to open system uptime file");
+        spdlog::error("Failed to open system uptime file");
         return std::nullopt;
     }
 
@@ -1582,7 +1614,7 @@ auto getProcessStartTime(int pid)
     size_t len = sizeof(kp);
 
     if (sysctl(mib, 4, &kp, &len, nullptr, 0) < 0) {
-        LOG_F(ERROR, "sysctl failed: error={}", strerror(errno));
+        spdlog::error("sysctl failed: error={}", strerror(errno));
         return std::nullopt;
     }
 
@@ -1627,7 +1659,7 @@ auto getProcessCommandLine(int pid) -> std::vector<std::string> {
     HANDLE hProcess =
         OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
     if (hProcess == nullptr) {
-        LOG_F(ERROR, "Failed to open process: PID={}", pid);
+        spdlog::error("Failed to open process: PID={}", pid);
         return cmdline;
     }
 
@@ -1662,14 +1694,14 @@ auto getProcessCommandLine(int pid) -> std::vector<std::string> {
     size_t size = 0;
 
     if (sysctl(mib, 3, nullptr, &size, nullptr, 0) < 0) {
-        LOG_F(ERROR, "sysctl size retrieval failed: {}", strerror(errno));
+        spdlog::error("sysctl size retrieval failed: {}", strerror(errno));
         return cmdline;
     }
 
     std::vector<char> procargs(size);
     if (sysctl(mib, 3, procargs.data(), &size, nullptr, 0) < 0) {
-        LOG_F(ERROR, "sysctl process args retrieval failed: {}",
-              strerror(errno));
+        spdlog::error("sysctl process args retrieval failed: {}",
+                      strerror(errno));
         return cmdline;
     }
 
@@ -1700,14 +1732,14 @@ auto getProcessEnvironment([[maybe_unused]] int pid)
     std::unordered_map<std::string, std::string> env;
 
 #ifdef _WIN32
-    LOG_F(WARNING,
-          "Windows does not support getting environment variables from other "
-          "processes");
+    spdlog::warn(
+        "Windows does not support getting environment variables from other "
+        "processes");
 #elif defined(__linux__)
     std::string envPath = "/proc/" + std::to_string(pid) + "/environ";
     std::ifstream envFile(envPath);
     if (!envFile) {
-        LOG_F(ERROR, "Failed to open environment file: {}", envPath);
+        spdlog::error("Failed to open environment file: {}", envPath);
         return env;
     }
 
@@ -1731,9 +1763,9 @@ auto getProcessEnvironment([[maybe_unused]] int pid)
         pos++;
     }
 #elif defined(__APPLE__)
-    LOG_F(WARNING,
-          "macOS does not support getting environment variables from other "
-          "processes");
+    spdlog::warn(
+        "macOS does not support getting environment variables from other "
+        "processes");
 #endif
 
     return env;
@@ -1743,7 +1775,7 @@ auto suspendProcess(int pid) -> bool {
 #ifdef _WIN32
     HANDLE hProcess = OpenProcess(PROCESS_SUSPEND_RESUME, FALSE, pid);
     if (hProcess == nullptr) {
-        LOG_F(ERROR, "无法打开进程: PID={}", pid);
+        spdlog::error("Failed to open process: PID={}", pid);
         return false;
     }
 
@@ -1753,7 +1785,7 @@ auto suspendProcess(int pid) -> bool {
     auto pfnNtSuspendProcess = (NtSuspendProcess)(procAddr);
 
     if (!pfnNtSuspendProcess) {
-        LOG_F(ERROR, "无法获取NtSuspendProcess函数");
+        spdlog::error("Failed to get NtSuspendProcess function");
         CloseHandle(hProcess);
         return false;
     }
@@ -1762,22 +1794,25 @@ auto suspendProcess(int pid) -> bool {
     CloseHandle(hProcess);
 
     if (status != 0) {
-        LOG_F(ERROR, "挂起进程失败: PID={}, 状态={}", pid, status);
+        spdlog::error("Failed to suspend process: PID={}, status={}", pid,
+                      status);
         return false;
     }
 
     return true;
 #elif defined(__linux__)
-    // 在Linux上使用SIGSTOP信号挂起进程
+    // Use SIGSTOP signal to suspend process on Linux
     if (kill(pid, SIGSTOP) != 0) {
-        LOG_F(ERROR, "挂起进程失败: PID={}, 错误={}", pid, strerror(errno));
+        spdlog::error("Failed to suspend process: PID={}, error={}", pid,
+                      strerror(errno));
         return false;
     }
     return true;
 #elif defined(__APPLE__)
-    // macOS与Linux类似，使用SIGSTOP信号
+    // macOS similar to Linux, use SIGSTOP signal
     if (kill(pid, SIGSTOP) != 0) {
-        LOG_F(ERROR, "挂起进程失败: PID={}, 错误={}", pid, strerror(errno));
+        spdlog::error("Failed to suspend process: PID={}, error={}", pid,
+                      strerror(errno));
         return false;
     }
     return true;
@@ -1790,7 +1825,7 @@ auto resumeProcess(int pid) -> bool {
 #ifdef _WIN32
     HANDLE hProcess = OpenProcess(PROCESS_SUSPEND_RESUME, FALSE, pid);
     if (hProcess == nullptr) {
-        LOG_F(ERROR, "Unable to open process: PID={}", pid);
+        spdlog::error("Unable to open process: PID={}", pid);
         return false;
     }
 
@@ -1800,7 +1835,7 @@ auto resumeProcess(int pid) -> bool {
     auto pfnNtResumeProcess = (NtResumeProcess)(procAddr);
 
     if (!pfnNtResumeProcess) {
-        LOG_F(ERROR, "Failed to get NtResumeProcess function");
+        spdlog::error("Failed to get NtResumeProcess function");
         CloseHandle(hProcess);
         return false;
     }
@@ -1809,16 +1844,16 @@ auto resumeProcess(int pid) -> bool {
     CloseHandle(hProcess);
 
     if (status != 0) {
-        LOG_F(ERROR, "Failed to resume process: PID={}, status={}", pid,
-              status);
+        spdlog::error("Failed to resume process: PID={}, status={}", pid,
+                      status);
         return false;
     }
 
     return true;
 #elif defined(__linux__) || defined(__APPLE__)
     if (kill(pid, SIGCONT) != 0) {
-        LOG_F(ERROR, "Failed to resume process: PID={}, error={}", pid,
-              strerror(errno));
+        spdlog::error("Failed to resume process: PID={}, error={}", pid,
+                      strerror(errno));
         return false;
     }
     return true;
@@ -1829,14 +1864,14 @@ auto resumeProcess(int pid) -> bool {
 
 auto setProcessAffinity(int pid, const std::vector<int> &cpuIndices) -> bool {
     if (cpuIndices.empty()) {
-        LOG_F(ERROR, "CPU core index list is empty");
+        spdlog::error("CPU core index list is empty");
         return false;
     }
 
 #ifdef _WIN32
     HANDLE hProcess = OpenProcess(PROCESS_SET_INFORMATION, FALSE, pid);
     if (hProcess == nullptr) {
-        LOG_F(ERROR, "Failed to open process: PID={}", pid);
+        spdlog::error("Failed to open process: PID={}", pid);
         return false;
     }
 
@@ -1851,9 +1886,9 @@ auto setProcessAffinity(int pid, const std::vector<int> &cpuIndices) -> bool {
     CloseHandle(hProcess);
 
     if (!result) {
-        LOG_F(ERROR,
-              "Failed to set process CPU affinity: PID={}, error code={}", pid,
-              GetLastError());
+        spdlog::error(
+            "Failed to set process CPU affinity: PID={}, error code={}", pid,
+            GetLastError());
         return false;
     }
     return true;
@@ -1868,13 +1903,13 @@ auto setProcessAffinity(int pid, const std::vector<int> &cpuIndices) -> bool {
     }
 
     if (sched_setaffinity(pid, sizeof(cpu_set_t), &cpuset) != 0) {
-        LOG_F(ERROR, "Failed to set process CPU affinity: PID={}, error={}",
-              pid, strerror(errno));
+        spdlog::error("Failed to set process CPU affinity: PID={}, error={}",
+                      pid, strerror(errno));
         return false;
     }
     return true;
 #elif defined(__APPLE__)
-    LOG_F(WARNING, "macOS does not support setting CPU affinity");
+    spdlog::warn("macOS does not support setting CPU affinity");
     return false;
 #else
     return false;
@@ -1887,7 +1922,7 @@ auto getProcessAffinity(int pid) -> std::vector<int> {
 #ifdef _WIN32
     HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
     if (hProcess == nullptr) {
-        LOG_F(ERROR, "Failed to open process: PID={}", pid);
+        spdlog::error("Failed to open process: PID={}", pid);
         return cpuIndices;
     }
 
@@ -1899,9 +1934,9 @@ auto getProcessAffinity(int pid) -> std::vector<int> {
             }
         }
     } else {
-        LOG_F(ERROR,
-              "Failed to get process CPU affinity: PID={}, error code={}", pid,
-              GetLastError());
+        spdlog::error(
+            "Failed to get process CPU affinity: PID={}, error code={}", pid,
+            GetLastError());
     }
 
     CloseHandle(hProcess);
@@ -1916,11 +1951,11 @@ auto getProcessAffinity(int pid) -> std::vector<int> {
             }
         }
     } else {
-        LOG_F(ERROR, "Failed to get process CPU affinity: PID={}, error={}",
-              pid, strerror(errno));
+        spdlog::error("Failed to get process CPU affinity: PID={}, error={}",
+                      pid, strerror(errno));
     }
 #elif defined(__APPLE__)
-    LOG_F(WARNING, "macOS does not support getting CPU affinity");
+    spdlog::warn("macOS does not support getting CPU affinity");
 #endif
 
     return cpuIndices;
@@ -1930,7 +1965,7 @@ auto setProcessMemoryLimit(int pid, std::size_t limitBytes) -> bool {
 #ifdef _WIN32
     HANDLE hProcess = OpenProcess(PROCESS_SET_QUOTA, FALSE, pid);
     if (hProcess == nullptr) {
-        LOG_F(ERROR, "Failed to open process: PID={}", pid);
+        spdlog::error("Failed to open process: PID={}", pid);
         return false;
     }
 
@@ -1940,24 +1975,24 @@ auto setProcessMemoryLimit(int pid, std::size_t limitBytes) -> bool {
 
     HANDLE hJob = CreateJobObject(nullptr, nullptr);
     if (hJob == nullptr) {
-        LOG_F(ERROR, "Failed to create job object: error code={}",
-              GetLastError());
+        spdlog::error("Failed to create job object: error code={}",
+                      GetLastError());
         CloseHandle(hProcess);
         return false;
     }
 
     if (!SetInformationJobObject(hJob, JobObjectExtendedLimitInformation,
                                  &jobInfo, sizeof(jobInfo))) {
-        LOG_F(ERROR, "Failed to set job object information: error code={}",
-              GetLastError());
+        spdlog::error("Failed to set job object information: error code={}",
+                      GetLastError());
         CloseHandle(hJob);
         CloseHandle(hProcess);
         return false;
     }
 
     if (!AssignProcessToJobObject(hJob, hProcess)) {
-        LOG_F(ERROR, "Failed to assign process to job object: error code={}",
-              GetLastError());
+        spdlog::error("Failed to assign process to job object: error code={}",
+                      GetLastError());
         CloseHandle(hJob);
         CloseHandle(hProcess);
         return false;
@@ -1971,13 +2006,13 @@ auto setProcessMemoryLimit(int pid, std::size_t limitBytes) -> bool {
     std::string fullPath = cgroupPath + processGroup;
 
     if (mkdir(fullPath.c_str(), 0755) != 0 && errno != EEXIST) {
-        LOG_F(ERROR, "Failed to create cgroup: {}", strerror(errno));
+        spdlog::error("Failed to create cgroup: {}", strerror(errno));
         return false;
     }
 
     std::ofstream limitFile(fullPath + "/memory.limit_in_bytes");
     if (!limitFile) {
-        LOG_F(ERROR, "Failed to open memory limit file");
+        spdlog::error("Failed to open memory limit file");
         return false;
     }
     limitFile << limitBytes;
@@ -1985,7 +2020,7 @@ auto setProcessMemoryLimit(int pid, std::size_t limitBytes) -> bool {
 
     std::ofstream tasksFile(fullPath + "/tasks");
     if (!tasksFile) {
-        LOG_F(ERROR, "Failed to open tasks file");
+        spdlog::error("Failed to open tasks file");
         return false;
     }
     tasksFile << pid;
@@ -1993,8 +2028,8 @@ auto setProcessMemoryLimit(int pid, std::size_t limitBytes) -> bool {
 
     return true;
 #else
-    LOG_F(WARNING,
-          "Current platform does not support setting process memory limits");
+    spdlog::warn(
+        "Current platform does not support setting process memory limits");
     return false;
 #endif
 }
@@ -2004,7 +2039,7 @@ auto getProcessPath(int pid) -> std::string {
     HANDLE hProcess =
         OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
     if (hProcess == nullptr) {
-        LOG_F(ERROR, "Failed to open process: PID={}", pid);
+        spdlog::error("Failed to open process: PID={}", pid);
         return "";
     }
 
@@ -2013,8 +2048,8 @@ auto getProcessPath(int pid) -> std::string {
     CloseHandle(hProcess);
 
     if (length == 0) {
-        LOG_F(ERROR, "Failed to get process path: PID={}, error code={}", pid,
-              GetLastError());
+        spdlog::error("Failed to get process path: PID={}, error code={}", pid,
+                      GetLastError());
         return "";
     }
 
@@ -2025,8 +2060,8 @@ auto getProcessPath(int pid) -> std::string {
     ssize_t length = readlink(procPath.c_str(), path, PATH_MAX - 1);
 
     if (length == -1) {
-        LOG_F(ERROR, "Failed to get process path: PID={}, error={}", pid,
-              strerror(errno));
+        spdlog::error("Failed to get process path: PID={}, error={}", pid,
+                      strerror(errno));
         return "";
     }
 
@@ -2037,8 +2072,8 @@ auto getProcessPath(int pid) -> std::string {
     int ret = proc_pidpath(pid, pathbuf, sizeof(pathbuf));
 
     if (ret <= 0) {
-        LOG_F(ERROR, "Failed to get process path: PID={}, error={}", pid,
-              strerror(errno));
+        spdlog::error("Failed to get process path: PID={}, error={}", pid,
+                      strerror(errno));
         return "";
     }
 
@@ -2065,7 +2100,7 @@ auto getProcessSyscalls([[maybe_unused]] int pid)
     auto [output, status] = executeCommandWithStatus(cmd);
 
     if (status != 0) {
-        LOG_F(ERROR, "Failed to execute strace command: {}", output);
+        spdlog::error("Failed to execute strace command: {}", output);
         return syscalls;
     }
 
@@ -2100,7 +2135,7 @@ auto getProcessSyscalls([[maybe_unused]] int pid)
         }
     }
 #else
-    LOG_F(WARNING, "Current platform does not support syscall statistics");
+    spdlog::warn("Current platform does not support syscall statistics");
 #endif
 
     return syscalls;
@@ -2119,7 +2154,7 @@ auto getProcessNetworkConnections(int pid) -> std::vector<NetworkConnection> {
     if (dwRetVal == ERROR_INSUFFICIENT_BUFFER) {
         pTcpTable = (MIB_TCPTABLE_OWNER_PID *)malloc(dwSize);
         if (pTcpTable == nullptr) {
-            LOG_F(ERROR, "Memory allocation failed");
+            spdlog::error("Memory allocation failed");
             return connections;
         }
 
@@ -2296,7 +2331,7 @@ auto getProcessNetworkConnections(int pid) -> std::vector<NetworkConnection> {
     auto [output, status] = executeCommandWithStatus(cmd);
 
     if (status != 0) {
-        LOG_F(ERROR, "Failed to execute lsof command: {}", output);
+        spdlog::error("Failed to execute lsof command: {}", output);
         return connections;
     }
 
@@ -2372,8 +2407,7 @@ auto getProcessFileDescriptors([[maybe_unused]] int pid)
     std::vector<FileDescriptor> fds;
 
 #ifdef _WIN32
-    LOG_F(WARNING,
-          "File handle listing on Windows platform is not implemented");
+    spdlog::warn("File handle listing on Windows platform is not implemented");
 #elif defined(__linux__)
     std::string fdPath = "/proc/" + std::to_string(pid) + "/fd";
     DIR *dir = opendir(fdPath.c_str());
@@ -2439,7 +2473,7 @@ auto getProcessFileDescriptors([[maybe_unused]] int pid)
     auto [output, status] = executeCommandWithStatus(cmd);
 
     if (status != 0) {
-        LOG_F(ERROR, "Failed to execute lsof command: {}", output);
+        spdlog::error("Failed to execute lsof command: {}", output);
         return fds;
     }
 
@@ -2515,7 +2549,7 @@ auto getProcessPerformanceHistory(int pid, std::chrono::seconds duration,
 }
 auto setProcessIOPriority([[maybe_unused]] int pid, int priority) -> bool {
     if (priority < 0 || priority > 7) {
-        LOG_F(ERROR, "IO priority must be in range 0-7");
+        spdlog::error("IO priority must be in range 0-7");
         return false;
     }
 
@@ -2524,13 +2558,13 @@ auto setProcessIOPriority([[maybe_unused]] int pid, int priority) -> bool {
     int ret = syscall(SYS_ioprio_set, 1, pid, ioprio);
 
     if (ret == -1) {
-        LOG_F(ERROR, "Failed to set IO priority: PID={}, error={}", pid,
-              strerror(errno));
+        spdlog::error("Failed to set IO priority: PID={}, error={}", pid,
+                      strerror(errno));
         return false;
     }
     return true;
 #else
-    LOG_F(WARNING, "Current platform does not support setting IO priority");
+    spdlog::warn("Current platform does not support setting IO priority");
     return false;
 #endif
 }
@@ -2540,14 +2574,14 @@ auto getProcessIOPriority([[maybe_unused]] int pid) -> int {
     long ioprio = syscall(SYS_ioprio_get, 1, pid);
 
     if (ioprio == -1) {
-        LOG_F(ERROR, "Failed to get IO priority: PID={}, error={}", pid,
-              strerror(errno));
+        spdlog::error("Failed to get IO priority: PID={}, error={}", pid,
+                      strerror(errno));
         return -1;
     }
 
     return ioprio & 0xFF;
 #else
-    LOG_F(WARNING, "Current platform does not support getting IO priority");
+    spdlog::warn("Current platform does not support getting IO priority");
     return -1;
 #endif
 }
@@ -2557,7 +2591,7 @@ auto sendSignalToProcess(int pid, int signal) -> bool {
     if (signal == SIGTERM) {
         HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
         if (hProcess == nullptr) {
-            LOG_F(ERROR, "Cannot open process: PID={}", pid);
+            spdlog::error("Cannot open process: PID={}", pid);
             return false;
         }
 
@@ -2565,26 +2599,26 @@ auto sendSignalToProcess(int pid, int signal) -> bool {
         CloseHandle(hProcess);
 
         if (!result) {
-            LOG_F(ERROR, "Failed to terminate process: PID={}, error code={}",
-                  pid, GetLastError());
+            spdlog::error("Failed to terminate process: PID={}, error code={}",
+                          pid, GetLastError());
             return false;
         }
         return true;
     } else if (signal == SIGINT) {
         if (!GenerateConsoleCtrlEvent(CTRL_C_EVENT, pid)) {
-            LOG_F(ERROR, "Failed to send Ctrl+C event: PID={}, error code={}",
-                  pid, GetLastError());
+            spdlog::error("Failed to send Ctrl+C event: PID={}, error code={}",
+                          pid, GetLastError());
             return false;
         }
         return true;
     } else {
-        LOG_F(ERROR, "Windows platform does not support signal: {}", signal);
+        spdlog::error("Windows platform does not support signal: {}", signal);
         return false;
     }
 #else
     if (kill(pid, signal) != 0) {
-        LOG_F(ERROR, "Failed to send signal: PID={}, signal={}, error={}", pid,
-              signal, strerror(errno));
+        spdlog::error("Failed to send signal: PID={}, signal={}, error={}", pid,
+                      signal, strerror(errno));
         return false;
     }
     return true;
@@ -2603,8 +2637,8 @@ auto findProcesses(std::function<bool(const Process &)> predicate)
                 matchingPids.push_back(pid);
             }
         } catch (const std::exception &e) {
-            LOG_F(WARNING, "Error getting process {} information: {}", pid,
-                  e.what());
+            spdlog::warn("Error getting process {} information: {}", pid,
+                         e.what());
         }
     }
 

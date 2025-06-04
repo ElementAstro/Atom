@@ -19,6 +19,7 @@ Description: Storage Monitor
 #include <functional>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 #include "atom/macro.hpp"
@@ -43,19 +44,39 @@ public:
     ~StorageMonitor();
 
     /**
+     * @brief Copy constructor (deleted).
+     */
+    StorageMonitor(const StorageMonitor&) = delete;
+
+    /**
+     * @brief Copy assignment operator (deleted).
+     */
+    StorageMonitor& operator=(const StorageMonitor&) = delete;
+
+    /**
+     * @brief Move constructor (deleted for thread safety).
+     */
+    StorageMonitor(StorageMonitor&&) = delete;
+
+    /**
+     * @brief Move assignment operator (deleted for thread safety).
+     */
+    StorageMonitor& operator=(StorageMonitor&&) = delete;
+
+    /**
      * @brief Registers a callback function.
      *
      * @param callback The callback function to be triggered when storage space
      * changes.
      */
-    void registerCallback(std::function<void(const std::string &)> callback);
+    void registerCallback(std::function<void(const std::string&)> callback);
 
     /**
      * @brief Starts storage space monitoring.
      *
      * @return True if monitoring started successfully, otherwise false.
      */
-    ATOM_NODISCARD auto startMonitoring() -> bool;
+    [[nodiscard]] auto startMonitoring() -> bool;
 
     /**
      * @brief Stops storage space monitoring.
@@ -67,14 +88,14 @@ public:
      *
      * @return True if monitoring is running, otherwise false.
      */
-    ATOM_NODISCARD auto isRunning() const -> bool;
+    [[nodiscard]] auto isRunning() const -> bool;
 
     /**
      * @brief Triggers all registered callback functions.
      *
      * @param path The storage space path.
      */
-    void triggerCallbacks(const std::string &path);
+    void triggerCallbacks(const std::string& path);
 
     /**
      * @brief Checks if new storage media is inserted at the specified path.
@@ -82,7 +103,7 @@ public:
      * @param path The storage space path.
      * @return True if new storage media is inserted, otherwise false.
      */
-    ATOM_NODISCARD auto isNewMediaInserted(const std::string &path) -> bool;
+    [[nodiscard]] auto isNewMediaInserted(const std::string& path) -> bool;
 
     /**
      * @brief Lists all mounted storage spaces.
@@ -94,47 +115,84 @@ public:
      *
      * @param path The storage space path.
      */
-    void listFiles(const std::string &path);
+    void listFiles(const std::string& path);
 
     /**
      * @brief Dynamically adds a storage path.
      *
      * @param path The storage path to add.
      */
-    void addStoragePath(const std::string &path);
+    void addStoragePath(const std::string& path);
 
     /**
      * @brief Dynamically removes a storage path.
      *
      * @param path The storage path to remove.
      */
-    void removeStoragePath(const std::string &path);
+    void removeStoragePath(const std::string& path);
 
     /**
      * @brief Gets the current storage status.
      *
      * @return A string representation of the storage status.
      */
-    std::string getStorageStatus();
+    [[nodiscard]] auto getStorageStatus() -> std::string;
+
+    /**
+     * @brief Gets the number of registered callbacks.
+     *
+     * @return The number of callbacks.
+     */
+    [[nodiscard]] auto getCallbackCount() const -> size_t;
+
+    /**
+     * @brief Clears all registered callbacks.
+     */
+    void clearCallbacks();
+
+    /**
+     * @brief Gets detailed information about a specific storage path.
+     *
+     * @param path The storage path to query.
+     * @return A string containing detailed storage information.
+     */
+    [[nodiscard]] auto getStorageInfo(const std::string& path) -> std::string;
 
 private:
-    std::vector<std::string>
-        m_storagePaths;  ///< All mounted storage space paths.
+    /**
+     * @brief The main monitoring loop.
+     */
+    void monitorLoop();
+
+    /**
+     * @brief Updates storage statistics for a given path.
+     *
+     * @param path The storage path to update.
+     */
+    void updateStorageStats(const std::string& path);
+
+    std::vector<std::string> storagePaths_;
     std::unordered_map<std::string, std::pair<uintmax_t, uintmax_t>>
-        m_storageStats;  ///< Storage statistics.
-    std::mutex m_mutex;  ///< Mutex for thread-safe access to data structures.
-    std::vector<std::function<void(const std::string &)>>
-        m_callbacks;              ///< List of registered callback functions.
-    bool m_isRunning;             ///< Flag indicating if monitoring is running.
-    std::thread m_monitorThread;  ///< Monitoring thread.
-    std::condition_variable
-        m_cv;  ///< Condition variable for thread synchronization.
+        storageStats_;
+    mutable std::mutex mutex_;
+    std::vector<std::function<void(const std::string&)>> callbacks_;
+    bool isRunning_;
+    std::thread monitorThread_;
+    std::condition_variable cv_;
 };
 
 #ifdef _WIN32
-static void monitorUdisk();
+/**
+ * @brief Monitor USB disk insertion and removal on Windows.
+ */
+void monitorUdisk();
 #else
-void monitorUdisk(atom::system::StorageMonitor &monitor);
+/**
+ * @brief Monitor USB disk insertion and removal on Linux.
+ *
+ * @param monitor Reference to the storage monitor instance.
+ */
+void monitorUdisk(StorageMonitor& monitor);
 #endif
 
 }  // namespace atom::system

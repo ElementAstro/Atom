@@ -34,189 +34,341 @@ Description: Storage Monitor
 #include <unistd.h>
 #endif
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 
 namespace fs = std::filesystem;
 
 namespace atom::system {
 
-StorageMonitor::StorageMonitor() : m_isRunning(false) {}
+StorageMonitor::StorageMonitor() : isRunning_(false) {
+    storagePaths_.reserve(16);
+    callbacks_.reserve(8);
+    storageStats_.reserve(16);
+}
 
 StorageMonitor::~StorageMonitor() {
-    LOG_F(INFO, "StorageMonitor destructor called");
+    spdlog::info("StorageMonitor destructor called");
     stopMonitoring();
 }
 
 void StorageMonitor::registerCallback(
     std::function<void(const std::string&)> callback) {
-    LOG_F(INFO, "registerCallback called");
-    std::lock_guard lock(m_mutex);
-    m_callbacks.emplace_back(std::move(callback));
-    LOG_F(INFO, "Callback registered successfully");
+    spdlog::info("Registering callback");
+    std::lock_guard lock(mutex_);
+    callbacks_.emplace_back(std::move(callback));
+    spdlog::info("Callback registered successfully, total callbacks: {}",
+                 callbacks_.size());
 }
 
 auto StorageMonitor::startMonitoring() -> bool {
-    std::lock_guard lock(m_mutex);
-    if (m_isRunning) {
-        LOG_F(WARNING, "Monitoring already running");
+    std::lock_guard lock(mutex_);
+    if (isRunning_) {
+        spdlog::warn("Monitoring already running");
         return false;
     }
-    LOG_F(INFO, "startMonitoring called");
-    m_isRunning = true;
-    m_monitorThread = std::thread([this]() {
-        try {
-            listAllStorage();
-            while (true) {
-                {
-                    std::unique_lock lk(m_mutex);
-                    if (!m_isRunning)
-                        break;
-                }
-                for (const auto& path : m_storagePaths) {
-                    if (isNewMediaInserted(path)) {
-                        triggerCallbacks(path);
-                    }
-                }
-                std::unique_lock lk(m_mutex);
-                m_cv.wait_for(lk, std::chrono::seconds(5),
-                              [this]() { return !m_isRunning; });
-                if (!m_isRunning)
-                    break;
-            }
-        } catch (const std::exception& e) {
-            LOG_F(ERROR, "Exception in storage monitor: {}", e.what());
-            std::lock_guard lk(m_mutex);
-            m_isRunning = false;
-        }
-    });
-    LOG_F(INFO, "Monitoring started successfully");
-    return true;
+
+    spdlog::info("Starting storage monitoring");
+    isRunning_ = true;
+
+    try {
+        monitorThread_ = std::thread(&StorageMonitor::monitorLoop, this);
+        spdlog::info("Storage monitoring started successfully");
+        return true;
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to start monitoring thread: {}", e.what());
+        isRunning_ = false;
+        return false;
+    }
 }
 
 void StorageMonitor::stopMonitoring() {
     {
-        std::lock_guard lock(m_mutex);
-        if (!m_isRunning)
+        std::lock_guard lock(mutex_);
+        if (!isRunning_) {
             return;
-        LOG_F(INFO, "stopMonitoring called");
-        m_isRunning = false;
+        }
+        spdlog::info("Stopping storage monitoring");
+        isRunning_ = false;
     }
-    m_cv.notify_all();
-    if (m_monitorThread.joinable()) {
-        m_monitorThread.join();
+
+    cv_.notify_all();
+    if (monitorThread_.joinable()) {
+        monitorThread_.join();
     }
-    LOG_F(INFO, "Storage monitor stopped");
+    spdlog::info("Storage monitoring stopped");
 }
 
 auto StorageMonitor::isRunning() const -> bool {
-    LOG_F(INFO, "isRunning called, returning: {}", m_isRunning);
-    return m_isRunning;
+    std::lock_guard lock(mutex_);
+    return isRunning_;
 }
 
 void StorageMonitor::triggerCallbacks(const std::string& path) {
-    LOG_F(INFO, "triggerCallbacks called with path: {}", path);
-    std::lock_guard lock(m_mutex);
-    for (const auto& callback : m_callbacks) {
+    spdlog::info("Triggering callbacks for path: {}", path);
+    std::lock_guard lock(mutex_);
+
+    for (const auto& callback : callbacks_) {
         try {
             callback(path);
         } catch (const std::exception& e) {
-            LOG_F(ERROR, "Callback exception: {}", e.what());
+            spdlog::error("Callback exception for path {}: {}", path, e.what());
         }
     }
-    LOG_F(INFO, "Callbacks triggered successfully for path: {}", path);
+
+    spdlog::info("Callbacks triggered successfully for path: {}", path);
 }
 
 auto StorageMonitor::isNewMediaInserted(const std::string& path) -> bool {
-    LOG_F(INFO, "isNewMediaInserted called with path: {}", path);
     try {
         auto currentSpace = fs::space(path);
-        std::lock_guard lock(m_mutex);
-        auto& [lastCapacity, lastFree] = m_storageStats[path];
+        std::lock_guard lock(mutex_);
+        auto& [lastCapacity, lastFree] = storageStats_[path];
+
         if (currentSpace.capacity != lastCapacity ||
             currentSpace.free != lastFree) {
             lastCapacity = currentSpace.capacity;
             lastFree = currentSpace.free;
-            LOG_F(INFO, "Storage changed at path: {}", path);
+            spdlog::info("Storage changed at path: {} (capacity: {}, free: {})",
+                         path, currentSpace.capacity, currentSpace.free);
             return true;
         }
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error checking storage space for {}: {}", path, e.what());
+        spdlog::error("Error checking storage space for {}: {}", path,
+                      e.what());
     }
-    LOG_F(INFO, "No change detected at path: {}", path);
+
     return false;
 }
 
 void StorageMonitor::listAllStorage() {
-    LOG_F(INFO, "listAllStorage called");
+    spdlog::info("Listing all storage devices");
+
     try {
-        for (const auto& entry : fs::directory_iterator("/media")) {
-            if (entry.is_directory()) {
-                auto path = entry.path().string();
-                m_storagePaths.emplace_back(path);
-                m_storageStats[path] = {0, 0};
-                LOG_F(INFO, "Found storage device: {}", path);
+        std::lock_guard lock(mutex_);
+        storagePaths_.clear();
+        storageStats_.clear();
+
+#ifdef _WIN32
+        for (char drive = 'A'; drive <= 'Z'; ++drive) {
+            std::string drivePath = std::format("{}:\\", drive);
+            UINT driveType = GetDriveTypeA(drivePath.c_str());
+
+            if (driveType == DRIVE_FIXED || driveType == DRIVE_REMOVABLE) {
+                storagePaths_.emplace_back(drivePath);
+                storageStats_[drivePath] = {0, 0};
+                updateStorageStats(drivePath);
+                spdlog::info("Found storage device: {} (type: {})", drivePath,
+                             driveType == DRIVE_FIXED ? "Fixed" : "Removable");
             }
         }
-        LOG_F(INFO, "listAllStorage completed with {} storage devices found",
-              m_storagePaths.size());
+#else
+        const std::vector<std::string> mountPoints = {"/", "/home", "/media",
+                                                      "/mnt"};
+
+        for (const auto& mountPoint : mountPoints) {
+            if (fs::exists(mountPoint) && fs::is_directory(mountPoint)) {
+                storagePaths_.emplace_back(mountPoint);
+                storageStats_[mountPoint] = {0, 0};
+                updateStorageStats(mountPoint);
+                spdlog::info("Found storage device: {}", mountPoint);
+            }
+        }
+
+        if (fs::exists("/media")) {
+            for (const auto& entry : fs::directory_iterator("/media")) {
+                if (entry.is_directory()) {
+                    auto path = entry.path().string();
+                    storagePaths_.emplace_back(path);
+                    storageStats_[path] = {0, 0};
+                    updateStorageStats(path);
+                    spdlog::info("Found removable storage device: {}", path);
+                }
+            }
+        }
+#endif
+
+        spdlog::info("Storage listing completed with {} devices found",
+                     storagePaths_.size());
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error listing storage: {}", e.what());
+        spdlog::error("Error listing storage: {}", e.what());
     }
 }
 
 void StorageMonitor::listFiles(const std::string& path) {
-    LOG_F(INFO, "listFiles called with path: {}", path);
+    spdlog::info("Listing files in path: {}", path);
+
     try {
+        size_t fileCount = 0;
         for (const auto& entry : fs::directory_iterator(path)) {
-            LOG_F(INFO, "- {}", entry.path().filename().string());
+            spdlog::debug("- {}", entry.path().filename().string());
+            ++fileCount;
+
+            if (fileCount > 100) {
+                spdlog::info("... and {} more files (truncated)",
+                             std::distance(fs::directory_iterator(path),
+                                           fs::directory_iterator{}));
+                break;
+            }
         }
-        LOG_F(INFO, "listFiles completed for path: {}", path);
+        spdlog::info("Listed {} files in path: {}", fileCount, path);
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Error listing files in {}: {}", path, e.what());
+        spdlog::error("Error listing files in {}: {}", path, e.what());
     }
 }
 
 void StorageMonitor::addStoragePath(const std::string& path) {
-    std::lock_guard lock(m_mutex);
-    if (std::find(m_storagePaths.begin(), m_storagePaths.end(), path) ==
-        m_storagePaths.end()) {
-        m_storagePaths.emplace_back(path);
-        m_storageStats[path] = {0, 0};
-        LOG_F(INFO, "Added new storage path: {}", path);
+    std::lock_guard lock(mutex_);
+
+    auto it = std::find(storagePaths_.begin(), storagePaths_.end(), path);
+    if (it == storagePaths_.end()) {
+        storagePaths_.emplace_back(path);
+        storageStats_[path] = {0, 0};
+        updateStorageStats(path);
+        spdlog::info("Added new storage path: {}", path);
     } else {
-        LOG_F(WARNING, "Storage path already exists: {}", path);
+        spdlog::warn("Storage path already exists: {}", path);
     }
 }
 
 void StorageMonitor::removeStoragePath(const std::string& path) {
-    std::lock_guard lock(m_mutex);
-    auto it = std::remove(m_storagePaths.begin(), m_storagePaths.end(), path);
-    if (it != m_storagePaths.end()) {
-        m_storagePaths.erase(it, m_storagePaths.end());
-        m_storageStats.erase(path);
-        LOG_F(INFO, "Removed storage path: {}", path);
+    std::lock_guard lock(mutex_);
+
+    auto it = std::remove(storagePaths_.begin(), storagePaths_.end(), path);
+    if (it != storagePaths_.end()) {
+        storagePaths_.erase(it, storagePaths_.end());
+        storageStats_.erase(path);
+        spdlog::info("Removed storage path: {}", path);
     } else {
-        LOG_F(WARNING, "Storage path not found: {}", path);
+        spdlog::warn("Storage path not found: {}", path);
     }
 }
 
-std::string StorageMonitor::getStorageStatus() {
-    std::lock_guard lock(m_mutex);
+auto StorageMonitor::getStorageStatus() -> std::string {
+    std::lock_guard lock(mutex_);
     std::stringstream ss;
     ss << "Storage Status:\n";
-    for (const auto& path : m_storagePaths) {
-        auto it = m_storageStats.find(path);
-        if (it != m_storageStats.end()) {
-            ss << path << ": Capacity=" << it->second.first
-               << ", Free=" << it->second.second << "\n";
+
+    for (const auto& path : storagePaths_) {
+        auto it = storageStats_.find(path);
+        if (it != storageStats_.end()) {
+            const auto [capacity, free] = it->second;
+            const auto used = capacity - free;
+            const double usagePercent =
+                capacity > 0 ? (static_cast<double>(used) / capacity) * 100.0
+                             : 0.0;
+
+            ss << std::format(
+                "{}: Capacity={:.2f}GB, Used={:.2f}GB, Free={:.2f}GB, "
+                "Usage={:.1f}%\n",
+                path, static_cast<double>(capacity) / (1024 * 1024 * 1024),
+                static_cast<double>(used) / (1024 * 1024 * 1024),
+                static_cast<double>(free) / (1024 * 1024 * 1024), usagePercent);
         }
     }
+
     return ss.str();
+}
+
+auto StorageMonitor::getCallbackCount() const -> size_t {
+    std::lock_guard lock(mutex_);
+    return callbacks_.size();
+}
+
+void StorageMonitor::clearCallbacks() {
+    std::lock_guard lock(mutex_);
+    callbacks_.clear();
+    spdlog::info("All callbacks cleared");
+}
+
+auto StorageMonitor::getStorageInfo(const std::string& path) -> std::string {
+    try {
+        auto spaceInfo = fs::space(path);
+        std::lock_guard lock(mutex_);
+
+        const auto capacity = spaceInfo.capacity;
+        const auto free = spaceInfo.free;
+        const auto available = spaceInfo.available;
+        const auto used = capacity - free;
+        const double usagePercent =
+            capacity > 0 ? (static_cast<double>(used) / capacity) * 100.0 : 0.0;
+
+        return std::format(
+            "Storage Info for {}:\n"
+            "  Capacity: {:.2f} GB\n"
+            "  Used: {:.2f} GB\n"
+            "  Free: {:.2f} GB\n"
+            "  Available: {:.2f} GB\n"
+            "  Usage: {:.1f}%\n",
+            path, static_cast<double>(capacity) / (1024 * 1024 * 1024),
+            static_cast<double>(used) / (1024 * 1024 * 1024),
+            static_cast<double>(free) / (1024 * 1024 * 1024),
+            static_cast<double>(available) / (1024 * 1024 * 1024),
+            usagePercent);
+    } catch (const std::exception& e) {
+        spdlog::error("Error getting storage info for {}: {}", path, e.what());
+        return std::format("Error getting storage info for {}: {}", path,
+                           e.what());
+    }
+}
+
+void StorageMonitor::monitorLoop() {
+    spdlog::info("Storage monitor loop started");
+
+    try {
+        listAllStorage();
+
+        while (true) {
+            {
+                std::unique_lock lk(mutex_);
+                if (!isRunning_) {
+                    break;
+                }
+            }
+
+            std::vector<std::string> pathsCopy;
+            {
+                std::lock_guard lock(mutex_);
+                pathsCopy = storagePaths_;
+            }
+
+            for (const auto& path : pathsCopy) {
+                if (isNewMediaInserted(path)) {
+                    triggerCallbacks(path);
+                }
+            }
+
+            std::unique_lock lk(mutex_);
+            cv_.wait_for(lk, std::chrono::seconds(5),
+                         [this]() { return !isRunning_; });
+
+            if (!isRunning_) {
+                break;
+            }
+        }
+    } catch (const std::exception& e) {
+        spdlog::error("Exception in storage monitor loop: {}", e.what());
+        std::lock_guard lk(mutex_);
+        isRunning_ = false;
+    }
+
+    spdlog::info("Storage monitor loop ended");
+}
+
+void StorageMonitor::updateStorageStats(const std::string& path) {
+    try {
+        auto spaceInfo = fs::space(path);
+        storageStats_[path] = {spaceInfo.capacity, spaceInfo.free};
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to update storage stats for {}: {}", path,
+                      e.what());
+        storageStats_[path] = {0, 0};
+    }
 }
 
 #ifdef _WIN32
 void monitorUdisk() {
-    LOG_F(INFO, "monitorUdisk called");
+    spdlog::info("Starting Windows USB disk monitoring");
+
     DEV_BROADCAST_DEVICEINTERFACE devInterface{};
     devInterface.dbcc_size = sizeof(DEV_BROADCAST_DEVICEINTERFACE);
     devInterface.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
@@ -225,9 +377,12 @@ void monitorUdisk() {
         GetConsoleWindow(), &devInterface, DEVICE_NOTIFY_WINDOW_HANDLE);
 
     if (hDevNotify == nullptr) {
-        LOG_F(ERROR, "Failed to register device notification");
+        spdlog::error("Failed to register device notification: {}",
+                      GetLastError());
         return;
     }
+
+    spdlog::info("Device notification registered successfully");
 
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0)) {
@@ -235,77 +390,110 @@ void monitorUdisk() {
             auto* hdr = reinterpret_cast<PDEV_BROADCAST_HDR>(msg.lParam);
             if ((hdr != nullptr) && hdr->dbch_devicetype == DBT_DEVTYP_VOLUME) {
                 auto* volume = reinterpret_cast<PDEV_BROADCAST_VOLUME>(hdr);
-                if (volume->dbcv_flags == DBT_DEVICEARRIVAL) {
-                    for (char driveLetter = 'A'; volume->dbcv_unitmask != 0U;
-                         volume->dbcv_unitmask >>= 1, ++driveLetter) {
-                        if ((volume->dbcv_unitmask & 1) != 0U) {
+
+                if (msg.wParam == DBT_DEVICEARRIVAL) {
+                    DWORD unitmask = volume->dbcv_unitmask;
+                    for (char driveLetter = 'A'; unitmask != 0U;
+                         unitmask >>= 1, ++driveLetter) {
+                        if ((unitmask & 1) != 0U) {
                             std::string drivePath =
                                 std::format("{}:\\", driveLetter);
-                            LOG_F(INFO, "U disk inserted. Drive path: {}",
-                                  drivePath);
+                            spdlog::info("USB disk inserted at drive: {}",
+                                         drivePath);
                         }
                     }
-                } else if (volume->dbcv_flags == DBT_DEVICEREMOVECOMPLETE) {
-                    for (char driveLetter = 'A'; volume->dbcv_unitmask != 0U;
-                         volume->dbcv_unitmask >>= 1, ++driveLetter) {
-                        if ((volume->dbcv_unitmask & 1) != 0U) {
+                } else if (msg.wParam == DBT_DEVICEREMOVECOMPLETE) {
+                    DWORD unitmask = volume->dbcv_unitmask;
+                    for (char driveLetter = 'A'; unitmask != 0U;
+                         unitmask >>= 1, ++driveLetter) {
+                        if ((unitmask & 1) != 0U) {
                             std::string drivePath =
                                 std::format("{}:\\", driveLetter);
-                            LOG_F(INFO, "U disk removed. Drive path: {}",
-                                  drivePath);
+                            spdlog::info("USB disk removed from drive: {}",
+                                         drivePath);
                         }
                     }
                 }
             }
         }
     }
+
     UnregisterDeviceNotification(hDevNotify);
-    LOG_F(INFO, "monitorUdisk completed");
+    spdlog::info("Windows USB disk monitoring completed");
 }
 #else
-void monitorUdisk(atom::system::StorageMonitor& monitor) {
-    LOG_F(INFO, "monitorUdisk called");
+void monitorUdisk(StorageMonitor& monitor) {
+    spdlog::info("Starting Linux USB disk monitoring");
+
     struct udev* udev = udev_new();
     if (!udev) {
-        LOG_F(ERROR, "Failed to initialize udev");
+        spdlog::error("Failed to initialize udev");
         return;
     }
 
     struct udev_monitor* udevMon = udev_monitor_new_from_netlink(udev, "udev");
     if (!udevMon) {
         udev_unref(udev);
-        LOG_F(ERROR, "Failed to create udev monitor");
+        spdlog::error("Failed to create udev monitor");
         return;
     }
 
-    udev_monitor_filter_add_match_subsystem_devtype(udevMon, "block", "disk");
-    udev_monitor_enable_receiving(udevMon);
+    if (udev_monitor_filter_add_match_subsystem_devtype(udevMon, "block",
+                                                        "disk") < 0) {
+        spdlog::error("Failed to add udev filter");
+        udev_monitor_unref(udevMon);
+        udev_unref(udev);
+        return;
+    }
+
+    if (udev_monitor_enable_receiving(udevMon) < 0) {
+        spdlog::error("Failed to enable udev receiving");
+        udev_monitor_unref(udevMon);
+        udev_unref(udev);
+        return;
+    }
 
     int fd = udev_monitor_get_fd(udevMon);
+    spdlog::info("USB disk monitoring started on fd: {}", fd);
+
     fd_set fds;
-    while (true) {
+    struct timeval timeout;
+
+    while (monitor.isRunning()) {
         FD_ZERO(&fds);
         FD_SET(fd, &fds);
-        int ret = select(fd + 1, &fds, nullptr, nullptr, nullptr);
+        timeout.tv_sec = 1;
+        timeout.tv_usec = 0;
+
+        int ret = select(fd + 1, &fds, nullptr, nullptr, &timeout);
         if (ret > 0 && FD_ISSET(fd, &fds)) {
             struct udev_device* dev = udev_monitor_receive_device(udevMon);
             if (dev) {
-                std::string action = udev_device_get_action(dev);
-                std::string devNode = udev_device_get_devnode(dev);
-                if (action == "add") {
-                    LOG_F(INFO, "New disk found: {}", devNode);
-                    monitor.triggerCallbacks(devNode);
-                } else if (action == "remove") {
-                    LOG_F(INFO, "Removed disk: {}", devNode);
+                const char* actionPtr = udev_device_get_action(dev);
+                const char* devNodePtr = udev_device_get_devnode(dev);
+
+                if (actionPtr && devNodePtr) {
+                    std::string action(actionPtr);
+                    std::string devNode(devNodePtr);
+
+                    if (action == "add") {
+                        spdlog::info("New USB disk detected: {}", devNode);
+                        monitor.triggerCallbacks(devNode);
+                    } else if (action == "remove") {
+                        spdlog::info("USB disk removed: {}", devNode);
+                    }
                 }
                 udev_device_unref(dev);
             }
+        } else if (ret < 0) {
+            spdlog::error("Error in select(): {}", strerror(errno));
+            break;
         }
     }
 
     udev_monitor_unref(udevMon);
     udev_unref(udev);
-    LOG_F(INFO, "monitorUdisk completed");
+    spdlog::info("Linux USB disk monitoring completed");
 }
 #endif
 

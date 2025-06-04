@@ -103,6 +103,13 @@ public:
                     std::chrono::milliseconds timeout)
         -> std::optional<std::time_t>;
 
+    /**
+     * @brief Checks if the current process has administrative/root privileges.
+     *
+     * @return true if the process has admin/root privileges, false otherwise
+     */
+    bool hasAdminPrivileges() const;
+
 private:
     /**
      * @brief RAII wrapper for socket operations

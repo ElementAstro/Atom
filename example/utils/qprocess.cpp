@@ -1,11 +1,14 @@
-/*
- * qprocess_example.cpp
+/**
+ * @file qprocess.cpp
+ * @brief QProcess usage example demonstrating external process management
  *
- * This example demonstrates the usage of the QProcess class for managing
- * external processes. It covers process creation, input/output handling,
- * environment management, and more across different platforms.
+ * This example demonstrates comprehensive usage of the QProcess class for
+ * managing external processes including process creation, I/O handling,
+ * environment management, and cross-platform compatibility.
  *
- * Copyright (C) 2024 Example User
+ * @author Example User
+ * @date 2024
+ * @copyright Copyright (C) 2024 Example User
  */
 
 #include <algorithm>
@@ -17,374 +20,325 @@
 #include <thread>
 #include <vector>
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/spdlog.h>
 #include "atom/utils/qprocess.hpp"
 
-// Platform-specific commands and utilities
+namespace {
+constexpr auto TIMEOUT_SECONDS = std::chrono::seconds(5);
+constexpr auto SHORT_TIMEOUT = std::chrono::seconds(1);
+
 #ifdef _WIN32
-const std::string ECHO_COMMAND = "cmd.exe";
+constexpr const char* ECHO_COMMAND = "cmd.exe";
 const std::vector<std::string> ECHO_ARGS = {"/c", "echo"};
-const std::string LIST_DIR_COMMAND = "cmd.exe";
+constexpr const char* LIST_DIR_COMMAND = "cmd.exe";
 const std::vector<std::string> LIST_DIR_ARGS = {"/c", "dir"};
-const std::string SLEEP_COMMAND = "timeout.exe";
-const std::string CAT_COMMAND = "type";
-const std::string ENV_VAR_FORMAT = "{}={}";
+constexpr const char* SLEEP_COMMAND = "timeout.exe";
+constexpr const char* CAT_COMMAND = "type";
 #else
-const std::string ECHO_COMMAND = "/bin/echo";
+constexpr const char* ECHO_COMMAND = "/bin/echo";
 const std::vector<std::string> ECHO_ARGS = {};
-const std::string LIST_DIR_COMMAND = "ls";
+constexpr const char* LIST_DIR_COMMAND = "ls";
 const std::vector<std::string> LIST_DIR_ARGS = {"-la"};
-const std::string SLEEP_COMMAND = "sleep";
-const std::string CAT_COMMAND = "cat";
-const std::string ENV_VAR_FORMAT = "{}={}";
+constexpr const char* SLEEP_COMMAND = "sleep";
+constexpr const char* CAT_COMMAND = "cat";
 #endif
 
-// Helper function to print section headers
+/**
+ * @brief Print formatted section header
+ * @param title Section title to display
+ */
 void printSection(const std::string& title) {
-    std::cout << "\n========== " << title << " ==========\n" << std::endl;
+    spdlog::info("========== {} ==========", title);
 }
 
-// Helper function to print command output
+/**
+ * @brief Print process output in formatted manner
+ * @param stdout_output Standard output content
+ * @param stderr_output Standard error content
+ */
 void printOutput(const std::string& stdout_output,
                  const std::string& stderr_output) {
-    std::cout << "Standard Output:" << std::endl;
-    if (stdout_output.empty()) {
-        std::cout << "(empty)" << std::endl;
-    } else {
-        std::cout << stdout_output << std::endl;
-    }
-
-    std::cout << "Standard Error:" << std::endl;
-    if (stderr_output.empty()) {
-        std::cout << "(empty)" << std::endl;
-    } else {
-        std::cout << stderr_output << std::endl;
-    }
-    std::cout << std::endl;
+    spdlog::info("Standard Output: {}",
+                 stdout_output.empty() ? "(empty)" : stdout_output);
+    spdlog::info("Standard Error: {}",
+                 stderr_output.empty() ? "(empty)" : stderr_output);
 }
 
-// Helper to create a temporary file with content
+/**
+ * @brief Create temporary file with specified content
+ * @param content Content to write to file
+ * @return Generated filename
+ */
 std::string createTempFile(const std::string& content) {
-    std::string filename =
+    const std::string filename =
         "qprocess_temp_" +
         std::to_string(
             std::chrono::system_clock::now().time_since_epoch().count()) +
         ".txt";
+
     std::ofstream file(filename);
     file << content;
-    file.close();
     return filename;
 }
 
-// Helper to format environment variables
+/**
+ * @brief Format environment variable string
+ * @param name Variable name
+ * @param value Variable value
+ * @return Formatted environment string
+ */
 std::string formatEnvVar(const std::string& name, const std::string& value) {
-    return std::string(ENV_VAR_FORMAT)
-        .replace(ENV_VAR_FORMAT.find("{}"), 2, name)
-        .replace(ENV_VAR_FORMAT.find("{}"), 2, value);
+    return name + "=" + value;
 }
 
-int main(int argc, char* argv[]) {
-    // Initialize loguru
-    loguru::g_stderr_verbosity = 1;
-    loguru::init(argc, argv);
-
-    std::cout << "======================================================="
-              << std::endl;
-    std::cout << "QProcess Comprehensive Usage Example" << std::endl;
-    std::cout << "======================================================="
-              << std::endl;
-
-    // ==========================================
-    // 1. Basic Process Execution
-    // ==========================================
+/**
+ * @brief Execute basic echo command demonstration
+ */
+void demonstrateBasicExecution() {
     printSection("Basic Process Execution");
 
-    // Create a QProcess instance
     atom::utils::QProcess echoProcess;
+    spdlog::info("Executing echo command with 'Hello, World!'");
 
-    std::cout << "Executing echo command with 'Hello, World!'..." << std::endl;
-
-    // Start the process with arguments
-    std::vector<std::string> args = ECHO_ARGS;
-    args.push_back("Hello, World!");
+    auto args = ECHO_ARGS;
+    args.emplace_back("Hello, World!");
 
     echoProcess.start(ECHO_COMMAND, args);
 
-    // Wait for process to finish (with timeout)
-    if (!echoProcess.waitForFinished(std::chrono::seconds(5))) {
-        std::cerr << "Process did not finish within timeout period."
-                  << std::endl;
+    if (!echoProcess.waitForFinished(TIMEOUT_SECONDS)) {
+        spdlog::error("Process did not finish within timeout period");
         echoProcess.terminate();
+        return;
     }
 
-    // Read output
-    std::string stdout_output = echoProcess.readAllStandardOutput();
-    std::string stderr_output = echoProcess.readAllStandardError();
+    printOutput(echoProcess.readAllStandardOutput(),
+                echoProcess.readAllStandardError());
+}
 
-    printOutput(stdout_output, stderr_output);
-
-    // ==========================================
-    // 2. Setting Working Directory
-    // ==========================================
+/**
+ * @brief Demonstrate working directory configuration
+ */
+void demonstrateWorkingDirectory() {
     printSection("Setting Working Directory");
 
     atom::utils::QProcess dirProcess;
+    const auto currentDir = std::filesystem::current_path().string();
+    const auto parentDir =
+        std::filesystem::current_path().parent_path().string();
 
-    // Get the current directory for display
-    auto currentDir = std::filesystem::current_path().string();
-    std::cout << "Current directory: " << currentDir << std::endl;
-
-    // Set working directory to the parent directory
-    auto parentDir = std::filesystem::current_path().parent_path().string();
-    std::cout << "Setting working directory to: " << parentDir << std::endl;
+    spdlog::info("Current directory: {}", currentDir);
+    spdlog::info("Setting working directory to: {}", parentDir);
 
     try {
         dirProcess.setWorkingDirectory(parentDir);
         dirProcess.start(LIST_DIR_COMMAND, LIST_DIR_ARGS);
 
-        if (!dirProcess.waitForFinished(std::chrono::seconds(5))) {
-            std::cerr << "Directory listing process did not finish within "
-                         "timeout period."
-                      << std::endl;
+        if (!dirProcess.waitForFinished(TIMEOUT_SECONDS)) {
+            spdlog::error("Directory listing process timeout");
             dirProcess.terminate();
+            return;
         }
 
-        stdout_output = dirProcess.readAllStandardOutput();
-        stderr_output = dirProcess.readAllStandardError();
-
-        printOutput(stdout_output, stderr_output);
+        printOutput(dirProcess.readAllStandardOutput(),
+                    dirProcess.readAllStandardError());
     } catch (const std::exception& e) {
-        std::cerr << "Error setting working directory: " << e.what()
-                  << std::endl;
+        spdlog::error("Error setting working directory: {}", e.what());
     }
+}
 
-    // ==========================================
-    // 3. Environment Variables
-    // ==========================================
+/**
+ * @brief Demonstrate environment variable management
+ */
+void demonstrateEnvironmentVariables() {
     printSection("Environment Variables");
 
     atom::utils::QProcess envProcess;
-
-    // Set custom environment variables
-    std::vector<std::string> environment = {
+    const std::vector<std::string> environment = {
         formatEnvVar("QPROCESS_TEST_VAR1", "Hello"),
         formatEnvVar("QPROCESS_TEST_VAR2", "World"),
         formatEnvVar("QPROCESS_TEST_VAR3", "From QProcess")};
 
-    std::cout << "Setting environment variables:" << std::endl;
+    spdlog::info("Setting environment variables:");
     for (const auto& env : environment) {
-        std::cout << "  " << env << std::endl;
+        spdlog::info("  {}", env);
     }
 
     envProcess.setEnvironment(environment);
 
-    // Execute a command that displays environment variables
 #ifdef _WIN32
-    // On Windows, use 'set' to display environment variables
     envProcess.start("cmd.exe", {"/c", "set", "QPROCESS_TEST"});
 #else
-    // On Unix-like systems, use 'env | grep' to display environment variables
     envProcess.start("/bin/sh", {"-c", "env | grep QPROCESS_TEST"});
 #endif
 
-    if (!envProcess.waitForFinished(std::chrono::seconds(5))) {
-        std::cerr << "Environment process did not finish within timeout period."
-                  << std::endl;
+    if (!envProcess.waitForFinished(TIMEOUT_SECONDS)) {
+        spdlog::error("Environment process timeout");
         envProcess.terminate();
+        return;
     }
 
-    stdout_output = envProcess.readAllStandardOutput();
-    stderr_output = envProcess.readAllStandardError();
+    printOutput(envProcess.readAllStandardOutput(),
+                envProcess.readAllStandardError());
+}
 
-    printOutput(stdout_output, stderr_output);
-
-    // ==========================================
-    // 4. Process Input/Output
-    // ==========================================
+/**
+ * @brief Demonstrate process input/output handling
+ */
+void demonstrateInputOutput() {
     printSection("Process Input/Output");
 
     atom::utils::QProcess ioProcess;
 
-    // Create a process that reads from stdin
 #ifdef _WIN32
     ioProcess.start("more.com", {});
 #else
     ioProcess.start("cat", {});
 #endif
 
-    std::cout << "Writing data to process stdin..." << std::endl;
-    std::string inputData =
-        "This is a test input.\nIt has multiple lines.\nEnd of input.";
-    std::cout << "Input data:\n" << inputData << std::endl << std::endl;
-
-    // Wait for the process to start
-    if (!ioProcess.waitForStarted(std::chrono::seconds(1))) {
-        std::cerr << "Process did not start within timeout period."
-                  << std::endl;
-        return 1;
+    if (!ioProcess.waitForStarted(SHORT_TIMEOUT)) {
+        spdlog::error("Process failed to start within timeout");
+        return;
     }
 
-    // Write to process stdin
+    const std::string inputData =
+        "This is a test input.\nIt has multiple lines.\nEnd of input.";
+    spdlog::info("Writing data to process stdin: {}", inputData);
+
     ioProcess.write(inputData);
 
-    // On Windows, we need to close stdin to signal EOF
 #ifdef _WIN32
-    ioProcess.write("\x1A");  // Ctrl+Z (EOF in Windows)
+    ioProcess.write("\x1A");
 #endif
 
-    if (!ioProcess.waitForFinished(std::chrono::seconds(5))) {
-        std::cerr << "IO process did not finish within timeout period."
-                  << std::endl;
+    if (!ioProcess.waitForFinished(TIMEOUT_SECONDS)) {
+        spdlog::error("IO process timeout");
         ioProcess.terminate();
+        return;
     }
 
-    stdout_output = ioProcess.readAllStandardOutput();
-    stderr_output = ioProcess.readAllStandardError();
+    printOutput(ioProcess.readAllStandardOutput(),
+                ioProcess.readAllStandardError());
+}
 
-    printOutput(stdout_output, stderr_output);
-
-    // ==========================================
-    // 5. Long-Running Processes and Timeouts
-    // ==========================================
+/**
+ * @brief Demonstrate long-running process management
+ */
+void demonstrateLongRunningProcess() {
     printSection("Long-Running Processes and Timeouts");
 
     atom::utils::QProcess sleepProcess;
+    spdlog::info("Starting process that sleeps for 10 seconds");
 
-    std::cout << "Starting a process that sleeps for 10 seconds..."
-              << std::endl;
-
-    // Start a sleep process
 #ifdef _WIN32
     sleepProcess.start(SLEEP_COMMAND, {"10"});
 #else
     sleepProcess.start(SLEEP_COMMAND, {"10"});
 #endif
 
-    std::cout << "Process started. Waiting for 2 seconds..." << std::endl;
+    spdlog::info("Process started. Waiting for 2 seconds");
 
-    // Wait for a shorter time than the process will take
     if (sleepProcess.waitForFinished(std::chrono::seconds(2))) {
-        std::cout << "Process unexpectedly finished within 2 seconds."
-                  << std::endl;
+        spdlog::info("Process unexpectedly finished within 2 seconds");
     } else {
-        std::cout << "Process is still running after 2 seconds as expected."
-                  << std::endl;
+        spdlog::info("Process still running after 2 seconds as expected");
 
-        // Check if the process is running
         if (sleepProcess.isRunning()) {
-            std::cout << "Process is confirmed to be running via isRunning()."
-                      << std::endl;
-            std::cout << "Terminating process..." << std::endl;
+            spdlog::info("Process confirmed running. Terminating...");
             sleepProcess.terminate();
-            std::cout << "Process terminated." << std::endl;
+            spdlog::info("Process terminated");
         } else {
-            std::cout << "Unexpected: isRunning() returned false." << std::endl;
+            spdlog::warn("Unexpected: isRunning() returned false");
         }
     }
+}
 
-    // ==========================================
-    // 6. Error Handling
-    // ==========================================
+/**
+ * @brief Demonstrate error handling scenarios
+ */
+void demonstrateErrorHandling() {
     printSection("Error Handling");
 
-    // Case 1: Invalid executable
-    std::cout << "Attempting to run a non-existent executable..." << std::endl;
+    spdlog::info("Testing non-existent executable");
     atom::utils::QProcess invalidProcess;
 
     try {
         invalidProcess.start("this_executable_does_not_exist", {});
-        if (!invalidProcess.waitForStarted(std::chrono::seconds(1))) {
-            std::cout << "Process failed to start as expected." << std::endl;
+        if (!invalidProcess.waitForStarted(SHORT_TIMEOUT)) {
+            spdlog::info("Process failed to start as expected");
         } else {
-            std::cout << "Unexpected: Process started successfully."
-                      << std::endl;
+            spdlog::warn("Unexpected: Process started successfully");
             invalidProcess.terminate();
         }
     } catch (const std::exception& e) {
-        std::cout << "Caught exception as expected: " << e.what() << std::endl;
+        spdlog::info("Caught expected exception: {}", e.what());
     }
 
-    // Case 2: Invalid working directory
-    std::cout << "\nAttempting to set an invalid working directory..."
-              << std::endl;
+    spdlog::info("Testing invalid working directory");
     atom::utils::QProcess invalidDirProcess;
 
     try {
         invalidDirProcess.setWorkingDirectory(
             "/path/that/definitely/does/not/exist");
-        std::cout
-            << "Unexpected: setWorkingDirectory did not throw an exception."
-            << std::endl;
+        spdlog::warn("Unexpected: setWorkingDirectory did not throw exception");
     } catch (const std::exception& e) {
-        std::cout << "Caught exception as expected: " << e.what() << std::endl;
+        spdlog::info("Caught expected exception: {}", e.what());
     }
 
-    // Case 3: Invalid environment variable format
-    std::cout << "\nAttempting to set an invalid environment variable..."
-              << std::endl;
+    spdlog::info("Testing invalid environment variable format");
     atom::utils::QProcess invalidEnvProcess;
 
     try {
         invalidEnvProcess.setEnvironment(
-            std::vector<std::string>{"invalid_format_without_equals_sign"});
-        std::cout << "Unexpected: setEnvironment did not throw an exception."
-                  << std::endl;
+            std::vector<std::string>({"invalid_format_without_equals_sign"}));
+        spdlog::warn("Unexpected: setEnvironment did not throw exception");
     } catch (const std::exception& e) {
-        std::cout << "Caught exception as expected: " << e.what() << std::endl;
+        spdlog::info("Caught expected exception: {}", e.what());
     }
+}
 
-    // ==========================================
-    // 7. Reading from Files with External Processes
-    // ==========================================
+/**
+ * @brief Demonstrate file reading with external processes
+ */
+void demonstrateFileReading() {
     printSection("Reading from Files with External Processes");
 
-    // Create a temporary file
-    std::string fileContent =
+    const std::string fileContent =
         "This is line 1\nThis is line 2\nThis is line 3\n";
-    std::string tempFilename = createTempFile(fileContent);
+    const std::string tempFilename = createTempFile(fileContent);
 
-    std::cout << "Created temporary file: " << tempFilename << std::endl;
-    std::cout << "File content:\n" << fileContent << std::endl;
+    spdlog::info("Created temporary file: {}", tempFilename);
+    spdlog::info("File content: {}", fileContent);
 
-    // Use an external process to read the file
     atom::utils::QProcess catProcess;
+    spdlog::info("Reading file with '{}'", CAT_COMMAND);
+    catProcess.start(CAT_COMMAND, {tempFilename});
 
-    std::vector<std::string> catArgs = {tempFilename};
-
-    std::cout << "Reading file with '" << CAT_COMMAND << "'..." << std::endl;
-    catProcess.start(CAT_COMMAND, catArgs);
-
-    if (!catProcess.waitForFinished(std::chrono::seconds(5))) {
-        std::cerr
-            << "File reading process did not finish within timeout period."
-            << std::endl;
+    if (!catProcess.waitForFinished(TIMEOUT_SECONDS)) {
+        spdlog::error("File reading process timeout");
         catProcess.terminate();
+    } else {
+        printOutput(catProcess.readAllStandardOutput(),
+                    catProcess.readAllStandardError());
     }
 
-    stdout_output = catProcess.readAllStandardOutput();
-    stderr_output = catProcess.readAllStandardError();
-
-    printOutput(stdout_output, stderr_output);
-
-    // Clean up temporary file
     try {
         std::filesystem::remove(tempFilename);
-        std::cout << "Temporary file removed." << std::endl;
+        spdlog::info("Temporary file removed");
     } catch (const std::exception& e) {
-        std::cerr << "Failed to remove temporary file: " << e.what()
-                  << std::endl;
+        spdlog::error("Failed to remove temporary file: {}", e.what());
     }
+}
 
-    // ==========================================
-    // 8. Asynchronous Process Management
-    // ==========================================
+/**
+ * @brief Demonstrate asynchronous process management
+ */
+void demonstrateAsynchronousProcess() {
     printSection("Asynchronous Process Management");
 
     atom::utils::QProcess asyncProcess;
+    spdlog::info("Starting background process");
 
-    std::cout << "Starting a background process..." << std::endl;
-
-    // Start a process that will produce output over time
 #ifdef _WIN32
     asyncProcess.start(
         "cmd.exe",
@@ -394,105 +348,90 @@ int main(int argc, char* argv[]) {
         "bash", {"-c", "for i in {1..5}; do echo Line $i; sleep 1; done"});
 #endif
 
-    if (!asyncProcess.waitForStarted(std::chrono::seconds(1))) {
-        std::cerr << "Async process failed to start." << std::endl;
-        return 1;
+    if (!asyncProcess.waitForStarted(SHORT_TIMEOUT)) {
+        spdlog::error("Async process failed to start");
+        return;
     }
 
-    std::cout << "Process started successfully. Reading output in real-time..."
-              << std::endl;
+    spdlog::info("Process started successfully. Reading output in real-time");
 
-    // Poll for output while the process is running
     for (int i = 0; i < 10; ++i) {
         if (!asyncProcess.isRunning()) {
-            std::cout << "Process has finished." << std::endl;
+            spdlog::info("Process has finished");
             break;
         }
 
-        std::string currentOutput = asyncProcess.readAllStandardOutput();
+        const std::string currentOutput = asyncProcess.readAllStandardOutput();
         if (!currentOutput.empty()) {
-            std::cout << "Output received: " << currentOutput;
+            spdlog::info("Output received: {}", currentOutput);
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(600));
     }
 
-    // Wait for process to finish and get any remaining output
     if (asyncProcess.isRunning()) {
-        std::cout << "Waiting for process to finish..." << std::endl;
-        if (!asyncProcess.waitForFinished(std::chrono::seconds(5))) {
-            std::cerr << "Process did not finish within timeout, terminating."
-                      << std::endl;
+        spdlog::info("Waiting for process to finish");
+        if (!asyncProcess.waitForFinished(TIMEOUT_SECONDS)) {
+            spdlog::error("Process timeout, terminating");
             asyncProcess.terminate();
         }
     }
 
-    stdout_output = asyncProcess.readAllStandardOutput();
-    stderr_output = asyncProcess.readAllStandardError();
-
-    if (!stdout_output.empty()) {
-        std::cout << "Remaining output: " << stdout_output;
+    const std::string remainingOutput = asyncProcess.readAllStandardOutput();
+    if (!remainingOutput.empty()) {
+        spdlog::info("Remaining output: {}", remainingOutput);
     }
+}
 
-    std::cout << std::endl;
-
-    // ==========================================
-    // 9. Process Move Operations
-    // ==========================================
+/**
+ * @brief Demonstrate move operations
+ */
+void demonstrateMoveOperations() {
     printSection("Process Move Operations");
 
-    std::cout << "Testing move constructor and assignment..." << std::endl;
+    spdlog::info("Testing move constructor and assignment");
 
-    // Create a process
     atom::utils::QProcess originalProcess;
     originalProcess.start(ECHO_COMMAND, {"Original Process"});
 
-    // Use move constructor
-    std::cout << "Moving process using move constructor..." << std::endl;
+    spdlog::info("Moving process using move constructor");
     atom::utils::QProcess movedProcess(std::move(originalProcess));
 
-    if (!movedProcess.waitForFinished(std::chrono::seconds(5))) {
-        std::cerr << "Moved process did not finish within timeout period."
-                  << std::endl;
+    if (!movedProcess.waitForFinished(TIMEOUT_SECONDS)) {
+        spdlog::error("Moved process timeout");
         movedProcess.terminate();
+    } else {
+        printOutput(movedProcess.readAllStandardOutput(),
+                    movedProcess.readAllStandardError());
     }
 
-    stdout_output = movedProcess.readAllStandardOutput();
-    stderr_output = movedProcess.readAllStandardError();
-
-    printOutput(stdout_output, stderr_output);
-
-    // Use move assignment
-    std::cout << "Moving process using move assignment..." << std::endl;
+    spdlog::info("Testing move assignment");
     atom::utils::QProcess firstProcess;
     firstProcess.start(ECHO_COMMAND, {"First Process"});
 
     atom::utils::QProcess secondProcess;
     secondProcess.start(ECHO_COMMAND, {"Second Process"});
 
-    std::cout << "Moving second process to first process..." << std::endl;
+    spdlog::info("Moving second process to first process");
     firstProcess = std::move(secondProcess);
 
-    if (!firstProcess.waitForFinished(std::chrono::seconds(5))) {
-        std::cerr << "Process did not finish within timeout period."
-                  << std::endl;
+    if (!firstProcess.waitForFinished(TIMEOUT_SECONDS)) {
+        spdlog::error("Process timeout");
         firstProcess.terminate();
+    } else {
+        printOutput(firstProcess.readAllStandardOutput(),
+                    firstProcess.readAllStandardError());
     }
+}
 
-    stdout_output = firstProcess.readAllStandardOutput();
-    stderr_output = firstProcess.readAllStandardError();
-
-    printOutput(stdout_output, stderr_output);
-
-    // ==========================================
-    // 10. Advanced Usage: Process Chaining
-    // ==========================================
+/**
+ * @brief Demonstrate process chaining
+ */
+void demonstrateProcessChaining() {
     printSection("Advanced Usage: Process Chaining");
 
-    std::cout << "Demonstrating process output piping (manually)..."
-              << std::endl;
+    spdlog::info("Demonstrating process output piping");
 
-    // First process: Generate some content
     atom::utils::QProcess generateProcess;
 #ifdef _WIN32
     generateProcess.start("cmd.exe",
@@ -502,18 +441,15 @@ int main(int argc, char* argv[]) {
         "bash", {"-c", "echo 'Line 1' && echo 'Line 2' && echo 'Line 3'"});
 #endif
 
-    if (!generateProcess.waitForFinished(std::chrono::seconds(5))) {
-        std::cerr << "Generate process did not finish within timeout period."
-                  << std::endl;
+    if (!generateProcess.waitForFinished(TIMEOUT_SECONDS)) {
+        spdlog::error("Generate process timeout");
         generateProcess.terminate();
-        return 1;
+        return;
     }
 
-    // Get output from first process
-    std::string generatedOutput = generateProcess.readAllStandardOutput();
-    std::cout << "Output from first process:\n" << generatedOutput << std::endl;
+    const std::string generatedOutput = generateProcess.readAllStandardOutput();
+    spdlog::info("Output from first process: {}", generatedOutput);
 
-    // Use output as input to second process
     atom::utils::QProcess transformProcess;
 #ifdef _WIN32
     transformProcess.start("cmd.exe", {"/c", "findstr /R /C:\"Line\""});
@@ -521,37 +457,58 @@ int main(int argc, char* argv[]) {
     transformProcess.start("grep", {"Line"});
 #endif
 
-    if (!transformProcess.waitForStarted(std::chrono::seconds(1))) {
-        std::cerr << "Transform process failed to start." << std::endl;
-        return 1;
+    if (!transformProcess.waitForStarted(SHORT_TIMEOUT)) {
+        spdlog::error("Transform process failed to start");
+        return;
     }
 
-    // Write the output from the first process to the second process
     transformProcess.write(generatedOutput);
 
-    // Close the input
 #ifdef _WIN32
-    transformProcess.write("\x1A");  // Ctrl+Z (EOF in Windows)
+    transformProcess.write("\x1A");
 #endif
 
-    if (!transformProcess.waitForFinished(std::chrono::seconds(5))) {
-        std::cerr << "Transform process did not finish within timeout period."
-                  << std::endl;
+    if (!transformProcess.waitForFinished(TIMEOUT_SECONDS)) {
+        spdlog::error("Transform process timeout");
         transformProcess.terminate();
-        return 1;
+        return;
     }
 
-    stdout_output = transformProcess.readAllStandardOutput();
-    stderr_output = transformProcess.readAllStandardError();
+    spdlog::info("Output from second process:");
+    printOutput(transformProcess.readAllStandardOutput(),
+                transformProcess.readAllStandardError());
+}
+}  // namespace
 
-    std::cout << "Output from second process:" << std::endl;
-    printOutput(stdout_output, stderr_output);
+/**
+ * @brief Main function demonstrating QProcess comprehensive usage
+ * @param argc Argument count
+ * @param argv Argument values
+ * @return Exit status
+ */
+int main(int argc, char* argv[]) {
+    auto console = spdlog::stdout_color_mt("console");
+    spdlog::set_default_logger(console);
+    spdlog::set_level(spdlog::level::info);
 
-    std::cout << "======================================================="
-              << std::endl;
-    std::cout << "QProcess Example Complete" << std::endl;
-    std::cout << "======================================================="
-              << std::endl;
+    spdlog::info("=======================================================");
+    spdlog::info("QProcess Comprehensive Usage Example");
+    spdlog::info("=======================================================");
+
+    demonstrateBasicExecution();
+    demonstrateWorkingDirectory();
+    demonstrateEnvironmentVariables();
+    demonstrateInputOutput();
+    demonstrateLongRunningProcess();
+    demonstrateErrorHandling();
+    demonstrateFileReading();
+    demonstrateAsynchronousProcess();
+    demonstrateMoveOperations();
+    demonstrateProcessChaining();
+
+    spdlog::info("=======================================================");
+    spdlog::info("QProcess Example Complete");
+    spdlog::info("=======================================================");
 
     return 0;
 }
