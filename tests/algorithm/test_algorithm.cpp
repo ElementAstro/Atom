@@ -1,14 +1,12 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-
+#include <spdlog/spdlog.h>
 #include <chrono>
 #include <future>
 #include <random>
 #include <string>
 #include <vector>
-
 #include "atom/algorithm/algorithm.hpp"
-#include "atom/log/loguru.hpp"
 
 using namespace atom::algorithm;
 using namespace std::chrono_literals;
@@ -45,7 +43,7 @@ protected:
         // Initialize loguru for testing if needed
         static bool initialized = false;
         if (!initialized) {
-            loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+            spdlog::set_level(spdlog::level::off);
             initialized = true;
         }
     }
@@ -57,7 +55,7 @@ protected:
         // Initialize loguru if needed
         static bool initialized = false;
         if (!initialized) {
-            loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+            spdlog::set_level(spdlog::level::off);
             initialized = true;
         }
     }
@@ -69,7 +67,7 @@ protected:
         // Initialize loguru if needed
         static bool initialized = false;
         if (!initialized) {
-            loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+            spdlog::set_level(spdlog::level::off);
             initialized = true;
         }
     }
@@ -224,8 +222,7 @@ TEST_F(KMPTest, Performance) {
     EXPECT_EQ(result[0], 500000);
 
     // This is more of a benchmark than an assertion
-    std::cout << "KMP search on 1MB text took: " << duration << "ms"
-              << std::endl;
+    spdlog::info("KMP search on 1MB text took: {}ms", duration);
 }
 
 // BloomFilter Tests
@@ -379,9 +376,8 @@ TEST_F(BloomFilterTest, LargeNumberOfElements) {
     // Allow for some statistical variation
     EXPECT_NEAR(measuredFPR, theoreticalFPR, 0.1);
 
-    std::cout << "Theoretical FPR: " << theoreticalFPR
-              << ", Measured FPR: " << measuredFPR << " (" << falsePositives
-              << "/" << testCount << ")" << std::endl;
+    spdlog::info("Theoretical FPR: {}, Measured FPR: {} ({} / {})",
+                 theoreticalFPR, measuredFPR, falsePositives, testCount);
 }
 
 // BoyerMoore Tests
@@ -541,10 +537,8 @@ TEST_F(BoyerMooreTest, Performance) {
     EXPECT_EQ(result2[0], 500000);
 
     // This is more of a benchmark than an assertion
-    std::cout << "BM normal search on 1MB text took: " << duration1 << "ms"
-              << std::endl;
-    std::cout << "BM optimized search on 1MB text took: " << duration2 << "ms"
-              << std::endl;
+    spdlog::info("BM normal search on 1MB text took: {}ms", duration1);
+    spdlog::info("BM optimized search on 1MB text took: {}ms", duration2);
 }
 
 // Compare KMP vs BoyerMoore
@@ -600,10 +594,9 @@ TEST(AlgorithmComparison, KMPVsBoyerMoore) {
     EXPECT_EQ(kmpParResult[0], 500000);
 
     // Output performance comparison
-    std::cout << "Performance comparison on 1MB text with 20-char pattern:"
-              << std::endl;
-    std::cout << "KMP:              " << kmpDuration << "ms" << std::endl;
-    std::cout << "KMP Parallel:     " << kmpParDuration << "ms" << std::endl;
-    std::cout << "Boyer-Moore:      " << bmDuration << "ms" << std::endl;
-    std::cout << "Boyer-Moore Opt:  " << bmOptDuration << "ms" << std::endl;
+    spdlog::info("Performance comparison on 1MB text with 20-char pattern:");
+    spdlog::info("KMP:              {}ms", kmpDuration);
+    spdlog::info("KMP Parallel:     {}ms", kmpParDuration);
+    spdlog::info("Boyer-Moore:      {}ms", bmDuration);
+    spdlog::info("Boyer-Moore Opt:  {}ms", bmOptDuration);
 }

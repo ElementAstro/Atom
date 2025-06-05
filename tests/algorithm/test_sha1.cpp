@@ -1,14 +1,12 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-
+#include <spdlog/spdlog.h>
 #include <algorithm>
 #include <chrono>
 #include <random>
 #include <string>
 #include <vector>
-
 #include "atom/algorithm/sha1.hpp"
-#include "atom/log/loguru.hpp"
 
 using namespace atom::algorithm;
 
@@ -19,7 +17,7 @@ protected:
         // Initialize loguru for testing
         static bool initialized = false;
         if (!initialized) {
-            loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+            spdlog::set_level(spdlog::level::off);
             initialized = true;
         }
     }
@@ -294,8 +292,8 @@ TEST_F(SHA1Test, PerformanceLargeData) {
         endTime - startTime);
 
     // Output performance info (not an actual test assertion)
-    std::cout << "SHA1 hashing of " << dataSize / (1024 * 1024) << "MB took "
-              << duration.count() << " ms" << std::endl;
+    spdlog::info("SHA1 hashing of {}MB took {} ms", dataSize / (1024 * 1024),
+                 duration.count());
 
     // Just verify we got a valid digest (not empty)
     bool allZeros = true;
@@ -328,7 +326,7 @@ TEST_F(SHA1Test, SIMDvsStandard) {
     // Results should be identical
     expectEqualDigests(standardDigest, simdDigest);
 
-    std::cout << "SIMD acceleration is available and used" << std::endl;
+    spdlog::info("SIMD acceleration is available and used");
 #else
     // Skip test if AVX2 is not available
     GTEST_SKIP() << "AVX2 not available, skipping SIMD test";

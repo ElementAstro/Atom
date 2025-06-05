@@ -1,15 +1,13 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-
+#include <spdlog/spdlog.h>
 #include <array>
 #include <chrono>
 #include <fstream>
 #include <random>
 #include <string>
 #include <vector>
-
 #include "atom/algorithm/blowfish.hpp"
-#include "atom/log/loguru.hpp"
 
 using namespace atom::algorithm;
 
@@ -49,22 +47,11 @@ std::string bytesToString(const std::vector<std::byte>& bytes) {
 class BlowfishTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // Initialize loguru with minimal verbosity for tests
-        loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
-
-        // Create a default key for tests
-        std::string key_str = "TestKey123";
-        key = stringToBytes(key_str);
-
-        // Create test data
+        key = stringToBytes("TestKey123");
         plaintext = stringToBytes("Hello, Blowfish encryption!");
-
-        // Ensure plaintext length is a multiple of BLOCK_SIZE (8 bytes)
         while (plaintext.size() % 8 != 0) {
             plaintext.push_back(std::byte{0});
         }
-
-        // Initialize Blowfish with the test key
         blowfish = std::make_unique<Blowfish>(std::span<const std::byte>(key));
     }
 
@@ -88,7 +75,6 @@ protected:
         std::ifstream file(filename, std::ios::binary | std::ios::ate);
         std::streamsize size = file.tellg();
         file.seekg(0, std::ios::beg);
-
         std::vector<std::byte> buffer(size);
         file.read(reinterpret_cast<char*>(buffer.data()), size);
         return buffer;
@@ -268,12 +254,12 @@ TEST_F(BlowfishTest, FileEncryptDecrypt) {
 // Test block size validation
 TEST_F(BlowfishTest, BlockSizeValidation) {
     // Test with data that's not a multiple of BLOCK_SIZE
-    std::vector<std::byte> invalid_data(7);  // 7 bytes, not a multiple of 8
+    std::vector<std::byte> invalid_data(7);
     EXPECT_THROW(blowfish->encrypt_data(std::span<std::byte>(invalid_data)),
                  std::runtime_error);
 
     // Test with data that is a multiple of BLOCK_SIZE
-    std::vector<std::byte> valid_data(16);  // 16 bytes, multiple of 8
+    std::vector<std::byte> valid_data(16);
     EXPECT_NO_THROW(blowfish->encrypt_data(std::span<std::byte>(valid_data)));
 }
 
@@ -423,11 +409,8 @@ TEST_F(BlowfishTest, LargeData) {
     auto decrypt_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                             decrypt_end - encrypt_end)
                             .count();
-
-    std::cout << "Large data (1MB) encryption time: " << encrypt_time << "ms"
-              << std::endl;
-    std::cout << "Large data (1MB) decryption time: " << decrypt_time << "ms"
-              << std::endl;
+    spdlog::info("Large data (1MB) encryption time: {}ms", encrypt_time);
+    spdlog::info("Large data (1MB) decryption time: {}ms", decrypt_time);
 }
 
 // Test with invalid padding
@@ -505,11 +488,8 @@ TEST_F(BlowfishTest, ParallelEncryption) {
 }
 
 int main(int argc, char** argv) {
-    // Initialize loguru
-    loguru::init(argc, argv);
-    loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
-
     // Initialize Google Test
     ::testing::InitGoogleTest(&argc, argv);
+    spdlog::set_level(spdlog::level::off);
     return RUN_ALL_TESTS();
 }

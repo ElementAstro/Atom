@@ -414,7 +414,7 @@ TEST_F(FloodFillTest, ParallelFillSimple) {
 
     // Fill one grid using BFS and the other with parallel fill
     FloodFill::fillBFS(grid1, 2, 2, targetColor, fillColor);
-    FloodFill::fillParallel(grid2, 2, 2, targetColor, fillColor);
+    FloodFill::fillParallel(grid2, 2, 2, targetColor, fillColor, FloodFill::FloodFillConfig{});
 
     // Results should be identical
     for (size_t i = 0; i < grid1.size(); ++i) {
@@ -439,8 +439,9 @@ TEST_F(FloodFillTest, ParallelFillLargeGrid) {
     int fillColor = 2;
 
     // Fill using parallel method with different thread counts
-    FloodFill::fillParallel(grid, size / 2, size / 2, targetColor, fillColor,
-                            Connectivity::Four, 4);
+    FloodFill::fillParallel(
+        grid, size / 2, size / 2, targetColor, fillColor,
+        FloodFill::FloodFillConfig{Connectivity::Four, 4});
 
     // Verify inner area is filled
     for (int i = 1; i < size - 1; ++i) {
@@ -474,23 +475,27 @@ TEST_F(FloodFillTest, ParallelFillWithDifferentThreadCounts) {
 
     // Test with 1 thread (should be similar to sequential)
     auto grid1 = grid;
-    FloodFill::fillParallel(grid1, size / 2, size / 2, targetColor, fillColor,
-                            Connectivity::Four, 1);
+    FloodFill::fillParallel(
+        grid1, size / 2, size / 2, targetColor, fillColor,
+        FloodFill::FloodFillConfig{Connectivity::Four, 1});
 
     // Test with 2 threads
     auto grid2 = grid;
-    FloodFill::fillParallel(grid2, size / 2, size / 2, targetColor, fillColor,
-                            Connectivity::Four, 2);
+    FloodFill::fillParallel(
+        grid2, size / 2, size / 2, targetColor, fillColor,
+        FloodFill::FloodFillConfig{Connectivity::Four, 2});
 
     // Test with 4 threads
     auto grid4 = grid;
-    FloodFill::fillParallel(grid4, size / 2, size / 2, targetColor, fillColor,
-                            Connectivity::Four, 4);
+    FloodFill::fillParallel(
+        grid4, size / 2, size / 2, targetColor, fillColor,
+        FloodFill::FloodFillConfig{Connectivity::Four, 4});
 
     // Test with default threads
     auto gridDefault = grid;
-    FloodFill::fillParallel(gridDefault, size / 2, size / 2, targetColor,
-                            fillColor);
+    FloodFill::fillParallel(
+        gridDefault, size / 2, size / 2, targetColor, fillColor,
+        FloodFill::FloodFillConfig{});
 
     // All results should be identical
     for (int i = 0; i < size; ++i) {
@@ -544,7 +549,7 @@ TEST_F(FloodFillTest, PerformanceComparisonLargeGrid) {
     auto gridPar = grid;
     auto startPar = std::chrono::high_resolution_clock::now();
     FloodFill::fillParallel(gridPar, size / 2, size / 2, targetColor,
-                            fillColor);
+                            fillColor, FloodFill::FloodFillConfig{});
     auto endPar = std::chrono::high_resolution_clock::now();
     auto durationPar =
         std::chrono::duration_cast<std::chrono::milliseconds>(endPar - startPar)
@@ -609,7 +614,7 @@ TEST_F(FloodFillTest, IntegrationTestComplexGrid) {
     // Apply different fill methods
     FloodFill::fillBFS(mazeBFS, 1, 1, targetColor, fillColor);
     FloodFill::fillDFS(mazeDFS, 1, 1, targetColor, fillColor);
-    FloodFill::fillParallel(mazeParallel, 1, 1, targetColor, fillColor);
+    FloodFill::fillParallel(mazeParallel, 1, 1, targetColor, fillColor, FloodFill::FloodFillConfig{});
 
     // All methods should produce the same result
     for (size_t i = 0; i < maze.size(); ++i) {

@@ -1,10 +1,8 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-
 #include <vector>
-
+#include <spdlog/spdlog.h>
 #include "atom/algorithm/matrix.hpp"
-#include "atom/log/loguru.hpp"
 
 using namespace atom::algorithm;
 using namespace std::chrono_literals;
@@ -29,7 +27,7 @@ protected:
         // Initialize loguru for testing
         static bool initialized = false;
         if (!initialized) {
-            loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+            spdlog::set_level(spdlog::level::off);
             initialized = true;
         }
     }

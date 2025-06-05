@@ -1,6 +1,6 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-
+#include <spdlog/spdlog.h>
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -9,9 +9,7 @@
 #include <random>
 #include <string>
 #include <vector>
-
 #include "atom/algorithm/tea.hpp"
-#include "atom/log/loguru.hpp"
 
 using namespace atom::algorithm;
 using namespace std::chrono_literals;
@@ -49,7 +47,7 @@ protected:
         // Initialize loguru for testing
         static bool initialized = false;
         if (!initialized) {
-            loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+            spdlog::set_level(spdlog::level::off);
             initialized = true;
         }
 
@@ -352,8 +350,8 @@ TEST_F(TEATest, PerformanceTest) {
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
             .count();
 
-    std::cout << "Regular XXTEA encryption of 100,000 integers took "
-              << duration << "ms" << std::endl;
+    spdlog::info("Regular XXTEA encryption of 100,000 integers took {} ms",
+                 duration);
 
     // Measure time for parallel XXTEA
     start = std::chrono::high_resolution_clock::now();
@@ -363,16 +361,12 @@ TEST_F(TEATest, PerformanceTest) {
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
             .count();
 
-    std::cout << "Parallel XXTEA encryption of 100,000 integers took "
-              << duration_parallel << "ms" << std::endl;
+    spdlog::info("Parallel XXTEA encryption of 100,000 integers took {} ms",
+                 duration_parallel);
 
-    // On multi-core systems, parallel should be faster
-    // This is not a strict test because performance depends on hardware
-    std::cout << "Speedup factor: "
-              << (duration > 0
-                      ? static_cast<double>(duration) / duration_parallel
-                      : 0)
-              << "x" << std::endl;
+    spdlog::info(
+        "Speedup factor: {}x",
+        (duration > 0 ? static_cast<double>(duration) / duration_parallel : 0));
 
     // Verify results match
     expectEqualVectors(encrypted, encrypted_parallel);

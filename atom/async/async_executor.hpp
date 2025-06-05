@@ -502,6 +502,8 @@ private:
 
     // Worker threads
     std::vector<std::jthread> m_threads;
+// 保存每个线程的 native_handle
+std::vector<std::thread::native_handle_type> m_threadHandles;
 
     // Statistics thread
     std::jthread m_statsThread;

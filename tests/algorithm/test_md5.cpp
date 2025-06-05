@@ -1,15 +1,13 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-
 #include <chrono>
 #include <future>
 #include <random>
 #include <string>
 #include <string_view>
 #include <vector>
-
+#include <spdlog/spdlog.h>
 #include "atom/algorithm/md5.hpp"
-#include "atom/log/loguru.hpp"
 
 using namespace atom::algorithm;
 using namespace std::chrono_literals;
@@ -47,7 +45,7 @@ protected:
         // Initialize loguru for testing
         static bool initialized = false;
         if (!initialized) {
-            loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+            spdlog::set_level(spdlog::level::off);
             initialized = true;
         }
     }
@@ -257,8 +255,7 @@ TEST_F(MD5Test, Performance) {
     auto duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-    std::cout << "MD5 hash of " << dataSize / (1024 * 1024) << " MB took "
-              << duration.count() << " ms" << std::endl;
+    spdlog::info("MD5 hash of {} MB took {} ms", dataSize / (1024 * 1024), duration.count());
 
     // No specific performance requirement, just for information
     EXPECT_EQ(hash.length(), 32);
@@ -282,6 +279,7 @@ TEST_F(MD5Test, ThreadSafety) {
 
     // Collect results
     std::vector<std::string> results;
+    results.reserve(numThreads);
     for (auto& future : futures) {
         results.push_back(future.get());
     }

@@ -642,4 +642,19 @@ template class MathAllocator<f32>;
 template class MathAllocator<f64>;
 template class MathAllocator<u64>;
 
+std::vector<uint64_t> parallelVectorAdd(const std::vector<uint64_t>& a,
+                                        const std::vector<uint64_t>& b) {
+    if (a.size() != b.size()) {
+        THROW_INVALID_ARGUMENT("Input vectors must have the same length");
+    }
+    std::vector<uint64_t> result(a.size());
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
+    for (size_t i = 0; i < a.size(); ++i) {
+        result[i] = a[i] + b[i];
+    }
+    return result;
+}
+
 }  // namespace atom::algorithm

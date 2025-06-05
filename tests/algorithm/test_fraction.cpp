@@ -1,11 +1,8 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-
-#include <cfloat>
 #include <cmath>
 #include <limits>
 #include <sstream>
-
 #include "atom/algorithm/fraction.hpp"
 #include "atom/log/loguru.hpp"
 
@@ -60,7 +57,7 @@ TEST_F(FractionTest, ConstructorHandlesNegativeValues) {
 }
 
 TEST_F(FractionTest, ConstructorThrowsOnZeroDenominator) {
-    EXPECT_THROW({ Fraction f(1, 0); }, FractionException);
+    EXPECT_THROW((void)Fraction(1, 0), FractionException);
 }
 
 // Arithmetic Tests
@@ -151,7 +148,7 @@ TEST_F(FractionTest, DivisionWithNegative) {
 TEST_F(FractionTest, DivisionThrowsOnZero) {
     Fraction f1(2, 3);
     Fraction f2(0, 1);
-    EXPECT_THROW({ f1 / f2; }, FractionException);
+    EXPECT_THROW((void)(f1 / f2), FractionException);
 }
 
 // Compound Assignment Tests
@@ -259,7 +256,7 @@ TEST_F(FractionTest, Invert) {
 
 TEST_F(FractionTest, InvertThrowsOnZeroNumerator) {
     Fraction f(0, 1);
-    EXPECT_THROW({ f.invert(); }, FractionException);
+    EXPECT_THROW(f.invert(), FractionException);
 }
 
 TEST_F(FractionTest, AbsValue) {
@@ -320,13 +317,13 @@ TEST_F(FractionTest, InputStreamOperator) {
 TEST_F(FractionTest, InputStreamOperatorThrowsOnInvalidFormat) {
     Fraction f;
     std::istringstream iss("5:8");
-    EXPECT_THROW({ iss >> f; }, FractionException);
+    EXPECT_THROW(iss >> f, FractionException);
 }
 
 TEST_F(FractionTest, InputStreamOperatorThrowsOnZeroDenominator) {
     Fraction f;
     std::istringstream iss("5/0");
-    EXPECT_THROW({ iss >> f; }, FractionException);
+    EXPECT_THROW(iss >> f, FractionException);
 }
 
 // Utility Function Tests
@@ -353,47 +350,42 @@ TEST_F(FractionTest, MakeFractionFromDouble) {
 }
 
 TEST_F(FractionTest, MakeFractionThrowsOnNanInf) {
-    EXPECT_THROW({ makeFraction(std::nan("")); }, FractionException);
-    EXPECT_THROW(
-        { makeFraction(std::numeric_limits<double>::infinity()); },
-        FractionException);
+    EXPECT_THROW((void)makeFraction(std::nan("")), FractionException);
+    EXPECT_THROW((void)makeFraction(std::numeric_limits<double>::infinity()),
+                 FractionException);
 }
 
 // Edge Cases Tests
 TEST_F(FractionTest, LargeNumbersAddition) {
     Fraction f1(std::numeric_limits<int>::max() / 2, 1);
     Fraction f2(std::numeric_limits<int>::max() / 2 + 1, 1);
-    EXPECT_THROW({ f1 + f2; }, FractionException);
+    EXPECT_THROW((void)(f1 + f2), FractionException);
 }
 
 TEST_F(FractionTest, LargeNumbersSubtraction) {
     Fraction f1(std::numeric_limits<int>::min() / 2, 1);
     Fraction f2(std::numeric_limits<int>::max() / 2, 1);
-    EXPECT_THROW({ f1 - f2; }, FractionException);
+    EXPECT_THROW((void)(f1 - f2), FractionException);
 }
 
 TEST_F(FractionTest, LargeNumbersMultiplication) {
     Fraction f1(46340, 1);  // sqrt(INT_MAX) ~ 46340
     Fraction f2(46341, 1);
-    EXPECT_THROW({ f1* f2; }, FractionException);
+    EXPECT_THROW((void)(f1 * f2), FractionException);
 }
 
 TEST_F(FractionTest, LargeNumbersDivision) {
     int large_num = std::numeric_limits<int>::max();
     Fraction f1(large_num, 1);
     Fraction f2(1, large_num);
-    EXPECT_THROW({ f1 / f2; }, FractionException);
+    EXPECT_THROW((void)(f1 / f2), FractionException);
 }
 
 TEST_F(FractionTest, MinIntHandling) {
-    // Test that MIN_INT is handled correctly in the gcd function
     int min_int = std::numeric_limits<int>::min();
     Fraction f1(min_int, 1);
     Fraction f2(1, 2);
-
-    // This shouldn't throw even though abs(min_int) is problematic
     Fraction result = f1 * f2;
-    // Result should be properly reduced and negative
     EXPECT_TRUE(result.isNegative());
 }
 

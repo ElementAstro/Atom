@@ -2,7 +2,6 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
-#include <span>
 #include <vector>
 
 #include "atom/algorithm/math.hpp"
@@ -150,16 +149,16 @@ TEST(MathTest, PowerOfTwoFunctions) {
 TEST(MathTest, ParallelVectorAdd) {
     std::vector<uint64_t> a = {1, 2, 3, 4};
     std::vector<uint64_t> b = {10, 20, 30, 40};
-    auto result = atom::algorithm::parallelVectorAdd<uint64_t>(a, b);
+    auto result = atom::algorithm::parallelVectorAdd(a, b);
     std::vector<uint64_t> expected = {11, 22, 33, 44};
     EXPECT_EQ(result, expected);
 }
 
-// Test parallelVectorMul
+// Test parallelVectorAdd
 TEST(MathTest, ParallelVectorMul) {
     std::vector<uint64_t> a = {2, 3, 4};
     std::vector<uint64_t> b = {5, 6, 7};
-    auto result = atom::algorithm::parallelVectorMul<uint64_t>(a, b);
+    auto result = atom::algorithm::parallelVectorAdd(a, b);
     std::vector<uint64_t> expected = {10, 18, 28};
     EXPECT_EQ(result, expected);
 }
