@@ -1,86 +1,107 @@
--- filepath: d:\msys64\home\qwdma\Atom\atom\components\xmake.lua
--- xmake configuration for Atom-Component module
--- Author: Max Qian
--- License: GPL3
+-- xmake script for Atom-Component
+-- This project adheres to the GPL3 license.
+--
+-- Project Details:
+--   Name: Atom-Component
+--   Description: Central component library for the Atom framework
+--   Author: Max Qian
+--   License: GPL3
 
--- Add standard build modes
+-- Set minimum xmake version
+set_xmakever("2.8.0")
+
+-- Set project info
+set_project("atom-component")
+set_version("1.0.0", {build = "%Y%m%d%H%M"})
+set_license("GPL-3.0")
+
+-- Set languages
+set_languages("c11", "cxx17")
+
+-- Add build modes
 add_rules("mode.debug", "mode.release")
 
--- Project configuration
-set_project("atom-component")
-set_version("1.0.0")
-set_license("GPL3")
+-- Add required packages
+add_requires("loguru")
 
--- Define module dependencies
-local atom_component_deps = {
-    "atom-error",
-    "atom-type",
-    "atom-utils"
+-- Define sources and headers
+local sources = {
+    "component.cpp",
+    "dispatch.cpp", 
+    "registry.cpp",
+    "var.cpp"
 }
 
--- Define package dependencies
-local atom_component_packages = {
-    "loguru"
-}
-
--- Define source files
-local source_files = {
-    "registry.cpp"
-}
-
--- Define header files
-local header_files = {
+local headers = {
     "component.hpp",
     "dispatch.hpp",
     "types.hpp",
     "var.hpp"
 }
 
--- Object Library
-target("atom-component-object")
-    set_kind("object")
+-- Main shared library target
+target("atom-component")
+    -- Set target kind to shared library
+    set_kind("shared")
     
-    -- Add files
-    add_files(table.unpack(source_files))
-    add_headerfiles(table.unpack(header_files))
+    -- Add source files
+    add_files(sources)
     
-    -- Add dependencies
-    add_deps(table.unpack(atom_component_deps))
-    add_packages(table.unpack(atom_component_packages))
+    -- Add header files
+    add_headerfiles(headers)
     
     -- Add include directories
     add_includedirs(".", {public = true})
-    add_includedirs("..", {public = true})
     
-    -- Set C++ standard
-    set_languages("c++20")
-target_end()
-
--- Library target
-target("atom-component")
-    -- Set library type based on parent project option
-    set_kind(has_config("shared_libs") and "shared" or "static")
+    -- Add packages
+    add_packages("loguru")
     
-    -- Add dependencies
-    add_deps("atom-component-object")
-    add_deps(table.unpack(atom_component_deps))
-    add_packages(table.unpack(atom_component_packages))
+    -- Add dependencies (assuming these are other xmake targets)
+    add_deps("atom-error", "atom-utils")
     
-    -- Platform-specific settings
-    if is_plat("linux") then
-        add_syslinks("pthread")
-    end
+    -- Add system libraries
+    add_syslinks("pthread")
     
-    -- Set output directories
+    -- Enable position independent code (automatic for shared libraries)
+    set_policy("build.optimization.lto", true)
+    
+    -- Set version info
+    set_version("1.0.0")
+    
+    -- Set output name
+    set_basename("atom-component")
+    
+    -- Set target and object directories
     set_targetdir("$(buildir)/lib")
     set_objectdir("$(buildir)/obj")
     
-    -- Set version with build timestamp
-    set_version("1.0.0", {build = "%Y%m%d%H%M"})
-    
-    -- Install configuration
-    on_install(function (target)
-        os.cp(target:targetfile(), path.join(target:installdir(), "lib"))
-        os.cp("*.hpp", path.join(target:installdir(), "include/atom/components"))
+    -- Installation rules
+    after_install(function (target)
+        local installdir = target:installdir() or "$(prefix)"
+        -- Install shared library
+        os.cp(target:targetfile(), path.join(installdir, "lib"))
+        -- Install headers
+        local headerdir = path.join(installdir, "include", "atom-component")
+        os.mkdir(headerdir)
+        for _, header in ipairs(headers) do
+            os.cp(header, headerdir)
+        end
     end)
-target_end()
+
+-- Optional: Create object library target (equivalent to CMake's object library)
+target("atom-component-object")
+    set_kind("object")
+    
+    -- Add the same source files
+    add_files(sources)
+    add_headerfiles(headers)
+    
+    -- Configuration
+    add_includedirs(".")
+    add_packages("loguru")
+    add_deps("atom-error", "atom-utils")
+    add_syslinks("pthread")
+    
+    -- Enable position independent code
+    add_cxflags("-fPIC", {tools = {"gcc", "clang"}})
+    add_cflags("-fPIC", {tools = {"gcc", "clang"}})

@@ -1,8 +1,5 @@
 #include "ws.hpp"
-
-#include <stdexcept>  // For std::invalid_argument, std::logic_error, std::bad_alloc
-
-// spdlog is already included in ws.hpp
+#include <stdexcept>
 
 WSClient::WSClient(net::io_context& ioc)
     : resolver_(std::make_shared<tcp::resolver>(net::make_strand(ioc))),
@@ -19,13 +16,11 @@ WSClient::~WSClient() noexcept {
         if (is_connected_ && ws_ && ws_->is_open()) {
             beast::error_code ec;
             ws_->close(websocket::close_code::normal, ec);
-            // Ignore error in destructor
         }
         if (ping_timer_) {
             try {
-                ping_timer_->cancel();  // Call 0-argument version
+                ping_timer_->cancel();
             } catch (const beast::system_error& e) {
-                // Log or ignore in destructor
                 spdlog::debug(
                     "Ignoring exception from ping_timer.cancel() in "
                     "destructor: {}",
@@ -37,7 +32,6 @@ WSClient::~WSClient() noexcept {
             }
         }
     } catch (...) {
-        // Prevent exceptions from escaping destructor
         spdlog::error("Exception in WSClient destructor");
     }
 }
@@ -53,7 +47,6 @@ void WSClient::setReconnectOptions(int retries, std::chrono::seconds interval) {
     if (interval.count() <= 0) {
         throw std::invalid_argument("Reconnect interval must be positive");
     }
-
     max_retries_ = retries;
     reconnect_interval_ = interval;
 }
@@ -66,7 +59,7 @@ void WSClient::setPingInterval(std::chrono::seconds interval) {
 }
 
 void WSClient::validateConnectionParams(std::string_view host,
-                                        std::string_view port) const {
+                                        std::string_view port) {
     if (host.empty()) {
         throw std::invalid_argument("Host cannot be empty");
     }
@@ -74,23 +67,16 @@ void WSClient::validateConnectionParams(std::string_view host,
         throw std::invalid_argument("Port cannot be empty");
     }
 
-    bool is_numeric_port = true;
-    for (char c : port) {
-        if (!std::isdigit(static_cast<unsigned char>(c))) {
-            is_numeric_port = false;
-            break;
-        }
-    }
+    bool is_numeric_port = std::all_of(port.begin(), port.end(), [](char c) {
+        return std::isdigit(static_cast<unsigned char>(c));
+    });
 
     if (!is_numeric_port) {
-        bool is_valid_service_char = true;
-        for (char c : port) {
-            if (!std::isalnum(static_cast<unsigned char>(c)) && c != '-') {
-                is_valid_service_char = false;
-                break;
-            }
-        }
-        if (!is_valid_service_char && !port.empty()) {
+        bool is_valid_service =
+            std::all_of(port.begin(), port.end(), [](char c) {
+                return std::isalnum(static_cast<unsigned char>(c)) || c == '-';
+            });
+        if (!is_valid_service) {
             throw std::invalid_argument(
                 "Port must be numeric or a valid service name");
         }
@@ -101,24 +87,17 @@ void WSClient::connect(std::string_view host, std::string_view port) {
     validateConnectionParams(host, port);
 
     beast::error_code ec;
-
     last_host_ = host;
     last_port_ = port;
     retry_count_ = 0;
 
-    // Re-initialize ws_ for a fresh connection attempt
-    // Use the ping_timer_'s executor to ensure operations are on the same
-    // strand if possible, or fall back to the original io_context if
-    // ping_timer_ isn't set up with one (though it is).
-    if (ping_timer_) {  // Should always be true after constructor
+    if (ping_timer_) {
         ws_ = std::make_shared<websocket::stream<tcp::socket>>(
             net::make_strand(ping_timer_->get_executor()));
     } else {
-        // Fallback, though ideally ping_timer_ is always available and
-        // configured
         spdlog::warn(
             "Ping timer not available for strand creation in connect, using "
-            "ws_->get_executor().context()");
+            "ws_->get_executor()");
         ws_ = std::make_shared<websocket::stream<tcp::socket>>(
             net::make_strand(ws_->get_executor()));
     }
@@ -130,11 +109,7 @@ void WSClient::connect(std::string_view host, std::string_view port) {
         throw beast::system_error{ec};
     }
 
-    // Iterate over the results and connect to the first successful endpoint
-    // net::connect returns the successfully connected endpoint or throws/sets
-    // ec.
-    tcp::resolver::results_type::endpoint_type ep =
-        net::connect(beast::get_lowest_layer(*ws_), results, ec);
+    auto ep = net::connect(beast::get_lowest_layer(*ws_), results, ec);
     if (ec) {
         spdlog::error("Failed to connect to '{}:{}': {}", host, port,
                       ec.message());
@@ -142,21 +117,15 @@ void WSClient::connect(std::string_view host, std::string_view port) {
     }
     (void)ep;
 
-    // Set TCP Keep-Alive option
-    boost::system::error_code result = beast::get_lowest_layer(*ws_).set_option(
+    auto result = beast::get_lowest_layer(*ws_).set_option(
         tcp::socket::keep_alive(true), ec);
-    ec = result;
     if (ec) {
-        spdlog::warn("Failed to set TCP keep-alive on socket: {}",
-                     ec.message());
+        spdlog::warn("Failed to set TCP keep-alive on socket: {} (result: {})",
+                     ec.message(), result.message());
     }
 
-    // Set timeout options for the handshake
-    // Configure timeouts for the websocket stream
     ws_->set_option(
         websocket::stream_base::timeout::suggested(beast::role_type::client));
-
-    // Perform the WebSocket handshake
     ws_->handshake(std::string(host), "/", ec);
 
     if (ec) {
@@ -164,14 +133,13 @@ void WSClient::connect(std::string_view host, std::string_view port) {
                       ec.message());
         if (ws_->is_open()) {
             beast::error_code close_ec;
-            // Close the underlying TCP socket on handshake failure
-            beast::error_code close_ec2;
-            auto close_result = beast::get_lowest_layer(*ws_).close(close_ec2);
-            close_ec = close_ec2;
-            if (close_ec)
+            auto result = beast::get_lowest_layer(*ws_).close(close_ec);
+            if (close_ec) {
                 spdlog::debug(
-                    "Error closing socket after handshake failure: {}",
-                    close_ec.message());
+                    "Error closing socket after handshake failure: {} (result: "
+                    "{})",
+                    close_ec.message(), result.message());
+            }
         }
         throw beast::system_error{ec};
     }
@@ -204,7 +172,6 @@ std::string WSClient::receive() {
 
     beast::flat_buffer buffer;
     beast::error_code ec;
-
     ws_->read(buffer, ec);
 
     if (ec) {
@@ -227,29 +194,22 @@ void WSClient::close() {
         return;
     }
 
-    // Cancel any pending operations like ping timer
     if (ping_timer_) {
-        beast::error_code timer_cancel_ec;
         try {
-            ping_timer_->cancel();  // Call 0-arg version
+            ping_timer_->cancel();
         } catch (const beast::system_error& e) {
-            timer_cancel_ec = e.code();
-        } catch (...) {
-            // Catch any other potential exceptions from cancel()
-            timer_cancel_ec = net::error::fault;  // Assign a generic error
-        }
-        if (timer_cancel_ec) {
             spdlog::warn("Error cancelling ping timer during close: {}",
-                         timer_cancel_ec.message());
+                         e.code().message());
+        } catch (...) {
+            spdlog::warn("Unknown error cancelling ping timer during close");
         }
     }
 
-    beast::error_code ec;  // This ec is for the ws_->close operation
+    beast::error_code ec;
     if (ws_ && ws_->is_open()) {
         ws_->close(websocket::close_code::normal, ec);
-    } else {
-        if (is_connected_)
-            spdlog::warn("Close called, was connected but stream is not open.");
+    } else if (is_connected_) {
+        spdlog::warn("Close called, was connected but stream is not open.");
     }
 
     is_connected_ = false;
@@ -309,31 +269,4 @@ void WSClient::startPing() {
                         }
                     }));
         }));
-}
-
-void WSClient::asyncSendJson(
-    const json& json_data,
-    std::function<void(beast::error_code, std::size_t)> handler) {
-    if (!is_connected_) {
-        net::post(ws_->get_executor(),
-                  [handler, ec = beast::error_code(
-                                net::error::not_connected,
-                                beast::generic_category())]() mutable {
-                      handler(ec, 0);
-                  });
-        return;
-    }
-
-    try {
-        std::string message = json_data.dump();
-        asyncSend(message, std::move(handler));
-    } catch (const json::exception& e) {
-        spdlog::error("JSON serialization error: {}", e.what());
-        net::post(ws_->get_executor(),
-                  [handler, ec = beast::error_code(
-                                net::error::invalid_argument,
-                                beast::generic_category())]() mutable {
-                      handler(ec, 0);
-                  });
-    }
 }
