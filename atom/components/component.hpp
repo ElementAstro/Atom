@@ -641,6 +641,55 @@ public:
     void defClassConversion(
         const std::shared_ptr<atom::meta::TypeConversionBase>& conversion);
 
+/**
+ * @brief Registers common operators for a type
+ */
+#define OP_EQ(a, b) ((a) == (b))
+#define OP_NE(a, b) ((a) != (b))
+#define OP_LT(a, b) ((a) < (b))
+#define OP_GT(a, b) ((a) > (b))
+#define OP_LE(a, b) ((a) <= (b))
+#define OP_GE(a, b) ((a) >= (b))
+
+// 定义条件检查宏
+#define CONDITION_EQ std::equality_comparable<T>
+#define CONDITION_LT \
+    requires(T a, T b) { {a < b}->std::convertible_to<bool>; }
+#define CONDITION_GT \
+    requires(T a, T b) { {a > b}->std::convertible_to<bool>; }
+#define CONDITION_LE \
+    requires(T a, T b) { {a <= b}->std::convertible_to<bool>; }
+#define CONDITION_GE \
+    requires(T a, T b) { {a >= b}->std::convertible_to<bool>; }
+
+// 注册操作符的通用宏
+#define REGISTER_OPERATOR(type_name, name, op, condition, description) \
+    if constexpr (condition) {                                         \
+        def(                                                           \
+            type_name + "." name,                                      \
+            [](const T& a, const T& b) -> bool { return op(a, b); },   \
+            "operators", description);                                 \
+    }
+
+    template <typename T>
+    void registerOperators(std::string_view typeName) {
+        std::string typeNameStr(typeName);
+
+        // 注册所有操作符
+        REGISTER_OPERATOR(typeNameStr, "equals", OP_EQ, CONDITION_EQ,
+                          "Check if two objects are equal")
+        REGISTER_OPERATOR(typeNameStr, "notEquals", OP_NE, CONDITION_EQ,
+                          "Check if two objects are not equal")
+        REGISTER_OPERATOR(typeNameStr, "lessThan", OP_LT, CONDITION_LT,
+                          "Compare objects")
+        REGISTER_OPERATOR(typeNameStr, "greaterThan", OP_GT, CONDITION_GT,
+                          "Compare objects")
+        REGISTER_OPERATOR(typeNameStr, "lessThanOrEqual", OP_LE, CONDITION_LE,
+                          "Compare objects")
+        REGISTER_OPERATOR(typeNameStr, "greaterThanOrEqual", OP_GE,
+                          CONDITION_GE, "Compare objects")
+    }
+
     /**
      * @brief Adds a command alias.
      * @param name Command name.
@@ -1016,16 +1065,30 @@ void Component::def(std::string_view name, Ret (Class::*func)(Args...),
         }));
 }
 
+// 注册静态变量（非const）
 template <typename MemberType, typename Class>
 void Component::def(std::string_view name, MemberType* var,
                     std::string_view group, std::string_view description) {
     if (!var) {
-        throw std::invalid_argument("Member variable pointer cannot be null");
+        throw std::invalid_argument("Static variable pointer cannot be null");
     }
-
     m_CommandDispatcher_->def(
         std::string(name), std::string(group), std::string(description),
         std::function<MemberType&()>([var]() -> MemberType& { return *var; }));
+}
+
+// 注册静态变量（const）
+template <typename MemberType, typename Class>
+void Component::def(std::string_view name, const MemberType* var,
+                    std::string_view group, std::string_view description) {
+    if (!var) {
+        throw std::invalid_argument(
+            "Const static variable pointer cannot be null");
+    }
+    m_CommandDispatcher_->def(
+        std::string(name), std::string(group), std::string(description),
+        std::function<const MemberType&()>(
+            [var]() -> const MemberType& { return *var; }));
 }
 
 template <typename EnumType>

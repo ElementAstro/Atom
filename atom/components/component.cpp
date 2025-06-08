@@ -671,3 +671,72 @@ auto Component::getVariableGroup(std::string_view name) const -> std::string {
 auto Component::getVariableNames() const -> std::vector<std::string> {
     return m_VariableManager_->getAllVariables();
 }
+
+template <typename Class, typename VarType>
+void Component::def(std::string_view name, VarType Class::* var,
+                    std::string_view group, std::string_view description) {
+    if (!var) {
+        throw std::invalid_argument("Member variable pointer cannot be null");
+    }
+    m_CommandDispatcher_->def(
+        std::string(name), std::string(group), std::string(description),
+        [var](Class& obj) -> VarType& { return obj.*var; });
+}
+
+template <typename Ret, typename Class, typename InstanceType>
+    requires Pointer<InstanceType> || SmartPointer<InstanceType> ||
+             std::is_same_v<InstanceType, PointerSentinel<Class>>
+void Component::def(std::string_view name, Ret (Class::*getter)() const,
+                    void (Class::*setter)(Ret), const InstanceType& instance,
+                    std::string_view group, std::string_view description) {
+    if (!getter || !setter) {
+        throw std::invalid_argument("Getter or setter pointer cannot be null");
+    }
+    // 注册getter
+    m_CommandDispatcher_->def(
+        std::string(name) + "_get", std::string(group),
+        std::string(description),
+        [instance, getter]() -> Ret { return (instance.get()->*getter)(); });
+    // 注册setter
+    m_CommandDispatcher_->def(
+        std::string(name) + "_set", std::string(group),
+        std::string(description),
+        [instance, setter](Ret value) { (instance.get()->*setter)(value); });
+}
+
+template <typename Class>
+void Component::def(std::string_view name, std::string_view group,
+                    std::string_view description) {
+    m_CommandDispatcher_->def(
+        std::string(name), std::string(group), std::string(description),
+        []() -> std::shared_ptr<Class> { return std::make_shared<Class>(); });
+}
+
+template <typename Class, typename... Args>
+void Component::def(std::string_view name, std::string_view group,
+                    std::string_view description) {
+    m_CommandDispatcher_->def(
+        std::string(name), std::string(group), std::string(description),
+        [](Args... args) -> std::shared_ptr<Class> {
+            return std::make_shared<Class>(std::forward<Args>(args)...);
+        });
+}
+
+template <typename Class, typename... Args>
+void Component::defConstructor(std::string_view name, std::string_view group,
+                               std::string_view description) {
+    m_CommandDispatcher_->def(std::string(name), std::string(group),
+                              std::string(description),
+                              [](Args... args) -> Class {
+                                  return Class(std::forward<Args>(args)...);
+                              });
+}
+
+template <typename Class>
+void Component::defDefaultConstructor(std::string_view name,
+                                      std::string_view group,
+                                      std::string_view description) {
+    m_CommandDispatcher_->def(std::string(name), std::string(group),
+                              std::string(description),
+                              []() -> Class { return Class(); });
+}
