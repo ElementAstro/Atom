@@ -4,8 +4,6 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
-#include <iomanip>
-#include <iostream>
 #include <map>
 #include <mutex>
 #include <numeric>
@@ -13,11 +11,13 @@
 #include <thread>
 #include <vector>
 
+#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/spdlog.h>
 #include "atom/type/json.hpp"
 
 namespace fs = std::filesystem;
 using namespace std::chrono_literals;
-
 // --- Perf::Location Implementation ---
 
 #if __cpp_lib_source_location
@@ -75,9 +75,9 @@ bool Perf::PerfFilter::match(const PerfTableEntry& entry) const {
 // --- Perf::generateFilteredReport Implementation ---
 
 void Perf::generateFilteredReport(const PerfFilter& filter) {
-    std::cout << "--- Filtered Performance Report ---\n"
-              << "Filter: minDuration=" << filter.minDuration
-              << "ns, funcContains='" << filter.funcContains << "'\n";
+    logger->info("--- Filtered Performance Report ---");
+    logger->info("Filter: minDuration={}ns, funcContains='{}'",
+                 filter.minDuration, filter.funcContains);
 
     bool found = false;
     std::lock_guard guard(gathered.lock);
@@ -85,17 +85,16 @@ void Perf::generateFilteredReport(const PerfFilter& filter) {
         if (filter.match(entry)) {
             found = true;
             const auto duration_ns = entry.t1 - entry.t0;
-            std::cout << entry.location.func << " (" << entry.location.file
-                      << ":" << entry.location.line << ") Tag: ["
-                      << entry.location.tag << "] Duration: " << duration_ns
-                      << " ns\n";
+            logger->info("{} ({}:{}) Tag: [{}] Duration: {} ns",
+                         entry.location.func, entry.location.file,
+                         entry.location.line, entry.location.tag, duration_ns);
         }
     }
 
     if (!found) {
-        std::cout << "No entries matched the filter.\n";
+        logger->info("No entries matched the filter.");
     }
-    std::cout << "--- End Filtered Report ---\n";
+    logger->info("--- End Filtered Report ---");
 }
 
 // --- Perf::PerfThreadLocal Implementation ---
@@ -139,18 +138,30 @@ std::thread::id Perf::PerfEntry::threadId() const { return threadId_; }
 // --- Perf::PerfAsyncLogger Implementation ---
 
 Perf::PerfAsyncLogger::PerfAsyncLogger() : done(false) {
+    try {
+        logger = spdlog::basic_logger_mt("perf_async_logger", "perf_async.log",
+                                         true);
+        logger->set_pattern("%v");
+        logger->info(
+            "StartTimestamp,EndTimestamp,Duration(ns),Function,File,Line,Tag,"
+            "ThreadID");
+    } catch (const spdlog::spdlog_ex& ex) {
+        Perf::logger->error("Failed to create async logger: {}", ex.what());
+        return;
+    }
+
     worker = std::thread([this]() { this->run(); });
 }
 
 Perf::PerfAsyncLogger::~PerfAsyncLogger() { stop(); }
 
 void Perf::PerfAsyncLogger::log(const PerfTableEntry& entry) {
-    if (!worker.joinable())
+    if (!worker.joinable() || !logger)
         return;
 
     {
         std::lock_guard lock(mutex);
-        if (queue.size() >= getConfig().maxQueueSize)
+        if (queue.size() >= Perf::getConfig().maxQueueSize)
             return;
         queue.push(entry);
     }
@@ -158,13 +169,8 @@ void Perf::PerfAsyncLogger::log(const PerfTableEntry& entry) {
 }
 
 void Perf::PerfAsyncLogger::run() {
-    const std::string log_filename = "perf_async.log";
-    std::ofstream fout(log_filename);
-    if (!fout)
+    if (!logger)
         return;
-
-    fout << "StartTimestamp,EndTimestamp,Duration(ns),Function,File,Line,Tag,"
-            "ThreadID\n";
 
     while (true) {
         std::unique_lock lock(mutex);
@@ -178,16 +184,20 @@ void Perf::PerfAsyncLogger::run() {
             const auto& entry = local_queue.front();
             const auto duration_ns = entry.t1 - entry.t0;
 
-            fout << entry.t0 << ',' << entry.t1 << ',' << duration_ns << ','
-                 << entry.location.func << ',' << entry.location.file << ','
-                 << entry.location.line << ',' << entry.location.tag << ','
-                 << std::hash<std::thread::id>()(entry.threadId) << '\n';
+            logger->info("{},{},{},{},{},{},{},{}", entry.t0, entry.t1,
+                         duration_ns, entry.location.func, entry.location.file,
+                         entry.location.line, entry.location.tag,
+                         std::hash<std::thread::id>()(entry.threadId));
             local_queue.pop();
         }
 
         lock.lock();
         if (done && queue.empty())
             break;
+    }
+
+    if (logger) {
+        logger->flush();
     }
 }
 
@@ -199,6 +209,10 @@ void Perf::PerfAsyncLogger::stop() {
     cv.notify_all();
     if (worker.joinable()) {
         worker.join();
+    }
+
+    if (logger) {
+        logger->flush();
     }
 }
 
@@ -256,9 +270,75 @@ void Perf::setConfig(const Config& config) {
         gathered.output_path.clear();
         gathered.output = nullptr;
     }
+
+    // Configure logger based on config
+    logger->set_level(spdlog::level::info);
+    if (config.outputPath.has_value()) {
+        try {
+            auto file_sink =
+                std::make_shared<spdlog::sinks::basic_file_sink_mt>(
+                    config.outputPath.value().string() + ".log", true);
+            logger->sinks().push_back(file_sink);
+        } catch (const spdlog::spdlog_ex& ex) {
+            logger->error("Failed to add file sink: {}", ex.what());
+        }
+    }
 }
 
 const Perf::Config& Perf::getConfig() { return config_; }
+
+void Perf::PerfGather::exportToJSON(const std::string& filename) {
+    const auto& config = Perf::getConfig();
+    const auto min_duration_ns =
+        static_cast<uint64_t>(config.minimumDuration.count());
+
+    try {
+        std::lock_guard guard(lock);
+
+        nlohmann::json j = nlohmann::json::array();
+
+        for (const auto& entry : table) {
+            const auto duration = entry.t1 - entry.t0;
+            if (duration < min_duration_ns)
+                continue;
+
+            j.push_back(
+                {{"func", entry.location.func},
+                 {"file", entry.location.file},
+                 {"line", entry.location.line},
+                 {"start_ns", entry.t0},
+                 {"end_ns", entry.t1},
+                 {"duration_ns", duration},
+                 {"thread_id", std::hash<std::thread::id>()(entry.threadId)},
+                 {"tag", entry.location.tag}});
+        }
+
+        const auto path = fs::path(filename);
+        if (!path.parent_path().empty() && !fs::exists(path.parent_path())) {
+            std::error_code ec;
+            fs::create_directories(path.parent_path(), ec);
+            if (ec) {
+                Perf::logger->error(
+                    "Error creating directory {} for JSON export: {}",
+                    path.parent_path().string(), ec.message());
+                return;
+            }
+        }
+
+        std::ofstream out(path);
+        if (!out) {
+            Perf::logger->error("Failed to open file for writing: {}",
+                                filename);
+            return;
+        }
+        out << j.dump(4);
+        Perf::logger->info("Exported performance data to {}", filename);
+
+    } catch (const std::exception& e) {
+        Perf::logger->error("Error exporting to JSON file {}: {}", filename,
+                            e.what());
+    }
+}
 
 static std::string formatDuration(std::chrono::nanoseconds duration_ns) {
     std::ostringstream oss;
@@ -286,63 +366,6 @@ static std::string formatDuration(std::chrono::nanoseconds duration_ns) {
     return oss.str();
 }
 
-void Perf::PerfGather::exportToJSON(const std::string& filename) {
-    nlohmann::json j = nlohmann::json::array();
-    const auto& config = Perf::getConfig();
-    const auto min_duration_ns =
-        static_cast<uint64_t>(config.minimumDuration.count());
-
-    try {
-        std::lock_guard guard(lock);
-
-        for (const auto& entry : table) {
-            const auto duration = entry.t1 - entry.t0;
-            if (duration < min_duration_ns)
-                continue;
-
-            j.push_back(
-                {{"func", entry.location.func},
-                 {"file", entry.location.file},
-                 {"line", entry.location.line},
-                 {"start_ns", entry.t0},
-                 {"end_ns", entry.t1},
-                 {"duration_ns", duration},
-                 {"thread_id", std::hash<std::thread::id>()(entry.threadId)},
-                 {"tag", entry.location.tag}});
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "Error processing performance data for JSON export: "
-                  << e.what() << '\n';
-        return;
-    }
-
-    try {
-        const auto path = fs::path(filename);
-        if (!path.parent_path().empty() && !fs::exists(path.parent_path())) {
-            std::error_code ec;
-            fs::create_directories(path.parent_path(), ec);
-            if (ec) {
-                std::cerr << "Error creating directory "
-                          << path.parent_path().string()
-                          << " for JSON export: " << ec.message() << '\n';
-                return;
-            }
-        }
-
-        std::ofstream out(path);
-        if (!out) {
-            std::cerr << "Failed to open file for writing: " << filename
-                      << '\n';
-            return;
-        }
-        out << j.dump(4);
-        std::cout << "Exported performance data to " << filename << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "Error writing JSON file " << filename << ": " << e.what()
-                  << '\n';
-    }
-}
-
 void Perf::PerfGather::generateThreadReport() {
     std::map<std::thread::id,
              std::vector<std::reference_wrapper<const PerfTableEntry>>>
@@ -362,27 +385,28 @@ void Perf::PerfGather::generateThreadReport() {
     }
 
     if (threadData.empty()) {
-        std::cout << "No performance data recorded (or none above minimum "
-                     "threshold of "
-                  << min_duration_ns << " ns)" << std::endl;
+        Perf::logger->info(
+            "No performance data recorded (or none above minimum threshold of "
+            "{} ns)",
+            min_duration_ns);
         return;
     }
 
-    std::cout << "==========================================\n"
-              << "Performance Summary Report\n"
-              << "==========================================\n"
-              << "Configuration:\n"
-              << "  Minimum Duration: " << min_duration_ns << " ns\n"
-              << "  Async Logging: "
-              << (config.asyncLogging ? "Enabled" : "Disabled") << "\n"
-              << "------------------------------------------\n"
-              << "Total threads with recorded entries: " << threadData.size()
-              << "\n\n";
+    Perf::logger->info("==========================================");
+    Perf::logger->info("Performance Summary Report");
+    Perf::logger->info("==========================================");
+    Perf::logger->info("Configuration:");
+    Perf::logger->info("  Minimum Duration: {} ns", min_duration_ns);
+    Perf::logger->info("  Async Logging: {}",
+                       config.asyncLogging ? "Enabled" : "Disabled");
+    Perf::logger->info("------------------------------------------");
+    Perf::logger->info("Total threads with recorded entries: {}",
+                       threadData.size());
 
     for (const auto& [id, entries] : threadData) {
-        std::cout << "--- Thread " << std::hash<std::thread::id>()(id)
-                  << " ---\n"
-                  << "  Total entries recorded: " << entries.size() << "\n";
+        Perf::logger->info("--- Thread {} ---",
+                           std::hash<std::thread::id>()(id));
+        Perf::logger->info("  Total entries recorded: {}", entries.size());
 
         const uint64_t totalDuration =
             std::accumulate(entries.begin(), entries.end(), uint64_t(0),
@@ -391,7 +415,7 @@ void Perf::PerfGather::generateThreadReport() {
                                 return sum + (entry.t1 - entry.t0);
                             });
 
-        std::cout << "  Total duration recorded: " << totalDuration << " ns\n";
+        Perf::logger->info("  Total duration recorded: {} ns", totalDuration);
 
         auto sortedEntries = entries;
         std::sort(sortedEntries.begin(), sortedEntries.end(),
@@ -402,24 +426,27 @@ void Perf::PerfGather::generateThreadReport() {
                   });
 
         const auto topCount = std::min(size_t(10), sortedEntries.size());
-        std::cout << "  Top " << topCount << " entries by duration:\n";
+        Perf::logger->info("  Top {} entries by duration:", topCount);
 
         for (size_t i = 0; i < topCount; ++i) {
             const auto& entry = sortedEntries[i].get();
             const auto duration = entry.t1 - entry.t0;
-            std::cout << "    " << entry.location.func;
+            std::string message = fmt::format("    {} ", entry.location.func);
+
             if (entry.location.tag && *entry.location.tag) {
-                std::cout << " [" << entry.location.tag << "]";
+                message += fmt::format("[{}] ", entry.location.tag);
             }
-            std::cout << " - " << duration << " ns (" << entry.location.file
-                      << ":" << entry.location.line << ")\n";
+
+            message += fmt::format("- {} ns ({}:{})", duration,
+                                   entry.location.file, entry.location.line);
+
+            Perf::logger->info(message);
         }
-        std::cout << "\n";
     }
 
-    std::cout << "==========================================\n"
-              << "Overall Top Functions (Across All Threads)\n"
-              << "==========================================\n";
+    Perf::logger->info("==========================================");
+    Perf::logger->info("Overall Top Functions (Across All Threads)");
+    Perf::logger->info("==========================================");
 
     std::vector<std::reference_wrapper<const PerfTableEntry>> allEntries;
     for (const auto& [id, entries] : threadData) {
@@ -434,25 +461,34 @@ void Perf::PerfGather::generateThreadReport() {
               });
 
     const size_t topCount = std::min(size_t(20), allEntries.size());
-    std::cout << "Top " << topCount << " entries by duration:\n";
+    Perf::logger->info("Top {} entries by duration:", topCount);
 
     for (size_t i = 0; i < topCount; ++i) {
         const auto& entry = allEntries[i].get();
         const auto duration = entry.t1 - entry.t0;
-        std::cout << std::setw(2) << (i + 1) << ". " << entry.location.func;
+
+        std::string message =
+            fmt::format("{:2}. {} ", (i + 1), entry.location.func);
+
         if (entry.location.tag && *entry.location.tag) {
-            std::cout << " [" << entry.location.tag << "]";
+            message += fmt::format("[{}] ", entry.location.tag);
         }
-        std::cout << " - " << duration << " ns (Thread "
-                  << std::hash<std::thread::id>()(entry.threadId) << ", "
-                  << entry.location.file << ":" << entry.location.line << ")\n";
+
+        message += fmt::format("- {} ns (Thread {}, {}:{})", duration,
+                               std::hash<std::thread::id>()(entry.threadId),
+                               entry.location.file, entry.location.line);
+
+        Perf::logger->info(message);
     }
-    std::cout << "==========================================\n";
+
+    Perf::logger->info("==========================================");
 }
 
-static void writeCsvData(std::ostream& csv, const Perf::PerfGather& gatherer,
+static void writeCsvData(std::shared_ptr<spdlog::logger> csv_logger,
+                         const Perf::PerfGather& gatherer,
                          const Perf::Config& config) {
-    csv << "Function,File,Line,Start(ns),End(ns),Duration(ns),ThreadID,Tag\n";
+    csv_logger->info(
+        "Function,File,Line,Start(ns),End(ns),Duration(ns),ThreadID,Tag");
 
     const auto min_duration_ns =
         static_cast<uint64_t>(config.minimumDuration.count());
@@ -463,21 +499,21 @@ static void writeCsvData(std::ostream& csv, const Perf::PerfGather& gatherer,
         if (duration < min_duration_ns)
             continue;
 
-        csv << entry.location.func << "," << entry.location.file << ","
-            << entry.location.line << "," << entry.t0 << "," << entry.t1 << ","
-            << duration << "," << std::hash<std::thread::id>()(entry.threadId)
-            << ",";
-
+        std::string tag_value = "";
         if (entry.location.tag && *entry.location.tag) {
-            csv << entry.location.tag;
+            tag_value = entry.location.tag;
         }
-        csv << "\n";
+
+        csv_logger->info(
+            "{},{},{},{},{},{},{},{}", entry.location.func, entry.location.file,
+            entry.location.line, entry.t0, entry.t1, duration,
+            std::hash<std::thread::id>()(entry.threadId), tag_value);
     }
 }
 
-static void writeFlamegraphData(std::ostream& folded,
-                                const Perf::PerfGather& gatherer,
-                                const Perf::Config& config) {
+static void writeFlamegraphData(
+    std::shared_ptr<spdlog::logger> flamegraph_logger,
+    const Perf::PerfGather& gatherer, const Perf::Config& config) {
     const auto min_duration_ns =
         static_cast<uint64_t>(config.minimumDuration.count());
 
@@ -487,14 +523,16 @@ static void writeFlamegraphData(std::ostream& folded,
         if (duration < min_duration_ns)
             continue;
 
-        folded << entry.location.func << ";" << entry.location.file << ":"
-               << entry.location.line;
+        std::string line =
+            fmt::format("{}:{};{}", entry.location.func, entry.location.file,
+                        entry.location.line);
 
         if (entry.location.tag && *entry.location.tag) {
-            folded << ";" << entry.location.tag;
+            line += fmt::format(";{}", entry.location.tag);
         }
 
-        folded << " " << duration << "\n";
+        line += fmt::format(" {}", duration);
+        flamegraph_logger->info(line);
     }
 }
 
@@ -534,19 +572,14 @@ void Perf::finalize() {
                  (basePath.filename().string() + ".csv"))
                     .string();
             try {
-                std::ofstream csv(csvFilename);
-                if (csv) {
-                    writeCsvData(csv, gathered, config);
-                    std::cout << "Exported CSV data to " << csvFilename
-                              << std::endl;
-                } else {
-                    std::cerr
-                        << "Failed to open file for writing: " << csvFilename
-                        << '\n';
-                }
-            } catch (const std::exception& e) {
-                std::cerr << "Error exporting CSV to " << csvFilename << ": "
-                          << e.what() << '\n';
+                auto csv_logger =
+                    spdlog::basic_logger_mt("perf_csv", csvFilename, true);
+                csv_logger->set_pattern("%v");
+                writeCsvData(csv_logger, gathered, config);
+                logger->info("Exported CSV data to {}", csvFilename);
+                spdlog::drop("perf_csv");
+            } catch (const spdlog::spdlog_ex& ex) {
+                logger->error("Failed to create CSV logger: {}", ex.what());
             }
         }
 
@@ -560,22 +593,19 @@ void Perf::finalize() {
                  (basePath.filename().string() + ".svg"))
                     .string();
             try {
-                std::ofstream folded(foldedFilename);
-                if (folded) {
-                    writeFlamegraphData(folded, gathered, config);
-                    std::cout << "Exported flamegraph data to "
-                              << foldedFilename << std::endl;
-                    std::cout << "Hint: Use 'flamegraph.pl " << foldedFilename
-                              << " > " << svgFilename
-                              << "' to generate visualization." << std::endl;
-                } else {
-                    std::cerr
-                        << "Failed to open file for writing: " << foldedFilename
-                        << '\n';
-                }
-            } catch (const std::exception& e) {
-                std::cerr << "Error exporting flamegraph data to "
-                          << foldedFilename << ": " << e.what() << '\n';
+                auto folded_logger = spdlog::basic_logger_mt(
+                    "perf_flamegraph", foldedFilename, true);
+                folded_logger->set_pattern("%v");
+                writeFlamegraphData(folded_logger, gathered, config);
+                logger->info("Exported flamegraph data to {}", foldedFilename);
+                logger->info(
+                    "Hint: Use 'flamegraph.pl {} > {}' to generate "
+                    "visualization.",
+                    foldedFilename, svgFilename);
+                spdlog::drop("perf_flamegraph");
+            } catch (const spdlog::spdlog_ex& ex) {
+                logger->error("Failed to create flamegraph logger: {}",
+                              ex.what());
             }
         }
     }
@@ -583,4 +613,6 @@ void Perf::finalize() {
     if (config.generateThreadReport) {
         gathered.generateThreadReport();
     }
+
+    spdlog::apply_all([](std::shared_ptr<spdlog::logger> l) { l->flush(); });
 }

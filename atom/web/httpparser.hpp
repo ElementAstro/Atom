@@ -25,7 +25,7 @@ Description: Http Header Parser with C++20 features
 namespace atom::web {
 
 /**
- * @brief HTTP方法枚举
+ * @brief HTTP method enumeration
  */
 enum class HttpMethod {
     GET,
@@ -41,12 +41,12 @@ enum class HttpMethod {
 };
 
 /**
- * @brief HTTP版本枚举
+ * @brief HTTP version enumeration
  */
 enum class HttpVersion { HTTP_1_0, HTTP_1_1, HTTP_2_0, HTTP_3_0, UNKNOWN };
 
 /**
- * @brief HTTP状态码及其对应描述的结构
+ * @brief HTTP status code and description structure
  */
 struct HttpStatus {
     int code;
@@ -74,7 +74,7 @@ struct HttpStatus {
 };
 
 /**
- * @brief Cookie结构体，用于表示HTTP Cookie
+ * @brief Cookie structure representing an HTTP Cookie
  */
 struct Cookie {
     std::string name;
@@ -111,16 +111,16 @@ public:
     void parseHeaders(const std::string& rawHeaders);
 
     /**
-     * @brief 解析完整的HTTP请求
-     * @param rawRequest 原始HTTP请求字符串
-     * @return 是否成功解析
+     * @brief Parse a complete HTTP request
+     * @param rawRequest The raw HTTP request string
+     * @return Whether parsing was successful
      */
     bool parseRequest(const std::string& rawRequest);
 
     /**
-     * @brief 解析完整的HTTP响应
-     * @param rawResponse 原始HTTP响应字符串
-     * @return 是否成功解析
+     * @brief Parse a complete HTTP response
+     * @param rawResponse The raw HTTP response string
+     * @return Whether parsing was successful
      */
     bool parseResponse(const std::string& rawResponse);
 
@@ -154,9 +154,9 @@ public:
         -> std::optional<std::vector<std::string>>;
 
     /**
-     * @brief 获取某个头部字段的第一个值
-     * @param key 头部字段名
-     * @return 头部字段的第一个值，如果不存在则返回空
+     * @brief Gets the first value of a header field
+     * @param key The header field name
+     * @return The first header field value, or nullopt if it doesn't exist
      */
     [[nodiscard]] auto getHeaderValue(const std::string& key) const
         -> std::optional<std::string>;
@@ -187,145 +187,145 @@ public:
     void clearHeaders();
 
     /**
-     * @brief 添加一个Cookie
-     * @param cookie Cookie对象
+     * @brief Add a Cookie
+     * @param cookie The Cookie object to add
      */
     void addCookie(const Cookie& cookie);
 
     /**
-     * @brief 解析Cookie字符串
-     * @param cookieStr Cookie字符串
-     * @return 解析后的Cookie键值对
+     * @brief Parse a Cookie string
+     * @param cookieStr The Cookie string
+     * @return A map of cookie name-value pairs
      */
     [[nodiscard]] std::map<std::string, std::string> parseCookies(
         const std::string& cookieStr) const;
 
     /**
-     * @brief 获取所有Cookie
-     * @return 所有Cookie的列表
+     * @brief Get all Cookies
+     * @return A list of all cookies
      */
     [[nodiscard]] std::vector<Cookie> getAllCookies() const;
 
     /**
-     * @brief 获取指定名称的Cookie
-     * @param name Cookie名称
-     * @return Cookie对象（如果存在）
+     * @brief Get a cookie with the specified name
+     * @param name The cookie name
+     * @return The Cookie object if it exists
      */
     [[nodiscard]] std::optional<Cookie> getCookie(
         const std::string& name) const;
 
     /**
-     * @brief 删除指定Cookie
-     * @param name Cookie名称
+     * @brief Remove a specific cookie
+     * @param name The name of the cookie to remove
      */
     void removeCookie(const std::string& name);
 
     /**
-     * @brief 解析URL查询参数
-     * @param url 包含查询参数的URL
-     * @return 解析后的参数键值对
+     * @brief Parse URL query parameters
+     * @param url The URL containing query parameters
+     * @return A map of parsed parameter name-value pairs
      */
     [[nodiscard]] std::map<std::string, std::string> parseUrlParameters(
         const std::string& url) const;
 
     /**
-     * @brief 设置HTTP方法
-     * @param method HTTP方法
+     * @brief Set the HTTP method
+     * @param method The HTTP method
      */
     void setMethod(HttpMethod method);
 
     /**
-     * @brief 获取HTTP方法
-     * @return 当前HTTP方法
+     * @brief Get the HTTP method
+     * @return The current HTTP method
      */
     [[nodiscard]] HttpMethod getMethod() const;
 
     /**
-     * @brief 将字符串转换为HTTP方法枚举
-     * @param methodStr 方法字符串
-     * @return 对应的HTTP方法枚举
+     * @brief Convert a string to HTTP method enum
+     * @param methodStr The method string
+     * @return The corresponding HTTP method enum
      */
     [[nodiscard]] static HttpMethod stringToMethod(
         const std::string& methodStr);
 
     /**
-     * @brief 将HTTP方法枚举转换为字符串
-     * @param method HTTP方法枚举
-     * @return 对应的方法字符串
+     * @brief Convert an HTTP method enum to string
+     * @param method The HTTP method enum
+     * @return The corresponding method string
      */
     [[nodiscard]] static std::string methodToString(HttpMethod method);
 
     /**
-     * @brief 设置HTTP状态
-     * @param status HTTP状态对象
+     * @brief Set the HTTP status
+     * @param status The HTTP status object
      */
     void setStatus(const HttpStatus& status);
 
     /**
-     * @brief 获取HTTP状态
-     * @return 当前HTTP状态对象
+     * @brief Get the HTTP status
+     * @return The current HTTP status object
      */
     [[nodiscard]] HttpStatus getStatus() const;
 
     /**
-     * @brief 设置URL路径
-     * @param path URL路径
+     * @brief Set the URL path
+     * @param path The URL path
      */
     void setPath(const std::string& path);
 
     /**
-     * @brief 获取URL路径
-     * @return 当前URL路径
+     * @brief Get the URL path
+     * @return The current URL path
      */
     [[nodiscard]] std::string getPath() const;
 
     /**
-     * @brief 设置HTTP版本
-     * @param version HTTP版本
+     * @brief Set the HTTP version
+     * @param version The HTTP version
      */
     void setVersion(HttpVersion version);
 
     /**
-     * @brief 获取HTTP版本
-     * @return 当前HTTP版本
+     * @brief Get the HTTP version
+     * @return The current HTTP version
      */
     [[nodiscard]] HttpVersion getVersion() const;
 
     /**
-     * @brief 设置请求体
-     * @param body 请求体内容
+     * @brief Set the request/response body
+     * @param body The body content
      */
     void setBody(const std::string& body);
 
     /**
-     * @brief 获取请求体内容
-     * @return 请求体内容
+     * @brief Get the request/response body content
+     * @return The body content
      */
     [[nodiscard]] std::string getBody() const;
 
     /**
-     * @brief 构建HTTP请求字符串
-     * @return 构建的HTTP请求
+     * @brief Build an HTTP request string
+     * @return The constructed HTTP request
      */
     [[nodiscard]] std::string buildRequest() const;
 
     /**
-     * @brief 构建HTTP响应字符串
-     * @return 构建的HTTP响应
+     * @brief Build an HTTP response string
+     * @return The constructed HTTP response
      */
     [[nodiscard]] std::string buildResponse() const;
 
     /**
-     * @brief URL编码
-     * @param str 要编码的字符串
-     * @return 编码后的字符串
+     * @brief URL encode a string
+     * @param str The string to encode
+     * @return The encoded string
      */
     [[nodiscard]] static std::string urlEncode(const std::string& str);
 
     /**
-     * @brief URL解码
-     * @param str 要解码的字符串
-     * @return 解码后的字符串
+     * @brief URL decode a string
+     * @param str The string to decode
+     * @return The decoded string
      */
     [[nodiscard]] static std::string urlDecode(const std::string& str);
 

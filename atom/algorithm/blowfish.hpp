@@ -19,8 +19,16 @@ concept ByteType = std::is_same_v<T, std::byte> || std::is_same_v<T, char> ||
                    std::is_same_v<T, unsigned char>;
 
 /**
+ * @brief Applies PKCS7 padding to the data.
+ * @param data The data to pad.
+ * @param length The length of the data, will be updated to include padding.
+ */
+template <ByteType T>
+void pkcs7_padding(std::span<T> data, usize& length);
+
+/**
  * @class Blowfish
- * @brief A class to implement the Blowfish encryption algorithm.
+ * @brief A class implementing the Blowfish encryption algorithm.
  */
 class Blowfish {
 private:
@@ -96,7 +104,7 @@ private:
     /**
      * @brief Validates the provided key.
      * @param key The key to validate.
-     * @throws std::invalid_argument If the key is invalid.
+     * @throws std::runtime_error If the key is invalid.
      */
     void validate_key(std::span<const std::byte> key) const;
 
@@ -110,16 +118,9 @@ private:
     /**
      * @brief Validates the size of the block.
      * @param size The size of the block.
-     * @throws std::invalid_argument If the block size is invalid.
+     * @throws std::runtime_error If the block size is invalid.
      */
     static void validate_block_size(usize size);
-
-    /**
-     * @brief Applies PKCS7 padding to the data.
-     * @param data The data to pad.
-     * @param length The length of the data after padding.
-     */
-    void pkcs7_padding(std::span<std::byte> data, usize& length);
 
     /**
      * @brief Removes PKCS7 padding from the data.

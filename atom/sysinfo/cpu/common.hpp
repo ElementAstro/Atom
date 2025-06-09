@@ -64,8 +64,6 @@ Description: System Information Module - CPU Common Header
 #include <sys/types.h>
 #endif
 
-#include "atom/log/loguru.hpp"
-
 namespace atom::system {
 
 namespace {

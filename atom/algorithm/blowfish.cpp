@@ -1,16 +1,17 @@
 #include "blowfish.hpp"
+
 #include <algorithm>
 #include <array>
-#include <cstring>
 #include <fstream>
 #include <future>
 #include <span>
 
 #include "atom/error/exception.hpp"
-#include "atom/log/loguru.hpp"
 
 namespace atom::algorithm {
-static constexpr std::array<uint32_t, 18> INITIAL_P = {
+
+// Initial state constants
+static constexpr std::array<u32, 18> INITIAL_P = {
     0x243f6a88, 0x85a308d3, 0x13198a2e, 0x03707344, 0xa4093822, 0x299f31d0,
     0x082efa98, 0xec4e6c89, 0x557a8e8c, 0x163f1dbe, 0x37e1e9af, 0x37cda6b7,
     0x58e0f419, 0x3de9c6a1, 0x6e10e33f, 0x28782c2f, 0x1f2b4e36, 0x74855fa2};
@@ -140,27 +141,56 @@ static constexpr std::array<std::array<uint32_t, 256>, 4> INITIAL_S = {
       0x545b9025, 0x14102f6e, 0x3ad2ff38, 0x8c54fc21, 0xd2227597, 0x4d962d87,
       0xa2f2d784, 0x14ce598f, 0x78a0c7c5, 0xa4f3c544, 0x6e1cd93e, 0x41c4d66b}}};
 
-static constexpr size_t BLOCK_SIZE = 8;
+static constexpr usize BLOCK_SIZE = 8;
 
+/**
+ * @brief Converts a byte-like value to std::byte.
+ */
 template <ByteType T>
 [[nodiscard]] static constexpr auto to_byte(T value) noexcept -> std::byte {
     return static_cast<std::byte>(static_cast<unsigned char>(value));
 }
 
+/**
+ * @brief Converts from std::byte to another byte-like type.
+ */
 template <ByteType T>
 [[nodiscard]] static constexpr auto from_byte(std::byte value) noexcept -> T {
     return static_cast<T>(std::to_integer<unsigned char>(value));
 }
 
+template <ByteType T>
+void pkcs7_padding(std::span<T> data, usize& length) {
+    usize padding_length = BLOCK_SIZE - (length % BLOCK_SIZE);
+    if (padding_length == 0) {
+        padding_length = BLOCK_SIZE;
+    }
+
+    // Ensure sufficient buffer space for padding
+    if (data.size() < length + padding_length) {
+        spdlog::error("Insufficient buffer space for padding");
+        THROW_RUNTIME_ERROR("Insufficient buffer space for padding");
+    }
+
+    // Add PKCS7 padding
+    auto padding_value = static_cast<T>(padding_length);
+    std::fill(data.begin() + length, data.begin() + length + padding_length,
+              padding_value);
+
+    length += padding_length;
+    spdlog::debug("Padding applied, new length: {}", length);
+}
+
 Blowfish::Blowfish(std::span<const std::byte> key) {
-    LOG_F(INFO, "Initializing Blowfish with key length: {}", key.size());
+    spdlog::info("Initializing Blowfish with key length: {}", key.size());
     validate_key(key);
     init_state(key);
-    LOG_F(INFO, "Blowfish initialization complete");
+    spdlog::info("Blowfish initialization complete");
 }
 
 void Blowfish::validate_key(std::span<const std::byte> key) const {
     if (key.empty() || key.size() > 56) {
+        spdlog::error("Invalid key length: {}", key.size());
         THROW_RUNTIME_ERROR(
             "Invalid key length. Must be between 1 and 56 bytes.");
     }
@@ -170,41 +200,36 @@ void Blowfish::init_state(std::span<const std::byte> key) {
     std::ranges::copy(INITIAL_P, P_.begin());
     std::ranges::copy(INITIAL_S, S_.begin());
 
-    // 使用普通循环代替 iota_view
-    for (size_t i = 0; i < P_ARRAY_SIZE; ++i) {
-        unsigned int data = 0;
-        size_t key_index = 0;
-        data =
-            (std::to_integer<unsigned int>(key[key_index]) << 24) |
-            (std::to_integer<unsigned int>(key[(key_index + 1) % key.size()])
-             << 16) |
-            (std::to_integer<unsigned int>(key[(key_index + 2) % key.size()])
-             << 8) |
-            (std::to_integer<unsigned int>(key[(key_index + 3) % key.size()]));
+    // Using regular loop for P-array initialization
+    for (usize i = 0; i < P_ARRAY_SIZE; ++i) {
+        u32 data = 0;
+        usize key_index = 0;
+        data = (std::to_integer<u32>(key[key_index]) << 24) |
+               (std::to_integer<u32>(key[(key_index + 1) % key.size()]) << 16) |
+               (std::to_integer<u32>(key[(key_index + 2) % key.size()]) << 8) |
+               (std::to_integer<u32>(key[(key_index + 3) % key.size()]));
         P_[i] ^= data;
         key_index = (key_index + 4) % key.size();
     }
 
-    for (size_t i = 0; i < 4; ++i) {
-        for (size_t j = 0; j < S_BOX_SIZE; ++j) {
-            unsigned int data = 0;
-            size_t key_index = 0;
-            data = (std::to_integer<unsigned int>(key[key_index]) << 24) |
-                   (std::to_integer<unsigned int>(
-                        key[(key_index + 1) % key.size()])
-                    << 16) |
-                   (std::to_integer<unsigned int>(
-                        key[(key_index + 2) % key.size()])
-                    << 8) |
-                   (std::to_integer<unsigned int>(
-                       key[(key_index + 3) % key.size()]));
+    // S-box initialization
+    for (usize i = 0; i < 4; ++i) {
+        for (usize j = 0; j < S_BOX_SIZE; ++j) {
+            u32 data = 0;
+            usize key_index = 0;
+            data =
+                (std::to_integer<u32>(key[key_index]) << 24) |
+                (std::to_integer<u32>(key[(key_index + 1) % key.size()])
+                 << 16) |
+                (std::to_integer<u32>(key[(key_index + 2) % key.size()]) << 8) |
+                (std::to_integer<u32>(key[(key_index + 3) % key.size()]));
             S_[i][j] ^= data;
             key_index = (key_index + 4) % key.size();
         }
     }
 }
 
-uint32_t Blowfish::F(uint32_t x) const noexcept {
+u32 Blowfish::F(u32 x) const noexcept {
     unsigned char a = (x >> 24) & 0xFF;
     unsigned char b = (x >> 16) & 0xFF;
     unsigned char c = (x >> 8) & 0xFF;
@@ -214,16 +239,16 @@ uint32_t Blowfish::F(uint32_t x) const noexcept {
 }
 
 void Blowfish::encrypt(std::span<std::byte, BLOCK_SIZE> block) noexcept {
-    LOG_F(INFO, "Encrypting block");
+    spdlog::debug("Encrypting block");
 
-    unsigned int left = (std::to_integer<unsigned int>(block[0]) << 24) |
-                        (std::to_integer<unsigned int>(block[1]) << 16) |
-                        (std::to_integer<unsigned int>(block[2]) << 8) |
-                        std::to_integer<unsigned int>(block[3]);
-    unsigned int right = (std::to_integer<unsigned int>(block[4]) << 24) |
-                         (std::to_integer<unsigned int>(block[5]) << 16) |
-                         (std::to_integer<unsigned int>(block[6]) << 8) |
-                         std::to_integer<unsigned int>(block[7]);
+    u32 left = (std::to_integer<u32>(block[0]) << 24) |
+               (std::to_integer<u32>(block[1]) << 16) |
+               (std::to_integer<u32>(block[2]) << 8) |
+               std::to_integer<u32>(block[3]);
+    u32 right = (std::to_integer<u32>(block[4]) << 24) |
+                (std::to_integer<u32>(block[5]) << 16) |
+                (std::to_integer<u32>(block[6]) << 8) |
+                std::to_integer<u32>(block[7]);
 
     left ^= P_[0];
     for (int i = 1; i <= 16; i += 2) {
@@ -241,21 +266,19 @@ void Blowfish::encrypt(std::span<std::byte, BLOCK_SIZE> block) noexcept {
     block[5] = static_cast<std::byte>((left >> 16) & 0xFF);
     block[6] = static_cast<std::byte>((left >> 8) & 0xFF);
     block[7] = static_cast<std::byte>(left & 0xFF);
-
-    LOG_F(INFO, "Block encrypted");
 }
 
 void Blowfish::decrypt(std::span<std::byte, BLOCK_SIZE> block) noexcept {
-    LOG_F(INFO, "Decrypting block");
+    spdlog::debug("Decrypting block");
 
-    unsigned int left = (std::to_integer<unsigned int>(block[0]) << 24) |
-                        (std::to_integer<unsigned int>(block[1]) << 16) |
-                        (std::to_integer<unsigned int>(block[2]) << 8) |
-                        std::to_integer<unsigned int>(block[3]);
-    unsigned int right = (std::to_integer<unsigned int>(block[4]) << 24) |
-                         (std::to_integer<unsigned int>(block[5]) << 16) |
-                         (std::to_integer<unsigned int>(block[6]) << 8) |
-                         std::to_integer<unsigned int>(block[7]);
+    u32 left = (std::to_integer<u32>(block[0]) << 24) |
+               (std::to_integer<u32>(block[1]) << 16) |
+               (std::to_integer<u32>(block[2]) << 8) |
+               std::to_integer<u32>(block[3]);
+    u32 right = (std::to_integer<u32>(block[4]) << 24) |
+                (std::to_integer<u32>(block[5]) << 16) |
+                (std::to_integer<u32>(block[6]) << 8) |
+                std::to_integer<u32>(block[7]);
 
     left ^= P_[17];
     for (int i = 16; i >= 1; i -= 2) {
@@ -273,114 +296,148 @@ void Blowfish::decrypt(std::span<std::byte, BLOCK_SIZE> block) noexcept {
     block[5] = static_cast<std::byte>((left >> 16) & 0xFF);
     block[6] = static_cast<std::byte>((left >> 8) & 0xFF);
     block[7] = static_cast<std::byte>(left & 0xFF);
-
-    LOG_F(INFO, "Block decrypted");
 }
 
-void Blowfish::validate_block_size(size_t size) {
+void Blowfish::validate_block_size(usize size) {
     if (size % BLOCK_SIZE != 0) {
-        LOG_F(ERROR, "Invalid block size: {}. Must be a multiple of {}", size,
-              BLOCK_SIZE);
+        spdlog::error("Invalid block size: {}. Must be a multiple of {}", size,
+                      BLOCK_SIZE);
         THROW_RUNTIME_ERROR("Invalid block size");
     }
 }
 
-template <ByteType T>
-void pkcs7_padding(std::span<T> data, size_t& length) {
-    size_t padding_length = BLOCK_SIZE - (length % BLOCK_SIZE);
-    if (padding_length == 0) {
-        padding_length = BLOCK_SIZE;
-    }
-
-    // 确保有足够空间进行填充
-    if (data.size() < length + padding_length) {
-        THROW_RUNTIME_ERROR("Insufficient buffer space for padding");
-    }
-
-    // 添加PKCS7填充
-    auto padding_value = static_cast<T>(padding_length);
-    std::fill(data.begin() + length, data.begin() + length + padding_length,
-              padding_value);
-
-    length += padding_length;
-    LOG_F(INFO, "Padding applied, new length: {}", length);
-}
-
-void Blowfish::remove_padding(std::span<std::byte> data, size_t& length) {
-    LOG_F(INFO, "Removing PKCS7 padding");
+void Blowfish::remove_padding(std::span<std::byte> data, usize& length) {
+    spdlog::debug("Removing PKCS7 padding");
 
     if (length == 0)
         return;
-    size_t padding_len = std::to_integer<size_t>(data[length - 1]);
-    if (padding_len > 8) {
-        LOG_F(ERROR, "Invalid padding length: {}", padding_len);
-        THROW_RUNTIME_ERROR("Invalid padding length.");
+
+    usize padding_len = std::to_integer<usize>(data[length - 1]);
+    if (padding_len > BLOCK_SIZE) {
+        spdlog::error("Invalid padding length: {}", padding_len);
+        THROW_RUNTIME_ERROR("Invalid padding length");
     }
+
     length -= padding_len;
     std::fill(data.begin() + length, data.end(), std::byte{0});
 
-    LOG_F(INFO, "Padding removed, new length: {}", length);
+    spdlog::debug("Padding removed, new length: {}", length);
 }
 
 template <ByteType T>
 void Blowfish::encrypt_data(std::span<T> data) {
-    LOG_F(INFO, "Encrypting data of length: {}", data.size());
+    spdlog::info("Encrypting data of length: {}", data.size());
     validate_block_size(data.size());
 
-    size_t length = data.size();
+    usize length = data.size();
     ::atom::algorithm::pkcs7_padding<T>(data, length);
 
-    const size_t num_blocks = length / BLOCK_SIZE;
-    const size_t num_threads = std::thread::hardware_concurrency();
+    // Multi-threaded encryption for optimal performance
+    const usize num_blocks = length / BLOCK_SIZE;
+    const usize num_threads = std::min(
+        num_blocks, static_cast<usize>(std::thread::hardware_concurrency()));
 
-    std::vector<std::future<void>> futures;
-    for (size_t t = 0; t < num_threads; ++t) {
-        futures.push_back(std::async(
-            std::launch::async, [this, data, t, num_blocks, num_threads]() {
-                std::array<std::byte, BLOCK_SIZE> block_buffer;
-                for (size_t i = t; i < num_blocks; i += num_threads) {
-                    auto block = data.subspan(i * BLOCK_SIZE, BLOCK_SIZE);
-                    // 转换为 std::byte
-                    for (size_t j = 0; j < BLOCK_SIZE; ++j) {
-                        block_buffer[j] = to_byte(block[j]);
+    if (num_threads > 1) {
+        std::vector<std::future<void>> futures;
+        futures.reserve(num_threads);
+
+        for (usize t = 0; t < num_threads; ++t) {
+            futures.push_back(std::async(
+                std::launch::async, [this, data, t, num_blocks, num_threads]() {
+                    std::array<std::byte, BLOCK_SIZE> block_buffer;
+                    for (usize i = t; i < num_blocks; i += num_threads) {
+                        auto block = data.subspan(i * BLOCK_SIZE, BLOCK_SIZE);
+
+                        // Convert to std::byte
+                        for (usize j = 0; j < BLOCK_SIZE; ++j) {
+                            block_buffer[j] = to_byte(block[j]);
+                        }
+
+                        encrypt(std::span<std::byte, BLOCK_SIZE>(block_buffer));
+
+                        // Convert back to original type
+                        for (usize j = 0; j < BLOCK_SIZE; ++j) {
+                            block[j] = from_byte<T>(block_buffer[j]);
+                        }
                     }
+                }));
+        }
 
-                    encrypt(std::span<std::byte, BLOCK_SIZE>(block_buffer));
+        for (auto& future : futures) {
+            future.get();
+        }
+    } else {
+        // Single-threaded approach for small data
+        std::array<std::byte, BLOCK_SIZE> block_buffer;
+        for (usize i = 0; i < num_blocks; ++i) {
+            auto block = data.subspan(i * BLOCK_SIZE, BLOCK_SIZE);
 
-                    // 转换回原始类型
-                    for (size_t j = 0; j < BLOCK_SIZE; ++j) {
-                        block[j] = from_byte<T>(block_buffer[j]);
-                    }
-                }
-            }));
+            for (usize j = 0; j < BLOCK_SIZE; ++j) {
+                block_buffer[j] = to_byte(block[j]);
+            }
+
+            encrypt(std::span<std::byte, BLOCK_SIZE>(block_buffer));
+
+            for (usize j = 0; j < BLOCK_SIZE; ++j) {
+                block[j] = from_byte<T>(block_buffer[j]);
+            }
+        }
     }
 
-    for (auto& future : futures) {
-        future.get();
-    }
-
-    LOG_F(INFO, "Data encrypted, new length: {}", length);
+    spdlog::info("Data encrypted successfully");
 }
 
 template <ByteType T>
-void Blowfish::decrypt_data(std::span<T> data, size_t& length) {
-    LOG_F(INFO, "Decrypting data of length: {}", data.size());
-    validate_block_size(data.size());
+void Blowfish::decrypt_data(std::span<T> data, usize& length) {
+    spdlog::info("Decrypting data of length: {}", length);
+    validate_block_size(length);
 
-    std::array<std::byte, BLOCK_SIZE> block_buffer;
-    for (size_t i = 0; i < length; i += BLOCK_SIZE) {
-        auto block = data.subspan(i, BLOCK_SIZE);
+    // Multi-threaded decryption
+    const usize num_blocks = length / BLOCK_SIZE;
+    const usize num_threads = std::min(
+        num_blocks, static_cast<usize>(std::thread::hardware_concurrency()));
 
-        // 转换为 std::byte
-        for (size_t j = 0; j < BLOCK_SIZE; ++j) {
-            block_buffer[j] = to_byte(block[j]);
+    if (num_threads > 1) {
+        std::vector<std::future<void>> futures;
+        futures.reserve(num_threads);
+
+        for (usize t = 0; t < num_threads; ++t) {
+            futures.push_back(std::async(
+                std::launch::async, [this, data, t, num_blocks, num_threads]() {
+                    std::array<std::byte, BLOCK_SIZE> block_buffer;
+                    for (usize i = t; i < num_blocks; i += num_threads) {
+                        auto block = data.subspan(i * BLOCK_SIZE, BLOCK_SIZE);
+
+                        for (usize j = 0; j < BLOCK_SIZE; ++j) {
+                            block_buffer[j] = to_byte(block[j]);
+                        }
+
+                        decrypt(std::span<std::byte, BLOCK_SIZE>(block_buffer));
+
+                        for (usize j = 0; j < BLOCK_SIZE; ++j) {
+                            block[j] = from_byte<T>(block_buffer[j]);
+                        }
+                    }
+                }));
         }
 
-        decrypt(std::span<std::byte, BLOCK_SIZE>(block_buffer));
+        for (auto& future : futures) {
+            future.get();
+        }
+    } else {
+        std::array<std::byte, BLOCK_SIZE> block_buffer;
+        for (usize i = 0; i < num_blocks; ++i) {
+            auto block = data.subspan(i * BLOCK_SIZE, BLOCK_SIZE);
 
-        // 转换回原始类型
-        for (size_t j = 0; j < BLOCK_SIZE; ++j) {
-            block[j] = from_byte<T>(block_buffer[j]);
+            for (usize j = 0; j < BLOCK_SIZE; ++j) {
+                block_buffer[j] = to_byte(block[j]);
+            }
+
+            decrypt(std::span<std::byte, BLOCK_SIZE>(block_buffer));
+
+            for (usize j = 0; j < BLOCK_SIZE; ++j) {
+                block[j] = from_byte<T>(block_buffer[j]);
+            }
         }
     }
 
@@ -388,25 +445,25 @@ void Blowfish::decrypt_data(std::span<T> data, size_t& length) {
         reinterpret_cast<std::byte*>(data.data()), data.size());
     remove_padding(byte_span, length);
 
-    LOG_F(INFO, "Data decrypted, new length: {}", length);
+    spdlog::info("Data decrypted successfully, actual length: {}", length);
 }
 
 void Blowfish::encrypt_file(std::string_view input_file,
                             std::string_view output_file) {
-    LOG_F(INFO, "Encrypting file: {}", input_file);
+    spdlog::info("Encrypting file: {}", input_file);
 
     std::ifstream infile(std::string(input_file),
                          std::ios::binary | std::ios::ate);
     if (!infile) {
-        LOG_F(ERROR, "Failed to open input file: {}", input_file);
-        THROW_RUNTIME_ERROR("Failed to open input file for reading.");
+        spdlog::error("Failed to open input file: {}", input_file);
+        THROW_RUNTIME_ERROR("Failed to open input file for reading");
     }
 
     std::streamsize size = infile.tellg();
     infile.seekg(0, std::ios::beg);
 
     // Calculate buffer size including padding
-    size_t buffer_size = size + (BLOCK_SIZE - (size % BLOCK_SIZE));
+    usize buffer_size = size + (BLOCK_SIZE - (size % BLOCK_SIZE));
     if (size % BLOCK_SIZE == 0) {
         buffer_size += BLOCK_SIZE;  // Add full block of padding when size is
                                     // multiple of BLOCK_SIZE
@@ -414,32 +471,31 @@ void Blowfish::encrypt_file(std::string_view input_file,
 
     std::vector<std::byte> buffer(buffer_size);
     if (!infile.read(reinterpret_cast<char*>(buffer.data()), size)) {
-        LOG_F(ERROR, "Failed to read input file: {}", input_file);
-        THROW_RUNTIME_ERROR("Failed to read input file.");
+        spdlog::error("Failed to read input file: {}", input_file);
+        THROW_RUNTIME_ERROR("Failed to read input file");
     }
 
     encrypt_data(std::span<std::byte>(buffer));
 
     std::ofstream outfile(std::string(output_file), std::ios::binary);
     if (!outfile) {
-        LOG_F(ERROR, "Failed to open output file: {}", output_file);
-        THROW_RUNTIME_ERROR("Failed to open output file for writing.");
+        spdlog::error("Failed to open output file: {}", output_file);
+        THROW_RUNTIME_ERROR("Failed to open output file for writing");
     }
 
     outfile.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
-
-    LOG_F(INFO, "File encrypted: {}", output_file);
+    spdlog::info("File encrypted successfully: {}", output_file);
 }
 
 void Blowfish::decrypt_file(std::string_view input_file,
                             std::string_view output_file) {
-    LOG_F(INFO, "Decrypting file: {}", input_file);
+    spdlog::info("Decrypting file: {}", input_file);
 
     std::ifstream infile(std::string(input_file),
                          std::ios::binary | std::ios::ate);
     if (!infile) {
-        LOG_F(ERROR, "Failed to open input file: {}", input_file);
-        THROW_RUNTIME_ERROR("Failed to open input file for reading.");
+        spdlog::error("Failed to open input file: {}", input_file);
+        THROW_RUNTIME_ERROR("Failed to open input file for reading");
     }
 
     std::streamsize size = infile.tellg();
@@ -447,30 +503,34 @@ void Blowfish::decrypt_file(std::string_view input_file,
 
     std::vector<std::byte> buffer(size);
     if (!infile.read(reinterpret_cast<char*>(buffer.data()), size)) {
-        LOG_F(ERROR, "Failed to read input file: {}", input_file);
-        THROW_RUNTIME_ERROR("Failed to read input file.");
+        spdlog::error("Failed to read input file: {}", input_file);
+        THROW_RUNTIME_ERROR("Failed to read input file");
     }
 
-    size_t length = buffer.size();
+    usize length = buffer.size();
     decrypt_data(std::span<std::byte>(buffer), length);
 
     std::ofstream outfile(std::string(output_file), std::ios::binary);
     if (!outfile) {
-        LOG_F(ERROR, "Failed to open output file: {}", output_file);
-        THROW_RUNTIME_ERROR("Failed to open output file for writing.");
+        spdlog::error("Failed to open output file: {}", output_file);
+        THROW_RUNTIME_ERROR("Failed to open output file for writing");
     }
 
     outfile.write(reinterpret_cast<const char*>(buffer.data()), length);
-
-    LOG_F(INFO, "File decrypted: {}", output_file);
+    spdlog::info("File decrypted successfully: {}", output_file);
 }
+
+// Template instantiations
+template void pkcs7_padding<std::byte>(std::span<std::byte>, usize&);
+template void pkcs7_padding<char>(std::span<char>, usize&);
+template void pkcs7_padding<unsigned char>(std::span<unsigned char>, usize&);
 
 template void Blowfish::encrypt_data<std::byte>(std::span<std::byte>);
 template void Blowfish::encrypt_data<char>(std::span<char>);
 template void Blowfish::encrypt_data<unsigned char>(std::span<unsigned char>);
-template void Blowfish::decrypt_data<std::byte>(std::span<std::byte>, size_t&);
-template void Blowfish::decrypt_data<char>(std::span<char>, size_t&);
+template void Blowfish::decrypt_data<std::byte>(std::span<std::byte>, usize&);
+template void Blowfish::decrypt_data<char>(std::span<char>, usize&);
 template void Blowfish::decrypt_data<unsigned char>(std::span<unsigned char>,
-                                                    size_t&);
+                                                    usize&);
 
 }  // namespace atom::algorithm

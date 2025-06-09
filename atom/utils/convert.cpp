@@ -4,14 +4,6 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
-
-Date: 2024-4-18
-
-Description: Convert Utils for Windows
-
-**************************************************/
-
 #ifdef _WIN32
 
 #include "convert.hpp"
@@ -25,11 +17,13 @@ Description: Convert Utils for Windows
 namespace atom::utils {
 
 namespace {
+// Thread-local buffers to avoid frequent memory allocations
 thread_local std::vector<std::unique_ptr<wchar_t[]>> wide_buffers;
 thread_local std::vector<std::unique_ptr<char[]>> char_buffers;
 
 constexpr size_t MAX_CACHED_BUFFERS = 10;
 
+// Clean up excess buffers to prevent memory growth
 void cleanup_buffers() {
     if (wide_buffers.size() > MAX_CACHED_BUFFERS) {
         wide_buffers.erase(
@@ -43,6 +37,7 @@ void cleanup_buffers() {
     }
 }
 
+// Get formatted error message from Windows API
 auto get_last_error_message() -> std::string {
     DWORD error = GetLastError();
     if (error == 0)
@@ -61,11 +56,11 @@ auto get_last_error_message() -> std::string {
 }
 }  // namespace
 
-LPWSTR CharToLPWSTR(std::string_view charString) {
-    spdlog::debug("Converting char string to LPWSTR, length: {}",
-                  charString.size());
+LPWSTR CharToLPWSTR(std::string_view str) {
+    spdlog::debug("Converting string_view to LPWSTR, length: {}", str.size());
 
-    if (charString.empty()) {
+    // Fast path for empty strings
+    if (str.empty()) {
         auto buffer = std::make_unique<wchar_t[]>(1);
         buffer[0] = L'\0';
         auto* result = buffer.get();
@@ -74,20 +69,22 @@ LPWSTR CharToLPWSTR(std::string_view charString) {
         return result;
     }
 
-    const int size =
-        MultiByteToWideChar(CP_UTF8, 0, charString.data(),
-                            static_cast<int>(charString.size()), nullptr, 0);
+    // Get required buffer size
+    const int size = MultiByteToWideChar(
+        CP_UTF8, 0, str.data(), static_cast<int>(str.size()), nullptr, 0);
     if (size == 0) {
         const auto error_msg = get_last_error_message();
-        spdlog::error("Error converting char string to LPWSTR: {}", error_msg);
-        THROW_RUNTIME_ERROR("Error converting char string to LPWSTR: " +
+        spdlog::error("Error determining buffer size for conversion: {}",
+                      error_msg);
+        THROW_RUNTIME_ERROR("Error determining buffer size for conversion: " +
                             error_msg);
     }
 
+    // Perform conversion
     auto buffer = std::make_unique<wchar_t[]>(size + 1);
-    const int result = MultiByteToWideChar(CP_UTF8, 0, charString.data(),
-                                           static_cast<int>(charString.size()),
-                                           buffer.get(), size);
+    const int result =
+        MultiByteToWideChar(CP_UTF8, 0, str.data(),
+                            static_cast<int>(str.size()), buffer.get(), size);
     if (result == 0) {
         const auto error_msg = get_last_error_message();
         spdlog::error("Error in MultiByteToWideChar conversion: {}", error_msg);
@@ -100,30 +97,31 @@ LPWSTR CharToLPWSTR(std::string_view charString) {
     wide_buffers.emplace_back(std::move(buffer));
     cleanup_buffers();
 
-    spdlog::debug("Conversion to LPWSTR successful, result length: {}", size);
+    spdlog::debug("Conversion to LPWSTR successful");
     return ptr;
 }
 
 std::string WCharArrayToString(const WCHAR* wCharArray) {
     spdlog::debug("Converting WCHAR array to std::string");
 
+    // Handle empty input
     if (!wCharArray || *wCharArray == L'\0') {
-        spdlog::debug("Empty or null WCHAR array, returning empty string");
+        spdlog::debug("Empty or null WCHAR array");
         return {};
     }
 
+    // Get required buffer size
     const int size_needed = WideCharToMultiByte(CP_UTF8, 0, wCharArray, -1,
                                                 nullptr, 0, nullptr, nullptr);
     if (size_needed <= 0) {
         const auto error_msg = get_last_error_message();
-        spdlog::error(
-            "Error getting buffer size for WCHAR to string conversion: {}",
-            error_msg);
-        THROW_RUNTIME_ERROR(
-            "Error getting buffer size for WCHAR to string conversion: " +
-            error_msg);
+        spdlog::error("Error getting buffer size for WCHAR conversion: {}",
+                      error_msg);
+        THROW_RUNTIME_ERROR("Error getting buffer size for WCHAR conversion: " +
+                            error_msg);
     }
 
+    // Perform conversion
     std::string str(size_needed - 1, '\0');
     const int result = WideCharToMultiByte(
         CP_UTF8, 0, wCharArray, -1, str.data(), size_needed, nullptr, nullptr);
@@ -134,8 +132,6 @@ std::string WCharArrayToString(const WCHAR* wCharArray) {
                             error_msg);
     }
 
-    spdlog::debug("Conversion to std::string successful, result length: {}",
-                  str.length());
     return str;
 }
 
@@ -150,7 +146,6 @@ LPSTR StringToLPSTR(const std::string& str) {
     char_buffers.emplace_back(std::move(buffer));
     cleanup_buffers();
 
-    spdlog::debug("Conversion to LPSTR successful");
     return result;
 }
 
@@ -158,6 +153,7 @@ LPSTR WStringToLPSTR(const std::wstring& wstr) {
     spdlog::debug("Converting std::wstring to LPSTR, length: {}",
                   wstr.length());
 
+    // Fast path for empty strings
     if (wstr.empty()) {
         auto buffer = std::make_unique<char[]>(1);
         buffer[0] = '\0';
@@ -167,6 +163,7 @@ LPSTR WStringToLPSTR(const std::wstring& wstr) {
         return result;
     }
 
+    // Get required buffer size
     const int bufferSize = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1,
                                                nullptr, 0, nullptr, nullptr);
     if (bufferSize <= 0) {
@@ -179,6 +176,7 @@ LPSTR WStringToLPSTR(const std::wstring& wstr) {
             error_msg);
     }
 
+    // Perform conversion
     auto buffer = std::make_unique<char[]>(bufferSize);
     const int result =
         WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, buffer.get(),
@@ -194,35 +192,35 @@ LPSTR WStringToLPSTR(const std::wstring& wstr) {
     char_buffers.emplace_back(std::move(buffer));
     cleanup_buffers();
 
-    spdlog::debug("Conversion to LPSTR successful");
     return ptr;
 }
 
 LPWSTR StringToLPWSTR(const std::string& str) {
-    spdlog::debug("Converting std::string to LPWSTR via CharToLPWSTR");
+    spdlog::debug("Converting std::string to LPWSTR");
     return CharToLPWSTR(str);
 }
 
 std::string LPWSTRToString(LPWSTR lpwstr) {
     spdlog::debug("Converting LPWSTR to std::string");
 
+    // Handle empty input
     if (!lpwstr || *lpwstr == L'\0') {
-        spdlog::debug("Empty or null LPWSTR, returning empty string");
+        spdlog::debug("Empty or null LPWSTR");
         return {};
     }
 
+    // Get required buffer size
     const int size = WideCharToMultiByte(CP_UTF8, 0, lpwstr, -1, nullptr, 0,
                                          nullptr, nullptr);
     if (size <= 0) {
         const auto error_msg = get_last_error_message();
-        spdlog::error(
-            "Error getting buffer size for LPWSTR to string conversion: {}",
-            error_msg);
+        spdlog::error("Error getting buffer size for LPWSTR conversion: {}",
+                      error_msg);
         THROW_RUNTIME_ERROR(
-            "Error getting buffer size for LPWSTR to string conversion: " +
-            error_msg);
+            "Error getting buffer size for LPWSTR conversion: " + error_msg);
     }
 
+    // Perform conversion
     std::string str(size - 1, '\0');
     const int result = WideCharToMultiByte(CP_UTF8, 0, lpwstr, -1, str.data(),
                                            size, nullptr, nullptr);
@@ -233,14 +231,41 @@ std::string LPWSTRToString(LPWSTR lpwstr) {
                             error_msg);
     }
 
-    spdlog::debug("Conversion to std::string successful, result length: {}",
-                  str.length());
     return str;
 }
 
 std::string LPCWSTRToString(LPCWSTR lpcwstr) {
     spdlog::debug("Converting LPCWSTR to std::string");
-    return LPWSTRToString(const_cast<LPWSTR>(lpcwstr));
+
+    // Handle empty input
+    if (!lpcwstr || *lpcwstr == L'\0') {
+        spdlog::debug("Empty or null LPCWSTR");
+        return {};
+    }
+
+    // Get required buffer size
+    const int size = WideCharToMultiByte(CP_UTF8, 0, lpcwstr, -1, nullptr, 0,
+                                         nullptr, nullptr);
+    if (size <= 0) {
+        const auto error_msg = get_last_error_message();
+        spdlog::error("Error getting buffer size for LPCWSTR conversion: {}",
+                      error_msg);
+        THROW_RUNTIME_ERROR(
+            "Error getting buffer size for LPCWSTR conversion: " + error_msg);
+    }
+
+    // Perform conversion
+    std::string str(size - 1, '\0');
+    const int result = WideCharToMultiByte(CP_UTF8, 0, lpcwstr, -1, str.data(),
+                                           size, nullptr, nullptr);
+    if (result == 0) {
+        const auto error_msg = get_last_error_message();
+        spdlog::error("Error in WideCharToMultiByte conversion: {}", error_msg);
+        THROW_RUNTIME_ERROR("Error in WideCharToMultiByte conversion: " +
+                            error_msg);
+    }
+
+    return str;
 }
 
 LPWSTR WStringToLPWSTR(const std::wstring& wstr) {
@@ -255,7 +280,6 @@ LPWSTR WStringToLPWSTR(const std::wstring& wstr) {
     wide_buffers.emplace_back(std::move(buffer));
     cleanup_buffers();
 
-    spdlog::debug("Conversion to LPWSTR successful");
     return result;
 }
 
@@ -263,28 +287,22 @@ std::wstring LPWSTRToWString(LPWSTR lpwstr) {
     spdlog::debug("Converting LPWSTR to std::wstring");
 
     if (!lpwstr) {
-        spdlog::debug("Null LPWSTR, returning empty wstring");
+        spdlog::debug("Null LPWSTR");
         return {};
     }
 
-    std::wstring result(lpwstr);
-    spdlog::debug("Conversion to std::wstring successful, result length: {}",
-                  result.length());
-    return result;
+    return std::wstring(lpwstr);
 }
 
 std::wstring LPCWSTRToWString(LPCWSTR lpcwstr) {
     spdlog::debug("Converting LPCWSTR to std::wstring");
 
     if (!lpcwstr) {
-        spdlog::debug("Null LPCWSTR, returning empty wstring");
+        spdlog::debug("Null LPCWSTR");
         return {};
     }
 
-    std::wstring result(lpcwstr);
-    spdlog::debug("Conversion to std::wstring successful, result length: {}",
-                  result.length());
-    return result;
+    return std::wstring(lpcwstr);
 }
 
 }  // namespace atom::utils

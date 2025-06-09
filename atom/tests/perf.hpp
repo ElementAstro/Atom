@@ -1,5 +1,6 @@
 #pragma once
 
+#include <spdlog/spdlog.h>
 #include <chrono>
 #include <condition_variable>
 #include <deque>
@@ -272,12 +273,14 @@ private:
         std::queue<PerfTableEntry> queue;
         bool done = false;
         std::thread worker;
+        std::shared_ptr<spdlog::logger> logger;
     };
 
     static inline thread_local PerfThreadLocal perthread;
     static inline PerfAsyncLogger asyncLogger;
     static inline PerfGather gathered;
     static inline Config config_;
+    static inline std::shared_ptr<spdlog::logger> logger;
 };
 
 /**

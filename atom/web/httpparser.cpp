@@ -18,11 +18,13 @@ Description: Http Header Parser with C++20 features
 #include <cctype>
 #include <chrono>
 #include <iomanip>
-#include <regex>
 #include <sstream>
+#include <string_view>
 
-#include "atom/log/loguru.hpp"
-#include "atom/utils/to_string.hpp"
+#include "spdlog/spdlog.h"
+
+#undef ERROR
+#undef DELETE
 
 namespace atom::web {
 
@@ -39,37 +41,62 @@ public:
 
 HttpHeaderParser::HttpHeaderParser()
     : impl_(std::make_shared<HttpHeaderParser::HttpHeaderParserImpl>()) {
-    LOG_F(INFO, "HttpHeaderParser constructor called");
+    spdlog::debug("HttpHeaderParser constructor called");
 }
 
 HttpHeaderParser::~HttpHeaderParser() {
-    LOG_F(INFO, "HttpHeaderParser destructor called");
+    spdlog::debug("HttpHeaderParser destructor called");
 }
 
 void HttpHeaderParser::parseHeaders(const std::string& rawHeaders) {
-    LOG_F(INFO, "parseHeaders called with rawHeaders: {}", rawHeaders);
+    spdlog::debug("parseHeaders called");
     impl_->headers.clear();
-    std::istringstream iss(rawHeaders);
 
-    std::string line;
-    while (std::getline(iss, line)) {
-        size_t colonPos = line.find(':');
-        if (colonPos != std::string::npos) {
-            std::string key = line.substr(0, colonPos);
-            std::string value = line.substr(colonPos + 1);
+    std::string_view sv(rawHeaders);
+    size_t pos = 0;
+    size_t lineEnd;
 
-            key.erase(key.find_last_not_of(' ') + 1);
-            value.erase(0, value.find_first_not_of(' '));
+    // Process each line
+    while ((lineEnd = sv.find('\n', pos)) != std::string_view::npos) {
+        std::string_view line = sv.substr(pos, lineEnd - pos);
 
-            impl_->headers[key].push_back(value);
-            LOG_F(INFO, "Parsed header: {}: {}", key, value);
+        // Remove trailing CR if present
+        if (!line.empty() && line.back() == '\r') {
+            line.remove_suffix(1);
         }
+
+        // Skip empty lines
+        if (!line.empty()) {
+            size_t colonPos = line.find(':');
+            if (colonPos != std::string_view::npos) {
+                std::string key(line.substr(0, colonPos));
+                std::string_view valueView = line.substr(colonPos + 1);
+
+                // Trim leading whitespace from value
+                while (!valueView.empty() && std::isspace(valueView.front())) {
+                    valueView.remove_prefix(1);
+                }
+
+                // Trim trailing whitespace from key
+                while (!key.empty() && std::isspace(key.back())) {
+                    key.pop_back();
+                }
+
+                std::string value(valueView);
+
+                impl_->headers[key].push_back(value);
+                spdlog::trace("Parsed header: {}: {}", key, value);
+            }
+        }
+
+        pos = lineEnd + 1;
     }
-    LOG_F(INFO, "parseHeaders completed");
+
+    spdlog::debug("parseHeaders completed");
 }
 
 bool HttpHeaderParser::parseRequest(const std::string& rawRequest) {
-    LOG_F(INFO, "parseRequest called");
+    spdlog::debug("parseRequest called");
 
     // Clear existing data
     clearHeaders();
@@ -81,7 +108,7 @@ bool HttpHeaderParser::parseRequest(const std::string& rawRequest) {
 
     // Parse request line
     if (!std::getline(iss, line)) {
-        LOG_F(ERROR, "Failed to read request line");
+        spdlog::error("Failed to read request line");
         return false;
     }
 
@@ -95,7 +122,7 @@ bool HttpHeaderParser::parseRequest(const std::string& rawRequest) {
     std::string methodStr, versionStr;
 
     if (!(requestLine >> methodStr >> impl_->path >> versionStr)) {
-        LOG_F(ERROR, "Failed to parse request line: {}", line);
+        spdlog::error("Failed to parse request line: {}", line);
         return false;
     }
 
@@ -151,30 +178,28 @@ bool HttpHeaderParser::parseRequest(const std::string& rawRequest) {
 
     // Parse body if present
     if (!inHeaders) {
-        std::string bodyStr;
+        std::stringstream bodyStream;
         std::string bodyLine;
 
         while (std::getline(iss, bodyLine)) {
             if (!bodyLine.empty() && bodyLine.back() == '\r') {
                 bodyLine.pop_back();
             }
-            bodyStr += bodyLine + "\n";
+            bodyStream << bodyLine << '\n';
         }
 
-        if (!bodyStr.empty()) {
-            impl_->body = bodyStr;
-        }
+        impl_->body = bodyStream.str();
     }
 
-    LOG_F(INFO,
-          "Request successfully parsed. Method: {}, Path: {}, Version: {}",
-          methodToString(impl_->method), impl_->path,
-          static_cast<int>(impl_->version));
+    spdlog::debug(
+        "Request successfully parsed. Method: {}, Path: {}, Version: {}",
+        methodToString(impl_->method), impl_->path,
+        static_cast<int>(impl_->version));
     return true;
 }
 
 bool HttpHeaderParser::parseResponse(const std::string& rawResponse) {
-    LOG_F(INFO, "parseResponse called");
+    spdlog::debug("parseResponse called");
 
     // Clear existing data
     clearHeaders();
@@ -186,7 +211,7 @@ bool HttpHeaderParser::parseResponse(const std::string& rawResponse) {
 
     // Parse status line
     if (!std::getline(iss, line)) {
-        LOG_F(ERROR, "Failed to read status line");
+        spdlog::error("Failed to read status line");
         return false;
     }
 
@@ -195,17 +220,34 @@ bool HttpHeaderParser::parseResponse(const std::string& rawResponse) {
         line.pop_back();
     }
 
-    // Parse version, status code and description
-    std::regex statusLineRegex(R"(HTTP/(\d+\.\d+) (\d+) (.*))");
-    std::smatch matches;
-
-    if (!std::regex_match(line, matches, statusLineRegex)) {
-        LOG_F(ERROR, "Failed to parse status line: {}", line);
+    // Parse version, status code and description using faster string operations
+    size_t firstSpace = line.find(' ');
+    if (firstSpace == std::string::npos) {
+        spdlog::error("Invalid status line: {}", line);
         return false;
     }
 
-    // Set version
-    std::string versionStr = matches[1].str();
+    std::string_view versionPart(line.c_str(), firstSpace);
+
+    size_t secondSpace = line.find(' ', firstSpace + 1);
+    if (secondSpace == std::string::npos) {
+        spdlog::error("Invalid status line: {}", line);
+        return false;
+    }
+
+    std::string_view statusCodePart(line.c_str() + firstSpace + 1,
+                                    secondSpace - firstSpace - 1);
+
+    std::string_view statusDescPart(line.c_str() + secondSpace + 1);
+
+    // Extract HTTP version
+    if (versionPart.substr(0, 5) != "HTTP/") {
+        spdlog::error("Invalid HTTP version: {}", versionPart);
+        return false;
+    }
+
+    std::string_view versionStr = versionPart.substr(5);
+
     if (versionStr == "1.0") {
         impl_->version = HttpVersion::HTTP_1_0;
     } else if (versionStr == "1.1") {
@@ -218,12 +260,18 @@ bool HttpHeaderParser::parseResponse(const std::string& rawResponse) {
         impl_->version = HttpVersion::UNKNOWN;
     }
 
-    // Set status
-    int statusCode = std::stoi(matches[2].str());
-    std::string statusDesc = matches[3].str();
-    impl_->status = {statusCode, statusDesc};
+    // Set status - convert status code to int
+    int statusCode;
+    try {
+        statusCode = std::stoi(std::string(statusCodePart));
+    } catch (const std::exception& e) {
+        spdlog::error("Invalid status code: {}", statusCodePart);
+        return false;
+    }
 
-    // Parse headers
+    impl_->status = {statusCode, std::string(statusDescPart)};
+
+    // Parse headers and rest of response
     bool inHeaders = true;
     std::string headerBlock;
 
@@ -263,52 +311,124 @@ bool HttpHeaderParser::parseResponse(const std::string& rawResponse) {
                     cookie.value = cookieStr.substr(pos + 1);
                 }
 
-                // Parse attributes
-                std::string remaining =
-                    cookieStr.substr(pos + cookie.value.length() + 1);
-                std::regex attributeRegex(R"(;\s*([^=;]+)(?:=([^;]*))?)",
-                                          std::regex::ECMAScript);
+                // Parse cookie attributes
+                if (semicolonPos != std::string::npos) {
+                    std::string_view remaining(cookieStr.c_str() +
+                                               semicolonPos);
+                    size_t attrStart = 0;
+                    size_t attrEnd;
 
-                std::sregex_iterator it(remaining.begin(), remaining.end(),
-                                        attributeRegex);
-                std::sregex_iterator end;
+                    while ((attrEnd = remaining.find(';', attrStart)) !=
+                           std::string_view::npos) {
+                        std::string_view attr = remaining.substr(
+                            attrStart + 1, attrEnd - attrStart - 1);
 
-                for (; it != end; ++it) {
-                    std::smatch match = *it;
-                    std::string name = match[1].str();
-                    std::string value = match[2].matched ? match[2].str() : "";
-
-                    std::transform(
-                        name.begin(), name.end(), name.begin(),
-                        [](unsigned char c) { return std::tolower(c); });
-
-                    if (name == "expires") {
-                        // Basic support for common date format
-                        std::tm tm = {};
-                        std::istringstream ss(value);
-                        ss >> std::get_time(&tm, "%a, %d %b %Y %H:%M:%S GMT");
-
-                        if (!ss.fail()) {
-                            std::time_t tt = std::mktime(&tm);
-                            cookie.expires =
-                                std::chrono::system_clock::from_time_t(tt);
+                        // Skip leading whitespace
+                        while (!attr.empty() && std::isspace(attr.front())) {
+                            attr.remove_prefix(1);
                         }
-                    } else if (name == "max-age") {
-                        try {
-                            cookie.maxAge = std::stoi(value);
-                        } catch (...) {
-                            LOG_F(WARNING, "Invalid max-age value: {}", value);
+
+                        size_t eqPos = attr.find('=');
+                        std::string attrName;
+                        std::string attrValue;
+
+                        if (eqPos != std::string_view::npos) {
+                            attrName = std::string(attr.substr(0, eqPos));
+                            attrValue = std::string(attr.substr(eqPos + 1));
+                        } else {
+                            attrName = std::string(attr);
                         }
-                    } else if (name == "domain") {
-                        cookie.domain = value;
-                    } else if (name == "path") {
-                        cookie.path = value;
-                    } else if (name == "secure") {
-                        cookie.secure = true;
-                    } else if (name == "httponly") {
-                        cookie.httpOnly = true;
-                    } else if (name == "samesite") {
-                        cookie.sameSite = value;
+
+                        // Convert attribute name to lowercase
+                        std::transform(
+                            attrName.begin(), attrName.end(), attrName.begin(),
+                            [](unsigned char c) { return std::tolower(c); });
+
+                        if (attrName == "expires") {
+                            // Parse date format
+                            std::tm tm = {};
+                            std::istringstream ss(attrValue);
+                            ss >>
+                                std::get_time(&tm, "%a, %d %b %Y %H:%M:%S GMT");
+
+                            if (!ss.fail()) {
+                                std::time_t tt = std::mktime(&tm);
+                                cookie.expires =
+                                    std::chrono::system_clock::from_time_t(tt);
+                            }
+                        } else if (attrName == "max-age") {
+                            try {
+                                cookie.maxAge = std::stoi(attrValue);
+                            } catch (...) {
+                                spdlog::warn("Invalid max-age value: {}",
+                                             attrValue);
+                            }
+                        } else if (attrName == "domain") {
+                            cookie.domain = attrValue;
+                        } else if (attrName == "path") {
+                            cookie.path = attrValue;
+                        } else if (attrName == "secure") {
+                            cookie.secure = true;
+                        } else if (attrName == "httponly") {
+                            cookie.httpOnly = true;
+                        } else if (attrName == "samesite") {
+                            cookie.sameSite = attrValue;
+                        }
+
+                        attrStart = attrEnd + 1;
+                    }
+
+                    // Process the last attribute
+                    if (attrStart < remaining.size()) {
+                        std::string_view attr = remaining.substr(attrStart + 1);
+                        while (!attr.empty() && std::isspace(attr.front())) {
+                            attr.remove_prefix(1);
+                        }
+
+                        size_t eqPos = attr.find('=');
+                        std::string attrName;
+                        std::string attrValue;
+
+                        if (eqPos != std::string_view::npos) {
+                            attrName = std::string(attr.substr(0, eqPos));
+                            attrValue = std::string(attr.substr(eqPos + 1));
+                        } else {
+                            attrName = std::string(attr);
+                        }
+
+                        std::transform(
+                            attrName.begin(), attrName.end(), attrName.begin(),
+                            [](unsigned char c) { return std::tolower(c); });
+
+                        if (attrName == "expires") {
+                            std::tm tm = {};
+                            std::istringstream ss(attrValue);
+                            ss >>
+                                std::get_time(&tm, "%a, %d %b %Y %H:%M:%S GMT");
+
+                            if (!ss.fail()) {
+                                std::time_t tt = std::mktime(&tm);
+                                cookie.expires =
+                                    std::chrono::system_clock::from_time_t(tt);
+                            }
+                        } else if (attrName == "max-age") {
+                            try {
+                                cookie.maxAge = std::stoi(attrValue);
+                            } catch (...) {
+                                spdlog::warn("Invalid max-age value: {}",
+                                             attrValue);
+                            }
+                        } else if (attrName == "domain") {
+                            cookie.domain = attrValue;
+                        } else if (attrName == "path") {
+                            cookie.path = attrValue;
+                        } else if (attrName == "secure") {
+                            cookie.secure = true;
+                        } else if (attrName == "httponly") {
+                            cookie.httpOnly = true;
+                        } else if (attrName == "samesite") {
+                            cookie.sameSite = attrValue;
+                        }
                     }
                 }
 
@@ -319,124 +439,110 @@ bool HttpHeaderParser::parseResponse(const std::string& rawResponse) {
 
     // Parse body if present
     if (!inHeaders) {
-        std::string bodyStr;
+        std::stringstream bodyStream;
         std::string bodyLine;
 
         while (std::getline(iss, bodyLine)) {
             if (!bodyLine.empty() && bodyLine.back() == '\r') {
                 bodyLine.pop_back();
             }
-            bodyStr += bodyLine + "\n";
+            bodyStream << bodyLine << '\n';
         }
 
-        if (!bodyStr.empty()) {
-            impl_->body = bodyStr;
-        }
+        impl_->body = bodyStream.str();
     }
 
-    LOG_F(INFO, "Response successfully parsed. Status: {} {}, Version: {}",
-          impl_->status.code, impl_->status.description,
-          static_cast<int>(impl_->version));
+    spdlog::debug("Response successfully parsed. Status: {} {}, Version: {}",
+                  impl_->status.code, impl_->status.description,
+                  static_cast<int>(impl_->version));
     return true;
 }
 
 void HttpHeaderParser::setHeaderValue(const std::string& key,
                                       const std::string& value) {
-    LOG_F(INFO, "setHeaderValue called with key: {}, value: {}", key, value);
+    spdlog::trace("setHeaderValue called: {}={}", key, value);
     impl_->headers[key] = {value};
-    LOG_F(INFO, "Header set: {}: {}", key, value);
 }
 
 void HttpHeaderParser::setHeaders(
     const std::map<std::string, std::vector<std::string>>& headers) {
-    LOG_F(INFO, "setHeaders called with headers: {}",
-          atom::utils::toString(headers));
+    spdlog::debug("setHeaders called");
     impl_->headers = headers;
-    LOG_F(INFO, "Headers set successfully");
 }
 
 void HttpHeaderParser::addHeaderValue(const std::string& key,
                                       const std::string& value) {
-    LOG_F(INFO, "addHeaderValue called with key: {}, value: {}", key, value);
+    spdlog::trace("addHeaderValue called: {}={}", key, value);
     impl_->headers[key].push_back(value);
-    LOG_F(INFO, "Header value added: {}: {}", key, value);
 }
 
 auto HttpHeaderParser::getHeaderValues(const std::string& key) const
     -> std::optional<std::vector<std::string>> {
-    LOG_F(INFO, "getHeaderValues called with key: {}", key);
+    spdlog::trace("getHeaderValues called: {}", key);
     if (auto it = impl_->headers.find(key); it != impl_->headers.end()) {
-        LOG_F(INFO, "Header values found for key {}: {}", key,
-              atom::utils::toString(it->second));
         return it->second;
     }
-    LOG_F(WARNING, "Header values not found for key: {}", key);
-    return std::nullopt;  // Use optional to represent missing values
+    return std::nullopt;
 }
 
 auto HttpHeaderParser::getHeaderValue(const std::string& key) const
     -> std::optional<std::string> {
-    LOG_F(INFO, "getHeaderValue called with key: {}", key);
+    spdlog::trace("getHeaderValue called: {}", key);
 
     auto values = getHeaderValues(key);
     if (values && !values->empty()) {
-        LOG_F(INFO, "Header value found for key {}: {}", key, values->front());
         return values->front();
     }
 
-    LOG_F(WARNING, "Header value not found for key: {}", key);
     return std::nullopt;
 }
 
 void HttpHeaderParser::removeHeader(const std::string& key) {
-    LOG_F(INFO, "removeHeader called with key: {}", key);
+    spdlog::trace("removeHeader called: {}", key);
     impl_->headers.erase(key);
-    LOG_F(INFO, "Header removed: {}", key);
 }
 
 auto HttpHeaderParser::getAllHeaders() const
     -> std::map<std::string, std::vector<std::string>> {
-    LOG_F(INFO, "getAllHeaders called");
+    spdlog::trace("getAllHeaders called");
     return impl_->headers;
 }
 
 auto HttpHeaderParser::hasHeader(const std::string& key) const -> bool {
-    LOG_F(INFO, "hasHeader called with key: {}", key);
-    bool result = impl_->headers.contains(key);  // Use C++20 contains method
-    LOG_F(INFO, "hasHeader result for key {}: {}", key, result);
-    return result;
+    spdlog::trace("hasHeader called: {}", key);
+    return impl_->headers.contains(key);  // C++20 contains method
 }
 
 void HttpHeaderParser::clearHeaders() {
-    LOG_F(INFO, "clearHeaders called");
+    spdlog::trace("clearHeaders called");
     impl_->headers.clear();
-    LOG_F(INFO, "All headers cleared");
 }
 
 void HttpHeaderParser::addCookie(const Cookie& cookie) {
-    LOG_F(INFO, "addCookie called for cookie: {}", cookie.name);
+    spdlog::debug("addCookie called: {}", cookie.name);
 
     // Check if cookie with the same name already exists
-    for (auto it = impl_->cookies.begin(); it != impl_->cookies.end(); ++it) {
-        if (it->name == cookie.name) {
-            *it = cookie;
-            LOG_F(INFO, "Updated existing cookie: {}", cookie.name);
-            return;
-        }
-    }
+    auto it = std::find_if(
+        impl_->cookies.begin(), impl_->cookies.end(),
+        [&cookie](const Cookie& c) { return c.name == cookie.name; });
 
-    // Add new cookie
-    impl_->cookies.push_back(cookie);
+    if (it != impl_->cookies.end()) {
+        *it = cookie;
+        spdlog::debug("Updated existing cookie: {}", cookie.name);
+    } else {
+        // Add new cookie
+        impl_->cookies.push_back(cookie);
+    }
 
     // Add to Set-Cookie header
     std::string cookieStr = cookie.name + "=" + cookie.value;
 
     if (cookie.expires) {
         std::time_t tt = std::chrono::system_clock::to_time_t(*cookie.expires);
-        std::tm* tm = std::gmtime(&tt);
+        std::tm tm = *std::gmtime(&tt);
         char buffer[100];
         std::strftime(buffer, sizeof(buffer),
-                      "; Expires=%a, %d %b %Y %H:%M:%S GMT", tm);
+                      "; Expires=%a, %d %b %Y %H:%M:%S GMT", &tm);
         cookieStr += buffer;
     }
 
@@ -465,31 +571,73 @@ void HttpHeaderParser::addCookie(const Cookie& cookie) {
     }
 
     addHeaderValue("Set-Cookie", cookieStr);
-    LOG_F(INFO, "Cookie added: {}", cookie.name);
 }
 
 std::map<std::string, std::string> HttpHeaderParser::parseCookies(
     const std::string& cookieStr) const {
-    LOG_F(INFO, "parseCookies called with cookieStr: {}", cookieStr);
+    spdlog::trace("parseCookies called");
 
     std::map<std::string, std::string> cookies;
-    std::istringstream iss(cookieStr);
-    std::string pair;
+    std::string_view sv(cookieStr);
+    size_t pos = 0;
+    size_t nextSemicolon;
 
-    while (std::getline(iss, pair, ';')) {
+    // Process each cookie pair
+    while ((nextSemicolon = sv.find(';', pos)) != std::string_view::npos) {
+        std::string_view pair = sv.substr(pos, nextSemicolon - pos);
+
         size_t eqPos = pair.find('=');
-        if (eqPos != std::string::npos) {
-            std::string key = pair.substr(0, eqPos);
-            std::string value = pair.substr(eqPos + 1);
+        if (eqPos != std::string_view::npos) {
+            std::string_view keyView = pair.substr(0, eqPos);
+            std::string_view valueView = pair.substr(eqPos + 1);
 
-            // Trim whitespace
-            key.erase(0, key.find_first_not_of(' '));
-            key.erase(key.find_last_not_of(' ') + 1);
-            value.erase(0, value.find_first_not_of(' '));
-            value.erase(value.find_last_not_of(' ') + 1);
+            // Trim whitespace from key
+            while (!keyView.empty() && std::isspace(keyView.front())) {
+                keyView.remove_prefix(1);
+            }
+            while (!keyView.empty() && std::isspace(keyView.back())) {
+                keyView.remove_suffix(1);
+            }
 
-            cookies[key] = value;
-            LOG_F(INFO, "Parsed cookie: {}={}", key, value);
+            // Trim whitespace from value
+            while (!valueView.empty() && std::isspace(valueView.front())) {
+                valueView.remove_prefix(1);
+            }
+            while (!valueView.empty() && std::isspace(valueView.back())) {
+                valueView.remove_suffix(1);
+            }
+
+            cookies[std::string(keyView)] = std::string(valueView);
+        }
+
+        pos = nextSemicolon + 1;
+    }
+
+    // Process the last pair
+    if (pos < sv.size()) {
+        std::string_view pair = sv.substr(pos);
+
+        size_t eqPos = pair.find('=');
+        if (eqPos != std::string_view::npos) {
+            std::string_view keyView = pair.substr(0, eqPos);
+            std::string_view valueView = pair.substr(eqPos + 1);
+
+            // Trim whitespace from key and value
+            while (!keyView.empty() && std::isspace(keyView.front())) {
+                keyView.remove_prefix(1);
+            }
+            while (!keyView.empty() && std::isspace(keyView.back())) {
+                keyView.remove_suffix(1);
+            }
+
+            while (!valueView.empty() && std::isspace(valueView.front())) {
+                valueView.remove_prefix(1);
+            }
+            while (!valueView.empty() && std::isspace(valueView.back())) {
+                valueView.remove_suffix(1);
+            }
+
+            cookies[std::string(keyView)] = std::string(valueView);
         }
     }
 
@@ -497,68 +645,79 @@ std::map<std::string, std::string> HttpHeaderParser::parseCookies(
 }
 
 std::vector<Cookie> HttpHeaderParser::getAllCookies() const {
-    LOG_F(INFO, "getAllCookies called");
+    spdlog::trace("getAllCookies called");
     return impl_->cookies;
 }
 
 std::optional<Cookie> HttpHeaderParser::getCookie(
     const std::string& name) const {
-    LOG_F(INFO, "getCookie called for name: {}", name);
+    spdlog::trace("getCookie called: {}", name);
 
-    for (const auto& cookie : impl_->cookies) {
-        if (cookie.name == name) {
-            LOG_F(INFO, "Cookie found: {}", name);
-            return cookie;
-        }
+    auto it = std::find_if(impl_->cookies.begin(), impl_->cookies.end(),
+                           [&name](const Cookie& c) { return c.name == name; });
+
+    if (it != impl_->cookies.end()) {
+        return *it;
     }
 
-    LOG_F(WARNING, "Cookie not found: {}", name);
     return std::nullopt;
 }
 
 void HttpHeaderParser::removeCookie(const std::string& name) {
-    LOG_F(INFO, "removeCookie called for name: {}", name);
+    spdlog::debug("removeCookie called: {}", name);
 
     impl_->cookies.erase(
         std::remove_if(impl_->cookies.begin(), impl_->cookies.end(),
                        [&name](const Cookie& c) { return c.name == name; }),
         impl_->cookies.end());
-
-    LOG_F(INFO, "Cookie removed: {}", name);
 }
 
 std::map<std::string, std::string> HttpHeaderParser::parseUrlParameters(
     const std::string& url) const {
-    LOG_F(INFO, "parseUrlParameters called with url: {}", url);
+    spdlog::debug("parseUrlParameters called");
 
     std::map<std::string, std::string> parameters;
     size_t queryStart = url.find('?');
 
     if (queryStart == std::string::npos) {
-        LOG_F(INFO, "No query parameters found in URL");
         return parameters;
     }
 
-    std::string queryString = url.substr(queryStart + 1);
-    std::istringstream iss(queryString);
-    std::string pair;
+    std::string_view queryString(url.c_str() + queryStart + 1);
+    size_t pos = 0;
+    size_t nextAmp;
 
-    while (std::getline(iss, pair, '&')) {
+    // Process each parameter pair
+    while ((nextAmp = queryString.find('&', pos)) != std::string_view::npos) {
+        std::string_view pair = queryString.substr(pos, nextAmp - pos);
+
         size_t eqPos = pair.find('=');
-        if (eqPos != std::string::npos) {
-            std::string key = pair.substr(0, eqPos);
-            std::string value = pair.substr(eqPos + 1);
-
-            // URL decode
-            key = urlDecode(key);
-            value = urlDecode(value);
-
+        if (eqPos != std::string_view::npos) {
+            std::string key = urlDecode(std::string(pair.substr(0, eqPos)));
+            std::string value = urlDecode(std::string(pair.substr(eqPos + 1)));
             parameters[key] = value;
-            LOG_F(INFO, "Parsed URL parameter: {}={}", key, value);
         } else {
             // Parameter without value
-            parameters[urlDecode(pair)] = "";
-            LOG_F(INFO, "Parsed URL parameter without value: {}", pair);
+            std::string key = urlDecode(std::string(pair));
+            parameters[key] = "";
+        }
+
+        pos = nextAmp + 1;
+    }
+
+    // Process the last pair
+    if (pos < queryString.size()) {
+        std::string_view pair = queryString.substr(pos);
+
+        size_t eqPos = pair.find('=');
+        if (eqPos != std::string_view::npos) {
+            std::string key = urlDecode(std::string(pair.substr(0, eqPos)));
+            std::string value = urlDecode(std::string(pair.substr(eqPos + 1)));
+            parameters[key] = value;
+        } else {
+            // Parameter without value
+            std::string key = urlDecode(std::string(pair));
+            parameters[key] = "";
         }
     }
 
@@ -566,85 +725,45 @@ std::map<std::string, std::string> HttpHeaderParser::parseUrlParameters(
 }
 
 void HttpHeaderParser::setMethod(HttpMethod method) {
-    LOG_F(INFO, "setMethod called with method: {}", static_cast<int>(method));
+    spdlog::trace("setMethod called: {}", static_cast<int>(method));
     impl_->method = method;
 }
 
 HttpMethod HttpHeaderParser::getMethod() const {
-    LOG_F(INFO, "getMethod called");
+    spdlog::trace("getMethod called");
     return impl_->method;
 }
 
-void HttpHeaderParser::setStatus(const HttpStatus& status) {
-    LOG_F(INFO, "setStatus called with status: {} {}", status.code,
-          status.description);
-    impl_->status = status;
-    LOG_F(INFO, "Status set to: {} {}", impl_->status.code,
-          impl_->status.description);
-}
-
-HttpStatus HttpHeaderParser::getStatus() const {
-    LOG_F(INFO, "getStatus called");
-    return impl_->status;
-}
-
-void HttpHeaderParser::setPath(const std::string& path) {
-    LOG_F(INFO, "setPath called with path: {}", path);
-    impl_->path = path;
-    LOG_F(INFO, "Path set to: {}", impl_->path);
-}
-
-std::string HttpHeaderParser::getPath() const {
-    LOG_F(INFO, "getPath called");
-    return impl_->path;
-}
-
-void HttpHeaderParser::setVersion(HttpVersion version) {
-    LOG_F(INFO, "setVersion called with version: {}",
-          static_cast<int>(version));
-    impl_->version = version;
-    LOG_F(INFO, "Version set to: {}", static_cast<int>(impl_->version));
-}
-
-HttpVersion HttpHeaderParser::getVersion() const {
-    LOG_F(INFO, "getVersion called");
-    return impl_->version;
-}
-
-void HttpHeaderParser::setBody(const std::string& body) {
-    LOG_F(INFO, "setBody called with body of length: {}", body.length());
-    impl_->body = body;
-    LOG_F(INFO, "Body set with length: {}", impl_->body.length());
-}
-
-std::string HttpHeaderParser::getBody() const {
-    LOG_F(INFO, "getBody called");
-    return impl_->body;
-}
-
 HttpMethod HttpHeaderParser::stringToMethod(const std::string& methodStr) {
-    std::string upperMethod = methodStr;
+    std::string_view sv(methodStr);
+
+    // Convert to uppercase for comparison
+    std::string upperMethod(sv);
     std::transform(upperMethod.begin(), upperMethod.end(), upperMethod.begin(),
                    [](unsigned char c) { return std::toupper(c); });
 
-    if (upperMethod == "GET")
+    // Use string_view for efficient comparison
+    std::string_view upperView(upperMethod);
+
+    if (upperView == "GET")
         return HttpMethod::GET;
-    if (upperMethod == "POST")
+    if (upperView == "POST")
         return HttpMethod::POST;
-    if (upperMethod == "PUT")
+    if (upperView == "PUT")
         return HttpMethod::PUT;
-    if (upperMethod == "DELETE")
+    if (upperView == "DELETE")
         return HttpMethod::DELETE;
-    if (upperMethod == "HEAD")
+    if (upperView == "HEAD")
         return HttpMethod::HEAD;
-    if (upperMethod == "OPTIONS")
+    if (upperView == "OPTIONS")
         return HttpMethod::OPTIONS;
-    if (upperMethod == "PATCH")
+    if (upperView == "PATCH")
         return HttpMethod::PATCH;
-    if (upperMethod == "TRACE")
+    if (upperView == "TRACE")
         return HttpMethod::TRACE;
-    if (upperMethod == "CONNECT")
+    if (upperView == "CONNECT")
         return HttpMethod::CONNECT;
+
     return HttpMethod::UNKNOWN;
 }
 
@@ -673,16 +792,78 @@ std::string HttpHeaderParser::methodToString(HttpMethod method) {
     }
 }
 
+void HttpHeaderParser::setStatus(const HttpStatus& status) {
+    spdlog::trace("setStatus called: {} {}", status.code, status.description);
+    impl_->status = status;
+}
+
+HttpStatus HttpHeaderParser::getStatus() const {
+    spdlog::trace("getStatus called");
+    return impl_->status;
+}
+
+void HttpHeaderParser::setPath(const std::string& path) {
+    spdlog::trace("setPath called: {}", path);
+    impl_->path = path;
+}
+
+std::string HttpHeaderParser::getPath() const {
+    spdlog::trace("getPath called");
+    return impl_->path;
+}
+
+void HttpHeaderParser::setVersion(HttpVersion version) {
+    spdlog::trace("setVersion called: {}", static_cast<int>(version));
+    impl_->version = version;
+}
+
+HttpVersion HttpHeaderParser::getVersion() const {
+    spdlog::trace("getVersion called");
+    return impl_->version;
+}
+
+void HttpHeaderParser::setBody(const std::string& body) {
+    spdlog::debug("setBody called: {} bytes", body.length());
+    impl_->body = body;
+}
+
+std::string HttpHeaderParser::getBody() const {
+    spdlog::trace("getBody called");
+    return impl_->body;
+}
+
 std::string HttpHeaderParser::urlDecode(const std::string& str) {
     std::string result;
     result.reserve(str.size());
 
     for (size_t i = 0; i < str.size(); ++i) {
         if (str[i] == '%' && i + 2 < str.size()) {
-            std::string hex = str.substr(i + 1, 2);
-            char decodedChar = static_cast<char>(std::stoi(hex, nullptr, 16));
-            result += decodedChar;
-            i += 2;
+            // Handle percent encoding
+            int value = 0;
+            for (int j = 1; j <= 2; ++j) {
+                char c = str[i + j];
+                value <<= 4;
+
+                if (c >= '0' && c <= '9') {
+                    value += c - '0';
+                } else if (c >= 'A' && c <= 'F') {
+                    value += c - 'A' + 10;
+                } else if (c >= 'a' && c <= 'f') {
+                    value += c - 'a' + 10;
+                } else {
+                    // Invalid hex character, keep original
+                    value = -1;
+                    break;
+                }
+            }
+
+            if (value >= 0) {
+                result += static_cast<char>(value);
+                i += 2;
+            } else {
+                // Not a valid percent encoding, keep original
+                result += str[i];
+            }
         } else if (str[i] == '+') {
             result += ' ';
         } else {
@@ -694,23 +875,280 @@ std::string HttpHeaderParser::urlDecode(const std::string& str) {
 }
 
 std::string HttpHeaderParser::urlEncode(const std::string& str) {
-    std::string result;
-    result.reserve(str.size() * 3);  // 预留足够空间
+    static const char hexChars[] = "0123456789ABCDEF";
+    static const bool shouldEscape[256] = {/* 0x00-0x0F */ true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           /* 0x10-0x1F */ true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           /* ' '-'/' */ true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           false,
+                                           false,
+                                           true,
+                                           /* '0'-'9' */ false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           /* '@'-'O' */ true,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           /* 'P'-'_' */ false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           false,
+                                           /* '`'-'o' */ true,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           /* 'p'-DEL */ false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           false,
+                                           true,
+                                           true,
+                                           true,
+                                           false,
+                                           true,
+                                           /* 0x80-0xFF */ true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true,
+                                           true};
 
-    const char hexChars[] = "0123456789ABCDEF";
+    std::string result;
+    result.reserve(str.size() * 3);  // Reserve enough space
 
     for (unsigned char c : str) {
-        if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
-            // 保持这些字符不变
-            result += c;
-        } else if (c == ' ') {
-            // 空格转换为加号或%20
-            result += '+';
+        if (shouldEscape[c]) {
+            if (c == ' ') {
+                // Convert space to plus
+                result += '+';
+            } else {
+                // Convert other characters to %HH
+                result += '%';
+                result += hexChars[c >> 4];
+                result += hexChars[c & 15];
+            }
         } else {
-            // 其他字符转换为 %HH
-            result += '%';
-            result += hexChars[c >> 4];
-            result += hexChars[c & 15];
+            result += c;
         }
     }
 
@@ -718,14 +1156,14 @@ std::string HttpHeaderParser::urlEncode(const std::string& str) {
 }
 
 std::string HttpHeaderParser::buildRequest() const {
-    LOG_F(INFO, "buildRequest called");
+    spdlog::debug("buildRequest called");
 
     std::stringstream request;
 
-    // 构建请求行
+    // Build request line
     request << methodToString(impl_->method) << " " << impl_->path << " ";
 
-    // 添加HTTP版本
+    // Add HTTP version
     switch (impl_->version) {
         case HttpVersion::HTTP_1_0:
             request << "HTTP/1.0";
@@ -740,36 +1178,35 @@ std::string HttpHeaderParser::buildRequest() const {
             request << "HTTP/3.0";
             break;
         default:
-            request << "HTTP/1.1";  // 默认使用 HTTP/1.1
+            request << "HTTP/1.1";  // Default to HTTP/1.1
             break;
     }
     request << "\r\n";
 
-    // 添加请求头
+    // Add request headers
     for (const auto& [key, values] : impl_->headers) {
         for (const auto& value : values) {
             request << key << ": " << value << "\r\n";
         }
     }
 
-    // 添加空行，表示头部结束
+    // Add blank line to indicate end of headers
     request << "\r\n";
 
-    // 添加请求体（如果有）
+    // Add request body if present
     if (!impl_->body.empty()) {
         request << impl_->body;
     }
 
-    LOG_F(INFO, "buildRequest completed");
     return request.str();
 }
 
 std::string HttpHeaderParser::buildResponse() const {
-    LOG_F(INFO, "buildResponse called");
+    spdlog::debug("buildResponse called");
 
     std::stringstream response;
 
-    // 构建状态行
+    // Build status line
     switch (impl_->version) {
         case HttpVersion::HTTP_1_0:
             response << "HTTP/1.0";
@@ -784,28 +1221,27 @@ std::string HttpHeaderParser::buildResponse() const {
             response << "HTTP/3.0";
             break;
         default:
-            response << "HTTP/1.1";  // 默认使用 HTTP/1.1
+            response << "HTTP/1.1";  // Default to HTTP/1.1
             break;
     }
     response << " " << impl_->status.code << " " << impl_->status.description
              << "\r\n";
 
-    // 添加响应头
+    // Add response headers
     for (const auto& [key, values] : impl_->headers) {
         for (const auto& value : values) {
             response << key << ": " << value << "\r\n";
         }
     }
 
-    // 添加空行，表示头部结束
+    // Add blank line to indicate end of headers
     response << "\r\n";
 
-    // 添加响应体（如果有）
+    // Add response body if present
     if (!impl_->body.empty()) {
         response << impl_->body;
     }
 
-    LOG_F(INFO, "buildResponse completed");
     return response.str();
 }
 
