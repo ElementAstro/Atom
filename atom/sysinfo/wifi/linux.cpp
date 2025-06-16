@@ -15,12 +15,11 @@
 #include <unistd.h>
 #include <cstdio>
 #include <fstream>
-#include <iterator>
 #include <memory>
 #include <sstream>
 
-
 namespace atom::system::linux {
+using PipeCloser = int (*)(FILE*);
 
 auto isConnectedToInternet_impl() -> bool {
     spdlog::debug("Checking internet connection");
@@ -79,8 +78,7 @@ auto getCurrentWifi_impl() -> std::string {
         interface.erase(interface.find_last_not_of(" \t") + 1);
 
         std::string cmd = "iwgetid " + interface + " -r 2>/dev/null";
-        std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"),
-                                                      pclose);
+        std::unique_ptr<FILE, PipeCloser> pipe(popen(cmd.c_str(), "r"), pclose);
 
         if (pipe) {
             char buffer[128];
@@ -154,7 +152,7 @@ auto getCurrentWiredNetwork_impl() -> std::string {
 auto isHotspotConnected_impl() -> bool {
     spdlog::debug("Checking if connected to a hotspot");
 
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(
+    std::unique_ptr<FILE, PipeCloser> pipe(
         popen("iw dev 2>/dev/null | grep -A 2 Interface | grep -i 'type ap'",
               "r"),
         pclose);
@@ -258,7 +256,7 @@ auto measurePing_impl(const std::string& host, int timeout) -> float {
     snprintf(cmd, sizeof(cmd), "ping -c 1 -W %d %s 2>/dev/null",
              std::max(1, timeout / 1000), host.c_str());
 
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+    std::unique_ptr<FILE, PipeCloser> pipe(popen(cmd, "r"), pclose);
     if (!pipe) {
         spdlog::error("Failed to execute ping command");
         return -1.0f;
@@ -321,7 +319,7 @@ auto getNetworkStats_impl() -> NetworkStats {
 
     stats.latency = measurePing_impl("8.8.8.8", 1000);
 
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(
+    std::unique_ptr<FILE, PipeCloser> pipe(
         popen("iwconfig 2>/dev/null | grep 'Signal level'", "r"), pclose);
 
     if (pipe) {

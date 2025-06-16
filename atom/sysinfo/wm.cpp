@@ -1,13 +1,13 @@
 #include "wm.hpp"
 
 #include <array>
-#include <format>
 #include <string_view>
 
 #ifdef _WIN32
 // clang-format off
 #include <windows.h>
 #include <dwmapi.h>
+#include <format>
 // clang-format on
 #if _MSC_VER
 #pragma comment(lib, "dwmapi.lib")
@@ -22,7 +22,7 @@
 namespace atom::system {
 
 namespace {
-
+using PipeCloser = int (*)(FILE*);
 #ifdef __linux__
 /**
  * @brief Executes a shell command and returns the output.
@@ -33,8 +33,7 @@ auto executeCommand(std::string_view command) -> std::string {
     std::array<char, 256> buffer{};
     std::string result;
 
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.data(), "r"),
-                                                  pclose);
+    std::unique_ptr<FILE, PipeCloser> pipe(popen(command.data(), "r"), pclose);
 
     if (!pipe) {
         spdlog::error("Failed to execute command: {}", command);

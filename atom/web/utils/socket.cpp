@@ -44,7 +44,11 @@ auto getLastErrorMessage() -> std::string {
     return std::format("Error {}: {}", error, buffer.data());
 #else
     int error = errno;
-    strerror_r(error, buffer.data(), buffer.size());
+    char* result = strerror_r(error, buffer.data(), buffer.size());
+    if (result != buffer.data()) {
+        std::strncpy(buffer.data(), result, buffer.size() - 1);
+        buffer[buffer.size() - 1] = '\0';
+    }
     return std::format("Error {}: {}", error, buffer.data());
 #endif
 }
