@@ -2,25 +2,25 @@
 
 #include <algorithm>
 #include <chrono>
-#include <iomanip>  // For std::fixed and std::setprecision if needed for formatting strings manually, though spdlog handles it.
+#include <iomanip>
 #include <regex>
-#include "spdlog/spdlog.h"  // 添加 spdlog 头文件
 
+#include "spdlog/spdlog.h"
 
 #ifdef _WIN32
-#include <setupapi.h>
+// clang-format off
 #include <windows.h>
-
+#include <setupapi.h>
+// clang-format on
 #else
 #include <fcntl.h>
 #include <unistd.h>
 #ifdef __linux__
+#include <fstream>
 #include <libudev.h>
 #include <termios.h>
 #endif
 #endif
-
-// using namespace atom::log;  // 移除自定义日志命名空间
 
 namespace {
 template <typename T>
@@ -1203,7 +1203,6 @@ void SerialPortScanner::fill_details_win(PortDetails& details) {
 
 std::optional<SerialPortScanner::PortDetails>
 SerialPortScanner::get_port_details_linux(std::string_view port_name) {
-    // Implementation for Linux port details retrieval using udev and sysfs
     PortDetails details;
     details.device_name = std::string(port_name);
     details.last_detected = std::chrono::steady_clock::now();
@@ -1214,93 +1213,50 @@ SerialPortScanner::get_port_details_linux(std::string_view port_name) {
             return std::nullopt;
         }
 
-        // Get device from device path
         struct udev_device* device =
-            udev_device_new_from_devnode(udev_context, port_name.data());
+            udev_device_new_from_syspath(udev_context, port_name.data());
         if (!device) {
             udev_unref(udev_context);
             return std::nullopt;
         }
 
         // Get device properties
-        if (const char* desc =
-                udev_device_get_property_value(device, "ID_MODEL")) {
+        if (const char* desc = udev_device_get_property_value(device, "ID_MODEL")) {
             details.description = desc;
         }
 
-        if (const char* vid_str =
-                udev_device_get_property_value(device, "ID_VENDOR_ID")) {
-            details.vendor_id = parse_hex(vid_str);
+        if (const char* vid_str = udev_device_get_property_value(device, "ID_VENDOR_ID")) {
+            details.vid = vid_str;
         }
 
-        if (const char* pid_str =
-                udev_device_get_property_value(device, "ID_MODEL_ID")) {
-            details.product_id = parse_hex(pid_str);
+        if (const char* pid_str = udev_device_get_property_value(device, "ID_MODEL_ID")) {
+            details.pid = pid_str;
         }
 
-        if (const char* serial =
-                udev_device_get_property_value(device, "ID_SERIAL_SHORT")) {
+        if (const char* serial = udev_device_get_property_value(device, "ID_SERIAL_SHORT")) {
             details.serial_number = serial;
         }
 
-        if (const char* mfg =
-                udev_device_get_property_value(device, "ID_VENDOR")) {
+        if (const char* mfg = udev_device_get_property_value(device, "ID_VENDOR")) {
             details.manufacturer = mfg;
         }
 
-        if (const char* driver =
-                udev_device_get_property_value(device, "ID_USB_DRIVER")) {
-            details.driver_provider = driver;
+        if (const char* driver = udev_device_get_property_value(device, "ID_USB_DRIVER")) {
+            details.driver_name = driver;
         }
 
         if (const char* subsystem = udev_device_get_subsystem(device)) {
-            details.port_subtype = subsystem;
+            details.interface = subsystem;
         }
 
         if (const char* syspath = udev_device_get_syspath(device)) {
-            details.sys_path = syspath;
+            details.location = syspath;
         }
 
         // Test port availability
         int fd = open(port_name.data(), O_RDWR | O_NOCTTY | O_NONBLOCK);
         if (fd >= 0) {
             details.is_available = true;
-
-            // Get current baud rate
-            struct termios tio;
-            if (tcgetattr(fd, &tio) == 0) {
-                speed_t speed = cfgetospeed(&tio);
-                switch (speed) {
-                    case B9600:
-                        details.current_baud_rate = 9600;
-                        break;
-                    case B19200:
-                        details.current_baud_rate = 19200;
-                        break;
-                    case B38400:
-                        details.current_baud_rate = 38400;
-                        break;
-                    case B57600:
-                        details.current_baud_rate = 57600;
-                        break;
-                    case B115200:
-                        details.current_baud_rate = 115200;
-                        break;
-                    case B230400:
-                        details.current_baud_rate = 230400;
-                        break;
-                    case B460800:
-                        details.current_baud_rate = 460800;
-                        break;
-                    case B921600:
-                        details.current_baud_rate = 921600;
-                        break;
-                    default:
-                        details.current_baud_rate = 0;
-                        break;
-                }
-            }
-
             close(fd);
         }
 
@@ -1313,7 +1269,7 @@ SerialPortScanner::get_port_details_linux(std::string_view port_name) {
 
     } catch (const std::exception& e) {
         if (config_.enable_debug_logging) {
-            spdlog::warn("Failed to get Linux port details for {}: {}",
+            spdlog::warn("Failed to get Linux port details for {}: {}", 
                          port_name, e.what());
         }
     }
@@ -1322,12 +1278,10 @@ SerialPortScanner::get_port_details_linux(std::string_view port_name) {
 }
 
 void SerialPortScanner::fill_details_linux(PortDetails& details) {
-    // Fill additional Linux-specific details using sysfs queries
     try {
         std::string sysfs_base = "/sys/class/tty/";
         std::string device_basename = details.device_name;
 
-        // Extract device name from path (e.g., "/dev/ttyUSB0" -> "ttyUSB0")
         size_t last_slash = device_basename.find_last_of('/');
         if (last_slash != std::string::npos) {
             device_basename = device_basename.substr(last_slash + 1);
@@ -1335,7 +1289,6 @@ void SerialPortScanner::fill_details_linux(PortDetails& details) {
 
         std::string sysfs_path = sysfs_base + device_basename;
 
-        // Read additional properties from sysfs
         auto read_sysfs_file = [](const std::string& path) -> std::string {
             std::ifstream file(path);
             if (file.is_open()) {
@@ -1346,40 +1299,21 @@ void SerialPortScanner::fill_details_linux(PortDetails& details) {
             return "";
         };
 
-        // Get device type information
-        std::string device_type =
-            read_sysfs_file(sysfs_path + "/device/bDeviceClass");
-        if (!device_type.empty()) {
-            details.device_class = device_type;
-        }
-
-        // Get power information
-        std::string power_state =
-            read_sysfs_file(sysfs_path + "/power/runtime_status");
-        if (!power_state.empty()) {
-            details.power_state = power_state;
-        }
-
-        // Check if it's a USB device and get additional USB properties
-        std::string usb_path =
-            sysfs_path + "/device/../../";  // Navigate to USB device directory
-        std::string product = read_sysfs_file(usb_path + "product");
+        std::string product = read_sysfs_file(sysfs_path + "/device/../../product");
         if (!product.empty()) {
-            details.friendly_name = product;
+            details.product = product;
         }
 
-        std::string version = read_sysfs_file(
-            usb_path + "version");  // This might be bcdUSB or similar
+        std::string version = read_sysfs_file(sysfs_path + "/device/../../version");
         if (!version.empty()) {
-            details.usb_version = version;
+            details.recommended_baud_rates = version;
         }
 
-        // Set max baud rate based on device type (common defaults)
         if (details.device_name.find("ttyUSB") != std::string::npos ||
             details.device_name.find("ttyACM") != std::string::npos) {
-            details.max_baud_rate = 921600;  // Common for USB serial adapters
+            details.max_baud_rate = 921600;
         } else if (details.device_name.find("ttyS") != std::string::npos) {
-            details.max_baud_rate = 115200;  // Traditional serial ports
+            details.max_baud_rate = 115200;
         }
 
     } catch (const std::exception& e) {

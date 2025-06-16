@@ -1168,40 +1168,7 @@ auto getProcessCpuUsage(int pid) -> double {
     info.numProcessors = sysconf(_SC_NPROCESSORS_ONLN);
 
     trackers[pid] = info;
-    return 0.0;  // 第一次调用返�?
-}
-
-auto &info = trackers[pid];
-FILE *file;
-double percent;
-struct tms timeSample;
-clock_t now;
-
-// 检查进程是否存�?    std::string procPath = "/proc/" + std::to_string(pid) +
-// "/stat";
-file = fopen(procPath.c_str(), "r");
-if (file == nullptr) {
-    trackers.erase(pid);  // 清理无效追踪�?        return -1.0;
-}
-fclose(file);
-
-now = times(&timeSample);
-if (now <= info.lastCPU || timeSample.tms_stime < info.lastSysCPU ||
-    timeSample.tms_utime < info.lastUserCPU) {
-    // 溢出检�?        percent = 0.0;
-} else {
-    percent = (timeSample.tms_stime - info.lastSysCPU) +
-              (timeSample.tms_utime - info.lastUserCPU);
-    percent /= (now - info.lastCPU);
-    percent /= info.numProcessors;
-    percent *= 100;
-}
-
-info.lastCPU = now;
-info.lastSysCPU = timeSample.tms_stime;
-info.lastUserCPU = timeSample.tms_utime;
-
-return percent;
+    return 0.0;
 #elif defined(__APPLE__)
     // macOS实现
     task_t task;
@@ -1255,7 +1222,7 @@ return percent;
 #else
     return -1.0;
 #endif
-}  // namespace
+}
 
 auto getProcessMemoryUsage(int pid) -> std::size_t {
 #ifdef _WIN32
@@ -1284,7 +1251,7 @@ auto getProcessMemoryUsage(int pid) -> std::size_t {
     std::size_t size, resident, shared, text, lib, data, dt;
     statmFile >> size >> resident >> shared >> text >> lib >> data >> dt;
 
-    // 计算实际物理内存（RSS�?    long pageSize = sysconf(_SC_PAGESIZE);
+    long pageSize = sysconf(_SC_PAGESIZE);
     return resident * pageSize;
 #elif defined(__APPLE__)
     task_t task;

@@ -1,7 +1,6 @@
-#include <iostream>
-#include <unordered_set>
-#if defined(__linux__)
+#include "bluetooth_serial.hpp"
 
+#if defined(__linux__)
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/hci.h>
 #include <bluetooth/hci_lib.h>
@@ -17,7 +16,9 @@
 #include <cstring>
 #include <mutex>
 #include <thread>
-#include "bluetooth_serial.hpp"
+#include <unordered_set>
+
+#include "spdlog/spdlog.h"
 
 namespace serial {
 
@@ -311,8 +312,7 @@ public:
                 }
             } catch (const std::exception& e) {
                 // Handle exception
-                std::cerr << "Bluetooth scan exception: " << e.what()
-                          << std::endl;
+                spdlog::error("Bluetooth scan exception: {}", e.what());
                 if (!stopScan_) {
                     onScanComplete();  // Notify scan complete (with error)
                 }
@@ -592,7 +592,7 @@ public:
         pfd.events = POLLIN;
 
         int pollResult =
-            poll(&pfd, 1, config_.serialConfig.readTimeout.count());
+            poll(&pfd, 1, config_.serialConfig.getReadTimeout().count());
 
         if (pollResult < 0) {
             throw SerialIOException("Read error: " +
@@ -660,11 +660,13 @@ public:
             auto remainingTimeout = timeout - elapsed;
 
             // Save original timeout setting
-            auto originalTimeout = config_.serialConfig.readTimeout;
+            auto originalTimeout = config_.serialConfig.getReadTimeout();
 
             try {
                 // Temporarily set timeout
-                config_.serialConfig.readTimeout = remainingTimeout;
+                config_.serialConfig.setReadTimeout(
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        remainingTimeout));
 
                 auto chunk = read(bytes - result.size());
                 if (!chunk.empty()) {
@@ -672,10 +674,9 @@ public:
                 }
 
                 // Restore original timeout setting
-                config_.serialConfig.readTimeout = originalTimeout;
+                config_.serialConfig.setReadTimeout(originalTimeout);
             } catch (...) {
-                // Ensure original timeout is restored
-                config_.serialConfig.readTimeout = originalTimeout;
+                config_.serialConfig.setReadTimeout(originalTimeout);
                 throw;
             }
 
@@ -779,7 +780,7 @@ public:
         pfd.events = POLLOUT;
 
         int pollResult =
-            poll(&pfd, 1, config_.serialConfig.writeTimeout.count());
+            poll(&pfd, 1, config_.serialConfig.getWriteTimeout().count());
 
         if (pollResult < 0) {
             throw SerialIOException("Write error: " +

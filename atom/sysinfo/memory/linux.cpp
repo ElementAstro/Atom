@@ -468,6 +468,23 @@ auto getMemoryPerformance() -> MemoryPerformance {
     return perf;
 }
 
+auto getMemoryLoadPercentage() -> float {
+    spdlog::debug("Getting memory load percentage (Linux)");
+    const auto memInfo = parseMemInfo();
+    const auto totalIt = memInfo.find("MemTotal");
+    const auto availableIt = memInfo.find("MemAvailable");
+    if (totalIt == memInfo.end() || availableIt == memInfo.end()) {
+        spdlog::error("Failed to parse memory information for load percentage");
+        return 0.0f;
+    }
+    const auto total = totalIt->second;
+    const auto available = availableIt->second;
+    const auto used = total - available;
+    const auto load = static_cast<float>(used) / total * 100.0f;
+    spdlog::debug("Memory load percentage: {:.2f}% (used: {} kB, total: {} kB)", load, used, total);
+    return load;
+}
+
 }  // namespace atom::system::linux
 
 #endif  // __linux__

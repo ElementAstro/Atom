@@ -78,16 +78,6 @@ public:
     throw InvalidFutureException(ATOM_FILE_NAME, ATOM_FILE_LINE, \
                                  ATOM_FUNC_NAME, __VA_ARGS__);
 
-/**
- * @def THROW_NESTED_INVALID_FUTURE_EXCEPTION
- * @brief Macro to rethrow a nested InvalidFutureException with file, line, and
- * function information.
- */
-#define THROW_NESTED_INVALID_FUTURE_EXCEPTION(...)                        \
-    InvalidFutureException::rethrowNested(ATOM_FILE_NAME, ATOM_FILE_LINE, \
-                                          ATOM_FUNC_NAME,                 \
-                                          "Invalid future: " __VA_ARGS__);
-
 // Concept to ensure a type can be used in a future
 template <typename T>
 concept FutureCompatible = std::is_object_v<T> || std::is_void_v<T>;
@@ -380,7 +370,7 @@ public:
                                try {
                                    return func(sharedFuture->get());
                                } catch (...) {
-                                   THROW_NESTED_INVALID_FUTURE_EXCEPTION(
+                                   THROW_INVALID_FUTURE_EXCEPTION(
                                        "Exception in then callback");
                                }
                            }
@@ -542,10 +532,10 @@ public:
         try {
             return future_.get();
         } catch (const std::exception& e) {
-            THROW_NESTED_INVALID_FUTURE_EXCEPTION(
+            THROW_INVALID_FUTURE_EXCEPTION(
                 "Exception while waiting for future: ", e.what());
         } catch (...) {
-            THROW_NESTED_INVALID_FUTURE_EXCEPTION(
+            THROW_INVALID_FUTURE_EXCEPTION(
                 "Unknown exception while waiting for future");
         }
     }
@@ -864,7 +854,7 @@ public:
                                    sharedFuture->get();  // Wait for void future
                                    return func();
                                } catch (...) {
-                                   THROW_NESTED_INVALID_FUTURE_EXCEPTION(
+                                   THROW_INVALID_FUTURE_EXCEPTION(
                                        "Exception in then callback");
                                }
                            }
@@ -963,10 +953,10 @@ public:
         try {
             future_.get();
         } catch (const std::exception& e) {
-            THROW_NESTED_INVALID_FUTURE_EXCEPTION(  // Corrected macro
+            THROW_INVALID_FUTURE_EXCEPTION(  // Corrected macro
                 "Exception while waiting for future: ", e.what());
         } catch (...) {
-            THROW_NESTED_INVALID_FUTURE_EXCEPTION(  // Corrected macro
+            THROW_INVALID_FUTURE_EXCEPTION(  // Corrected macro
                 "Unknown exception while waiting for future");
         }
     }

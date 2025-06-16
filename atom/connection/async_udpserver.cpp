@@ -428,8 +428,8 @@ public:
             struct timeval tv;
             tv.tv_sec = static_cast<long>(timeout.count() / 1000);
             tv.tv_usec = static_cast<long>((timeout.count() % 1000) * 1000);
-            socket_.set_option(asio::detail::socket_option::linger(
-                SOL_SOCKET, SO_RCVTIMEO, tv));
+            ::setsockopt(socket_.native_handle(), SOL_SOCKET, SO_RCVTIMEO, &tv,
+                         sizeof(tv));
 #endif
             return true;
         } catch (const std::exception& e) {

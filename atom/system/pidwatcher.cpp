@@ -945,25 +945,6 @@ bool PidWatcher::isProcessRunning(pid_t pid) const {
 }
 
 double PidWatcher::getProcessCpuUsage(pid_t pid) const {
-#ifdef _WIN32
-    static PDH_HQUERY cpu_query = NULL;
-    static PDH_HCOUNTER cpu_total = NULL;
-
-    if (cpu_query == NULL) {
-        PdhOpenQuery(NULL, 0, &cpu_query);
-        std::string counter_path =
-            "\\Process(" + std::to_string(pid) + ")\\% Processor Time";
-        PdhAddEnglishCounter(cpu_query, counter_path.c_str(), 0, &cpu_total);
-        PdhCollectQueryData(cpu_query);
-        return 0.0;
-    }
-
-    PDH_FMT_COUNTERVALUE counter_val;
-    PdhCollectQueryData(cpu_query);
-    PdhGetFormattedCounterValue(cpu_total, PDH_FMT_DOUBLE, NULL, &counter_val);
-
-    return counter_val.doubleValue;
-#else
     std::string proc_path = "/proc/" + std::to_string(pid);
 
     if (!fs::exists(proc_path)) {
@@ -1018,10 +999,10 @@ double PidWatcher::getProcessCpuUsage(pid_t pid) const {
 
     if (first_call) {
         CPUUsageData data;
-        data.lastTotalUser = user;
-        data.lastTotalUserLow = nice;
-        data.lastTotalSys = system;
-        data.lastTotalIdle = idle;
+        data.last_total_user = user;
+        data.last_total_user_low = nice;
+        data.last_total_sys = system;
+        data.last_total_idle = idle;
         data.last_update = now;
         cpu_usage_data_[pid] = data;
         return 0.0;
@@ -1036,23 +1017,22 @@ double PidWatcher::getProcessCpuUsage(pid_t pid) const {
 
         double percent = 0.0;
 
-        if (total_cpu_time > (last.lastTotalUser + last.lastTotalUserLow +
-                              last.lastTotalSys + last.lastTotalIdle)) {
-            percent =
-                (total_time * 100.0) /
-                (total_cpu_time - (last.lastTotalUser + last.lastTotalUserLow +
-                                   last.lastTotalSys + last.lastTotalIdle));
+        if (total_cpu_time > (last.last_total_user + last.last_total_user_low +
+                              last.last_total_sys + last.last_total_idle)) {
+            percent = (total_time * 100.0) /
+                      (total_cpu_time -
+                       (last.last_total_user + last.last_total_user_low +
+                        last.last_total_sys + last.last_total_idle));
         }
 
-        last.lastTotalUser = user;
-        last.lastTotalUserLow = nice;
-        last.lastTotalSys = system;
-        last.lastTotalIdle = idle;
+        last.last_total_user = user;
+        last.last_total_user_low = nice;
+        last.last_total_sys = system;
+        last.last_total_idle = idle;
         last.last_update = now;
 
         return percent;
     }
-#endif
 }
 
 size_t PidWatcher::getProcessMemoryUsage(pid_t pid) const {

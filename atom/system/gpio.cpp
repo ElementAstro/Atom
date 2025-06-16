@@ -11,10 +11,12 @@
 #include "atom/error/exception.hpp"
 
 #ifdef _WIN32
+// clang-format off
+#include <windows.h>
 #include <cfgmgr32.h>
 #include <hidsdi.h>
 #include <setupapi.h>
-#include <windows.h>
+// clang-format on
 #ifdef _MSC_VER
 #pragma comment(lib, "setupapi.lib")
 #pragma comment(lib, "cfgmgr32.lib")
@@ -25,7 +27,7 @@
 #include <sys/epoll.h>
 #include <unistd.h>
 #include <filesystem>
-
+#include <fstream>
 #define GPIO_EXPORT "/sys/class/gpio/export"
 #define GPIO_UNEXPORT "/sys/class/gpio/unexport"
 #define GPIO_PATH "/sys/class/gpio"

@@ -179,7 +179,7 @@ auto getMemoryFragmentation() -> double {
     size_t allocatableSize = 0;
     try {
         constexpr size_t MAX_ALLOC_SIZE = 100 * 1024 * 1024;  // 100 MB
-        const size_t testSize = std::min(MAX_ALLOC_SIZE, available);
+        const size_t testSize = std::min(MAX_ALLOC_SIZE, static_cast<size_t>(available));
         std::vector<char> testAlloc;
         testAlloc.reserve(testSize);
         allocatableSize = testAlloc.capacity();

@@ -24,6 +24,12 @@ namespace atom::system::linux {
 auto getMemoryUsage() -> float;
 
 /**
+ * @brief Get current memory load percentage
+ * @return Memory load as percentage (0.0 - 100.0)
+ */
+auto getMemoryLoadPercentage() -> float;
+
+/**
  * @brief Get total physical memory size
  * @return Total physical memory in bytes
  */

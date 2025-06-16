@@ -572,7 +572,8 @@ auto getNetworkConnections(int pid) -> std::vector<NetworkConnection> {
 
 #else
     for (const auto& [protocol, path] :
-         std::array{std::pair{"TCP", "net/tcp"}, {"UDP", "net/udp"}}) {
+         std::array<std::pair<const char*, const char*>, 2>{
+             {{"TCP", "net/tcp"}, {"UDP", "net/udp"}}}) {
         std::ifstream netFile("/proc/" + std::to_string(pid) + "/" + path);
         if (!netFile.is_open()) {
             spdlog::error("Failed to open: /proc/{}/{}", pid, path);
