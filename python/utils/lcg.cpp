@@ -55,7 +55,7 @@ Examples:
 
 Args:
     filename: The name of the file to save the state to.
-             
+
 Raises:
     RuntimeError: If the file cannot be opened.
 )")
@@ -64,7 +64,7 @@ Raises:
 
 Args:
     filename: The name of the file to load the state from.
-             
+
 Raises:
     RuntimeError: If the file cannot be opened or is corrupt.
 )")
@@ -75,10 +75,10 @@ Raises:
 Args:
     min: The minimum value (inclusive). Defaults to 0.
     max: The maximum value (inclusive). Defaults to the maximum value of int.
-             
+
 Returns:
     A random integer within the specified range.
-             
+
 Raises:
     ValueError: If min > max.
 )")
@@ -89,10 +89,10 @@ Raises:
 Args:
     min: The minimum value (inclusive). Defaults to 0.0.
     max: The maximum value (exclusive). Defaults to 1.0.
-             
+
 Returns:
     A random double within the specified range.
-             
+
 Raises:
     ValueError: If min >= max.
 )")
@@ -103,10 +103,10 @@ Raises:
 
 Args:
     probability: The probability of returning true. Defaults to 0.5.
-             
+
 Returns:
     A random boolean value.
-             
+
 Raises:
     ValueError: If probability is not in [0,1].
 )")
@@ -118,10 +118,10 @@ Raises:
 Args:
     mean: The mean of the distribution. Defaults to 0.0.
     stddev: The standard deviation of the distribution. Defaults to 1.0.
-             
+
 Returns:
     A random number following a Gaussian distribution.
-             
+
 Raises:
     ValueError: If stddev <= 0.
 )")
@@ -131,10 +131,10 @@ Raises:
 
 Args:
     lambda: The rate parameter (lambda) of the distribution. Defaults to 1.0.
-             
+
 Returns:
     A random number following a Poisson distribution.
-             
+
 Raises:
     ValueError: If lambda <= 0.
 )")
@@ -145,10 +145,10 @@ Raises:
 
 Args:
     lambda: The rate parameter (lambda) of the distribution. Defaults to 1.0.
-             
+
 Returns:
     A random number following an Exponential distribution.
-             
+
 Raises:
     ValueError: If lambda <= 0.
 )")
@@ -158,10 +158,10 @@ Raises:
 
 Args:
     probability: The probability of success in each trial. Defaults to 0.5.
-             
+
 Returns:
     A random number following a Geometric distribution.
-             
+
 Raises:
     ValueError: If probability not in (0,1).
 )")
@@ -172,10 +172,10 @@ Raises:
 Args:
     shape: The shape parameter of the distribution.
     scale: The scale parameter of the distribution. Defaults to 1.0.
-             
+
 Returns:
     A random number following a Gamma distribution.
-             
+
 Raises:
     ValueError: If shape or scale <= 0.
 )")
@@ -186,10 +186,10 @@ Raises:
 Args:
     alpha: The alpha parameter of the distribution.
     beta: The beta parameter of the distribution.
-             
+
 Returns:
     A random number following a Beta distribution.
-             
+
 Raises:
     ValueError: If alpha or beta <= 0.
 )")
@@ -199,10 +199,10 @@ Raises:
 
 Args:
     degrees_of_freedom: The degrees of freedom of the distribution.
-             
+
 Returns:
     A random number following a Chi-Squared distribution.
-             
+
 Raises:
     ValueError: If degrees_of_freedom <= 0.
 )")
@@ -215,10 +215,10 @@ Args:
     total: The total number of items.
     success: The number of successful items.
     draws: The number of draws.
-             
+
 Returns:
     A random number following a Hypergeometric distribution.
-             
+
 Raises:
     ValueError: If parameters are invalid.
 )")
@@ -230,10 +230,10 @@ Raises:
 
 Args:
     weights: The weights of the discrete distribution.
-             
+
 Returns:
     A random index based on the weights.
-             
+
 Raises:
     ValueError: If weights is empty or contains negative values.
 )")
@@ -246,10 +246,10 @@ Raises:
 Args:
     trials: The number of trials.
     probabilities: The probabilities of each outcome.
-             
+
 Returns:
     A vector of counts for each outcome.
-             
+
 Raises:
     ValueError: If probabilities is invalid.
 )")
@@ -277,7 +277,7 @@ Raises:
 
 Args:
     data: The list of data to shuffle.
-             
+
 Returns:
     A new shuffled list.
 )")
@@ -311,10 +311,10 @@ Returns:
 Args:
     data: The list of data to sample from.
     sample_size: The number of elements to sample.
-             
+
 Returns:
     A list containing the sampled elements.
-             
+
 Raises:
     ValueError: If sample_size > len(data).
 )");

@@ -53,7 +53,7 @@ PYBIND11_MODULE(packaged_task, m) {
         m, "PackagedTask",
         R"(Enhanced packaged task for executing deferred operations.
 
-This class wraps a callable object and provides mechanisms to execute it 
+This class wraps a callable object and provides mechanisms to execute it
 asynchronously, returning its result through a future.
 
 Examples:
@@ -124,7 +124,7 @@ Returns:
         m, "VoidPackagedTask",
         R"(Enhanced packaged task for executing deferred operations without return values.
 
-This class wraps a callable object and provides mechanisms to execute it 
+This class wraps a callable object and provides mechanisms to execute it
 asynchronously, signaling completion through a future.
 
 Examples:
@@ -277,7 +277,7 @@ Examples:
         py::arg("task"),
         R"(Run a callable as a packaged task and return its future.
 
-This is a convenience function that creates a packaged task, 
+This is a convenience function that creates a packaged task,
 executes it in a background thread, and returns a future.
 
 Args:

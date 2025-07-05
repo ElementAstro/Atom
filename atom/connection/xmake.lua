@@ -44,7 +44,7 @@ option_end()
 -- Define base sources and headers
 local base_sources = {
     "async_fifoclient.cpp",
-    "async_fifoserver.cpp", 
+    "async_fifoserver.cpp",
     "async_sockethub.cpp",
     "async_tcpclient.cpp",
     "async_udpclient.cpp",
@@ -53,14 +53,14 @@ local base_sources = {
     "fifoserver.cpp",
     "sockethub.cpp",
     "tcpclient.cpp",
-    "udpclient.cpp", 
+    "udpclient.cpp",
     "udpserver.cpp"
 }
 
 local base_headers = {
     "async_fifoclient.hpp",
     "async_fifoserver.hpp",
-    "async_sockethub.hpp", 
+    "async_sockethub.hpp",
     "async_tcpclient.hpp",
     "async_udpclient.hpp",
     "async_udpserver.hpp",
@@ -79,7 +79,7 @@ local ssh_sources = {
 }
 
 local ssh_headers = {
-    "sshclient.hpp", 
+    "sshclient.hpp",
     "sshserver.hpp"
 }
 
@@ -87,65 +87,65 @@ local ssh_headers = {
 target("atom-connection")
     -- Set target kind
     set_kind("static")
-    
+
     -- Add base source files
     add_files(base_sources)
     add_headerfiles(base_headers)
-    
+
     -- Add SSH files conditionally
     if has_config("enable-libssh") then
         add_files(ssh_sources)
         add_headerfiles(ssh_headers)
     end
-    
+
     -- Add include directories
     add_includedirs(".", {public = true})
-    
+
     -- Add packages
     add_packages("loguru", "openssl")
-    
+
     -- Add SSH package conditionally
     if has_config("enable-ssh") then
         add_packages("libssh")
     end
-    
+
     -- Add system libraries
     add_syslinks("pthread")
-    
+
     -- Windows-specific libraries
     if is_plat("windows") then
         add_syslinks("ws2_32", "mswsock")
     end
-    
+
     -- Enable position independent code
     add_cxflags("-fPIC", {tools = {"gcc", "clang"}})
     add_cflags("-fPIC", {tools = {"gcc", "clang"}})
-    
+
     -- Set version info
     set_version("1.0.0")
-    
+
     -- Set output name
     set_basename("atom-connection")
-    
+
     -- Set directories
     set_targetdir("$(buildir)/lib")
     set_objectdir("$(buildir)/obj")
-    
+
     -- Installation rules
     after_install(function (target)
         local installdir = target:installdir() or "$(prefix)"
         -- Install static library
         os.cp(target:targetfile(), path.join(installdir, "lib"))
-        
+
         -- Install headers
         local headerdir = path.join(installdir, "include", "atom-connection")
         os.mkdir(headerdir)
-        
+
         -- Install base headers
         for _, header in ipairs(base_headers) do
             os.cp(header, headerdir)
         end
-        
+
         -- Install SSH headers conditionally
         if has_config("enable-libssh") then
             for _, header in ipairs(ssh_headers) do
@@ -157,31 +157,31 @@ target("atom-connection")
 -- Optional: Create object library target
 target("atom-connection-object")
     set_kind("object")
-    
+
     -- Add base files
     add_files(base_sources)
     add_headerfiles(base_headers)
-    
+
     -- Add SSH files conditionally
     if has_config("enable-libssh") then
         add_files(ssh_sources)
         add_headerfiles(ssh_headers)
     end
-    
+
     -- Configuration
     add_includedirs(".")
     add_packages("loguru", "openssl")
-    
+
     if has_config("enable-ssh") then
         add_packages("libssh")
     end
-    
+
     add_syslinks("pthread")
-    
+
     if is_plat("windows") then
         add_syslinks("ws2_32", "mswsock")
     end
-    
+
     -- Enable PIC
     add_cxflags("-fPIC", {tools = {"gcc", "clang"}})
     add_cflags("-fPIC", {tools = {"gcc", "clang"}})

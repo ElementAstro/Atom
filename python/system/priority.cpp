@@ -136,14 +136,14 @@ Examples:
     >>> import threading
     >>> # Set current thread to high priority
     >>> priority.set_thread_priority(priority.PriorityLevel.HIGHEST)
-    >>> 
+    >>>
     >>> # Create thread and set its priority (using native handle)
     >>> def worker():
     ...     # Get native handle and set priority (platform-specific code)
     ...     thread_handle = threading.get_native_id()  # This is simplified
     ...     priority.set_thread_priority(priority.PriorityLevel.ABOVE_NORMAL, thread_handle)
     ...     # Thread work...
-    ... 
+    ...
     >>> t = threading.Thread(target=worker)
     >>> t.start()
 )");
@@ -232,14 +232,14 @@ Args:
 Examples:
     >>> from atom.system import priority
     >>> import time
-    >>> 
+    >>>
     >>> # Callback function for priority changes
     >>> def on_priority_change(level):
     ...     print(f"Process priority changed to: {level}")
-    ... 
+    ...
     >>> # Monitor process 1234 for priority changes
     >>> priority.start_priority_monitor(1234, on_priority_change)
-    >>> 
+    >>>
     >>> # Keep the program running to receive callbacks
     >>> try:
     ...     while True:
@@ -312,7 +312,7 @@ Examples:
     >>> from atom.system import priority
     >>> cpu_count = priority.get_available_cpu_count()
     >>> print(f"This system has {cpu_count} CPU cores")
-    >>> 
+    >>>
     >>> # Pin process to first half of available cores
     >>> first_half = list(range(cpu_count // 2))
     >>> priority.set_process_affinity(first_half)
@@ -400,7 +400,7 @@ Returns:
 Examples:
     >>> from atom.system import priority
     >>> import time
-    >>> 
+    >>>
     >>> # Temporarily run with high priority
     >>> with priority.thread_priority(priority.PriorityLevel.HIGHEST):
     ...     # This code runs with high priority
@@ -463,7 +463,7 @@ Returns:
 Examples:
     >>> from atom.system import priority
     >>> import time
-    >>> 
+    >>>
     >>> # Temporarily run with high priority
     >>> with priority.process_priority(priority.PriorityLevel.HIGHEST):
     ...     # This code runs with high priority
@@ -506,16 +506,16 @@ Returns:
 
 Examples:
     >>> from atom.system import priority
-    >>> 
+    >>>
     >>> def compute_something():
     ...     result = 0
     ...     for i in range(10000000):
     ...         result += i
     ...     return result
-    ... 
+    ...
     >>> # Run with high priority
     >>> result = priority.run_with_priority(
-    ...     priority.PriorityLevel.HIGHEST, 
+    ...     priority.PriorityLevel.HIGHEST,
     ...     compute_something
     ... )
     >>> print(f"Result: {result}")
@@ -581,21 +581,21 @@ Raises:
 Examples:
     >>> from atom.system import priority
     >>> import threading
-    >>> 
+    >>>
     >>> def worker(cpu_id):
     ...     # Pin this thread to the specified CPU
     ...     priority.pin_thread_to_cpus([cpu_id])
     ...     # Now this thread will only run on the specified CPU
     ...     for i in range(10):
     ...         print(f"Thread on CPU {cpu_id}: {i}")
-    ... 
+    ...
     >>> # Create threads and pin each to a different CPU
     >>> threads = []
     >>> for i in range(4):  # Create 4 threads
     ...     t = threading.Thread(target=worker, args=(i,))
     ...     threads.append(t)
     ...     t.start()
-    ... 
+    ...
     >>> # Wait for all threads to complete
     >>> for t in threads:
     ...     t.join()

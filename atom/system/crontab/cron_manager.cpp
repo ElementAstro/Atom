@@ -131,10 +131,10 @@ auto CronManager::deleteCronJobById(const std::string& id) -> bool {
 
 auto CronManager::listCronJobs() -> std::vector<CronJob> {
     spdlog::info("Listing all Cron jobs");
-    
+
     // Merge with system jobs to ensure consistency
     auto systemJobs = CronSystem::listSystemJobs();
-    
+
     // Update existing jobs with system data
     for (const auto& systemJob : systemJobs) {
         auto existingIt = std::find_if(jobs_.begin(), jobs_.end(),
@@ -149,7 +149,7 @@ auto CronManager::listCronJobs() -> std::vector<CronJob> {
             jobs_.push_back(systemJob);
         }
     }
-    
+
     refreshJobIndex();
     spdlog::info("Retrieved {} Cron jobs", jobs_.size());
     return jobs_;

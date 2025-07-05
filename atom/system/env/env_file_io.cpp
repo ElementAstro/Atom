@@ -77,7 +77,7 @@ auto EnvFileIO::loadFromFile(const std::filesystem::path& filePath,
 
         while (std::getline(file, line)) {
             lineNumber++;
-            
+
             // Skip empty lines and comments
             if (line.empty() || line[0] == '#') {
                 continue;
@@ -205,7 +205,7 @@ auto EnvFileIO::unescapeValue(const String& value) -> String {
     unescaped.reserve(value.length());
 
     String input = value;
-    
+
     // Remove quotes if present
     if (input.length() >= 2 && input.front() == '"' && input.back() == '"') {
         input = input.substr(1, input.length() - 2);

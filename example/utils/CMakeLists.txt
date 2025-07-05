@@ -14,20 +14,20 @@ file(GLOB CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 foreach(CPP_FILE ${CPP_FILES})
     # 获取不带扩展名的文件名
     get_filename_component(EXAMPLE_NAME ${CPP_FILE} NAME_WE)
-    
+
     # 构造可执行文件名称（子目录名_文件名）
     set(EXECUTABLE_NAME ${SUBDIR_NAME}_${EXAMPLE_NAME})
-    
+
     # 配置选项，允许单独控制每个示例的构建
     string(TOUPPER ${EXAMPLE_NAME} EXAMPLE_NAME_UPPER)
     option(ATOM_EXAMPLE_UTILS_${EXAMPLE_NAME_UPPER} "Build utils example: ${EXAMPLE_NAME}" ${ATOM_EXAMPLE_UTILS_BUILD_ALL})
-    
+
     # 有条件地添加可执行文件
     if(ATOM_EXAMPLE_UTILS_${EXAMPLE_NAME_UPPER})
         add_executable(${EXECUTABLE_NAME} ${CPP_FILE})
         target_link_libraries(${EXECUTABLE_NAME} atom)
-        
-        
+
+
         # 设置IDE文件夹分组
         set_property(TARGET ${EXECUTABLE_NAME} PROPERTY FOLDER "Examples/Utils")
     endif()

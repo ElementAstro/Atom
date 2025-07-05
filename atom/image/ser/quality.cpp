@@ -37,27 +37,27 @@ double QualityAssessor::assessQuality(const cv::Mat& frame) const {
 std::vector<double> QualityAssessor::getQualityScores(const std::vector<cv::Mat>& frames) const {
     std::vector<double> scores;
     scores.reserve(frames.size());
-    
+
     for (const auto& frame : frames) {
         scores.push_back(assessQuality(frame));
     }
-    
+
     return scores;
 }
 
 std::vector<size_t> QualityAssessor::sortFramesByQuality(const std::vector<cv::Mat>& frames) const {
     // Calculate quality scores
     std::vector<double> scores = getQualityScores(frames);
-    
+
     // Create index vector
     std::vector<size_t> indices(frames.size());
     std::iota(indices.begin(), indices.end(), 0);
-    
+
     // Sort indices by scores (descending order)
     std::sort(indices.begin(), indices.end(), [&scores](size_t a, size_t b) {
         return scores[a] > scores[b];
     });
-    
+
     return indices;
 }
 
@@ -65,31 +65,31 @@ std::vector<cv::Mat> QualityAssessor::selectBestFrames(const std::vector<cv::Mat
     if (frames.empty()) {
         return {};
     }
-    
+
     // Get sorted indices
     auto sortedIndices = sortFramesByQuality(frames);
-    
+
     // Limit count to available frames
     count = std::min(count, frames.size());
-    
+
     // Select best frames
     std::vector<cv::Mat> bestFrames;
     bestFrames.reserve(count);
-    
+
     for (size_t i = 0; i < count; ++i) {
         bestFrames.push_back(frames[sortedIndices[i]]);
     }
-    
+
     return bestFrames;
 }
 
-void QualityAssessor::addCustomMetric(const std::string& name, 
+void QualityAssessor::addCustomMetric(const std::string& name,
                                     QualityMetricFunction metricFunction,
                                     double weight) {
     if (weight <= 0.0) {
         throw InvalidParameterException("Metric weight must be greater than zero");
     }
-    
+
     customMetrics[name] = std::make_pair(std::move(metricFunction), weight);
 }
 
@@ -134,20 +134,20 @@ double QualityAssessor::getCustomMetricValue(const cv::Mat& frame, const std::st
     if (it == customMetrics.end()) {
         throw InvalidParameterException(std::format("Unknown custom metric: {}", metricName));
     }
-    
+
     return it->second.first(frame);
 }
 
 std::vector<QualityAssessor::MetricDetails> QualityAssessor::getDetailedMetrics(const cv::Mat& frame) const {
     std::vector<MetricDetails> details;
-    
+
     // Add standard metrics
     struct StdMetric {
         QualityMetric metric;
         std::string name;
         double weight;
     };
-    
+
     std::vector<StdMetric> stdMetrics = {
         {QualityMetric::Sharpness, "Sharpness", parameters.metricWeights[0]},
         {QualityMetric::SNR, "SNR", parameters.metricWeights[1]},
@@ -156,17 +156,17 @@ std::vector<QualityAssessor::MetricDetails> QualityAssessor::getDetailedMetrics(
         {QualityMetric::Contrast, "Contrast", parameters.metricWeights[4]},
         {QualityMetric::StarCount, "StarCount", parameters.metricWeights[5]}
     };
-    
+
     // Calculate raw values
     std::vector<double> rawValues;
     rawValues.reserve(stdMetrics.size() + customMetrics.size());
-    
+
     for (const auto& metric : stdMetrics) {
         double value = getMetricValue(frame, metric.metric);
         rawValues.push_back(value);
         details.push_back({metric.name, value, 0.0, metric.weight});
     }
-    
+
     // Add custom metrics
     for (const auto& [name, metricPair] : customMetrics) {
         const auto& [metricFunc, weight] = metricPair;
@@ -174,7 +174,7 @@ std::vector<QualityAssessor::MetricDetails> QualityAssessor::getDetailedMetrics(
         rawValues.push_back(value);
         details.push_back({name, value, 0.0, weight});
     }
-    
+
     // Normalize if requested
     if (parameters.normalizeMetrics) {
         // Find min and max for each metric
@@ -190,7 +190,7 @@ std::vector<QualityAssessor::MetricDetails> QualityAssessor::getDetailedMetrics(
             details[i].normalizedValue = details[i].rawValue;
         }
     }
-    
+
     return details;
 }
 
@@ -198,10 +198,10 @@ cv::Rect QualityAssessor::calculateROI(const cv::Mat& frame) const {
     // Calculate ROI based on selected method
     int width = frame.cols;
     int height = frame.rows;
-    
+
     int roiWidth = static_cast<int>(width * parameters.roiSize);
     int roiHeight = static_cast<int>(height * parameters.roiSize);
-    
+
     if (parameters.roiSelector == "centered") {
         // Centered ROI
         int x = (width - roiWidth) / 2;
@@ -211,13 +211,13 @@ cv::Rect QualityAssessor::calculateROI(const cv::Mat& frame) const {
         // Find brightest region (simplified)
         cv::Mat blurred;
         cv::GaussianBlur(frame, blurred, cv::Size(21, 21), 5);
-        
+
         cv::Point maxLoc;
         cv::minMaxLoc(blurred, nullptr, nullptr, nullptr, &maxLoc);
-        
+
         int x = std::clamp(maxLoc.x - roiWidth/2, 0, width - roiWidth);
         int y = std::clamp(maxLoc.y - roiHeight/2, 0, height - roiHeight);
-        
+
         return cv::Rect(x, y, roiWidth, roiHeight);
     } else {
         // Default to full frame
@@ -233,7 +233,7 @@ double QualityAssessor::calculateSharpness(const cv::Mat& frame) const {
     } else {
         gray = frame;
     }
-    
+
     // Convert to float if needed
     cv::Mat floatImg;
     if (gray.depth() != CV_32F) {
@@ -241,21 +241,21 @@ double QualityAssessor::calculateSharpness(const cv::Mat& frame) const {
     } else {
         floatImg = gray;
     }
-    
+
     // Calculate ROI
     cv::Rect roi = calculateROI(floatImg);
     cv::Mat roiImg = floatImg(roi);
-    
+
     // Apply Laplacian
     cv::Mat laplacian;
     cv::Laplacian(roiImg, laplacian, CV_32F, 3);
-    
+
     // Calculate variance of Laplacian (measure of sharpness)
     cv::Scalar mean, stddev;
     cv::meanStdDev(laplacian, mean, stddev);
-    
+
     double variance = stddev[0] * stddev[0];
-    
+
     // Normalize to a reasonable range (empirical)
     return std::min(variance / 100.0, 1.0);
 }
@@ -268,30 +268,30 @@ double QualityAssessor::calculateSNR(const cv::Mat& frame) const {
     } else {
         gray = frame;
     }
-    
+
     // Convert to float
     cv::Mat floatImg;
     gray.convertTo(floatImg, CV_32F);
-    
+
     // Calculate ROI
     cv::Rect roi = calculateROI(floatImg);
     cv::Mat roiImg = floatImg(roi);
-    
+
     // Apply Gaussian blur to estimate signal
     cv::Mat blurred;
     cv::GaussianBlur(roiImg, blurred, cv::Size(0, 0), 3);
-    
+
     // Estimate noise as difference between original and blurred
     cv::Mat noise = roiImg - blurred;
-    
+
     // Calculate statistics
     cv::Scalar signalMean, signalStdDev, noiseStdDev;
     cv::meanStdDev(blurred, signalMean, signalStdDev);
     cv::meanStdDev(noise, cv::Scalar(), noiseStdDev);
-    
+
     // SNR = signal / noise
     double snr = signalMean[0] / (noiseStdDev[0] + 1e-6);
-    
+
     // Normalize to a reasonable range (empirical)
     return std::min(snr / 20.0, 1.0);
 }
@@ -304,7 +304,7 @@ double QualityAssessor::calculateEntropy(const cv::Mat& frame) const {
     } else {
         gray = frame;
     }
-    
+
     // Ensure 8-bit for histogram
     cv::Mat img8bit;
     if (gray.depth() != CV_8U) {
@@ -312,22 +312,22 @@ double QualityAssessor::calculateEntropy(const cv::Mat& frame) const {
     } else {
         img8bit = gray;
     }
-    
+
     // Calculate ROI
     cv::Rect roi = calculateROI(img8bit);
     cv::Mat roiImg = img8bit(roi);
-    
+
     // Calculate histogram
     cv::Mat hist;
     int histSize = 256;
     float range[] = {0, 256};
     const float* histRange = {range};
     cv::calcHist(&roiImg, 1, 0, cv::Mat(), hist, 1, &histSize, &histRange);
-    
+
     // Normalize histogram
     double pixelCount = roiImg.total();
     hist /= pixelCount;
-    
+
     // Calculate entropy
     double entropy = 0.0;
     for (int i = 0; i < histSize; i++) {
@@ -336,7 +336,7 @@ double QualityAssessor::calculateEntropy(const cv::Mat& frame) const {
             entropy -= binVal * std::log2(binVal);
         }
     }
-    
+
     // Normalize to 0-1 range (max entropy for 8-bit is 8)
     return std::min(entropy / 8.0, 1.0);
 }
@@ -349,14 +349,14 @@ double QualityAssessor::calculateBrightness(const cv::Mat& frame) const {
     } else {
         gray = frame;
     }
-    
+
     // Calculate ROI
     cv::Rect roi = calculateROI(gray);
     cv::Mat roiImg = gray(roi);
-    
+
     // Calculate mean brightness
     cv::Scalar meanVal = cv::mean(roiImg);
-    
+
     // Normalize based on bit depth
     double normFactor = 1.0;
     if (gray.depth() == CV_8U) {
@@ -364,7 +364,7 @@ double QualityAssessor::calculateBrightness(const cv::Mat& frame) const {
     } else if (gray.depth() == CV_16U) {
         normFactor = 65535.0;
     }
-    
+
     return meanVal[0] / normFactor;
 }
 
@@ -376,19 +376,19 @@ double QualityAssessor::calculateContrast(const cv::Mat& frame) const {
     } else {
         gray = frame;
     }
-    
+
     // Convert to float
     cv::Mat floatImg;
     gray.convertTo(floatImg, CV_32F);
-    
+
     // Calculate ROI
     cv::Rect roi = calculateROI(floatImg);
     cv::Mat roiImg = floatImg(roi);
-    
+
     // Calculate standard deviation (measure of contrast)
     cv::Scalar mean, stddev;
     cv::meanStdDev(roiImg, mean, stddev);
-    
+
     // Normalize by maximum possible standard deviation
     double maxStdDev = 0.5; // For normalized [0,1] image
     if (gray.depth() == CV_8U) {
@@ -396,7 +396,7 @@ double QualityAssessor::calculateContrast(const cv::Mat& frame) const {
     } else if (gray.depth() == CV_16U) {
         maxStdDev = 32767.5;
     }
-    
+
     return std::min(stddev[0] / maxStdDev, 1.0);
 }
 
@@ -408,7 +408,7 @@ double QualityAssessor::calculateStarCount(const cv::Mat& frame) const {
     } else {
         gray = frame;
     }
-    
+
     // Ensure 8-bit for blob detection
     cv::Mat img8bit;
     if (gray.depth() != CV_8U) {
@@ -416,37 +416,37 @@ double QualityAssessor::calculateStarCount(const cv::Mat& frame) const {
     } else {
         img8bit = gray;
     }
-    
+
     // Calculate ROI
     cv::Rect roi = calculateROI(img8bit);
     cv::Mat roiImg = img8bit(roi);
-    
+
     // Threshold the image to find bright points
     cv::Mat thresholded;
     double thresh = parameters.starDetectionThreshold * 255.0;
     cv::threshold(roiImg, thresholded, thresh, 255, cv::THRESH_BINARY);
-    
+
     // Find contours
     std::vector<std::vector<cv::Point>> contours;
     cv::findContours(thresholded, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-    
+
     // Filter contours by size and shape to find star-like objects
     int starCount = 0;
     for (const auto& contour : contours) {
         double area = cv::contourArea(contour);
-        
+
         // Stars are typically small and roughly circular
         if (area > 3 && area < 100) {
             // Check circularity
             double perimeter = cv::arcLength(contour, true);
             double circularity = 4 * M_PI * area / (perimeter * perimeter);
-            
+
             if (circularity > 0.7) { // More circular than not
                 starCount++;
             }
         }
     }
-    
+
     // Normalize star count to 0-1 (assuming max ~100 stars in frame)
     return std::min(static_cast<double>(starCount) / 100.0, 1.0);
 }
@@ -459,11 +459,11 @@ double QualityAssessor::calculateCompositeScore(const cv::Mat& frame) const {
     double brightness = calculateBrightness(frame);
     double contrast = calculateContrast(frame);
     double starCount = calculateStarCount(frame);
-    
+
     // Calculate weighted sum
     double weightSum = 0;
     double score = 0;
-    
+
     // Standard metrics
     const std::vector<double> values = {sharpness, snr, entropy, brightness, contrast, starCount};
     for (size_t i = 0; i < values.size(); ++i) {
@@ -472,7 +472,7 @@ double QualityAssessor::calculateCompositeScore(const cv::Mat& frame) const {
             weightSum += parameters.metricWeights[i];
         }
     }
-    
+
     // Add custom metrics
     for (const auto& [name, metricPair] : customMetrics) {
         const auto& [metricFunc, weight] = metricPair;
@@ -480,12 +480,12 @@ double QualityAssessor::calculateCompositeScore(const cv::Mat& frame) const {
         score += value * weight;
         weightSum += weight;
     }
-    
+
     // Normalize by sum of weights
     if (weightSum > 0) {
         score /= weightSum;
     }
-    
+
     return score;
 }
 

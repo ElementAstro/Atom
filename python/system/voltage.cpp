@@ -554,7 +554,7 @@ Returns:
 Examples:
     >>> from atom.system import voltage
     >>> import time
-    >>> 
+    >>>
     >>> # Define a callback function
     >>> def on_voltage_change(input_v, battery_v, sources):
     ...     print(f"Voltage change detected!")
@@ -564,12 +564,12 @@ Examples:
     ...         print(f"Battery voltage: {battery_v} V")
     ...     for source in sources:
     ...         print(f"Source: {source.name}, Type: {source.type}")
-    ... 
+    ...
     >>> # Use as a context manager
     >>> with voltage.monitor_voltage_changes(0.5, on_voltage_change):
     ...     print("Monitoring voltage changes for 10 seconds...")
     ...     time.sleep(10)
-    ... 
+    ...
     >>> print("Monitoring stopped")
 )");
 }

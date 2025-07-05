@@ -38,24 +38,24 @@ local example_dirs = {
 -- Function to build examples from a directory
 function build_examples_from_dir(dir)
     local files = os.files(dir .. "/*.cpp")
-    
+
     for _, file in ipairs(files) do
         local name = path.basename(file)
         local example_name = "example_" .. dir:gsub("/", "_") .. "_" .. name
-        
+
         target(example_name)
             -- Set target kind to executable
             set_kind("binary")
-            
+
             -- Add source file
             add_files(file)
-            
+
             -- Add dependencies on atom libraries
             add_deps("atom")
-            
+
             -- Add packages
             add_packages("loguru")
-            
+
             -- Set output directory
             set_targetdir("$(buildir)/examples/" .. dir)
         target_end()

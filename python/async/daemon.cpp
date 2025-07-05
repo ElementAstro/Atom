@@ -15,27 +15,27 @@ PYBIND11_MODULE(daemon, m) {
 
         This module provides tools for creating and managing daemon processes
         on both Unix-like systems and Windows.
-        
+
         Features:
         - Create daemon processes that run in the background
         - Monitor and control daemon processes
         - Handle daemon restarts and failure recovery
         - Manage daemon PID files
-        
+
         Example:
             >>> from atom.async.daemon import DaemonGuard, check_pid_file, write_pid_file
-            >>> 
+            >>>
             >>> # Check if daemon is already running
             >>> if not check_pid_file("my-daemon"):
             >>>     # Create a daemon process
             >>>     daemon = DaemonGuard()
-            >>>     
+            >>>
             >>>     # Define the main process function
             >>>     def main_process(argc, argv):
             >>>         # Your daemon code here
             >>>         write_pid_file("my-daemon")
             >>>         return 0
-            >>>     
+            >>>
             >>>     # Start the daemon
             >>>     daemon.start_daemon(0, [], main_process, True)
     )pbdoc";
@@ -65,18 +65,18 @@ PYBIND11_MODULE(daemon, m) {
     py::class_<atom::async::DaemonGuard>(m, "DaemonGuard",
                                          R"pbdoc(
         Class for managing daemon processes.
-        
+
         This class provides methods to start, monitor and control daemon processes
         on both Unix-like systems and Windows.
-        
+
         Examples:
             >>> daemon = DaemonGuard()
-            >>> 
+            >>>
             >>> # Define the main process function
             >>> def main_process(argc, argv):
             >>>     # Your daemon code here
             >>>     return 0
-            >>>     
+            >>>
             >>> # Start a daemon process
             >>> daemon.start_daemon(0, [], main_process, True)
         )pbdoc")
@@ -112,15 +112,15 @@ PYBIND11_MODULE(daemon, m) {
             py::arg("argc"), py::arg("argv"), py::arg("main_cb"),
             R"pbdoc(
              Starts a child process to execute the actual task.
-             
+
              Args:
                  argc: The number of command line arguments
                  argv: A list of command line arguments
                  main_cb: The main callback function to be executed in the child process
-                 
+
              Returns:
                  The return value of the main callback function
-                 
+
              Raises:
                  DaemonException: If process creation fails
              )pbdoc")
@@ -151,15 +151,15 @@ PYBIND11_MODULE(daemon, m) {
             py::arg("argc"), py::arg("argv"), py::arg("main_cb"),
             R"pbdoc(
              Starts a child process as a daemon to execute the actual task.
-             
+
              Args:
                  argc: The number of command line arguments
                  argv: A list of command line arguments
                  main_cb: The main callback function to be executed in the daemon process
-                 
+
              Returns:
                  The return value of the main callback function
-                 
+
              Raises:
                  DaemonException: If daemon process creation fails
              )pbdoc")
@@ -192,18 +192,18 @@ PYBIND11_MODULE(daemon, m) {
             py::arg("argc"), py::arg("argv"), py::arg("main_cb"),
             py::arg("is_daemon"),
             R"pbdoc(
-             Starts the process. If a daemon process needs to be created, 
+             Starts the process. If a daemon process needs to be created,
              it will create the daemon process first.
-             
+
              Args:
                  argc: The number of command line arguments
                  argv: A list of command line arguments
                  main_cb: The main callback function to be executed
                  is_daemon: Determines if a daemon process should be created
-                 
+
              Returns:
                  The return value of the main callback function
-                 
+
              Raises:
                  DaemonException: If process creation fails
              )pbdoc")
@@ -224,10 +224,10 @@ PYBIND11_MODULE(daemon, m) {
         py::arg("file_path") = "lithium-daemon",
         R"pbdoc(
          Writes the process ID to a file.
-         
+
          Args:
              file_path: Path to write the PID file (default: "lithium-daemon")
-             
+
          Raises:
              OSError: If file operation fails
          )pbdoc");
@@ -240,10 +240,10 @@ PYBIND11_MODULE(daemon, m) {
         py::arg("file_path") = "lithium-daemon",
         R"pbdoc(
          Checks if the process ID file exists and the process is running.
-         
+
          Args:
              file_path: Path to the PID file (default: "lithium-daemon")
-             
+
          Returns:
              True if the PID file exists and the process is running, False otherwise
          )pbdoc");
@@ -252,10 +252,10 @@ PYBIND11_MODULE(daemon, m) {
           py::arg("seconds"),
           R"pbdoc(
           Sets the restart interval for daemon processes.
-          
+
           Args:
               seconds: Interval in seconds
-              
+
           Raises:
               ValueError: If seconds is less than or equal to zero
           )pbdoc");

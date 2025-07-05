@@ -357,7 +357,7 @@ PYBIND11_MODULE(rust_numeric, m) {
     m.attr("__doc__") = R"(
     Rust-like numeric types and utilities for Python
 
-    This module provides Rust-inspired numeric types and operations with 
+    This module provides Rust-inspired numeric types and operations with
     controlled overflow behavior, checked arithmetic, and error handling patterns.
 
     Examples:
@@ -369,7 +369,7 @@ PYBIND11_MODULE(rust_numeric, m) {
         >>> else:
         >>>     print(result.unwrap_err())
         123
-        
+
         >>> # Check for overflow when adding
         >>> option = I32.checked_add(2147483647, 1)  # MAX_INT32 + 1
         >>> if option.is_some():
@@ -377,12 +377,12 @@ PYBIND11_MODULE(rust_numeric, m) {
         >>> else:
         >>>     print("Overflow occurred")
         Overflow occurred
-        
+
         >>> # Saturating operations (clamping to min/max)
         >>> saturated = I32.saturating_add(2147483647, 1000)
         >>> print(saturated)
         2147483647
-        
+
         >>> # Working with ranges
         >>> from atom.algorithm.rust_numeric import range, range_inclusive
         >>> r = range(1, 5)  # 1, 2, 3, 4

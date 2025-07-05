@@ -49,41 +49,41 @@ local headers = {
 target("atom-io")
     -- Set target kind to static library
     set_kind("static")
-    
+
     -- Add source files
     add_files(sources)
-    
+
     -- Add header files
     add_headerfiles(headers)
-    
+
     -- Add include directories
     add_includedirs(".", {public = true})
-    
+
     -- Add packages
     add_packages("loguru", "minizip", "zlib", "tbb")
-    
+
     -- Add system libraries
     add_syslinks("pthread")
-    
+
     -- Windows-specific libraries
     if is_plat("windows") then
         add_syslinks("ws2_32", "wsock32")
     end
-    
+
     -- Enable position independent code
     add_cxflags("-fPIC", {tools = {"gcc", "clang"}})
     add_cflags("-fPIC", {tools = {"gcc", "clang"}})
-    
+
     -- Set version info
     set_version("1.0.0")
-    
+
     -- Set output name
     set_basename("atom-io")
-    
+
     -- Set target and object directories
     set_targetdir("$(buildir)/lib")
     set_objectdir("$(buildir)/obj")
-    
+
     -- Installation rules
     after_install(function (target)
         local installdir = target:installdir() or "$(prefix)"
@@ -100,21 +100,21 @@ target("atom-io")
 -- Optional: Create object library target (equivalent to CMake's object library)
 target("atom-io-object")
     set_kind("object")
-    
+
     -- Add the same source files
     add_files(sources)
     add_headerfiles(headers)
-    
+
     -- Configuration
     add_includedirs(".")
     add_packages("loguru", "minizip", "zlib", "tbb")
     add_syslinks("pthread")
-    
+
     -- Windows-specific libraries
     if is_plat("windows") then
         add_syslinks("ws2_32", "wsock32")
     end
-    
+
     -- Enable position independent code
     add_cxflags("-fPIC", {tools = {"gcc", "clang"}})
     add_cflags("-fPIC", {tools = {"gcc", "clang"}})

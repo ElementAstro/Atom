@@ -89,7 +89,7 @@ endif
 debug:
 	@$(MAKE) build BUILD_TYPE=Debug
 
-## Quick release build  
+## Quick release build
 release:
 	@$(MAKE) build BUILD_TYPE=Release
 

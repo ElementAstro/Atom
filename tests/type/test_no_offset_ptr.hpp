@@ -27,13 +27,13 @@ public:
     SimpleTestClass(const SimpleTestClass& other) : value(other.value) {
         instances++;
     }
-    
+
     // 修复未使用的参数警告
     SimpleTestClass(SimpleTestClass&& other) noexcept : value(other.value) {
         other.value = 0;
         instances++;
     }
-    
+
     ~SimpleTestClass() { instances--; }
 
 private:

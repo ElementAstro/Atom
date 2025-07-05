@@ -41,16 +41,16 @@ Args:
 Examples:
     >>> from atom.ws import WSClient
     >>> import asyncio
-    >>> 
+    >>>
     >>> # Create a WebSocket client
     >>> client = WSClient()
-    >>> 
+    >>>
     >>> # Connect to a WebSocket server
     >>> client.connect("echo.websocket.org", "80")
-    >>> 
+    >>>
     >>> # Send a message
     >>> client.send("Hello, WebSocket!")
-    >>> 
+    >>>
     >>> # Receive a message
     >>> response = client.receive()
     >>> print(response)

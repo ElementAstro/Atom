@@ -16,13 +16,13 @@ presets:
       - "--examples"
       - "--sanitizers"
     description: "Debug build with tests and sanitizers"
-  
+
   release:
     build_type: "release"
     options:
       - "--lto"
     description: "Optimized release build"
-  
+
   dev:
     build_type: "relwithdebinfo"
     options:
@@ -31,19 +31,19 @@ presets:
       - "--docs"
       - "--ccache"
     description: "Development build with debug info"
-  
+
   python:
     build_type: "release"
     options:
       - "--python"
       - "--shared"
     description: "Python bindings build"
-  
+
   minimal:
     build_type: "minsizerel"
     options: []
     description: "Minimal size build"
-  
+
   full:
     build_type: "release"
     options:
@@ -63,13 +63,13 @@ compilers:
     recommended_flags:
       debug: ["-g", "-O0", "-Wall", "-Wextra"]
       release: ["-O3", "-DNDEBUG", "-march=native"]
-  
+
   clang:
     min_version: "10.0"
     recommended_flags:
       debug: ["-g", "-O0", "-Wall", "-Wextra"]
       release: ["-O3", "-DNDEBUG", "-march=native"]
-  
+
   msvc:
     min_version: "19.28"
     recommended_flags:
@@ -81,11 +81,11 @@ platforms:
   linux:
     preferred_generator: "Ninja"
     package_manager: "vcpkg"
-    
+
   windows:
     preferred_generator: "Visual Studio 17 2022"
     package_manager: "vcpkg"
-    
+
   macos:
     preferred_generator: "Ninja"
     package_manager: "vcpkg"
@@ -99,7 +99,7 @@ dependencies:
       version: ">=1.24.0"
     - name: "zlib"
       version: ">=1.2.11"
-  
+
   optional:
     - name: "cfitsio"
       condition: "ATOM_USE_CFITSIO"
@@ -113,11 +113,11 @@ optimization:
   lto:
     supported_compilers: ["gcc", "clang", "msvc"]
     min_cmake_version: "3.9"
-  
+
   ccache:
     supported_platforms: ["linux", "macos", "windows"]
     max_cache_size: "5G"
-  
+
   parallel_build:
     auto_detect_cores: true
     memory_per_job_gb: 2

@@ -254,10 +254,10 @@ When exiting a context started with 'with StopWatcher() as sw:', the stopwatch s
 
 Args:
     function: Function to execute and time.
-    
+
 Returns:
     tuple: A tuple containing (function_result, elapsed_time_ms).
-    
+
 Examples:
     >>> from atom.utils import timed_execution
     >>> def my_func():
@@ -289,10 +289,10 @@ Examples:
 
 Args:
     milliseconds: Time in milliseconds.
-    
+
 Returns:
     str: Formatted time string.
-    
+
 Examples:
     >>> from atom.utils import format_time
     >>> formatted = format_time(65432)  # "00:01:05.432"

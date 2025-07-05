@@ -19,9 +19,9 @@ namespace win32_utils {
  * @brief Known keyboard hook DLL modules commonly used by applications
  */
 static const std::unordered_set<std::string> knownHookDlls = {
-    "HOOK.DLL",         "KBDHOOK.DLL",          "KEYHOOK.DLL",  
-    "INPUTHOOK.DLL",    "WINHOOK.DLL",          "LLKEYBOARD.DLL", 
-    "KEYMAGIC.DLL",     "HOOKSPY.DLL",          "KEYBOARDHOOK.DLL", 
+    "HOOK.DLL",         "KBDHOOK.DLL",          "KEYHOOK.DLL",
+    "INPUTHOOK.DLL",    "WINHOOK.DLL",          "LLKEYBOARD.DLL",
+    "KEYMAGIC.DLL",     "HOOKSPY.DLL",          "KEYBOARDHOOK.DLL",
     "INPUTMANAGERHOOK.DLL", "UIHOOK.DLL"};
 
 std::vector<std::string> getProcessesWithKeyboardHooks() {

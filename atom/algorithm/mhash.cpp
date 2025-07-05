@@ -74,12 +74,12 @@ namespace {
 // Using template string to simplify OpenCL kernel code
 constexpr const char *minhashKernelSource = R"CLC(
 __kernel void minhash_kernel(
-    __global const size_t* hashes, 
-    __global size_t* signature, 
-    __global const size_t* a_values, 
-    __global const size_t* b_values, 
-    const size_t p, 
-    const size_t num_hashes, 
+    __global const size_t* hashes,
+    __global size_t* signature,
+    __global const size_t* a_values,
+    __global const size_t* b_values,
+    const size_t p,
+    const size_t num_hashes,
     const size_t num_elements
 ) {
     int gid = get_global_id(0);
@@ -87,13 +87,13 @@ __kernel void minhash_kernel(
         size_t min_hash = SIZE_MAX;
         size_t a = a_values[gid];
         size_t b = b_values[gid];
-        
+
         // Batch processing to leverage locality
         for (size_t i = 0; i < num_elements; ++i) {
             size_t h = (a * hashes[i] + b) % p;
             min_hash = (h < min_hash) ? h : min_hash;
         }
-        
+
         signature[gid] = min_hash;
     }
 }

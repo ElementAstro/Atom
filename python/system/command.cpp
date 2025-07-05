@@ -353,7 +353,7 @@ Returns:
 Examples:
     >>> from atom.system import command
     >>> results = command.execute_commands_with_common_env(
-    ...     ["echo %HOME%", "echo %PATH%"], 
+    ...     ["echo %HOME%", "echo %PATH%"],
     ...     {"HOME": "/home/user", "PATH": "/usr/bin"}
     ... )
     >>> for output, status in results:

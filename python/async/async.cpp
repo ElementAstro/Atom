@@ -297,10 +297,10 @@ void declare_async_retry(py::module& m, const std::string& suffix) {
               callback: Callback function called on success (default: no-op)
               exception_handler: Handler called when exceptions occur (default: no-op)
               complete_handler: Handler called when all attempts complete (default: no-op)
-              
+
           Returns:
               A future with the result of the async operation
-              
+
           Raises:
               ValueError: If invalid parameters are provided
           )pbdoc");
@@ -311,36 +311,36 @@ PYBIND11_MODULE(async, m) {
         Asynchronous Task Processing Module
         ----------------------------------
 
-        This module provides tools for executing tasks asynchronously with 
+        This module provides tools for executing tasks asynchronously with
         features like timeouts, callbacks, and task management.
-        
+
         Key components:
         - AsyncWorker: Manages a single asynchronous task
         - AsyncWorkerManager: Coordinates multiple async workers
         - Task/Future wrappers: Enhanced futures with additional capabilities
         - Retry mechanisms: Automatic retry with configurable backoff strategies
-        
+
         Example:
             >>> from atom.async import AsyncWorkerInt, AsyncWorkerManagerInt
-            >>> 
+            >>>
             >>> # Create a worker and start a task
             >>> worker = AsyncWorkerInt()
             >>> worker.start_async(lambda: 42)
-            >>> 
+            >>>
             >>> # Get the result (with optional timeout)
             >>> result = worker.get_result(timeout=5000)  # 5 seconds timeout
             >>> print(result)  # Output: 42
-            >>> 
+            >>>
             >>> # Create a worker manager for multiple tasks
             >>> manager = AsyncWorkerManagerInt()
             >>> workers = [
-            >>>     manager.create_worker(lambda: i * 10) 
+            >>>     manager.create_worker(lambda: i * 10)
             >>>     for i in range(5)
             >>> ]
-            >>> 
+            >>>
             >>> # Wait for all tasks to complete
             >>> manager.wait_for_all()
-            >>> 
+            >>>
             >>> # Collect results
             >>> results = [w.get_result() for w in workers]
             >>> print(results)  # Output: [0, 10, 20, 30, 40]
@@ -417,14 +417,14 @@ PYBIND11_MODULE(async, m) {
         py::arg("future"), py::arg("timeout"),
         R"pbdoc(
           Gets the result of a future with a timeout.
-          
+
           Args:
               future: The future to get the result from
               timeout: The timeout in seconds
-              
+
           Returns:
               The result of the future
-              
+
           Raises:
               TimeoutException: If the timeout is reached
           )pbdoc");

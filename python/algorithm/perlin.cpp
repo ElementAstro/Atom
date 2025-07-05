@@ -14,22 +14,22 @@ PYBIND11_MODULE(perlin, m) {
 
         This module provides a high-performance implementation of Perlin noise,
         with support for multiple octaves, persistence, and GPU acceleration.
-        
+
         Features:
         - 1D, 2D, and 3D noise generation
         - Octave noise for more natural patterns
         - Noise map generation for terrain or texture creation
         - OpenCL acceleration when available
-        
+
         Example:
             >>> from atom.algorithm.perlin import PerlinNoise
-            >>> 
+            >>>
             >>> # Create a noise generator with a specific seed
             >>> noise = PerlinNoise(seed=42)
-            >>> 
+            >>>
             >>> # Generate a single noise value
             >>> value = noise.noise(1.0, 2.0, 0.5)
-            >>> 
+            >>>
             >>> # Generate a 2D noise map (e.g., for terrain)
             >>> noise_map = noise.generate_noise_map(256, 256, scale=25.0, octaves=4, persistence=0.5)
     )pbdoc";
@@ -52,14 +52,14 @@ PYBIND11_MODULE(perlin, m) {
     py::class_<atom::algorithm::PerlinNoise>(m, "PerlinNoise",
                                              R"pbdoc(
         Perlin noise generator class.
-        
+
         This class implements the improved Perlin noise algorithm for
         generating coherent noise in 1D, 2D, or 3D space. It can be used
         for procedural generation of terrain, textures, animations, etc.
-        
+
         Constructor Args:
             seed: Optional random seed for noise generation (default: system random)
-        
+
         Examples:
             >>> noise = PerlinNoise(seed=42)
             >>> value = noise.noise(x=1.0, y=2.0, z=3.0)
@@ -75,15 +75,15 @@ PYBIND11_MODULE(perlin, m) {
             py::arg("x"), py::arg("y"), py::arg("z"),
             R"pbdoc(
              Generate a 3D Perlin noise value.
-             
+
              Args:
                  x: X-coordinate in noise space
                  y: Y-coordinate in noise space
                  z: Z-coordinate in noise space
-                 
+
              Returns:
                  Noise value in range [0.0, 1.0]
-                 
+
              Example:
                  >>> noise = PerlinNoise(seed=42)
                  >>> value = noise.noise(0.5, 1.2, 0.8)
@@ -97,14 +97,14 @@ PYBIND11_MODULE(perlin, m) {
             py::arg("x"), py::arg("y"),
             R"pbdoc(
              Generate a 2D Perlin noise value.
-             
+
              Args:
                  x: X-coordinate in noise space
                  y: Y-coordinate in noise space
-                 
+
              Returns:
                  Noise value in range [0.0, 1.0]
-                 
+
              Example:
                  >>> noise = PerlinNoise(seed=42)
                  >>> value = noise.noise_2d(0.5, 1.2)
@@ -118,13 +118,13 @@ PYBIND11_MODULE(perlin, m) {
             py::arg("x"),
             R"pbdoc(
              Generate a 1D Perlin noise value.
-             
+
              Args:
                  x: X-coordinate in noise space
-                 
+
              Returns:
                  Noise value in range [0.0, 1.0]
-                 
+
              Example:
                  >>> noise = PerlinNoise(seed=42)
                  >>> value = noise.noise_1d(0.5)
@@ -139,17 +139,17 @@ PYBIND11_MODULE(perlin, m) {
             py::arg("persistence"),
             R"pbdoc(
              Generate fractal noise by summing multiple octaves of Perlin noise.
-             
+
              Args:
                  x: X-coordinate in noise space
                  y: Y-coordinate in noise space
                  z: Z-coordinate in noise space
                  octaves: Number of noise layers to sum
                  persistence: Amplitude multiplier for each octave (0.0-1.0)
-                 
+
              Returns:
                  Octave noise value in range [0.0, 1.0]
-                 
+
              Example:
                  >>> noise = PerlinNoise(seed=42)
                  >>> value = noise.octave_noise(0.5, 1.2, 0.8, octaves=4, persistence=0.5)
@@ -164,13 +164,13 @@ PYBIND11_MODULE(perlin, m) {
             py::arg("persistence"),
             R"pbdoc(
              Generate 2D fractal noise by summing multiple octaves of Perlin noise.
-             
+
              Args:
                  x: X-coordinate in noise space
                  y: Y-coordinate in noise space
                  octaves: Number of noise layers to sum
                  persistence: Amplitude multiplier for each octave (0.0-1.0)
-                 
+
              Returns:
                  Octave noise value in range [0.0, 1.0]
              )pbdoc")
@@ -202,9 +202,9 @@ PYBIND11_MODULE(perlin, m) {
             py::arg("seed") = std::default_random_engine::default_seed,
             R"pbdoc(
              Generate a 2D noise map.
-             
+
              This is useful for terrain generation, textures, or other 2D applications.
-             
+
              Args:
                  width: Width of the noise map
                  height: Height of the noise map
@@ -213,17 +213,17 @@ PYBIND11_MODULE(perlin, m) {
                  persistence: Amplitude reduction per octave (0.0-1.0)
                  lacunarity: Frequency multiplier per octave (default: 2.0)
                  seed: Random seed for noise map generation (default: uses object's seed)
-                 
+
              Returns:
                  2D numpy array of noise values in range [0.0, 1.0]
-                 
+
              Example:
                  >>> noise = PerlinNoise(seed=42)
                  >>> terrain = noise.generate_noise_map(
-                 ...     width=256, height=256, 
+                 ...     width=256, height=256,
                  ...     scale=50.0, octaves=4, persistence=0.5
                  ... )
-                 >>> 
+                 >>>
                  >>> # You can visualize it with matplotlib:
                  >>> import matplotlib.pyplot as plt
                  >>> plt.imshow(terrain, cmap='terrain')
@@ -245,7 +245,7 @@ PYBIND11_MODULE(perlin, m) {
         py::arg("seed") = std::default_random_engine::default_seed,
         R"pbdoc(
           Convenience function to create a fractal noise map in one call.
-          
+
           Args:
               width: Width of the noise map
               height: Height of the noise map
@@ -254,7 +254,7 @@ PYBIND11_MODULE(perlin, m) {
               persistence: Amplitude reduction per octave (0.0-1.0)
               lacunarity: Frequency multiplier per octave (default: 2.0)
               seed: Random seed for noise map generation
-              
+
           Returns:
               2D numpy array of noise values in range [0.0, 1.0]
           )pbdoc");

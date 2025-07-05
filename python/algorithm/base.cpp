@@ -10,12 +10,12 @@ PYBIND11_MODULE(base, m) {
     m.doc() = R"pbdoc(
         Base Encoding/Decoding Algorithms
         ---------------------------------
-        
+
         This module provides functions for encoding and decoding data in various formats:
         - Base32 encoding and decoding
         - Base64 encoding and decoding
         - XOR encryption and decryption
-        
+
         Examples:
             >>> import atom.algorithm.base as base
             >>> base.base64_encode("Hello, world!")
@@ -56,16 +56,16 @@ PYBIND11_MODULE(base, m) {
         },
         py::arg("data"), R"pbdoc(
         Encode binary data using Base32.
-        
+
         Args:
             data (bytes): The binary data to encode.
-            
+
         Returns:
             str: The Base32 encoded string.
-            
+
         Raises:
             ValueError: If encoding fails.
-            
+
         Example:
             >>> encode_base32(b'hello')
             'NBSWY3DP'
@@ -85,16 +85,16 @@ PYBIND11_MODULE(base, m) {
         },
         py::arg("encoded"), R"pbdoc(
         Decode a Base32 encoded string back to binary data.
-        
+
         Args:
             encoded (str): The Base32 encoded string.
-            
+
         Returns:
             bytes: The decoded binary data.
-            
+
         Raises:
             ValueError: If decoding fails.
-            
+
         Example:
             >>> decode_base32('NBSWY3DP')
             b'hello'
@@ -113,17 +113,17 @@ PYBIND11_MODULE(base, m) {
         },
         py::arg("input"), py::arg("padding") = true, R"pbdoc(
         Encode a string using Base64.
-        
+
         Args:
             input (str): The string to encode.
             padding (bool, optional): Whether to add padding characters. Defaults to True.
-            
+
         Returns:
             str: The Base64 encoded string.
-            
+
         Raises:
             ValueError: If encoding fails.
-            
+
         Example:
             >>> base64_encode("hello")
             'aGVsbG8='
@@ -143,16 +143,16 @@ PYBIND11_MODULE(base, m) {
         },
         py::arg("input"), R"pbdoc(
         Decode a Base64 encoded string.
-        
+
         Args:
             input (str): The Base64 encoded string.
-            
+
         Returns:
             str: The decoded string.
-            
+
         Raises:
             ValueError: If decoding fails.
-            
+
         Example:
             >>> base64_decode('aGVsbG8=')
             'hello'
@@ -163,14 +163,14 @@ PYBIND11_MODULE(base, m) {
           py::arg("key"),
           R"pbdoc(
         Encrypt a string using XOR algorithm.
-        
+
         Args:
             plaintext (str): The string to encrypt.
             key (int): The encryption key (0-255).
-            
+
         Returns:
             str: The encrypted string.
-            
+
         Example:
             >>> encrypted = xor_encrypt("hello", 42)
             >>> # Result is binary data
@@ -180,14 +180,14 @@ PYBIND11_MODULE(base, m) {
           py::arg("key"),
           R"pbdoc(
         Decrypt a string using XOR algorithm.
-        
+
         Args:
             ciphertext (str): The encrypted string.
             key (int): The decryption key (0-255).
-            
+
         Returns:
             str: The decrypted string.
-            
+
         Example:
             >>> encrypted = xor_encrypt("hello", 42)
             >>> xor_decrypt(encrypted, 42)
@@ -198,13 +198,13 @@ PYBIND11_MODULE(base, m) {
     m.def("is_base64", &atom::algorithm::isBase64, py::arg("str"),
           R"pbdoc(
         Check if a string is a valid Base64 encoded string.
-        
+
         Args:
             str (str): The string to validate.
-            
+
         Returns:
             bool: True if the string is valid Base64, False otherwise.
-            
+
         Example:
             >>> is_base64('aGVsbG8=')
             True
@@ -227,14 +227,14 @@ PYBIND11_MODULE(base, m) {
         },
         py::arg("input"), py::arg("padding") = true, R"pbdoc(
         Encode binary data using Base64.
-        
+
         Args:
             input (bytes): The binary data to encode.
             padding (bool, optional): Whether to add padding characters. Defaults to True.
-            
+
         Returns:
             str: The Base64 encoded string.
-            
+
         Example:
             >>> base64_encode_binary(b'\x00\x01\x02\x03')
             'AAECAw=='
@@ -252,13 +252,13 @@ PYBIND11_MODULE(base, m) {
         },
         py::arg("input"), R"pbdoc(
         Decode a Base64 encoded string to binary data.
-        
+
         Args:
             input (str): The Base64 encoded string.
-            
+
         Returns:
             bytes: The decoded binary data.
-            
+
         Example:
             >>> base64_decode_binary('AAECAw==')
             b'\x00\x01\x02\x03'
@@ -279,13 +279,13 @@ PYBIND11_MODULE(base, m) {
         },
         py::arg("input"), py::arg("padding") = true, R"pbdoc(
         Encode binary data using Base64 (returns bytes).
-        
+
         This function matches the API of Python's `base64.b64encode`.
-        
+
         Args:
             input (bytes): The binary data to encode.
             padding (bool, optional): Whether to add padding characters. Defaults to True.
-            
+
         Returns:
             bytes: The Base64 encoded data as bytes.
     )pbdoc");
@@ -304,12 +304,12 @@ PYBIND11_MODULE(base, m) {
         },
         py::arg("input"), R"pbdoc(
         Decode Base64 encoded data (accepts bytes).
-        
+
         This function matches the API of Python's `base64.b64decode`.
-        
+
         Args:
             input (bytes): The Base64 encoded data.
-            
+
         Returns:
             bytes: The decoded binary data.
     )pbdoc");
@@ -338,11 +338,11 @@ PYBIND11_MODULE(base, m) {
         },
         py::arg("plaintext"), py::arg("key"), R"pbdoc(
         Encrypt binary data using XOR algorithm.
-        
+
         Args:
             plaintext (bytes): The binary data to encrypt.
             key (int): The encryption key (0-255).
-            
+
         Returns:
             bytes: The encrypted data.
     )pbdoc");
@@ -357,11 +357,11 @@ PYBIND11_MODULE(base, m) {
         },
         py::arg("ciphertext"), py::arg("key"), R"pbdoc(
         Decrypt binary data using XOR algorithm.
-        
+
         Args:
             ciphertext (bytes): The encrypted data.
             key (int): The decryption key (0-255).
-            
+
         Returns:
             bytes: The decrypted data.
     )pbdoc");
@@ -411,16 +411,16 @@ PYBIND11_MODULE(base, m) {
         },
         py::arg("data"), py::arg("thread_count") = 0, py::arg("func"), R"pbdoc(
         Process binary data in parallel across multiple threads.
-        
+
         Args:
             data (bytes): The binary data to process.
             thread_count (int, optional): Number of threads to use. Default is 0 (auto).
             func (callable): Function that processes a chunk of data.
                              Should accept and return bytes objects of the same size.
-            
+
         Returns:
             bytes: The processed data.
-            
+
         Example:
             >>> def process_chunk(chunk):
             ...     return bytes(b ^ 42 for b in chunk)

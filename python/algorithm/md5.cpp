@@ -14,19 +14,19 @@ PYBIND11_MODULE(md5, m) {
 
         This module provides a modern, optimized implementation of the MD5 hashing algorithm
         with additional utility functions and binary data support.
-        
+
         Example:
             >>> from atom.algorithm import md5
-            >>> 
+            >>>
             >>> # Compute MD5 hash of a string
             >>> hash_value = md5.encrypt("Hello, world!")
             >>> print(hash_value)
             '6cd3556deb0da54bca060b4c39479839'
-            
+
             >>> # Verify a hash
             >>> md5.verify("Hello, world!", hash_value)
             True
-            
+
             >>> # Compute hash of binary data
             >>> import os
             >>> binary_data = os.urandom(1024)
@@ -42,13 +42,13 @@ PYBIND11_MODULE(md5, m) {
           py::arg("input"),
           R"pbdoc(
         Encrypts a string using the MD5 algorithm.
-        
+
         Args:
             input: The input string to hash
-            
+
         Returns:
             The MD5 hash as a lowercase hex string
-            
+
         Raises:
             MD5Exception: If encryption fails
     )pbdoc");
@@ -57,11 +57,11 @@ PYBIND11_MODULE(md5, m) {
           py::arg("input"), py::arg("hash"),
           R"pbdoc(
         Verifies if a string matches a given MD5 hash.
-        
+
         Args:
             input: The input string to check
             hash: The expected MD5 hash
-            
+
         Returns:
             True if the hash of input matches the expected hash, False otherwise
     )pbdoc");
@@ -83,13 +83,13 @@ PYBIND11_MODULE(md5, m) {
         py::arg("data"),
         R"pbdoc(
         Computes MD5 hash for binary data.
-        
+
         Args:
             data: Binary data (bytes, bytearray, or any buffer-like object)
-            
+
         Returns:
             The MD5 hash as a lowercase hex string
-            
+
         Raises:
             ValueError: If encryption fails
     )pbdoc");

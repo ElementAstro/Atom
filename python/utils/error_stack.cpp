@@ -227,23 +227,23 @@ filtering errors by module or severity, and exporting error data.
 Examples:
     >>> from atom.utils import error_stack
     >>> from atom.utils.error_stack import ErrorLevel, ErrorCategory
-    >>> 
+    >>>
     >>> # Create an error stack
     >>> stack = error_stack.ErrorStack()
-    >>> 
+    >>>
     >>> # Insert a simple error
     >>> stack.insert_error("File not found", "IO", "readFile", 42, "file_io.cpp")
-    >>> 
+    >>>
     >>> # Insert an error with additional information
     >>> stack.insert_error_with_level(
     ...     "Connection timeout", "Network", "connect", 123, "network.cpp",
     ...     ErrorLevel.ERROR, ErrorCategory.NETWORK, 408)
-    >>> 
+    >>>
     >>> # Get the latest error
     >>> latest = stack.get_latest_error()
     >>> if latest:
     ...     print(f"Latest error: {latest.error_message} in {latest.module_name}")
-    >>> 
+    >>>
     >>> # Export errors to JSON
     >>> json_data = stack.export_to_json()
 )")

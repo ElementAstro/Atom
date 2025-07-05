@@ -29,24 +29,24 @@ PYBIND11_MODULE(error_calibration, m) {
         This module provides tools for error calibration of measurement data.
         It includes methods for linear, polynomial, exponential, logarithmic,
         and power law calibration, as well as tools for statistical analysis.
-        
+
         Examples:
             >>> import numpy as np
             >>> from atom.algorithm.error_calibration import ErrorCalibration
-            >>> 
+            >>>
             >>> # Sample data
             >>> measured = [1.0, 2.0, 3.0, 4.0, 5.0]
             >>> actual = [0.9, 2.1, 2.8, 4.2, 4.9]
-            >>> 
+            >>>
             >>> # Create calibrator and perform linear calibration
             >>> calibrator = ErrorCalibration()
             >>> calibrator.linear_calibrate(measured, actual)
-            >>> 
+            >>>
             >>> # Print calibration parameters
             >>> print(f"Slope: {calibrator.get_slope()}")
             >>> print(f"Intercept: {calibrator.get_intercept()}")
             >>> print(f"R-squared: {calibrator.get_r_squared()}")
-            >>> 
+            >>>
             >>> # Apply calibration to new measurements
             >>> new_measurement = 3.5
             >>> calibrated_value = calibrator.apply(new_measurement)
@@ -79,7 +79,7 @@ PYBIND11_MODULE(error_calibration, m) {
     py::class_<atom::algorithm::ErrorCalibration<double>>(m, "ErrorCalibration",
                                                           R"pbdoc(
         Error calibration class for measurement data.
-        
+
         This class provides methods for calibrating measurements and analyzing errors
         using various calibration techniques, including linear, polynomial, exponential,
         logarithmic, and power law models.
@@ -90,11 +90,11 @@ PYBIND11_MODULE(error_calibration, m) {
              py::arg("measured"), py::arg("actual"),
              R"pbdoc(
              Perform linear calibration using the least squares method.
-             
+
              Args:
                  measured: List of measured values
                  actual: List of actual values
-             
+
              Raises:
                  ValueError: If input vectors are empty or of unequal size
              )pbdoc")
@@ -103,12 +103,12 @@ PYBIND11_MODULE(error_calibration, m) {
              py::arg("measured"), py::arg("actual"), py::arg("degree"),
              R"pbdoc(
              Perform polynomial calibration using the least squares method.
-             
+
              Args:
                  measured: List of measured values
                  actual: List of actual values
                  degree: Degree of the polynomial
-             
+
              Raises:
                  ValueError: If input vectors are empty, of unequal size, or if degree is invalid
              )pbdoc")
@@ -117,11 +117,11 @@ PYBIND11_MODULE(error_calibration, m) {
              py::arg("measured"), py::arg("actual"),
              R"pbdoc(
              Perform exponential calibration using the least squares method.
-             
+
              Args:
                  measured: List of measured values
                  actual: List of actual values
-             
+
              Raises:
                  ValueError: If input vectors are empty, of unequal size, or if actual values are not positive
              )pbdoc")
@@ -130,11 +130,11 @@ PYBIND11_MODULE(error_calibration, m) {
              py::arg("measured"), py::arg("actual"),
              R"pbdoc(
              Perform logarithmic calibration using the least squares method.
-             
+
              Args:
                  measured: List of measured values
                  actual: List of actual values
-             
+
              Raises:
                  ValueError: If input vectors are empty, of unequal size, or if measured values are not positive
              )pbdoc")
@@ -143,11 +143,11 @@ PYBIND11_MODULE(error_calibration, m) {
              py::arg("measured"), py::arg("actual"),
              R"pbdoc(
              Perform power law calibration using the least squares method.
-             
+
              Args:
                  measured: List of measured values
                  actual: List of actual values
-             
+
              Raises:
                  ValueError: If input vectors are empty, of unequal size, or if values are not positive
              )pbdoc")
@@ -164,10 +164,10 @@ PYBIND11_MODULE(error_calibration, m) {
              py::arg("filename"),
              R"pbdoc(
              Save residuals to a CSV file for plotting.
-             
+
              Args:
                  filename: Path to the output file
-             
+
              Raises:
                  IOError: If the file cannot be opened
              )pbdoc")
@@ -178,16 +178,16 @@ PYBIND11_MODULE(error_calibration, m) {
              py::arg("n_iterations") = 1000, py::arg("confidence_level") = 0.95,
              R"pbdoc(
              Calculate bootstrap confidence interval for the slope.
-             
+
              Args:
                  measured: List of measured values
                  actual: List of actual values
                  n_iterations: Number of bootstrap iterations (default: 1000)
                  confidence_level: Confidence level (default: 0.95)
-             
+
              Returns:
                  Tuple of lower and upper bounds of the confidence interval
-             
+
              Raises:
                  ValueError: If input parameters are invalid
              )pbdoc")
@@ -196,15 +196,15 @@ PYBIND11_MODULE(error_calibration, m) {
              py::arg("measured"), py::arg("actual"), py::arg("threshold") = 2.0,
              R"pbdoc(
              Detect outliers using the residuals of the calibration.
-             
+
              Args:
                  measured: List of measured values
                  actual: List of actual values
                  threshold: Z-score threshold for outlier detection (default: 2.0)
-             
+
              Returns:
                  Tuple of mean residual, standard deviation, and threshold
-             
+
              Raises:
                  RuntimeError: If metrics have not been calculated yet
              )pbdoc")
@@ -213,12 +213,12 @@ PYBIND11_MODULE(error_calibration, m) {
              py::arg("measured"), py::arg("actual"), py::arg("k") = 5,
              R"pbdoc(
              Perform k-fold cross-validation of the calibration.
-             
+
              Args:
                  measured: List of measured values
                  actual: List of actual values
                  k: Number of folds (default: 5)
-             
+
              Raises:
                  ValueError: If input vectors are invalid
                  RuntimeError: If all cross-validation folds fail
@@ -249,7 +249,7 @@ PYBIND11_MODULE(error_calibration, m) {
     py::class_<atom::algorithm::ErrorCalibration<float>>(
         m, "ErrorCalibrationFloat", R"pbdoc(
         Error calibration class with single precision (float).
-        
+
         This class is identical to ErrorCalibration but uses single precision
         floating point calculations, which may be faster but less accurate.
     )pbdoc")
@@ -317,17 +317,17 @@ PYBIND11_MODULE(error_calibration, m) {
         py::arg("measured"), py::arg("actual"),
         R"pbdoc(
        Perform asynchronous linear calibration.
-       
+
        This function starts a calibration in a background thread and returns the calibrator
        once the calibration is complete.
-       
+
        Args:
            measured: List of measured values
            actual: List of actual values
-       
+
        Returns:
            ErrorCalibration object with the calibration results
-       
+
        Raises:
            ValueError: If the calibration fails
        )pbdoc");
@@ -406,17 +406,17 @@ PYBIND11_MODULE(error_calibration, m) {
         py::arg("measured"), py::arg("actual"),
         R"pbdoc(
        Find the best calibration method for the given data.
-       
+
        This function tries different calibration methods and returns the name
        of the method with the lowest Mean Squared Error (MSE).
-       
+
        Args:
            measured: List of measured values
            actual: List of actual values
-       
+
        Returns:
            String with the name of the best calibration method
-       
+
        Raises:
            ValueError: If all calibration methods fail
        )pbdoc");
@@ -439,11 +439,11 @@ PYBIND11_MODULE(error_calibration, m) {
         py::arg("measured_array"), py::arg("calibrator"),
         R"pbdoc(
        Apply calibration to a numpy array of measurements.
-       
+
        Args:
            measured_array: Numpy array of measured values
            calibrator: ErrorCalibration object
-       
+
        Returns:
            Numpy array of calibrated values
        )pbdoc");
@@ -502,18 +502,18 @@ PYBIND11_MODULE(error_calibration, m) {
         py::arg("measured"), py::arg("actual"), py::arg("calibrator"),
         R"pbdoc(
        Plot calibration results using matplotlib.
-       
+
        This function creates a scatter plot of measured vs actual values,
        as well as the calibrated values and the calibration line.
-       
+
        Args:
            measured: List of measured values
            actual: List of actual values
            calibrator: ErrorCalibration object
-       
+
        Returns:
            True if the plot was created successfully, False otherwise
-       
+
        Note:
            This function requires matplotlib to be installed.
        )pbdoc");
@@ -656,21 +656,21 @@ PYBIND11_MODULE(error_calibration, m) {
         py::arg("calibrator"), py::arg("measured"), py::arg("actual"),
         R"pbdoc(
        Analyze residuals with comprehensive plots and statistics.
-       
+
        This function creates a set of diagnostic plots for analyzing residuals:
        1. Residuals vs measured values
        2. Histogram of residuals
        3. Q-Q plot for normality check
        4. Calibration curve
-       
+
        Args:
            calibrator: ErrorCalibration object
            measured: List of measured values
            actual: List of actual values
-       
+
        Returns:
            Dictionary with residual statistics (mean, std_dev, mse, mae, r_squared, slope, intercept)
-       
+
        Note:
            This function requires matplotlib and scipy to be installed.
        )pbdoc");

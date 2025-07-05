@@ -70,7 +70,7 @@ auto EnvPersistent::setPersistentEnvWindows(const String& key, const String& val
     HKEY hKey;
     LONG result;
 
-    const char* subKey = (level == PersistLevel::USER) 
+    const char* subKey = (level == PersistLevel::USER)
         ? "Environment"
         : "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment";
 
@@ -95,12 +95,12 @@ auto EnvPersistent::setPersistentEnvWindows(const String& key, const String& val
 
     // Notify system of environment change
     SendMessageTimeoutA(HWND_BROADCAST, WM_SETTINGCHANGE, 0,
-                        reinterpret_cast<LPARAM>("Environment"), 
+                        reinterpret_cast<LPARAM>("Environment"),
                         SMTO_ABORTIFHUNG, 5000, nullptr);
 
     // Also set in current process
     EnvCore::setEnv(key, val);
-    
+
     spdlog::info("Successfully set persistent environment variable in registry");
     return true;
 }
@@ -110,7 +110,7 @@ auto EnvPersistent::deletePersistentEnvWindows(const String& key,
     HKEY hKey;
     LONG result;
 
-    const char* subKey = (level == PersistLevel::USER) 
+    const char* subKey = (level == PersistLevel::USER)
         ? "Environment"
         : "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment";
 
@@ -131,7 +131,7 @@ auto EnvPersistent::deletePersistentEnvWindows(const String& key,
     }
 
     SendMessageTimeoutA(HWND_BROADCAST, WM_SETTINGCHANGE, 0,
-                        reinterpret_cast<LPARAM>("Environment"), 
+                        reinterpret_cast<LPARAM>("Environment"),
                         SMTO_ABORTIFHUNG, 5000, nullptr);
     EnvCore::unsetEnv(key);
     return true;
@@ -199,7 +199,7 @@ auto EnvPersistent::setPersistentEnvUnix(const String& key, const String& val,
 
     // Set in current process
     EnvCore::setEnv(key, val);
-    
+
     spdlog::info("Successfully set persistent environment variable in {}", filePath);
     return true;
 }
@@ -232,7 +232,7 @@ auto EnvPersistent::deletePersistentEnvUnix(const String& key,
         while (std::getline(inFile, line)) {
             std::string pattern = std::string(key.c_str());
             pattern += "=";
-            if (line.find(pattern) == 0 || 
+            if (line.find(pattern) == 0 ||
                 line.find("export " + pattern) == 0) {
                 found = true;
                 continue;  // Skip this line

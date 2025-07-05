@@ -33,7 +33,7 @@ PYBIND11_MODULE(sysinfo_printer, m) {
         R"(Formats and presents system information in human-readable formats.
 
 This class provides methods to format different types of system information
-into readable text, generate comprehensive system reports, and export this 
+into readable text, generate comprehensive system reports, and export this
 information to various file formats like HTML, JSON, and Markdown.
 
 Examples:
@@ -43,7 +43,7 @@ Examples:
     >>> # Format it as readable text
     >>> formatted = sysinfo_printer.SystemInfoPrinter.format_cpu_info(cpu_info)
     >>> print(formatted)
-    >>> 
+    >>>
     >>> # Generate a comprehensive system report
     >>> full_report = sysinfo_printer.SystemInfoPrinter.generate_full_report()
     >>> print(full_report)
@@ -202,7 +202,7 @@ Examples:
     >>> # Generate a full system report
     >>> report = sysinfo_printer.SystemInfoPrinter.generate_full_report()
     >>> print(report)
-    >>> 
+    >>>
     >>> # Optionally, save to a file
     >>> with open('system_report.txt', 'w') as f:
     ...     f.write(report)
@@ -650,7 +650,7 @@ Examples:
     ...     formats=["html", "markdown"],
     ...     report_types=["performance", "security"]
     ... )
-    >>> 
+    >>>
     >>> # Check results
     >>> for report_type, formats in results.items():
     ...     print(f"{report_type} report:")

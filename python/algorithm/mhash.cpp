@@ -25,21 +25,21 @@ PYBIND11_MODULE(mhash, m) {
         Optimized Hashing Algorithms
         ---------------------------
 
-        This module provides implementation of MinHash for similarity estimation 
+        This module provides implementation of MinHash for similarity estimation
         and Keccak-256 cryptographic hash functions.
-        
+
         The module includes:
           - MinHash implementation for estimating Jaccard similarity between sets
           - Keccak-256 cryptographic hash function (compatible with Ethereum's keccak256)
           - Utility functions for hex string conversion
-          
+
         Example:
             >>> from atom.algorithm import mhash
-            >>> 
+            >>>
             >>> # Computing Keccak-256 hash
             >>> h = mhash.keccak256("Hello, world!")
             >>> print(mhash.hash_to_hex(h))
-            
+
             >>> # Using MinHash for similarity estimation
             >>> minhash = mhash.MinHash(100)  # 100 hash functions
             >>> sig1 = minhash.compute_signature(["a", "b", "c", "d"])

@@ -8,10 +8,10 @@ PYBIND11_MODULE(blowfish, m) {
     m.doc() = R"pbdoc(
         Blowfish Encryption Algorithm
         ----------------------------
-        
+
         This module provides a Python interface to the Blowfish encryption algorithm.
         Blowfish is a symmetric-key block cipher designed by Bruce Schneier in 1993.
-        
+
         Example:
             >>> import atom.algorithm.blowfish as bf
             >>> # Generate a random key
@@ -47,10 +47,10 @@ PYBIND11_MODULE(blowfish, m) {
     // Blowfish class
     py::class_<atom::algorithm::Blowfish>(m, "Blowfish", R"pbdoc(
         Blowfish cipher implementation.
-        
+
         The Blowfish class implements the Blowfish encryption algorithm,
         a symmetric key block cipher that can be used for encrypting data.
-        
+
         Args:
             key (bytes): The encryption key (4-56 bytes)
     )pbdoc")
@@ -94,13 +94,13 @@ PYBIND11_MODULE(blowfish, m) {
             },
             py::arg("block"), R"pbdoc(
             Encrypt a single 8-byte block.
-            
+
             Args:
                 block (bytes): The 8-byte block to encrypt
-                
+
             Returns:
                 bytes: The encrypted 8-byte block
-                
+
             Raises:
                 ValueError: If the block is not exactly 8 bytes
         )pbdoc")
@@ -127,13 +127,13 @@ PYBIND11_MODULE(blowfish, m) {
             },
             py::arg("block"), R"pbdoc(
             Decrypt a single 8-byte block.
-            
+
             Args:
                 block (bytes): The 8-byte block to decrypt
-                
+
             Returns:
                 bytes: The decrypted 8-byte block
-                
+
             Raises:
                 ValueError: If the block is not exactly 8 bytes
         )pbdoc")
@@ -156,16 +156,16 @@ PYBIND11_MODULE(blowfish, m) {
             },
             py::arg("data"), R"pbdoc(
             Encrypt arbitrary data.
-            
+
             This method encrypts arbitrary data using the Blowfish cipher.
             PKCS7 padding is automatically applied.
-            
+
             Args:
                 data (bytes): The data to encrypt
-                
+
             Returns:
                 bytes: The encrypted data
-                
+
             Raises:
                 ValueError: If the data is empty
         )pbdoc")
@@ -200,16 +200,16 @@ PYBIND11_MODULE(blowfish, m) {
             },
             py::arg("data"), R"pbdoc(
             Decrypt data.
-            
+
             This method decrypts data that was encrypted with the encrypt_data method.
             PKCS7 padding is automatically removed.
-            
+
             Args:
                 data (bytes): The encrypted data
-                
+
             Returns:
                 bytes: The decrypted data
-                
+
             Raises:
                 ValueError: If the data is empty or not a multiple of 8 bytes
         )pbdoc")
@@ -217,14 +217,14 @@ PYBIND11_MODULE(blowfish, m) {
              py::arg("input_file"), py::arg("output_file"),
              R"pbdoc(
                 Encrypt a file.
-                
+
                 This method reads a file, encrypts its contents, and writes the
                 encrypted data to another file.
-                
+
                 Args:
                     input_file (str): Path to the input file
                     output_file (str): Path to the output file
-                
+
                 Raises:
                     RuntimeError: If file operations fail
             )pbdoc")
@@ -232,14 +232,14 @@ PYBIND11_MODULE(blowfish, m) {
              py::arg("input_file"), py::arg("output_file"),
              R"pbdoc(
                 Decrypt a file.
-                
+
                 This method reads an encrypted file, decrypts its contents, and writes
                 the decrypted data to another file.
-                
+
                 Args:
                     input_file (str): Path to the encrypted file
                     output_file (str): Path to the output file
-                
+
                 Raises:
                     RuntimeError: If file operations fail
             )pbdoc");
@@ -260,14 +260,14 @@ PYBIND11_MODULE(blowfish, m) {
         },
         py::arg("length") = 16, R"pbdoc(
         Generate a cryptographically secure random key.
-        
+
         Args:
             length (int, optional): The key length in bytes. Default is 16.
                 Must be between 4 and 56 bytes.
-                
+
         Returns:
             bytes: A random key of the specified length
-            
+
         Raises:
             ValueError: If the length is not between 4 and 56 bytes
     )pbdoc");
@@ -288,11 +288,11 @@ PYBIND11_MODULE(blowfish, m) {
         },
         py::arg("cipher"), py::arg("text"), R"pbdoc(
         Encrypt a string using a Blowfish cipher.
-        
+
         Args:
             cipher (Blowfish): The Blowfish cipher instance
             text (str): The string to encrypt
-            
+
         Returns:
             bytes: The encrypted data
     )pbdoc");
@@ -326,14 +326,14 @@ PYBIND11_MODULE(blowfish, m) {
         },
         py::arg("cipher"), py::arg("data"), R"pbdoc(
         Decrypt data to a string using a Blowfish cipher.
-        
+
         Args:
             cipher (Blowfish): The Blowfish cipher instance
             data (bytes): The encrypted data
-            
+
         Returns:
             str: The decrypted string
-            
+
         Raises:
             ValueError: If the data is empty or not a multiple of 8 bytes
             UnicodeDecodeError: If the decrypted data is not valid UTF-8
@@ -379,17 +379,17 @@ PYBIND11_MODULE(blowfish, m) {
         },
         py::arg("password"), py::arg("data"), R"pbdoc(
         Encrypt data using a password.
-        
+
         WARNING: This is a convenience function with a simple key derivation.
         For secure applications, use a proper key derivation function.
-        
+
         Args:
             password (str): The password
             data (bytes): The data to encrypt
-            
+
         Returns:
             bytes: The encrypted data
-            
+
         Raises:
             ValueError: If the password is empty or data is empty
     )pbdoc");
@@ -439,17 +439,17 @@ PYBIND11_MODULE(blowfish, m) {
         },
         py::arg("password"), py::arg("data"), R"pbdoc(
         Decrypt data using a password.
-        
+
         WARNING: This is a convenience function with a simple key derivation.
         For secure applications, use a proper key derivation function.
-        
+
         Args:
             password (str): The password
             data (bytes): The encrypted data
-            
+
         Returns:
             bytes: The decrypted data
-            
+
         Raises:
             ValueError: If the password is empty, data is empty, or data is not a multiple of 8 bytes
     )pbdoc");

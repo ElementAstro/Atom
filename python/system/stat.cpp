@@ -414,7 +414,7 @@ Examples:
     >>> # Format the modification time
     >>> formatted_time = stat.Stat.format_time(s.mtime())
     >>> print(f"Last modified: {formatted_time}")
-    >>> 
+    >>>
     >>> # Custom time format
     >>> custom_format = stat.Stat.format_time(s.mtime(), "%H:%M:%S %d-%m-%Y")
     >>> print(f"Last modified: {custom_format}")
