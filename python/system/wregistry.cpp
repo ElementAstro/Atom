@@ -108,7 +108,7 @@ Examples:
     >>> from atom.system import wregistry
     >>> # Get values from HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
     >>> values = wregistry.get_registry_values(
-    ...     wregistry.HKEY_CURRENT_USER, 
+    ...     wregistry.HKEY_CURRENT_USER,
     ...     "Software\\Microsoft\\Windows\\CurrentVersion\\Run"
     ... )
     >>> for name, value in values.items():

@@ -1,7 +1,7 @@
 # ExamplesBuildOptions.cmake
 #
 # This file contains all options for controlling the build of Atom examples
-# 
+#
 # Author: Max Qian
 # License: GPL3
 

@@ -145,7 +145,7 @@ Examples:
     >>> from atom.sysinfo import bios
     >>> # Get the singleton instance
     >>> bios_mgr = bios.BiosInfo.get_instance()
-    >>> 
+    >>>
     >>> # Get basic BIOS information
     >>> info = bios_mgr.get_bios_info()
     >>> print(f"BIOS version: {info.version}")
@@ -182,7 +182,7 @@ Examples:
     >>> # Get cached BIOS info
     >>> info = bios.BiosInfo.get_instance().get_bios_info()
     >>> print(f"BIOS version: {info.version}")
-    >>> 
+    >>>
     >>> # Force update and get fresh info
     >>> info = bios.BiosInfo.get_instance().get_bios_info(True)
 )",
@@ -518,10 +518,10 @@ Examples:
     >>> print(f"BIOS version: {summary['version']}")
     >>> print(f"Manufacturer: {summary['manufacturer']}")
     >>> print(f"Age: {summary['age_in_days']} days")
-    >>> 
+    >>>
     >>> if summary['update_available']:
     ...     print(f"Update available: {summary['latest_version']}")
-    >>> 
+    >>>
     >>> if summary['warnings']:
     ...     print("Warnings:")
     ...     for warning in summary['warnings']:

@@ -87,7 +87,7 @@ PYBIND11_MODULE(env, m) {
                std::shared_ptr<atom::utils::Env::ScopedEnv>>(
         m, "ScopedEnv",
         R"(Temporary environment variable scope.
-        
+
 When this object is created, it sets the specified environment variable.
 When the object is destroyed, the original value is restored.)")
         .def(py::init<const atom::utils::String&, const atom::utils::String&>(),

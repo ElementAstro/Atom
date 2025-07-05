@@ -46,19 +46,19 @@ Args:
 Examples:
     >>> import asio
     >>> from atom.io.glob import AsyncGlob
-    >>> 
+    >>>
     >>> # Create an io_context and glob object
     >>> io_context = asio.io_context()
     >>> glob = AsyncGlob(io_context)
-    >>> 
+    >>>
     >>> # Example of synchronous usage
     >>> matches = glob.glob_sync("*.txt")
     >>> print(f"Found {len(matches)} text files")
-    >>> 
+    >>>
     >>> # Example of asynchronous usage with callback
     >>> def on_files_found(files):
     ...     print(f"Found {len(files)} files")
-    >>> 
+    >>>
     >>> glob.glob("*.py", on_files_found, recursive=True)
     >>> io_context.run()
 )")
@@ -92,7 +92,7 @@ Examples:
     ...     print(f"Matched {len(files)} files")
     ...     for file in files:
     ...         print(f"  - {file}")
-    >>> 
+    >>>
     >>> glob.glob("*.py", print_matches)
     >>> io_context.run()  # Run the ASIO io_context
 )")

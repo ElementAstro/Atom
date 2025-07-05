@@ -246,16 +246,16 @@ Args:
 Examples:
     >>> import asio
     >>> from atom.io.asyncio import AsyncFile
-    >>> 
+    >>>
     >>> io_context = asio.io_context()
     >>> async_file = AsyncFile(io_context)
-    >>> 
+    >>>
     >>> def on_read(result):
     ...     if result.success:
     ...         print(f"Read {len(result.value)} bytes")
     ...     else:
     ...         print(f"Error: {result.error_message}")
-    >>> 
+    >>>
     >>> async_file.async_read("example.txt", on_read)
     >>> io_context.run()
 )")
@@ -286,7 +286,7 @@ Examples:
     ...         print(f"Content: {result.value[:50]}...")
     ...     else:
     ...         print(f"Error: {result.error_message}")
-    >>> 
+    >>>
     >>> async_file.async_read("example.txt", on_read)
 )")
         .def(
@@ -316,7 +316,7 @@ Examples:
     ...         print("Write successful")
     ...     else:
     ...         print(f"Error: {result.error_message}")
-    >>> 
+    >>>
     >>> async_file.async_write("example.txt", "Hello, World!", on_write)
 )")
         .def(
@@ -343,7 +343,7 @@ Examples:
     ...         print("Delete successful")
     ...     else:
     ...         print(f"Error: {result.error_message}")
-    >>> 
+    >>>
     >>> async_file.async_delete("temporary.txt", on_delete)
 )")
         .def(
@@ -371,7 +371,7 @@ Examples:
     ...         print("Copy successful")
     ...     else:
     ...         print(f"Error: {result.error_message}")
-    >>> 
+    >>>
     >>> async_file.async_copy("original.txt", "backup.txt", on_copy)
 )")
         .def(
@@ -400,7 +400,7 @@ Examples:
     ...         print(f"Read successful: {len(result.value }) bytes")
     ...     else:
     ...         print(f"Error: {result.error_message}")
-    >>> 
+    >>>
     >>> async_file.async_read_with_timeout("example.txt", 1000, on_read)  # 1 second timeout
 )")
         .def(
@@ -431,7 +431,7 @@ Examples:
     ...             print(f"File {i+1}: {len(content)} bytes")
     ...     else:
     ...         print(f"Error: {result.error_message}")
-    >>> 
+    >>>
     >>> async_file.async_batch_read(["file1.txt", "file2.txt"], on_batch_read)
 )")
         .def(
@@ -462,7 +462,7 @@ Examples:
     ...             print("It's a regular file")
     ...     else:
     ...         print(f"Error: {result.error_message}")
-    >>> 
+    >>>
     >>> async_file.async_stat("example.txt", on_stat)
 )")
         .def(
@@ -490,7 +490,7 @@ Examples:
     ...         print("Move successful")
     ...     else:
     ...         print(f"Error: {result.error_message}")
-    >>> 
+    >>>
     >>> async_file.async_move("old_path.txt", "new_path.txt", on_move)
 )")
         .def(
@@ -516,13 +516,13 @@ Examples:
     >>> import stat
     >>> from pathlib import Path
     >>> perms = stat.S_IRUSR | stat.S_IWUSR  # Read & write for owner only
-    >>> 
+    >>>
     >>> def on_chmod(result):
     ...     if result.success:
     ...         print("Changed permissions successfully")
     ...     else:
     ...         print(f"Error: {result.error_message}")
-    >>> 
+    >>>
     >>> async_file.async_change_permissions("example.txt", perms, on_chmod)
 )")
         .def(
@@ -549,7 +549,7 @@ Examples:
     ...         print("Directory created successfully")
     ...     else:
     ...         print(f"Error: {result.error_message}")
-    >>> 
+    >>>
     >>> async_file.async_create_directory("new_directory", on_create_dir)
 )")
         .def(
@@ -579,7 +579,7 @@ Examples:
     ...             print("File does not exist")
     ...     else:
     ...         print(f"Error: {result.error_message}")
-    >>> 
+    >>>
     >>> async_file.async_exists("example.txt", on_exists)
 )")
         .def(
@@ -679,10 +679,10 @@ Args:
 Examples:
     >>> import asio
     >>> from atom.io.asyncio import AsyncDirectory
-    >>> 
+    >>>
     >>> io_context = asio.io_context()
     >>> async_dir = AsyncDirectory(io_context)
-    >>> 
+    >>>
     >>> def on_list(result):
     ...     if result.success:
     ...         print(f"Found {len(result.value)} entries:")
@@ -690,7 +690,7 @@ Examples:
     ...             print(f"  - {path}")
     ...     else:
     ...         print(f"Error: {result.error_message}")
-    >>> 
+    >>>
     >>> async_dir.async_list_contents(".", on_list)
     >>> io_context.run()
 )")
@@ -721,7 +721,7 @@ Examples:
     ...         print("Directory created successfully")
     ...     else:
     ...         print(f"Error: {result.error_message}")
-    >>> 
+    >>>
     >>> async_dir.async_create("new_directory", on_create)
 )")
         .def(
@@ -748,7 +748,7 @@ Examples:
     ...         print("Directory removed successfully")
     ...     else:
     ...         print(f"Error: {result.error_message}")
-    >>> 
+    >>>
     >>> async_dir.async_remove("old_directory", on_remove)
 )")
         .def(
@@ -778,7 +778,7 @@ Examples:
     ...             print(f"  - {path}")
     ...     else:
     ...         print(f"Error: {result.error_message}")
-    >>> 
+    >>>
     >>> async_dir.async_list_contents(".", on_list)
 )")
         .def(
@@ -808,7 +808,7 @@ Examples:
     ...             print("Directory does not exist")
     ...     else:
     ...         print(f"Error: {result.error_message}")
-    >>> 
+    >>>
     >>> async_dir.async_exists("my_directory", on_exists)
 )")
         .def(

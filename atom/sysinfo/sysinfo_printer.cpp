@@ -1,16 +1,17 @@
 #include "sysinfo_printer.hpp"
+#include <spdlog/spdlog.h>
 #include <format>
 #include <fstream>
 #include <sstream>
-#include <spdlog/spdlog.h>
-#include "wifi.hpp"
 #include "bios.hpp"
+#include "wifi.hpp"
 
 /**
  * 辅助函数：将磁盘文件系统类型字符串标准化输出
  */
 static std::string diskTypeToString(const std::string& fsType) {
-    if (fsType.empty()) return "Unknown";
+    if (fsType.empty())
+        return "Unknown";
     // 可根据需要做大小写转换或映射
     return fsType;
 }
@@ -100,7 +101,8 @@ auto SystemInfoPrinter::formatCpuInfo(const CpuInfo& info) -> std::string {
     return ss.str();
 }
 
-auto SystemInfoPrinter::formatBiosInfo(const BiosInfoData& info) -> std::string {
+auto SystemInfoPrinter::formatBiosInfo(const BiosInfoData& info)
+    -> std::string {
     std::stringstream ss;
     ss << createTableHeader("BIOS Information");
     ss << createTableRow("Vendor", info.manufacturer);
@@ -110,30 +112,37 @@ auto SystemInfoPrinter::formatBiosInfo(const BiosInfoData& info) -> std::string 
     return ss.str();
 }
 
-auto SystemInfoPrinter::formatDiskInfo(const std::vector<DiskInfo>& disks) -> std::string {
+auto SystemInfoPrinter::formatDiskInfo(const std::vector<DiskInfo>& disks)
+    -> std::string {
     std::stringstream ss;
     ss << createTableHeader("Disk Information");
-    
+
     for (size_t i = 0; i < disks.size(); ++i) {
         const auto& disk = disks[i];
-        ss << createTableRow("Disk " + std::to_string(i + 1) + " Model", disk.model);
-        ss << createTableRow("Disk " + std::to_string(i + 1) + " Type", 
-                            diskTypeToString(disk.fsType));
-        ss << createTableRow("Disk " + std::to_string(i + 1) + " Size", 
-                            std::format("{:.2f} GB", disk.totalSpace / (1024.0 * 1024 * 1024)));
-        ss << createTableRow("Disk " + std::to_string(i + 1) + " Free Space", 
-                            std::format("{:.2f} GB", disk.freeSpace / (1024.0 * 1024 * 1024)));
+        ss << createTableRow("Disk " + std::to_string(i + 1) + " Model",
+                             disk.model);
+        ss << createTableRow("Disk " + std::to_string(i + 1) + " Type",
+                             diskTypeToString(disk.fsType));
+        ss << createTableRow(
+            "Disk " + std::to_string(i + 1) + " Size",
+            std::format("{:.2f} GB", disk.totalSpace / (1024.0 * 1024 * 1024)));
+        ss << createTableRow(
+            "Disk " + std::to_string(i + 1) + " Free Space",
+            std::format("{:.2f} GB", disk.freeSpace / (1024.0 * 1024 * 1024)));
     }
-    
+
     ss << createTableFooter();
     return ss.str();
 }
 
-auto SystemInfoPrinter::formatLocaleInfo(const LocaleInfo& info) -> std::string {
+auto SystemInfoPrinter::formatLocaleInfo(const LocaleInfo& info)
+    -> std::string {
     std::stringstream ss;
     ss << createTableHeader("Locale Information");
-    ss << createTableRow("Language", info.languageDisplayName + " (" + info.languageCode + ")");
-    ss << createTableRow("Country", info.countryDisplayName + " (" + info.countryCode + ")");
+    ss << createTableRow(
+        "Language", info.languageDisplayName + " (" + info.languageCode + ")");
+    ss << createTableRow(
+        "Country", info.countryDisplayName + " (" + info.countryCode + ")");
     ss << createTableRow("Encoding", info.characterEncoding);
     ss << createTableRow("Time Format", info.timeFormat);
     ss << createTableRow("Date Format", info.dateFormat);
@@ -141,7 +150,8 @@ auto SystemInfoPrinter::formatLocaleInfo(const LocaleInfo& info) -> std::string 
     return ss.str();
 }
 
-auto SystemInfoPrinter::formatOsInfo(const OperatingSystemInfo& info) -> std::string {
+auto SystemInfoPrinter::formatOsInfo(const OperatingSystemInfo& info)
+    -> std::string {
     std::stringstream ss;
     ss << createTableHeader("Operating System Information");
     ss << createTableRow("OS Name", info.osName);
@@ -168,7 +178,8 @@ auto SystemInfoPrinter::formatOsInfo(const OperatingSystemInfo& info) -> std::st
 //     return ss.str();
 // }
 
-auto SystemInfoPrinter::formatSystemInfo(const SystemInfo& info) -> std::string {
+auto SystemInfoPrinter::formatSystemInfo(const SystemInfo& info)
+    -> std::string {
     std::stringstream ss;
     ss << "=== System Desktop/WM Information ===\n\n";
     ss << createTableHeader("Desktop/WM Information");
@@ -212,7 +223,8 @@ auto SystemInfoPrinter::generateFullReport() -> std::string {
             ss << formatBatteryInfo(batteryInfo);
         } else {
             ss << createTableHeader("Battery Information");
-            ss << createTableRow("Error", "Battery information unavailable or error occurred.");
+            ss << createTableRow(
+                "Error", "Battery information unavailable or error occurred.");
             ss << createTableFooter();
         }
 
@@ -255,19 +267,23 @@ auto SystemInfoPrinter::generateSimpleReport() -> std::string {
         auto memInfo = getDetailedMemoryStats();
 
         ss << "OS: " << osInfo.osName << " " << osInfo.osVersion << "\n";
-        ss << "CPU: " << cpuInfo.model << " (" << cpuInfo.numPhysicalCores 
+        ss << "CPU: " << cpuInfo.model << " (" << cpuInfo.numPhysicalCores
            << " cores, " << cpuInfo.numLogicalCores << " threads)\n";
-        ss << "Memory: " << std::format("{:.2f} GB / {:.2f} GB ({:.1f}% used)\n", 
-                                      (memInfo.totalPhysicalMemory - memInfo.availablePhysicalMemory) / (1024.0 * 1024 * 1024),
-                                      memInfo.totalPhysicalMemory / (1024.0 * 1024 * 1024),
-                                      memInfo.memoryLoadPercentage);
-        
+        ss << "Memory: "
+           << std::format("{:.2f} GB / {:.2f} GB ({:.1f}% used)\n",
+                          (memInfo.totalPhysicalMemory -
+                           memInfo.availablePhysicalMemory) /
+                              (1024.0 * 1024 * 1024),
+                          memInfo.totalPhysicalMemory / (1024.0 * 1024 * 1024),
+                          memInfo.memoryLoadPercentage);
+
         auto batteryResult = getDetailedBatteryInfo();
         if (std::holds_alternative<BatteryInfo>(batteryResult)) {
             const auto& batteryInfo = std::get<BatteryInfo>(batteryResult);
             if (batteryInfo.isBatteryPresent) {
                 ss << "Battery: " << batteryInfo.batteryLifePercent << "% "
-                   << (batteryInfo.isCharging ? "(Charging)" : "(Discharging)") << "\n";
+                   << (batteryInfo.isCharging ? "(Charging)" : "(Discharging)")
+                   << "\n";
             }
         }
     } catch (const std::exception& e) {
@@ -291,23 +307,37 @@ auto SystemInfoPrinter::generatePerformanceReport() -> std::string {
         auto cpuInfo = getCpuInfo();
         ss << createTableHeader("CPU Performance");
         ss << createTableRow("Model", cpuInfo.model);
-        ss << createTableRow("Base Frequency", std::format("{:.2f} GHz", cpuInfo.baseFrequency));
-        ss << createTableRow("Current Usage", std::format("{:.1f}%", cpuInfo.usage));
-        ss << createTableRow("Temperature", std::format("{:.1f}°C", cpuInfo.temperature));
+        ss << createTableRow("Base Frequency",
+                             std::format("{:.2f} GHz", cpuInfo.baseFrequency));
+        ss << createTableRow("Current Usage",
+                             std::format("{:.1f}%", cpuInfo.usage));
+        ss << createTableRow("Temperature",
+                             std::format("{:.1f}°C", cpuInfo.temperature));
         ss << createTableFooter();
 
         auto memInfo = getDetailedMemoryStats();
         ss << createTableHeader("Memory Performance");
-        ss << createTableRow("Total RAM", std::format("{:.2f} GB", memInfo.totalPhysicalMemory / (1024.0 * 1024 * 1024)));
-        ss << createTableRow("Available RAM", std::format("{:.2f} GB", memInfo.availablePhysicalMemory / (1024.0 * 1024 * 1024)));
-        ss << createTableRow("Memory Usage", std::format("{:.1f}%", memInfo.memoryLoadPercentage));
+        ss << createTableRow(
+            "Total RAM", std::format("{:.2f} GB", memInfo.totalPhysicalMemory /
+                                                      (1024.0 * 1024 * 1024)));
+        ss << createTableRow(
+            "Available RAM",
+            std::format("{:.2f} GB", memInfo.availablePhysicalMemory /
+                                         (1024.0 * 1024 * 1024)));
+        ss << createTableRow(
+            "Memory Usage",
+            std::format("{:.1f}%", memInfo.memoryLoadPercentage));
         ss << createTableFooter();
 
         auto netStats = getNetworkStats();
         ss << createTableHeader("Network Performance");
-        ss << createTableRow("Download Speed", std::format("{:.2f} MB/s", netStats.downloadSpeed));
-        ss << createTableRow("Upload Speed", std::format("{:.2f} MB/s", netStats.uploadSpeed));
-        ss << createTableRow("Latency", std::format("{:.1f} ms", netStats.latency));
+        ss << createTableRow(
+            "Download Speed",
+            std::format("{:.2f} MB/s", netStats.downloadSpeed));
+        ss << createTableRow("Upload Speed",
+                             std::format("{:.2f} MB/s", netStats.uploadSpeed));
+        ss << createTableRow("Latency",
+                             std::format("{:.1f} ms", netStats.latency));
         ss << createTableFooter();
 
         auto disks = getDiskInfo();
@@ -315,9 +345,11 @@ auto SystemInfoPrinter::generatePerformanceReport() -> std::string {
         for (size_t i = 0; i < disks.size(); ++i) {
             const auto& disk = disks[i];
             // DiskInfo结构体无readSpeed/writeSpeed成员，以下两行已注释或移除
-            // ss << createTableRow("Disk " + std::to_string(i + 1) + " Read Speed",
+            // ss << createTableRow("Disk " + std::to_string(i + 1) + " Read
+            // Speed",
             //                     std::format("{:.1f} MB/s", disk.readSpeed));
-            // ss << createTableRow("Disk " + std::to_string(i + 1) + " Write Speed",
+            // ss << createTableRow("Disk " + std::to_string(i + 1) + " Write
+            // Speed",
             //                     std::format("{:.1f} MB/s", disk.writeSpeed));
         }
         ss << createTableFooter();
@@ -342,7 +374,8 @@ auto SystemInfoPrinter::generateSecurityReport() -> std::string {
     try {
         auto osInfo = getOperatingSystemInfo();
         ss << createTableHeader("OS Security");
-        ss << createTableRow("Operating System", osInfo.osName + " " + osInfo.osVersion);
+        ss << createTableRow("Operating System",
+                             osInfo.osName + " " + osInfo.osVersion);
         ss << createTableRow("Kernel Version", osInfo.kernelVersion);
         ss << createTableRow("Computer Name", osInfo.computerName);
         ss << createTableRow("Boot Time", osInfo.bootTime);
@@ -353,7 +386,7 @@ auto SystemInfoPrinter::generateSecurityReport() -> std::string {
         ss << createTableRow("Is Server", osInfo.isServer ? "Yes" : "No");
         ss << createTableFooter();
 
-        #include "bios.hpp"
+#include "bios.hpp"
         auto& bios = BiosInfo::getInstance();
         const auto& biosInfo = bios.getBiosInfo();
         ss << createTableHeader("Firmware Security");
@@ -394,57 +427,56 @@ bool SystemInfoPrinter::exportToHTML(const std::string& filename) {
 </head>
 <body>
 <h1>System Information Report</h1>
-<p>Generated at: )" + 
-    std::format("{:%Y-%m-%d %H:%M:%S}", std::chrono::system_clock::now()) + 
-R"(</p>
+<p>Generated at: )" +
+                           std::format("{:%Y-%m-%d %H:%M:%S}",
+                                       std::chrono::system_clock::now()) +
+                           R"(</p>
 )";
 
         // Convert ASCII tables to HTML tables
         std::string currentLine;
         std::istringstream reportStream(report);
         bool inTable = false;
-        
+
         while (std::getline(reportStream, currentLine)) {
             if (currentLine.find("===") != std::string::npos) {
                 html += "<h2>" + currentLine + "</h2>\n";
-            }
-            else if (currentLine.find("|--") != std::string::npos) {
+            } else if (currentLine.find("|--") != std::string::npos) {
                 // Table border line, ignore
                 if (!inTable) {
-                    html += "<table>\n<tr><th>Parameter</th><th>Value</th></tr>\n";
+                    html +=
+                        "<table>\n<tr><th>Parameter</th><th>Value</th></tr>\n";
                     inTable = true;
                 }
-            }
-            else if (currentLine.find("|") == 0) {
+            } else if (currentLine.find("|") == 0) {
                 // Table row
                 size_t middlePipe = currentLine.find("|", 1);
                 if (middlePipe != std::string::npos) {
                     std::string param = currentLine.substr(1, middlePipe - 1);
                     std::string value = currentLine.substr(middlePipe + 1);
-                    
+
                     // Remove trailing pipe and trim
                     if (!value.empty() && value.back() == '|') {
                         value.pop_back();
                     }
-                    
+
                     // Trim spaces
                     param.erase(0, param.find_first_not_of(" "));
                     param.erase(param.find_last_not_of(" ") + 1);
                     value.erase(0, value.find_first_not_of(" "));
                     value.erase(value.find_last_not_of(" ") + 1);
-                    
-                    html += "<tr><td>" + param + "</td><td>" + value + "</td></tr>\n";
+
+                    html += "<tr><td>" + param + "</td><td>" + value +
+                            "</td></tr>\n";
                 }
-            }
-            else if (inTable && currentLine.empty()) {
+            } else if (inTable && currentLine.empty()) {
                 html += "</table>\n";
                 inTable = false;
-            }
-            else if (!currentLine.empty()) {
+            } else if (!currentLine.empty()) {
                 html += "<p>" + currentLine + "</p>\n";
             }
         }
-        
+
         if (inTable) {
             html += "</table>\n";
         }
@@ -469,62 +501,81 @@ bool SystemInfoPrinter::exportToJSON(const std::string& filename) {
 
         // Create a JSON structure with system information
         file << "{\n";
-        file << "  \"timestamp\": \"" << 
-            std::format("{:%Y-%m-%d %H:%M:%S}", std::chrono::system_clock::now()) << "\",\n";
-        
+        file << "  \"timestamp\": \""
+             << std::format("{:%Y-%m-%d %H:%M:%S}",
+                            std::chrono::system_clock::now())
+             << "\",\n";
+
         // OS information
         try {
             auto osInfo = getOperatingSystemInfo();
             file << "  \"os\": {\n";
             file << "    \"osName\": \"" << osInfo.osName << "\",\n";
             file << "    \"osVersion\": \"" << osInfo.osVersion << "\",\n";
-            file << "    \"kernelVersion\": \"" << osInfo.kernelVersion << "\",\n";
-            file << "    \"architecture\": \"" << osInfo.architecture << "\",\n";
-            file << "    \"computerName\": \"" << osInfo.computerName << "\",\n";
+            file << "    \"kernelVersion\": \"" << osInfo.kernelVersion
+                 << "\",\n";
+            file << "    \"architecture\": \"" << osInfo.architecture
+                 << "\",\n";
+            file << "    \"computerName\": \"" << osInfo.computerName
+                 << "\",\n";
             file << "    \"bootTime\": \"" << osInfo.bootTime << "\",\n";
             file << "    \"installDate\": \"" << osInfo.installDate << "\",\n";
             file << "    \"lastUpdate\": \"" << osInfo.lastUpdate << "\",\n";
             file << "    \"timeZone\": \"" << osInfo.timeZone << "\",\n";
             file << "    \"charSet\": \"" << osInfo.charSet << "\",\n";
-            file << "    \"isServer\": " << (osInfo.isServer ? "true" : "false") << "\n";
+            file << "    \"isServer\": " << (osInfo.isServer ? "true" : "false")
+                 << "\n";
             file << "  },\n";
         } catch (const std::exception& e) {
-            spdlog::error("Error getting OS info for JSON export: {}", e.what());
+            spdlog::error("Error getting OS info for JSON export: {}",
+                          e.what());
             file << "  \"os\": { \"error\": \"" << e.what() << "\" },\n";
         }
-        
+
         // CPU information
         try {
             auto cpuInfo = getCpuInfo();
             file << "  \"cpu\": {\n";
             file << "    \"model\": \"" << cpuInfo.model << "\",\n";
-            file << "    \"vendor\": \"" << cpuVendorToString(cpuInfo.vendor) << "\",\n";
-            file << "    \"architecture\": \"" << cpuArchitectureToString(cpuInfo.architecture) << "\",\n";
-            file << "    \"physical_cores\": " << cpuInfo.numPhysicalCores << ",\n";
-            file << "    \"logical_cores\": " << cpuInfo.numLogicalCores << ",\n";
-            file << "    \"base_frequency_ghz\": " << cpuInfo.baseFrequency << ",\n";
-            file << "    \"temperature_celsius\": " << cpuInfo.temperature << ",\n";
+            file << "    \"vendor\": \"" << cpuVendorToString(cpuInfo.vendor)
+                 << "\",\n";
+            file << "    \"architecture\": \""
+                 << cpuArchitectureToString(cpuInfo.architecture) << "\",\n";
+            file << "    \"physical_cores\": " << cpuInfo.numPhysicalCores
+                 << ",\n";
+            file << "    \"logical_cores\": " << cpuInfo.numLogicalCores
+                 << ",\n";
+            file << "    \"base_frequency_ghz\": " << cpuInfo.baseFrequency
+                 << ",\n";
+            file << "    \"temperature_celsius\": " << cpuInfo.temperature
+                 << ",\n";
             file << "    \"usage_percent\": " << cpuInfo.usage << "\n";
             file << "  },\n";
         } catch (const std::exception& e) {
-            spdlog::error("Error getting CPU info for JSON export: {}", e.what());
+            spdlog::error("Error getting CPU info for JSON export: {}",
+                          e.what());
             file << "  \"cpu\": { \"error\": \"" << e.what() << "\" },\n";
         }
-        
+
         // Memory information
         try {
             auto memInfo = getDetailedMemoryStats();
             file << "  \"memory\": {\n";
-            file << "    \"total_physical_bytes\": " << memInfo.totalPhysicalMemory << ",\n";
-            file << "    \"available_physical_bytes\": " << memInfo.availablePhysicalMemory << ",\n";
-            file << "    \"memory_load_percent\": " << memInfo.memoryLoadPercentage << ",\n";
-            file << "    \"virtual_memory_max_bytes\": " << memInfo.virtualMemoryMax << "\n";
+            file << "    \"total_physical_bytes\": "
+                 << memInfo.totalPhysicalMemory << ",\n";
+            file << "    \"available_physical_bytes\": "
+                 << memInfo.availablePhysicalMemory << ",\n";
+            file << "    \"memory_load_percent\": "
+                 << memInfo.memoryLoadPercentage << ",\n";
+            file << "    \"virtual_memory_max_bytes\": "
+                 << memInfo.virtualMemoryMax << "\n";
             file << "  }\n";
         } catch (const std::exception& e) {
-            spdlog::error("Error getting memory info for JSON export: {}", e.what());
+            spdlog::error("Error getting memory info for JSON export: {}",
+                          e.what());
             file << "  \"memory\": { \"error\": \"" << e.what() << "\" }\n";
         }
-        
+
         file << "}\n";
         return true;
     } catch (const std::exception& e) {
@@ -543,8 +594,10 @@ bool SystemInfoPrinter::exportToMarkdown(const std::string& filename) {
         }
 
         file << "# System Information Report\n\n";
-        file << "Generated at: " << 
-            std::format("{:%Y-%m-%d %H:%M:%S}", std::chrono::system_clock::now()) << "\n\n";
+        file << "Generated at: "
+             << std::format("{:%Y-%m-%d %H:%M:%S}",
+                            std::chrono::system_clock::now())
+             << "\n\n";
 
         // Operating system information
         try {
@@ -562,14 +615,17 @@ bool SystemInfoPrinter::exportToMarkdown(const std::string& filename) {
             file << "| Last Update | " << osInfo.lastUpdate << " |\n";
             file << "| Time Zone | " << osInfo.timeZone << " |\n";
             file << "| Character Set | " << osInfo.charSet << " |\n";
-            file << "| Is Server | " << (osInfo.isServer ? "Yes" : "No") << " |\n\n";
+            file << "| Is Server | " << (osInfo.isServer ? "Yes" : "No")
+                 << " |\n\n";
         } catch (const std::exception& e) {
-            spdlog::error("Error getting OS info for Markdown export: {}", e.what());
-            file << "Error retrieving operating system information: " << e.what() << "\n\n";
+            spdlog::error("Error getting OS info for Markdown export: {}",
+                          e.what());
+            file << "Error retrieving operating system information: "
+                 << e.what() << "\n\n";
         }
-        
+
         // Add additional sections for CPU, memory, etc.
-        
+
         return true;
     } catch (const std::exception& e) {
         spdlog::error("Error exporting to Markdown: {}", e.what());

@@ -1,0 +1,282 @@
+# GitHub Actions workflow for Atom project
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [published]
+
+env:
+  BUILD_TYPE: Release
+  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+
+jobs:
+  # Build validation job
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install Python dependencies
+      run: |
+        pip install pyyaml
+
+    - name: Run build validation
+      run: python validate-build.py
+
+  # Matrix build across platforms and configurations
+  build:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux builds
+          - name: "Ubuntu 22.04 GCC"
+            os: ubuntu-22.04
+            cc: gcc-12
+            cxx: g++-12
+            preset: release
+
+          - name: "Ubuntu 22.04 Clang"
+            os: ubuntu-22.04
+            cc: clang-15
+            cxx: clang++-15
+            preset: release
+
+          - name: "Ubuntu Debug with Tests"
+            os: ubuntu-22.04
+            cc: gcc-12
+            cxx: g++-12
+            preset: debug-full
+
+          # macOS builds
+          - name: "macOS Latest"
+            os: macos-latest
+            cc: clang
+            cxx: clang++
+            preset: release
+
+          # Windows builds
+          - name: "Windows MSVC"
+            os: windows-latest
+            preset: release
+
+          - name: "Windows MinGW"
+            os: windows-latest
+            preset: release
+            mingw: true
+
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.name }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Cache vcpkg
+      uses: actions/cache@v3
+      with:
+        path: |
+          ${{ github.workspace }}/vcpkg
+          !${{ github.workspace }}/vcpkg/buildtrees
+          !${{ github.workspace }}/vcpkg/packages
+          !${{ github.workspace }}/vcpkg/downloads
+        key: vcpkg-${{ matrix.os }}-${{ hashFiles('vcpkg.json') }}
+        restore-keys: |
+          vcpkg-${{ matrix.os }}-
+
+    - name: Setup vcpkg (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: |
+        git clone https://github.com/Microsoft/vcpkg.git
+        ./vcpkg/bootstrap-vcpkg.sh
+
+    - name: Setup vcpkg (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        git clone https://github.com/Microsoft/vcpkg.git
+        .\vcpkg\bootstrap-vcpkg.bat
+
+    - name: Export GitHub Actions cache environment variables
+      uses: actions/github-script@v6
+      with:
+        script: |
+          core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+          core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+    - name: Install system dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ninja-build ccache
+        # Install specific compiler versions
+        if [[ "${{ matrix.cc }}" == "clang-15" ]]; then
+          sudo apt-get install -y clang-15
+        fi
+
+    - name: Install system dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install ninja ccache
+
+    - name: Setup MinGW (Windows)
+      if: runner.os == 'Windows' && matrix.mingw
+      uses: egor-tensin/setup-mingw@v2
+      with:
+        platform: x64
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install Python build dependencies
+      run: |
+        pip install pyyaml numpy pybind11
+
+    - name: Configure CMake (Linux/macOS)
+      if: runner.os != 'Windows'
+      env:
+        CC: ${{ matrix.cc }}
+        CXX: ${{ matrix.cxx }}
+        VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+      run: |
+        cmake --preset ${{ matrix.preset }} \
+          -DUSE_VCPKG=ON \
+          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+
+    - name: Configure CMake (Windows MSVC)
+      if: runner.os == 'Windows' && !matrix.mingw
+      env:
+        VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+      run: |
+        cmake --preset ${{ matrix.preset }} `
+          -DUSE_VCPKG=ON `
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+
+    - name: Configure CMake (Windows MinGW)
+      if: runner.os == 'Windows' && matrix.mingw
+      env:
+        VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+      run: |
+        cmake -B build -G "MinGW Makefiles" `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DUSE_VCPKG=ON `
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+
+    - name: Build
+      run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+
+    - name: Test
+      working-directory: build
+      run: ctest --output-on-failure --parallel 2 --build-config ${{ env.BUILD_TYPE }}
+
+    - name: Install
+      run: cmake --build build --config ${{ env.BUILD_TYPE }} --target install
+
+    - name: Package (Linux)
+      if: runner.os == 'Linux' && matrix.preset == 'release'
+      run: |
+        cd build
+        cpack -G DEB
+        cpack -G TGZ
+
+    - name: Upload artifacts
+      if: matrix.preset == 'release'
+      uses: actions/upload-artifact@v3
+      with:
+        name: atom-${{ matrix.os }}
+        path: |
+          build/*.deb
+          build/*.tar.gz
+          build/*.msi
+          build/*.exe
+
+  # Python package build
+  python-package:
+    needs: validate
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install build dependencies
+      run: |
+        pip install build wheel pybind11 numpy
+
+    - name: Build Python package
+      run: |
+        python -m build
+
+    - name: Test Python package
+      run: |
+        pip install dist/*.whl
+        python -c "import atom; print('Package imported successfully')"
+
+    - name: Upload Python artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: python-package-${{ matrix.os }}-py${{ matrix.python-version }}
+        path: dist/
+
+  # Documentation build
+  documentation:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Doxygen
+      run: sudo apt-get install -y doxygen graphviz
+
+    - name: Generate documentation
+      run: doxygen Doxyfile
+
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs/html
+
+  # Release deployment
+  release:
+    needs: [build, python-package]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
+
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          **/*.deb
+          **/*.tar.gz
+          **/*.whl
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

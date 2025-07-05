@@ -13,7 +13,6 @@
 #include <utility>  // For std::forward, std::move, std::apply
 #include "atom/meta/concept.hpp"
 
-
 namespace atom::async {
 
 template <Callable F>

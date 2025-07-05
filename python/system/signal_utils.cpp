@@ -70,7 +70,7 @@ Examples:
     >>> def handle_sigint(signal_id):
     ...     print(f"Caught signal {signal_utils.get_signal_name(signal_id)}")
     ...     return True  # Continue handling
-    ... 
+    ...
     >>> # Create a scoped handler for SIGINT
     >>> handler = signal_utils.ScopedSignalHandler(signal_utils.SIGINT, handle_sigint)
     >>> # The handler will be automatically removed when it goes out of scope
@@ -96,19 +96,19 @@ Examples:
     >>> from atom.system import signal_utils
     >>> # Create a signal group
     >>> group = signal_utils.SignalGroup("app_signals")
-    >>> 
+    >>>
     >>> def handle_int(signal_id):
     ...     print("Handling SIGINT")
     ...     return True
-    ... 
+    ...
     >>> def handle_term(signal_id):
     ...     print("Handling SIGTERM")
     ...     return True
-    ... 
+    ...
     >>> # Add handlers to the group
     >>> group.add_handler(signal_utils.SIGINT, handle_int)
     >>> group.add_handler(signal_utils.SIGTERM, handle_term)
-    >>> 
+    >>>
     >>> # All handlers will be removed when group is destroyed
 )")
         .def(py::init<const std::string&, bool>(), py::arg("group_name") = "",
@@ -144,11 +144,11 @@ Returns:
 Examples:
     >>> from atom.system import signal_utils
     >>> group = signal_utils.SignalGroup("app_signals")
-    >>> 
+    >>>
     >>> def handle_signal(signal_id):
     ...     print(f"Handling signal {signal_id}")
     ...     return True
-    ... 
+    ...
     >>> handler_id = group.add_handler(signal_utils.SIGINT, handle_signal)
     >>> print(f"Registered handler with ID: {handler_id}")
 )")
@@ -165,11 +165,11 @@ Returns:
 Examples:
     >>> from atom.system import signal_utils
     >>> group = signal_utils.SignalGroup()
-    >>> 
+    >>>
     >>> def handle_signal(signal_id):
     ...     print(f"Handling signal {signal_id}")
     ...     return True
-    ... 
+    ...
     >>> handler_id = group.add_handler(signal_utils.SIGINT, handle_signal)
     >>> # Later, when we want to remove just this handler:
     >>> success = group.remove_handler(handler_id)
@@ -188,11 +188,11 @@ Returns:
 Examples:
     >>> from atom.system import signal_utils
     >>> group = signal_utils.SignalGroup()
-    >>> 
+    >>>
     >>> # Add multiple handlers for SIGINT
     >>> group.add_handler(signal_utils.SIGINT, lambda sig: True)
     >>> group.add_handler(signal_utils.SIGINT, lambda sig: True)
-    >>> 
+    >>>
     >>> # Remove all SIGINT handlers
     >>> removed = group.remove_signal_handlers(signal_utils.SIGINT)
     >>> print(f"Removed {removed} handlers")
@@ -206,11 +206,11 @@ Returns:
 Examples:
     >>> from atom.system import signal_utils
     >>> group = signal_utils.SignalGroup()
-    >>> 
+    >>>
     >>> # Add handlers for different signals
     >>> group.add_handler(signal_utils.SIGINT, lambda sig: True)
     >>> group.add_handler(signal_utils.SIGTERM, lambda sig: True)
-    >>> 
+    >>>
     >>> # Later, remove all handlers
     >>> removed = group.remove_all()
     >>> print(f"Removed {removed} handlers")
@@ -224,10 +224,10 @@ Returns:
 Examples:
     >>> from atom.system import signal_utils
     >>> group = signal_utils.SignalGroup()
-    >>> 
+    >>>
     >>> group.add_handler(signal_utils.SIGINT, lambda sig: True)
     >>> group.add_handler(signal_utils.SIGTERM, lambda sig: True)
-    >>> 
+    >>>
     >>> handler_ids = group.get_handler_ids()
     >>> for signal, ids in handler_ids.items():
     ...     signal_name = signal_utils.get_signal_name(signal)
@@ -262,11 +262,11 @@ Examples:
     >>> from atom.system import signal_utils
     >>> # Create a signal group
     >>> group = signal_utils.make_signal_group("app_signals")
-    >>> 
+    >>>
     >>> def handle_signal(signal_id):
     ...     print(f"Handling signal {signal_id}")
     ...     return True
-    ... 
+    ...
     >>> group.add_handler(signal_utils.SIGINT, handle_signal)
     >>> # The group will be automatically cleaned up when the reference is lost
 )",
@@ -308,12 +308,12 @@ Args:
 Examples:
     >>> from atom.system import signal_utils
     >>> import time
-    >>> 
+    >>>
     >>> def critical_section():
     ...     print("Starting critical section (SIGINT blocked) ")
     ...     time.sleep(2)  # During this time, SIGINT is blocked
     ...     print("Ending critical section")
-    ... 
+    ...
     >>> # SIGINT will be blocked during the execution of critical_section
     >>> signal_utils.with_blocked_signal(signal_utils.SIGINT, critical_section)
 )");
@@ -383,16 +383,16 @@ Returns:
 Examples:
     >>> from atom.system import signal_utils
     >>> import time
-    >>> 
+    >>>
     >>> def handle_int(signal_id):
     ...     print("Got SIGINT, but continuing execution")
     ...     return True
-    ... 
+    ...
     >>> # Use as a context manager
     >>> with signal_utils.handle_signal(signal_utils.SIGINT, handle_int):
     ...     print("SIGINT will be handled specially in this block")
     ...     time.sleep(5)  # Try pressing Ctrl+C during this time
-    ... 
+    ...
     >>> print("Back to normal signal handling")
 )");
 
@@ -469,13 +469,13 @@ Returns:
 Examples:
     >>> from atom.system import signal_utils
     >>> import time
-    >>> 
+    >>>
     >>> # Use as a context manager to block SIGINT
     >>> with signal_utils.block_signal(signal_utils.SIGINT):
     ...     print("SIGINT is blocked in this block")
     ...     print("Try pressing Ctrl+C, it won't interrupt until after the block")
     ...     time.sleep(5)
-    ... 
+    ...
     >>> print("SIGINT is now unblocked")
 )");
 
@@ -548,15 +548,15 @@ Returns:
 
 Examples:
     >>> from atom.system import signal_utils
-    >>> 
+    >>>
     >>> def handle_signal(signal_id):
     ...     signal_name = signal_utils.get_signal_name(signal_id)
     ...     print(f"Handling {signal_name}")
     ...     return True
-    ... 
+    ...
     >>> # Single signal handler
     >>> int_handler = signal_utils.create_handler(signal_utils.SIGINT, handler=handle_signal)
-    >>> 
+    >>>
     >>> # Multiple signal handler group
     >>> termination_handlers = signal_utils.create_handler(
     ...     [signal_utils.SIGTERM, signal_utils.SIGINT, signal_utils.SIGQUIT],
@@ -628,10 +628,10 @@ Returns:
 Examples:
     >>> from atom.system import signal_utils
     >>> import threading, time, os
-    >>> 
+    >>>
     >>> # Ensure SIGUSR1 is available for the example
     >>> sig_to_test = signal_utils.SIGUSR1 if hasattr(signal_utils, "SIGUSR1") else signal_utils.SIGINT
-    >>> 
+    >>>
     >>> def send_signal_thread_func(pid, sig):
     ...     time.sleep(0.5) # Give capture_next_signal time to set up
     ...     try:
@@ -639,10 +639,10 @@ Examples:
     ...         print(f"Test thread: Sent signal {sig}")
     ...     except Exception as e:
     ...         print(f"Test thread: Error sending signal: {e}")
-    ... 
+    ...
     >>> t = threading.Thread(target=send_signal_thread_func, args=(os.getpid(), sig_to_test))
     >>> t.start()
-    >>> 
+    >>>
     >>> print(f"Main thread: Waiting for signal {sig_to_test}...")
     >>> success, sig = signal_utils.capture_next_signal(sig_to_test, 2.0)
     >>> if success and sig is not None:

@@ -1,12 +1,13 @@
 @echo off
-REM Build script for Atom project using xmake or CMake
+REM Enhanced build script for Atom project using xmake or CMake
 REM Author: Max Qian
+setlocal enabledelayedexpansion
 
 echo ===============================================
-echo Atom Project Build Script
+echo Atom Project Enhanced Build Script
 echo ===============================================
 
-REM Parse command-line options
+REM Parse command-line options with enhanced defaults
 set BUILD_TYPE=release
 set BUILD_PYTHON=n
 set BUILD_SHARED=n
@@ -17,6 +18,15 @@ set BUILD_SSH=n
 set BUILD_SYSTEM=cmake
 set CLEAN_BUILD=n
 set SHOW_HELP=n
+set BUILD_DOCS=n
+set BUILD_BENCHMARKS=n
+set ENABLE_LTO=n
+set ENABLE_COVERAGE=n
+set ENABLE_SANITIZERS=n
+set PARALLEL_JOBS=
+set INSTALL_PREFIX=
+set CCACHE_ENABLE=auto
+set VERBOSE_BUILD=n
 
 :parse_args
 if "%~1"=="" goto end_parse_args
@@ -135,7 +145,7 @@ if "%CLEAN_BUILD%"=="y" (
 REM Build using the selected system
 if "%BUILD_SYSTEM%"=="xmake" (
     echo Building with XMake...
-    
+
     REM Configure XMake options
     set XMAKE_ARGS=
     if "%BUILD_TYPE%"=="debug" set XMAKE_ARGS=%XMAKE_ARGS% -m debug
@@ -145,7 +155,7 @@ if "%BUILD_SYSTEM%"=="xmake" (
     if "%BUILD_TESTS%"=="y" set XMAKE_ARGS=%XMAKE_ARGS% --tests=y
     if "%BUILD_CFITSIO%"=="y" set XMAKE_ARGS=%XMAKE_ARGS% --cfitsio=y
     if "%BUILD_SSH%"=="y" set XMAKE_ARGS=%XMAKE_ARGS% --ssh=y
-    
+
     REM Run XMake
     echo Configuring XMake project...
     xmake f %XMAKE_ARGS%
@@ -153,7 +163,7 @@ if "%BUILD_SYSTEM%"=="xmake" (
         echo Error: XMake configuration failed
         exit /b 1
     )
-    
+
     echo Building project...
     xmake
     if %ERRORLEVEL% NEQ 0 (
@@ -162,7 +172,7 @@ if "%BUILD_SYSTEM%"=="xmake" (
     )
 ) else (
     echo Building with CMake...
-    
+
     REM Configure CMake options
     set CMAKE_ARGS=-B build
     if "%BUILD_TYPE%"=="debug" set CMAKE_ARGS=%CMAKE_ARGS% -DCMAKE_BUILD_TYPE=Debug
@@ -173,7 +183,7 @@ if "%BUILD_SYSTEM%"=="xmake" (
     if "%BUILD_TESTS%"=="y" set CMAKE_ARGS=%CMAKE_ARGS% -DATOM_BUILD_TESTS=ON
     if "%BUILD_CFITSIO%"=="y" set CMAKE_ARGS=%CMAKE_ARGS% -DATOM_USE_CFITSIO=ON
     if "%BUILD_SSH%"=="y" set CMAKE_ARGS=%CMAKE_ARGS% -DATOM_USE_SSH=ON
-    
+
     REM Run CMake
     echo Configuring CMake project...
     cmake %CMAKE_ARGS% .
@@ -181,7 +191,7 @@ if "%BUILD_SYSTEM%"=="xmake" (
         echo Error: CMake configuration failed
         exit /b 1
     )
-    
+
     echo Building project...
     cmake --build build --config %BUILD_TYPE%
     if %ERRORLEVEL% NEQ 0 (

@@ -1,0 +1,104 @@
+[build-system]
+requires = [
+    "setuptools>=65",
+    "wheel",
+    "pybind11>=2.10.0",
+    "cmake>=3.21.0",
+    "ninja; platform_system!='Windows'",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atom"
+version = "1.0.0"
+description = "Foundational library for astronomical software"
+readme = "README.md"
+license = { text = "GPL-3.0" }
+authors = [{ name = "Max Qian", email = "your.email@example.com" }]
+maintainers = [{ name = "Max Qian", email = "your.email@example.com" }]
+keywords = ["astronomy", "science", "cpp", "python-bindings"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "loguru>=0.7.3",
+    "numpy>=1.20.0",
+    "psutil>=7.0.0",
+    "pybind11>=2.10.0",
+    "pyyaml>=6.0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=22.0.0",
+    "isort>=5.10.0",
+    "flake8>=5.0.0",
+    "mypy>=0.991",
+    "sphinx>=5.0.0",
+    "sphinx-rtd-theme>=1.0.0",
+]
+test = ["pytest>=7.0.0", "pytest-cov>=4.0.0", "pytest-benchmark>=4.0.0"]
+docs = ["sphinx>=5.0.0", "sphinx-rtd-theme>=1.0.0", "myst-parser>=0.18.0"]
+
+[project.urls]
+Homepage = "https://github.com/ElementAstro/Atom"
+Documentation = "https://atom.readthedocs.io/"
+Repository = "https://github.com/ElementAstro/Atom.git"
+"Bug Tracker" = "https://github.com/ElementAstro/Atom/issues"
+
+[tool.setuptools]
+packages = ["atom"]
+
+[tool.setuptools.package-data]
+atom = ["py.typed", "*.pyi"]
+
+[tool.black]
+line-length = 88
+target-version = ['py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers"
+testpaths = ["tests", "python/tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
+
+[tool.coverage.run]
+source = ["atom"]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]

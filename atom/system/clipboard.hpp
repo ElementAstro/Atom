@@ -14,7 +14,6 @@
 #include <unordered_map>
 #include <vector>
 
-
 #ifdef CLIPBOARD_SUPPORT_OPENCV
 #include <opencv2/opencv.hpp>
 #endif

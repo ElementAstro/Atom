@@ -203,11 +203,11 @@ Examples:
     >>> config = ConnectionConfig()
     >>> config.keep_alive = True
     >>> config.connect_timeout = 5000  # 5 seconds
-    >>> 
+    >>>
     >>> client = TcpClient(config)
     >>> client.connect("example.com", 80)
     >>> client.send_string("GET / HTTP/1.1\r\nHost: example.com\r\n\r\n")
-    >>> 
+    >>>
     >>> # Asynchronous receive
     >>> future = client.receive_until('\n', 1000)
     >>> response = future.result()
@@ -487,7 +487,7 @@ Args:
 Examples:
     >>> def on_connecting():
     ...     print("Connecting to server...")
-    ... 
+    ...
     >>> client.set_on_connecting_callback(on_connecting)
 )")
         .def("set_on_connected_callback",
@@ -501,7 +501,7 @@ Args:
 Examples:
     >>> def on_connected():
     ...     print("Successfully connected to server")
-    ... 
+    ...
     >>> client.set_on_connected_callback(on_connected)
 )")
         .def("set_on_disconnected_callback",
@@ -515,7 +515,7 @@ Args:
 Examples:
     >>> def on_disconnected():
     ...     print("Disconnected from server")
-    ... 
+    ...
     >>> client.set_on_disconnected_callback(on_disconnected)
 )")
         .def("set_on_data_received_callback",
@@ -529,7 +529,7 @@ Args:
 Examples:
     >>> def on_data_received(data):
     ...     print(f"Received {len(data)} bytes")
-    ... 
+    ...
     >>> client.set_on_data_received_callback(on_data_received)
 )")
         .def("set_on_error_callback",
@@ -543,7 +543,7 @@ Args:
 Examples:
     >>> def on_error(error_msg):
     ...     print(f"Error: {error_msg}")
-    ... 
+    ...
     >>> client.set_on_error_callback(on_error)
 )")
         .def("set_on_state_changed_callback",
@@ -557,7 +557,7 @@ Args:
 Examples:
     >>> def on_state_changed(new_state, old_state):
     ...     print(f"State changed from {old_state} to {new_state}")
-    ... 
+    ...
     >>> client.set_on_state_changed_callback(on_state_changed)
 )")
         .def("set_on_heartbeat_callback",
@@ -571,7 +571,7 @@ Args:
 Examples:
     >>> def on_heartbeat():
     ...     print("Heartbeat sent")
-    ... 
+    ...
     >>> client.set_on_heartbeat_callback(on_heartbeat)
 )")
         .def(

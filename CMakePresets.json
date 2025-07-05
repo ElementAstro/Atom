@@ -12,7 +12,8 @@
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build",
             "cacheVariables": {
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_COLOR_DIAGNOSTICS": "ON"
             }
         },
         {
@@ -21,7 +22,8 @@
             "generator": "Unix Makefiles",
             "binaryDir": "${sourceDir}/build",
             "cacheVariables": {
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_COLOR_DIAGNOSTICS": "ON"
             }
         },
         {
@@ -112,6 +114,47 @@
             "hidden": true,
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "_python-config",
+            "hidden": true,
+            "cacheVariables": {
+                "ATOM_BUILD_PYTHON_BINDINGS": "ON",
+                "BUILD_SHARED_LIBS": "ON"
+            }
+        },
+        {
+            "name": "_features-config",
+            "hidden": true,
+            "cacheVariables": {
+                "ATOM_BUILD_EXAMPLES": "ON",
+                "ATOM_BUILD_TESTS": "ON",
+                "ATOM_BUILD_DOCS": "ON"
+            }
+        },
+        {
+            "name": "_optimization-config",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
+                "CMAKE_CXX_FLAGS": "-march=native -mtune=native"
+            }
+        },
+        {
+            "name": "_sanitizer-config",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+                "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer"
+            }
+        },
+        {
+            "name": "_coverage-config",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_CXX_FLAGS": "--coverage",
+                "CMAKE_C_FLAGS": "--coverage"
             }
         },
         {
@@ -209,6 +252,68 @@
                 "base-vs",
                 "_vs-relwithdebinfo-config"
             ]
+        },
+        {
+            "name": "debug-full",
+            "displayName": "Debug with all features",
+            "inherits": [
+                "base",
+                "_common-debug-config",
+                "_features-config",
+                "_sanitizer-config"
+            ]
+        },
+        {
+            "name": "release-optimized",
+            "displayName": "Release with optimizations",
+            "inherits": [
+                "base",
+                "_common-release-config",
+                "_optimization-config"
+            ]
+        },
+        {
+            "name": "python-dev",
+            "displayName": "Python development build",
+            "inherits": [
+                "base",
+                "_common-relwithdebinfo-config",
+                "_python-config",
+                "_features-config"
+            ]
+        },
+        {
+            "name": "python-release",
+            "displayName": "Python release build",
+            "inherits": [
+                "base",
+                "_common-release-config",
+                "_python-config",
+                "_optimization-config"
+            ]
+        },
+        {
+            "name": "coverage",
+            "displayName": "Coverage analysis build",
+            "inherits": [
+                "base",
+                "_common-debug-config",
+                "_features-config",
+                "_coverage-config"
+            ]
+        },
+        {
+            "name": "minimal",
+            "displayName": "Minimal build",
+            "inherits": [
+                "base"
+            ],
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "ATOM_BUILD_EXAMPLES": "OFF",
+                "ATOM_BUILD_TESTS": "OFF",
+                "ATOM_BUILD_DOCS": "OFF"
+            }
         }
     ],
     "buildPresets": [
@@ -271,6 +376,36 @@
             "name": "relwithdebinfo-vs",
             "configurePreset": "relwithdebinfo-vs",
             "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "debug-full",
+            "configurePreset": "debug-full",
+            "jobs": 8
+        },
+        {
+            "name": "release-optimized",
+            "configurePreset": "release-optimized",
+            "jobs": 8
+        },
+        {
+            "name": "python-dev",
+            "configurePreset": "python-dev",
+            "jobs": 8
+        },
+        {
+            "name": "python-release",
+            "configurePreset": "python-release",
+            "jobs": 8
+        },
+        {
+            "name": "coverage",
+            "configurePreset": "coverage",
+            "jobs": 8
+        },
+        {
+            "name": "minimal",
+            "configurePreset": "minimal",
+            "jobs": 8
         }
     ],
     "testPresets": [

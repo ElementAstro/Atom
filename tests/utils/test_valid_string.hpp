@@ -537,9 +537,9 @@ TEST_F(ValidStringTest, ProgrammingSyntax) {
 
     // SQL like syntax
     std::string sqlCode = R"(
-        SELECT * FROM users 
+        SELECT * FROM users
         WHERE (age > 18) AND (
-            status = 'active' OR 
+            status = 'active' OR
             (registration_date > '2023-01-01')
         )
     )";

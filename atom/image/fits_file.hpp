@@ -2,12 +2,12 @@
 #define ATOM_IMAGE_FITS_FILE_HPP
 
 #include <concepts>
+#include <functional>
 #include <future>
 #include <memory>
 #include <string>
-#include <vector>
-#include <functional>
 #include <system_error>
+#include <vector>
 
 #include "hdu.hpp"
 
@@ -50,12 +50,14 @@ public:
  */
 class FITSFileException : public std::system_error {
 public:
-    explicit FITSFileException(FITSErrorCode code, const std::string& message = "")
+    explicit FITSFileException(FITSErrorCode code,
+                               const std::string& message = "")
         : std::system_error(make_error_code(code), message) {}
-    
+
     explicit FITSFileException(const std::string& message)
-        : std::system_error(make_error_code(FITSErrorCode::InternalError), message) {}
-        
+        : std::system_error(make_error_code(FITSErrorCode::InternalError),
+                            message) {}
+
     [[nodiscard]] FITSErrorCode errorCode() const noexcept {
         return static_cast<FITSErrorCode>(code().value());
     }
@@ -64,7 +66,8 @@ public:
 /**
  * @brief Callback type for progress reporting.
  */
-using ProgressCallback = std::function<void(float progress, const std::string& status)>;
+using ProgressCallback =
+    std::function<void(float progress, const std::string& status)>;
 
 /**
  * @class FITSFile
@@ -214,7 +217,7 @@ public:
      * @param callback The callback function to set.
      */
     void setProgressCallback(ProgressCallback callback) noexcept;
-    
+
     /**
      * @brief Reads a FITS file from the specified filename with options.
      * @param filename The name of the file to read.
@@ -222,7 +225,7 @@ public:
      * @param validateData Whether to validate data after reading.
      * @throws FITSFileException if file cannot be opened or read
      */
-    void readFITS(const std::string& filename, bool useMmap = false, 
+    void readFITS(const std::string& filename, bool useMmap = false,
                   bool validateData = true);
 
     /**
@@ -232,22 +235,22 @@ public:
      * @param validateData Whether to validate data after reading.
      * @return A future that can be waited on for completion.
      */
-    [[nodiscard]] std::future<void> readFITSAsync(const std::string& filename, 
-                                                 bool useMmap = false,
-                                                 bool validateData = true);
+    [[nodiscard]] std::future<void> readFITSAsync(const std::string& filename,
+                                                  bool useMmap = false,
+                                                  bool validateData = true);
 
 private:
     std::vector<std::unique_ptr<HDU>>
-        hdus;  ///< Vector of unique pointers to HDUs.
-    ProgressCallback progressCallback;       ///< Callback for progress reporting.
-    
+        hdus;                           ///< Vector of unique pointers to HDUs.
+    ProgressCallback progressCallback;  ///< Callback for progress reporting.
+
     /**
      * @brief Reports progress to the registered callback, if any.
      * @param progress Progress value (0.0 to 1.0).
      * @param status Status message.
      */
     void reportProgress(float progress, const std::string& status) const;
-    
+
     /**
      * @brief Reads a FITS file using memory-mapped I/O.
      * @param filename The name of the file to read.

@@ -95,8 +95,7 @@ private:
 template <typename E>
 class unexpected {
 public:
-
-/**
+    /**
      * @brief Constructs an unexpected from an unexpected<Error<E>>
      * (unwrapping).
      *
@@ -132,8 +131,6 @@ public:
     constexpr explicit unexpected(U&& error) noexcept(
         std::is_nothrow_constructible_v<E, U>)
         : error_(std::forward<U>(error)) {}
-
-    
 
     /**
      * @brief Gets a const reference to the error value.

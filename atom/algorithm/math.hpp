@@ -536,8 +536,7 @@ public:
  * @throws atom::error::InvalidArgumentException 如果长度不一致
  */
 [[nodiscard]] std::vector<uint64_t> parallelVectorAdd(
-    const std::vector<uint64_t>& a,
-    const std::vector<uint64_t>& b);
+    const std::vector<uint64_t>& a, const std::vector<uint64_t>& b);
 
 }  // namespace atom::algorithm
 

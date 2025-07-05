@@ -4,14 +4,14 @@ if(ASIO_INCLUDE_DIR)
     set(Asio_FOUND TRUE)
     set(ASIO_STANDALONE TRUE)
     set(ASIO_INCLUDE_DIRS ${ASIO_INCLUDE_DIR})
-    
+
     if(NOT TARGET Asio::Asio)
         add_library(Asio::Asio INTERFACE IMPORTED)
         set_target_properties(Asio::Asio PROPERTIES
             INTERFACE_INCLUDE_DIRECTORIES "${ASIO_INCLUDE_DIRS}"
             INTERFACE_COMPILE_DEFINITIONS "ASIO_STANDALONE")
     endif()
-    
+
     mark_as_advanced(ASIO_INCLUDE_DIR)
 else()
     find_package(Boost QUIET COMPONENTS system)
@@ -21,7 +21,7 @@ else()
             set(Asio_FOUND TRUE)
             set(ASIO_STANDALONE FALSE)
             set(ASIO_INCLUDE_DIRS ${Boost_INCLUDE_DIRS})
-            
+
             if(NOT TARGET Asio::Asio)
                 add_library(Asio::Asio INTERFACE IMPORTED)
                 set_target_properties(Asio::Asio PROPERTIES

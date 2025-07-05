@@ -169,42 +169,31 @@ public:
      */
     [[nodiscard]] std::shared_ptr<T> acquire(
         Priority priority = Priority::Normal) {
-        std::unique_lock lock(mutex_);
-
+        std::unique_lock<std::shared_mutex> lock(mutex_);
         if (available_ == 0 && pool_.empty()) {
-            THROW_RUNTIME_ERROR("ObjectPool is full.");
+            THROW_RUNTIME_ERROR("ObjectPool is full");
         }
 
         auto start_time = std::chrono::steady_clock::now();
         bool waited = false;
 
-        // Wait for an object to become available
         if (pool_.empty() && available_ == 0) {
             if (config_.enable_stats) {
                 stats_.wait_count++;
             }
             waited = true;
-
-            // Higher priority requests will be serviced first when objects
-            // become available
             waiting_priorities_.push_back(priority);
-
             cv_.wait(lock, [this, priority] {
-                // Only wake if we have objects AND this is the highest waiting
-                // priority
                 return (!pool_.empty() || available_ > 0) &&
                        (waiting_priorities_.empty() ||
                         waiting_priorities_.front() <= priority);
             });
-
-            // Remove our priority from the waiting list
             waiting_priorities_.erase(
                 std::remove(waiting_priorities_.begin(),
                             waiting_priorities_.end(), priority),
                 waiting_priorities_.end());
         }
 
-        // Calculate wait time if tracking stats
         if (config_.enable_stats && waited) {
             auto wait_duration = std::chrono::steady_clock::now() - start_time;
             stats_.total_wait_time += wait_duration;
@@ -212,12 +201,10 @@ public:
                 std::max(stats_.max_wait_time, wait_duration);
         }
 
-        // Run cleanup if it's time
         if (config_.enable_auto_cleanup) {
             tryCleanupLocked();
         }
 
-        // Acquire the object
         return acquireImpl(lock);
     }
 
@@ -235,37 +222,30 @@ public:
     [[nodiscard]] std::optional<std::shared_ptr<T>> tryAcquireFor(
         const std::chrono::duration<Rep, Period>& timeout_duration,
         Priority priority = Priority::Normal) {
-        std::unique_lock lock(mutex_);
-
+        std::unique_lock<std::shared_mutex> lock(mutex_);
         if (available_ == 0 && pool_.empty()) {
-            THROW_RUNTIME_ERROR("ObjectPool is full.");
+            THROW_RUNTIME_ERROR("ObjectPool is full");
         }
 
         auto start_time = std::chrono::steady_clock::now();
         bool waited = false;
 
-        // Wait for an object to become available, respecting the timeout
         if (pool_.empty() && available_ == 0) {
             if (config_.enable_stats) {
                 stats_.wait_count++;
             }
             waited = true;
-
             waiting_priorities_.push_back(priority);
-
             bool success =
                 cv_.wait_for(lock, timeout_duration, [this, priority] {
                     return (!pool_.empty() || available_ > 0) &&
                            (waiting_priorities_.empty() ||
                             waiting_priorities_.front() <= priority);
                 });
-
-            // Remove our priority from the waiting list
             waiting_priorities_.erase(
                 std::remove(waiting_priorities_.begin(),
                             waiting_priorities_.end(), priority),
                 waiting_priorities_.end());
-
             if (!success) {
                 if (config_.enable_stats) {
                     stats_.timeout_count++;
@@ -274,7 +254,6 @@ public:
             }
         }
 
-        // Calculate wait time if tracking stats
         if (config_.enable_stats && waited) {
             auto wait_duration = std::chrono::steady_clock::now() - start_time;
             stats_.total_wait_time += wait_duration;
@@ -282,7 +261,6 @@ public:
                 std::max(stats_.max_wait_time, wait_duration);
         }
 
-        // Run cleanup if it's time
         if (config_.enable_auto_cleanup) {
             tryCleanupLocked();
         }
@@ -625,51 +603,42 @@ public:
 private:
     /**
      * @brief Acquires an object from the pool without waiting (assumes lock is
-     * held).
-     *
-     * @param lock The unique lock that is already held.
-     * @return A shared pointer to the acquired object.
+     * held)
+     * @param lock The unique lock that is already held
+     * @return A shared pointer to the acquired object
      */
-    std::shared_ptr<T> acquireImpl(std::unique_lock<std::mutex>& lock) {
+    std::shared_ptr<T> acquireImpl(std::unique_lock<std::shared_mutex>& lock) {
         std::shared_ptr<T> obj;
 
 #ifdef ATOM_USE_BOOST
-        // Use Boost's object pool if enabled
         T* raw_ptr = boost_pool_.construct();
         if (!raw_ptr) {
-            THROW_RUNTIME_ERROR("Boost pool allocation failed.");
+            THROW_RUNTIME_ERROR("Boost pool allocation failed");
         }
         obj = std::shared_ptr<T>(raw_ptr, [this](T* ptr) {
             boost_pool_.destroy(ptr);
-            std::unique_lock lock(mutex_);
+            std::unique_lock<std::shared_mutex> lock(mutex_);
             ++available_;
             cv_.notify_one();
         });
 #else
-        // Get from our custom pool or create new
         if (!pool_.empty()) {
             obj = std::move(pool_.back());
             pool_.pop_back();
-
             if (config_.enable_stats) {
                 stats_.hits++;
             }
         } else {
             --available_;
             obj = creator_();
-
             if (config_.enable_stats) {
                 stats_.misses++;
-
-                // Update peak usage
                 size_t current_usage = max_size_ - available_;
                 if (current_usage > stats_.peak_usage) {
                     stats_.peak_usage = current_usage;
                 }
             }
         }
-
-        // Wrap the object with our custom deleter
         obj = wrapWithDeleter(std::move(obj));
 #endif
 

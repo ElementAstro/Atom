@@ -1,28 +1,39 @@
-# CMakeLists.txt for Atom-System
-# This project is licensed under the terms of the GPL3 license.
+# CMakeLists.txt for Atom-System This project is licensed under the terms of the
+# GPL3 license.
 #
-# Project Name: Atom-System
-# Description: A collection of useful system functions
-# Author: Max Qian
-# License: GPL3
+# Project Name: Atom-System Description: A collection of useful system functions
+# Author: Max Qian License: GPL3
 
 cmake_minimum_required(VERSION 3.20)
-project(atom-system VERSION 1.0.0 LANGUAGES C CXX)
+project(
+  atom-system
+  VERSION 1.0.0
+  LANGUAGES C CXX)
 
 find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 
 if(LIBUSB_FOUND)
-    message(STATUS "Found libusb-1.0: ${LIBUSB_VERSION}")
+  message(STATUS "Found libusb-1.0: ${LIBUSB_VERSION}")
 endif()
 
 # Sources and Headers
 set(SOURCES
     command.cpp
+    command/executor.cpp
+    command/process_manager.cpp
+    command/advanced_executor.cpp
+    command/utils.cpp
+    command/history.cpp
     crash_quotes.cpp
     crash.cpp
     crontab.cpp
+    crontab/cron_job.cpp
+    crontab/cron_validation.cpp
+    crontab/cron_system.cpp
+    crontab/cron_storage.cpp
+    crontab/cron_manager.cpp
     device.cpp
     env.cpp
     gpio.cpp
@@ -37,13 +48,23 @@ set(SOURCES
     software.cpp
     storage.cpp
     user.cpp
-    wregistry.cpp
-)
+    wregistry.cpp)
 
 set(HEADERS
     command.hpp
+    command/executor.hpp
+    command/process_manager.hpp
+    command/advanced_executor.hpp
+    command/utils.hpp
+    command/history.hpp
     crash_quotes.hpp
     crash.hpp
+    crontab.hpp
+    crontab/cron_job.hpp
+    crontab/cron_validation.hpp
+    crontab/cron_system.hpp
+    crontab/cron_storage.hpp
+    crontab/cron_manager.hpp
     env.hpp
     gpio.hpp
     lregistry.hpp
@@ -55,16 +76,10 @@ set(HEADERS
     software.hpp
     storage.hpp
     user.hpp
-    wregistry.hpp
-)
+    wregistry.hpp)
 
-set(LIBS
-    loguru
-    ${CMAKE_THREAD_LIBS_INIT}
-    atom-sysinfo
-    atom-meta
-    ${LIBUSB_LIBRARIES}
-)
+set(LIBS loguru ${CMAKE_THREAD_LIBS_INIT} atom-sysinfo atom-meta
+         ${LIBUSB_LIBRARIES})
 
 # Build Object Library
 add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
@@ -79,19 +94,19 @@ target_include_directories(${PROJECT_NAME} PUBLIC .)
 
 # Platform-specific libraries
 if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE pdh wlanapi userenv)
+  target_link_libraries(${PROJECT_NAME} PRIVATE pdh wlanapi userenv)
 endif()
 
 # Set library properties
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
-    OUTPUT_NAME ${PROJECT_NAME}
-)
+set_target_properties(
+  ${PROJECT_NAME}
+  PROPERTIES VERSION ${PROJECT_VERSION}
+             SOVERSION ${PROJECT_VERSION_MAJOR}
+             OUTPUT_NAME ${PROJECT_NAME})
 
 # Installation
-install(TARGETS ${PROJECT_NAME}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    PUBLIC_HEADER DESTINATION include/${PROJECT_NAME}
-)
+install(
+  TARGETS ${PROJECT_NAME}
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  PUBLIC_HEADER DESTINATION include/${PROJECT_NAME})

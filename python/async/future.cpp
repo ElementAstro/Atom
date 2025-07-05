@@ -19,25 +19,25 @@ void declare_enhanced_future(py::module& m, const std::string& type_name) {
     py::class_<EnhancedFutureT>(m, class_name.c_str(),
                                 R"pbdoc(
         Enhanced future class with additional functionality beyond standard futures.
-        
-        This class extends std::future with features like chaining operations, 
+
+        This class extends std::future with features like chaining operations,
         callbacks, timeouts, cancellation, and more.
-        
+
         Args:
             future: A shared_future to wrap (typically created by makeEnhancedFuture)
-            
+
         Examples:
             >>> from atom.async.future import makeEnhancedFuture
-            >>> 
+            >>>
             >>> # Create an enhanced future
             >>> future = makeEnhancedFuture(lambda: 42)
-            >>> 
+            >>>
             >>> # Chain operations
             >>> result_future = future.then(lambda x: x * 2)
-            >>> 
+            >>>
             >>> # Add completion callback
             >>> future.on_complete(lambda x: print(f"Result: {x}"))
-            >>> 
+            >>>
             >>> # Get result with timeout
             >>> result = future.wait_for(5000)  # 5 seconds timeout
         )pbdoc")
@@ -48,10 +48,10 @@ void declare_enhanced_future(py::module& m, const std::string& type_name) {
         .def("wait", &EnhancedFutureT::wait,
              R"pbdoc(
              Waits synchronously for the future to complete.
-             
+
              Returns:
                  The value of the future.
-                 
+
              Raises:
                  RuntimeError: If the future is cancelled or throws an exception.
              )pbdoc")
@@ -64,10 +64,10 @@ void declare_enhanced_future(py::module& m, const std::string& type_name) {
              py::arg("timeout"),
              R"pbdoc(
              Waits for the future with a timeout and auto-cancels if not ready.
-             
+
              Args:
                  timeout: The timeout duration in milliseconds
-                 
+
              Returns:
                  The value if ready, or None if timed out
              )pbdoc")
@@ -77,10 +77,10 @@ void declare_enhanced_future(py::module& m, const std::string& type_name) {
         .def("get", &EnhancedFutureT::get,
              R"pbdoc(
              Gets the result of the future.
-             
+
              Returns:
                  The value of the future.
-                 
+
              Raises:
                  RuntimeError: If the future is cancelled or throws an exception.
              )pbdoc")
@@ -107,13 +107,13 @@ void declare_enhanced_future(py::module& m, const std::string& type_name) {
             py::arg("func"),
             R"pbdoc(
         Chains another operation to be called after the future is done.
-        
+
         Args:
             func: The function to call when the future is done
-            
+
         Returns:
             A new EnhancedFuture for the result of the function
-            
+
         Examples:
             >>> future = makeEnhancedFuture(lambda: 10)
             >>> future2 = future.then(lambda x: x * 2)
@@ -137,17 +137,17 @@ void declare_enhanced_future(py::module& m, const std::string& type_name) {
             py::arg("func"),
             R"pbdoc(
         Provides exception handling for the future.
-        
+
         Args:
             func: The function to call when an exception occurs
-            
+
         Returns:
             A new EnhancedFuture that will handle exceptions
-            
+
         Examples:
             >>> def might_fail():
             >>>     raise ValueError("Something went wrong")
-            >>> 
+            >>>
             >>> future = makeEnhancedFuture(might_fail)
             >>> safe_future = future.catching(lambda err: f"Error: {err}")
             >>> result = safe_future.get()  # Will be "Error: Something went wrong"
@@ -168,15 +168,15 @@ void declare_enhanced_future(py::module& m, const std::string& type_name) {
             py::arg("backoff_ms") = py::none(),
             R"pbdoc(
         Retries the operation associated with the future.
-        
+
         Args:
             func: The function to call when retrying
             max_retries: The maximum number of retries
             backoff_ms: Optional backoff time between retries in milliseconds
-            
+
         Returns:
             A new EnhancedFuture for the retry operation
-            
+
         Examples:
             >>> future = makeEnhancedFuture(lambda: 10)
             >>> retry_future = future.retry(lambda x: x * 2, 3, 100)
@@ -193,10 +193,10 @@ void declare_enhanced_future(py::module& m, const std::string& type_name) {
             py::arg("callback"),
             R"pbdoc(
         Sets a completion callback to be called when the future is done.
-        
+
         Args:
             callback: The callback function to add
-            
+
         Examples:
             >>> future = makeEnhancedFuture(lambda: 42)
             >>> future.on_complete(lambda x: print(f"Result: {x}"))
@@ -211,22 +211,22 @@ void declare_enhanced_future_void(py::module& m) {
     py::class_<EnhancedFutureVoid>(m, "EnhancedFutureVoid",
                                    R"pbdoc(
         Enhanced future class for void operations.
-        
-        This class extends std::future<void> with features like chaining operations, 
+
+        This class extends std::future<void> with features like chaining operations,
         callbacks, timeouts, cancellation, and more.
-        
+
         Args:
             future: A shared_future to wrap (typically created by makeEnhancedFuture)
-            
+
         Examples:
             >>> from atom.async.future import makeEnhancedFuture
-            >>> 
+            >>>
             >>> # Create a void enhanced future
             >>> future = makeEnhancedFuture(lambda: None)
-            >>> 
+            >>>
             >>> # Chain operations
             >>> result_future = future.then(lambda: "Operation completed")
-            >>> 
+            >>>
             >>> # Add completion callback
             >>> future.on_complete(lambda: print("Done!"))
         )pbdoc")
@@ -237,7 +237,7 @@ void declare_enhanced_future_void(py::module& m) {
         .def("wait", &EnhancedFutureVoid::wait,
              R"pbdoc(
              Waits synchronously for the future to complete.
-             
+
              Raises:
                  RuntimeError: If the future is cancelled or throws an exception.
              )pbdoc")
@@ -247,10 +247,10 @@ void declare_enhanced_future_void(py::module& m) {
              py::arg("timeout"),
              R"pbdoc(
              Waits for the future with a timeout and auto-cancels if not ready.
-             
+
              Args:
                  timeout: The timeout duration in milliseconds
-                 
+
              Returns:
                  True if completed successfully, False if timed out
              )pbdoc")
@@ -259,7 +259,7 @@ void declare_enhanced_future_void(py::module& m) {
         .def("get", &EnhancedFutureVoid::get,
              R"pbdoc(
              Waits for the future to complete.
-             
+
              Raises:
                  RuntimeError: If the future is cancelled or throws an exception.
              )pbdoc")
@@ -286,13 +286,13 @@ void declare_enhanced_future_void(py::module& m) {
             py::arg("func"),
             R"pbdoc(
         Chains another operation to be called after the future is done.
-        
+
         Args:
             func: The function to call when the future is done
-            
+
         Returns:
             A new EnhancedFuture for the result of the function
-            
+
         Examples:
             >>> future = makeEnhancedFuture(lambda: None)
             >>> future2 = future.then(lambda: "Done!")
@@ -310,10 +310,10 @@ void declare_enhanced_future_void(py::module& m) {
             py::arg("callback"),
             R"pbdoc(
         Sets a completion callback to be called when the future is done.
-        
+
         Args:
             callback: The callback function to add
-            
+
         Examples:
             >>> future = makeEnhancedFuture(lambda: None)
             >>> future.on_complete(lambda: print("Task completed!"))
@@ -328,27 +328,27 @@ PYBIND11_MODULE(future, m) {
         This module provides enhanced future classes with additional functionality
         beyond standard futures, including chaining operations, callbacks, timeouts,
         cancellation support, and more.
-        
+
         Key components:
           - EnhancedFuture: Extended future with additional functionality
           - makeEnhancedFuture: Factory function to create enhanced futures
           - whenAll: Synchronization for multiple futures
           - parallelProcess: Utility for parallel data processing
-          
+
         Example:
             >>> from atom.async.future import makeEnhancedFuture, whenAll
-            >>> 
+            >>>
             >>> # Create enhanced futures
             >>> future1 = makeEnhancedFuture(lambda: 10)
             >>> future2 = makeEnhancedFuture(lambda: 20)
-            >>> 
+            >>>
             >>> # Chain operations
             >>> future3 = future1.then(lambda x: x * 2)
-            >>> 
+            >>>
             >>> # Synchronize multiple futures
             >>> all_futures = whenAll(future1, future2, future3)
             >>> results = all_futures.get()  # [10, 20, 20]
-            >>> 
+            >>>
             >>> # With timeout and callbacks
             >>> future = makeEnhancedFuture(lambda: compute_something())
             >>> future.on_complete(lambda x: print(f"Result: {x}"))
@@ -398,13 +398,13 @@ PYBIND11_MODULE(future, m) {
         py::arg("func"),
         R"pbdoc(
     Creates an EnhancedFuture from a function.
-    
+
     Args:
         func: The function to execute asynchronously
-        
+
     Returns:
         An EnhancedFuture for the result of the function
-        
+
     Examples:
         >>> future = makeEnhancedFuture(lambda: 42)
         >>> result = future.get()  # 42
@@ -508,14 +508,14 @@ PYBIND11_MODULE(future, m) {
         py::arg("futures"), py::arg("timeout") = py::none(),
         R"pbdoc(
     Waits for all futures to complete and returns their results.
-    
+
     Args:
         futures: List of futures to wait for
         timeout: Optional timeout in milliseconds
-        
+
     Returns:
         List of results from all futures
-        
+
     Examples:
         >>> future1 = makeEnhancedFuture(lambda: 10)
         >>> future2 = makeEnhancedFuture(lambda: 20)
@@ -562,15 +562,15 @@ PYBIND11_MODULE(future, m) {
         py::arg("items"), py::arg("func"), py::arg("chunk_size") = 0,
         R"pbdoc(
     Processes items in parallel using multiple threads.
-    
+
     Args:
         items: List of items to process
         func: Function to apply to each item
         chunk_size: Size of chunks to process together (0 = auto)
-        
+
     Returns:
         List of futures containing the results
-        
+
     Examples:
         >>> items = list(range(100))
         >>> futures = parallelProcess(items, lambda x: x * x)
@@ -604,14 +604,14 @@ PYBIND11_MODULE(future, m) {
         py::arg("future"), py::arg("timeout"),
         R"pbdoc(
     Gets the result of a future with a timeout.
-    
+
     Args:
         future: The future to get the result from
         timeout: The timeout in seconds
-        
+
     Returns:
         The result of the future
-        
+
     Raises:
         InvalidFutureException: If the timeout is reached
     )pbdoc");

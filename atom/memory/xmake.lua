@@ -42,61 +42,61 @@ end
 target(lib_name)
     local sources = get_sources()
     local headers = get_headers()
-    
+
     if #sources > 0 then
         -- Create library with source files
         set_kind("static")
         add_files(sources)
         add_headerfiles(headers)
-        
+
         -- Add dependencies
         add_deps("atom-error")
-        
+
         -- Set include directories
         add_includedirs(".", {public = true})
-        
+
         -- Enable position independent code
         add_cxflags("-fPIC", {tools = {"gcc", "clang"}})
         add_cflags("-fPIC", {tools = {"gcc", "clang"}})
-        
+
     else
         -- Create header-only library
         set_kind("headeronly")
         add_headerfiles(headers)
-        
+
         -- Add dependencies for header-only library
         add_deps("atom-error")
-        
+
         -- Set include directories
         add_includedirs(".", {public = true})
     end
-    
+
     -- Set version
     set_version("1.0.0")
-    
+
     -- Set output name
     set_basename(lib_name)
-    
+
     -- Installation rules
     after_install(function (target)
         local installdir = target:installdir() or "$(prefix)"
         local kind = target:kind()
-        
+
         if kind ~= "headeronly" then
             -- Install library file
             os.cp(target:targetfile(), path.join(installdir, "lib"))
         end
-        
+
         -- Install headers
         local headerdir = path.join(installdir, "include", "atom", "memory")
         os.mkdir(headerdir)
-        
+
         local headers = get_headers()
         for _, header in ipairs(headers) do
             os.cp(header, headerdir)
         end
     end)
-    
+
     -- Add to global module list (equivalent to CMake's global property)
     after_build(function (target)
         -- Store module information for potential use by parent build system

@@ -186,22 +186,22 @@ Args:
 
 Examples:
     >>> from atom.connection.sockethub import SocketHub, Message, SocketHubConfig
-    >>> 
+    >>>
     >>> # Create and configure the hub
     >>> config = SocketHubConfig()
     >>> config.connection_timeout = 60
     >>> hub = SocketHub(config)
-    >>> 
+    >>>
     >>> # Set up handlers
     >>> def on_message(message, client_id):
     ...     print(f"Received: {message.as_string()} from client {client_id}")
     ...     hub.broadcast_message(Message.create_text("Echo: " + message.as_string()))
-    >>> 
+    >>>
     >>> hub.add_message_handler(on_message)
-    >>> 
+    >>>
     >>> # Start the server
     >>> hub.start(8080)
-    >>> 
+    >>>
     >>> # Keep the server running until manually stopped
     >>> try:
     ...     # Your application logic here
@@ -240,7 +240,7 @@ Args:
 Examples:
     >>> def message_handler(message, client_id):
     ...     print(f"Message from {client_id}: {message.as_string()}")
-    ... 
+    ...
     >>> hub.add_message_handler(message_handler)
 )")
         .def("add_connect_handler",
@@ -254,7 +254,7 @@ Args:
 Examples:
     >>> def connect_handler(client_id, ip):
     ...     print(f"Client {client_id} connected from {ip}")
-    ... 
+    ...
     >>> hub.add_connect_handler(connect_handler)
 )")
         .def("add_disconnect_handler",
@@ -268,7 +268,7 @@ Args:
 Examples:
     >>> def disconnect_handler(client_id, reason):
     ...     print(f"Client {client_id} disconnected: {reason}")
-    ... 
+    ...
     >>> hub.add_disconnect_handler(disconnect_handler)
 )")
         .def("add_error_handler",
@@ -282,7 +282,7 @@ Args:
 Examples:
     >>> def error_handler(error, client_id):
     ...     print(f"Error for client {client_id}: {error}")
-    ... 
+    ...
     >>> hub.add_error_handler(error_handler)
 )")
         .def("broadcast_message",
@@ -357,7 +357,7 @@ Examples:
     >>> def authenticate(username, password):
     ...     # Check credentials against a database, etc.
     ...     return username == "admin" and password == "secret"
-    ... 
+    ...
     >>> hub.set_authenticator(authenticate)
 )")
         .def("require_authentication",
@@ -419,7 +419,7 @@ Examples:
     >>> def log_handler(level, message):
     ...     levels = ["DEBUG", "INFO", "WARNING", "ERROR", "FATAL"]
     ...     print(f"[{levels[int(level)]}] {message}")
-    ... 
+    ...
     >>> hub.set_log_handler(log_handler)
 )")
         .def("is_running", &atom::async::connection::SocketHub::isRunning,

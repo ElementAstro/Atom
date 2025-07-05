@@ -38,37 +38,37 @@ local headers = {
 target("atom-error")
     -- Set target kind to shared library
     set_kind("shared")
-    
+
     -- Add source files
     add_files(sources)
-    
+
     -- Add header files
     add_headerfiles(headers)
-    
+
     -- Add include directories
     add_includedirs(".", {public = true})
-    
+
     -- Add packages
     add_packages("loguru")
-    
+
     -- Add platform-specific libraries
     if is_plat("linux") then
         add_syslinks("dl")
     end
-    
+
     -- Enable position independent code (automatic for shared libraries)
     set_policy("build.optimization.lto", true)
-    
+
     -- Set version info
     set_version("1.0.0")
-    
+
     -- Set output name
     set_basename("atom-error")
-    
+
     -- Set target and object directories
     set_targetdir("$(buildir)/lib")
     set_objectdir("$(buildir)/obj")
-    
+
     -- Installation rules
     after_install(function (target)
         local installdir = target:installdir() or "$(prefix)"
@@ -85,20 +85,20 @@ target("atom-error")
 -- Optional: Create object library target (equivalent to CMake's object library)
 target("atom-error-object")
     set_kind("object")
-    
+
     -- Add the same source files
     add_files(sources)
     add_headerfiles(headers)
-    
+
     -- Configuration
     add_includedirs(".")
     add_packages("loguru")
-    
+
     -- Platform-specific libraries
     if is_plat("linux") then
         add_syslinks("dl")
     end
-    
+
     -- Enable position independent code
     add_cxflags("-fPIC", {tools = {"gcc", "clang"}})
     add_cflags("-fPIC", {tools = {"gcc", "clang"}})

@@ -16,24 +16,24 @@ Description: Main Message Bus with Asio support and additional features
 #define ATOM_ASYNC_MESSAGE_BUS_HPP
 
 #include <algorithm>
-#include <any> // For std::any, std::any_cast, std::bad_any_cast
+#include <any>     // For std::any, std::any_cast, std::bad_any_cast
+#include <chrono>  // For std::chrono
 #include <concepts>
 #include <exception>
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>  // For std::optional
 #include <shared_mutex>
 #include <string>
 #include <string_view>
+#include <thread>  // For std::thread (used if ATOM_USE_ASIO is off)
 #include <typeindex>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <optional> // For std::optional
-#include <chrono>   // For std::chrono
-#include <thread>   // For std::thread (used if ATOM_USE_ASIO is off)
 
-#include "spdlog/spdlog.h" // Added for logging
+#include "spdlog/spdlog.h"  // Added for logging
 
 #ifdef ATOM_USE_ASIO
 #include <asio/io_context.hpp>
@@ -51,8 +51,8 @@ Description: Main Message Bus with Asio support and additional features
 #ifdef ATOM_USE_LOCKFREE_QUEUE
 #include <boost/lockfree/queue.hpp>
 #include <boost/lockfree/spsc_queue.hpp>
-// Assuming atom/async/queue.hpp is not strictly needed if using boost::lockfree directly
-// #include "atom/async/queue.hpp"
+// Assuming atom/async/queue.hpp is not strictly needed if using boost::lockfree
+// directly #include "atom/async/queue.hpp"
 #endif
 
 namespace atom::async {
@@ -128,7 +128,8 @@ public:
 
     /**
      * @brief Constructs a MessageBus.
-     * @param io_context The Asio io_context to use (if ATOM_USE_ASIO is defined).
+     * @param io_context The Asio io_context to use (if ATOM_USE_ASIO is
+     * defined).
      */
 #ifdef ATOM_USE_ASIO
     explicit MessageBus(asio::io_context& io_context)
@@ -166,7 +167,8 @@ public:
     MessageBus& operator=(const MessageBus&) = delete;
 
     /**
-     * @brief Movable (deleted for simplicity with enable_shared_from_this and potential threads)
+     * @brief Movable (deleted for simplicity with enable_shared_from_this and
+     * potential threads)
      */
     MessageBus(MessageBus&&) noexcept = delete;
     MessageBus& operator=(MessageBus&&) noexcept = delete;
@@ -182,8 +184,7 @@ public:
         return std::make_shared<MessageBus>(io_context);
     }
 #else
-    [[nodiscard]] static auto createShared()
-        -> std::shared_ptr<MessageBus> {
+    [[nodiscard]] static auto createShared() -> std::shared_ptr<MessageBus> {
         return std::make_shared<MessageBus>();
     }
 #endif
@@ -194,22 +195,34 @@ public:
      */
     void startMessageProcessing() {
         bool expected = false;
-        if (processingActive_.compare_exchange_strong(expected, true)) { // Start only if not already active
+        if (processingActive_.compare_exchange_strong(
+                expected, true)) {  // Start only if not already active
 #ifdef ATOM_USE_ASIO
-            asio::post(io_context_, [self = shared_from_this()]() { self->processMessagesContinuously(); });
-            spdlog::info("[MessageBus] Asio-driven lock-free message processing started.");
+            asio::post(io_context_, [self = shared_from_this()]() {
+                self->processMessagesContinuously();
+            });
+            spdlog::info(
+                "[MessageBus] Asio-driven lock-free message processing "
+                "started.");
 #else
             if (processingThread_.joinable()) {
-                processingThread_.join(); // Join previous thread if any
+                processingThread_.join();  // Join previous thread if any
             }
-            processingThread_ = std::thread([self_capture = shared_from_this()]() {
-                spdlog::info("[MessageBus] Non-Asio lock-free processing thread started.");
-                while (self_capture->processingActive_.load(std::memory_order_relaxed)) {
-                    self_capture->processLockFreeQueueBatch();
-                    std::this_thread::sleep_for(std::chrono::milliseconds(5)); // Prevent busy waiting
-                }
-                spdlog::info("[MessageBus] Non-Asio lock-free processing thread stopped.");
-            });
+            processingThread_ =
+                std::thread([self_capture = shared_from_this()]() {
+                    spdlog::info(
+                        "[MessageBus] Non-Asio lock-free processing thread "
+                        "started.");
+                    while (self_capture->processingActive_.load(
+                        std::memory_order_relaxed)) {
+                        self_capture->processLockFreeQueueBatch();
+                        std::this_thread::sleep_for(std::chrono::milliseconds(
+                            5));  // Prevent busy waiting
+                    }
+                    spdlog::info(
+                        "[MessageBus] Non-Asio lock-free processing thread "
+                        "stopped.");
+                });
 #endif
         }
     }
@@ -219,7 +232,8 @@ public:
      */
     void stopMessageProcessing() {
         bool expected = true;
-        if (processingActive_.compare_exchange_strong(expected, false)) { // Stop only if active
+        if (processingActive_.compare_exchange_strong(
+                expected, false)) {  // Stop only if active
             spdlog::info("[MessageBus] Lock-free message processing stopping.");
 #if !defined(ATOM_USE_ASIO)
             if (processingThread_.joinable()) {
@@ -229,29 +243,34 @@ public:
 #else
             // For Asio, stopping is done by not re-posting.
             // The current tasks in io_context will finish.
-            spdlog::info("[MessageBus] Asio-driven processing will stop after current tasks.");
+            spdlog::info(
+                "[MessageBus] Asio-driven processing will stop after current "
+                "tasks.");
 #endif
         }
     }
 
 #ifdef ATOM_USE_ASIO
     /**
-     * @brief Process pending messages from the queue continuously (Asio-driven).
+     * @brief Process pending messages from the queue continuously
+     * (Asio-driven).
      */
     void processMessagesContinuously() {
         if (!processingActive_.load(std::memory_order_relaxed)) {
-            spdlog::debug("[MessageBus] Asio processing loop terminating as processingActive_ is false.");
+            spdlog::debug(
+                "[MessageBus] Asio processing loop terminating as "
+                "processingActive_ is false.");
             return;
         }
 
-        processLockFreeQueueBatch(); // Process one batch
+        processLockFreeQueueBatch();  // Process one batch
 
         // Reschedule message processing
         asio::post(io_context_, [self = shared_from_this()]() {
             self->processMessagesContinuously();
         });
     }
-#endif // ATOM_USE_ASIO
+#endif  // ATOM_USE_ASIO
 
     /**
      * @brief Processes a batch of messages from the lock-free queue.
@@ -259,24 +278,27 @@ public:
     void processLockFreeQueueBatch() {
         const size_t MAX_MESSAGES_PER_BATCH = 20;
         size_t processed = 0;
-        PendingMessage msg_item; // Renamed to avoid conflict
+        PendingMessage msg_item;  // Renamed to avoid conflict
 
-        while (processed < MAX_MESSAGES_PER_BATCH && pendingMessages_.pop(msg_item)) {
+        while (processed < MAX_MESSAGES_PER_BATCH &&
+               pendingMessages_.pop(msg_item)) {
             processOneMessage(msg_item);
             processed++;
         }
         if (processed > 0) {
-            spdlog::trace("[MessageBus] Processed {} messages from lock-free queue.", processed);
+            spdlog::trace(
+                "[MessageBus] Processed {} messages from lock-free queue.",
+                processed);
         }
     }
-
 
     /**
      * @brief Process a single message from the queue
      */
     void processOneMessage(const PendingMessage& pendingMsg) {
         try {
-            std::shared_lock lock(mutex_); // Lock for accessing subscribers_ and namespaces_
+            std::shared_lock lock(
+                mutex_);  // Lock for accessing subscribers_ and namespaces_
             std::unordered_set<Token> calledSubscribers;
 
             // Find subscribers for this message type
@@ -293,28 +315,34 @@ public:
 
                 // Publish to namespace matching subscribers
                 for (const auto& namespaceName : namespaces_) {
-                    if (pendingMsg.name.rfind(namespaceName + ".", 0) == 0) { // name starts with namespaceName + "."
+                    if (pendingMsg.name.rfind(namespaceName + ".", 0) ==
+                        0) {  // name starts with namespaceName + "."
                         auto nsIter = nameMap.find(namespaceName);
                         if (nsIter != nameMap.end()) {
-                             // Ensure we don't call for the exact same name if pendingMsg.name itself is a registered_ns_key,
-                             // as it's already handled by the direct match above.
-                             // The calledSubscribers set will prevent actual duplicate delivery.
+                            // Ensure we don't call for the exact same name if
+                            // pendingMsg.name itself is a registered_ns_key, as
+                            // it's already handled by the direct match above.
+                            // The calledSubscribers set will prevent actual
+                            // duplicate delivery.
                             if (pendingMsg.name != namespaceName) {
                                 publishToSubscribersLockFree(nsIter->second,
-                                                            pendingMsg.message,
-                                                            calledSubscribers);
+                                                             pendingMsg.message,
+                                                             calledSubscribers);
                             }
                         }
                     }
                 }
             }
         } catch (const std::exception& ex) {
-            spdlog::error("[MessageBus] Error processing message from queue ('{}'): {}", pendingMsg.name, ex.what());
+            spdlog::error(
+                "[MessageBus] Error processing message from queue ('{}'): {}",
+                pendingMsg.name, ex.what());
         }
     }
 
     /**
-     * @brief Helper method to publish to subscribers in lockfree mode's processing path
+     * @brief Helper method to publish to subscribers in lockfree mode's
+     * processing path
      */
     void publishToSubscribersLockFree(
         const std::vector<Subscriber>& subscribersList, const std::any& message,
@@ -323,14 +351,22 @@ public:
             try {
                 if (subscriber.filter(message) &&
                     calledSubscribers.insert(subscriber.token).second) {
-                    auto handler_task = [handlerFunc = subscriber.handler, // Renamed to avoid conflict
-                                    message_copy = message, token = subscriber.token]() { // Capture message by value & token for logging
-                        try {
-                            handlerFunc(message_copy);
-                        } catch (const std::exception& e) {
-                            spdlog::error("[MessageBus] Handler exception (token {}): {}", token, e.what());
-                        }
-                    };
+                    auto handler_task =
+                        [handlerFunc =
+                             subscriber.handler,  // Renamed to avoid conflict
+                         message_copy = message,
+                         token =
+                             subscriber.token]() {  // Capture message by value
+                                                    // & token for logging
+                            try {
+                                handlerFunc(message_copy);
+                            } catch (const std::exception& e) {
+                                spdlog::error(
+                                    "[MessageBus] Handler exception (token "
+                                    "{}): {}",
+                                    token, e.what());
+                            }
+                        };
 
 #ifdef ATOM_USE_ASIO
                     if (subscriber.async) {
@@ -342,12 +378,16 @@ public:
                     // If Asio is not used, async handlers become synchronous
                     handler_task();
                     if (subscriber.async) {
-                        spdlog::trace("[MessageBus] ATOM_USE_ASIO is not defined. Async handler for token {} executed synchronously.", subscriber.token);
+                        spdlog::trace(
+                            "[MessageBus] ATOM_USE_ASIO is not defined. Async "
+                            "handler for token {} executed synchronously.",
+                            subscriber.token);
                     }
 #endif
                 }
             } catch (const std::exception& e) {
-                spdlog::error("[MessageBus] Filter exception (token {}): {}", subscriber.token, e.what());
+                spdlog::error("[MessageBus] Filter exception (token {}): {}",
+                              subscriber.token, e.what());
             }
         }
     }
@@ -357,19 +397,23 @@ public:
      */
     template <MessageConcept MessageType>
     void publish(
-        std::string_view name_sv, const MessageType& message, // Renamed name to name_sv
+        std::string_view name_sv,
+        const MessageType& message,  // Renamed name to name_sv
         std::optional<std::chrono::milliseconds> delay = std::nullopt) {
         try {
             if (name_sv.empty()) {
                 throw MessageBusException("Message name cannot be empty");
             }
-            std::string name_str(name_sv); // Convert for capture
+            std::string name_str(name_sv);  // Convert for capture
 
             // Capture shared_from_this() for the task
-            auto sft_ptr = shared_from_this(); // Moved shared_from_this() call
-            auto publishTask = [self = sft_ptr, name_s = name_str, message_copy = message]() { // Capture the ptr as self
+            auto sft_ptr = shared_from_this();  // Moved shared_from_this() call
+            auto publishTask = [self = sft_ptr, name_s = name_str,
+                                message_copy =
+                                    message]() {  // Capture the ptr as self
                 if (!self->processingActive_.load(std::memory_order_relaxed)) {
-                    self->startMessageProcessing(); // Ensure processing is active
+                    self->startMessageProcessing();  // Ensure processing is
+                                                     // active
                 }
 
                 PendingMessage pendingMsg(name_s, message_copy);
@@ -377,58 +421,87 @@ public:
                 bool pushed = false;
                 for (int retry = 0; retry < 3 && !pushed; ++retry) {
                     pushed = self->pendingMessages_.push(pendingMsg);
-                    if (!pushed && retry < 2) { // Don't yield on last attempt before fallback
+                    if (!pushed &&
+                        retry <
+                            2) {  // Don't yield on last attempt before fallback
                         std::this_thread::yield();
                     }
                 }
 
                 if (!pushed) {
-                    spdlog::warn("[MessageBus] Message queue full for '{}', processing synchronously as fallback.", name_s);
-                    self->processOneMessage(pendingMsg); // Fallback
+                    spdlog::warn(
+                        "[MessageBus] Message queue full for '{}', processing "
+                        "synchronously as fallback.",
+                        name_s);
+                    self->processOneMessage(pendingMsg);  // Fallback
                 } else {
-                    spdlog::trace("[MessageBus] Message '{}' pushed to lock-free queue.", name_s);
+                    spdlog::trace(
+                        "[MessageBus] Message '{}' pushed to lock-free queue.",
+                        name_s);
                 }
 
-                { // Scope for history lock
+                {  // Scope for history lock
                     std::unique_lock lock(self->mutex_);
-                    self->recordMessageHistory<MessageType>(name_s, message_copy);
+                    self->recordMessageHistory<MessageType>(name_s,
+                                                            message_copy);
                 }
             };
 
             if (delay && delay.value().count() > 0) {
 #ifdef ATOM_USE_ASIO
-                auto timer = std::make_shared<asio::steady_timer>(io_context_, *delay);
-                timer->async_wait(
-                    [timer, publishTask_copy = publishTask, name_copy = name_str](const asio::error_code& errorCode) { // Capture task by value
-                        if (!errorCode) {
-                            publishTask_copy();
-                        } else {
-                            spdlog::error("[MessageBus] Asio timer error for message '{}': {}", name_copy, errorCode.message());
-                        }
-                    });
-#else
-                spdlog::debug("[MessageBus] ATOM_USE_ASIO not defined. Using std::thread for delayed publish of '{}'.", name_str);
-                auto delayedPublishWrapper = [delay_val = *delay, task_to_run = publishTask, name_copy = name_str]() { // Removed self capture
-                    std::this_thread::sleep_for(delay_val);
-                    try {
-                        task_to_run();
-                    } catch (const std::exception& e) {
-                        spdlog::error("[MessageBus] Exception in non-Asio delayed task for message '{}': {}", name_copy, e.what());
-                    } catch (...) {
-                        spdlog::error("[MessageBus] Unknown exception in non-Asio delayed task for message '{}'", name_copy);
+                auto timer =
+                    std::make_shared<asio::steady_timer>(io_context_, *delay);
+                timer->async_wait([timer, publishTask_copy = publishTask,
+                                   name_copy = name_str](
+                                      const asio::error_code&
+                                          errorCode) {  // Capture task by value
+                    if (!errorCode) {
+                        publishTask_copy();
+                    } else {
+                        spdlog::error(
+                            "[MessageBus] Asio timer error for message '{}': "
+                            "{}",
+                            name_copy, errorCode.message());
                     }
-                };
+                });
+#else
+                spdlog::debug(
+                    "[MessageBus] ATOM_USE_ASIO not defined. Using std::thread "
+                    "for delayed publish of '{}'.",
+                    name_str);
+                auto delayedPublishWrapper =
+                    [delay_val = *delay, task_to_run = publishTask,
+                     name_copy = name_str]() {  // Removed self capture
+                        std::this_thread::sleep_for(delay_val);
+                        try {
+                            task_to_run();
+                        } catch (const std::exception& e) {
+                            spdlog::error(
+                                "[MessageBus] Exception in non-Asio delayed "
+                                "task for message '{}': {}",
+                                name_copy, e.what());
+                        } catch (...) {
+                            spdlog::error(
+                                "[MessageBus] Unknown exception in non-Asio "
+                                "delayed task for message '{}'",
+                                name_copy);
+                        }
+                    };
                 std::thread(delayedPublishWrapper).detach();
 #endif
             } else {
                 publishTask();
             }
         } catch (const std::exception& ex) {
-            spdlog::error("[MessageBus] Error in lock-free publish for message '{}': {}", name_sv, ex.what());
-            throw MessageBusException(std::string("Failed to publish message (lock-free): ") + ex.what());
+            spdlog::error(
+                "[MessageBus] Error in lock-free publish for message '{}': {}",
+                name_sv, ex.what());
+            throw MessageBusException(
+                std::string("Failed to publish message (lock-free): ") +
+                ex.what());
         }
     }
-#else   // ATOM_USE_LOCKFREE_QUEUE is not defined (Synchronous publish)
+#else  // ATOM_USE_LOCKFREE_QUEUE is not defined (Synchronous publish)
     /**
      * @brief Publishes a message to all relevant subscribers.
      * Synchronous version when lockfree queue is not used.
@@ -447,18 +520,27 @@ public:
             }
             std::string name_str(name_sv);
 
-            auto sft_ptr = shared_from_this(); // Moved shared_from_this() call
-            auto publishTask = [self = sft_ptr, name_s = name_str, message_copy = message]() { // Capture the ptr as self
+            auto sft_ptr = shared_from_this();  // Moved shared_from_this() call
+            auto publishTask = [self = sft_ptr, name_s = name_str,
+                                message_copy =
+                                    message]() {  // Capture the ptr as self
                 std::unique_lock lock(self->mutex_);
                 std::unordered_set<Token> calledSubscribers;
-                spdlog::trace("[MessageBus] Publishing message '{}' synchronously.", name_s);
+                spdlog::trace(
+                    "[MessageBus] Publishing message '{}' synchronously.",
+                    name_s);
 
-                self->publishToSubscribersInternal<MessageType>(name_s, message_copy, calledSubscribers);
+                self->publishToSubscribersInternal<MessageType>(
+                    name_s, message_copy, calledSubscribers);
 
                 for (const auto& registered_ns_key : self->namespaces_) {
                     if (name_s.rfind(registered_ns_key + ".", 0) == 0) {
-                        if (name_s != registered_ns_key) { // Avoid re-processing exact match if it's a namespace
-                           self->publishToSubscribersInternal<MessageType>(registered_ns_key, message_copy, calledSubscribers);
+                        if (name_s !=
+                            registered_ns_key) {  // Avoid re-processing exact
+                                                  // match if it's a namespace
+                            self->publishToSubscribersInternal<MessageType>(
+                                registered_ns_key, message_copy,
+                                calledSubscribers);
                         }
                     }
                 }
@@ -467,34 +549,56 @@ public:
 
             if (delay && delay.value().count() > 0) {
 #ifdef ATOM_USE_ASIO
-                auto timer = std::make_shared<asio::steady_timer>(io_context_, *delay);
-                timer->async_wait([timer, task_to_run = publishTask, name_copy = name_str](const asio::error_code& errorCode) {
-                    if (!errorCode) {
-                        task_to_run();
-                    } else {
-                        spdlog::error("[MessageBus] Asio timer error for message '{}': {}", name_copy, errorCode.message());
-                    }
-                });
+                auto timer =
+                    std::make_shared<asio::steady_timer>(io_context_, *delay);
+                timer->async_wait(
+                    [timer, task_to_run = publishTask,
+                     name_copy = name_str](const asio::error_code& errorCode) {
+                        if (!errorCode) {
+                            task_to_run();
+                        } else {
+                            spdlog::error(
+                                "[MessageBus] Asio timer error for message "
+                                "'{}': {}",
+                                name_copy, errorCode.message());
+                        }
+                    });
 #else
-                spdlog::debug("[MessageBus] ATOM_USE_ASIO not defined. Using std::thread for delayed publish of '{}'.", name_str);
-                 auto delayedPublishWrapper = [delay_val = *delay, task_to_run = publishTask, name_copy = name_str]() { // Removed self capture
-                    std::this_thread::sleep_for(delay_val);
-                    try {
-                        task_to_run();
-                    } catch (const std::exception& e) {
-                        spdlog::error("[MessageBus] Exception in non-Asio delayed task for message '{}': {}", name_copy, e.what());
-                    } catch (...) {
-                        spdlog::error("[MessageBus] Unknown exception in non-Asio delayed task for message '{}'", name_copy);
-                    }
-                };
+                spdlog::debug(
+                    "[MessageBus] ATOM_USE_ASIO not defined. Using std::thread "
+                    "for delayed publish of '{}'.",
+                    name_str);
+                auto delayedPublishWrapper =
+                    [delay_val = *delay, task_to_run = publishTask,
+                     name_copy = name_str]() {  // Removed self capture
+                        std::this_thread::sleep_for(delay_val);
+                        try {
+                            task_to_run();
+                        } catch (const std::exception& e) {
+                            spdlog::error(
+                                "[MessageBus] Exception in non-Asio delayed "
+                                "task for message '{}': {}",
+                                name_copy, e.what());
+                        } catch (...) {
+                            spdlog::error(
+                                "[MessageBus] Unknown exception in non-Asio "
+                                "delayed task for message '{}'",
+                                name_copy);
+                        }
+                    };
                 std::thread(delayedPublishWrapper).detach();
 #endif
             } else {
                 publishTask();
             }
         } catch (const std::exception& ex) {
-            spdlog::error("[MessageBus] Error in synchronous publish for message '{}': {}", name_sv, ex.what());
-            throw MessageBusException(std::string("Failed to publish message synchronously: ") + ex.what());
+            spdlog::error(
+                "[MessageBus] Error in synchronous publish for message '{}': "
+                "{}",
+                name_sv, ex.what());
+            throw MessageBusException(
+                std::string("Failed to publish message synchronously: ") +
+                ex.what());
         }
     }
 #endif  // ATOM_USE_LOCKFREE_QUEUE
@@ -507,11 +611,13 @@ public:
     template <MessageConcept MessageType>
     void publishGlobal(const MessageType& message) noexcept {
         try {
-            spdlog::trace("[MessageBus] Publishing global message of type {}.", typeid(MessageType).name());
+            spdlog::trace("[MessageBus] Publishing global message of type {}.",
+                          typeid(MessageType).name());
             std::vector<std::string> names_to_publish;
             {
                 std::shared_lock lock(mutex_);
-                auto typeIter = subscribers_.find(std::type_index(typeid(MessageType)));
+                auto typeIter =
+                    subscribers_.find(std::type_index(typeid(MessageType)));
                 if (typeIter != subscribers_.end()) {
                     names_to_publish.reserve(typeIter->second.size());
                     for (const auto& [name, _] : typeIter->second) {
@@ -521,7 +627,8 @@ public:
             }
 
             for (const auto& name : names_to_publish) {
-                this->publish<MessageType>(name, message); // Uses the appropriate publish overload
+                this->publish<MessageType>(
+                    name, message);  // Uses the appropriate publish overload
             }
         } catch (const std::exception& ex) {
             spdlog::error("[MessageBus] Error in publishGlobal: {}", ex.what());
@@ -533,16 +640,19 @@ public:
      * @tparam MessageType The type of the message.
      * @param name_sv The name of the message or namespace.
      * @param handler The handler function.
-     * @param async Whether to call the handler asynchronously (requires ATOM_USE_ASIO for true async).
+     * @param async Whether to call the handler asynchronously (requires
+     * ATOM_USE_ASIO for true async).
      * @param once Whether to unsubscribe after the first message.
      * @param filter Optional filter function.
      * @return A token representing the subscription.
      */
     template <MessageConcept MessageType>
     [[nodiscard]] auto subscribe(
-        std::string_view name_sv, std::function<void(const MessageType&)> handler_fn, // Renamed params
+        std::string_view name_sv,
+        std::function<void(const MessageType&)> handler_fn,  // Renamed params
         bool async = true, bool once = false,
-        std::function<bool(const MessageType&)> filter_fn = [](const MessageType&) { return true; }) -> Token {
+        std::function<bool(const MessageType&)> filter_fn =
+            [](const MessageType&) { return true; }) -> Token {
         if (name_sv.empty()) {
             throw MessageBusException("Subscription name cannot be empty");
         }
@@ -553,36 +663,54 @@ public:
         std::unique_lock lock(mutex_);
         std::string nameStr(name_sv);
 
-        auto& subscribersList = subscribers_[std::type_index(typeid(MessageType))][nameStr];
+        auto& subscribersList =
+            subscribers_[std::type_index(typeid(MessageType))][nameStr];
 
         if (subscribersList.size() >= K_MAX_SUBSCRIBERS_PER_MESSAGE) {
-            spdlog::error("[MessageBus] Maximum subscribers ({}) reached for message name '{}', type '{}'.", K_MAX_SUBSCRIBERS_PER_MESSAGE, nameStr, typeid(MessageType).name());
-            throw MessageBusException("Maximum number of subscribers reached for this message type and name");
+            spdlog::error(
+                "[MessageBus] Maximum subscribers ({}) reached for message "
+                "name '{}', type '{}'.",
+                K_MAX_SUBSCRIBERS_PER_MESSAGE, nameStr,
+                typeid(MessageType).name());
+            throw MessageBusException(
+                "Maximum number of subscribers reached for this message type "
+                "and name");
         }
 
         Token token = nextToken_++;
         subscribersList.emplace_back(Subscriber{
-            [handler_capture = std::move(handler_fn)](const std::any& msg) { // Capture handler
+            [handler_capture = std::move(handler_fn)](
+                const std::any& msg) {  // Capture handler
                 try {
                     handler_capture(std::any_cast<const MessageType&>(msg));
                 } catch (const std::bad_any_cast& e) {
-                    spdlog::error("[MessageBus] Handler bad_any_cast (token unknown, type {}): {}", typeid(MessageType).name(), e.what());
+                    spdlog::error(
+                        "[MessageBus] Handler bad_any_cast (token unknown, "
+                        "type {}): {}",
+                        typeid(MessageType).name(), e.what());
                 }
             },
             async, once,
-            [filter_capture = std::move(filter_fn)](const std::any& msg) { // Capture filter
+            [filter_capture =
+                 std::move(filter_fn)](const std::any& msg) {  // Capture filter
                 try {
-                    return filter_capture(std::any_cast<const MessageType&>(msg));
+                    return filter_capture(
+                        std::any_cast<const MessageType&>(msg));
                 } catch (const std::bad_any_cast& e) {
-                    spdlog::error("[MessageBus] Filter bad_any_cast (token unknown, type {}): {}", typeid(MessageType).name(), e.what());
-                     return false; // Default behavior on cast error
+                    spdlog::error(
+                        "[MessageBus] Filter bad_any_cast (token unknown, type "
+                        "{}): {}",
+                        typeid(MessageType).name(), e.what());
+                    return false;  // Default behavior on cast error
                 }
             },
             token});
 
         namespaces_.insert(extractNamespace(nameStr));
-        spdlog::info("[MessageBus] Subscribed to: '{}' (type: {}) with token: {}. Async: {}, Once: {}",
-                     nameStr, typeid(MessageType).name(), token, async, once);
+        spdlog::info(
+            "[MessageBus] Subscribed to: '{}' (type: {}) with token: {}. "
+            "Async: {}, Once: {}",
+            nameStr, typeid(MessageType).name(), token, async, once);
         return token;
     }
 
@@ -594,10 +722,11 @@ public:
     template <MessageConcept MessageType>
     struct [[nodiscard]] MessageAwaitable {
         MessageBus& bus_;
-        std::string_view name_sv_; // Renamed
+        std::string_view name_sv_;  // Renamed
         Token token_{0};
-        std::optional<MessageType> message_opt_; // Renamed
-        // bool done_{false}; // Not strictly needed if resume is handled carefully
+        std::optional<MessageType> message_opt_;  // Renamed
+        // bool done_{false}; // Not strictly needed if resume is handled
+        // carefully
 
         explicit MessageAwaitable(MessageBus& bus, std::string_view name)
             : bus_(bus), name_sv_(name) {}
@@ -605,40 +734,59 @@ public:
         bool await_ready() const noexcept { return false; }
 
         void await_suspend(std::coroutine_handle<> handle) {
-            spdlog::trace("[MessageBus] Coroutine awaiting message '{}' of type {}", name_sv_, typeid(MessageType).name());
+            spdlog::trace(
+                "[MessageBus] Coroutine awaiting message '{}' of type {}",
+                name_sv_, typeid(MessageType).name());
             token_ = bus_.subscribe<MessageType>(
                 name_sv_,
-                [this, handle](const MessageType& msg) mutable { // Removed mutable as done_ is removed
+                [this, handle](
+                    const MessageType&
+                        msg) mutable {  // Removed mutable as done_ is removed
                     message_opt_.emplace(msg);
                     // done_ = true;
-                    if (handle) { // Ensure handle is valid before resuming
+                    if (handle) {  // Ensure handle is valid before resuming
                         handle.resume();
                     }
                 },
-                true, true); // Async true, Once true for typical awaitable
+                true, true);  // Async true, Once true for typical awaitable
         }
 
         MessageType await_resume() {
             if (!message_opt_.has_value()) {
-                 spdlog::error("[MessageBus] Coroutine resumed for '{}' but no message was received.", name_sv_);
+                spdlog::error(
+                    "[MessageBus] Coroutine resumed for '{}' but no message "
+                    "was received.",
+                    name_sv_);
                 throw MessageBusException("No message received in coroutine");
             }
-            spdlog::trace("[MessageBus] Coroutine received message for '{}'", name_sv_);
+            spdlog::trace("[MessageBus] Coroutine received message for '{}'",
+                          name_sv_);
             return std::move(message_opt_.value());
         }
 
         ~MessageAwaitable() {
-            if (token_ != 0 && bus_.isActive()) { // Check if bus is still active
+            if (token_ != 0 &&
+                bus_.isActive()) {  // Check if bus is still active
                 try {
-                    // Check if the subscription might still exist before unsubscribing
-                    // This is tricky without querying subscriber state directly here.
-                    // Unsubscribing a non-existent token is handled gracefully by unsubscribe.
-                    spdlog::trace("[MessageBus] Cleaning up coroutine subscription token {} for '{}'", token_, name_sv_);
+                    // Check if the subscription might still exist before
+                    // unsubscribing This is tricky without querying subscriber
+                    // state directly here. Unsubscribing a non-existent token
+                    // is handled gracefully by unsubscribe.
+                    spdlog::trace(
+                        "[MessageBus] Cleaning up coroutine subscription token "
+                        "{} for '{}'",
+                        token_, name_sv_);
                     bus_.unsubscribe<MessageType>(token_);
                 } catch (const std::exception& e) {
-                    spdlog::warn("[MessageBus] Exception during coroutine awaitable cleanup for token {}: {}", token_, e.what());
+                    spdlog::warn(
+                        "[MessageBus] Exception during coroutine awaitable "
+                        "cleanup for token {}: {}",
+                        token_, e.what());
                 } catch (...) {
-                    spdlog::warn("[MessageBus] Unknown exception during coroutine awaitable cleanup for token {}", token_);
+                    spdlog::warn(
+                        "[MessageBus] Unknown exception during coroutine "
+                        "awaitable cleanup for token {}",
+                        token_);
                 }
             }
         }
@@ -658,14 +806,20 @@ public:
 #elif defined(ATOM_COROUTINE_SUPPORT) && !defined(ATOM_USE_ASIO)
     template <MessageConcept MessageType>
     [[nodiscard]] auto receiveAsync(std::string_view name) {
-        spdlog::warn("[MessageBus] receiveAsync (coroutines) called but ATOM_USE_ASIO is not defined. True async behavior is not guaranteed.");
+        spdlog::warn(
+            "[MessageBus] receiveAsync (coroutines) called but ATOM_USE_ASIO "
+            "is not defined. True async behavior is not guaranteed.");
         // Potentially provide a synchronous-emulation or throw an error.
         // For now, let's disallow or make it clear it's not fully async.
         // This requires a placeholder or a compile-time error if not supported.
         // To make it compile, we can return a dummy or throw.
-        throw MessageBusException("receiveAsync with coroutines requires ATOM_USE_ASIO to be defined for proper asynchronous operation.");
-        // Or, provide a simplified awaitable that might behave more synchronously:
-        // struct DummyAwaitable { bool await_ready() { return true; } void await_suspend(std::coroutine_handle<>) {} MessageType await_resume() { throw MessageBusException("Not implemented"); } };
+        throw MessageBusException(
+            "receiveAsync with coroutines requires ATOM_USE_ASIO to be defined "
+            "for proper asynchronous operation.");
+        // Or, provide a simplified awaitable that might behave more
+        // synchronously: struct DummyAwaitable { bool await_ready() { return
+        // true; } void await_suspend(std::coroutine_handle<>) {} MessageType
+        // await_resume() { throw MessageBusException("Not implemented"); } };
         // return DummyAwaitable{};
     }
 #endif  // ATOM_COROUTINE_SUPPORT
@@ -679,7 +833,8 @@ public:
     void unsubscribe(Token token) noexcept {
         try {
             std::unique_lock lock(mutex_);
-            auto typeIter = subscribers_.find(std::type_index(typeid(MessageType))); // Renamed iterator
+            auto typeIter = subscribers_.find(
+                std::type_index(typeid(MessageType)));  // Renamed iterator
             if (typeIter != subscribers_.end()) {
                 bool found = false;
                 std::vector<std::string> names_to_cleanup_if_empty;
@@ -691,31 +846,39 @@ public:
                         if (subscribersList.empty()) {
                             names_to_cleanup_if_empty.push_back(name);
                         }
-                        // Optimization: if 'once' subscribers are common, breaking here might be too early
-                        // if a token could somehow be associated with multiple names (not current design).
-                        // For now, assume a token is unique across all names for a given type.
-                        // break; 
+                        // Optimization: if 'once' subscribers are common,
+                        // breaking here might be too early if a token could
+                        // somehow be associated with multiple names (not
+                        // current design). For now, assume a token is unique
+                        // across all names for a given type. break;
                     }
                 }
 
-                for(const auto& name_to_remove : names_to_cleanup_if_empty) {
+                for (const auto& name_to_remove : names_to_cleanup_if_empty) {
                     typeIter->second.erase(name_to_remove);
                 }
-                if (typeIter->second.empty()){
+                if (typeIter->second.empty()) {
                     subscribers_.erase(typeIter);
                 }
 
-
                 if (found) {
-                    spdlog::info("[MessageBus] Unsubscribed token: {} for type {}", token, typeid(MessageType).name());
+                    spdlog::info(
+                        "[MessageBus] Unsubscribed token: {} for type {}",
+                        token, typeid(MessageType).name());
                 } else {
-                    spdlog::trace("[MessageBus] Token {} not found for unsubscribe (type {}).", token, typeid(MessageType).name());
+                    spdlog::trace(
+                        "[MessageBus] Token {} not found for unsubscribe (type "
+                        "{}).",
+                        token, typeid(MessageType).name());
                 }
             } else {
-                 spdlog::trace("[MessageBus] Type {} not found for unsubscribe token {}.", typeid(MessageType).name(), token);
+                spdlog::trace(
+                    "[MessageBus] Type {} not found for unsubscribe token {}.",
+                    typeid(MessageType).name(), token);
             }
         } catch (const std::exception& ex) {
-            spdlog::error("[MessageBus] Error in unsubscribe for token {}: {}", token, ex.what());
+            spdlog::error("[MessageBus] Error in unsubscribe for token {}: {}",
+                          token, ex.what());
         }
     }
 
@@ -728,38 +891,50 @@ public:
     void unsubscribeAll(std::string_view name_sv) noexcept {
         try {
             std::unique_lock lock(mutex_);
-            auto typeIter = subscribers_.find(std::type_index(typeid(MessageType)));
+            auto typeIter =
+                subscribers_.find(std::type_index(typeid(MessageType)));
             if (typeIter != subscribers_.end()) {
                 std::string nameStr(name_sv);
                 auto nameIterator = typeIter->second.find(nameStr);
                 if (nameIterator != typeIter->second.end()) {
                     size_t count = nameIterator->second.size();
-                    typeIter->second.erase(nameIterator); // Erase the entry for this name
-                    if (typeIter->second.empty()){
+                    typeIter->second.erase(
+                        nameIterator);  // Erase the entry for this name
+                    if (typeIter->second.empty()) {
                         subscribers_.erase(typeIter);
                     }
-                    spdlog::info("[MessageBus] Unsubscribed all {} handlers for: '{}' (type {})",
-                                 count, nameStr, typeid(MessageType).name());
+                    spdlog::info(
+                        "[MessageBus] Unsubscribed all {} handlers for: '{}' "
+                        "(type {})",
+                        count, nameStr, typeid(MessageType).name());
                 } else {
-                    spdlog::trace("[MessageBus] No subscribers found for name '{}' (type {}) to unsubscribeAll.", nameStr, typeid(MessageType).name());
+                    spdlog::trace(
+                        "[MessageBus] No subscribers found for name '{}' (type "
+                        "{}) to unsubscribeAll.",
+                        nameStr, typeid(MessageType).name());
                 }
             }
         } catch (const std::exception& ex) {
-            spdlog::error("[MessageBus] Error in unsubscribeAll for name '{}': {}", name_sv, ex.what());
+            spdlog::error(
+                "[MessageBus] Error in unsubscribeAll for name '{}': {}",
+                name_sv, ex.what());
         }
     }
 
     /**
-     * @brief Gets the number of subscribers for a given message name or namespace.
+     * @brief Gets the number of subscribers for a given message name or
+     * namespace.
      * @tparam MessageType The type of the message.
      * @param name_sv The name of the message or namespace.
      * @return The number of subscribers.
      */
     template <MessageConcept MessageType>
-    [[nodiscard]] auto getSubscriberCount(std::string_view name_sv) const noexcept -> std::size_t {
+    [[nodiscard]] auto getSubscriberCount(
+        std::string_view name_sv) const noexcept -> std::size_t {
         try {
             std::shared_lock lock(mutex_);
-            auto typeIter = subscribers_.find(std::type_index(typeid(MessageType)));
+            auto typeIter =
+                subscribers_.find(std::type_index(typeid(MessageType)));
             if (typeIter != subscribers_.end()) {
                 std::string nameStr(name_sv);
                 auto nameIterator = typeIter->second.find(nameStr);
@@ -769,30 +944,38 @@ public:
             }
             return 0;
         } catch (const std::exception& ex) {
-            spdlog::error("[MessageBus] Error in getSubscriberCount for name '{}': {}", name_sv, ex.what());
+            spdlog::error(
+                "[MessageBus] Error in getSubscriberCount for name '{}': {}",
+                name_sv, ex.what());
             return 0;
         }
     }
 
     /**
-     * @brief Checks if there are any subscribers for a given message name or namespace.
+     * @brief Checks if there are any subscribers for a given message name or
+     * namespace.
      * @tparam MessageType The type of the message.
      * @param name_sv The name of the message or namespace.
      * @return True if there are subscribers, false otherwise.
      */
     template <MessageConcept MessageType>
-    [[nodiscard]] auto hasSubscriber(std::string_view name_sv) const noexcept -> bool {
+    [[nodiscard]] auto hasSubscriber(std::string_view name_sv) const noexcept
+        -> bool {
         try {
             std::shared_lock lock(mutex_);
-            auto typeIter = subscribers_.find(std::type_index(typeid(MessageType)));
+            auto typeIter =
+                subscribers_.find(std::type_index(typeid(MessageType)));
             if (typeIter != subscribers_.end()) {
                 std::string nameStr(name_sv);
                 auto nameIterator = typeIter->second.find(nameStr);
-                return nameIterator != typeIter->second.end() && !nameIterator->second.empty();
+                return nameIterator != typeIter->second.end() &&
+                       !nameIterator->second.empty();
             }
             return false;
         } catch (const std::exception& ex) {
-            spdlog::error("[MessageBus] Error in hasSubscriber for name '{}': {}", name_sv, ex.what());
+            spdlog::error(
+                "[MessageBus] Error in hasSubscriber for name '{}': {}",
+                name_sv, ex.what());
             return false;
         }
     }
@@ -805,11 +988,14 @@ public:
             std::unique_lock lock(mutex_);
             subscribers_.clear();
             namespaces_.clear();
-            messageHistory_.clear(); // Also clear history
-            nextToken_ = 0; // Reset token counter
-            spdlog::info("[MessageBus] Cleared all subscribers, namespaces, and history.");
+            messageHistory_.clear();  // Also clear history
+            nextToken_ = 0;           // Reset token counter
+            spdlog::info(
+                "[MessageBus] Cleared all subscribers, namespaces, and "
+                "history.");
         } catch (const std::exception& ex) {
-            spdlog::error("[MessageBus] Error in clearAllSubscribers: {}", ex.what());
+            spdlog::error("[MessageBus] Error in clearAllSubscribers: {}",
+                          ex.what());
         }
     }
 
@@ -817,12 +1003,14 @@ public:
      * @brief Gets the list of active namespaces.
      * @return A vector of active namespace names.
      */
-    [[nodiscard]] auto getActiveNamespaces() const noexcept -> std::vector<std::string> {
+    [[nodiscard]] auto getActiveNamespaces() const noexcept
+        -> std::vector<std::string> {
         try {
             std::shared_lock lock(mutex_);
             return {namespaces_.begin(), namespaces_.end()};
         } catch (const std::exception& ex) {
-            spdlog::error("[MessageBus] Error in getActiveNamespaces: {}", ex.what());
+            spdlog::error("[MessageBus] Error in getActiveNamespaces: {}",
+                          ex.what());
             return {};
         }
     }
@@ -836,7 +1024,8 @@ public:
      */
     template <MessageConcept MessageType>
     [[nodiscard]] auto getMessageHistory(
-        std::string_view name_sv, std::size_t count = K_MAX_HISTORY_SIZE) const -> std::vector<MessageType> {
+        std::string_view name_sv, std::size_t count = K_MAX_HISTORY_SIZE) const
+        -> std::vector<MessageType> {
         try {
             if (count == 0) {
                 return {};
@@ -844,7 +1033,8 @@ public:
 
             count = std::min(count, K_MAX_HISTORY_SIZE);
             std::shared_lock lock(mutex_);
-            auto typeIter = messageHistory_.find(std::type_index(typeid(MessageType)));
+            auto typeIter =
+                messageHistory_.find(std::type_index(typeid(MessageType)));
             if (typeIter != messageHistory_.end()) {
                 std::string nameStr(name_sv);
                 auto nameIterator = typeIter->second.find(nameStr);
@@ -853,12 +1043,19 @@ public:
                     std::vector<MessageType> history;
                     history.reserve(std::min(count, historyData.size()));
 
-                    std::size_t start = (historyData.size() > count) ? historyData.size() - count : 0;
+                    std::size_t start = (historyData.size() > count)
+                                            ? historyData.size() - count
+                                            : 0;
                     for (std::size_t i = start; i < historyData.size(); ++i) {
                         try {
-                            history.emplace_back(std::any_cast<const MessageType&>(historyData[i]));
+                            history.emplace_back(
+                                std::any_cast<const MessageType&>(
+                                    historyData[i]));
                         } catch (const std::bad_any_cast& e) {
-                            spdlog::warn("[MessageBus] Bad any_cast in getMessageHistory for '{}', type {}: {}", nameStr, typeid(MessageType).name(), e.what());
+                            spdlog::warn(
+                                "[MessageBus] Bad any_cast in "
+                                "getMessageHistory for '{}', type {}: {}",
+                                nameStr, typeid(MessageType).name(), e.what());
                         }
                     }
                     return history;
@@ -866,20 +1063,24 @@ public:
             }
             return {};
         } catch (const std::exception& ex) {
-            spdlog::error("[MessageBus] Error in getMessageHistory for name '{}': {}", name_sv, ex.what());
+            spdlog::error(
+                "[MessageBus] Error in getMessageHistory for name '{}': {}",
+                name_sv, ex.what());
             return {};
         }
     }
 
     /**
-     * @brief Checks if the message bus is currently processing messages (for lock-free queue) or generally operational.
+     * @brief Checks if the message bus is currently processing messages (for
+     * lock-free queue) or generally operational.
      * @return True if active, false otherwise
      */
     [[nodiscard]] bool isActive() const noexcept {
 #ifdef ATOM_USE_LOCKFREE_QUEUE
         return processingActive_.load(std::memory_order_relaxed);
 #else
-        return true;  // Synchronous mode is always considered active for publishing
+        return true;  // Synchronous mode is always considered active for
+                      // publishing
 #endif
     }
 
@@ -895,7 +1096,7 @@ public:
             size_t namespaceCount{0};
             size_t historyTotalMessages{0};
 #ifdef ATOM_USE_LOCKFREE_QUEUE
-            size_t pendingQueueSizeApprox{0}; // Approximate for lock-free
+            size_t pendingQueueSizeApprox{0};  // Approximate for lock-free
 #endif
         } stats;
 
@@ -903,22 +1104,24 @@ public:
         stats.typeCount = subscribers_.size();
 
         for (const auto& [_, typeMap] : subscribers_) {
-            for (const auto& [__, subscribersList] : typeMap) { // Renamed
+            for (const auto& [__, subscribersList] : typeMap) {  // Renamed
                 stats.subscriberCount += subscribersList.size();
             }
         }
 
         for (const auto& [_, nameMap] : messageHistory_) {
-            for (const auto& [__, historyList] : nameMap) { // Renamed
+            for (const auto& [__, historyList] : nameMap) {  // Renamed
                 stats.historyTotalMessages += historyList.size();
             }
         }
 #ifdef ATOM_USE_LOCKFREE_QUEUE
-        // pendingMessages_.empty() is usually available, but size might not be cheap/exact.
-        // For boost::lockfree::queue, there's no direct size(). We can't get an exact size easily.
-        // We can only check if it's empty or try to count by popping, which is not suitable here.
-        // So, we'll omit pendingQueueSizeApprox or set to 0 if not available.
-        // stats.pendingQueueSizeApprox = pendingMessages_.read_available(); // If spsc_queue or similar with read_available
+        // pendingMessages_.empty() is usually available, but size might not be
+        // cheap/exact. For boost::lockfree::queue, there's no direct size(). We
+        // can't get an exact size easily. We can only check if it's empty or
+        // try to count by popping, which is not suitable here. So, we'll omit
+        // pendingQueueSizeApprox or set to 0 if not available.
+        // stats.pendingQueueSizeApprox = pendingMessages_.read_available(); //
+        // If spsc_queue or similar with read_available
 #endif
         return stats;
     }
@@ -932,7 +1135,7 @@ private:
         Token token;
     } ATOM_ALIGNAS(64);
 
-#ifndef ATOM_USE_LOCKFREE_QUEUE // Only needed for synchronous publish
+#ifndef ATOM_USE_LOCKFREE_QUEUE  // Only needed for synchronous publish
     /**
      * @brief Internal method to publish to subscribers (called under lock).
      * @tparam MessageType The type of the message.
@@ -941,30 +1144,44 @@ private:
      * @param calledSubscribers The set of already called subscribers.
      */
     template <MessageConcept MessageType>
-    void publishToSubscribersInternal(const std::string& name,
-                              const MessageType& message,
-                              std::unordered_set<Token>& calledSubscribers) {
+    void publishToSubscribersInternal(
+        const std::string& name, const MessageType& message,
+        std::unordered_set<Token>& calledSubscribers) {
         auto typeIter = subscribers_.find(std::type_index(typeid(MessageType)));
-        if (typeIter == subscribers_.end()) return;
+        if (typeIter == subscribers_.end())
+            return;
 
         auto nameIterator = typeIter->second.find(name);
-        if (nameIterator == typeIter->second.end()) return;
+        if (nameIterator == typeIter->second.end())
+            return;
 
         auto& subscribersList = nameIterator->second;
-        std::vector<Token> tokensToRemove; // For one-time subscribers
+        std::vector<Token> tokensToRemove;  // For one-time subscribers
 
-        for (auto& subscriber : subscribersList) { // Iterate by reference to allow modification if needed (though not directly here)
+        for (auto& subscriber :
+             subscribersList) {  // Iterate by reference to allow modification
+                                 // if needed (though not directly here)
             try {
-                // Ensure message is converted to std::any for filter and handler
-                std::any msg_any = message; 
-                if (subscriber.filter(msg_any) && calledSubscribers.insert(subscriber.token).second) {
-                    auto handler_task = [handlerFunc = subscriber.handler, message_for_handler = msg_any, token = subscriber.token]() { // Capture message_any by value
-                        try {
-                            handlerFunc(message_for_handler);
-                        } catch (const std::exception& e) {
-                            spdlog::error("[MessageBus] Handler exception (sync publish, token {}): {}", token, e.what());
-                        }
-                    };
+                // Ensure message is converted to std::any for filter and
+                // handler
+                std::any msg_any = message;
+                if (subscriber.filter(msg_any) &&
+                    calledSubscribers.insert(subscriber.token).second) {
+                    auto handler_task =
+                        [handlerFunc = subscriber.handler,
+                         message_for_handler = msg_any,
+                         token =
+                             subscriber
+                                 .token]() {  // Capture message_any by value
+                            try {
+                                handlerFunc(message_for_handler);
+                            } catch (const std::exception& e) {
+                                spdlog::error(
+                                    "[MessageBus] Handler exception (sync "
+                                    "publish, token {}): {}",
+                                    token, e.what());
+                            }
+                        };
 
 #ifdef ATOM_USE_ASIO
                     if (subscriber.async) {
@@ -973,9 +1190,13 @@ private:
                         handler_task();
                     }
 #else
-                    handler_task(); // Synchronous if no Asio
+                    handler_task();  // Synchronous if no Asio
                     if (subscriber.async) {
-                         spdlog::trace("[MessageBus] ATOM_USE_ASIO not defined. Async handler for token {} (sync publish) executed synchronously.", subscriber.token);
+                        spdlog::trace(
+                            "[MessageBus] ATOM_USE_ASIO not defined. Async "
+                            "handler for token {} (sync publish) executed "
+                            "synchronously.",
+                            subscriber.token);
                     }
 #endif
                     if (subscriber.once) {
@@ -983,9 +1204,15 @@ private:
                     }
                 }
             } catch (const std::bad_any_cast& e) {
-                 spdlog::error("[MessageBus] Filter bad_any_cast (sync publish, token {}): {}", subscriber.token, e.what());
+                spdlog::error(
+                    "[MessageBus] Filter bad_any_cast (sync publish, token "
+                    "{}): {}",
+                    subscriber.token, e.what());
             } catch (const std::exception& e) {
-                spdlog::error("[MessageBus] Filter/Handler exception (sync publish, token {}): {}", subscriber.token, e.what());
+                spdlog::error(
+                    "[MessageBus] Filter/Handler exception (sync publish, "
+                    "token {}): {}",
+                    subscriber.token, e.what());
             }
         }
 
@@ -993,33 +1220,39 @@ private:
             subscribersList.erase(
                 std::remove_if(subscribersList.begin(), subscribersList.end(),
                                [&](const Subscriber& sub) {
-                                   return std::find(tokensToRemove.begin(), tokensToRemove.end(), sub.token) != tokensToRemove.end();
+                                   return std::find(tokensToRemove.begin(),
+                                                    tokensToRemove.end(),
+                                                    sub.token) !=
+                                          tokensToRemove.end();
                                }),
                 subscribersList.end());
             if (subscribersList.empty()) {
-                // If list becomes empty, remove 'name' entry from typeIter->second
-                typeIter->second.erase(nameIterator); 
+                // If list becomes empty, remove 'name' entry from
+                // typeIter->second
+                typeIter->second.erase(nameIterator);
                 if (typeIter->second.empty()) {
-                    // If type map becomes empty, remove type_index entry from subscribers_
+                    // If type map becomes empty, remove type_index entry from
+                    // subscribers_
                     subscribers_.erase(typeIter);
                 }
             }
         }
     }
-#endif // !ATOM_USE_LOCKFREE_QUEUE
+#endif  // !ATOM_USE_LOCKFREE_QUEUE
 
     /**
      * @brief Removes a subscription from the list.
      * @param subscribersList The list of subscribers.
      * @param token The token representing the subscription.
      */
-    static void removeSubscription(std::vector<Subscriber>& subscribersList, Token token) noexcept {
+    static void removeSubscription(std::vector<Subscriber>& subscribersList,
+                                   Token token) noexcept {
         // auto old_size = subscribersList.size(); // Not strictly needed here
         std::erase_if(subscribersList, [token](const Subscriber& sub) {
             return sub.token == token;
         });
         // if (subscribersList.size() < old_size) {
-             // Logged by caller if needed
+        // Logged by caller if needed
         // }
     }
 
@@ -1030,14 +1263,21 @@ private:
      * @param message The message to record.
      */
     template <MessageConcept MessageType>
-    void recordMessageHistory(const std::string& name, const MessageType& message) {
+    void recordMessageHistory(const std::string& name,
+                              const MessageType& message) {
         // Assumes mutex_ is already locked by caller
-        auto& historyList = messageHistory_[std::type_index(typeid(MessageType))][name]; // Renamed
-        historyList.emplace_back(std::any(message)); // Store as std::any explicitly
+        auto& historyList =
+            messageHistory_[std::type_index(typeid(MessageType))]
+                           [name];  // Renamed
+        historyList.emplace_back(
+            std::any(message));  // Store as std::any explicitly
         if (historyList.size() > K_MAX_HISTORY_SIZE) {
             historyList.erase(historyList.begin());
         }
-        spdlog::trace("[MessageBus] Recorded message for '{}' in history. History size: {}", name, historyList.size());
+        spdlog::trace(
+            "[MessageBus] Recorded message for '{}' in history. History size: "
+            "{}",
+            name, historyList.size());
     }
 
     /**
@@ -1045,18 +1285,22 @@ private:
      * @param name_sv The message name.
      * @return The namespace part of the name.
      */
-    [[nodiscard]] std::string extractNamespace(std::string_view name_sv) const noexcept {
+    [[nodiscard]] std::string extractNamespace(
+        std::string_view name_sv) const noexcept {
         auto pos = name_sv.find('.');
         if (pos != std::string_view::npos) {
             return std::string(name_sv.substr(0, pos));
         }
-        // If no '.', the name itself can be considered a "namespace" or root level.
-        // For consistency, if we always want a distinct namespace part, this might return empty or the name itself.
-        // Current logic: "foo.bar" -> "foo"; "foo" -> "foo".
-        // If "foo" should not be a namespace for itself, then:
-        // return (pos != std::string_view::npos) ? std::string(name_sv.substr(0, pos)) : "";
-        return std::string(name_sv); // Treat full name as namespace if no dot, or just the part before first dot.
-                                     // The original code returns std::string(name) if no dot. Let's keep it.
+        // If no '.', the name itself can be considered a "namespace" or root
+        // level. For consistency, if we always want a distinct namespace part,
+        // this might return empty or the name itself. Current logic: "foo.bar"
+        // -> "foo"; "foo" -> "foo". If "foo" should not be a namespace for
+        // itself, then: return (pos != std::string_view::npos) ?
+        // std::string(name_sv.substr(0, pos)) : "";
+        return std::string(
+            name_sv);  // Treat full name as namespace if no dot, or just the
+                       // part before first dot. The original code returns
+                       // std::string(name) if no dot. Let's keep it.
     }
 
 #ifdef ATOM_USE_LOCKFREE_QUEUE
@@ -1074,7 +1318,8 @@ private:
                        std::unordered_map<std::string, std::vector<std::any>>>
         messageHistory_;
     std::unordered_set<std::string> namespaces_;
-    mutable std::shared_mutex mutex_; // For subscribers_, messageHistory_, namespaces_, nextToken_
+    mutable std::shared_mutex
+        mutex_;  // For subscribers_, messageHistory_, namespaces_, nextToken_
     Token nextToken_;
 
 #ifdef ATOM_USE_ASIO

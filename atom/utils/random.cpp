@@ -53,7 +53,7 @@ auto generateRandomString(int length, const std::string& charset, bool secure) -
         }
     } else {
         std::uniform_int_distribution<size_t> dist(0, chars.size() - 1);
-        
+
         for (int i = 0; i < length; ++i) {
             result.push_back(chars[dist(thread_engine)]);
         }

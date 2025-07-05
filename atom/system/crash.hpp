@@ -23,22 +23,24 @@ namespace atom::system {
  * @param error_msg The detailed information of the crash log.
  *
  * This function is used to save the log information when the program crashes,
- * which is helpful for further debugging and analysis. The function automatically
- * collects system information, stack traces, environment variables, and creates
- * crash dump files (on Windows).
+ * which is helpful for further debugging and analysis. The function
+ * automatically collects system information, stack traces, environment
+ * variables, and creates crash dump files (on Windows).
  *
- * @note Make sure the crash log directory is writable before calling this function.
- * On Windows, this function will also create a minidump file for advanced debugging.
+ * @note Make sure the crash log directory is writable before calling this
+ * function. On Windows, this function will also create a minidump file for
+ * advanced debugging.
  */
 void saveCrashLog(std::string_view error_msg);
 
 /**
  * @brief Get comprehensive system information for crash reports
- * @return A formatted string containing system information including OS, CPU, memory, and disk usage
+ * @return A formatted string containing system information including OS, CPU,
+ * memory, and disk usage
  *
- * This function collects detailed system information that is useful for crash analysis,
- * including operating system details, CPU usage and specifications, memory status,
- * and disk usage information.
+ * This function collects detailed system information that is useful for crash
+ * analysis, including operating system details, CPU usage and specifications,
+ * memory status, and disk usage information.
  */
 [[nodiscard]] auto getSystemInfo() -> std::string;
 

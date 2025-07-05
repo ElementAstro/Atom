@@ -73,7 +73,8 @@ auto isRoot() -> bool {
 
     bool elevated = (elevation.TokenIsElevated != 0);
     CloseHandle(hToken);
-    spdlog::debug("User elevation status: {}", elevated ? "elevated" : "not elevated");
+    spdlog::debug("User elevation status: {}",
+                  elevated ? "elevated" : "not elevated");
     return elevated;
 #else
     bool result = (getuid() == 0);
@@ -92,7 +93,7 @@ auto getUserGroups() -> std::vector<std::wstring> {
         spdlog::error("Failed to open process token for group enumeration");
         return groups;
     }
-    
+
     DWORD bufferSize = 0;
     GetTokenInformation(hToken, TokenGroups, nullptr, 0, &bufferSize);
     if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
@@ -102,7 +103,8 @@ auto getUserGroups() -> std::vector<std::wstring> {
     }
 
     std::vector<BYTE> buffer(bufferSize);
-    if (GetTokenInformation(hToken, TokenGroups, buffer.data(), bufferSize, &bufferSize) == 0) {
+    if (GetTokenInformation(hToken, TokenGroups, buffer.data(), bufferSize,
+                            &bufferSize) == 0) {
         spdlog::error("Failed to retrieve token group information");
         CloseHandle(hToken);
         return groups;
@@ -123,11 +125,12 @@ auto getUserGroups() -> std::vector<std::wstring> {
         std::vector<TCHAR> nameBuffer(nameLength);
         std::vector<TCHAR> domainBuffer(domainLength);
         if (LookupAccountSid(nullptr, pTokenGroups->Groups[i].Sid,
-                            nameBuffer.data(), &nameLength,
-                            domainBuffer.data(), &domainLength, &sidUse)) {
+                             nameBuffer.data(), &nameLength,
+                             domainBuffer.data(), &domainLength, &sidUse)) {
             std::wstring nameStr(nameBuffer.begin(), nameBuffer.end());
             groups.push_back(nameStr);
-            spdlog::debug("Found group: {}", atom::utils::wstringToString(nameStr));
+            spdlog::debug("Found group: {}",
+                          atom::utils::wstringToString(nameStr));
         }
     }
 
@@ -150,7 +153,7 @@ auto getUserGroups() -> std::vector<std::wstring> {
     for (int i = 0; i < groupCount; i++) {
         struct group *grp = getgrgid(groupsArray[i]);
         if (grp != nullptr) {
-            std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+            std::wstring_convert<std::codecvt_utf8_utf16<wchar_t> > converter;
             std::wstring nameStr = converter.from_bytes(grp->gr_name);
             groups.push_back(nameStr);
             spdlog::debug("Found group: {}", grp->gr_name);
@@ -224,7 +227,8 @@ auto getUserId() -> int {
                                 dwLengthNeeded, &dwLengthNeeded) != 0) {
             PSID sid = pTokenUser->User.Sid;
             DWORD subAuthorityCount = *GetSidSubAuthorityCount(sid);
-            DWORD *subAuthority = GetSidSubAuthority(sid, subAuthorityCount - 1);
+            DWORD *subAuthority =
+                GetSidSubAuthority(sid, subAuthorityCount - 1);
             userId = static_cast<int>(*subAuthority);
         } else {
             spdlog::error("Failed to get user token information");
@@ -247,14 +251,19 @@ auto getGroupId() -> int {
     HANDLE hToken;
     if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken) != 0) {
         DWORD dwLengthNeeded;
-        GetTokenInformation(hToken, TokenPrimaryGroup, nullptr, 0, &dwLengthNeeded);
-        auto pTokenPrimaryGroup = std::unique_ptr<TOKEN_PRIMARY_GROUP, decltype(&free)>(
-            static_cast<TOKEN_PRIMARY_GROUP *>(malloc(dwLengthNeeded)), free);
+        GetTokenInformation(hToken, TokenPrimaryGroup, nullptr, 0,
+                            &dwLengthNeeded);
+        auto pTokenPrimaryGroup =
+            std::unique_ptr<TOKEN_PRIMARY_GROUP, decltype(&free)>(
+                static_cast<TOKEN_PRIMARY_GROUP *>(malloc(dwLengthNeeded)),
+                free);
         if (GetTokenInformation(hToken, TokenPrimaryGroup,
-                                pTokenPrimaryGroup.get(), dwLengthNeeded, &dwLengthNeeded) != 0) {
+                                pTokenPrimaryGroup.get(), dwLengthNeeded,
+                                &dwLengthNeeded) != 0) {
             PSID sid = pTokenPrimaryGroup->PrimaryGroup;
             DWORD subAuthorityCount = *GetSidSubAuthorityCount(sid);
-            DWORD *subAuthority = GetSidSubAuthority(sid, subAuthorityCount - 1);
+            DWORD *subAuthority =
+                GetSidSubAuthority(sid, subAuthorityCount - 1);
             groupId = static_cast<int>(*subAuthority);
         } else {
             spdlog::error("Failed to get primary group token information");
@@ -407,7 +416,8 @@ auto getEnvironmentVariable(const std::string &name) -> std::string {
     return value;
 }
 
-auto getAllEnvironmentVariables() -> std::unordered_map<std::string, std::string> {
+auto getAllEnvironmentVariables()
+    -> std::unordered_map<std::string, std::string> {
     spdlog::debug("Retrieving all environment variables");
     std::unordered_map<std::string, std::string> envVars;
 
@@ -446,7 +456,8 @@ auto getAllEnvironmentVariables() -> std::unordered_map<std::string, std::string
     return envVars;
 }
 
-auto setEnvironmentVariable(const std::string &name, const std::string &value) -> bool {
+auto setEnvironmentVariable(const std::string &name, const std::string &value)
+    -> bool {
     spdlog::debug("Setting environment variable '{}' = '{}'", name, value);
     bool success = false;
 
@@ -491,18 +502,21 @@ auto getLoggedInUsers() -> std::vector<std::string> {
     WTS_SESSION_INFO *sessionInfo = nullptr;
     DWORD sessionCount = 0;
 
-    if (WTSEnumerateSessions(WTS_CURRENT_SERVER_HANDLE, 0, 1, &sessionInfo, &sessionCount)) {
+    if (WTSEnumerateSessions(WTS_CURRENT_SERVER_HANDLE, 0, 1, &sessionInfo,
+                             &sessionCount)) {
         for (DWORD i = 0; i < sessionCount; i++) {
             if (sessionInfo[i].State == WTSActive) {
                 LPSTR buffer = nullptr;
                 DWORD bytesReturned = 0;
 
-                if (WTSQuerySessionInformationA(WTS_CURRENT_SERVER_HANDLE, sessionInfo[i].SessionId,
-                                              WTSUserName, &buffer, &bytesReturned)) {
+                if (WTSQuerySessionInformationA(
+                        WTS_CURRENT_SERVER_HANDLE, sessionInfo[i].SessionId,
+                        WTSUserName, &buffer, &bytesReturned)) {
                     if (buffer && bytesReturned > 1) {
                         std::string username(buffer);
-                        if (!username.empty() && 
-                            std::find(users.begin(), users.end(), username) == users.end()) {
+                        if (!username.empty() &&
+                            std::find(users.begin(), users.end(), username) ==
+                                users.end()) {
                             users.push_back(username);
                             spdlog::debug("Found logged-in user: {}", username);
                         }
@@ -522,8 +536,8 @@ auto getLoggedInUsers() -> std::vector<std::string> {
     while ((entry = getutent()) != nullptr) {
         if (entry->ut_type == USER_PROCESS) {
             std::string username(entry->ut_user);
-            if (!username.empty() && 
-                std::find(users.begin(), users.end(), username) == users.end()) {
+            if (!username.empty() && std::find(users.begin(), users.end(),
+                                               username) == users.end()) {
                 users.push_back(username);
                 spdlog::debug("Found logged-in user: {}", username);
             }
@@ -544,7 +558,8 @@ auto userExists(const std::string &username) -> bool {
     DWORD level = 1;
     USER_INFO_1 *userInfo = nullptr;
     std::wstring wUsername(username.begin(), username.end());
-    NET_API_STATUS status = NetUserGetInfo(nullptr, wUsername.c_str(), level, (LPBYTE *)&userInfo);
+    NET_API_STATUS status =
+        NetUserGetInfo(nullptr, wUsername.c_str(), level, (LPBYTE *)&userInfo);
 
     exists = (status == NERR_Success);
 

@@ -53,7 +53,7 @@ PYBIND11_MODULE(flood_fill, m) {
         --------------------
 
         This module provides various flood fill algorithms for 2D grids:
-        
+
         - **fill_bfs**: Flood fill using Breadth-First Search
         - **fill_dfs**: Flood fill using Depth-First Search
         - **fill_parallel**: Flood fill using multiple threads
@@ -61,14 +61,14 @@ PYBIND11_MODULE(flood_fill, m) {
         Example:
             >>> import numpy as np
             >>> from atom.algorithm.flood_fill import fill_bfs, Connectivity
-            >>> 
+            >>>
             >>> # Create a grid
             >>> grid = np.zeros((10, 10), dtype=np.int32)
             >>> grid[3:7, 3:7] = 1  # Create a square
-            >>> 
+            >>>
             >>> # Fill the square
             >>> filled_grid = fill_bfs(grid, 5, 5, 1, 2, Connectivity.FOUR)
-            >>> 
+            >>>
             >>> # Check result
             >>> assert np.all(filled_grid[3:7, 3:7] == 2)
     )pbdoc";

@@ -29,19 +29,19 @@ local header_files = {
 -- Object Library
 target("atom-secret-object")
     set_kind("object")
-    
+
     -- Add files
     add_files(table.unpack(source_files))
     add_headerfiles(table.unpack(header_files))
-    
+
     -- Add dependencies
     add_packages("loguru")
     add_deps("atom-utils")
-    
+
     -- Add include directories
     add_includedirs(".", {public = true})
     add_includedirs("..", {public = true})
-    
+
     -- Platform-specific settings
     if is_plat("windows") then
         add_syslinks("crypt32", "advapi32")
@@ -50,7 +50,7 @@ target("atom-secret-object")
     elseif is_plat("macosx") then
         add_frameworks("Security")
     end
-    
+
     -- Set C++ standard
     set_languages("c++20")
 target_end()
@@ -59,11 +59,11 @@ target_end()
 target("atom-secret")
     -- Set library type based on parent project option
     set_kind(has_config("shared_libs") and "shared" or "static")
-    
+
     -- Add dependencies
     add_deps("atom-secret-object", "atom-utils")
     add_packages("loguru")
-    
+
     -- Platform-specific settings
     if is_plat("windows") then
         add_syslinks("crypt32", "advapi32")
@@ -72,11 +72,11 @@ target("atom-secret")
     elseif is_plat("macosx") then
         add_frameworks("Security")
     end
-    
+
     -- Set output directories
     set_targetdir("$(buildir)/lib")
     set_objectdir("$(buildir)/obj")
-    
+
     -- Install configuration
     on_install(function (target)
         os.cp(target:targetfile(), path.join(target:installdir(), "lib"))

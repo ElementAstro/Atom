@@ -48,14 +48,14 @@ echo %YELLOW%vcpkg not found. Do you want to install it? (Y/N)%RESET%
 set /p INSTALL_CHOICE="> "
 if /i "%INSTALL_CHOICE%"=="Y" (
     echo %GREEN%Installing vcpkg...%RESET%
-    
+
     REM Determine installation path
     echo %YELLOW%Please select vcpkg installation location:%RESET%
     echo 1. User home directory (%USERPROFILE%\vcpkg)
     echo 2. C drive root (C:\vcpkg)
     echo 3. Current directory (%cd%\vcpkg)
     set /p INSTALL_LOCATION="> "
-    
+
     if "%INSTALL_LOCATION%"=="1" (
         set "VCPKG_PATH=%USERPROFILE%\vcpkg"
     ) else if "%INSTALL_LOCATION%"=="2" (
@@ -66,28 +66,28 @@ if /i "%INSTALL_CHOICE%"=="Y" (
         echo %RED%Invalid choice. Using default location (%USERPROFILE%\vcpkg)%RESET%
         set "VCPKG_PATH=%USERPROFILE%\vcpkg"
     )
-    
+
     REM Clone and bootstrap vcpkg
     if exist "%VCPKG_PATH%" (
         echo %YELLOW%Directory %VCPKG_PATH% already exists. Continue? (Y/N)%RESET%
         set /p CONTINUE_CHOICE="> "
         if /i not "%CONTINUE_CHOICE%"=="Y" goto :eof
     )
-    
+
     echo %GREEN%Cloning vcpkg to %VCPKG_PATH%...%RESET%
     git clone https://github.com/microsoft/vcpkg.git "%VCPKG_PATH%"
     if %ERRORLEVEL% neq 0 (
         echo %RED%Failed to clone vcpkg%RESET%
         goto :eof
     )
-    
+
     echo %GREEN%Bootstrapping vcpkg...%RESET%
     call "%VCPKG_PATH%\bootstrap-vcpkg.bat" -disableMetrics
     if %ERRORLEVEL% neq 0 (
         echo %RED%Failed to bootstrap vcpkg%RESET%
         goto :eof
     )
-    
+
     REM Set VCPKG_ROOT environment variable
     echo %GREEN%Setting VCPKG_ROOT environment variable...%RESET%
     setx VCPKG_ROOT "%VCPKG_PATH%"
@@ -123,18 +123,18 @@ set "TRIPLET=%ARCH%-windows"
 if %IS_MSYS2% equ 1 (
     set "TRIPLET=%ARCH%-mingw-dynamic"
     echo %GREEN%MSYS2: Using triplet %TRIPLET%%RESET%
-    
+
     REM Check if MinGW triplet needs to be created
     if not exist "%VCPKG_PATH%\triplets\community\%TRIPLET%.cmake" (
         echo %YELLOW%Need to create MinGW triplet file: %TRIPLET%%RESET%
-        
+
         mkdir "%VCPKG_PATH%\triplets\community" 2>nul
-        
+
         echo set(VCPKG_TARGET_ARCHITECTURE %ARCH%) > "%VCPKG_PATH%\triplets\community\%TRIPLET%.cmake"
         echo set(VCPKG_CRT_LINKAGE dynamic) >> "%VCPKG_PATH%\triplets\community\%TRIPLET%.cmake"
         echo set(VCPKG_LIBRARY_LINKAGE dynamic) >> "%VCPKG_PATH%\triplets\community\%TRIPLET%.cmake"
         echo set(VCPKG_CMAKE_SYSTEM_NAME MinGW) >> "%VCPKG_PATH%\triplets\community\%TRIPLET%.cmake"
-        
+
         echo %GREEN%Triplet file created: %TRIPLET%%RESET%
     fi
 )
@@ -158,7 +158,7 @@ if /i "%OPTIONAL_DEPS%"=="Y" (
     if %ERRORLEVEL% neq 0 (
         echo %YELLOW%Warning: Failed to install optional Boost components%RESET%
     )
-    
+
     echo %GREEN%Installing test components...%RESET%
     "%VCPKG_PATH%\vcpkg.exe" install gtest --triplet=%TRIPLET%
     if %ERRORLEVEL% neq 0 (
@@ -192,7 +192,7 @@ if /i "%CONFIG_NOW%"=="Y" (
         echo %RED%Project configuration failed%RESET%
     ) else {
         echo %GREEN%Project configured successfully!%RESET%
-        
+
         echo %YELLOW%Start build now? (Y/N)%RESET%
         set /p BUILD_NOW="> "
         if /i "%BUILD_NOW%"=="Y" (

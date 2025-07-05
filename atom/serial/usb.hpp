@@ -97,10 +97,12 @@ struct UsbOperation {
     explicit UsbOperation(handle_type h) : handle(h) {}
     UsbOperation(const UsbOperation&) = delete;
     UsbOperation& operator=(const UsbOperation&) = delete;
-    UsbOperation(UsbOperation&& other) noexcept : handle(std::exchange(other.handle, {})) {}
+    UsbOperation(UsbOperation&& other) noexcept
+        : handle(std::exchange(other.handle, {})) {}
     UsbOperation& operator=(UsbOperation&& other) noexcept {
         if (this != &other) {
-            if (handle) handle.destroy();
+            if (handle)
+                handle.destroy();
             handle = std::exchange(other.handle, {});
         }
         return *this;

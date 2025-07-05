@@ -36,14 +36,14 @@ Examples:
     >>> from atom.system import storage
     >>> # Create a storage monitor
     >>> monitor = storage.StorageMonitor()
-    >>> 
+    >>>
     >>> # Define a callback function
     >>> def on_storage_change(path):
     ...     print(f"Storage change detected at: {path}")
-    ... 
+    ...
     >>> # Register the callback
     >>> monitor.register_callback(on_storage_change)
-    >>> 
+    >>>
     >>> # Start monitoring
     >>> monitor.start_monitoring()
 )")
@@ -296,12 +296,12 @@ Examples:
     >>> from atom.system import storage
     >>> # Create a polling callback factory with 2-second interval
     >>> polling = storage.with_polling_callback(2.0)
-    >>> 
+    >>>
     >>> # Use it to decorate our actual callback
     >>> @polling
     ... def my_callback(path):
     ...     print(f"Storage changed: {path}")
-    ... 
+    ...
     >>> # Register the decorated callback
     >>> monitor = storage.StorageMonitor()
     >>> monitor.register_callback(my_callback)
@@ -363,7 +363,7 @@ Examples:
     >>> from atom.system import storage
     >>> def notify_change(path):
     ...     print(f"Storage changed: {path}")
-    ... 
+    ...
     >>> # Use as a context manager
     >>> with storage.monitor_storage(notify_change):
     ...     print("Monitoring storage...")

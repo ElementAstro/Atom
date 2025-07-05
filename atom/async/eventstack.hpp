@@ -937,7 +937,6 @@ void EventStack<T>::transformEvents(Func&& transformFunc) {
             Parallel::for_each(events_.begin(), events_.end(),
                                std::forward<Func>(transformFunc));
             */
-            
         }
 #endif
     } catch (const std::exception& e) {

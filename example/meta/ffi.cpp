@@ -360,7 +360,7 @@ int main() {
         std::cout << R"(
          DynamicLibrary myLibrary("path/to/library.so", {});
          auto mockObjectResult = myLibrary.createObject<MockLibraryInterface>("createMockLibrary");
-         
+
          if (mockObjectResult) {
              MockLibraryInterface& mockObj = *mockObjectResult.value();
              int sum = mockObj.add(10, 20);

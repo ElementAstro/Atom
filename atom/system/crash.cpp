@@ -25,8 +25,8 @@ Description: Crash Report
 #endif
 
 #ifdef _WIN32
-#include <windows.h>
 #include <dbghelp.h>
+#include <windows.h>
 #endif
 
 #include "atom/error/stacktrace.hpp"
@@ -51,7 +51,8 @@ auto getSystemInfo() -> std::string {
     try {
         auto osInfo = getOperatingSystemInfo();
         sss << "==================== System Information ====================\n";
-        sss << std::format("Operating System: {} {}\n", osInfo.osName, osInfo.osVersion);
+        sss << std::format("Operating System: {} {}\n", osInfo.osName,
+                           osInfo.osVersion);
         sss << std::format("Architecture: {}\n", osInfo.architecture);
         sss << std::format("Kernel Version: {}\n", osInfo.kernelVersion);
         sss << std::format("Computer Name: {}\n", osInfo.computerName);
@@ -62,14 +63,17 @@ auto getSystemInfo() -> std::string {
         sss << std::format("Usage: {:.2f}%\n", getCurrentCpuUsage());
         sss << std::format("Model: {}\n", getCPUModel());
         sss << std::format("Frequency: {:.2f} GHz\n", getProcessorFrequency());
-        sss << std::format("Temperature: {:.1f} °C\n", getCurrentCpuTemperature());
+        sss << std::format("Temperature: {:.1f} °C\n",
+                           getCurrentCpuTemperature());
         sss << std::format("Cores: {}\n", getNumberOfPhysicalCores());
         sss << std::format("Packages: {}\n\n", getNumberOfPhysicalPackages());
 
         sss << "==================== Memory Status ====================\n";
         sss << std::format("Usage: {:.2f}%\n", getMemoryUsage());
-        sss << std::format("Total: {:.2f} MB\n", static_cast<double>(getTotalMemorySize()));
-        sss << std::format("Free: {:.2f} MB\n\n", static_cast<double>(getAvailableMemorySize()));
+        sss << std::format("Total: {:.2f} MB\n",
+                           static_cast<double>(getTotalMemorySize()));
+        sss << std::format("Free: {:.2f} MB\n\n",
+                           static_cast<double>(getAvailableMemorySize()));
 
         sss << "==================== Disk Usage ====================\n";
         for (const auto& [drive, usage] : getDiskUsage()) {
@@ -85,7 +89,8 @@ auto getSystemInfo() -> std::string {
 }
 
 void saveCrashLog(std::string_view error_msg) {
-    spdlog::critical("Crash detected, saving crash log with error: {}", error_msg);
+    spdlog::critical("Crash detected, saving crash log with error: {}",
+                     error_msg);
 
     try {
         std::string systemInfo = getSystemInfo();
@@ -97,13 +102,15 @@ void saveCrashLog(std::string_view error_msg) {
                 environmentInfo += std::format("{}: {}\n", key, value);
             }
         } catch (const std::exception& e) {
-            spdlog::error("Failed to collect environment variables: {}", e.what());
+            spdlog::error("Failed to collect environment variables: {}",
+                          e.what());
             environmentInfo = "Failed to collect environment variables\n";
         }
 
         std::stringstream sss;
         sss << "==================== Crash Report ====================\n";
-        sss << std::format("Program crashed at: {}\n", utils::getChinaTimestampString());
+        sss << std::format("Program crashed at: {}\n",
+                           utils::getChinaTimestampString());
         sss << std::format("Error message: {}\n\n", error_msg);
 
         sss << "==================== Stack Trace ====================\n";
@@ -125,7 +132,8 @@ void saveCrashLog(std::string_view error_msg) {
             if (quotes.loadQuotesFromJson("./quotes.json")) {
                 std::string quote = quotes.getRandomQuote();
                 if (!quote.empty()) {
-                    sss << std::format("============ Famous Saying: {} ============\n", quote);
+                    sss << std::format(
+                        "============ Famous Saying: {} ============\n", quote);
                 }
             }
         } catch (const std::exception& e) {
@@ -146,7 +154,8 @@ void saveCrashLog(std::string_view error_msg) {
         }
 
         std::stringstream logFileName;
-        logFileName << "crash_report/crash_" << std::put_time(&localTime, "%Y%m%d_%H%M%S") << ".log";
+        logFileName << "crash_report/crash_"
+                    << std::put_time(&localTime, "%Y%m%d_%H%M%S") << ".log";
 
         std::filesystem::path dirPath("crash_report");
         if (!std::filesystem::exists(dirPath)) {
@@ -167,11 +176,14 @@ void saveCrashLog(std::string_view error_msg) {
 #ifdef _WIN32
         try {
             std::stringstream dumpFileName;
-            dumpFileName << "crash_report/crash_" << std::put_time(&localTime, "%Y%m%d_%H%M%S") << ".dmp";
+            dumpFileName << "crash_report/crash_"
+                         << std::put_time(&localTime, "%Y%m%d_%H%M%S")
+                         << ".dmp";
             std::string dumpFile = dumpFileName.str();
 
-            HANDLE hFile = CreateFileA(dumpFile.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
-                                      CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+            HANDLE hFile = CreateFileA(
+                dumpFile.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
+                CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
             if (hFile == INVALID_HANDLE_VALUE) {
                 spdlog::error("Failed to create dump file {}", dumpFile);
             } else {
@@ -181,20 +193,14 @@ void saveCrashLog(std::string_view error_msg) {
                 mdei.ClientPointers = FALSE;
 
                 BOOL dumpResult = MiniDumpWriteDump(
-                    GetCurrentProcess(),
-                    GetCurrentProcessId(),
-                    hFile,
-                    MiniDumpNormal,
-                    nullptr,
-                    nullptr,
-                    nullptr
-                );
+                    GetCurrentProcess(), GetCurrentProcessId(), hFile,
+                    MiniDumpNormal, nullptr, nullptr, nullptr);
 
                 if (dumpResult) {
                     spdlog::info("Minidump file created at {}", dumpFile);
                 } else {
                     spdlog::error("Failed to write minidump file {}, error: {}",
-                                 dumpFile, GetLastError());
+                                  dumpFile, GetLastError());
                 }
                 CloseHandle(hFile);
             }
@@ -207,11 +213,14 @@ void saveCrashLog(std::string_view error_msg) {
         spdlog::critical("Critical error while saving crash log: {}", e.what());
 
         try {
-            std::ofstream emergencyLog("emergency_crash.log", std::ios::out | std::ios::app);
+            std::ofstream emergencyLog("emergency_crash.log",
+                                       std::ios::out | std::ios::app);
             if (emergencyLog.good()) {
-                emergencyLog << std::format("Emergency crash log - {}: {}\n",
-                                          utils::getChinaTimestampString(), error_msg);
-                emergencyLog << std::format("Error saving full crash log: {}\n", e.what());
+                emergencyLog
+                    << std::format("Emergency crash log - {}: {}\n",
+                                   utils::getChinaTimestampString(), error_msg);
+                emergencyLog << std::format("Error saving full crash log: {}\n",
+                                            e.what());
                 emergencyLog.close();
                 spdlog::info("Emergency crash log written");
             }

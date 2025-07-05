@@ -67,13 +67,13 @@ PYBIND11_MODULE(signal, m) {
         m, "SignalHandlerRegistry",
         R"(Singleton class to manage signal handlers and dispatch signals.
 
-This class handles registering and dispatching signal handlers with priorities. 
+This class handles registering and dispatching signal handlers with priorities.
 It also provides a mechanism to set up default crash signal handlers.
 
 Examples:
     >>> from atom.system import signal
     >>> registry = signal.SignalHandlerRegistry.get_instance()
-    >>> 
+    >>>
     >>> # Define a simple handler
     >>> def handle_interrupt(sig_id):
     ...     print(f"Received interrupt signal: {sig_id}")
@@ -90,7 +90,7 @@ Returns:
     Reference to the singleton SignalHandlerRegistry instance.
 )")
 */
-        
+
         .def(
             "set_signal_handler", &SignalHandlerRegistry::setSignalHandler,
             py::arg("signal"), py::arg("handler"), py::arg("priority") = 0,
@@ -257,7 +257,7 @@ Args:
 Examples:
     >>> from atom.system import signal
     >>> manager = signal.SafeSignalManager.get_instance()
-    >>> 
+    >>>
     >>> # Define a signal handler function
     >>> def handle_signal(sig_id):
     ...     print(f"Handled signal {sig_id} safely in separate thread")
@@ -294,7 +294,7 @@ Returns:
 Examples:
     >>> def safe_handler(sig_id):
     ...     print(f"Safe handling of signal {sig_id}")
-    ... 
+    ...
     >>> handler_id = manager.add_safe_signal_handler(15, safe_handler)
 )")
         .def("remove_safe_signal_handler_by_id",

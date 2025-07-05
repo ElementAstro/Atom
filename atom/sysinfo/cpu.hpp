@@ -114,7 +114,8 @@ enum class CpuFeatureSupport { UNKNOWN, SUPPORTED, NOT_SUPPORTED };
 [[nodiscard]] auto getCpuLoadAverage() -> LoadAverage;
 [[nodiscard]] auto getCpuPowerInfo() -> CpuPowerInfo;
 [[nodiscard]] auto getCpuFeatureFlags() -> std::vector<std::string>;
-[[nodiscard]] auto isCpuFeatureSupported(const std::string& feature) -> CpuFeatureSupport;
+[[nodiscard]] auto isCpuFeatureSupported(const std::string& feature)
+    -> CpuFeatureSupport;
 [[nodiscard]] auto getCpuArchitecture() -> CpuArchitecture;
 [[nodiscard]] auto getCpuVendor() -> CpuVendor;
 [[nodiscard]] auto getCpuSocketType() -> std::string;

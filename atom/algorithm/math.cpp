@@ -226,11 +226,11 @@ void MathMemoryPool::deallocate(void* ptr, usize size) noexcept {
 #ifdef ATOM_USE_BOOST
     std::unique_lock lock(mutex_);
     if (size <= SMALL_BLOCK_SIZE) {
-        smallPool.free(static_cast<char (*)[SMALL_BLOCK_SIZE]>(ptr));
+        smallPool.free(static_cast<char(*)[SMALL_BLOCK_SIZE]>(ptr));
     } else if (size <= MEDIUM_BLOCK_SIZE) {
-        mediumPool.free(static_cast<char (*)[MEDIUM_BLOCK_SIZE]>(ptr));
+        mediumPool.free(static_cast<char(*)[MEDIUM_BLOCK_SIZE]>(ptr));
     } else if (size <= LARGE_BLOCK_SIZE) {
-        largePool.free(static_cast<char (*)[LARGE_BLOCK_SIZE]>(ptr));
+        largePool.free(static_cast<char(*)[LARGE_BLOCK_SIZE]>(ptr));
     } else {
         ::operator delete(ptr);
     }

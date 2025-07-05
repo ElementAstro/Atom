@@ -23,7 +23,7 @@ namespace atom::web {
 
 /**
  * @brief Set the Time-To-Live for DNS cache entries
- * 
+ *
  * @param ttlSeconds The TTL in seconds
  */
 void setDNSCacheTTL(std::chrono::seconds ttlSeconds);

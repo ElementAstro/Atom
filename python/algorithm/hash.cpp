@@ -13,29 +13,29 @@ PYBIND11_MODULE(hash, m) {
 
         This module provides a collection of optimized hash functions with thread-safe
         caching, parallel processing capability, and support for various data types.
-        
+
         The module includes:
           - Standard hash functions optimized with SIMD instructions
           - Support for various hash algorithms (STD, FNV1A, etc.)
           - Utilities for combining and verifying hash values
           - Thread-safe hash caching
           - Hash computation for complex data structures
-          
+
         Example:
             >>> from atom.algorithm import hash
-            >>> 
+            >>>
             >>> # Compute hash of a string
             >>> h1 = hash.compute_hash("Hello, world!")
             >>> print(h1)
-            
+
             >>> # Compute hash with a specific algorithm
             >>> h2 = hash.compute_hash("Hello, world!", hash.HashAlgorithm.FNV1A)
             >>> print(h2)
-            
+
             >>> # Hash a list of values
             >>> h3 = hash.compute_hash([1, 2, 3, 4, 5])
             >>> print(h3)
-            
+
             >>> # Verify if two hashes match
             >>> hash.verify_hash(h1, h2)  # False
             >>> hash.verify_hash(h1, h1)  # True
@@ -66,11 +66,11 @@ PYBIND11_MODULE(hash, m) {
         py::arg("algorithm") = atom::algorithm::HashAlgorithm::STD,
         R"pbdoc(
         Compute the hash value of a string.
-        
+
         Args:
             value: The string value to hash
             algorithm: The hash algorithm to use (default: STD)
-            
+
         Returns:
             The computed hash value
     )pbdoc");
@@ -85,11 +85,11 @@ PYBIND11_MODULE(hash, m) {
         py::arg("algorithm") = atom::algorithm::HashAlgorithm::STD,
         R"pbdoc(
         Compute the hash value of an integer.
-        
+
         Args:
             value: The integer value to hash
             algorithm: The hash algorithm to use (default: STD)
-            
+
         Returns:
             The computed hash value
     )pbdoc");
@@ -104,11 +104,11 @@ PYBIND11_MODULE(hash, m) {
         py::arg("algorithm") = atom::algorithm::HashAlgorithm::STD,
         R"pbdoc(
         Compute the hash value of a float.
-        
+
         Args:
             value: The float value to hash
             algorithm: The hash algorithm to use (default: STD)
-            
+
         Returns:
             The computed hash value
     )pbdoc");
@@ -123,11 +123,11 @@ PYBIND11_MODULE(hash, m) {
         py::arg("algorithm") = atom::algorithm::HashAlgorithm::STD,
         R"pbdoc(
         Compute the hash value of a boolean.
-        
+
         Args:
             value: The boolean value to hash
             algorithm: The hash algorithm to use (default: STD)
-            
+
         Returns:
             The computed hash value
     )pbdoc");
@@ -143,11 +143,11 @@ PYBIND11_MODULE(hash, m) {
         py::arg("algorithm") = atom::algorithm::HashAlgorithm::STD,
         R"pbdoc(
         Compute the hash value of a bytes object.
-        
+
         Args:
             value: The bytes object to hash
             algorithm: The hash algorithm to use (default: STD)
-            
+
         Returns:
             The computed hash value
     )pbdoc");
@@ -168,10 +168,10 @@ PYBIND11_MODULE(hash, m) {
         py::arg("value"),
         R"pbdoc(
         Compute the hash value of a tuple.
-        
+
         Args:
             value: The tuple to hash
-            
+
         Returns:
             The computed hash value
     )pbdoc");
@@ -210,11 +210,11 @@ PYBIND11_MODULE(hash, m) {
         py::arg("value"), py::arg("parallel") = false,
         R"pbdoc(
         Compute the hash value of a list.
-        
+
         Args:
             value: The list to hash
             parallel: Whether to use parallel processing for large lists (default: False)
-            
+
         Returns:
             The computed hash value
     )pbdoc");
@@ -245,10 +245,10 @@ PYBIND11_MODULE(hash, m) {
         py::arg("value"),
         R"pbdoc(
         Compute the hash value of a dictionary.
-        
+
         Args:
             value: The dictionary to hash
-            
+
         Returns:
             The computed hash value
     )pbdoc");
@@ -275,10 +275,10 @@ PYBIND11_MODULE(hash, m) {
         py::arg("value"),
         R"pbdoc(
         Compute the hash value of a set.
-        
+
         Args:
             value: The set to hash
-            
+
         Returns:
             The computed hash value
     )pbdoc");
@@ -289,10 +289,10 @@ PYBIND11_MODULE(hash, m) {
         py::arg("value"),
         R"pbdoc(
         Compute the hash value of None.
-        
+
         Args:
             value: None
-            
+
         Returns:
             The hash value of None (0)
     )pbdoc");
@@ -306,11 +306,11 @@ PYBIND11_MODULE(hash, m) {
         py::arg("value"), py::arg("basis") = 2166136261u,
         R"pbdoc(
         Compute the FNV-1a hash of a string.
-        
+
         Args:
             value: The string to hash
             basis: The initial basis value (default: 2166136261)
-            
+
         Returns:
             The computed FNV-1a hash value
     )pbdoc");
@@ -320,13 +320,13 @@ PYBIND11_MODULE(hash, m) {
           py::arg("hash"),
           R"pbdoc(
         Combine two hash values into one.
-        
+
         This function is useful for creating hash values for composite objects.
-        
+
         Args:
             seed: The initial hash value
             hash: The hash value to combine with the seed
-            
+
         Returns:
             The combined hash value
     )pbdoc");
@@ -336,12 +336,12 @@ PYBIND11_MODULE(hash, m) {
           py::arg("hash2"), py::arg("tolerance") = 0,
           R"pbdoc(
         Verify if two hash values match.
-        
+
         Args:
             hash1: The first hash value
             hash2: The second hash value
             tolerance: Allowed difference for fuzzy matching (default: 0)
-            
+
         Returns:
             True if the hashes match within the tolerance, False otherwise
     )pbdoc");
@@ -355,12 +355,12 @@ PYBIND11_MODULE(hash, m) {
         py::arg("str"),
         R"pbdoc(
         Compute the hash value of a string using the FNV-1a algorithm.
-        
+
         This is equivalent to the _hash string literal operator in C++.
-        
+
         Args:
             str: The string to hash
-            
+
         Returns:
             The computed hash value
     )pbdoc");
@@ -396,12 +396,12 @@ PYBIND11_MODULE(hash, m) {
         py::arg("filename"),
         R"pbdoc(
         Generate a fast hash for a filename.
-        
+
         This is useful for creating unique identifiers for files.
-        
+
         Args:
             filename: The filename to hash
-            
+
         Returns:
             The computed hash value
     )pbdoc");
@@ -438,11 +438,11 @@ PYBIND11_MODULE(hash, m) {
         py::arg("value"), py::arg("iterations") = 100000,
         R"pbdoc(
         Benchmark different hash algorithms.
-        
+
         Args:
             value: The string to hash
             iterations: Number of iterations to run (default: 100000)
-            
+
         Returns:
             A dictionary with algorithm names as keys and tuples (time, hash_value) as values
     )pbdoc");
@@ -498,11 +498,11 @@ PYBIND11_MODULE(hash, m) {
         py::arg("algorithm") = atom::algorithm::HashAlgorithm::STD,
         R"pbdoc(
         Analyze the distribution of hash values for a list of inputs.
-        
+
         Args:
             values: The list of values to hash
             algorithm: The hash algorithm to use (default: STD)
-            
+
         Returns:
             A dictionary with distribution metrics
     )pbdoc");

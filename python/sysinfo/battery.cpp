@@ -76,14 +76,14 @@ Examples:
                        "Battery serial number")
         .def("get_battery_health", &BatteryInfo::getBatteryHealth,
              R"(Calculate battery health (0-100%).
-            
+
 Returns:
     Battery health percentage.
 )")
         .def("get_estimated_time_remaining",
              &BatteryInfo::getEstimatedTimeRemaining,
              R"(Estimate remaining usage time.
-            
+
 Returns:
     Estimated time remaining in hours.
 )")
@@ -235,18 +235,18 @@ This class provides static methods to start and stop battery monitoring.
 Examples:
     >>> from atom.sysinfo import battery
     >>> import time
-    >>> 
+    >>>
     >>> # Define callback function for battery updates
     >>> def on_battery_update(info):
     ...     print(f"Battery level: {info.battery_life_percent}%")
     ...     print(f"Charging: {info.is_charging}")
-    ... 
+    ...
     >>> # Start monitoring with 2 second interval
     >>> battery.BatteryMonitor.start_monitoring(on_battery_update, 2000)
-    >>> 
+    >>>
     >>> # Let it run for a while
     >>> time.sleep(10)
-    >>> 
+    >>>
     >>> # Stop monitoring
     >>> battery.BatteryMonitor.stop_monitoring()
 )")
@@ -276,7 +276,7 @@ Examples:
     >>> # Define a callback function
     >>> def on_battery_update(info):
     ...     print(f"Battery update - Level: {info.battery_life_percent}%")
-    ... 
+    ...
     >>> # Start monitoring with 1 second intervals
     >>> battery.BatteryMonitor.start_monitoring(on_battery_update)
 )")
@@ -301,14 +301,14 @@ Examples:
     >>> from atom.sysinfo import battery
     >>> # Get the singleton instance
     >>> manager = battery.BatteryManager.get_instance()
-    >>> 
+    >>>
     >>> # Set up alert callback
     >>> def on_battery_alert(alert_msg, info):
     ...     print(f"Battery alert: {alert_msg}")
     ...     print(f"Current level: {info.battery_life_percent}%")
-    ... 
+    ...
     >>> manager.set_alert_callback(on_battery_alert)
-    >>> 
+    >>>
     >>> # Start monitoring
     >>> manager.start_monitoring(5000)  # Check every 5 seconds
 )")
@@ -364,17 +364,17 @@ Examples:
 
 Args:
     callback: Function to call when a battery alert is triggered.
-              The callback receives two arguments: alert message (str) 
+              The callback receives two arguments: alert message (str)
               and battery info (BatteryInfo).
 
 Examples:
     >>> from atom.sysinfo import battery
     >>> mgr = battery.BatteryManager.get_instance()
-    >>> 
+    >>>
     >>> def alert_handler(alert_msg, info):
     ...     print(f"Alert: {alert_msg}")
     ...     print(f"Battery level: {info.battery_life_percent}%")
-    ... 
+    ...
     >>> mgr.set_alert_callback(alert_handler)
 )")
         .def("set_alert_settings", &BatteryManager::setAlertSettings,
@@ -390,7 +390,7 @@ Examples:
     >>> settings = battery.BatteryAlertSettings()
     >>> settings.low_battery_threshold = 25.0
     >>> settings.high_temp_threshold = 42.0
-    >>> 
+    >>>
     >>> # Apply settings
     >>> mgr = battery.BatteryManager.get_instance()
     >>> mgr.set_alert_settings(settings)
@@ -465,11 +465,11 @@ Returns:
 Examples:
     >>> from atom.sysinfo import battery
     >>> import datetime
-    >>> 
+    >>>
     >>> mgr = battery.BatteryManager.get_instance()
     >>> # Get the last 10 history entries
     >>> history = mgr.get_history(10)
-    >>> 
+    >>>
     >>> for timestamp, info in history:
     ...     # Convert timestamp to readable format
     ...     time_str = datetime.datetime.fromtimestamp(
@@ -490,7 +490,7 @@ Examples:
     >>> # Get current power plan
     >>> current_plan = battery.PowerPlanManager.get_current_power_plan()
     >>> print(f"Current power plan: {current_plan}")
-    >>> 
+    >>>
     >>> # Switch to power saver
     >>> success = battery.PowerPlanManager.set_power_plan(battery.PowerPlan.POWER_SAVER)
     >>> if success:
@@ -724,15 +724,15 @@ Returns:
 Examples:
     >>> from atom.sysinfo import battery
     >>> import time
-    >>> 
+    >>>
     >>> def process_battery_info(info):
     ...     print(f"Battery level: {info.battery_life_percent}%")
-    ... 
+    ...
     >>> # Use as a context manager
     >>> with battery.monitor_battery(process_battery_info, 2000):
     ...     print("Monitoring battery for 10 seconds...")
     ...     time.sleep(10)
-    ... 
+    ...
     >>> print("Monitoring stopped")
 )");
 

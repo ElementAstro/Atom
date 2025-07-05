@@ -24,30 +24,30 @@ function(check_compiler_requirements)
     set(options "")
     set(oneValueArgs CXX_STANDARD MIN_GCC_VERSION MIN_CLANG_VERSION MIN_MSVC_VERSION)
     set(multiValueArgs "")
-    
+
     cmake_parse_arguments(CHECK "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
-    
+
     # Set default values
     if(NOT DEFINED CHECK_CXX_STANDARD)
         set(CHECK_CXX_STANDARD 23)
     endif()
-    
+
     if(NOT DEFINED CHECK_MIN_GCC_VERSION)
         set(CHECK_MIN_GCC_VERSION 10.0)
     endif()
-    
+
     if(NOT DEFINED CHECK_MIN_CLANG_VERSION)
         set(CHECK_MIN_CLANG_VERSION 10.0)
     endif()
-    
+
     if(NOT DEFINED CHECK_MIN_MSVC_VERSION)
         set(CHECK_MIN_MSVC_VERSION 19.28)
     endif()
-    
+
     # Check C++ standard support
     check_cxx_compiler_flag(-std=c++20 HAS_CXX20_FLAG)
     check_cxx_compiler_flag(-std=c++23 HAS_CXX23_FLAG)
-    
+
     if(CHECK_CXX_STANDARD EQUAL 23)
         if(NOT HAS_CXX23_FLAG)
             message(FATAL_ERROR "C++23 standard support is required!")
@@ -61,11 +61,11 @@ function(check_compiler_requirements)
     else()
         set(CMAKE_CXX_STANDARD ${CHECK_CXX_STANDARD} PARENT_SCOPE)
     endif()
-    
+
     set(CMAKE_CXX_STANDARD_REQUIRED ON PARENT_SCOPE)
     set(CMAKE_CXX_EXTENSIONS OFF PARENT_SCOPE)
     set(CMAKE_C_STANDARD 17 PARENT_SCOPE)
-    
+
     # Check compiler version
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
         execute_process(
@@ -95,7 +95,7 @@ function(check_compiler_requirements)
         message(STATUS "Using MSVC version ${CMAKE_CXX_COMPILER_VERSION}")
     endif()
     message(STATUS "Using C++${CMAKE_CXX_STANDARD}")
-    
+
     # Set special flags for Apple platforms
     if(APPLE)
         check_cxx_compiler_flag(-stdlib=libc++ HAS_LIBCXX_FLAG)
@@ -103,7 +103,7 @@ function(check_compiler_requirements)
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++" PARENT_SCOPE)
         endif()
     endif()
-    
+
     # Set build architecture for non-Apple platforms
     if(NOT APPLE)
         set(CMAKE_OSX_ARCHITECTURES x86_64 CACHE STRING "Build architecture for non-Apple platforms" FORCE)
@@ -113,22 +113,22 @@ endfunction()
 # Configure compiler options function
 function(configure_compiler_options)
     # Parse arguments
-    set(options 
-        ENABLE_WARNINGS TREAT_WARNINGS_AS_ERRORS 
+    set(options
+        ENABLE_WARNINGS TREAT_WARNINGS_AS_ERRORS
         ENABLE_OPTIMIZATIONS ENABLE_DEBUG_INFO
         ENABLE_UTF8 ENABLE_EXCEPTION_HANDLING
         ENABLE_LTO
     )
     set(oneValueArgs WARNING_LEVEL OPTIMIZATION_LEVEL)
     set(multiValueArgs ADDITIONAL_OPTIONS)
-    
+
     cmake_parse_arguments(ARGS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
-    
+
     # Set default values
     if(NOT DEFINED ARGS_WARNING_LEVEL)
         set(ARGS_WARNING_LEVEL "normal")
     endif()
-    
+
     if(NOT DEFINED ARGS_OPTIMIZATION_LEVEL)
         if(CMAKE_BUILD_TYPE STREQUAL "Debug")
             set(ARGS_OPTIMIZATION_LEVEL "none")
@@ -136,17 +136,17 @@ function(configure_compiler_options)
             set(ARGS_OPTIMIZATION_LEVEL "speed")
         endif()
     endif()
-    
+
     set(compiler_options "")
     set(linker_options "")
-    
+
     # MSVC compiler options
     if(MSVC)
         # Basic options
         list(APPEND compiler_options
             /nologo                # Suppress copyright message
         )
-        
+
         # UTF-8 support
         if(ARGS_ENABLE_UTF8)
             list(APPEND compiler_options
@@ -154,12 +154,12 @@ function(configure_compiler_options)
                 /execution-charset:UTF-8   # Specify execution character set as UTF-8
             )
         endif()
-        
+
         # Exception handling
         if(ARGS_ENABLE_EXCEPTION_HANDLING)
             list(APPEND compiler_options /EHsc)
         endif()
-        
+
         # Warning level
         if(ARGS_ENABLE_WARNINGS)
             if(ARGS_WARNING_LEVEL STREQUAL "high")
@@ -169,12 +169,12 @@ function(configure_compiler_options)
             else()
                 list(APPEND compiler_options /W3)
             endif()
-            
+
             if(ARGS_TREAT_WARNINGS_AS_ERRORS)
                 list(APPEND compiler_options /WX)
             endif()
         endif()
-        
+
         # Optimization level
         if(ARGS_ENABLE_OPTIMIZATIONS)
             if(ARGS_OPTIMIZATION_LEVEL STREQUAL "speed")
@@ -187,30 +187,30 @@ function(configure_compiler_options)
         else()
             list(APPEND compiler_options /Od)
         endif()
-        
+
         # Debug information
         if(ARGS_ENABLE_DEBUG_INFO)
             list(APPEND compiler_options /Zi)
         endif()
-        
+
         # Link Time Optimization
         if(ARGS_ENABLE_LTO)
             list(APPEND compiler_options /GL)
             list(APPEND linker_options /LTCG)
         endif()
-        
+
     # GCC/Clang compiler options
     elseif(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         # UTF-8 support
         if(ARGS_ENABLE_UTF8)
             list(APPEND compiler_options -fexec-charset=UTF-8)
         endif()
-        
+
         # Exception handling
         if(ARGS_ENABLE_EXCEPTION_HANDLING)
             list(APPEND compiler_options -fexceptions)
         endif()
-        
+
         # Warning level
         if(ARGS_ENABLE_WARNINGS)
             if(ARGS_WARNING_LEVEL STREQUAL "high")
@@ -220,12 +220,12 @@ function(configure_compiler_options)
             else()
                 list(APPEND compiler_options -Wall)
             endif()
-            
+
             if(ARGS_TREAT_WARNINGS_AS_ERRORS)
                 list(APPEND compiler_options -Werror)
             endif()
         endif()
-        
+
         # Optimization level
         if(ARGS_ENABLE_OPTIMIZATIONS)
             if(ARGS_OPTIMIZATION_LEVEL STREQUAL "speed")
@@ -238,34 +238,34 @@ function(configure_compiler_options)
         else()
             list(APPEND compiler_options -O0)
         endif()
-        
+
         # Debug information
         if(ARGS_ENABLE_DEBUG_INFO)
             list(APPEND compiler_options -g)
         endif()
-        
+
         # Link Time Optimization
         if(ARGS_ENABLE_LTO)
             list(APPEND compiler_options -flto)
             list(APPEND linker_options -flto)
         endif()
     endif()
-    
+
     # Add user-provided additional options
     if(ARGS_ADDITIONAL_OPTIONS)
         list(APPEND compiler_options ${ARGS_ADDITIONAL_OPTIONS})
     endif()
-    
+
     # Apply compiler options
     add_compile_options(${compiler_options})
-    
+
     # Apply linker options
     if(linker_options)
         string(REPLACE ";" " " linker_flags_str "${linker_options}")
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${linker_flags_str}" PARENT_SCOPE)
         set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${linker_flags_str}" PARENT_SCOPE)
     endif()
-    
+
     # Print information
     message(STATUS "Configured compiler options: ${compiler_options}")
     if(linker_options)
@@ -284,7 +284,7 @@ function(apply_build_preset PRESET_NAME)
             ENABLE_DEBUG_INFO
         )
         add_definitions(-DDEBUG -D_DEBUG)
-        
+
     elseif(PRESET_NAME STREQUAL "RELEASE")
         configure_compiler_options(
             ENABLE_UTF8
@@ -296,7 +296,7 @@ function(apply_build_preset PRESET_NAME)
             ENABLE_LTO
         )
         add_definitions(-DNDEBUG)
-        
+
     elseif(PRESET_NAME STREQUAL "MINSIZEREL")
         configure_compiler_options(
             ENABLE_UTF8
@@ -306,7 +306,7 @@ function(apply_build_preset PRESET_NAME)
             ENABLE_LTO
         )
         add_definitions(-DNDEBUG)
-        
+
     elseif(PRESET_NAME STREQUAL "RELWITHDEBINFO")
         configure_compiler_options(
             ENABLE_UTF8
@@ -315,7 +315,7 @@ function(apply_build_preset PRESET_NAME)
             ENABLE_DEBUG_INFO
         )
         add_definitions(-DNDEBUG)
-        
+
     elseif(PRESET_NAME STREQUAL "SANITIZE")
         # Enable code analysis and checking tools
         if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -346,7 +346,7 @@ function(configure_platform_options)
     elseif(UNIX AND NOT APPLE)
         add_definitions(-DPLATFORM_LINUX)
     endif()
-    
+
     # Check architecture
     if(CMAKE_SIZEOF_VOID_P EQUAL 8)
         add_definitions(-DARCH_X64)
@@ -361,9 +361,9 @@ macro(setup_project_defaults)
     set(options STATIC_RUNTIME ENABLE_PCH)
     set(oneValueArgs BUILD_PRESET CXX_STANDARD MIN_GCC_VERSION MIN_CLANG_VERSION MIN_MSVC_VERSION)
     set(multiValueArgs PCH_HEADERS)
-    
+
     cmake_parse_arguments(SETUP "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
-    
+
     # Check compiler requirements
     check_compiler_requirements(
         CXX_STANDARD ${SETUP_CXX_STANDARD}
@@ -371,7 +371,7 @@ macro(setup_project_defaults)
         MIN_CLANG_VERSION ${SETUP_MIN_CLANG_VERSION}
         MIN_MSVC_VERSION ${SETUP_MIN_MSVC_VERSION}
     )
-    
+
     # Configure static runtime library
     if(SETUP_STATIC_RUNTIME AND MSVC)
         set(variables
@@ -390,10 +390,10 @@ macro(setup_project_defaults)
             endif()
         endforeach()
     endif()
-    
+
     # Apply platform options
     configure_platform_options()
-    
+
     # Apply build preset
     if(DEFINED SETUP_BUILD_PRESET)
         apply_build_preset(${SETUP_BUILD_PRESET})
@@ -412,7 +412,7 @@ macro(setup_project_defaults)
             apply_build_preset("RELEASE")
         endif()
     endif()
-    
+
     # Configure precompiled headers
     if(SETUP_ENABLE_PCH AND DEFINED SETUP_PCH_HEADERS)
         if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
@@ -427,3 +427,8 @@ macro(setup_project_defaults)
         endif()
     endif()
 endmacro()
+
+if(LINUX)
+set(CMAKE_COLOR_DIAGNOSTICS ON)
+set(CMAKE_COLOR_MAKEFILE OFF)
+endif()

@@ -15,7 +15,6 @@
 #include <spdlog/spdlog.h>
 #include "atom/algorithm/rust_numeric.hpp"
 
-
 namespace atom::algorithm {
 
 //=============================================================================

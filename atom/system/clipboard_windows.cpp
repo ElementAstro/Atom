@@ -235,7 +235,8 @@ public:
             }
             return std::nullopt;
         }
-    }    bool setData(ClipboardFormat format,
+    }
+    bool setData(ClipboardFormat format,
                  std::span<const std::byte> data) override {
         try {
             if (!open())
@@ -294,7 +295,8 @@ public:
             }
             return false;
         }
-    }    std::optional<std::vector<std::byte>> getData(
+    }
+    std::optional<std::vector<std::byte>> getData(
         ClipboardFormat format) override {
         try {
             if (!open())
@@ -656,14 +658,16 @@ public:
 
     bool hasText() override { return containsFormat(ClipboardFormat{CF_TEXT}); }
 
-    bool hasImage() override { return containsFormat(ClipboardFormat{CF_BITMAP}); }
+    bool hasImage() override {
+        return containsFormat(ClipboardFormat{CF_BITMAP});
+    }
 
     // ============================================================================
     // Change Monitoring Implementation
     // ============================================================================
-    
+
     bool hasChanged() const override {
-        // Windows doesn't provide built-in change detection, 
+        // Windows doesn't provide built-in change detection,
         // so we'll use a simple sequence number approach
         DWORD currentSequence = GetClipboardSequenceNumber();
         if (currentSequence != m_lastSequenceNumber) {
@@ -672,10 +676,11 @@ public:
         }
         return false;
     }
-    
+
     void updateChangeCount() override {
         m_lastSequenceNumber = GetClipboardSequenceNumber();
-    }std::vector<ClipboardFormat> getAvailableFormats() override {
+    }
+    std::vector<ClipboardFormat> getAvailableFormats() override {
         try {
             if (!open())
                 return {};
@@ -697,10 +702,12 @@ public:
             }
             return {};
         }
-    }    std::optional<std::string> getFormatName(ClipboardFormat format) override {
+    }
+    std::optional<std::string> getFormatName(ClipboardFormat format) override {
         try {
             char name[256] = {0};
-            int result = GetClipboardFormatNameA(format.value, name, sizeof(name));
+            int result =
+                GetClipboardFormatNameA(format.value, name, sizeof(name));
 
             if (result == 0) {
                 // Handle standard formats
@@ -738,7 +745,8 @@ public:
                     case CF_LOCALE:
                         return "CF_LOCALE";
                     case CF_DIBV5:
-                        return "CF_DIBV5";                    default:
+                        return "CF_DIBV5";
+                    default:
                         return std::format("Unknown Format ({})", format.value);
                 }
             }

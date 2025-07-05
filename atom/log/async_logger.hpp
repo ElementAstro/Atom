@@ -165,9 +165,7 @@ struct Task<void>::promise_type {
     std::suspend_never initial_suspend() noexcept { return {}; }
     std::suspend_never final_suspend() noexcept { return {}; }
 
-    void return_void() {
-        result = std::expected<void, LogErrorCode>{};
-    }
+    void return_void() { result = std::expected<void, LogErrorCode>{}; }
 
     void unhandled_exception() {
         try {

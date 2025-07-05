@@ -126,7 +126,7 @@ public:
     template <typename T, typename UnaryFunction>
     auto transform(UnaryFunction transform_f) const -> cstream<T> {
         T dest;
-        dest.reserve(container_ref_.size());
+        dest.reverse(container_ref_.size());
         std::transform(container_ref_.begin(), container_ref_.end(),
                        std::back_inserter(dest), transform_f);
         return cstream<T>(std::move(dest));

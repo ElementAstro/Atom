@@ -62,11 +62,13 @@ struct PasswordManagerSettings {
 };
 
 /**
- * @brief Structure representing a previous password entry with change timestamp.
+ * @brief Structure representing a previous password entry with change
+ * timestamp.
  */
 struct PreviousPassword {
     std::string password;  ///< The previous password value
-    std::chrono::system_clock::time_point changed;  ///< When the password was changed
+    std::chrono::system_clock::time_point
+        changed;  ///< When the password was changed
 };
 
 }  // namespace atom::secret

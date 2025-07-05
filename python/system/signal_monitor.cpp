@@ -127,21 +127,21 @@ and register callbacks for various signal events.
 Examples:
     >>> from atom.system import signal_monitor
     >>> import time
-    >>> 
+    >>>
     >>> # Get the singleton instance
     >>> monitor = signal_monitor.get_instance()
-    >>> 
+    >>>
     >>> # Start monitoring all signals
     >>> monitor.start()
-    >>> 
+    >>>
     >>> # Wait a bit to collect stats
     >>> time.sleep(5)
-    >>> 
+    >>>
     >>> # Get a snapshot of signal statistics
     >>> stats = monitor.get_stat_snapshot()
     >>> for signal_id, signal_stats in stats.items():
     ...     print(f"Signal {signal_id}: Received {signal_stats.received}")
-    >>> 
+    >>>
     >>> # Stop monitoring
     >>> monitor.stop()
 )")
@@ -165,7 +165,7 @@ Examples:
     >>> # Start monitoring all signals, checking every 500ms
     >>> monitor = signal_monitor.get_instance()
     >>> monitor.start(500)
-    >>> 
+    >>>
     >>> # Or monitor specific signals
     >>> import signal
     >>> monitor.start(1000, [signal.SIGINT, signal.SIGTERM])
@@ -219,12 +219,12 @@ Returns:
 Examples:
     >>> from atom.system import signal_monitor
     >>> import signal
-    >>> 
+    >>>
     >>> # Define a callback function
     >>> def on_signal_threshold(signal_id, stats):
     ...     print(f"Signal {signal_id} threshold exceeded!")
     ...     print(f"Received: {stats.received}, Errors: {stats.handler_errors}")
-    ... 
+    ...
     >>> # Register callback for SIGINT - triggered after 5 occurrences
     >>> monitor = signal_monitor.get_instance()
     >>> callback_id = monitor.add_threshold_callback(
@@ -267,12 +267,12 @@ Examples:
     >>> from atom.system import signal_monitor
     >>> import signal
     >>> import time
-    >>> 
+    >>>
     >>> # Define a callback function
     >>> def on_signal_inactivity(signal_id, stats):
     ...     print(f"Signal {signal_id} has been inactive for too long!")
     ...     print(f"Last received: {stats.last_received}")
-    ... 
+    ...
     >>> # Register callback for SIGTERM - triggered after 30 seconds of inactivity
     >>> monitor = signal_monitor.get_instance()
     >>> callback_id = monitor.add_inactivity_callback(
@@ -293,15 +293,15 @@ Returns:
 Examples:
     >>> from atom.system import signal_monitor
     >>> monitor = signal_monitor.get_instance()
-    >>> 
+    >>>
     >>> # Add a callback
     >>> def callback(signal_id, stats):
     ...     print(f"Signal {signal_id} event")
-    ... 
+    ...
     >>> callback_id = monitor.add_threshold_callback(
     ...     signal.SIGINT, 5, 0, callback
     ... )
-    >>> 
+    >>>
     >>> # Later, remove the callback
     >>> success = monitor.remove_callback(callback_id)
     >>> print(f"Callback removed: {success}")
@@ -315,7 +315,7 @@ Returns:
 Examples:
     >>> from atom.system import signal_monitor
     >>> monitor = signal_monitor.get_instance()
-    >>> 
+    >>>
     >>> # Get stats for all monitored signals
     >>> stats = monitor.get_stat_snapshot()
     >>> for signal_id, signal_stats in stats.items():
@@ -333,7 +333,7 @@ Returns:
 Examples:
     >>> from atom.system import signal_monitor
     >>> monitor = signal_monitor.get_instance()
-    >>> 
+    >>>
     >>> # Get list of monitored signals
     >>> signals = monitor.get_monitored_signals()
     >>> print(f"Monitoring {len(signals)} signals: {signals}")
@@ -344,7 +344,7 @@ Examples:
 Examples:
     >>> from atom.system import signal_monitor
     >>> monitor = signal_monitor.get_instance()
-    >>> 
+    >>>
     >>> # Reset all stats to zero
     >>> monitor.reset_all_stats()
     >>> print("All signal statistics have been reset")
@@ -390,7 +390,7 @@ Examples:
     >>> from atom.system import signal_monitor
     >>> # Start monitoring all signals
     >>> signal_monitor.start_monitoring()
-    >>> 
+    >>>
     >>> # Or monitor specific signals with custom interval
     >>> import signal
     >>> signal_monitor.start_monitoring(500, [signal.SIGINT, signal.SIGTERM])
@@ -519,17 +519,17 @@ Returns:
 Examples:
     >>> from atom.system import signal_monitor
     >>> import signal
-    >>> 
+    >>>
     >>> def on_signal_event(signal_id, stats):
     ...     print(f"Signal {signal_id} event detected!")
-    ... 
+    ...
     >>> # Use as a context manager to monitor signals
     >>> with signal_monitor.monitor_signals(
     ...     [signal.SIGINT, signal.SIGTERM], on_signal_event, 500
     ... ):
     ...     print("Monitoring signals in this block...")
     ...     # Your code here
-    ... 
+    ...
     >>> print("Signal monitoring stopped")
 )");
 
@@ -602,19 +602,19 @@ Examples:
     >>> import threading
     >>> import os
     >>> import time
-    >>> 
+    >>>
     >>> # Set up a thread to send a signal after 1 second
     >>> def send_test_signal(pid, sig_to_send):
     ...     time.sleep(1)
     ...     os.kill(pid, sig_to_send)
-    ... 
+    ...
     >>> # Note: SIGUSR1 might not be available on Windows without specific setup.
     >>> # Using SIGINT for a more portable example, though be careful with terminal interruption.
     >>> # For a real test, use a signal like SIGUSR1 if available and handled.
     >>> test_signal = signal.SIGUSR1 if hasattr(signal, "SIGUSR1") else signal.SIGINT
     >>> pid = os.getpid()
     >>> threading.Thread(target=send_test_signal, args=(pid, test_signal)).start()
-    >>> 
+    >>>
     >>> # Wait for the signal with 2 second timeout
     >>> print(f"Waiting for signal {test_signal}...")
     >>> if signal_monitor.wait_for_signal(test_signal, 2000):
@@ -779,11 +779,11 @@ Examples:
     >>> import signal
     >>> import time
     >>> import os
-    >>> 
+    >>>
     >>> # Note: SIGUSR1 might not be available on Windows.
     >>> test_signal = signal.SIGUSR1 if hasattr(signal, "SIGUSR1") else signal.SIGINT
     >>> pid = os.getpid()
-    >>> 
+    >>>
     >>> # Use as a context manager to track signal rate
     >>> with signal_monitor.track_signal_rate(test_signal) as tracker:
     ...     # Generate some signals
@@ -800,7 +800,7 @@ Examples:
     ...     sig_thread.start()
     ...     time.sleep(0.6) // Allow signals to be sent and processed
     ...     sig_thread.join()
-    ...     
+    ...
     ...     // Get the rate
     ...     rate = tracker.get_rate()
     ...     print(f"Signal rate for {test_signal}: {rate:.2f} signals per second")

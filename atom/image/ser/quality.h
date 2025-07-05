@@ -42,35 +42,35 @@ class QualityAssessor {
 public:
     QualityAssessor();
     explicit QualityAssessor(const QualityParameters& params);
-    
+
     // Assess quality of a single frame
     double assessQuality(const cv::Mat& frame) const;
-    
+
     // Get quality scores as vector
     std::vector<double> getQualityScores(const std::vector<cv::Mat>& frames) const;
-    
+
     // Sort frames by quality (returns indices of frames in descending order)
     std::vector<size_t> sortFramesByQuality(const std::vector<cv::Mat>& frames) const;
-    
+
     // Select best N frames
     std::vector<cv::Mat> selectBestFrames(const std::vector<cv::Mat>& frames, size_t count) const;
-    
+
     // Add custom quality metric
-    void addCustomMetric(const std::string& name, 
+    void addCustomMetric(const std::string& name,
                         QualityMetricFunction metricFunction,
                         double weight = 1.0);
-                        
+
     // Remove custom metric
     void removeCustomMetric(const std::string& name);
-    
+
     // Get/set parameters
     void setParameters(const QualityParameters& params);
     const QualityParameters& getParameters() const;
-    
+
     // Get value of specific metric
     double getMetricValue(const cv::Mat& frame, QualityMetric metric) const;
     double getCustomMetricValue(const cv::Mat& frame, const std::string& metricName) const;
-    
+
     // Get details of all metrics for a frame
     struct MetricDetails {
         std::string name;
@@ -78,16 +78,16 @@ public:
         double normalizedValue;
         double weight;
     };
-    
+
     std::vector<MetricDetails> getDetailedMetrics(const cv::Mat& frame) const;
 
 private:
     QualityParameters parameters;
     std::unordered_map<std::string, std::pair<QualityMetricFunction, double>> customMetrics;
-    
+
     // Calculate ROI for quality assessment
     cv::Rect calculateROI(const cv::Mat& frame) const;
-    
+
     // Internal implementations for standard metrics
     double calculateSharpness(const cv::Mat& frame) const;
     double calculateSNR(const cv::Mat& frame) const;

@@ -92,12 +92,12 @@ Args:
 Examples:
     >>> from atom.connection.udpserver import UdpSocketHub
     >>> server = UdpSocketHub()
-    >>> 
+    >>>
     >>> # Set up message handler
     >>> def on_message(message, addr, port):
     ...     print(f"Received from {addr}:{port}: {message}")
     ...     return "Response: " + message
-    >>> 
+    >>>
     >>> server.add_message_handler(on_message)
     >>> server.start(8080)  # Start listening on port 8080
 )")
@@ -144,7 +144,7 @@ Args:
 Examples:
     >>> def message_handler(message, ip, port):
     ...     print(f"Received message from {ip}:{port}: {message}")
-    ... 
+    ...
     >>> server.add_message_handler(message_handler)
 )")
         .def("remove_message_handler",
@@ -167,7 +167,7 @@ Args:
 Examples:
     >>> def error_handler(message, error_code):
     ...     print(f"Error {error_code}: {message}")
-    ... 
+    ...
     >>> server.add_error_handler(error_handler)
 )")
         .def("remove_error_handler",

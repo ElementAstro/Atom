@@ -35,9 +35,9 @@ Description: Compressor using ZLib and MiniZip-ng
 #include <fmt/format.h>
 #endif
 
+#include <spdlog/spdlog.h>
 #include "atom/containers/high_performance.hpp"
 #include "atom/type/json.hpp"
-#include <spdlog/spdlog.h>
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
@@ -46,9 +46,11 @@ namespace {
 constexpr size_t DEFAULT_CHUNK_SIZE = 16384;
 
 // Helper function to calculate compression ratio
-inline double calculateCompressionRatio(size_t compressed_size, size_t original_size) {
+inline double calculateCompressionRatio(size_t compressed_size,
+                                        size_t original_size) {
     if (original_size > 0) {
-        return static_cast<double>(compressed_size) / static_cast<double>(original_size);
+        return static_cast<double>(compressed_size) /
+               static_cast<double>(original_size);
     }
     return 0.0;
 }
@@ -82,8 +84,8 @@ public:
 
     // Initialize for compression
     bool initDeflate(int level, int windowBits = 7) {
-        int ret = deflateInit2(&stream_, level, Z_DEFLATED, windowBits, 
-                              8, Z_DEFAULT_STRATEGY);
+        int ret = deflateInit2(&stream_, level, Z_DEFLATED, windowBits, 8,
+                               Z_DEFAULT_STRATEGY);
         if (ret == Z_OK) {
             initialized_ = true;
             is_inflate_ = false;
@@ -273,10 +275,11 @@ CompressionResult compressFile(std::string_view file_path_sv,
         }
         result.success = true;
 
-        spdlog::info("{} -> {} (ratio: {:.2f}%)", input_path.string(),
-              output_path.string(),
-              (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
-                                        : 0.0));
+        spdlog::info(
+            "{} -> {} (ratio: {:.2f}%)", input_path.string(),
+            output_path.string(),
+            (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
+                                      : 0.0));
 
     } catch (const std::exception& e) {
         result.error_message =
@@ -373,10 +376,11 @@ CompressionResult decompressFile(
         }
         result.success = true;
 
-        spdlog::info("Successfully decompressed {} -> {} (ratio: {:.2f}%)",
-              input_path.string(), output_path.string(),
-              (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
-                                        : 0.0));
+        spdlog::info(
+            "Successfully decompressed {} -> {} (ratio: {:.2f}%)",
+            input_path.string(), output_path.string(),
+            (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
+                                      : 0.0));
 
     } catch (const std::exception& e) {
         result.error_message =
@@ -468,7 +472,7 @@ CompressionResult compressFolder(std::string_view folder_path_sv,
                 }
             } catch (...) {
                 spdlog::warn("Could not get valid timestamp for file: {}",
-                      file_path.string());
+                             file_path.string());
             }
 
             // Add file entry to ZIP
@@ -570,10 +574,11 @@ CompressionResult compressFolder(std::string_view folder_path_sv,
         }
         result.success = true;
 
-        spdlog::info("Successfully compressed folder {} -> {} (ratio: {:.2f}%)",
-              input_dir.string(), zip_fs_path.string(),
-              (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
-                                        : 0.0));
+        spdlog::info(
+            "Successfully compressed folder {} -> {} (ratio: {:.2f}%)",
+            input_dir.string(), zip_fs_path.string(),
+            (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
+                                      : 0.0));
 
     } catch (const std::exception& e) {
         result.error_message =
@@ -731,7 +736,7 @@ CompressionResult extractZip(std::string_view zip_path_sv,
             // Close current file in ZIP
             if (unzCloseCurrentFile(unz) != UNZ_OK) {
                 spdlog::warn("Failed to close current file in ZIP: {}",
-                      filename);
+                             filename);
                 // Continue to next file? Or treat as error? Let's log and
                 // continue for now.
             }
@@ -758,7 +763,8 @@ CompressionResult extractZip(std::string_view zip_path_sv,
         }
 
         spdlog::info("Successfully extracted {} files from {} -> {}",
-              gi.number_entry, zip_fs_path.string(), output_dir.string());
+                     gi.number_entry, zip_fs_path.string(),
+                     output_dir.string());
 
     } catch (const std::exception& e) {
         result.error_message =
@@ -819,7 +825,7 @@ CompressionResult createZip(std::string_view source_path_sv,
                 }
             } catch (...) {
                 spdlog::warn("Could not get valid timestamp for file: {}",
-                      source_path.string());
+                             source_path.string());
             }
 
             const char* password_cstr =
@@ -908,7 +914,7 @@ CompressionResult createZip(std::string_view source_path_sv,
             }
             result.success = true;
             spdlog::info("Successfully created ZIP {} from file {}",
-                  zip_fs_path.string(), source_path.string());
+                         zip_fs_path.string(), source_path.string());
 
         } catch (const std::exception& e) {
             result.error_message =
@@ -942,7 +948,7 @@ Vector<ZipFileInfo> listZipContents(std::string_view zip_path_sv) {
         unz_global_info64 gi;
         if (unzGetGlobalInfo64(unz, &gi) != UNZ_OK) {
             spdlog::error("Failed to get ZIP file info for {}",
-                  zip_fs_path.string());
+                          zip_fs_path.string());
             return result_vec;
         }
 
@@ -954,7 +960,7 @@ Vector<ZipFileInfo> listZipContents(std::string_view zip_path_sv) {
             if (gi.number_entry == 0)
                 return result_vec;  // Empty zip is ok
             spdlog::error("Failed to go to first file in ZIP: {}",
-                  zip_fs_path.string());
+                          zip_fs_path.string());
             return result_vec;  // unz_guard handles closing
         }
 
@@ -967,7 +973,7 @@ Vector<ZipFileInfo> listZipContents(std::string_view zip_path_sv) {
                                         sizeof(filename_c), nullptr, 0, nullptr,
                                         0) != UNZ_OK) {
                 spdlog::error("Failed to get file info in ZIP: {}",
-                      zip_fs_path.string());
+                              zip_fs_path.string());
                 continue;  // Skip this entry
             }
 
@@ -1000,7 +1006,7 @@ Vector<ZipFileInfo> listZipContents(std::string_view zip_path_sv) {
         } while (unzGoToNextFile(unz) == UNZ_OK);
 
         spdlog::info("Listed {} files in ZIP: {}", result_vec.size(),
-              zip_fs_path.string());
+                     zip_fs_path.string());
 
     } catch (const std::exception& e) {
         spdlog::error("Exception in listZipContents: {}", e.what());
@@ -1127,7 +1133,7 @@ CompressionResult removeFromZip(std::string_view zip_path_sv,
             // Need exact match, consider case sensitivity and path separators
             if (current_filename == String(file_path_to_remove_sv)) {
                 spdlog::info("Skipping file for removal: {}",
-                      current_filename.c_str());
+                             current_filename.c_str());
                 continue;
             }
 
@@ -1225,7 +1231,7 @@ CompressionResult removeFromZip(std::string_view zip_path_sv,
             // Close current file entries
             if (unzCloseCurrentFile(src_zip_handle) != UNZ_OK) {
                 spdlog::warn("Failed to close current file in source ZIP: {}",
-                      current_filename.c_str());
+                             current_filename.c_str());
                 // Continue?
             }
             if (zipCloseFileInZip(dst_zip_handle) != ZIP_OK) {
@@ -1247,7 +1253,7 @@ CompressionResult removeFromZip(std::string_view zip_path_sv,
 
         result.success = true;
         spdlog::info("Successfully removed {} from ZIP file {}",
-              file_path_to_remove_sv.data(), zip_path_sv.data());
+                     file_path_to_remove_sv.data(), zip_path_sv.data());
 
     } catch (const std::exception& e) {
         result.error_message =
@@ -1282,7 +1288,7 @@ std::optional<size_t> getZipSize(std::string_view zip_path_sv) {
         size_t size = fs::file_size(zip_fs_path, ec);
         if (ec) {
             spdlog::error("Failed to get file size for {}: {}",
-                  zip_fs_path.string().c_str(), ec.message().c_str());
+                          zip_fs_path.string().c_str(), ec.message().c_str());
             return std::nullopt;
         }
         // ZIP file size calculation complete
@@ -1291,7 +1297,7 @@ std::optional<size_t> getZipSize(std::string_view zip_path_sv) {
     } catch (const std::exception& e) {
         // Catch potential filesystem exceptions
         spdlog::error("Exception in getZipSize for {}: {}", zip_path_sv.data(),
-              e.what());
+                      e.what());
         return std::nullopt;
     }
 }
@@ -1551,10 +1557,11 @@ CompressionResult compressFileInSlices(std::string_view file_path_sv,
         manifest_file.close();
 
         result.success = true;
-        spdlog::info("Successfully created {} slices for {} (ratio: {:.2f}%)",
-              num_slices, file_path_sv.data(),
-              (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
-                                        : 0.0));
+        spdlog::info(
+            "Successfully created {} slices for {} (ratio: {:.2f}%)",
+            num_slices, file_path_sv.data(),
+            (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
+                                      : 0.0));
 
     } catch (const std::exception& e) {
         result.error_message =
@@ -1769,10 +1776,11 @@ CompressionResult mergeCompressedSlices(
         }
         result.success = true;
 
-        spdlog::info("Successfully merged {} slices into {} (ratio: {:.2f}%)",
-              slice_files.size(), output_path_sv.data(),
-              (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
-                                        : 0.0));
+        spdlog::info(
+            "Successfully merged {} slices into {} (ratio: {:.2f}%)",
+            slice_files.size(), output_path_sv.data(),
+            (result.original_size > 0 ? (1.0 - result.compression_ratio) * 100
+                                      : 0.0));
 
     } catch (const std::exception& e) {
         result.error_message =
@@ -1912,8 +1920,8 @@ CompressionResult createBackup(std::string_view source_path_sv,
                     result.original_size;  // No compression
                 result.compression_ratio = 1.0;
                 spdlog::info(
-                      "Successfully created uncompressed backup: {} -> {}",
-                      source_path_sv.data(), backup_path_sv.data());
+                    "Successfully created uncompressed backup: {} -> {}",
+                    source_path_sv.data(), backup_path_sv.data());
             }
         }
 
@@ -2055,36 +2063,39 @@ std::pair<CompressionResult, Vector<unsigned char>> compressData(
         compressed_data.resize(
             compressed_bound);  // Resize Vector<unsigned char>
 
-        // Use advanced deflate with specified window_bits instead of simple compress2
+        // Use advanced deflate with specified window_bits instead of simple
+        // compress2
         z_stream zs{};
         zs.zalloc = Z_NULL;
         zs.zfree = Z_NULL;
         zs.opaque = Z_NULL;
         zs.avail_in = static_cast<uInt>(data_size);
-        zs.next_in = const_cast<Bytef*>(reinterpret_cast<const Bytef*>(data_ptr));
+        zs.next_in =
+            const_cast<Bytef*>(reinterpret_cast<const Bytef*>(data_ptr));
         zs.avail_out = static_cast<uInt>(compressed_bound);
         zs.next_out = reinterpret_cast<Bytef*>(compressed_data.data());
-        
+
         // Initialize deflate with window_bits from options
-        int ret = deflateInit2(&zs, options.level, Z_DEFLATED, options.window_bits, 
-                              8, Z_DEFAULT_STRATEGY);
+        int ret = deflateInit2(&zs, options.level, Z_DEFLATED,
+                               options.window_bits, 8, Z_DEFAULT_STRATEGY);
         if (ret != Z_OK) {
             compression_result.error_message = getZlibErrorMessage(ret);
             return result_pair;
         }
-        
+
         // Use RAII for zstream cleanup
-        std::unique_ptr<z_stream, decltype(&deflateEnd)> deflate_guard(&zs, deflateEnd);
-        
+        std::unique_ptr<z_stream, decltype(&deflateEnd)> deflate_guard(
+            &zs, deflateEnd);
+
         // Perform compression in one step
         ret = deflate(&zs, Z_FINISH);
-        
+
         if (ret != Z_STREAM_END) {
-            compression_result.error_message = 
+            compression_result.error_message =
                 String("Compression failed: ") + getZlibErrorMessage(ret);
             return result_pair;
         }
-        
+
         // Use actual bytes written
         uLongf actual_compressed_size = zs.total_out;
 
@@ -2104,9 +2115,9 @@ std::pair<CompressionResult, Vector<unsigned char>> compressData(
         compression_result.success = true;
 
         spdlog::info(
-              "Successfully compressed {} bytes to {} bytes (ratio: {:.2f}%)",
-              compression_result.original_size, actual_compressed_size,
-              getCompressionPercentage(compression_result.compression_ratio));
+            "Successfully compressed {} bytes to {} bytes (ratio: {:.2f}%)",
+            compression_result.original_size, actual_compressed_size,
+            getCompressionPercentage(compression_result.compression_ratio));
 
     } catch (const std::exception& e) {
         compression_result.error_message =
@@ -2147,27 +2158,30 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
         // Optimized buffer size estimation
         // For small inputs, allocate a minimum buffer
         // For larger inputs with known expected size, use that
-        // For larger inputs with unknown size, use a multiplier based on compression type detection
+        // For larger inputs with unknown size, use a multiplier based on
+        // compression type detection
         size_t buffer_size = 0;
         if (expected_size > 0) {
             // If we know the expected size, allocate exactly that
             buffer_size = expected_size;
         } else {
-            // Try to detect compression type from header bytes for better buffer estimation
+            // Try to detect compression type from header bytes for better
+            // buffer estimation
             if (compressed_data_size >= 2) {
-                const unsigned char* header = reinterpret_cast<const unsigned char*>(compressed_data_ptr);
-                
+                const unsigned char* header =
+                    reinterpret_cast<const unsigned char*>(compressed_data_ptr);
+
                 // Check for gzip magic signature (0x1F, 0x8B)
                 if (header[0] == 0x1F && header[1] == 0x8B) {
                     // Gzip typically has 2:1 to 10:1 compression ratio
                     buffer_size = compressed_data_size * 5;
                 }
-                // Check for zlib header (first byte bits 0-3 is 8 for deflate, bits 4-7 for window size)
+                // Check for zlib header (first byte bits 0-3 is 8 for deflate,
+                // bits 4-7 for window size)
                 else if ((header[0] & 0x0F) == 0x08) {
                     // Zlib typically has similar compression ratio to gzip
                     buffer_size = compressed_data_size * 5;
-                }
-                else {
+                } else {
                     // Unknown format, use conservative 4:1 ratio
                     buffer_size = compressed_data_size * 4;
                 }
@@ -2176,12 +2190,12 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
                 buffer_size = 4096;
             }
         }
-        
+
         // Ensure minimum buffer size
         if (buffer_size < 1024) {
             buffer_size = 1024;
         }
-        
+
         decompressed_data.resize(buffer_size);
 
         // Use z_stream for more control, especially for potential resizing
@@ -2199,10 +2213,11 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
         // For gzip/zlib auto-detection, add 32 (15+32)
         // For raw deflate with no header, use negative value (-15)
         int windowBits = options.window_bits;
-        
+
         // Auto-detect based on header bytes if possible
         if (compressed_data_size >= 2) {
-            const unsigned char* header = reinterpret_cast<const unsigned char*>(compressed_data_ptr);
+            const unsigned char* header =
+                reinterpret_cast<const unsigned char*>(compressed_data_ptr);
             // Check for gzip magic signature (0x1F, 0x8B)
             if (header[0] == 0x1F && header[1] == 0x8B) {
                 // Need at least 15 or add 16 for gzip
@@ -2215,7 +2230,7 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
             }
             // If not recognized, use as-is (for raw deflate)
         }
-        
+
         int ret = inflateInit2(&zs, windowBits);
         if (ret != Z_OK) {
             compression_result.error_message = getZlibErrorMessage(ret);
@@ -2236,11 +2251,12 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
             if (zs.avail_out == 0) {
                 // Buffer is full, resize it with an optimized growth strategy
                 size_t old_size = decompressed_data.size();
-                
+
                 // Smart growth strategy:
                 // - For small buffers (<64KB): double the size
                 // - For medium buffers (64KB-1MB): grow by 50%
-                // - For large buffers (>1MB): grow by 25% or a fixed chunk (1MB), whichever is larger
+                // - For large buffers (>1MB): grow by 25% or a fixed chunk
+                // (1MB), whichever is larger
                 size_t new_size;
                 if (old_size < 65536) {
                     new_size = old_size * 2;
@@ -2250,14 +2266,14 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
                     size_t increment = std::max(old_size / 4, size_t(1048576));
                     new_size = old_size + increment;
                 }
-                
+
                 // Check for overflow
                 if (new_size <= old_size) {
                     compression_result.error_message =
                         "Decompression buffer size overflow";
                     return result_pair;  // inflate_guard handles cleanup
                 }
-                
+
                 // Allocate new buffer
                 try {
                     decompressed_data.resize(new_size);
@@ -2266,7 +2282,7 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
                         "Memory allocation failed during decompression";
                     return result_pair;
                 }
-                
+
                 // Update stream pointers after resize
                 zs.avail_out =
                     static_cast<uInt>(decompressed_data.size() - zs.total_out);
@@ -2335,9 +2351,9 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
         compression_result.success = true;
 
         spdlog::info(
-              "Successfully decompressed {} bytes to {} bytes (ratio: {:.2f}%)",
-              compression_result.compressed_size, actual_decompressed_size,
-              getCompressionPercentage(compression_result.compression_ratio));
+            "Successfully decompressed {} bytes to {} bytes (ratio: {:.2f}%)",
+            compression_result.compressed_size, actual_decompressed_size,
+            getCompressionPercentage(compression_result.compression_ratio));
 
     } catch (const std::exception& e) {
         compression_result.error_message =

@@ -33,8 +33,8 @@ option_end()
 
 -- Module build options
 local modules = {
-    "algorithm", "async", "components", "connection", "containers", 
-    "error", "io", "log", "memory", "meta", "search", "secret", 
+    "algorithm", "async", "components", "connection", "containers",
+    "error", "io", "log", "memory", "meta", "search", "secret",
     "serial", "sysinfo", "system", "type", "utils", "web"
 }
 
@@ -66,7 +66,7 @@ option_end()
 
 if has_config("python") then
     add_requires("python3", "pybind11")
-    
+
     after_load(function ()
         local python = find_tool("python3")
         if python then
@@ -94,7 +94,7 @@ end
 function check_module_directory(name, dir_name)
     local module_path = path.join(".", dir_name)
     local xmake_file = path.join(module_path, "xmake.lua")
-    
+
     if os.isdir(module_path) and os.isfile(xmake_file) then
         return true
     else
@@ -161,16 +161,16 @@ end
 if has_config("unified") and #_G.ATOM_MODULES > 0 then
     target("atom-unified")
         set_kind("phony")
-        
+
         -- Add all module dependencies
         for _, module in ipairs(_G.ATOM_MODULES) do
             add_deps(module)
         end
-        
+
         after_build(function (target)
             print("Created unified Atom library with modules: " .. table.concat(_G.ATOM_MODULES, ", "))
         end)
-    
+
     -- Create atom alias target
     target("atom")
         set_kind("phony")
@@ -187,7 +187,7 @@ task("install-all")
         usage = "xmake install-all",
         description = "Install all Atom modules"
     }
-    
+
     on_run(function ()
         for _, module in ipairs(_G.ATOM_MODULES) do
             os.exec("xmake install " .. module)

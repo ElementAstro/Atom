@@ -26,7 +26,7 @@ add_library(shortcut_detector SHARED
 
 # Set include directories
 target_include_directories(shortcut_detector
-    PUBLIC 
+    PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
     PRIVATE
@@ -50,7 +50,7 @@ add_library(shortcut_detector_static STATIC
 )
 
 target_include_directories(shortcut_detector_static
-    PUBLIC 
+    PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
     PRIVATE
@@ -101,7 +101,7 @@ install(
 )
 
 install(
-    FILES 
+    FILES
         include/detector.h
         include/shortcut.h
         include/factory.h

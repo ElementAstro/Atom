@@ -44,7 +44,7 @@ function(detect_wsl RESULT_VAR)
         set(${RESULT_VAR} TRUE PARENT_SCOPE)
         return()
     endif()
-    
+
     # Default to not WSL
     set(${RESULT_VAR} FALSE PARENT_SCOPE)
 endfunction()

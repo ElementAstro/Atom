@@ -2,6 +2,8 @@
 #define ATOM_TESTS_FUZZ_HPP
 
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <chrono>
 #include <concepts>
 #include <filesystem>
@@ -17,10 +19,41 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <unordered_map>
 #include <variant>
 #include <vector>
+
+// Platform-specific optimizations
+#ifdef _WIN32
+#include <intrin.h>
+#elif defined(__x86_64__) || defined(__i386__)
+#include <x86intrin.h>
+#endif
+
+// SIMD support detection
+#if defined(__AVX2__)
+#define FUZZ_HAS_AVX2 1
+#include <immintrin.h>
+#endif
+#if defined(__SSE4_2__)
+#define FUZZ_HAS_SSE42 1
+#include <nmmintrin.h>
+#endif
+
+// Branch prediction hints
+#ifdef __GNUC__
+#define FUZZ_LIKELY(x) __builtin_expect(!!(x), 1)
+#define FUZZ_UNLIKELY(x) __builtin_expect(!!(x), 0)
+#define FUZZ_INLINE __attribute__((always_inline)) inline
+#define FUZZ_NOINLINE __attribute__((noinline))
+#else
+#define FUZZ_LIKELY(x) (x)
+#define FUZZ_UNLIKELY(x) (x)
+#define FUZZ_INLINE inline
+#define FUZZ_NOINLINE
+#endif
 
 #undef CHAR_MIN
 #undef CHAR_MAX
@@ -38,7 +71,7 @@ public:
 };
 
 /**
- * @brief A configuration class for the RandomDataGenerator
+ * @brief A configuration class for the RandomDataGenerator (optimized)
  */
 struct RandomConfig {
     int defaultIntMax = 100;        ///< Default maximum integer value
@@ -52,6 +85,23 @@ struct RandomConfig {
     int filePathExtensionLength = 3;  ///< Default file path extension length
     int jsonPrecision = 6;    ///< Precision for JSON floating point numbers
     bool threadSafe = false;  ///< Thread safety flag
+
+    // Performance optimization flags
+    bool enableSIMD = true;  ///< Enable SIMD optimizations where available
+    bool enableStringPooling = true;        ///< Enable string buffer pooling
+    bool enableDistributionCaching = true;  ///< Enable distribution caching
+    bool enableBulkOptimizations =
+        true;                        ///< Enable bulk generation optimizations
+    size_t stringBufferSize = 4096;  ///< Size of pre-allocated string buffers
+    size_t distributionCacheSize = 64;  ///< Max cached distributions
+
+    // Threading model
+    enum class ThreadingMode {
+        SingleThreaded,  ///< No locking, fastest for single thread
+        ThreadLocal,     ///< Thread-local instances
+        Shared           ///< Shared instance with locking
+    };
+    ThreadingMode threadingMode = ThreadingMode::SingleThreaded;
 
     // Builder pattern for fluent interface
     RandomConfig& setDefaultIntMax(int value) {
@@ -110,7 +160,64 @@ struct RandomConfig {
         threadSafe = value;
         return *this;
     }
+
+    // New performance optimization methods
+    RandomConfig& setThreadingMode(ThreadingMode mode) {
+        threadingMode = mode;
+        if (mode == ThreadingMode::Shared) {
+            threadSafe = true;
+        }
+        return *this;
+    }
+
+    RandomConfig& enableSIMDOptimizations(bool value = true) {
+        enableSIMD = value;
+        return *this;
+    }
+
+    RandomConfig& enableStringBufferPooling(bool value = true,
+                                            size_t bufferSize = 4096) {
+        enableStringPooling = value;
+        stringBufferSize = bufferSize;
+        return *this;
+    }
+
+    RandomConfig& enableDistributionCache(bool value = true,
+                                          size_t cacheSize = 64) {
+        enableDistributionCaching = value;
+        distributionCacheSize = cacheSize;
+        return *this;
+    }
+
+    RandomConfig& enableBulkGeneration(bool value = true) {
+        enableBulkOptimizations = value;
+        return *this;
+    }
 };
+
+// Performance optimization constants
+namespace detail {
+constexpr size_t MAX_BULK_COUNT =
+    1000000;  ///< Maximum allowed bulk generation count
+constexpr int BULK_GENERATION_THRESHOLD =
+    32;                                ///< Minimum count for bulk optimization
+constexpr size_t MAX_CACHE_SIZE = 64;  ///< Maximum cache size for distributions
+constexpr size_t DEFAULT_STRING_BUFFER_SIZE =
+    4096;  ///< Default string buffer size
+
+// SIMD feature detection
+constexpr bool HAS_SIMD =
+#if defined(FUZZ_HAS_AVX2) || defined(FUZZ_HAS_SSE42)
+    true;
+#else
+    false;
+#endif
+
+// Feature flags
+constexpr bool ENABLE_BULK_GENERATION = true;
+constexpr bool ENABLE_DISTRIBUTION_CACHING = true;
+constexpr bool ENABLE_STRING_POOLING = true;
+}  // namespace detail
 
 /**
  * @concept Serializable
@@ -154,16 +261,60 @@ private:
     // Configuration
     RandomConfig config_;
 
-    // Random number generation
-    std::mt19937 generator_;
+    // Random number generation (cache-aligned for better performance)
+    alignas(64) std::mt19937 generator_;
     std::uniform_int_distribution<> intDistribution_;
     std::uniform_real_distribution<> realDistribution_;
     std::uniform_int_distribution<> charDistribution_;
 
-    // Thread safety
+    // Thread safety (only used when needed)
     mutable std::shared_mutex mutex_;
 
-    // Caches for frequently used distributions
+    // Performance optimization structures
+    struct DistributionCache {
+        static constexpr size_t MAX_CACHE_SIZE = 64;
+
+        std::array<std::pair<std::string,
+                             std::unique_ptr<std::uniform_int_distribution<>>>,
+                   MAX_CACHE_SIZE>
+            intCache{};
+        std::array<std::pair<std::string,
+                             std::unique_ptr<std::uniform_real_distribution<>>>,
+                   MAX_CACHE_SIZE>
+            realCache{};
+        std::atomic<size_t> intCacheSize{0};
+        std::atomic<size_t> realCacheSize{0};
+
+        // Fast lookup without dynamic allocation
+        template <typename DistType>
+        DistType* findCached(const std::string& key) noexcept;
+
+        template <typename DistType>
+        void cacheDistribution(const std::string& key,
+                               std::unique_ptr<DistType> dist) noexcept;
+    } distributionCache_;
+
+    // String buffer pool for reducing allocations
+    struct StringBufferPool {
+        static constexpr size_t POOL_SIZE = 8;
+        std::array<std::string, POOL_SIZE> buffers;
+        std::atomic<size_t> nextBuffer{0};
+
+        std::string& getBuffer() {
+            size_t idx =
+                nextBuffer.fetch_add(1, std::memory_order_relaxed) % POOL_SIZE;
+            buffers[idx].clear();
+            return buffers[idx];
+        }
+
+        void initializeBuffers(size_t capacity) {
+            for (auto& buffer : buffers) {
+                buffer.reserve(capacity);
+            }
+        }
+    } stringPool_;
+
+    // Legacy distribution caches (kept for compatibility)
     std::unordered_map<std::string,
                        std::unique_ptr<std::uniform_int_distribution<>>>
         intDistCache_;
@@ -171,7 +322,7 @@ private:
                        std::unique_ptr<std::uniform_real_distribution<>>>
         realDistCache_;
 
-    // Distribution factory methods
+    // Distribution factory methods (optimized)
     template <typename T>
     auto getIntDistribution(int min, int max)
         -> std::uniform_int_distribution<T>&;
@@ -180,12 +331,96 @@ private:
     auto getRealDistribution(T min, T max)
         -> std::uniform_real_distribution<T>&;
 
-    // Thread safety helpers
+    // Thread safety helpers (conditional locking)
     template <typename Func>
-    auto withSharedLock(Func&& func) const;
+    FUZZ_INLINE auto withSharedLock(Func&& func) const {
+        if (FUZZ_LIKELY(config_.threadingMode !=
+                        RandomConfig::ThreadingMode::Shared)) {
+            return func();
+        } else {
+            std::shared_lock lock(mutex_);
+            return func();
+        }
+    }
 
     template <typename Func>
-    auto withExclusiveLock(Func&& func);
+    FUZZ_INLINE auto withExclusiveLock(Func&& func) {
+        if (FUZZ_LIKELY(config_.threadingMode !=
+                        RandomConfig::ThreadingMode::Shared)) {
+            return func();
+        } else {
+            std::unique_lock lock(mutex_);
+            return func();
+        }
+    }
+
+    // Optimized bulk generation methods
+    template <typename T>
+    void generateIntegersBulk(T* output, int count, int min, int max);
+
+    template <typename T>
+    void generateRealsBulk(T* output, int count, T min, T max);
+
+    void generateBooleansBulk(bool* output, int count, double trueProbability);
+
+    // SIMD-optimized string generation
+    void generateStringChars(char* output, size_t length, const char* charset,
+                             size_t charsetSize);
+
+    // Fast validation methods
+    FUZZ_INLINE void validateCount(int count,
+                                   std::string_view paramName) const {
+        if (FUZZ_UNLIKELY(count < 0)) {
+            throw RandomGenerationError(
+                std::format("Invalid {} value: {} (must be non-negative)",
+                            paramName, count));
+        }
+    }
+
+    FUZZ_INLINE void validateProbability(double probability,
+                                         std::string_view paramName) const {
+        if (FUZZ_UNLIKELY(probability < 0.0 || probability > 1.0)) {
+            throw RandomGenerationError(std::format(
+                "Invalid {} value: {} (must be between 0.0 and 1.0)", paramName,
+                probability));
+        }
+    }
+
+    template <typename T>
+    FUZZ_INLINE void validateRange(T min, T max,
+                                   std::string_view paramName) const {
+        if (FUZZ_UNLIKELY(min > max)) {
+            throw RandomGenerationError(std::format(
+                "Invalid {} - min ({}) > max ({})", paramName, min, max));
+        }
+    }
+
+    // Additional optimized validation helpers
+    FUZZ_INLINE bool fastValidateCount(int count) const noexcept {
+        return FUZZ_LIKELY(count > 0 &&
+                           count <= static_cast<int>(detail::MAX_BULK_COUNT));
+    }
+
+    template <typename T>
+    FUZZ_INLINE bool fastValidateRange(T min, T max) const noexcept {
+        return FUZZ_LIKELY(min <= max);
+    }
+
+    FUZZ_INLINE bool fastValidateProbability(double prob) const noexcept {
+        return FUZZ_LIKELY(prob >= 0.0 && prob <= 1.0);
+    }
+
+    // SIMD bulk generation helpers
+    template <typename IntType>
+    auto generateIntegersBulkSIMD(int count, IntType min, IntType max)
+        -> std::vector<IntType>;
+
+    template <typename RealType>
+    auto generateRealsBulkSIMD(int count, RealType min, RealType max)
+        -> std::vector<RealType>;
+
+    auto generateBooleansBulkSIMD(int count, double trueProbability)
+        -> std::vector<bool>;
 
 public:
     /**
@@ -624,18 +859,6 @@ private:
     template <typename K, typename V>
     static void serializeToJSONHelper(std::ostringstream& oss,
                                       const std::map<K, V>& map);
-
-    // Validate parameters
-    void validateCount(int count, const std::string& paramName) const;
-    template <typename T>
-    void validateRange(T min, T max, const std::string& paramName) const {
-        if (min > max) {
-            throw RandomGenerationError(std::format(
-                "Invalid {} range: min ({}) > max ({})", paramName, min, max));
-        }
-    }
-    void validateProbability(double probability,
-                             const std::string& paramName) const;
 };
 
 // Template implementation
@@ -643,69 +866,42 @@ private:
 template <typename T>
 auto RandomDataGenerator::getIntDistribution(int min, int max)
     -> std::uniform_int_distribution<T>& {
-    validateRange(min, max, "integer range");
+    static_assert(std::is_integral_v<T>, "T must be an integral type");
 
-    std::string key = std::to_string(min) + ":" + std::to_string(max);
-    if (config_.threadSafe) {
-        std::unique_lock lock(mutex_);
-        if (!intDistCache_.contains(key)) {
-            intDistCache_[key] =
-                std::make_unique<std::uniform_int_distribution<>>(min, max);
-        }
-        return *static_cast<std::uniform_int_distribution<T>*>(
-            intDistCache_[key].get());
-    } else {
-        if (!intDistCache_.contains(key)) {
-            intDistCache_[key] =
-                std::make_unique<std::uniform_int_distribution<>>(min, max);
-        }
-        return *static_cast<std::uniform_int_distribution<T>*>(
-            intDistCache_[key].get());
+    std::string key = std::to_string(min) + ":" + std::to_string(max) + ":" +
+                      typeid(T).name();
+
+    // Use a thread_local cache for better performance and type safety
+    static thread_local std::unordered_map<
+        std::string, std::unique_ptr<std::uniform_int_distribution<T>>>
+        localCache;
+
+    if (!localCache.contains(key)) {
+        localCache[key] =
+            std::make_unique<std::uniform_int_distribution<T>>(min, max);
     }
+    return *localCache[key];
 }
 
 template <typename T>
 auto RandomDataGenerator::getRealDistribution(T min, T max)
     -> std::uniform_real_distribution<T>& {
-    validateRange(min, max, "real range");
+    static_assert(std::is_floating_point_v<T>,
+                  "T must be a floating point type");
 
-    std::string key = std::to_string(min) + ":" + std::to_string(max);
-    if (config_.threadSafe) {
-        std::unique_lock lock(mutex_);
-        if (!realDistCache_.contains(key)) {
-            realDistCache_[key] =
-                std::make_unique<std::uniform_real_distribution<>>(min, max);
-        }
-        return *static_cast<std::uniform_real_distribution<T>*>(
-            realDistCache_[key].get());
-    } else {
-        if (!realDistCache_.contains(key)) {
-            realDistCache_[key] =
-                std::make_unique<std::uniform_real_distribution<>>(min, max);
-        }
-        return *static_cast<std::uniform_real_distribution<T>*>(
-            realDistCache_[key].get());
-    }
-}
+    std::string key = std::to_string(min) + ":" + std::to_string(max) + ":" +
+                      typeid(T).name();
 
-template <typename Func>
-auto RandomDataGenerator::withSharedLock(Func&& func) const {
-    if (config_.threadSafe) {
-        std::shared_lock lock(mutex_);
-        return std::forward<Func>(func)();
-    } else {
-        return std::forward<Func>(func)();
-    }
-}
+    // Use a thread_local cache for better performance and type safety
+    static thread_local std::unordered_map<
+        std::string, std::unique_ptr<std::uniform_real_distribution<T>>>
+        localCache;
 
-template <typename Func>
-auto RandomDataGenerator::withExclusiveLock(Func&& func) {
-    if (config_.threadSafe) {
-        std::unique_lock lock(mutex_);
-        return std::forward<Func>(func)();
-    } else {
-        return std::forward<Func>(func)();
+    if (!localCache.contains(key)) {
+        localCache[key] =
+            std::make_unique<std::uniform_real_distribution<T>>(min, max);
     }
+    return *localCache[key];
 }
 
 template <typename Func, typename... Args>

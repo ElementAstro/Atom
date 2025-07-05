@@ -123,7 +123,7 @@ Examples:
     py::class_<atom::utils::Timer, std::shared_ptr<atom::utils::Timer>>(
         m, "Timer",
         R"(Modern C++ timer class inspired by Qt's QTimer.
-        
+
 This class provides timer functionality with callbacks, single-shot mode,
 and customizable precision.
 
@@ -171,7 +171,7 @@ Examples:
             py::arg("milliseconds"), py::arg("callback"),
             py::arg("mode") = atom::utils::Timer::PrecisionMode::PRECISE,
             R"(Creates a single-shot timer that calls the provided callback after the specified interval.
-                  
+
 Args:
     milliseconds: Interval in milliseconds
     callback: Function to call when timer expires
