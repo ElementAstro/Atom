@@ -143,8 +143,12 @@ public:
     }
 
     // Add public setters for timeouts
-    void setReadTimeout(std::chrono::milliseconds timeout) { readTimeout = timeout; }
-    void setWriteTimeout(std::chrono::milliseconds timeout) { writeTimeout = timeout; }
+    void setReadTimeout(std::chrono::milliseconds timeout) {
+        readTimeout = timeout;
+    }
+    void setWriteTimeout(std::chrono::milliseconds timeout) {
+        writeTimeout = timeout;
+    }
 
 private:
     int baudRate = 9600;

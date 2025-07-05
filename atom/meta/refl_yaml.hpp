@@ -15,13 +15,13 @@ namespace atom::meta {
 template <typename T, typename MemberType>
 struct Field {
     const char* name;
-    MemberType T::*member;
+    MemberType T::* member;
     bool required;
     MemberType default_value;
     using Validator = std::function<bool(const MemberType&)>;
     Validator validator;
 
-    Field(const char* n, MemberType T::*m, bool r = true, MemberType def = {},
+    Field(const char* n, MemberType T::* m, bool r = true, MemberType def = {},
           Validator v = nullptr)
         : name(n),
           member(m),
@@ -82,7 +82,7 @@ struct Reflectable {
 
 // Field creation function
 template <typename T, typename MemberType>
-auto make_field(const char* name, MemberType T::*member, bool required = true,
+auto make_field(const char* name, MemberType T::* member, bool required = true,
                 MemberType default_value = {},
                 typename Field<T, MemberType>::Validator validator = nullptr)
     -> Field<T, MemberType> {

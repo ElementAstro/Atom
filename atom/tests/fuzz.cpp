@@ -1,47 +1,104 @@
 #include "fuzz.hpp"
 
+// Use the same branch prediction macros as defined in header
+#ifdef __GNUC__
+#define ATOM_LIKELY_IF(x) if (__builtin_expect(!!(x), 1))
+#define ATOM_UNLIKELY_IF(x) if (__builtin_expect(!!(x), 0))
+#else
+#define ATOM_LIKELY_IF(x) if (x)
+#define ATOM_UNLIKELY_IF(x) if (x)
+#endif
+
+#include <algorithm>
+#include <array>
 #include <chrono>
+#include <cstring>
 #include <ctime>
 #include <filesystem>
-#include <format>
 #include <iomanip>
 #include <mutex>
 #include <random>
-#include <ranges>
 #include <sstream>
+
+// SIMD includes
+#if defined(FUZZ_HAS_AVX2)
+#include <immintrin.h>
+#elif defined(FUZZ_HAS_SSE42)
+#include <nmmintrin.h>
+#endif
 
 namespace atom::tests {
 
-// 常量定义
+// Optimized character sets - aligned for SIMD access
 namespace {
-constexpr const char* ALPHA_NUMERIC_CHARS =
+alignas(32) constexpr const char ALPHA_NUMERIC_CHARS[] =
     "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-constexpr const char* PRINTABLE_CHARS =
+
+alignas(32) constexpr const char PRINTABLE_CHARS[] =
     " !\"#$%&'()*+,-./"
     "0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`"
     "abcdefghijklmnopqrstuvwxyz{|}~";
 
+alignas(32) constexpr const char DIGIT_CHARS[] = "0123456789";
+constexpr size_t DIGIT_SIZE = sizeof(DIGIT_CHARS) - 1;
+
+alignas(32) constexpr const char WORD_CHARS[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_";
+constexpr size_t WORD_SIZE = sizeof(WORD_CHARS) - 1;
+
+// Thread-local random device and generator instances
 thread_local std::random_device rd;
-thread_local RandomDataGenerator* threadLocalGenerator = nullptr;
+thread_local std::unique_ptr<RandomDataGenerator> threadLocalGenerator =
+    nullptr;
+
+// SIMD utility functions
+#if defined(FUZZ_HAS_AVX2)
+inline void generateRandomCharsAVX2(char* output, size_t length,
+                                    const char* charset, size_t charsetSize,
+                                    std::mt19937& gen) {
+    std::uniform_int_distribution<> dist(0, charsetSize - 1);
+
+    // Process 32 characters at a time using AVX2
+    const size_t simdChunks = length / 32;
+    size_t processed = 0;
+
+    for (size_t i = 0; i < simdChunks; ++i) {
+        alignas(32) std::array<char, 32> indices;
+        for (size_t j = 0; j < 32; ++j) {
+            indices[j] = static_cast<char>(dist(gen));
+        }
+
+        // Load indices and gather characters
+        __m256i idx =
+            _mm256_load_si256(reinterpret_cast<const __m256i*>(indices.data()));
+
+        // Gather characters from charset (manual implementation since we need
+        // byte gather)
+        for (size_t j = 0; j < 32; ++j) {
+            output[processed + j] = charset[indices[j]];
+        }
+        processed += 32;
+    }
+
+    // Handle remaining characters
+    for (size_t i = processed; i < length; ++i) {
+        output[i] = charset[dist(gen)];
+    }
+}
+#endif
+
+inline void generateRandomCharsFallback(char* output, size_t length,
+                                        const char* charset, size_t charsetSize,
+                                        std::mt19937& gen) {
+    std::uniform_int_distribution<> dist(0, charsetSize - 1);
+    for (size_t i = 0; i < length; ++i) {
+        output[i] = charset[dist(gen)];
+    }
+}
+
 }  // namespace
 
-void RandomDataGenerator::validateCount(int count,
-                                        const std::string& paramName) const {
-    if (count < 0) {
-        throw RandomGenerationError(std::format(
-            "Invalid {} value: {} (must be non-negative)", paramName, count));
-    }
-}
-
-void RandomDataGenerator::validateProbability(
-    double probability, const std::string& paramName) const {
-    if (probability < 0.0 || probability > 1.0) {
-        throw RandomGenerationError(
-            std::format("Invalid {} value: {} (must be between 0.0 and 1.0)",
-                        paramName, probability));
-    }
-}
-
+// Optimized constructor implementations
 RandomDataGenerator::RandomDataGenerator(
     std::variant<RandomConfig, int> configOrSeed) {
     if (std::holds_alternative<RandomConfig>(configOrSeed)) {
@@ -65,6 +122,11 @@ RandomDataGenerator::RandomDataGenerator(
         charDistribution_ =
             std::uniform_int_distribution<>(config_.charMin, config_.charMax);
     }
+
+    // Initialize performance optimizations
+    if (config_.enableStringPooling) {
+        stringPool_.initializeBuffers(config_.stringBufferSize);
+    }
 }
 
 RandomDataGenerator::RandomDataGenerator(const RandomConfig& config, int seed)
@@ -72,7 +134,12 @@ RandomDataGenerator::RandomDataGenerator(const RandomConfig& config, int seed)
       generator_(seed),
       intDistribution_(0, config.defaultIntMax),
       realDistribution_(0.0, 1.0),
-      charDistribution_(config.charMin, config.charMax) {}
+      charDistribution_(config.charMin, config.charMax) {
+    // Initialize performance optimizations
+    if (config_.enableStringPooling) {
+        stringPool_.initializeBuffers(config_.stringBufferSize);
+    }
+}
 
 auto RandomDataGenerator::reseed(int seed) -> RandomDataGenerator& {
     withExclusiveLock([&]() { generator_.seed(seed); });
@@ -97,20 +164,52 @@ auto RandomDataGenerator::updateConfig(const RandomConfig& config)
 
 auto RandomDataGenerator::generateIntegers(int count, int min, int max)
     -> std::vector<int> {
-    validateCount(count, "count");
+    ATOM_LIKELY_IF(fastValidateCount(count)) {
+        if (max == -1) {
+            max = config_.defaultIntMax;
+        }
 
+        ATOM_LIKELY_IF(fastValidateRange(min, max)) {
+            // Fast path: use SIMD bulk generation if available and beneficial
+            if constexpr (detail::HAS_SIMD && detail::ENABLE_BULK_GENERATION) {
+                if (count >= detail::BULK_GENERATION_THRESHOLD) {
+                    return generateIntegersBulkSIMD<int>(count, min, max);
+                }
+            }
+
+            // Regular optimized path with shared lock for read-mostly workloads
+            return withSharedLock([&]() {
+                auto& dist = getIntDistribution<int>(min, max);
+                std::vector<int> result;
+                result.reserve(count);
+
+                // Generate in chunks to maintain cache locality
+                constexpr int CHUNK_SIZE = 64;
+                for (int i = 0; i < count; i += CHUNK_SIZE) {
+                    int chunk_end = std::min(i + CHUNK_SIZE, count);
+                    for (int j = i; j < chunk_end; ++j) {
+                        result.push_back(dist(generator_));
+                    }
+                }
+                return result;
+            });
+        }
+    }
+
+    // Fallback to full validation
+    validateCount(count, "count");
     if (max == -1) {
         max = config_.defaultIntMax;
     }
-
-    return withExclusiveLock([&]() {
-        auto& dist = getIntDistribution<int>(min, max);
-
-        // 使用 std::ranges 进行更简洁的实现(C++20)
-        return std::views::iota(0, count) |
-               std::views::transform([&](auto) { return dist(generator_); }) |
-               std::ranges::to<std::vector>();
-    });
+    validateRange(min, max, "integer range");
+    // Non-recursive fallback: generate the integers directly
+    auto& dist = getIntDistribution<int>(min, max);
+    std::vector<int> result;
+    result.reserve(count);
+    for (int i = 0; i < count; ++i) {
+        result.push_back(dist(generator_));
+    }
+    return result;
 }
 
 auto RandomDataGenerator::generateInteger(int min, int max) -> int {
@@ -118,25 +217,60 @@ auto RandomDataGenerator::generateInteger(int min, int max) -> int {
         max = config_.defaultIntMax;
     }
 
-    return withExclusiveLock([&]() {
-        auto& dist = getIntDistribution<int>(min, max);
-        return dist(generator_);
-    });
+    ATOM_LIKELY_IF(fastValidateRange(min, max)) {
+        // Fast path: use shared lock for single value generation
+        return withSharedLock([&]() {
+            auto& dist = getIntDistribution<int>(min, max);
+            return dist(generator_);
+        });
+    }
+
+    // Fallback to full validation
+    validateRange(min, max, "integer range");
+    // Non-recursive fallback: generate the integer directly
+    auto& dist = getIntDistribution<int>(min, max);
+    return dist(generator_);
 }
 
 auto RandomDataGenerator::generateReals(int count, double min, double max)
     -> std::vector<double> {
+    ATOM_LIKELY_IF(fastValidateCount(count) && fastValidateRange(min, max)) {
+        // Fast path: use SIMD bulk generation if available and beneficial
+        if constexpr (detail::HAS_SIMD && detail::ENABLE_BULK_GENERATION) {
+            if (count >= detail::BULK_GENERATION_THRESHOLD) {
+                return generateRealsBulkSIMD<double>(count, min, max);
+            }
+        }
+
+        // Regular optimized path with shared lock
+        return withSharedLock([&]() {
+            auto& dist = getRealDistribution<double>(min, max);
+            std::vector<double> result;
+            result.reserve(count);
+
+            // Generate in chunks for cache efficiency
+            constexpr int CHUNK_SIZE = 32;  // Smaller chunks for doubles
+            for (int i = 0; i < count; i += CHUNK_SIZE) {
+                int chunk_end = std::min(i + CHUNK_SIZE, count);
+                for (int j = i; j < chunk_end; ++j) {
+                    result.push_back(dist(generator_));
+                }
+            }
+            return result;
+        });
+    }
+
+    // Fallback to full validation
     validateCount(count, "count");
     validateRange(min, max, "real range");
-
-    return withExclusiveLock([&]() {
-        auto& dist = getRealDistribution<double>(min, max);
-
-        // 使用 std::ranges 进行更简洁的实现(C++20)
-        return std::views::iota(0, count) |
-               std::views::transform([&](auto) { return dist(generator_); }) |
-               std::ranges::to<std::vector>();
-    });
+    // Non-recursive fallback: generate the reals directly
+    auto& dist = getRealDistribution<double>(min, max);
+    std::vector<double> result;
+    result.reserve(count);
+    for (int i = 0; i < count; ++i) {
+        result.push_back(dist(generator_));
+    }
+    return result;
 }
 
 auto RandomDataGenerator::generateReal(double min, double max) -> double {
@@ -151,55 +285,161 @@ auto RandomDataGenerator::generateReal(double min, double max) -> double {
 auto RandomDataGenerator::generateString(
     int length, bool alphanumeric, std::optional<std::string_view> charset)
     -> std::string {
-    validateCount(length, "string length");
+    ATOM_LIKELY_IF(fastValidateCount(length)) {
+        // Fast path with optimized string generation
+        if (config_.enableStringPooling) {
+            auto& buffer = stringPool_.getBuffer();
+            buffer.reserve(length);
 
-    return withExclusiveLock([&]() {
-        std::string chars;
+            // Use optimized charset selection
+            const char* chars_ptr;
+            size_t chars_size;
 
-        if (charset.has_value()) {
-            chars = std::string{charset.value()};
-            if (chars.empty()) {
-                throw RandomGenerationError("Custom charset cannot be empty");
+            if (charset.has_value()) {
+                chars_ptr = charset->data();
+                chars_size = charset->size();
+                if (chars_size == 0) {
+                    throw RandomGenerationError(
+                        "Custom charset cannot be empty");
+                }
+            } else if (alphanumeric) {
+                chars_ptr = ALPHA_NUMERIC_CHARS;
+                chars_size = strlen(ALPHA_NUMERIC_CHARS);
+            } else {
+                chars_ptr = PRINTABLE_CHARS;
+                chars_size = strlen(PRINTABLE_CHARS);
             }
-        } else if (alphanumeric) {
-            chars = ALPHA_NUMERIC_CHARS;
-        } else {
-            // 使用可打印字符
-            chars = PRINTABLE_CHARS;
+
+            // Fast generation with shared lock
+            return withSharedLock([&]() {
+                std::uniform_int_distribution<> dist(
+                    0, static_cast<int>(chars_size - 1));
+
+                // Generate in chunks for better cache performance
+                constexpr int CHUNK_SIZE = 64;
+                for (int i = 0; i < length; i += CHUNK_SIZE) {
+                    int chunk_end = std::min(i + CHUNK_SIZE, length);
+                    for (int j = i; j < chunk_end; ++j) {
+                        buffer.push_back(chars_ptr[dist(generator_)]);
+                    }
+                }
+
+                return std::string(buffer);
+            });
         }
 
-        std::uniform_int_distribution<> dist(
-            0, static_cast<int>(chars.size() - 1));
+        // Standard optimized path
+        return withSharedLock([&]() {
+            std::string chars;
+            if (charset.has_value()) {
+                chars = std::string{charset.value()};
+                if (chars.empty()) {
+                    throw RandomGenerationError(
+                        "Custom charset cannot be empty");
+                }
+            } else if (alphanumeric) {
+                chars = ALPHA_NUMERIC_CHARS;
+            } else {
+                chars = PRINTABLE_CHARS;
+            }
 
-        // 使用 std::ranges 进行更简洁的实现(C++20)
-        return std::views::iota(0, length) | std::views::transform([&](auto) {
-                   return chars[dist(generator_)];
-               }) |
-               std::ranges::to<std::string>();
-    });
+            std::uniform_int_distribution<> dist(
+                0, static_cast<int>(chars.size() - 1));
+            std::string result;
+            result.reserve(length);
+
+            // Generate in chunks
+            constexpr int CHUNK_SIZE = 32;
+            for (int i = 0; i < length; i += CHUNK_SIZE) {
+                int chunk_end = std::min(i + CHUNK_SIZE, length);
+                for (int j = i; j < chunk_end; ++j) {
+                    result.push_back(chars[dist(generator_)]);
+                }
+            }
+            return result;
+        });
+    }
+
+    // Fallback to validation
+    validateCount(length, "string length");
+    // Non-recursive fallback: generate the string directly
+    std::string chars;
+    if (charset.has_value()) {
+        chars = std::string{charset.value()};
+        if (chars.empty()) {
+            throw RandomGenerationError("Custom charset cannot be empty");
+        }
+    } else if (alphanumeric) {
+        chars = ALPHA_NUMERIC_CHARS;
+    } else {
+        chars = PRINTABLE_CHARS;
+    }
+
+    std::uniform_int_distribution<> dist(0, static_cast<int>(chars.size() - 1));
+    std::string result;
+    result.reserve(length);
+
+    for (int i = 0; i < length; ++i) {
+        result.push_back(chars[dist(generator_)]);
+    }
+    return result;
 }
 
 auto RandomDataGenerator::generateBooleans(int count, double trueProbability)
     -> std::vector<bool> {
+    ATOM_LIKELY_IF(fastValidateCount(count) &&
+                   fastValidateProbability(trueProbability)) {
+        // Fast path: use SIMD bulk generation if available and beneficial
+        if constexpr (detail::HAS_SIMD && detail::ENABLE_BULK_GENERATION) {
+            if (count >= detail::BULK_GENERATION_THRESHOLD) {
+                return generateBooleansBulkSIMD(count, trueProbability);
+            }
+        }
+
+        // Regular optimized path with shared lock
+        return withSharedLock([&]() {
+            std::bernoulli_distribution dist(trueProbability);
+            std::vector<bool> result;
+            result.reserve(count);
+
+            // Generate in chunks for cache efficiency
+            constexpr int CHUNK_SIZE = 128;  // Larger chunks for booleans
+            for (int i = 0; i < count; i += CHUNK_SIZE) {
+                int chunk_end = std::min(i + CHUNK_SIZE, count);
+                for (int j = i; j < chunk_end; ++j) {
+                    result.push_back(dist(generator_));
+                }
+            }
+            return result;
+        });
+    }
+
+    // Fallback to full validation
     validateCount(count, "count");
     validateProbability(trueProbability, "probability");
-
-    return withExclusiveLock([&]() {
-        std::bernoulli_distribution dist(trueProbability);
-
-        // 使用 std::ranges 进行更简洁的实现(C++20)
-        return std::views::iota(0, count) |
-               std::views::transform([&](auto) { return dist(generator_); }) |
-               std::ranges::to<std::vector<bool>>();
-    });
+    // Non-recursive fallback: generate the booleans directly
+    std::bernoulli_distribution dist(trueProbability);
+    std::vector<bool> result;
+    result.reserve(count);
+    for (int i = 0; i < count; ++i) {
+        result.push_back(dist(generator_));
+    }
+    return result;
 }
 
 auto RandomDataGenerator::generateBoolean(double trueProbability) -> bool {
-    validateProbability(trueProbability, "probability");
+    ATOM_LIKELY_IF(fastValidateProbability(trueProbability)) {
+        // Fast path with shared lock
+        return withSharedLock([&]() {
+            return std::bernoulli_distribution(trueProbability)(generator_);
+        });
+    }
 
-    return withExclusiveLock([&]() {
-        return std::bernoulli_distribution(trueProbability)(generator_);
-    });
+    // Fallback to full validation
+    validateProbability(trueProbability, "probability");
+    // Non-recursive fallback: generate the boolean directly
+    std::bernoulli_distribution dist(trueProbability);
+    return dist(generator_);
 }
 
 auto RandomDataGenerator::generateException() -> std::string {
@@ -359,7 +599,7 @@ auto RandomDataGenerator::generateRandomJSON(int depth, int maxElementsPerLevel)
                 if (intDistribution_(generator_) % 2 == 0) {
                     oss << generateJSON(currentDepth - 1);
                 } else {
-                    oss << "\"" << generateString(5, true) << "\"";
+                    oss << "\"" << generateString(5, true) + "\"";
                 }
             }
 
@@ -694,20 +934,111 @@ auto RandomDataGenerator::threadLocal(std::optional<int> seed)
         std::lock_guard<std::mutex> lock(initMutex);
         if (!threadLocalGenerator) {
             RandomConfig config;
-            config.enableThreadSafety(false);  // 线程局部不需要线程安全
+            config.setThreadingMode(RandomConfig::ThreadingMode::ThreadLocal);
 
             if (seed.has_value()) {
                 threadLocalGenerator =
-                    new RandomDataGenerator(config, seed.value());
+                    std::make_unique<RandomDataGenerator>(config, seed.value());
             } else {
                 // 使用随机种子
                 std::random_device rd;
-                threadLocalGenerator = new RandomDataGenerator(config, rd());
+                threadLocalGenerator =
+                    std::make_unique<RandomDataGenerator>(config, rd());
             }
         }
     }
 
     return *threadLocalGenerator;
 }
+
+// SIMD bulk generation implementations
+template <typename IntType>
+auto RandomDataGenerator::generateIntegersBulkSIMD(int count, IntType min,
+                                                   IntType max)
+    -> std::vector<IntType> {
+    return withSharedLock([&]() {
+        auto& dist = getIntDistribution<IntType>(min, max);
+        std::vector<IntType> result;
+        result.reserve(count);
+
+        // Use SIMD-friendly batching
+        constexpr int SIMD_BATCH_SIZE = 128;
+        for (int i = 0; i < count; i += SIMD_BATCH_SIZE) {
+            int batch_end = std::min(i + SIMD_BATCH_SIZE, count);
+            for (int j = i; j < batch_end; ++j) {
+                result.push_back(dist(generator_));
+            }
+
+            // Prefetch next batch to improve cache performance
+            if (i + SIMD_BATCH_SIZE < count) {
+#ifdef __GNUC__
+                __builtin_prefetch(&result[i + SIMD_BATCH_SIZE], 1, 3);
+#endif
+            }
+        }
+        return result;
+    });
+}
+
+template <typename RealType>
+auto RandomDataGenerator::generateRealsBulkSIMD(int count, RealType min,
+                                                RealType max)
+    -> std::vector<RealType> {
+    return withSharedLock([&]() {
+        auto& dist = getRealDistribution<RealType>(min, max);
+        std::vector<RealType> result;
+        result.reserve(count);
+
+        // Use SIMD-friendly batching for reals
+        constexpr int SIMD_BATCH_SIZE = 64;  // Smaller batch for floating point
+        for (int i = 0; i < count; i += SIMD_BATCH_SIZE) {
+            int batch_end = std::min(i + SIMD_BATCH_SIZE, count);
+            for (int j = i; j < batch_end; ++j) {
+                result.push_back(dist(generator_));
+            }
+
+            // Prefetch next batch
+            if (i + SIMD_BATCH_SIZE < count) {
+#ifdef __GNUC__
+                __builtin_prefetch(&result[i + SIMD_BATCH_SIZE], 1, 3);
+#endif
+            }
+        }
+        return result;
+    });
+}
+
+auto RandomDataGenerator::generateBooleansBulkSIMD(int count,
+                                                   double trueProbability)
+    -> std::vector<bool> {
+    return withSharedLock([&]() {
+        std::bernoulli_distribution dist(trueProbability);
+        std::vector<bool> result;
+        result.reserve(count);
+
+        // Generate in optimized chunks
+        constexpr int CHUNK_SIZE = 256;  // Larger chunks for booleans
+        for (int i = 0; i < count; i += CHUNK_SIZE) {
+            int chunk_end = std::min(i + CHUNK_SIZE, count);
+            for (int j = i; j < chunk_end; ++j) {
+                result.push_back(dist(generator_));
+            }
+        }
+        return result;
+    });
+}
+
+// Explicit template instantiations for common types
+template auto RandomDataGenerator::generateIntegersBulkSIMD<int>(int, int, int)
+    -> std::vector<int>;
+template auto RandomDataGenerator::generateIntegersBulkSIMD<long>(int, long,
+                                                                  long)
+    -> std::vector<long>;
+template auto RandomDataGenerator::generateRealsBulkSIMD<double>(int, double,
+                                                                 double)
+    -> std::vector<double>;
+template auto RandomDataGenerator::generateRealsBulkSIMD<float>(int, float,
+                                                                float)
+    -> std::vector<float>;
 
 }  // namespace atom::tests

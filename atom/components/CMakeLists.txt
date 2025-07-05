@@ -1,38 +1,22 @@
-# CMakeLists.txt for Atom-Component
-# This project adheres to the GPL3 license.
+# CMakeLists.txt for Atom-Component This project adheres to the GPL3 license.
 #
-# Project Details:
-#   Name: Atom-Component
-#   Description: Central component library for the Atom framework
-#   Author: Max Qian
-#   License: GPL3
+# Project Details: Name: Atom-Component Description: Central component library
+# for the Atom framework Author: Max Qian License: GPL3
 
 cmake_minimum_required(VERSION 3.20)
-project(atom-component VERSION 1.0.0 LANGUAGES C CXX)
+project(
+  atom-component
+  VERSION 1.0.0
+  LANGUAGES C CXX)
 
 # Source files
-set(SOURCES
-    component.cpp
-    dispatch.cpp
-    registry.cpp
-    var.cpp
-)
+set(SOURCES component.cpp dispatch.cpp registry.cpp var.cpp)
 
 # Header files
-set(HEADERS
-    component.hpp
-    dispatch.hpp
-    types.hpp
-    var.hpp
-)
+set(HEADERS component.hpp dispatch.hpp types.hpp var.hpp)
 
 # Dependencies
-set(LIBS
-    loguru
-    atom-error
-    atom-utils
-    ${CMAKE_THREAD_LIBS_INIT}
-)
+set(LIBS loguru atom-error atom-utils ${CMAKE_THREAD_LIBS_INIT})
 
 # Include directories
 include_directories(.)
@@ -46,13 +30,11 @@ add_library(${PROJECT_NAME} SHARED $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
 target_include_directories(${PROJECT_NAME} PUBLIC .)
 
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
-    OUTPUT_NAME ${PROJECT_NAME}
-)
+set_target_properties(
+  ${PROJECT_NAME}
+  PROPERTIES VERSION ${PROJECT_VERSION}
+             SOVERSION ${PROJECT_VERSION_MAJOR}
+             OUTPUT_NAME ${PROJECT_NAME})
 
 # Install rules
-install(TARGETS ${PROJECT_NAME}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
+install(TARGETS ${PROJECT_NAME} ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})

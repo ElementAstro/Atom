@@ -300,7 +300,7 @@ void Promise<void>::runCallbacks() noexcept {
 #else
     // Make a local copy of callbacks to avoid holding the lock while executing
     // them
-    std::vector<std::function<void()>> localCallbacks;
+    std::vector<std::function<void()> > localCallbacks;
     {
         std::shared_lock lock(mutex_);
         if (callbacks_.empty())

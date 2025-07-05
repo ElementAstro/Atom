@@ -328,8 +328,8 @@ private:
  * @brief Legacy AsyncDirectory interface for backward compatibility
  * @deprecated Use AsyncFile methods instead for unified interface
  */
-class [[deprecated("Use AsyncFile for unified file/directory operations")]]
-AsyncDirectory {
+class [[deprecated(
+    "Use AsyncFile for unified file/directory operations")]] AsyncDirectory {
 public:
 #ifdef ATOM_USE_ASIO
     explicit AsyncDirectory(asio::io_context& io_context) noexcept;

@@ -1,12 +1,13 @@
 @echo off
-REM Build script for Atom project using xmake or CMake
+REM Enhanced build script for Atom project using xmake or CMake
 REM Author: Max Qian
+setlocal enabledelayedexpansion
 
 echo ===============================================
-echo Atom Project Build Script
+echo Atom Project Enhanced Build Script
 echo ===============================================
 
-REM Parse command-line options
+REM Parse command-line options with enhanced defaults
 set BUILD_TYPE=release
 set BUILD_PYTHON=n
 set BUILD_SHARED=n
@@ -17,6 +18,15 @@ set BUILD_SSH=n
 set BUILD_SYSTEM=cmake
 set CLEAN_BUILD=n
 set SHOW_HELP=n
+set BUILD_DOCS=n
+set BUILD_BENCHMARKS=n
+set ENABLE_LTO=n
+set ENABLE_COVERAGE=n
+set ENABLE_SANITIZERS=n
+set PARALLEL_JOBS=
+set INSTALL_PREFIX=
+set CCACHE_ENABLE=auto
+set VERBOSE_BUILD=n
 
 :parse_args
 if "%~1"=="" goto end_parse_args

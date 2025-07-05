@@ -67,3 +67,4 @@ libexample.json
 *.pyc
 *.pyd
 __pycache__/
+atom.egg-info/

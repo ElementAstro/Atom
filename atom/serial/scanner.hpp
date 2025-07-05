@@ -271,11 +271,11 @@ public:
      * @brief Structure to hold detailed information about a serial port.
      */
     struct PortDetails {
-        std::string device_name;  ///< The device name
-        std::string description;  ///< A description of the port
-        std::string hardware_id;  ///< The hardware ID of the port
+        std::string device_name;    ///< The device name
+        std::string description;    ///< A description of the port
+        std::string hardware_id;    ///< The hardware ID of the port
         std::string registry_path;  ///< Windows registry path for the device
-        std::string vid;          ///< The Vendor ID (VID) in hexadecimal format
+        std::string vid;  ///< The Vendor ID (VID) in hexadecimal format
         std::string pid;  ///< The Product ID (PID) in hexadecimal format
         std::string serial_number;   ///< The serial number of the device
         std::string location;        ///< The location of the device
@@ -292,8 +292,8 @@ public:
         bool is_available{false};  ///< Whether the port is currently available
         std::string ch340_model;   ///< The CH340 model (if applicable)
         std::string
-            recommended_baud_rates;  ///< Recommended baud rates for the port
-        std::string notes;           ///< Additional notes about the port
+            recommended_baud_rates;     ///< Recommended baud rates for the port
+        std::string notes;              ///< Additional notes about the port
         uint32_t current_baud_rate{0};  ///< Current baud rate of the port
         uint32_t max_baud_rate{0};      ///< Maximum supported baud rate
 

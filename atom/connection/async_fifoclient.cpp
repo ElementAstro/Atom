@@ -201,4 +201,4 @@ bool FifoClient::isOpen() const { return m_impl->isOpen(); }
 
 void FifoClient::close() { m_impl->close(); }
 
-}  // namespace atom::connection
+}  // namespace atom::async::connection

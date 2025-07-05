@@ -47,53 +47,54 @@ enum class ProcessStatus {
  * @brief Process I/O statistics structure
  */
 struct ProcessIOStats {
-    uint64_t read_bytes{0};    ///< Total bytes read
-    uint64_t write_bytes{0};   ///< Total bytes written
-    double read_rate{0.0};     ///< Current read rate (bytes/sec)
-    double write_rate{0.0};    ///< Current write rate (bytes/sec)
-    std::chrono::steady_clock::time_point last_update{std::chrono::steady_clock::now()}; ///< Last update time
+    uint64_t read_bytes{0};   ///< Total bytes read
+    uint64_t write_bytes{0};  ///< Total bytes written
+    double read_rate{0.0};    ///< Current read rate (bytes/sec)
+    double write_rate{0.0};   ///< Current write rate (bytes/sec)
+    std::chrono::steady_clock::time_point last_update{
+        std::chrono::steady_clock::now()};  ///< Last update time
 };
 
 /**
  * @brief Process information structure
  */
 struct ProcessInfo {
-    pid_t pid{0};                           ///< Process ID
-    pid_t parent_pid{0};                    ///< Parent process ID
-    std::string name;                       ///< Process name
-    std::string command_line;               ///< Full command line
-    std::string username;                   ///< Owner username
-    ProcessStatus status{ProcessStatus::UNKNOWN}; ///< Process status
-    bool running{false};                    ///< Process running status
-    double cpu_usage{0.0};                  ///< CPU usage percentage
-    size_t memory_usage{0};                 ///< Memory usage in KB
-    size_t virtual_memory{0};               ///< Virtual memory in KB
-    size_t shared_memory{0};                ///< Shared memory in KB
-    int priority{0};                        ///< Process priority/nice value
-    unsigned int thread_count{0};           ///< Number of threads
-    ProcessIOStats io_stats;                ///< I/O statistics
-    std::chrono::system_clock::time_point start_time; ///< Process start time
-    std::chrono::milliseconds uptime{0};    ///< Process uptime
-    std::vector<pid_t> child_processes;     ///< Child process IDs
+    pid_t pid{0};                                  ///< Process ID
+    pid_t parent_pid{0};                           ///< Parent process ID
+    std::string name;                              ///< Process name
+    std::string command_line;                      ///< Full command line
+    std::string username;                          ///< Owner username
+    ProcessStatus status{ProcessStatus::UNKNOWN};  ///< Process status
+    bool running{false};                           ///< Process running status
+    double cpu_usage{0.0};                         ///< CPU usage percentage
+    size_t memory_usage{0};                        ///< Memory usage in KB
+    size_t virtual_memory{0};                      ///< Virtual memory in KB
+    size_t shared_memory{0};                       ///< Shared memory in KB
+    int priority{0};               ///< Process priority/nice value
+    unsigned int thread_count{0};  ///< Number of threads
+    ProcessIOStats io_stats;       ///< I/O statistics
+    std::chrono::system_clock::time_point start_time;  ///< Process start time
+    std::chrono::milliseconds uptime{0};               ///< Process uptime
+    std::vector<pid_t> child_processes;                ///< Child process IDs
 };
 
 /**
  * @brief Resource limit configuration
  */
 struct ResourceLimits {
-    double max_cpu_percent{0.0}; ///< Maximum CPU usage percentage
-    size_t max_memory_kb{0};     ///< Maximum memory usage in KB
+    double max_cpu_percent{0.0};  ///< Maximum CPU usage percentage
+    size_t max_memory_kb{0};      ///< Maximum memory usage in KB
 };
 
 /**
  * @brief Configuration for process monitoring
  */
 struct MonitorConfig {
-    std::chrono::milliseconds update_interval{1000}; ///< Update interval
-    bool monitor_children{false};          ///< Whether to monitor child processes
-    bool auto_restart{false};              ///< Whether to restart process on exit
-    int max_restart_attempts{3};           ///< Maximum restart attempts
-    ResourceLimits resource_limits;        ///< Resource limits
+    std::chrono::milliseconds update_interval{1000};  ///< Update interval
+    bool monitor_children{false};    ///< Whether to monitor child processes
+    bool auto_restart{false};        ///< Whether to restart process on exit
+    int max_restart_attempts{3};     ///< Maximum restart attempts
+    ResourceLimits resource_limits;  ///< Resource limits
 };
 
 /**
@@ -102,10 +103,13 @@ struct MonitorConfig {
 class PidWatcher {
 public:
     using ProcessCallback = std::function<void(const ProcessInfo&)>;
-    using MultiProcessCallback = std::function<void(const std::vector<ProcessInfo>&)>;
+    using MultiProcessCallback =
+        std::function<void(const std::vector<ProcessInfo>&)>;
     using ErrorCallback = std::function<void(const std::string&, int)>;
-    using ResourceLimitCallback = std::function<void(const ProcessInfo&, const ResourceLimits&)>;
-    using ProcessCreateCallback = std::function<void(pid_t, const std::string&)>;
+    using ResourceLimitCallback =
+        std::function<void(const ProcessInfo&, const ResourceLimits&)>;
+    using ProcessCreateCallback =
+        std::function<void(pid_t, const std::string&)>;
     using ProcessFilter = std::function<bool(const ProcessInfo&)>;
 
     /**
@@ -142,7 +146,8 @@ public:
      * @param interval The interval at which the monitor function should run.
      * @return Reference to this object for method chaining
      */
-    PidWatcher& setMonitorFunction(ProcessCallback callback, std::chrono::milliseconds interval);
+    PidWatcher& setMonitorFunction(ProcessCallback callback,
+                                   std::chrono::milliseconds interval);
 
     /**
      * @brief Sets the callback for monitoring multiple processes.
@@ -191,7 +196,8 @@ public:
      * @param name The name of the process.
      * @return Vector of PIDs matching the name.
      */
-    [[nodiscard]] std::vector<pid_t> getPidsByName(const std::string& name) const;
+    [[nodiscard]] std::vector<pid_t> getPidsByName(
+        const std::string& name) const;
 
     /**
      * @brief Get information about a process.
@@ -235,7 +241,8 @@ public:
      * @param config Optional specific configuration for these processes.
      * @return Number of successfully started monitors.
      */
-    size_t startMultiple(const std::vector<std::string>& process_names, const MonitorConfig* config = nullptr);
+    size_t startMultiple(const std::vector<std::string>& process_names,
+                         const MonitorConfig* config = nullptr);
 
     /**
      * @brief Stops monitoring all processes.
@@ -329,10 +336,13 @@ public:
      * @brief Launch a new process.
      * @param command The command to execute.
      * @param args Vector of command arguments.
-     * @param auto_monitor Whether to automatically start monitoring the new process.
+     * @param auto_monitor Whether to automatically start monitoring the new
+     * process.
      * @return PID of the new process or 0 on failure.
      */
-    pid_t launchProcess(const std::string& command, const std::vector<std::string>& args = {}, bool auto_monitor = true);
+    pid_t launchProcess(const std::string& command,
+                        const std::vector<std::string>& args = {},
+                        bool auto_monitor = true);
 
     /**
      * @brief Terminate a process.
@@ -381,13 +391,15 @@ public:
      * @param output_file Optional file to write to (default: log).
      * @return True if dump was successful.
      */
-    bool dumpProcessInfo(pid_t pid, bool detailed = false, const std::string& output_file = "");
+    bool dumpProcessInfo(pid_t pid, bool detailed = false,
+                         const std::string& output_file = "");
 
     /**
      * @brief Get monitoring statistics.
      * @return Map of monitoring statistics by process ID.
      */
-    [[nodiscard]] std::unordered_map<pid_t, std::map<std::string, double>> getMonitoringStats() const;
+    [[nodiscard]] std::unordered_map<pid_t, std::map<std::string, double>>
+    getMonitoringStats() const;
 
     /**
      * @brief Set rate limiting for monitoring to prevent high CPU usage.
@@ -431,7 +443,9 @@ private:
 
     std::unordered_map<pid_t, ProcessInfo> monitored_processes_;
     std::unordered_map<pid_t, int> restart_attempts_;
-    std::unordered_map<pid_t, std::chrono::time_point<std::chrono::steady_clock>> last_update_time_;
+    std::unordered_map<pid_t,
+                       std::chrono::time_point<std::chrono::steady_clock>>
+        last_update_time_;
 
     std::atomic<unsigned int> max_updates_per_second_{10};
     std::chrono::time_point<std::chrono::steady_clock> rate_limit_start_time_;
@@ -447,7 +461,8 @@ private:
 
     mutable std::unordered_map<pid_t, CPUUsageData> cpu_usage_data_;
     mutable std::unordered_map<pid_t, ProcessIOStats> prev_io_stats_;
-    mutable std::unordered_map<pid_t, std::map<std::string, double>> monitoring_stats_;
+    mutable std::unordered_map<pid_t, std::map<std::string, double>>
+        monitoring_stats_;
 
     std::thread monitor_thread_;
     std::thread exit_thread_;
@@ -465,6 +480,6 @@ private:
     std::condition_variable watchdog_cv_;
 };
 
-} // namespace atom::system
+}  // namespace atom::system
 
 #endif

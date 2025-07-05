@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-
 #undef ERROR
 
 namespace atom::async::connection {

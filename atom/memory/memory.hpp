@@ -132,11 +132,17 @@ public:
      */
     MemoryPool(MemoryPool&& other) noexcept
         : block_size_strategy_(std::move(other.block_size_strategy_)),
-          free_list_(std::move(other.free_list_)),
-          stats_(other.stats_) {
+          free_list_(std::move(other.free_list_)) {
         std::unique_lock lock(other.mutex_);
         pool_ = std::move(other.pool_);
         tagged_allocations_ = std::move(other.tagged_allocations_);
+
+        // Manually copy atomic values
+        stats_.total_allocated = other.stats_.total_allocated.load();
+        stats_.total_available = other.stats_.total_available.load();
+        stats_.allocation_count = other.stats_.allocation_count.load();
+        stats_.deallocation_count = other.stats_.deallocation_count.load();
+        stats_.chunk_count = other.stats_.chunk_count.load();
     }
 
     /**
@@ -151,8 +157,14 @@ public:
             block_size_strategy_ = std::move(other.block_size_strategy_);
             pool_ = std::move(other.pool_);
             free_list_ = std::move(other.free_list_);
-            stats_ = other.stats_;
             tagged_allocations_ = std::move(other.tagged_allocations_);
+
+            // Manually copy atomic values
+            stats_.total_allocated = other.stats_.total_allocated.load();
+            stats_.total_available = other.stats_.total_available.load();
+            stats_.allocation_count = other.stats_.allocation_count.load();
+            stats_.deallocation_count = other.stats_.deallocation_count.load();
+            stats_.chunk_count = other.stats_.chunk_count.load();
         }
         return *this;
     }

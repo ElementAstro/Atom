@@ -62,7 +62,7 @@ public:
         if (full()) {
             return false;
         }
-        buffer_[head_] = item;
+        buffer_[head_] = std::move(item);
         head_ = (head_ + 1) % max_size_;
         ++count_;
 #endif
@@ -108,7 +108,7 @@ public:
         if (empty()) {
             return std::nullopt;
         }
-        T item = buffer_[tail_];
+        T item = std::move(buffer_[tail_]);
         tail_ = (tail_ + 1) % max_size_;
         --count_;
         return item;

@@ -42,7 +42,7 @@ struct Process {
     int priority;          ///< 进程优先级
 
     std::chrono::system_clock::time_point startTime;  ///< 进程启动时间
-    ProcessResource resources;  ///< 进程资源使用情况
+    ProcessResource resources;                        ///< 进程资源使用情况
 
     std::unordered_map<std::string, std::string> environment;  ///< 进程环境变量
 
@@ -82,12 +82,12 @@ struct PrivilegesInfo {
  * @brief 表示进程的网络连接信息
  */
 struct NetworkConnection {
-    std::string protocol;           ///< 协议(TCP/UDP)
-    std::string localAddress;       ///< 本地地址
-    int localPort;                  ///< 本地端口
-    std::string remoteAddress;      ///< 远程地址
-    int remotePort;                 ///< 远程端口
-    std::string status;             ///< 连接状态
+    std::string protocol;       ///< 协议(TCP/UDP)
+    std::string localAddress;   ///< 本地地址
+    int localPort;              ///< 本地端口
+    std::string remoteAddress;  ///< 远程地址
+    int remotePort;             ///< 远程端口
+    std::string status;         ///< 连接状态
 } ATOM_ALIGNAS(64);
 
 /**
@@ -95,10 +95,10 @@ struct NetworkConnection {
  * @brief 表示进程打开的文件描述符或句柄
  */
 struct FileDescriptor {
-    int fd;                         ///< 文件描述符/句柄ID
-    std::string path;               ///< 文件路径
-    std::string type;               ///< 文件类型(regular, socket, pipe等)
-    std::string mode;               ///< 访问模式(r, w, rw等)
+    int fd;            ///< 文件描述符/句柄ID
+    std::string path;  ///< 文件路径
+    std::string type;  ///< 文件类型(regular, socket, pipe等)
+    std::string mode;  ///< 访问模式(r, w, rw等)
 } ATOM_ALIGNAS(64);
 
 /**
@@ -107,10 +107,10 @@ struct FileDescriptor {
  */
 struct PerformanceDataPoint {
     std::chrono::system_clock::time_point timestamp;  ///< 时间戳
-    double cpuUsage;                ///< CPU使用率
-    std::size_t memoryUsage;        ///< 内存使用量
-    std::size_t ioReadBytes;        ///< IO读取字节数
-    std::size_t ioWriteBytes;       ///< IO写入字节数
+    double cpuUsage;                                  ///< CPU使用率
+    std::size_t memoryUsage;                          ///< 内存使用量
+    std::size_t ioReadBytes;                          ///< IO读取字节数
+    std::size_t ioWriteBytes;                         ///< IO写入字节数
 } ATOM_ALIGNAS(64);
 
 /**
@@ -118,7 +118,7 @@ struct PerformanceDataPoint {
  * @brief 表示进程的性能历史数据
  */
 struct PerformanceHistory {
-    int pid;                        ///< 进程ID
+    int pid;                                       ///< 进程ID
     std::vector<PerformanceDataPoint> dataPoints;  ///< 性能数据点列表
 } ATOM_ALIGNAS(64);
 

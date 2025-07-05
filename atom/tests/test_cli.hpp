@@ -3,9 +3,11 @@
 
 #include <charconv>
 #include <chrono>
+#include <iomanip>
 #include <iostream>
 #include <optional>
 #include <span>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -16,40 +18,96 @@
 
 namespace atom::test {
 
+// ═══════════════════════════════════════════════════════════════════════════════════
+// ░█▀▀░█▀█░█▄█░█▄█░█▀▀░█▀█░█▀▄░█░░░▀█▀░█▀█░█▀▀░░░█▀█░█▀▀░█▀▄░█▀▀░█▀▀░█▀▄
+// ░█░░░█░█░█░█░█░█░█▀▀░█░█░█░█░█░░░░█░░█░█░█▀▀░░░█▀▀░█▀▀░█▀▄░▀▀█░█▀▀░█▀▄
+// ░▀▀▀░▀▀▀░▀░▀░▀░▀░▀▀▀░▀░▀░▀▀░░▀▀▀░▀▀▀░▀░▀░▀▀▀░░░▀░░░▀▀▀░▀░▀░▀▀▀░▀▀▀░▀░▀
+// ═══════════════════════════════════════════════════════════════════════════════════
+
 /**
- * @brief A command-line argument parser
- * @details Provides modern C++ based command-line argument parsing, supporting
- * various argument types including flags, string options, and numerical options
+ * @brief 🎨 Modern Command-Line Interface with Enhanced Visual Appeal
+ * @details A beautifully crafted command-line argument parser designed for
+ *          optimal user experience with colorful output, intuitive formatting,
+ *          and comprehensive help documentation.
+ *
+ * ✨ Features:
+ * • 🎯 Type-safe argument parsing with modern C++ variants
+ * • 🌈 Colorful and aesthetically pleasing help output
+ * • 🔧 Flexible option registration with chaining support
+ * • 📊 Smart formatting and alignment for readability
+ * • 🛡️ Robust error handling with helpful messages
+ * • 🚀 High-performance parsing with zero-cost abstractions
  */
 class CommandLineParser {
 public:
     /**
-     * @brief Type alias for the possible values an argument can hold
-     * @details Supports boolean flags, integer, double, and string values
+     * @brief 🎯 Type-safe argument value container
+     * @details Supports boolean flags, integers, floating-point numbers, and
+     * strings
      */
     using ArgValue = std::variant<bool, int, double, std::string>;
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Color Constants for Beautiful Terminal Output
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    struct Colors {
+        static constexpr const char* RESET = "\033[0m";
+        static constexpr const char* BOLD = "\033[1m";
+        static constexpr const char* DIM = "\033[2m";
+        static constexpr const char* ITALIC = "\033[3m";
+        static constexpr const char* UNDERLINE = "\033[4m";
+
+        // Text Colors
+        static constexpr const char* BLACK = "\033[30m";
+        static constexpr const char* RED = "\033[31m";
+        static constexpr const char* GREEN = "\033[32m";
+        static constexpr const char* YELLOW = "\033[33m";
+        static constexpr const char* BLUE = "\033[34m";
+        static constexpr const char* MAGENTA = "\033[35m";
+        static constexpr const char* CYAN = "\033[36m";
+        static constexpr const char* WHITE = "\033[37m";
+
+        // Bright Colors
+        static constexpr const char* BRIGHT_BLACK = "\033[90m";
+        static constexpr const char* BRIGHT_RED = "\033[91m";
+        static constexpr const char* BRIGHT_GREEN = "\033[92m";
+        static constexpr const char* BRIGHT_YELLOW = "\033[93m";
+        static constexpr const char* BRIGHT_BLUE = "\033[94m";
+        static constexpr const char* BRIGHT_MAGENTA = "\033[95m";
+        static constexpr const char* BRIGHT_CYAN = "\033[96m";
+        static constexpr const char* BRIGHT_WHITE = "\033[97m";
+
+        // Background Colors
+        static constexpr const char* BG_BLACK = "\033[40m";
+        static constexpr const char* BG_RED = "\033[41m";
+        static constexpr const char* BG_GREEN = "\033[42m";
+        static constexpr const char* BG_YELLOW = "\033[43m";
+        static constexpr const char* BG_BLUE = "\033[44m";
+        static constexpr const char* BG_MAGENTA = "\033[45m";
+        static constexpr const char* BG_CYAN = "\033[46m";
+        static constexpr const char* BG_WHITE = "\033[47m";
+    };
+
     /**
-     * @brief Registers a command-line option
+     * @brief 🔧 Register a command-line option with beautiful formatting
      * @param name The long name of the option (e.g., "--help")
-     * @param shortName The short name of the option (e.g., "-h"). Can be empty
-     * @param description A description of the option for help messages
-     * @param defaultValue The default value of the option. Defaults to false
-     * (boolean flag)
-     * @param required Whether the option must be provided by the user. Defaults
-     * to false
-     * @return A reference to this CommandLineParser instance for method
-     * chaining
+     * @param shortName The short name of the option (e.g., "-h")
+     * @param description A descriptive explanation of the option
+     * @param defaultValue The default value (supports bool, int, double,
+     * string)
+     * @param required Whether this option is mandatory
+     * @return Reference to this parser for method chaining ⛓️
      */
     auto registerOption(std::string name, std::string shortName,
                         std::string description, ArgValue defaultValue = false,
                         bool required = false) -> CommandLineParser& {
-        options_[name] = {std::move(shortName),
-                          std::move(description),
-                          defaultValue,
-                          required,
-                          false,
-                          std::move(defaultValue)};
+        options_[name] = {.shortName = std::move(shortName),
+                          .description = std::move(description),
+                          .defaultValue = defaultValue,
+                          .required = required,
+                          .isSet = false,
+                          .value = std::move(defaultValue)};
 
         if (!options_[name].shortName.empty()) {
             shortNameMap_[options_[name].shortName] = name;
@@ -58,13 +116,14 @@ public:
     }
 
     /**
-     * @brief Parses command-line arguments provided as argc and argv
-     * @param argc The argument count, typically from main()
-     * @param argv The argument vector, typically from main()
-     * @return true if parsing was successful, false otherwise
+     * @brief 🔍 Parse command-line arguments from argc/argv
+     * @param argc Argument count from main()
+     * @param argv Argument vector from main()
+     * @return ✅ true if parsing succeeded, ❌ false otherwise
      */
     [[nodiscard]] auto parse(int argc, char* argv[]) -> bool {
         if (argc < 1) {
+            printError("No arguments provided");
             return false;
         }
         programName_ = argv[0];
@@ -79,24 +138,23 @@ public:
     }
 
     /**
-     * @brief Parses command-line arguments provided as a span of string views
-     * @param args A span containing the command-line arguments (including
-     * program name)
-     * @return true if parsing was successful, false otherwise
+     * @brief 🔍 Parse command-line arguments from string_view span
+     * @param args Span containing arguments (including program name)
+     * @return ✅ true if parsing succeeded, ❌ false otherwise
      */
     [[nodiscard]] auto parse(std::span<const std::string_view> args) -> bool {
         if (!args.empty()) {
             programName_ = std::string(args[0]);
             return parseArgs(args.subspan(1));
         }
-        std::cerr << "Error: No arguments provided.\n";
+        printError("No arguments provided");
         return false;
     }
 
     /**
-     * @brief Checks if a specific option was provided in the parsed arguments
-     * @param name The long name of the option (e.g., "--help")
-     * @return true if the option was present and set, false otherwise
+     * @brief ✔️ Check if an option was provided
+     * @param name The long name of the option
+     * @return true if option was set, false otherwise
      */
     [[nodiscard]] auto contains(const std::string& name) const -> bool {
         auto it = options_.find(name);
@@ -104,16 +162,11 @@ public:
     }
 
     /**
-     * @brief Retrieves the value of a specific option
-     * @details If the option was not provided or its value cannot be converted
-     * to type T, the specified defaultValue is returned
-     * @tparam T The expected type of the option's value (bool, int, double,
-     * std::string)
-     * @param name The long name of the option (e.g., "--threads")
-     * @param defaultValue The value to return if the option is not set or type
-     * mismatch occurs
-     * @return The value of the option if set and type matches, otherwise
-     * defaultValue
+     * @brief 🎯 Get typed value of an option with fallback
+     * @tparam T Expected type (bool, int, double, std::string)
+     * @param name Option name
+     * @param defaultValue Fallback value if option not set or type mismatch
+     * @return Option value or default
      */
     template <typename T>
     [[nodiscard]] auto getValue(const std::string& name,
@@ -126,68 +179,100 @@ public:
         try {
             return std::get<T>(it->second.value);
         } catch (const std::bad_variant_access&) {
-            std::cerr << "Warning: Type mismatch for option '" << name
-                      << "'. Returning default value.\n";
+            printWarning("Type mismatch for option '" + name +
+                         "'. Using default value");
             return defaultValue;
         }
     }
 
     /**
-     * @brief Prints a help message describing the registered options
-     * @details The output includes usage information, option names (long and
-     * short), descriptions, default values, and whether an option is required
+     * @brief 🎨 Print a stunning help message with beautiful formatting
+     * @details Creates an aesthetically pleasing help output with colors,
+     *          proper alignment, and intuitive organization
      */
     void printHelp() const {
-        std::cout << "Usage: " << programName_ << " [options]\n\n";
-        std::cout << "Options:\n";
+        printBanner();
 
-        size_t maxLength = 0;
-        for (const auto& [name, option] : options_) {
-            size_t length = name.length();
-            if (!option.shortName.empty()) {
-                length += option.shortName.length() + 2;
-            }
-            maxLength = std::max(maxLength, length);
+        // Usage section
+        std::cout << Colors::BOLD << Colors::CYAN << "USAGE:" << Colors::RESET
+                  << "\n";
+        std::cout << "  " << Colors::BRIGHT_BLUE << programName_
+                  << Colors::RESET << " " << Colors::DIM << "[options]"
+                  << Colors::RESET << "\n\n";
+
+        if (options_.empty()) {
+            std::cout << Colors::YELLOW << "No options registered."
+                      << Colors::RESET << "\n";
+            return;
         }
 
+        // Calculate optimal column width for alignment
+        size_t maxOptionWidth = 0;
         for (const auto& [name, option] : options_) {
-            std::string optionText = name;
+            size_t width = name.length();
             if (!option.shortName.empty()) {
-                optionText += ", " + option.shortName;
+                width += option.shortName.length() + 2;  // ", " separator
             }
+            maxOptionWidth = std::max(maxOptionWidth, width);
+        }
+        maxOptionWidth =
+            std::min(maxOptionWidth, size_t(30));  // Reasonable max width
 
-            std::cout << "  " << optionText;
-            std::cout << std::string(maxLength + 4 - optionText.length(), ' ');
-            std::cout << option.description;
+        // Options header
+        std::cout << Colors::BOLD << Colors::CYAN << "OPTIONS:" << Colors::RESET
+                  << "\n";
 
-            std::visit(
-                [&](auto&& arg) {
-                    using T = std::decay_t<decltype(arg)>;
-                    if constexpr (std::is_same_v<T, int> ||
-                                  std::is_same_v<T, double>) {
-                        std::cout << " (Default: " << arg << ")";
-                    } else if constexpr (std::is_same_v<T, std::string>) {
-                        if (!arg.empty()) {
-                            std::cout << " (Default: \"" << arg << "\")";
-                        }
-                    }
-                },
-                option.defaultValue);
+        // Group options by category
+        std::vector<std::pair<std::string, const Option*>> required_options;
+        std::vector<std::pair<std::string, const Option*>> flag_options;
+        std::vector<std::pair<std::string, const Option*>> value_options;
 
+        for (const auto& [name, option] : options_) {
             if (option.required) {
-                std::cout << " (Required)";
+                required_options.emplace_back(name, &option);
+            } else if (std::holds_alternative<bool>(option.defaultValue)) {
+                flag_options.emplace_back(name, &option);
+            } else {
+                value_options.emplace_back(name, &option);
             }
-
-            std::cout << "\n";
         }
+
+        // Print required options first (if any)
+        if (!required_options.empty()) {
+            std::cout << "\n"
+                      << Colors::BOLD << Colors::RED
+                      << "  Required:" << Colors::RESET << "\n";
+            for (const auto& [name, option] : required_options) {
+                printOptionLine(name, *option, maxOptionWidth, true);
+            }
+        }
+
+        // Print flag options
+        if (!flag_options.empty()) {
+            std::cout << "\n"
+                      << Colors::BOLD << Colors::GREEN
+                      << "  Flags:" << Colors::RESET << "\n";
+            for (const auto& [name, option] : flag_options) {
+                printOptionLine(name, *option, maxOptionWidth, false);
+            }
+        }
+
+        // Print value options
+        if (!value_options.empty()) {
+            std::cout << "\n"
+                      << Colors::BOLD << Colors::BLUE
+                      << "  Options:" << Colors::RESET << "\n";
+            for (const auto& [name, option] : value_options) {
+                printOptionLine(name, *option, maxOptionWidth, false);
+            }
+        }
+
+        printFooter();
     }
 
     /**
-     * @brief Applies the parsed command-line options to a TestRunnerConfig
-     * object
-     * @details Updates the configuration based on the presence and values of
-     * relevant options
-     * @param config The TestRunnerConfig object to update
+     * @brief ⚙️ Apply parsed options to TestRunnerConfig
+     * @param config Configuration object to update
      */
     void applyToConfig(TestRunnerConfig& config) const {
         if (contains("--parallel")) {
@@ -263,6 +348,149 @@ private:
     std::string programName_;
 
     /**
+     * @brief 🎨 Print a beautiful banner for the application
+     * @details Creates an eye-catching header with program information
+     */
+    void printBanner() const {
+        std::cout << Colors::BOLD << Colors::BRIGHT_CYAN << "\n";
+        std::cout << "╔════════════════════════════════════════════════════════"
+                     "══════════════════════╗\n";
+        std::cout << "║                           " << Colors::BRIGHT_WHITE
+                  << "🧪 ATOM TEST RUNNER" << Colors::BRIGHT_CYAN
+                  << "                           ║\n";
+        std::cout << "║                    " << Colors::BRIGHT_YELLOW
+                  << "High-Performance C++ Testing Framework"
+                  << Colors::BRIGHT_CYAN << "                    ║\n";
+        std::cout << "╚════════════════════════════════════════════════════════"
+                     "══════════════════════╝"
+                  << Colors::RESET << "\n\n";
+    }
+
+    /**
+     * @brief 📝 Print a beautifully formatted option line
+     * @param name The long name of the option
+     * @param option The option configuration
+     * @param maxWidth Maximum width for alignment
+     * @param isRequired Whether this is a required option
+     */
+    void printOptionLine(const std::string& name, const Option& option,
+                         size_t maxWidth, bool isRequired) const {
+        std::ostringstream optionStr;
+
+        // Build option string (e.g., "--help, -h")
+        if (!option.shortName.empty()) {
+            optionStr << option.shortName << ", " << name;
+        } else {
+            optionStr << name;
+        }
+
+        std::string optText = optionStr.str();
+
+        // Color based on type and requirements
+        std::string color = Colors::BRIGHT_WHITE;
+        if (isRequired) {
+            color = Colors::BRIGHT_RED;
+        } else if (std::holds_alternative<bool>(option.defaultValue)) {
+            color = Colors::BRIGHT_GREEN;  // Flags
+        } else {
+            color = Colors::BRIGHT_BLUE;  // Value options
+        }
+
+        // Print option with proper padding
+        std::cout << "    " << color << std::left
+                  << std::setw(static_cast<int>(maxWidth + 2)) << optText
+                  << Colors::RESET;
+
+        // Print description
+        std::cout << Colors::DIM << option.description;
+
+        // Show default value if not a flag and not required
+        if (!isRequired && !std::holds_alternative<bool>(option.defaultValue)) {
+            std::cout << " " << Colors::BRIGHT_BLACK << "(default: ";
+
+            std::visit(
+                [](const auto& value) {
+                    using T = std::decay_t<decltype(value)>;
+                    if constexpr (std::is_same_v<T, std::string>) {
+                        if (value.empty()) {
+                            std::cout << "\"\"";
+                        } else {
+                            std::cout << "\"" << value << "\"";
+                        }
+                    } else {
+                        std::cout << value;
+                    }
+                },
+                option.defaultValue);
+
+            std::cout << ")";
+        }
+
+        std::cout << Colors::RESET << "\n";
+    }
+
+    /**
+     * @brief 📋 Print a helpful footer with usage tips
+     * @details Provides additional guidance and examples for users
+     */
+    void printFooter() const {
+        std::cout << "\n"
+                  << Colors::BOLD << Colors::CYAN
+                  << "EXAMPLES:" << Colors::RESET << "\n";
+        std::cout << "  " << Colors::DIM
+                  << "# Run all tests with verbose output" << Colors::RESET
+                  << "\n";
+        std::cout << "  " << Colors::BRIGHT_BLUE << programName_
+                  << Colors::RESET << " " << Colors::GREEN << "--verbose"
+                  << Colors::RESET << "\n\n";
+
+        std::cout << "  " << Colors::DIM
+                  << "# Run tests in parallel with 8 threads" << Colors::RESET
+                  << "\n";
+        std::cout << "  " << Colors::BRIGHT_BLUE << programName_
+                  << Colors::RESET << " " << Colors::GREEN
+                  << "--parallel --threads 8" << Colors::RESET << "\n\n";
+
+        std::cout << "  " << Colors::DIM << "# Filter and run specific tests"
+                  << Colors::RESET << "\n";
+        std::cout << "  " << Colors::BRIGHT_BLUE << programName_
+                  << Colors::RESET << " " << Colors::GREEN
+                  << "--filter \"performance.*\"" << Colors::RESET << "\n\n";
+
+        std::cout << "  " << Colors::DIM
+                  << "# Enable fail-fast mode with retries" << Colors::RESET
+                  << "\n";
+        std::cout << "  " << Colors::BRIGHT_BLUE << programName_
+                  << Colors::RESET << " " << Colors::GREEN
+                  << "--fail-fast --retry 3" << Colors::RESET << "\n\n";
+
+        std::cout << Colors::BOLD << Colors::YELLOW
+                  << "💡 TIP:" << Colors::RESET << " Use " << Colors::GREEN
+                  << "--help" << Colors::RESET
+                  << " anytime to see this information!\n\n";
+    }
+
+    /**
+     * @brief ❌ Print a formatted error message
+     * @param message The error message to display
+     */
+    void printError(const std::string& message) const {
+        std::cout << Colors::BOLD << Colors::BRIGHT_RED
+                  << "✗ ERROR: " << Colors::RESET << Colors::RED << message
+                  << Colors::RESET << "\n";
+    }
+
+    /**
+     * @brief ⚠️ Print a formatted warning message
+     * @param message The warning message to display
+     */
+    void printWarning(const std::string& message) const {
+        std::cout << Colors::BOLD << Colors::BRIGHT_YELLOW
+                  << "⚠ WARNING: " << Colors::RESET << Colors::YELLOW << message
+                  << Colors::RESET << "\n";
+    }
+
+    /**
      * @brief Internal helper function to parse arguments after initial setup
      * @param args A span containing the command-line arguments (excluding
      * program name)
@@ -297,9 +525,9 @@ private:
                         std::string short_flag = "-" + std::string(1, arg[j]);
                         auto shortIt = shortNameMap_.find(short_flag);
                         if (shortIt == shortNameMap_.end()) {
-                            std::cerr
-                                << "Error: Unknown short option component '"
-                                << short_flag << "' in '" << arg << "'\n";
+                            printError("Unknown short option component '" +
+                                       short_flag + "' in '" +
+                                       std::string(arg) + "'");
                             return false;
                         }
                         auto longIt = options_.find(shortIt->second);
@@ -315,10 +543,10 @@ private:
                                 optionPtr = &longIt->second;
                                 break;
                             } else {
-                                std::cerr << "Error: Combined short option '"
-                                          << arg
-                                          << "' contains non-flag or requires "
-                                             "value before the end.\n";
+                                printError("Combined short option '" +
+                                           std::string(arg) +
+                                           "' contains non-flag or requires "
+                                           "value before the end");
                                 return false;
                             }
                         }
@@ -339,14 +567,14 @@ private:
                     }
                 }
             } else {
-                std::cerr << "Error: Unexpected positional argument: " << arg
-                          << "\n";
+                printError("Unexpected positional argument: " +
+                           std::string(arg));
                 printHelp();
                 return false;
             }
 
             if (!optionPtr) {
-                std::cerr << "Error: Unknown option: " << arg << "\n";
+                printError("Unknown option: " + std::string(arg));
                 printHelp();
                 return false;
             }
@@ -357,8 +585,8 @@ private:
                 optionPtr->value = true;
             } else {
                 if (i + 1 >= args.size() || args[i + 1].starts_with("-")) {
-                    std::cerr << "Error: Option " << arg
-                              << " requires a value.\n";
+                    printError("Option " + std::string(arg) +
+                               " requires a value");
                     printHelp();
                     return false;
                 }
@@ -406,9 +634,9 @@ private:
                         optionPtr->value = std::string(valueArg);
                     }
                 } catch (const std::exception& e) {
-                    std::cerr << "Error: Invalid value '" << valueArg
-                              << "' for option " << arg << ". " << e.what()
-                              << "\n";
+                    printError("Invalid value '" + std::string(valueArg) +
+                               "' for option " + std::string(arg) + ". " +
+                               e.what());
                     printHelp();
                     return false;
                 }
@@ -417,7 +645,7 @@ private:
 
         for (const auto& [name, option] : options_) {
             if (option.required && !option.isSet) {
-                std::cerr << "Error: Missing required option: " << name << "\n";
+                printError("Missing required option: " + name);
                 printHelp();
                 return false;
             }

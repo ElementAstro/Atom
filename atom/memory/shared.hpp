@@ -375,6 +375,23 @@ public:
         return static_cast<char*>(buffer_) + sizeof(SharedMemoryHeader);
     }
 
+    /**
+     * @brief Notifies all registered listeners about data changes
+     * @param data The new data to notify about
+     */
+    void notifyListeners(const T& data) {
+        std::lock_guard<std::mutex> lock(callbackMutex_);
+        for (const auto& [id, callback] : changeCallbacks_) {
+            try {
+                callback(data);
+            } catch (const std::exception& e) {
+                spdlog::error(
+                    "Exception in change callback for shared memory {}: {}",
+                    name_, e.what());
+            }
+        }
+    }
+
 private:
     std::string name_;
     std::size_t totalSize_;
@@ -403,7 +420,6 @@ private:
 
     void unmap() noexcept;
     void mapMemory(bool create, std::size_t size);
-    void notifyListeners(const T& data);
     void startWatchThread();
     void watchForChanges();
     void platformSpecificInit();
@@ -1056,58 +1072,6 @@ auto SharedMemory<T>::unregisterChangeCallback(std::size_t callbackId) -> bool {
         return true;
     }
     return false;
-}
-
-template <TriviallyCopyable T>
-void SharedMemory<T>::notifyListeners(const T& data) {
-    std::lock_guard<std::mutex> lock(callbackMutex_);
-    for (const auto& [id, callback] : changeCallbacks_) {
-        try {
-            callback(data);
-        } catch (const std::exception& e) {
-            spdlog::error(
-                "Exception in change callback for shared memory {}: {}", name_,
-                e.what());
-        }
-    }
-}
-
-template <TriviallyCopyable T>
-auto SharedMemory<T>::waitForChange(std::chrono::milliseconds timeout) -> bool {
-    std::unique_lock<std::mutex> lock(mutex_);
-    uint64_t currentVersion = header_->version.load(std::memory_order_acquire);
-
-    if (currentVersion != lastKnownVersion_) {
-        lastKnownVersion_ = currentVersion;
-        return true;
-    }
-
-    if (timeout == std::chrono::milliseconds(0)) {
-        changeCondition_.wait(lock, [this, currentVersion]() {
-            return header_->version.load(std::memory_order_acquire) !=
-                   currentVersion;
-        });
-        lastKnownVersion_ = header_->version.load(std::memory_order_acquire);
-        return true;
-    } else {
-        bool changed =
-            changeCondition_.wait_for(lock, timeout, [this, currentVersion]() {
-                return header_->version.load(std::memory_order_acquire) !=
-                       currentVersion;
-            });
-
-        if (changed) {
-            lastKnownVersion_ =
-                header_->version.load(std::memory_order_acquire);
-        }
-        return changed;
-    }
-}
-
-template <TriviallyCopyable T>
-void SharedMemory<T>::startWatchThread() {
-    watchThread_ = std::jthread(
-        [this](std::stop_token stoken) { this->watchForChanges(); });
 }
 
 template <TriviallyCopyable T>

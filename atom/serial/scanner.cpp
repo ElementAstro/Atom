@@ -16,9 +16,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 #ifdef __linux__
-#include <fstream>
 #include <libudev.h>
 #include <termios.h>
+#include <fstream>
 #endif
 #endif
 
@@ -1221,27 +1221,33 @@ SerialPortScanner::get_port_details_linux(std::string_view port_name) {
         }
 
         // Get device properties
-        if (const char* desc = udev_device_get_property_value(device, "ID_MODEL")) {
+        if (const char* desc =
+                udev_device_get_property_value(device, "ID_MODEL")) {
             details.description = desc;
         }
 
-        if (const char* vid_str = udev_device_get_property_value(device, "ID_VENDOR_ID")) {
+        if (const char* vid_str =
+                udev_device_get_property_value(device, "ID_VENDOR_ID")) {
             details.vid = vid_str;
         }
 
-        if (const char* pid_str = udev_device_get_property_value(device, "ID_MODEL_ID")) {
+        if (const char* pid_str =
+                udev_device_get_property_value(device, "ID_MODEL_ID")) {
             details.pid = pid_str;
         }
 
-        if (const char* serial = udev_device_get_property_value(device, "ID_SERIAL_SHORT")) {
+        if (const char* serial =
+                udev_device_get_property_value(device, "ID_SERIAL_SHORT")) {
             details.serial_number = serial;
         }
 
-        if (const char* mfg = udev_device_get_property_value(device, "ID_VENDOR")) {
+        if (const char* mfg =
+                udev_device_get_property_value(device, "ID_VENDOR")) {
             details.manufacturer = mfg;
         }
 
-        if (const char* driver = udev_device_get_property_value(device, "ID_USB_DRIVER")) {
+        if (const char* driver =
+                udev_device_get_property_value(device, "ID_USB_DRIVER")) {
             details.driver_name = driver;
         }
 
@@ -1269,7 +1275,7 @@ SerialPortScanner::get_port_details_linux(std::string_view port_name) {
 
     } catch (const std::exception& e) {
         if (config_.enable_debug_logging) {
-            spdlog::warn("Failed to get Linux port details for {}: {}", 
+            spdlog::warn("Failed to get Linux port details for {}: {}",
                          port_name, e.what());
         }
     }
@@ -1299,12 +1305,14 @@ void SerialPortScanner::fill_details_linux(PortDetails& details) {
             return "";
         };
 
-        std::string product = read_sysfs_file(sysfs_path + "/device/../../product");
+        std::string product =
+            read_sysfs_file(sysfs_path + "/device/../../product");
         if (!product.empty()) {
             details.product = product;
         }
 
-        std::string version = read_sysfs_file(sysfs_path + "/device/../../version");
+        std::string version =
+            read_sysfs_file(sysfs_path + "/device/../../version");
         if (!version.empty()) {
             details.recommended_baud_rates = version;
         }

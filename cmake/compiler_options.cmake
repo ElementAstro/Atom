@@ -427,3 +427,8 @@ macro(setup_project_defaults)
         endif()
     endif()
 endmacro()
+
+if(LINUX)
+set(CMAKE_COLOR_DIAGNOSTICS ON)
+set(CMAKE_COLOR_MAKEFILE OFF)
+endif()

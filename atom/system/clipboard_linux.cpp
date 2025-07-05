@@ -42,7 +42,8 @@ public:
         }
     }
 
-    bool open() override { return m_display != nullptr; }    void close() noexcept override {
+    bool open() override { return m_display != nullptr; }
+    void close() noexcept override {
         // 在X11实现中，不需要显式关闭剪贴板
     }
 
@@ -126,18 +127,21 @@ public:
         XFree(data);
 
         return result;
-    }    bool setData(ClipboardFormat format,
+    }
+    bool setData(ClipboardFormat format,
                  std::span<const std::byte> data) override {
         if (!m_display)
             return false;
 
         // 保存数据以备后续请求
-        m_customData[format.value] = std::vector<std::byte>(data.begin(), data.end());
+        m_customData[format.value] =
+            std::vector<std::byte>(data.begin(), data.end());
 
         // 在X11中处理自定义数据格式需要更复杂的实现
         // 暂时只针对一些常见格式实现
         return true;
-    }    std::optional<std::vector<std::byte>> getData(
+    }
+    std::optional<std::vector<std::byte>> getData(
         ClipboardFormat format) override {
         if (!m_display)
             return std::nullopt;
@@ -559,7 +563,8 @@ public:
 
         XFree(data);
         return hasImageFormat;
-    }    std::vector<ClipboardFormat> getAvailableFormats() override {
+    }
+    std::vector<ClipboardFormat> getAvailableFormats() override {
         std::vector<ClipboardFormat> formats;
 
         if (!m_display)
@@ -600,14 +605,17 @@ public:
         }
 
         // 获取原子列表
-        Atom *atoms = reinterpret_cast<Atom *>(data);        for (unsigned long i = 0; i < nitems; ++i) {
+        Atom *atoms = reinterpret_cast<Atom *>(data);
+        for (unsigned long i = 0; i < nitems; ++i) {
             // 使用Atom值作为format ID
-            formats.push_back(ClipboardFormat{static_cast<unsigned int>(atoms[i])});
+            formats.push_back(
+                ClipboardFormat{static_cast<unsigned int>(atoms[i])});
         }
 
         XFree(data);
         return formats;
-    }    std::optional<std::string> getFormatName(ClipboardFormat format) override {
+    }
+    std::optional<std::string> getFormatName(ClipboardFormat format) override {
         if (!m_display)
             return std::nullopt;
 

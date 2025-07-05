@@ -17,17 +17,17 @@ Description: System Information Module - Disk
 
 /**
  * @brief Disk module for system information
- * 
+ *
  * This module provides functionality for retrieving disk information,
  * monitoring disk events, and managing disk security.
  */
 
 // Include all disk submodule headers
-#include "atom/sysinfo/disk/disk_types.hpp"
-#include "atom/sysinfo/disk/disk_info.hpp"
-#include "atom/sysinfo/disk/disk_util.hpp"
 #include "atom/sysinfo/disk/disk_device.hpp"
-#include "atom/sysinfo/disk/disk_security.hpp"
+#include "atom/sysinfo/disk/disk_info.hpp"
 #include "atom/sysinfo/disk/disk_monitor.hpp"
+#include "atom/sysinfo/disk/disk_security.hpp"
+#include "atom/sysinfo/disk/disk_types.hpp"
+#include "atom/sysinfo/disk/disk_util.hpp"
 
-#endif // ATOM_SYSTEM_MODULE_DISK_HPP
+#endif  // ATOM_SYSTEM_MODULE_DISK_HPP

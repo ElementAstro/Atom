@@ -134,7 +134,7 @@ using SafeConstructorResult = ConstructorResult<T>;
  */
 template <typename MemberFunc, typename ClassType>
     requires std::is_member_function_pointer_v<MemberFunc ClassType::*>
-auto bindMemberFunction(MemberFunc ClassType::*member_func) {
+auto bindMemberFunction(MemberFunc ClassType::* member_func) {
     return [member_func](ClassType& obj, auto&&... params) -> decltype(auto) {
         // Use std::invoke for more uniform function calling
         return std::invoke(member_func, obj,
@@ -151,7 +151,7 @@ auto bindMemberFunction(MemberFunc ClassType::*member_func) {
  */
 template <typename MemberFunc, typename ClassType>
     requires std::is_member_function_pointer_v<MemberFunc ClassType::*>
-auto bindConstMemberFunction(MemberFunc ClassType::*member_func) {
+auto bindConstMemberFunction(MemberFunc ClassType::* member_func) {
     return [member_func](const ClassType& obj,
                          auto&&... params) -> decltype(auto) {
         // Always use as const
@@ -184,7 +184,7 @@ auto bindStaticFunction(Func&& func) {
  */
 template <typename MemberType, typename ClassType>
     requires std::is_member_object_pointer_v<MemberType ClassType::*>
-auto bindMemberVariable(MemberType ClassType::*member_var) {
+auto bindMemberVariable(MemberType ClassType::* member_var) {
     return [member_var](ClassType& instance) -> MemberType& {
         return instance.*member_var;
     };
@@ -199,7 +199,7 @@ auto bindMemberVariable(MemberType ClassType::*member_var) {
  */
 template <typename MemberType, typename ClassType>
     requires std::is_member_object_pointer_v<MemberType ClassType::*>
-auto bindConstMemberVariable(MemberType ClassType::*member_var) {
+auto bindConstMemberVariable(MemberType ClassType::* member_var) {
     return [member_var](const ClassType& instance) -> const MemberType& {
         return instance.*member_var;
     };
@@ -556,7 +556,7 @@ public:
     ObjectBuilder() : m_buildFunc([]() { return std::make_shared<Class>(); }) {}
 
     template <typename Prop, typename Value>
-    ObjectBuilder& with(Prop Class::*prop, Value&& value) {
+    ObjectBuilder& with(Prop Class::* prop, Value&& value) {
         auto prevFunc = m_buildFunc;
         m_buildFunc = [prevFunc, prop, value = std::forward<Value>(value)]() {
             auto obj = prevFunc();
@@ -567,7 +567,7 @@ public:
     }
 
     template <typename Func, typename... Args>
-    ObjectBuilder& call(Func Class::*method, Args&&... args) {
+    ObjectBuilder& call(Func Class::* method, Args&&... args) {
         auto prevFunc = m_buildFunc;
         m_buildFunc = [prevFunc, method,
                        args = std::make_tuple(std::forward<Args>(args)...)]() {

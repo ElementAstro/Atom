@@ -653,14 +653,30 @@ public:
 
 // 定义条件检查宏
 #define CONDITION_EQ std::equality_comparable<T>
-#define CONDITION_LT \
-    requires(T a, T b) { {a < b}->std::convertible_to<bool>; }
-#define CONDITION_GT \
-    requires(T a, T b) { {a > b}->std::convertible_to<bool>; }
-#define CONDITION_LE \
-    requires(T a, T b) { {a <= b}->std::convertible_to<bool>; }
-#define CONDITION_GE \
-    requires(T a, T b) { {a >= b}->std::convertible_to<bool>; }
+#define CONDITION_LT                    \
+    requires(T a, T b) {                \
+        {                               \
+            a < b                       \
+        } -> std::convertible_to<bool>; \
+    }
+#define CONDITION_GT                    \
+    requires(T a, T b) {                \
+        {                               \
+            a > b                       \
+        } -> std::convertible_to<bool>; \
+    }
+#define CONDITION_LE                    \
+    requires(T a, T b) {                \
+        {                               \
+            a <= b                      \
+        } -> std::convertible_to<bool>; \
+    }
+#define CONDITION_GE                    \
+    requires(T a, T b) {                \
+        {                               \
+            a >= b                      \
+        } -> std::convertible_to<bool>; \
+    }
 
 // 注册操作符的通用宏
 #define REGISTER_OPERATOR(type_name, name, op, condition, description) \
