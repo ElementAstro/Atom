@@ -880,7 +880,7 @@ auto deconvolve2D(const std::vector<std::vector<f64>>& signal,
             auto extendedKernel = extend2D(kernel, signalRows + kernelRows - 1,
                                            signalCols + kernelCols - 1);
 
-            auto discreteFourierTransform2D = 
+            auto discreteFourierTransform2D =
                 [&](const std::vector<std::vector<f64>>& input) {
                     return dfT2D(input, numThreads, stopToken)
                         .get();  // Assume DFT2D supports multithreading

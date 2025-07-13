@@ -178,7 +178,7 @@ public:
         typename GridType::value_type::value_type target_color,
         typename GridType::value_type::value_type fill_color,
         const FloodFillConfig& config);
-    
+
     /**
      * @brief Perform SIMD-accelerated flood fill for suitable grid types.
      *

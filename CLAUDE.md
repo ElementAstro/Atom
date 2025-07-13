@@ -40,7 +40,7 @@ cd build && ctest -R <test_name> --output-on-failure
 Key configuration options:
 
 - `ATOM_BUILD_TESTS=ON/OFF` - Build test suite
-- `ATOM_BUILD_EXAMPLES=ON/OFF` - Build example programs  
+- `ATOM_BUILD_EXAMPLES=ON/OFF` - Build example programs
 - `ATOM_BUILD_PYTHON_BINDINGS=ON/OFF` - Build Python bindings
 - `ATOM_BUILD_DOCS=ON/OFF` - Generate documentation
 - `ATOM_BUILD_ALL=ON/OFF` - Build all modules
@@ -115,7 +115,7 @@ The project uses GitHub Actions for comprehensive multi-platform CI/CD with the 
 
 ### Supported Platforms
 - **Linux**: Ubuntu 22.04 with GCC 12/13 and Clang 15/16
-- **Windows**: MSVC 2022, MSYS2 MinGW64, and UCRT64 environments  
+- **Windows**: MSVC 2022, MSYS2 MinGW64, and UCRT64 environments
 - **macOS**: Latest versions with Clang
 
 ### CI Features
@@ -137,6 +137,6 @@ Use GitHub's workflow_dispatch to trigger builds with custom parameters:
 The CI uses predefined CMake presets:
 - `release`, `debug`, `relwithdebinfo` for standard builds
 - `debug-full` for comprehensive testing with sanitizers
-- `coverage` for code coverage analysis  
+- `coverage` for code coverage analysis
 - `release-msys2`, `debug-msys2` for MSYS2 MinGW64 builds
 - `release-vs`, `debug-vs` for Visual Studio builds

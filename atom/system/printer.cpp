@@ -39,11 +39,11 @@ PrintManager& PrintManager::getInstance() {
             throw PrintSystemInitException(e.what());
         }
     });
-    
+
     if (!s_instance) {
         throw PrintSystemInitException("Failed to initialize print system");
     }
-    
+
     return *s_instance;
 }
 
