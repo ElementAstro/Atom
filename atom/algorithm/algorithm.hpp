@@ -27,15 +27,6 @@ Description: A collection of algorithms for C++
 #include <vector>
 
 namespace atom::algorithm {
-
-// Concepts for string-like types
-template <typename T>
-concept StringLike = requires(T t) {
-    { t.data() } -> std::convertible_to<const char*>;
-    { t.size() } -> std::convertible_to<std::size_t>;
-    { t[0] } -> std::convertible_to<char>;
-};
-
 /**
  * @brief Implements the Knuth-Morris-Pratt (KMP) string searching algorithm.
  *

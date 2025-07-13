@@ -1,7 +1,9 @@
 #include "bignumber.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cassert>
+#include <shared_mutex>
 #include <vector>
 
 #include <spdlog/spdlog.h>
@@ -12,6 +14,15 @@
 #endif
 
 namespace atom::algorithm {
+
+// Lock-free singleton for zero BigNumber (thread-safe, no contention)
+static const BigNumber& zeroBigNumber() {
+    static const BigNumber zero("0");
+    return zero;
+}
+
+// Shared mutex for thread-safe operations on static/shared data if needed
+static std::shared_mutex bignum_shared_mutex;
 
 BigNumber::BigNumber(std::string_view number) {
     try {
@@ -111,14 +122,14 @@ auto BigNumber::abs() const -> BigNumber {
 
 auto BigNumber::trimLeadingZeros() const noexcept -> BigNumber {
     if (digits_.empty() || (digits_.size() == 1 && digits_[0] == 0)) {
-        return BigNumber();
+        return zeroBigNumber();
     }
 
     auto lastNonZero = std::find_if(digits_.rbegin(), digits_.rend(),
                                     [](uint8_t digit) { return digit != 0; });
 
     if (lastNonZero == digits_.rend()) {
-        return BigNumber();
+        return zeroBigNumber();
     }
 
     BigNumber result;
@@ -152,12 +163,12 @@ auto BigNumber::add(const BigNumber& other) const -> BigNumber {
         const auto& b = other.digits_;
         const size_t maxSize = std::max(a.size(), b.size());
 
-        result.digits_.reserve(maxSize + 1);
+        result.digits_.resize(maxSize + 1, 0);
 
         uint8_t carry = 0;
         size_t i = 0;
 
-        while (i < maxSize || carry) {
+        for (; i < maxSize || carry; ++i) {
             uint8_t sum = carry;
             if (i < a.size())
                 sum += a[i];
@@ -165,9 +176,12 @@ auto BigNumber::add(const BigNumber& other) const -> BigNumber {
                 sum += b[i];
 
             carry = sum / 10;
-            result.digits_.push_back(sum % 10);
-            ++i;
+            result.digits_[i] = sum % 10;
         }
+
+        // Remove trailing zeros
+        while (result.digits_.size() > 1 && result.digits_.back() == 0)
+            result.digits_.pop_back();
 
         spdlog::debug("Result of addition: {}", result.toString());
         return result;
@@ -202,7 +216,7 @@ auto BigNumber::subtract(const BigNumber& other) const -> BigNumber {
         const BigNumber *larger, *smaller;
 
         if (abs().equals(other.abs())) {
-            return BigNumber();
+            return zeroBigNumber();
         } else if ((isNegative_ && *this > other) ||
                    (!isNegative_ && *this < other)) {
             larger = &other;
@@ -220,7 +234,7 @@ auto BigNumber::subtract(const BigNumber& other) const -> BigNumber {
         const auto& a = larger->digits_;
         const auto& b = smaller->digits_;
 
-        result.digits_.reserve(a.size());
+        result.digits_.resize(a.size(), 0);
 
         int borrow = 0;
         for (size_t i = 0; i < a.size(); ++i) {
@@ -235,12 +249,12 @@ auto BigNumber::subtract(const BigNumber& other) const -> BigNumber {
                 borrow = 0;
             }
 
-            result.digits_.push_back(static_cast<uint8_t>(diff));
+            result.digits_[i] = static_cast<uint8_t>(diff);
         }
 
-        while (!result.digits_.empty() && result.digits_.back() == 0) {
+        // Remove trailing zeros
+        while (result.digits_.size() > 1 && result.digits_.back() == 0)
             result.digits_.pop_back();
-        }
 
         if (result.digits_.empty()) {
             result.digits_.push_back(0);
@@ -268,7 +282,7 @@ auto BigNumber::multiply(const BigNumber& other) const -> BigNumber {
 #else
         if ((digits_.size() == 1 && digits_[0] == 0) ||
             (other.digits_.size() == 1 && other.digits_[0] == 0)) {
-            return BigNumber();
+            return zeroBigNumber();
         }
 
         if (digits_.size() > 100 && other.digits_.size() > 100) {
@@ -429,7 +443,7 @@ auto BigNumber::divide(const BigNumber& other) const -> BigNumber {
         boost::multiprecision::cpp_int result = num1 / num2;
         return BigNumber(result.str());
 #else
-        if (other.equals(BigNumber("0"))) {
+        if (other.equals(zeroBigNumber())) {
             spdlog::error("Division by zero");
             THROW_INVALID_ARGUMENT("Division by zero");
         }
@@ -453,7 +467,7 @@ auto BigNumber::divide(const BigNumber& other) const -> BigNumber {
         }
 
         quotient = quotient.trimLeadingZeros();
-        if (resultNegative && !quotient.equals(BigNumber("0"))) {
+        if (resultNegative && !quotient.equals(zeroBigNumber())) {
             quotient = quotient.negate();
         }
 

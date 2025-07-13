@@ -16,6 +16,8 @@ Description: Some useful spinlock implementations
 
 #include <functional>
 #include <memory>
+#include <mutex>
+#include <shared_mutex>
 #include <thread>
 
 namespace atom::async {
@@ -129,7 +131,7 @@ auto TicketSpinlock::lock() noexcept -> uint64_t {
     }
 }
 
-void TicketSpinlock::unlock(uint64_t ticket) {
+void TicketSpinlock::unlock(uint64_t ticket) noexcept {
 // Verify correct ticket in debug builds
 #ifdef ATOM_DEBUG
     auto expected_ticket = serving_.load(std::memory_order_acquire);
@@ -260,61 +262,84 @@ void BoostSpinlock::unlock() noexcept {
 }
 #endif
 
+namespace {
+template <typename T>
+auto make_lock_ptr() {
+    auto lock = new T();
+    return std::unique_ptr<void, std::function<void(void*)>>(
+        lock, [](void* ptr) { delete static_cast<T*>(ptr); });
+}
+}  // namespace
+
 auto LockFactory::createLock(LockType type)
     -> std::unique_ptr<void, std::function<void(void*)>> {
     switch (type) {
-        case LockType::SPINLOCK: {
-            auto lock = new Spinlock();
-            return {lock,
-                    [](void* ptr) { delete static_cast<Spinlock*>(ptr); }};
-        }
-        case LockType::TICKET_SPINLOCK: {
-            auto lock = new TicketSpinlock();
-            return {lock, [](void* ptr) {
-                        delete static_cast<TicketSpinlock*>(ptr);
-                    }};
-        }
-        case LockType::UNFAIR_SPINLOCK: {
-            auto lock = new UnfairSpinlock();
-            return {lock, [](void* ptr) {
-                        delete static_cast<UnfairSpinlock*>(ptr);
-                    }};
-        }
-        case LockType::ADAPTIVE_SPINLOCK: {
-            auto lock = new AdaptiveSpinlock();
-            return {lock, [](void* ptr) {
-                        delete static_cast<AdaptiveSpinlock*>(ptr);
-                    }};
-        }
+        case LockType::SPINLOCK:
+            return make_lock_ptr<Spinlock>();
+        case LockType::TICKET_SPINLOCK:
+            return make_lock_ptr<TicketSpinlock>();
+        case LockType::UNFAIR_SPINLOCK:
+            return make_lock_ptr<UnfairSpinlock>();
+        case LockType::ADAPTIVE_SPINLOCK:
+            return make_lock_ptr<AdaptiveSpinlock>();
+#ifdef ATOM_HAS_ATOMIC_WAIT
+        case LockType::ATOMIC_WAIT_LOCK:
+            return make_lock_ptr<AtomicWaitLock>();
+#endif
+#ifdef ATOM_PLATFORM_WINDOWS
+        case LockType::WINDOWS_SPINLOCK:
+            return make_lock_ptr<WindowsSpinlock>();
+        case LockType::WINDOWS_SHARED_MUTEX:
+            return make_lock_ptr<WindowsSharedMutex>();
+#endif
+#ifdef ATOM_PLATFORM_MACOS
+        case LockType::DARWIN_SPINLOCK:
+            return make_lock_ptr<DarwinSpinlock>();
+#endif
+#ifdef ATOM_PLATFORM_LINUX
+        case LockType::LINUX_FUTEX_LOCK:
+            return make_lock_ptr<LinuxFutexLock>();
+#endif
 #ifdef ATOM_USE_BOOST_LOCKFREE
-        case LockType::BOOST_SPINLOCK: {
-            auto lock = new BoostSpinlock();
-            return {lock,
-                    [](void* ptr) { delete static_cast<BoostSpinlock*>(ptr); }};
-        }
+        case LockType::BOOST_SPINLOCK:
+            return make_lock_ptr<BoostSpinlock>();
 #endif
 #ifdef ATOM_USE_BOOST_LOCKS
-        case LockType::BOOST_MUTEX: {
-            auto lock = new boost::mutex();
-            return {lock,
-                    [](void* ptr) { delete static_cast<boost::mutex*>(ptr); }};
-        }
-        case LockType::BOOST_RECURSIVE_MUTEX: {
-            auto lock = new BoostRecursiveMutex();
-            return {lock, [](void* ptr) {
-                        delete static_cast<BoostRecursiveMutex*>(ptr);
-                    }};
-        }
-        case LockType::BOOST_SHARED_MUTEX: {
-            auto lock = new BoostSharedMutex();
-            return {lock, [](void* ptr) {
-                        delete static_cast<BoostSharedMutex*>(ptr);
-                    }};
-        }
+        case LockType::BOOST_MUTEX:
+            return make_lock_ptr<boost::mutex>();
+        case LockType::BOOST_RECURSIVE_MUTEX:
+            return make_lock_ptr<BoostRecursiveMutex>();
+        case LockType::BOOST_SHARED_MUTEX:
+            return make_lock_ptr<BoostSharedMutex>();
 #endif
+        case LockType::STD_MUTEX:
+            return make_lock_ptr<std::mutex>();
+        case LockType::STD_RECURSIVE_MUTEX:
+            return make_lock_ptr<std::recursive_mutex>();
+        case LockType::STD_SHARED_MUTEX:
+            return make_lock_ptr<std::shared_mutex>();
+        case LockType::AUTO_OPTIMIZED:
+            return createOptimizedLock();
         default:
-            throw std::invalid_argument("Invalid lock type");
+            throw std::invalid_argument("Invalid or unsupported lock type");
     }
+}
+
+auto LockFactory::createOptimizedLock()
+    -> std::unique_ptr<void, std::function<void(void*)>> {
+#ifdef ATOM_HAS_ATOMIC_WAIT
+    // C++20 atomic wait is generally the most efficient
+    return createLock(LockType::ATOMIC_WAIT_LOCK);
+#elif defined(ATOM_PLATFORM_WINDOWS)
+    return createLock(LockType::WINDOWS_SPINLOCK);
+#elif defined(ATOM_PLATFORM_MACOS)
+    return createLock(LockType::DARWIN_SPINLOCK);
+#elif defined(ATOM_PLATFORM_LINUX)
+    return createLock(LockType::LINUX_FUTEX_LOCK);
+#else
+    // Fallback to a standard spinlock
+    return createLock(LockType::ADAPTIVE_SPINLOCK);
+#endif
 }
 
 }  // namespace atom::async

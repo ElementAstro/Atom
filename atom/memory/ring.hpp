@@ -43,6 +43,58 @@ public:
         max_size_ = size;
     }
 
+    // Deleted copy constructor and assignment operator to prevent copying of
+    // mutex
+    RingBuffer(const RingBuffer&) = delete;
+    RingBuffer& operator=(const RingBuffer&) = delete;
+
+    // Move constructor and assignment operator
+    RingBuffer(RingBuffer&& other) noexcept
+#ifdef ATOM_USE_BOOST
+        : buffer_(std::move(other.buffer_))
+#else
+        : buffer_(std::move(other.buffer_)),
+          max_size_(other.max_size_),
+          head_(other.head_),
+          tail_(other.tail_),
+          count_(other.count_)
+#endif
+    {
+        // Reset other's state to a valid, empty state
+#ifndef ATOM_USE_BOOST
+        other.max_size_ = 0;
+        other.head_ = 0;
+        other.tail_ = 0;
+        other.count_ = 0;
+#endif
+    }
+
+    RingBuffer& operator=(RingBuffer&& other) noexcept {
+        if (this != &other) {
+            std::lock(mutex_, other.mutex_);  // Lock both mutexes
+            std::lock_guard<MutexType> self_lock(mutex_, std::adopt_lock);
+            std::lock_guard<MutexType> other_lock(other.mutex_,
+                                                  std::adopt_lock);
+
+#ifdef ATOM_USE_BOOST
+            buffer_ = std::move(other.buffer_);
+#else
+            buffer_ = std::move(other.buffer_);
+            max_size_ = other.max_size_;
+            head_ = other.head_;
+            tail_ = other.tail_;
+            count_ = other.count_;
+
+            // Reset other's state
+            other.max_size_ = 0;
+            other.head_ = 0;
+            other.tail_ = 0;
+            other.count_ = 0;
+#endif
+        }
+        return *this;
+    }
+
     /**
      * @brief Push an item to the buffer.
      *
@@ -62,7 +114,32 @@ public:
         if (full()) {
             return false;
         }
-        buffer_[head_] = std::move(item);
+        buffer_[head_] = item;  // Use copy assignment
+        head_ = (head_ + 1) % max_size_;
+        ++count_;
+#endif
+        return true;
+    }
+
+    /**
+     * @brief Push an item to the buffer using move semantics.
+     *
+     * @param item The item to push (rvalue reference).
+     * @return true if the item was successfully pushed, false if the buffer was
+     * full.
+     */
+    auto push(T&& item) -> bool {
+        std::lock_guard lock(mutex_);
+#ifdef ATOM_USE_BOOST
+        if (buffer_.full()) {
+            return false;
+        }
+        buffer_.push_back(std::move(item));
+#else
+        if (full()) {
+            return false;
+        }
+        buffer_[head_] = std::move(item);  // Use move assignment
         head_ = (head_ + 1) % max_size_;
         ++count_;
 #endif
@@ -80,6 +157,27 @@ public:
         buffer_.push_back(item);
 #else
         buffer_[head_] = item;
+        if (full()) {
+            tail_ = (tail_ + 1) % max_size_;
+        } else {
+            ++count_;
+        }
+        head_ = (head_ + 1) % max_size_;
+#endif
+    }
+
+    /**
+     * @brief Push an item to the buffer, overwriting the oldest item if full,
+     * using move semantics.
+     *
+     * @param item The item to push (rvalue reference).
+     */
+    void pushOverwrite(T&& item) {
+        std::lock_guard lock(mutex_);
+#ifdef ATOM_USE_BOOST
+        buffer_.push_back(std::move(item));
+#else
+        buffer_[head_] = std::move(item);
         if (full()) {
             tail_ = (tail_ + 1) % max_size_;
         } else {
@@ -172,6 +270,13 @@ public:
 #ifdef ATOM_USE_BOOST
         buffer_.clear();
 #else
+        // For types that manage resources (like unique_ptr), we need to
+        // explicitly destroy the elements to release resources.
+        // For POD types, this loop is effectively a no-op.
+        for (size_t i = 0; i < count_; ++i) {
+            size_t index = (tail_ + i) % max_size_;
+            buffer_[index].~T();  // Explicitly call destructor
+        }
         head_ = 0;
         tail_ = 0;
         count_ = 0;
@@ -195,6 +300,7 @@ public:
         if (empty()) {
             return std::nullopt;
         }
+        // Return a copy, as the internal element might be moved out by pop()
         return buffer_[tail_];
 #endif
     }
@@ -217,6 +323,7 @@ public:
             return std::nullopt;
         }
         size_t backIndex = (head_ + max_size_ - 1) % max_size_;
+        // Return a copy
         return buffer_[backIndex];
 #endif
     }
@@ -257,6 +364,10 @@ public:
 #else
         for (size_t i = 0; i < count_; ++i) {
             size_t index = (tail_ + i) % max_size_;
+            // This will attempt to copy. For move-only types, this will fail.
+            // A better approach for move-only types would be to return a vector
+            // of references or iterators. For now, assuming T is
+            // CopyConstructible for view().
             combined.emplace_back(buffer_[index]);
         }
 #endif
@@ -343,14 +454,20 @@ public:
 #ifdef ATOM_USE_BOOST
         buffer_.set_capacity(new_size);
 #else
-        std::vector<T> newBuffer(new_size);
+        // Create a new vector and move elements
+        std::vector<T> newBuffer;
+        newBuffer.reserve(new_size);
+        newBuffer.resize(
+            new_size);  // Allocate memory and default-construct elements
+
         for (size_t i = 0; i < count_; ++i) {
             size_t oldIndex = (tail_ + i) % max_size_;
             newBuffer[i] = std::move(buffer_[oldIndex]);
         }
         buffer_ = std::move(newBuffer);
         max_size_ = new_size;
-        head_ = count_ % max_size_;
+        head_ =
+            count_;  // After moving, elements are at the beginning of newBuffer
         tail_ = 0;
 #endif
     }
@@ -371,6 +488,7 @@ public:
         return buffer_[index];
 #else
         size_t actualIndex = (tail_ + index) % max_size_;
+        // Return a copy
         return buffer_[actualIndex];
 #endif
     }
@@ -407,22 +525,38 @@ public:
         buffer_.erase(std::remove_if(buffer_.begin(), buffer_.end(), pred),
                       buffer_.end());
 #else
-        size_t write = tail_;
-        size_t newCount = 0;
+        size_t write_idx = 0;  // Index in the temporary contiguous buffer
+        std::vector<T> temp_buffer;
+        temp_buffer.reserve(count_);  // Reserve enough space
 
         for (size_t i = 0; i < count_; ++i) {
-            size_t read = (tail_ + i) % max_size_;
-            if (!pred(buffer_[read])) {
-                if (write != read) {
-                    buffer_[write] = std::move(buffer_[read]);
-                }
-                write = (write + 1) % max_size_;
-                ++newCount;
+            size_t read_idx = (tail_ + i) % max_size_;
+            if (!pred(buffer_[read_idx])) {
+                temp_buffer.emplace_back(std::move(buffer_[read_idx]));
+            } else {
+                // Explicitly destroy the removed element if it manages
+                // resources
+                buffer_[read_idx].~T();
             }
         }
 
-        count_ = newCount;
-        head_ = write;
+        // Rebuild the buffer_ from temp_buffer
+        count_ = temp_buffer.size();
+        head_ = count_;
+        tail_ = 0;
+        // Ensure buffer_ has enough capacity before moving
+        if (max_size_ < count_) {
+            max_size_ = count_;  // Should not happen if resize logic is correct
+        }
+        buffer_ = std::vector<T>();  // Clear and reallocate
+        buffer_.reserve(max_size_);
+        buffer_.resize(max_size_);
+
+        for (size_t i = 0; i < count_; ++i) {
+            buffer_[i] = std::move(temp_buffer[i]);
+        }
+        head_ = count_;  // head_ points to the next available slot
+        tail_ = 0;       // tail_ points to the first element
 #endif
     }
 
@@ -441,13 +575,37 @@ public:
 #ifdef ATOM_USE_BOOST
         buffer_.rotate(n);
 #else
-        size_t effectiveN = static_cast<size_t>(n) % count_;
-        if (n < 0) {
-            effectiveN = count_ - effectiveN;
+        // Normalize n to be within [0, count_)
+        long long effectiveN = n % static_cast<long long>(count_);
+        if (effectiveN < 0) {
+            effectiveN += count_;
         }
 
-        tail_ = (tail_ + effectiveN) % max_size_;
-        head_ = (head_ + effectiveN) % max_size_;
+        // Create a temporary buffer to hold the rotated elements
+        std::vector<T> temp_buffer;
+        temp_buffer.reserve(count_);
+
+        // Copy elements starting from the new logical tail
+        for (size_t i = 0; i < count_; ++i) {
+            size_t current_idx = (tail_ + effectiveN + i) % max_size_;
+            temp_buffer.emplace_back(std::move(buffer_[current_idx]));
+        }
+
+        // Move elements back to the original buffer_
+        // This assumes buffer_ has enough capacity and is properly managed
+        // Clear and reallocate buffer_ to ensure contiguous memory and proper
+        // state
+        buffer_ = std::vector<T>();
+        buffer_.reserve(max_size_);
+        buffer_.resize(max_size_);
+
+        for (size_t i = 0; i < count_; ++i) {
+            buffer_[i] = std::move(temp_buffer[i]);
+        }
+
+        // Reset head and tail for the new contiguous layout
+        head_ = count_;
+        tail_ = 0;
 #endif
     }
 

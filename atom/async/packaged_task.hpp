@@ -5,12 +5,11 @@
 #include <concepts>
 #include <functional>
 #include <future>
-#include <memory>
-#include <mutex>
 #include <type_traits>
-#include <vector>
+#include <utility>
 
 #include "atom/async/future.hpp"
+#include "atom/error/exception.hpp"
 
 #ifdef __cpp_lib_hardware_interference_size
 using std::hardware_constructive_interference_size;
@@ -18,11 +17,6 @@ using std::hardware_destructive_interference_size;
 #else
 constexpr std::size_t hardware_constructive_interference_size = 64;
 constexpr std::size_t hardware_destructive_interference_size = 64;
-#endif
-
-#ifdef ATOM_USE_LOCKFREE_QUEUE
-#include <boost/lockfree/queue.hpp>
-#include <boost/lockfree/spsc_queue.hpp>
 #endif
 
 #ifdef ATOM_USE_ASIO
@@ -40,593 +34,370 @@ public:
     throw InvalidPackagedTaskException(ATOM_FILE_NAME, ATOM_FILE_LINE, \
                                        ATOM_FUNC_NAME, __VA_ARGS__);
 
-#define THROW_NESTED_INVALID_PACKAGED_TASK_EXCEPTION(...) \
-    InvalidPackagedTaskException::rethrowNested(          \
-        ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME,   \
-        "Invalid packaged task: " __VA_ARGS__);
+namespace internal {
+// Base for continuations to allow for a intrusive lock-free list
+template <typename ResultType>
+struct ContinuationBase {
+    virtual ~ContinuationBase() = default;
+    // Changed run signature to take shared_future by const reference
+    virtual void run(const std::shared_future<ResultType>& future) = 0;
+    ContinuationBase* next = nullptr;
+};
 
-template <typename F, typename R, typename... Args>
-concept InvocableWithResult =
-    std::invocable<F, Args...> &&
-    (std::same_as<std::invoke_result_t<F, Args...>, R> ||
-     std::same_as<R, void>);
+template <typename ResultType, typename F>
+struct Continuation : ContinuationBase<ResultType> {
+    F func;
+    explicit Continuation(F&& f) : func(std::move(f)) {}
+
+    // Changed run signature to take shared_future by const reference
+    void run(const std::shared_future<ResultType>& future) override {
+        if constexpr (std::is_void_v<ResultType>) {
+            future.get();  // Check for exceptions
+            func();
+        } else {
+            func(future.get());
+        }
+    }
+};
+}  // namespace internal
 
 template <typename ResultType, typename... Args>
-class alignas(hardware_constructive_interference_size) EnhancedPackagedTask {
+class alignas(hardware_constructive_interference_size) PackagedTask {
 public:
     using TaskType = std::function<ResultType(Args...)>;
 
-    explicit EnhancedPackagedTask(TaskType task)
-        : cancelled_(false), task_(std::move(task)) {
+    explicit PackagedTask(TaskType task) : task_(std::move(task)) {
         if (!task_) {
             THROW_INVALID_PACKAGED_TASK_EXCEPTION("Provided task is invalid");
         }
-        promise_ = std::make_unique<std::promise<ResultType>>();
-        future_ = promise_->get_future().share();
-
-#ifdef ATOM_USE_ASIO
-        asioContext_ = nullptr;
-#endif
     }
 
 #ifdef ATOM_USE_ASIO
-    EnhancedPackagedTask(TaskType task, asio::io_context* context)
-        : cancelled_(false), task_(std::move(task)), asioContext_(context) {
+    PackagedTask(TaskType task, asio::io_context* context)
+        : task_(std::move(task)), asioContext_(context) {
         if (!task_) {
             THROW_INVALID_PACKAGED_TASK_EXCEPTION("Provided task is invalid");
         }
-        promise_ = std::make_unique<std::promise<ResultType>>();
-        future_ = promise_->get_future().share();
     }
 #endif
 
-    EnhancedPackagedTask(const EnhancedPackagedTask&) = delete;
-    EnhancedPackagedTask& operator=(const EnhancedPackagedTask&) = delete;
+    PackagedTask(const PackagedTask&) = delete;
+    PackagedTask& operator=(const PackagedTask&) = delete;
 
-    EnhancedPackagedTask(EnhancedPackagedTask&& other) noexcept
-        : task_(std::move(other.task_)),
-          promise_(std::move(other.promise_)),
-          future_(std::move(other.future_)),
-          callbacks_(std::move(other.callbacks_)),
-          cancelled_(other.cancelled_.load(std::memory_order_acquire))
-#ifdef ATOM_USE_LOCKFREE_QUEUE
-          ,
-          m_lockfreeCallbacks(std::move(other.m_lockfreeCallbacks))
-#endif
-#ifdef ATOM_USE_ASIO
-          ,
-          asioContext_(other.asioContext_)
-#endif
-    {
-    }
+    PackagedTask(PackagedTask&& other) noexcept = default;
+    PackagedTask& operator=(PackagedTask&& other) noexcept = default;
 
-    EnhancedPackagedTask& operator=(EnhancedPackagedTask&& other) noexcept {
-        if (this != &other) {
-            task_ = std::move(other.task_);
-            promise_ = std::move(other.promise_);
-            future_ = std::move(other.future_);
-            callbacks_ = std::move(other.callbacks_);
-            cancelled_.store(other.cancelled_.load(std::memory_order_acquire),
-                             std::memory_order_release);
-#ifdef ATOM_USE_LOCKFREE_QUEUE
-            m_lockfreeCallbacks = std::move(other.m_lockfreeCallbacks);
-#endif
-#ifdef ATOM_USE_ASIO
-            asioContext_ = other.asioContext_;
-#endif
-        }
-        return *this;
-    }
-
-    [[nodiscard]] EnhancedFuture<ResultType> getEnhancedFuture() const {
-        if (!future_.valid()) {
-            THROW_INVALID_PACKAGED_TASK_EXCEPTION("Future is no longer valid");
-        }
-        return EnhancedFuture<ResultType>(future_);
+    [[nodiscard]] EnhancedFuture<ResultType> getEnhancedFuture() {
+        return EnhancedFuture<ResultType>(promise_.get_future().share());
     }
 
     void operator()(Args... args) {
-        if (isCancelled()) {
-            promise_->set_exception(
-                std::make_exception_ptr(InvalidPackagedTaskException(
-                    ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME,
-                    "Task has been cancelled")));
-            return;
+        State expected = State::Pending;
+        if (!state_.compare_exchange_strong(expected, State::Executing,
+                                            std::memory_order_acq_rel)) {
+            return;  // Already executed or cancelled
         }
 
-        if (!task_) {
-            promise_->set_exception(
-                std::make_exception_ptr(InvalidPackagedTaskException(
-                    ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME,
-                    "Task function is invalid")));
-            return;
-        }
+        auto execute = [this, ... largs = std::forward<Args>(args)]() mutable {
+            try {
+                if constexpr (!std::is_void_v<ResultType>) {
+                    promise_.set_value(
+                        std::invoke(task_, std::forward<Args>(largs)...));
+                } else {
+                    std::invoke(task_, std::forward<Args>(largs)...);
+                    promise_.set_value();
+                }
+            } catch (...) {
+                promise_.set_exception(std::current_exception());
+            }
+            state_.store(State::Completed, std::memory_order_release);
+            runContinuations();
+        };
 
 #ifdef ATOM_USE_ASIO
         if (asioContext_) {
-            asio::post(*asioContext_, [this,
-                                       ... capturedArgs =
-                                           std::forward<Args>(args)]() mutable {
-                try {
-                    if constexpr (!std::is_void_v<ResultType>) {
-                        ResultType result = std::invoke(
-                            task_, std::forward<Args>(capturedArgs)...);
-                        promise_->set_value(std::move(result));
-                        runCallbacks(result);
-                    } else {
-                        std::invoke(task_, std::forward<Args>(capturedArgs)...);
-                        promise_->set_value();
-                        runCallbacks();
-                    }
-                } catch (...) {
-                    try {
-                        promise_->set_exception(std::current_exception());
-                    } catch (const std::future_error&) {
-                        // Promise might be already satisfied
-                    }
-                }
-            });
+            asio::post(*asioContext_, std::move(execute));
+        } else {
+            execute();
+        }
+#else
+        execute();
+#endif
+    }
+
+    template <typename F>
+    void onComplete(F&& func) {
+        auto* continuation =
+            new internal::Continuation<ResultType, std::decay_t<F>>(
+                std::forward<F>(func));
+
+        // Capture the shared_future here to ensure it's valid when passed to
+        // continuation->run This is the fix for the potential use-after-free if
+        // promise_ is moved or destroyed before the continuation runs.
+        auto shared_fut = promise_.get_future().share();
+
+        if (state_.load(std::memory_order_acquire) == State::Completed) {
+            // If already completed, run immediately
+            continuation->run(shared_fut);
+            delete continuation;
             return;
         }
-#endif
 
-        try {
-            if constexpr (!std::is_void_v<ResultType>) {
-                ResultType result =
-                    std::invoke(task_, std::forward<Args>(args)...);
-                promise_->set_value(std::move(result));
-                runCallbacks(result);
-            } else {
-                std::invoke(task_, std::forward<Args>(args)...);
-                promise_->set_value();
-                runCallbacks();
-            }
-        } catch (...) {
-            try {
-                promise_->set_exception(std::current_exception());
-            } catch (const std::future_error&) {
-                // Promise might have been fulfilled already
-            }
+        internal::ContinuationBase<ResultType>* old_head =
+            continuations_.load(std::memory_order_relaxed);
+        do {
+            continuation->next = old_head;
+        } while (!continuations_.compare_exchange_weak(
+            old_head, continuation, std::memory_order_release,
+            std::memory_order_relaxed));
+
+        // Double check after adding to list, if state changed to Completed, run
+        // continuations This handles the race condition where state becomes
+        // Completed between the initial check and the CAS loop.
+        if (state_.load(std::memory_order_acquire) == State::Completed) {
+            runContinuations();
         }
     }
-
-#ifdef ATOM_USE_LOCKFREE_QUEUE
-    template <typename F>
-        requires std::invocable<F, ResultType>
-    void onComplete(F&& func) {
-        if (!func) {
-            THROW_INVALID_PACKAGED_TASK_EXCEPTION(
-                "Provided callback is invalid");
-        }
-
-        if (!m_lockfreeCallbacks) {
-            std::lock_guard<std::mutex> lock(callbacksMutex_);
-            if (!m_lockfreeCallbacks) {
-                m_lockfreeCallbacks = std::make_unique<LockfreeCallbackQueue>(
-                    CALLBACK_QUEUE_SIZE);
-            }
-        }
-
-        auto wrappedCallback =
-            std::make_shared<CallbackWrapperImpl<F>>(std::forward<F>(func));
-
-        constexpr int MAX_RETRIES = 3;
-        bool pushed = false;
-
-        for (int i = 0; i < MAX_RETRIES && !pushed; ++i) {
-            pushed = m_lockfreeCallbacks->push(wrappedCallback);
-            if (!pushed) {
-                std::this_thread::sleep_for(std::chrono::microseconds(1 << i));
-            }
-        }
-
-        if (!pushed) {
-            std::lock_guard<std::mutex> lock(callbacksMutex_);
-            callbacks_.emplace_back(
-                [wrappedCallback](const ResultType& result) {
-                    (*wrappedCallback)(result);
-                });
-        }
-    }
-#else
-    template <typename F>
-        requires std::invocable<F, ResultType>
-    void onComplete(F&& func) {
-        if (!func) {
-            THROW_INVALID_PACKAGED_TASK_EXCEPTION(
-                "Provided callback is invalid");
-        }
-        std::lock_guard<std::mutex> lock(callbacksMutex_);
-        callbacks_.emplace_back(std::forward<F>(func));
-    }
-#endif
 
     [[nodiscard]] bool cancel() noexcept {
-        bool expected = false;
-        return cancelled_.compare_exchange_strong(expected, true,
-                                                  std::memory_order_acq_rel,
-                                                  std::memory_order_acquire);
+        State expected = State::Pending;
+        if (state_.compare_exchange_strong(expected, State::Cancelled,
+                                           std::memory_order_acq_rel)) {
+            promise_.set_exception(
+                std::make_exception_ptr(InvalidPackagedTaskException(
+                    ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME,
+                    "Task has been cancelled")));
+            runContinuations();  // Notify continuations about cancellation via
+                                 // exception
+            return true;
+        }
+        return false;
     }
 
     [[nodiscard]] bool isCancelled() const noexcept {
-        return cancelled_.load(std::memory_order_acquire);
+        return state_.load(std::memory_order_acquire) == State::Cancelled;
     }
 
 #ifdef ATOM_USE_ASIO
     void setAsioContext(asio::io_context* context) { asioContext_ = context; }
-
     [[nodiscard]] asio::io_context* getAsioContext() const {
         return asioContext_;
     }
 #endif
 
     [[nodiscard]] explicit operator bool() const noexcept {
-        return static_cast<bool>(task_) && !isCancelled() && future_.valid();
+        return static_cast<bool>(task_);
     }
-
-protected:
-    alignas(hardware_destructive_interference_size) TaskType task_;
-    std::unique_ptr<std::promise<ResultType>> promise_;
-    std::shared_future<ResultType> future_;
-    std::vector<std::function<void(const ResultType&)>> callbacks_;
-    std::atomic<bool> cancelled_;
-    mutable std::mutex callbacksMutex_;
-
-#ifdef ATOM_USE_ASIO
-    asio::io_context* asioContext_;
-#endif
-
-#ifdef ATOM_USE_LOCKFREE_QUEUE
-    struct CallbackWrapperBase {
-        virtual ~CallbackWrapperBase() = default;
-        virtual void operator()(const ResultType& result) = 0;
-    };
-
-    template <typename F>
-    struct CallbackWrapperImpl : CallbackWrapperBase {
-        std::function<void(const ResultType&)> callback;
-
-        explicit CallbackWrapperImpl(F&& func)
-            : callback(std::forward<F>(func)) {}
-
-        void operator()(const ResultType& result) override { callback(result); }
-    };
-
-    static constexpr size_t CALLBACK_QUEUE_SIZE = 128;
-    using LockfreeCallbackQueue =
-        boost::lockfree::queue<std::shared_ptr<CallbackWrapperBase>>;
-
-    std::unique_ptr<LockfreeCallbackQueue> m_lockfreeCallbacks;
-#endif
 
 private:
-#ifdef ATOM_USE_LOCKFREE_QUEUE
-    void runCallbacks(const ResultType& result) {
-        if (m_lockfreeCallbacks) {
-            std::shared_ptr<CallbackWrapperBase> callback_ptr;
-            while (m_lockfreeCallbacks->pop(callback_ptr)) {
-                try {
-                    (*callback_ptr)(result);
-                } catch (...) {
-                    // Log exception
-                }
-            }
-        }
+    enum class State : uint8_t { Pending, Executing, Completed, Cancelled };
 
-        std::vector<std::function<void(const ResultType&)>> callbacksCopy;
-        {
-            std::lock_guard<std::mutex> lock(callbacksMutex_);
-            callbacksCopy = std::move(callbacks_);
-        }
+    void runContinuations() {
+        internal::ContinuationBase<ResultType>* head =
+            continuations_.exchange(nullptr, std::memory_order_acq_rel);
 
-        for (auto& callback : callbacksCopy) {
+        if (!head)
+            return;
+
+        // Reverse the list to execute in registration order
+        internal::ContinuationBase<ResultType>* prev = nullptr;
+        while (head) {
+            auto* next = head->next;
+            head->next = prev;
+            prev = head;
+            head = next;
+        }
+        head = prev;
+
+        // Capture the shared_future once for all continuations
+        auto future = promise_.get_future().share();
+        while (head) {
+            auto* next = head->next;
             try {
-                callback(result);
+                head->run(future);
             } catch (...) {
-                // Log exception
+                // Log exceptions from continuations
             }
+            delete head;
+            head = next;
         }
     }
-#else
-    void runCallbacks(const ResultType& result) {
-        std::vector<std::function<void(const ResultType&)>> callbacksCopy;
-        {
-            std::lock_guard<std::mutex> lock(callbacksMutex_);
-            callbacksCopy = std::move(callbacks_);
-        }
 
-        for (auto& callback : callbacksCopy) {
-            try {
-                callback(result);
-            } catch (...) {
-                // Log exception
-            }
-        }
-    }
+    alignas(hardware_destructive_interference_size) TaskType task_;
+    std::promise<ResultType> promise_;
+    std::atomic<State> state_{State::Pending};
+    std::atomic<internal::ContinuationBase<ResultType>*> continuations_{
+        nullptr};
+
+#ifdef ATOM_USE_ASIO
+    asio::io_context* asioContext_ = nullptr;
 #endif
 };
 
 template <typename... Args>
 class alignas(hardware_constructive_interference_size)
-    EnhancedPackagedTask<void, Args...> {
+    PackagedTask<void, Args...> {
 public:
     using TaskType = std::function<void(Args...)>;
 
-    explicit EnhancedPackagedTask(TaskType task)
-        : cancelled_(false), task_(std::move(task)) {
+    explicit PackagedTask(TaskType task) : task_(std::move(task)) {
         if (!task_) {
             THROW_INVALID_PACKAGED_TASK_EXCEPTION("Provided task is invalid");
         }
-        promise_ = std::make_unique<std::promise<void>>();
-        future_ = promise_->get_future().share();
-
-#ifdef ATOM_USE_ASIO
-        asioContext_ = nullptr;
-#endif
     }
 
 #ifdef ATOM_USE_ASIO
-    EnhancedPackagedTask(TaskType task, asio::io_context* context)
-        : cancelled_(false), task_(std::move(task)), asioContext_(context) {
+    PackagedTask(TaskType task, asio::io_context* context)
+        : task_(std::move(task)), asioContext_(context) {
         if (!task_) {
             THROW_INVALID_PACKAGED_TASK_EXCEPTION("Provided task is invalid");
         }
-        promise_ = std::make_unique<std::promise<void>>();
-        future_ = promise_->get_future().share();
     }
 #endif
 
-    EnhancedPackagedTask(const EnhancedPackagedTask&) = delete;
-    EnhancedPackagedTask& operator=(const EnhancedPackagedTask&) = delete;
+    PackagedTask(const PackagedTask&) = delete;
+    PackagedTask& operator=(const PackagedTask&) = delete;
 
-    EnhancedPackagedTask(EnhancedPackagedTask&& other) noexcept
-        : task_(std::move(other.task_)),
-          promise_(std::move(other.promise_)),
-          future_(std::move(other.future_)),
-          callbacks_(std::move(other.callbacks_)),
-          cancelled_(other.cancelled_.load(std::memory_order_acquire))
-#ifdef ATOM_USE_LOCKFREE_QUEUE
-          ,
-          m_lockfreeCallbacks(std::move(other.m_lockfreeCallbacks))
-#endif
-#ifdef ATOM_USE_ASIO
-          ,
-          asioContext_(other.asioContext_)
-#endif
-    {
-    }
+    PackagedTask(PackagedTask&& other) noexcept = default;
+    PackagedTask& operator=(PackagedTask&& other) noexcept = default;
 
-    EnhancedPackagedTask& operator=(EnhancedPackagedTask&& other) noexcept {
-        if (this != &other) {
-            task_ = std::move(other.task_);
-            promise_ = std::move(other.promise_);
-            future_ = std::move(other.future_);
-            callbacks_ = std::move(other.callbacks_);
-            cancelled_.store(other.cancelled_.load(std::memory_order_acquire),
-                             std::memory_order_release);
-#ifdef ATOM_USE_LOCKFREE_QUEUE
-            m_lockfreeCallbacks = std::move(other.m_lockfreeCallbacks);
-#endif
-#ifdef ATOM_USE_ASIO
-            asioContext_ = other.asioContext_;
-#endif
-        }
-        return *this;
-    }
-
-    [[nodiscard]] EnhancedFuture<void> getEnhancedFuture() const {
-        if (!future_.valid()) {
-            THROW_INVALID_PACKAGED_TASK_EXCEPTION("Future is no longer valid");
-        }
-        return EnhancedFuture<void>(future_);
+    [[nodiscard]] EnhancedFuture<void> getEnhancedFuture() {
+        return EnhancedFuture<void>(promise_.get_future().share());
     }
 
     void operator()(Args... args) {
-        if (isCancelled()) {
-            promise_->set_exception(
-                std::make_exception_ptr(InvalidPackagedTaskException(
-                    ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME,
-                    "Task has been cancelled")));
-            return;
+        State expected = State::Pending;
+        if (!state_.compare_exchange_strong(expected, State::Executing,
+                                            std::memory_order_acq_rel)) {
+            return;  // Already executed or cancelled
         }
 
-        if (!task_) {
-            promise_->set_exception(
-                std::make_exception_ptr(InvalidPackagedTaskException(
-                    ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME,
-                    "Task function is invalid")));
-            return;
-        }
+        auto execute = [this, ... largs = std::forward<Args>(args)]() mutable {
+            try {
+                std::invoke(task_, std::forward<Args>(largs)...);
+                promise_.set_value();
+            } catch (...) {
+                promise_.set_exception(std::current_exception());
+            }
+            state_.store(State::Completed, std::memory_order_release);
+            runContinuations();
+        };
 
 #ifdef ATOM_USE_ASIO
         if (asioContext_) {
-            asio::post(
-                *asioContext_,
-                [this, ... capturedArgs = std::forward<Args>(args)]() mutable {
-                    try {
-                        std::invoke(task_, std::forward<Args>(capturedArgs)...);
-                        promise_->set_value();
-                        runCallbacks();
-                    } catch (...) {
-                        try {
-                            promise_->set_exception(std::current_exception());
-                        } catch (const std::future_error&) {
-                            // Promise might be already satisfied
-                        }
-                    }
-                });
+            asio::post(*asioContext_, std::move(execute));
+        } else {
+            execute();
+        }
+#else
+        execute();
+#endif
+    }
+
+    template <typename F>
+        requires std::invocable<F>
+    void onComplete(F&& func) {
+        auto* continuation = new internal::Continuation<void, std::decay_t<F>>(
+            std::forward<F>(func));
+
+        // Capture the shared_future here
+        auto shared_fut = promise_.get_future().share();
+
+        if (state_.load(std::memory_order_acquire) == State::Completed) {
+            continuation->run(shared_fut);
+            delete continuation;
             return;
         }
-#endif
 
-        try {
-            std::invoke(task_, std::forward<Args>(args)...);
-            promise_->set_value();
-            runCallbacks();
-        } catch (...) {
-            try {
-                promise_->set_exception(std::current_exception());
-            } catch (const std::future_error&) {
-                // Promise might have been fulfilled already
-            }
+        internal::ContinuationBase<void>* old_head =
+            continuations_.load(std::memory_order_relaxed);
+        do {
+            continuation->next = old_head;
+        } while (!continuations_.compare_exchange_weak(
+            old_head, continuation, std::memory_order_release,
+            std::memory_order_relaxed));
+
+        if (state_.load(std::memory_order_acquire) == State::Completed) {
+            runContinuations();
         }
     }
-
-#ifdef ATOM_USE_LOCKFREE_QUEUE
-    template <typename F>
-        requires std::invocable<F>
-    void onComplete(F&& func) {
-        if (!func) {
-            THROW_INVALID_PACKAGED_TASK_EXCEPTION(
-                "Provided callback is invalid");
-        }
-
-        if (!m_lockfreeCallbacks) {
-            std::lock_guard<std::mutex> lock(callbacksMutex_);
-            if (!m_lockfreeCallbacks) {
-                m_lockfreeCallbacks = std::make_unique<LockfreeCallbackQueue>(
-                    CALLBACK_QUEUE_SIZE);
-            }
-        }
-
-        auto wrappedCallback =
-            std::make_shared<CallbackWrapperImpl<F>>(std::forward<F>(func));
-        bool pushed = false;
-
-        for (int i = 0; i < 3 && !pushed; ++i) {
-            pushed = m_lockfreeCallbacks->push(wrappedCallback);
-            if (!pushed) {
-                std::this_thread::sleep_for(std::chrono::microseconds(1 << i));
-            }
-        }
-
-        if (!pushed) {
-            std::lock_guard<std::mutex> lock(callbacksMutex_);
-            callbacks_.emplace_back(
-                [wrappedCallback]() { (*wrappedCallback)(); });
-        }
-    }
-#else
-    template <typename F>
-        requires std::invocable<F>
-    void onComplete(F&& func) {
-        if (!func) {
-            THROW_INVALID_PACKAGED_TASK_EXCEPTION(
-                "Provided callback is invalid");
-        }
-        std::lock_guard<std::mutex> lock(callbacksMutex_);
-        callbacks_.emplace_back(std::forward<F>(func));
-    }
-#endif
 
     [[nodiscard]] bool cancel() noexcept {
-        bool expected = false;
-        return cancelled_.compare_exchange_strong(expected, true,
-                                                  std::memory_order_acq_rel,
-                                                  std::memory_order_acquire);
+        State expected = State::Pending;
+        if (state_.compare_exchange_strong(expected, State::Cancelled,
+                                           std::memory_order_acq_rel)) {
+            promise_.set_exception(
+                std::make_exception_ptr(InvalidPackagedTaskException(
+                    ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME,
+                    "Task has been cancelled")));
+            runContinuations();
+            return true;
+        }
+        return false;
     }
 
     [[nodiscard]] bool isCancelled() const noexcept {
-        return cancelled_.load(std::memory_order_acquire);
+        return state_.load(std::memory_order_acquire) == State::Cancelled;
     }
 
 #ifdef ATOM_USE_ASIO
     void setAsioContext(asio::io_context* context) { asioContext_ = context; }
-
     [[nodiscard]] asio::io_context* getAsioContext() const {
         return asioContext_;
     }
 #endif
 
     [[nodiscard]] explicit operator bool() const noexcept {
-        return static_cast<bool>(task_) && !isCancelled() && future_.valid();
+        return static_cast<bool>(task_);
     }
-
-protected:
-    TaskType task_;
-    std::unique_ptr<std::promise<void>> promise_;
-    std::shared_future<void> future_;
-    std::vector<std::function<void()>> callbacks_;
-    std::atomic<bool> cancelled_;
-    mutable std::mutex callbacksMutex_;
-
-#ifdef ATOM_USE_ASIO
-    asio::io_context* asioContext_;
-#endif
-
-#ifdef ATOM_USE_LOCKFREE_QUEUE
-    struct CallbackWrapperBase {
-        virtual ~CallbackWrapperBase() = default;
-        virtual void operator()() = 0;
-    };
-
-    template <typename F>
-    struct CallbackWrapperImpl : CallbackWrapperBase {
-        std::function<void()> callback;
-
-        explicit CallbackWrapperImpl(F&& func)
-            : callback(std::forward<F>(func)) {}
-
-        void operator()() override { callback(); }
-    };
-
-    static constexpr size_t CALLBACK_QUEUE_SIZE = 128;
-    using LockfreeCallbackQueue =
-        boost::lockfree::queue<std::shared_ptr<CallbackWrapperBase>>;
-
-    std::unique_ptr<LockfreeCallbackQueue> m_lockfreeCallbacks;
-#endif
 
 private:
-#ifdef ATOM_USE_LOCKFREE_QUEUE
-    void runCallbacks() {
-        if (m_lockfreeCallbacks) {
-            std::shared_ptr<CallbackWrapperBase> callback_ptr;
-            while (m_lockfreeCallbacks->pop(callback_ptr)) {
-                try {
-                    (*callback_ptr)();
-                } catch (...) {
-                    // Log exception
-                }
-            }
-        }
+    enum class State : uint8_t { Pending, Executing, Completed, Cancelled };
 
-        std::vector<std::function<void()>> callbacksCopy;
-        {
-            std::lock_guard<std::mutex> lock(callbacksMutex_);
-            callbacksCopy = std::move(callbacks_);
-        }
+    void runContinuations() {
+        internal::ContinuationBase<void>* head =
+            continuations_.exchange(nullptr, std::memory_order_acq_rel);
 
-        for (auto& callback : callbacksCopy) {
+        if (!head)
+            return;
+
+        // Reverse list
+        internal::ContinuationBase<void>* prev = nullptr;
+        while (head) {
+            auto* next = head->next;
+            head->next = prev;
+            prev = head;
+            head = next;
+        }
+        head = prev;
+
+        // Capture the shared_future once for all continuations
+        auto future = promise_.get_future().share();
+        while (head) {
+            auto* next = head->next;
             try {
-                callback();
+                head->run(future);
             } catch (...) {
-                // Log exception
+                // Log
             }
+            delete head;
+            head = next;
         }
     }
-#else
-    void runCallbacks() {
-        std::vector<std::function<void()>> callbacksCopy;
-        {
-            std::lock_guard<std::mutex> lock(callbacksMutex_);
-            callbacksCopy = std::move(callbacks_);
-        }
 
-        for (auto& callback : callbacksCopy) {
-            try {
-                callback();
-            } catch (...) {
-                // Log exception
-            }
-        }
-    }
+    alignas(hardware_destructive_interference_size) TaskType task_;
+    std::promise<void> promise_;
+    std::atomic<State> state_{State::Pending};
+    std::atomic<internal::ContinuationBase<void>*> continuations_{nullptr};
+
+#ifdef ATOM_USE_ASIO
+    asio::io_context* asioContext_ = nullptr;
 #endif
 };
 
 template <typename Signature, typename F>
 [[nodiscard]] auto make_enhanced_task(F&& f) {
-    return EnhancedPackagedTask<Signature>(std::forward<F>(f));
+    return PackagedTask<Signature>(std::forward<F>(f));
 }
 
 template <typename F>
@@ -637,13 +408,13 @@ template <typename F>
 
 template <typename F, typename Ret, typename C, typename... Args>
 [[nodiscard]] auto make_enhanced_task_impl(F&& f, Ret (C::*)(Args...) const) {
-    return EnhancedPackagedTask<Ret, Args...>(
+    return PackagedTask<Ret, Args...>(
         std::function<Ret(Args...)>(std::forward<F>(f)));
 }
 
 template <typename F, typename Ret, typename C, typename... Args>
 [[nodiscard]] auto make_enhanced_task_impl(F&& f, Ret (C::*)(Args...)) {
-    return EnhancedPackagedTask<Ret, Args...>(
+    return PackagedTask<Ret, Args...>(
         std::function<Ret(Args...)>(std::forward<F>(f)));
 }
 
@@ -651,7 +422,7 @@ template <typename F, typename Ret, typename C, typename... Args>
 template <typename Signature, typename F>
 [[nodiscard]] auto make_enhanced_task_with_asio(F&& f,
                                                 asio::io_context* context) {
-    return EnhancedPackagedTask<Signature>(std::forward<F>(f), context);
+    return PackagedTask<Signature>(std::forward<F>(f), context);
 }
 
 template <typename F>
@@ -664,14 +435,14 @@ template <typename F>
 template <typename F, typename Ret, typename C, typename... Args>
 [[nodiscard]] auto make_enhanced_task_with_asio_impl(
     F&& f, Ret (C::*)(Args...) const, asio::io_context* context) {
-    return EnhancedPackagedTask<Ret, Args...>(
+    return PackagedTask<Ret, Args...>(
         std::function<Ret(Args...)>(std::forward<F>(f)), context);
 }
 
 template <typename F, typename Ret, typename C, typename... Args>
 [[nodiscard]] auto make_enhanced_task_with_asio_impl(
     F&& f, Ret (C::*)(Args...), asio::io_context* context) {
-    return EnhancedPackagedTask<Ret, Args...>(
+    return PackagedTask<Ret, Args...>(
         std::function<Ret(Args...)>(std::forward<F>(f)), context);
 }
 #endif

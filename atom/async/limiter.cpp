@@ -726,42 +726,17 @@ void RateLimiter::optimizedProcessWaiters() {
     }
 
     if (!waiters_to_process.empty()) {
-        struct ResumeThreadArg {
-            std::string function_name;
-            std::coroutine_handle<> handle;
-        };
-
-        std::vector<pthread_t> threads;
-        threads.reserve(waiters_to_process.size());
-
-        for (const auto& [fn_name, handle] : waiters_to_process) {
-            auto* arg = new ResumeThreadArg{fn_name, handle};
-            pthread_t thread;
-            if (pthread_create(
-                    &thread, nullptr,
-                    [](void* thread_arg) -> void* {
-                        auto* data = static_cast<ResumeThreadArg*>(thread_arg);
-                        spdlog::debug(
-                            "Resuming waiter for function: {} (Linux pthread)",
-                            data->function_name);
-                        data->handle.resume();
-                        delete data;
-                        return nullptr;
-                    },
-                    arg) == 0) {
-                threads.push_back(thread);
-            } else {
-                spdlog::warn(
-                    "Failed to create thread for {}, executing synchronously",
-                    arg->function_name);
-                arg->handle.resume();
-                delete arg;
-            }
-        }
-
-        for (auto thread_id : threads) {
-            pthread_detach(thread_id);
-        }
+        // Use C++17 parallel algorithms for efficient resumption,
+        // avoiding expensive thread creation per task.
+        std::for_each(
+            std::execution::par_unseq, waiters_to_process.begin(),
+            waiters_to_process.end(), [](const auto& waiter_info) {
+                const auto& [function_name, handle] = waiter_info;
+                spdlog::debug(
+                    "Resuming waiter for function: {} (Linux, parallel)",
+                    function_name);
+                handle.resume();
+            });
     }
 }
 #endif

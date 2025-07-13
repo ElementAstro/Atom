@@ -1076,7 +1076,6 @@ size_t MessageQueue<T>::cancelMessages(
     if (!cancelCondition) {
         return 0;
     }
-    size_t cancelledCount = 0;
 #ifdef ATOM_USE_LOCKFREE_QUEUE
     // Cancelling from lockfree queue is complex; typically, you'd filter on
     // dequeue. For simplicity, we only cancel from the m_messages_ deque. Users
@@ -1086,13 +1085,9 @@ size_t MessageQueue<T>::cancelMessages(
         "lockfree queue portion.");
 #endif
     std::lock_guard lock(m_mutex_);
-    const auto initialSize = m_messages_.size();
-    auto it = std::remove_if(m_messages_.begin(), m_messages_.end(),
-                             [&cancelCondition](const auto& msg) {
-                                 return cancelCondition(msg.data);
-                             });
-    cancelledCount = std::distance(it, m_messages_.end());
-    m_messages_.erase(it, m_messages_.end());
+    size_t cancelledCount = std::erase_if(
+        m_messages_,
+        [&cancelCondition](const auto& msg) { return cancelCondition(msg.data); });
     if (cancelledCount > 0) {
         spdlog::info("Cancelled {} messages from the deque.", cancelledCount);
     }

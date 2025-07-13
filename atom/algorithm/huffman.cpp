@@ -20,6 +20,8 @@ Description: Enhanced implementation of Huffman encoding
 #include <span>
 #include <thread>
 #include <unordered_map>
+#include <vector>
+#include <future>
 
 #ifdef ATOM_USE_BOOST
 #include <boost/format.hpp>
@@ -383,6 +385,7 @@ std::shared_ptr<atom::algorithm::HuffmanNode> createTreeParallel(
 
 /* ------------------------ compressSimd ------------------------ */
 
+// Keep compressSimd as is, it compresses a chunk and returns a string
 std::string compressSimd(
     std::span<const unsigned char> data,
     const std::unordered_map<unsigned char, std::string>& huffmanCodes) {
@@ -404,6 +407,7 @@ std::string compressSimd(
 
 /* ------------------------ compressParallel ------------------------ */
 
+// Optimized parallel compression with efficient result combination
 std::string compressParallel(
     std::span<const unsigned char> data,
     const std::unordered_map<unsigned char, std::string>& huffmanCodes,
@@ -413,36 +417,35 @@ std::string compressParallel(
         return compressSimd(data, huffmanCodes);
     }
 
-    std::vector<std::string> results(threadCount);
-    std::vector<std::thread> threads;
-    size_t block = data.size() / threadCount;
+    std::vector<std::future<std::string>> futures;
+    size_t block_size = data.size() / threadCount;
 
     for (size_t t = 0; t < threadCount; ++t) {
-        size_t begin = t * block;
-        size_t end = (t == threadCount - 1) ? data.size() : (t + 1) * block;
-        threads.emplace_back([&, begin, end, t] {
-            results[t] =
-                compressSimd(std::span<const unsigned char>(
-                                 data.begin() + begin, data.begin() + end),
-                             huffmanCodes);
-        });
+        size_t begin = t * block_size;
+        size_t end = (t == threadCount - 1) ? data.size() : (t + 1) * block_size;
+
+        futures.push_back(std::async(std::launch::async, [&, begin, end]() {
+            std::span<const unsigned char> chunk(data.begin() + begin, data.begin() + end);
+            return compressSimd(chunk, huffmanCodes);
+        }));
     }
 
-    for (auto& th : threads) {
-        th.join();
-    }
-
-    // 计算结果大小并合并
+    // Collect results and calculate total size
+    std::vector<std::string> results;
+    results.reserve(futures.size()); // Reserve space for results
     size_t total_size = 0;
-    for (const auto& s : results) {
-        total_size += s.size();
+    for (auto& future : futures) {
+        results.push_back(future.get());
+        total_size += results.back().size();
     }
 
+    // Concatenate results into a single string efficiently
     std::string out;
-    out.reserve(total_size);
-    for (auto& s : results) {
-        out += s;
+    out.reserve(total_size); // Reserve memory to avoid reallocations
+    for (const auto& s : results) {
+        out.append(s);
     }
+
     return out;
 }
 

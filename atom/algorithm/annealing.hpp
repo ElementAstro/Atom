@@ -28,6 +28,7 @@
 #endif
 
 #include "atom/error/exception.hpp"
+#include "atom/utils/random.hpp"
 #include "spdlog/spdlog.h"
 
 template <typename ProblemType, typename SolutionType>
@@ -84,29 +85,49 @@ private:
     std::unique_ptr<std::vector<std::pair<int, double>>> energy_history_ =
         std::make_unique<std::vector<std::pair<int, double>>>();
 
-    void optimizeThread();
+    /**
+     * @brief The main optimization loop executed by each thread.
+     * @param seed A unique seed for the thread's random number generator.
+     */
+    void optimizeThread(unsigned int seed);
 
+    /**
+     * @brief Restarts the optimization process, potentially with a new random
+     * solution.
+     */
     void restartOptimization() {
-        std::lock_guard lock(best_mutex_);
+        // Only lock when updating best_solution_ and best_energy_
+        double newEnergy = 0.0;
+        SolutionType newSolution;
+        bool found_better = false;
         if (current_restart_ < restart_interval_) {
             current_restart_++;
             return;
         }
-
         spdlog::info("Performing restart optimization");
-        auto newSolution = problem_instance_.randomSolution();
-        double newEnergy = problem_instance_.energy(newSolution);
-
-        if (newEnergy < best_energy_) {
-            best_solution_ = newSolution;
-            best_energy_ = newEnergy;
-            total_restarts_++;
-            current_restart_ = 0;
+        newSolution = problem_instance_.randomSolution();
+        newEnergy = problem_instance_.energy(newSolution);
+        {
+            std::lock_guard lock(best_mutex_);
+            if (newEnergy < best_energy_) {
+                best_solution_ = newSolution;
+                best_energy_ = newEnergy;
+                total_restarts_++;
+                current_restart_ = 0;
+                found_better = true;
+            }
+        }
+        if (found_better) {
             spdlog::info("Restart found better solution with energy: {}",
                          best_energy_);
         }
     }
 
+    /**
+     * @brief Updates internal statistics for the optimization process.
+     * @param iteration The current iteration number.
+     * @param energy The current energy of the solution.
+     */
     void updateStatistics(int iteration, double energy) {
         total_steps_++;
         energy_history_->emplace_back(iteration, energy);
@@ -117,26 +138,50 @@ private:
         }
     }
 
+    /**
+     * @brief Logs a checkpoint of the current optimization progress.
+     */
     void checkpoint() {
-        std::lock_guard lock(best_mutex_);
+        double best_energy_snapshot;
+        int total_steps_snapshot, accepted_steps_snapshot,
+            rejected_steps_snapshot, total_restarts_snapshot;
+        {
+            std::lock_guard lock(best_mutex_);
+            best_energy_snapshot = best_energy_;
+            total_steps_snapshot = total_steps_.load();
+            accepted_steps_snapshot = accepted_steps_.load();
+            rejected_steps_snapshot = rejected_steps_.load();
+            total_restarts_snapshot = total_restarts_.load();
+        }
         auto now = std::chrono::steady_clock::now();
         auto elapsed =
             std::chrono::duration_cast<std::chrono::seconds>(now - start_time_);
-
         spdlog::info("Checkpoint at {} seconds:", elapsed.count());
-        spdlog::info("  Best energy: {}", best_energy_);
-        spdlog::info("  Total steps: {}", total_steps_.load());
-        spdlog::info("  Accepted steps: {}", accepted_steps_.load());
-        spdlog::info("  Rejected steps: {}", rejected_steps_.load());
-        spdlog::info("  Restarts: {}", total_restarts_.load());
+        spdlog::info("  Best energy: {}", best_energy_snapshot);
+        spdlog::info("  Total steps: {}", total_steps_snapshot);
+        spdlog::info("  Accepted steps: {}", accepted_steps_snapshot);
+        spdlog::info("  Rejected steps: {}", rejected_steps_snapshot);
+        spdlog::info("  Restarts: {}", total_restarts_snapshot);
     }
 
+    /**
+     * @brief Resumes the optimization process from a previous state.
+     */
     void resume() {
-        std::lock_guard lock(best_mutex_);
+        double best_energy_snapshot;
+        {
+            std::lock_guard lock(best_mutex_);
+            best_energy_snapshot = best_energy_;
+        }
         spdlog::info("Resuming optimization from checkpoint");
-        spdlog::info("  Current best energy: {}", best_energy_);
+        spdlog::info("  Current best energy: {}", best_energy_snapshot);
     }
 
+    /**
+     * @brief Adapts the temperature based on the acceptance rate for adaptive
+     * cooling.
+     * @param acceptance_rate The current acceptance rate of new solutions.
+     */
     void adaptTemperature(double acceptance_rate) {
         if (cooling_strategy_ != AnnealingStrategy::ADAPTIVE) {
             return;
@@ -157,36 +202,74 @@ private:
     }
 
 public:
+    /**
+     * @brief Builder class for constructing SimulatedAnnealing objects.
+     */
     class Builder {
     public:
+        /**
+         * @brief Constructs a Builder with a reference to the problem instance.
+         * @param problemInstance The problem instance to be optimized.
+         */
         Builder(ProblemType& problemInstance)
             : problem_instance_(problemInstance) {}
 
+        /**
+         * @brief Sets the cooling strategy for the simulated annealing.
+         * @param strategy The annealing strategy to use.
+         * @return Reference to the Builder for chaining.
+         */
         Builder& setCoolingStrategy(AnnealingStrategy strategy) {
             cooling_strategy_ = strategy;
             return *this;
         }
 
+        /**
+         * @brief Sets the maximum number of iterations for the simulated
+         * annealing.
+         * @param iterations The maximum number of iterations.
+         * @return Reference to the Builder for chaining.
+         */
         Builder& setMaxIterations(int iterations) {
             max_iterations_ = iterations;
             return *this;
         }
 
+        /**
+         * @brief Sets the initial temperature for the simulated annealing.
+         * @param temperature The initial temperature.
+         * @return Reference to the Builder for chaining.
+         */
         Builder& setInitialTemperature(double temperature) {
             initial_temperature_ = temperature;
             return *this;
         }
 
+        /**
+         * @brief Sets the cooling rate for the simulated annealing.
+         * @param rate The cooling rate.
+         * @return Reference to the Builder for chaining.
+         */
         Builder& setCoolingRate(double rate) {
             cooling_rate_ = rate;
             return *this;
         }
 
+        /**
+         * @brief Sets the restart interval for the simulated annealing.
+         * @param interval The number of iterations after which to consider a
+         * restart.
+         * @return Reference to the Builder for chaining.
+         */
         Builder& setRestartInterval(int interval) {
             restart_interval_ = interval;
             return *this;
         }
 
+        /**
+         * @brief Builds and returns a SimulatedAnnealing object.
+         * @return A configured SimulatedAnnealing object.
+         */
         SimulatedAnnealing build() { return SimulatedAnnealing(*this); }
 
         ProblemType& problem_instance_;
@@ -197,22 +280,59 @@ public:
         int restart_interval_ = 0;
     };
 
+    /**
+     * @brief Constructs a SimulatedAnnealing object using a Builder.
+     * @param builder The Builder object containing configuration.
+     */
     explicit SimulatedAnnealing(const Builder& builder);
 
+    /**
+     * @brief Sets the cooling schedule based on the specified strategy.
+     * @param strategy The annealing strategy to use.
+     */
     void setCoolingSchedule(AnnealingStrategy strategy);
 
+    /**
+     * @brief Sets a callback function to report progress during optimization.
+     * @param callback The function to call with iteration, current energy, and
+     * current solution.
+     */
     void setProgressCallback(
         std::function<void(int, double, const SolutionType&)> callback);
 
+    /**
+     * @brief Sets a condition function to stop the optimization prematurely.
+     * @param condition The function to call with iteration, current energy, and
+     * current solution. Returns true to stop, false to continue.
+     */
     void setStopCondition(
         std::function<bool(int, double, const SolutionType&)> condition);
 
-    auto optimize(int numThreads = 1) -> SolutionType;
+    /**
+     * @brief Starts the optimization process.
+     * @param numThreads The number of threads to use for parallel optimization.
+     * @return The best solution found.
+     */
+    [[nodiscard]] auto optimize(int numThreads = 1) -> SolutionType;
 
+    /**
+     * @brief Retrieves the energy of the best solution found so far.
+     * @return The best energy.
+     */
     [[nodiscard]] auto getBestEnergy() -> double;
 
+    /**
+     * @brief Sets the initial temperature for the annealing process.
+     * @param temperature The initial temperature.
+     * @throws std::invalid_argument If temperature is not positive.
+     */
     void setInitialTemperature(double temperature);
 
+    /**
+     * @brief Sets the cooling rate for the annealing process.
+     * @param rate The cooling rate.
+     * @throws std::invalid_argument If rate is not between 0 and 1.
+     */
     void setCoolingRate(double rate);
 };
 
@@ -222,13 +342,31 @@ private:
     std::vector<std::pair<double, double>> cities_;
 
 public:
+    /**
+     * @brief Constructs a TSP problem instance with a given set of cities.
+     * @param cities A vector of (x, y) coordinates for each city.
+     */
     explicit TSP(const std::vector<std::pair<double, double>>& cities);
 
+    /**
+     * @brief Calculates the total distance (energy) of a given TSP solution.
+     * @param solution A permutation of city indices representing the tour.
+     * @return The total distance of the tour.
+     */
     [[nodiscard]] auto energy(const std::vector<int>& solution) const -> double;
 
+    /**
+     * @brief Generates a neighboring solution by swapping two random cities.
+     * @param solution The current TSP solution.
+     * @return A new neighboring TSP solution.
+     */
     [[nodiscard]] static auto neighbor(const std::vector<int>& solution)
         -> std::vector<int>;
 
+    /**
+     * @brief Generates a random initial TSP solution (a shuffled tour).
+     * @return A random TSP solution.
+     */
     [[nodiscard]] auto randomSolution() const -> std::vector<int>;
 };
 
@@ -331,17 +469,11 @@ void SimulatedAnnealing<ProblemType, SolutionType>::setStopCondition(
 
 template <typename ProblemType, typename SolutionType>
     requires AnnealingProblem<ProblemType, SolutionType>
-void SimulatedAnnealing<ProblemType, SolutionType>::optimizeThread() {
+void SimulatedAnnealing<ProblemType, SolutionType>::optimizeThread(
+    unsigned int seed) {
     try {
-#ifdef ATOM_USE_BOOST
-        boost::random::random_device randomDevice;
-        boost::random::mt19937 generator(randomDevice());
-        boost::random::uniform_real_distribution<double> distribution(0.0, 1.0);
-#else
-        std::random_device randomDevice;
-        std::mt19937 generator(randomDevice());
+        std::mt19937 generator(seed);
         std::uniform_real_distribution<double> distribution(0.0, 1.0);
-#endif
 
         auto threadIdToString = [] {
             std::ostringstream oss;
@@ -454,8 +586,16 @@ auto SimulatedAnnealing<ProblemType, SolutionType>::optimize(int numThreads)
         std::vector<std::jthread> threads;
         threads.reserve(numThreads);
 
+        std::random_device rd;  // Use a single random_device for seeding
         for (int threadIndex = 0; threadIndex < numThreads; ++threadIndex) {
-            threads.emplace_back([this]() { optimizeThread(); });
+            // Generate a unique seed for each thread
+            unsigned int seed =
+                rd() ^ (static_cast<unsigned int>(
+                            std::chrono::high_resolution_clock::now()
+                                .time_since_epoch()
+                                .count()) +
+                        threadIndex);
+            threads.emplace_back([this, seed]() { optimizeThread(seed); });
             spdlog::info("Launched optimization thread {}.", threadIndex + 1);
         }
 
@@ -589,19 +729,12 @@ inline auto TSP::neighbor(const std::vector<int>& solution)
     -> std::vector<int> {
     std::vector<int> newSolution = solution;
     try {
-#ifdef ATOM_USE_BOOST
-        boost::random::random_device randomDevice;
-        boost::random::mt19937 generator(randomDevice());
-        boost::random::uniform_int_distribution<int> distribution(
-            0, static_cast<int>(solution.size()) - 1);
-#else
-        std::random_device randomDevice;
-        std::mt19937 generator(randomDevice());
-        std::uniform_int_distribution<int> distribution(
-            0, static_cast<int>(solution.size()) - 1);
-#endif
-        int index1 = distribution(generator);
-        int index2 = distribution(generator);
+        // Use atom::utils::Random for random number generation
+        atom::utils::Random<std::mt19937, std::uniform_int_distribution<int>>
+            rand_gen(0, static_cast<int>(solution.size()) - 1);
+
+        int index1 = rand_gen();
+        int index2 = rand_gen();
         std::swap(newSolution[index1], newSolution[index2]);
         spdlog::info(
             "Generated neighbor solution by swapping indices {} and {}.",
@@ -617,15 +750,10 @@ inline auto TSP::randomSolution() const -> std::vector<int> {
     std::vector<int> solution(cities_.size());
     std::iota(solution.begin(), solution.end(), 0);
     try {
-#ifdef ATOM_USE_BOOST
-        boost::random::random_device randomDevice;
-        boost::random::mt19937 generator(randomDevice());
-        boost::range::random_shuffle(solution, generator);
-#else
-        std::random_device randomDevice;
-        std::mt19937 generator(randomDevice());
+        // Use atom::utils::Random for random number generation
+        std::random_device rd;
+        std::mt19937 generator(rd());
         std::ranges::shuffle(solution, generator);
-#endif
         spdlog::info("Generated random solution.");
     } catch (const std::exception& e) {
         spdlog::error("Exception in TSP::randomSolution: {}", e.what());

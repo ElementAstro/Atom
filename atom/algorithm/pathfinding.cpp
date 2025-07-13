@@ -406,8 +406,8 @@ std::optional<std::vector<Point>> PathFinder::findJPSPath(const GridMap& map,
 
             f32 tentativeG = gScore[current];
 
-            f32 dx = jumpPoint->x - current.x;
-            f32 dy = jumpPoint->y - current.y;
+            f32 dx = static_cast<f32>(jumpPoint->x - current.x);
+            f32 dy = static_cast<f32>(jumpPoint->y - current.y);
             f32 dist = std::sqrt(dx * dx + dy * dy);
 
             tentativeG += dist * 1.0f;

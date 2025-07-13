@@ -27,10 +27,10 @@ Description: A simple thread safe queue
 #include <mutex>
 #include <optional>
 #include <queue>
-#include <shared_mutex>  // For read-write lock
+#include <shared_mutex>
 #include <span>
 #include <stdexcept>
-#include <thread>  // For yield in spin lock
+#include <thread>
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
@@ -46,8 +46,6 @@ Description: A simple thread safe queue
 #endif
 
 namespace atom::async {
-
-// High-performance lock implementations
 
 /**
  * @brief High-performance spin lock implementation
@@ -66,7 +64,6 @@ public:
         while (m_lock.test_and_set(std::memory_order_acquire)) {
             // Exponential backoff strategy
             for (std::uint32_t i = 0; i < backoff; ++i) {
-// Pause instruction to reduce power consumption and improve performance
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || \
     defined(_M_IX86)
                 _mm_pause();
@@ -145,14 +142,12 @@ public:
                 return;
             }
 
-// Pause to reduce CPU consumption and bus contention
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || \
     defined(_M_IX86)
             _mm_pause();
 #elif defined(__arm__) || defined(__aarch64__)
             __asm__ __volatile__("yield" ::: "memory");
 #else
-            // No specific CPU hint, use compiler barrier
             std::atomic_signal_fence(std::memory_order_seq_cst);
 #endif
         }
@@ -188,11 +183,15 @@ public:
 
 private:
     std::atomic_flag m_spinLock = ATOMIC_FLAG_INIT;
+    alignas(CACHE_LINE_SIZE) char m_padding[CACHE_LINE_SIZE];
     std::mutex m_mutex;
     std::atomic<bool> m_isThreadLocked{false};
 };
 
-// Forward declarations of lock guards for custom mutexes
+/**
+ * @brief Lock guard for custom mutexes
+ * @tparam Mutex Mutex type
+ */
 template <typename Mutex>
 class lock_guard {
 public:
@@ -207,6 +206,10 @@ private:
     Mutex& m_mutex;
 };
 
+/**
+ * @brief Shared lock guard for custom mutexes (for SharedMutex)
+ * @tparam Mutex Mutex type
+ */
 template <typename Mutex>
 class shared_lock {
 public:
@@ -232,18 +235,27 @@ concept ExtractableWith = requires(T t, U u) {
     { u(t) } -> std::convertible_to<bool>;
 };
 
-// Main thread-safe queue implementation with high-performance locks
+template <typename GroupKey>
+concept HashableGroupKey =
+    std::movable<GroupKey> && std::equality_comparable<GroupKey> &&
+    requires(GroupKey k) {
+        { std::hash<GroupKey>{}(k) } -> std::convertible_to<size_t>;
+    };
+
+/**
+ * @brief Main thread-safe queue implementation with high-performance locks
+ * @tparam T Type of elements stored in the queue
+ */
 template <Movable T>
 class ThreadSafeQueue {
 public:
     ThreadSafeQueue() = default;
-    ThreadSafeQueue(const ThreadSafeQueue&) = delete;  // Prevent copying
+    ThreadSafeQueue(const ThreadSafeQueue&) = delete;
     ThreadSafeQueue& operator=(const ThreadSafeQueue&) = delete;
     ThreadSafeQueue(ThreadSafeQueue&&) noexcept = default;
     ThreadSafeQueue& operator=(ThreadSafeQueue&&) noexcept = default;
     ~ThreadSafeQueue() noexcept {
         try {
-            // 修复：保存返回值以避免警告
             [[maybe_unused]] auto result = destroy();
         } catch (...) {
             // Ensure no exceptions escape destructor
@@ -263,7 +275,8 @@ public:
             }
             m_conditionVariable_.notify_one();
         } catch (const std::exception&) {
-            // Error handling
+            // Error handling: Consider logging or rethrowing in non-critical
+            // paths
         }
     }
 
@@ -274,17 +287,16 @@ public:
      */
     [[nodiscard]] auto take() -> std::optional<T> {
         std::unique_lock<HybridMutex> lock(m_mutex);
-        // Avoid spurious wakeups
-        while (!m_mustReturnNullptr_ && m_queue_.empty()) {
+        while (!m_mustReturnNullptr_.load(std::memory_order_relaxed) &&
+               m_queue_.empty()) {
             m_conditionVariable_.wait(lock);
         }
 
-        if (m_mustReturnNullptr_ || m_queue_.empty()) {
+        if (m_mustReturnNullptr_.load(std::memory_order_relaxed) ||
+            m_queue_.empty()) {
             return std::nullopt;
         }
 
-        // Use move semantics to directly construct optional, reducing one move
-        // operation
         std::optional<T> ret{std::move(m_queue_.front())};
         m_queue_.pop();
         return ret;
@@ -297,7 +309,7 @@ public:
     [[nodiscard]] auto destroy() noexcept -> std::queue<T> {
         {
             lock_guard lock(m_mutex);
-            m_mustReturnNullptr_ = true;
+            m_mustReturnNullptr_.store(true, std::memory_order_release);
         }
         m_conditionVariable_.notify_all();
 
@@ -376,7 +388,8 @@ public:
             }
             m_conditionVariable_.notify_one();
         } catch (const std::exception& e) {
-            // Log error
+            // Error handling: Consider logging or rethrowing in non-critical
+            // paths
         }
     }
 
@@ -390,11 +403,12 @@ public:
     [[nodiscard]] auto waitFor(Predicate predicate) -> std::optional<T> {
         std::unique_lock<HybridMutex> lock(m_mutex);
         m_conditionVariable_.wait(lock, [this, &predicate] {
-            return m_mustReturnNullptr_ ||
+            return m_mustReturnNullptr_.load(std::memory_order_relaxed) ||
                    (!m_queue_.empty() && predicate(m_queue_.front()));
         });
 
-        if (m_mustReturnNullptr_ || m_queue_.empty())
+        if (m_mustReturnNullptr_.load(std::memory_order_relaxed) ||
+            m_queue_.empty())
             return std::nullopt;
 
         T ret = std::move(m_queue_.front());
@@ -408,8 +422,10 @@ public:
      */
     void waitUntilEmpty() noexcept {
         std::unique_lock<HybridMutex> lock(m_mutex);
-        m_conditionVariable_.wait(
-            lock, [this] { return m_mustReturnNullptr_ || m_queue_.empty(); });
+        m_conditionVariable_.wait(lock, [this] {
+            return m_mustReturnNullptr_.load(std::memory_order_relaxed) ||
+                   m_queue_.empty();
+        });
     }
 
     /**
@@ -434,13 +450,15 @@ public:
             std::queue<T> remaining;
 
             while (!m_queue_.empty()) {
-                T& item = m_queue_.front();
-                if (pred(item)) {
-                    result.push_back(std::move(item));
-                } else {
-                    remaining.push(std::move(item));
-                }
+                T item = std::move(m_queue_.front());  // Move item out
                 m_queue_.pop();
+                if (pred(item)) {
+                    result.push_back(std::move(
+                        item));  // Move to result if predicate is true
+                } else {
+                    remaining.push(std::move(
+                        item));  // Move to remaining if predicate is false
+                }
             }
             // Use swap to avoid copying, O(1) complexity
             std::swap(m_queue_, remaining);
@@ -469,7 +487,7 @@ public:
         }
 
         // Use parallel algorithm when available
-        if (temp.size() > 1000) {
+        if (temp.size() > 1000) {  // Heuristic threshold for parallel execution
             std::sort(std::execution::par, temp.begin(), temp.end(), comp);
         } else {
             std::sort(temp.begin(), temp.end(), comp);
@@ -484,6 +502,7 @@ public:
      * @brief Transform elements using a function and return a new queue
      * @param func Transformation function
      * @return Shared pointer to a queue of transformed elements
+     * @note This operation consumes elements from the original queue.
      */
     template <typename ResultType>
     [[nodiscard]] auto transform(std::function<ResultType(T)> func)
@@ -509,7 +528,8 @@ public:
         }
 
         // Process data outside the lock
-        if (originalItems.size() > 1000) {
+        if (originalItems.size() >
+            1000) {  // Heuristic threshold for parallel execution
             std::vector<ResultType> transformed(originalItems.size());
             std::transform(std::execution::par, originalItems.begin(),
                            originalItems.end(), transformed.begin(), func);
@@ -523,13 +543,7 @@ public:
             }
         }
 
-        // Restore queue
-        {
-            lock_guard lock(m_mutex);
-            for (auto& item : originalItems) {
-                m_queue_.push(std::move(item));
-            }
-        }
+        // Original queue is consumed by this operation, no restoration needed.
 
         return resultQueue;
     }
@@ -538,12 +552,11 @@ public:
      * @brief Group elements by a key
      * @param func Function to extract the key
      * @return Vector of queues, each containing elements with the same key
+     * @note This operation copies elements and restores the original queue.
      */
-    template <typename GroupKey>
-        requires std::movable<GroupKey> && std::equality_comparable<GroupKey>
+    template <HashableGroupKey GroupKey>
     [[nodiscard]] auto groupBy(std::function<GroupKey(const T&)> func)
         -> std::vector<std::shared_ptr<ThreadSafeQueue<T>>> {
-        /*
         std::unordered_map<GroupKey, std::shared_ptr<ThreadSafeQueue<T>>>
             resultMap;
         std::vector<T> originalItems;
@@ -558,7 +571,7 @@ public:
             const size_t queueSize = m_queue_.size();
             originalItems.reserve(queueSize);
 
-            // Use move semantics to reduce copying
+            // Use move semantics to reduce copying from the queue
             while (!m_queue_.empty()) {
                 originalItems.push_back(std::move(m_queue_.front()));
                 m_queue_.pop();
@@ -567,15 +580,16 @@ public:
 
         // Process data outside the lock
         // Estimate map size, reduce rehash
-        resultMap.reserve(std::min(originalItems.size(), size_t(100)));
+        resultMap.reserve(
+            std::min(originalItems.size(), size_t(100)));  // Heuristic size
 
         for (const auto& item : originalItems) {
             GroupKey key = func(item);
-            if (!resultMap.contains(key)) {
+            if (resultMap.find(key) == resultMap.end()) {
                 resultMap[key] = std::make_shared<ThreadSafeQueue<T>>();
             }
-            resultMap[key]->put(
-                item);  // Use constant reference to avoid copying
+            resultMap[key]->put(item);  // Use constant reference to call
+                                        // put(const T&), copying the item
         }
 
         // Restore queue, prepare data outside the lock to reduce lock holding
@@ -583,19 +597,17 @@ public:
         {
             lock_guard lock(m_mutex);
             for (auto& item : originalItems) {
-                m_queue_.push(std::move(item));
+                m_queue_.push(std::move(item));  // Move items back
             }
         }
 
         std::vector<std::shared_ptr<ThreadSafeQueue<T>>> resultQueues;
         resultQueues.reserve(resultMap.size());
-        for (auto& [_, queue_ptr] : resultMap) {
-            resultQueues.push_back(std::move(queue_ptr));  // Use move semantics
+        for (auto& pair : resultMap) {  // Iterate through map
+            resultQueues.push_back(std::move(pair.second));  // Move shared_ptr
         }
 
         return resultQueues;
-        */
-        return {};
     }
 
     /**
@@ -614,10 +626,10 @@ public:
 
         // Optimization: avoid creating temporary queue, use existing queue
         // directly
-        std::queue<T> queueCopy = m_queue_;
+        std::queue<T> queueCopy = m_queue_;  // Creates copies
 
         while (!queueCopy.empty()) {
-            result.push_back(std::move(queueCopy.front()));
+            result.push_back(std::move(queueCopy.front()));  // Move from copy
             queueCopy.pop();
         }
 
@@ -628,6 +640,7 @@ public:
      * @brief Apply a function to each element
      * @param func Function to apply
      * @param parallel Whether to process in parallel
+     * @note This operation consumes elements from the original queue.
      */
     template <typename Func>
         requires std::invocable<Func, T&>
@@ -650,7 +663,8 @@ public:
         }
 
         // Process outside the lock to improve concurrency
-        if (parallel && vec.size() > 1000) {
+        if (parallel &&
+            vec.size() > 1000) {  // Heuristic threshold for parallel execution
             std::for_each(std::execution::par, vec.begin(), vec.end(),
                           [&func](auto& item) { func(item); });
         } else {
@@ -659,13 +673,7 @@ public:
             }
         }
 
-        // Restore queue
-        {
-            lock_guard lock(m_mutex);
-            for (auto& item : vec) {
-                m_queue_.push(std::move(item));
-            }
-        }
+        // Original queue is consumed by this operation, no restoration needed.
     }
 
     /**
@@ -693,9 +701,11 @@ public:
         const std::chrono::duration<Rep, Period>& timeout) -> std::optional<T> {
         std::unique_lock<HybridMutex> lock(m_mutex);
         if (m_conditionVariable_.wait_for(lock, timeout, [this] {
-                return !m_queue_.empty() || m_mustReturnNullptr_;
+                return !m_queue_.empty() ||
+                       m_mustReturnNullptr_.load(std::memory_order_relaxed);
             })) {
-            if (m_mustReturnNullptr_ || m_queue_.empty()) {
+            if (m_mustReturnNullptr_.load(std::memory_order_relaxed) ||
+                m_queue_.empty()) {
                 return std::nullopt;
             }
             T ret = std::move(m_queue_.front());
@@ -717,9 +727,11 @@ public:
         -> std::optional<T> {
         std::unique_lock<HybridMutex> lock(m_mutex);
         if (m_conditionVariable_.wait_until(lock, timeout_time, [this] {
-                return !m_queue_.empty() || m_mustReturnNullptr_;
+                return !m_queue_.empty() ||
+                       m_mustReturnNullptr_.load(std::memory_order_relaxed);
             })) {
-            if (m_mustReturnNullptr_ || m_queue_.empty()) {
+            if (m_mustReturnNullptr_.load(std::memory_order_relaxed) ||
+                m_queue_.empty()) {
                 return std::nullopt;
             }
             T ret = std::move(m_queue_.front());
@@ -734,6 +746,7 @@ public:
      * @param batchSize Size of each batch
      * @param processor Function to process each batch
      * @return Number of processed batches
+     * @note This operation consumes elements from the original queue.
      */
     template <typename Processor>
         requires std::invocable<Processor, std::span<T>>
@@ -775,13 +788,7 @@ public:
             future.wait();
         }
 
-        // Put processed items back
-        {
-            lock_guard lock(m_mutex);
-            for (auto& item : items) {
-                m_queue_.push(std::move(item));
-            }
-        }
+        // Original queue is consumed by this operation, no restoration needed.
 
         return numBatches;
     }
@@ -789,6 +796,7 @@ public:
     /**
      * @brief Apply a filter to the queue elements
      * @param predicate Predicate determining which elements to keep
+     * @note This operation modifies the queue in place.
      */
     template <std::predicate<const T&> Predicate>
     void filter(Predicate predicate) {
@@ -814,6 +822,8 @@ public:
      * @brief Filter elements and return a new queue with matching elements
      * @param predicate Predicate determining which elements to include
      * @return Shared pointer to a new queue containing filtered elements
+     * @note This operation copies matching elements to the new queue and leaves
+     * the original queue unchanged.
      */
     template <std::predicate<const T&> Predicate>
     [[nodiscard]] auto filterOut(Predicate predicate)
@@ -866,8 +876,8 @@ private:
     std::condition_variable_any m_conditionVariable_;
     std::atomic<bool> m_mustReturnNullptr_{false};
 
-    // 使用固定大小替代 std::hardware_destructive_interference_size
-    alignas(CACHE_LINE_SIZE) char m_padding[1];
+    // Removed ineffective padding here. Padding within HybridMutex is more
+    // relevant.
 };
 
 /**
@@ -889,7 +899,6 @@ public:
 
     ~PooledThreadSafeQueue() noexcept {
         try {
-            // 修复：保存返回值以避免警告
             [[maybe_unused]] auto result = destroy();
         } catch (...) {
             // Ensure no exceptions escape destructor
@@ -908,7 +917,7 @@ public:
             }
             m_conditionVariable_.notify_one();
         } catch (const std::exception&) {
-            // Error handling
+            // Error handling: Consider logging or rethrowing
         }
     }
 
@@ -919,11 +928,13 @@ public:
      */
     [[nodiscard]] auto take() -> std::optional<T> {
         std::unique_lock<HybridMutex> lock(m_mutex);
-        while (!m_mustReturnNullptr_ && m_queue_.empty()) {
+        while (!m_mustReturnNullptr_.load(std::memory_order_relaxed) &&
+               m_queue_.empty()) {
             m_conditionVariable_.wait(lock);
         }
 
-        if (m_mustReturnNullptr_ || m_queue_.empty()) {
+        if (m_mustReturnNullptr_.load(std::memory_order_relaxed) ||
+            m_queue_.empty()) {
             return std::nullopt;
         }
 
@@ -939,7 +950,7 @@ public:
     [[nodiscard]] auto destroy() noexcept -> std::queue<T> {
         {
             lock_guard lock(m_mutex);
-            m_mustReturnNullptr_ = true;
+            m_mustReturnNullptr_.store(true, std::memory_order_release);
         }
         m_conditionVariable_.notify_all();
 
@@ -993,8 +1004,9 @@ public:
     }
 
 private:
-    // 使用固定大小替代 std::hardware_destructive_interference_size
-    alignas(CACHE_LINE_SIZE) char buffer_[MemoryPoolSize];
+    // Removed padding on buffer as it doesn't prevent false sharing of control
+    // members
+    char buffer_[MemoryPoolSize];
     std::pmr::monotonic_buffer_resource m_memoryPool_;
     std::pmr::polymorphic_allocator<T> m_resource_;
     std::queue<T> m_queue_{&m_resource_};
@@ -1007,8 +1019,6 @@ private:
 }  // namespace atom::async
 
 #ifdef ATOM_USE_LOCKFREE_QUEUE
-
-namespace atom::async {
 /**
  * @brief Lock-free queue implementation using boost::lockfree
  * @tparam T Type of elements stored in the queue

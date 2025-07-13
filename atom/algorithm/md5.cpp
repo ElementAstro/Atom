@@ -14,17 +14,14 @@ Description: Self implemented MD5 algorithm.
 
 #include "md5.hpp"
 
-#include <bit>
-#include <format>
 #include <iomanip>
 #include <iostream>
 #include <span>
 #include <sstream>
 
 // SIMD and parallel support
-#ifdef __AVX2__
-#include <immintrin.h>
-#define USE_SIMD
+#ifdef USE_SIMD
+#include <immintrin.h> // Required for AVX2 intrinsics
 #endif
 
 #ifdef USE_OPENMP
@@ -69,7 +66,7 @@ void MD5::update(std::span<const std::byte> input) {
         }
     } catch (const std::exception& e) {
         spdlog::error("MD5: Update failed - {}", e.what());
-        throw MD5Exception(std::format("Update failed: {}", e.what()));
+        throw MD5Exception(std::string("Update failed: ") + e.what());
     }
 }
 
@@ -105,20 +102,27 @@ auto MD5::finalize() -> std::string {
         std::stringstream ss;
         ss << std::hex << std::setfill('0');
 
-        // Use std::byteswap for little-endian conversion (C++20)
-        ss << std::setw(8) << std::byteswap(a_);
-        ss << std::setw(8) << std::byteswap(b_);
-        ss << std::setw(8) << std::byteswap(c_);
-        ss << std::setw(8) << std::byteswap(d_);
+        // Use manual byte swap for little-endian conversion
+        auto byte_swap = [](u32 val) -> u32 {
+            return ((val << 24) & 0xff000000) |
+                   ((val << 8) & 0x00ff0000) |
+                   ((val >> 8) & 0x0000ff00) |
+                   ((val >> 24) & 0x000000ff);
+        };
+
+        ss << std::setw(8) << byte_swap(a_);
+        ss << std::setw(8) << byte_swap(b_);
+        ss << std::setw(8) << byte_swap(c_);
+        ss << std::setw(8) << byte_swap(d_);
 
         return ss.str();
     } catch (const std::exception& e) {
         spdlog::error("MD5: Finalization failed - {}", e.what());
-        throw MD5Exception(std::format("Finalization failed: {}", e.what()));
+        throw MD5Exception(std::string("Finalization failed: ") + e.what());
     }
 }
 
-void MD5::processBlock(std::span<const std::byte, 64> block) noexcept {
+void MD5::processBlock(std::span<const std::byte, 64> const block) noexcept {
     // Convert input block to 16 32-bit words
     std::array<u32, 16> M;
 
@@ -240,7 +244,7 @@ auto MD5::encryptBinary(std::span<const std::byte> data) -> std::string {
     } catch (const std::exception& e) {
         spdlog::error("MD5: Binary encryption failed - {}", e.what());
         throw MD5Exception(
-            std::format("Binary encryption failed: {}", e.what()));
+            std::string("Binary encryption failed: ") + e.what());
     }
 }
 

@@ -1,6 +1,7 @@
 #ifndef ATOM_ASYNC_THREADPOOL_HPP
 #define ATOM_ASYNC_THREADPOOL_HPP
 
+#include <spdlog/spdlog.h>  // Added for logging
 #include <atomic>
 #include <concepts>
 #include <condition_variable>
@@ -104,6 +105,8 @@ public:
             std::scoped_lock lock(other.mutex_);
             data_ = other.data_;
         } catch (const std::exception& e) {
+            spdlog::error("ThreadSafeQueue copy constructor failed: {}",
+                          e.what());
             throw ThreadPoolError(std::string("Copy constructor failed: ") +
                                   e.what());
         }
@@ -123,6 +126,8 @@ public:
                 std::lock(lockThis, lockOther);
                 data_ = other.data_;
             } catch (const std::exception& e) {
+                spdlog::error("ThreadSafeQueue copy assignment failed: {}",
+                              e.what());
                 throw ThreadPoolError(std::string("Copy assignment failed: ") +
                                       e.what());
             }
@@ -139,6 +144,7 @@ public:
             std::scoped_lock lock(other.mutex_);
             data_ = std::move(other.data_);
         } catch (...) {
+            spdlog::error("ThreadSafeQueue move constructor failed.");
             // Maintain strong exception safety
         }
     }
@@ -156,6 +162,7 @@ public:
                 std::lock(lockThis, lockOther);
                 data_ = std::move(other.data_);
             } catch (...) {
+                spdlog::error("ThreadSafeQueue move assignment failed.");
                 // Maintain strong exception safety
             }
         }
@@ -171,11 +178,13 @@ public:
     void pushBack(T&& value) {
         std::scoped_lock lock(mutex_);
         if (data_.size() >= max_size) {
+            spdlog::error("ThreadSafeQueue is full, cannot pushBack.");
             throw ThreadPoolError("Queue is full");
         }
         try {
             data_.push_back(std::forward<T>(value));
         } catch (const std::exception& e) {
+            spdlog::error("ThreadSafeQueue pushBack failed: {}", e.what());
             throw ThreadPoolError(std::string("Push back failed: ") + e.what());
         }
     }
@@ -189,11 +198,13 @@ public:
     void pushFront(T&& value) {
         std::scoped_lock lock(mutex_);
         if (data_.size() >= max_size) {
+            spdlog::error("ThreadSafeQueue is full, cannot pushFront.");
             throw ThreadPoolError("Queue is full");
         }
         try {
             data_.push_front(std::forward<T>(value));
         } catch (const std::exception& e) {
+            spdlog::error("ThreadSafeQueue pushFront failed: {}", e.what());
             throw ThreadPoolError(std::string("Push front failed: ") +
                                   e.what());
         }
@@ -208,6 +219,8 @@ public:
             std::scoped_lock lock(mutex_);
             return data_.empty();
         } catch (...) {
+            spdlog::error(
+                "Exception in ThreadSafeQueue::empty, returning true.");
             return true;  // Conservative approach: return empty on exceptions
         }
     }
@@ -221,6 +234,7 @@ public:
             std::scoped_lock lock(mutex_);
             return data_.size();
         } catch (...) {
+            spdlog::error("Exception in ThreadSafeQueue::size, returning 0.");
             return 0;  // Conservative approach: return 0 on exceptions
         }
     }
@@ -241,6 +255,9 @@ public:
             data_.pop_front();
             return front;
         } catch (...) {
+            spdlog::error(
+                "Exception in ThreadSafeQueue::popFront, returning "
+                "std::nullopt.");
             return std::nullopt;
         }
     }
@@ -261,6 +278,9 @@ public:
             data_.pop_back();
             return back;
         } catch (...) {
+            spdlog::error(
+                "Exception in ThreadSafeQueue::popBack, returning "
+                "std::nullopt.");
             return std::nullopt;
         }
     }
@@ -282,6 +302,8 @@ public:
             data_.pop_back();
             return back;
         } catch (...) {
+            spdlog::error(
+                "Exception in ThreadSafeQueue::steal, returning std::nullopt.");
             return std::nullopt;
         }
     }
@@ -302,6 +324,7 @@ public:
 
             data_.push_front(item);
         } catch (...) {
+            spdlog::error("Exception in ThreadSafeQueue::rotateToFront.");
             // Maintain atomicity of the operation
         }
     }
@@ -326,6 +349,9 @@ public:
 
             return front;
         } catch (...) {
+            spdlog::error(
+                "Exception in ThreadSafeQueue::copyFrontAndRotateToBack, "
+                "returning std::nullopt.");
             return std::nullopt;
         }
     }
@@ -338,6 +364,7 @@ public:
             std::scoped_lock lock(mutex_);
             data_.clear();
         } catch (...) {
+            spdlog::error("Exception in ThreadSafeQueue::clear.");
             // Ignore exceptions during clear attempt
         }
     }
@@ -361,7 +388,9 @@ template <typename T, size_t Capacity = 1024>
 class BoostLockFreeQueue {
 public:
     using value_type = T;
-    using size_type = typename std::deque<T>::size_type;
+    using size_type =
+        typename std::deque<T>::size_type;  // Using deque's size_type for
+                                            // consistency
     static constexpr size_type max_size = Capacity;
 
     BoostLockFreeQueue() = default;
@@ -377,7 +406,11 @@ public:
         // Instead, move elements individually
         T value;
         while (other.queue_.pop(value)) {
-            queue_.push(std::move(value));
+            if (!queue_.push(std::move(value))) {
+                spdlog::warn(
+                    "BoostLockFreeQueue move constructor: Failed to push "
+                    "element.");
+            }
         }
     }
 
@@ -389,7 +422,11 @@ public:
                 ;  // Clear current queue
 
             while (other.queue_.pop(value)) {
-                queue_.push(std::move(value));
+                if (!queue_.push(std::move(value))) {
+                    spdlog::warn(
+                        "BoostLockFreeQueue move assignment: Failed to push "
+                        "element.");
+                }
             }
         }
         return *this;
@@ -402,6 +439,7 @@ public:
      */
     void pushBack(T&& value) {
         if (!queue_.push(std::forward<T>(value))) {
+            spdlog::error("Boost lockfree queue is full or push failed.");
             throw ThreadPoolError(
                 "Boost lockfree queue is full or push failed");
         }
@@ -421,6 +459,9 @@ public:
             // Pop all existing items and push to temp stack
             while (queue_.pop(temp_value)) {
                 if (!temp_stack.push(std::move(temp_value))) {
+                    spdlog::error(
+                        "Failed to push to temporary stack in "
+                        "BoostLockFreeQueue::pushFront.");
                     throw std::runtime_error(
                         "Failed to push to temporary stack");
                 }
@@ -428,16 +469,24 @@ public:
 
             // Push the new value first
             if (!queue_.push(std::forward<T>(value))) {
+                spdlog::error(
+                    "Failed to push new value to queue in "
+                    "BoostLockFreeQueue::pushFront.");
                 throw std::runtime_error("Failed to push new value");
             }
 
             // Push back original items
             while (temp_stack.pop(temp_value)) {
                 if (!queue_.push(std::move(temp_value))) {
+                    spdlog::error(
+                        "Failed to restore queue items in "
+                        "BoostLockFreeQueue::pushFront.");
                     throw std::runtime_error("Failed to restore queue items");
                 }
             }
         } catch (const std::exception& e) {
+            spdlog::error("BoostLockFreeQueue pushFront operation failed: {}",
+                          e.what());
             throw ThreadPoolError(std::string("Push front operation failed: ") +
                                   e.what());
         }
@@ -498,17 +547,27 @@ public:
             // Push back the remaining items in original order
             for (auto it = temp_storage.rbegin(); it != temp_storage.rend();
                  ++it) {
-                queue_.push(std::move(*it));
+                if (!queue_.push(std::move(*it))) {
+                    spdlog::error(
+                        "Failed to push back remaining items in "
+                        "BoostLockFreeQueue::popBack.");
+                    // This indicates a serious issue, as we just popped them.
+                    // Re-throwing might be an option, but for noexcept, just
+                    // log.
+                }
             }
 
             return std::optional<T>(std::move(back_item));
         } catch (...) {
+            spdlog::error(
+                "Exception in BoostLockFreeQueue::popBack, returning "
+                "std::nullopt.");
             return std::nullopt;
         }
     }
 
     /**
-     * @brief Steal an element from the queue (same as popBack for consistency)
+     * @brief Steal an element from the queue (same as popFront for consistency)
      * @return An element if queue is not empty, std::nullopt otherwise
      */
     [[nodiscard]] auto steal() noexcept -> std::optional<T> {
@@ -537,12 +596,20 @@ public:
 
             // Push the target item first if found
             if (found) {
-                queue_.push(item);
+                if (!queue_.push(item)) {
+                    spdlog::error(
+                        "Failed to push target item in "
+                        "BoostLockFreeQueue::rotateToFront.");
+                }
             }
 
             // Push back all other items
             for (auto& stored_item : temp_storage) {
-                queue_.push(std::move(stored_item));
+                if (!queue_.push(std::move(stored_item))) {
+                    spdlog::error(
+                        "Failed to push back stored item in "
+                        "BoostLockFreeQueue::rotateToFront.");
+                }
             }
 
             // If item wasn't found, push it to front
@@ -554,13 +621,22 @@ public:
                     rebuild.push_back(std::move(temp_value));
                 }
 
-                queue_.push(item);
+                if (!queue_.push(item)) {
+                    spdlog::error(
+                        "Failed to push item when not found in "
+                        "BoostLockFreeQueue::rotateToFront.");
+                }
 
                 for (auto& stored_item : rebuild) {
-                    queue_.push(std::move(stored_item));
+                    if (!queue_.push(std::move(stored_item))) {
+                        spdlog::error(
+                            "Failed to push back rebuilt item in "
+                            "BoostLockFreeQueue::rotateToFront.");
+                    }
                 }
             }
         } catch (...) {
+            spdlog::error("Exception in BoostLockFreeQueue::rotateToFront.");
             // Maintain strong exception safety
         }
     }
@@ -592,12 +668,23 @@ public:
 
             // Push back all items including the front item at the end
             for (size_t i = 1; i < temp_storage.size(); ++i) {
-                queue_.push(std::move(temp_storage[i]));
+                if (!queue_.push(std::move(temp_storage[i]))) {
+                    spdlog::error(
+                        "Failed to push back temp_storage item in "
+                        "BoostLockFreeQueue::copyFrontAndRotateToBack.");
+                }
             }
-            queue_.push(front_item);  // Push front item to back
+            if (!queue_.push(front_item)) {  // Push front item to back
+                spdlog::error(
+                    "Failed to push front_item to back in "
+                    "BoostLockFreeQueue::copyFrontAndRotateToBack.");
+            }
 
             return std::optional<T>(front_item);
         } catch (...) {
+            spdlog::error(
+                "Exception in BoostLockFreeQueue::copyFrontAndRotateToBack, "
+                "returning std::nullopt.");
             return std::nullopt;
         }
     }
@@ -733,6 +820,8 @@ public:
      */
     explicit ThreadPool(Options options = Options::createDefault())
         : options_(std::move(options)), stop_(false), activeThreads_(0) {
+        spdlog::info("ThreadPool created with initialThreadCount: {}",
+                     options_.initialThreadCount);
 #ifdef ATOM_USE_ASIO
         // Initialize ASIO if enabled
         if (options_.useAsioContext) {
@@ -744,10 +833,15 @@ public:
         size_t numThreads = options_.initialThreadCount;
         if (numThreads == 0) {
             numThreads = std::thread::hardware_concurrency();
+            spdlog::info("Initial thread count set to hardware_concurrency: {}",
+                         numThreads);
         }
 
         // Ensure at least one thread
         numThreads = std::max(size_t(1), numThreads);
+
+        // Initialize local queues for work stealing
+        localTaskQueues_.resize(numThreads);
 
         // Create worker threads
         for (size_t i = 0; i < numThreads; ++i) {
@@ -765,6 +859,7 @@ public:
      * @brief Destructor, stops all threads
      */
     ~ThreadPool() {
+        spdlog::info("ThreadPool destructor called, shutting down.");
         shutdown();
 #ifdef ATOM_USE_ASIO
         // Clean up ASIO context
@@ -792,6 +887,7 @@ public:
         // If using ASIO and context is available, delegate to ASIO
         // implementation
         if (options_.useAsioContext && asioContext_) {
+            spdlog::debug("Submitting task to ASIO context.");
             return submitAsio<ResultType>(std::forward<F>(f),
                                           std::forward<Args>(args)...);
         }
@@ -810,22 +906,35 @@ public:
 
         // Queue the task
         {
-            std::unique_lock lock(queueMutex_);
+            std::unique_lock lock(queueMutex_);  // Global queue mutex
 
             // Check if we need to increase thread count
-            if (options_.allowThreadGrowth && tasks_.size() >= activeThreads_ &&
+            if (options_.allowThreadGrowth &&
+                getTotalQueuedTasks() >= activeThreads_ &&
                 workers_.size() < options_.maxThreadCount) {
+                spdlog::info(
+                    "Growing thread pool: current tasks {} >= active threads "
+                    "{}, workers {}",
+                    getTotalQueuedTasks(), activeThreads_.load(),
+                    workers_.size());
                 createWorkerThread(workers_.size());
             }
 
-            // Check if queue is full
+            // Check if queue is full (global queue + all local queues)
             if (options_.maxQueueSize > 0 &&
-                tasks_.size() >= options_.maxQueueSize) {
+                (globalTaskQueue_.size() + getTotalQueuedTasks()) >=
+                    options_.maxQueueSize) {
+                spdlog::error(
+                    "Thread pool task queue is full, maxQueueSize: {}",
+                    options_.maxQueueSize);
                 throw std::runtime_error("Thread pool task queue is full");
             }
 
-            // Add task
-            tasks_.emplace_back([task]() { (*task)(); });
+            // Add task to global queue
+            globalTaskQueue_.pushBack([task]() { (*task)(); });
+            spdlog::debug(
+                "Task submitted to global queue. Global queue size: {}",
+                globalTaskQueue_.size());
         }
 
         // Notify a waiting thread
@@ -853,23 +962,27 @@ public:
         auto future = promise->get_future();
 
         // Post the task to ASIO
-        asio::post(*asioContext_->getContext(),
-                   [promise, func = std::forward<F>(f),
-                    ... largs = std::forward<Args>(args)]() mutable {
-                       try {
-                           if constexpr (std::is_void_v<ResultType>) {
-                               std::invoke(std::forward<F>(func),
-                                           std::forward<Args>(largs)...);
-                               promise->set_value();
-                           } else {
-                               promise->set_value(
-                                   std::invoke(std::forward<F>(func),
-                                               std::forward<Args>(largs)...));
-                           }
-                       } catch (...) {
-                           promise->set_exception(std::current_exception());
-                       }
-                   });
+        asio::post(*asioContext_->getContext(), [promise,
+                                                 func = std::forward<F>(f),
+                                                 ... largs = std::forward<Args>(
+                                                     args)]() mutable {
+            try {
+                if constexpr (std::is_void_v<ResultType>) {
+                    std::invoke(std::forward<F>(func),
+                                std::forward<Args>(largs)...);
+                    promise->set_value();
+                } else {
+                    promise->set_value(std::invoke(
+                        std::forward<F>(func), std::forward<Args>(largs)...));
+                }
+            } catch (const std::exception& e) {
+                spdlog::error("Exception in ASIO task: {}", e.what());
+                promise->set_exception(std::current_exception());
+            } catch (...) {
+                spdlog::error("Unknown exception in ASIO task.");
+                promise->set_exception(std::current_exception());
+            }
+        });
 
         // Return enhanced future
         return EnhancedFuture<ResultType>(future.share());
@@ -909,7 +1022,7 @@ public:
         for (auto it = first; it != last; ++it) {
             futures.push_back(submit(f, *it));
         }
-
+        spdlog::debug("Submitted batch of {} tasks.", futures.size());
         return futures;
     }
 
@@ -932,23 +1045,31 @@ public:
 #ifdef ATOM_USE_ASIO
         // If using ASIO and context is available, use ASIO for execution
         if (options_.useAsioContext && asioContext_) {
-            asio::post(*asioContext_->getContext(),
-                       [promise, func = std::forward<F>(f),
-                        ... largs = std::forward<Args>(args)]() mutable {
-                           try {
-                               if constexpr (std::is_void_v<ResultType>) {
-                                   std::invoke(std::forward<F>(func),
-                                               std::forward<Args>(largs)...);
-                                   promise.setValue();
-                               } else {
-                                   promise.setValue(std::invoke(
-                                       std::forward<F>(func),
-                                       std::forward<Args>(largs)...));
-                               }
-                           } catch (...) {
-                               promise.setException(std::current_exception());
-                           }
-                       });
+            spdlog::debug("Submitting task with promise to ASIO context.");
+            asio::post(
+                *asioContext_->getContext(),
+                [promise, func = std::forward<F>(f),
+                 ... largs = std::forward<Args>(args)]() mutable {
+                    try {
+                        if constexpr (std::is_void_v<ResultType>) {
+                            std::invoke(std::forward<F>(func),
+                                        std::forward<Args>(largs)...);
+                            promise.setValue();
+                        } else {
+                            promise.setValue(
+                                std::invoke(std::forward<F>(func),
+                                            std::forward<Args>(largs)...));
+                        }
+                    } catch (const std::exception& e) {
+                        spdlog::error("Exception in ASIO promise task: {}",
+                                      e.what());
+                        promise.setException(std::current_exception());
+                    } catch (...) {
+                        spdlog::error(
+                            "Unknown exception in ASIO promise task.");
+                        promise.setException(std::current_exception());
+                    }
+                });
 
             return promise;
         }
@@ -966,7 +1087,11 @@ public:
                     promise.setValue(std::invoke(std::forward<F>(func),
                                                  std::forward<Args>(largs)...));
                 }
+            } catch (const std::exception& e) {
+                spdlog::error("Exception in promise task: {}", e.what());
+                promise.setException(std::current_exception());
             } catch (...) {
+                spdlog::error("Unknown exception in promise task.");
                 promise.setException(std::current_exception());
             }
         };
@@ -976,19 +1101,33 @@ public:
             std::unique_lock lock(queueMutex_);
 
             // Check if we need to increase thread count
-            if (options_.allowThreadGrowth && tasks_.size() >= activeThreads_ &&
+            if (options_.allowThreadGrowth &&
+                getTotalQueuedTasks() >= activeThreads_ &&
                 workers_.size() < options_.maxThreadCount) {
+                spdlog::info(
+                    "Growing thread pool for promise task: current tasks {} >= "
+                    "active threads {}, workers {}",
+                    getTotalQueuedTasks(), activeThreads_.load(),
+                    workers_.size());
                 createWorkerThread(workers_.size());
             }
 
             // Check if queue is full
             if (options_.maxQueueSize > 0 &&
-                tasks_.size() >= options_.maxQueueSize) {
+                (globalTaskQueue_.size() + getTotalQueuedTasks()) >=
+                    options_.maxQueueSize) {
+                spdlog::error(
+                    "Thread pool task queue is full for promise task, "
+                    "maxQueueSize: {}",
+                    options_.maxQueueSize);
                 throw std::runtime_error("Thread pool task queue is full");
             }
 
             // Add task
-            tasks_.emplace_back(std::move(task));
+            globalTaskQueue_.pushBack(std::move(task));
+            spdlog::debug(
+                "Promise task submitted to global queue. Global queue size: {}",
+                globalTaskQueue_.size());
         }
 
         // Notify a waiting thread
@@ -1008,6 +1147,7 @@ public:
 #ifdef ATOM_USE_ASIO
         // If using ASIO and context is available, use ASIO for execution
         if (options_.useAsioContext && asioContext_) {
+            spdlog::debug("Executing task via ASIO context.");
             asio::post(*asioContext_->getContext(), std::forward<F>(f));
             return;
         }
@@ -1015,7 +1155,19 @@ public:
 
         {
             std::unique_lock lock(queueMutex_);
-            tasks_.emplace_back(std::forward<F>(f));
+            if (options_.maxQueueSize > 0 &&
+                (globalTaskQueue_.size() + getTotalQueuedTasks()) >=
+                    options_.maxQueueSize) {
+                spdlog::error(
+                    "Thread pool task queue is full for execute task, "
+                    "maxQueueSize: {}",
+                    options_.maxQueueSize);
+                throw std::runtime_error("Thread pool task queue is full");
+            }
+            globalTaskQueue_.pushBack(std::forward<F>(f));
+            spdlog::debug(
+                "Execute task submitted to global queue. Global queue size: {}",
+                globalTaskQueue_.size());
         }
         condition_.notify_one();
     }
@@ -1032,6 +1184,8 @@ public:
         requires std::invocable<Function, Args...>
     void enqueueDetach(Function&& func, Args&&... args) {
         if (stop_.load(std::memory_order_acquire)) {
+            spdlog::warn(
+                "Cannot enqueue detached task: Thread pool is shutting down.");
             throw ThreadPoolError(
                 "Cannot enqueue detached task: Thread pool is shutting down");
         }
@@ -1039,6 +1193,7 @@ public:
 #ifdef ATOM_USE_ASIO
         // If using ASIO and context is available, use ASIO for execution
         if (options_.useAsioContext && asioContext_) {
+            spdlog::debug("Enqueuing detached task via ASIO context.");
             asio::post(
                 *asioContext_->getContext(),
                 [func = std::forward<Function>(func),
@@ -1051,9 +1206,12 @@ public:
                         } else {
                             std::ignore = std::invoke(func, largs...);
                         }
+                    } catch (const std::exception& e) {
+                        spdlog::error("Exception in detached ASIO task: {}",
+                                      e.what());
                     } catch (...) {
-                        // Catch and log exception (in production, might log to
-                        // a logging system)
+                        spdlog::error(
+                            "Unknown exception in detached ASIO task.");
                     }
                 });
 
@@ -1067,14 +1225,19 @@ public:
 
                 // Check if queue is full
                 if (options_.maxQueueSize > 0 &&
-                    tasks_.size() >= options_.maxQueueSize) {
+                    (globalTaskQueue_.size() + getTotalQueuedTasks()) >=
+                        options_.maxQueueSize) {
+                    spdlog::error(
+                        "Thread pool task queue is full for detached task, "
+                        "maxQueueSize: {}",
+                        options_.maxQueueSize);
                     throw ThreadPoolError("Thread pool task queue is full");
                 }
 
                 // Add task
-                tasks_.emplace_back([func = std::forward<Function>(func),
-                                     ... largs =
-                                         std::forward<Args>(args)]() mutable {
+                globalTaskQueue_.pushBack([func = std::forward<Function>(func),
+                                           ... largs = std::forward<Args>(
+                                               args)]() mutable {
                     try {
                         if constexpr (std::is_same_v<
                                           void, std::invoke_result_t<
@@ -1083,14 +1246,21 @@ public:
                         } else {
                             std::ignore = std::invoke(func, largs...);
                         }
+                    } catch (const std::exception& e) {
+                        spdlog::error("Exception in detached task: {}",
+                                      e.what());
                     } catch (...) {
-                        // Catch and log exception (in production, might log to
-                        // a logging system)
+                        spdlog::error("Unknown exception in detached task.");
                     }
                 });
+                spdlog::debug(
+                    "Detached task submitted to global queue. Global queue "
+                    "size: {}",
+                    globalTaskQueue_.size());
             }
             condition_.notify_one();
         } catch (const std::exception& e) {
+            spdlog::error("Failed to enqueue detached task: {}", e.what());
             throw ThreadPoolError(
                 std::string("Failed to enqueue detached task: ") + e.what());
         }
@@ -1102,7 +1272,19 @@ public:
      */
     [[nodiscard]] size_t getQueueSize() const {
         std::unique_lock lock(queueMutex_);
-        return tasks_.size();
+        return globalTaskQueue_.size();
+    }
+
+    /**
+     * @brief Get total queued tasks across all queues (global + local)
+     * @return Total task count
+     */
+    [[nodiscard]] size_t getTotalQueuedTasks() const {
+        size_t total = globalTaskQueue_.size();
+        for (const auto& localQueue : localTaskQueues_) {
+            total += localQueue.size();
+        }
+        return total;
     }
 
     /**
@@ -1126,24 +1308,36 @@ public:
      */
     void resize(size_t newSize) {
         if (newSize == 0) {
+            spdlog::error("Thread pool size cannot be zero.");
             throw std::invalid_argument("Thread pool size cannot be zero");
         }
 
         std::unique_lock lock(queueMutex_);
 
         size_t currentSize = workers_.size();
+        spdlog::info("Resizing thread pool from {} to {} threads.", currentSize,
+                     newSize);
 
         if (newSize > currentSize) {
             // Increase threads
             if (!options_.allowThreadGrowth) {
+                spdlog::warn(
+                    "Thread growth is disabled, cannot resize from {} to {}.",
+                    currentSize, newSize);
                 throw std::runtime_error(
                     "Thread growth is disabled in this pool");
             }
 
             if (options_.maxThreadCount > 0 &&
                 newSize > options_.maxThreadCount) {
+                spdlog::warn(
+                    "New size {} exceeds maxThreadCount {}, capping to max.",
+                    newSize, options_.maxThreadCount);
                 newSize = options_.maxThreadCount;
             }
+
+            // Resize local queues vector first
+            localTaskQueues_.resize(newSize);
 
             for (size_t i = currentSize; i < newSize; ++i) {
                 createWorkerThread(i);
@@ -1151,13 +1345,19 @@ public:
         } else if (newSize < currentSize) {
             // Decrease threads
             if (!options_.allowThreadShrink) {
+                spdlog::warn(
+                    "Thread shrinking is disabled, cannot resize from {} to "
+                    "{}.",
+                    currentSize, newSize);
                 throw std::runtime_error(
                     "Thread shrinking is disabled in this pool");
             }
 
             // Mark excess threads for termination
             for (size_t i = newSize; i < currentSize; ++i) {
-                terminationFlags_[i] = true;
+                if (i < terminationFlags_.size()) {  // Ensure index is valid
+                    terminationFlags_[i] = true;
+                }
             }
 
             // Unlock mutex to avoid deadlock
@@ -1165,6 +1365,8 @@ public:
 
             // Wake up all threads to check termination flags
             condition_.notify_all();
+            spdlog::info("Signaled {} threads for termination.",
+                         currentSize - newSize);
         }
     }
 
@@ -1175,6 +1377,7 @@ public:
         {
             std::unique_lock lock(queueMutex_);
             stop_ = true;
+            spdlog::info("ThreadPool shutdown initiated.");
         }
 
         // Notify all threads
@@ -1184,15 +1387,26 @@ public:
         for (auto& worker : workers_) {
             if (worker.joinable()) {
                 worker.join();
+                spdlog::debug("Worker thread joined.");
             }
         }
+        workers_.clear();  // Clear worker threads after joining
+
+        // Clear all queues
+        globalTaskQueue_.clear();
+        for (auto& localQueue : localTaskQueues_) {
+            localQueue.clear();
+        }
+        localTaskQueues_.clear();  // Clear local queues vector
 
 #ifdef ATOM_USE_ASIO
         // Stop ASIO context
         if (asioContext_) {
             asioContext_->stop();
+            spdlog::info("ASIO context stopped.");
         }
 #endif
+        spdlog::info("ThreadPool shutdown complete.");
     }
 
     /**
@@ -1202,7 +1416,12 @@ public:
         {
             std::unique_lock lock(queueMutex_);
             stop_ = true;
-            tasks_.clear();
+            globalTaskQueue_.clear();  // Discard global tasks
+            for (auto& localQueue : localTaskQueues_) {
+                localQueue.clear();  // Discard local tasks
+            }
+            spdlog::info(
+                "ThreadPool shutdownNow initiated, discarding all tasks.");
         }
 
         // Notify all threads
@@ -1212,33 +1431,44 @@ public:
         for (auto& worker : workers_) {
             if (worker.joinable()) {
                 worker.join();
+                spdlog::debug("Worker thread joined during shutdownNow.");
             }
         }
+        workers_.clear();
+
+        localTaskQueues_.clear();
 
 #ifdef ATOM_USE_ASIO
         // Stop ASIO context
         if (asioContext_) {
             asioContext_->stop();
+            spdlog::info("ASIO context stopped during shutdownNow.");
         }
 #endif
+        spdlog::info("ThreadPool shutdownNow complete.");
     }
 
     /**
      * @brief Wait for all current tasks to complete
      */
     void waitForTasks() {
+        spdlog::info("Waiting for all tasks to complete.");
         std::unique_lock lock(queueMutex_);
-        waitEmpty_.wait(
-            lock, [this] { return tasks_.empty() && activeThreads_ == 0; });
+        waitEmpty_.wait(lock, [this] {
+            return getTotalQueuedTasks() == 0 && activeThreads_ == 0;
+        });
+        spdlog::info("All tasks completed.");
     }
 
     /**
      * @brief Wait for an available thread
      */
     void waitForAvailableThread() {
+        spdlog::debug("Waiting for an available thread.");
         std::unique_lock lock(queueMutex_);
         waitAvailable_.wait(
             lock, [this] { return activeThreads_ < workers_.size() || stop_; });
+        spdlog::debug("Thread available or pool stopped.");
     }
 
     /**
@@ -1277,20 +1507,26 @@ private:
     class AsioContextWrapper {
     public:
         AsioContextWrapper() : context_(std::make_unique<asio::io_context>()) {
+            spdlog::debug("ASIO context wrapper created.");
             // Start the work guard to prevent io_context from running out of
             // work
             workGuard_ = std::make_unique<asio::io_context::work>(*context_);
         }
 
-        ~AsioContextWrapper() { stop(); }
+        ~AsioContextWrapper() {
+            spdlog::debug("ASIO context wrapper destroyed.");
+            stop();
+        }
 
         void stop() {
             if (workGuard_) {
                 // Reset work guard to allow run() to exit when queue is empty
                 workGuard_.reset();
+                spdlog::debug("ASIO work guard reset.");
 
                 // Stop the context
                 context_->stop();
+                spdlog::debug("ASIO context stopped.");
             }
         }
 
@@ -1306,6 +1542,7 @@ private:
      */
     void initAsioContext() {
         asioContext_ = std::make_unique<AsioContextWrapper>();
+        spdlog::info("ASIO context initialized.");
     }
 #endif
 
@@ -1317,16 +1554,22 @@ private:
         // Don't create if we've reached max thread count
         if (options_.maxThreadCount > 0 &&
             workers_.size() >= options_.maxThreadCount) {
+            spdlog::warn(
+                "Max thread count reached, not creating new worker thread {}.",
+                id);
             return;
         }
 
         // Initialize termination flag
         if (id >= terminationFlags_.size()) {
             terminationFlags_.resize(id + 1, false);
+        } else {
+            terminationFlags_[id] = false;  // Reset if reusing ID
         }
 
         // Create worker thread
         workers_.emplace_back([this, id]() {
+            spdlog::info("Worker thread {} started.", id);
 #if defined(ATOM_PLATFORM_LINUX) || defined(ATOM_PLATFORM_MACOS)
             {
                 char threadName[16];
@@ -1352,14 +1595,25 @@ private:
             // Thread main loop
             while (true) {
                 std::function<void()> task;
+                bool taskFound = false;
 
-                {
+                // Try to get a task from local queue first
+                if (options_.useWorkStealing) {
+                    task = localTaskQueues_[id].popFront().value_or(nullptr);
+                    if (task) {
+                        taskFound = true;
+                        spdlog::debug("Worker {} got task from local queue.",
+                                      id);
+                    }
+                }
+
+                if (!taskFound) {
                     std::unique_lock lock(queueMutex_);
 
                     // Wait for task or stop signal
                     auto waitResult = condition_.wait_for(
                         lock, options_.threadIdleTimeout, [this, id] {
-                            return stop_ || !tasks_.empty() ||
+                            return stop_ || !globalTaskQueue_.empty() ||
                                    terminationFlags_[id];
                         });
 
@@ -1369,55 +1623,84 @@ private:
                         workers_.size() > options_.initialThreadCount) {
                         // If idle time exceeds threshold and current thread
                         // count exceeds initial count
+                        spdlog::info(
+                            "Worker {} idle timeout, considering termination.",
+                            id);
                         terminationFlags_[id] = true;
                     }
 
                     // Check if thread should terminate
-                    if ((stop_ || terminationFlags_[id]) && tasks_.empty()) {
+                    if ((stop_ || terminationFlags_[id]) &&
+                        globalTaskQueue_.empty()) {
                         // Clear termination flag
                         if (id < terminationFlags_.size()) {
                             terminationFlags_[id] = false;
                         }
+                        spdlog::info("Worker thread {} terminating.", id);
                         return;
                     }
 
-                    // If no tasks, continue waiting
-                    if (tasks_.empty()) {
-                        continue;
+                    // If global queue is empty, continue waiting or try
+                    // stealing
+                    if (globalTaskQueue_.empty()) {
+                        // If work stealing is enabled, try to steal from other
+                        // queues
+                        if (options_.useWorkStealing) {
+                            lock.unlock();  // Unlock global mutex before
+                                            // stealing
+                            task = tryStealTasks(id).value_or(nullptr);
+                            if (task) {
+                                taskFound = true;
+                                spdlog::debug("Worker {} stole a task.", id);
+                            } else {
+                                // If no task found after stealing, re-lock and
+                                // continue waiting
+                                lock.lock();
+                                continue;
+                            }
+                        } else {
+                            continue;  // No work stealing, just wait
+                        }
+                    } else {
+                        // Get task from global queue
+                        task = globalTaskQueue_.popFront().value_or(nullptr);
+                        if (task) {
+                            taskFound = true;
+                            spdlog::debug(
+                                "Worker {} got task from global queue.", id);
+                        }
                     }
-
-                    // Get task
-                    task = std::move(tasks_.front());
-                    tasks_.pop_front();
 
                     // Notify potential waiting submitters
-                    waitAvailable_.notify_one();
-                }
-
-                // Execute task
-                activeThreads_++;
-
-                try {
-                    task();
-                } catch (...) {
-                    // Ignore exceptions in task execution
-                }
-
-                // Decrease active thread count
-                activeThreads_--;
-
-                // If no active threads and task queue is empty, notify waiters
-                {
-                    std::unique_lock lock(queueMutex_);
-                    if (activeThreads_ == 0 && tasks_.empty()) {
-                        waitEmpty_.notify_all();
+                    if (taskFound) {
+                        waitAvailable_.notify_one();
                     }
                 }
 
-                // Work stealing implementation - if local queue is empty, try
-                // to steal tasks from other threads
-                if (options_.useWorkStealing) {
-                    tryStealTasks();
+                // Execute task if found
+                if (taskFound && task) {
+                    activeThreads_++;
+                    try {
+                        task();
+                    } catch (const std::exception& e) {
+                        spdlog::error(
+                            "Exception in worker {} task execution: {}", id,
+                            e.what());
+                    } catch (...) {
+                        spdlog::error(
+                            "Unknown exception in worker {} task execution.",
+                            id);
+                    }
+                    activeThreads_--;
+                }
+
+                // If no active threads and all task queues are empty, notify
+                // waiters
+                {
+                    std::unique_lock lock(queueMutex_);
+                    if (activeThreads_ == 0 && getTotalQueuedTasks() == 0) {
+                        waitEmpty_.notify_all();
+                    }
                 }
             }
         });
@@ -1427,31 +1710,43 @@ private:
         if (options_.setStackSize && options_.stackSize > 0) {
             // In Windows, can't directly change stack size of already created
             // thread This would only log a message in a real implementation
+            spdlog::warn(
+                "Cannot set stack size for already created thread on Windows. "
+                "Set stackSize before thread creation.");
         }
 #endif
     }
 
     /**
      * @brief Try to steal tasks from other threads
+     * @param currentThreadId The ID of the thread attempting to steal
+     * @return An optional containing the stolen task, or std::nullopt if no
+     * task was stolen
      */
-    void tryStealTasks() {
-        // Simple implementation: each thread checks global queue when idle
-        std::unique_lock lock(queueMutex_, std::try_to_lock);
-        if (lock.owns_lock() && !tasks_.empty()) {
-            std::function<void()> task = std::move(tasks_.front());
-            tasks_.pop_front();
-
-            // Release lock before executing task
-            lock.unlock();
-
-            activeThreads_++;
-            try {
-                task();
-            } catch (...) {
-                // Ignore exceptions in task execution
-            }
-            activeThreads_--;
+    [[nodiscard]] auto tryStealTasks(size_t currentThreadId) noexcept
+        -> std::optional<std::function<void()>> {
+        if (!options_.useWorkStealing) {
+            return std::nullopt;
         }
+
+        // Iterate through other threads' local queues to steal
+        for (size_t i = 0; i < localTaskQueues_.size(); ++i) {
+            if (i == currentThreadId) {
+                continue;  // Don't steal from self
+            }
+
+            // Try to steal from the back of another thread's queue
+            auto stolenTask =
+                localTaskQueues_[i].popBack();  // Use popBack for work stealing
+            if (stolenTask) {
+                spdlog::debug(
+                    "Worker {} successfully stole a task from worker {}.",
+                    currentThreadId, i);
+                return stolenTask;
+            }
+        }
+        spdlog::debug("Worker {} failed to steal any tasks.", currentThreadId);
+        return std::nullopt;
     }
 
     /**
@@ -1483,46 +1778,50 @@ private:
             default:
                 winPriority = THREAD_PRIORITY_NORMAL;
         }
-        SetThreadPriority(GetCurrentThread(), winPriority);
+        if (!SetThreadPriority(GetCurrentThread(), winPriority)) {
+            spdlog::warn("Failed to set thread priority on Windows.");
+        } else {
+            spdlog::debug("Thread priority set to {} on Windows.",
+                          static_cast<int>(priority));
+        }
 #elif defined(ATOM_PLATFORM_LINUX) || defined(ATOM_PLATFORM_MACOS)
         int policy;
         struct sched_param param;
-        pthread_getschedparam(pthread_self(), &policy, &param);
+        if (pthread_getschedparam(pthread_self(), &policy, &param) != 0) {
+            spdlog::warn("Failed to get thread scheduling parameters.");
+            return;
+        }
+
+        int min_prio = sched_get_priority_min(policy);
+        int max_prio = sched_get_priority_max(policy);
 
         switch (priority) {
             case Options::ThreadPriority::Lowest:
-                param.sched_priority = sched_get_priority_min(policy);
+                param.sched_priority = min_prio;
                 break;
             case Options::ThreadPriority::BelowNormal:
-                param.sched_priority = sched_get_priority_min(policy) +
-                                       (sched_get_priority_max(policy) -
-                                        sched_get_priority_min(policy)) /
-                                           4;
+                param.sched_priority = min_prio + (max_prio - min_prio) / 4;
                 break;
             case Options::ThreadPriority::Normal:
-                param.sched_priority = sched_get_priority_min(policy) +
-                                       (sched_get_priority_max(policy) -
-                                        sched_get_priority_min(policy)) /
-                                           2;
+                param.sched_priority = min_prio + (max_prio - min_prio) / 2;
                 break;
             case Options::ThreadPriority::AboveNormal:
-                param.sched_priority = sched_get_priority_max(policy) -
-                                       (sched_get_priority_max(policy) -
-                                        sched_get_priority_min(policy)) /
-                                           4;
+                param.sched_priority = max_prio - (max_prio - min_prio) / 4;
                 break;
             case Options::ThreadPriority::Highest:
             case Options::ThreadPriority::TimeCritical:
-                param.sched_priority = sched_get_priority_max(policy);
+                param.sched_priority = max_prio;
                 break;
             default:
-                param.sched_priority = sched_get_priority_min(policy) +
-                                       (sched_get_priority_max(policy) -
-                                        sched_get_priority_min(policy)) /
-                                           2;
+                param.sched_priority = min_prio + (max_prio - min_prio) / 2;
         }
 
-        pthread_setschedparam(pthread_self(), policy, &param);
+        if (pthread_setschedparam(pthread_self(), policy, &param) != 0) {
+            spdlog::warn("Failed to set thread priority on Linux/macOS.");
+        } else {
+            spdlog::debug("Thread priority set to {} on Linux/macOS.",
+                          static_cast<int>(priority));
+        }
 #endif
     }
 
@@ -1537,6 +1836,7 @@ private:
 
         const unsigned int numCores = std::thread::hardware_concurrency();
         if (numCores <= 1) {
+            spdlog::debug("Single core system, no need for CPU affinity.");
             return;  // No need for affinity on single-core systems
         }
 
@@ -1549,7 +1849,7 @@ private:
 
             case Options::CpuAffinityMode::Spread:
                 // Try to spread threads across different physical cores
-                coreId = (threadId * 2) % numCores;
+                coreId = (threadId * 2) % numCores;  // Simple heuristic
                 break;
 
             case Options::CpuAffinityMode::CorePinned:
@@ -1557,50 +1857,74 @@ private:
                     coreId = options_.pinnedCores[threadId %
                                                   options_.pinnedCores.size()];
                 } else {
+                    spdlog::warn(
+                        "CorePinned affinity mode selected but no pinnedCores "
+                        "specified. Defaulting to sequential.");
                     coreId = threadId % numCores;
                 }
                 break;
 
             case Options::CpuAffinityMode::Automatic:
-                // Automatic mode relies on OS scheduling
+                // Automatic mode relies on OS scheduling, no explicit action
+                // here
+                spdlog::debug(
+                    "CPU affinity mode set to Automatic, relying on OS "
+                    "scheduling.");
                 return;
 
             default:
+                spdlog::warn("Unknown CPU affinity mode selected.");
                 return;
         }
 
-            // Set CPU affinity
+        spdlog::debug("Setting CPU affinity for thread {} to core {}.",
+                      threadId, coreId);
+        // Set CPU affinity
 #if defined(ATOM_PLATFORM_WINDOWS)
         DWORD_PTR mask = (static_cast<DWORD_PTR>(1) << coreId);
-        SetThreadAffinityMask(GetCurrentThread(), mask);
+        if (SetThreadAffinityMask(GetCurrentThread(), mask) == 0) {
+            spdlog::warn("Failed to set thread affinity mask on Windows.");
+        }
 #elif defined(ATOM_PLATFORM_LINUX)
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
         CPU_SET(coreId, &cpuset);
-        pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+        if (pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t),
+                                   &cpuset) != 0) {
+            spdlog::warn("Failed to set thread affinity on Linux.");
+        }
 #elif defined(ATOM_PLATFORM_MACOS)
         // macOS only supports soft affinity through thread policy
         thread_affinity_policy_data_t policy = {static_cast<integer_t>(coreId)};
-        thread_policy_set(pthread_mach_thread_np(pthread_self()),
-                          THREAD_AFFINITY_POLICY, (thread_policy_t)&policy,
-                          THREAD_AFFINITY_POLICY_COUNT);
+        if (thread_policy_set(pthread_mach_thread_np(pthread_self()),
+                              THREAD_AFFINITY_POLICY, (thread_policy_t)&policy,
+                              THREAD_AFFINITY_POLICY_COUNT) != KERN_SUCCESS) {
+            spdlog::warn("Failed to set thread affinity policy on macOS.");
+        }
 #endif
     }
 
 private:
-    Options options_;                          // Thread pool configuration
-    std::atomic<bool> stop_;                   // Stop flag
-    std::vector<std::thread> workers_;         // Worker threads
-    std::deque<std::function<void()>> tasks_;  // Task queue
-    std::vector<bool> terminationFlags_;       // Thread termination flags
+    Options options_;                   // Thread pool configuration
+    std::atomic<bool> stop_;            // Stop flag
+    std::vector<std::thread> workers_;  // Worker threads
 
-    mutable std::mutex queueMutex_;  // Mutex protecting task queue
+    // Global task queue, used for initial task submission
+    DefaultQueueType<std::function<void()>> globalTaskQueue_;
+
+    // Local task queues for each worker thread, used for work stealing
+    std::vector<DefaultQueueType<std::function<void()>>> localTaskQueues_;
+
+    std::vector<bool> terminationFlags_;  // Thread termination flags
+
+    mutable std::mutex queueMutex_;  // Mutex protecting global task queue and
+                                     // worker/terminationFlags vectors
     std::condition_variable
-        condition_;  // Condition variable for thread waiting
+        condition_;  // Condition variable for thread waiting for tasks
     std::condition_variable
-        waitEmpty_;  // Condition variable for waiting for empty queue
-    std::condition_variable
-        waitAvailable_;  // Condition variable for waiting for available thread
+        waitEmpty_;  // Condition variable for waiting for all tasks to complete
+    std::condition_variable waitAvailable_;  // Condition variable for waiting
+                                             // for an available thread
 
     std::atomic<size_t> activeThreads_;  // Current active thread count
 

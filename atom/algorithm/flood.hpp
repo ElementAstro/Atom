@@ -158,7 +158,7 @@ public:
         Connectivity conn = Connectivity::Four);
 
     /**
-     * @brief Perform parallel flood fill using multiple threads.
+     * @brief Perform flood fill using parallel processing.
      *
      * @tparam GridType The type of grid to perform flood fill on
      * @param grid The 2D grid to perform the flood fill on.
@@ -178,7 +178,7 @@ public:
         typename GridType::value_type::value_type target_color,
         typename GridType::value_type::value_type fill_color,
         const FloodFillConfig& config);
-
+    
     /**
      * @brief Perform SIMD-accelerated flood fill for suitable grid types.
      *
@@ -263,6 +263,39 @@ public:
                                        Connectivity conn = Connectivity::Four);
 
 private:
+    /**
+     * @brief A simple thread-safe queue for parallel processing.
+     */
+    template <typename T>
+    class ThreadSafeQueue {
+    public:
+        void push(T value) {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_queue.push(std::move(value));
+            m_cond.notify_one();
+        }
+
+        bool try_pop(T& value) {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            if (m_queue.empty()) {
+                return false;
+            }
+            value = std::move(m_queue.front());
+            m_queue.pop();
+            return true;
+        }
+
+        bool empty() const {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            return m_queue.empty();
+        }
+
+    private:
+        std::queue<T> m_queue;
+        mutable std::mutex m_mutex;
+        std::condition_variable m_cond;
+    };
+
     /**
      * @brief Check if a position is within the bounds of the grid.
      *
@@ -362,7 +395,85 @@ private:
         GridType& grid, i32 blockX, i32 blockY, i32 blockSize,
         typename GridType::value_type::value_type target_color,
         typename GridType::value_type::value_type fill_color, Connectivity conn,
-        std::queue<std::pair<i32, i32>>& borderQueue);
+        std::queue<std::pair<i32, i32>>& borderQueue) {
+        usize filled_count = 0;
+        i32 rows = static_cast<i32>(grid.size());
+        i32 cols = static_cast<i32>(grid[0].size());
+
+        // Calculate block boundaries
+        i32 endX = std::min(blockX + blockSize, rows);
+        i32 endY = std::min(blockY + blockSize, cols);
+
+        // Use BFS to process the block
+        std::queue<std::pair<i32, i32>> localQueue;
+        std::vector<std::vector<bool>> localVisited(
+            static_cast<usize>(blockSize),
+            std::vector<bool>(static_cast<usize>(blockSize), false));
+
+        // Find any already filled pixel in the block to use as starting point
+        bool found_start = false;
+        for (i32 x = blockX; x < endX && !found_start; ++x) {
+            for (i32 y = blockY; y < endY && !found_start; ++y) {
+                if (grid[static_cast<usize>(x)][static_cast<usize>(y)] ==
+                    fill_color) {
+                    // Check neighbors for target color pixels
+                    auto directions = getDirections(conn);
+                    for (auto [dx, dy] : directions) {
+                        i32 nx = x + dx;
+                        i32 ny = y + dy;
+
+                        if (isInBounds(nx, ny, rows, cols) &&
+                            grid[static_cast<usize>(nx)][static_cast<usize>(ny)] ==
+                                target_color &&
+                            nx >= blockX && nx < endX && ny >= blockY &&
+                            ny < endY) {
+                            localQueue.emplace(nx, ny);
+                            localVisited[static_cast<usize>(nx - blockX)]
+                                        [static_cast<usize>(ny - blockY)] = true;
+                            grid[static_cast<usize>(nx)][static_cast<usize>(ny)] =
+                                fill_color;
+                            filled_count++;
+                            found_start = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Perform BFS within the block
+        auto directions = getDirections(conn);
+        while (!localQueue.empty()) {
+            auto [x, y] = localQueue.front();
+            localQueue.pop();
+
+            for (auto [dx, dy] : directions) {
+                i32 nx = x + dx;
+                i32 ny = y + dy;
+
+                if (isInBounds(nx, ny, rows, cols) &&
+                    grid[static_cast<usize>(nx)][static_cast<usize>(ny)] ==
+                        target_color) {
+                    // Check if the pixel is within the current block
+                    if (nx >= blockX && nx < endX && ny >= blockY && ny < endY) {
+                        if (!localVisited[static_cast<usize>(nx - blockX)]
+                                         [static_cast<usize>(ny - blockY)]) {
+                            grid[static_cast<usize>(nx)][static_cast<usize>(ny)] =
+                                fill_color;
+                            localQueue.emplace(nx, ny);
+                            localVisited[static_cast<usize>(nx - blockX)]
+                                        [static_cast<usize>(ny - blockY)] = true;
+                            filled_count++;
+                        }
+                    } else {
+                        // Pixel is outside the block, add to border queue
+                        borderQueue.emplace(x, y);
+                    }
+                }
+            }
+        }
+
+        return filled_count;
+    }
 };
 
 template <Grid GridType>

@@ -184,7 +184,10 @@ void pkcs7_padding(std::span<T> data, usize& length) {
 Blowfish::Blowfish(std::span<const std::byte> key) {
     spdlog::info("Initializing Blowfish with key length: {}", key.size());
     validate_key(key);
-    init_state(key);
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        init_state(key);
+    }
     spdlog::info("Blowfish initialization complete");
 }
 
@@ -239,7 +242,7 @@ u32 Blowfish::F(u32 x) const noexcept {
 }
 
 void Blowfish::encrypt(std::span<std::byte, BLOCK_SIZE> block) noexcept {
-    spdlog::debug("Encrypting block");
+    std::lock_guard<std::mutex> lock(state_mutex_);
 
     u32 left = (std::to_integer<u32>(block[0]) << 24) |
                (std::to_integer<u32>(block[1]) << 16) |
@@ -269,7 +272,7 @@ void Blowfish::encrypt(std::span<std::byte, BLOCK_SIZE> block) noexcept {
 }
 
 void Blowfish::decrypt(std::span<std::byte, BLOCK_SIZE> block) noexcept {
-    spdlog::debug("Decrypting block");
+    std::lock_guard<std::mutex> lock(state_mutex_);
 
     u32 left = (std::to_integer<u32>(block[0]) << 24) |
                (std::to_integer<u32>(block[1]) << 16) |
@@ -353,7 +356,11 @@ void Blowfish::encrypt_data(std::span<T> data) {
                             block_buffer[j] = to_byte(block[j]);
                         }
 
-                        encrypt(std::span<std::byte, BLOCK_SIZE>(block_buffer));
+                        {
+                            std::lock_guard<std::mutex> lock(state_mutex_);
+                            encrypt(
+                                std::span<std::byte, BLOCK_SIZE>(block_buffer));
+                        }
 
                         // Convert back to original type
                         for (usize j = 0; j < BLOCK_SIZE; ++j) {
@@ -376,7 +383,10 @@ void Blowfish::encrypt_data(std::span<T> data) {
                 block_buffer[j] = to_byte(block[j]);
             }
 
-            encrypt(std::span<std::byte, BLOCK_SIZE>(block_buffer));
+            {
+                std::lock_guard<std::mutex> lock(state_mutex_);
+                encrypt(std::span<std::byte, BLOCK_SIZE>(block_buffer));
+            }
 
             for (usize j = 0; j < BLOCK_SIZE; ++j) {
                 block[j] = from_byte<T>(block_buffer[j]);
@@ -412,7 +422,11 @@ void Blowfish::decrypt_data(std::span<T> data, usize& length) {
                             block_buffer[j] = to_byte(block[j]);
                         }
 
-                        decrypt(std::span<std::byte, BLOCK_SIZE>(block_buffer));
+                        {
+                            std::lock_guard<std::mutex> lock(state_mutex_);
+                            decrypt(
+                                std::span<std::byte, BLOCK_SIZE>(block_buffer));
+                        }
 
                         for (usize j = 0; j < BLOCK_SIZE; ++j) {
                             block[j] = from_byte<T>(block_buffer[j]);
@@ -433,7 +447,10 @@ void Blowfish::decrypt_data(std::span<T> data, usize& length) {
                 block_buffer[j] = to_byte(block[j]);
             }
 
-            decrypt(std::span<std::byte, BLOCK_SIZE>(block_buffer));
+            {
+                std::lock_guard<std::mutex> lock(state_mutex_);
+                decrypt(std::span<std::byte, BLOCK_SIZE>(block_buffer));
+            }
 
             for (usize j = 0; j < BLOCK_SIZE; ++j) {
                 block[j] = from_byte<T>(block_buffer[j]);

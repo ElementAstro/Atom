@@ -373,53 +373,37 @@ public:
 
         // 使用std::stop_source来协调线程停止
         std::stop_source stopSource;
-
-        // 使用C++20的std::latch来进行同步
-        std::latch completionLatch(numThreads - 1);
-
         std::vector<std::jthread> threads;
-        threads.reserve(numThreads - 1);
+        threads.reserve(numThreads);
+        std::latch completionLatch(numThreads);
 
-        const auto chunk_size = range_size / numThreads;
+        const auto chunk_size = (range_size + numThreads - 1) / numThreads;
         auto chunk_begin = begin;
 
-        for (size_t i = 0; i < numThreads - 1; ++i) {
-            auto chunk_end = std::next(chunk_begin, chunk_size);
+        for (size_t i = 0; i < numThreads; ++i) {
+            auto chunk_end = (i == numThreads - 1)
+                                 ? end
+                                 : std::next(chunk_begin, chunk_size);
 
             threads.emplace_back([=, &func, &completionLatch,
                                   stopToken = stopSource.get_token()]() {
-                // 如果请求停止，则提前返回
                 if (stopToken.stop_requested())
                     return;
 
                 try {
-                    // 尝试在特定平台上优化线程性能
-                    ThreadConfig::setThreadAffinity(
-                        i % std::thread::hardware_concurrency());
-
                     std::for_each(chunk_begin, chunk_end, func);
                 } catch (...) {
-                    // 如果一个线程失败，通知其他线程停止
                     stopSource.request_stop();
                 }
                 completionLatch.count_down();
             });
 
             chunk_begin = chunk_end;
+            if (chunk_begin == end)
+                break;
         }
 
-        // 在当前线程处理最后一个分块
-        try {
-            std::for_each(chunk_begin, end, func);
-        } catch (...) {
-            stopSource.request_stop();
-            throw;  // 重新抛出异常
-        }
-
-        // 等待所有线程完成
         completionLatch.wait();
-
-        // 不需要显式join，jthread会在析构时自动join
     }
 
     /**
@@ -437,43 +421,7 @@ public:
             Function, typename std::iterator_traits<Iterator>::value_type>
     static void for_each(Iterator begin, Iterator end, Function func,
                          size_t numThreads = 0) {
-        if (numThreads == 0) {
-            numThreads = std::thread::hardware_concurrency();
-        }
-
-        const auto range_size = std::distance(begin, end);
-        if (range_size == 0)
-            return;
-
-        if (range_size <= numThreads || numThreads == 1) {
-            // For small ranges, just use std::for_each
-            std::for_each(begin, end, func);
-            return;
-        }
-
-        std::vector<std::future<void>> futures;
-        futures.reserve(numThreads);
-
-        const auto chunk_size = range_size / numThreads;
-        auto chunk_begin = begin;
-
-        for (size_t i = 0; i < numThreads - 1; ++i) {
-            auto chunk_end = std::next(chunk_begin, chunk_size);
-
-            futures.emplace_back(std::async(std::launch::async, [=, &func] {
-                std::for_each(chunk_begin, chunk_end, func);
-            }));
-
-            chunk_begin = chunk_end;
-        }
-
-        // Process final chunk in this thread
-        std::for_each(chunk_begin, end, func);
-
-        // Wait for all other chunks
-        for (auto& future : futures) {
-            future.wait();
-        }
+        for_each_jthread(begin, end, std::move(func), numThreads);
     }
 
     /**
@@ -507,39 +455,37 @@ public:
 
         std::vector<ResultType> results(range_size);
 
-        if (range_size <= numThreads || numThreads == 1) {
-            // For small ranges, just process sequentially
+        if (range_size < numThreads * 4 || numThreads == 1) {
             std::transform(begin, end, results.begin(), func);
             return results;
         }
 
-        std::vector<std::future<void>> futures;
-        futures.reserve(numThreads);
+        std::vector<std::jthread> threads;
+        threads.reserve(numThreads);
+        std::latch completion_latch(numThreads);
 
-        const auto chunk_size = range_size / numThreads;
+        const auto chunk_size = (range_size + numThreads - 1) / numThreads;
         auto chunk_begin = begin;
-        auto result_begin = results.begin();
+        size_t start_offset = 0;
 
-        for (size_t i = 0; i < numThreads - 1; ++i) {
-            auto chunk_end = std::next(chunk_begin, chunk_size);
-            auto result_end = std::next(result_begin, chunk_size);
+        for (size_t i = 0; i < numThreads; ++i) {
+            auto chunk_end = (i == numThreads - 1)
+                                 ? end
+                                 : std::next(chunk_begin, chunk_size);
 
-            futures.emplace_back(std::async(std::launch::async, [=, &func] {
-                std::transform(chunk_begin, chunk_end, result_begin, func);
-            }));
+            threads.emplace_back([&, chunk_begin, chunk_end, start_offset] {
+                std::transform(chunk_begin, chunk_end,
+                               results.begin() + start_offset, func);
+                completion_latch.count_down();
+            });
 
+            start_offset += std::distance(chunk_begin, chunk_end);
             chunk_begin = chunk_end;
-            result_begin = result_end;
+            if (chunk_begin == end)
+                break;
         }
 
-        // Process final chunk in this thread
-        std::transform(chunk_begin, end, result_begin, func);
-
-        // Wait for all other chunks
-        for (auto& future : futures) {
-            future.wait();
-        }
-
+        completion_latch.wait();
         return results;
     }
 
@@ -569,38 +515,42 @@ public:
         if (range_size == 0)
             return init;
 
-        if (range_size <= numThreads || numThreads == 1) {
-            // For small ranges, just process sequentially
+        if (range_size < numThreads * 4 || numThreads == 1) {
             return std::accumulate(begin, end, init, binary_op);
         }
 
-        std::vector<std::future<T>> futures;
-        futures.reserve(numThreads);
+        std::vector<T> partial_results(numThreads);
+        std::vector<std::jthread> threads;
+        threads.reserve(numThreads);
+        std::latch completion_latch(numThreads);
 
-        const auto chunk_size = range_size / numThreads;
+        const auto chunk_size = (range_size + numThreads - 1) / numThreads;
         auto chunk_begin = begin;
 
-        for (size_t i = 0; i < numThreads - 1; ++i) {
-            auto chunk_end = std::next(chunk_begin, chunk_size);
+        for (size_t i = 0; i < numThreads; ++i) {
+            auto chunk_end = (i == numThreads - 1)
+                                 ? end
+                                 : std::next(chunk_begin, chunk_size);
 
-            futures.emplace_back(std::async(std::launch::async, [=,
-                                                                 &binary_op] {
-                return std::accumulate(chunk_begin, chunk_end, T{}, binary_op);
-            }));
+            threads.emplace_back([&, chunk_begin, chunk_end, i] {
+                partial_results[i] =
+                    std::accumulate(chunk_begin, chunk_end, T{}, binary_op);
+                completion_latch.count_down();
+            });
 
             chunk_begin = chunk_end;
+            if (chunk_begin == end)
+                break;
         }
 
-        // Process final chunk in this thread
-        T result = std::accumulate(chunk_begin, end, T{}, binary_op);
+        completion_latch.wait();
 
-        // Combine all results
-        for (auto& future : futures) {
-            result = binary_op(result, future.get());
+        T final_result = init;
+        for (const auto& partial : partial_results) {
+            final_result = binary_op(final_result, partial);
         }
 
-        // Combine with initial value
-        return binary_op(init, result);
+        return final_result;
     }
 
     /**
@@ -620,50 +570,12 @@ public:
                                                RandomIt>::value_type>
     static RandomIt partition(RandomIt begin, RandomIt end, Predicate pred,
                               size_t numThreads = 0) {
-        if (numThreads == 0) {
-            numThreads = std::thread::hardware_concurrency();
-        }
-
-        const auto range_size = std::distance(begin, end);
-        if (range_size <= 1)
-            return end;
-
-        if (range_size <= numThreads * 8 || numThreads == 1) {
-            // For small ranges, just use standard partition
+        try {
+            return std::partition(std::execution::par, begin, end, pred);
+        } catch (const std::exception&) {
+            // Fallback to sequential version if parallel execution fails
             return std::partition(begin, end, pred);
         }
-
-        // Determine which elements satisfy the predicate in parallel
-        std::vector<bool> satisfies(range_size);
-        for_each(
-            begin, end,
-            [&satisfies, &pred, begin](const auto& item) {
-                auto idx = std::distance(begin, &item);
-                satisfies[idx] = pred(item);
-            },
-            numThreads);
-
-        // Count true values to determine partition point
-        size_t true_count =
-            std::count(satisfies.begin(), satisfies.end(), true);
-
-        // Create a copy of the range
-        std::vector<typename std::iterator_traits<RandomIt>::value_type> temp(
-            begin, end);
-
-        // Place elements in the correct position
-        size_t true_idx = 0;
-        size_t false_idx = true_count;
-
-        for (size_t i = 0; i < satisfies.size(); ++i) {
-            if (satisfies[i]) {
-                *(begin + true_idx++) = std::move(temp[i]);
-            } else {
-                *(begin + false_idx++) = std::move(temp[i]);
-            }
-        }
-
-        return begin + true_count;
     }
 
     /**
@@ -693,63 +605,46 @@ public:
         if (range_size == 0)
             return {};
 
-        if (range_size <= numThreads * 4 || numThreads == 1) {
-            // For small ranges, just filter sequentially
+        if (range_size < numThreads * 4 || numThreads == 1) {
             std::vector<ValueType> result;
-            for (auto it = begin; it != end; ++it) {
-                if (pred(*it)) {
-                    result.push_back(*it);
-                }
-            }
+            std::copy_if(begin, end, std::back_inserter(result), pred);
             return result;
         }
 
-        // Create vectors for each thread
         std::vector<std::vector<ValueType>> thread_results(numThreads);
+        std::vector<std::jthread> threads;
+        threads.reserve(numThreads);
+        std::latch completion_latch(numThreads);
 
-        // Process chunks in parallel
-        std::vector<std::future<void>> futures;
-        futures.reserve(numThreads);
-
-        const auto chunk_size = range_size / numThreads;
+        const auto chunk_size = (range_size + numThreads - 1) / numThreads;
         auto chunk_begin = begin;
 
-        for (size_t i = 0; i < numThreads - 1; ++i) {
-            auto chunk_end = std::next(chunk_begin, chunk_size);
+        for (size_t i = 0; i < numThreads; ++i) {
+            auto chunk_end = (i == numThreads - 1)
+                                 ? end
+                                 : std::next(chunk_begin, chunk_size);
 
-            futures.emplace_back(
-                std::async(std::launch::async, [=, &pred, &thread_results] {
-                    auto& result = thread_results[i];
-                    for (auto it = chunk_begin; it != chunk_end; ++it) {
-                        if (pred(*it)) {
-                            result.push_back(*it);
-                        }
+            threads.emplace_back([&, chunk_begin, chunk_end, i] {
+                for (auto it = chunk_begin; it != chunk_end; ++it) {
+                    if (pred(*it)) {
+                        thread_results[i].push_back(*it);
                     }
-                }));
+                }
+                completion_latch.count_down();
+            });
 
             chunk_begin = chunk_end;
+            if (chunk_begin == end)
+                break;
         }
 
-        // Process final chunk in this thread
-        auto& last_result = thread_results[numThreads - 1];
-        for (auto it = chunk_begin; it != end; ++it) {
-            if (pred(*it)) {
-                last_result.push_back(*it);
-            }
-        }
+        completion_latch.wait();
 
-        // Wait for all other chunks
-        for (auto& future : futures) {
-            future.wait();
-        }
-
-        // Combine results
         std::vector<ValueType> result;
         size_t total_size = 0;
         for (const auto& vec : thread_results) {
             total_size += vec.size();
         }
-
         result.reserve(total_size);
         for (auto& vec : thread_results) {
             result.insert(result.end(), std::make_move_iterator(vec.begin()),
@@ -894,21 +789,25 @@ public:
             numThreads = std::thread::hardware_concurrency();
         }
 
-        // 使用 ranges 将范围转换为向量
-        auto data = std::ranges::to<std::vector>(range);
+        // Manually convert range to vector instead of using std::ranges::to
+        std::vector<ValueType> data;
+        if constexpr (std::ranges::sized_range<Range>) {
+            data.reserve(std::ranges::size(range));
+        }
+        std::ranges::copy(range, std::back_inserter(data));
 
         if (data.empty())
             return {};
 
         if (data.size() <= numThreads * 4 || numThreads == 1) {
-            // 小范围直接使用 ranges 过滤
-            auto filtered = data | std::views::filter(pred);
-            return std::ranges::to<std::vector>(filtered);
+            // Manually filter for small ranges
+            std::vector<ValueType> result;
+            std::copy_if(data.begin(), data.end(), std::back_inserter(result),
+                         pred);
+            return result;
         }
 
-        // 为每个线程创建结果向量
         std::vector<std::vector<ValueType>> thread_results(numThreads);
-
         std::vector<std::jthread> threads;
         threads.reserve(numThreads - 1);
 

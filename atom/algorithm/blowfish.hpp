@@ -4,6 +4,7 @@
 #include <array>
 #include <span>
 #include <string_view>
+#include <mutex>
 
 #include <spdlog/spdlog.h>
 #include "atom/algorithm/rust_numeric.hpp"
@@ -39,6 +40,7 @@ private:
     std::array<u32, P_ARRAY_SIZE> P_;  ///< P-array used in the algorithm.
     std::array<std::array<u32, S_BOX_SIZE>, 4>
         S_;  ///< S-boxes used in the algorithm.
+    mutable std::mutex state_mutex_;  ///< Mutex for thread-safe access.
 
     /**
      * @brief The F function used in the Blowfish algorithm.

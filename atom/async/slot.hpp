@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <concepts>
-#include <coroutine>
 #include <exception>
 #include <execution>
 #include <functional>
@@ -12,6 +11,7 @@
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
+#include <stdexcept>
 #include <vector>
 
 namespace atom::async {
@@ -33,7 +33,7 @@ concept SlotInvocable = std::invocable<T, Args...>;
 
 /**
  * @brief A signal class that allows connecting, disconnecting, and emitting
- * slots.
+ * slots. Uses a single mutex for thread safety.
  *
  * @tparam Args The argument types for the slots.
  */
@@ -80,11 +80,19 @@ public:
      * @brief Emit the signal, calling all connected slots.
      *
      * @param args The arguments to pass to the slots.
+     * @throws SlotEmissionError if any slot execution fails
      */
     void emit(Args... args) {
-        try {
+        // Copy slots under lock to allow concurrent connect/disconnect during
+        // emission
+        std::vector<SlotType> slots_copy;
+        {
             std::lock_guard lock(mutex_);
-            for (const auto& slot : slots_) {
+            slots_copy = slots_;
+        }
+
+        try {
+            for (const auto& slot : slots_copy) {
                 if (slot) {
                     slot(args...);
                 }
@@ -129,7 +137,8 @@ private:
 };
 
 /**
- * @brief A signal class that allows asynchronous slot execution.
+ * @brief A signal class that allows asynchronous slot execution using
+ * std::async. Emission is non-blocking, returning futures for each slot.
  *
  * @tparam Args The argument types for the slots.
  */
@@ -174,48 +183,42 @@ public:
 
     /**
      * @brief Emit the signal asynchronously, calling all connected slots.
+     * Returns a vector of futures, allowing the caller to wait for specific
+     * slots or all of them later.
      *
      * @param args The arguments to pass to the slots.
-     * @throws SlotEmissionError if any asynchronous execution fails
+     * @return std::vector<std::future<void>> A vector of futures, one for each
+     * launched slot task.
      */
-    void emit(Args... args) {
-        std::vector<std::future<void>> futures;
+    [[nodiscard]] std::vector<std::future<void>> emit(Args... args) {
+        std::vector<SlotType> slots_copy;
         {
             std::lock_guard lock(mutex_);
-            futures.reserve(slots_.size());
-            for (const auto& slot : slots_) {
-                if (slot) {
-                    futures.push_back(
-                        std::async(std::launch::async, [slot, args...]() {
-                            try {
-                                slot(args...);
-                            } catch (const std::exception& e) {
-                                throw SlotEmissionError(
-                                    std::string(
-                                        "Async slot execution failed: ") +
-                                    e.what());
-                            }
-                        }));
-                }
-            }
+            slots_copy = slots_;
         }
 
-        // Wait for all futures to complete
-        for (auto& future : futures) {
-            try {
-                future.get();
-            } catch (const std::exception& e) {
-                throw SlotEmissionError(
-                    std::string("Async slot execution failed: ") + e.what());
+        std::vector<std::future<void>> futures;
+        futures.reserve(slots_copy.size());
+        for (const auto& slot : slots_copy) {
+            if (slot) {
+                futures.push_back(
+                    std::async(std::launch::async, [slot, args...]() {
+                        try {
+                            slot(args...);
+                        } catch (const std::exception& e) {
+                            // Log or handle exception within the async task
+                            // Re-throwing here won't be caught by the emitter
+                            // unless future.get() is called.
+                            // For simplicity, we rethrow so future.get() can
+                            // propagate it.
+                            throw SlotEmissionError(
+                                std::string("Async slot execution failed: ") +
+                                e.what());
+                        }
+                    }));
             }
         }
-    }
-
-    /**
-     * @brief Wait for all slots to finish execution.
-     */
-    void waitForCompletion() noexcept {
-        // Purposefully empty - futures are waited for in emit
+        return futures;  // Return futures immediately, do not block
     }
 
     /**
@@ -232,7 +235,8 @@ private:
 };
 
 /**
- * @brief A signal class that allows automatic disconnection of slots.
+ * @brief A signal class that allows automatic disconnection of slots using
+ * unique IDs.
  *
  * @tparam Args The argument types for the slots.
  */
@@ -278,9 +282,16 @@ public:
      * @throws SlotEmissionError if any slot execution fails
      */
     void emit(Args... args) {
-        try {
+        // Copy slots under lock to allow concurrent connect/disconnect during
+        // emission
+        std::map<ConnectionId, SlotType> slots_copy;
+        {
             std::lock_guard lock(mutex_);
-            for (const auto& [id, slot] : slots_) {
+            slots_copy = slots_;
+        }
+
+        try {
+            for (const auto& [id, slot] : slots_copy) {
                 if (slot) {
                     slot(args...);
                 }
@@ -377,12 +388,15 @@ public:
     void emit(Args... args) {
         try {
             // Process local slots
+            std::vector<SlotType> slots_copy;
             {
                 std::lock_guard lock(mutex_);
-                for (const auto& slot : slots_) {
-                    if (slot) {
-                        slot(args...);
-                    }
+                slots_copy = slots_;
+            }
+
+            for (const auto& slot : slots_copy) {
+                if (slot) {
+                    slot(args...);
                 }
             }
 
@@ -390,16 +404,16 @@ public:
             std::vector<SignalPtr> validChains;
             {
                 std::lock_guard lock(mutex_);
-                validChains.reserve(chains_.size());
-                for (auto it = chains_.begin(); it != chains_.end();) {
-                    if (auto signal = it->lock()) {
-                        validChains.push_back(signal);
-                        ++it;
-                    } else {
-                        // Remove expired weak pointers
-                        it = chains_.erase(it);
-                    }
-                }
+                // Use erase-remove idiom with weak_ptr lock check
+                auto it = std::remove_if(chains_.begin(), chains_.end(),
+                                         [&](const WeakSignalPtr& wp) {
+                                             if (auto signal = wp.lock()) {
+                                                 validChains.push_back(signal);
+                                                 return false;  // Keep valid
+                                             }
+                                             return true;  // Erase expired
+                                         });
+                chains_.erase(it, chains_.end());
             }
 
             // Emit on valid chains
@@ -429,7 +443,7 @@ private:
 
 /**
  * @brief A template for signals with advanced thread-safety for readers and
- * writers.
+ * writers using std::shared_mutex and parallel execution.
  *
  * @tparam Args The argument types for the slots.
  */
@@ -473,22 +487,21 @@ public:
     }
 
     /**
-     * @brief Emit the signal using a strand execution policy for parallel
-     * execution.
+     * @brief Emit the signal using parallel execution for slots.
      *
      * @param args The arguments to pass to the slots.
      * @throws SlotEmissionError if any slot execution fails
      */
     void emit(Args... args) {
-        try {
-            std::vector<SlotType> slots_copy;
-            {
-                std::shared_lock lock(mutex_);  // Read-only lock for copying
-                slots_copy = slots_;
-            }
+        std::vector<SlotType> slots_copy;
+        {
+            std::shared_lock lock(mutex_);  // Read-only lock for copying
+            slots_copy = slots_;
+        }
 
+        try {
             // Use C++17 parallel execution if there are enough slots
-            if (slots_copy.size() > 4) {
+            if (slots_copy.size() > 4) {  // Heuristic threshold
                 std::for_each(std::execution::par_unseq, slots_copy.begin(),
                               slots_copy.end(),
                               [&args...](const SlotType& slot) {
@@ -530,8 +543,8 @@ public:
 
 private:
     std::vector<SlotType> slots_;
-    mutable std::shared_mutex
-        mutex_;  // Allows multiple readers or single writer
+    mutable std::shared_mutex  // Allows multiple readers or single writer
+        mutex_;
 };
 
 /**
@@ -601,19 +614,22 @@ public:
      * @throws SlotEmissionError if any slot execution fails
      */
     [[nodiscard]] bool emit(Args... args) {
-        try {
+        std::vector<SlotType> slots_copy;
+        {
             std::lock_guard lock(mutex_);
             if (callCount_ >= maxCalls_) {
                 return false;
             }
+            slots_copy = slots_;
+            ++callCount_;
+        }
 
-            for (const auto& slot : slots_) {
+        try {
+            for (const auto& slot : slots_copy) {
                 if (slot) {
                     slot(args...);
                 }
             }
-
-            ++callCount_;
             return true;
         } catch (const std::exception& e) {
             throw SlotEmissionError(
@@ -657,123 +673,8 @@ private:
 };
 
 /**
- * @brief A signal class that uses C++20 coroutines for asynchronous slot
- * execution
- *
- * @tparam Args The argument types for the slots
- */
-template <typename... Args>
-class CoroutineSignal {
-public:
-    using SlotType = std::function<void(Args...)>;
-
-    // Coroutine support structure
-    struct EmitTask {
-        struct promise_type {
-            EmitTask get_return_object() {
-                return {
-                    std::coroutine_handle<promise_type>::from_promise(*this)};
-            }
-            std::suspend_never initial_suspend() noexcept { return {}; }
-            std::suspend_never final_suspend() noexcept { return {}; }
-            void return_void() noexcept {}
-            void unhandled_exception() {
-                exception_ = std::current_exception();
-            }
-
-            std::exception_ptr exception_;
-        };
-
-        std::coroutine_handle<promise_type> handle;
-
-        EmitTask(std::coroutine_handle<promise_type> h) : handle(h) {}
-        ~EmitTask() {
-            if (handle) {
-                handle.destroy();
-            }
-        }
-    };
-
-    /**
-     * @brief Connect a slot to the signal.
-     *
-     * @param slot The slot to connect.
-     * @throws SlotConnectionError if the slot is invalid
-     */
-    void connect(SlotType slot) noexcept(false) {
-        if (!slot) {
-            throw SlotConnectionError("Cannot connect invalid slot");
-        }
-
-        std::lock_guard lock(mutex_);
-        slots_.push_back(std::move(slot));
-    }
-
-    /**
-     * @brief Disconnect a slot from the signal.
-     *
-     * @param slot The slot to disconnect.
-     */
-    void disconnect(const SlotType& slot) noexcept {
-        if (!slot) {
-            return;
-        }
-
-        std::lock_guard lock(mutex_);
-        slots_.erase(std::remove_if(slots_.begin(), slots_.end(),
-                                    [&](const SlotType& s) {
-                                        return s.target_type() ==
-                                               slot.target_type();
-                                    }),
-                     slots_.end());
-    }
-
-    /**
-     * @brief Emit the signal asynchronously using C++20 coroutines
-     *
-     * @param args The arguments to pass to the slots
-     * @return EmitTask Coroutine task that completes when all slots are
-     * executed
-     */
-    [[nodiscard]] EmitTask emit(Args... args) {
-        std::vector<SlotType> slots_copy;
-        {
-            std::lock_guard lock(mutex_);
-            slots_copy = slots_;
-        }
-
-        for (const auto& slot : slots_copy) {
-            if (slot) {
-                // 修复：避免在 try-catch 块中使用 co_yield
-                bool had_exception = false;
-                std::exception_ptr eptr;
-
-                try {
-                    slot(args...);
-                } catch (...) {
-                    had_exception = true;
-                    eptr = std::current_exception();
-                }
-
-                // 在 try-catch 块外处理异常
-                if (had_exception && eptr) {
-                    // 设置协程的异常状态
-                    std::rethrow_exception(eptr);
-                }
-
-                // Yield to allow other coroutines to execute
-                co_await std::suspend_always{};
-            }
-        }
-    }
-
-private:
-    std::vector<SlotType> slots_;
-    mutable std::mutex mutex_;
-};
-
-/**
  * @brief A signal class that uses shared_ptr for scoped slot management.
+ * Slots are automatically disconnected when the shared_ptr is released.
  *
  * @tparam Args The argument types for the slots.
  */
@@ -787,11 +688,12 @@ public:
      * @brief Connect a slot to the signal using a shared pointer.
      *
      * @param slotPtr The shared pointer to the slot to connect.
-     * @throws SlotConnectionError if the slot pointer is null
+     * @throws SlotConnectionError if the slot pointer is null or contains an
+     * invalid function
      */
     void connect(SlotPtr slotPtr) noexcept(false) {
         if (!slotPtr || !(*slotPtr)) {
-            throw SlotConnectionError("Cannot connect null slot");
+            throw SlotConnectionError("Cannot connect null or invalid slot");
         }
 
         std::lock_guard lock(mutex_);
@@ -818,21 +720,26 @@ public:
     }
 
     /**
-     * @brief Emit the signal, calling all connected slots.
+     * @brief Emit the signal, calling all connected slots. Invalid (expired)
+     * slots are removed during emission.
      *
      * @param args The arguments to pass to the slots.
      * @throws SlotEmissionError if any slot execution fails
      */
     void emit(Args... args) {
-        try {
+        std::vector<SlotPtr> slots_copy;
+        {
             std::lock_guard lock(mutex_);
-            // 修复：使用 std::erase_if 代替范围和spans，避免引入ranges头文件
-            auto it = std::remove_if(slots_.begin(), slots_.end(),
-                                     [](const auto& slot) { return !slot; });
-            slots_.erase(it, slots_.end());
+            // Remove expired slots using C++20 erase_if
+            std::erase_if(slots_, [](const auto& slot) { return !slot; });
+            slots_copy = slots_;
+        }
 
-            for (const auto& slot : slots_) {
-                if (slot) {
+        try {
+            for (const auto& slot : slots_copy) {
+                // Check again in case a slot became invalid between copy and
+                // call
+                if (slot && (*slot)) {
                     (*slot)(args...);
                 }
             }
@@ -857,6 +764,7 @@ public:
      */
     [[nodiscard]] size_t size() const noexcept {
         std::lock_guard lock(mutex_);
+        // Count valid slots
         return std::count_if(
             slots_.begin(), slots_.end(),
             [](const auto& slot) { return static_cast<bool>(slot); });

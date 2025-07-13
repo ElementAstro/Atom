@@ -170,7 +170,7 @@ public:
 private:
     i32 width_;
     i32 height_;
-    std::vector<bool>
+    std::vector<u8>
         obstacles_;  // Can be replaced with terrain type matrix in the future
     std::vector<TerrainType> terrain_;  // Terrain types
 };

@@ -102,7 +102,7 @@ private:
      * @brief Processes a 512-bit block of the input.
      * @param block A span representing the 512-bit block.
      */
-    void processBlock(std::span<const std::byte, 64> block) noexcept;
+    void processBlock(std::span<const std::byte, 64> const block) noexcept;
 
     // Define helper functions as constexpr to support compile-time computation
     static constexpr auto F(u32 x, u32 y, u32 z) noexcept -> u32;

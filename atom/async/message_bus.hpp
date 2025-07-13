@@ -19,6 +19,7 @@ Description: Main Message Bus with Asio support and additional features
 #include <any>     // For std::any, std::any_cast, std::bad_any_cast
 #include <chrono>  // For std::chrono
 #include <concepts>
+// #include <deque> // Not directly used
 #include <exception>
 #include <functional>
 #include <memory>
@@ -42,7 +43,7 @@ Description: Main Message Bus with Asio support and additional features
 #endif
 
 #if __cpp_impl_coroutine >= 201902L
-#include <coroutine>
+// #include <coroutine> // Not directly used
 #define ATOM_COROUTINE_SUPPORT
 #endif
 
@@ -1117,8 +1118,7 @@ public:
 #ifdef ATOM_USE_LOCKFREE_QUEUE
         // pendingMessages_.empty() is usually available, but size might not be
         // cheap/exact. For boost::lockfree::queue, there's no direct size(). We
-        // can't get an exact size easily. We can only check if it's empty or
-        // try to count by popping, which is not suitable here. So, we'll omit
+        // can't get an exact size easily. So, we'll omit
         // pendingQueueSizeApprox or set to 0 if not available.
         // stats.pendingQueueSizeApprox = pendingMessages_.read_available(); //
         // If spsc_queue or similar with read_available
@@ -1281,26 +1281,18 @@ private:
     }
 
     /**
-     * @brief Extracts the namespace from the message name.
-     * @param name_sv The message name.
-     * @return The namespace part of the name.
+     * @brief Extracts the namespace from a message name.
+     * A namespace is considered the part of the string before the first dot.
+     * If no dot is present, the entire string is considered the namespace.
+     * @param name The full message name.
+     * @return The extracted namespace.
      */
-    [[nodiscard]] std::string extractNamespace(
-        std::string_view name_sv) const noexcept {
-        auto pos = name_sv.find('.');
-        if (pos != std::string_view::npos) {
-            return std::string(name_sv.substr(0, pos));
+    [[nodiscard]] std::string extractNamespace(const std::string& name) const {
+        size_t dot_pos = name.find('.');
+        if (dot_pos != std::string::npos) {
+            return name.substr(0, dot_pos);
         }
-        // If no '.', the name itself can be considered a "namespace" or root
-        // level. For consistency, if we always want a distinct namespace part,
-        // this might return empty or the name itself. Current logic: "foo.bar"
-        // -> "foo"; "foo" -> "foo". If "foo" should not be a namespace for
-        // itself, then: return (pos != std::string_view::npos) ?
-        // std::string(name_sv.substr(0, pos)) : "";
-        return std::string(
-            name_sv);  // Treat full name as namespace if no dot, or just the
-                       // part before first dot. The original code returns
-                       // std::string(name) if no dot. Let's keep it.
+        return name;  // No dot, the whole name is the namespace
     }
 
 #ifdef ATOM_USE_LOCKFREE_QUEUE

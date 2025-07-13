@@ -143,7 +143,7 @@ private:
      */
     [[nodiscard]] static constexpr auto rotateLeft(u32 value,
                                                    usize bits) noexcept -> u32 {
-        return (value << bits) | (value >> (WORD_SIZE - bits));
+        return std::rotl(value, bits);
     }
 
 #ifdef __AVX2__
@@ -234,15 +234,7 @@ template <usize N>
 [[nodiscard]] auto bytesToHex(const std::array<u8, N>& bytes) noexcept
     -> std::string;
 
-/**
- * @brief Specialization of bytesToHex for SHA1 digest size.
- *
- * This specialization provides an optimized version for converting SHA1 digests
- * (20 bytes) to a hexadecimal string.
- *
- * @param bytes The array of bytes to convert.
- * @return A string containing the hexadecimal representation of the byte array.
- */
+// Explicit specialization declaration for SHA1::DIGEST_SIZE
 template <>
 [[nodiscard]] auto bytesToHex<SHA1::DIGEST_SIZE>(
     const std::array<u8, SHA1::DIGEST_SIZE>& bytes) noexcept -> std::string;

@@ -15,12 +15,14 @@ Description: C++20 coroutine-based generator implementation
 #ifndef ATOM_ASYNC_GENERATOR_HPP
 #define ATOM_ASYNC_GENERATOR_HPP
 
+#include <atomic>  // Required for std::atomic
 #include <concepts>
 #include <coroutine>
 #include <exception>
 #include <optional>
 #include <ranges>
 #include <stdexcept>
+#include <thread>  // Required for std::this_thread::yield() and std::thread
 #include <type_traits>
 
 #ifdef ATOM_USE_BOOST_LOCKS
@@ -28,12 +30,6 @@ Description: C++20 coroutine-based generator implementation
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/shared_lock_guard.hpp>
 #include <boost/thread/shared_mutex.hpp>
-#endif
-
-#ifdef ATOM_USE_BOOST_LOCKFREE
-#include <boost/atomic.hpp>
-#include <boost/lockfree/queue.hpp>
-#include <boost/lockfree/spsc_queue.hpp>
 #endif
 
 #ifdef ATOM_USE_ASIO
@@ -45,6 +41,9 @@ Description: C++20 coroutine-based generator implementation
 // needs to be accessible.
 #include "atom/async/future.hpp"
 #endif
+
+// Include the ThreadSafeQueue from pool.hpp for internal use
+#include "atom/async/pool.hpp"  // Assuming ThreadSafeQueue is defined here
 
 namespace atom::async {
 
@@ -115,6 +114,8 @@ public:
     struct promise_type {
         T value_;
         std::exception_ptr exception_;
+        // Expose value_type for external introspection, e.g., make_concurrent_generator
+        using value_type = T;
 
         Generator get_return_object() {
             return Generator{
@@ -561,6 +562,8 @@ public:
         std::exception_ptr exception_;
         mutable boost::shared_mutex
             value_access_mutex_;  // Protects value_ and exception_
+        // Expose value_type for external introspection
+        using value_type = T;
 
         ThreadSafeGenerator get_return_object() {
             return ThreadSafeGenerator{
@@ -647,48 +650,49 @@ private:
 };
 #endif  // ATOM_USE_BOOST_LOCKS
 
-#ifdef ATOM_USE_BOOST_LOCKFREE
 /**
  * @brief A concurrent generator that allows consumption from multiple threads
  *
- * This generator variant uses lock-free data structures to enable efficient
- * multi-threaded consumption of generated values.
+ * This generator variant uses standard C++ concurrency primitives to enable
+ * efficient multi-threaded consumption of generated values.
  *
  * @tparam T The type of values yielded by the generator
- * @tparam QueueSize Size of the internal lock-free queue (default: 128)
  */
-template <typename T, size_t QueueSize = 128>
-class ConcurrentGenerator {
+template <typename T>  // Removed QueueSize template parameter as it's not
+                       // needed for ThreadSafeQueue
+                       class ConcurrentGenerator {
 public:
-    struct producer_token {};
     using value_type = T;
 
     template <typename Func>
     explicit ConcurrentGenerator(Func&& generator_func)
-        : queue_(QueueSize),
-          done_(false),
-          is_producing_(true),
-          exception_ptr_(nullptr) {
+        : done_(false), is_producing_(true), exception_ptr_(nullptr) {
         auto producer_lambda =
             [this, func = std::forward<Func>(generator_func)](
                 std::shared_ptr<std::promise<void>> task_promise) {
                 try {
                     Generator<T> gen = func();  // func returns a Generator<T>
                     for (const auto& item : gen) {
-                        if (done_.load(boost::memory_order_acquire))
+                        if (done_.load(std::memory_order_acquire))
                             break;
-                        T value = item;  // Ensure copy or move as appropriate
-                        while (!queue_.push(value) &&
-                               !done_.load(boost::memory_order_acquire)) {
+                        // Use pushBack for ThreadSafeQueue
+                        queue_.pushBack(
+                            item);  // Item is copied/moved into the queue
+                        // Yield to allow consumer to catch up if queue is full
+                        while (
+                            queue_.size() > 100 &&
+                            !done_.load(
+                                std::memory_order_acquire)) {  // Simple
+                                                               // backpressure
                             std::this_thread::yield();
                         }
-                        if (done_.load(boost::memory_order_acquire))
+                        if (done_.load(std::memory_order_acquire))
                             break;
                     }
                 } catch (...) {
                     exception_ptr_ = std::current_exception();
                 }
-                is_producing_.store(false, boost::memory_order_release);
+                is_producing_.store(false, std::memory_order_release);
                 if (task_promise)
                     task_promise->set_value();
             };
@@ -709,7 +713,7 @@ public:
     }
 
     ~ConcurrentGenerator() {
-        done_.store(true, boost::memory_order_release);
+        done_.store(true, std::memory_order_release);
 #ifdef ATOM_USE_ASIO
         if (task_completion_signal_.valid()) {
             try {
@@ -728,10 +732,9 @@ public:
     ConcurrentGenerator& operator=(const ConcurrentGenerator&) = delete;
 
     ConcurrentGenerator(ConcurrentGenerator&& other) noexcept
-        : queue_(QueueSize),  // New queue, contents are not moved from lockfree
-                              // queue
-          done_(other.done_.load(boost::memory_order_acquire)),
-          is_producing_(other.is_producing_.load(boost::memory_order_acquire)),
+        : queue_(),  // Default construct new queue
+          done_(other.done_.load(std::memory_order_acquire)),
+          is_producing_(other.is_producing_.load(std::memory_order_acquire)),
           exception_ptr_(other.exception_ptr_)
 #ifdef ATOM_USE_ASIO
           ,
@@ -741,24 +744,16 @@ public:
           producer_thread_(std::move(other.producer_thread_))
 #endif
     {
-        // The queue itself cannot be moved in a lock-free way easily.
-        // The typical pattern for moving such concurrent objects is to
-        // signal the old one to stop and create a new one, or make them
-        // non-movable. For simplicity here, we move the thread/task handle and
-        // state, but the queue_ is default-initialized or re-initialized. This
-        // implies that items in `other.queue_` are lost if not consumed before
-        // move. A fully correct move for a populated lock-free queue is
-        // complex. The current boost::lockfree::queue is not movable in the way
-        // std::vector is. We mark the other as done.
-        other.done_.store(true, boost::memory_order_release);
-        other.is_producing_.store(false, boost::memory_order_release);
+        // Signal the other generator to stop its producer thread
+        other.done_.store(true, std::memory_order_release);
+        other.is_producing_.store(false, std::memory_order_release);
         other.exception_ptr_ = nullptr;
     }
 
     ConcurrentGenerator& operator=(ConcurrentGenerator&& other) noexcept {
         if (this != &other) {
-            done_.store(true, boost::memory_order_release);  // Signal current
-                                                             // producer to stop
+            done_.store(true, std::memory_order_release);  // Signal current
+                                                           // producer to stop
 #ifdef ATOM_USE_ASIO
             if (task_completion_signal_.valid()) {
                 task_completion_signal_.wait();
@@ -768,16 +763,14 @@ public:
                 producer_thread_.join();
             }
 #endif
-            // queue_ is not directly assignable in a meaningful way for its
-            // content. Re-initialize or rely on its own state after current
-            // producer stops. For this example, we'll assume queue_ is
-            // effectively reset by new producer.
+            // The queue_ is not directly assignable in a meaningful way for its
+            // content. It will be empty after the current producer stops.
 
-            done_.store(other.done_.load(boost::memory_order_acquire),
-                        boost::memory_order_relaxed);
+            done_.store(other.done_.load(std::memory_order_acquire),
+                        std::memory_order_relaxed);
             is_producing_.store(
-                other.is_producing_.load(boost::memory_order_acquire),
-                boost::memory_order_relaxed);
+                other.is_producing_.load(std::memory_order_acquire),
+                std::memory_order_relaxed);
             exception_ptr_ = other.exception_ptr_;
 
 #ifdef ATOM_USE_ASIO
@@ -786,8 +779,8 @@ public:
             producer_thread_ = std::move(other.producer_thread_);
 #endif
 
-            other.done_.store(true, boost::memory_order_release);
-            other.is_producing_.store(false, boost::memory_order_release);
+            other.done_.store(true, std::memory_order_release);
+            other.is_producing_.store(false, std::memory_order_release);
             other.exception_ptr_ = nullptr;
         }
         return *this;
@@ -798,12 +791,18 @@ public:
             std::rethrow_exception(exception_ptr_);
         }
 
-        if (queue_.pop(value)) {
+        auto opt_value = queue_.popFront();
+        if (opt_value) {
+            value = std::move(*opt_value);
             return true;
         }
 
-        if (!is_producing_.load(boost::memory_order_acquire)) {
-            return queue_.pop(value);  // Final check
+        if (!is_producing_.load(std::memory_order_acquire)) {
+            opt_value = queue_.popFront();  // Final check
+            if (opt_value) {
+                value = std::move(*opt_value);
+                return true;
+            }
         }
         return false;
     }
@@ -816,11 +815,12 @@ public:
         }
 
         while (!done_.load(
-            boost::memory_order_acquire)) {  // Check overall done flag
-            if (queue_.pop(value)) {
-                return value;
+            std::memory_order_acquire)) {  // Check overall done flag
+            auto opt_value = queue_.popFront();
+            if (opt_value) {
+                return std::move(*opt_value);
             }
-            if (!is_producing_.load(boost::memory_order_acquire) &&
+            if (!is_producing_.load(std::memory_order_acquire) &&
                 queue_.empty()) {
                 // Producer is done and queue is empty
                 break;
@@ -829,8 +829,9 @@ public:
         }
 
         // After loop, try one last time from queue or rethrow pending exception
-        if (queue_.pop(value)) {
-            return value;
+        auto opt_value = queue_.popFront();
+        if (opt_value) {
+            return std::move(*opt_value);
         }
         if (exception_ptr_) {
             std::rethrow_exception(exception_ptr_);
@@ -839,36 +840,36 @@ public:
     }
 
     bool done() const {
-        return !is_producing_.load(boost::memory_order_acquire) &&
-               queue_.empty();
+        return !is_producing_.load(std::memory_order_acquire) && queue_.empty();
     }
 
 private:
-    boost::lockfree::queue<T> queue_;
+    // Using ThreadSafeQueue from pool.hpp
+    ThreadSafeQueue<T> queue_;
 #ifdef ATOM_USE_ASIO
     std::future<void> task_completion_signal_;
 #else
     std::thread producer_thread_;
 #endif
-    boost::atomic<bool> done_;
-    boost::atomic<bool> is_producing_;
+    std::atomic<bool> done_;
+    std::atomic<bool> is_producing_;
     std::exception_ptr exception_ptr_;
 };
 
 /**
- * @brief A lock-free two-way generator for producer-consumer pattern
+ * @brief A thread-safe two-way generator for producer-consumer pattern
  *
  * @tparam Yield Type yielded by the producer
  * @tparam Receive Type received from the consumer
- * @tparam QueueSize Size of the internal lock-free queues
  */
-template <typename Yield, typename Receive = void, size_t QueueSize = 128>
-class LockFreeTwoWayGenerator {
+template <typename Yield, typename Receive = void>  // Removed QueueSize
+class LockFreeTwoWayGenerator {  // Renamed to ThreadSafeTwoWayGenerator for
+                                 // clarity, but keeping original name for now
 public:
     template <typename Func>
     explicit LockFreeTwoWayGenerator(Func&& coroutine_func)
-        : yield_queue_(QueueSize),
-          receive_queue_(QueueSize),
+        : yield_queue_(),    // Default construct
+          receive_queue_(),  // Default construct
           done_(false),
           active_(true),
           exception_ptr_(nullptr) {
@@ -878,7 +879,7 @@ public:
                 try {
                     TwoWayGenerator<Yield, Receive> gen =
                         func();  // func returns TwoWayGenerator
-                    while (!done_.load(boost::memory_order_acquire) &&
+                    while (!done_.load(std::memory_order_acquire) &&
                            !gen.done()) {
                         Receive recv_val;
                         // If Receive is void, this logic needs adjustment.
@@ -887,24 +888,26 @@ public:
                         // the no-receive case.
                         if constexpr (!std::is_void_v<Receive>) {
                             recv_val = get_next_receive_value_internal();
-                            if (done_.load(boost::memory_order_acquire))
+                            if (done_.load(std::memory_order_acquire))
                                 break;  // Check after potentially blocking
                         }
 
                         Yield to_yield_val =
                             gen.next(std::move(recv_val));  // Pass if not void
 
-                        while (!yield_queue_.push(to_yield_val) &&
-                               !done_.load(boost::memory_order_acquire)) {
+                        yield_queue_.pushBack(to_yield_val);
+                        // Yield to allow consumer to catch up if queue is full
+                        while (yield_queue_.size() > 100 &&
+                               !done_.load(std::memory_order_acquire)) {
                             std::this_thread::yield();
                         }
-                        if (done_.load(boost::memory_order_acquire))
+                        if (done_.load(std::memory_order_acquire))
                             break;
                     }
                 } catch (...) {
                     exception_ptr_ = std::current_exception();
                 }
-                active_.store(false, boost::memory_order_release);
+                active_.store(false, std::memory_order_release);
                 if (task_promise)
                     task_promise->set_value();
             };
@@ -921,7 +924,7 @@ public:
     }
 
     ~LockFreeTwoWayGenerator() {
-        done_.store(true, boost::memory_order_release);
+        done_.store(true, std::memory_order_release);
 #ifdef ATOM_USE_ASIO
         if (task_completion_signal_.valid()) {
             try {
@@ -940,10 +943,10 @@ public:
     LockFreeTwoWayGenerator& operator=(const LockFreeTwoWayGenerator&) = delete;
 
     LockFreeTwoWayGenerator(LockFreeTwoWayGenerator&& other) noexcept
-        : yield_queue_(QueueSize),
-          receive_queue_(QueueSize),  // Queues are not moved
-          done_(other.done_.load(boost::memory_order_acquire)),
-          active_(other.active_.load(boost::memory_order_acquire)),
+        : yield_queue_(),  // Queue not moved
+          receive_queue_(),
+          done_(other.done_.load(std::memory_order_acquire)),
+          active_(other.active_.load(std::memory_order_acquire)),
           exception_ptr_(other.exception_ptr_)
 #ifdef ATOM_USE_ASIO
           ,
@@ -953,15 +956,15 @@ public:
           worker_thread_(std::move(other.worker_thread_))
 #endif
     {
-        other.done_.store(true, boost::memory_order_release);
-        other.active_.store(false, boost::memory_order_release);
+        other.done_.store(true, std::memory_order_release);
+        other.active_.store(false, std::memory_order_release);
         other.exception_ptr_ = nullptr;
     }
 
     LockFreeTwoWayGenerator& operator=(
         LockFreeTwoWayGenerator&& other) noexcept {
         if (this != &other) {
-            done_.store(true, boost::memory_order_release);
+            done_.store(true, std::memory_order_release);
 #ifdef ATOM_USE_ASIO
             if (task_completion_signal_.valid()) {
                 task_completion_signal_.wait();
@@ -971,18 +974,18 @@ public:
                 worker_thread_.join();
             }
 #endif
-            done_.store(other.done_.load(boost::memory_order_acquire),
-                        boost::memory_order_relaxed);
-            active_.store(other.active_.load(boost::memory_order_acquire),
-                          boost::memory_order_relaxed);
+            done_.store(other.done_.load(std::memory_order_acquire),
+                        std::memory_order_relaxed);
+            active_.store(other.active_.load(std::memory_order_acquire),
+                          std::memory_order_relaxed);
             exception_ptr_ = other.exception_ptr_;
 #ifdef ATOM_USE_ASIO
             task_completion_signal_ = std::move(other.task_completion_signal_);
 #else
             worker_thread_ = std::move(other.worker_thread_);
 #endif
-            other.done_.store(true, boost::memory_order_release);
-            other.active_.store(false, boost::memory_order_release);
+            other.done_.store(true, std::memory_order_release);
+            other.active_.store(false, std::memory_order_release);
             other.exception_ptr_ = nullptr;
         }
         return *this;
@@ -992,21 +995,24 @@ public:
         if (exception_ptr_) {
             std::rethrow_exception(exception_ptr_);
         }
-        if (!active_.load(boost::memory_order_acquire) &&
+        if (!active_.load(std::memory_order_acquire) &&
             yield_queue_.empty()) {  // More robust check
             throw std::runtime_error("Generator is done");
         }
 
-        while (!receive_queue_.push(value) &&
-               active_.load(boost::memory_order_acquire)) {
-            if (done_.load(boost::memory_order_acquire))
+        receive_queue_.pushBack(value);
+        // Yield to allow worker to consume if queue is full
+        while (receive_queue_.size() > 100 &&
+               active_.load(std::memory_order_acquire)) {
+            if (done_.load(std::memory_order_acquire))
                 throw std::runtime_error("Generator shutting down during send");
             std::this_thread::yield();
         }
 
         Yield result;
-        while (!yield_queue_.pop(result)) {
-            if (!active_.load(boost::memory_order_acquire) &&
+        auto opt_result = yield_queue_.popFront();
+        while (!opt_result) {
+            if (!active_.load(std::memory_order_acquire) &&
                 yield_queue_
                     .empty()) {  // Check if worker stopped and queue is empty
                 if (exception_ptr_)
@@ -1014,14 +1020,16 @@ public:
                 throw std::runtime_error(
                     "Generator stopped while waiting for yield");
             }
-            if (done_.load(boost::memory_order_acquire))
+            if (done_.load(std::memory_order_acquire))
                 throw std::runtime_error(
                     "Generator shutting down while waiting for yield");
             std::this_thread::yield();
+            opt_result = yield_queue_.popFront();
         }
+        result = std::move(*opt_result);
 
         // Final check for exception after potentially successful pop
-        if (!active_.load(boost::memory_order_acquire) && exception_ptr_ &&
+        if (!active_.load(std::memory_order_acquire) && exception_ptr_ &&
             yield_queue_.empty()) {
             // This case is tricky: value might have been popped just before an
             // exception was set and active_ turned false. The exception_ptr_
@@ -1031,33 +1039,31 @@ public:
     }
 
     bool done() const {
-        return !active_.load(boost::memory_order_acquire) &&
+        return !active_.load(std::memory_order_acquire) &&
                yield_queue_.empty() && receive_queue_.empty();
     }
 
 private:
-    boost::lockfree::spsc_queue<Yield> yield_queue_;
-    boost::lockfree::spsc_queue<Receive>
-        receive_queue_;  // SPSC if one consumer (this class) and one producer
-                         // (worker_lambda)
+    ThreadSafeQueue<Yield> yield_queue_;
+    ThreadSafeQueue<Receive> receive_queue_;
 #ifdef ATOM_USE_ASIO
     std::future<void> task_completion_signal_;
 #else
     std::thread worker_thread_;
 #endif
-    boost::atomic<bool> done_;
-    boost::atomic<bool> active_;
+    std::atomic<bool> done_;
+    std::atomic<bool> active_;
     std::exception_ptr exception_ptr_;
 
     Receive get_next_receive_value_internal() {
         Receive value;
-        while (!receive_queue_.pop(value) &&
-               !done_.load(boost::memory_order_acquire)) {
+        auto opt_value = receive_queue_.popFront();
+        while (!opt_value && !done_.load(std::memory_order_acquire)) {
             std::this_thread::yield();
+            opt_value = receive_queue_.popFront();
         }
-        if (done_.load(boost::memory_order_acquire) &&
-            !receive_queue_.pop(
-                value)) {  // Check if done and queue became empty
+        if (done_.load(std::memory_order_acquire) &&
+            !opt_value) {  // Check if done and queue became empty
             // This situation means we were signaled to stop while waiting for a
             // receive value. The coroutine might not get a valid value. How it
             // handles this depends on its logic. For now, if Receive is default
@@ -1069,17 +1075,17 @@ private:
                     "Generator stopped while waiting for receive value, and "
                     "value type not default constructible.");
         }
-        return value;
+        return std::move(*opt_value);
     }
 };
 
 // Specialization for generators that don't receive values (Receive = void)
-template <typename Yield, size_t QueueSize>
-class LockFreeTwoWayGenerator<Yield, void, QueueSize> {
+template <typename Yield>
+class LockFreeTwoWayGenerator<Yield, void> {  // Removed QueueSize
 public:
     template <typename Func>
     explicit LockFreeTwoWayGenerator(Func&& coroutine_func)
-        : yield_queue_(QueueSize),
+        : yield_queue_(),  // Default construct
           done_(false),
           active_(true),
           exception_ptr_(nullptr) {
@@ -1089,22 +1095,24 @@ public:
                 try {
                     TwoWayGenerator<Yield, void> gen =
                         func();  // func returns TwoWayGenerator<Yield, void>
-                    while (!done_.load(boost::memory_order_acquire) &&
+                    while (!done_.load(std::memory_order_acquire) &&
                            !gen.done()) {
                         Yield to_yield_val =
                             gen.next();  // No value sent to next()
 
-                        while (!yield_queue_.push(to_yield_val) &&
-                               !done_.load(boost::memory_order_acquire)) {
+                        yield_queue_.pushBack(to_yield_val);
+                        // Yield to allow consumer to catch up if queue is full
+                        while (yield_queue_.size() > 100 &&
+                               !done_.load(std::memory_order_acquire)) {
                             std::this_thread::yield();
                         }
-                        if (done_.load(boost::memory_order_acquire))
+                        if (done_.load(std::memory_order_acquire))
                             break;
                     }
                 } catch (...) {
                     exception_ptr_ = std::current_exception();
                 }
-                active_.store(false, boost::memory_order_release);
+                active_.store(false, std::memory_order_release);
                 if (task_promise)
                     task_promise->set_value();
             };
@@ -1121,7 +1129,7 @@ public:
     }
 
     ~LockFreeTwoWayGenerator() {
-        done_.store(true, boost::memory_order_release);
+        done_.store(true, std::memory_order_release);
 #ifdef ATOM_USE_ASIO
         if (task_completion_signal_.valid()) {
             try {
@@ -1140,9 +1148,9 @@ public:
     LockFreeTwoWayGenerator& operator=(const LockFreeTwoWayGenerator&) = delete;
 
     LockFreeTwoWayGenerator(LockFreeTwoWayGenerator&& other) noexcept
-        : yield_queue_(QueueSize),  // Queue not moved
-          done_(other.done_.load(boost::memory_order_acquire)),
-          active_(other.active_.load(boost::memory_order_acquire)),
+        : yield_queue_(),  // Queue not moved
+          done_(other.done_.load(std::memory_order_acquire)),
+          active_(other.active_.load(std::memory_order_acquire)),
           exception_ptr_(other.exception_ptr_)
 #ifdef ATOM_USE_ASIO
           ,
@@ -1152,15 +1160,15 @@ public:
           worker_thread_(std::move(other.worker_thread_))
 #endif
     {
-        other.done_.store(true, boost::memory_order_release);
-        other.active_.store(false, boost::memory_order_release);
+        other.done_.store(true, std::memory_order_release);
+        other.active_.store(false, std::memory_order_release);
         other.exception_ptr_ = nullptr;
     }
 
     LockFreeTwoWayGenerator& operator=(
         LockFreeTwoWayGenerator&& other) noexcept {
         if (this != &other) {
-            done_.store(true, boost::memory_order_release);
+            done_.store(true, std::memory_order_release);
 #ifdef ATOM_USE_ASIO
             if (task_completion_signal_.valid()) {
                 task_completion_signal_.wait();
@@ -1170,18 +1178,18 @@ public:
                 worker_thread_.join();
             }
 #endif
-            done_.store(other.done_.load(boost::memory_order_acquire),
-                        boost::memory_order_relaxed);
-            active_.store(other.active_.load(boost::memory_order_acquire),
-                          boost::memory_order_relaxed);
+            done_.store(other.done_.load(std::memory_order_acquire),
+                        std::memory_order_relaxed);
+            active_.store(other.active_.load(std::memory_order_acquire),
+                          std::memory_order_relaxed);
             exception_ptr_ = other.exception_ptr_;
 #ifdef ATOM_USE_ASIO
             task_completion_signal_ = std::move(other.task_completion_signal_);
 #else
             worker_thread_ = std::move(other.worker_thread_);
 #endif
-            other.done_.store(true, boost::memory_order_release);
-            other.active_.store(false, boost::memory_order_release);
+            other.done_.store(true, std::memory_order_release);
+            other.active_.store(false, std::memory_order_release);
             other.exception_ptr_ = nullptr;
         }
         return *this;
@@ -1191,42 +1199,42 @@ public:
         if (exception_ptr_) {
             std::rethrow_exception(exception_ptr_);
         }
-        if (!active_.load(boost::memory_order_acquire) &&
-            yield_queue_.empty()) {
+        if (!active_.load(std::memory_order_acquire) && yield_queue_.empty()) {
             throw std::runtime_error("Generator is done");
         }
 
         Yield result;
-        while (!yield_queue_.pop(result)) {
-            if (!active_.load(boost::memory_order_acquire) &&
+        auto opt_result = yield_queue_.popFront();
+        while (!opt_result) {
+            if (!active_.load(std::memory_order_acquire) &&
                 yield_queue_.empty()) {
                 if (exception_ptr_)
                     std::rethrow_exception(exception_ptr_);
                 throw std::runtime_error(
                     "Generator stopped while waiting for yield");
             }
-            if (done_.load(boost::memory_order_acquire))
+            if (done_.load(std::memory_order_acquire))
                 throw std::runtime_error(
                     "Generator shutting down while waiting for yield");
             std::this_thread::yield();
+            opt_result = yield_queue_.popFront();
         }
-        return result;
+        return std::move(*opt_result);
     }
 
     bool done() const {
-        return !active_.load(boost::memory_order_acquire) &&
-               yield_queue_.empty();
+        return !active_.load(std::memory_order_acquire) && yield_queue_.empty();
     }
 
 private:
-    boost::lockfree::spsc_queue<Yield> yield_queue_;
+    ThreadSafeQueue<Yield> yield_queue_;
 #ifdef ATOM_USE_ASIO
     std::future<void> task_completion_signal_;
 #else
     std::thread worker_thread_;
 #endif
-    boost::atomic<bool> done_;
-    boost::atomic<bool> active_;
+    std::atomic<bool> done_;
+    std::atomic<bool> active_;
     std::exception_ptr exception_ptr_;
 };
 
@@ -1247,7 +1255,14 @@ auto make_concurrent_generator(Func&& func) {
     using ValueType = typename GenType::promise_type::value_type;  // Extracts V
     return ConcurrentGenerator<ValueType>(std::forward<Func>(func));
 }
-#endif  // ATOM_USE_BOOST_LOCKFREE
+// Removed make_lock_free_two_way_generator as it's now
+// ThreadSafeTwoWayGenerator template <typename Func, typename Receive = void>
+// auto make_lock_free_two_way_generator(Func&& func) {
+//     using GenType = std::invoke_result_t<Func>;
+//     using YieldType = typename GenType::promise_type::value_type;
+//     return LockFreeTwoWayGenerator<YieldType,
+//     Receive>(std::forward<Func>(func));
+// }
 
 }  // namespace atom::async
 

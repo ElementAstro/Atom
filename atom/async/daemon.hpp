@@ -372,6 +372,9 @@ public:
         return m_pidFilePath;
     }
 
+    // Added for testing purposes to allow setting m_mainId
+    void setMainId(ProcessId id) noexcept { m_mainId = id; }
+
 private:
     ProcessId m_parentId;
     ProcessId m_mainId;

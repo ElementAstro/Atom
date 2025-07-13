@@ -201,30 +201,32 @@ auto xxteaDecryptParallel(const Container &inputData,
                           usize numThreads = 0) -> std::vector<u32>;
 
 /**
- * @brief Implementation detail for XXTEA encryption.
+ * @brief Implementation detail for XXTEA encryption operating on spans.
  *
- * This function performs the actual XXTEA encryption.
+ * This function performs the actual XXTEA encryption on provided spans.
  *
- * @param inputData A span of 32-bit values to encrypt.
+ * @param input A span of 32-bit values to encrypt.
+ * @param output A span where the encrypted 32-bit values will be written. Must
+ * have the same size as input.
  * @param inputKey A span of four 32-bit unsigned integers representing the
  * 128-bit key.
- * @return A vector of encrypted 32-bit values.
  */
-auto xxteaEncryptImpl(std::span<const u32> inputData,
-                      std::span<const u32, 4> inputKey) -> std::vector<u32>;
+auto xxteaEncryptSpan(std::span<const u32> input, std::span<u32> output,
+                      std::span<const u32, 4> inputKey) -> void;
 
 /**
- * @brief Implementation detail for XXTEA decryption.
+ * @brief Implementation detail for XXTEA decryption operating on spans.
  *
- * This function performs the actual XXTEA decryption.
+ * This function performs the actual XXTEA decryption on provided spans.
  *
- * @param inputData A span of 32-bit values to decrypt.
+ * @param input A span of 32-bit values to decrypt.
+ * @param output A span where the decrypted 32-bit values will be written. Must
+ * have the same size as input.
  * @param inputKey A span of four 32-bit unsigned integers representing the
  * 128-bit key.
- * @return A vector of decrypted 32-bit values.
  */
-auto xxteaDecryptImpl(std::span<const u32> inputData,
-                      std::span<const u32, 4> inputKey) -> std::vector<u32>;
+auto xxteaDecryptSpan(std::span<const u32> input, std::span<u32> output,
+                      std::span<const u32, 4> inputKey) -> void;
 
 /**
  * @brief Implementation detail for parallel XXTEA encryption.
@@ -296,8 +298,10 @@ auto toByteArrayImpl(std::span<const u32> data) -> std::vector<u8>;
 template <UInt32Container Container>
 auto xxteaEncrypt(const Container &inputData, std::span<const u32, 4> inputKey)
     -> std::vector<u32> {
-    return xxteaEncryptImpl(
-        std::span<const u32>{inputData.data(), inputData.size()}, inputKey);
+    std::vector<u32> result(inputData.size());
+    xxteaEncryptSpan(std::span<const u32>{inputData.data(), inputData.size()},
+                     result, inputKey);
+    return result;
 }
 
 /**
@@ -313,8 +317,10 @@ auto xxteaEncrypt(const Container &inputData, std::span<const u32, 4> inputKey)
 template <UInt32Container Container>
 auto xxteaDecrypt(const Container &inputData, std::span<const u32, 4> inputKey)
     -> std::vector<u32> {
-    return xxteaDecryptImpl(
-        std::span<const u32>{inputData.data(), inputData.size()}, inputKey);
+    std::vector<u32> result(inputData.size());
+    xxteaDecryptSpan(std::span<const u32>{inputData.data(), inputData.size()},
+                     result, inputKey);
+    return result;
 }
 
 /**

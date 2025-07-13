@@ -5,6 +5,7 @@
 #include <future>
 #include <random>
 #include <thread>
+#include <vector>
 
 #include <spdlog/spdlog.h>
 #include "atom/algorithm/rust_numeric.hpp"
@@ -30,6 +31,30 @@ namespace atom::algorithm {
 // Define default number of threads for compression/decompression
 static usize getDefaultThreadCount() noexcept {
     return std::max(1u, std::thread::hardware_concurrency());
+}
+
+// Helper function to merge two CompressedData vectors
+auto mergeCompressedData(const MatrixCompressor::CompressedData& data1, const MatrixCompressor::CompressedData& data2) -> MatrixCompressor::CompressedData {
+    MatrixCompressor::CompressedData merged_data;
+    merged_data.reserve(data1.size() + data2.size());
+
+    if (data1.empty()) {
+        return data2;
+    } else if (data2.empty()) {
+        return data1;
+    }
+
+    merged_data.insert(merged_data.end(), data1.begin(), data1.end());
+
+    // Merge the last element of data1 with the first element of data2 if they are the same character
+    if (merged_data.back().first == data2.front().first) {
+        merged_data.back().second += data2.front().second;
+        merged_data.insert(merged_data.end(), std::next(data2.begin()), data2.end());
+    } else {
+        merged_data.insert(merged_data.end(), data2.begin(), data2.end());
+    }
+
+    return merged_data;
 }
 
 auto MatrixCompressor::compress(const Matrix& matrix) -> CompressedData {
@@ -94,6 +119,7 @@ auto MatrixCompressor::compressParallel(const Matrix& matrix, i32 thread_count)
         std::vector<std::future<CompressedData>> futures;
         futures.reserve(num_threads);
 
+        // Launch initial compression tasks
         for (usize t = 0; t < num_threads; ++t) {
             usize start_row = t * rows_per_thread;
             usize end_row = (t == num_threads - 1) ? matrix.size()
@@ -128,23 +154,30 @@ auto MatrixCompressor::compressParallel(const Matrix& matrix, i32 thread_count)
                 }));
         }
 
-        CompressedData result;
-        for (auto& future : futures) {
-            auto partial = future.get();
-            if (result.empty()) {
-                result = std::move(partial);
-            } else if (!partial.empty()) {
-                if (result.back().first == partial.front().first) {
-                    result.back().second += partial.front().second;
-                    result.insert(result.end(), std::next(partial.begin()),
-                                  partial.end());
+        // Parallel merging of results
+        while (futures.size() > 1) {
+            std::vector<std::future<CompressedData>> next_futures;
+            for (size_t i = 0; i < futures.size(); i += 2) {
+                if (i + 1 < futures.size()) {
+                    // Merge two results
+                    next_futures.push_back(std::async(std::launch::async, [
+                        &futures, i
+                    ]() {
+                        CompressedData data1 = futures[i].get();
+                        CompressedData data2 = futures[i + 1].get();
+                        return mergeCompressedData(data1, data2);
+                    }));
                 } else {
-                    result.insert(result.end(), partial.begin(), partial.end());
+                    // Move the last result if there's an odd number
+                    next_futures.push_back(std::move(futures[i]));
                 }
             }
+            futures = std::move(next_futures);
         }
 
-        return result;
+        // Get the final result
+        return futures[0].get();
+
     } catch (const std::exception& e) {
         THROW_MATRIX_COMPRESS_EXCEPTION(
             "Error during parallel matrix compression: " +

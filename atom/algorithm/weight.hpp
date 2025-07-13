@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>  // For std::pow
 #include <concepts>
 #include <format>
 #include <functional>
@@ -17,7 +18,7 @@
 #include <vector>
 
 #include "atom/algorithm/rust_numeric.hpp"
-#include "atom/utils/random.hpp"
+#include "atom/utils/random.hpp"  // Assuming this provides a suitable wrapper or can be adapted
 
 #ifdef ATOM_USE_BOOST
 #include <boost/format.hpp>
@@ -75,6 +76,13 @@ public:
          */
         [[nodiscard]] virtual auto clone() const
             -> std::unique_ptr<SelectionStrategy> = 0;
+
+        /**
+         * @brief Update internal state based on changes in the number of
+         * weights
+         * @param new_max_index The new maximum index (size of weights - 1)
+         */
+        virtual void updateMaxIndex(usize new_max_index) {}
     };
 
     /**
@@ -164,40 +172,52 @@ public:
     class RandomSelectionStrategy : public SelectionStrategy {
     private:
 #ifdef ATOM_USE_BOOST
-        mutable utils::Random<boost::random::mt19937,
-                              boost::random::uniform_int_distribution<>>
-            random_index_;
+        mutable boost::random::mt19937 gen_;
+        mutable boost::random::uniform_int_distribution<> random_index_;
 #else
-        mutable utils::Random<std::mt19937, std::uniform_int_distribution<>>
-            random_index_;
+        mutable std::mt19937 gen_;
+        mutable std::uniform_int_distribution<> random_index_;
 #endif
         usize max_index_;
 
     public:
         explicit RandomSelectionStrategy(usize max_index)
-            : random_index_(static_cast<usize>(0),
-                            max_index > 0 ? max_index - 1 : 0),
-              max_index_(max_index) {}
+            : max_index_(max_index) {
+            std::random_device rd;
+            gen_.seed(rd());
+            updateDistribution();
+        }
 
         RandomSelectionStrategy(usize max_index, u32 seed)
-            : random_index_(0, max_index > 0 ? max_index - 1 : 0, seed),
-              max_index_(max_index) {}
+            : gen_(seed), max_index_(max_index) {
+            updateDistribution();
+        }
 
         [[nodiscard]] auto select(std::span<const T> /*cumulative_weights*/,
                                   T /*total_weight*/) const -> usize override {
-            return random_index_();
+            if (max_index_ == 0)
+                return 0;  // Handle empty case
+            return random_index_(gen_);
         }
 
-        void updateMaxIndex(usize new_max_index) {
+        void updateMaxIndex(usize new_max_index) override {
             max_index_ = new_max_index;
-            random_index_ = decltype(random_index_)(
-                static_cast<usize>(0),
-                new_max_index > 0 ? new_max_index - 1 : 0);
+            updateDistribution();
         }
 
         [[nodiscard]] auto clone() const
             -> std::unique_ptr<SelectionStrategy> override {
+            // Note: Cloning a strategy with a mutable RNG might not preserve
+            // the exact sequence of random numbers if the clone is used in
+            // parallel. If deterministic cloning is needed, the RNG state
+            // would need to be copied.
             return std::make_unique<RandomSelectionStrategy>(max_index_);
+        }
+
+    private:
+        void updateDistribution() {
+            random_index_ = decltype(random_index_)(
+                static_cast<usize>(0), max_index_ > 0 ? max_index_ - 1 : 0);
         }
     };
 
@@ -305,18 +325,26 @@ public:
     };
 
     /**
-     * @brief Utility class for batch sampling with replacement
+     * @brief Utility class for batch sampling with replacement and without
+     * replacement
      */
     class WeightedRandomSampler {
     private:
-        std::optional<u32> seed_;
+#ifdef ATOM_USE_BOOST
+        mutable boost::random::mt19937 gen_;
+#else
+        mutable std::mt19937 gen_;
+#endif
 
     public:
-        WeightedRandomSampler() = default;
-        explicit WeightedRandomSampler(u32 seed) : seed_(seed) {}
+        WeightedRandomSampler() {
+            std::random_device rd;
+            gen_.seed(rd());
+        }
+        explicit WeightedRandomSampler(u32 seed) : gen_(seed) {}
 
         /**
-         * @brief Sample n indices according to their weights
+         * @brief Sample n indices according to their weights (with replacement)
          * @param weights The weights for each index
          * @param n Number of samples to draw
          * @return Vector of sampled indices
@@ -334,26 +362,14 @@ public:
             std::vector<usize> results(n);
 
 #ifdef ATOM_USE_BOOST
-            utils::Random<boost::random::mt19937,
-                          boost::random::discrete_distribution<>>
-                random(weights.begin(), weights.end(),
-                       seed_.has_value() ? *seed_ : 0);
-
+            boost::random::discrete_distribution<> dist(weights.begin(),
+                                                        weights.end());
             std::generate(results.begin(), results.end(),
-                          [&]() { return random(); });
+                          [&]() { return dist(gen_); });
 #else
             std::discrete_distribution<> dist(weights.begin(), weights.end());
-            std::mt19937 gen;
-
-            if (seed_.has_value()) {
-                gen.seed(*seed_);
-            } else {
-                std::random_device rd;
-                gen.seed(rd());
-            }
-
             std::generate(results.begin(), results.end(),
-                          [&]() { return dist(gen); });
+                          [&]() { return dist(gen_); });
 #endif
 
             return results;
@@ -383,35 +399,27 @@ public:
                 return {};
             }
 
-            // For small n compared to weights size, use rejection sampling
-            if (n <= weights.size() / 4) {
-                return sampleUniqueRejection(weights, n);
-            } else {
-                // For larger n, use the algorithm based on shuffling
-                return sampleUniqueShuffle(weights, n);
-            }
+            // Use the more efficient shuffle method for weighted unique
+            // sampling
+            return sampleUniqueShuffle(weights, n);
         }
 
     private:
+        // Rejection sampling method (kept for comparison, but shuffle is
+        // generally better for weighted unique)
         [[nodiscard]] auto sampleUniqueRejection(std::span<const T> weights,
                                                  usize n) const
             -> std::vector<usize> {
-            std::vector<usize> indices(weights.size());
-            std::iota(indices.begin(), indices.end(), 0);
-
             std::vector<usize> results;
             results.reserve(n);
 
             std::vector<bool> selected(weights.size(), false);
 
 #ifdef ATOM_USE_BOOST
-            utils::Random<boost::random::mt19937,
-                          boost::random::discrete_distribution<>>
-                random(weights.begin(), weights.end(),
-                       seed_.has_value() ? *seed_ : 0);
-
+            boost::random::discrete_distribution<> dist(weights.begin(),
+                                                        weights.end());
             while (results.size() < n) {
-                usize idx = random();
+                usize idx = dist(gen_);
                 if (!selected[idx]) {
                     selected[idx] = true;
                     results.push_back(idx);
@@ -419,17 +427,8 @@ public:
             }
 #else
             std::discrete_distribution<> dist(weights.begin(), weights.end());
-            std::mt19937 gen;
-
-            if (seed_.has_value()) {
-                gen.seed(*seed_);
-            } else {
-                std::random_device rd;
-                gen.seed(rd());
-            }
-
             while (results.size() < n) {
-                usize idx = dist(gen);
+                usize idx = dist(gen_);
                 if (!selected[idx]) {
                     selected[idx] = true;
                     results.push_back(idx);
@@ -440,64 +439,60 @@ public:
             return results;
         }
 
+        // Optimized shuffle method for weighted unique sampling
         [[nodiscard]] auto sampleUniqueShuffle(std::span<const T> weights,
                                                usize n) const
             -> std::vector<usize> {
-            std::vector<usize> indices(weights.size());
-            std::iota(indices.begin(), indices.end(), 0);
-
-            // Create a vector of pairs (weight, index)
-            std::vector<std::pair<T, usize>> weighted_indices;
+            // Create a vector of pairs (random_value_derived_from_weight,
+            // index)
+            std::vector<std::pair<double, usize>> weighted_indices;
             weighted_indices.reserve(weights.size());
 
+            std::uniform_real_distribution<double> dist(0.0, 1.0);
+
             for (usize i = 0; i < weights.size(); ++i) {
-                weighted_indices.emplace_back(weights[i], i);
+                T weight = weights[i];
+                double random_value;
+                if (weight <= 0) {
+                    // Assign a value that will sort it to the end
+                    random_value = -1.0;  // Or some value guaranteed to be low
+                } else {
+                    // Generate a random value such that higher weights are more
+                    // likely to get a higher value Using log(rand()) / weight
+                    // is a common trick (Gumbel-max related) Or pow(rand(),
+                    // 1/weight) - need to sort descending for this
+                    random_value =
+                        std::pow(dist(gen_), 1.0 / static_cast<double>(weight));
+                }
+                weighted_indices.emplace_back(random_value, i);
             }
 
-            // Generate random values
-#ifdef ATOM_USE_BOOST
-            boost::random::mt19937 gen(
-                seed_.has_value() ? *seed_ : std::random_device{}());
-#else
-            std::mt19937 gen;
-            if (seed_.has_value()) {
-                gen.seed(*seed_);
-            } else {
-                std::random_device rd;
-                gen.seed(rd());
-            }
-#endif
-
-            // Sort by weighted random values
+            // Sort by the calculated random values in descending order
             std::ranges::sort(
-                weighted_indices, [&](const auto& a, const auto& b) {
-                    // Generate a random value weighted by the item's weight
-                    T weight_a = a.first;
-                    T weight_b = b.first;
-
-                    if (weight_a <= 0 && weight_b <= 0)
-                        return false;  // arbitrary order for zero weights
-                    if (weight_a <= 0)
-                        return false;
-                    if (weight_b <= 0)
-                        return true;
-
-                    // Generate random values weighted by the weights
-                    std::uniform_real_distribution<double> dist(0.0, 1.0);
-                    double r_a = std::pow(dist(gen), 1.0 / weight_a);
-                    double r_b = std::pow(dist(gen), 1.0 / weight_b);
-
-                    return r_a > r_b;
-                });
+                weighted_indices,
+                [](const auto& a, const auto& b) { return a.first > b.first; });
 
             // Extract the top n indices
             std::vector<usize> results;
             results.reserve(n);
 
             for (usize i = 0; i < n; ++i) {
+                if (weighted_indices[i].first < 0) {
+                    // Stop if we encounter weights that were zero or negative
+                    // This handles cases where n is larger than the count of
+                    // positive weights
+                    break;
+                }
                 results.push_back(weighted_indices[i].second);
             }
 
+            // If we didn't get enough unique samples because of zero/negative
+            // weights, this indicates an issue or expectation mismatch, but the
+            // current logic correctly returns fewer than n if there aren't
+            // enough valid items. If exactly n unique items with positive
+            // weights are required, additional error handling or logic would be
+            // needed here. For now, we return what we got from the top N
+            // positive-weighted items.
             return results;
         }
     };
@@ -507,13 +502,14 @@ private:
     std::vector<T> cumulative_weights_;
     std::unique_ptr<SelectionStrategy> strategy_;
     mutable std::shared_mutex mutex_;  // For thread safety
-    u32 seed_ = 0;
+    u32 seed_ =
+        0;  // Seed is primarily for the Sampler, not the main strategy RNGs
     bool weights_dirty_ = true;
 
     /**
      * @brief Updates the cumulative weights array
      * @note This function is not thread-safe and should be called with proper
-     * synchronization
+     * synchronization (unique_lock). Assumes weights_ is already validated.
      */
     void updateCumulativeWeights() {
         if (!weights_dirty_)
@@ -536,7 +532,7 @@ private:
     }
 
     /**
-     * @brief Validates that the weights are positive
+     * @brief Validates that the weights are non-negative
      * @throws WeightError if any weight is negative
      */
     void validateWeights() const {
@@ -563,13 +559,18 @@ public:
           strategy_(std::move(custom_strategy)) {
         validateWeights();
         updateCumulativeWeights();
+        // Inform strategy about initial size if it cares (e.g.,
+        // RandomSelectionStrategy)
+        if (strategy_) {
+            strategy_->updateMaxIndex(weights_.size());
+        }
     }
 
     /**
      * @brief Construct a WeightSelector with the given weights, strategy, and
      * seed
      * @param input_weights The initial weights
-     * @param seed Seed for random number generation
+     * @param seed Seed for random number generation (primarily for Sampler)
      * @param custom_strategy Custom selection strategy (defaults to
      * DefaultSelectionStrategy)
      * @throws WeightError If input weights contain negative values
@@ -582,6 +583,11 @@ public:
           seed_(seed) {
         validateWeights();
         updateCumulativeWeights();
+        // Inform strategy about initial size if it cares (e.g.,
+        // RandomSelectionStrategy)
+        if (strategy_) {
+            strategy_->updateMaxIndex(weights_.size());
+        }
     }
 
     /**
@@ -599,9 +605,8 @@ public:
      */
     WeightSelector& operator=(WeightSelector&& other) noexcept {
         if (this != &other) {
-            std::unique_lock lock1(mutex_, std::defer_lock);
-            std::unique_lock lock2(other.mutex_, std::defer_lock);
-            std::lock(lock1, lock2);
+            // Use std::scoped_lock for multiple mutexes in C++17+
+            std::scoped_lock lock(mutex_, other.mutex_);
 
             weights_ = std::move(other.weights_);
             cumulative_weights_ = std::move(other.cumulative_weights_);
@@ -627,9 +632,11 @@ public:
      */
     WeightSelector& operator=(const WeightSelector& other) {
         if (this != &other) {
-            std::unique_lock lock1(mutex_, std::defer_lock);
-            std::shared_lock lock2(other.mutex_, std::defer_lock);
-            std::lock(lock1, lock2);
+            // Use std::scoped_lock for multiple mutexes in C++17+
+            // Note: shared_lock for 'other' is sufficient for reading its state
+            std::unique_lock self_lock(mutex_);
+            std::shared_lock other_lock(other.mutex_);
+            // std::scoped_lock would require both to be unique_lock
 
             weights_ = other.weights_;
             cumulative_weights_ = other.cumulative_weights_;
@@ -647,6 +654,10 @@ public:
     void setSelectionStrategy(std::unique_ptr<SelectionStrategy> new_strategy) {
         std::unique_lock lock(mutex_);
         strategy_ = std::move(new_strategy);
+        // Inform new strategy about current size
+        if (strategy_) {
+            strategy_->updateMaxIndex(weights_.size());
+        }
     }
 
     /**
@@ -661,27 +672,39 @@ public:
             throw WeightError("Cannot select from empty weights");
         }
 
+        // Calculate total weight under shared lock first
         T totalWeight = calculateTotalWeight();
         if (totalWeight <= T{0}) {
             throw WeightError(std::format(
                 "Total weight must be positive (current: {})", totalWeight));
         }
 
+        // If weights are dirty, we need to upgrade to a unique lock to update
+        // cumulative weights.
         if (weights_dirty_) {
-            lock.unlock();
-            std::unique_lock write_lock(mutex_);
+            lock.unlock();                        // Release shared lock
+            std::unique_lock write_lock(mutex_);  // Acquire unique lock
+            // Double-check weights_dirty_ in case another thread updated it
             if (weights_dirty_) {
                 updateCumulativeWeights();
             }
-            write_lock.unlock();
+            // write_lock goes out of scope, releasing unique lock
+        }
+        // Re-acquire shared lock for selection if it was released
+        if (!lock.owns_lock()) {
             lock.lock();
         }
 
+        // Now cumulative_weights_ is up-to-date (or was already)
+        // We need to ensure the strategy's select method is thread-safe if it
+        // uses mutable members (like RNGs). The current strategy
+        // implementations use mutable RNGs but are called under the
+        // WeightSelector's lock, which makes them safe in this context.
         return strategy_->select(cumulative_weights_, totalWeight);
     }
 
     /**
-     * @brief Selects multiple indices based on weights
+     * @brief Selects multiple indices based on weights (with replacement)
      * @param n Number of selections to make
      * @return Vector of selected indices
      */
@@ -692,6 +715,9 @@ public:
         std::vector<usize> results;
         results.reserve(n);
 
+        // Each call to select() acquires and releases the lock, which might be
+        // inefficient for large N. A batch selection method within the strategy
+        // or Sampler would be better. For now, keep the simple loop.
         for (usize i = 0; i < n; ++i) {
             results.push_back(select());
         }
@@ -704,7 +730,8 @@ public:
      * replacement)
      * @param n Number of selections to make
      * @return Vector of unique selected indices
-     * @throws WeightError if n > number of weights
+     * @throws WeightError if n > number of weights or if total positive weight
+     * is zero
      */
     [[nodiscard]] auto selectUniqueMultiple(usize n) const
         -> std::vector<usize> {
@@ -719,6 +746,18 @@ public:
                 weights_.size()));
         }
 
+        // Check if there are enough items with positive weight
+        T totalPositiveWeight = std::accumulate(
+            weights_.begin(), weights_.end(), T{0},
+            [](T sum, T w) { return sum + (w > T{0} ? w : T{0}); });
+
+        if (n > 0 && totalPositiveWeight <= T{0}) {
+            throw WeightError(
+                "Cannot select unique items when total positive weight is "
+                "zero");
+        }
+
+        // WeightedRandomSampler handles its own seeding internally now
         WeightedRandomSampler sampler(seed_);
         return sampler.sampleUnique(weights_, n);
     }
@@ -743,6 +782,7 @@ public:
         }
         weights_[index] = new_weight;
         weights_dirty_ = true;
+        // No need to update strategy max index here as size didn't change
     }
 
     /**
@@ -760,10 +800,9 @@ public:
         weights_.push_back(new_weight);
         weights_dirty_ = true;
 
-        // Update RandomSelectionStrategy if that's what we're using
-        if (auto* random_strategy =
-                dynamic_cast<RandomSelectionStrategy*>(strategy_.get())) {
-            random_strategy->updateMaxIndex(weights_.size());
+        // Update strategy about the new size
+        if (strategy_) {
+            strategy_->updateMaxIndex(weights_.size());
         }
     }
 
@@ -781,16 +820,15 @@ public:
         weights_.erase(weights_.begin() + static_cast<std::ptrdiff_t>(index));
         weights_dirty_ = true;
 
-        // Update RandomSelectionStrategy if that's what we're using
-        if (auto* random_strategy =
-                dynamic_cast<RandomSelectionStrategy*>(strategy_.get())) {
-            random_strategy->updateMaxIndex(weights_.size());
+        // Update strategy about the new size
+        if (strategy_) {
+            strategy_->updateMaxIndex(weights_.size());
         }
     }
 
     /**
      * @brief Normalizes weights so they sum to 1.0
-     * @throws WeightError if all weights are zero
+     * @throws WeightError if all weights are zero or negative
      */
     void normalizeWeights() {
         std::unique_lock lock(mutex_);
@@ -861,6 +899,7 @@ public:
         }
 
         weights_dirty_ = true;
+        // No need to update strategy max index here as size didn't change
     }
 
     /**
@@ -935,14 +974,16 @@ public:
      */
     [[nodiscard]] auto getWeights() const -> std::vector<T> {
         std::shared_lock lock(mutex_);
-        return weights_;
+        return weights_;  // Returns a copy
     }
 
     /**
      * @brief Calculates the sum of all weights
      * @return Total weight
+     * @note This method does NOT acquire a lock. It's a helper for methods that
+     * already hold a lock.
      */
-    [[nodiscard]] auto calculateTotalWeight() -> T {
+    [[nodiscard]] auto calculateTotalWeight() const -> T {
 #ifdef ATOM_USE_BOOST
         return boost::accumulate(weights_, T{0});
 #else
@@ -954,7 +995,7 @@ public:
      * @brief Gets the sum of all weights
      * @return Total weight
      */
-    [[nodiscard]] auto getTotalWeight() -> T {
+    [[nodiscard]] auto getTotalWeight() const -> T {
         std::shared_lock lock(mutex_);
         return calculateTotalWeight();
     }
@@ -970,10 +1011,9 @@ public:
         validateWeights();
         weights_dirty_ = true;
 
-        // Update RandomSelectionStrategy if that's what we're using
-        if (auto* random_strategy =
-                dynamic_cast<RandomSelectionStrategy*>(strategy_.get())) {
-            random_strategy->updateMaxIndex(weights_.size());
+        // Update strategy about the new size
+        if (strategy_) {
+            strategy_->updateMaxIndex(weights_.size());
         }
     }
 
@@ -1004,7 +1044,7 @@ public:
      * @return Average weight
      * @throws WeightError if weights collection is empty
      */
-    [[nodiscard]] auto getAverageWeight() -> T {
+    [[nodiscard]] auto getAverageWeight() const -> T {
         std::shared_lock lock(mutex_);
         if (weights_.empty()) {
             throw WeightError("Cannot calculate average of empty weights");
@@ -1046,12 +1086,15 @@ public:
     }
 
     /**
-     * @brief Sets the random seed for selection strategies
+     * @brief Sets the random seed for the internal Sampler.
      * @param seed The new seed value
      */
     void setSeed(u32 seed) {
         std::unique_lock lock(mutex_);
         seed_ = seed;
+        // Note: This seed is primarily used by the WeightedRandomSampler
+        // created within selectUniqueMultiple. Strategies manage their own
+        // RNGs.
     }
 
     /**
@@ -1063,10 +1106,9 @@ public:
         cumulative_weights_.clear();
         weights_dirty_ = false;
 
-        // Update RandomSelectionStrategy if that's what we're using
-        if (auto* random_strategy =
-                dynamic_cast<RandomSelectionStrategy*>(strategy_.get())) {
-            random_strategy->updateMaxIndex(0);
+        // Update strategy about the new size
+        if (strategy_) {
+            strategy_->updateMaxIndex(0);
         }
     }
 
@@ -1134,6 +1176,7 @@ public:
     [[nodiscard]] auto findIndices(P&& predicate) const -> std::vector<usize> {
         std::shared_lock lock(mutex_);
         std::vector<usize> result;
+        result.reserve(weights_.size());  // Reserve maximum possible space
 
         for (usize i = 0; i < weights_.size(); ++i) {
             if (std::invoke(std::forward<P>(predicate), weights_[i])) {

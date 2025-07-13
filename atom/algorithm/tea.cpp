@@ -160,9 +160,10 @@ auto xxteaEncryptImpl(std::span<const u32> inputData,
     }
 
     std::vector<u32> result(inputData.begin(), inputData.end());
+    std::span<u32> data = result;
 
     u32 sum = 0;
-    u32 lastElement = result[numElements - 1];
+    u32 lastElement = data[numElements - 1];
     usize numRounds = MIN_ROUNDS + MAX_ROUNDS / numElements;
 
     try {
@@ -172,18 +173,18 @@ auto xxteaEncryptImpl(std::span<const u32> inputData,
 
             for (usize elementIndex = 0; elementIndex < numElements - 1;
                  ++elementIndex) {
-                u32 currentElement = result[elementIndex + 1];
-                result[elementIndex] +=
+                u32 currentElement = data[elementIndex + 1];
+                data[elementIndex] +=
                     detail::MX(sum, currentElement, lastElement, elementIndex,
                                keyIndex, inputKey.data());
-                lastElement = result[elementIndex];
+                lastElement = data[elementIndex];
             }
 
-            u32 currentElement = result[0];
-            result[numElements - 1] +=
+            u32 currentElement = data[0];
+            data[numElements - 1] +=
                 detail::MX(sum, currentElement, lastElement, numElements - 1,
                            keyIndex, inputKey.data());
-            lastElement = result[numElements - 1];
+            lastElement = data[numElements - 1];
         }
     } catch (const std::exception& e) {
         spdlog::error("XXTEA encryption error: {}", e.what());
@@ -207,27 +208,29 @@ auto xxteaDecryptImpl(std::span<const u32> inputData,
     }
 
     std::vector<u32> result(inputData.begin(), inputData.end());
+    std::span<u32> data = result;
+
     usize numRounds = MIN_ROUNDS + MAX_ROUNDS / numElements;
     u32 sum = numRounds * DELTA;
 
     try {
         for (usize roundIndex = 0; roundIndex < numRounds; ++roundIndex) {
             u32 keyIndex = (sum >> SHIFT_2) & KEY_MASK;
-            u32 currentElement = result[0];
+            u32 currentElement = data[0];
 
             for (usize elementIndex = numElements - 1; elementIndex > 0;
                  --elementIndex) {
-                u32 lastElement = result[elementIndex - 1];
-                result[elementIndex] -=
+                u32 lastElement = data[elementIndex - 1];
+                data[elementIndex] -=
                     detail::MX(sum, currentElement, lastElement, elementIndex,
                                keyIndex, inputKey.data());
-                currentElement = result[elementIndex];
+                currentElement = data[elementIndex];
             }
 
-            u32 lastElement = result[numElements - 1];
-            result[0] -= detail::MX(sum, currentElement, lastElement, 0,
-                                    keyIndex, inputKey.data());
-            currentElement = result[0];
+            u32 lastElement = data[numElements - 1];
+            data[0] -= detail::MX(sum, currentElement, lastElement, 0, keyIndex,
+                                  inputKey.data());
+            currentElement = data[0];
             sum -= DELTA;
         }
     } catch (const std::exception& e) {
@@ -238,53 +241,98 @@ auto xxteaDecryptImpl(std::span<const u32> inputData,
     return result;
 }
 
-// XTEA encryption function with enhanced security and validation
-auto xteaEncrypt(u32& value0, u32& value1, const XTEAKey& key) noexcept(false)
-    -> void {
-    try {
-        if (!isValidKey(key)) {
-            spdlog::error("Invalid key provided for XTEA encryption");
-            throw TEAException("Invalid key for XTEA encryption");
-        }
+// Helper function for XXTEA encryption of a block
+auto xxteaEncryptBlock(std::span<const u32> inputBlock,
+                       std::span<u32> outputBlock,
+                       std::span<const u32, 4> inputKey) -> void {
+    if (inputBlock.empty()) {
+        return;
+    }
 
-        u32 sum = 0;
-        for (i32 i = 0; i < NUM_ROUNDS; ++i) {
-            value0 += (((value1 << SHIFT_4) ^ (value1 >> SHIFT_5)) + value1) ^
-                      (sum + key[sum & KEY_MASK]);
+    usize numElements = inputBlock.size();
+    if (numElements < 2) {
+        std::copy(inputBlock.begin(), inputBlock.end(), outputBlock.begin());
+        return;
+    }
+
+    std::copy(inputBlock.begin(), inputBlock.end(), outputBlock.begin());
+    std::span<u32> data = outputBlock;
+
+    u32 sum = 0;
+    u32 lastElement = data[numElements - 1];
+    usize numRounds = MIN_ROUNDS + MAX_ROUNDS / numElements;
+
+    try {
+        for (usize roundIndex = 0; roundIndex < numRounds; ++roundIndex) {
             sum += DELTA;
-            value1 += (((value0 << SHIFT_4) ^ (value0 >> SHIFT_5)) + value0) ^
-                      (sum + key[(sum >> SHIFT_11) & KEY_MASK]);
+            u32 keyIndex = (sum >> SHIFT_2) & KEY_MASK;
+
+            for (usize elementIndex = 0; elementIndex < numElements - 1;
+                 ++elementIndex) {
+                u32 currentElement = data[elementIndex + 1];
+                data[elementIndex] +=
+                    detail::MX(sum, currentElement, lastElement, elementIndex,
+                               keyIndex, inputKey.data());
+                lastElement = data[elementIndex];
+            }
+
+            u32 currentElement = data[0];
+            data[numElements - 1] +=
+                detail::MX(sum, currentElement, lastElement, numElements - 1,
+                           keyIndex, inputKey.data());
+            lastElement = data[numElements - 1];
         }
-    } catch (const TEAException&) {
-        throw;
     } catch (const std::exception& e) {
-        spdlog::error("XTEA encryption error: {}", e.what());
-        throw TEAException(std::string("XTEA encryption error: ") + e.what());
+        spdlog::error("XXTEA encryption error in block: {}", e.what());
+        throw TEAException(std::string("XXTEA encryption error in block: ") +
+                           e.what());
     }
 }
 
-// XTEA decryption function with enhanced security and validation
-auto xteaDecrypt(u32& value0, u32& value1, const XTEAKey& key) noexcept(false)
-    -> void {
-    try {
-        if (!isValidKey(key)) {
-            spdlog::error("Invalid key provided for XTEA decryption");
-            throw TEAException("Invalid key for XTEA decryption");
-        }
+// Helper function for XXTEA decryption of a block
+auto xxteaDecryptBlock(std::span<const u32> inputBlock,
+                       std::span<u32> outputBlock,
+                       std::span<const u32, 4> inputKey) -> void {
+    if (inputBlock.empty()) {
+        return;
+    }
 
-        u32 sum = DELTA * NUM_ROUNDS;
-        for (i32 i = 0; i < NUM_ROUNDS; ++i) {
-            value1 -= (((value0 << SHIFT_4) ^ (value0 >> SHIFT_5)) + value0) ^
-                      (sum + key[(sum >> SHIFT_11) & KEY_MASK]);
+    usize numElements = inputBlock.size();
+    if (numElements < 2) {
+        std::copy(inputBlock.begin(), inputBlock.end(), outputBlock.begin());
+        return;
+    }
+
+    std::copy(inputBlock.begin(), inputBlock.end(), outputBlock.begin());
+    std::span<u32> data = outputBlock;
+
+    usize numRounds = MIN_ROUNDS + MAX_ROUNDS / numElements;
+    u32 sum = numRounds * DELTA;
+
+    try {
+        for (usize roundIndex = 0; roundIndex < numRounds; ++roundIndex) {
+            u32 keyIndex = (sum >> SHIFT_2) & KEY_MASK;
+            u32 currentElement = data[0];
+
+            for (usize elementIndex = numElements - 1; elementIndex > 0;
+                 --elementIndex) {
+                u32 lastElement = data[elementIndex - 1];
+                data[elementIndex] -=
+                    detail::MX(sum, currentElement, lastElement, elementIndex,
+                               keyIndex, inputKey.data());
+                currentElement = data[elementIndex];
+            }
+
+            u32 lastElement = data[numElements - 1];
+            data[0] -= detail::MX(sum, currentElement, lastElement, 0, keyIndex,
+                                  inputKey.data());
+            currentElement = data[0];
             sum -= DELTA;
-            value0 -= (((value1 << SHIFT_4) ^ (value1 >> SHIFT_5)) + value1) ^
-                      (sum + key[sum & KEY_MASK]);
         }
-    } catch (const TEAException&) {
-        throw;
     } catch (const std::exception& e) {
-        spdlog::error("XTEA decryption error: {}", e.what());
-        throw TEAException(std::string("XTEA decryption error: ") + e.what());
+        spdlog::error("XXTEA decryption error in block: {}", e.what());
+        throw TEAException(std::string("XXTEA decryption error in block: ") +
+                           e.what());
     }
 }
 
@@ -294,26 +342,40 @@ auto xxteaEncryptParallelImpl(std::span<const u32> inputData,
                               usize numThreads) -> std::vector<u32> {
     const usize dataSize = inputData.size();
 
-    if (dataSize < 1024) {  // For small data sets, use single-threaded version
-        return xxteaEncryptImpl(inputData, inputKey);
+    if (dataSize == 0) {
+        return {};  // Return empty vector for empty input
+    }
+
+    // For small data sets, use single-threaded version
+    usize minParallelSize = 1024;  // Minimum elements for parallel processing
+    usize minElementsPerThread = 512;  // Minimum elements per thread block
+
+    if (dataSize < minParallelSize) {
+        std::vector<u32> result(dataSize);
+        xxteaEncryptSpan(inputData, result, inputKey);
+        return result;
     }
 
     if (numThreads == 0) {
         numThreads = std::thread::hardware_concurrency();
         if (numThreads == 0)
-            numThreads = 4;  // Default value
+            numThreads = 4;  // Default value if hardware_concurrency is 0
     }
 
-    // Ensure each thread processes at least 512 elements to avoid overhead
-    // exceeding benefits
-    numThreads = std::min(numThreads, dataSize / 512 + 1);
+    // Adjust number of threads based on data size and minimum elements per
+    // thread
+    numThreads = std::min(numThreads, (dataSize + minElementsPerThread - 1) /
+                                          minElementsPerThread);
+    if (numThreads == 0)
+        numThreads = 1;  // Ensure at least one thread
 
     const usize blockSize = (dataSize + numThreads - 1) / numThreads;
-    std::vector<std::future<std::vector<u32>>> futures;
-    std::vector<u32> result(dataSize);
+    std::vector<std::future<void>> futures;  // Futures return void
+    std::vector<u32> result(dataSize);       // Allocate result vector once
 
-    spdlog::debug("Parallel XXTEA encryption started with {} threads",
-                  numThreads);
+    spdlog::debug(
+        "Parallel XXTEA encryption started with {} threads, block size {}",
+        numThreads, blockSize);
 
     // Launch multiple threads to process blocks
     for (usize i = 0; i < numThreads; ++i) {
@@ -321,26 +383,33 @@ auto xxteaEncryptParallelImpl(std::span<const u32> inputData,
         usize endIdx = std::min(startIdx + blockSize, dataSize);
 
         if (startIdx >= dataSize)
-            break;
+            break;  // Avoid launching threads for empty blocks
 
-        // Create a separate copy of data for each block to handle overlap
-        // issues
-        std::vector<u32> blockData(inputData.begin() + startIdx,
-                                   inputData.begin() + endIdx);
+        // Get spans for the input and output blocks
+        std::span<const u32> inputBlock =
+            inputData.subspan(startIdx, endIdx - startIdx);
+        std::span<u32> outputBlock =
+            std::span<u32>(result.data() + startIdx, endIdx - startIdx);
 
+        // Use std::async with std::launch::async to ensure new threads are
+        // launched
         futures.push_back(std::async(
-            std::launch::async, [blockData = std::move(blockData), inputKey]() {
-                return xxteaEncryptImpl(blockData, inputKey);
+            std::launch::async, [inputBlock, outputBlock, inputKey]() {
+                // Call the span-based encryption function
+                xxteaEncryptSpan(inputBlock, outputBlock, inputKey);
             }));
     }
 
-    // Collect results
-    usize offset = 0;
-    for (auto& future : futures) {
-        auto blockResult = future.get();
-        std::copy(blockResult.begin(), blockResult.end(),
-                  result.begin() + offset);
-        offset += blockResult.size();
+    // Wait for all futures to complete and propagate exceptions
+    try {
+        for (auto& future : futures) {
+            future.get();
+        }
+    } catch (const std::exception& e) {
+        spdlog::error("Parallel XXTEA encryption block error: {}", e.what());
+        // Re-throw as a TEAException
+        throw TEAException(std::string("Parallel XXTEA encryption failed: ") +
+                           e.what());
     }
 
     spdlog::debug("Parallel XXTEA encryption completed successfully");
@@ -352,47 +421,72 @@ auto xxteaDecryptParallelImpl(std::span<const u32> inputData,
                               usize numThreads) -> std::vector<u32> {
     const usize dataSize = inputData.size();
 
-    if (dataSize < 1024) {
-        return xxteaDecryptImpl(inputData, inputKey);
+    if (dataSize == 0) {
+        return {};  // Return empty vector for empty input
+    }
+
+    usize minParallelSize = 1024;  // Minimum elements for parallel processing
+    usize minElementsPerThread = 512;  // Minimum elements per thread block
+
+    if (dataSize < minParallelSize) {
+        std::vector<u32> result(dataSize);
+        xxteaDecryptSpan(inputData, result, inputKey);
+        return result;
     }
 
     if (numThreads == 0) {
         numThreads = std::thread::hardware_concurrency();
         if (numThreads == 0)
-            numThreads = 4;
+            numThreads = 4;  // Default value
     }
 
-    numThreads = std::min(numThreads, dataSize / 512 + 1);
+    // Adjust number of threads based on data size and minimum elements per
+    // thread
+    numThreads = std::min(numThreads, (dataSize + minElementsPerThread - 1) /
+                                          minElementsPerThread);
+    if (numThreads == 0)
+        numThreads = 1;  // Ensure at least one thread
 
     const usize blockSize = (dataSize + numThreads - 1) / numThreads;
-    std::vector<std::future<std::vector<u32>>> futures;
-    std::vector<u32> result(dataSize);
+    std::vector<std::future<void>> futures;  // Futures return void
+    std::vector<u32> result(dataSize);       // Allocate result vector once
 
-    spdlog::debug("Parallel XXTEA decryption started with {} threads",
-                  numThreads);
+    spdlog::debug(
+        "Parallel XXTEA decryption started with {} threads, block size {}",
+        numThreads, blockSize);
 
     for (usize i = 0; i < numThreads; ++i) {
         usize startIdx = i * blockSize;
         usize endIdx = std::min(startIdx + blockSize, dataSize);
 
         if (startIdx >= dataSize)
-            break;
+            break;  // Avoid launching threads for empty blocks
 
-        std::vector<u32> blockData(inputData.begin() + startIdx,
-                                   inputData.begin() + endIdx);
+        // Get spans for the input and output blocks
+        std::span<const u32> inputBlock =
+            inputData.subspan(startIdx, endIdx - startIdx);
+        std::span<u32> outputBlock =
+            std::span<u32>(result.data() + startIdx, endIdx - startIdx);
 
+        // Use std::async with std::launch::async to ensure new threads are
+        // launched
         futures.push_back(std::async(
-            std::launch::async, [blockData = std::move(blockData), inputKey]() {
-                return xxteaDecryptImpl(blockData, inputKey);
+            std::launch::async, [inputBlock, outputBlock, inputKey]() {
+                // Call the span-based decryption function
+                xxteaDecryptSpan(inputBlock, outputBlock, inputKey);
             }));
     }
 
-    usize offset = 0;
-    for (auto& future : futures) {
-        auto blockResult = future.get();
-        std::copy(blockResult.begin(), blockResult.end(),
-                  result.begin() + offset);
-        offset += blockResult.size();
+    // Wait for all futures to complete and propagate exceptions
+    try {
+        for (auto& future : futures) {
+            future.get();
+        }
+    } catch (const std::exception& e) {
+        spdlog::error("Parallel XXTEA decryption block error: {}", e.what());
+        // Re-throw as a TEAException
+        throw TEAException(std::string("Parallel XXTEA decryption failed: ") +
+                           e.what());
     }
 
     spdlog::debug("Parallel XXTEA decryption completed successfully");

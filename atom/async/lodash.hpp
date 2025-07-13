@@ -1,9 +1,7 @@
 #ifndef ATOM_ASYNC_LODASH_HPP
 #define ATOM_ASYNC_LODASH_HPP
-/**
- * @class Debounce
- * @brief A class that implements a debouncing mechanism for function calls.
- */
+
+#include <atomic>
 #include <chrono>
 #include <condition_variable>  // For std::condition_variable_any
 #include <functional>          // For std::function
@@ -55,6 +53,7 @@ public:
 
             last_call_time_ = now;
 
+            // Store the task payload
             current_task_ = [this, f = this->func_,
                              captured_args = std::make_tuple(
                                  std::forward<CallArgs>(args)...)]() mutable {
@@ -69,133 +68,186 @@ public:
             bool is_call_active = call_pending_.load(std::memory_order_acquire);
 
             if (leading_ && !is_call_active) {
-                call_pending_.store(true, std::memory_order_release);
+                // Leading edge call
+                call_pending_.store(
+                    true,
+                    std::memory_order_release);  // Mark as pending to prevent
+                                                 // immediate subsequent leading
+                                                 // calls
 
-                auto task_to_run_now = current_task_;
-                lock.unlock();
+                auto task_to_run_now = current_task_;  // Copy the task payload
+                lock.unlock();  // Release lock before running user function
                 try {
                     if (task_to_run_now)
                         task_to_run_now();
                 } catch (...) { /* Record (e.g., log) but do not propagate
                                    exceptions */
                 }
-                lock.lock();
+                lock.lock();  // Re-acquire lock
+                // After leading call, the debounce timer should start for
+                // subsequent calls The timer thread logic below will handle
+                // scheduling the trailing/delayed call
             }
 
-            call_pending_.store(true, std::memory_order_release);
+            // Schedule/reschedule the delayed call
+            call_pending_.store(
+                true, std::memory_order_release);  // Ensure pending is true for
+                                                   // the timer
+            scheduled_time_ =
+                now + delay_;  // Schedule based on the latest call time
 
-            if (timer_thread_.joinable()) {
-                timer_thread_.request_stop();
-                // jthread destructor/reassignment handles join. Forcing wake
-                // for faster exit:
-                cv_.notify_all();
+            if (maxWait_ && first_call_in_series_time_) {
+                auto max_wait_deadline =
+                    first_call_in_series_time_.value() + *maxWait_;
+                if (scheduled_time_ > max_wait_deadline) {
+                    scheduled_time_ = max_wait_deadline;
+                }
             }
 
-            timer_thread_ = std::jthread([this, task_for_timer = current_task_,
-                                          timer_start_call_time =
-                                              last_call_time_,
-                                          timer_series_start_time =
-                                              first_call_in_series_time_](
-                                             std::stop_token st) {
-                std::unique_lock timer_lock(mutex_);
+            if (!timer_thread_.joinable() || timer_thread_.request_stop()) {
+                // If thread is not running or stop was successfully requested
+                // (meaning it wasn't already stopping/joining) Start a new
+                // timer thread
+                timer_thread_ = std::jthread([this](std::stop_token st) {
+                    std::unique_lock timer_lock(mutex_);
+                    while (call_pending_.load(std::memory_order_acquire) &&
+                           !st.stop_requested()) {
+                        auto current_scheduled_time =
+                            scheduled_time_;  // Capture scheduled time under
+                                              // lock
+                        auto current_last_call_time =
+                            last_call_time_;  // Capture last call time under
+                                              // lock
 
-                if (!call_pending_.load(std::memory_order_acquire)) {
-                    return;
-                }
-
-                if (last_call_time_ != timer_start_call_time) {
-                    return;
-                }
-
-                std::chrono::steady_clock::time_point deadline;
-                if (!timer_start_call_time) {
-                    call_pending_.store(false, std::memory_order_release);
-                    if (first_call_in_series_time_ ==
-                        timer_series_start_time) {  // reset only if this timer
-                                                    // was responsible
-                        first_call_in_series_time_.reset();
-                    }
-                    return;
-                }
-                deadline = timer_start_call_time.value() + delay_;
-
-                if (maxWait_ && timer_series_start_time) {
-                    std::chrono::steady_clock::time_point max_wait_deadline =
-                        timer_series_start_time.value() + *maxWait_;
-                    if (max_wait_deadline < deadline) {
-                        deadline = max_wait_deadline;
-                    }
-                }
-
-                // 修复：正确调用 wait_until，不传递 st 作为第二个参数
-                bool stop_requested_during_wait =
-                    cv_.wait_until(timer_lock, deadline,
-                                   [&st] { return st.stop_requested(); });
-
-                if (st.stop_requested() || stop_requested_during_wait) {
-                    if (last_call_time_ != timer_start_call_time &&
-                        call_pending_.load(std::memory_order_acquire)) {
-                        // Superseded by a newer pending call.
-                    } else if (!call_pending_.load(std::memory_order_acquire)) {
-                        if (last_call_time_ == timer_start_call_time) {
+                        if (!current_last_call_time) {  // Should not happen if
+                                                        // call_pending is true,
+                                                        // but safety check
+                            call_pending_.store(false,
+                                                std::memory_order_release);
                             first_call_in_series_time_.reset();
+                            break;
                         }
-                    }
-                    return;
-                }
 
-                if (call_pending_.load(std::memory_order_acquire) &&
-                    last_call_time_ == timer_start_call_time) {
-                    call_pending_.store(false, std::memory_order_release);
-                    first_call_in_series_time_.reset();
+                        // Wait until the scheduled time or stop is requested
+                        bool stop_requested_during_wait = cv_.wait_until(
+                            timer_lock, current_scheduled_time.value(),
+                            [&st, this, current_scheduled_time]() {
+                                // Predicate: stop requested OR the scheduled
+                                // time has been updated to be earlier
+                                return st.stop_requested() ||
+                                       (scheduled_time_ &&
+                                        scheduled_time_.value() <
+                                            current_scheduled_time.value());
+                            });
 
-                    timer_lock.unlock();
-                    try {
-                        if (task_for_timer) {
-                            task_for_timer();  // This increments
-                                               // invocation_count_
+                        if (st.stop_requested() || stop_requested_during_wait) {
+                            // Stop requested or scheduled time was moved
+                            // earlier (handled by next loop iteration)
+                            if (st.stop_requested()) {
+                                // If stop was explicitly requested, clear
+                                // pending flag
+                                call_pending_.store(false,
+                                                    std::memory_order_release);
+                                first_call_in_series_time_.reset();
+                            }
+                            break;  // Exit thread loop
                         }
-                    } catch (...) { /* Record (e.g., log) but do not propagate
-                                       exceptions */
+
+                        // Woke up because scheduled time was reached (and stop
+                        // wasn't requested) Double check if the scheduled time
+                        // is still the one we waited for and if a call is still
+                        // pending.
+                        if (call_pending_.load(std::memory_order_acquire) &&
+                            scheduled_time_ &&
+                            scheduled_time_.value() ==
+                                current_scheduled_time.value()) {
+                            // This is the correct time to fire the trailing
+                            // call
+                            call_pending_.store(false,
+                                                std::memory_order_release);
+                            first_call_in_series_time_.reset();
+
+                            auto task_to_run =
+                                current_task_;  // Copy the latest task payload
+                            timer_lock.unlock();  // Release lock before running
+                                                  // user function
+                            try {
+                                if (task_to_run) {
+                                    task_to_run();  // This increments
+                                                    // invocation_count_
+                                }
+                            } catch (...) { /* Record (e.g., log) but do not
+                                               propagate exceptions */
+                            }
+                            return;  // Task executed, thread finishes
+                        }
+                        // If scheduled_time_ changed or call_pending_ became
+                        // false, the loop continues or breaks
                     }
-                } else {
-                    if (!call_pending_.load(std::memory_order_acquire) &&
-                        last_call_time_ == timer_start_call_time) {
+                    // Loop finished because call_pending became false or stop
+                    // was requested
+                    if (!call_pending_.load(std::memory_order_acquire)) {
                         first_call_in_series_time_.reset();
                     }
+                });
+            } else {
+                // If a thread is already pending, just updating scheduled_time_
+                // and notifying is enough.
+                scheduled_time_ =
+                    now + delay_;  // Reschedule the existing pending call
+                if (maxWait_ &&
+                    first_call_in_series_time_) {  // Re-apply maxWait if needed
+                    auto max_wait_deadline =
+                        first_call_in_series_time_.value() + *maxWait_;
+                    if (scheduled_time_ > max_wait_deadline) {
+                        scheduled_time_ = max_wait_deadline;
+                    }
                 }
-            });
+                cv_.notify_one();  // Notify the waiting thread
+            }
 
         } catch (...) { /* Ensure exceptions do not propagate from operator() */
         }
     }
 
+    /**
+     * @brief Cancels any pending delayed function call.
+     */
     void cancel() noexcept {
         std::unique_lock lock(mutex_);
         call_pending_.store(false, std::memory_order_relaxed);
+        last_call_time_.reset();
         first_call_in_series_time_.reset();
+        scheduled_time_.reset();
         current_task_ = nullptr;
         if (timer_thread_.joinable()) {
             timer_thread_.request_stop();
-            cv_.notify_all();
+            cv_.notify_all();  // Wake up the timer thread
         }
     }
 
+    /**
+     * @brief Flushes any pending delayed function call, invoking it
+     * immediately.
+     */
     void flush() noexcept {
         try {
             std::unique_lock lock(mutex_);
             if (call_pending_.load(std::memory_order_acquire)) {
                 if (timer_thread_.joinable()) {
                     timer_thread_.request_stop();
-                    cv_.notify_all();
+                    cv_.notify_all();  // Wake up the timer thread
                 }
 
-                auto task_to_run = std::move(current_task_);
+                auto task_to_run =
+                    std::move(current_task_);  // Get the latest task
                 call_pending_.store(false, std::memory_order_relaxed);
+                last_call_time_.reset();
                 first_call_in_series_time_.reset();
+                scheduled_time_.reset();
 
                 if (task_to_run) {
-                    lock.unlock();
+                    lock.unlock();  // Release lock before running user function
                     try {
                         task_to_run();  // This increments invocation_count_
                     } catch (...) { /* Record (e.g., log) but do not propagate
@@ -207,28 +259,36 @@ public:
         }
     }
 
+    /**
+     * @brief Resets the debounce state, clearing any pending calls and timers.
+     */
     void reset() noexcept {
         std::unique_lock lock(mutex_);
         call_pending_.store(false, std::memory_order_relaxed);
         last_call_time_.reset();
         first_call_in_series_time_.reset();
+        scheduled_time_.reset();
         current_task_ = nullptr;
         if (timer_thread_.joinable()) {
             timer_thread_.request_stop();
-            cv_.notify_all();
+            cv_.notify_all();  // Wake up the timer thread
         }
     }
 
+    /**
+     * @brief Returns the number of times the debounced function has been
+     * called.
+     * @return The count of function invocations.
+     */
     [[nodiscard]] size_t callCount() const noexcept {
         return invocation_count_.load(std::memory_order_relaxed);
     }
 
 private:
-    // void run(); // Replaced by jthread lambda logic
-
     F func_;
     std::chrono::milliseconds delay_;
     std::optional<std::chrono::steady_clock::time_point> last_call_time_;
+    std::optional<std::chrono::steady_clock::time_point> scheduled_time_;
     std::jthread timer_thread_;
     mutable std::mutex mutex_;
     bool leading_;
@@ -238,8 +298,8 @@ private:
     std::optional<std::chrono::steady_clock::time_point>
         first_call_in_series_time_;
 
-    std::function<void()> current_task_;  // Stores the task (function + args)
-    std::condition_variable_any cv_;  // For efficient waiting in timer thread
+    std::function<void()> current_task_;
+    std::condition_variable_any cv_;
 };
 
 /**
@@ -290,30 +350,21 @@ public:
     [[nodiscard]] auto callCount() const noexcept -> size_t;
 
 private:
-    void trailingCall();
+    F func_;
+    std::chrono::milliseconds interval_;
+    std::optional<std::chrono::steady_clock::time_point> last_call_time_;
+    mutable std::mutex mutex_;
+    bool leading_;
+    bool trailing_;
+    std::atomic<size_t> invocation_count_{0};
+    std::jthread trailing_thread_;
+    std::atomic<bool> trailing_call_pending_ = false;
+    std::optional<std::chrono::steady_clock::time_point> last_attempt_time_;
 
-    F func_;  ///< The function to be throttled.
-    std::chrono::milliseconds
-        interval_;  ///< The time interval between allowed function calls.
+    std::function<void()> current_task_payload_;
+    std::condition_variable_any trailing_cv_;
     std::optional<std::chrono::steady_clock::time_point>
-        last_call_time_;        ///< Timestamp of the last function invocation.
-    mutable std::mutex mutex_;  ///< Mutex to protect concurrent access.
-    bool leading_;              ///< True to invoke on the leading edge.
-    bool trailing_;             ///< True to invoke on the trailing edge.
-    std::atomic<size_t> invocation_count_{
-        0};                         ///< Counter for actual invocations.
-    std::jthread trailing_thread_;  ///< Thread for handling trailing calls.
-    std::atomic<bool> trailing_call_pending_ =
-        false;  ///< Is a trailing call scheduled?
-    std::optional<std::chrono::steady_clock::time_point>
-        last_attempt_time_;  ///< Timestamp of the last attempt to call
-                             ///< operator().
-
-    // 添加缺失的成员变量
-    std::function<void()>
-        current_task_payload_;  ///< Stores the current task to execute
-    std::condition_variable_any
-        trailing_cv_;  ///< For efficient waiting in trailing thread
+        trailing_scheduled_time_;
 };
 
 /**
@@ -387,9 +438,6 @@ private:
     std::optional<std::chrono::milliseconds> maxWait_;
 };
 
-// Implementation of Debounce methods (constructor, operator(), cancel, flush,
-// reset, callCount are above) Debounce<F>::run() is removed.
-
 // Implementation of Throttle methods
 template <Callable F>
 Throttle<F>::Throttle(F func, std::chrono::milliseconds interval, bool leading,
@@ -409,8 +457,9 @@ void Throttle<F>::operator()(CallArgs&&... args) noexcept {
     try {
         std::unique_lock lock(mutex_);
         auto now = std::chrono::steady_clock::now();
-        last_attempt_time_ = now;
+        last_attempt_time_ = now;  // Record the time of this attempt
 
+        // Store the task payload - always store the latest args
         current_task_payload_ =
             [this, f = this->func_,
              captured_args =
@@ -422,99 +471,163 @@ void Throttle<F>::operator()(CallArgs&&... args) noexcept {
         bool can_call_now = !last_call_time_.has_value() ||
                             (now - last_call_time_.value() >= interval_);
 
-        if (leading_ && can_call_now) {
-            last_call_time_ = now;
-            auto task_to_run = current_task_payload_;
-            lock.unlock();
-            try {
-                if (task_to_run)
-                    task_to_run();
-            } catch (...) { /* Record exceptions */
-            }
-            return;
-        }
-
-        if (!leading_ && can_call_now) {
-            last_call_time_ = now;
-            auto task_to_run = current_task_payload_;
-            lock.unlock();
-            try {
-                if (task_to_run)
-                    task_to_run();
-            } catch (...) { /* Record exceptions */
-            }
-            return;
-        }
-
-        if (trailing_ &&
-            !trailing_call_pending_.load(std::memory_order_relaxed)) {
-            trailing_call_pending_.store(true, std::memory_order_relaxed);
-
-            if (trailing_thread_.joinable()) {
-                trailing_thread_.request_stop();
-                trailing_cv_.notify_all();  // Wake up if waiting
-            }
-            trailing_thread_ = std::jthread([this, task_for_trailing =
-                                                       current_task_payload_](
-                                                std::stop_token st) {
-                std::unique_lock trailing_lock(this->mutex_);
-
-                if (this->interval_.count() > 0) {
-                    // 修复: 正确调用 wait_for 方法
-                    // 将 st 作为谓词函数的参数传递，而不是方法的第二个参数
-                    if (this->trailing_cv_.wait_for(
-                            trailing_lock, this->interval_,
-                            [&st] { return st.stop_requested(); })) {
-                        // Predicate met (stop requested) or spurious wakeup +
-                        // stop_requested
-                        this->trailing_call_pending_.store(
-                            false, std::memory_order_relaxed);
-                        return;
-                    }
-                    // Timeout occurred if wait_for returned false and st not
-                    // requested
-                    if (st.stop_requested()) {  // Double check after wait_for
-                                                // if it returned due to timeout
-                                                // but st became true
-                        this->trailing_call_pending_.store(
-                            false, std::memory_order_relaxed);
-                        return;
-                    }
-                } else {  // Interval is zero or negative, check stop token once
-                    if (st.stop_requested()) {
-                        this->trailing_call_pending_.store(
-                            false, std::memory_order_relaxed);
-                        return;
+        if (can_call_now) {
+            // Leading edge or simple interval call
+            if (leading_ ||
+                !last_call_time_.has_value()) {  // Only call immediately if
+                                                 // leading or first call ever
+                last_call_time_ = now;  // Update last successful call time
+                auto task_to_run =
+                    current_task_payload_;  // Copy the latest task
+                lock.unlock();  // Release lock before running user function
+                try {
+                    if (task_to_run)
+                        task_to_run();
+                } catch (...) { /* Record exceptions */
+                }
+                // If leading is true, we might still need a trailing call if
+                // more calls come in If leading is false, and we called now, no
+                // trailing needed for this call series
+                if (!leading_) {
+                    // If not leading, and we just called, clear any pending
+                    // trailing call
+                    trailing_call_pending_.store(false,
+                                                 std::memory_order_relaxed);
+                    trailing_scheduled_time_.reset();
+                    if (trailing_thread_.joinable()) {
+                        trailing_thread_.request_stop();
+                        trailing_cv_
+                            .notify_all();  // Wake up the trailing thread
                     }
                 }
+                return;
+            }
+        }
 
-                if (this->trailing_call_pending_.load(
-                        std::memory_order_acquire)) {
-                    auto current_time = std::chrono::steady_clock::now();
-                    if (this->last_attempt_time_ &&
-                        (!this->last_call_time_.has_value() ||
-                         (this->last_attempt_time_.value() >
-                          this->last_call_time_.value())) &&
-                        (!this->last_call_time_.has_value() ||
-                         (current_time - this->last_call_time_.value() >=
-                          this->interval_))) {
-                        this->last_call_time_ = current_time;
-                        this->trailing_call_pending_.store(
-                            false, std::memory_order_relaxed);
+        // If we couldn't call now, schedule a trailing call if enabled
+        if (trailing_) {
+            // Schedule the trailing call for interval_ after the *current*
+            // attempt time
+            auto new_scheduled_time = now + interval_;
 
-                        trailing_lock.unlock();
-                        try {
-                            if (task_for_trailing)
-                                task_for_trailing();  // This increments count
-                        } catch (...) {               /* Record exceptions */
+            if (!trailing_call_pending_.load(std::memory_order_acquire)) {
+                // No trailing call pending, schedule a new one
+                trailing_call_pending_.store(true, std::memory_order_release);
+                trailing_scheduled_time_ = new_scheduled_time;
+
+                // Start the trailing thread if not already running
+                if (!trailing_thread_.joinable() ||
+                    trailing_thread_.request_stop()) {
+                    trailing_thread_ = std::jthread([this](std::stop_token st) {
+                        std::unique_lock trailing_lock(mutex_);
+                        while (trailing_call_pending_.load(
+                                   std::memory_order_acquire) &&
+                               !st.stop_requested()) {
+                            auto current_scheduled_time =
+                                trailing_scheduled_time_;  // Capture scheduled
+                                                           // time under lock
+
+                            if (!current_scheduled_time) {  // Should not happen
+                                                            // if pending is
+                                                            // true
+                                trailing_call_pending_.store(
+                                    false, std::memory_order_release);
+                                break;
+                            }
+
+                            // Wait until the scheduled time or stop is
+                            // requested
+                            bool stop_requested_during_wait =
+                                trailing_cv_.wait_until(
+                                    trailing_lock,
+                                    current_scheduled_time.value(),
+                                    [&st, this, current_scheduled_time]() {
+                                        // Predicate: stop requested OR the
+                                        // scheduled time has been updated to be
+                                        // earlier
+                                        return st.stop_requested() ||
+                                               (trailing_scheduled_time_ &&
+                                                trailing_scheduled_time_
+                                                        .value() <
+                                                    current_scheduled_time
+                                                        .value());
+                                    });
+
+                            if (st.stop_requested() ||
+                                stop_requested_during_wait) {
+                                // Stop requested or scheduled time was moved
+                                // earlier (handled by next loop iteration)
+                                if (st.stop_requested()) {
+                                    // If stop was explicitly requested, clear
+                                    // pending flag
+                                    trailing_call_pending_.store(
+                                        false, std::memory_order_release);
+                                }
+                                break;  // Exit thread loop
+                            }
+
+                            // Woke up because scheduled time was reached (and
+                            // stop wasn't requested) Double check if the
+                            // scheduled time is still the one we waited for and
+                            // if a call is still pending.
+                            if (trailing_call_pending_.load(
+                                    std::memory_order_acquire) &&
+                                trailing_scheduled_time_ &&
+                                trailing_scheduled_time_.value() ==
+                                    current_scheduled_time.value()) {
+                                // This is the correct time to fire the trailing
+                                // call
+                                auto current_time =
+                                    std::chrono::steady_clock::now();
+                                last_call_time_ =
+                                    current_time;  // Update last successful
+                                                   // call time
+                                trailing_call_pending_.store(
+                                    false, std::memory_order_release);
+                                trailing_scheduled_time_
+                                    .reset();  // Clear scheduled time
+
+                                auto task_to_run =
+                                    current_task_payload_;  // Copy the latest
+                                                            // task payload
+                                trailing_lock
+                                    .unlock();  // Release lock before running
+                                                // user function
+                                try {
+                                    if (task_to_run) {
+                                        task_to_run();  // This increments
+                                                        // invocation_count_
+                                    }
+                                } catch (...) { /* Record (e.g., log) but do not
+                                                   propagate exceptions */
+                                }
+                                return;  // Task executed, thread finishes
+                            }
+                            // If scheduled_time_ changed or
+                            // trailing_call_pending_ became false, the loop
+                            // continues or breaks
                         }
-                        return;
+                        // Loop finished because trailing_call_pending became
+                        // false or stop was requested
+                    });
+                } else {
+                    // Trailing is enabled and a call is already pending.
+                    // Just update the scheduled time based on the latest
+                    // attempt. The waiting thread will pick up the new
+                    // scheduled time. Only update if the new scheduled time is
+                    // *later* than the current one, unless we want to allow
+                    // shortening the wait? Standard is usually extend.
+                    if (!trailing_scheduled_time_ ||
+                        new_scheduled_time > trailing_scheduled_time_.value()) {
+                        trailing_scheduled_time_ = new_scheduled_time;
+                        trailing_cv_
+                            .notify_one();  // Notify the waiting thread
+                                            // about the updated schedule
                     }
                 }
-                this->trailing_call_pending_.store(false,
-                                                   std::memory_order_relaxed);
-            });
+            }
         }
+
     } catch (...) { /* Ensure exceptions do not propagate */
     }
 }
@@ -523,6 +636,7 @@ template <Callable F>
 void Throttle<F>::cancel() noexcept {
     std::unique_lock lock(mutex_);
     trailing_call_pending_.store(false, std::memory_order_relaxed);
+    trailing_scheduled_time_.reset();
     current_task_payload_ = nullptr;
     if (trailing_thread_.joinable()) {
         trailing_thread_.request_stop();
@@ -536,6 +650,7 @@ void Throttle<F>::reset() noexcept {
     last_call_time_.reset();
     last_attempt_time_.reset();
     trailing_call_pending_.store(false, std::memory_order_relaxed);
+    trailing_scheduled_time_.reset();
     current_task_payload_ = nullptr;
     if (trailing_thread_.joinable()) {
         trailing_thread_.request_stop();

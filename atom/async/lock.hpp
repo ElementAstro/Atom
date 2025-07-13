@@ -297,10 +297,8 @@ public:
     /**
      * @brief Releases the lock using a specific ticket number
      * @param ticket The ticket number to release
-     * @throws std::invalid_argument if the ticket does not match the current
-     * serving number
      */
-    void unlock(uint64_t ticket);
+    void unlock(uint64_t ticket) noexcept;
 
     /**
      * @brief Tries to acquire the lock if immediately available
