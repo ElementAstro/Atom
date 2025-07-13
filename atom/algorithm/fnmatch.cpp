@@ -11,7 +11,6 @@
 #include <execution>
 #include <list>
 #include <memory>
-#include <mutex>
 #include <regex>
 #include <unordered_map>
 
@@ -187,8 +186,7 @@ auto fnmatch_nothrow(T1&& pattern, T2&& string, int flags) noexcept
     try {
         auto regex = get_pattern_cache().get_regex(pattern_view, flags);
 
-        if (std::regex_match(
-                std::string(string_view.begin(), string_view.end()), *regex)) {
+        if (std::regex_match(string_view, *regex)) {
             spdlog::debug("Regex match successful");
             return true;
         }

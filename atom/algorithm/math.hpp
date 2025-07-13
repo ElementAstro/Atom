@@ -22,6 +22,8 @@ Description: Extra Math Library
 #include <shared_mutex>
 #include <unordered_map>
 #include <vector>
+#include <execution>
+#include <functional>
 
 #include "atom/algorithm/rust_numeric.hpp"
 #include "atom/error/exception.hpp"

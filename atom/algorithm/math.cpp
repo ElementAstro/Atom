@@ -648,12 +648,8 @@ std::vector<uint64_t> parallelVectorAdd(const std::vector<uint64_t>& a,
         THROW_INVALID_ARGUMENT("Input vectors must have the same length");
     }
     std::vector<uint64_t> result(a.size());
-#ifdef _OPENMP
-#pragma omp parallel for
-#endif
-    for (size_t i = 0; i < a.size(); ++i) {
-        result[i] = a[i] + b[i];
-    }
+    std::transform(std::execution::par_unseq, a.begin(), a.end(), b.begin(),
+                   result.begin(), std::plus<uint64_t>());
     return result;
 }
 
