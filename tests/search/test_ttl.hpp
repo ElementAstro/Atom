@@ -330,6 +330,7 @@ TEST_F(TTLCacheTest, StressTest) {
         EXPECT_FALSE(stressCache->get(i).has_value());
     }
 }
+<<<<<<< HEAD
 TEST_F(TTLCacheTest, GetShared) {
     cache->put("key1", 1);
     auto value_ptr = cache->get_shared("key1");
@@ -783,3 +784,5 @@ TEST_F(TTLCacheTest, ThreadSafetyWithDisabledThreadSafe) {
     // so we don't explicitly test for crashes, but rather that the flag
     // is respected in the get/get_shared paths.
 }
+=======
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea

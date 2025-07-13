@@ -213,7 +213,7 @@ fi
 # Auto-detect optimal settings
 detect_system_capabilities() {
     log_info "Detecting system capabilities..."
-    
+
     # Detect number of CPU cores if not specified
     if [[ -z "$PARALLEL_JOBS" ]]; then
         if command -v nproc &> /dev/null; then
@@ -224,7 +224,7 @@ detect_system_capabilities() {
             PARALLEL_JOBS=4  # Default to 4 cores
         fi
     fi
-    
+
     # Auto-detect ccache if not explicitly set
     if [[ "$CCACHE_ENABLE" == "auto" ]]; then
         if command -v ccache &> /dev/null; then
@@ -235,7 +235,7 @@ detect_system_capabilities() {
             log_warn "ccache not found, compilation caching disabled"
         fi
     fi
-    
+
     # Check available memory
     local available_memory_gb=0
     if [[ -f /proc/meminfo ]]; then
@@ -246,7 +246,7 @@ detect_system_capabilities() {
         local free_pages=$(vm_stat | grep "Pages free" | awk '{print $3}' | sed 's/\.//')
         available_memory_gb=$((free_pages * page_size / 1024 / 1024 / 1024))
     fi
-    
+
     # Adjust parallel jobs based on available memory (roughly 2GB per job for C++)
     if [[ $available_memory_gb -gt 0 ]] && [[ $PARALLEL_JOBS -gt $((available_memory_gb / 2)) ]]; then
         local suggested_jobs=$((available_memory_gb / 2))
@@ -296,13 +296,13 @@ check_build_system_availability() {
         fi
         local cmake_version=$(cmake --version | head -1 | awk '{print $3}')
         log_info "CMake found: $cmake_version"
-        
+
         # Check minimum CMake version
         local min_version="3.21"
         if ! printf '%s\n' "$min_version" "$cmake_version" | sort -V | head -1 | grep -q "^$min_version$"; then
             log_warn "CMake version $cmake_version is older than recommended minimum $min_version"
         fi
-        
+
         # Check for Ninja if available
         if command -v ninja &> /dev/null; then
             log_info "Ninja found: $(ninja --version)"
@@ -323,7 +323,7 @@ manage_build_directory() {
         log_info "Creating build directory..."
         mkdir -p build
     fi
-    
+
     # Setup ccache if enabled
     if [[ "$CCACHE_ENABLE" == "y" ]]; then
         export CC="ccache ${CC:-gcc}"
@@ -338,7 +338,7 @@ manage_build_directory
 # Enhanced build process
 if [[ "$BUILD_SYSTEM" == "xmake" ]]; then
     log_info "Building with XMake..."
-    
+
     # Configure XMake options
     XMAKE_ARGS=""
     if [[ "$BUILD_TYPE" == "debug" ]]; then XMAKE_ARGS="$XMAKE_ARGS -m debug"; fi
@@ -349,28 +349,28 @@ if [[ "$BUILD_SYSTEM" == "xmake" ]]; then
     if [[ "$BUILD_TESTS" == "y" ]]; then XMAKE_ARGS="$XMAKE_ARGS --tests=y"; fi
     if [[ "$BUILD_CFITSIO" == "y" ]]; then XMAKE_ARGS="$XMAKE_ARGS --cfitsio=y"; fi
     if [[ "$BUILD_SSH" == "y" ]]; then XMAKE_ARGS="$XMAKE_ARGS --ssh=y"; fi
-    
+
     # Run XMake
     log_info "Configuring XMake project..."
     if ! xmake f $XMAKE_ARGS; then
         error_exit "XMake configuration failed"
     fi
-    
+
     log_info "Building project with $PARALLEL_JOBS parallel jobs..."
     XMAKE_BUILD_ARGS="-j $PARALLEL_JOBS"
     if [[ "$VERBOSE_BUILD" == "y" ]]; then
         XMAKE_BUILD_ARGS="$XMAKE_BUILD_ARGS -v"
     fi
-    
+
     if ! xmake $XMAKE_BUILD_ARGS; then
         error_exit "XMake build failed"
     fi
 else
     log_info "Building with CMake..."
-    
+
     # Configure CMake options
     CMAKE_ARGS="-B build"
-    
+
     # Build type configuration
     case "$BUILD_TYPE" in
         "debug") CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_BUILD_TYPE=Debug" ;;
@@ -378,7 +378,7 @@ else
         "relwithdebinfo") CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_BUILD_TYPE=RelWithDebInfo" ;;
         "minsizerel") CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_BUILD_TYPE=MinSizeRel" ;;
     esac
-    
+
     # Feature configuration
     if [[ "$BUILD_PYTHON" == "y" ]]; then CMAKE_ARGS="$CMAKE_ARGS -DATOM_BUILD_PYTHON_BINDINGS=ON"; fi
     if [[ "$BUILD_SHARED" == "y" ]]; then CMAKE_ARGS="$CMAKE_ARGS -DBUILD_SHARED_LIBS=ON"; fi
@@ -387,39 +387,39 @@ else
     if [[ "$BUILD_DOCS" == "y" ]]; then CMAKE_ARGS="$CMAKE_ARGS -DATOM_BUILD_DOCS=ON"; fi
     if [[ "$BUILD_CFITSIO" == "y" ]]; then CMAKE_ARGS="$CMAKE_ARGS -DATOM_USE_CFITSIO=ON"; fi
     if [[ "$BUILD_SSH" == "y" ]]; then CMAKE_ARGS="$CMAKE_ARGS -DATOM_USE_SSH=ON"; fi
-    
+
     # Optimization configuration
     if [[ "$ENABLE_LTO" == "y" ]]; then CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON"; fi
     if [[ "$ENABLE_COVERAGE" == "y" ]]; then CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_CXX_FLAGS=--coverage -DCMAKE_C_FLAGS=--coverage"; fi
-    if [[ "$ENABLE_SANITIZERS" == "y" ]]; then 
+    if [[ "$ENABLE_SANITIZERS" == "y" ]]; then
         CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -DCMAKE_C_FLAGS=-fsanitize=address,undefined"
     fi
-    
+
     # Installation prefix
     if [[ -n "$INSTALL_PREFIX" ]]; then
         CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX"
     fi
-    
+
     # Use Ninja if available
     if command -v ninja &> /dev/null; then
         CMAKE_ARGS="$CMAKE_ARGS -G Ninja"
     fi
-    
+
     # Export compile commands for IDE support
     CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
-    
+
     # Run CMake configuration
     log_info "Configuring CMake project..."
     if ! cmake $CMAKE_ARGS .; then
         error_exit "CMake configuration failed"
     fi
-    
+
     # Build configuration
     CMAKE_BUILD_ARGS="--build build --config $BUILD_TYPE --parallel $PARALLEL_JOBS"
     if [[ "$VERBOSE_BUILD" == "y" ]]; then
         CMAKE_BUILD_ARGS="$CMAKE_BUILD_ARGS --verbose"
     fi
-    
+
     log_info "Building project with $PARALLEL_JOBS parallel jobs..."
     if ! cmake $CMAKE_BUILD_ARGS; then
         error_exit "CMake build failed"
@@ -429,7 +429,7 @@ fi
 # Post-build actions
 post_build_actions() {
     log_success "Build completed successfully!"
-    
+
     # Run tests if requested and built
     if [[ "$BUILD_TESTS" == "y" ]]; then
         log_info "Running tests..."
@@ -439,7 +439,7 @@ post_build_actions() {
             xmake test
         fi
     fi
-    
+
     # Generate documentation if requested
     if [[ "$BUILD_DOCS" == "y" ]]; then
         log_info "Generating documentation..."
@@ -449,7 +449,7 @@ post_build_actions() {
             log_warn "Doxygen not found, skipping documentation generation"
         fi
     fi
-    
+
     # Show build summary
     echo ""
     echo "==============================================="
@@ -459,19 +459,19 @@ post_build_actions() {
     echo "Build type: $BUILD_TYPE"
     echo "Build time: $((SECONDS/60))m $((SECONDS%60))s"
     echo "Parallel jobs used: $PARALLEL_JOBS"
-    
+
     if [[ -d "build" ]]; then
         local build_size=$(du -sh build 2>/dev/null | cut -f1)
         echo "Build directory size: $build_size"
     fi
-    
+
     # Show important artifacts
     echo ""
     echo "Built artifacts:"
     if [[ "$BUILD_SYSTEM" == "cmake" ]]; then
         find build -name "*.so" -o -name "*.a" -o -name "*.dll" -o -name "*.exe" | head -10
     fi
-    
+
     # Installation instructions
     if [[ "$BUILD_SYSTEM" == "cmake" ]]; then
         echo ""

@@ -104,17 +104,17 @@ auto EnvUtils::expandWindowsVariables(const String& str) -> String {
         if (str[pos] == '%') {
             size_t start = pos + 1;
             size_t end = str.find('%', start);
-            
+
             if (end != String::npos && end > start) {
                 String varName = str.substr(start, end - start);
-                
+
                 if (isValidVariableName(varName)) {
                     String value = EnvCore::getEnv(varName, "");
                     result += value;
                 } else {
                     result += "%" + varName + "%";
                 }
-                
+
                 pos = end + 1;
             } else {
                 result += str[pos++];
@@ -130,15 +130,15 @@ auto EnvUtils::expandWindowsVariables(const String& str) -> String {
 auto EnvUtils::findNextVariable(const String& str, size_t start,
                                 VariableFormat format)
     -> std::tuple<bool, size_t, size_t, String> {
-    
+
     size_t pos = start;
-    
+
     if (format == VariableFormat::UNIX) {
         pos = str.find('$', start);
         if (pos != String::npos && pos + 1 < str.length()) {
             size_t varStart = pos + 1;
             size_t varEnd = varStart;
-            
+
             if (str[varStart] == '{') {
                 varStart++;
                 varEnd = str.find('}', varStart);
@@ -162,14 +162,14 @@ auto EnvUtils::findNextVariable(const String& str, size_t start,
         if (pos != String::npos) {
             size_t varStart = pos + 1;
             size_t varEnd = str.find('%', varStart);
-            
+
             if (varEnd != String::npos && varEnd > varStart) {
                 String varName = str.substr(varStart, varEnd - varStart);
                 return {true, pos, varEnd + 1, varName};
             }
         }
     }
-    
+
     return {false, 0, 0, ""};
 }
 

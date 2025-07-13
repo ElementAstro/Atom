@@ -135,7 +135,7 @@ auto EnvPath::addToPath(const String& path, bool prepend) -> bool {
     }
 
     String normalizedPath = normalizePath(path);
-    
+
     // Check if path already exists
     if (isInPath(normalizedPath)) {
         spdlog::debug("Path already exists in PATH: {}", normalizedPath);
@@ -143,7 +143,7 @@ auto EnvPath::addToPath(const String& path, bool prepend) -> bool {
     }
 
     Vector<String> entries = getPathEntries();
-    
+
     if (prepend) {
         entries.insert(entries.begin(), normalizedPath);
     } else {
@@ -171,7 +171,7 @@ auto EnvPath::removeFromPath(const String& path) -> bool {
 
     String normalizedPath = normalizePath(path);
     Vector<String> entries = getPathEntries();
-    
+
     auto originalSize = entries.size();
     entries.erase(
         std::remove_if(entries.begin(), entries.end(),
@@ -248,14 +248,14 @@ auto EnvPath::cleanupPath() -> bool {
 
     for (const auto& entry : entries) {
         String normalizedEntry = normalizePath(entry);
-        
+
         // Skip duplicates
         if (seen.find(normalizedEntry) != seen.end()) {
             continue;
         }
-        
+
         seen.insert(normalizedEntry);
-        
+
         // Keep valid paths
         if (isValidPath(entry)) {
             cleanEntries.push_back(entry);

@@ -146,17 +146,17 @@ Args:
 Examples:
     >>> import asio
     >>> from atom.io.dirstack import DirectoryStack
-    >>> 
+    >>>
     >>> io_context = asio.io_context()
     >>> dirstack = DirectoryStack(io_context)
-    >>> 
+    >>>
     >>> # Push current directory and change to a new one
     >>> def on_push(error):
     ...     if not error:
     ...         print("Successfully changed directory")
     ...     else:
     ...         print(f"Error: {error.message()}")
-    >>> 
+    >>>
     >>> dirstack.async_pushd("/tmp", on_push)
     >>> io_context.run()
 )")
@@ -185,7 +185,7 @@ Examples:
     ...         print("Successfully changed directory")
     ...     else:
     ...         print(f"Error: {error.message()}")
-    >>> 
+    >>>
     >>> dirstack.async_pushd("/tmp", on_push)
 )")
         .def(
@@ -203,11 +203,11 @@ Returns:
 
 Examples:
     >>> import asyncio
-    >>> 
+    >>>
     >>> async def change_dir():
     ...     await dirstack.pushd("/tmp").__await__()
     ...     print("Directory changed")
-    >>> 
+    >>>
     >>> asyncio.run(change_dir())
 )")
         .def(
@@ -230,7 +230,7 @@ Examples:
     ...         print("Successfully changed back to previous directory")
     ...     else:
     ...         print(f"Error: {error.message()}")
-    >>> 
+    >>>
     >>> dirstack.async_popd(on_pop)
 )")
         .def("popd", &atom::io::DirectoryStack::popd,
@@ -243,11 +243,11 @@ Returns:
 
 Examples:
     >>> import asyncio
-    >>> 
+    >>>
     >>> async def pop_dir():
     ...     await dirstack.popd().__await__()
     ...     print("Returned to previous directory")
-    >>> 
+    >>>
     >>> asyncio.run(pop_dir())
 )")
         .def("peek", &atom::io::DirectoryStack::peek,
@@ -322,7 +322,7 @@ Examples:
     ...         print("Changed to directory at index")
     ...     else:
     ...         print(f"Error: {error.message()}")
-    >>> 
+    >>>
     >>> dirstack.async_goto_index(2, on_goto)  # Change to the directory at index 2
 )")
         .def("goto_index", &atom::io::DirectoryStack::gotoIndex,
@@ -339,11 +339,11 @@ Returns:
 
 Examples:
     >>> import asyncio
-    >>> 
+    >>>
     >>> async def goto_dir():
     ...     await dirstack.goto_index(2).__await__()
     ...     print("Changed to directory at index 2")
-    >>> 
+    >>>
     >>> asyncio.run(goto_dir())
 )")
         .def(
@@ -369,7 +369,7 @@ Examples:
     ...         print("Stack saved to file")
     ...     else:
     ...         print(f"Error saving stack: {error.message()}")
-    >>> 
+    >>>
     >>> dirstack.async_save_stack_to_file("dirstack.txt", on_save)
 )")
         .def("save_stack_to_file", &atom::io::DirectoryStack::saveStackToFile,
@@ -386,11 +386,11 @@ Returns:
 
 Examples:
     >>> import asyncio
-    >>> 
+    >>>
     >>> async def save_stack():
     ...     await dirstack.save_stack_to_file("dirstack.txt").__await__()
     ...     print("Stack saved to file")
-    >>> 
+    >>>
     >>> asyncio.run(save_stack())
 )")
         .def(
@@ -416,7 +416,7 @@ Examples:
     ...         print("Stack loaded from file")
     ...     else:
     ...         print(f"Error loading stack: {error.message()}")
-    >>> 
+    >>>
     >>> dirstack.async_load_stack_from_file("dirstack.txt", on_load)
 )")
         .def("load_stack_from_file",
@@ -433,11 +433,11 @@ Returns:
 
 Examples:
     >>> import asyncio
-    >>> 
+    >>>
     >>> async def load_stack():
     ...     await dirstack.load_stack_from_file("dirstack.txt").__await__()
     ...     print("Stack loaded from file")
-    >>> 
+    >>>
     >>> asyncio.run(load_stack())
 )")
         .def("size", &atom::io::DirectoryStack::size,
@@ -485,7 +485,7 @@ Args:
 Examples:
     >>> def on_get_dir(path):
     ...     print(f"Current directory: {path}")
-    >>> 
+    >>>
     >>> dirstack.async_get_current_directory(on_get_dir)
 )")
         .def("get_current_directory",
@@ -499,11 +499,11 @@ Returns:
 
 Examples:
     >>> import asyncio
-    >>> 
+    >>>
     >>> async def print_current_dir():
     ...     path = await dirstack.get_current_directory().__await__()
     ...     print(f"Current directory: {path}")
-    >>> 
+    >>>
     >>> asyncio.run(print_current_dir())
 )")
         .def("__len__", &atom::io::DirectoryStack::size,
@@ -533,7 +533,7 @@ Returns:
 Examples:
     >>> import asio
     >>> from atom.io.dirstack import create_directory_stack
-    >>> 
+    >>>
     >>> io_context = asio.io_context()
     >>> dirstack = create_directory_stack(io_context)
 )");

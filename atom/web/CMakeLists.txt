@@ -70,7 +70,7 @@ set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS} atom-web-time)
 
 # Build Static Library
-add_library(${PROJECT_NAME} STATIC 
+add_library(${PROJECT_NAME} STATIC
     $<TARGET_OBJECTS:${PROJECT_NAME}_object>
     $<TARGET_OBJECTS:atom-web-time>
     $<TARGET_OBJECTS:atom-web-address>

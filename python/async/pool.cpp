@@ -79,7 +79,7 @@ PYBIND11_MODULE(pool, m) {
         m, "ThreadSafeQueue",
         R"(A thread-safe queue implementation for storing Python objects.
 
-This queue provides thread-safe operations for adding, removing, and 
+This queue provides thread-safe operations for adding, removing, and
 manipulating elements in a multi-threaded environment.
 
 Examples:

@@ -106,10 +106,10 @@ EnvCore::EnvCore(int argc, char** argv) : impl_(std::make_shared<Impl>()) {
 
     impl_->mExe = exePath.string();
     impl_->mCwd = fs::current_path().string();
-    
+
     if (argc > 0 && argv != nullptr) {
         impl_->mProgram = fs::path(argv[0]).filename().string();
-        
+
         // Parse command line arguments
         for (int i = 1; i < argc; ++i) {
             String arg(argv[i]);
@@ -124,7 +124,7 @@ EnvCore::EnvCore(int argc, char** argv) : impl_(std::make_shared<Impl>()) {
         }
     }
 
-    spdlog::debug("EnvCore initialized: exe={}, cwd={}, program={}", 
+    spdlog::debug("EnvCore initialized: exe={}, cwd={}, program={}",
                   impl_->mExe, impl_->mCwd, impl_->mProgram);
 }
 
@@ -141,18 +141,18 @@ auto EnvCore::Environ() -> HashMap<String, String> {
             if (eq_pos != std::wstring::npos) {
                 std::wstring key = line.substr(0, eq_pos);
                 std::wstring value = line.substr(eq_pos + 1);
-                
+
                 // Convert to narrow strings
                 int key_size = WideCharToMultiByte(CP_UTF8, 0, key.c_str(), -1, nullptr, 0, nullptr, nullptr);
                 int val_size = WideCharToMultiByte(CP_UTF8, 0, value.c_str(), -1, nullptr, 0, nullptr, nullptr);
-                
+
                 if (key_size > 0 && val_size > 0) {
                     std::string key_str(key_size - 1, '\0');
                     std::string val_str(val_size - 1, '\0');
-                    
+
                     WideCharToMultiByte(CP_UTF8, 0, key.c_str(), -1, &key_str[0], key_size, nullptr, nullptr);
                     WideCharToMultiByte(CP_UTF8, 0, value.c_str(), -1, &val_str[0], val_size, nullptr, nullptr);
-                    
+
                     result[String(key_str)] = String(val_str);
                 }
             }
@@ -345,12 +345,12 @@ void EnvCore::unsetEnvMultiple(const Vector<String>& names) {
 auto EnvCore::listVariables() -> Vector<String> {
     Vector<String> result;
     HashMap<String, String> envVars = Environ();
-    
+
     result.reserve(envVars.size());
     for (const auto& [key, value] : envVars) {
         result.push_back(key);
     }
-    
+
     spdlog::debug("Listed {} environment variables", result.size());
     return result;
 }

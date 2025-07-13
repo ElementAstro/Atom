@@ -386,7 +386,7 @@ void cpp20_features_example() {
     {
         Timer t("使用 span 进行映射操作");
         std::span<const float> data_view(data);
-        
+
         // 创建结果向量
         std::vector<float> results(data_view.size());
         for (size_t i = 0; i < data_view.size(); ++i) {
@@ -406,10 +406,10 @@ void cpp20_features_example() {
     struct Person {
         std::string name;
         int age;
-        
+
         // 移除局部类中的友元函数定义
     };
-    
+
     // 定义非成员操作符重载
     std::ostream& operator<<(std::ostream& os, const Person& p) {
         return os << p.name << "(" << p.age << ")";
@@ -422,14 +422,14 @@ void cpp20_features_example() {
     // 使用标准库过滤数据
     {
         Timer t("使用标准库过滤成年人");
-        
+
         std::vector<Person> adults;
         for (const auto& p : people) {
             if (p.age >= 18) {
                 adults.push_back(p);
             }
         }
-        
+
         // 注释掉有问题的调用
         // auto adults = atom::async::Parallel::filter_range(
         //     people, [](const Person& p) { return p.age >= 18; });
@@ -441,9 +441,9 @@ void cpp20_features_example() {
 // 7. 协程任务示例 - 使用标准库替代
 void coroutine_task_example() {
     std::cout << "\n===== 协程任务示例 =====\n";
-    
+
     std::cout << "注意：协程示例需要使用 atom::async::Task，已被注释" << std::endl;
-    
+
     // 简化协程示例，使用标准线程代替
     auto simple_task = []() -> int {
         std::cout << "执行简单任务..." << std::endl;
@@ -522,7 +522,7 @@ void simd_operations_example() {
             for (size_t i = 0; i < size; ++i) {
                 result[i] = a[i] + b[i];
             }
-            
+
             // 注释掉有问题的调用
             // atom::async::SimdOps::add(a.data(), b.data(), result.data(), size);
 
@@ -553,7 +553,7 @@ void simd_operations_example() {
             for (size_t i = 0; i < size; ++i) {
                 result[i] = a[i] * b[i];
             }
-            
+
             // 注释掉有问题的调用
             // atom::async::SimdOps::multiply(a.data(), b.data(), result.data(), size);
 
@@ -585,7 +585,7 @@ void simd_operations_example() {
             for (size_t i = 0; i < size; ++i) {
                 dot_result += a[i] * b[i];
             }
-            
+
             // 注释掉有问题的调用
             // float dot_result = atom::async::SimdOps::dotProduct(a.data(), b.data(), size);
 
@@ -622,7 +622,7 @@ void simd_operations_example() {
             for (size_t i = 0; i < span_a.size(); ++i) {
                 dot_result += span_a[i] * span_b[i];
             }
-            
+
             // 注释掉有问题的调用
             // float dot_result = atom::async::SimdOps::dotProduct(span_a, span_b);
             std::cout << "使用 span 的点积结果: " << dot_result
@@ -647,11 +647,11 @@ void edge_cases_and_error_handling() {
         try {
             // 使用标准库代替
             std::for_each(empty_data.begin(), empty_data.end(), [](int& x) { x *= 2; });
-            
+
             // 注释掉有问题的调用
             // atom::async::Parallel::for_each(
             //     empty_data.begin(), empty_data.end(), [](int& x) { x *= 2; });
-            
+
             std::cout << "空数据集的 for_each 成功完成" << std::endl;
         } catch (const std::exception& e) {
             std::cout << "空数据集的 for_each 发生错误: " << e.what()
@@ -666,12 +666,12 @@ void edge_cases_and_error_handling() {
             for (int x : empty_data) {
                 result.push_back(x * 2);
             }
-            
+
             // 注释掉有问题的调用
             // auto result =
             //    atom::async::Parallel::map(empty_data.begin(), empty_data.end(),
             //                               [](int x) { return x * 2; });
-            
+
             std::cout << "空数据集的 map 成功完成，结果大小: " << result.size()
                       << std::endl;
         } catch (const std::exception& e) {
@@ -688,12 +688,12 @@ void edge_cases_and_error_handling() {
         try {
             // 使用标准库代替
             int result = std::accumulate(single_data.begin(), single_data.end(), 10);
-            
+
             // 注释掉有问题的调用
             // int result = atom::async::Parallel::reduce(
             //     single_data.begin(), single_data.end(), 10,
             //     [](int a, int b) { return a + b; });
-            
+
             std::cout << "单元素数据集的 reduce 结果: " << result << std::endl;
         } catch (const std::exception& e) {
             std::cout << "单元素数据集的 reduce 发生错误: " << e.what()
@@ -704,10 +704,10 @@ void edge_cases_and_error_handling() {
         try {
             // 使用标准库代替
             std::sort(single_data.begin(), single_data.end());
-            
+
             // 注释掉有问题的调用
             // atom::async::Parallel::sort(single_data.begin(), single_data.end());
-            
+
             std::cout << "单元素数据集的 sort 成功完成，结果: "
                       << single_data[0] << std::endl;
         } catch (const std::exception& e) {
@@ -730,12 +730,12 @@ void edge_cases_and_error_handling() {
             if (b.data() == nullptr || result.data() == nullptr) {
                 throw std::invalid_argument("输入指针不能为空");
             }
-            
+
             // 模拟正常操作
             for (size_t i = 0; i < 2; ++i) {
                 result[i] = 0 + b[i];  // 模拟 a 为空
             }
-            
+
             // 注释掉有问题的调用
             // atom::async::SimdOps::add(nullptr, b.data(), result.data(), 2);
             std::cout << "不应该看到这行输出!" << std::endl;
@@ -753,7 +753,7 @@ void edge_cases_and_error_handling() {
             if (span_a.size() != span_c.size()) {
                 throw std::invalid_argument("向量大小不匹配");
             }
-            
+
             // 注释掉有问题的调用
             // float result = atom::async::SimdOps::dotProduct(span_a, span_c);
             std::cout << "不应该看到这行输出!" << std::endl;
@@ -798,13 +798,13 @@ void jthread_example() {
     // 使用标准库代替 jthread 实现的 for_each
     {
         Timer t("使用 std::for_each 的处理");
-        
+
         // 使用标准库代替
         std::for_each(data.begin(), data.end(), [&counter](int& val) {
             val *= 2;  // 乘以2
             counter++;
         });
-        
+
         // 注释掉有问题的调用
         // atom::async::Parallel::for_each_jthread(data.begin(), data.end(),
         //                                        [&counter](int& val) {
@@ -823,13 +823,13 @@ void jthread_example() {
     // 使用标准库代替 jthread 实现的 for_each
     {
         Timer t("使用 std::for_each 的处理 (模拟4个线程)");
-        
+
         // 使用标准库代替
         std::for_each(data.begin(), data.end(), [&counter](int& val) {
             val *= 2;  // 乘以2
             counter++;
         });
-        
+
         // 注释掉有问题的调用
         // atom::async::Parallel::for_each_jthread(
         //    data.begin(), data.end(),

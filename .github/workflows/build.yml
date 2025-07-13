@@ -43,19 +43,27 @@ jobs:
       should_build: ${{ steps.check.outputs.should_build }}
     steps:
     - uses: actions/checkout@v4
+<<<<<<< HEAD
       with:
         fetch-depth: 0
     
+=======
+
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
+<<<<<<< HEAD
         cache: 'pip'
     
+=======
+
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
     - name: Install Python dependencies
       run: |
         pip install pyyaml
-    
+
     - name: Run build validation
       run: |
         if [ -f validate-build.py ]; then
@@ -69,7 +77,7 @@ jobs:
       run: |
         echo "should_build=true" >> $GITHUB_OUTPUT
 
-  # Matrix build across platforms and configurations  
+  # Matrix build across platforms and configurations
   build:
     needs: validate
     if: needs.validate.outputs.should_build == 'true'
@@ -83,6 +91,7 @@ jobs:
             cc: gcc-12
             cxx: g++-12
             preset: release
+<<<<<<< HEAD
             triplet: x64-linux
             
           - name: "Ubuntu 22.04 GCC-13"
@@ -93,13 +102,22 @@ jobs:
             triplet: x64-linux
             
           - name: "Ubuntu 22.04 Clang-15"
+=======
+
+          - name: "Ubuntu 22.04 Clang"
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
             os: ubuntu-22.04
             cc: clang-15
             cxx: clang++-15
             preset: release
+<<<<<<< HEAD
             triplet: x64-linux
             
           - name: "Ubuntu 22.04 Clang-16"
+=======
+
+          - name: "Ubuntu Debug with Tests"
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
             os: ubuntu-22.04
             cc: clang-16
             cxx: clang++-16
@@ -111,6 +129,7 @@ jobs:
             cc: gcc-13
             cxx: g++-13
             preset: debug-full
+<<<<<<< HEAD
             triplet: x64-linux
             enable_tests: true
             enable_examples: true
@@ -123,6 +142,9 @@ jobs:
             triplet: x64-linux
             enable_coverage: true
             
+=======
+
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
           # macOS builds
           - name: "macOS 12 Clang"
             os: macos-12
@@ -143,6 +165,7 @@ jobs:
             cc: clang
             cxx: clang++
             preset: release
+<<<<<<< HEAD
             triplet: x64-osx
             
           # Windows MSVC builds
@@ -159,6 +182,15 @@ jobs:
             
           # Windows MSYS2 MinGW64 builds
           - name: "Windows MSYS2 MinGW64 GCC"
+=======
+
+          # Windows builds
+          - name: "Windows MSVC"
+            os: windows-latest
+            preset: release
+
+          - name: "Windows MinGW"
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
             os: windows-latest
             preset: release-msys2
             triplet: x64-mingw-dynamic
@@ -182,7 +214,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.name }}
-    
+
     steps:
     - uses: actions/checkout@v4
       with:
@@ -238,6 +270,7 @@ jobs:
     - name: Setup vcpkg (Linux/macOS)
       if: runner.os != 'Windows' && !matrix.msys2
       run: |
+<<<<<<< HEAD
         if [ ! -d "vcpkg" ]; then
           git clone https://github.com/Microsoft/vcpkg.git
           ./vcpkg/bootstrap-vcpkg.sh
@@ -245,6 +278,13 @@ jobs:
         
     - name: Setup vcpkg (Windows MSVC)
       if: runner.os == 'Windows' && !matrix.msys2
+=======
+        git clone https://github.com/Microsoft/vcpkg.git
+        ./vcpkg/bootstrap-vcpkg.sh
+
+    - name: Setup vcpkg (Windows)
+      if: runner.os == 'Windows'
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
       run: |
         if (!(Test-Path "vcpkg")) {
           git clone https://github.com/Microsoft/vcpkg.git
@@ -280,9 +320,9 @@ jobs:
         if [[ "${{ matrix.enable_coverage }}" == "true" ]]; then
           sudo apt-get install -y lcov gcovr
         fi
-        
+
     - name: Install system dependencies (macOS)
-      if: runner.os == 'macOS'  
+      if: runner.os == 'macOS'
       run: |
         brew install ninja ccache pkg-config
         
@@ -448,6 +488,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+<<<<<<< HEAD
         include:
           # Linux wheels
           - os: ubuntu-latest
@@ -489,33 +530,49 @@ jobs:
             python-version: '3.12'
             arch: x86_64
         
+=======
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
     runs-on: ${{ matrix.os }}
-    
+
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
-        
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
-        
+
     - name: Install build dependencies
       run: |
         pip install build wheel pybind11 numpy
-        
+
     - name: Build Python package
       run: |
+<<<<<<< HEAD
         python -m build --wheel
         
+=======
+        python -m build
+
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
     - name: Test Python package
       run: |
         pip install dist/*.whl
         python -c "import atom; print('Package imported successfully')"
+<<<<<<< HEAD
         
     - name: Upload Python wheels
       uses: actions/upload-artifact@v4
+=======
+
+    - name: Upload Python artifacts
+      uses: actions/upload-artifact@v3
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
       with:
         name: python-wheels-${{ matrix.os }}-py${{ matrix.python-version }}-${{ matrix.arch }}
         path: dist/*.whl
@@ -524,6 +581,7 @@ jobs:
   # Documentation build
   documentation:
     runs-on: ubuntu-latest
+<<<<<<< HEAD
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     
     steps:
@@ -546,6 +604,19 @@ jobs:
           echo "<h1>Atom Library Documentation</h1>" > docs/html/index.html
         fi
       
+=======
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Doxygen
+      run: sudo apt-get install -y doxygen graphviz
+
+    - name: Generate documentation
+      run: doxygen Doxyfile
+
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v4
       with:
@@ -597,8 +668,9 @@ jobs:
     needs: [build, python-package]
     runs-on: ubuntu-latest
     if: github.event_name == 'release'
-    
+
     steps:
+<<<<<<< HEAD
     - name: Download build artifacts
       uses: actions/download-artifact@v4
       with:
@@ -616,6 +688,11 @@ jobs:
         ls -la
         find . -name "*.deb" -o -name "*.tar.gz" -o -name "*.zip" -o -name "*.whl" -o -name "*.msi" | head -20
         
+=======
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
+
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
     - name: Release
       uses: softprops/action-gh-release@v2
       with:

@@ -13,22 +13,22 @@ PYBIND11_MODULE(fraction, m) {
         -----------------------------
 
         This module provides a robust fraction class for exact rational arithmetic.
-        
+
         The Fraction class represents rational numbers as a numerator and denominator,
         always keeping the fraction in reduced form. It supports all standard arithmetic
         operations, comparison, conversion to various types, and additional utilities.
 
         Example:
             >>> from atom.algorithm import fraction
-            >>> 
+            >>>
             >>> # Create fractions
             >>> a = fraction.Fraction(1, 2)    # 1/2
             >>> b = fraction.Fraction(3, 4)    # 3/4
-            >>> 
+            >>>
             >>> # Arithmetic operations
             >>> c = a + b                      # 5/4
             >>> print(c)                       # "5/4"
-            >>> 
+            >>>
             >>> # Converting from floats
             >>> d = fraction.make_fraction(0.333333)  # Approximate as a fraction
             >>> print(d)                       # "1/3" or a close approximation
@@ -67,18 +67,18 @@ Raises:
 
 Examples:
     >>> from atom.algorithm.fraction import Fraction
-    >>> 
+    >>>
     >>> # Create a fraction
     >>> f1 = Fraction(1, 2)    # 1/2
     >>> f2 = Fraction(3, 4)    # 3/4
-    >>> 
+    >>>
     >>> # Basic arithmetic
     >>> f3 = f1 + f2           # 5/4
     >>> f4 = f1 * f2           # 3/8
-    >>> 
+    >>>
     >>> # Comparisons
     >>> f1 < f2                # True
-    >>> 
+    >>>
     >>> # Conversion
     >>> float(f1)              # 0.5
 )")

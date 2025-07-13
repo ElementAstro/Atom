@@ -201,7 +201,7 @@ template <SmartPointer T>
 auto toString(const T& ptr) -> std::string {
     try {
         if (ptr) {
-            return std::format("SmartPointer({}, {})", 
+            return std::format("SmartPointer({}, {})",
                              static_cast<const void*>(ptr.get()), toString(*ptr));
         }
         return "nullptr";
@@ -287,7 +287,7 @@ auto toString(const T& container) -> std::string {
  * @throws ToStringException if conversion fails
  */
 template <typename T>
-    requires(!StringType<T> && !Container<T> && !PointerType<T> && 
+    requires(!StringType<T> && !Container<T> && !PointerType<T> &&
              !EnumType<T> && !SmartPointer<T>)
 auto toString(const T& value) -> std::string {
     try {
@@ -323,11 +323,11 @@ auto joinCommandLine(const Args&... args) -> std::string {
     try {
         std::string result;
         result.reserve(sizeof...(args) * 32);
-        
+
         bool first = true;
-        ((first ? (result += toString(args), first = false) 
+        ((first ? (result += toString(args), first = false)
                 : (result += " " + toString(args))), ...);
-        
+
         return result;
     } catch (const std::exception& e) {
         throw ToStringException(std::format("Command line joining failed: {}", e.what()));
@@ -432,7 +432,7 @@ auto toString(const std::array<T, N>& array) -> std::string {
  * @throws ToStringException if conversion fails
  */
 template <typename Tuple, std::size_t... I>
-auto tupleToStringImpl(const Tuple& tpl, std::index_sequence<I...>, 
+auto tupleToStringImpl(const Tuple& tpl, std::index_sequence<I...>,
                       std::string_view separator) -> std::string {
     try {
         std::string result = "(";
