@@ -33,7 +33,7 @@ auto getAddresses(int family, IF_ADDRS* addrs) -> int {
     do {
         *addrs = (IP_ADAPTER_ADDRESSES*)HeapAlloc(GetProcessHeap(), 0, bufLen);
         if (*addrs == nullptr) {
-            LOG_F(ERROR, "HeapAlloc failed");
+            spdlog::error("HeapAlloc failed while allocating memory for adapter addresses.");
             return -1;
         }
 
@@ -49,7 +49,7 @@ auto getAddresses(int family, IF_ADDRS* addrs) -> int {
         iter++;
     } while ((rv == ERROR_BUFFER_OVERFLOW) && (iter < 3));
     if (rv != NO_ERROR) {
-        LOG_F(ERROR, "GetAdaptersAddresses failed");
+        spdlog::error("GetAdaptersAddresses failed to retrieve network adapter addresses. Error code: {}", rv);
         return -1;
     }
     return 0;

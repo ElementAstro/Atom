@@ -33,7 +33,7 @@ auto getCPUModel_Windows() -> std::string;
 // 这里应该添加所有函数的前向声明
 
 auto getCurrentCpuUsage_Windows() -> float {
-    LOG_F(INFO, "Starting getCurrentCpuUsage function on Windows");
+    spdlog::info("Invoking getCurrentCpuUsage_Windows to retrieve overall CPU usage on Windows.");
 
     static PDH_HQUERY cpuQuery = nullptr;
     static PDH_HCOUNTER cpuTotal = nullptr;
@@ -48,26 +48,23 @@ auto getCurrentCpuUsage_Windows() -> float {
         PdhCollectQueryData(cpuQuery);
         initialized = true;
 
-        // First call will not return valid data, need to wait and call again
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         PdhCollectQueryData(cpuQuery);
     }
 
-    // Get the CPU usage
     PDH_FMT_COUNTERVALUE counterVal;
     PdhCollectQueryData(cpuQuery);
     PdhGetFormattedCounterValue(cpuTotal, PDH_FMT_DOUBLE, nullptr, &counterVal);
     cpuUsage = static_cast<float>(counterVal.doubleValue);
 
-    // Clamp the value between 0 and 100
     cpuUsage = std::max(0.0F, std::min(100.0F, cpuUsage));
 
-    LOG_F(INFO, "Windows CPU Usage: {}%", cpuUsage);
+    spdlog::info("Overall CPU usage on Windows: {:.2f}%", cpuUsage);
     return cpuUsage;
 }
 
 auto getPerCoreCpuUsage() -> std::vector<float> {
-    LOG_F(INFO, "Starting getPerCoreCpuUsage function on Windows");
+    spdlog::info("Invoking getPerCoreCpuUsage to retrieve per-core CPU usage statistics on Windows.");
 
     static PDH_HQUERY cpuQuery = nullptr;
     static std::vector<PDH_HCOUNTER> cpuCounters;
@@ -90,12 +87,10 @@ auto getPerCoreCpuUsage() -> std::vector<float> {
         PdhCollectQueryData(cpuQuery);
         initialized = true;
 
-        // First call will not return valid data, need to wait and call again
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         PdhCollectQueryData(cpuQuery);
     }
 
-    // Get the CPU usage for each core
     PdhCollectQueryData(cpuQuery);
 
     for (int i = 0; i < numCores; i++) {
@@ -106,41 +101,31 @@ auto getPerCoreCpuUsage() -> std::vector<float> {
         coreUsages[i] = std::max(0.0F, std::min(100.0F, coreUsages[i]));
     }
 
-    LOG_F(INFO, "Windows Per-Core CPU Usage collected for {} cores", numCores);
+    spdlog::info("Collected per-core CPU usage for {} logical cores on Windows.", numCores);
     return coreUsages;
 }
 
 auto getCurrentCpuTemperature() -> float {
-    LOG_F(INFO, "Starting getCurrentCpuTemperature function on Windows");
-
-    // Windows doesn't provide a direct API for CPU temperature
-    // This would require WMI or third-party libraries like OpenHardwareMonitor
-    // A simplified placeholder implementation is provided
+    spdlog::info("Invoking getCurrentCpuTemperature to retrieve CPU temperature on Windows (placeholder implementation).");
 
     float temperature = 0.0F;
 
-    LOG_F(INFO, "Windows CPU Temperature: {}°C (placeholder value)",
-          temperature);
+    spdlog::info("CPU temperature on Windows: {:.2f}°C (placeholder value)", temperature);
     return temperature;
 }
 
 auto getPerCoreCpuTemperature() -> std::vector<float> {
-    LOG_F(INFO, "Starting getPerCoreCpuTemperature function on Windows");
+    spdlog::info("Invoking getPerCoreCpuTemperature to retrieve per-core CPU temperatures on Windows (placeholder implementation).");
 
     int numCores = getNumberOfLogicalCores();
     std::vector<float> temperatures(numCores, 0.0F);
 
-    // As with getCurrentCpuTemperature, this is a placeholder
-
-    LOG_F(INFO,
-          "Windows Per-Core CPU Temperature collected for {} cores "
-          "(placeholder values)",
-          numCores);
+    spdlog::info("Per-core CPU temperatures on Windows: placeholder values for {} logical cores.", numCores);
     return temperatures;
 }
 
 auto getCPUModel() -> std::string {
-    LOG_F(INFO, "Starting getCPUModel function on Windows");
+    spdlog::info("Invoking getCPUModel to retrieve the CPU model string on Windows.");
 
     if (!needsCacheRefresh() && !g_cpuInfoCache.model.empty()) {
         return g_cpuInfoCache.model;
@@ -155,7 +140,6 @@ auto getCPUModel() -> std::string {
     unsigned int nExIds = cpuInfo[0];
 
     if (nExIds >= 0x80000004) {
-        // Get the brand string from EAX=8000000[2,3,4]
         for (unsigned int i = 0x80000002; i <= 0x80000004; i++) {
             __cpuid(cpuInfo, i);
             memcpy(cpuBrandString + (i - 0x80000002) * 16, cpuInfo,
@@ -164,16 +148,15 @@ auto getCPUModel() -> std::string {
         cpuModel = cpuBrandString;
     }
 
-    // Trim whitespace
     cpuModel.erase(0, cpuModel.find_first_not_of(" \t\n\r\f\v"));
     cpuModel.erase(cpuModel.find_last_not_of(" \t\n\r\f\v") + 1);
 
-    LOG_F(INFO, "Windows CPU Model: {}", cpuModel);
+    spdlog::info("Detected CPU model on Windows: {}", cpuModel);
     return cpuModel;
 }
 
 auto getProcessorIdentifier() -> std::string {
-    LOG_F(INFO, "Starting getProcessorIdentifier function on Windows");
+    spdlog::info("Invoking getProcessorIdentifier to retrieve the processor identifier on Windows.");
 
     if (!needsCacheRefresh() && !g_cpuInfoCache.identifier.empty()) {
         return g_cpuInfoCache.identifier;
@@ -184,14 +167,12 @@ auto getProcessorIdentifier() -> std::string {
     int cpuInfo[4] = {0};
     char vendorID[13] = {0};
 
-    // Get vendor ID
     __cpuid(cpuInfo, 0);
     memcpy(vendorID, &cpuInfo[1], sizeof(int));
     memcpy(vendorID + 4, &cpuInfo[3], sizeof(int));
     memcpy(vendorID + 8, &cpuInfo[2], sizeof(int));
     vendorID[12] = '\0';
 
-    // Get family, model, stepping
     __cpuid(cpuInfo, 1);
     int family = (cpuInfo[0] >> 8) & 0xF;
     int model = (cpuInfo[0] >> 4) & 0xF;
@@ -211,112 +192,94 @@ auto getProcessorIdentifier() -> std::string {
                  " Model " + std::to_string(model) + " Stepping " +
                  std::to_string(stepping);
 
-    LOG_F(INFO, "Windows CPU Identifier: {}", identifier);
+    spdlog::info("Constructed processor identifier on Windows: {}", identifier);
     return identifier;
 }
 
 auto getProcessorFrequency() -> double {
-    LOG_F(INFO, "Starting getProcessorFrequency function on Windows");
+    spdlog::info("Invoking getProcessorFrequency to retrieve the current CPU frequency on Windows.");
 
     DWORD bufSize = sizeof(DWORD);
     DWORD mhz = 0;
 
-    // Get current frequency (in MHz)
     if (RegGetValue(HKEY_LOCAL_MACHINE,
                     "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
                     "~MHz", RRF_RT_REG_DWORD, nullptr, &mhz,
                     &bufSize) == ERROR_SUCCESS) {
         double frequency = static_cast<double>(mhz) / 1000.0;
-        LOG_F(INFO, "Windows CPU Frequency: {} GHz", frequency);
+        spdlog::info("Current CPU frequency on Windows: {:.3f} GHz", frequency);
         return frequency;
     }
 
-    LOG_F(INFO, "Failed to get Windows CPU Frequency");
+    spdlog::warn("Failed to retrieve current CPU frequency on Windows.");
     return 0.0;
 }
 
 auto getMinProcessorFrequency() -> double {
-    LOG_F(INFO, "Starting getMinProcessorFrequency function on Windows");
-
-    // Windows doesn't provide a direct API for minimum CPU frequency
-    // This would require reading from the registry or using WMI
-    // A placeholder implementation is provided
+    spdlog::info("Invoking getMinProcessorFrequency to retrieve the minimum CPU frequency on Windows.");
 
     double minFreq = 0.0;
 
-    // As a fallback, we can try to get processor information from WMIC
-    // For simplicity, we'll return a default value or a fraction of the current
-    // frequency
     double currentFreq = getProcessorFrequency();
     if (currentFreq > 0) {
-        minFreq = currentFreq * 0.5;  // Estimate as half the current frequency
+        minFreq = currentFreq * 0.5;
+        spdlog::info("Estimated minimum CPU frequency as half of current: {:.3f} GHz", minFreq);
     }
 
-    LOG_F(INFO, "Windows CPU Min Frequency: {} GHz (estimated)", minFreq);
+    spdlog::info("Minimum CPU frequency on Windows: {:.3f} GHz (estimated)", minFreq);
     return minFreq;
 }
 
 auto getMaxProcessorFrequency() -> double {
-    LOG_F(INFO, "Starting getMaxProcessorFrequency function on Windows");
+    spdlog::info("Invoking getMaxProcessorFrequency to retrieve the maximum CPU frequency on Windows.");
 
     DWORD bufSize = sizeof(DWORD);
     DWORD mhz = 0;
 
-    // Try to get the max frequency from registry
     if (RegGetValue(HKEY_LOCAL_MACHINE,
                     "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
                     "~MHz", RRF_RT_REG_DWORD, nullptr, &mhz,
                     &bufSize) == ERROR_SUCCESS) {
         double frequency = static_cast<double>(mhz) / 1000.0;
-        LOG_F(INFO, "Windows CPU Max Frequency: {} GHz", frequency);
+        spdlog::info("Maximum CPU frequency on Windows: {:.3f} GHz", frequency);
         return frequency;
     }
 
-    LOG_F(INFO, "Failed to get Windows CPU Max Frequency");
-    return getProcessorFrequency();  // Fallback to current frequency
+    spdlog::warn("Failed to retrieve maximum CPU frequency on Windows. Using current frequency as fallback.");
+    return getProcessorFrequency();
 }
 
 auto getPerCoreFrequencies() -> std::vector<double> {
-    LOG_F(INFO, "Starting getPerCoreFrequencies function on Windows");
+    spdlog::info("Invoking getPerCoreFrequencies to retrieve per-core CPU frequencies on Windows.");
 
     int numCores = getNumberOfLogicalCores();
     std::vector<double> frequencies(numCores, 0.0);
 
-    // Windows doesn't provide an easy way to get per-core frequencies
-    // This would require platform-specific hardware monitoring
-    // For simplicity, we'll use the same frequency for all cores
     double frequency = getProcessorFrequency();
 
     for (int i = 0; i < numCores; i++) {
         frequencies[i] = frequency;
     }
 
-    LOG_F(INFO, "Windows Per-Core CPU Frequencies: {} GHz (all cores)",
-          frequency);
+    spdlog::info("Assigned CPU frequency {:.3f} GHz to all {} logical cores on Windows.", frequency, numCores);
     return frequencies;
 }
 
 auto getNumberOfPhysicalPackages() -> int {
-    LOG_F(INFO, "Starting getNumberOfPhysicalPackages function on Windows");
+    spdlog::info("Invoking getNumberOfPhysicalPackages to determine the number of physical CPU packages on Windows.");
 
     if (!needsCacheRefresh() && g_cpuInfoCache.numPhysicalPackages > 0) {
         return g_cpuInfoCache.numPhysicalPackages;
     }
 
-    int numberOfPackages = 0;
+    int numberOfPackages = 1;
 
-    // Use WMI to get physical package information
-    // This is a simplified placeholder implementation
-
-    // Most desktop/laptop systems have 1 physical package
-    numberOfPackages = 1;
-
-    LOG_F(INFO, "Windows Physical CPU Packages: {}", numberOfPackages);
+    spdlog::info("Number of physical CPU packages detected on Windows: {}", numberOfPackages);
     return numberOfPackages;
 }
 
 auto getNumberOfPhysicalCores() -> int {
-    LOG_F(INFO, "Starting getNumberOfPhysicalCores function on Windows");
+    spdlog::info("Invoking getNumberOfPhysicalCores to determine the number of physical CPU cores on Windows.");
 
     if (!needsCacheRefresh() && g_cpuInfoCache.numPhysicalCores > 0) {
         return g_cpuInfoCache.numPhysicalCores;
@@ -325,16 +288,10 @@ auto getNumberOfPhysicalCores() -> int {
     SYSTEM_INFO sysInfo;
     GetSystemInfo(&sysInfo);
 
-    // GetSystemInfo returns logical cores, not physical cores
-    // For a more accurate count, we would need to use WMI or similar
-    // This is a simplified approximation
     int numberOfCores = sysInfo.dwNumberOfProcessors;
 
-    // Try to account for hyperthreading by dividing by 2
-    // This is a very rough approximation
     bool hasHyperthreading = false;
 
-    // Check for hyperthreading capability using CPUID
     int cpuInfo[4] = {0};
     __cpuid(cpuInfo, 1);
     hasHyperthreading = (cpuInfo[3] & (1 << 28)) != 0;
@@ -343,15 +300,14 @@ auto getNumberOfPhysicalCores() -> int {
         numberOfCores = numberOfCores / 2;
     }
 
-    // Ensure we have at least 1 core
     numberOfCores = std::max(1, numberOfCores);
 
-    LOG_F(INFO, "Windows Physical CPU Cores: {}", numberOfCores);
+    spdlog::info("Number of physical CPU cores detected on Windows: {}", numberOfCores);
     return numberOfCores;
 }
 
 auto getNumberOfLogicalCores() -> int {
-    LOG_F(INFO, "Starting getNumberOfLogicalCores function on Windows");
+    spdlog::info("Invoking getNumberOfLogicalCores to determine the number of logical CPU cores on Windows.");
 
     if (!needsCacheRefresh() && g_cpuInfoCache.numLogicalCores > 0) {
         return g_cpuInfoCache.numLogicalCores;
@@ -362,12 +318,12 @@ auto getNumberOfLogicalCores() -> int {
 
     int numberOfCores = sysInfo.dwNumberOfProcessors;
 
-    LOG_F(INFO, "Windows Logical CPU Cores: {}", numberOfCores);
+    spdlog::info("Number of logical CPU cores detected on Windows: {}", numberOfCores);
     return numberOfCores;
 }
 
 auto getCacheSizes() -> CacheSizes {
-    LOG_F(INFO, "Starting getCacheSizes function on Windows");
+    spdlog::info("Invoking getCacheSizes to retrieve CPU cache sizes on Windows.");
 
     if (!needsCacheRefresh() &&
         (g_cpuInfoCache.caches.l1d > 0 || g_cpuInfoCache.caches.l2 > 0 ||
@@ -377,18 +333,15 @@ auto getCacheSizes() -> CacheSizes {
 
     CacheSizes cacheSizes{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-    // L1 cache size - use CPUID
     int cpuInfo[4] = {0};
 
     __cpuid(cpuInfo, 0);
     int maxFunc = cpuInfo[0];
 
     if (maxFunc >= 4) {
-        // Get cache info using CPUID function 4
         for (int i = 0;; i++) {
             __cpuidex(cpuInfo, 4, i);
 
-            // If no more caches
             if ((cpuInfo[0] & 0x1F) == 0)
                 break;
 
@@ -399,14 +352,13 @@ auto getCacheSizes() -> CacheSizes {
             int sets = cpuInfo[2] + 1;
             int totalSize = (associativity * lineSize * sets);
 
-            // Type: 1=data, 2=instruction, 3=unified
             switch (level) {
                 case 1:
-                    if (type == 1) {  // Data cache
+                    if (type == 1) {
                         cacheSizes.l1d = totalSize;
                         cacheSizes.l1d_line_size = lineSize;
                         cacheSizes.l1d_associativity = associativity;
-                    } else if (type == 2) {  // Instruction cache
+                    } else if (type == 2) {
                         cacheSizes.l1i = totalSize;
                         cacheSizes.l1i_line_size = lineSize;
                         cacheSizes.l1i_associativity = associativity;
@@ -426,7 +378,7 @@ auto getCacheSizes() -> CacheSizes {
         }
     }
 
-    LOG_F(INFO, "Windows Cache Sizes: L1d={}KB, L1i={}KB, L2={}KB, L3={}KB",
+    spdlog::info("Cache sizes on Windows: L1d={} KB, L1i={} KB, L2={} KB, L3={} KB",
           cacheSizes.l1d / 1024, cacheSizes.l1i / 1024, cacheSizes.l2 / 1024,
           cacheSizes.l3 / 1024);
 
@@ -434,52 +386,36 @@ auto getCacheSizes() -> CacheSizes {
 }
 
 auto getCpuLoadAverage() -> LoadAverage {
-    LOG_F(INFO, "Starting getCpuLoadAverage function on Windows");
+    spdlog::info("Invoking getCpuLoadAverage to retrieve system load averages on Windows (approximated from CPU usage).");
 
     LoadAverage loadAvg{0.0, 0.0, 0.0};
 
-    // Windows doesn't have a direct equivalent to Unix load average
-    // Instead, we can use CPU usage as an approximation
     float cpuUsage = getCurrentCpuUsage();
 
-    // Convert to a load-like value
     int numCores = getNumberOfLogicalCores();
     double load = (cpuUsage / 100.0) * numCores;
 
-    // For simplicity, use the same value for all time periods
     loadAvg.oneMinute = load;
     loadAvg.fiveMinutes = load;
     loadAvg.fifteenMinutes = load;
 
-    LOG_F(INFO,
-          "Windows Load Average (approximated from CPU usage): {}, {}, {}",
+    spdlog::info("System load averages on Windows (approximated): 1min={:.2f}, 5min={:.2f}, 15min={:.2f}",
           loadAvg.oneMinute, loadAvg.fiveMinutes, loadAvg.fifteenMinutes);
 
     return loadAvg;
 }
 
 auto getCpuPowerInfo() -> CpuPowerInfo {
-    LOG_F(INFO, "Starting getCpuPowerInfo function on Windows");
+    spdlog::info("Invoking getCpuPowerInfo to retrieve CPU power information on Windows (not implemented).");
 
     CpuPowerInfo powerInfo{0.0, 0.0, 0.0};
 
-    // Windows doesn't provide direct CPU power consumption without hardware
-    // monitoring This would require platform-specific hardware monitoring
-    // libraries
-
-    // For TDP, we could try to read from WMI or simply set a typical value
-    // based on the processor model
-
-    LOG_F(INFO,
-          "Windows CPU Power Info: currentWatts={}, maxTDP={}, energyImpact={} "
-          "(placeholder values)",
-          powerInfo.currentWatts, powerInfo.maxTDP, powerInfo.energyImpact);
-
+    spdlog::info("CPU power information retrieval is not implemented for Windows.");
     return powerInfo;
 }
 
 auto getCpuFeatureFlags() -> std::vector<std::string> {
-    LOG_F(INFO, "Starting getCpuFeatureFlags function on Windows");
+    spdlog::info("Invoking getCpuFeatureFlags to retrieve CPU feature flags on Windows.");
 
     if (!needsCacheRefresh() && !g_cpuInfoCache.flags.empty()) {
         return g_cpuInfoCache.flags;
@@ -487,13 +423,10 @@ auto getCpuFeatureFlags() -> std::vector<std::string> {
 
     std::vector<std::string> flags;
 
-    // CPU feature flags using CPUID
     int cpuInfo[4] = {0};
 
-    // Get standard feature flags
     __cpuid(cpuInfo, 1);
 
-    // EDX register flags
     if (cpuInfo[3] & (1 << 0))
         flags.push_back("fpu");
     if (cpuInfo[3] & (1 << 1))
@@ -553,7 +486,6 @@ auto getCpuFeatureFlags() -> std::vector<std::string> {
     if (cpuInfo[3] & (1 << 31))
         flags.push_back("pbe");
 
-    // ECX register flags
     if (cpuInfo[2] & (1 << 0))
         flags.push_back("sse3");
     if (cpuInfo[2] & (1 << 1))
@@ -595,22 +527,19 @@ auto getCpuFeatureFlags() -> std::vector<std::string> {
     if (cpuInfo[2] & (1 << 30))
         flags.push_back("rdrnd");
 
-    // Check for extended features
     __cpuid(cpuInfo, 0x80000000);
     unsigned int nExIds = cpuInfo[0];
 
     if (nExIds >= 0x80000001) {
         __cpuid(cpuInfo, 0x80000001);
 
-        // EDX
         if (cpuInfo[3] & (1 << 11))
             flags.push_back("syscall");
         if (cpuInfo[3] & (1 << 20))
             flags.push_back("nx");
         if (cpuInfo[3] & (1 << 29))
-            flags.push_back("lm");  // Long Mode (64-bit)
+            flags.push_back("lm");
 
-        // ECX
         if (cpuInfo[2] & (1 << 0))
             flags.push_back("lahf_lm");
         if (cpuInfo[2] & (1 << 5))
@@ -625,10 +554,8 @@ auto getCpuFeatureFlags() -> std::vector<std::string> {
             flags.push_back("fma4");
     }
 
-    // Check for AVX2 and other newer features (CPUID 7)
     __cpuidex(cpuInfo, 7, 0);
 
-    // EBX
     if (cpuInfo[1] & (1 << 5))
         flags.push_back("avx2");
     if (cpuInfo[1] & (1 << 3))
@@ -636,7 +563,6 @@ auto getCpuFeatureFlags() -> std::vector<std::string> {
     if (cpuInfo[1] & (1 << 8))
         flags.push_back("bmi2");
 
-    // Check for AVX-512 features
     if (cpuInfo[1] & (1 << 16))
         flags.push_back("avx512f");
     if (cpuInfo[1] & (1 << 17))
@@ -654,19 +580,18 @@ auto getCpuFeatureFlags() -> std::vector<std::string> {
     if (cpuInfo[1] & (1 << 31))
         flags.push_back("avx512vl");
 
-    // ECX
     if (cpuInfo[2] & (1 << 1))
         flags.push_back("avx512vbmi");
     if (cpuInfo[2] & (1 << 6))
         flags.push_back("avx512vbmi2");
 
-    LOG_F(INFO, "Windows CPU Flags: {} features collected", flags.size());
+    spdlog::info("Collected {} CPU feature flags on Windows.", flags.size());
 
     return flags;
 }
 
 auto getCpuArchitecture() -> CpuArchitecture {
-    LOG_F(INFO, "Starting getCpuArchitecture function on Windows");
+    spdlog::info("Invoking getCpuArchitecture to determine the CPU architecture on Windows.");
 
     if (!needsCacheRefresh()) {
         std::lock_guard<std::mutex> lock(g_cacheMutex);
@@ -699,12 +624,12 @@ auto getCpuArchitecture() -> CpuArchitecture {
             break;
     }
 
-    LOG_F(INFO, "Windows CPU Architecture: {}", cpuArchitectureToString(arch));
+    spdlog::info("Detected CPU architecture on Windows: {}", cpuArchitectureToString(arch));
     return arch;
 }
 
 auto getCpuVendor() -> CpuVendor {
-    LOG_F(INFO, "Starting getCpuVendor function on Windows");
+    spdlog::info("Invoking getCpuVendor to determine the CPU vendor on Windows.");
 
     if (!needsCacheRefresh()) {
         std::lock_guard<std::mutex> lock(g_cacheMutex);
@@ -728,13 +653,12 @@ auto getCpuVendor() -> CpuVendor {
     vendorString = vendorID;
     vendor = getVendorFromString(vendorString);
 
-    LOG_F(INFO, "Windows CPU Vendor: {} ({})", vendorString,
-          cpuVendorToString(vendor));
+    spdlog::info("Detected CPU vendor on Windows: {} ({})", vendorString, cpuVendorToString(vendor));
     return vendor;
 }
 
 auto getCpuSocketType() -> std::string {
-    LOG_F(INFO, "Starting getCpuSocketType function on Windows");
+    spdlog::info("Invoking getCpuSocketType to retrieve the CPU socket type on Windows (placeholder implementation).");
 
     if (!needsCacheRefresh() && !g_cpuInfoCache.socketType.empty()) {
         return g_cpuInfoCache.socketType;
@@ -742,38 +666,29 @@ auto getCpuSocketType() -> std::string {
 
     std::string socketType = "Unknown";
 
-    // Windows doesn't provide a direct API for socket type
-    // This would require WMI or similar advanced techniques
-    // This is a placeholder implementation
-
-    LOG_F(INFO, "Windows CPU Socket Type: {} (placeholder)", socketType);
+    spdlog::info("CPU socket type on Windows: {} (no direct method available, placeholder value)", socketType);
     return socketType;
 }
 
 auto getCpuScalingGovernor() -> std::string {
-    LOG_F(INFO, "Starting getCpuScalingGovernor function on Windows");
+    spdlog::info("Invoking getCpuScalingGovernor to retrieve the CPU scaling governor (power plan) on Windows.");
 
     std::string governor = "Unknown";
 
     GUID* activePlanGuid = NULL;
     if (PowerGetActiveScheme(NULL, &activePlanGuid) == ERROR_SUCCESS) {
-        // First, get the required buffer size
         DWORD bufferSize = 0;
         PowerReadFriendlyName(NULL, activePlanGuid, NULL, NULL, NULL,
                               &bufferSize);
 
         if (bufferSize > 0) {
-            // Allocate buffer of the correct type
             std::vector<BYTE> buffer(bufferSize);
 
-            // Get the friendly name
             if (PowerReadFriendlyName(NULL, activePlanGuid, NULL, NULL,
                                       buffer.data(),
                                       &bufferSize) == ERROR_SUCCESS) {
-                // The result is a wide string (UTF-16)
                 LPWSTR friendlyName = reinterpret_cast<LPWSTR>(buffer.data());
 
-                // Convert wide string to UTF-8
                 int narrowBufferSize = WideCharToMultiByte(
                     CP_UTF8, 0, friendlyName, -1, NULL, 0, NULL, NULL);
                 if (narrowBufferSize > 0) {
@@ -790,26 +705,23 @@ auto getCpuScalingGovernor() -> std::string {
         LocalFree(activePlanGuid);
     }
 
-    LOG_F(INFO, "Windows Power Plan: {}", governor);
+    spdlog::info("CPU scaling governor (power plan) on Windows: {}", governor);
     return governor;
 }
 
 auto getPerCoreScalingGovernors() -> std::vector<std::string> {
-    LOG_F(INFO, "Starting getPerCoreScalingGovernors function on Windows");
+    spdlog::info("Invoking getPerCoreScalingGovernors to retrieve per-core CPU scaling governors on Windows.");
 
     int numCores = getNumberOfLogicalCores();
     std::vector<std::string> governors(numCores);
 
-    // Windows doesn't have per-core power modes, use system-wide setting for
-    // all
     std::string governor = getCpuScalingGovernor();
 
     for (int i = 0; i < numCores; ++i) {
         governors[i] = governor;
     }
 
-    LOG_F(INFO, "Windows Per-Core Power Plans: {} (same for all cores)",
-          governor);
+    spdlog::info("Assigned CPU scaling governor '{}' to all {} logical cores on Windows.", governor, numCores);
     return governors;
 }
 

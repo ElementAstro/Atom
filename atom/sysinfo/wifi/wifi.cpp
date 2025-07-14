@@ -32,7 +32,7 @@ auto isConnectedToInternet() -> bool {
 #if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
     return impl::isConnectedToInternet_impl();
 #else
-    LOG_F(ERROR, "Unsupported operating system");
+    spdlog::error("isConnectedToInternet: Unsupported operating system. Unable to determine internet connectivity.");
     return false;
 #endif
 }
@@ -41,7 +41,7 @@ auto getCurrentWifi() -> std::string {
 #if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
     return impl::getCurrentWifi_impl();
 #else
-    LOG_F(ERROR, "Unsupported operating system");
+    spdlog::error("getCurrentWifi: Unsupported operating system. Unable to retrieve current WiFi information.");
     return {};
 #endif
 }
@@ -50,10 +50,10 @@ auto getCurrentWiredNetwork() -> std::string {
 #if defined(_WIN32) || defined(__linux__)
     return impl::getCurrentWiredNetwork_impl();
 #elif defined(__APPLE__)
-    LOG_F(WARNING, "Getting current wired network is not supported on macOS");
+    spdlog::warn("getCurrentWiredNetwork: Retrieving current wired network is not supported on macOS.");
     return {};
 #else
-    LOG_F(ERROR, "Unsupported operating system");
+    spdlog::error("getCurrentWiredNetwork: Unsupported operating system. Unable to retrieve current wired network.");
     return {};
 #endif
 }
@@ -62,10 +62,10 @@ auto isHotspotConnected() -> bool {
 #if defined(_WIN32) || defined(__linux__)
     return impl::isHotspotConnected_impl();
 #elif defined(__APPLE__)
-    LOG_F(WARNING, "Checking if connected to a hotspot is not supported on macOS");
+    spdlog::warn("isHotspotConnected: Checking hotspot connectivity is not supported on macOS.");
     return false;
 #else
-    LOG_F(ERROR, "Unsupported operating system");
+    spdlog::error("isHotspotConnected: Unsupported operating system. Unable to determine hotspot connectivity.");
     return false;
 #endif
 }
@@ -74,7 +74,7 @@ auto getHostIPs() -> std::vector<std::string> {
 #if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
     return impl::getHostIPs_impl();
 #else
-    LOG_F(ERROR, "Unsupported operating system");
+    spdlog::error("getHostIPs: Unsupported operating system. Unable to retrieve host IP addresses.");
     return {};
 #endif
 }
@@ -82,13 +82,14 @@ auto getHostIPs() -> std::vector<std::string> {
 // Implementation of the template function for IP addresses
 template <typename AddressType>
 auto getIPAddresses(int addressFamily) -> std::vector<std::string> {
-    LOG_F(INFO, "Getting IP addresses for address family: {}", addressFamily);
+    spdlog::info("getIPAddresses: Retrieving IP addresses for address family {}.", addressFamily);
     std::vector<std::string> addresses;
 
 #ifdef _WIN32
     ULONG bufferSize = 0;
     if (GetAdaptersAddresses(addressFamily, 0, nullptr, nullptr, &bufferSize) !=
         ERROR_BUFFER_OVERFLOW) {
+        spdlog::warn("getIPAddresses: Initial call to GetAdaptersAddresses did not return ERROR_BUFFER_OVERFLOW. No addresses found.");
         return addresses;
     }
 
@@ -113,16 +114,18 @@ auto getIPAddresses(int addressFamily) -> std::vector<std::string> {
 
                     inet_ntop(addressFamily, addr, ipStr, sizeof(ipStr));
                     addresses.emplace_back(ipStr);
-                    LOG_F(INFO, "Found IP address: {}", ipStr);
+                    spdlog::info("getIPAddresses: Found IP address '{}'.", ipStr);
                 }
             }
         }
+    } else {
+        spdlog::error("getIPAddresses: GetAdaptersAddresses failed to retrieve adapter addresses.");
     }
 #else
     struct ifaddrs* ifAddrList = nullptr;
 
     if (getifaddrs(&ifAddrList) == -1) {
-        LOG_F(ERROR, "getifaddrs failed");
+        spdlog::error("getIPAddresses: getifaddrs failed to retrieve network interface addresses.");
         return addresses;
     }
 
@@ -145,7 +148,7 @@ auto getIPAddresses(int addressFamily) -> std::vector<std::string> {
 
             inet_ntop(addressFamily, addr, ipStr, sizeof(ipStr));
             addresses.emplace_back(ipStr);
-            LOG_F(INFO, "Found IP address: {}", ipStr);
+            spdlog::info("getIPAddresses: Found IP address '{}'.", ipStr);
         }
     }
 #endif
@@ -154,12 +157,12 @@ auto getIPAddresses(int addressFamily) -> std::vector<std::string> {
 }
 
 auto getIPv4Addresses() -> std::vector<std::string> {
-    LOG_F(INFO, "Getting IPv4 addresses");
+    spdlog::info("getIPv4Addresses: Retrieving all IPv4 addresses.");
     return getIPAddresses<sockaddr_in>(AF_INET);
 }
 
 auto getIPv6Addresses() -> std::vector<std::string> {
-    LOG_F(INFO, "Getting IPv6 addresses");
+    spdlog::info("getIPv6Addresses: Retrieving all IPv6 addresses.");
     return getIPAddresses<sockaddr_in6>(AF_INET6);
 }
 
@@ -167,7 +170,7 @@ auto getInterfaceNames() -> std::vector<std::string> {
 #if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
     return impl::getInterfaceNames_impl();
 #else
-    LOG_F(ERROR, "Unsupported operating system");
+    spdlog::error("getInterfaceNames: Unsupported operating system. Unable to retrieve interface names.");
     return {};
 #endif
 }
@@ -176,44 +179,44 @@ auto getNetworkStats() -> NetworkStats {
 #if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
     return impl::getNetworkStats_impl();
 #else
-    LOG_F(ERROR, "Unsupported operating system");
+    spdlog::error("getNetworkStats: Unsupported operating system. Unable to retrieve network statistics.");
     return {};
 #endif
 }
 
 // Placeholder implementations for functions declared in header but not implemented in original file
 auto getNetworkHistory(std::chrono::minutes duration) -> std::vector<NetworkStats> {
-    LOG_F(INFO, "Getting network history for duration: {} minutes", duration.count());
+    spdlog::info("getNetworkHistory: Retrieving network history for the past {} minutes.", duration.count());
     // Placeholder implementation
     return {};
 }
 
 auto scanAvailableNetworks() -> std::vector<std::string> {
-    LOG_F(INFO, "Scanning available networks");
+    spdlog::info("scanAvailableNetworks: Scanning for available WiFi networks.");
     // Placeholder implementation
     return {};
 }
 
 auto getNetworkSecurity() -> std::string {
-    LOG_F(INFO, "Getting network security information");
+    spdlog::info("getNetworkSecurity: Retrieving network security information.");
     // Placeholder implementation
     return {};
 }
 
 auto measureBandwidth() -> std::pair<double, double> {
-    LOG_F(INFO, "Measuring bandwidth");
+    spdlog::info("measureBandwidth: Measuring network bandwidth.");
     // Placeholder implementation
     return {0.0, 0.0};
 }
 
 auto analyzeNetworkQuality() -> std::string {
-    LOG_F(INFO, "Analyzing network quality");
+    spdlog::info("analyzeNetworkQuality: Analyzing network quality.");
     // Placeholder implementation
     return {};
 }
 
 auto getConnectedDevices() -> std::vector<std::string> {
-    LOG_F(INFO, "Getting connected devices");
+    spdlog::info("getConnectedDevices: Retrieving list of connected devices.");
     // Placeholder implementation
     return {};
 }

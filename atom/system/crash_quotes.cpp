@@ -55,26 +55,25 @@ QuoteManager::QuoteManager(const std::string &filename) {
 }
 
 bool QuoteManager::addQuote(const Quote &quote) {
-    spdlog::info("Adding quote: {} - {}", quote.getText(), quote.getAuthor());
+    spdlog::info("Attempting to add a new quote: '{}' by '{}'.", quote.getText(), quote.getAuthor());
 
     // Check if quote already exists
     auto it = std::find_if(quotes_.begin(), quotes_.end(),
                            [&quote](const Quote &q) { return q == quote; });
 
     if (it != quotes_.end()) {
-        spdlog::warn("Quote already exists: {} - {}", quote.getText(),
-                     quote.getAuthor());
+        spdlog::warn("The quote '{}' by '{}' already exists and will not be added again.", quote.getText(), quote.getAuthor());
         return false;
     }
 
     quotes_.push_back(quote);
     cacheValid_ = false;
-    spdlog::info("Quote added successfully");
+    spdlog::info("Quote added successfully: '{}' by '{}'.", quote.getText(), quote.getAuthor());
     return true;
 }
 
 size_t QuoteManager::addQuotes(const std::vector<Quote> &quotes) {
-    spdlog::info("Adding batch of {} quotes", quotes.size());
+    spdlog::info("Attempting to add a batch of {} quotes.", quotes.size());
 
     size_t addedCount = 0;
     std::unordered_set<std::string> existingQuotes;
@@ -100,12 +99,12 @@ size_t QuoteManager::addQuotes(const std::vector<Quote> &quotes) {
         cacheValid_ = false;
     }
 
-    spdlog::info("Added {} new quotes successfully", addedCount);
+    spdlog::info("{} new quotes were added successfully.", addedCount);
     return addedCount;
 }
 
 bool QuoteManager::removeQuote(const Quote &quote) {
-    spdlog::info("Removing quote: {} - {}", quote.getText(), quote.getAuthor());
+    spdlog::info("Attempting to remove the quote: '{}' by '{}'.", quote.getText(), quote.getAuthor());
 
     auto initialSize = quotes_.size();
     quotes_.erase(
@@ -117,17 +116,16 @@ bool QuoteManager::removeQuote(const Quote &quote) {
 
     if (removed) {
         cacheValid_ = false;
-        spdlog::info("Quote removed successfully");
+        spdlog::info("Quote removed successfully: '{}' by '{}'.", quote.getText(), quote.getAuthor());
     } else {
-        spdlog::warn("Quote not found: {} - {}", quote.getText(),
-                     quote.getAuthor());
+        spdlog::warn("The quote '{}' by '{}' was not found and could not be removed.", quote.getText(), quote.getAuthor());
     }
 
     return removed;
 }
 
 size_t QuoteManager::removeQuotesByAuthor(const std::string &author) {
-    spdlog::info("Removing all quotes by author: {}", author);
+    spdlog::info("Attempting to remove all quotes by author '{}'.", author);
 
     auto initialSize = quotes_.size();
     quotes_.erase(std::remove_if(quotes_.begin(), quotes_.end(),
@@ -140,9 +138,9 @@ size_t QuoteManager::removeQuotesByAuthor(const std::string &author) {
 
     if (removedCount > 0) {
         cacheValid_ = false;
-        spdlog::info("Removed {} quotes by author: {}", removedCount, author);
+        spdlog::info("Successfully removed {} quotes by author '{}'.", removedCount, author);
     } else {
-        spdlog::warn("No quotes found by author: {}", author);
+        spdlog::warn("No quotes by author '{}' were found to remove.", author);
     }
 
     return removedCount;
@@ -159,31 +157,31 @@ void QuoteManager::displayQuotes() const {
 #endif
 
 void QuoteManager::shuffleQuotes() {
-    spdlog::info("Shuffling quotes");
+    spdlog::info("Shuffling the order of all stored quotes.");
 
     std::random_device rd;
     std::mt19937 gen(rd());
     std::shuffle(quotes_.begin(), quotes_.end(), gen);
 
-    spdlog::info("Quotes shuffled successfully");
+    spdlog::info("Quotes have been shuffled successfully.");
 }
 
 void QuoteManager::clearQuotes() {
-    spdlog::info("Clearing all quotes");
+    spdlog::info("Clearing all stored quotes and resetting caches.");
     quotes_.clear();
     authorCache_.clear();
     categoryCache_.clear();
     cacheValid_ = true;  // Empty cache is valid
-    spdlog::info("All quotes cleared successfully");
+    spdlog::info("All quotes and caches have been cleared successfully.");
 }
 
 bool QuoteManager::loadQuotesFromJson(const std::string &filename,
                                       bool append) {
-    spdlog::info("Loading quotes from JSON file: {}", filename);
+    spdlog::info("Loading quotes from the JSON file '{}'.", filename);
 
     std::ifstream file(filename);
     if (!file.is_open()) {
-        spdlog::error("Failed to open JSON file: {}", filename);
+        spdlog::error("Failed to open the JSON file '{}' for reading.", filename);
         return false;
     }
 
@@ -216,23 +214,21 @@ bool QuoteManager::loadQuotesFromJson(const std::string &filename,
             cacheValid_ = false;
         }
 
-        spdlog::info("Loaded {} quotes successfully from JSON file: {}",
-                     addedCount, filename);
+        spdlog::info("Successfully loaded {} quotes from the JSON file '{}'.", addedCount, filename);
         return true;
     } catch (const nlohmann::json::parse_error &e) {
-        spdlog::error("Error parsing JSON file: {} - {}", filename, e.what());
-        THROW_UNLAWFUL_OPERATION("Error parsing JSON file: " +
-                                 std::string(e.what()));
+        spdlog::error("Failed to parse the JSON file '{}': {}.", filename, e.what());
+        THROW_UNLAWFUL_OPERATION("Error parsing JSON file: " + std::string(e.what()));
         return false;
     }
 }
 
 bool QuoteManager::saveQuotesToJson(const std::string &filename) const {
-    spdlog::info("Saving quotes to JSON file: {}", filename);
+    spdlog::info("Saving all stored quotes to the JSON file '{}'.", filename);
 
     std::ofstream file(filename);
     if (!file.is_open()) {
-        spdlog::error("Failed to open JSON file for writing: {}", filename);
+        spdlog::error("Failed to open the JSON file '{}' for writing.", filename);
         return false;
     }
 
@@ -255,10 +251,10 @@ bool QuoteManager::saveQuotesToJson(const std::string &filename) const {
         }
 
         file << data.dump(4);
-        spdlog::info("Quotes saved successfully to JSON file: {}", filename);
+        spdlog::info("Quotes have been saved successfully to the JSON file '{}'.", filename);
         return true;
     } catch (const std::exception &e) {
-        spdlog::error("Error saving JSON file: {} - {}", filename, e.what());
+        spdlog::error("An error occurred while saving quotes to the JSON file '{}': {}.", filename, e.what());
         return false;
     }
 }
@@ -266,11 +262,10 @@ bool QuoteManager::saveQuotesToJson(const std::string &filename) const {
 auto QuoteManager::searchQuotes(const std::string &keyword,
                                 bool caseSensitive) const
     -> std::vector<Quote> {
-    spdlog::info("Searching quotes with keyword: {} (case sensitive: {})",
-                 keyword, caseSensitive ? "yes" : "no");
+    spdlog::info("Searching for quotes containing the keyword '{}' (case sensitive: {}).", keyword, caseSensitive ? "yes" : "no");
 
     if (keyword.empty()) {
-        spdlog::warn("Empty search keyword provided");
+        spdlog::warn("A search was attempted with an empty keyword. No results will be returned.");
         return {};
     }
 
@@ -300,7 +295,7 @@ auto QuoteManager::searchQuotes(const std::string &keyword,
         }
     }
 
-    spdlog::info("Found {} quotes with keyword: {}", results.size(), keyword);
+    spdlog::info("Search completed. Found {} quotes containing the keyword '{}'.", results.size(), keyword);
     return results;
 }
 
@@ -309,7 +304,8 @@ void QuoteManager::rebuildCache() const {
         return;
     }
 
-    spdlog::info("Rebuilding quote cache");
+    spdlog::info("Rebuilding the internal cache for authors and categories.");
+
     authorCache_.clear();
     categoryCache_.clear();
 
@@ -322,14 +318,14 @@ void QuoteManager::rebuildCache() const {
     }
 
     cacheValid_ = true;
-    spdlog::info("Quote cache rebuilt successfully");
+    spdlog::info("Cache rebuild completed successfully.");
 }
 
 bool QuoteManager::needCacheRebuild() const { return !cacheValid_; }
 
 auto QuoteManager::filterQuotesByAuthor(const std::string &author) const
     -> std::vector<Quote> {
-    spdlog::info("Filtering quotes by author: {}", author);
+    spdlog::info("Filtering quotes to find all entries by author '{}'.", author);
 
     if (needCacheRebuild()) {
         rebuildCache();
@@ -346,13 +342,13 @@ auto QuoteManager::filterQuotesByAuthor(const std::string &author) const
         }
     }
 
-    spdlog::info("Found {} quotes by author: {}", results.size(), author);
+    spdlog::info("Filtering complete. Found {} quotes by author '{}'.", results.size(), author);
     return results;
 }
 
 auto QuoteManager::filterQuotesByCategory(const std::string &category) const
     -> std::vector<Quote> {
-    spdlog::info("Filtering quotes by category: {}", category);
+    spdlog::info("Filtering quotes to find all entries in category '{}'.", category);
 
     if (needCacheRebuild()) {
         rebuildCache();
@@ -369,12 +365,12 @@ auto QuoteManager::filterQuotesByCategory(const std::string &category) const
         }
     }
 
-    spdlog::info("Found {} quotes in category: {}", results.size(), category);
+    spdlog::info("Filtering complete. Found {} quotes in category '{}'.", results.size(), category);
     return results;
 }
 
 auto QuoteManager::filterQuotesByYear(int year) const -> std::vector<Quote> {
-    spdlog::info("Filtering quotes by year: {}", year);
+    spdlog::info("Filtering quotes to find all entries from year {}.", year);
 
     std::vector<Quote> results;
     results.reserve(quotes_.size() / 10);
@@ -385,13 +381,13 @@ auto QuoteManager::filterQuotesByYear(int year) const -> std::vector<Quote> {
         }
     }
 
-    spdlog::info("Found {} quotes from year: {}", results.size(), year);
+    spdlog::info("Filtering complete. Found {} quotes from year {}.", results.size(), year);
     return results;
 }
 
 auto QuoteManager::filterQuotes(
     std::function<bool(const Quote &)> filterFunc) const -> std::vector<Quote> {
-    spdlog::info("Filtering quotes with custom filter function");
+    spdlog::info("Filtering quotes using a custom filter function.");
 
     std::vector<Quote> results;
     results.reserve(quotes_.size() / 10);
@@ -402,27 +398,27 @@ auto QuoteManager::filterQuotes(
         }
     }
 
-    spdlog::info("Found {} quotes matching custom filter", results.size());
+    spdlog::info("Filtering complete. Found {} quotes matching the custom filter.", results.size());
     return results;
 }
 
 auto QuoteManager::getRandomQuote() const -> std::string {
-    spdlog::info("Getting a random quote");
+    spdlog::info("Selecting a random quote from the collection.");
 
     auto quoteOpt = getRandomQuoteObject();
     if (!quoteOpt) {
-        spdlog::warn("No quotes available");
+        spdlog::warn("No quotes are available to select a random entry.");
         return "";
     }
 
     std::string randomQuote = quoteOpt->toString();
-    spdlog::info("Random quote: {}", randomQuote);
+    spdlog::info("Random quote selected: '{}'.", randomQuote);
     return randomQuote;
 }
 
 auto QuoteManager::getRandomQuoteObject() const -> std::optional<Quote> {
     if (quotes_.empty()) {
-        spdlog::warn("No quotes available");
+        spdlog::warn("No quotes are available in the collection.");
         return std::nullopt;
     }
 

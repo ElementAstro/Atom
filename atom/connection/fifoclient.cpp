@@ -21,6 +21,7 @@ Description: FIFO Client
 #include <functional>
 #include <future>
 #include <mutex>
+#include <queue>
 #include <system_error>
 #include <thread>
 #include <unordered_map>
@@ -93,21 +94,21 @@ const FifoErrorCategory theFifoErrorCategory{};
 }
 
 struct AsyncOperation {
+    int id;
+    OperationCallback callback;
+    std::atomic<bool> canceled = false;
+
+    AsyncOperation(int id_, OperationCallback callback_)
+        : id(id_), callback(std::move(callback_)) {}
+};
+
+struct AsyncOperationRequest {
     enum class Type { Read, Write };
     Type type;
     int id;
-    OperationCallback callback;
-    std::chrono::steady_clock::time_point start_time;
     std::optional<std::chrono::milliseconds> timeout;
-    std::atomic<bool> canceled = false;
-
-    AsyncOperation(Type type_, int id_, OperationCallback callback_,
-                   std::optional<std::chrono::milliseconds> timeout_)
-        : type(type_),
-          id(id_),
-          callback(std::move(callback_)),
-          start_time(std::chrono::steady_clock::now()),
-          timeout(timeout_) {}
+    std::string data;
+    std::size_t maxSize;
 };
 
 struct FifoClient::Impl {
@@ -121,35 +122,39 @@ struct FifoClient::Impl {
     ClientStats stats;
 
     mutable std::mutex operationMutex;
-    std::mutex asyncMutex;
     std::mutex callbackMutex;
 
     std::atomic<int> nextOperationId{1};
-    std::unordered_map<int, std::unique_ptr<AsyncOperation>> pendingOperations;
-    std::jthread asyncThread;
-    std::atomic_bool stopAsyncThread{false};
-    std::condition_variable asyncCondition;
+    std::atomic<int> nextCallbackId{1};
 
     std::atomic_bool isConnected{false};
     std::atomic<int> reconnectAttempts{0};
 
-    std::atomic<int> nextCallbackId{1};
     std::unordered_map<int, ConnectionCallback> connectionCallbacks;
+
+    std::queue<std::unique_ptr<AsyncOperationRequest>> asyncRequestQueue;
+    std::mutex asyncRequestMutex;
+    std::condition_variable asyncRequestCondition;
+    std::unordered_map<int, std::shared_ptr<AsyncOperation>>
+        pendingAsyncOperations;
+    std::mutex pendingOpsMutex;
+    std::jthread asyncWorkerThread;
+    std::atomic_bool stopWorkerThread{false};
 
     explicit Impl(std::string_view path, const ClientConfig& clientConfig = {})
         : fifoPath(path), config(clientConfig) {
         spdlog::info("Creating FIFO client for path: {}", fifoPath);
-        startAsyncThread();
+        startAsyncWorkerThread();
         openFifo();
     }
 
     ~Impl() {
         spdlog::debug("Destroying FIFO client");
         close();
-        stopAsyncThread = true;
-        if (asyncThread.joinable()) {
-            asyncCondition.notify_all();
-            asyncThread.join();
+        stopWorkerThread = true;
+        asyncRequestCondition.notify_all();
+        if (asyncWorkerThread.joinable()) {
+            asyncWorkerThread.join();
         }
     }
 
@@ -171,14 +176,20 @@ struct FifoClient::Impl {
         if (fifoHandle == INVALID_HANDLE_VALUE) {
             DWORD error = GetLastError();
             spdlog::error("Failed to open FIFO {}: error {}", fifoPath, error);
-            throw std::system_error(make_error_code(FifoError::OpenFailed));
+            isConnected = false;
+            notifyConnectionChange(
+                false, std::error_code(error, std::system_category()));
+            return;
         }
 #else
         fifoFd = ::open(fifoPath.c_str(), O_RDWR | O_NONBLOCK);
         if (fifoFd == -1) {
             spdlog::error("Failed to open FIFO {}: {}", fifoPath,
                           strerror(errno));
-            throw std::system_error(make_error_code(FifoError::OpenFailed));
+            isConnected = false;
+            notifyConnectionChange(
+                false, std::error_code(errno, std::system_category()));
+            return;
         }
 #endif
 
@@ -221,8 +232,10 @@ struct FifoClient::Impl {
             notifyConnectionChange(false, {});
         }
 
-        std::lock_guard<std::mutex> asyncLock(asyncMutex);
-        pendingOperations.clear();
+        std::lock_guard<std::mutex> pendingLock(pendingOpsMutex);
+        for (auto const& [id, op] : pendingAsyncOperations) {
+            op->canceled = true;
+        }
     }
 
     auto attemptReconnect(std::optional<std::chrono::milliseconds> timeout)
@@ -245,15 +258,29 @@ struct FifoClient::Impl {
         reconnectAttempts++;
         std::this_thread::sleep_for(config.reconnect_delay);
 
-        try {
-            close();
-            openFifo();
+        {
+            std::lock_guard<std::mutex> lock(operationMutex);
+            if (isOpen()) {
+                spdlog::debug("Closing FIFO before reconnect attempt");
+#ifdef _WIN32
+                CloseHandle(fifoHandle);
+                fifoHandle = INVALID_HANDLE_VALUE;
+#else
+                ::close(fifoFd);
+                fifoFd = -1;
+#endif
+            }
+        }
+
+        openFifo();
+
+        if (isConnected) {
             stats.successful_reconnects++;
             reconnectAttempts = 0;
             spdlog::info("Reconnection successful");
             return {};
-        } catch (const std::exception& e) {
-            spdlog::error("Reconnection failed: {}", e.what());
+        } else {
+            spdlog::error("Reconnection failed after open attempt");
             return type::unexpected(make_error_code(FifoError::ConnectionLost));
         }
     }
@@ -265,6 +292,7 @@ struct FifoClient::Impl {
         if (data.size() > config.max_message_size) {
             spdlog::error("Message size {} exceeds maximum {}", data.size(),
                           config.max_message_size);
+            stats.messages_failed++;
             return type::unexpected(
                 make_error_code(FifoError::MessageTooLarge));
         }
@@ -290,6 +318,7 @@ struct FifoClient::Impl {
                               data.size(), processedData.size());
             } catch (const std::exception& e) {
                 spdlog::error("Compression failed: {}", e.what());
+                stats.messages_failed++;
                 return type::unexpected(
                     make_error_code(FifoError::CompressionFailed));
             }
@@ -301,67 +330,102 @@ struct FifoClient::Impl {
                 spdlog::debug("Encrypted data: {} bytes", processedData.size());
             } catch (const std::exception& e) {
                 spdlog::error("Encryption failed: {}", e.what());
+                stats.messages_failed++;
                 return type::unexpected(
                     make_error_code(FifoError::EncryptionFailed));
             }
         }
 
-        size_t bytesWritten = 0;
+        size_t bytesToWrite = processedData.size();
+        size_t totalBytesWritten = 0;
         auto effectiveTimeout = timeout.value_or(
             config.default_timeout.value_or(std::chrono::milliseconds(5000)));
+        auto deadline = startTime + effectiveTimeout;
 
+        while (totalBytesWritten < bytesToWrite) {
+            if (std::chrono::steady_clock::now() > deadline) {
+                spdlog::warn("Write operation timed out");
+                stats.messages_failed++;
+                return type::unexpected(make_error_code(FifoError::Timeout));
+            }
+
+            ssize_t result = 0;
 #ifdef _WIN32
-        DWORD written;
-        BOOL result = WriteFile(fifoHandle, processedData.data(),
-                                processedData.size(), &written, nullptr);
-
-        if (!result) {
-            DWORD error = GetLastError();
-            spdlog::error("Write failed: error {}", error);
-            stats.messages_failed++;
-            return type::unexpected(make_error_code(FifoError::WriteFailed));
-        }
-        bytesWritten = written;
+            DWORD written;
+            BOOL success =
+                WriteFile(fifoHandle, processedData.data() + totalBytesWritten,
+                          bytesToWrite - totalBytesWritten, &written, nullptr);
+            if (!success) {
+                DWORD error = GetLastError();
+                spdlog::error("WriteFile failed: error {}", error);
+                stats.messages_failed++;
+                return type::unexpected(
+                    std::error_code(error, std::system_category()));
+            }
+            result = written;
 #else
-        ssize_t result =
-            ::write(fifoFd, processedData.data(), processedData.size());
+            result = ::write(fifoFd, processedData.data() + totalBytesWritten,
+                             bytesToWrite - totalBytesWritten);
 
-        if (result == -1) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                pollfd pfd{fifoFd, POLLOUT, 0};
-                int pollResult = poll(&pfd, 1, effectiveTimeout.count());
+            if (result == -1) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    pollfd pfd{fifoFd, POLLOUT, 0};
+                    auto timeRemaining =
+                        std::chrono::duration_cast<std::chrono::milliseconds>(
+                            deadline - std::chrono::steady_clock::now());
+                    if (timeRemaining.count() <= 0) {
+                        spdlog::warn(
+                            "Write operation timed out during poll wait");
+                        stats.messages_failed++;
+                        return type::unexpected(
+                            make_error_code(FifoError::Timeout));
+                    }
+                    int pollResult =
+                        poll(&pfd, 1, static_cast<int>(timeRemaining.count()));
 
-                if (pollResult == 0) {
-                    spdlog::warn("Write operation timed out");
-                    stats.messages_failed++;
-                    return type::unexpected(
-                        make_error_code(FifoError::Timeout));
-                } else if (pollResult == -1) {
-                    spdlog::error("Poll failed: {}", strerror(errno));
-                    stats.messages_failed++;
-                    return type::unexpected(
-                        make_error_code(FifoError::WriteFailed));
+                    if (pollResult == 0) {
+                        spdlog::warn("Write operation timed out during poll");
+                        stats.messages_failed++;
+                        return type::unexpected(
+                            make_error_code(FifoError::Timeout));
+                    } else if (pollResult == -1) {
+                        spdlog::error("Poll failed during write: {}",
+                                      strerror(errno));
+                        stats.messages_failed++;
+                        return type::unexpected(
+                            std::error_code(errno, std::system_category()));
+                    }
+                    result = ::write(fifoFd,
+                                     processedData.data() + totalBytesWritten,
+                                     bytesToWrite - totalBytesWritten);
                 }
-
-                result =
-                    ::write(fifoFd, processedData.data(), processedData.size());
             }
 
             if (result == -1) {
                 spdlog::error("Write failed: {}", strerror(errno));
                 stats.messages_failed++;
                 return type::unexpected(
-                    make_error_code(FifoError::WriteFailed));
+                    std::error_code(errno, std::system_category()));
+            }
+#endif
+            if (result > 0) {
+                totalBytesWritten += static_cast<size_t>(result);
+            } else if (result == 0 && bytesToWrite > 0) {
+                spdlog::error("Write failed: connection lost (wrote 0 bytes)");
+                isConnected = false;
+                notifyConnectionChange(
+                    false, make_error_code(FifoError::ConnectionLost));
+                stats.messages_failed++;
+                return type::unexpected(
+                    make_error_code(FifoError::ConnectionLost));
             }
         }
-        bytesWritten = static_cast<size_t>(result);
-#endif
 
-        updateWriteStats(data.size(), bytesWritten, startTime);
+        updateWriteStats(data.size(), totalBytesWritten, startTime);
         stats.messages_sent++;
 
-        spdlog::debug("Successfully wrote {} bytes to FIFO", bytesWritten);
-        return bytesWritten;
+        spdlog::debug("Successfully wrote {} bytes to FIFO", totalBytesWritten);
+        return totalBytesWritten;
     }
 
     type::expected<std::size_t, std::error_code> writeMultiple(
@@ -386,30 +450,25 @@ struct FifoClient::Impl {
     int writeAsync(
         std::string_view data, OperationCallback callback,
         std::optional<std::chrono::milliseconds> timeout = std::nullopt) {
-        std::lock_guard<std::mutex> lock(asyncMutex);
-
         int id = nextOperationId++;
-        auto operation = std::make_unique<AsyncOperation>(
-            AsyncOperation::Type::Write, id, std::move(callback), timeout);
+        auto op = std::make_shared<AsyncOperation>(id, std::move(callback));
 
-        std::string dataCopy(data);
+        {
+            std::lock_guard<std::mutex> lock(pendingOpsMutex);
+            pendingAsyncOperations[id] = op;
+        }
 
-        pendingOperations[id] = std::move(operation);
+        auto request = std::make_unique<AsyncOperationRequest>();
+        request->type = AsyncOperationRequest::Type::Write;
+        request->id = id;
+        request->timeout = timeout;
+        request->data = std::string(data);
 
-        std::thread([this, id, dataCopy = std::move(dataCopy)]() {
-            auto result = write(dataCopy);
-
-            std::lock_guard<std::mutex> asyncLock(asyncMutex);
-            auto it = pendingOperations.find(id);
-            if (it != pendingOperations.end() && !it->second->canceled) {
-                if (result) {
-                    it->second->callback(true, {}, *result);
-                } else {
-                    it->second->callback(false, result.error().error(), 0);
-                }
-                pendingOperations.erase(it);
-            }
-        }).detach();
+        {
+            std::lock_guard<std::mutex> lock(asyncRequestMutex);
+            asyncRequestQueue.push(std::move(request));
+        }
+        asyncRequestCondition.notify_one();
 
         return id;
     }
@@ -423,7 +482,7 @@ struct FifoClient::Impl {
         auto future = promise->get_future();
 
         writeAsync(
-            data,
+            std::string(data),
             [promise](bool success, std::error_code ec, size_t bytes) {
                 if (success) {
                     promise->set_value(bytes);
@@ -454,56 +513,74 @@ struct FifoClient::Impl {
 
         auto effectiveTimeout = timeout.value_or(
             config.default_timeout.value_or(std::chrono::milliseconds(5000)));
+        auto deadline = startTime + effectiveTimeout;
 
         size_t bytesRead = 0;
 
 #ifdef _WIN32
-        DWORD read;
-        BOOL result =
-            ReadFile(fifoHandle, buffer.data(), bufferSize, &read, nullptr);
+        DWORD readBytes;
+        BOOL success = ReadFile(fifoHandle, buffer.data(), bufferSize,
+                                &readBytes, nullptr);
 
-        if (!result) {
+        if (!success) {
             DWORD error = GetLastError();
-            spdlog::error("Read failed: error {}", error);
-            return type::unexpected(make_error_code(FifoError::ReadFailed));
+            spdlog::error("ReadFile failed: error {}", error);
+            return type::unexpected(
+                std::error_code(error, std::system_category()));
         }
-        bytesRead = read;
+        bytesRead = readBytes;
 #else
         ssize_t result = ::read(fifoFd, buffer.data(), bufferSize);
 
         if (result == -1) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 pollfd pfd{fifoFd, POLLIN, 0};
-                int pollResult = poll(&pfd, 1, effectiveTimeout.count());
+                auto timeRemaining =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        deadline - std::chrono::steady_clock::now());
+                if (timeRemaining.count() <= 0) {
+                    spdlog::warn("Read operation timed out during poll wait");
+                    return type::unexpected(
+                        make_error_code(FifoError::Timeout));
+                }
+                int pollResult =
+                    poll(&pfd, 1, static_cast<int>(timeRemaining.count()));
 
                 if (pollResult == 0) {
-                    spdlog::warn("Read operation timed out");
+                    spdlog::warn("Read operation timed out during poll");
                     return type::unexpected(
                         make_error_code(FifoError::Timeout));
                 } else if (pollResult == -1) {
-                    spdlog::error("Poll failed: {}", strerror(errno));
+                    spdlog::error("Poll failed during read: {}",
+                                  strerror(errno));
                     return type::unexpected(
-                        make_error_code(FifoError::ReadFailed));
+                        std::error_code(errno, std::system_category()));
                 }
-
                 result = ::read(fifoFd, buffer.data(), bufferSize);
             }
+        }
 
-            if (result == -1) {
-                spdlog::error("Read failed: {}", strerror(errno));
-                return type::unexpected(make_error_code(FifoError::ReadFailed));
-            }
+        if (result == -1) {
+            spdlog::error("Read failed: {}", strerror(errno));
+            return type::unexpected(make_error_code(FifoError::ReadFailed));
         }
         bytesRead = static_cast<size_t>(result);
 #endif
 
         if (bytesRead == 0) {
-            spdlog::debug("No data available to read");
+            spdlog::debug("Read 0 bytes, connection likely closed");
+            isConnected = false;
+            notifyConnectionChange(false,
+                                   make_error_code(FifoError::ConnectionLost));
             return std::string{};
         }
 
         std::string data(buffer.data(), bytesRead);
-        data = processReceivedData(std::move(data));
+        try {
+            data = processReceivedData(std::move(data));
+        } catch (const std::system_error& e) {
+            return type::unexpected(e.code());
+        }
 
         updateReadStats(bytesRead, startTime);
 
@@ -528,8 +605,9 @@ struct FifoClient::Impl {
                 data = decompressData(data);
                 spdlog::debug("Decompressed data: {} bytes", data.size());
             } catch (const std::exception& e) {
-                spdlog::warn("Data may not be compressed, using as-is: {}",
-                             e.what());
+                spdlog::warn(
+                    "Decompression failed, data might not be compressed: {}",
+                    e.what());
             }
         }
 
@@ -539,28 +617,25 @@ struct FifoClient::Impl {
     int readAsync(
         OperationCallback callback, std::size_t maxSize = 0,
         std::optional<std::chrono::milliseconds> timeout = std::nullopt) {
-        std::lock_guard<std::mutex> lock(asyncMutex);
-
         int id = nextOperationId++;
-        auto operation = std::make_unique<AsyncOperation>(
-            AsyncOperation::Type::Read, id, std::move(callback), timeout);
+        auto op = std::make_shared<AsyncOperation>(id, std::move(callback));
 
-        pendingOperations[id] = std::move(operation);
+        {
+            std::lock_guard<std::mutex> lock(pendingOpsMutex);
+            pendingAsyncOperations[id] = op;
+        }
 
-        std::thread([this, id, maxSize]() {
-            auto result = read(maxSize);
+        auto request = std::make_unique<AsyncOperationRequest>();
+        request->type = AsyncOperationRequest::Type::Read;
+        request->id = id;
+        request->timeout = timeout;
+        request->maxSize = maxSize;
 
-            std::lock_guard<std::mutex> asyncLock(asyncMutex);
-            auto it = pendingOperations.find(id);
-            if (it != pendingOperations.end() && !it->second->canceled) {
-                if (result) {
-                    it->second->callback(true, {}, result->size());
-                } else {
-                    it->second->callback(false, result.error().error(), 0);
-                }
-                pendingOperations.erase(it);
-            }
-        }).detach();
+        {
+            std::lock_guard<std::mutex> lock(asyncRequestMutex);
+            asyncRequestQueue.push(std::move(request));
+        }
+        asyncRequestCondition.notify_one();
 
         return id;
     }
@@ -576,8 +651,10 @@ struct FifoClient::Impl {
         readAsync(
             [promise](bool success, std::error_code ec, size_t) {
                 if (success) {
-                    promise->set_value(
-                        std::string{});  // Would need to store actual data
+                    spdlog::warn(
+                        "readAsyncWithFuture cannot return read data with "
+                        "current callback signature.");
+                    promise->set_value(std::string{});
                 } else {
                     promise->set_value(type::unexpected(ec));
                 }
@@ -588,12 +665,11 @@ struct FifoClient::Impl {
     }
 
     bool cancelOperation(int id) {
-        std::lock_guard<std::mutex> lock(asyncMutex);
-        auto it = pendingOperations.find(id);
-        if (it != pendingOperations.end()) {
+        std::lock_guard<std::mutex> lock(pendingOpsMutex);
+        auto it = pendingAsyncOperations.find(id);
+        if (it != pendingAsyncOperations.end()) {
             it->second->canceled = true;
-            pendingOperations.erase(it);
-            spdlog::info("Cancelled operation {}", id);
+            spdlog::info("Marked operation {} for cancellation", id);
             return true;
         }
         return false;
@@ -637,15 +713,17 @@ struct FifoClient::Impl {
         auto latencyMs =
             std::chrono::duration<double, std::milli>(duration).count();
 
+        std::lock_guard<std::mutex> lock(operationMutex);
         stats.bytes_sent += bytesWritten;
         stats.avg_write_latency_ms =
             (stats.avg_write_latency_ms * stats.messages_sent + latencyMs) /
             (stats.messages_sent + 1);
 
-        if (config.enable_compression && dataSize > bytesWritten) {
+        if (config.enable_compression && dataSize > bytesWritten &&
+            bytesWritten > 0) {
             stats.avg_compression_ratio = (stats.avg_compression_ratio +
                                            (dataSize * 100 / bytesWritten)) /
-                                          2;
+                                          (stats.messages_sent > 0 ? 2 : 1);
         }
     }
 
@@ -656,16 +734,14 @@ struct FifoClient::Impl {
         auto latencyMs =
             std::chrono::duration<double, std::milli>(duration).count();
 
+        std::lock_guard<std::mutex> lock(operationMutex);
         stats.bytes_received += bytesRead;
-
-        size_t totalReads = stats.bytes_received / config.read_buffer_size + 1;
-        stats.avg_read_latency_ms =
-            (stats.avg_read_latency_ms * (totalReads - 1) + latencyMs) /
-            totalReads;
     }
 
     std::string compressData(const std::string& data) {
 #ifdef ENABLE_COMPRESSION
+        if (data.empty())
+            return "";
         std::string compressed;
         compressed.resize(compressBound(data.size()));
 
@@ -687,8 +763,14 @@ struct FifoClient::Impl {
 
     std::string decompressData(const std::string& data) {
 #ifdef ENABLE_COMPRESSION
+        if (data.empty())
+            return "";
         std::string decompressed;
-        decompressed.resize(data.size() * 4);  // Initial guess
+        size_t decompressedSizeGuess =
+            std::min(data.size() * 4, config.max_message_size);
+        if (decompressedSizeGuess == 0)
+            decompressedSizeGuess = config.read_buffer_size;
+        decompressed.resize(decompressedSizeGuess);
 
         uLongf decompressedSize = decompressed.size();
         int result = uncompress(
@@ -696,6 +778,7 @@ struct FifoClient::Impl {
             reinterpret_cast<const Bytef*>(data.data()), data.size());
 
         if (result != Z_OK) {
+            spdlog::error("Decompression failed with zlib error: {}", result);
             throw std::runtime_error("Decompression failed");
         }
 
@@ -708,9 +791,9 @@ struct FifoClient::Impl {
 
     std::string encryptData(const std::string& data) {
 #ifdef ENABLE_ENCRYPTION
-        // Simplified encryption example - in practice, use proper key
-        // management
-        return data;  // Placeholder implementation
+        spdlog::warn(
+            "Encryption is enabled but using a placeholder implementation.");
+        return data;
 #else
         return data;
 #endif
@@ -718,38 +801,115 @@ struct FifoClient::Impl {
 
     std::string decryptData(const std::string& data) {
 #ifdef ENABLE_ENCRYPTION
-        // Simplified decryption example - in practice, use proper key
-        // management
-        return data;  // Placeholder implementation
+        spdlog::warn(
+            "Decryption is enabled but using a placeholder implementation.");
+        return data;
 #else
         return data;
 #endif
     }
 
-    void startAsyncThread() {
-        asyncThread = std::jthread([this](std::stop_token stoken) {
-            while (!stoken.stop_requested() && !stopAsyncThread) {
-                std::unique_lock<std::mutex> lock(asyncMutex);
-                asyncCondition.wait_for(lock, std::chrono::milliseconds(100));
+    void startAsyncWorkerThread() {
+        asyncWorkerThread = std::jthread([this](std::stop_token stoken) {
+            while (!stoken.stop_requested() && !stopWorkerThread) {
+                std::unique_ptr<AsyncOperationRequest> request;
+                {
+                    std::unique_lock<std::mutex> lock(asyncRequestMutex);
+                    asyncRequestCondition.wait(lock, [&] {
+                        return stoken.stop_requested() || stopWorkerThread ||
+                               !asyncRequestQueue.empty();
+                    });
+                    if (stoken.stop_requested() || stopWorkerThread) {
+                        break;
+                    }
+                    request = std::move(asyncRequestQueue.front());
+                    asyncRequestQueue.pop();
+                }
 
-                auto now = std::chrono::steady_clock::now();
-                std::vector<int> timedOutOps;
+                if (!request)
+                    continue;
 
-                for (const auto& [id, op] : pendingOperations) {
-                    if (op->timeout && now - op->start_time > *op->timeout) {
-                        timedOutOps.push_back(id);
+                std::shared_ptr<AsyncOperation> op;
+                {
+                    std::lock_guard<std::mutex> lock(pendingOpsMutex);
+                    auto it = pendingAsyncOperations.find(request->id);
+                    if (it != pendingAsyncOperations.end()) {
+                        op = it->second;
                     }
                 }
 
-                for (int id : timedOutOps) {
-                    auto it = pendingOperations.find(id);
-                    if (it != pendingOperations.end()) {
-                        it->second->callback(
-                            false, make_error_code(FifoError::Timeout), 0);
-                        pendingOperations.erase(it);
+                if (!op || op->canceled) {
+                    spdlog::debug(
+                        "Async operation {} cancelled before execution",
+                        request->id);
+                    std::lock_guard<std::mutex> lock(pendingOpsMutex);
+                    pendingAsyncOperations.erase(request->id);
+                    continue;
+                }
+
+                spdlog::debug("Executing async operation {}", request->id);
+
+                std::error_code ec;
+                size_t bytesTransferred = 0;
+                bool success = false;
+
+                try {
+                    if (request->type == AsyncOperationRequest::Type::Write) {
+                        auto result =
+                            write(request->data, MessagePriority::Normal,
+                                  request->timeout);
+                        if (result) {
+                            success = true;
+                            bytesTransferred = *result;
+                        } else {
+                            ec = result.error().error();
+                        }
+                    } else {
+                        auto result = read(request->maxSize, request->timeout);
+                        if (result) {
+                            success = true;
+                            bytesTransferred = result->size();
+                        } else {
+                            ec = result.error().error();
+                        }
+                    }
+                } catch (const std::exception& e) {
+                    spdlog::error("Exception during async operation {}: {}",
+                                  request->id, e.what());
+                    success = false;
+                    ec = make_error_code(FifoError::InvalidOperation);
+                }
+
+                {
+                    std::lock_guard<std::mutex> lock(pendingOpsMutex);
+                    auto it = pendingAsyncOperations.find(request->id);
+                    if (it != pendingAsyncOperations.end()) {
+                        if (!it->second->canceled) {
+                            try {
+                                it->second->callback(success, ec,
+                                                     bytesTransferred);
+                            } catch (const std::exception& e) {
+                                spdlog::error(
+                                    "Exception in async operation callback {}: "
+                                    "{}",
+                                    request->id, e.what());
+                            }
+                        } else {
+                            spdlog::debug(
+                                "Async operation {} cancelled after execution "
+                                "but before callback",
+                                request->id);
+                        }
+                        pendingAsyncOperations.erase(it);
+                    } else {
+                        spdlog::warn(
+                            "Async operation {} not found in pending list "
+                            "after execution",
+                            request->id);
                     }
                 }
             }
+            spdlog::debug("Async worker thread stopping");
         });
     }
 
@@ -776,8 +936,6 @@ struct FifoClient::Impl {
         spdlog::info("Reset FIFO client statistics");
     }
 };
-
-// FifoClient implementation
 
 FifoClient::FifoClient(std::string_view fifoPath)
     : m_impl(std::make_unique<Impl>(fifoPath)) {}
@@ -880,11 +1038,11 @@ auto FifoClient::open(std::optional<std::chrono::milliseconds> timeout)
     if (!m_impl) {
         return type::unexpected(make_error_code(FifoError::NotOpen));
     }
-    try {
-        m_impl->openFifo();
+    m_impl->openFifo();
+    if (m_impl->isOpen()) {
         return {};
-    } catch (const std::system_error& e) {
-        return type::unexpected(e.code());
+    } else {
+        return type::unexpected(make_error_code(FifoError::OpenFailed));
     }
 }
 

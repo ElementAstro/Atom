@@ -13,6 +13,7 @@ Description: UDP Client Class
 #define ATOM_CONNECTION_ASYNC_UDPCLIENT_HPP
 
 #include <asio.hpp>
+#include <atomic>  // For std::atomic
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -24,6 +25,8 @@ namespace atom::async::connection {
 /**
  * @class UdpClient
  * @brief Represents a UDP client for sending and receiving datagrams.
+ * This class provides a high-performance, thread-safe UDP client implementation
+ * using modern C++ features for asynchronous I/O, concurrency, and scalability.
  */
 class UdpClient {
 public:
@@ -32,24 +35,52 @@ public:
         ReuseAddress,
         ReceiveBufferSize,
         SendBufferSize,
-        ReceiveTimeout,
-        SendTimeout
+        ReceiveTimeout,  // Note: Not directly supported, use receive() with
+                         // timeout
+        SendTimeout      // Note: Not directly supported, use sendWithTimeout()
     };
 
+    /**
+     * @struct Statistics
+     * @brief Holds performance and usage statistics for the UDP client.
+     * All counters are atomic to ensure thread-safe, lock-free updates.
+     */
     struct Statistics {
-        std::size_t packets_sent{0};
-        std::size_t packets_received{0};
-        std::size_t bytes_sent{0};
-        std::size_t bytes_received{0};
+        std::atomic<std::size_t> packets_sent{0};
+        std::atomic<std::size_t> packets_received{0};
+        std::atomic<std::size_t> bytes_sent{0};
+        std::atomic<std::size_t> bytes_received{0};
         std::chrono::steady_clock::time_point start_time;
 
         Statistics() : start_time(std::chrono::steady_clock::now()) {}
 
+        // Custom copy constructor and assignment operator for atomics
+        Statistics(const Statistics& other)
+            : packets_sent(other.packets_sent.load()),
+              packets_received(other.packets_received.load()),
+              bytes_sent(other.bytes_sent.load()),
+              bytes_received(other.bytes_received.load()),
+              start_time(other.start_time) {}
+
+        Statistics& operator=(const Statistics& other) {
+            if (this != &other) {
+                packets_sent = other.packets_sent.load();
+                packets_received = other.packets_received.load();
+                bytes_sent = other.bytes_sent.load();
+                bytes_received = other.bytes_received.load();
+                start_time = other.start_time;
+            }
+            return *this;
+        }
+
+        /**
+         * @brief Resets all statistical counters to zero.
+         */
         void reset() {
-            packets_sent = 0;
-            packets_received = 0;
-            bytes_sent = 0;
-            bytes_received = 0;
+            packets_sent.store(0, std::memory_order_relaxed);
+            packets_received.store(0, std::memory_order_relaxed);
+            bytes_sent.store(0, std::memory_order_relaxed);
+            bytes_received.store(0, std::memory_order_relaxed);
             start_time = std::chrono::steady_clock::now();
         }
     };
@@ -60,108 +91,118 @@ public:
     using OnStatusCallback = std::function<void(const std::string&)>;
 
     /**
-     * @brief Constructs a new UDP client.
+     * @brief Constructs a new UDP client using IPv4.
      */
     UdpClient();
 
     /**
-     * @brief Constructs a new UDP client with specified IP version.
-     * @param use_ipv6 Whether to use IPv6 (true) or IPv4 (false)
+     * @brief Constructs a new UDP client with a specified IP version.
+     * @param use_ipv6 Set to true to use IPv6, false for IPv4.
      */
     explicit UdpClient(bool use_ipv6);
 
     /**
-     * @brief Destructor
+     * @brief Destructor.
      */
     ~UdpClient();
 
     UdpClient(const UdpClient&) = delete;
     UdpClient& operator=(const UdpClient&) = delete;
 
-    // Move constructor and assignment
+    // Move constructor and assignment operator
     UdpClient(UdpClient&&) noexcept;
     UdpClient& operator=(UdpClient&&) noexcept;
 
     /**
-     * @brief Binds the socket to a specific port.
-     * @param port The port to bind to
-     * @param address Optional address to bind to (default: any)
-     * @return true if successful, false otherwise
+     * @brief Binds the socket to a specific local port and address.
+     * @param port The port number to bind to.
+     * @param address The local IP address to bind to. If empty, binds to all
+     * available interfaces.
+     * @return true if the bind operation was successful, false otherwise.
      */
     bool bind(int port, const std::string& address = "");
 
     /**
-     * @brief Sends data to a specified host and port.
-     * @param host The target host
-     * @param port The target port
-     * @param data The data to send
-     * @return true if successful, false otherwise
+     * @brief Sends a block of data to a specified destination.
+     * @param host The hostname or IP address of the recipient.
+     * @param port The port number of the recipient.
+     * @param data A vector of characters containing the data to send.
+     * @return true if the data was sent successfully, false otherwise.
      */
     bool send(const std::string& host, int port, const std::vector<char>& data);
 
     /**
-     * @brief Sends string data to a specified host and port.
-     * @param host The target host
-     * @param port The target port
-     * @param data The string data to send
-     * @return true if successful, false otherwise
+     * @brief Sends a string to a specified destination.
+     * @param host The hostname or IP address of the recipient.
+     * @param port The port number of the recipient.
+     * @param data The string data to send.
+     * @return true if the data was sent successfully, false otherwise.
      */
     bool send(const std::string& host, int port, const std::string& data);
 
     /**
-     * @brief Sends data with timeout.
-     * @param host The target host
-     * @param port The target port
-     * @param data The data to send
-     * @param timeout Timeout duration
-     * @return true if successful, false otherwise
+     * @brief Sends data with a specified timeout.
+     * @param host The hostname or IP address of the recipient.
+     * @param port The port number of the recipient.
+     * @param data The data to send.
+     * @param timeout The maximum time to wait for the send operation to
+     * complete.
+     * @return true if the data was sent within the timeout, false otherwise.
      */
     bool sendWithTimeout(const std::string& host, int port,
                          const std::vector<char>& data,
                          std::chrono::milliseconds timeout);
 
     /**
-     * @brief Batch sends data to multiple destinations.
-     * @param destinations Vector of host:port pairs
-     * @param data The data to send
-     * @return Number of successful transmissions
+     * @brief Sends the same data packet to multiple destinations.
+     * @param destinations A vector of host-port pairs.
+     * @param data The data to send.
+     * @return The number of destinations to which the data was sent
+     * successfully.
      */
     int batchSend(const std::vector<std::pair<std::string, int>>& destinations,
                   const std::vector<char>& data);
 
     /**
-     * @brief Receives data synchronously.
-     * @param size Buffer size for received data
-     * @param remoteHost Will store the sender's host
-     * @param remotePort Will store the sender's port
-     * @param timeout Optional timeout (zero means no timeout)
-     * @return The received data
+     * @brief Receives data synchronously with an optional timeout.
+     * @param size The maximum number of bytes to receive.
+     * @param[out] remoteHost The IP address of the sender.
+     * @param[out] remotePort The port of the sender.
+     * @param timeout The maximum time to wait for data. If zero, waits
+     * indefinitely.
+     * @return A vector containing the received data. Returns an empty vector on
+     * timeout or error.
      */
     std::vector<char> receive(
         size_t size, std::string& remoteHost, int& remotePort,
         std::chrono::milliseconds timeout = std::chrono::milliseconds::zero());
 
     /**
-     * @brief Sets callback for data reception.
-     * @param callback The callback function
+     * @brief Registers a callback function to be invoked when data is received
+     * asynchronously.
+     * @param callback The function to call with received data, sender host, and
+     * port.
      */
     void setOnDataReceivedCallback(const OnDataReceivedCallback& callback);
 
     /**
-     * @brief Sets callback for errors.
-     * @param callback The callback function
+     * @brief Registers a callback function for handling errors.
+     * @param callback The function to call with an error message and error
+     * code.
      */
     void setOnErrorCallback(const OnErrorCallback& callback);
 
     /**
-     * @brief Sets callback for status updates.
-     * @param callback The callback function
+     * @brief Registers a callback function for status updates.
+     * @param callback The function to call with a status message.
      */
     void setOnStatusCallback(const OnStatusCallback& callback);
 
     /**
      * @brief Starts asynchronous data reception.
-     * @param bufferSize Size of the receive buffer
+     * Once started, the client listens for incoming data and invokes the
+     * OnDataReceivedCallback.
+     * @param bufferSize The size of the internal buffer for incoming data.
      */
     void startReceiving(size_t bufferSize = 4096);
 
@@ -171,63 +212,64 @@ public:
     void stopReceiving();
 
     /**
-     * @brief Sets a socket option.
-     * @param option The option to set
-     * @param value The option value
-     * @return true if successful, false otherwise
+     * @brief Configures a socket option.
+     * @param option The socket option to configure.
+     * @param value The value to set for the option.
+     * @return true if the option was set successfully, false otherwise.
      */
     bool setSocketOption(SocketOption option, int value);
 
     /**
-     * @brief Sets the Time To Live (TTL) value.
-     * @param ttl The TTL value
-     * @return true if successful, false otherwise
+     * @brief Sets the Time-To-Live (TTL) for unicast packets.
+     * @param ttl The TTL value.
+     * @return true if successful, false otherwise.
      */
     bool setTTL(int ttl);
 
     /**
      * @brief Joins a multicast group.
-     * @param multicastAddress The multicast group address
-     * @param interfaceAddress The local interface address (optional)
-     * @return true if successful, false otherwise
+     * @param multicastAddress The IP address of the multicast group to join.
+     * @param interfaceAddress The local interface address to use. If empty, the
+     * OS chooses.
+     * @return true if the group was joined successfully, false otherwise.
      */
     bool joinMulticastGroup(const std::string& multicastAddress,
                             const std::string& interfaceAddress = "");
 
     /**
      * @brief Leaves a multicast group.
-     * @param multicastAddress The multicast group address
-     * @param interfaceAddress The local interface address (optional)
-     * @return true if successful, false otherwise
+     * @param multicastAddress The IP address of the multicast group to leave.
+     * @param interfaceAddress The local interface address used to join.
+     * @return true if the group was left successfully, false otherwise.
      */
     bool leaveMulticastGroup(const std::string& multicastAddress,
                              const std::string& interfaceAddress = "");
 
     /**
-     * @brief Gets the local endpoint information.
-     * @return Pair of address and port
+     * @brief Gets the local address and port the socket is bound to.
+     * @return A pair containing the local IP address and port.
      */
     std::pair<std::string, int> getLocalEndpoint() const;
 
     /**
-     * @brief Checks if the socket is open.
-     * @return true if open, false otherwise
+     * @brief Checks if the socket is currently open.
+     * @return true if the socket is open, false otherwise.
      */
     bool isOpen() const;
 
     /**
-     * @brief Closes the socket.
+     * @brief Closes the socket, stopping all operations.
      */
     void close();
 
     /**
-     * @brief Gets current statistics.
-     * @return The statistics
+     * @brief Retrieves the current communication statistics.
+     * @return A copy of the Statistics struct.
      */
     Statistics getStatistics() const;
 
     /**
-     * @brief Resets statistics.
+     * @brief Resets all communication statistics to zero.
      */
     void resetStatistics();
 
