@@ -190,5 +190,3 @@ auto FifoServer::getPath() const -> std::string { return pimpl_->getPath(); }
 void FifoServer::cancel() { pimpl_->cancel(); }
 
 } // namespace atom::async::connection
-
-
