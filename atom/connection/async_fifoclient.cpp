@@ -1,9 +1,14 @@
 #include "async_fifoclient.hpp"
 
+#include <spdlog/spdlog.h>
 #include <asio.hpp>
-#include <iostream>
+#include <chrono>
+#include <future>
+#include <memory>
+#include <optional>
 #include <string>
-#include <system_error>
+#include <string_view>
+#include <thread>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -17,188 +22,197 @@
 namespace atom::async::connection {
 
 struct FifoClient::Impl {
-    asio::io_context io_context;
+    asio::io_context io_context_;
+    std::thread io_thread_;
+    std::string fifoPath_;
 #ifdef _WIN32
-    HANDLE fifoHandle{nullptr};
+    asio::windows::stream_handle pipe_;
 #else
-    int fifoFd{-1};
+    asio::posix::stream_descriptor pipe_;
 #endif
-    std::string fifoPath;
-    asio::steady_timer timer;
 
-    Impl(std::string_view path) : fifoPath(path), timer(io_context) {
-        openFifo();
+    explicit Impl()
+#ifdef _WIN32
+        : pipe_(io_context_)
+#else
+        : pipe_(io_context_)
+#endif
+    {
     }
 
-    ~Impl() { close(); }
-
-    void openFifo() {
+    explicit Impl(std::string_view fifoPath)
 #ifdef _WIN32
-        fifoHandle =
-            CreateFileA(fifoPath.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
-                        nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (fifoHandle == INVALID_HANDLE_VALUE) {
-            throw std::runtime_error("Failed to open FIFO pipe");
-        }
+        : pipe_(io_context_),
 #else
-        if (mkfifo(fifoPath.c_str(), 0666) == -1 && errno != EEXIST) {
-            throw std::system_error(errno, std::generic_category(),
-                                    "Failed to create FIFO");
-        }
-        fifoFd = open(fifoPath.c_str(), O_RDWR | O_NONBLOCK);
-        if (fifoFd == -1) {
-            throw std::system_error(errno, std::generic_category(),
-                                    "Failed to open FIFO pipe");
-        }
+        : pipe_(io_context_),
 #endif
+          io_thread_([this] { io_context_.run(); }) {
+        open(fifoPath);
     }
 
-    bool isOpen() const {
-#ifdef _WIN32
-        return fifoHandle != INVALID_HANDLE_VALUE;
-#else
-        return fifoFd != -1;
-#endif
+    ~Impl() {
+        io_context_.stop();
+        if (io_thread_.joinable()) {
+            io_thread_.join();
+        }
+        close();
     }
+
+    void open(std::string_view fifoPath) {
+        if (isOpen()) {
+            throw std::runtime_error("FIFO is already open");
+        }
+        fifoPath_ = fifoPath;
+#ifdef _WIN32
+        HANDLE handle =
+            CreateFileA(fifoPath_.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
+                        nullptr, OPEN_EXISTING, 0, nullptr);
+        if (handle == INVALID_HANDLE_VALUE) {
+            spdlog::error("Failed to open FIFO: {}", GetLastError());
+            throw std::runtime_error("Failed to open FIFO");
+        }
+        pipe_.assign(handle);
+#else
+        if (mkfifo(fifoPath_.c_str(), 0666) == -1 && errno != EEXIST) {
+            spdlog::error("Failed to create FIFO: {}", strerror(errno));
+            throw std::runtime_error("Failed to create FIFO");
+        }
+        int fd = ::open(fifoPath_.c_str(), O_RDWR | O_NONBLOCK);
+        if (fd == -1) {
+            spdlog::error("Failed to open FIFO: {}", strerror(errno));
+            throw std::runtime_error("Failed to open FIFO");
+        }
+        pipe_.assign(fd);
+#endif
+        spdlog::info("FIFO opened successfully: {}", fifoPath_);
+        if (!io_thread_.joinable()) {
+            io_thread_ = std::thread([this] { io_context_.run(); });
+        }
+    }
+
+    auto isOpen() const -> bool { return pipe_.is_open(); }
 
     void close() {
-#ifdef _WIN32
         if (isOpen()) {
-            CloseHandle(fifoHandle);
-            fifoHandle = INVALID_HANDLE_VALUE;
-        }
-#else
-        if (isOpen()) {
-            ::close(fifoFd);
-            fifoFd = -1;
-        }
-#endif
-    }
-
-    bool write(std::string_view data,
-               const std::optional<std::chrono::milliseconds>& timeout) {
-        if (!isOpen())
-            return false;
-
-        // Convert data to buffer
-        std::vector<char> buffer(data.begin(), data.end());
-        buffer.push_back('\0');
-
-#ifdef _WIN32
-        // Windows specific writing logic
-        DWORD bytesWritten;
-        if (timeout) {
-            timer.expires_after(*timeout);
-            timer.async_wait(
-                [this, &buffer, &bytesWritten](const asio::error_code&) {
-                    WriteFile(fifoHandle, buffer.data(),
-                              static_cast<DWORD>(buffer.size()), &bytesWritten,
-                              nullptr);
-                });
-        } else {
-            return WriteFile(fifoHandle, buffer.data(),
-                             static_cast<DWORD>(buffer.size()), &bytesWritten,
-                             nullptr) != 0;
-        }
-        io_context.run();
-        io_context.reset();
-        return true;
-#else
-        if (timeout) {
-            fd_set writeFds;
-            FD_ZERO(&writeFds);
-            FD_SET(fifoFd, &writeFds);
-            timeval tv{};
-            tv.tv_sec = timeout->count() / 1000;
-            tv.tv_usec = (timeout->count() % 1000) * 1000;
-            int result = select(fifoFd + 1, nullptr, &writeFds, nullptr, &tv);
-            if (result > 0) {
-                return ::write(fifoFd, buffer.data(), buffer.size()) != -1;
+            asio::error_code ec;
+            if (pipe_.close(ec)) {
+                spdlog::info("FIFO closed successfully.");
             }
-            return false;
-        } else {
-            return ::write(fifoFd, buffer.data(), buffer.size()) != -1;
-        }
-#endif
-    }
-
-    std::optional<std::string> read(
-        const std::optional<std::chrono::milliseconds>& timeout) {
-        if (!isOpen())
-            return std::nullopt;
-
-        std::string data;
-        char buffer[1024];
-
-#ifdef _WIN32
-        // Windows specific reading logic
-        DWORD bytesRead;
-        if (timeout) {
-            timer.expires_after(*timeout);
-            timer.async_wait(
-                [this, &data, &buffer, &bytesRead](const asio::error_code&) {
-                    if (ReadFile(fifoHandle, buffer, sizeof(buffer) - 1,
-                                 &bytesRead, nullptr) &&
-                        bytesRead > 0) {
-                        buffer[bytesRead] = '\0';
-                        data += buffer;
-                    }
-                });
-        } else {
-            while (ReadFile(fifoHandle, buffer, sizeof(buffer) - 1, &bytesRead,
-                            nullptr) &&
-                   bytesRead > 0) {
-                buffer[bytesRead] = '\0';
-                data += buffer;
+            if (ec) {
+                spdlog::error("Failed to close FIFO: {}", ec.message());
             }
         }
-#else
+    }
+
+    void cancel() { pipe_.cancel(); }
+
+    auto getPath() const -> std::string { return fifoPath_; }
+
+    auto write(std::string_view data,
+               const std::optional<std::chrono::milliseconds> &timeout)
+        -> std::future<bool> {
+        auto promise = std::make_shared<std::promise<bool>>();
+        auto future = promise->get_future();
+
+        asio::async_write(pipe_, asio::buffer(data),
+                          [promise](const asio::error_code &ec, size_t) {
+                              if (ec) {
+                                  spdlog::error("Write error: {}",
+                                                ec.message());
+                                  promise->set_value(false);
+                              } else {
+                                  promise->set_value(true);
+                              }
+                          });
+
         if (timeout) {
-            fd_set readFds;
-            FD_ZERO(&readFds);
-            FD_SET(fifoFd, &readFds);
-            timeval tv{};
-            tv.tv_sec = timeout->count() / 1000;
-            tv.tv_usec = (timeout->count() % 1000) * 1000;
-            int result = select(fifoFd + 1, &readFds, nullptr, nullptr, &tv);
-            if (result > 0) {
-                ssize_t bytesRead = ::read(fifoFd, buffer, sizeof(buffer) - 1);
-                if (bytesRead > 0) {
-                    buffer[bytesRead] = '\0';
-                    data += buffer;
+            auto timer = std::make_shared<asio::steady_timer>(io_context_);
+            timer->expires_after(*timeout);
+            timer->async_wait([promise, timer](const asio::error_code &ec) {
+                if (!ec) {
+                    promise->set_value(false);
                 }
-            }
-        } else {
-            ssize_t bytesRead;
-            while ((bytesRead = ::read(fifoFd, buffer, sizeof(buffer) - 1)) >
-                   0) {
-                buffer[bytesRead] = '\0';
-                data += buffer;
-            }
+            });
         }
-#endif
 
-        return data.empty() ? std::nullopt : std::make_optional(data);
+        return future;
+    }
+
+    auto read(const std::optional<std::chrono::milliseconds> &timeout)
+        -> std::future<std::optional<std::string>> {
+        auto promise =
+            std::make_shared<std::promise<std::optional<std::string>>>();
+        auto future = promise->get_future();
+        auto buffer = std::make_shared<asio::streambuf>();
+
+        asio::async_read_until(
+            pipe_, *buffer, '\n',
+            [promise, buffer](const asio::error_code &ec,
+                              size_t bytes_transferred) {
+                if (!ec) {
+                    std::string data(asio::buffers_begin(buffer->data()),
+                                     asio::buffers_begin(buffer->data()) +
+                                         bytes_transferred);
+                    promise->set_value(data);
+                } else if (ec == asio::error::eof) {
+                    promise->set_value(std::nullopt);
+                } else {
+                    spdlog::error("Read error: {}", ec.message());
+                    promise->set_value(std::nullopt);
+                }
+            });
+
+        if (timeout) {
+            auto timer = std::make_shared<asio::steady_timer>(io_context_);
+            timer->expires_after(*timeout);
+            timer->async_wait([promise, timer](const asio::error_code &ec) {
+                if (!ec) {
+                    promise->set_value(std::nullopt);
+                }
+            });
+        }
+
+        return future;
     }
 };
 
-FifoClient::FifoClient(std::string fifoPath)
-    : m_impl(std::make_unique<Impl>(fifoPath)) {}
+FifoClient::FifoClient() : pimpl_(std::make_unique<Impl>()) {}
+
+FifoClient::FifoClient(std::string_view fifoPath)
+    : pimpl_(std::make_unique<Impl>(fifoPath)) {}
 
 FifoClient::~FifoClient() = default;
 
-bool FifoClient::write(std::string_view data,
-                       std::optional<std::chrono::milliseconds> timeout) {
-    return m_impl->write(data, timeout);
+void FifoClient::open(std::string_view fifoPath) { pimpl_->open(fifoPath); }
+
+auto FifoClient::write(std::string_view data,
+                       std::optional<std::chrono::milliseconds> timeout)
+    -> std::future<bool> {
+    return pimpl_->write(data, timeout);
 }
 
-std::optional<std::string> FifoClient::read(
-    std::optional<std::chrono::milliseconds> timeout) {
-    return m_impl->read(timeout);
+auto FifoClient::writeSync(std::string_view data,
+                           std::optional<std::chrono::milliseconds> timeout)
+    -> bool {
+    return write(data, timeout).get();
 }
 
-bool FifoClient::isOpen() const { return m_impl->isOpen(); }
+auto FifoClient::read(std::optional<std::chrono::milliseconds> timeout)
+    -> std::future<std::optional<std::string>> {
+    return pimpl_->read(timeout);
+}
 
-void FifoClient::close() { m_impl->close(); }
+auto FifoClient::readSync(std::optional<std::chrono::milliseconds> timeout)
+    -> std::optional<std::string> {
+    return read(timeout).get();
+}
+
+auto FifoClient::isOpen() const -> bool { return pimpl_->isOpen(); }
+
+void FifoClient::close() { pimpl_->close(); }
+
+void FifoClient::cancel() { pimpl_->cancel(); }
+
+auto FifoClient::getPath() const -> std::string { return pimpl_->getPath(); }
 
 }  // namespace atom::async::connection

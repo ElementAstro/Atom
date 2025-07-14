@@ -78,7 +78,8 @@ TEST_F(ThreadSafeLRUCacheTest, Resize) {
     cache->put("key3", 3);
     cache->resize(2);
     EXPECT_EQ(cache->size(), 2);
-    EXPECT_FALSE(cache->get("key1").has_value());
+    auto val1 = cache->get("key1");  // Capture return value
+    EXPECT_FALSE(val1.has_value());
 }
 
 TEST_F(ThreadSafeLRUCacheTest, LoadFactor) {
@@ -89,8 +90,8 @@ TEST_F(ThreadSafeLRUCacheTest, LoadFactor) {
 
 TEST_F(ThreadSafeLRUCacheTest, HitRate) {
     cache->put("key1", 1);
-    cache->get("key1");
-    cache->get("key2");
+    auto val1 = cache->get("key1");  // Hit // Capture return value
+    auto val2 = cache->get("key2");  // Miss // Capture return value
     EXPECT_FLOAT_EQ(cache->hitRate(), 0.5);
 }
 
@@ -121,7 +122,8 @@ TEST_F(ThreadSafeLRUCacheTest, LoadFromFile) {
 TEST_F(ThreadSafeLRUCacheTest, Expiry) {
     cache->put("key1", 1, std::chrono::seconds(1));
     std::this_thread::sleep_for(std::chrono::seconds(2));
-    EXPECT_FALSE(cache->get("key1").has_value());
+    auto val = cache->get("key1");  // Capture return value
+    EXPECT_FALSE(val.has_value());
 }
 
 TEST_F(ThreadSafeLRUCacheTest, InsertCallback) {
@@ -193,8 +195,10 @@ TEST_F(ThreadSafeLRUCacheTest, PruneExpired) {
     EXPECT_EQ(prunedCount, 1);
 
     // key1 should be gone, key2 should remain
-    EXPECT_FALSE(cache->get("key1").has_value());
-    EXPECT_TRUE(cache->get("key2").has_value());
+    auto val1 = cache->get("key1");  // Capture return value
+    EXPECT_FALSE(val1.has_value());
+    auto val2 = cache->get("key2");  // Capture return value
+    EXPECT_TRUE(val2.has_value());
 }
 
 TEST_F(ThreadSafeLRUCacheTest, Prefetch) {
@@ -229,8 +233,8 @@ TEST_F(ThreadSafeLRUCacheTest, Prefetch) {
 
 TEST_F(ThreadSafeLRUCacheTest, GetStatistics) {
     cache->put("key1", 1);
-    cache->get("key1");         // Hit
-    cache->get("nonexistent");  // Miss
+    auto val1 = cache->get("key1");         // Hit // Capture return value
+    auto val2 = cache->get("nonexistent");  // Miss // Capture return value
 
     auto stats = cache->getStatistics();
 
@@ -249,13 +253,15 @@ TEST_F(ThreadSafeLRUCacheTest, TimeToLiveExpiration) {
                    std::chrono::milliseconds(50)));
 
     // Should be available immediately
-    EXPECT_TRUE(cache->get("key1").has_value());
+    auto val1 = cache->get("key1");  // Capture return value
+    EXPECT_TRUE(val1.has_value());
 
     // Wait for expiration
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     // Should be gone now
-    EXPECT_FALSE(cache->get("key1").has_value());
+    auto val2 = cache->get("key1");  // Capture return value
+    EXPECT_FALSE(val2.has_value());
 
     // Check that contains also respects expiry
     EXPECT_FALSE(cache->contains("key1"));
@@ -276,15 +282,18 @@ TEST_F(ThreadSafeLRUCacheTest, ResizeWithValidation) {
     // Only one item should remain (the most recently used)
     EXPECT_EQ(cache->size(), 1);
     EXPECT_TRUE(cache->get("key3").has_value());
-    EXPECT_FALSE(cache->get("key1").has_value());
-    EXPECT_FALSE(cache->get("key2").has_value());
+    auto val1 = cache->get("key1");  // Capture return value
+    EXPECT_FALSE(val1.has_value());
+    auto val2 = cache->get("key2");  // Capture return value
+    EXPECT_FALSE(val2.has_value());
 }
 
 TEST_F(ThreadSafeLRUCacheTest, EmptyOperations) {
     // Test operations on empty cache
     EXPECT_EQ(cache->size(), 0);
     EXPECT_FALSE(cache->contains("any"));
-    EXPECT_FALSE(cache->get("any").has_value());
+    auto val = cache->get("any");  // Capture return value
+    EXPECT_FALSE(val.has_value());
     EXPECT_EQ(cache->getShared("any"), nullptr);
 
     auto lru = cache->popLru();
@@ -312,7 +321,7 @@ TEST_F(ThreadSafeLRUCacheTest, ConcurrentAccess) {
                     std::string key =
                         "key" + std::to_string(i) + "_" + std::to_string(j);
                     cache->put(key, j);
-                    auto val = cache->get(key);
+                    auto val = cache->get(key);  // Capture return value
                     if (val.has_value() && val.value() == j) {
                         successCount++;
                     }
@@ -347,7 +356,7 @@ TEST_F(ThreadSafeLRUCacheTest, EdgeCases) {
     // Test with negative TTL (should fail gracefully)
     try {
         cache->put("negative", 42, std::chrono::seconds(-10));
-        auto val = cache->get("negative");
+        auto val = cache->get("negative");  // Capture return value
         // Implementation-dependent whether this succeeds, but shouldn't crash
     } catch (const std::exception&) {
         // Exception is acceptable
@@ -464,10 +473,14 @@ TEST_F(ThreadSafeLRUCacheTest, ComplexValueType) {
     complexCache->put(3, TestSerializable(103, "Item 3"));
     complexCache->put(4, TestSerializable(104, "Item 4"));
 
-    EXPECT_FALSE(complexCache->get(1).has_value());  // Should be evicted
-    EXPECT_TRUE(complexCache->get(2).has_value());
-    EXPECT_TRUE(complexCache->get(3).has_value());
-    EXPECT_TRUE(complexCache->get(4).has_value());
+    auto val1 = complexCache->get(1);  // Capture return value
+    EXPECT_FALSE(val1.has_value());    // Should be evicted
+    auto val2 = complexCache->get(2);  // Capture return value
+    EXPECT_TRUE(val2.has_value());
+    auto val3 = complexCache->get(3);  // Capture return value
+    EXPECT_TRUE(val3.has_value());
+    auto val4 = complexCache->get(4);  // Capture return value
+    EXPECT_TRUE(val4.has_value());
 }
 
 TEST_F(ThreadSafeLRUCacheTest, AccessOrder) {
@@ -477,13 +490,150 @@ TEST_F(ThreadSafeLRUCacheTest, AccessOrder) {
     cache->put("key3", 3);
 
     // Access key1 to move it to front
-    cache->get("key1");
+    auto val1_access = cache->get("key1");  // Capture return value
 
     // Add a new key to evict LRU item (should be key2)
     cache->put("key4", 4);
 
-    EXPECT_TRUE(cache->get("key1").has_value());   // Was accessed recently
-    EXPECT_FALSE(cache->get("key2").has_value());  // Should be evicted
-    EXPECT_TRUE(cache->get("key3").has_value());
-    EXPECT_TRUE(cache->get("key4").has_value());
+    auto val1 = cache->get("key1");  // Capture return value
+    EXPECT_TRUE(val1.has_value());   // Was accessed recently
+    auto val2 = cache->get("key2");  // Capture return value
+    EXPECT_FALSE(val2.has_value());  // Should be evicted
+    auto val3 = cache->get("key3");  // Capture return value
+    EXPECT_TRUE(val3.has_value());
+    auto val4 = cache->get("key4");  // Capture return value
+    EXPECT_TRUE(val4.has_value());
+}
+TEST_F(ThreadSafeLRUCacheTest, DefaultTTL) {
+    // Set a default TTL
+    cache->setDefaultTTL(std::chrono::seconds(1));
+
+    // Put an item without specifying TTL
+    cache->put("default_ttl_key", 99);
+
+    // Should be available immediately
+    auto val1 = cache->get("default_ttl_key");  // Capture return value
+    EXPECT_TRUE(val1.has_value());
+
+    // Wait for longer than the default TTL
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    // Should be gone now due to default TTL
+    auto val2 = cache->get("default_ttl_key");  // Capture return value
+    EXPECT_FALSE(val2.has_value());
+
+    // Check getDefaultTTL
+    auto defaultTtl = cache->getDefaultTTL();
+    ASSERT_TRUE(defaultTtl.has_value());
+    EXPECT_EQ(defaultTtl.value(), std::chrono::seconds(1));
+
+    // Clear default TTL
+    cache->setDefaultTTL(
+        std::chrono::seconds::zero());  // Or some other indicator for no
+                                        // default TTL
+    defaultTtl = cache->getDefaultTTL();
+    // Depending on implementation, zero seconds might mean no TTL or instant
+    // expiry. Let's assume zero means no default TTL is set. The current
+    // implementation uses optional, so setting it to zero seconds is valid. A
+    // better test might be to check if setting it to nullopt works. The current
+    // code doesn't provide a way to unset it easily, let's test setting it to a
+    // new value.
+    cache->setDefaultTTL(std::chrono::seconds(5));
+    defaultTtl = cache->getDefaultTTL();
+    ASSERT_TRUE(defaultTtl.has_value());
+    EXPECT_EQ(defaultTtl.value(), std::chrono::seconds(5));
+}
+
+TEST_F(ThreadSafeLRUCacheTest, AsyncGet) {
+    cache->put("async_key", 123);
+
+    auto futureValue = cache->asyncGet("async_key");
+    auto value = futureValue.get();  // Wait for the async operation to complete
+
+    ASSERT_TRUE(value.has_value());
+    EXPECT_EQ(value.value(), 123);
+
+    auto futureNonExistent = cache->asyncGet("nonexistent_async");
+    auto nonExistentValue = futureNonExistent.get();
+    EXPECT_FALSE(nonExistentValue.has_value());
+}
+
+TEST_F(ThreadSafeLRUCacheTest, AsyncPut) {
+    auto futurePut =
+        cache->asyncPut("async_put_key", 456, std::chrono::seconds(10));
+    futurePut.get();  // Wait for the async operation to complete
+
+    // Verify the item was added
+    auto value = cache->get("async_put_key");
+    ASSERT_TRUE(value.has_value());
+    EXPECT_EQ(value.value(), 456);
+}
+
+TEST_F(ThreadSafeLRUCacheTest, ResetStatistics) {
+    cache->put("key1", 1);
+    auto val1 = cache->get("key1");  // Hit // Capture return value
+    auto val2 = cache->get("key2");  // Miss // Capture return value
+
+    auto statsBefore = cache->getStatistics();
+    EXPECT_EQ(statsBefore.hitCount, 1);
+    EXPECT_EQ(statsBefore.missCount, 1);
+
+    cache->resetStatistics();
+
+    auto statsAfter = cache->getStatistics();
+    EXPECT_EQ(statsAfter.hitCount, 0);
+    EXPECT_EQ(statsAfter.missCount, 0);
+}
+
+TEST_F(ThreadSafeLRUCacheTest, ContainsRespectsExpiry) {
+    cache->put("expiring_key", 1, std::chrono::seconds(1));
+
+    // Should contain immediately
+    EXPECT_TRUE(cache->contains("expiring_key"));
+
+    // Wait for expiration
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    // Should not contain after expiry
+    EXPECT_FALSE(cache->contains("expiring_key"));
+}
+
+TEST_F(ThreadSafeLRUCacheTest, PutBatchWithTTL) {
+    std::vector<ThreadSafeLRUCache<std::string, int>::KeyValuePair> items = {
+        {"batch_ttl_key1", 10}, {"batch_ttl_key2", 20}};
+
+    cache->putBatch(items, std::chrono::seconds(1));
+
+    // Should contain immediately
+    EXPECT_TRUE(cache->contains("batch_ttl_key1"));
+    EXPECT_TRUE(cache->contains("batch_ttl_key2"));
+
+    // Wait for expiration
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    // Should not contain after expiry
+    EXPECT_FALSE(cache->contains("batch_ttl_key1"));
+    EXPECT_FALSE(cache->contains("batch_ttl_key2"));
+}
+
+TEST_F(ThreadSafeLRUCacheTest, PrefetchWithTTL) {
+    std::vector<std::string> keysToPrefetch = {"prefetch_ttl_key1",
+                                               "prefetch_ttl_key2"};
+
+    auto loader = [](const std::string& key) -> int {
+        return key == "prefetch_ttl_key1" ? 111 : 222;
+    };
+
+    cache->prefetch(keysToPrefetch, loader, std::chrono::seconds(1));
+
+    // Should contain immediately
+    EXPECT_TRUE(cache->contains("prefetch_ttl_key1"));
+    EXPECT_TRUE(cache->contains("prefetch_ttl_key2"));
+
+    // Wait for expiration
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    // Should not contain after expiry
+    EXPECT_FALSE(cache->contains("prefetch_ttl_key1"));
+    EXPECT_FALSE(cache->contains("prefetch_ttl_key2"));
 }

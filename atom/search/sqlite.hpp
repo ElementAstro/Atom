@@ -19,6 +19,8 @@
 
 #include "atom/containers/high_performance.hpp"
 
+namespace atom::search {
+
 using atom::containers::String;
 using atom::containers::Vector;
 
@@ -378,5 +380,6 @@ private:
     friend class SqliteDBTest;
 #endif
 };
+}  // namespace atom::search
 
 #endif  // ATOM_SEARCH_SQLITE_HPP

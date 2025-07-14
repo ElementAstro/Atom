@@ -325,7 +325,7 @@ function(apply_build_preset PRESET_NAME)
                 ENABLE_WARNINGS
                 WARNING_LEVEL "high"
                 ENABLE_DEBUG_INFO
-                ADDITIONAL_OPTIONS "-fsanitize=address" "-fsanitize=undefined"
+                ADDITIONAL_OPTIONS "-fsanitize=address" "-fsanitize=undefined" "-fno-diagnostics-colors=always"
             )
             set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address -fsanitize=undefined" PARENT_SCOPE)
         endif()
@@ -427,8 +427,3 @@ macro(setup_project_defaults)
         endif()
     endif()
 endmacro()
-
-if(LINUX)
-set(CMAKE_COLOR_DIAGNOSTICS ON)
-set(CMAKE_COLOR_MAKEFILE OFF)
-endif()

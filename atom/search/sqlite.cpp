@@ -20,6 +20,7 @@
 #include "atom/containers/high_performance.hpp"
 #include "atom/macro.hpp"
 
+namespace atom::search {
 using atom::containers::HashMap;
 using atom::containers::String;
 using atom::containers::Vector;
@@ -860,3 +861,5 @@ template std::optional<int> SqliteDB::getSingleValue<int>(
     std::string_view query, int (*columnFunc)(sqlite3_stmt*, int));
 template std::optional<double> SqliteDB::getSingleValue<double>(
     std::string_view query, double (*columnFunc)(sqlite3_stmt*, int));
+
+}  // namespace atom::search

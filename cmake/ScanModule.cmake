@@ -41,11 +41,6 @@ function(scan_module_dependencies)
         message(STATUS "Module 'atom-error' is enabled")
     endif()
 
-    if(ATOM_BUILD_LOG)
-        list(APPEND enabled_modules "atom-log")
-        message(STATUS "Module 'atom-log' is enabled")
-    endif()
-
     if(ATOM_BUILD_ALGORITHM)
         list(APPEND enabled_modules "atom-algorithm")
         message(STATUS "Module 'atom-algorithm' is enabled")

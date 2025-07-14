@@ -3,143 +3,311 @@
 
 #include <asio.hpp>
 #include <asio/ssl.hpp>
+#include <atomic>
 #include <chrono>
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
-
-#undef ERROR
 
 namespace atom::async::connection {
 
-// Forward declarations
-class Client;
-struct Message;
-
-enum class LogLevel { DEBUG, INFO, WARNING, ERROR, FATAL };
-
-// Configuration structure for the SocketHub
+/**
+ * @brief Configuration for the SocketHub.
+ */
 struct SocketHubConfig {
-    bool use_ssl = false;
-    int backlog_size = 10;
-    std::chrono::seconds connection_timeout{30};
-    bool keep_alive = true;
-    std::string ssl_cert_file;
-    std::string ssl_key_file;
-    std::string ssl_dh_file;
-    std::string ssl_password;
-    bool enable_rate_limiting = false;
-    int max_connections_per_ip = 10;
-    int max_messages_per_minute = 100;
-    LogLevel log_level = LogLevel::INFO;
+  bool use_ssl = false;
+  int backlog_size = 128;
+  std::chrono::seconds connection_timeout{30};
+  bool keep_alive = true;
+  std::string ssl_cert_file;
+  std::string ssl_key_file;
+  std::string ssl_dh_file;
+  std::string ssl_password;
+  bool enable_rate_limiting = false;
+  int max_connections_per_ip = 10;
+  int max_messages_per_minute = 100;
 };
 
-// Message structure for more structured data exchange
+/**
+ * @brief Represents a message for data exchange.
+ */
 struct Message {
-    enum class Type { TEXT, BINARY, PING, PONG, CLOSE };
+  enum class Type { TEXT, BINARY, PING, PONG, CLOSE };
 
-    Type type = Type::TEXT;
-    std::vector<char> data;
-    size_t sender_id = 0;
+  Type type = Type::TEXT;
+  std::vector<char> data;
+  size_t sender_id = 0;
 
-    static Message createText(std::string text, size_t sender = 0) {
-        Message msg;
-        msg.type = Type::TEXT;
-        msg.data = std::vector<char>(text.begin(), text.end());
-        msg.sender_id = sender;
-        return msg;
-    }
+  /**
+   * @brief Creates a text message.
+   * @param text The text content.
+   * @param sender The ID of the sender.
+   * @return A new Message object.
+   */
+  static auto createText(std::string_view text, size_t sender = 0) -> Message {
+    return {Type::TEXT, {text.begin(), text.end()}, sender};
+  }
 
-    static Message createBinary(const std::vector<char>& data,
-                                size_t sender = 0) {
-        Message msg;
-        msg.type = Type::BINARY;
-        msg.data = data;
-        msg.sender_id = sender;
-        return msg;
-    }
+  /**
+   * @brief Creates a binary message.
+   * @param binary_data The binary data.
+   * @param sender The ID of the sender.
+   * @return A new Message object.
+   */
+  static auto createBinary(const std::vector<char> &binary_data,
+                           size_t sender = 0) -> Message {
+    return {Type::BINARY, binary_data, sender};
+  }
 
-    std::string asString() const {
-        return std::string(data.begin(), data.end());
-    }
+  /**
+   * @brief Returns the message data as a string.
+   * @return The string representation of the data.
+   */
+  [[nodiscard]] auto asString() const -> std::string {
+    return {data.begin(), data.end()};
+  }
 };
 
-// Statistics for monitoring
+/**
+ * @brief Statistics for monitoring the SocketHub.
+ */
 struct SocketHubStats {
-    size_t total_connections = 0;
-    size_t active_connections = 0;
-    size_t messages_received = 0;
-    size_t messages_sent = 0;
-    size_t bytes_received = 0;
-    size_t bytes_sent = 0;
-    std::chrono::system_clock::time_point start_time =
-        std::chrono::system_clock::now();
+  std::atomic<size_t> total_connections = 0;
+  std::atomic<size_t> active_connections = 0;
+  std::atomic<size_t> messages_received = 0;
+  std::atomic<size_t> messages_sent = 0;
+  std::atomic<size_t> bytes_received = 0;
+  std::atomic<size_t> bytes_sent = 0;
+  std::chrono::system_clock::time_point start_time;
+
+  // Default constructor
+  SocketHubStats() : start_time(std::chrono::system_clock::now()) {}
+
+  // Explicitly define copy constructor to handle atomic members
+  SocketHubStats(const SocketHubStats& other)
+      : total_connections(other.total_connections.load()),
+        active_connections(other.active_connections.load()),
+        messages_received(other.messages_received.load()),
+        messages_sent(other.messages_sent.load()),
+        bytes_received(other.bytes_received.load()),
+        bytes_sent(other.bytes_sent.load()),
+        start_time(other.start_time) {}
+
+  // Explicitly define copy assignment operator to handle atomic members
+  SocketHubStats& operator=(const SocketHubStats& other) {
+      if (this != &other) {
+          total_connections.store(other.total_connections.load());
+          active_connections.store(other.active_connections.load());
+          messages_received.store(other.messages_received.load());
+          messages_sent.store(other.messages_sent.load());
+          bytes_received.store(other.bytes_received.load());
+          bytes_sent.store(other.bytes_sent.load());
+          start_time = other.start_time;
+      }
+      return *this;
+  }
 };
 
-// Enhanced SocketHub class
+/**
+ * @brief A high-performance, scalable, and thread-safe hub for managing TCP/SSL
+ * socket connections.
+ *
+ * SocketHub provides a robust framework for building networked applications,
+ * featuring asynchronous I/O, SSL/TLS encryption, client management, message
+ * broadcasting, and more, all built on modern C++ and Asio.
+ */
 class SocketHub {
 public:
-    explicit SocketHub(const SocketHubConfig& config = SocketHubConfig{});
-    ~SocketHub();
+  /**
+   * @brief Constructs a SocketHub with the given configuration.
+   * @param config The configuration settings for the hub.
+   */
+  explicit SocketHub(const SocketHubConfig &config = {});
+  ~SocketHub();
 
-    // Server control
-    void start(int port);
-    void stop();
-    void restart();
+  SocketHub(const SocketHub &) = delete;
+  auto operator=(const SocketHub &) -> SocketHub & = delete;
+  SocketHub(SocketHub &&) noexcept;
+  auto operator=(SocketHub &&) noexcept -> SocketHub &;
 
-    // Handler registration
-    void addMessageHandler(
-        const std::function<void(const Message&, size_t)>& handler);
-    void addConnectHandler(
-        const std::function<void(size_t, const std::string&)>& handler);
-    void addDisconnectHandler(
-        const std::function<void(size_t, const std::string&)>& handler);
-    void addErrorHandler(
-        const std::function<void(const std::string&, size_t)>& handler);
+  /**
+   * @brief Starts the server and begins listening on the specified port.
+   * @param port The port number to listen on.
+   * @throws std::runtime_error on failure to start.
+   */
+  void start(uint16_t port);
 
-    // Client interaction
-    void broadcastMessage(const Message& message);
-    void sendMessageToClient(size_t client_id, const Message& message);
-    void disconnectClient(size_t client_id, const std::string& reason = "");
+  /**
+   * @brief Stops the server and disconnects all clients.
+   */
+  void stop();
 
-    // Group management
-    void createGroup(const std::string& group_name);
-    void addClientToGroup(size_t client_id, const std::string& group_name);
-    void removeClientFromGroup(size_t client_id, const std::string& group_name);
-    void broadcastToGroup(const std::string& group_name,
-                          const Message& message);
+  /**
+   * @brief Restarts the server.
+   */
+  void restart();
 
-    // Authentication
-    void setAuthenticator(
-        const std::function<bool(const std::string&, const std::string&)>&
-            authenticator);
-    void requireAuthentication(bool require);
+  // Handler registration
+  using MessageHandler = std::function<void(const Message &, size_t)>;
+  using ConnectHandler = std::function<void(size_t, std::string_view)>;
+  using DisconnectHandler = std::function<void(size_t, std::string_view)>;
+  using ErrorHandler = std::function<void(const std::string &, size_t)>;
 
-    // Client metadata
-    void setClientMetadata(size_t client_id, const std::string& key,
-                           const std::string& value);
-    std::string getClientMetadata(size_t client_id, const std::string& key);
+  /**
+   * @brief Registers a handler for incoming messages.
+   * @param handler The function to call when a message is received.
+   */
+  void addMessageHandler(MessageHandler handler);
 
-    // Statistics and monitoring
-    SocketHubStats getStatistics() const;
-    void enableLogging(bool enable, LogLevel level = LogLevel::INFO);
-    void setLogHandler(
-        const std::function<void(LogLevel, const std::string&)>& handler);
+  /**
+   * @brief Registers a handler for new client connections.
+   * @param handler The function to call when a client connects.
+   */
+  void addConnectHandler(ConnectHandler handler);
 
-    // Status checks
-    [[nodiscard]] bool isRunning() const;
-    [[nodiscard]] bool isClientConnected(size_t client_id) const;
-    [[nodiscard]] std::vector<size_t> getConnectedClients() const;
-    [[nodiscard]] std::vector<std::string> getGroups() const;
-    [[nodiscard]] std::vector<size_t> getClientsInGroup(
-        const std::string& group_name) const;
+  /**
+   * @brief Registers a handler for client disconnections.
+   * @param handler The function to call when a client disconnects.
+   */
+  void addDisconnectHandler(DisconnectHandler handler);
+
+  /**
+   * @brief Registers a handler for errors.
+   * @param handler The function to call when an error occurs.
+   */
+  void addErrorHandler(ErrorHandler handler);
+
+  // Client interaction
+  /**
+   * @brief Broadcasts a message to all connected clients.
+   * @param message The message to send.
+   */
+  void broadcastMessage(const Message &message);
+
+  /**
+   * @brief Sends a message to a specific client.
+   * @param client_id The ID of the target client.
+   * @param message The message to send.
+   */
+  void sendMessageToClient(size_t client_id, const Message &message);
+
+  /**
+   * @brief Disconnects a specific client.
+   * @param client_id The ID of the client to disconnect.
+   * @param reason An optional reason for the disconnection.
+   */
+  void disconnectClient(size_t client_id, std::string_view reason = "");
+
+  // Group management
+  /**
+   * @brief Creates a new client group.
+   * @param group_name The name of the group to create.
+   */
+  void createGroup(std::string_view group_name);
+
+  /**
+   * @brief Adds a client to a group.
+   * @param client_id The ID of the client.
+   * @param group_name The name of the group.
+   */
+  void addClientToGroup(size_t client_id, std::string_view group_name);
+
+  /**
+   * @brief Removes a client from a group.
+   * @param client_id The ID of the client.
+   * @param group_name The name of the group.
+   */
+  void removeClientFromGroup(size_t client_id, std::string_view group_name);
+
+  /**
+   * @brief Broadcasts a message to all clients in a specific group.
+   * @param group_name The name of the target group.
+   * @param message The message to send.
+   */
+  void broadcastToGroup(std::string_view group_name, const Message &message);
+
+  // Authentication
+  using Authenticator =
+      std::function<bool(std::string_view, std::string_view)>;
+
+  /**
+   * @brief Sets a custom authenticator function.
+   * @param authenticator The function to use for authentication.
+   */
+  void setAuthenticator(Authenticator authenticator);
+
+  /**
+   * @brief Sets whether authentication is required for clients.
+   * @param require True to require authentication, false otherwise.
+   */
+  void requireAuthentication(bool require);
+
+  // Client metadata
+  /**
+   * @brief Sets a metadata key-value pair for a client.
+   * @param client_id The ID of the client.
+   * @param key The metadata key.
+   * @param value The metadata value.
+   */
+  void setClientMetadata(size_t client_id, std::string_view key,
+                         std::string_view value);
+
+  /**
+   * @brief Gets a metadata value for a client.
+   * @param client_id The ID of the client.
+   * @param key The metadata key.
+   * @return The metadata value, or an empty string if not found.
+   */
+  auto getClientMetadata(size_t client_id, std::string_view key) -> std::string;
+
+  // Statistics and monitoring
+  /**
+   * @brief Retrieves the current hub statistics.
+   * @return A SocketHubStats object.
+   */
+  [[nodiscard]] auto getStatistics() const -> SocketHubStats;
+
+  // Status checks
+  /**
+   * @brief Checks if the server is running.
+   * @return True if the server is running, false otherwise.
+   */
+  [[nodiscard]] auto isRunning() const -> bool;
+
+  /**
+   * @brief Checks if a client is connected.
+   * @param client_id The ID of the client.
+   * @return True if the client is connected, false otherwise.
+   */
+  [[nodiscard]] auto isClientConnected(size_t client_id) const -> bool;
+
+  /**
+   * @brief Gets a list of all connected client IDs.
+   * @return A vector of client IDs.
+   */
+  [[nodiscard]] auto getConnectedClients() const -> std::vector<size_t>;
+
+  /**
+   * @brief Gets a list of all group names.
+   * @return A vector of group names.
+   */
+  [[nodiscard]] auto getGroups() const -> std::vector<std::string>;
+
+  /**
+   * @brief Gets a list of client IDs in a specific group.
+   * @param group_name The name of the group.
+   * @return A vector of client IDs.
+   */
+  [[nodiscard]] auto getClientsInGroup(std::string_view group_name) const
+      -> std::vector<size_t>;
 
 private:
-    class Impl;
-    std::unique_ptr<Impl> impl_;
+  class Impl;
+  std::unique_ptr<Impl> pimpl_;
 };
 
-}  // namespace atom::async::connection
+} // namespace atom::async::connection
 
-#endif  // ATOM_CONNECTION_ASYNC_SOCKETHUB_HPP
+#endif // ATOM_CONNECTION_ASYNC_SOCKETHUB_HPP

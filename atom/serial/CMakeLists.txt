@@ -24,13 +24,13 @@ target_include_directories(
 
 # Set platform-specific dependencies
 if(WIN32)
-  target_link_libraries(${LIB_NAME} PUBLIC atom-error atom-log SetupAPI
+  target_link_libraries(${LIB_NAME} PUBLIC atom-error SetupAPI
                                            Cfgmgr32)
 elseif(APPLE)
   find_library(IOKIT_FRAMEWORK IOKit REQUIRED)
   find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
   target_link_libraries(
-    ${LIB_NAME} PUBLIC atom-error atom-log ${IOKIT_FRAMEWORK}
+    ${LIB_NAME} PUBLIC atom-error ${IOKIT_FRAMEWORK}
                        ${FOUNDATION_FRAMEWORK})
 else() # Linux/Unix
   find_package(PkgConfig REQUIRED)
@@ -41,7 +41,7 @@ else() # Linux/Unix
                                                 ${LIBUSB_INCLUDE_DIRS})
 
   target_link_libraries(
-    ${LIB_NAME} PUBLIC atom-error atom-log ${UDEV_LIBRARIES}
+    ${LIB_NAME} PUBLIC atom-error ${UDEV_LIBRARIES}
                        ${LIBUSB_LIBRARIES})
 endif()
 

@@ -132,4 +132,167 @@ TEST_F(ResourceCacheTest, GetStatistics) {
     EXPECT_EQ(misses, 1);
 }
 
+TEST_F(ResourceCacheTest, OnInsertCallback) {
+    bool callbackCalled = false;
+    String insertedKey;
+    cache->onInsert([&](const String &key) {
+        callbackCalled = true;
+        insertedKey = key;
+    });
+
+    cache->insert("key_insert", 10, std::chrono::seconds(10));
+
+    EXPECT_TRUE(callbackCalled);
+    EXPECT_EQ(insertedKey, "key_insert");
+}
+
+TEST_F(ResourceCacheTest, OnRemoveCallback) {
+    bool callbackCalled = false;
+    String removedKey;
+    cache->onRemove([&](const String &key) {
+        callbackCalled = true;
+        removedKey = key;
+    });
+
+    cache->insert("key_remove", 20, std::chrono::seconds(10));
+    cache->remove("key_remove");
+
+    EXPECT_TRUE(callbackCalled);
+    EXPECT_EQ(removedKey, "key_remove");
+}
+
+TEST_F(ResourceCacheTest, ReadWriteToFile) {
+    // Need a temporary file path
+    String filePath = "test_cache_file.txt";
+
+    // Serializer for int
+    auto serializer = [](const int &value) {
+        return String(std::to_string(value));
+    };
+    // Deserializer for int
+    auto deserializer = [](const String &valueString) {
+        return std::stoi(std::string(valueString.c_str()));
+    };
+
+    // Insert some data
+    cache->insert("file_key1", 100, std::chrono::seconds(10));
+    cache->insert("file_key2", 200, std::chrono::seconds(10));
+
+    // Write to file
+    cache->writeToFile(filePath, serializer);
+
+    // Clear cache and read from file
+    cache->clear();
+    EXPECT_TRUE(cache->empty());
+
+    cache->readFromFile(filePath, deserializer);
+
+    // Verify contents
+    EXPECT_TRUE(cache->contains("file_key1"));
+    EXPECT_TRUE(cache->contains("file_key2"));
+    auto value1 = cache->get("file_key1");
+    auto value2 = cache->get("file_key2");
+    ASSERT_TRUE(value1.has_value());
+    ASSERT_TRUE(value2.has_value());
+    EXPECT_EQ(value1.value(), 100);
+    EXPECT_EQ(value2.value(), 200);
+
+    // Clean up the temporary file
+    std::remove(filePath.c_str());
+}
+
+TEST_F(ResourceCacheTest, ReadWriteToJsonFile) {
+    // Need a temporary file path
+    String filePath = "test_cache_file.json";
+
+    // Serializer for int to json
+    auto toJson = [](const int &value) { return json(value); };
+    // Deserializer for json to int
+    auto fromJson = [](const json &j) { return j.get<int>(); };
+
+    // Insert some data
+    cache->insert("json_key1", 300, std::chrono::seconds(10));
+    cache->insert("json_key2", 400, std::chrono::seconds(10));
+
+    // Write to JSON file
+    cache->writeToJsonFile(filePath, toJson);
+
+    // Clear cache and read from JSON file
+    cache->clear();
+    EXPECT_TRUE(cache->empty());
+
+    cache->readFromJsonFile(filePath, fromJson);
+
+    // Verify contents
+    EXPECT_TRUE(cache->contains("json_key1"));
+    EXPECT_TRUE(cache->contains("json_key2"));
+    auto value1 = cache->get("json_key1");
+    auto value2 = cache->get("json_key2");
+    ASSERT_TRUE(value1.has_value());
+    ASSERT_TRUE(value2.has_value());
+    EXPECT_EQ(value1.value(), 300);
+    EXPECT_EQ(value2.value(), 400);
+
+    // Clean up the temporary file
+    std::remove(filePath.c_str());
+}
+
+TEST_F(ResourceCacheTest, ExpirationAndCleanup) {
+    // Insert an item with a short expiration
+    cache->insert("expired_key", 500, std::chrono::seconds(1));
+
+    // Wait for longer than the expiration time and cleanup interval
+    // The default cleanup interval is 1 second. Wait for 3 seconds to be safe.
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+
+    // Check if the item is expired and removed by the cleanup thread
+    EXPECT_FALSE(cache->contains("expired_key"));
+    auto value = cache->get("expired_key");
+    EXPECT_FALSE(value.has_value());
+}
+
+TEST_F(ResourceCacheTest, LRUEvictionOrder) {
+    // Set max size to 3 for easier testing
+    cache->setMaxSize(3);
+
+    // Insert 3 items
+    cache->insert("lru_key1", 1,
+                  std::chrono::seconds(100));  // Oldest initially
+    cache->insert("lru_key2", 2, std::chrono::seconds(100));
+    cache->insert("lru_key3", 3,
+                  std::chrono::seconds(100));  // Newest initially
+
+    EXPECT_EQ(cache->size(), 3);
+    EXPECT_TRUE(cache->contains("lru_key1"));
+    EXPECT_TRUE(cache->contains("lru_key2"));
+    EXPECT_TRUE(cache->contains("lru_key3"));
+
+    // Access lru_key1 - this should move it to the front (most recently used)
+    cache->get("lru_key1");
+
+    // Insert a new item - this should evict the current oldest (lru_key2)
+    cache->insert("lru_key4", 4, std::chrono::seconds(100));
+
+    EXPECT_EQ(cache->size(), 3);
+    EXPECT_TRUE(
+        cache->contains("lru_key1"));  // Should still be there (recently used)
+    EXPECT_FALSE(cache->contains(
+        "lru_key2"));  // Should be evicted (oldest after lru_key1 was accessed)
+    EXPECT_TRUE(cache->contains("lru_key3"));  // Should still be there
+    EXPECT_TRUE(cache->contains("lru_key4"));  // The new item
+
+    // Access lru_key3 - moves it to front
+    cache->get("lru_key3");
+
+    // Insert another new item - should evict the current oldest (lru_key1)
+    cache->insert("lru_key5", 5, std::chrono::seconds(100));
+
+    EXPECT_EQ(cache->size(), 3);
+    EXPECT_FALSE(cache->contains("lru_key1"));  // Should be evicted
+    EXPECT_TRUE(
+        cache->contains("lru_key3"));  // Should still be there (recently used)
+    EXPECT_TRUE(cache->contains("lru_key4"));  // Should still be there
+    EXPECT_TRUE(cache->contains("lru_key5"));  // The new item
+}
+
 #endif  // ATOM_SEARCH_TEST_CACHE_HPP

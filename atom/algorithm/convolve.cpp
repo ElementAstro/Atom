@@ -18,9 +18,9 @@ and deconvolution with optional OpenCL support.
 
 #include <algorithm>
 #include <cmath>
+#include <future>
 #include <numbers>
 #include <stop_token>
-#include <future>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -29,6 +29,15 @@ and deconvolution with optional OpenCL support.
 #ifdef __SSE__
 #include <immintrin.h>
 #endif
+#endif
+
+// SIMD constants
+#ifdef __AVX__
+constexpr int SIMD_WIDTH = 4;  // 4 doubles per AVX register
+#define SIMD_ALIGNED alignas(32)
+#else
+constexpr int SIMD_WIDTH = 1;  // Fallback for non-SIMD
+#define SIMD_ALIGNED
 #endif
 
 #ifdef __GNUC__
@@ -251,18 +260,18 @@ auto pad2D(const std::vector<std::vector<T>>& input, usize padTop,
                     if (j < padLeft) {
                         // Top-left corner
                         output[padTop - 1 - i][padLeft - 1 - j] =
-                            input[Usize::min(i, inputRows - 1)]
-                                 [Usize::min(j, inputCols - 1)];
+                            input[std::min(i, inputRows - 1)]
+                                 [std::min(j, inputCols - 1)];
                     } else if (j >= padLeft + inputCols) {
                         // Top-right corner
                         output[padTop - 1 - i][j] =
-                            input[Usize::min(i, inputRows - 1)][Usize::min(
+                            input[std::min(i, inputRows - 1)][std::min(
                                 inputCols - 1 - (j - (padLeft + inputCols)),
                                 inputCols - 1)];
                     } else {
                         // Top edge
                         output[padTop - 1 - i][j] =
-                            input[Usize::min(i, inputRows - 1)][j - padLeft];
+                            input[std::min(i, inputRows - 1)][j - padLeft];
                     }
                 }
             }
@@ -273,18 +282,18 @@ auto pad2D(const std::vector<std::vector<T>>& input, usize padTop,
                     if (j < padLeft) {
                         // Bottom-left corner
                         output[padTop + inputRows + i][j] =
-                            input[Usize::max(0UL, inputRows - 1 - i)]
-                                 [Usize::min(j, inputCols - 1)];
+                            input[std::max(0UL, inputRows - 1 - i)]
+                                 [std::min(j, inputCols - 1)];
                     } else if (j >= padLeft + inputCols) {
                         // Bottom-right corner
                         output[padTop + inputRows + i][j] =
-                            input[Usize::max(0UL, inputRows - 1 - i)]
-                                 [Usize::max(0UL,
+                            input[std::max(0UL, inputRows - 1 - i)]
+                                 [std::max(0UL,
                                              inputCols - 1 -
                                                  (j - (padLeft + inputCols)))];
                     } else {
                         // Bottom edge
-                        output[padTop + inputRows + i][j] = input[Usize::max(
+                        output[padTop + inputRows + i][j] = input[std::max(
                             0UL, inputRows - 1 - i)][j - padLeft];
                     }
                 }
@@ -294,7 +303,7 @@ auto pad2D(const std::vector<std::vector<T>>& input, usize padTop,
             for (usize i = padTop; i < padTop + inputRows; ++i) {
                 for (usize j = 0; j < padLeft; ++j) {
                     output[i][padLeft - 1 - j] =
-                        input[i - padTop][Usize::min(j, inputCols - 1)];
+                        input[i - padTop][std::min(j, inputCols - 1)];
                 }
             }
 
@@ -302,7 +311,7 @@ auto pad2D(const std::vector<std::vector<T>>& input, usize padTop,
             for (usize i = padTop; i < padTop + inputRows; ++i) {
                 for (usize j = 0; j < padRight; ++j) {
                     output[i][padLeft + inputCols + j] =
-                        input[i - padTop][Usize::max(0UL, inputCols - 1 - j)];
+                        input[i - padTop][std::max(0UL, inputCols - 1 - j)];
                 }
             }
 
@@ -456,202 +465,220 @@ auto convolve2DOpenCL(const std::vector<std::vector<f64>>& input,
                       const ConvolutionOptions<f64>& options,
                       std::stop_token stopToken)
     -> std::future<std::vector<std::vector<f64>>> {
-    return std::async(std::launch::async, [=]() -> std::vector<std::vector<f64>> {
-        try {
-            auto context = initializeOpenCL();
-            auto queue = createCommandQueue(context.get());
+    return std::async(
+        std::launch::async, [=]() -> std::vector<std::vector<f64>> {
+            try {
+                auto context = initializeOpenCL();
+                auto queue = createCommandQueue(context.get());
 
-            const usize inputRows = input.size();
-            const usize inputCols = input[0].size();
-            const usize kernelRows = kernel.size();
-            const usize kernelCols = kernel[0].size();
+                const usize inputRows = input.size();
+                const usize inputCols = input[0].size();
+                const usize kernelRows = kernel.size();
+                const usize kernelCols = kernel[0].size();
 
-            // 验证输入有效性
-            if (inputRows == 0 || inputCols == 0 || kernelRows == 0 ||
-                kernelCols == 0) {
-                THROW_CONVOLVE_ERROR("Input and kernel matrices must not be empty");
-            }
-
-            // 检查所有行的长度是否一致
-            for (const auto& row : input) {
-                if (row.size() != inputCols) {
+                // 验证输入有效性
+                if (inputRows == 0 || inputCols == 0 || kernelRows == 0 ||
+                    kernelCols == 0) {
                     THROW_CONVOLVE_ERROR(
-                        "Input matrix must have uniform column sizes");
+                        "Input and kernel matrices must not be empty");
                 }
-            }
 
-            for (const auto& row : kernel) {
-                if (row.size() != kernelCols) {
-                    THROW_CONVOLVE_ERROR(
-                        "Kernel matrix must have uniform column sizes");
+                // 检查所有行的长度是否一致
+                for (const auto& row : input) {
+                    if (row.size() != inputCols) {
+                        THROW_CONVOLVE_ERROR(
+                            "Input matrix must have uniform column sizes");
+                    }
                 }
-            }
 
-            // Determine data type for OpenCL
-            std::string buildOptions = "";
-            usize elementSize = sizeof(f32);
-            if (options.useDoublePrecision) {
-                // Check for double precision support
-                cl_device_id device_id;
-                clGetDeviceIDs(nullptr, CL_DEVICE_TYPE_GPU, 1, &device_id, nullptr);
-                char extensions[1024];
-                clGetDeviceInfo(device_id, CL_DEVICE_EXTENSIONS, sizeof(extensions),
-                                extensions, nullptr);
-                if (std::string(extensions).find("cl_khr_fp64") !=
-                    std::string::npos) {
-                    buildOptions = "-D USE_DOUBLE";
-                    elementSize = sizeof(f64);
+                for (const auto& row : kernel) {
+                    if (row.size() != kernelCols) {
+                        THROW_CONVOLVE_ERROR(
+                            "Kernel matrix must have uniform column sizes");
+                    }
+                }
+
+                // Determine data type for OpenCL
+                std::string buildOptions = "";
+                usize elementSize = sizeof(f32);
+                if (options.useDoublePrecision) {
+                    // Check for double precision support
+                    cl_device_id device_id;
+                    clGetDeviceIDs(nullptr, CL_DEVICE_TYPE_GPU, 1, &device_id,
+                                   nullptr);
+                    char extensions[1024];
+                    clGetDeviceInfo(device_id, CL_DEVICE_EXTENSIONS,
+                                    sizeof(extensions), extensions, nullptr);
+                    if (std::string(extensions).find("cl_khr_fp64") !=
+                        std::string::npos) {
+                        buildOptions = "-D USE_DOUBLE";
+                        elementSize = sizeof(f64);
+                    } else {
+                        // Fallback to float if double is not supported
+                        // THROW_CONVOLVE_ERROR("Double precision not supported
+                        // by OpenCL device. Falling back to float.");
+                    }
+                }
+
+                // 扁平化数据以便传输到OpenCL设备
+                std::vector<std::byte> inputFlattened(inputRows * inputCols *
+                                                      elementSize);
+                std::vector<std::byte> kernelFlattened(kernelRows * kernelCols *
+                                                       elementSize);
+                std::vector<std::byte> outputFlattened(inputRows * inputCols *
+                                                       elementSize);
+
+                if (elementSize == sizeof(f64)) {
+                    for (usize i = 0; i < inputRows; ++i) {
+                        for (usize j = 0; j < inputCols; ++j) {
+                            *reinterpret_cast<f64*>(
+                                &inputFlattened[elementSize *
+                                                (i * inputCols + j)]) =
+                                input[i][j];
+                        }
+                    }
+                    for (usize i = 0; i < kernelRows; ++i) {
+                        for (usize j = 0; j < kernelCols; ++j) {
+                            *reinterpret_cast<f64*>(
+                                &kernelFlattened[elementSize *
+                                                 (i * kernelCols + j)]) =
+                                kernel[i][j];
+                        }
+                    }
                 } else {
-                    // Fallback to float if double is not supported
-                    // THROW_CONVOLVE_ERROR("Double precision not supported by OpenCL device. Falling back to float.");
+                    for (usize i = 0; i < inputRows; ++i) {
+                        for (usize j = 0; j < inputCols; ++j) {
+                            *reinterpret_cast<f32*>(
+                                &inputFlattened[elementSize *
+                                                (i * inputCols + j)]) =
+                                static_cast<f32>(input[i][j]);
+                        }
+                    }
+                    for (usize i = 0; i < kernelRows; ++i) {
+                        for (usize j = 0; j < kernelCols; ++j) {
+                            *reinterpret_cast<f32*>(
+                                &kernelFlattened[elementSize *
+                                                 (i * kernelCols + j)]) =
+                                static_cast<f32>(kernel[i][j]);
+                        }
+                    }
                 }
+
+                // 创建OpenCL缓冲区
+                cl_int err;
+                CLMemPtr inputBuffer(clCreateBuffer(
+                    context.get(), CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                    inputFlattened.size(), inputFlattened.data(), &err));
+                checkErr(err, "Creating input buffer");
+
+                CLMemPtr kernelBuffer(clCreateBuffer(
+                    context.get(), CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                    kernelFlattened.size(), kernelFlattened.data(), &err));
+                checkErr(err, "Creating kernel buffer");
+
+                CLMemPtr outputBuffer(
+                    clCreateBuffer(context.get(), CL_MEM_WRITE_ONLY,
+                                   outputFlattened.size(), nullptr, &err));
+                checkErr(err, "Creating output buffer");
+
+                // 创建和编译OpenCL程序
+                auto program =
+                    createProgram(convolve2DKernelSrc, context.get());
+                err = clBuildProgram(program.get(), 0, nullptr,
+                                     buildOptions.c_str(), nullptr, nullptr);
+
+                // 处理构建错误，提供详细错误信息
+                if (err != CL_SUCCESS) {
+                    cl_device_id device_id;
+                    clGetDeviceIDs(nullptr, CL_DEVICE_TYPE_GPU, 1, &device_id,
+                                   nullptr);
+
+                    usize logSize;
+                    clGetProgramBuildInfo(program.get(), device_id,
+                                          CL_PROGRAM_BUILD_LOG, 0, nullptr,
+                                          &logSize);
+
+                    std::vector<char> buildLog(logSize);
+                    clGetProgramBuildInfo(program.get(), device_id,
+                                          CL_PROGRAM_BUILD_LOG, logSize,
+                                          buildLog.data(), nullptr);
+
+                    THROW_CONVOLVE_ERROR("Failed to build OpenCL program: {}",
+                                         std::string(buildLog.data(), logSize));
+                }
+
+                // 创建内核
+                CLKernelPtr openclKernel(
+                    clCreateKernel(program.get(), "convolve2D", &err));
+                checkErr(err, "Creating kernel");
+
+                // 设置内核参数
+                i32 inputRowsInt = static_cast<i32>(inputRows);
+                i32 inputColsInt = static_cast<i32>(inputCols);
+                i32 kernelRowsInt = static_cast<i32>(kernelRows);
+                i32 kernelColsInt = static_cast<i32>(kernelCols);
+
+                err = clSetKernelArg(openclKernel.get(), 0, sizeof(cl_mem),
+                                     &inputBuffer.get());
+                err |= clSetKernelArg(openclKernel.get(), 1, sizeof(cl_mem),
+                                      &kernelBuffer.get());
+                err |= clSetKernelArg(openclKernel.get(), 2, sizeof(cl_mem),
+                                      &outputBuffer.get());
+                err |= clSetKernelArg(openclKernel.get(), 3, sizeof(i32),
+                                      &inputRowsInt);
+                err |= clSetKernelArg(openclKernel.get(), 4, sizeof(i32),
+                                      &inputColsInt);
+                err |= clSetKernelArg(openclKernel.get(), 5, sizeof(i32),
+                                      &kernelRowsInt);
+                err |= clSetKernelArg(openclKernel.get(), 6, sizeof(i32),
+                                      &kernelColsInt);
+                checkErr(err, "Setting kernel arguments");
+
+                // 执行内核
+                usize globalWorkSize[2] = {inputRows, inputCols};
+                err = clEnqueueNDRangeKernel(queue.get(), openclKernel.get(), 2,
+                                             nullptr, globalWorkSize, nullptr,
+                                             0, nullptr, nullptr);
+                checkErr(err, "Enqueueing kernel");
+
+                // 等待完成并读取结果
+                clFinish(queue.get());
+
+                err = clEnqueueReadBuffer(queue.get(), outputBuffer.get(),
+                                          CL_TRUE, 0, outputFlattened.size(),
+                                          outputFlattened.data(), 0, nullptr,
+                                          nullptr);
+                checkErr(err, "Reading back output buffer");
+
+                // 将结果转换回2D向量
+                std::vector<std::vector<f64>> output(
+                    inputRows, std::vector<f64>(inputCols));
+
+                if (elementSize == sizeof(f64)) {
+                    for (usize i = 0; i < inputRows; ++i) {
+                        for (usize j = 0; j < inputCols; ++j) {
+                            output[i][j] = *reinterpret_cast<f64*>(
+                                &outputFlattened[elementSize *
+                                                 (i * inputCols + j)]);
+                        }
+                    }
+                } else {
+                    for (usize i = 0; i < inputRows; ++i) {
+                        for (usize j = 0; j < inputCols; ++j) {
+                            output[i][j] =
+                                static_cast<f64>(*reinterpret_cast<f32*>(
+                                    &outputFlattened[elementSize *
+                                                     (i * inputCols + j)]));
+                        }
+                    }
+                }
+
+                return output;
+            } catch (const std::exception& e) {
+                // 重新抛出异常，提供更多上下文
+                THROW_CONVOLVE_ERROR("OpenCL convolution failed: {}", e.what());
             }
-
-            // 扁平化数据以便传输到OpenCL设备
-            std::vector<std::byte> inputFlattened(inputRows * inputCols * elementSize);
-            std::vector<std::byte> kernelFlattened(kernelRows * kernelCols * elementSize);
-            std::vector<std::byte> outputFlattened(inputRows * inputCols * elementSize);
-
-            if (elementSize == sizeof(f64)) {
-                for (usize i = 0; i < inputRows; ++i) {
-                    for (usize j = 0; j < inputCols; ++j) {
-                        *reinterpret_cast<f64*>(
-                            &inputFlattened[elementSize * (i * inputCols + j)]) =
-                            input[i][j];
-                    }
-                }
-                for (usize i = 0; i < kernelRows; ++i) {
-                    for (usize j = 0; j < kernelCols; ++j) {
-                        *reinterpret_cast<f64*>(
-                            &kernelFlattened[elementSize * (i * kernelCols + j)]) =
-                            kernel[i][j];
-                    }
-                }
-            } else {
-                for (usize i = 0; i < inputRows; ++i) {
-                    for (usize j = 0; j < inputCols; ++j) {
-                        *reinterpret_cast<f32*>(
-                            &inputFlattened[elementSize * (i * inputCols + j)]) =
-                            static_cast<f32>(input[i][j]);
-                    }
-                }
-                for (usize i = 0; i < kernelRows; ++i) {
-                    for (usize j = 0; j < kernelCols; ++j) {
-                        *reinterpret_cast<f32*>(
-                            &kernelFlattened[elementSize * (i * kernelCols + j)]) =
-                            static_cast<f32>(kernel[i][j]);
-                    }
-                }
-            }
-
-            // 创建OpenCL缓冲区
-            cl_int err;
-            CLMemPtr inputBuffer(clCreateBuffer(
-                context.get(), CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                inputFlattened.size(), inputFlattened.data(), &err));
-            checkErr(err, "Creating input buffer");
-
-            CLMemPtr kernelBuffer(clCreateBuffer(
-                context.get(), CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                kernelFlattened.size(), kernelFlattened.data(), &err));
-            checkErr(err, "Creating kernel buffer");
-
-            CLMemPtr outputBuffer(clCreateBuffer(
-                context.get(), CL_MEM_WRITE_ONLY, outputFlattened.size(), nullptr,
-                &err));
-            checkErr(err, "Creating output buffer");
-
-            // 创建和编译OpenCL程序
-            auto program = createProgram(convolve2DKernelSrc, context.get());
-            err = clBuildProgram(program.get(), 0, nullptr, buildOptions.c_str(),
-                                 nullptr, nullptr);
-
-            // 处理构建错误，提供详细错误信息
-            if (err != CL_SUCCESS) {
-                cl_device_id device_id;
-                clGetDeviceIDs(nullptr, CL_DEVICE_TYPE_GPU, 1, &device_id, nullptr);
-
-                usize logSize;
-                clGetProgramBuildInfo(program.get(), device_id,
-                                      CL_PROGRAM_BUILD_LOG, 0, nullptr, &logSize);
-
-                std::vector<char> buildLog(logSize);
-                clGetProgramBuildInfo(program.get(), device_id,
-                                      CL_PROGRAM_BUILD_LOG, logSize,
-                                      buildLog.data(), nullptr);
-
-                THROW_CONVOLVE_ERROR("Failed to build OpenCL program: {}",
-                                     std::string(buildLog.data(), logSize));
-            }
-
-            // 创建内核
-            CLKernelPtr openclKernel(
-                clCreateKernel(program.get(), "convolve2D", &err));
-            checkErr(err, "Creating kernel");
-
-            // 设置内核参数
-            i32 inputRowsInt = static_cast<i32>(inputRows);
-            i32 inputColsInt = static_cast<i32>(inputCols);
-            i32 kernelRowsInt = static_cast<i32>(kernelRows);
-            i32 kernelColsInt = static_cast<i32>(kernelCols);
-
-            err = clSetKernelArg(openclKernel.get(), 0, sizeof(cl_mem),
-                                 &inputBuffer.get());
-            err |= clSetKernelArg(openclKernel.get(), 1, sizeof(cl_mem),
-                                  &kernelBuffer.get());
-            err |= clSetKernelArg(openclKernel.get(), 2, sizeof(cl_mem),
-                                  &outputBuffer.get());
-            err |=
-                clSetKernelArg(openclKernel.get(), 3, sizeof(i32), &inputRowsInt);
-            err |=
-                clSetKernelArg(openclKernel.get(), 4, sizeof(i32), &inputColsInt);
-            err |=
-                clSetKernelArg(openclKernel.get(), 5, sizeof(i32), &kernelRowsInt);
-            err |=
-                clSetKernelArg(openclKernel.get(), 6, sizeof(i32), &kernelColsInt);
-            checkErr(err, "Setting kernel arguments");
-
-            // 执行内核
-            usize globalWorkSize[2] = {inputRows, inputCols};
-            err = clEnqueueNDRangeKernel(queue.get(), openclKernel.get(), 2,
-                                         nullptr, globalWorkSize, nullptr, 0,
-                                         nullptr, nullptr);
-            checkErr(err, "Enqueueing kernel");
-
-            // 等待完成并读取结果
-            clFinish(queue.get());
-
-            err = clEnqueueReadBuffer(queue.get(), outputBuffer.get(), CL_TRUE, 0,
-                                      outputFlattened.size(),
-                                      outputFlattened.data(), 0, nullptr, nullptr);
-            checkErr(err, "Reading back output buffer");
-
-            // 将结果转换回2D向量
-            std::vector<std::vector<f64>> output(inputRows,
-                                                 std::vector<f64>(inputCols));
-
-            if (elementSize == sizeof(f64)) {
-                for (usize i = 0; i < inputRows; ++i) {
-                    for (usize j = 0; j < inputCols; ++j) {
-                        output[i][j] = *reinterpret_cast<f64*>(
-                            &outputFlattened[elementSize * (i * inputCols + j)]);
-                    }
-                }
-            } else {
-                for (usize i = 0; i < inputRows; ++i) {
-                    for (usize j = 0; j < inputCols; ++j) {
-                        output[i][j] = static_cast<f64>(*reinterpret_cast<f32*>(
-                            &outputFlattened[elementSize * (i * inputCols + j)]));
-                    }
-                }
-            }
-
-            return output;
-        } catch (const std::exception& e) {
-            // 重新抛出异常，提供更多上下文
-            THROW_CONVOLVE_ERROR("OpenCL convolution failed: {}", e.what());
-        }
-    });
+        });
 }
 
 // OpenCL实现的二维反卷积
@@ -668,15 +695,17 @@ auto deconvolve2DOpenCL(const std::vector<std::vector<f64>>& signal,
                         const ConvolutionOptions<f64>& options,
                         std::stop_token stopToken)
     -> std::future<std::vector<std::vector<f64>>> {
-    return std::async(std::launch::async, [=]() -> std::vector<std::vector<f64>> {
-        try {
-            // Can implement OpenCL version of deconvolution here.
-            // For simplicity, calling non-OpenCL version.
-            return deconvolve2D(signal, kernel, options, stopToken).get();
-        } catch (const std::exception& e) {
-            THROW_CONVOLVE_ERROR("OpenCL deconvolution failed: {}", e.what());
-        }
-    });
+    return std::async(
+        std::launch::async, [=]() -> std::vector<std::vector<f64>> {
+            try {
+                // Can implement OpenCL version of deconvolution here.
+                // For simplicity, calling non-OpenCL version.
+                return deconvolve2D(signal, kernel, options, stopToken).get();
+            } catch (const std::exception& e) {
+                THROW_CONVOLVE_ERROR("OpenCL deconvolution failed: {}",
+                                     e.what());
+            }
+        });
 }
 #endif
 
@@ -697,128 +726,117 @@ auto convolve2D(const std::vector<std::vector<f64>>& input,
                 const ConvolutionOptions<f64>& options,
                 std::stop_token stopToken)
     -> std::future<std::vector<std::vector<f64>>> {
-    return std::async(std::launch::async, [=]() -> std::vector<std::vector<f64>> {
-        try {
-            // 输入验证
-            if (input.empty() || input[0].empty()) {
-                THROW_CONVOLVE_ERROR("Input matrix cannot be empty");
-            }
-            if (kernel.empty() || kernel[0].empty()) {
-                THROW_CONVOLVE_ERROR("Kernel matrix cannot be empty");
-            }
-
-            // 检查每行的列数是否一致
-            const auto inputCols = input[0].size();
-            const auto kernelCols = kernel[0].size();
-
-            for (const auto& row : input) {
-                if (row.size() != inputCols) {
-                    THROW_CONVOLVE_ERROR(
-                        "Input matrix must have uniform column sizes");
+    return std::async(
+        std::launch::async, [=]() -> std::vector<std::vector<f64>> {
+            try {
+                // 输入验证
+                if (input.empty() || input[0].empty()) {
+                    THROW_CONVOLVE_ERROR("Input matrix cannot be empty");
                 }
-            }
-
-            for (const auto& row : kernel) {
-                if (row.size() != kernelCols) {
-                    THROW_CONVOLVE_ERROR(
-                        "Kernel matrix must have uniform column sizes");
+                if (kernel.empty() || kernel[0].empty()) {
+                    THROW_CONVOLVE_ERROR("Kernel matrix cannot be empty");
                 }
-            }
 
-            // 线程数验证和调整
-            i32 numThreads = validateAndAdjustThreadCount(options.numThreads);
+                // 检查每行的列数是否一致
+                const auto inputCols = input[0].size();
+                const auto kernelCols = kernel[0].size();
+
+                for (const auto& row : input) {
+                    if (row.size() != inputCols) {
+                        THROW_CONVOLVE_ERROR(
+                            "Input matrix must have uniform column sizes");
+                    }
+                }
+
+                for (const auto& row : kernel) {
+                    if (row.size() != kernelCols) {
+                        THROW_CONVOLVE_ERROR(
+                            "Kernel matrix must have uniform column sizes");
+                    }
+                }
+
+                // 线程数验证和调整
+                i32 numThreads =
+                    validateAndAdjustThreadCount(options.numThreads);
 
 #if ATOM_USE_OPENCL
-            if (options.useOpenCL) {
-                return convolve2DOpenCL(input, kernel, numThreads).get();
-            }
+                if (options.useOpenCL) {
+                    return convolve2DOpenCL(input, kernel, numThreads).get();
+                }
 #endif
-            const usize inputRows = input.size();
-            const usize kernelRows = kernel.size();
+                const usize inputRows = input.size();
+                const usize kernelRows = kernel.size();
 
-            // 扩展输入和卷积核以便于计算
-            auto extendedInput = extend2D(input, inputRows + kernelRows - 1,
-                                          inputCols + kernelCols - 1);
-            auto extendedKernel = extend2D(kernel, inputRows + kernelRows - 1,
-                                           inputCols + kernelCols - 1);
+                // 扩展输入和卷积核以便于计算
+                auto extendedInput = extend2D(input, inputRows + kernelRows - 1,
+                                              inputCols + kernelCols - 1);
+                auto extendedKernel =
+                    extend2D(kernel, inputRows + kernelRows - 1,
+                             inputCols + kernelCols - 1);
 
-            std::vector<std::vector<f64>> output(
-                inputRows, std::vector<f64>(inputCols, 0.0));
+                std::vector<std::vector<f64>> output(
+                    inputRows, std::vector<f64>(inputCols, 0.0));
 
-            // 使用C++20 ranges提高可读性，用std::execution提高性能
-            auto computeBlock = [&](usize blockStartRow, usize blockEndRow) {
-                for (usize i = blockStartRow; i < blockEndRow; ++i) {
-                    if (stopToken.stop_requested()) {
-                        return;
-                    }
-                    for (usize j = 0; j < inputCols; ++j) {
-                        f64 sum = 0.0;
+                // 使用C++20 ranges提高可读性，用std::execution提高性能
+                auto computeBlock = [&](usize blockStartRow,
+                                        usize blockEndRow) {
+                    for (usize i = blockStartRow; i < blockEndRow; ++i) {
+                        if (stopToken.stop_requested()) {
+                            return;
+                        }
+                        for (usize j = 0; j < inputCols; ++j) {
+                            f64 sum = 0.0;
 
-#ifdef ATOM_USE_SIMD
-                        // 使用SIMD加速内循环计算
-                        const usize kernelRowMid = kernelRows / 2;
-                        const usize kernelColMid = kernelCols / 2;
-
-                        for (usize ki = 0; ki < kernelRows; ++ki) {
-                            for (usize kj = 0; kj < kernelCols; ++kj) {
-                                usize ii = i + ki;
-                                usize jj = j + kj;
-                                if (ii < inputRows + kernelRows - 1 &&
-                                    jj < inputCols + kernelCols - 1) {
-                                    sum += extendedInput[ii][jj] *
-                                           extendedKernel[kernelRows - 1 - ki]
-                                                         [kernelCols - 1 - kj];
+                            // Standard convolution implementation
+                            for (usize ki = 0; ki < kernelRows; ++ki) {
+                                for (usize kj = 0; kj < kernelCols; ++kj) {
+                                    usize ii = i + ki;
+                                    usize jj = j + kj;
+                                    if (ii < inputRows + kernelRows - 1 &&
+                                        jj < inputCols + kernelCols - 1) {
+                                        sum +=
+                                            extendedInput[ii][jj] *
+                                            extendedKernel[kernelRows - 1 - ki]
+                                                          [kernelCols - 1 - kj];
+                                    }
                                 }
                             }
+                            output[i - kernelRows / 2][j] = sum;
                         }
-#else
-                        // 标准实现
-                        for (usize ki = 0; ki < kernelRows; ++ki) {
-                            for (usize kj = 0; kj < kernelCols; ++kj) {
-                                usize ii = i + ki;
-                                usize jj = j + kj;
-                                if (ii < inputRows + kernelRows - 1 &&
-                                    jj < inputCols + kernelCols - 1) {
-                                    sum += extendedInput[ii][jj] *
-                                           extendedKernel[kernelRows - 1 - ki]
-                                                         [kernelCols - 1 - kj];
-                                }
-                            }
-                        }
-#endif
-                        output[i - kernelRows / 2][j] = sum;
                     }
+                };
+
+                // 使用多线程处理
+                if (numThreads > 1) {
+                    std::vector<std::jthread> threadPool;
+                    usize blockSize =
+                        (inputRows + static_cast<usize>(numThreads) - 1) /
+                        static_cast<usize>(numThreads);
+                    usize blockStartRow = kernelRows / 2;
+
+                    for (i32 threadIndex = 0; threadIndex < numThreads;
+                         ++threadIndex) {
+                        usize startRow =
+                            blockStartRow +
+                            static_cast<usize>(threadIndex) * blockSize;
+                        usize endRow = std::min(startRow + blockSize,
+                                                  inputRows + kernelRows / 2);
+
+                        // 使用C++20 jthread自动管理线程生命周期
+                        threadPool.emplace_back(computeBlock, startRow, endRow);
+                    }
+
+                    // jthread会在作用域结束时自动join
+                } else {
+                    // 单线程执行
+                    computeBlock(kernelRows / 2, inputRows + kernelRows / 2);
                 }
-            };
 
-            // 使用多线程处理
-            if (numThreads > 1) {
-                std::vector<std::jthread> threadPool;
-                usize blockSize = (inputRows + static_cast<usize>(numThreads) - 1) /
-                                  static_cast<usize>(numThreads);
-                usize blockStartRow = kernelRows / 2;
-
-                for (i32 threadIndex = 0; threadIndex < numThreads; ++threadIndex) {
-                    usize startRow = blockStartRow +
-                                       static_cast<usize>(threadIndex) * blockSize;
-                    usize endRow = Usize::min(startRow + blockSize,
-                                              inputRows + kernelRows / 2);
-
-                    // 使用C++20 jthread自动管理线程生命周期
-                    threadPool.emplace_back(computeBlock, startRow, endRow);
-                }
-
-                // jthread会在作用域结束时自动join
-            } else {
-                // 单线程执行
-                computeBlock(kernelRows / 2, inputRows + kernelRows / 2);
+                return output;
+            } catch (const std::exception& e) {
+                THROW_CONVOLVE_ERROR("2D convolution failed: {}", e.what());
             }
-
-            return output;
-        } catch (const std::exception& e) {
-            THROW_CONVOLVE_ERROR("2D convolution failed: {}", e.what());
-        }
-    });
+        });
 }
 
 // Function to deconvolve a 2D input with a 2D kernel using multithreading or
@@ -836,122 +854,71 @@ auto deconvolve2D(const std::vector<std::vector<f64>>& signal,
                   const ConvolutionOptions<f64>& options,
                   std::stop_token stopToken)
     -> std::future<std::vector<std::vector<f64>>> {
-    return std::async(std::launch::async, [=]() -> std::vector<std::vector<f64>> {
-        try {
-            // 输入验证
-            if (signal.empty() || signal[0].empty()) {
-                THROW_CONVOLVE_ERROR("Signal matrix cannot be empty");
-            }
-            if (kernel.empty() || kernel[0].empty()) {
-                THROW_CONVOLVE_ERROR("Kernel matrix cannot be empty");
-            }
-
-            // 验证所有行的列数是否一致
-            const auto signalCols = signal[0].size();
-            const auto kernelCols = kernel[0].size();
-
-            for (const auto& row : signal) {
-                if (row.size() != signalCols) {
-                    THROW_CONVOLVE_ERROR(
-                        "Signal matrix must have uniform column sizes");
+    return std::async(
+        std::launch::async, [=]() -> std::vector<std::vector<f64>> {
+            try {
+                // 输入验证
+                if (signal.empty() || signal[0].empty()) {
+                    THROW_CONVOLVE_ERROR("Signal matrix cannot be empty");
                 }
-            }
-
-            for (const auto& row : kernel) {
-                if (row.size() != kernelCols) {
-                    THROW_CONVOLVE_ERROR(
-                        "Kernel matrix must have uniform column sizes");
-                }
-            }
-
-            // 线程数验证和调整
-            i32 numThreads = validateAndAdjustThreadCount(options.numThreads);
-
-#if ATOM_USE_OPENCL
-            if (options.useOpenCL) {
-                return deconvolve2DOpenCL(signal, kernel, numThreads).get();
-            }
-#endif
-            const usize signalRows = signal.size();
-            const usize kernelRows = kernel.size();
-
-            auto extendedSignal = extend2D(signal, signalRows + kernelRows - 1,
-                                           signalCols + kernelCols - 1);
-            auto extendedKernel = extend2D(kernel, signalRows + kernelRows - 1,
-                                           signalCols + kernelCols - 1);
-
-            auto discreteFourierTransform2D = 
-                [&](const std::vector<std::vector<f64>>& input) {
-                    return dfT2D(input, numThreads, stopToken)
-                        .get();  // Assume DFT2D supports multithreading
-                };
-
-            auto frequencySignal = discreteFourierTransform2D(extendedSignal);
-            auto frequencyKernel = discreteFourierTransform2D(extendedKernel);
-
-            std::vector<std::vector<std::complex<f64>>> frequencyProduct(
-                signalRows + kernelRows - 1,
-                std::vector<std::complex<f64>>(signalCols + kernelCols - 1,
-                                               {0, 0}));
-
-            // SIMD-optimized computation of frequencyProduct
-#ifdef ATOM_USE_SIMD
-            const i32 simdWidth = SIMD_WIDTH;
-            __m256d epsilon_vec = _mm256_set1_pd(EPSILON);
-
-            for (usize u = 0; u < signalRows + kernelRows - 1; ++u) {
-                if (stopToken.stop_requested()) {
-                    return {};
-                }
-                for (usize v = 0; v < signalCols + kernelCols - 1;
-                     v += static_cast<usize>(simdWidth)) {
-                    __m256d kernelReal =
-                        _mm256_loadu_pd(&frequencyKernel[u][v].real());
-                    __m256d kernelImag =
-                        _mm256_loadu_pd(&frequencyKernel[u][v].imag());
-
-                    __m256d magnitude = _mm256_sqrt_pd(
-                        _mm256_add_pd(_mm256_mul_pd(kernelReal, kernelReal),
-                                      _mm256_mul_pd(kernelImag, kernelImag)));
-                    __m256d mask =
-                        _mm256_cmp_pd(magnitude, epsilon_vec, _CMP_GT_OQ);
-
-                    __m256d norm = _mm256_add_pd(
-                        _mm256_mul_pd(kernelReal, kernelReal),
-                        _mm256_mul_pd(kernelImag, kernelImag));
-                    norm = _mm256_add_pd(norm, epsilon_vec);
-
-                    __m256d normalizedReal = _mm256_div_pd(kernelReal, norm);
-                    __m256d normalizedImag = _mm256_div_pd(
-                        _mm256_xor_pd(kernelImag, _mm256_set1_pd(-0.0)), norm);
-
-                    normalizedReal =
-                        _mm256_blendv_pd(kernelReal, normalizedReal, mask);
-                    normalizedImag =
-                        _mm256_blendv_pd(kernelImag, normalizedImag, mask);
-
-                    _mm256_storeu_pd(&frequencyProduct[u][v].real(),
-                                     normalizedReal);
-                    _mm256_storeu_pd(&frequencyProduct[u][v].imag(),
-                                     normalizedImag);
+                if (kernel.empty() || kernel[0].empty()) {
+                    THROW_CONVOLVE_ERROR("Kernel matrix cannot be empty");
                 }
 
-                // Handle remaining elements
-                for (usize v = ((signalCols + kernelCols - 1) /
-                                static_cast<usize>(simdWidth)) *
-                               static_cast<usize>(simdWidth);
-                     v < signalCols + kernelCols - 1; ++v) {
-                    if (std::abs(frequencyKernel[u][v]) > EPSILON) {
-                        frequencyProduct[u][v] =
-                            std::conj(frequencyKernel[u][v]) /
-                            (std::norm(frequencyKernel[u][v]) + EPSILON);
-                    } else {
-                        frequencyProduct[u][v] = std::conj(frequencyKernel[u][v]);
+                // 验证所有行的列数是否一致
+                const auto signalCols = signal[0].size();
+                const auto kernelCols = kernel[0].size();
+
+                for (const auto& row : signal) {
+                    if (row.size() != signalCols) {
+                        THROW_CONVOLVE_ERROR(
+                            "Signal matrix must have uniform column sizes");
                     }
                 }
-            }
-#else
-            // Fallback to non-SIMD version
+
+                for (const auto& row : kernel) {
+                    if (row.size() != kernelCols) {
+                        THROW_CONVOLVE_ERROR(
+                            "Kernel matrix must have uniform column sizes");
+                    }
+                }
+
+                // 线程数验证和调整
+                i32 numThreads =
+                    validateAndAdjustThreadCount(options.numThreads);
+
+#if ATOM_USE_OPENCL
+                if (options.useOpenCL) {
+                    return deconvolve2DOpenCL(signal, kernel, numThreads).get();
+                }
+#endif
+                const usize signalRows = signal.size();
+                const usize kernelRows = kernel.size();
+
+                auto extendedSignal =
+                    extend2D(signal, signalRows + kernelRows - 1,
+                             signalCols + kernelCols - 1);
+                auto extendedKernel =
+                    extend2D(kernel, signalRows + kernelRows - 1,
+                             signalCols + kernelCols - 1);
+
+                auto discreteFourierTransform2D =
+                    [&](const std::vector<std::vector<f64>>& input) {
+                        return dfT2D(input, numThreads, stopToken)
+                            .get();  // Assume DFT2D supports multithreading
+                    };
+
+                auto frequencySignal =
+                    discreteFourierTransform2D(extendedSignal);
+                auto frequencyKernel =
+                    discreteFourierTransform2D(extendedKernel);
+
+                std::vector<std::vector<std::complex<f64>>> frequencyProduct(
+                    signalRows + kernelRows - 1,
+                    std::vector<std::complex<f64>>(signalCols + kernelCols - 1,
+                                                   {0, 0}));
+
+            // Compute frequency domain multiplication (deconvolution)
             for (usize u = 0; u < signalRows + kernelRows - 1; ++u) {
                 if (stopToken.stop_requested()) {
                     return {};
@@ -966,25 +933,25 @@ auto deconvolve2D(const std::vector<std::vector<f64>>& signal,
                     }
                 }
             }
-#endif
 
-            std::vector<std::vector<f64>> frequencyInverse =
-                idfT2D(frequencyProduct, numThreads, stopToken).get();
+                std::vector<std::vector<f64>> frequencyInverse =
+                    idfT2D(frequencyProduct, numThreads, stopToken).get();
 
-            std::vector<std::vector<f64>> result(
-                signalRows, std::vector<f64>(signalCols, 0.0));
-            for (usize i = 0; i < signalRows; ++i) {
-                for (usize j = 0; j < signalCols; ++j) {
-                    result[i][j] = frequencyInverse[i][j] /
-                                   static_cast<f64>(signalRows * signalCols);
+                std::vector<std::vector<f64>> result(
+                    signalRows, std::vector<f64>(signalCols, 0.0));
+                for (usize i = 0; i < signalRows; ++i) {
+                    for (usize j = 0; j < signalCols; ++j) {
+                        result[i][j] =
+                            frequencyInverse[i][j] /
+                            static_cast<f64>(signalRows * signalCols);
+                    }
                 }
-            }
 
-            return result;
-        } catch (const std::exception& e) {
-            THROW_CONVOLVE_ERROR("2D deconvolution failed: {}", e.what());
-        }
-    });
+                return result;
+            } catch (const std::exception& e) {
+                THROW_CONVOLVE_ERROR("2D deconvolution failed: {}", e.what());
+            }
+        });
 }
 
 // 2D Discrete Fourier Transform (2D DFT)
@@ -1006,58 +973,11 @@ auto dfT2D(const std::vector<std::vector<f64>>& signal, i32 numThreads,
 
             // Lambda function to compute the DFT for a block of rows
             auto computeDFT = [&](usize startRow, usize endRow) {
-#ifdef ATOM_USE_SIMD
-                std::array<f64, 4> realParts{};
-                std::array<f64, 4> imagParts{};
-#endif
                 for (usize u = startRow; u < endRow; ++u) {
                     if (stopToken.stop_requested()) {
                         return;
                     }
                     for (usize v = 0; v < N; ++v) {
-#ifdef ATOM_USE_SIMD
-                        __m256d sumReal = _mm256_setzero_pd();
-                        __m256d sumImag = _mm256_setzero_pd();
-
-                        for (usize m = 0; m < M; ++m) {
-                            for (usize n = 0; n < N; n += 4) {
-                                f64 theta[4];
-                                for (i32 k = 0; k < 4; ++k) {
-                                    theta[k] = -2.0 * std::numbers::pi *
-                                               ((static_cast<f64>(u) *
-                                                 static_cast<f64>(m)) /
-                                                    static_cast<f64>(M) +
-                                                (static_cast<f64>(v) *
-                                                 static_cast<f64>(
-                                                     n + static_cast<usize>(k))) /
-                                                    static_cast<f64>(N));
-                                }
-
-                                __m256d signalVec = _mm256_loadu_pd(&signal[m][n]);
-                                __m256d cosVec = _mm256_setr_pd(
-                                    F64::cos(theta[0]), F64::cos(theta[1]),
-                                    F64::cos(theta[2]), F64::cos(theta[3]));
-                                __m256d sinVec = _mm256_setr_pd(
-                                    F64::sin(theta[0]), F64::sin(theta[1]),
-                                    F64::sin(theta[2]), F64::sin(theta[3]));
-
-                                sumReal = _mm256_add_pd(
-                                    sumReal, _mm256_mul_pd(signalVec, cosVec));
-                                sumImag = _mm256_add_pd(
-                                    sumImag, _mm256_mul_pd(signalVec, sinVec));
-                            }
-                        }
-
-                        _mm256_store_pd(realParts.data(), sumReal);
-                        _mm256_store_pd(imagParts.data(), sumImag);
-
-                        f64 realSum = realParts[0] + realParts[1] +
-                                      realParts[2] + realParts[3];
-                        f64 imagSum = imagParts[0] + imagParts[1] +
-                                      imagParts[2] + imagParts[3];
-
-                        frequency[u][v] = std::complex<f64>(realSum, imagSum);
-#else
                         std::complex<f64> sum(0, 0);
                         for (usize m = 0; m < M; ++m) {
                             for (usize n = 0; n < N; ++n) {
@@ -1068,13 +988,12 @@ auto dfT2D(const std::vector<std::vector<f64>>& signal, i32 numThreads,
                                              (static_cast<f64>(v) *
                                               static_cast<f64>(n)) /
                                                  static_cast<f64>(N));
-                                std::complex<f64> w(F64::cos(theta),
-                                                    F64::sin(theta));
+                                std::complex<f64> w(std::cos(theta),
+                                                    std::sin(theta));
                                 sum += signal[m][n] * w;
                             }
                         }
                         frequency[u][v] = sum;
-#endif
                     }
                 }
             };
@@ -1085,11 +1004,13 @@ auto dfT2D(const std::vector<std::vector<f64>>& signal, i32 numThreads,
                 usize rowsPerThread = M / static_cast<usize>(numThreads);
                 usize blockStartRow = 0;
 
-                for (i32 threadIndex = 0; threadIndex < numThreads; ++threadIndex) {
+                for (i32 threadIndex = 0; threadIndex < numThreads;
+                     ++threadIndex) {
                     usize blockEndRow = (threadIndex == numThreads - 1)
                                             ? M
                                             : blockStartRow + rowsPerThread;
-                    threadPool.emplace_back(computeDFT, blockStartRow, blockEndRow);
+                    threadPool.emplace_back(computeDFT, blockStartRow,
+                                            blockEndRow);
                     blockStartRow = blockEndRow;
                 }
 
@@ -1113,8 +1034,7 @@ auto idfT2D(const std::vector<std::vector<std::complex<f64>>>& spectrum,
             i32 numThreads, std::stop_token stopToken)
     -> std::future<std::vector<std::vector<f64>>> {
     return std::async(
-        std::launch::async,
-        [=]() -> std::vector<std::vector<f64>> {
+        std::launch::async, [=]() -> std::vector<std::vector<f64>> {
             const usize M = spectrum.size();
             const usize N = spectrum[0].size();
             std::vector<std::vector<f64>> spatial(M, std::vector<f64>(N, 0.0));
@@ -1126,63 +1046,6 @@ auto idfT2D(const std::vector<std::vector<std::complex<f64>>>& spectrum,
                         return;
                     }
                     for (usize n = 0; n < N; ++n) {
-#ifdef ATOM_USE_SIMD
-                        __m256d sumReal = _mm256_setzero_pd();
-                        __m256d sumImag = _mm256_setzero_pd();
-                        for (usize u = 0; u < M; ++u) {
-                            for (usize v = 0; v < N; v += SIMD_WIDTH) {
-                                __m256d theta = _mm256_set_pd(
-                                    2 * std::numbers::pi *
-                                        ((static_cast<f64>(u) *
-                                          static_cast<f64>(m)) /
-                                             static_cast<f64>(M) +
-                                         (static_cast<f64>(v) *
-                                          static_cast<f64>(n + 3)) /
-                                             static_cast<f64>(N)),
-                                    2 * std::numbers::pi *
-                                        ((static_cast<f64>(u) *
-                                          static_cast<f64>(m)) /
-                                             static_cast<f64>(M) +
-                                         (static_cast<f64>(v) *
-                                          static_cast<f64>(n + 2)) /
-                                             static_cast<f64>(N)),
-                                    2 * std::numbers::pi *
-                                        ((static_cast<f64>(u) *
-                                          static_cast<f64>(m)) /
-                                             static_cast<f64>(M) +
-                                         (static_cast<f64>(v) *
-                                          static_cast<f64>(n + 1)) /
-                                             static_cast<f64>(N)),
-                                    2 * std::numbers::pi *
-                                        ((static_cast<f64>(u) *
-                                          static_cast<f64>(m)) /
-                                             static_cast<f64>(M) +
-                                         (static_cast<f64>(v) *
-                                          static_cast<f64>(n)) /
-                                             static_cast<f64>(N)));
-                                __m256d wReal = _mm256_cos_pd(theta);
-                                __m256d wImag = _mm256_sin_pd(theta);
-                                __m256d spectrumReal =
-                                    _mm256_loadu_pd(&spectrum[u][v].real());
-                                __m256d spectrumImag =
-                                    _mm256_loadu_pd(&spectrum[u][v].imag());
-
-                                sumReal = _mm256_fmadd_pd(spectrumReal, wReal,
-                                                          sumReal);
-                                sumImag = _mm256_fmadd_pd(spectrumImag, wImag,
-                                                          sumImag);
-                            }
-                        }
-                        // Assuming _mm256_reduce_add_pd is defined or use an
-                        // alternative
-                        f64 realPart = _mm256_hadd_pd(sumReal, sumReal).m256d_f64[0] +
-                                       _mm256_hadd_pd(sumReal, sumReal).m256d_f64[2];
-                        f64 imagPart = _mm256_hadd_pd(sumImag, sumImag).m256d_f64[0] +
-                                       _mm256_hadd_pd(sumImag, sumImag).m256d_f64[2];
-                        spatial[m][n] = (realPart + imagPart) /
-                                        (static_cast<f64>(M) *
-                                         static_cast<f64>(N));
-#else
                         std::complex<f64> sum(0.0, 0.0);
                         for (usize u = 0; u < M; ++u) {
                             for (usize v = 0; v < N; ++v) {
@@ -1193,15 +1056,13 @@ auto idfT2D(const std::vector<std::vector<std::complex<f64>>>& spectrum,
                                              (static_cast<f64>(v) *
                                               static_cast<f64>(n)) /
                                                  static_cast<f64>(N));
-                                std::complex<f64> w(F64::cos(theta),
-                                                    F64::sin(theta));
+                                std::complex<f64> w(std::cos(theta),
+                                                    std::sin(theta));
                                 sum += spectrum[u][v] * w;
                             }
                         }
-                        spatial[m][n] = std::real(sum) /
-                                        (static_cast<f64>(M) *
-                                         static_cast<f64>(N));
-#endif
+                        spatial[m][n] = sum.real() / (static_cast<f64>(M) *
+                                                      static_cast<f64>(N));
                     }
                 }
             };
@@ -1212,11 +1073,13 @@ auto idfT2D(const std::vector<std::vector<std::complex<f64>>>& spectrum,
                 usize rowsPerThread = M / static_cast<usize>(numThreads);
                 usize blockStartRow = 0;
 
-                for (i32 threadIndex = 0; threadIndex < numThreads; ++threadIndex) {
+                for (i32 threadIndex = 0; threadIndex < numThreads;
+                     ++threadIndex) {
                     usize blockEndRow = (threadIndex == numThreads - 1)
                                             ? M
                                             : blockStartRow + rowsPerThread;
-                    threadPool.emplace_back(computeIDFT, blockStartRow, blockEndRow);
+                    threadPool.emplace_back(computeIDFT, blockStartRow,
+                                            blockEndRow);
                     blockStartRow = blockEndRow;
                 }
 
@@ -1238,60 +1101,13 @@ auto generateGaussianKernel(i32 size, f64 sigma)
     f64 sum = 0.0;
     i32 center = size / 2;
 
-#ifdef ATOM_USE_SIMD
-    SIMD_ALIGNED f64 tempBuffer[SIMD_WIDTH];
-    __m256d sigmaVec = _mm256_set1_pd(sigma);
-    __m256d twoSigmaSquared =
-        _mm256_mul_pd(_mm256_set1_pd(2.0), _mm256_mul_pd(sigmaVec, sigmaVec));
-    __m256d scale = _mm256_div_pd(
-        _mm256_set1_pd(1.0),
-        _mm256_mul_pd(_mm256_set1_pd(2 * std::numbers::pi), twoSigmaSquared));
-
     for (i32 i = 0; i < size; ++i) {
-        __m256d iVec = _mm256_set1_pd(static_cast<f64>(i - center));
-        for (i32 j = 0; j < size; j += SIMD_WIDTH) {
-            __m256d jVec = _mm256_set_pd(static_cast<f64>(j + 3 - center),
-                                         static_cast<f64>(j + 2 - center),
-                                         static_cast<f64>(j + 1 - center),
-                                         static_cast<f64>(j - center));
-
-            __m256d xSquared = _mm256_mul_pd(iVec, iVec);
-            __m256d ySquared = _mm256_mul_pd(jVec, jVec);
-            __m256d exponent = _mm256_div_pd(_mm256_add_pd(xSquared, ySquared),
-                                             twoSigmaSquared);
-            __m256d kernelValues = _mm256_mul_pd(
-                scale,
-                _mm256_exp_pd(_mm256_mul_pd(_mm256_set1_pd(-0.5), exponent)));
-
-            _mm256_store_pd(tempBuffer, kernelValues);
-            for (i32 k = 0; k < SIMD_WIDTH && (j + k) < size; ++k) {
-                kernel[static_cast<usize>(i)][static_cast<usize>(j + k)] =
-                    tempBuffer[k];
-                sum += tempBuffer[k];
-            }
-        }
-    }
-
-    // Normalize to ensure the sum of the weights is 1
-    __m256d sumVec = _mm256_set1_pd(sum);
-    for (i32 i = 0; i < size; ++i) {
-        for (i32 j = 0; j < size; j += SIMD_WIDTH) {
-            __m256d kernelValues = _mm256_loadu_pd(
-                &kernel[static_cast<usize>(i)][static_cast<usize>(j)]);
-            kernelValues = _mm256_div_pd(kernelValues, sumVec);
-            _mm256_storeu_pd(
-                &kernel[static_cast<usize>(i)][static_cast<usize>(j)],
-                kernelValues);
-        }
-    }
-#else
-    for (i32 i = 0; i < size; ++i) {
-        for (i32 j = 0; i < size; ++j) {
+        for (i32 j = 0; j < size; ++j) {
             kernel[static_cast<usize>(i)][static_cast<usize>(j)] =
-                F64::exp(
+                std::exp(
                     -0.5 *
-                    (F64::pow(static_cast<f64>(i - center) / sigma, 2.0) +
-                     F64::pow(static_cast<f64>(j - center) / sigma, 2.0))) /
+                    (std::pow(static_cast<f64>(i - center) / sigma, 2.0) +
+                     std::pow(static_cast<f64>(j - center) / sigma, 2.0))) /
                 (2 * std::numbers::pi * sigma * sigma);
             sum += kernel[static_cast<usize>(i)][static_cast<usize>(j)];
         }
@@ -1299,11 +1115,10 @@ auto generateGaussianKernel(i32 size, f64 sigma)
 
     // Normalize to ensure the sum of the weights is 1
     for (i32 i = 0; i < size; ++i) {
-        for (i32 j = 0; j < size; ++j) {  // 修复循环变量错误
+        for (i32 j = 0; j < size; ++j) {
             kernel[static_cast<usize>(i)][static_cast<usize>(j)] /= sum;
         }
     }
-#endif
 
     return kernel;
 }
@@ -1321,76 +1136,39 @@ auto applyGaussianFilter(const std::vector<std::vector<f64>>& image,
                          const ConvolutionOptions<f64>& options,
                          std::stop_token stopToken)
     -> std::future<std::vector<std::vector<f64>>> {
-    return std::async(std::launch::async, [=]() -> std::vector<std::vector<f64>> {
-        const usize imageHeight = image.size();
-        const usize imageWidth = image[0].size();
-        const usize kernelSize = kernel.size();
-        const usize kernelRadius = kernelSize / 2;
-        std::vector<std::vector<f64>> filteredImage(
-            imageHeight, std::vector<f64>(imageWidth, 0.0));
+    return std::async(
+        std::launch::async, [=]() -> std::vector<std::vector<f64>> {
+            const usize imageHeight = image.size();
+            const usize imageWidth = image[0].size();
+            const usize kernelSize = kernel.size();
+            const usize kernelRadius = kernelSize / 2;
+            std::vector<std::vector<f64>> filteredImage(
+                imageHeight, std::vector<f64>(imageWidth, 0.0));
 
-#ifdef ATOM_USE_SIMD
-        SIMD_ALIGNED f64 tempBuffer[SIMD_WIDTH];
-
-        for (usize i = 0; i < imageHeight; ++i) {
-            if (stopToken.stop_requested()) {
-                return {};
-            }
-            for (usize j = 0; j < imageWidth; j += SIMD_WIDTH) {
-                __m256d sumVec = _mm256_setzero_pd();
-
-                for (usize k = 0; k < kernelSize; ++k) {
-                    for (usize l = 0; l < kernelSize; ++l) {
-                        __m256d kernelVal = _mm256_set1_pd(
-                            kernel[kernelRadius + k][kernelRadius + l]);
-
-                        for (i32 m = 0; m < SIMD_WIDTH; ++m) {
-                            i32 x = I32::clamp(static_cast<i32>(i + k), 0,
-                                               static_cast<i32>(imageHeight) - 1);
-                            i32 y = I32::clamp(
-                                static_cast<i32>(j + l + static_cast<usize>(m)), 0,
-                                static_cast<i32>(imageWidth) - 1);
-                            tempBuffer[m] =
-                                image[static_cast<usize>(x)][static_cast<usize>(y)];
-                        }
-
-                        __m256d imageVal = _mm256_loadu_pd(tempBuffer);
-                        sumVec = _mm256_add_pd(sumVec,
-                                               _mm256_mul_pd(imageVal, kernelVal));
-                    }
+            for (usize i = 0; i < imageHeight; ++i) {
+                if (stopToken.stop_requested()) {
+                    return {};
                 }
-
-                _mm256_storeu_pd(tempBuffer, sumVec);
-                for (i32 m = 0;
-                     m < SIMD_WIDTH && (j + static_cast<usize>(m)) < imageWidth;
-                     ++m) {
-                    filteredImage[i][j + static_cast<usize>(m)] = tempBuffer[m];
-                }
-            }
-        }
-#else
-        for (usize i = 0; i < imageHeight; ++i) {
-            if (stopToken.stop_requested()) {
-                return {};
-            }
-            for (usize j = 0; j < imageWidth; ++j) {
-                f64 sum = 0.0;
-                for (usize k = 0; k < kernelSize; ++k) {
-                    for (usize l = 0; l < kernelSize; ++l) {
-                        i32 x = I32::clamp(static_cast<i32>(i + k), 0,
+                for (usize j = 0; j < imageWidth; ++j) {
+                    f64 sum = 0.0;
+                    for (usize k = 0; k < kernelSize; ++k) {
+                        for (usize l = 0; l < kernelSize; ++l) {
+                            i32 x =
+                                std::clamp(static_cast<i32>(i + k), 0,
                                            static_cast<i32>(imageHeight) - 1);
-                        i32 y = I32::clamp(static_cast<i32>(j + l), 0,
+                            i32 y =
+                                std::clamp(static_cast<i32>(j + l), 0,
                                            static_cast<i32>(imageWidth) - 1);
-                        sum += image[static_cast<usize>(x)][static_cast<usize>(y)] *
-                               kernel[kernelRadius + k][kernelRadius + l];
+                            sum += image[static_cast<usize>(x)]
+                                        [static_cast<usize>(y)] *
+                                   kernel[kernelRadius + k][kernelRadius + l];
+                        }
                     }
+                    filteredImage[i][j] = sum;
                 }
-                filteredImage[i][j] = sum;
             }
-        }
-#endif
-        return filteredImage;
-    });
+            return filteredImage;
+        });
 }
 
 }  // namespace atom::algorithm

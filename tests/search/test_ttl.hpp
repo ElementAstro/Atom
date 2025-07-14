@@ -330,7 +330,7 @@ TEST_F(TTLCacheTest, StressTest) {
         EXPECT_FALSE(stressCache->get(i).has_value());
     }
 }
-<<<<<<< HEAD
+
 TEST_F(TTLCacheTest, GetShared) {
     cache->put("key1", 1);
     auto value_ptr = cache->get_shared("key1");
@@ -784,5 +784,308 @@ TEST_F(TTLCacheTest, ThreadSafetyWithDisabledThreadSafe) {
     // so we don't explicitly test for crashes, but rather that the flag
     // is respected in the get/get_shared paths.
 }
-=======
->>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
+TEST_F(TTLCacheTest, PutWithCustomTTL) {
+    // Put with shorter TTL
+    cache->put("short_ttl_key", 10, std::chrono::milliseconds(50));
+    EXPECT_TRUE(cache->contains("short_ttl_key"));
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    EXPECT_FALSE(cache->contains("short_ttl_key")); // Should be expired
+
+    // Put with longer TTL than default (default is 100ms)
+    cache->put("long_ttl_key", 20, std::chrono::milliseconds(200));
+    EXPECT_TRUE(cache->contains("long_ttl_key"));
+    std::this_thread::sleep_for(std::chrono::milliseconds(150)); // Wait past default TTL
+    EXPECT_TRUE(cache->contains("long_ttl_key")); // Should still be present
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Wait past custom TTL
+    EXPECT_FALSE(cache->contains("long_ttl_key")); // Should now be expired
+}
+
+TEST_F(TTLCacheTest, BatchPutEmpty) {
+    EXPECT_EQ(cache->size(), 0);
+    std::vector<std::pair<std::string, int>> empty_items;
+    cache->batch_put(empty_items);
+    EXPECT_EQ(cache->size(), 0); // Size should remain 0
+}
+
+TEST_F(TTLCacheTest, BatchGetEmpty) {
+    std::vector<std::string> empty_keys;
+    auto results = cache->batch_get(empty_keys);
+    EXPECT_TRUE(results.empty());
+}
+
+TEST_F(TTLCacheTest, GetOrCreateFactoryThrows) {
+    struct FactoryError : public std::runtime_error {
+        FactoryError() : std::runtime_error("Factory failed") {}
+    };
+
+    // Expect the exception from the factory
+    EXPECT_THROW(
+        {
+            cache->get_or_compute("throwing_key", []() -> int {
+                throw FactoryError();
+                return 0; // Should not be reached
+            });
+        },
+        FactoryError);
+
+    // The key should not have been added to the cache
+    EXPECT_FALSE(cache->contains("throwing_key"));
+    EXPECT_FALSE(cache->get("throwing_key").has_value());
+}
+
+TEST_F(TTLCacheTest, RemoveExpiredItem) {
+    cache->put("key1", 1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(150)); // Expire
+
+    EXPECT_FALSE(cache->contains("key1")); // Should be expired
+    EXPECT_EQ(cache->size(), 1); // Still in cache list/map
+
+    // Removing an expired item should still work and return true
+    EXPECT_TRUE(cache->remove("key1"));
+    EXPECT_EQ(cache->size(), 0); // Should be removed
+}
+
+TEST_F(TTLCacheTest, BatchRemoveEmpty) {
+    cache->put("key1", 1);
+    EXPECT_EQ(cache->size(), 1);
+    std::vector<std::string> empty_keys;
+    size_t removed_count = cache->batch_remove(empty_keys);
+    EXPECT_EQ(removed_count, 0);
+    EXPECT_EQ(cache->size(), 1); // Size should remain 1
+}
+
+TEST_F(TTLCacheTest, UpdateTTLExpiredItem) {
+    cache->put("key1", 1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(150)); // Expire
+
+    EXPECT_FALSE(cache->contains("key1")); // Should be expired
+
+    // Updating TTL for an expired item should return false
+    EXPECT_FALSE(cache->update_ttl("key1", std::chrono::milliseconds(100)));
+
+    // The item should still be in the cache list/map but expired
+    EXPECT_EQ(cache->size(), 1);
+    EXPECT_FALSE(cache->contains("key1"));
+}
+
+TEST_F(TTLCacheTest, GetRemainingTTLNearZero) {
+    cache->put("key1", 1, std::chrono::milliseconds(50));
+    std::this_thread::sleep_for(std::chrono::milliseconds(45)); // Wait almost until expiry
+
+    auto remaining_ttl = cache->get_remaining_ttl("key1");
+    ASSERT_TRUE(remaining_ttl.has_value());
+    // Should be a small positive value, e.g., 5ms +/- jitter
+    EXPECT_GE(remaining_ttl.value().count(), 0);
+    EXPECT_LE(remaining_ttl.value().count(), 10); // Allow some small jitter
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(10)); // Wait past expiry
+    remaining_ttl = cache->get_remaining_ttl("key1");
+    EXPECT_FALSE(remaining_ttl.has_value()); // Should be expired
+}
+
+TEST_F(TTLCacheTest, CleanupBatchSize) {
+    // Create a cache with a small cleanup batch size
+    CacheConfig config;
+    config.enable_automatic_cleanup = false; // Disable auto cleanup for manual control
+    config.cleanup_batch_size = 2;
+    auto batch_cache = std::make_unique<TTLCache<std::string, int>>(
+        std::chrono::milliseconds(50), 10, std::nullopt, config);
+
+    // Add 5 items, all with short TTL
+    for (int i = 0; i < 5; ++i) {
+        batch_cache->put("key" + std::to_string(i), i);
+    }
+    EXPECT_EQ(batch_cache->size(), 5);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Wait for all to expire
+
+    // All items are expired, but still in cache
+    EXPECT_EQ(batch_cache->size(), 5);
+    for (int i = 0; i < 5; ++i) {
+        EXPECT_FALSE(batch_cache->contains("key" + std::to_string(i)));
+    }
+
+    // Run cleanup - should only remove batch_size items
+    batch_cache->cleanup();
+    EXPECT_EQ(batch_cache->size(), 5 - config.cleanup_batch_size); // 3 items remaining
+
+    // Run cleanup again - should remove the next batch_size items
+    batch_cache->cleanup();
+    EXPECT_EQ(batch_cache->size(), 5 - 2 * config.cleanup_batch_size); // 1 item remaining
+
+    // Run cleanup again - should remove the last item
+    batch_cache->cleanup();
+    EXPECT_EQ(batch_cache->size(), 0); // All items removed
+}
+
+TEST_F(TTLCacheTest, StatisticsCounts) {
+    // Create a cache with stats enabled (default)
+    auto stats_cache = std::make_unique<TTLCache<std::string, int>>(
+        std::chrono::milliseconds(50), 3); // Capacity 3
+
+    auto stats = stats_cache->get_statistics();
+    EXPECT_EQ(stats.hits, 0);
+    EXPECT_EQ(stats.misses, 0);
+    EXPECT_EQ(stats.evictions, 0);
+    EXPECT_EQ(stats.expirations, 0);
+    EXPECT_EQ(stats.current_size, 0);
+    EXPECT_EQ(stats.max_capacity, 3);
+
+    // Put 3 items (fill cache)
+    stats_cache->put("k1", 1);
+    stats_cache->put("k2", 2);
+    stats_cache->put("k3", 3);
+    stats = stats_cache->get_statistics();
+    EXPECT_EQ(stats.current_size, 3);
+
+    // Put 1 more item (trigger 1 eviction)
+    stats_cache->put("k4", 4); // Evicts k1 (LRU)
+    stats = stats_cache->get_statistics();
+    EXPECT_EQ(stats.current_size, 3);
+    EXPECT_EQ(stats.evictions, 1);
+    EXPECT_EQ(stats.expirations, 0); // No expirations yet
+
+    // Get hit
+    stats_cache->get("k2");
+    stats = stats_cache->get_statistics();
+    EXPECT_EQ(stats.hits, 1);
+    EXPECT_EQ(stats.misses, 0); // No misses yet
+
+    // Get miss
+    stats_cache->get("k1"); // k1 was evicted
+    stats = stats_cache->get_statistics();
+    EXPECT_EQ(stats.hits, 1);
+    EXPECT_EQ(stats.misses, 1);
+
+    // Wait for expiry
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // k2, k3, k4 expire
+
+    // Get expired item (miss)
+    stats_cache->get("k2");
+    stats = stats_cache->get_statistics();
+    EXPECT_EQ(stats.hits, 1);
+    EXPECT_EQ(stats.misses, 2); // Miss count increases
+
+    // Cleanup (trigger expirations)
+    stats_cache->cleanup();
+    stats = stats_cache->get_statistics();
+    EXPECT_EQ(stats.current_size, 0);
+    EXPECT_EQ(stats.evictions, 1); // Still 1 LRU eviction
+    EXPECT_EQ(stats.expirations, 3); // 3 items expired and removed by cleanup
+
+    // Reset stats
+    stats_cache->reset_statistics();
+    stats = stats_cache->get_statistics();
+    EXPECT_EQ(stats.hits, 0);
+    EXPECT_EQ(stats.misses, 0);
+    EXPECT_EQ(stats.evictions, 0);
+    EXPECT_EQ(stats.expirations, 0);
+}
+
+TEST_F(TTLCacheTest, HitRateZeroAccesses) {
+    // Hit rate should be 0 when no gets have occurred
+    EXPECT_DOUBLE_EQ(cache->hit_rate(), 0.0);
+    auto stats = cache->get_statistics();
+    EXPECT_EQ(stats.hit_rate, 0.0);
+}
+
+TEST_F(TTLCacheTest, GetKeysEmpty) {
+    EXPECT_TRUE(cache->empty());
+    auto keys = cache->get_keys();
+    EXPECT_TRUE(keys.empty());
+}
+
+TEST_F(TTLCacheTest, ResizeToCurrentSize) {
+    cache->put("k1", 1);
+    cache->put("k2", 2);
+    EXPECT_EQ(cache->size(), 2);
+    EXPECT_EQ(cache->capacity(), 3);
+
+    // Resize to current size (should do nothing)
+    EXPECT_NO_THROW(cache->resize(2));
+    EXPECT_EQ(cache->size(), 2);
+    EXPECT_EQ(cache->capacity(), 2); // Capacity updates
+    EXPECT_TRUE(cache->contains("k1"));
+    EXPECT_TRUE(cache->contains("k2"));
+
+    // Resize to current size again (should do nothing)
+    EXPECT_NO_THROW(cache->resize(2));
+    EXPECT_EQ(cache->size(), 2);
+    EXPECT_EQ(cache->capacity(), 2);
+}
+
+TEST_F(TTLCacheTest, ResizeWhenEmpty) {
+    cache->clear();
+    EXPECT_TRUE(cache->empty());
+    EXPECT_EQ(cache->capacity(), 3);
+
+    // Resize when empty
+    EXPECT_NO_THROW(cache->resize(5));
+    EXPECT_TRUE(cache->empty());
+    EXPECT_EQ(cache->capacity(), 5);
+
+    // Add items after resizing when empty
+    cache->put("k1", 1);
+    EXPECT_EQ(cache->size(), 1);
+    EXPECT_TRUE(cache->contains("k1"));
+}
+
+TEST_F(TTLCacheTest, SetEvictionCallbackToNull) {
+    bool callback_called = false;
+    cache->set_eviction_callback(
+        [&](const std::string&, const int&, bool) { callback_called = true; });
+
+    cache->put("k1", 1);
+    cache->put("k2", 2);
+    cache->put("k3", 3);
+    cache->put("k4", 4); // Triggers eviction of k1
+    EXPECT_TRUE(callback_called);
+
+    // Reset callback and state
+    callback_called = false;
+    cache->set_eviction_callback(nullptr);
+
+    // Trigger another eviction (k2 should be next LRU)
+    cache->put("k5", 5); // Triggers eviction of k2
+    EXPECT_FALSE(callback_called); // Callback should not be called
+}
+
+TEST_F(TTLCacheTest, UpdateConfigAutoCleanupBatchSize) {
+    // Create cache with auto cleanup enabled
+    auto config_cache = std::make_unique<TTLCache<std::string, int>>(
+        std::chrono::milliseconds(50), 5);
+    EXPECT_TRUE(config_cache->get_config().enable_automatic_cleanup);
+
+    // Update config to disable auto cleanup
+    CacheConfig new_config = config_cache->get_config();
+    new_config.enable_automatic_cleanup = false;
+    config_cache->update_config(new_config);
+    EXPECT_FALSE(config_cache->get_config().enable_automatic_cleanup);
+
+    // Add item and wait past TTL - should not be auto-cleaned
+    config_cache->put("k1", 1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    EXPECT_EQ(config_cache->size(), 1); // Still present
+
+    // Update config to change batch size and manually cleanup
+    new_config.enable_automatic_cleanup = false; // Keep disabled for manual test
+    new_config.cleanup_batch_size = 1;
+    config_cache->update_config(new_config);
+    EXPECT_EQ(config_cache->get_config().cleanup_batch_size, 1);
+
+    config_cache->put("k2", 2);
+    config_cache->put("k3", 3);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Expire k1, k2, k3
+    EXPECT_EQ(config_cache->size(), 3);
+
+    // Manual cleanup should use the new batch size
+    config_cache->cleanup();
+    EXPECT_EQ(config_cache->size(), 2); // Removed 1 (batch size)
+
+    config_cache->cleanup();
+    EXPECT_EQ(config_cache->size(), 1); // Removed 1
+
+    config_cache->cleanup();
+    EXPECT_EQ(config_cache->size(), 0); // All items removed
+}

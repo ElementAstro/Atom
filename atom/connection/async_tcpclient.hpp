@@ -1,6 +1,7 @@
 #ifndef ATOM_CONNECTION_ASYNC_TCPCLIENT_HPP
 #define ATOM_CONNECTION_ASYNC_TCPCLIENT_HPP
 
+#include <atomic>
 #include <chrono>
 #include <functional>
 #include <future>
@@ -26,14 +27,42 @@ enum class ConnectionState {
  * @brief Struct for connection statistics
  */
 struct ConnectionStats {
-    std::size_t total_bytes_sent{0};
-    std::size_t total_bytes_received{0};
-    std::size_t connection_attempts{0};
-    std::size_t successful_connections{0};
-    std::size_t failed_connections{0};
-    std::chrono::steady_clock::time_point last_connected_time{};
-    std::chrono::steady_clock::time_point last_activity_time{};
-    std::chrono::milliseconds average_latency{0};
+    std::atomic<std::size_t> total_bytes_sent{0};
+    std::atomic<std::size_t> total_bytes_received{0};
+    std::atomic<std::size_t> connection_attempts{0};
+    std::atomic<std::size_t> successful_connections{0};
+    std::atomic<std::size_t> failed_connections{0};
+    std::atomic<std::chrono::steady_clock::time_point> last_connected_time{};
+    std::atomic<std::chrono::steady_clock::time_point> last_activity_time{};
+    std::atomic<std::chrono::milliseconds> average_latency{
+        std::chrono::milliseconds{0}};
+
+    ConnectionStats() = default;
+
+    ConnectionStats(const ConnectionStats& other)
+        : total_bytes_sent(other.total_bytes_sent.load()),
+          total_bytes_received(other.total_bytes_received.load()),
+          connection_attempts(other.connection_attempts.load()),
+          successful_connections(other.successful_connections.load()),
+          failed_connections(other.failed_connections.load()),
+          last_connected_time(other.last_connected_time.load()),
+          last_activity_time(other.last_activity_time.load()),
+          average_latency(other.average_latency.load()) {}
+
+    // Custom copy assignment operator
+    ConnectionStats& operator=(const ConnectionStats& other) {
+        if (this != &other) {
+            total_bytes_sent.store(other.total_bytes_sent.load());
+            total_bytes_received.store(other.total_bytes_received.load());
+            connection_attempts.store(other.connection_attempts.load());
+            successful_connections.store(other.successful_connections.load());
+            failed_connections.store(other.failed_connections.load());
+            last_connected_time.store(other.last_connected_time.load());
+            last_activity_time.store(other.last_activity_time.load());
+            average_latency.store(other.average_latency.load());
+        }
+        return *this;
+    }
 };
 
 /**
@@ -237,9 +266,9 @@ public:
     /**
      * @brief Get connection statistics
      *
-     * @return const ConnectionStats& Statistics
+     * @return ConnectionStats A copy of the current statistics.
      */
-    [[nodiscard]] const ConnectionStats& getStats() const;
+    [[nodiscard]] ConnectionStats getStats() const;
 
     /**
      * @brief Reset connection statistics
