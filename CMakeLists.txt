@@ -105,7 +105,7 @@ endif()
 # -----------------------------------------------------------------------------
 message(STATUS "Finding dependency packages...")
 
-find_package(Asio REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(SQLite3 REQUIRED)
 find_package(fmt REQUIRED)

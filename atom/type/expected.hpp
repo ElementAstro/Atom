@@ -133,6 +133,32 @@ public:
         : error_(std::forward<U>(error)) {}
 
     /**
+     * @brief Constructs an unexpected from an unexpected<Error<E>>
+     * (unwrapping).
+     *
+     * @tparam U The inner error type
+     * @param other The unexpected<Error<U>> to unwrap
+     */
+    template <typename U>
+        requires std::constructible_from<E, U>
+    constexpr unexpected(const unexpected<Error<U>>& other) noexcept(
+        std::is_nothrow_constructible_v<E, const U&>)
+        : error_(other.error().error()) {}
+
+    /**
+     * @brief Constructs an unexpected from an unexpected<Error<E>> (unwrapping,
+     * move version).
+     *
+     * @tparam U The inner error type
+     * @param other The unexpected<Error<U>> to unwrap
+     */
+    template <typename U>
+        requires std::constructible_from<E, U>
+    constexpr unexpected(unexpected<Error<U>>&& other) noexcept(
+        std::is_nothrow_constructible_v<E, U>)
+        : error_(std::move(other).error().error()) {}
+
+    /**
      * @brief Gets a const reference to the error value.
      *
      * @return const E& The error value

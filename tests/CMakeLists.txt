@@ -16,16 +16,6 @@ if(ATOM_TEST_BUILD_ALGORITHM AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/algorithm/C
   add_subdirectory(algorithm)
 endif()
 
-# Async tests
-if(ATOM_TEST_BUILD_ASYNC AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/async/CMakeLists.txt")
-  add_subdirectory(async)
-endif()
-
-# Components tests
-if(ATOM_TEST_BUILD_COMPONENTS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/components/CMakeLists.txt")
-  add_subdirectory(components)
-endif()
-
 # Connection tests
 if(ATOM_TEST_BUILD_CONNECTION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/connection/CMakeLists.txt")
   add_subdirectory(connection)

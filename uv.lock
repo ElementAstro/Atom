@@ -44,6 +44,7 @@ dependencies = [
     { name = "psutil" },
     { name = "pybind11" },
     { name = "pyyaml" },
+    { name = "rich" },
 ]
 
 [package.optional-dependencies]
@@ -90,6 +91,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "pytest-cov", marker = "extra == 'test'", specifier = ">=4.0.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
+    { name = "rich", specifier = ">=14.0.0" },
     { name = "sphinx", marker = "extra == 'dev'", specifier = ">=5.0.0" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = ">=5.0.0" },
     { name = "sphinx-rtd-theme", marker = "extra == 'dev'", specifier = ">=1.0.0" },
@@ -1049,6 +1051,20 @@ dependencies = [
 sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/e1/0a/929373653770d8a0d7ea76c37de6e41f11eb07559b103b1c02cafb3f7cf8/requests-2.32.4.tar.gz", hash = "sha256:27d0316682c8a29834d3264820024b62a36942083d52caf2f14c0591336d3422", size = 135258, upload-time = "2025-06-09T16:43:07.34Z" }
 wheels = [
     { url = "https://pypi.tuna.tsinghua.edu.cn/packages/7c/e4/56027c4a6b4ae70ca9de302488c5ca95ad4a39e190093d6c1a8ace08341b/requests-2.32.4-py3-none-any.whl", hash = "sha256:27babd3cda2a6d50b30443204ee89830707d396671944c998b5975b031ac2b2c", size = 64847, upload-time = "2025-06-09T16:43:05.728Z" },
+]
+
+[[package]]
+name = "rich"
+version = "14.0.0"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+dependencies = [
+    { name = "markdown-it-py" },
+    { name = "pygments" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
+]
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/a1/53/830aa4c3066a8ab0ae9a9955976fb770fe9c6102117c8ec4ab3ea62d89e8/rich-14.0.0.tar.gz", hash = "sha256:82f1bc23a6a21ebca4ae0c45af9bdbc492ed20231dcb63f297d6d1021a9d5725", size = 224078, upload-time = "2025-03-30T14:15:14.23Z" }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/0d/9b/63f4c7ebc259242c89b3acafdb37b41d1185c07ff0011164674e9076b491/rich-14.0.0-py3-none-any.whl", hash = "sha256:1c9491e1951aac09caffd42f448ee3d04e58923ffe14993f6e83068dc395d7e0", size = 243229, upload-time = "2025-03-30T14:15:12.283Z" },
 ]
 
 [[package]]

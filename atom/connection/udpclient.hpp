@@ -1,17 +1,3 @@
-/*
- * udpclient.hpp
- *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
- */
-
-/*************************************************
-
-Date: 2024-5-24
-
-Description: UDP Client Class
-
-*************************************************/
-
 #ifndef ATOM_CONNECTION_UDPCLIENT_HPP
 #define ATOM_CONNECTION_UDPCLIENT_HPP
 
@@ -73,7 +59,7 @@ struct UdpStatistics {
     std::size_t bytesSent = 0;
     std::size_t receiveErrors = 0;
     std::size_t sendErrors = 0;
-    std::chrono::system_clock::time_point lastActivity =
+    std::chrono::system_clock::time_point lastActivity = 
         std::chrono::system_clock::now();
 
     void reset() {
@@ -103,32 +89,6 @@ struct SocketOptions {
 };
 
 /**
- * @brief Callback concept for data received events
- */
-template <typename T>
-concept DataReceivedHandler = requires(T callback, std::span<const char> data,
-                                       const RemoteEndpoint& endpoint) {
-    { callback(data, endpoint) } -> std::same_as<void>;
-};
-
-/**
- * @brief Callback concept for error events
- */
-template <typename T>
-concept ErrorHandler =
-    requires(T callback, UdpError error, const std::string& message) {
-        { callback(error, message) } -> std::same_as<void>;
-    };
-
-/**
- * @brief Callback concept for status change events
- */
-template <typename T>
-concept StatusHandler = requires(T callback, bool status) {
-    { callback(status) } -> std::same_as<void>;
-};
-
-/**
  * @class UdpClient
  * @brief Represents a UDP client for sending and receiving datagrams with
  * modern C++20 features.
@@ -144,17 +104,10 @@ public:
     /**
      * @brief Constructor with specific local port
      * @param port Local port to bind to
-     * @throws std::runtime_error if the socket creation or binding fails
-     */
-    explicit UdpClient(uint16_t port);
-
-    /**
-     * @brief Constructor with specific local port and socket options
-     * @param port Local port to bind to
      * @param options Socket configuration options
      * @throws std::runtime_error if the socket creation or binding fails
      */
-    UdpClient(uint16_t port, const SocketOptions& options);
+    UdpClient(uint16_t port, const SocketOptions& options = {});
 
     /**
      * @brief Destructor
@@ -236,7 +189,7 @@ public:
      * @return Result containing received data and endpoint or error code
      */
     [[nodiscard]] UdpResult<std::pair<std::vector<char>, RemoteEndpoint>>
-    receive(size_t maxSize, std::chrono::milliseconds timeout =
+    receive(size_t maxSize, std::chrono::milliseconds timeout = 
                                 std::chrono::milliseconds::zero()) noexcept;
 
     /**
@@ -263,7 +216,7 @@ public:
      * @brief Create an awaitable for asynchronous receiving
      */
     [[nodiscard]] ReceiveAwaitable receiveAsync(
-        size_t maxSize, std::chrono::milliseconds timeout =
+        size_t maxSize, std::chrono::milliseconds timeout = 
                             std::chrono::milliseconds::zero()) noexcept {
         return ReceiveAwaitable(*this, maxSize, timeout);
     }
@@ -299,32 +252,23 @@ public:
      * @brief Sets the callback function to be called when data is received
      * @param callback The callback function
      */
-    template <typename Handler>
-        requires DataReceivedHandler<Handler>
-    void setOnDataReceivedCallback(Handler&& callback) {
-        onDataReceivedCallback_ = std::forward<Handler>(callback);
-    }
+    void setOnDataReceivedCallback(
+        std::function<void(std::span<const char>, const RemoteEndpoint&)> callback);
 
     /**
      * @brief Sets the callback function to be called when an error occurs
      * @param callback The callback function
      */
-    template <typename Handler>
-        requires ErrorHandler<Handler>
-    void setOnErrorCallback(Handler&& callback) {
-        onErrorCallback_ = std::forward<Handler>(callback);
-    }
+    void setOnErrorCallback(
+        std::function<void(UdpError, const std::string&)> callback);
 
     /**
      * @brief Sets the callback function to be called when connection status
      * changes
      * @param callback The callback function
      */
-    template <typename Handler>
-        requires StatusHandler<Handler>
-    void setOnStatusChangeCallback(Handler&& callback) {
-        onStatusChangeCallback_ = std::forward<Handler>(callback);
-    }
+    void setOnStatusChangeCallback(
+        std::function<void(bool)> callback);
 
     /**
      * @brief Starts receiving data asynchronously

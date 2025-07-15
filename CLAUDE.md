@@ -114,11 +114,13 @@ The build system auto-detects WSL environments and adjusts dependency handling a
 The project uses GitHub Actions for comprehensive multi-platform CI/CD with the following features:
 
 ### Supported Platforms
+
 - **Linux**: Ubuntu 22.04 with GCC 12/13 and Clang 15/16
 - **Windows**: MSVC 2022, MSYS2 MinGW64, and UCRT64 environments
 - **macOS**: Latest versions with Clang
 
 ### CI Features
+
 - **Multi-compiler Support**: GCC, Clang, MSVC across different versions
 - **MSYS2 Integration**: Full Windows MinGW64 support with native dependency management
 - **Advanced Caching**: vcpkg dependencies, build artifacts, and ccache for faster builds
@@ -128,13 +130,17 @@ The project uses GitHub Actions for comprehensive multi-platform CI/CD with the 
 - **Performance**: Benchmark execution and performance tracking
 
 ### Manual Workflow Triggers
+
 Use GitHub's workflow_dispatch to trigger builds with custom parameters:
+
 - Build type (Release/Debug/RelWithDebInfo)
 - Enable/disable tests and examples
 - Available in Actions tab of the repository
 
 ### CI Presets
+
 The CI uses predefined CMake presets:
+
 - `release`, `debug`, `relwithdebinfo` for standard builds
 - `debug-full` for comprehensive testing with sanitizers
 - `coverage` for code coverage analysis

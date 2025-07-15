@@ -158,11 +158,21 @@ TEST_F(VariantWrapperTest, GetWithCorrectType) {
 }
 
 TEST_F(VariantWrapperTest, GetWithIncorrectType) {
-    EXPECT_THROW(intVariant.get<double>(), VariantException);
-    EXPECT_THROW(doubleVariant.get<int>(), VariantException);
-    EXPECT_THROW(stringVariant.get<bool>(), VariantException);
-    EXPECT_THROW(boolVariant.get<std::string>(), VariantException);
-    EXPECT_THROW(testStructVariant.get<int>(), VariantException);
+    // Store the result in a variable to avoid nodiscard warnings
+    auto testGet = [](auto& variant, auto type) {
+        try {
+            (void)variant.template get<decltype(type)>();
+            return false;
+        } catch (const VariantException&) {
+            return true;
+        }
+    };
+
+    EXPECT_TRUE(testGet(intVariant, double{}));
+    EXPECT_TRUE(testGet(doubleVariant, int{}));
+    EXPECT_TRUE(testGet(stringVariant, bool{}));
+    EXPECT_TRUE(testGet(boolVariant, std::string{}));
+    EXPECT_TRUE(testGet(testStructVariant, int{}));
 }
 
 TEST_F(VariantWrapperTest, IsType) {
@@ -363,15 +373,12 @@ TEST_F(VariantWrapperTest, ThreadSafety) {
 
     for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back(
-            [&sharedVariant, &successCount, i, iterationsPerThread]() {
+            [&sharedVariant, &successCount, i]() {  // Removed iterationsPerThread capture
                 for (int j = 0; j < iterationsPerThread; ++j) {
                     try {
-                        // Every other thread writes
                         if (i % 2 == 0) {
                             sharedVariant = i * 1000 + j;
-                        }
-                        // Other threads read
-                        else {
+                        } else {
                             auto value = sharedVariant.tryGet<int>();
                             if (value.has_value()) {
                                 successCount++;
@@ -388,8 +395,6 @@ TEST_F(VariantWrapperTest, ThreadSafety) {
         t.join();
     }
 
-    // We don't assert on exact counts, just that we had some successful reads
-    // and no crashes occurred
     EXPECT_GT(successCount, 0);
 }
 
@@ -400,10 +405,10 @@ TEST_F(VariantWrapperTest, EmptyState) {
     EXPECT_EQ(emptyVariant.index(), 0);
 
     // Getting monostate should work
-    EXPECT_NO_THROW(emptyVariant.get<std::monostate>());
+    EXPECT_NO_THROW((void)emptyVariant.get<std::monostate>());
 
     // Getting any other type should throw
-    EXPECT_THROW(emptyVariant.get<int>(), VariantException);
+    EXPECT_THROW((void)emptyVariant.get<int>(), VariantException);
 }
 
 // Test for variant with different wrapper type

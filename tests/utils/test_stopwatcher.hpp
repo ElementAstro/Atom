@@ -4,12 +4,10 @@
 
 #include <atomic>
 #include <chrono>
-#include <functional>
 #include <string>
 #include <thread>
 #include <vector>
 
-#include "atom/error/exception.hpp"
 #include "stopwatcher.hpp"
 
 // Mock for LOG_F to avoid actual logging during tests
@@ -66,21 +64,22 @@ TEST_F(StopWatcherTest, Constructor) {
 
 // Test start method
 TEST_F(StopWatcherTest, Start) {
-    stopwatcher->start();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
     EXPECT_EQ(stopwatcher->getState(), StopWatcherState::Running);
     EXPECT_TRUE(stopwatcher->isRunning());
 }
 
 // Test start when already running
 TEST_F(StopWatcherTest, StartWhenRunning) {
-    stopwatcher->start();
-    EXPECT_THROW(stopwatcher->start(), std::runtime_error);
+    (void)stopwatcher->start();  // Suppress nodiscard warning
+    EXPECT_THROW((void)stopwatcher->start(),
+                 std::runtime_error);  // Suppress nodiscard warning
     EXPECT_EQ(stopwatcher->getState(), StopWatcherState::Running);
 }
 
 // Test stop method
 TEST_F(StopWatcherTest, Stop) {
-    stopwatcher->start();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
     preciseSleep(50ms);
     EXPECT_TRUE(stopwatcher->stop());
     EXPECT_EQ(stopwatcher->getState(), StopWatcherState::Stopped);
@@ -97,15 +96,15 @@ TEST_F(StopWatcherTest, StopWhenNotRunning) {
     EXPECT_FALSE(stopwatcher->stop());
     EXPECT_EQ(stopwatcher->getState(), StopWatcherState::Idle);
 
-    stopwatcher->start();
-    stopwatcher->stop();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
+    (void)stopwatcher->stop();   // Suppress nodiscard warning
     EXPECT_FALSE(stopwatcher->stop());
     EXPECT_EQ(stopwatcher->getState(), StopWatcherState::Stopped);
 }
 
 // Test pause and resume
 TEST_F(StopWatcherTest, PauseAndResume) {
-    stopwatcher->start();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
     preciseSleep(50ms);
     EXPECT_TRUE(stopwatcher->pause());
     EXPECT_EQ(stopwatcher->getState(), StopWatcherState::Paused);
@@ -134,8 +133,8 @@ TEST_F(StopWatcherTest, PauseWhenNotRunning) {
     EXPECT_FALSE(stopwatcher->pause());
     EXPECT_EQ(stopwatcher->getState(), StopWatcherState::Idle);
 
-    stopwatcher->start();
-    stopwatcher->stop();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
+    (void)stopwatcher->stop();   // Suppress nodiscard warning
     EXPECT_FALSE(stopwatcher->pause());
     EXPECT_EQ(stopwatcher->getState(), StopWatcherState::Stopped);
 }
@@ -145,11 +144,11 @@ TEST_F(StopWatcherTest, ResumeWhenNotPaused) {
     EXPECT_FALSE(stopwatcher->resume());
     EXPECT_EQ(stopwatcher->getState(), StopWatcherState::Idle);
 
-    stopwatcher->start();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
     EXPECT_FALSE(stopwatcher->resume());
     EXPECT_EQ(stopwatcher->getState(), StopWatcherState::Running);
 
-    stopwatcher->stop();
+    (void)stopwatcher->stop();  // Suppress nodiscard warning
     EXPECT_FALSE(stopwatcher->resume());
     EXPECT_EQ(stopwatcher->getState(), StopWatcherState::Stopped);
 }
@@ -157,9 +156,9 @@ TEST_F(StopWatcherTest, ResumeWhenNotPaused) {
 // Test reset method
 TEST_F(StopWatcherTest, Reset) {
     // Start, run, and record a lap
-    stopwatcher->start();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
     preciseSleep(50ms);
-    stopwatcher->lap();
+    (void)stopwatcher->lap();  // Suppress nodiscard warning
     preciseSleep(50ms);
 
     // Reset and verify state
@@ -171,21 +170,23 @@ TEST_F(StopWatcherTest, Reset) {
     EXPECT_EQ(stopwatcher->elapsedSeconds(), 0.0);
 
     // Should be able to start again
-    EXPECT_NO_THROW(stopwatcher->start());
+    EXPECT_NO_THROW((void)stopwatcher->start());  // Suppress nodiscard warning
 }
 
 // Test lap method
 TEST_F(StopWatcherTest, Lap) {
-    stopwatcher->start();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
 
     // Record multiple laps
     preciseSleep(50ms);
-    double lap1 = stopwatcher->lap();
+    double lap1 =
+        stopwatcher->lap().value();  // Correctly get value from expected
     EXPECT_GE(lap1, 50.0);
     EXPECT_LT(lap1, 150.0);
 
     preciseSleep(75ms);
-    double lap2 = stopwatcher->lap();
+    double lap2 =
+        stopwatcher->lap().value();  // Correctly get value from expected
     EXPECT_GE(lap2, lap1 + 75.0);
     EXPECT_LT(lap2, lap1 + 175.0);
 
@@ -199,20 +200,23 @@ TEST_F(StopWatcherTest, Lap) {
 
 // Test lap when not running
 TEST_F(StopWatcherTest, LapWhenNotRunning) {
-    EXPECT_THROW(stopwatcher->lap(), std::runtime_error);
+    EXPECT_THROW((void)stopwatcher->lap(),
+                 std::runtime_error);  // Suppress nodiscard warning
 
-    stopwatcher->start();
-    stopwatcher->stop();
-    EXPECT_THROW(stopwatcher->lap(), std::runtime_error);
+    (void)stopwatcher->start();  // Suppress nodiscard warning
+    (void)stopwatcher->stop();   // Suppress nodiscard warning
+    EXPECT_THROW((void)stopwatcher->lap(),
+                 std::runtime_error);  // Suppress nodiscard warning
 
-    stopwatcher->start();
-    stopwatcher->pause();
-    EXPECT_THROW(stopwatcher->lap(), std::runtime_error);
+    (void)stopwatcher->start();  // Suppress nodiscard warning
+    (void)stopwatcher->pause();  // Suppress nodiscard warning
+    EXPECT_THROW((void)stopwatcher->lap(),
+                 std::runtime_error);  // Suppress nodiscard warning
 }
 
 // Test elapsedMilliseconds and elapsedSeconds
 TEST_F(StopWatcherTest, ElapsedTime) {
-    stopwatcher->start();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
     preciseSleep(100ms);
 
     double milliseconds = stopwatcher->elapsedMilliseconds();
@@ -227,8 +231,8 @@ TEST_F(StopWatcherTest, ElapsedTime) {
 
 // Test elapsedFormatted
 TEST_F(StopWatcherTest, ElapsedFormatted) {
-    stopwatcher->start();
-    preciseSleep(1234ms);  // 1.234 seconds
+    (void)stopwatcher->start();  // Suppress nodiscard warning
+    preciseSleep(1234ms);        // 1.234 seconds
 
     std::string formatted = stopwatcher->elapsedFormatted();
     EXPECT_TRUE(isFormattedTimeValid(formatted));
@@ -244,13 +248,13 @@ TEST_F(StopWatcherTest, GetAverageLapTime) {
     EXPECT_EQ(stopwatcher->getAverageLapTime(), 0.0);
 
     // With laps
-    stopwatcher->start();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
     preciseSleep(100ms);
-    stopwatcher->lap();  // ~100ms
+    (void)stopwatcher->lap();  // ~100ms // Suppress nodiscard warning
     preciseSleep(200ms);
-    stopwatcher->lap();  // ~300ms
+    (void)stopwatcher->lap();  // ~300ms // Suppress nodiscard warning
     preciseSleep(300ms);
-    stopwatcher->lap();  // ~600ms
+    (void)stopwatcher->lap();  // ~600ms // Suppress nodiscard warning
 
     // Average should be around (100 + 300 + 600) / 3 = 333.33ms
     double avg = stopwatcher->getAverageLapTime();
@@ -261,15 +265,15 @@ TEST_F(StopWatcherTest, GetAverageLapTime) {
 // Test multiple start-stop cycles
 TEST_F(StopWatcherTest, MultipleStartStopCycles) {
     // First cycle
-    stopwatcher->start();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
     preciseSleep(50ms);
-    stopwatcher->stop();
+    (void)stopwatcher->stop();  // Suppress nodiscard warning
     double time1 = stopwatcher->elapsedMilliseconds();
 
     // Second cycle - should reset time
-    stopwatcher->start();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
     preciseSleep(100ms);
-    stopwatcher->stop();
+    (void)stopwatcher->stop();  // Suppress nodiscard warning
     double time2 = stopwatcher->elapsedMilliseconds();
 
     // time2 should reflect only the second interval, not cumulative
@@ -285,13 +289,13 @@ TEST_F(StopWatcherTest, Callbacks) {
     std::atomic<bool> callbackExecuted = false;
 
     // Register a callback to execute after 50ms
-    stopwatcher->registerCallback(
+    (void)stopwatcher->registerCallback(  // Suppress nodiscard warning
         [&callbackExecuted]() { callbackExecuted = true; }, 50);
 
     // Run for 100ms
-    stopwatcher->start();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
     preciseSleep(100ms);
-    stopwatcher->stop();
+    (void)stopwatcher->stop();  // Suppress nodiscard warning
 
     // Callback should have executed
     EXPECT_TRUE(callbackExecuted);
@@ -299,7 +303,8 @@ TEST_F(StopWatcherTest, Callbacks) {
 
 // Test callback with invalid interval
 TEST_F(StopWatcherTest, CallbackInvalidInterval) {
-    EXPECT_THROW(stopwatcher->registerCallback([]() {}, -10),
+    EXPECT_THROW((void)stopwatcher->registerCallback(
+                     []() {}, -10),  // Suppress nodiscard warning
                  std::invalid_argument);
 }
 
@@ -308,20 +313,20 @@ TEST_F(StopWatcherTest, MultipleCallbacks) {
     std::atomic<int> callbacksExecuted = 0;
 
     // Register callbacks at different times
-    stopwatcher->registerCallback(
+    (void)stopwatcher->registerCallback(  // Suppress nodiscard warning
         [&callbacksExecuted]() { callbacksExecuted++; }, 50);
 
-    stopwatcher->registerCallback(
+    (void)stopwatcher->registerCallback(  // Suppress nodiscard warning
         [&callbacksExecuted]() { callbacksExecuted++; }, 150);
 
     // Callbacks that won't execute
-    stopwatcher->registerCallback(
+    (void)stopwatcher->registerCallback(  // Suppress nodiscard warning
         [&callbacksExecuted]() { callbacksExecuted++; }, 250);
 
     // Run for 200ms - only the first two should execute
-    stopwatcher->start();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
     preciseSleep(200ms);
-    stopwatcher->stop();
+    (void)stopwatcher->stop();  // Suppress nodiscard warning
 
     EXPECT_EQ(callbacksExecuted, 2);
 }
@@ -329,7 +334,7 @@ TEST_F(StopWatcherTest, MultipleCallbacks) {
 // Test move operations
 TEST_F(StopWatcherTest, MoveOperations) {
     // Start the original stopwatcher
-    stopwatcher->start();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
     preciseSleep(50ms);
 
     // Move construct
@@ -339,7 +344,7 @@ TEST_F(StopWatcherTest, MoveOperations) {
 
     // Create a new stopwatcher
     stopwatcher = std::make_unique<StopWatcher>();
-    stopwatcher->start();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
     preciseSleep(50ms);
 
     // Move assign
@@ -351,7 +356,7 @@ TEST_F(StopWatcherTest, MoveOperations) {
 
 // Test thread safety
 TEST_F(StopWatcherTest, ThreadSafety) {
-    stopwatcher->start();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
 
     std::vector<std::thread> threads;
     std::atomic<int> successCount = 0;
@@ -370,7 +375,8 @@ TEST_F(StopWatcherTest, ThreadSafety) {
                 } else if (i % 4 == 1) {
                     // Try to record a lap
                     try {
-                        stopwatcher->lap();
+                        // Access the value from std::expected
+                        (void)stopwatcher->lap();  // Suppress nodiscard warning
                         successCount++;
                     } catch (const std::exception&) {
                         // Might fail if stopwatch is stopped by another thread
@@ -406,19 +412,19 @@ TEST_F(StopWatcherTest, ThreadSafety) {
 TEST_F(StopWatcherTest, StateTransitions) {
     // Idle -> Running
     EXPECT_EQ(stopwatcher->getState(), StopWatcherState::Idle);
-    stopwatcher->start();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
     EXPECT_EQ(stopwatcher->getState(), StopWatcherState::Running);
 
     // Running -> Paused
-    stopwatcher->pause();
+    (void)stopwatcher->pause();  // Suppress nodiscard warning
     EXPECT_EQ(stopwatcher->getState(), StopWatcherState::Paused);
 
     // Paused -> Running
-    stopwatcher->resume();
+    (void)stopwatcher->resume();  // Suppress nodiscard warning
     EXPECT_EQ(stopwatcher->getState(), StopWatcherState::Running);
 
     // Running -> Stopped
-    stopwatcher->stop();
+    (void)stopwatcher->stop();  // Suppress nodiscard warning
     EXPECT_EQ(stopwatcher->getState(), StopWatcherState::Stopped);
 
     // Stopped -> Idle (via reset)
@@ -428,7 +434,7 @@ TEST_F(StopWatcherTest, StateTransitions) {
 
 // Test elapsed time accuracy
 TEST_F(StopWatcherTest, TimeAccuracy) {
-    stopwatcher->start();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
 
     // Sleep for 1 second
     std::this_thread::sleep_for(1000ms);
@@ -442,20 +448,20 @@ TEST_F(StopWatcherTest, TimeAccuracy) {
 
 // Test multiple pauses
 TEST_F(StopWatcherTest, MultiplePauses) {
-    stopwatcher->start();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
     preciseSleep(100ms);
 
     // First pause
-    stopwatcher->pause();
+    (void)stopwatcher->pause();  // Suppress nodiscard warning
     double time1 = stopwatcher->elapsedMilliseconds();
     preciseSleep(50ms);  // Should not count
 
     // Resume
-    stopwatcher->resume();
+    (void)stopwatcher->resume();  // Suppress nodiscard warning
     preciseSleep(100ms);
 
     // Second pause
-    stopwatcher->pause();
+    (void)stopwatcher->pause();  // Suppress nodiscard warning
     double time2 = stopwatcher->elapsedMilliseconds();
 
     // time2 should be about 200ms (100ms before first pause + 100ms after
@@ -466,7 +472,7 @@ TEST_F(StopWatcherTest, MultiplePauses) {
 
 // Test with very short intervals
 TEST_F(StopWatcherTest, VeryShortIntervals) {
-    stopwatcher->start();
+    (void)stopwatcher->start();  // Suppress nodiscard warning
     preciseSleep(1ms);
     double time = stopwatcher->elapsedMilliseconds();
 
@@ -477,8 +483,8 @@ TEST_F(StopWatcherTest, VeryShortIntervals) {
 
 // Test with long running operations
 TEST_F(StopWatcherTest, LongRunning) {
-    stopwatcher->start();
-    preciseSleep(2000ms);  // 2 seconds
+    (void)stopwatcher->start();  // Suppress nodiscard warning
+    preciseSleep(2000ms);        // 2 seconds
 
     double milliseconds = stopwatcher->elapsedMilliseconds();
     double seconds = stopwatcher->elapsedSeconds();

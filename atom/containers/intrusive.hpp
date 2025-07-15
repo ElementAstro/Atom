@@ -16,7 +16,8 @@ Description: Boost Intrusive Containers
 
 #include "../macro.hpp"
 
-// 只有在定义了ATOM_USE_BOOST_INTRUSIVE宏且Boost侵入式容器库可用时才启用
+// Enable only if ATOM_HAS_BOOST_INTRUSIVE is defined and Boost intrusive
+// library is available
 #if defined(ATOM_HAS_BOOST_INTRUSIVE)
 
 #include <boost/functional/hash.hpp>
@@ -30,65 +31,68 @@ namespace atom {
 namespace containers {
 namespace intrusive {
 
-// 定义常用链表钩子
+// Define common list hooks
 using list_base_hook = boost::intrusive::list_base_hook<>;
 using set_base_hook = boost::intrusive::set_base_hook<>;
 using unordered_set_base_hook = boost::intrusive::unordered_set_base_hook<>;
 using slist_base_hook = boost::intrusive::slist_base_hook<>;
 
 /**
- * @brief 侵入式链表
+ * @brief Intrusive list
  *
- * 侵入式链表要求元素类型内包含钩子（hook），避免了额外的内存分配。
- * 非常适合管理大量对象，减少内存碎片和提高缓存性能。
+ * Intrusive list requires element types to contain a hook, avoiding additional
+ * memory allocation. Very suitable for managing large numbers of objects,
+ * reducing memory fragmentation and improving cache performance.
  *
- * 使用示例:
+ * Usage example:
  * class MyClass : public atom::containers::intrusive::list_base_hook {
- *   // 类成员和方法
+ *   // Class members and methods
  * };
  *
  * atom::containers::intrusive::list<MyClass> my_list;
  *
- * @tparam T 必须继承自list_base_hook的元素类型
+ * @tparam T Element type that must inherit from list_base_hook
  */
 template <typename T>
 using list = boost::intrusive::list<T>;
 
 /**
- * @brief 侵入式单向链表
+ * @brief Intrusive singly-linked list
  *
- * 比双向链表更轻量，但只支持单向遍历
+ * Lighter than doubly-linked list, but only supports forward traversal
  *
- * @tparam T 必须继承自slist_base_hook的元素类型
+ * @tparam T Element type that must inherit from slist_base_hook
  */
 template <typename T>
 using slist = boost::intrusive::slist<T>;
 
 /**
- * @brief 侵入式有序集合
+ * @brief Intrusive ordered set
  *
- * 元素按键排序，提供快速查找，同时避免了内存分配开销
+ * Elements are sorted by key, providing fast lookup while avoiding memory
+ * allocation overhead
  *
- * @tparam T 必须继承自set_base_hook的元素类型
- * @tparam Compare 比较元素的函数对象类型
+ * @tparam T Element type that must inherit from set_base_hook
+ * @tparam Compare Function object type for comparing elements
  */
 template <typename T, typename Compare = std::less<T>>
 using set = boost::intrusive::set<T, boost::intrusive::compare<Compare>>;
 
 /**
- * @brief 侵入式无序集合
+ * @brief Intrusive unordered set
  *
- * 通过哈希实现快速查找，避免了标准无序容器的节点分配开销
+ * Implements fast lookup through hashing, avoiding node allocation overhead of
+ * standard unordered containers
  *
- * @tparam T 必须继承自unordered_set_base_hook的元素类型
- * @tparam Hash 哈希函数对象类型
- * @tparam Equal 判断元素相等的函数对象类型
+ * @tparam T Element type that must inherit from unordered_set_base_hook
+ * @tparam Hash Hash function object type
+ * @tparam Equal Function object type for element equality comparison
  */
 template <typename T, typename Hash = boost::hash<T>,
           typename Equal = std::equal_to<T>>
 class unordered_set {
 private:
-    // 哈希表桶的基本配置
+    // Basic configuration for hash table buckets
     static constexpr std::size_t NumBuckets = 128;
     using bucket_type = boost::intrusive::unordered_set<T>::bucket_type;
     bucket_type buckets_[NumBuckets];
@@ -107,79 +111,80 @@ public:
         : set_(boost::intrusive::bucket_traits(buckets_, NumBuckets)) {}
 
     /**
-     * @brief 插入元素到无序集合
+     * @brief Insert element into unordered set
      *
-     * @param value 要插入的元素
+     * @param value Element to insert
      * @return std::pair<iterator, bool>
-     * 包含指向插入元素的迭代器和是否成功插入的标志
+     * Contains iterator to inserted element and flag indicating successful
+     * insertion
      */
     std::pair<iterator, bool> insert(T& value) { return set_.insert(value); }
 
     /**
-     * @brief 从无序集合中移除元素
+     * @brief Remove element from unordered set
      *
-     * @param value 要移除的元素
-     * @return bool 如果元素被移除则返回true
+     * @param value Element to remove
+     * @return bool Returns true if element was removed
      */
     bool remove(T& value) { return set_.erase(value) > 0; }
 
     /**
-     * @brief 查找元素
+     * @brief Find element
      *
-     * @param value 要查找的元素
-     * @return iterator 指向找到的元素，如果未找到则返回end()
+     * @param value Element to find
+     * @return iterator Iterator to found element, returns end() if not found
      */
     iterator find(const T& value) { return set_.find(value); }
 
     /**
-     * @brief 返回起始迭代器
+     * @brief Return begin iterator
      */
     iterator begin() { return set_.begin(); }
 
     /**
-     * @brief 返回终止迭代器
+     * @brief Return end iterator
      */
     iterator end() { return set_.end(); }
 
     /**
-     * @brief 检查容器是否为空
+     * @brief Check if container is empty
      */
     bool empty() const { return set_.empty(); }
 
     /**
-     * @brief 返回容器中元素的数量
+     * @brief Return number of elements in container
      */
     std::size_t size() const { return set_.size(); }
 
     /**
-     * @brief 清空容器
+     * @brief Clear container
      */
     void clear() { set_.clear(); }
 };
 
 /**
- * @brief 提供可链接类型的助手基类
+ * @brief Helper base class for linkable types
  *
- * 这个类简化了创建支持多种侵入式容器的对象。
- * 如果需要一个对象同时可以放入list、set和unordered_set，
- * 可以继承这个类。
+ * This class simplifies creating objects that support multiple intrusive
+ * containers. If you need an object that can be placed in list, set, and
+ * unordered_set simultaneously, you can inherit from this class.
  */
 class intrusive_base : public list_base_hook,
                        public set_base_hook,
                        public unordered_set_base_hook,
                        public slist_base_hook {
 protected:
-    // 保护构造函数防止直接实例化
+    // Protected constructor to prevent direct instantiation
     intrusive_base() = default;
 
-    // 允许派生类销毁
+    // Allow derived class destruction
     virtual ~intrusive_base() = default;
 
-    // 禁止复制
+    // Disable copying
     intrusive_base(const intrusive_base&) = delete;
     intrusive_base& operator=(const intrusive_base&) = delete;
 
-    // 允许移动
+    // Enable moving
     intrusive_base(intrusive_base&&) = default;
     intrusive_base& operator=(intrusive_base&&) = default;
 };

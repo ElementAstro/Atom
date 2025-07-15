@@ -18,9 +18,9 @@
     namespace {                                                               \
     struct Dependency_##name##_##dependency {                                 \
         Dependency_##name##_##dependency() {                                  \
-            spdlog::info("Registering dependency: {} -> {}", #name,           \
+            spdlog::info("Registering dependency: {} depends on {}", #name,           \
                          #dependency);                                        \
-            Registry::instance().addDependency(#name, #dependency);           \
+        Registry::instance().addDependency(#name, #dependency);           \
         }                                                                     \
     };                                                                        \
     static Dependency_##name##_##dependency dependency_##name##_##dependency; \
@@ -34,7 +34,7 @@
     struct DependencyRegistrar_##name {                                       \
         template <typename T>                                                 \
         static void register_one() {                                          \
-            spdlog::info("Registering component dependency: {} -> {}", #name, \
+            spdlog::info("Registering component dependency for {}: requires {}", #name, \
                          typeid(T).name());                                   \
             Registry::instance().addDependency(#name, typeid(T).name());      \
         }                                                                     \
@@ -65,9 +65,11 @@
                     auto dependency = Registry::instance().getComponent(comp); \
                     if (dependency) {                                          \
                         instance->addOtherComponent(comp, dependency);         \
+                    } else {                                                   \
+                        spdlog::warn("Dependency '{}' for module '{}' not found during initialization.", comp, #module_name); \
                     }                                                          \
                 } catch (const std::exception& e) {                            \
-                    spdlog::warn(                                              \
+                    spdlog::error(                                              \
                         "Failed to load dependency '{}' for module '{}': {}",  \
                         comp, #module_name, e.what());                         \
                 }                                                              \
@@ -82,6 +84,8 @@
                 if (component) {                                               \
                     component->clearOtherComponents();                         \
                     component->destroy();                                      \
+                } else {                                                       \
+                    spdlog::warn("Module '{}' not found during cleanup.", #module_name); \
                 }                                                              \
             });                                                                \
         }                                                                      \
@@ -94,33 +98,33 @@
 #define ATOM_MODULE(module_name, init_func)                                   \
     ATOM_MODULE_INIT(module_name, init_func)                                  \
     extern "C" void module_name##_initialize_registry() {                     \
-        spdlog::info("Starting registry initialization for module '{}'",      \
+        spdlog::info("Starting registry initialization for dynamic module '{}'.",      \
                      #module_name);                                           \
         try {                                                                 \
             module_name::ModuleManager::init();                               \
             Registry::instance().initializeAll();                             \
-            spdlog::info("Registry initialized for module '{}'",              \
+            spdlog::info("Registry successfully initialized for dynamic module '{}'.",              \
                          #module_name);                                       \
         } catch (const std::exception& e) {                                   \
-            spdlog::error("Module '{}' initialization failed: {}",            \
+            spdlog::error("Initialization failed for dynamic module '{}': {}",            \
                           #module_name, e.what());                            \
         }                                                                     \
     }                                                                         \
     extern "C" void module_name##_cleanup_registry() {                        \
-        spdlog::info("Beginning registry cleanup for module '{}'",            \
+        spdlog::info("Beginning registry cleanup for dynamic module '{}'.",            \
                      #module_name);                                           \
         try {                                                                 \
             module_name::ModuleManager::cleanup();                            \
             Registry::instance().cleanupAll();                                \
-            spdlog::info("Registry cleanup completed for module '{}'",        \
+            spdlog::info("Registry cleanup completed for dynamic module '{}'.",        \
                          #module_name);                                       \
         } catch (const std::exception& e) {                                   \
-            spdlog::error("Error during cleanup of module '{}': {}",          \
+            spdlog::error("Error during cleanup of dynamic module '{}': {}",          \
                           #module_name, e.what());                            \
         }                                                                     \
     }                                                                         \
     extern "C" auto module_name##_getInstance()->std::shared_ptr<Component> { \
-        spdlog::info("Retrieving instance of module '{}'", #module_name);     \
+        spdlog::info("Attempting to retrieve instance of module '{}'.", #module_name);     \
         return Registry::instance().getComponent(#module_name);               \
     }                                                                         \
     extern "C" auto module_name##_getVersion()->const char* {                 \
@@ -137,7 +141,7 @@
     struct ModuleInitializer {                                              \
         ModuleInitializer() {                                               \
             if (!init_flag.has_value()) {                                   \
-                spdlog::info("Embedding module '{}'", #module_name);        \
+                spdlog::info("Embedding module '{}' for static linking.", #module_name);        \
                 init_flag.emplace();                                        \
                 try {                                                       \
                     ModuleManager::init();                                  \
@@ -146,11 +150,13 @@
                         "Failed to initialize embedded module '{}': {}",    \
                         #module_name, e.what());                            \
                 }                                                           \
+            } else {                                                        \
+                spdlog::debug("Embedded module '{}' already initialized.", #module_name); \
             }                                                               \
         }                                                                   \
         ~ModuleInitializer() {                                              \
             if (init_flag.has_value()) {                                    \
-                spdlog::info("Cleaning up embedded module '{}'",            \
+                spdlog::info("Cleaning up embedded module '{}'.",            \
                              #module_name);                                 \
                 try {                                                       \
                     ModuleManager::cleanup();                               \
@@ -175,11 +181,15 @@
 #define ATOM_MODULE_TEST(module_name, init_func, test_func)                  \
     ATOM_MODULE(module_name, init_func)                                      \
     extern "C" void module_name##_test() {                                   \
-        spdlog::info("Executing tests for module '{}'", #module_name);       \
+        spdlog::info("Executing tests for module '{}'.", #module_name);       \
         try {                                                                \
             auto instance = Registry::instance().getComponent(#module_name); \
-            test_func(instance);                                             \
-            spdlog::info("All tests passed for module '{}'", #module_name);  \
+            if (instance) {                                                  \
+                test_func(instance);                                         \
+                spdlog::info("All tests passed for module '{}'.", #module_name);  \
+            } else {                                                         \
+                spdlog::error("Cannot run tests for module '{}': module instance not found.", #module_name); \
+            }                                                                \
         } catch (const std::exception& e) {                                  \
             spdlog::error("Test execution failed for module '{}': {}",       \
                           #module_name, e.what());                           \
@@ -194,10 +204,10 @@
     public:                                                                \
         explicit component_name(const std::string& name = #component_name) \
             : component_type(name) {                                       \
-            spdlog::info("Component {} created", name);                    \
+            spdlog::info("Component '{}' created.", name);                    \
         }                                                                  \
         ~component_name() override {                                       \
-            spdlog::info("Component {} destroyed", getName());             \
+            spdlog::info("Component '{}' destroyed.", getName());             \
         }                                                                  \
         static auto create() -> std::shared_ptr<component_name> {          \
             return std::make_shared<component_name>();                     \
@@ -219,10 +229,16 @@
             return false;                                                \
         Registry::instance().registerModule(                             \
             #component_name, []() { return component_name::create(); }); \
+        spdlog::info("Hot-reloadable component '{}' initialized and registered.", #component_name); \
         return true;                                                     \
     }                                                                    \
     bool reload() {                                                      \
-        LOG_F(INFO, "Reloading component: {}", getName());               \
-        return destroy() && initialize();                                \
+        spdlog::info("Attempting to reload hot-reloadable component: '{}'.", getName());               \
+        if (destroy() && initialize()) {                                 \
+            spdlog::info("Hot-reloadable component '{}' reloaded successfully.", getName()); \
+            return true;                                                 \
+        }                                                                \
+        spdlog::error("Failed to reload hot-reloadable component: '{}'.", getName()); \
+        return false;                                                    \
     }
 #endif

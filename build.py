@@ -9,7 +9,6 @@ import os
 import sys
 import subprocess
 import argparse
-import json
 import yaml
 import shutil
 import multiprocessing
@@ -20,6 +19,14 @@ from typing import Dict, List, Optional, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import psutil
 from loguru import logger
+
+# Import rich components
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich.text import Text
+from rich import box
+from rich.padding import Padding
 
 # Configure loguru logging
 logger.remove()  # Remove default handler
@@ -121,13 +128,14 @@ class ConfigManager:
 class BuildSystem:
     """Advanced build system for Atom project with optimizations"""
 
-    def __init__(self):
+    def __init__(self, console: Console):
         self.project_root = Path(__file__).parent
         self.build_dir = self.project_root / "build"
         self.config_manager = ConfigManager(
             self.project_root / "build-config.yaml")
         self.system_caps = SystemCapabilities()
         self.start_time = time.perf_counter()  # More precise timing
+        self.console = console  # Add console instance
 
     @property
     def config(self) -> Dict[str, Any]:
@@ -206,11 +214,15 @@ class BuildSystem:
                 capture_output=capture_output,
                 text=True if capture_output else None
             )
+            if capture_output and result.stdout:
+                # Use rich to print captured output
+                self.console.print(result.stdout, style="dim")
             return True, result.stdout if capture_output else None
         except subprocess.CalledProcessError as e:
             logger.error(f"Command failed with exit code {e.returncode}")
             if capture_output and e.stderr:
-                logger.error(f"Error output: {e.stderr}")
+                # Use rich to print captured error output
+                self.console.print(e.stderr, style="red")
             return False, None
 
     def _clean_build_directory(self):
@@ -447,18 +459,19 @@ class BuildSystem:
         return total_size / (1024 * 1024)  # MB
 
     def _show_build_summary(self, args: argparse.Namespace, build_time: float):
-        """Show optimized build summary"""
-        print("\n" + "=" * 60)
-        print("BUILD SUMMARY")
-        print("=" * 60)
-        print(f"Build system:     {args.build_system}")
-        print(f"Build type:       {args.build_type}")
-        print(f"Total time:       {build_time:.1f} seconds")
+        """Show optimized build summary using rich"""
+        summary_table = Table(title="Build Summary", box=box.ROUNDED)
+        summary_table.add_column("Metric", style="cyan", justify="right")
+        summary_table.add_column("Value", style="green")
+
+        summary_table.add_row("Build System", args.build_system)
+        summary_table.add_row("Build Type", args.build_type)
+        summary_table.add_row("Total Time", f"{build_time:.1f} seconds")
 
         # Calculate build size in background if directory exists
         if self.build_dir.exists():
             build_size = self._calculate_build_size()
-            print(f"Build size:       {build_size:.1f} MB")
+            summary_table.add_row("Build Size", f"{build_size:.1f} MB")
 
         # Show enabled features
         enabled_features = []
@@ -467,9 +480,12 @@ class BuildSystem:
                 enabled_features.append(feature)
 
         if enabled_features:
-            print(f"Enabled features: {', '.join(enabled_features)}")
+            summary_table.add_row("Enabled Features",
+                                  ", ".join(enabled_features))
+        else:
+            summary_table.add_row("Enabled Features", "None")
 
-        print("=" * 60)
+        self.console.print(Padding(summary_table, (1, 0)))
 
     def apply_preset(self, preset_name: str) -> Dict[str, Any]:
         """Apply a build preset with validation"""
@@ -480,8 +496,14 @@ class BuildSystem:
                 f"Unknown preset: {preset_name}. Available: {available}")
 
         preset = presets[preset_name]
-        logger.info(
-            f"Applying preset '{preset_name}': {preset.get('description', '')}")
+        description = preset.get('description', 'No description')
+        self.console.print(
+            Panel(
+                f"Applying preset '[bold green]{preset_name}[/bold green]'\n[dim]{description}[/dim]",
+                title="Applying Preset",
+                expand=False
+            )
+        )
         return preset
 
     def build(self, args: argparse.Namespace) -> bool:
@@ -600,21 +622,27 @@ Examples:
 
 
 def main():
-    """Main entry point with improved error handling"""
+    """Main entry point with improved error handling and rich output"""
     parser = create_parser()
     args = parser.parse_args()
 
+    console = Console()  # Create rich console instance
+
     try:
-        build_system = BuildSystem()
+        build_system = BuildSystem(console)  # Pass console to BuildSystem
 
         # List presets if requested
         if args.list_presets:
             presets = build_system.config.get('presets', {})
             if presets:
-                logger.info("Available build presets:")
+                preset_table = Table(
+                    title="Available Build Presets", box=box.ROUNDED)
+                preset_table.add_column("Name", style="cyan", justify="left")
+                preset_table.add_column("Description", style="green")
                 for name, preset in presets.items():
                     description = preset.get('description', 'No description')
-                    logger.info(f"  {name:<12} - {description}")
+                    preset_table.add_row(name, description)
+                console.print(Padding(preset_table, (1, 0)))
             else:
                 logger.warning("No presets defined in configuration")
             return 0

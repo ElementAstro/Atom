@@ -16,7 +16,8 @@ Description: Boost Lock-Free Data Structures
 
 #include "../macro.hpp"
 
-// 只有在定义了ATOM_USE_BOOST_LOCKFREE宏且Boost锁无关库可用时才启用
+// Enable only if ATOM_HAS_BOOST_LOCKFREE is defined and Boost lock-free library
+// is available
 #if defined(ATOM_HAS_BOOST_LOCKFREE)
 
 #include <atomic>
@@ -29,13 +30,14 @@ namespace containers {
 namespace lockfree {
 
 /**
- * @brief 多生产者多消费者无锁队列
+ * @brief Multi-producer multi-consumer lock-free queue
  *
- * 这个队列允许多个线程并发地入队和出队，无需互斥锁。
- * 适用于高性能并发系统和并行计算。
+ * This queue allows multiple threads to enqueue and dequeue concurrently
+ * without mutex locks. Suitable for high-performance concurrent systems and
+ * parallel computing.
  *
- * @tparam T 元素类型
- * @tparam Capacity 队列容量
+ * @tparam T Element type
+ * @tparam Capacity Queue capacity
  */
 template <typename T, size_t Capacity = 1024>
 class queue {
@@ -46,39 +48,41 @@ public:
     queue() : impl_() {}
 
     /**
-     * @brief 将元素推入队列
+     * @brief Push element to queue
      *
-     * @param item 要入队的元素
-     * @return bool 如果成功返回true，如果队列已满则返回false
+     * @param item Element to enqueue
+     * @return bool Returns true if successful, false if queue is full
      */
     bool push(const T& item) { return impl_.push(item); }
 
     /**
-     * @brief 从队列弹出元素
+     * @brief Pop element from queue
      *
-     * @param item 接收弹出元素的引用
-     * @return bool 如果成功返回true，如果队列为空则返回false
+     * @param item Reference to receive popped element
+     * @return bool Returns true if successful, false if queue is empty
      */
     bool pop(T& item) { return impl_.pop(item); }
 
     /**
-     * @brief 检查队列是否为空
+     * @brief Check if queue is empty
      *
-     * 注意：在多线程环境中，此操作结果可能立即过期
+     * Note: In multithreaded environments, this operation result may
+     * immediately become outdated
      *
-     * @return bool 如果队列为空返回true
+     * @return bool Returns true if queue is empty
      */
     bool empty() const { return impl_.empty(); }
 };
 
 /**
- * @brief 单生产者单消费者无锁队列
+ * @brief Single-producer single-consumer lock-free queue
  *
- * 这个高度优化的队列适用于只有一个线程生产数据和一个线程消费数据的场景。
- * 比多生产者多消费者版本有更低的开销。
+ * This highly optimized queue is suitable for scenarios with only one thread
+ * producing data and one thread consuming data. Has lower overhead than
+ * multi-producer multi-consumer version.
  *
- * @tparam T 元素类型
- * @tparam Capacity 队列容量
+ * @tparam T Element type
+ * @tparam Capacity Queue capacity
  */
 template <typename T, size_t Capacity = 1024>
 class spsc_queue {
@@ -89,36 +93,37 @@ public:
     spsc_queue() : impl_() {}
 
     /**
-     * @brief 将元素推入队列
+     * @brief Push element to queue
      *
-     * @param item 要入队的元素
-     * @return bool 如果成功返回true，如果队列已满则返回false
+     * @param item Element to enqueue
+     * @return bool Returns true if successful, false if queue is full
      */
     bool push(const T& item) { return impl_.push(item); }
 
     /**
-     * @brief 从队列弹出元素
+     * @brief Pop element from queue
      *
-     * @param item 接收弹出元素的引用
-     * @return bool 如果成功返回true，如果队列为空则返回false
+     * @param item Reference to receive popped element
+     * @return bool Returns true if successful, false if queue is empty
      */
     bool pop(T& item) { return impl_.pop(item); }
 
     /**
-     * @brief 检查队列是否为空
+     * @brief Check if queue is empty
      *
-     * @return bool 如果队列为空返回true
+     * @return bool Returns true if queue is empty
      */
     bool empty() const { return impl_.empty(); }
 };
 
 /**
- * @brief 无锁栈
+ * @brief Lock-free stack
  *
- * 线程安全的LIFO数据结构，允许多个线程并发地压入和弹出元素，无需互斥锁。
+ * Thread-safe LIFO data structure that allows multiple threads to push and pop
+ * elements concurrently without mutex locks.
  *
- * @tparam T 元素类型
- * @tparam Capacity 栈容量
+ * @tparam T Element type
+ * @tparam Capacity Stack capacity
  */
 template <typename T, size_t Capacity = 1024>
 class stack {
@@ -129,27 +134,28 @@ public:
     stack() : impl_() {}
 
     /**
-     * @brief 将元素压入栈
+     * @brief Push element to stack
      *
-     * @param item 要压入的元素
-     * @return bool 如果成功返回true，如果栈已满则返回false
+     * @param item Element to push
+     * @return bool Returns true if successful, false if stack is full
      */
     bool push(const T& item) { return impl_.push(item); }
 
     /**
-     * @brief 从栈弹出元素
+     * @brief Pop element from stack
      *
-     * @param item 接收弹出元素的引用
-     * @return bool 如果成功返回true，如果栈为空则返回false
+     * @param item Reference to receive popped element
+     * @return bool Returns true if successful, false if stack is empty
      */
     bool pop(T& item) { return impl_.pop(item); }
 
     /**
-     * @brief 检查栈是否为空
+     * @brief Check if stack is empty
      *
-     * 注意：在多线程环境中，此操作结果可能立即过期
+     * Note: In multithreaded environments, this operation result may
+     * immediately become outdated
      *
-     * @return bool 如果栈为空返回true
+     * @return bool Returns true if stack is empty
      */
     bool empty() const { return impl_.empty(); }
 };
