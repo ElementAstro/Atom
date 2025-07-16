@@ -1,12 +1,15 @@
 #ifndef ATOM_CONNECTION_TTYBASE_HPP
 #define ATOM_CONNECTION_TTYBASE_HPP
 
+#include <chrono>
 #include <cstdint>
+#include <functional>
 #include <future>
 #include <memory>
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 /**
  * @class TTYBase
@@ -15,7 +18,8 @@
  * This class serves as an interface for reading from and writing to TTY
  * devices, handling various responses and errors associated with the
  * communication. It employs the PIMPL design pattern to hide implementation
- * details and reduce compilation dependencies.
+ * details and reduce compilation dependencies, and it utilizes modern C++
+ * features for high-performance asynchronous operations.
  */
 class TTYBase {
 public:
@@ -179,6 +183,45 @@ public:
      */
     [[nodiscard]]
     bool isConnected() const noexcept;
+
+    /**
+     * @brief Starts the asynchronous reading operations.
+     * A worker thread is started to read data from the TTY port.
+     */
+    void startAsyncRead();
+
+    /**
+     * @brief Stops the asynchronous reading operations.
+     * The worker thread is stopped and joined.
+     */
+    void stopAsyncRead();
+
+    /**
+     * @brief Sets the callback function for processing incoming data
+     * asynchronously.
+     *
+     * @param callback The function to be called when data is received.
+     */
+    void setDataCallback(
+        std::function<void(const std::vector<uint8_t>&, size_t)> callback);
+
+    /**
+     * @brief Retrieves data from the internal queue if no callback is set.
+     *
+     * @param data A vector to store the retrieved data.
+     * @param timeout The maximum time to wait for data.
+     * @return True if data was retrieved, false otherwise.
+     */
+    [[nodiscard]]
+    bool getQueuedData(std::vector<uint8_t>& data,
+                       std::chrono::milliseconds timeout);
+
+    /**
+     * @brief Sets the size of the internal buffer for asynchronous reads.
+     *
+     * @param size The new buffer size.
+     */
+    void setReadBufferSize(size_t size);
 
 private:
     // Forward declaration of the private implementation class

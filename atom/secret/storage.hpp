@@ -2,6 +2,7 @@
 #define ATOM_SECRET_STORAGE_HPP
 
 #include <memory>
+#include <shared_mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -10,6 +11,7 @@ namespace atom::secret {
 
 /**
  * @brief Interface for platform-specific secure storage.
+ * This class is thread-safe.
  */
 class SecureStorage {
 public:
@@ -50,6 +52,9 @@ public:
      * @return A unique_ptr to a SecureStorage instance.
      */
     static std::unique_ptr<SecureStorage> create(std::string_view appName);
+
+protected:
+    mutable std::shared_mutex mutex_;
 };
 
 }  // namespace atom::secret

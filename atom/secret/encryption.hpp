@@ -1,52 +1,66 @@
 #ifndef ATOM_SECRET_ENCRYPTION_HPP
 #define ATOM_SECRET_ENCRYPTION_HPP
 
-#include <openssl/err.h>
+#include <openssl/evp.h>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include "result.hpp"
 
 namespace atom::secret {
 
-// Forward declaration for OpenSSL context
-typedef struct evp_cipher_ctx_st EVP_CIPHER_CTX;
-
 /**
- * @brief RAII wrapper for OpenSSL EVP_CIPHER_CTX.
- * Ensures the context is properly freed.
+ * @brief Provides high-level cryptographic operations.
  */
-class SslCipherContext {
-private:
-    EVP_CIPHER_CTX* ctx;  ///< Pointer to the OpenSSL cipher context.
-
+class Encryption {
 public:
     /**
-     * @brief Constructs an SslCipherContext, creating a new EVP_CIPHER_CTX.
-     * @throws std::runtime_error if context creation fails.
+     * @brief Derives a key from a password using PBKDF2.
+     * @param password The password.
+     * @param salt The salt.
+     * @param key_len The desired key length.
+     * @return The derived key.
      */
-    SslCipherContext();
+    static std::vector<unsigned char> derive_key(std::string_view password,
+                                                 std::string_view salt,
+                                                 int key_len = 32);
 
     /**
-     * @brief Destroys the SslCipherContext, freeing the EVP_CIPHER_CTX.
+     * @brief Encrypts data using AES-256-GCM.
+     * @param plaintext The data to encrypt.
+     * @param key The encryption key.
+     * @param iv The initialization vector.
+     * @param aad Additional authenticated data.
+     * @return A Result containing the ciphertext (with appended 16-byte tag),
+     * or an error string.
      */
-    ~SslCipherContext();
-
-    // Disable copy construction and assignment
-    SslCipherContext(const SslCipherContext&) = delete;
-    SslCipherContext& operator=(const SslCipherContext&) = delete;
-
-    // Enable move construction and assignment
-    SslCipherContext(SslCipherContext&& other) noexcept;
-    SslCipherContext& operator=(SslCipherContext&& other) noexcept;
+    static Result<std::vector<unsigned char>> encrypt(
+        std::string_view plaintext, const std::vector<unsigned char>& key,
+        const std::vector<unsigned char>& iv,
+        const std::vector<unsigned char>& aad);
 
     /**
-     * @brief Gets the raw pointer to the EVP_CIPHER_CTX.
-     * @return The raw EVP_CIPHER_CTX pointer.
+     * @brief Decrypts data using AES-256-GCM.
+     * @param ciphertext_with_tag The data to decrypt (with appended 16-byte
+     * tag).
+     * @param key The encryption key.
+     * @param iv The initialization vector.
+     * @param aad Additional authenticated data.
+     * @return A Result containing the plaintext, or an error string.
      */
-    EVP_CIPHER_CTX* get() const noexcept { return ctx; }
+    static Result<std::string> decrypt(
+        const std::vector<unsigned char>& ciphertext_with_tag,
+        const std::vector<unsigned char>& key,
+        const std::vector<unsigned char>& iv,
+        const std::vector<unsigned char>& aad);
 
     /**
-     * @brief Implicit conversion to the raw EVP_CIPHER_CTX pointer.
-     * @return The raw EVP_CIPHER_CTX pointer.
+     * @brief Generates a random byte sequence.
+     * @param len The number of bytes to generate.
+     * @return A vector of random bytes.
      */
-    operator EVP_CIPHER_CTX*() const noexcept { return ctx; }
+    static std::vector<unsigned char> random_bytes(int len);
 };
 
 }  // namespace atom::secret

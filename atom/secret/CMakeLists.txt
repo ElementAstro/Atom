@@ -7,15 +7,15 @@
 cmake_minimum_required(VERSION 3.20)
 project(
   atom-secret
-  VERSION 1.0.0
+  VERSION 2.0.0
   LANGUAGES C CXX)
 
 # Sources and Headers
-set(SOURCES encryption.cpp storage.cpp)
+set(SOURCES encryption.cpp storage.cpp password_manager.cpp)
 
-set(HEADERS common.hpp encryption.hpp password_entry.hpp storage.hpp)
+set(HEADERS common.hpp encryption.hpp password_entry.hpp storage.hpp password_manager.hpp result.hpp)
 
-set(LIBS loguru ${CMAKE_THREAD_LIBS_INIT})
+set(LIBS spdlog::spdlog ${CMAKE_THREAD_LIBS_INIT})
 
 # Build Object Library
 add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
@@ -45,10 +45,3 @@ set_target_properties(
   PROPERTIES VERSION ${PROJECT_VERSION}
              SOVERSION ${PROJECT_VERSION_MAJOR}
              OUTPUT_NAME ${PROJECT_NAME})
-
-# Installation
-install(
-  TARGETS ${PROJECT_NAME}
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  PUBLIC_HEADER DESTINATION include/${PROJECT_NAME})

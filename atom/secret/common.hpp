@@ -1,5 +1,6 @@
 #ifndef ATOM_SECRET_COMMON_HPP
 #define ATOM_SECRET_COMMON_HPP
+
 #include <chrono>
 #include <cstdint>
 #include <string>

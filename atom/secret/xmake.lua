@@ -8,13 +8,14 @@ add_rules("mode.debug", "mode.release")
 
 -- Project configuration
 set_project("atom-secret")
-set_version("1.0.0")
+set_version("2.0.0") -- Version bump for new API
 set_license("GPL3")
 
 -- Define source files
 local source_files = {
     "encryption.cpp",
-    "storage.cpp"
+    "storage.cpp",
+    "password_manager.cpp"
 }
 
 -- Define header files
@@ -23,7 +24,8 @@ local header_files = {
     "encryption.hpp",
     "password_entry.hpp",
     "result.hpp",
-    "storage.hpp"
+    "storage.hpp",
+    "password_manager.hpp"
 }
 
 -- Object Library
@@ -31,11 +33,11 @@ target("atom-secret-object")
     set_kind("object")
 
     -- Add files
-    add_files(table.unpack(source_files))
-    add_headerfiles(table.unpack(header_files))
+    add_files(source_files)
+    add_headerfiles(header_files)
 
     -- Add dependencies
-    add_packages("loguru")
+    add_packages("spdlog", "nlohmann_json")
     add_deps("atom-utils")
 
     -- Add include directories
@@ -62,7 +64,7 @@ target("atom-secret")
 
     -- Add dependencies
     add_deps("atom-secret-object", "atom-utils")
-    add_packages("loguru")
+    add_packages("spdlog", "nlohmann_json")
 
     -- Platform-specific settings
     if is_plat("windows") then
@@ -80,6 +82,6 @@ target("atom-secret")
     -- Install configuration
     on_install(function (target)
         os.cp(target:targetfile(), path.join(target:installdir(), "lib"))
-        os.cp("*.hpp", path.join(target:installdir(), "include/atom/secret"))
+        os.cp(header_files, path.join(target:installdir(), "include/atom/secret"))
     end)
 target_end()

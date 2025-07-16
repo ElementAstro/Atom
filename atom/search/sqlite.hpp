@@ -1,21 +1,19 @@
-/*
- * sqlite.hpp
- *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+/**
+ * @file sqlite.hpp
+ * @brief A high-performance, thread-safe SQLite database wrapper for Atom Search.
+ * @date 2025-07-16
  */
 
 #ifndef ATOM_SEARCH_SQLITE_HPP
 #define ATOM_SEARCH_SQLITE_HPP
 
-#include <exception>
 #include <functional>
 #include <memory>
 #include <optional>
-#include <shared_mutex>
+#include <stdexcept>
 #include <string_view>
 
 #include <spdlog/spdlog.h>
-#include <sqlite3.h>
 
 #include "atom/containers/high_performance.hpp"
 
@@ -25,361 +23,170 @@ using atom::containers::String;
 using atom::containers::Vector;
 
 /**
- * @brief Custom exception class for SQLite operations
+ * @brief Custom exception class for SQLite-related errors.
  *
- * This exception is thrown when SQLite operations fail or encounter errors.
- * It provides detailed error messages to help with debugging.
+ * This exception is thrown when a SQLite operation fails, providing a detailed
+ * error message.
  */
-class SQLiteException : public std::exception {
-private:
-    String message;
-
+class SQLiteException : public std::runtime_error {
 public:
     /**
-     * @brief Construct a new SQLite Exception object
-     *
-     * @param msg Error message describing the exception
+     * @brief Constructs a new SQLiteException.
+     * @param msg The error message.
      */
-    explicit SQLiteException(std::string_view msg) : message(msg) {}
-
-    /**
-     * @brief Get the exception message
-     *
-     * @return const char* Null-terminated error message string
-     */
-    [[nodiscard]] const char* what() const noexcept override {
-        return message.c_str();
-    }
+    explicit SQLiteException(const std::string& msg) : std::runtime_error(msg) {}
 };
+
+class TransactionContext;
 
 /**
  * @class SqliteDB
- * @brief A thread-safe SQLite database wrapper with advanced features
+ * @brief A thread-safe SQLite database wrapper featuring a connection pool.
  *
- * This class provides a high-level interface for SQLite database operations
- * including prepared statement caching, transaction management, and thread
- * safety. It uses the Pimpl design pattern for implementation hiding and better
- * compilation times.
+ * This class provides a high-level interface for SQLite database operations,
+ * using a connection pool to manage concurrent access, which enhances
+ * performance and scalability on multi-core architectures. It is designed for
+ * safety and efficiency, with support for transactions and prepared statements.
  */
 class SqliteDB {
 public:
-    /**
-     * @brief Type alias for a single row of query results
-     */
     using RowData = Vector<String>;
-
-    /**
-     * @brief Type alias for complete query result sets
-     */
     using ResultSet = Vector<RowData>;
 
     /**
-     * @brief Construct a new SqliteDB object
+     * @brief Constructs a new SqliteDB object and initializes the connection
+     * pool.
      *
-     * @param dbPath Path to the SQLite database file
-     * @throws SQLiteException if the database cannot be opened
+     * @param db_path Path to the SQLite database file.
+     * @param pool_size The number of connections in the pool. If 0, it defaults
+     * to the hardware concurrency.
+     * @throws SQLiteException if the database cannot be opened.
      */
-    explicit SqliteDB(std::string_view dbPath);
+    explicit SqliteDB(std::string_view db_path, unsigned int pool_size = 0);
 
     /**
-     * @brief Destroy the SqliteDB object
-     *
-     * Automatically closes the database connection and cleans up resources.
+     * @brief Destroys the SqliteDB object, closing all database connections.
      */
     ~SqliteDB();
 
     SqliteDB(const SqliteDB&) = delete;
     SqliteDB& operator=(const SqliteDB&) = delete;
+    SqliteDB(SqliteDB&&) = delete;
+    SqliteDB& operator=(SqliteDB&&) = delete;
 
     /**
-     * @brief Move constructor
+     * @brief Executes a simple SQL query without parameters.
      *
-     * @param other Source object to move from
+     * @param query The SQL query string to execute.
+     * @throws SQLiteException on execution error.
      */
-    SqliteDB(SqliteDB&& other) noexcept;
+    void execute_query(std::string_view query);
 
     /**
-     * @brief Move assignment operator
+     * @brief Executes a parameterized SQL query with bound values.
      *
-     * @param other Source object to move from
-     * @return SqliteDB& Reference to this object
-     */
-    SqliteDB& operator=(SqliteDB&& other) noexcept;
-
-    /**
-     * @brief Execute a simple SQL query without parameters
-     *
-     * @param query SQL query string to execute
-     * @return true if execution was successful
-     * @throws SQLiteException on execution error
-     */
-    [[nodiscard]] bool executeQuery(std::string_view query);
-
-    /**
-     * @brief Execute a parameterized SQL query with bound values
-     *
-     * This method uses prepared statements for security and performance.
-     * Parameters are automatically bound based on their types.
-     *
-     * @tparam Args Parameter types to bind
-     * @param query SQL query with placeholders (?)
-     * @param params Parameters to bind to the query
-     * @return true if execution was successful
-     * @throws SQLiteException on execution error
+     * @tparam Args The types of the parameters to bind.
+     * @param query The SQL query with '?' placeholders.
+     * @param params The parameters to bind to the query.
+     * @throws SQLiteException on execution error.
      */
     template <typename... Args>
-    [[nodiscard]] bool executeParameterizedQuery(std::string_view query,
-                                                 Args&&... params);
+    void execute_parameterized_query(std::string_view query, Args&&... params);
 
     /**
-     * @brief Execute a SELECT query and return all results
+     * @brief Executes a SELECT query and returns all results.
      *
-     * @param query SQL SELECT query string
-     * @return ResultSet containing all rows from the query
-     * @throws SQLiteException on query error
+     * @param query The SQL SELECT query string.
+     * @return A ResultSet containing all rows from the query.
+     * @throws SQLiteException on query error.
      */
-    [[nodiscard]] ResultSet selectData(std::string_view query);
+    [[nodiscard]] ResultSet select_data(std::string_view query);
 
     /**
-     * @brief Execute a parameterized SELECT query and return results
+     * @brief Executes a parameterized SELECT query and returns the results.
      *
-     * @tparam Args Parameter types to bind
-     * @param query SQL SELECT query with placeholders
-     * @param params Parameters to bind to the query
-     * @return ResultSet containing all matching rows
-     * @throws SQLiteException on query error
+     * @tparam Args The types of the parameters to bind.
+     * @param query The SQL SELECT query with '?' placeholders.
+     * @param params The parameters to bind to the query.
+     * @return A ResultSet containing all matching rows.
+     * @throws SQLiteException on query error.
      */
     template <typename... Args>
-    [[nodiscard]] ResultSet selectParameterizedData(std::string_view query,
-                                                    Args&&... params);
+    [[nodiscard]] ResultSet select_parameterized_data(std::string_view query,
+                                                      Args&&... params);
 
     /**
-     * @brief Helper function to retrieve a single value of any type
+     * @brief Retrieves a single integer value from a query.
      *
-     * @tparam T Type of value to retrieve
-     * @param query SQL query that returns a single value
-     * @param columnFunc Function to extract value from SQLite column
-     * @return Optional value (empty if query fails or result is NULL)
+     * @param query The SQL query that should return a single integer value.
+     * @return An optional containing the integer value, or std::nullopt if no
+     * result.
      */
-    template <typename T>
-    [[nodiscard]] std::optional<T> getSingleValue(std::string_view query,
-                                                  T (*columnFunc)(sqlite3_stmt*,
-                                                                  int));
+    [[nodiscard]] std::optional<int> get_int_value(std::string_view query);
 
     /**
-     * @brief Retrieve a single integer value from a query
+     * @brief Retrieves a single double value from a query.
      *
-     * @param query SQL query that returns a single integer
-     * @return Optional integer value
+     * @param query The SQL query that should return a single double value.
+     * @return An optional containing the double value, or std::nullopt if no
+     * result.
      */
-    [[nodiscard]] std::optional<int> getIntValue(std::string_view query);
+    [[nodiscard]] std::optional<double> get_double_value(std::string_view query);
 
     /**
-     * @brief Retrieve a single floating-point value from a query
+     * @brief Retrieves a single text value from a query.
      *
-     * @param query SQL query that returns a single double
-     * @return Optional double value
+     * @param query The SQL query that should return a single text value.
+     * @return An optional containing the String value, or std::nullopt if no
+     * result.
      */
-    [[nodiscard]] std::optional<double> getDoubleValue(std::string_view query);
+    [[nodiscard]] std::optional<String> get_text_value(std::string_view query);
 
     /**
-     * @brief Retrieve a single text value from a query
+     * @brief Executes operations within a transaction.
      *
-     * @param query SQL query that returns a single text value
-     * @return Optional String value
+     * @param operations A function containing the database operations to execute
+     * transactionally.
+     * @throws SQLiteException if any operation fails, after rolling back.
      */
-    [[nodiscard]] std::optional<String> getTextValue(std::string_view query);
+    void with_transaction(const std::function<void(TransactionContext&)>& operations);
 
     /**
-     * @brief Search for data matching a specific term
+     * @brief Checks if the database connection pool is active.
      *
-     * @param query SQL query with a single parameter placeholder
-     * @param searchTerm Term to search for
-     * @return true if matching data was found
+     * @return True if connected, false otherwise.
      */
-    [[nodiscard]] bool searchData(std::string_view query,
-                                  std::string_view searchTerm);
+    [[nodiscard]] bool is_connected() const noexcept;
 
     /**
-     * @brief Execute an UPDATE statement and return affected row count
+     * @brief Gets the rowid of the last inserted row on the current thread's
+     * connection.
      *
-     * @param query SQL UPDATE statement
-     * @return Number of rows affected by the update
-     * @throws SQLiteException on update error
+     * @return The row ID of the last insert operation.
+     * @throws SQLiteException if not connected.
      */
-    [[nodiscard]] int updateData(std::string_view query);
+    [[nodiscard]] int64_t get_last_insert_rowid() const;
 
     /**
-     * @brief Execute a DELETE statement and return affected row count
+     * @brief Checks if a table exists in the database.
      *
-     * @param query SQL DELETE statement
-     * @return Number of rows affected by the delete
-     * @throws SQLiteException on delete error
+     * @param table_name The name of the table to check.
+     * @return True if the table exists, false otherwise.
      */
-    [[nodiscard]] int deleteData(std::string_view query);
+    [[nodiscard]] bool table_exists(std::string_view table_name);
 
     /**
-     * @brief Begin a database transaction
+     * @brief Rebuilds and optimizes the database.
      *
-     * Uses IMMEDIATE transaction mode for better concurrency control.
-     *
-     * @throws SQLiteException if transaction cannot be started
-     */
-    void beginTransaction();
-
-    /**
-     * @brief Commit the current transaction
-     *
-     * @throws SQLiteException if transaction cannot be committed
-     */
-    void commitTransaction();
-
-    /**
-     * @brief Rollback the current transaction
-     *
-     * This method does not throw exceptions to ensure it can be safely
-     * called from destructors and error handlers.
-     */
-    void rollbackTransaction();
-
-    /**
-     * @brief Execute operations within a transaction with automatic rollback
-     *
-     * Automatically begins a transaction, executes the provided operations,
-     * and commits. If any exception occurs, the transaction is rolled back.
-     *
-     * @param operations Function containing database operations to execute
-     * @throws Re-throws any exceptions from operations after rollback
-     */
-    void withTransaction(const std::function<void()>& operations);
-
-    /**
-     * @brief Validate data using a validation query
-     *
-     * Executes the main query, then runs a validation query to check
-     * if the operation was successful.
-     *
-     * @param query Main SQL query to execute
-     * @param validationQuery Query that should return non-zero for success
-     * @return true if validation passes
-     */
-    [[nodiscard]] bool validateData(std::string_view query,
-                                    std::string_view validationQuery);
-
-    /**
-     * @brief Execute a SELECT query with pagination
-     *
-     * @param query Base SQL SELECT query (without LIMIT/OFFSET)
-     * @param limit Maximum number of rows to return
-     * @param offset Number of rows to skip
-     * @return ResultSet containing the paginated results
-     * @throws SQLiteException on query error or invalid parameters
-     */
-    [[nodiscard]] ResultSet selectDataWithPagination(std::string_view query,
-                                                     int limit, int offset);
-
-    /**
-     * @brief Set a custom error message callback
-     *
-     * @param errorCallback Function to call when errors occur
-     */
-    void setErrorMessageCallback(
-        const std::function<void(std::string_view)>& errorCallback);
-
-    /**
-     * @brief Check if the database connection is active
-     *
-     * @return true if connected to a database
-     */
-    [[nodiscard]] bool isConnected() const noexcept;
-
-    /**
-     * @brief Get the rowid of the last inserted row
-     *
-     * @return Row ID of the last insert operation
-     * @throws SQLiteException if not connected
-     */
-    [[nodiscard]] int64_t getLastInsertRowId() const;
-
-    /**
-     * @brief Get the number of rows modified by the last statement
-     *
-     * @return Number of rows affected by the last INSERT/UPDATE/DELETE
-     * @throws SQLiteException if not connected
-     */
-    [[nodiscard]] int getChanges() const;
-
-    /**
-     * @brief Get the total number of rows modified since database opened
-     *
-     * @return Total number of rows modified
-     * @throws SQLiteException if not connected
-     */
-    [[nodiscard]] int getTotalChanges() const;
-
-    /**
-     * @brief Check if a table exists in the database
-     *
-     * @param tableName Name of the table to check
-     * @return true if the table exists
-     */
-    [[nodiscard]] bool tableExists(std::string_view tableName);
-
-    /**
-     * @brief Get the schema information for a table
-     *
-     * @param tableName Name of the table
-     * @return ResultSet containing column information
-     */
-    [[nodiscard]] ResultSet getTableSchema(std::string_view tableName);
-
-    /**
-     * @brief Execute VACUUM command to optimize database
-     *
-     * @return true if VACUUM was successful
+     * @return True if VACUUM was successful, false otherwise.
      */
     [[nodiscard]] bool vacuum();
 
-    /**
-     * @brief Execute ANALYZE command to update query planner statistics
-     *
-     * @return true if ANALYZE was successful
-     */
-    [[nodiscard]] bool analyze();
-
 private:
     class Impl;
-    std::unique_ptr<Impl> pImpl;
-    mutable std::shared_mutex mtx;
-
-    /**
-     * @brief Validate query string for basic security checks
-     *
-     * @param query Query string to validate
-     * @throws SQLiteException if query is invalid
-     */
-    void validateQueryString(std::string_view query) const;
-
-    /**
-     * @brief Check database connection before operations
-     *
-     * @throws SQLiteException if database is not connected
-     */
-    void checkConnection() const;
-
-    /**
-     * @brief Helper for update/delete operations
-     *
-     * @param query SQL statement to execute
-     * @return Number of rows affected
-     * @throws SQLiteException on error
-     */
-    [[nodiscard]] int executeAndGetChanges(std::string_view query);
-
-#if defined(TEST_F)
-    friend class SqliteDBTest;
-#endif
+    std::unique_ptr<Impl> p_impl_;
 };
+
 }  // namespace atom::search
 
 #endif  // ATOM_SEARCH_SQLITE_HPP

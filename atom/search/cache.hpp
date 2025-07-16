@@ -1,179 +1,56 @@
-/*
- * cache.hpp
- *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
- */
-
 /**
  * @file cache.hpp
- * @brief ResourceCache class for Atom Search
- * @date 2023-12-6
+ * @brief A high-performance, thread-safe, sharded resource cache for Atom Search.
+ * @date 2025-07-16
  */
 
 #ifndef ATOM_SEARCH_CACHE_HPP
 #define ATOM_SEARCH_CACHE_HPP
 
+#include <spdlog/spdlog.h>
+
 #include <atomic>
 #include <chrono>
+#include <concepts>
 #include <fstream>
 #include <functional>
 #include <future>
 #include <list>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
+#include <string>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #include "atom/containers/high_performance.hpp"
-
-#if defined(ATOM_USE_BOOST_THREAD) || defined(ATOM__USE_BOOST_LOCKFREE)
-#include <boost/config.hpp>
-#endif
-
-#ifdef ATOM_USE_BOOST_THREAD
-#include <boost/thread.hpp>
-#include <boost/thread/condition_variable.hpp>
-#include <boost/thread/future.hpp>
-#include <boost/thread/lock_types.hpp>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/shared_mutex.hpp>
-#endif
-
-#ifdef ATOM_USE_BOOST_LOCKFREE
-#include <boost/atomic.hpp>
-#include <boost/lockfree/queue.hpp>
-#include <boost/lockfree/spsc_queue.hpp>
-#endif
-
-#include <spdlog/spdlog.h>
 #include "atom/type/json.hpp"
+
+namespace atom::search {
 
 using json = nlohmann::json;
 using atom::containers::HashMap;
 using atom::containers::String;
 using atom::containers::Vector;
 
-namespace atom::search {
-
-#if defined(ATOM_USE_BOOST_THREAD)
-using SharedMutex = boost::shared_mutex;
-template <typename T>
-using SharedLock = boost::shared_lock<T>;
-template <typename T>
-using UniqueLock = boost::unique_lock<T>;
-template <typename... Args>
-using Future = boost::future<Args...>;
-template <typename... Args>
-using Promise = boost::promise<Args...>;
-using Thread = boost::thread;
-using JThread = boost::thread;
-#else
-using SharedMutex = std::shared_mutex;
-template <typename T>
-using SharedLock = std::shared_lock<T>;
-template <typename T>
-using UniqueLock = std::unique_lock<T>;
-template <typename... Args>
-using Future = std::future<Args...>;
-template <typename... Args>
-using Promise = std::promise<Args...>;
-using Thread = std::thread;
-using JThread = std::jthread;
-#endif
-
-#if defined(ATOM_USE_BOOST_LOCKFREE)
-template <typename T>
-using Atomic = boost::atomic<T>;
-
-template <typename T>
-class LockFreeQueue {
-private:
-    boost::lockfree::queue<T *> queue;
-
-public:
-    explicit LockFreeQueue(size_t capacity) : queue(capacity) {}
-
-    bool push(const T &item) {
-        T *ptr = new T(item);
-        if (!queue.push(ptr)) {
-            delete ptr;
-            return false;
-        }
-        return true;
-    }
-
-    bool pop(T &item) {
-        T *ptr = nullptr;
-        if (!queue.pop(ptr)) {
-            return false;
-        }
-        item = *ptr;
-        delete ptr;
-        return true;
-    }
-
-    bool empty() const { return queue.empty(); }
-
-    ~LockFreeQueue() {
-        T *ptr;
-        while (queue.pop(ptr)) {
-            delete ptr;
-        }
-    }
-};
-#else
-template <typename T>
-using Atomic = std::atomic<T>;
-
-template <typename T>
-class LockFreeQueue {
-private:
-    std::mutex mutex_;
-    std::vector<T> items_;
-    size_t capacity_;
-
-public:
-    explicit LockFreeQueue(size_t capacity) : capacity_(capacity) {
-        items_.reserve(capacity);
-    }
-
-    bool push(const T &item) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (items_.size() >= capacity_) {
-            return false;
-        }
-        items_.push_back(item);
-        return true;
-    }
-
-    bool pop(T &item) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (items_.empty()) {
-            return false;
-        }
-        item = items_.front();
-        items_.erase(items_.begin());
-        return true;
-    }
-
-    bool empty() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return items_.empty();
-    }
-};
-#endif
-
+/**
+ * @brief Concept for types that can be stored in the ResourceCache.
+ * @details Ensures that the type is both copy-constructible and copy-assignable.
+ */
 template <typename T>
 concept Cacheable = std::copy_constructible<T> && std::is_copy_assignable_v<T>;
 
 /**
- * @brief A thread-safe cache for storing and managing resources with expiration
- * times.
+ * @brief A high-performance, thread-safe, sharded cache for storing and managing
+ * resources with expiration times.
  *
- * This class provides a high-performance, thread-safe caching mechanism with
- * LRU eviction, automatic expiration cleanup, and support for both synchronous
- * and asynchronous operations.
+ * This class provides a highly concurrent caching mechanism with an LRU eviction
+ * policy. It achieves scalability by partitioning the cache into multiple shards,
+ * each with its own lock, minimizing contention on multi-core systems. It
+ * features automatic expiration cleanup and supports both synchronous and
+ * asynchronous operations.
  *
  * @tparam T The type of the resources to be cached. Must satisfy the Cacheable
  * concept.
@@ -181,53 +58,66 @@ concept Cacheable = std::copy_constructible<T> && std::is_copy_assignable_v<T>;
 template <Cacheable T>
 class ResourceCache {
 public:
-    using Callback = std::function<void(const String &key)>;
+    using Callback = std::function<void(const String& key)>;
+    using Clock = std::chrono::steady_clock;
+    using TimePoint = Clock::time_point;
+    using Duration = std::chrono::seconds;
 
     /**
-     * @brief Constructs a ResourceCache with a specified maximum size.
+     * @brief Constructs a ResourceCache.
      *
-     * @param maxSize The maximum number of items the cache can hold.
+     * @param max_size The maximum number of items the cache can hold across all
+     * shards.
+     * @param cleanup_interval The interval at which the cleanup thread checks
+     * for expired items.
      */
-    explicit ResourceCache(int maxSize);
+    explicit ResourceCache(size_t max_size,
+                           Duration cleanup_interval = Duration(5));
 
     /**
-     * @brief Destructs the ResourceCache and stops the cleanup thread.
+     * @brief Destructs the ResourceCache, stopping the background cleanup
+     * thread.
      */
     ~ResourceCache();
+
+    ResourceCache(const ResourceCache&) = delete;
+    ResourceCache& operator=(const ResourceCache&) = delete;
+    ResourceCache(ResourceCache&&) = delete;
+    ResourceCache& operator=(ResourceCache&&) = delete;
 
     /**
      * @brief Inserts a resource into the cache with an expiration time.
      *
      * @param key The key associated with the resource.
      * @param value The resource to be cached.
-     * @param expirationTime The time after which the resource expires.
+     * @param expiration_time The duration after which the resource expires.
      */
-    void insert(const String &key, const T &value,
-                std::chrono::seconds expirationTime);
+    void insert(const String& key, const T& value, Duration expiration_time);
 
     /**
      * @brief Checks if the cache contains a resource with the specified key.
      *
      * @param key The key to check.
-     * @return True if the cache contains the resource, false otherwise.
+     * @return True if the cache contains a non-expired resource, false
+     * otherwise.
      */
-    auto contains(const String &key) const -> bool;
+    [[nodiscard]] auto contains(const String& key) const -> bool;
 
     /**
      * @brief Retrieves a resource from the cache.
      *
      * @param key The key associated with the resource.
-     * @return An optional containing the resource if found, otherwise
-     * std::nullopt.
+     * @return An optional containing the resource if found and not expired,
+     * otherwise std::nullopt.
      */
-    auto get(const String &key) -> std::optional<T>;
+    [[nodiscard]] auto get(const String& key) -> std::optional<T>;
 
     /**
      * @brief Removes a resource from the cache.
      *
      * @param key The key associated with the resource to be removed.
      */
-    void remove(const String &key);
+    void remove(const String& key);
 
     /**
      * @brief Asynchronously retrieves a resource from the cache.
@@ -236,19 +126,18 @@ public:
      * @return A future containing an optional with the resource if found,
      * otherwise std::nullopt.
      */
-    auto asyncGet(const String &key) -> Future<std::optional<T>>;
+    [[nodiscard]] auto async_get(const String& key) -> std::future<std::optional<T>>;
 
     /**
-     * @brief Asynchronously inserts a resource into the cache with an
-     * expiration time.
+     * @brief Asynchronously inserts a resource into the cache.
      *
      * @param key The key associated with the resource.
      * @param value The resource to be cached.
-     * @param expirationTime The time after which the resource expires.
+     * @param expiration_time The time after which the resource expires.
      * @return A future that completes when the insertion is done.
      */
-    auto asyncInsert(const String &key, const T &value,
-                     std::chrono::seconds expirationTime) -> Future<void>;
+    auto async_insert(const String& key, const T& value, Duration expiration_time)
+        -> std::future<void>;
 
     /**
      * @brief Clears all resources from the cache.
@@ -256,678 +145,441 @@ public:
     void clear();
 
     /**
-     * @brief Gets the number of resources in the cache.
+     * @brief Gets the approximate number of resources in the cache.
      *
-     * @return The number of resources in the cache.
+     * @return The number of resources currently in the cache.
      */
-    auto size() const -> size_t;
+    [[nodiscard]] auto size() const -> size_t;
 
     /**
      * @brief Checks if the cache is empty.
      *
      * @return True if the cache is empty, false otherwise.
      */
-    auto empty() const -> bool;
-
-    /**
-     * @brief Evicts the oldest resource from the cache.
-     */
-    void evictOldest();
-
-    /**
-     * @brief Checks if a resource with the specified key is expired.
-     *
-     * @param key The key associated with the resource.
-     * @return True if the resource is expired, false otherwise.
-     */
-    auto isExpired(const String &key) const -> bool;
-
-    /**
-     * @brief Asynchronously loads a resource into the cache using a provided
-     * function.
-     *
-     * @param key The key associated with the resource.
-     * @param loadDataFunction The function to load the resource.
-     * @return A future that completes when the resource is loaded.
-     */
-    auto asyncLoad(const String &key, std::function<T()> loadDataFunction)
-        -> Future<void>;
+    [[nodiscard]] auto empty() const -> bool;
 
     /**
      * @brief Sets the maximum size of the cache.
-     *
-     * @param maxSize The new maximum size of the cache.
+     * @details This will re-distribute the capacity among shards and may cause
+     * evictions.
+     * @param new_max_size The new maximum size of the cache.
      */
-    void setMaxSize(int maxSize);
-
-    /**
-     * @brief Sets the expiration time for a resource in the cache.
-     *
-     * @param key The key associated with the resource.
-     * @param expirationTime The new expiration time for the resource.
-     */
-    void setExpirationTime(const String &key,
-                           std::chrono::seconds expirationTime);
-
-    /**
-     * @brief Reads resources from a file and inserts them into the cache.
-     *
-     * @param filePath The path to the file.
-     * @param deserializer The function to deserialize the resources.
-     */
-    void readFromFile(const String &filePath,
-                      const std::function<T(const String &)> &deserializer);
-
-    /**
-     * @brief Writes the resources in the cache to a file.
-     *
-     * @param filePath The path to the file.
-     * @param serializer The function to serialize the resources.
-     */
-    void writeToFile(const String &filePath,
-                     const std::function<String(const T &)> &serializer);
-
-    /**
-     * @brief Removes expired resources from the cache.
-     */
-    void removeExpired();
+    void set_max_size(size_t new_max_size);
 
     /**
      * @brief Reads resources from a JSON file and inserts them into the cache.
      *
-     * @param filePath The path to the JSON file.
-     * @param fromJson The function to deserialize the resources from JSON.
+     * @param file_path The path to the JSON file.
+     * @param from_json A function to deserialize a resource from a JSON object.
+     * @param expiration_time The expiration time to apply to all loaded items.
      */
-    void readFromJsonFile(const String &filePath,
-                          const std::function<T(const json &)> &fromJson);
+    void read_from_json_file(const String& file_path,
+                             const std::function<T(const json&)>& from_json,
+                             Duration expiration_time);
 
     /**
      * @brief Writes the resources in the cache to a JSON file.
      *
-     * @param filePath The path to the JSON file.
-     * @param toJson The function to serialize the resources to JSON.
+     * @param file_path The path to the JSON file.
+     * @param to_json A function to serialize a resource to a JSON object.
      */
-    void writeToJsonFile(const String &filePath,
-                         const std::function<json(const T &)> &toJson);
+    void write_to_json_file(const String& file_path,
+                            const std::function<json(const T&)>& to_json) const;
 
     /**
-     * @brief Inserts multiple resources into the cache with an expiration time.
+     * @brief Inserts multiple resources into the cache.
      *
      * @param items The vector of key-value pairs to insert.
-     * @param expirationTime The time after which the resources expire.
+     * @param expiration_time The time after which the resources expire.
      */
-    void insertBatch(const Vector<std::pair<String, T>> &items,
-                     std::chrono::seconds expirationTime);
+    void insert_batch(const Vector<std::pair<String, T>>& items,
+                      Duration expiration_time);
 
     /**
      * @brief Removes multiple resources from the cache.
      *
      * @param keys The vector of keys associated with the resources to remove.
      */
-    void removeBatch(const Vector<String> &keys);
+    void remove_batch(const Vector<String>& keys);
 
     /**
      * @brief Registers a callback to be called on insertion.
      *
      * @param callback The callback function.
      */
-    void onInsert(Callback callback);
+    void on_insert(Callback callback);
 
     /**
      * @brief Registers a callback to be called on removal.
      *
      * @param callback The callback function.
      */
-    void onRemove(Callback callback);
+    void on_remove(Callback callback);
 
     /**
-     * @brief Retrieves cache statistics.
+     * @brief Retrieves cache performance statistics.
      *
      * @return A pair containing hit count and miss count.
      */
-    std::pair<size_t, size_t> getStatistics() const;
+    [[nodiscard]] auto get_statistics() const -> std::pair<size_t, size_t>;
 
 private:
-    void evict();
-    void cleanupExpiredEntries();
+    struct CacheEntry {
+        T value;
+        TimePoint creation_time;
+        Duration expiration_time;
+    };
 
-    HashMap<String, std::pair<T, std::chrono::steady_clock::time_point>> cache_;
-    int maxSize_;
-    HashMap<String, std::chrono::seconds> expirationTimes_;
-    HashMap<String, std::chrono::steady_clock::time_point> lastAccessTimes_;
-    std::list<String> lruList_;
-    mutable SharedMutex cacheMutex_;
-    JThread cleanupThread_;
-    Atomic<bool> stopCleanupThread_{false};
-    Callback insertCallback_;
-    Callback removeCallback_;
-    mutable Atomic<size_t> hitCount_{0};
-    mutable Atomic<size_t> missCount_{0};
-    std::chrono::seconds cleanupInterval_{1};
+    struct Shard {
+        HashMap<String, typename std::list<String>::iterator> map;
+        std::list<String> lru_list;
+        HashMap<String, CacheEntry> entries;
+        mutable std::shared_mutex mutex;
+        size_t max_size;
+
+        explicit Shard(size_t capacity) : max_size(capacity) {}
+    };
+
+    void evict(Shard& shard);
+    void cleanup_expired_entries();
+    auto get_shard(const String& key) const -> Shard&;
+
+    std::vector<std::unique_ptr<Shard>> shards_;
+    const size_t shard_mask_;
+    std::atomic<size_t> max_size_;
+    std::atomic<size_t> current_size_{0};
+
+    std::jthread cleanup_thread_;
+    std::atomic<bool> stop_cleanup_{false};
+    Duration cleanup_interval_;
+
+    Callback insert_callback_;
+    Callback remove_callback_;
+    mutable std::mutex callback_mutex_;
+
+    mutable std::atomic<size_t> hit_count_{0};
+    mutable std::atomic<size_t> miss_count_{0};
 };
 
 template <Cacheable T>
-ResourceCache<T>::ResourceCache(int maxSize) : maxSize_(maxSize) {
-    cleanupThread_ = JThread([this] { cleanupExpiredEntries(); });
+ResourceCache<T>::ResourceCache(size_t max_size, Duration cleanup_interval)
+    : shard_mask_([&] {
+        size_t shard_count = std::thread::hardware_concurrency();
+        if (shard_count == 0) shard_count = 4;
+        size_t power = 1;
+        while (power < shard_count) power <<= 1;
+        return power - 1;
+    }()),
+      max_size_(max_size),
+      cleanup_interval_(cleanup_interval) {
+    size_t shard_count = shard_mask_ + 1;
+    shards_.reserve(shard_count);
+    size_t per_shard_capacity = (max_size + shard_count - 1) / shard_count;
+    for (size_t i = 0; i < shard_count; ++i) {
+        shards_.emplace_back(std::make_unique<Shard>(per_shard_capacity));
+    }
+    cleanup_thread_ = std::jthread([this] { cleanup_expired_entries(); });
 }
 
 template <Cacheable T>
 ResourceCache<T>::~ResourceCache() {
-    stopCleanupThread_.store(true);
-    if (cleanupThread_.joinable()) {
-        cleanupThread_.join();
-    }
+    stop_cleanup_.store(true);
 }
 
 template <Cacheable T>
-void ResourceCache<T>::insert(const String &key, const T &value,
-                              std::chrono::seconds expirationTime) {
+auto ResourceCache<T>::get_shard(const String& key) const -> Shard& {
+    return *shards_[std::hash<String>{}(key) & shard_mask_];
+}
+
+template <Cacheable T>
+void ResourceCache<T>::insert(const String& key, const T& value,
+                              Duration expiration_time) {
     try {
-        UniqueLock lock(cacheMutex_);
-        if (cache_.size() >= static_cast<size_t>(maxSize_)) {
-            evictOldest();
+        auto& shard = get_shard(key);
+        std::unique_lock lock(shard.mutex);
+
+        auto it = shard.map.find(key);
+        if (it != shard.map.end()) {
+            shard.lru_list.erase(it->second);
+            shard.map.erase(it);
+            shard.entries.erase(key);
+            current_size_--;
         }
 
-        if (cache_.size() >= static_cast<size_t>(maxSize_)) {
-            spdlog::warn("Cache still full after eviction attempt for key {}",
-                         key.c_str());
-            return;
+        if (shard.entries.size() >= shard.max_size) {
+            evict(shard);
         }
 
-        cache_[key] = {value, std::chrono::steady_clock::now()};
-        expirationTimes_[key] = expirationTime;
-        lastAccessTimes_[key] = std::chrono::steady_clock::now();
-        lruList_.remove(key);
-        lruList_.push_front(key);
+        shard.lru_list.push_front(key);
+        shard.map[key] = shard.lru_list.begin();
+        shard.entries[key] = {value, Clock::now(), expiration_time};
+        current_size_++;
 
-        if (insertCallback_) {
-            insertCallback_(key);
+        if (insert_callback_) {
+            std::lock_guard cb_lock(callback_mutex_);
+            if (insert_callback_) insert_callback_(key);
         }
-    } catch (const std::exception &e) {
+    } catch (const std::exception& e) {
         spdlog::error("Insert failed for key {}: {}", key.c_str(), e.what());
     }
 }
 
 template <Cacheable T>
-auto ResourceCache<T>::contains(const String &key) const -> bool {
-    SharedLock lock(cacheMutex_);
-    return cache_.find(key) != cache_.end();
+auto ResourceCache<T>::contains(const String& key) const -> bool {
+    try {
+        auto& shard = get_shard(key);
+        std::shared_lock lock(shard.mutex);
+        auto it = shard.entries.find(key);
+        if (it == shard.entries.end()) {
+            return false;
+        }
+        return (Clock::now() - it->second.creation_time) <
+               it->second.expiration_time;
+    } catch (const std::exception& e) {
+        spdlog::error("Contains check failed for key {}: {}", key.c_str(),
+                      e.what());
+        return false;
+    }
 }
 
 template <Cacheable T>
-auto ResourceCache<T>::get(const String &key) -> std::optional<T> {
+auto ResourceCache<T>::get(const String& key) -> std::optional<T> {
     try {
-        T value;
-        bool found = false;
-        bool expired = false;
+        auto& shard = get_shard(key);
+        std::unique_lock lock(shard.mutex);
 
-        {
-            SharedLock lock(cacheMutex_);
-            auto it = cache_.find(key);
-            if (it == cache_.end()) {
-                missCount_++;
-                return std::nullopt;
-            }
-
-            auto expIt = expirationTimes_.find(key);
-            if (expIt != expirationTimes_.end()) {
-                if ((std::chrono::steady_clock::now() - it->second.second) >=
-                    expIt->second) {
-                    expired = true;
-                }
-            }
-
-            if (expired) {
-                missCount_++;
-            } else {
-                value = it->second.first;
-                found = true;
-                hitCount_++;
-            }
-        }
-
-        if (expired) {
-            remove(key);
+        auto map_it = shard.map.find(key);
+        if (map_it == shard.map.end()) {
+            miss_count_++;
             return std::nullopt;
         }
 
-        if (found) {
-            UniqueLock uniqueLock(cacheMutex_);
-            if (lastAccessTimes_.count(key)) {
-                lastAccessTimes_[key] = std::chrono::steady_clock::now();
-                lruList_.remove(key);
-                lruList_.push_front(key);
-            } else {
-                return std::nullopt;
+        auto& entry = shard.entries.at(key);
+        if ((Clock::now() - entry.creation_time) >= entry.expiration_time) {
+            miss_count_++;
+            // Entry is expired, remove it
+            shard.lru_list.erase(map_it->second);
+            shard.map.erase(map_it);
+            shard.entries.erase(key);
+            current_size_--;
+            if (remove_callback_) {
+                std::lock_guard cb_lock(callback_mutex_);
+                if (remove_callback_) remove_callback_(key);
             }
-            return value;
+            return std::nullopt;
         }
 
-        return std::nullopt;
-    } catch (const std::exception &e) {
+        // Move to front of LRU list
+        shard.lru_list.splice(shard.lru_list.begin(), shard.lru_list,
+                              map_it->second);
+        hit_count_++;
+        return entry.value;
+    } catch (const std::exception& e) {
         spdlog::error("Get failed for key {}: {}", key.c_str(), e.what());
+        miss_count_++;
         return std::nullopt;
     }
 }
 
 template <Cacheable T>
-void ResourceCache<T>::remove(const String &key) {
+void ResourceCache<T>::remove(const String& key) {
     try {
-        UniqueLock lock(cacheMutex_);
-        size_t erasedCount = cache_.erase(key);
-        expirationTimes_.erase(key);
-        lastAccessTimes_.erase(key);
-
-        if (erasedCount > 0) {
-            lruList_.remove(key);
-            if (removeCallback_) {
-                removeCallback_(key);
+        auto& shard = get_shard(key);
+        std::unique_lock lock(shard.mutex);
+        auto it = shard.map.find(key);
+        if (it != shard.map.end()) {
+            shard.lru_list.erase(it->second);
+            shard.map.erase(it);
+            shard.entries.erase(key);
+            current_size_--;
+            if (remove_callback_) {
+                std::lock_guard cb_lock(callback_mutex_);
+                if (remove_callback_) remove_callback_(key);
             }
         }
-    } catch (const std::exception &e) {
+    } catch (const std::exception& e) {
         spdlog::error("Remove failed for key {}: {}", key.c_str(), e.what());
     }
 }
 
 template <Cacheable T>
-void ResourceCache<T>::onInsert(Callback callback) {
-    UniqueLock lock(cacheMutex_);
-    insertCallback_ = std::move(callback);
+auto ResourceCache<T>::async_get(const String& key)
+    -> std::future<std::optional<T>> {
+    return std::async(std::launch::async, [this, key]() { return get(key); });
 }
 
 template <Cacheable T>
-void ResourceCache<T>::onRemove(Callback callback) {
-    UniqueLock lock(cacheMutex_);
-    removeCallback_ = std::move(callback);
-}
-
-template <Cacheable T>
-std::pair<size_t, size_t> ResourceCache<T>::getStatistics() const {
-    return {hitCount_.load(), missCount_.load()};
-}
-
-template <Cacheable T>
-auto ResourceCache<T>::asyncGet(const String &key) -> Future<std::optional<T>> {
-    return std::async(std::launch::async,
-                      [this, key]() -> std::optional<T> { return get(key); });
-}
-
-template <Cacheable T>
-auto ResourceCache<T>::asyncInsert(const String &key, const T &value,
-                                   std::chrono::seconds expirationTime)
-    -> Future<void> {
-    return std::async(std::launch::async, [this, key, value, expirationTime]() {
-        insert(key, value, expirationTime);
+auto ResourceCache<T>::async_insert(const String& key, const T& value,
+                                    Duration expiration_time) -> std::future<void> {
+    return std::async(std::launch::async, [this, key, value, expiration_time]() {
+        insert(key, value, expiration_time);
     });
 }
 
 template <Cacheable T>
 void ResourceCache<T>::clear() {
-    UniqueLock lock(cacheMutex_);
-    cache_.clear();
-    expirationTimes_.clear();
-    lastAccessTimes_.clear();
-    lruList_.clear();
+    for (auto& shard_ptr : shards_) {
+        std::unique_lock lock(shard_ptr->mutex);
+        shard_ptr->map.clear();
+        shard_ptr->lru_list.clear();
+        shard_ptr->entries.clear();
+    }
+    current_size_ = 0;
 }
 
 template <Cacheable T>
 auto ResourceCache<T>::size() const -> size_t {
-    SharedLock lock(cacheMutex_);
-    return cache_.size();
+    return current_size_.load();
 }
 
 template <Cacheable T>
 auto ResourceCache<T>::empty() const -> bool {
-    SharedLock lock(cacheMutex_);
-    return cache_.empty();
+    return size() == 0;
 }
 
 template <Cacheable T>
-void ResourceCache<T>::evict() {
-    if (lruList_.empty()) {
+void ResourceCache<T>::evict(Shard& shard) {
+    if (shard.lru_list.empty()) {
+        return;
+    }
+    String key_to_evict = shard.lru_list.back();
+    shard.lru_list.pop_back();
+    shard.map.erase(key_to_evict);
+    shard.entries.erase(key_to_evict);
+    current_size_--;
+
+    if (remove_callback_) {
+        std::lock_guard cb_lock(callback_mutex_);
+        if (remove_callback_) remove_callback_(key_to_evict);
+    }
+    spdlog::info("Evicted key: {}", key_to_evict.c_str());
+}
+
+template <Cacheable T>
+void ResourceCache<T>::cleanup_expired_entries() {
+    while (!stop_cleanup_.load()) {
+        std::this_thread::sleep_for(cleanup_interval_);
+        if (stop_cleanup_.load()) break;
+
+        for (auto& shard_ptr : shards_) {
+            std::unique_lock lock(shard_ptr->mutex);
+            Vector<String> expired_keys;
+            for (const auto& key : shard_ptr->lru_list) {
+                const auto& entry = shard_ptr->entries.at(key);
+                if ((Clock::now() - entry.creation_time) >=
+                    entry.expiration_time) {
+                    expired_keys.push_back(key);
+                }
+            }
+
+            for (const auto& key : expired_keys) {
+                auto it = shard_ptr->map.find(key);
+                if (it != shard_ptr->map.end()) {
+                    shard_ptr->lru_list.erase(it->second);
+                    shard_ptr->map.erase(it);
+                    shard_ptr->entries.erase(key);
+                    current_size_--;
+                    if (remove_callback_) {
+                        std::lock_guard cb_lock(callback_mutex_);
+                        if (remove_callback_) remove_callback_(key);
+                    }
+                    spdlog::info("Removed expired key: {}", key.c_str());
+                }
+            }
+        }
+    }
+}
+
+template <Cacheable T>
+void ResourceCache<T>::set_max_size(size_t new_max_size) {
+    max_size_ = new_max_size;
+    size_t per_shard_capacity =
+        (new_max_size + shards_.size() - 1) / shards_.size();
+    for (auto& shard_ptr : shards_) {
+        std::unique_lock lock(shard_ptr->mutex);
+        shard_ptr->max_size = per_shard_capacity;
+        while (shard_ptr->entries.size() > per_shard_capacity) {
+            evict(*shard_ptr);
+        }
+    }
+}
+
+template <Cacheable T>
+void ResourceCache<T>::read_from_json_file(
+    const String& file_path, const std::function<T(const json&)>& from_json,
+    Duration expiration_time) {
+    std::ifstream input_file(file_path.c_str());
+    if (!input_file.is_open()) {
+        spdlog::error("Failed to open JSON file for reading: {}",
+                      file_path.c_str());
         return;
     }
 
-    String keyToEvict = lruList_.back();
-    lruList_.pop_back();
-
-    size_t erasedCount = cache_.erase(keyToEvict);
-    expirationTimes_.erase(keyToEvict);
-    lastAccessTimes_.erase(keyToEvict);
-
-    if (erasedCount > 0 && removeCallback_) {
-        removeCallback_(keyToEvict);
-    }
-
-    spdlog::info("Evicted key: {}", keyToEvict.c_str());
-}
-
-template <Cacheable T>
-void ResourceCache<T>::evictOldest() {
-    evict();
-}
-
-template <Cacheable T>
-auto ResourceCache<T>::isExpired(const String &key) const -> bool {
-    auto expIt = expirationTimes_.find(key);
-    if (expIt == expirationTimes_.end()) {
-        return false;
-    }
-
-    auto cacheIt = cache_.find(key);
-    if (cacheIt == cache_.end()) {
-        spdlog::error(
-            "Inconsistency: Key {} found in expirationTimes_ but not in cache_",
-            key.c_str());
-        return true;
-    }
-
-    return (std::chrono::steady_clock::now() - cacheIt->second.second) >=
-           expIt->second;
-}
-
-template <Cacheable T>
-auto ResourceCache<T>::asyncLoad(const String &key,
-                                 std::function<T()> loadDataFunction)
-    -> Future<void> {
-    return std::async(std::launch::async, [this, key, loadDataFunction]() {
-        try {
-            T value = loadDataFunction();
-            insert(key, value, std::chrono::seconds(60));
-        } catch (const std::exception &e) {
-            spdlog::error("Async load failed for key {}: {}", key.c_str(),
-                          e.what());
-        }
-    });
-}
-
-template <Cacheable T>
-void ResourceCache<T>::setMaxSize(int maxSize) {
-    UniqueLock lock(cacheMutex_);
-    if (maxSize > 0) {
-        this->maxSize_ = maxSize;
-        while (cache_.size() > static_cast<size_t>(maxSize_)) {
-            evict();
-        }
-    } else {
-        spdlog::warn("Attempted to set invalid cache max size: {}", maxSize);
-    }
-}
-
-template <Cacheable T>
-void ResourceCache<T>::setExpirationTime(const String &key,
-                                         std::chrono::seconds expirationTime) {
-    UniqueLock lock(cacheMutex_);
-    if (cache_.find(key) != cache_.end()) {
-        expirationTimes_[key] = expirationTime;
-    }
-}
-
-template <Cacheable T>
-void ResourceCache<T>::readFromFile(
-    const String &filePath,
-    const std::function<T(const String &)> &deserializer) {
-    std::ifstream inputFile(filePath.c_str());
-    if (inputFile.is_open()) {
-        UniqueLock lock(cacheMutex_);
-        std::string line;
-        while (std::getline(inputFile, line)) {
-            auto separatorIndex = line.find(':');
-            if (separatorIndex != std::string::npos) {
-                String key(line.substr(0, separatorIndex));
-                String valueString(line.substr(separatorIndex + 1));
-                try {
-                    T value = deserializer(valueString);
-                    if (cache_.size() >= static_cast<size_t>(maxSize_)) {
-                        evict();
-                    }
-                    if (cache_.size() < static_cast<size_t>(maxSize_)) {
-                        cache_[key] = {value, std::chrono::steady_clock::now()};
-                        lastAccessTimes_[key] =
-                            std::chrono::steady_clock::now();
-                        expirationTimes_[key] = std::chrono::seconds(3600);
-                        lruList_.remove(key);
-                        lruList_.push_front(key);
-                    } else {
-                        spdlog::warn(
-                            "Cache full, could not insert key {} from file",
-                            key.c_str());
-                    }
-                } catch (const std::exception &e) {
-                    spdlog::error(
-                        "Deserialization failed for key {} from file: {}",
-                        key.c_str(), e.what());
-                }
+    try {
+        json data;
+        input_file >> data;
+        if (data.is_object()) {
+            for (auto it = data.begin(); it != data.end(); ++it) {
+                insert(String(it.key()), from_json(it.value()), expiration_time);
             }
         }
-        inputFile.close();
-    } else {
-        spdlog::error("Failed to open file for reading: {}", filePath.c_str());
+    } catch (const std::exception& e) {
+        spdlog::error("Error processing JSON file {}: {}", file_path.c_str(),
+                      e.what());
     }
 }
 
 template <Cacheable T>
-void ResourceCache<T>::writeToFile(
-    const String &filePath,
-    const std::function<String(const T &)> &serializer) {
-    std::ofstream outputFile(filePath.c_str());
-    if (outputFile.is_open()) {
-        SharedLock lock(cacheMutex_);
-        for (const auto &pair : cache_) {
-            try {
-                String serializedValue = serializer(pair.second.first);
-                std::string line = std::string(pair.first.c_str()) + ":" +
-                                   std::string(serializedValue.c_str()) + "\n";
-                outputFile << line;
-            } catch (const std::exception &e) {
-                spdlog::error("Serialization failed for key {}: {}",
-                              pair.first.c_str(), e.what());
-            }
-        }
-        outputFile.close();
-    } else {
-        spdlog::error("Failed to open file for writing: {}", filePath.c_str());
-    }
-}
-
-template <Cacheable T>
-void ResourceCache<T>::removeExpired() {
-    UniqueLock lock(cacheMutex_);
-    Vector<String> expiredKeys;
-
-    for (auto it = cache_.begin(); it != cache_.end(); ++it) {
-        if (isExpired(it->first)) {
-            expiredKeys.push_back(it->first);
+void ResourceCache<T>::write_to_json_file(
+    const String& file_path,
+    const std::function<json(const T&)>& to_json) const {
+    json data = json::object();
+    for (const auto& shard_ptr : shards_) {
+        std::shared_lock lock(shard_ptr->mutex);
+        for (const auto& pair : shard_ptr->entries) {
+            data[std::string(pair.first.c_str())] = to_json(pair.second.value);
         }
     }
 
-    for (const auto &key : expiredKeys) {
-        cache_.erase(key);
-        expirationTimes_.erase(key);
-        lastAccessTimes_.erase(key);
-        lruList_.remove(key);
-        if (removeCallback_) {
-            removeCallback_(key);
-        }
-        spdlog::info("Removed expired key: {}", key.c_str());
-    }
-}
-
-template <Cacheable T>
-void ResourceCache<T>::readFromJsonFile(
-    const String &filePath, const std::function<T(const json &)> &fromJson) {
-    std::ifstream inputFile(filePath.c_str());
-    if (inputFile.is_open()) {
-        UniqueLock lock(cacheMutex_);
-        json jsonData;
-        try {
-            inputFile >> jsonData;
-            inputFile.close();
-
-            if (jsonData.is_object()) {
-                for (auto it = jsonData.begin(); it != jsonData.end(); ++it) {
-                    String key(it.key());
-                    try {
-                        T value = fromJson(it.value());
-                        if (cache_.size() >= static_cast<size_t>(maxSize_)) {
-                            evict();
-                        }
-                        if (cache_.size() < static_cast<size_t>(maxSize_)) {
-                            cache_[key] = {value,
-                                           std::chrono::steady_clock::now()};
-                            lastAccessTimes_[key] =
-                                std::chrono::steady_clock::now();
-                            expirationTimes_[key] = std::chrono::seconds(3600);
-                            lruList_.remove(key);
-                            lruList_.push_front(key);
-                        } else {
-                            spdlog::warn(
-                                "Cache full, could not insert key {} from JSON "
-                                "file",
-                                key.c_str());
-                        }
-                    } catch (const std::exception &e) {
-                        spdlog::error(
-                            "Deserialization failed for key {} from JSON file: "
-                            "{}",
-                            key.c_str(), e.what());
-                    }
-                }
-            } else {
-                spdlog::error("JSON file does not contain a root object: {}",
-                              filePath.c_str());
-            }
-        } catch (const json::parse_error &e) {
-            spdlog::error("Failed to parse JSON file {}: {}", filePath.c_str(),
-                          e.what());
-            inputFile.close();
-        } catch (const std::exception &e) {
-            spdlog::error("Error reading JSON file {}: {}", filePath.c_str(),
-                          e.what());
-            inputFile.close();
-        }
-    } else {
-        spdlog::error("Failed to open JSON file for reading: {}",
-                      filePath.c_str());
-    }
-}
-
-template <Cacheable T>
-void ResourceCache<T>::writeToJsonFile(
-    const String &filePath, const std::function<json(const T &)> &toJson) {
-    std::ofstream outputFile(filePath.c_str());
-    if (outputFile.is_open()) {
-        SharedLock lock(cacheMutex_);
-        json jsonData = json::object();
-        for (const auto &pair : cache_) {
-            try {
-                jsonData[std::string(pair.first.c_str())] =
-                    toJson(pair.second.first);
-            } catch (const std::exception &e) {
-                spdlog::error("Serialization to JSON failed for key {}: {}",
-                              pair.first.c_str(), e.what());
-            }
-        }
-        try {
-            outputFile << jsonData.dump(4);
-            outputFile.close();
-        } catch (const std::exception &e) {
-            spdlog::error("Error writing JSON data to file {}: {}",
-                          filePath.c_str(), e.what());
-            outputFile.close();
-        }
-    } else {
+    std::ofstream output_file(file_path.c_str());
+    if (!output_file.is_open()) {
         spdlog::error("Failed to open JSON file for writing: {}",
-                      filePath.c_str());
+                      file_path.c_str());
+        return;
+    }
+    output_file << data.dump(4);
+}
+
+template <Cacheable T>
+void ResourceCache<T>::insert_batch(const Vector<std::pair<String, T>>& items,
+                                    Duration expiration_time) {
+    for (const auto& [key, value] : items) {
+        insert(key, value, expiration_time);
     }
 }
 
 template <Cacheable T>
-void ResourceCache<T>::cleanupExpiredEntries() {
-    while (!stopCleanupThread_.load()) {
-        std::this_thread::sleep_for(cleanupInterval_);
-
-        Vector<String> expiredKeys;
-        std::chrono::seconds nextInterval = std::chrono::seconds(5);
-
-        {
-            UniqueLock lock(cacheMutex_);
-            for (auto it = cache_.begin(); it != cache_.end(); ++it) {
-                if (isExpired(it->first)) {
-                    expiredKeys.push_back(it->first);
-                }
-            }
-
-            for (const auto &key : expiredKeys) {
-                cache_.erase(key);
-                expirationTimes_.erase(key);
-                lastAccessTimes_.erase(key);
-                lruList_.remove(key);
-                if (removeCallback_) {
-                    removeCallback_(key);
-                }
-                spdlog::info("Removed expired key: {}", key.c_str());
-            }
-
-            size_t currentSize = cache_.size();
-            if (currentSize > 0) {
-                double density = static_cast<double>(expiredKeys.size()) /
-                                 (currentSize + expiredKeys.size());
-                if (density > 0.3) {
-                    nextInterval = std::chrono::seconds(1);
-                } else if (density < 0.1) {
-                    nextInterval = std::chrono::seconds(5);
-                } else {
-                    nextInterval = std::chrono::seconds(3);
-                }
-            } else {
-                nextInterval = std::chrono::seconds(5);
-            }
-        }
-
-        cleanupInterval_ = nextInterval;
+void ResourceCache<T>::remove_batch(const Vector<String>& keys) {
+    for (const auto& key : keys) {
+        remove(key);
     }
 }
 
 template <Cacheable T>
-void ResourceCache<T>::insertBatch(const Vector<std::pair<String, T>> &items,
-                                   std::chrono::seconds expirationTime) {
-    UniqueLock lock(cacheMutex_);
-    for (const auto &[key, value] : items) {
-        if (cache_.size() >= static_cast<size_t>(maxSize_)) {
-            evict();
-        }
-        if (cache_.size() < static_cast<size_t>(maxSize_)) {
-            cache_[key] = {value, std::chrono::steady_clock::now()};
-            expirationTimes_[key] = expirationTime;
-            lastAccessTimes_[key] = std::chrono::steady_clock::now();
-            lruList_.remove(key);
-            lruList_.push_front(key);
-            if (insertCallback_) {
-                insertCallback_(key);
-            }
-        } else {
-            spdlog::warn(
-                "Cache full during batch insert, could not insert key {}",
-                key.c_str());
-        }
-    }
+void ResourceCache<T>::on_insert(Callback callback) {
+    std::lock_guard lock(callback_mutex_);
+    insert_callback_ = std::move(callback);
 }
 
 template <Cacheable T>
-void ResourceCache<T>::removeBatch(const Vector<String> &keys) {
-    UniqueLock lock(cacheMutex_);
-    for (const auto &key : keys) {
-        size_t erasedCount = cache_.erase(key);
-        expirationTimes_.erase(key);
-        lastAccessTimes_.erase(key);
-        if (erasedCount > 0) {
-            lruList_.remove(key);
-            if (removeCallback_) {
-                removeCallback_(key);
-            }
-        }
-    }
+void ResourceCache<T>::on_remove(Callback callback) {
+    std::lock_guard lock(callback_mutex_);
+    remove_callback_ = std::move(callback);
+}
+
+template <Cacheable T>
+auto ResourceCache<T>::get_statistics() const -> std::pair<size_t, size_t> {
+    return {hit_count_.load(), miss_count_.load()};
 }
 
 }  // namespace atom::search

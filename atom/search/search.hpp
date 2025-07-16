@@ -1,7 +1,16 @@
+/**
+ * @file search.hpp
+ * @brief Defines the Document and SearchEngine classes for Atom Search.
+ * @date 2025-07-16
+ */
+
 #ifndef ATOM_SEARCH_SEARCH_HPP
 #define ATOM_SEARCH_SEARCH_HPP
 
+#include <spdlog/spdlog.h>
+
 #include <atomic>
+#include <condition_variable>
 #include <exception>
 #include <future>
 #include <memory>
@@ -11,20 +20,10 @@
 #include <shared_mutex>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #include "atom/containers/high_performance.hpp"
-
-#ifdef ATOM_USE_BOOST
-#include <boost/container/string.hpp>
-#include <boost/lockfree/queue.hpp>
-#include <boost/thread/future.hpp>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/shared_mutex.hpp>
-#include <boost/thread/thread.hpp>
-#endif
-
-#include <spdlog/spdlog.h>
 
 namespace atom::search {
 
@@ -33,95 +32,21 @@ using atom::containers::HashSet;
 using atom::containers::String;
 using atom::containers::Vector;
 
-#ifdef ATOM_USE_BOOST
-namespace threading {
-using thread = boost::thread;
-using mutex = boost::mutex;
-using shared_mutex = boost::shared_mutex;
-using unique_lock = boost::unique_lock<mutex>;
-using shared_lock = boost::shared_lock<shared_mutex>;
-
-template <typename T>
-using future = boost::future<T>;
-template <typename T>
-using shared_future = boost::shared_future<T>;
-template <typename T>
-using promise = boost::promise<T>;
-
-#ifdef ATOM_HAS_BOOST_LOCKFREE
-using atom::containers::hp::lockfree::queue;
-#else
-template <typename T, size_t Capacity = 1024>
-using queue = boost::lockfree::queue<T, boost::lockfree::capacity<Capacity>>;
-#endif
-template <typename T>
-using lockfree_queue = queue<T>;
-
-}  // namespace threading
-#else
-namespace threading {
-using thread = std::thread;
-using mutex = std::mutex;
-using shared_mutex = std::shared_mutex;
-using unique_lock = std::unique_lock<mutex>;
-using shared_lock = std::shared_lock<shared_mutex>;
-
-template <typename T>
-using future = std::future<T>;
-template <typename T>
-using shared_future = std::shared_future<T>;
-template <typename T>
-using promise = std::promise<T>;
-
-template <typename T>
-class lockfree_queue {
-private:
-    std::mutex mutex_;
-    std::queue<T> queue_;
-
-public:
-    explicit lockfree_queue(size_t capacity [[maybe_unused]] = 128) {}
-
-    bool push(const T& item) {
-        std::lock_guard lock(mutex_);
-        queue_.push(item);
-        return true;
-    }
-
-    bool pop(T& item) {
-        std::lock_guard lock(mutex_);
-        if (queue_.empty())
-            return false;
-        item = queue_.front();
-        queue_.pop();
-        return true;
-    }
-
-    bool empty() {
-        std::lock_guard lock(mutex_);
-        return queue_.empty();
-    }
-
-    bool consume(T& item) { return pop(item); }
-};
-}  // namespace threading
-#endif
-
 /**
  * @brief Base exception class for search engine errors.
  */
 class SearchEngineException : public std::exception {
 public:
     /**
-     * @brief Constructs a SearchEngineException with the given message.
-     * @param message The error message
+     * @brief Constructs a SearchEngineException with a given message.
+     * @param message The error message.
      */
     explicit SearchEngineException(std::string message)
         : message_(std::move(message)) {}
 
     /**
      * @brief Returns the error message.
-     * @return The error message as a C-style string
+     * @return The error message as a C-style string.
      */
     const char* what() const noexcept override { return message_.c_str(); }
 
@@ -135,409 +60,368 @@ protected:
 class DocumentNotFoundException : public SearchEngineException {
 public:
     /**
-     * @brief Constructs a DocumentNotFoundException for the given document ID.
-     * @param docId The ID of the document that was not found
+     * @brief Constructs a DocumentNotFoundException for a given document ID.
+     * @param doc_id The ID of the document that was not found.
      */
-    explicit DocumentNotFoundException(const String& docId)
-        : SearchEngineException("Document not found: " + std::string(docId)) {}
+    explicit DocumentNotFoundException(const String& doc_id)
+        : SearchEngineException("Document not found: " + std::string(doc_id)) {}
 };
 
 /**
- * @brief Exception thrown when there's an issue with document validation.
+ * @brief Exception for document validation errors.
  */
 class DocumentValidationException : public SearchEngineException {
 public:
     /**
-     * @brief Constructs a DocumentValidationException with the given message.
-     * @param message The validation error message
+     * @brief Constructs a DocumentValidationException with a given message.
+     * @param message The validation error message.
      */
     explicit DocumentValidationException(const std::string& message)
         : SearchEngineException("Document validation error: " + message) {}
 };
 
 /**
- * @brief Exception thrown when there's an issue with search operations.
+ * @brief Exception for errors during a search operation.
  */
 class SearchOperationException : public SearchEngineException {
 public:
     /**
-     * @brief Constructs a SearchOperationException with the given message.
-     * @param message The search operation error message
+     * @brief Constructs a SearchOperationException with a given message.
+     * @param message The search operation error message.
      */
     explicit SearchOperationException(const std::string& message)
         : SearchEngineException("Search operation error: " + message) {}
 };
 
 /**
- * @brief Represents a document with an ID, content, tags, and click count.
+ * @brief Represents a searchable document.
+ *
+ * Contains an ID, content, a set of tags, and a click counter for relevance.
+ * The class is thread-safe for click count modifications.
  */
 class Document {
 public:
     /**
-     * @brief Constructs a Document object.
-     * @param id The unique identifier of the document
-     * @param content The content of the document
-     * @param tags The tags associated with the document
-     * @throws DocumentValidationException if validation fails
+     * @brief Constructs a Document.
+     * @param id The unique identifier for the document.
+     * @param content The main content of the document.
+     * @param tags An initializer list of tags.
+     * @throws DocumentValidationException if any validation fails.
      */
     explicit Document(String id, String content,
                       std::initializer_list<std::string> tags = {});
-
-    /**
-     * @brief Copy constructor.
-     * @param other Document to copy from
-     */
-    Document(const Document& other);
-
-    /**
-     * @brief Copy assignment operator.
-     * @param other Document to copy from
-     * @return Reference to this document
-     */
-    Document& operator=(const Document& other);
-
-    /**
-     * @brief Move constructor.
-     * @param other Document to move from
-     */
-    Document(Document&& other) noexcept;
-
-    /**
-     * @brief Move assignment operator.
-     * @param other Document to move from
-     * @return Reference to this document
-     */
-    Document& operator=(Document&& other) noexcept;
 
     /**
      * @brief Default destructor.
      */
     ~Document() = default;
 
+    Document(const Document& other);
+    Document& operator=(const Document& other);
+    Document(Document&& other) noexcept;
+    Document& operator=(Document&& other) noexcept;
+
     /**
-     * @brief Validates document fields.
-     * @throws DocumentValidationException if validation fails
+     * @brief Validates the document's fields.
+     * @throws DocumentValidationException if validation fails.
      */
     void validate() const;
 
     /**
-     * @brief Gets the document ID.
-     * @return The document ID as a string view
+     * @brief Gets the document's ID.
+     * @return A string view of the document's ID.
      */
-    std::string_view getId() const noexcept { return std::string_view(id_); }
+    [[nodiscard]] std::string_view get_id() const noexcept {
+        return std::string_view(id_);
+    }
 
     /**
-     * @brief Gets the document content.
-     * @return The document content as a string view
+     * @brief Gets the document's content.
+     * @return A string view of the document's content.
      */
-    std::string_view getContent() const noexcept {
+    [[nodiscard]] std::string_view get_content() const noexcept {
         return std::string_view(content_);
     }
 
     /**
-     * @brief Gets the document tags.
-     * @return A const reference to the set of tags
+     * @brief Gets the document's tags.
+     * @return A const reference to the set of tags.
      */
-    const std::set<std::string>& getTags() const noexcept { return tags_; }
-
-    /**
-     * @brief Gets the click count.
-     * @return The current click count
-     */
-    int getClickCount() const noexcept {
-        return clickCount_.load(std::memory_order_relaxed);
+    [[nodiscard]] const std::set<std::string>& get_tags() const noexcept {
+        return tags_;
     }
 
     /**
-     * @brief Sets the document content.
-     * @param content The new content for the document
-     * @throws DocumentValidationException if content is empty
+     * @brief Gets the document's click count.
+     * @return The current click count.
      */
-    void setContent(String content);
+    [[nodiscard]] int get_click_count() const noexcept {
+        return click_count_.load(std::memory_order_relaxed);
+    }
+
+    /**
+     * @brief Sets the document's content.
+     * @param content The new content.
+     * @throws DocumentValidationException if content is empty.
+     */
+    void set_content(String content);
 
     /**
      * @brief Adds a tag to the document.
-     * @param tag The tag to add
-     * @throws DocumentValidationException if tag is invalid
+     * @param tag The tag to add.
+     * @throws DocumentValidationException if the tag is invalid.
      */
-    void addTag(const std::string& tag);
+    void add_tag(const std::string& tag);
 
     /**
      * @brief Removes a tag from the document.
-     * @param tag The tag to remove
+     * @param tag The tag to remove.
      */
-    void removeTag(const std::string& tag);
+    void remove_tag(const std::string& tag);
 
     /**
-     * @brief Increments the click count atomically.
+     * @brief Atomically increments the click count.
      */
-    void incrementClickCount() noexcept {
-        clickCount_.fetch_add(1, std::memory_order_relaxed);
+    void increment_click_count() noexcept {
+        click_count_.fetch_add(1, std::memory_order_relaxed);
     }
 
     /**
-     * @brief Sets the click count.
-     * @param count The new click count
+     * @brief Sets the click count to a specific value.
+     * @param count The new click count.
      */
-    void setClickCount(int count) noexcept {
-        clickCount_.store(count, std::memory_order_relaxed);
-    }
-
-    /**
-     * @brief Resets the click count to zero.
-     */
-    void resetClickCount() noexcept {
-        clickCount_.store(0, std::memory_order_relaxed);
+    void set_click_count(int count) noexcept {
+        click_count_.store(count, std::memory_order_relaxed);
     }
 
 private:
     String id_;
     String content_;
     std::set<std::string> tags_;
-    std::atomic<int> clickCount_{0};
+    std::atomic<int> click_count_{0};
 };
 
 /**
- * @brief A high-performance search engine for indexing and searching documents.
+ * @brief A high-performance, thread-safe, sharded search engine.
+ *
+ * This search engine uses a sharded architecture to provide high-concurrency
+ * indexing and searching. Data is partitioned across multiple shards, each
+ * with its own lock, to minimize contention and scale on multi-core systems.
  */
 class SearchEngine {
 public:
     /**
-     * @brief Constructs a SearchEngine with optional parallelism settings.
-     * @param maxThreads Maximum number of threads to use (0 = use hardware
-     * concurrency)
+     * @brief Constructs the SearchEngine.
+     * @param num_threads The number of worker threads for background tasks. If 0,
+     * defaults to hardware concurrency.
      */
-    explicit SearchEngine(unsigned maxThreads = 0);
+    explicit SearchEngine(unsigned num_threads = 0);
 
     /**
-     * @brief Destructor - cleans up thread resources.
+     * @brief Destructor. Stops worker threads and cleans up resources.
      */
     ~SearchEngine();
 
-    /**
-     * @brief Non-copyable.
-     */
     SearchEngine(const SearchEngine&) = delete;
     SearchEngine& operator=(const SearchEngine&) = delete;
-
-    /**
-     * @brief Non-movable.
-     */
     SearchEngine(SearchEngine&&) = delete;
     SearchEngine& operator=(SearchEngine&&) = delete;
 
     /**
-     * @brief Adds a document to the search engine.
-     * @param doc The document to add
-     * @throws std::invalid_argument if the document ID already exists
-     * @throws DocumentValidationException if the document is invalid
+     * @brief Adds a document to the search index.
+     * @param doc The document to add (l-value).
      */
-    void addDocument(const Document& doc);
+    void add_document(const Document& doc);
 
     /**
-     * @brief Adds a document to the search engine using move semantics.
-     * @param doc The document to add
-     * @throws std::invalid_argument if the document ID already exists
-     * @throws DocumentValidationException if the document is invalid
+     * @brief Adds a document to the search index.
+     * @param doc The document to add (r-value).
      */
-    void addDocument(Document&& doc);
+    void add_document(Document&& doc);
 
     /**
-     * @brief Removes a document from the search engine.
-     * @param docId The ID of the document to remove
-     * @throws DocumentNotFoundException if the document does not exist
+     * @brief Removes a document from the search index.
+     * @param doc_id The ID of the document to remove.
      */
-    void removeDocument(const String& docId);
+    void remove_document(const String& doc_id);
 
     /**
-     * @brief Updates an existing document in the search engine.
-     * @param doc The updated document
-     * @throws DocumentNotFoundException if the document does not exist
-     * @throws DocumentValidationException if the document is invalid
+     * @brief Updates an existing document.
+     * @param doc The document with updated information.
      */
-    void updateDocument(const Document& doc);
+    void update_document(const Document& doc);
 
     /**
-     * @brief Searches for documents by a specific tag.
-     * @param tag The tag to search for
-     * @return A vector of shared pointers to documents that match the tag
+     * @brief Searches for documents matching a single tag.
+     * @param tag The tag to search for.
+     * @return A vector of documents matching the tag.
      */
-    std::vector<std::shared_ptr<Document>> searchByTag(const std::string& tag);
+    [[nodiscard]] std::vector<std::shared_ptr<Document>> search_by_tag(
+        const std::string& tag);
 
     /**
-     * @brief Performs a fuzzy search for documents by a tag with a specified
-     * tolerance.
-     * @param tag The tag to search for
-     * @param tolerance The tolerance for the fuzzy search
-     * @return A vector of shared pointers to documents that match the tag
-     * within the tolerance
-     * @throws std::invalid_argument if tolerance is negative
+     * @brief Performs a fuzzy search for documents by tag.
+     * @param tag The tag to search for.
+     * @param tolerance The maximum Levenshtein distance.
+     * @return A vector of documents matching the fuzzy search.
      */
-    std::vector<std::shared_ptr<Document>> fuzzySearchByTag(
+    [[nodiscard]] std::vector<std::shared_ptr<Document>> fuzzy_search_by_tag(
         const std::string& tag, int tolerance);
 
     /**
-     * @brief Searches for documents by multiple tags.
-     * @param tags The tags to search for
-     * @return A vector of shared pointers to documents that match all the tags
+     * @brief Searches for documents matching a list of tags.
+     * @param tags The tags to search for.
+     * @return A vector of documents, ranked by relevance.
      */
-    std::vector<std::shared_ptr<Document>> searchByTags(
+    [[nodiscard]] std::vector<std::shared_ptr<Document>> search_by_tags(
         const std::vector<std::string>& tags);
 
     /**
-     * @brief Searches for documents by content.
-     * @param query The content query to search for
-     * @return A vector of shared pointers to documents that match the content
-     * query
+     * @brief Searches document content for a query string.
+     * @param query The query string.
+     * @return A vector of documents, ranked by relevance.
      */
-    std::vector<std::shared_ptr<Document>> searchByContent(const String& query);
+    [[nodiscard]] std::vector<std::shared_ptr<Document>> search_by_content(
+        const String& query);
 
     /**
-     * @brief Performs a boolean search for documents by a query.
-     * @param query The boolean query to search for
-     * @return A vector of shared pointers to documents that match the boolean
-     * query
+     * @brief Performs a boolean search (AND, OR, NOT).
+     * @param query The boolean query string.
+     * @return A vector of documents matching the query.
      */
-    std::vector<std::shared_ptr<Document>> booleanSearch(const String& query);
+    [[nodiscard]] std::vector<std::shared_ptr<Document>> boolean_search(
+        const String& query);
 
     /**
-     * @brief Provides autocomplete suggestions for a given prefix.
-     * @param prefix The prefix to autocomplete
-     * @param maxResults The maximum number of results to return (0 = no limit)
-     * @return A vector of autocomplete suggestions
+     * @brief Provides autocomplete suggestions for a prefix.
+     * @param prefix The prefix to complete.
+     * @param max_results The maximum number of suggestions to return.
+     * @return A vector of suggestion strings.
      */
-    std::vector<String> autoComplete(const String& prefix,
-                                     size_t maxResults = 0);
+    [[nodiscard]] std::vector<String> auto_complete(const String& prefix,
+                                                    size_t max_results = 10);
 
     /**
-     * @brief Saves the current index to a file.
-     * @param filename The file to save the index
-     * @throws std::ios_base::failure if the file cannot be written
+     * @brief Saves the entire search index to a file.
+     * @param filename The path to the file.
      */
-    void saveIndex(const String& filename) const;
+    void save_index(const String& filename) const;
 
     /**
-     * @brief Loads the index from a file.
-     * @param filename The file to load the index from
-     * @throws std::ios_base::failure if the file cannot be read
+     * @brief Loads the search index from a file.
+     * @param filename The path to the file.
      */
-    void loadIndex(const String& filename);
+    void load_index(const String& filename);
 
     /**
-     * @brief Gets the total number of documents in the search engine.
-     * @return The total document count
+     * @brief Gets the total number of documents in the engine.
+     * @return The total number of documents.
      */
-    size_t getDocumentCount() const noexcept {
-        return totalDocs_.load(std::memory_order_relaxed);
+    [[nodiscard]] size_t get_document_count() const noexcept {
+        return total_docs_.load(std::memory_order_relaxed);
     }
 
     /**
-     * @brief Clears all documents and indexes.
+     * @brief Clears all data from the search engine.
      */
     void clear();
 
     /**
-     * @brief Checks if a document exists.
-     * @param docId The document ID to check
-     * @return True if the document exists, false otherwise
+     * @brief Checks if a document with a given ID exists.
+     * @param doc_id The document ID to check.
+     * @return True if the document exists, false otherwise.
      */
-    bool hasDocument(const String& docId) const;
+    [[nodiscard]] bool has_document(const String& doc_id) const;
 
     /**
-     * @brief Gets all document IDs.
-     * @return A vector of all document IDs
+     * @brief Gets the IDs of all documents in the engine.
+     * @return A vector of all document IDs.
      */
-    std::vector<String> getAllDocumentIds() const;
+    [[nodiscard]] std::vector<String> get_all_document_ids() const;
 
 private:
-    /**
-     * @brief Adds the content of a document to the content index.
-     * @param doc The document whose content to index
-     */
-    void addContentToIndex(const std::shared_ptr<Document>& doc);
+    struct Shard {
+        HashMap<String, std::shared_ptr<Document>> documents;
+        HashMap<std::string, std::vector<String>> tag_index;
+        HashMap<String, HashSet<String>> content_index;
+        HashMap<String, int> doc_frequency;
+        mutable std::shared_mutex mutex;
+    };
 
     /**
-     * @brief Computes the Levenshtein distance between two strings.
-     * @param s1 The first string
-     * @param s2 The second string
-     * @return The Levenshtein distance between the two strings
+     * @brief A thread-safe queue for asynchronous tasks.
      */
-    int levenshteinDistanceSIMD(std::string_view s1,
-                                std::string_view s2) const noexcept;
+    template <typename T>
+    class ConcurrentQueue {
+    public:
+        void push(T item) {
+            {
+                std::unique_lock lock(mutex_);
+                queue_.push(std::move(item));
+            }
+            cv_.notify_one();
+        }
 
-    /**
-     * @brief Computes the TF-IDF score for a term in a document.
-     * @param doc The document
-     * @param term The term
-     * @return The TF-IDF score for the term in the document
-     */
-    double tfIdf(const Document& doc, std::string_view term) const noexcept;
+        bool pop(T& item) {
+            std::unique_lock lock(mutex_);
+            cv_.wait(lock, [this] { return !queue_.empty() || stop_; });
+            if (stop_ && queue_.empty()) {
+                return false;
+            }
+            item = std::move(queue_.front());
+            queue_.pop();
+            return true;
+        }
 
-    /**
-     * @brief Finds a document by its ID.
-     * @param docId The ID of the document
-     * @return A shared pointer to the document with the specified ID
-     * @throws DocumentNotFoundException if the document does not exist
-     */
-    std::shared_ptr<Document> findDocumentById(const String& docId);
+        void stop() {
+            {
+                std::unique_lock lock(mutex_);
+                stop_ = true;
+            }
+            cv_.notify_all();
+        }
 
-    /**
-     * @brief Tokenizes the content into words.
-     * @param content The content to tokenize
-     * @return A vector of tokens
-     */
-    std::vector<String> tokenizeContent(const String& content) const;
-
-    /**
-     * @brief Gets the ranked results for a set of document scores.
-     * @param scores The scores of the documents
-     * @return A vector of shared pointers to documents ranked by their scores
-     */
-    std::vector<std::shared_ptr<Document>> getRankedResults(
-        const HashMap<String, double>& scores);
-
-    /**
-     * @brief Parallel worker function for searching documents by content.
-     * @param wordChunk Chunk of words to process
-     * @param scoresMap Map to store document scores
-     * @param scoresMutex Mutex to protect the scores map
-     */
-    void searchByContentWorker(const std::vector<String>& wordChunk,
-                               HashMap<String, double>& scoresMap,
-                               threading::mutex& scoresMutex);
-
-    /**
-     * @brief Starts worker threads for processing tasks.
-     */
-    void startWorkerThreads();
-
-    /**
-     * @brief Stops worker threads.
-     */
-    void stopWorkerThreads();
-
-    /**
-     * @brief Worker thread function.
-     */
-    void workerFunction();
-
-private:
-    unsigned maxThreads_;
-    HashMap<String, std::shared_ptr<Document>> documents_;
-    HashMap<std::string, std::vector<String>> tagIndex_;
-    HashMap<String, HashSet<String>> contentIndex_;
-    HashMap<String, int> docFrequency_;
-    std::atomic<int> totalDocs_{0};
-    mutable threading::shared_mutex indexMutex_;
+    private:
+        std::queue<T> queue_;
+        std::mutex mutex_;
+        std::condition_variable cv_;
+        bool stop_ = false;
+    };
 
     struct SearchTask {
         std::vector<String> words;
         std::function<void(const std::vector<String>&)> callback;
     };
 
-    std::unique_ptr<threading::lockfree_queue<SearchTask>> taskQueue_;
-    std::atomic<bool> shouldStopWorkers_{false};
-    std::vector<std::unique_ptr<threading::thread>> workerThreads_;
+    Shard& get_shard(const String& key) const;
+    Shard& get_shard(const std::string& key) const;
+
+    void add_content_to_index(Shard& doc_shard,
+                              const std::shared_ptr<Document>& doc);
+    void remove_content_from_index(Shard& doc_shard,
+                                   const std::shared_ptr<Document>& doc);
+
+    [[nodiscard]] std::vector<String> tokenize_content(
+        const String& content) const;
+    [[nodiscard]] double tf_idf(const Document& doc,
+                              std::string_view term) const;
+    [[nodiscard]] std::vector<std::shared_ptr<Document>> get_ranked_results(
+        const HashMap<String, double>& scores) const;
+    [[nodiscard]] int levenshtein_distance(std::string_view s1,
+                                           std::string_view s2) const noexcept;
+
+    void start_worker_threads();
+    void stop_worker_threads();
+    void worker_function();
+
+    const unsigned int num_threads_;
+    std::vector<std::unique_ptr<Shard>> shards_;
+    const size_t shard_mask_;
+    std::atomic<size_t> total_docs_{0};
+
+    std::unique_ptr<ConcurrentQueue<SearchTask>> task_queue_;
+    std::vector<std::thread> worker_threads_;
+    std::atomic<bool> stop_workers_{false};
 };
 
 }  // namespace atom::search

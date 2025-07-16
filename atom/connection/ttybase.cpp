@@ -38,7 +38,7 @@ public:
 
     ~Impl() noexcept {
         try {
-            stopAsyncOperations();
+            stopAsyncRead();
             if (m_PortFD != -1) {
                 disconnect();
             }
@@ -346,9 +346,9 @@ public:
             std::string devicePath(device);
 
             if (devicePath.find("COM") != std::string::npos &&
-                devicePath.find("\\\\.\\") != 0 &&
+                devicePath.find("\\.") != 0 &&
                 std::stoi(devicePath.substr(3)) > 9) {
-                devicePath = "\\\\.\\" + devicePath;
+                devicePath = "\\." + devicePath;
             }
 
             HANDLE hSerial = CreateFileA(
@@ -604,9 +604,6 @@ public:
 
             m_PortFD = tFd;
 
-            // Start async read thread if not already running
-            startAsyncOperations();
-
             return TTYResponse::OK;
 #endif
         } catch (const std::invalid_argument& e) {
@@ -630,7 +627,7 @@ public:
     [[nodiscard]]
     TTYResponse disconnect() noexcept {
         try {
-            stopAsyncOperations();
+            stopAsyncRead();
 
             if (m_PortFD == -1) {
                 return TTYResponse::OK;  // Already disconnected
@@ -727,7 +724,7 @@ public:
         return m_PortFD != -1;
     }
 
-    void startAsyncOperations() {
+    void startAsyncRead() {
         std::lock_guard<std::mutex> lock(m_Mutex);
 
         if (m_IsRunning.load(std::memory_order_acquire) || m_PortFD == -1) {
@@ -798,7 +795,7 @@ public:
         }
     }
 
-    void stopAsyncOperations() {
+    void stopAsyncRead() {
         std::lock_guard<std::mutex> lock(m_Mutex);
 
         if (!m_IsRunning.load(std::memory_order_acquire)) {
@@ -955,3 +952,21 @@ std::string TTYBase::getErrorMessage(TTYResponse code) const noexcept {
 int TTYBase::getPortFD() const noexcept { return m_pImpl->getPortFD(); }
 
 bool TTYBase::isConnected() const noexcept { return m_pImpl->isConnected(); }
+
+void TTYBase::startAsyncRead() { m_pImpl->startAsyncRead(); }
+
+void TTYBase::stopAsyncRead() { m_pImpl->stopAsyncRead(); }
+
+void TTYBase::setDataCallback(
+    std::function<void(const std::vector<uint8_t>&, size_t)> callback) {
+    m_pImpl->setDataCallback(std::move(callback));
+}
+
+bool TTYBase::getQueuedData(std::vector<uint8_t>& data,
+                            std::chrono::milliseconds timeout) {
+    return m_pImpl->getQueuedData(data, timeout);
+}
+
+void TTYBase::setReadBufferSize(size_t size) {
+    m_pImpl->setReadBufferSize(size);
+}

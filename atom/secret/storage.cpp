@@ -4,6 +4,8 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <system_error>
 
@@ -162,6 +164,7 @@ public:
     }
 
     bool store(std::string_view key, std::string_view data) const override {
+        std::unique_lock lock(mutex_);
         if (key.empty()) {
             spdlog::error("Empty key provided for file storage");
             return false;
@@ -196,6 +199,7 @@ public:
     }
 
     std::string retrieve(std::string_view key) const override {
+        std::shared_lock lock(mutex_);
         if (key.empty()) {
             spdlog::error("Empty key provided for file retrieval");
             return "";
@@ -222,6 +226,7 @@ public:
     }
 
     bool remove(std::string_view key) const override {
+        std::unique_lock lock(mutex_);
         if (key.empty()) {
             spdlog::error("Empty key provided for file removal");
             return false;
@@ -249,6 +254,7 @@ public:
     }
 
     std::vector<std::string> getAllKeys() const override {
+        std::shared_lock lock(mutex_);
         std::vector<std::string> keys;
         std::filesystem::path indexPath = storageDir_ / "index.txt";
 
@@ -321,6 +327,7 @@ public:
     }
 
     bool store(std::string_view key, std::string_view data) const override {
+        std::unique_lock lock(mutex_);
         if (key.empty()) {
             spdlog::error("Empty key provided for Windows Credential Manager");
             return false;
@@ -371,6 +378,7 @@ public:
     }
 
     std::string retrieve(std::string_view key) const override {
+        std::shared_lock lock(mutex_);
         if (key.empty()) {
             spdlog::error(
                 "Empty key provided for Windows Credential Manager retrieval");
@@ -415,6 +423,7 @@ public:
     }
 
     bool remove(std::string_view key) const override {
+        std::unique_lock lock(mutex_);
         if (key.empty()) {
             spdlog::error(
                 "Empty key provided for Windows Credential Manager removal");
@@ -456,6 +465,7 @@ public:
     }
 
     std::vector<std::string> getAllKeys() const override {
+        std::shared_lock lock(mutex_);
         std::vector<std::string> results;
         DWORD count = 0;
         PCREDENTIALW* pCredentials = nullptr;
@@ -513,6 +523,7 @@ public:
     }
 
     bool store(std::string_view key, std::string_view data) const override {
+        std::unique_lock lock(mutex_);
         if (key.empty()) {
             spdlog::error("Empty key provided for Mac Keychain");
             return false;
@@ -588,6 +599,7 @@ public:
     }
 
     std::string retrieve(std::string_view key) const override {
+        std::shared_lock lock(mutex_);
         if (key.empty()) {
             spdlog::error("Empty key provided for Mac Keychain retrieval");
             return "";
@@ -643,6 +655,7 @@ public:
     }
 
     bool remove(std::string_view key) const override {
+        std::unique_lock lock(mutex_);
         if (key.empty()) {
             spdlog::error("Empty key provided for Mac Keychain removal");
             return false;
@@ -689,6 +702,7 @@ public:
     }
 
     std::vector<std::string> getAllKeys() const override {
+        std::shared_lock lock(mutex_);
         std::vector<std::string> results;
         CFStringRef cfService = CFStringCreateWithBytes(
             kCFAllocatorDefault,
@@ -727,7 +741,7 @@ public:
                     CFIndex maxSize = CFStringGetMaximumSizeForEncoding(
                                           length, kCFStringEncodingUTF8) +
                                       1;
-                    std::string accountStr(maxSize, '\0');
+                    std::string accountStr(maxSize, ' ');
 
                     if (CFStringGetCString(cfAccount, &accountStr[0], maxSize,
                                            kCFStringEncodingUTF8)) {
@@ -765,6 +779,7 @@ public:
     }
 
     bool store(std::string_view key, std::string_view data) const override {
+        std::unique_lock lock(mutex_);
         if (key.empty()) {
             spdlog::error("Empty key provided for Linux keyring");
             return false;
@@ -803,6 +818,7 @@ public:
     }
 
     std::string retrieve(std::string_view key) const override {
+        std::shared_lock lock(mutex_);
         if (key.empty()) {
             spdlog::error("Empty key provided for Linux keyring retrieval");
             return "";
@@ -833,6 +849,7 @@ public:
     }
 
     bool remove(std::string_view key) const override {
+        std::unique_lock lock(mutex_);
         if (key.empty()) {
             spdlog::error("Empty key provided for Linux keyring removal");
             return false;
@@ -859,21 +876,41 @@ public:
     }
 
     std::vector<std::string> getAllKeys() const override {
+        std::shared_lock lock(mutex_);
         std::vector<std::string> results;
-        std::string indexKey = std::string(schemaName_) + "_INDEX";
-        std::string indexData = retrieve(indexKey);
 
-        if (!indexData.empty()) {
-            size_t pos = 0;
-            while (pos < indexData.size()) {
-                size_t endPos = indexData.find('\n', pos);
-                if (endPos == std::string::npos) {
-                    results.push_back(indexData.substr(pos));
-                    break;
+        const SecretSchema schema = {
+            schemaName_.c_str(),
+            SECRET_SCHEMA_NONE,
+            {{"app_key", SECRET_SCHEMA_ATTRIBUTE_STRING},
+             {nullptr, SecretSchemaAttributeType(0)}}};
+
+        GError* error = nullptr;
+        // Search for all items with the given schema
+        GList* found =
+            secret_password_search_sync(&schema, nullptr, &error, nullptr);
+
+        if (error) {
+            spdlog::error(
+                "Failed to search for items in Linux keyring (Schema: {}): {}",
+                schemaName_, error->message);
+            g_error_free(error);
+            return results;
+        }
+
+        if (found) {
+            for (GList* l = found; l != nullptr; l = l->next) {
+                SecretPassword* secret = (SecretPassword*)l->data;
+                if (secret) {
+                    // The key is stored as the label
+                    const gchar* label =
+                        secret_item_get_label(SECRET_ITEM(secret));
+                    if (label) {
+                        results.emplace_back(label);
+                    }
                 }
-                results.push_back(indexData.substr(pos, endPos - pos));
-                pos = endPos + 1;
             }
+            g_list_free_full(found, (GDestroyNotify)secret_password_free);
         }
 
         return results;

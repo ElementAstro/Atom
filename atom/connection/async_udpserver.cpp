@@ -7,25 +7,27 @@
 /*************************************************
 
 Date: 2024-1-4
+Revision Date: 2024-05-22
 
-Description: A simple Asio-based UDP server.
+Description: A high-performance, Asio-based asynchronous
+             UDP server utilizing modern C++ concurrency.
 
 *************************************************/
 
 #include "async_udpserver.hpp"
 
-#include <fmt/format.h>
-#include <spdlog/spdlog.h>
 #include <algorithm>
 #include <asio.hpp>
 #include <atomic>
 #include <chrono>
 #include <mutex>
 #include <queue>
-#include <set>
-#include <shared_mutex>
 #include <thread>
+#include <unordered_set>
 #include <vector>
+
+#include <fmt/format.h>
+#include <spdlog/spdlog.h>
 
 namespace atom::async::connection {
 
@@ -40,10 +42,19 @@ class UdpSocketHub::Impl {
 public:
     Impl(unsigned int numThreads = DEFAULT_THREAD_COUNT)
         : socket_(io_context_),
-          running_(false),
           receiveBufferSize_(DEFAULT_BUFFER_SIZE),
           numThreads_(numThreads > 0 ? numThreads : 1),
-          ipFilterEnabled_(false) {}
+          running_(false),
+          ipFilterEnabled_(false) {
+        // Initialize atomic shared pointers with empty collections
+        handlers_.store(std::make_shared<const std::vector<MessageHandler>>());
+        errorHandlers_.store(
+            std::make_shared<const std::vector<ErrorHandler>>());
+        multicastGroups_.store(
+            std::make_shared<const std::unordered_set<std::string>>());
+        allowedIps_.store(
+            std::make_shared<const std::unordered_set<asio::ip::address>>());
+    }
 
     ~Impl() { stop(); }
 
@@ -65,6 +76,8 @@ public:
 
             doReceive();
 
+            // Start I/O threads using C++20 jthread for automatic management
+            io_threads_.reserve(numThreads_);
             for (unsigned int i = 0; i < numThreads_; ++i) {
                 io_threads_.emplace_back([this] {
                     try {
@@ -82,7 +95,7 @@ public:
         } catch (const std::exception& e) {
             notifyError(
                 fmt::format("Failed to start UDP server: {}", e.what()));
-            stop();
+            running_ = false;  // Reset state on failure
             return false;
         }
     }
@@ -93,32 +106,28 @@ public:
         }
 
         spdlog::info("Stopping UDP server...");
-        try {
-            asio::error_code ec;
+
+        // Cooperatively stop all worker threads
+        stopSource_.request_stop();
+
+        asio::error_code ec;
+        if (socket_.is_open()) {
             [[maybe_unused]] auto res = socket_.close(ec);
             if (ec) {
                 notifyError("Error closing socket", ec);
             }
-        } catch (const std::exception& e) {
-            notifyError(
-                fmt::format("Exception while closing socket: {}", e.what()));
         }
 
         io_context_.stop();
         outgoingCV_.notify_all();
 
-        for (auto& thread : io_threads_) {
-            if (thread.joinable()) {
-                thread.join();
-            }
-        }
+        // jthreads will auto-join in their destructors
         io_threads_.clear();
+        // The outgoing thread jthread will also auto-join
 
-        if (outgoingThread_.joinable()) {
-            outgoingThread_.join();
+        if (!io_context_.stopped()) {
+            io_context_.restart();
         }
-
-        io_context_.restart();
         spdlog::info("UDP server stopped.");
     }
 
@@ -127,42 +136,57 @@ public:
     }
 
     void addMessageHandler(MessageHandler handler) {
-        std::unique_lock<std::shared_mutex> lock(handlersMutex_);
-        handlers_.push_back(std::move(handler));
+        std::scoped_lock lock(handlerWriteMutex_);
+        auto oldHandlers = handlers_.load(std::memory_order_relaxed);
+        auto newHandlers =
+            std::make_shared<std::vector<MessageHandler>>(*oldHandlers);
+        newHandlers->push_back(std::move(handler));
+        handlers_.store(newHandlers, std::memory_order_release);
     }
 
     void removeMessageHandler(MessageHandler handler) {
-        std::unique_lock<std::shared_mutex> lock(handlersMutex_);
-        handlers_.erase(
-            std::remove_if(
-                handlers_.begin(), handlers_.end(),
-                [&](const MessageHandler& h) {
-                    return h.target<void(const std::string&, const std::string&,
-                                         unsigned short)>() ==
-                           handler.target<void(const std::string&,
-                                               const std::string&,
-                                               unsigned short)>();
-                }),
-            handlers_.end());
+        std::scoped_lock lock(handlerWriteMutex_);
+        auto oldHandlers = handlers_.load(std::memory_order_relaxed);
+        auto newHandlers = std::make_shared<std::vector<MessageHandler>>();
+        newHandlers->reserve(oldHandlers->size());
+
+        auto target = handler.target<void(
+            const std::string&, const std::string&, unsigned short)>();
+        std::copy_if(
+            oldHandlers->begin(), oldHandlers->end(),
+            std::back_inserter(*newHandlers), [&](const MessageHandler& h) {
+                return h.target<void(const std::string&, const std::string&,
+                                     unsigned short)>() != target;
+            });
+
+        handlers_.store(newHandlers, std::memory_order_release);
     }
 
     void addErrorHandler(ErrorHandler handler) {
-        std::unique_lock<std::shared_mutex> lock(errorHandlersMutex_);
-        errorHandlers_.push_back(std::move(handler));
+        std::scoped_lock lock(errorHandlersWriteMutex_);
+        auto oldHandlers = errorHandlers_.load(std::memory_order_relaxed);
+        auto newHandlers =
+            std::make_shared<std::vector<ErrorHandler>>(*oldHandlers);
+        newHandlers->push_back(std::move(handler));
+        errorHandlers_.store(newHandlers, std::memory_order_release);
     }
 
     void removeErrorHandler(ErrorHandler handler) {
-        std::unique_lock<std::shared_mutex> lock(errorHandlersMutex_);
-        errorHandlers_.erase(
-            std::remove_if(
-                errorHandlers_.begin(), errorHandlers_.end(),
-                [&](const ErrorHandler& h) {
-                    return h.target<void(const std::string&,
-                                         const std::error_code&)>() ==
-                           handler.target<void(const std::string&,
-                                               const std::error_code&)>();
-                }),
-            errorHandlers_.end());
+        std::scoped_lock lock(errorHandlersWriteMutex_);
+        auto oldHandlers = errorHandlers_.load(std::memory_order_relaxed);
+        auto newHandlers = std::make_shared<std::vector<ErrorHandler>>();
+        newHandlers->reserve(oldHandlers->size());
+
+        auto target =
+            handler.target<void(const std::string&, const std::error_code&)>();
+        std::copy_if(
+            oldHandlers->begin(), oldHandlers->end(),
+            std::back_inserter(*newHandlers), [&](const ErrorHandler& h) {
+                return h.target<void(const std::string&,
+                                     const std::error_code&)>() != target;
+            });
+
+        errorHandlers_.store(newHandlers, std::memory_order_release);
     }
 
     bool sendTo(const std::string& message, const std::string& ipAddress,
@@ -173,10 +197,8 @@ public:
         }
         try {
             return queueOutgoingMessage(
-                {message,
-                 asio::ip::udp::endpoint(asio::ip::make_address(ipAddress),
-                                         port),
-                 false});
+                {message, asio::ip::udp::endpoint(
+                              asio::ip::make_address(ipAddress), port)});
         } catch (const std::system_error& e) {
             notifyError(fmt::format("Failed to resolve address {}: {}",
                                     ipAddress, e.what()),
@@ -190,10 +212,16 @@ public:
             notifyError("Cannot broadcast message: Server is not running");
             return false;
         }
+        asio::error_code ec;
+        [[maybe_unused]] auto res =
+            socket_.set_option(asio::socket_base::broadcast(true), ec);
+        if (ec) {
+            notifyError("Failed to enable broadcast option", ec);
+            return false;
+        }
         return queueOutgoingMessage(
             {message,
-             asio::ip::udp::endpoint(asio::ip::address_v4::broadcast(), port),
-             true});
+             asio::ip::udp::endpoint(asio::ip::address_v4::broadcast(), port)});
     }
 
     bool joinMulticastGroup(const std::string& multicastAddress) {
@@ -209,8 +237,14 @@ public:
                 return false;
             }
             socket_.set_option(asio::ip::multicast::join_group(multicastAddr));
-            std::unique_lock<std::shared_mutex> lock(multicastMutex_);
-            multicastGroups_.insert(multicastAddress);
+
+            std::scoped_lock lock(multicastWriteMutex_);
+            auto oldGroups = multicastGroups_.load(std::memory_order_relaxed);
+            auto newGroups =
+                std::make_shared<std::unordered_set<std::string>>(*oldGroups);
+            newGroups->insert(multicastAddress);
+            multicastGroups_.store(newGroups, std::memory_order_release);
+
             spdlog::info("Joined multicast group: {}", multicastAddress);
             return true;
         } catch (const std::system_error& e) {
@@ -234,8 +268,14 @@ public:
                 return false;
             }
             socket_.set_option(asio::ip::multicast::leave_group(multicastAddr));
-            std::unique_lock<std::shared_mutex> lock(multicastMutex_);
-            multicastGroups_.erase(multicastAddress);
+
+            std::scoped_lock lock(multicastWriteMutex_);
+            auto oldGroups = multicastGroups_.load(std::memory_order_relaxed);
+            auto newGroups =
+                std::make_shared<std::unordered_set<std::string>>(*oldGroups);
+            newGroups->erase(multicastAddress);
+            multicastGroups_.store(newGroups, std::memory_order_release);
+
             spdlog::info("Left multicast group: {}", multicastAddress);
             return true;
         } catch (const std::system_error& e) {
@@ -262,7 +302,7 @@ public:
             }
             socket_.set_option(asio::ip::multicast::hops(1));
             return queueOutgoingMessage(
-                {message, asio::ip::udp::endpoint(multicastAddr, port), false});
+                {message, asio::ip::udp::endpoint(multicastAddr, port)});
         } catch (const std::system_error& e) {
             notifyError(
                 fmt::format("Failed to prepare multicast message for {}: {}",
@@ -274,33 +314,57 @@ public:
 
     template <typename T>
     bool setSocketOption(SocketOption option, const T& value) {
-        if (!isRunning()) {
-            notifyError("Cannot set socket option: Server is not running");
+        if (!socket_.is_open()) {
+            notifyError("Cannot set socket option: Socket is not open");
             return false;
         }
         try {
             switch (option) {
                 case SocketOption::Broadcast:
-                    socket_.set_option(
-                        asio::socket_base::broadcast(static_cast<bool>(value)));
+                    if constexpr (std::is_convertible_v<T, bool>) {
+                        socket_.set_option(asio::socket_base::broadcast(
+                            static_cast<bool>(value)));
+                    } else {
+                        notifyError(
+                            "Invalid type for Broadcast option, bool "
+                            "expected.");
+                        return false;
+                    }
                     break;
                 case SocketOption::ReuseAddress:
-                    socket_.set_option(asio::socket_base::reuse_address(
-                        static_cast<bool>(value)));
+                    if constexpr (std::is_convertible_v<T, bool>) {
+                        socket_.set_option(asio::socket_base::reuse_address(
+                            static_cast<bool>(value)));
+                    } else {
+                        notifyError(
+                            "Invalid type for ReuseAddress option, bool "
+                            "expected.");
+                        return false;
+                    }
                     break;
                 case SocketOption::ReceiveBufferSize:
-                    socket_.set_option(asio::socket_base::receive_buffer_size(
-                        static_cast<int>(value)));
+                    if constexpr (std::is_convertible_v<T, int>) {
+                        socket_.set_option(
+                            asio::socket_base::receive_buffer_size(
+                                static_cast<int>(value)));
+                    } else {
+                        notifyError(
+                            "Invalid type for ReceiveBufferSize option, int "
+                            "expected.");
+                        return false;
+                    }
                     break;
                 case SocketOption::SendBufferSize:
-                    socket_.set_option(asio::socket_base::send_buffer_size(
-                        static_cast<int>(value)));
+                    if constexpr (std::is_convertible_v<T, int>) {
+                        socket_.set_option(asio::socket_base::send_buffer_size(
+                            static_cast<int>(value)));
+                    } else {
+                        notifyError(
+                            "Invalid type for SendBufferSize option, int "
+                            "expected.");
+                        return false;
+                    }
                     break;
-                case SocketOption::ReceiveTimeout:  // Fallthrough
-                case SocketOption::SendTimeout:     // Fallthrough
-                default:
-                    notifyError("Unsupported or unknown socket option");
-                    return false;
             }
             return true;
         } catch (const std::system_error& e) {
@@ -317,14 +381,16 @@ public:
             return false;
         }
         receiveBufferSize_ = size;
-        receiveBuffer_.resize(size);
+        if (isRunning()) {
+            receiveBuffer_.resize(size);
+        }
         return setSocketOption(SocketOption::ReceiveBufferSize,
                                static_cast<int>(size));
     }
 
     bool setReceiveTimeout(const std::chrono::milliseconds& timeout) {
-        if (!isRunning()) {
-            notifyError("Cannot set receive timeout: Server is not running");
+        if (!socket_.is_open()) {
+            notifyError("Cannot set receive timeout: Socket is not open");
             return false;
         }
         try {
@@ -334,8 +400,12 @@ public:
                        (const char*)&milliseconds, sizeof(milliseconds));
 #else
             struct timeval tv;
-            tv.tv_sec = static_cast<long>(timeout.count() / 1000);
-            tv.tv_usec = static_cast<long>((timeout.count() % 1000) * 1000);
+            tv.tv_sec =
+                std::chrono::duration_cast<std::chrono::seconds>(timeout)
+                    .count();
+            tv.tv_usec = std::chrono::duration_cast<std::chrono::microseconds>(
+                             timeout % std::chrono::seconds(1))
+                             .count();
             setsockopt(socket_.native_handle(), SOL_SOCKET, SO_RCVTIMEO, &tv,
                        sizeof(tv));
 #endif
@@ -357,9 +427,14 @@ public:
 
     void addAllowedIp(const std::string& ip) {
         try {
-            std::unique_lock<std::shared_mutex> lock(ipFilterMutex_);
-            allowedIps_.insert(asio::ip::make_address(ip));
-            ipFilterEnabled_ = true;
+            std::scoped_lock lock(ipFilterWriteMutex_);
+            auto oldIps = allowedIps_.load(std::memory_order_relaxed);
+            auto newIps =
+                std::make_shared<std::unordered_set<asio::ip::address>>(
+                    *oldIps);
+            newIps->insert(asio::ip::make_address(ip));
+            allowedIps_.store(newIps, std::memory_order_release);
+            ipFilterEnabled_.store(true, std::memory_order_release);
         } catch (const std::system_error& e) {
             notifyError(
                 fmt::format("Failed to add IP filter for {}: {}", ip, e.what()),
@@ -369,9 +444,14 @@ public:
 
     void removeAllowedIp(const std::string& ip) {
         try {
-            std::unique_lock<std::shared_mutex> lock(ipFilterMutex_);
-            allowedIps_.erase(asio::ip::make_address(ip));
-            ipFilterEnabled_ = !allowedIps_.empty();
+            std::scoped_lock lock(ipFilterWriteMutex_);
+            auto oldIps = allowedIps_.load(std::memory_order_relaxed);
+            auto newIps =
+                std::make_shared<std::unordered_set<asio::ip::address>>(
+                    *oldIps);
+            newIps->erase(asio::ip::make_address(ip));
+            ipFilterEnabled_.store(!newIps->empty(), std::memory_order_release);
+            allowedIps_.store(newIps, std::memory_order_release);
         } catch (const std::system_error& e) {
             notifyError(fmt::format("Failed to remove IP filter for {}: {}", ip,
                                     e.what()),
@@ -380,16 +460,16 @@ public:
     }
 
     void clearIpFilters() {
-        std::unique_lock<std::shared_mutex> lock(ipFilterMutex_);
-        allowedIps_.clear();
-        ipFilterEnabled_ = false;
+        std::scoped_lock lock(ipFilterWriteMutex_);
+        allowedIps_.store(
+            std::make_shared<const std::unordered_set<asio::ip::address>>());
+        ipFilterEnabled_.store(false, std::memory_order_release);
     }
 
 private:
     struct OutgoingMessage {
         std::string message;
         asio::ip::udp::endpoint endpoint;
-        bool isBroadcast;
     };
 
     void doReceive() {
@@ -397,10 +477,9 @@ private:
             asio::buffer(receiveBuffer_), senderEndpoint_,
             [this](std::error_code errorCode, std::size_t bytesReceived) {
                 if (errorCode) {
-                    if (isRunning() &&
-                        errorCode != asio::error::operation_aborted) {
+                    // operation_aborted is expected on clean shutdown
+                    if (errorCode != asio::error::operation_aborted) {
                         notifyError("Receive error", errorCode);
-                        doReceive();
                     }
                     return;
                 }
@@ -411,13 +490,14 @@ private:
                     stats_.messagesReceived.fetch_add(
                         1, std::memory_order_relaxed);
 
-                    if (ipFilterEnabled_) {
-                        std::shared_lock<std::shared_mutex> lock(
-                            ipFilterMutex_);
-                        if (allowedIps_.find(senderEndpoint_.address()) ==
-                            allowedIps_.end()) {
-                            if (isRunning())
-                                doReceive();
+                    // IP filter check is lock-free
+                    if (ipFilterEnabled_.load(std::memory_order_acquire)) {
+                        auto currentAllowedIps =
+                            allowedIps_.load(std::memory_order_acquire);
+                        if (currentAllowedIps->find(
+                                senderEndpoint_.address()) ==
+                            currentAllowedIps->end()) {
+                            doReceive();  // Silently drop and wait for next
                             return;
                         }
                     }
@@ -428,12 +508,15 @@ private:
                         senderEndpoint_.address().to_string());
                     unsigned short senderPort = senderEndpoint_.port();
 
+                    // Post handler execution to the thread pool to unblock the
+                    // receiver
                     asio::post(io_context_, [this, message, senderIp,
                                              senderPort]() {
                         notifyMessageHandlers(*message, *senderIp, senderPort);
                     });
                 }
 
+                // Continue the receive loop if the server is still running
                 if (isRunning()) {
                     doReceive();
                 }
@@ -443,13 +526,13 @@ private:
     void notifyMessageHandlers(const std::string& message,
                                const std::string& senderIp,
                                unsigned short senderPort) {
-        std::vector<MessageHandler> handlersCopy;
-        {
-            std::shared_lock<std::shared_mutex> lock(handlersMutex_);
-            handlersCopy = handlers_;
+        // This read is lock-free
+        auto currentHandlers = handlers_.load(std::memory_order_acquire);
+        if (currentHandlers->empty()) {
+            return;
         }
 
-        for (const auto& handler : handlersCopy) {
+        for (const auto& handler : *currentHandlers) {
             try {
                 handler(message, senderIp, senderPort);
             } catch (const std::exception& e) {
@@ -463,19 +546,19 @@ private:
                      const std::error_code& ec = {}) {
         stats_.errors.fetch_add(1, std::memory_order_relaxed);
         if (ec) {
-            spdlog::error("UDP Socket Error: {} (Code: {}, {})", errorMessage,
-                          ec.value(), ec.message());
+            spdlog::error("UDP Socket Error: {} (Code: {}, Message: {})",
+                          errorMessage, ec.value(), ec.message());
         } else {
             spdlog::error("UDP Socket Error: {}", errorMessage);
         }
 
-        std::vector<ErrorHandler> handlersCopy;
-        {
-            std::shared_lock<std::shared_mutex> lock(errorHandlersMutex_);
-            handlersCopy = errorHandlers_;
+        // This read is lock-free
+        auto currentHandlers = errorHandlers_.load(std::memory_order_acquire);
+        if (currentHandlers->empty()) {
+            return;
         }
 
-        for (const auto& handler : handlersCopy) {
+        for (const auto& handler : *currentHandlers) {
             try {
                 handler(errorMessage, ec);
             } catch (const std::exception& e) {
@@ -498,50 +581,51 @@ private:
     }
 
     void startOutgoingMessageWorker() {
-        outgoingThread_ = std::thread([this] {
-            while (isRunning()) {
-                std::unique_lock<std::mutex> lock(outgoingQueueMutex_);
-                outgoingCV_.wait(lock, [this] {
-                    return !outgoingQueue_.empty() || !isRunning();
-                });
+        outgoingThread_ = std::jthread(
+            [this](std::stop_token st) {
+                std::queue<OutgoingMessage> localQueue;
+                while (!st.stop_requested()) {
+                    {
+                        std::unique_lock<std::mutex> lock(outgoingQueueMutex_);
+                        // Wait until the queue has items or a stop is requested
+                        outgoingCV_.wait(lock, st, [this] {
+                            return !outgoingQueue_.empty();
+                        });
 
-                if (!isRunning() && outgoingQueue_.empty())
-                    break;
+                        // After waking, drain the entire queue to a local one
+                        // This minimizes lock holding time.
+                        if (!outgoingQueue_.empty()) {
+                            localQueue.swap(outgoingQueue_);
+                        }
+                    }  // Mutex is unlocked here
 
-                if (!outgoingQueue_.empty()) {
-                    OutgoingMessage msg = std::move(outgoingQueue_.front());
-                    outgoingQueue_.pop();
-                    lock.unlock();
-
-                    try {
-                        if (msg.isBroadcast) {
-                            socket_.set_option(
-                                asio::socket_base::broadcast(true));
+                    // Process all drained messages without holding the lock
+                    while (!localQueue.empty()) {
+                        OutgoingMessage& msg = localQueue.front();
+                        try {
+                            std::error_code ec;
+                            std::size_t bytesSent = socket_.send_to(
+                                asio::buffer(msg.message), msg.endpoint, 0, ec);
+                            if (ec) {
+                                notifyError("Failed to send message", ec);
+                            } else {
+                                stats_.bytesSent.fetch_add(
+                                    bytesSent, std::memory_order_relaxed);
+                                stats_.messagesSent.fetch_add(
+                                    1, std::memory_order_relaxed);
+                            }
+                        } catch (const std::system_error& e) {
+                            notifyError(
+                                fmt::format(
+                                    "Exception while sending message: {}",
+                                    e.what()),
+                                e.code());
                         }
-                        std::error_code ec;
-                        std::size_t bytesSent = socket_.send_to(
-                            asio::buffer(msg.message), msg.endpoint, 0, ec);
-                        if (ec) {
-                            notifyError("Failed to send message", ec);
-                        } else {
-                            stats_.bytesSent.fetch_add(
-                                bytesSent, std::memory_order_relaxed);
-                            stats_.messagesSent.fetch_add(
-                                1, std::memory_order_relaxed);
-                        }
-                        if (msg.isBroadcast) {
-                            socket_.set_option(
-                                asio::socket_base::broadcast(false));
-                        }
-                    } catch (const std::system_error& e) {
-                        notifyError(
-                            fmt::format("Exception while sending message: {}",
-                                        e.what()),
-                            e.code());
+                        localQueue.pop();
                     }
                 }
-            }
-        });
+            },
+            stopSource_.get_token());
     }
 
     asio::io_context io_context_;
@@ -550,37 +634,43 @@ private:
     std::vector<char> receiveBuffer_;
     std::size_t receiveBufferSize_;
 
-    std::vector<std::thread> io_threads_;
-    std::thread outgoingThread_;
+    std::vector<std::jthread> io_threads_;
+    std::jthread outgoingThread_;
     unsigned int numThreads_;
+    std::stop_source stopSource_;
 
     std::atomic<bool> running_;
 
-    mutable std::shared_mutex handlersMutex_;
-    std::vector<MessageHandler> handlers_;
+    // High-performance, copy-on-write collections for lock-free reads
+    std::atomic<std::shared_ptr<const std::vector<MessageHandler>>> handlers_;
+    std::mutex handlerWriteMutex_;
 
-    mutable std::shared_mutex errorHandlersMutex_;
-    std::vector<ErrorHandler> errorHandlers_;
+    std::atomic<std::shared_ptr<const std::vector<ErrorHandler>>>
+        errorHandlers_;
+    std::mutex errorHandlersWriteMutex_;
 
+    std::atomic<std::shared_ptr<const std::unordered_set<std::string>>>
+        multicastGroups_;
+    std::mutex multicastWriteMutex_;
+
+    std::atomic<std::shared_ptr<const std::unordered_set<asio::ip::address>>>
+        allowedIps_;
+    std::mutex ipFilterWriteMutex_;
+    std::atomic<bool> ipFilterEnabled_;
+
+    // High-throughput outgoing message queue
     std::queue<OutgoingMessage> outgoingQueue_;
     std::mutex outgoingQueueMutex_;
-    std::condition_variable outgoingCV_;
-
-    mutable std::shared_mutex multicastMutex_;
-    std::set<std::string> multicastGroups_;
-
-    mutable std::shared_mutex ipFilterMutex_;
-    std::set<asio::ip::address> allowedIps_;
-    std::atomic<bool> ipFilterEnabled_;
+    std::condition_variable_any outgoingCV_;
 
     Statistics stats_;
 };
 
-// UdpSocketHub implementation
+// UdpSocketHub PIMPL forwarding
 UdpSocketHub::UdpSocketHub() : impl_(std::make_unique<Impl>()) {}
 UdpSocketHub::UdpSocketHub(unsigned int numThreads)
     : impl_(std::make_unique<Impl>(numThreads)) {}
-UdpSocketHub::~UdpSocketHub() = default;
+UdpSocketHub::~UdpSocketHub() { impl_->stop(); }
 
 bool UdpSocketHub::start(unsigned short port, bool ipv6) {
     return impl_->start(port, ipv6);

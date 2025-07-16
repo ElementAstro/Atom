@@ -7,8 +7,10 @@
 /*************************************************
 
 Date: 2024-1-4
+Revision Date: 2024-05-22
 
-Description: A simple Asio-based UDP server.
+Description: A high-performance, Asio-based asynchronous
+             UDP server utilizing modern C++ concurrency.
 
 *************************************************/
 
@@ -27,14 +29,14 @@ namespace atom::async::connection {
 /**
  * @enum SocketOption
  * @brief Defines socket options that can be configured for the UDP server.
+ * @note Timeout options are handled by dedicated methods due to type
+ * differences.
  */
 enum class SocketOption {
     Broadcast,
     ReuseAddress,
     ReceiveBufferSize,
-    SendBufferSize,
-    ReceiveTimeout,
-    SendTimeout
+    SendBufferSize
 };
 
 /**
@@ -43,8 +45,8 @@ enum class SocketOption {
  *
  * This class provides a robust and scalable interface for UDP communication,
  * supporting asynchronous operations, multicast, broadcast, and fine-grained
- * configuration. It is designed for thread safety and high throughput in
- * multi-core environments.
+ * configuration. It leverages modern C++ concurrency primitives for lock-free
+ * reads and high throughput in multi-core environments.
  */
 class UdpSocketHub {
 public:
@@ -81,19 +83,25 @@ public:
         Statistics() = default;
 
         Statistics(const Statistics& other)
-            : bytesReceived(other.bytesReceived.load()),
-              bytesSent(other.bytesSent.load()),
-              messagesReceived(other.messagesReceived.load()),
-              messagesSent(other.messagesSent.load()),
-              errors(other.errors.load()) {}
+            : bytesReceived(
+                  other.bytesReceived.load(std::memory_order_relaxed)),
+              bytesSent(other.bytesSent.load(std::memory_order_relaxed)),
+              messagesReceived(
+                  other.messagesReceived.load(std::memory_order_relaxed)),
+              messagesSent(other.messagesSent.load(std::memory_order_relaxed)),
+              errors(other.errors.load(std::memory_order_relaxed)) {}
 
         Statistics& operator=(const Statistics& other) {
             if (this != &other) {
-                bytesReceived = other.bytesReceived.load();
-                bytesSent = other.bytesSent.load();
-                messagesReceived = other.messagesReceived.load();
-                messagesSent = other.messagesSent.load();
-                errors = other.errors.load();
+                bytesReceived.store(
+                    other.bytesReceived.load(std::memory_order_relaxed));
+                bytesSent.store(
+                    other.bytesSent.load(std::memory_order_relaxed));
+                messagesReceived.store(
+                    other.messagesReceived.load(std::memory_order_relaxed));
+                messagesSent.store(
+                    other.messagesSent.load(std::memory_order_relaxed));
+                errors.store(other.errors.load(std::memory_order_relaxed));
             }
             return *this;
         }
@@ -153,27 +161,30 @@ public:
 
     /**
      * @brief Adds a message handler to be called upon message reception.
+     * This operation is thread-safe.
      * @param handler The callback function to add.
      */
     void addMessageHandler(MessageHandler handler);
 
     /**
      * @brief Removes a message handler.
-     * @param handler The handler to remove. Note: Relies on function target
-     * comparison, which may be unreliable for complex callables.
+     * @param handler The handler to remove. Note: Relies on std::function
+     * target comparison, which may be unreliable for complex callables like
+     * lambdas not stored in a variable.
      */
     void removeMessageHandler(MessageHandler handler);
 
     /**
      * @brief Adds an error handler to be called when an error occurs.
+     * This operation is thread-safe.
      * @param handler The callback function to add.
      */
     void addErrorHandler(ErrorHandler handler);
 
     /**
      * @brief Removes an error handler.
-     * @param handler The handler to remove. Note: Relies on function target
-     * comparison.
+     * @param handler The handler to remove. Note: Relies on std::function
+     * target comparison.
      */
     void removeErrorHandler(ErrorHandler handler);
 
@@ -225,7 +236,9 @@ public:
 
     /**
      * @brief Sets a low-level socket option.
-     * @tparam T The type of the option value.
+     * This function is type-safe and will fail compilation for invalid
+     * type/option pairs.
+     * @tparam T The type of the option value (e.g., bool, int).
      * @param option The socket option to configure.
      * @param value The value to set for the option.
      * @return true if the option was set successfully, false otherwise.
@@ -260,7 +273,8 @@ public:
 
     /**
      * @brief Adds an IP address to the whitelist. If the whitelist is enabled,
-     * only messages from these IPs are processed.
+     * only messages from these IPs are processed. Reads from the whitelist are
+     * lock-free.
      * @param ip The IP address to allow.
      */
     void addAllowedIp(const std::string& ip);
