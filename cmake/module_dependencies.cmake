@@ -53,7 +53,7 @@ set(ATOM_WEB_DEPENDS atom-error atom-utils atom-io)
 # Set module priority order (build sequence)
 set(ATOM_MODULE_BUILD_ORDER
     atom-error
-   
+
     atom-meta
     atom-utils
     atom-algorithm
