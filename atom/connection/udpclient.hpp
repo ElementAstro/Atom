@@ -59,7 +59,7 @@ struct UdpStatistics {
     std::size_t bytesSent = 0;
     std::size_t receiveErrors = 0;
     std::size_t sendErrors = 0;
-    std::chrono::system_clock::time_point lastActivity = 
+    std::chrono::system_clock::time_point lastActivity =
         std::chrono::system_clock::now();
 
     void reset() {
@@ -189,7 +189,7 @@ public:
      * @return Result containing received data and endpoint or error code
      */
     [[nodiscard]] UdpResult<std::pair<std::vector<char>, RemoteEndpoint>>
-    receive(size_t maxSize, std::chrono::milliseconds timeout = 
+    receive(size_t maxSize, std::chrono::milliseconds timeout =
                                 std::chrono::milliseconds::zero()) noexcept;
 
     /**
@@ -216,7 +216,7 @@ public:
      * @brief Create an awaitable for asynchronous receiving
      */
     [[nodiscard]] ReceiveAwaitable receiveAsync(
-        size_t maxSize, std::chrono::milliseconds timeout = 
+        size_t maxSize, std::chrono::milliseconds timeout =
                             std::chrono::milliseconds::zero()) noexcept {
         return ReceiveAwaitable(*this, maxSize, timeout);
     }

@@ -307,4 +307,3 @@ template SqliteDB::ResultSet SqliteDB::select_parameterized_data<int>(
     std::string_view, int&&);
 
 }  // namespace atom::search
-

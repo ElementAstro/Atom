@@ -143,7 +143,7 @@ private:
         std::shared_lock lock(mutex_);
         return cache_items_map_.size();
     }
-    
+
     size_t maxSize() const {
         return max_size_;
     }
@@ -590,7 +590,7 @@ public:
             std::optional<std::chrono::seconds> ttl = (ttlSeconds >= 0)
                 ? std::optional<std::chrono::seconds>(std::chrono::seconds(ttlSeconds))
                 : std::nullopt;
-            
+
             put(key, std::move(value), ttl);
         }
     }
