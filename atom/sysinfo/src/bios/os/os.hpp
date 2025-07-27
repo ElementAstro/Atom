@@ -58,7 +58,7 @@ struct SystemOptimizationConfig {
 
 /**
  * @brief Enhanced Operating System Manager
- * 
+ *
  * Provides comprehensive operating system information, monitoring, and management
  * capabilities with platform-specific optimizations and advanced features.
  */
@@ -158,7 +158,7 @@ public:
      * @param maxEntries Maximum number of entries to retrieve
      * @return Log entries
      */
-    auto getSystemLogs(const std::string& category = "system", 
+    auto getSystemLogs(const std::string& category = "system",
                       uint32_t maxEntries = 100) -> std::vector<std::string>;
 
     /**
@@ -180,7 +180,7 @@ public:
      * @param action Action to perform (start, stop, restart, enable, disable)
      * @return Operation result
      */
-    auto manageService(const std::string& serviceName, 
+    auto manageService(const std::string& serviceName,
                       const std::string& action) -> OSOperationResult;
 
     /**
@@ -234,7 +234,7 @@ public:
      * @param includeUserData Include user data in backup
      * @return Operation result
      */
-    auto createSystemBackup(const std::string& backupPath, 
+    auto createSystemBackup(const std::string& backupPath,
                            bool includeUserData = false) -> OSOperationResult;
 
     /**
@@ -264,7 +264,7 @@ public:
      * @param maxEvents Maximum number of events
      * @return Event history
      */
-    auto getEventHistory(const std::string& eventType = "all", 
+    auto getEventHistory(const std::string& eventType = "all",
                         uint32_t maxEvents = 1000) -> std::vector<std::unordered_map<std::string, std::string>>;
 
     /**
@@ -273,7 +273,7 @@ public:
      * @param format Export format (json, xml, csv)
      * @return Operation result
      */
-    auto exportSystemInfo(const std::string& filePath, 
+    auto exportSystemInfo(const std::string& filePath,
                          const std::string& format = "json") -> OSOperationResult;
 
     /**
@@ -285,7 +285,7 @@ public:
 
 private:
     EnhancedOSManager();
-    
+
     class EnhancedOSManagerImpl;
     std::unique_ptr<EnhancedOSManagerImpl> m_impl;
 };

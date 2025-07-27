@@ -115,8 +115,8 @@ std::cout << "Memory Bandwidth: " << results.memoryBandwidth << " GB/s" << std::
 auto monitors = atom::system::getAllMonitorsInfo();
 
 for (const auto& monitor : monitors) {
-    std::cout << "Monitor: " << monitor.model 
-              << " (" << monitor.width << "x" << monitor.height 
+    std::cout << "Monitor: " << monitor.model
+              << " (" << monitor.width << "x" << monitor.height
               << " @ " << monitor.refreshRate << "Hz)" << std::endl;
 }
 ```

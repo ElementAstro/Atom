@@ -8,7 +8,7 @@ target("atom-sysinfo-cpu")
 
     -- Source files
     add_files("cpu.cpp", "common.cpp")
-    
+
     -- Platform-specific sources
     if is_plat("windows") then
         add_files("platform/windows.cpp")

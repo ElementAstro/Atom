@@ -29,7 +29,7 @@ namespace {
     std::string readFile(const std::string& path) {
         std::ifstream file(path);
         if (!file.is_open()) return "";
-        
+
         std::string content;
         std::string line;
         while (std::getline(file, line)) {
@@ -80,17 +80,17 @@ auto getGPUInfoLinux() -> std::string {
             if (card.find("card") == 0 && card.find("-") == std::string::npos) {
                 std::string cardPath = "/sys/class/drm/" + card;
                 std::string devicePath = cardPath + "/device";
-                
+
                 if (fileExists(devicePath + "/vendor") && fileExists(devicePath + "/device")) {
                     std::string vendor = readFile(devicePath + "/vendor");
                     std::string device = readFile(devicePath + "/device");
-                    
+
                     if (!gpuInfo.empty()) gpuInfo += "\n";
                     gpuInfo += "DRM Card: " + card + " (Vendor: " + vendor + ", Device: " + device + ")";
                 }
             }
         }
-        
+
         if (gpuInfo.empty()) {
             spdlog::warn("Failed to open NVIDIA GPU information file and no DRM cards found");
             gpuInfo = "GPU information not available";
@@ -103,40 +103,40 @@ auto getGPUInfoLinux() -> std::string {
 
 auto getDetailedGPUInfoLinux() -> std::vector<GPUInfo> {
     std::vector<GPUInfo> gpus;
-    
+
     // Scan DRM cards
     auto drmCards = listDirectory("/sys/class/drm");
     int gpuIndex = 0;
-    
+
     for (const auto& card : drmCards) {
         if (card.find("card") == 0 && card.find("-") == std::string::npos) {
             std::string cardPath = "/sys/class/drm/" + card;
             std::string devicePath = cardPath + "/device";
-            
+
             GPUInfo gpu;
             gpu.gpuIndex = gpuIndex++;
             gpu.timestamp = std::chrono::steady_clock::now();
-            
+
             // Read vendor ID
             std::string vendorStr = readFile(devicePath + "/vendor");
             if (!vendorStr.empty()) {
                 gpu.vendorId = vendorStr;
                 gpu.vendor = parseGPUVendor(vendorStr);
             }
-            
+
             // Read device ID
             std::string deviceStr = readFile(devicePath + "/device");
             if (!deviceStr.empty()) {
                 gpu.deviceId = deviceStr;
             }
-            
+
             // Read subsystem vendor and device
             std::string subsystemVendor = readFile(devicePath + "/subsystem_vendor");
             std::string subsystemDevice = readFile(devicePath + "/subsystem_device");
             if (!subsystemVendor.empty() && !subsystemDevice.empty()) {
                 gpu.subsystemId = subsystemVendor + ":" + subsystemDevice;
             }
-            
+
             // Try to get GPU name from modalias or other sources
             std::string modalias = readFile(devicePath + "/modalias");
             if (!modalias.empty()) {
@@ -145,7 +145,7 @@ auto getDetailedGPUInfoLinux() -> std::vector<GPUInfo> {
             } else {
                 gpu.name = "Unknown GPU " + card;
             }
-            
+
             // Read PCI information
             std::string pciPath = readFile(devicePath + "/uevent");
             if (pciPath.find("PCI_SLOT_NAME=") != std::string::npos) {
@@ -155,17 +155,17 @@ auto getDetailedGPUInfoLinux() -> std::vector<GPUInfo> {
                     gpu.busId = pciPath.substr(start, end - start);
                 }
             }
-            
+
             // Determine GPU type (simplified)
             if (gpu.vendor == GPUVendor::INTEL) {
                 gpu.type = GPUType::INTEGRATED;
             } else {
                 gpu.type = GPUType::DISCRETE;
             }
-            
+
             // Parse architecture
             gpu.architecture = parseGPUArchitecture(gpu.name, gpu.vendor);
-            
+
             // Try to get memory information
             std::string memInfoPath = devicePath + "/mem_info_vram_total";
             if (fileExists(memInfoPath)) {
@@ -178,17 +178,17 @@ auto getDetailedGPUInfoLinux() -> std::vector<GPUInfo> {
                     }
                 }
             }
-            
+
             // Set timestamps
             gpu.memoryInfo.timestamp = gpu.timestamp;
             gpu.performance.timestamp = gpu.timestamp;
             gpu.compute.timestamp = gpu.timestamp;
             gpu.driver.timestamp = gpu.timestamp;
-            
+
             gpus.push_back(gpu);
         }
     }
-    
+
     return gpus;
 }
 
@@ -208,11 +208,11 @@ auto getGPUInfoLinux(int gpuIndex) -> GPUInfo {
 auto getGPUPerformanceMetricsLinux(int gpuIndex) -> GPUPerformanceMetrics {
     GPUPerformanceMetrics metrics;
     metrics.timestamp = std::chrono::steady_clock::now();
-    
+
     // Try to read performance metrics from sysfs
     std::string cardPath = "/sys/class/drm/card" + std::to_string(gpuIndex);
     std::string devicePath = cardPath + "/device";
-    
+
     // Try to read GPU utilization
     std::string gpuBusyPath = devicePath + "/gpu_busy_percent";
     if (fileExists(gpuBusyPath)) {
@@ -225,7 +225,7 @@ auto getGPUPerformanceMetricsLinux(int gpuIndex) -> GPUPerformanceMetrics {
             }
         }
     }
-    
+
     // Try to read temperature
     std::string tempPath = devicePath + "/hwmon/hwmon0/temp1_input";
     if (fileExists(tempPath)) {
@@ -239,7 +239,7 @@ auto getGPUPerformanceMetricsLinux(int gpuIndex) -> GPUPerformanceMetrics {
             }
         }
     }
-    
+
     // Try to read power information
     std::string powerPath = devicePath + "/hwmon/hwmon0/power1_average";
     if (fileExists(powerPath)) {
@@ -253,7 +253,7 @@ auto getGPUPerformanceMetricsLinux(int gpuIndex) -> GPUPerformanceMetrics {
             }
         }
     }
-    
+
     return metrics;
 }
 

@@ -19,7 +19,7 @@ auto getComputerNameMacOS() -> std::optional<std::string> {
     spdlog::debug("Retrieving computer name on macOS");
     constexpr size_t bufferSize = 256;
     std::array<char, bufferSize> buffer;
-    
+
     CFStringRef name = SCDynamicStoreCopyComputerName(nullptr, nullptr);
     if (name != nullptr) {
         CFStringGetCString(name, buffer.data(), buffer.size(),

@@ -50,9 +50,9 @@ struct EnvProfile {
     EnvTemplate envTemplate;
     std::chrono::system_clock::time_point createdAt;
     std::chrono::system_clock::time_point lastModified;
-    
+
     EnvProfile(const String& n = "", const String& desc = "")
-        : name(n), description(desc), 
+        : name(n), description(desc),
           createdAt(std::chrono::system_clock::now()),
           lastModified(std::chrono::system_clock::now()) {}
 };
@@ -179,7 +179,7 @@ public:
      * @return Diff results showing changes
      */
     static auto createEnvironmentDiff(const HashMap<String, String>& before,
-                                      const HashMap<String, String>& after) 
+                                      const HashMap<String, String>& after)
         -> HashMap<String, String>;
 
     /**
@@ -236,7 +236,7 @@ private:
 class SimpleEncryptionProvider : public EnvEncryptionProvider {
 public:
     explicit SimpleEncryptionProvider(const String& key);
-    
+
     auto encrypt(const String& plaintext) -> String override;
     auto decrypt(const String& ciphertext) -> String override;
     auto isEncrypted(const String& data) -> bool override;

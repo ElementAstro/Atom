@@ -155,7 +155,7 @@ auto WindowsBatteryProvider::getDetailedBatteryInfo() -> BatteryResult {
 
 auto WindowsBatteryProvider::getAllBatteries() -> MultiBatteryInfo {
     MultiBatteryInfo result;
-    
+
     // For now, Windows implementation focuses on primary battery
     auto batteryResult = getDetailedBatteryInfo();
     if (auto* batteryInfo = std::get_if<BatteryInfo>(&batteryResult)) {
@@ -167,7 +167,7 @@ auto WindowsBatteryProvider::getAllBatteries() -> MultiBatteryInfo {
             result.totalEnergyRemaining = batteryInfo->energyNow;
         }
     }
-    
+
     return result;
 }
 
@@ -177,11 +177,11 @@ auto WindowsBatteryProvider::supportsAdvancedFeatures() -> bool {
     osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
     osvi.dwMajorVersion = 6;
     osvi.dwMinorVersion = 2;  // Windows 8
-    
+
     DWORDLONG conditionMask = 0;
     VER_SET_CONDITION(conditionMask, VER_MAJORVERSION, VER_GREATER_EQUAL);
     VER_SET_CONDITION(conditionMask, VER_MINORVERSION, VER_GREATER_EQUAL);
-    
+
     return VerifyVersionInfo(&osvi, VER_MAJORVERSION | VER_MINORVERSION, conditionMask);
 }
 
@@ -260,7 +260,7 @@ auto WindowsPowerManager::getCurrentPowerPlan() -> std::optional<PowerPlan> {
             return PowerPlan::CUSTOM;
         }
     }
-    
+
     spdlog::error("Failed to get active power scheme: {}", GetLastError());
     return std::nullopt;
 }

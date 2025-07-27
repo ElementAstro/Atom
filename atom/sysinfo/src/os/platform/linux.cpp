@@ -18,7 +18,7 @@ auto getComputerNameLinux() -> std::optional<std::string> {
     spdlog::debug("Retrieving computer name on Linux");
     constexpr size_t bufferSize = 256;
     std::array<char, bufferSize> buffer;
-    
+
     if (gethostname(buffer.data(), buffer.size()) == 0) {
         spdlog::info("Successfully retrieved computer name: {}", buffer.data());
         return std::string(buffer.data());
@@ -91,7 +91,7 @@ auto getSystemTimeZoneLinux() -> std::string {
 auto getInstalledUpdatesLinux() -> std::vector<std::string> {
     spdlog::debug("Getting installed updates on Linux");
     std::vector<std::string> updates;
-    
+
     std::ifstream log("/var/log/dpkg.log");
     if (log.is_open()) {
         std::string line;
@@ -101,7 +101,7 @@ auto getInstalledUpdatesLinux() -> std::vector<std::string> {
             }
         }
     }
-    
+
     spdlog::info("Found {} installed updates on Linux", updates.size());
     return updates;
 }

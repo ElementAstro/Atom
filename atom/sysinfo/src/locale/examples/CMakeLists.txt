@@ -12,20 +12,20 @@ set(LOCALE_EXAMPLES
 # Create executables for each example
 foreach(EXAMPLE ${LOCALE_EXAMPLES})
     add_executable(locale_${EXAMPLE} ${EXAMPLE}.cpp)
-    
+
     # Link with the locale library
     target_link_libraries(locale_${EXAMPLE}
         PRIVATE
             atom_sysinfo_locale
     )
-    
+
     # Set target properties
     set_target_properties(locale_${EXAMPLE} PROPERTIES
         CXX_STANDARD 20
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
     )
-    
+
     # Compiler-specific options
     target_compile_options(locale_${EXAMPLE}
         PRIVATE
@@ -40,7 +40,7 @@ if(LOCALE_INSTALL_EXAMPLES)
     install(TARGETS ${LOCALE_EXAMPLES}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/locale_examples
     )
-    
+
     # Install source files for reference
     install(FILES
         basic_usage.cpp
@@ -63,7 +63,7 @@ foreach(EXAMPLE ${LOCALE_EXAMPLES})
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         COMMENT "Running locale ${EXAMPLE} example"
     )
-    
+
     add_dependencies(run_locale_examples run_locale_${EXAMPLE})
 endforeach()
 

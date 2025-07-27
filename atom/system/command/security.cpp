@@ -42,7 +42,7 @@ public:
             initializeAuditLogging();
         }
     }
-    
+
     ~Impl() {
         stopMonitoring();
     }
@@ -52,68 +52,68 @@ public:
         if (!policy_.whitelist.empty()) {
             auto validation = validateCommandDetailed(command);
             std::string baseCommand = extractBaseCommand(command);
-            
-            bool inWhitelist = std::find(policy_.whitelist.begin(), 
-                                       policy_.whitelist.end(), 
+
+            bool inWhitelist = std::find(policy_.whitelist.begin(),
+                                       policy_.whitelist.end(),
                                        baseCommand) != policy_.whitelist.end();
-            
+
             if (policy_.level == SecurityLevel::PARANOID) {
                 return inWhitelist;
             }
         }
-        
+
         // Check blacklist
         std::string baseCommand = extractBaseCommand(command);
-        bool inBlacklist = std::find(policy_.blacklist.begin(), 
-                                   policy_.blacklist.end(), 
+        bool inBlacklist = std::find(policy_.blacklist.begin(),
+                                   policy_.blacklist.end(),
                                    baseCommand) != policy_.blacklist.end();
-        
+
         if (inBlacklist) {
             return false;
         }
-        
+
         // Apply security level policies
         auto validation = validateCommandDetailed(command);
-        
+
         switch (policy_.level) {
             case SecurityLevel::PERMISSIVE:
                 return true;
-                
+
             case SecurityLevel::MODERATE:
                 return validation.securityScore >= 0.3;
-                
+
             case SecurityLevel::STRICT:
                 return validation.securityScore >= 0.7;
-                
+
             case SecurityLevel::PARANOID:
                 // Already handled above with whitelist
                 return validation.securityScore >= 0.9;
         }
-        
+
         return false;
     }
-    
+
     auto validateAndSanitizeCommand(const std::string& command, const std::string& user) const -> std::string {
         if (!isCommandAllowed(command, user)) {
-            logSecurityEvent(AuditEventType::COMMAND_BLOCKED, command, user, 
+            logSecurityEvent(AuditEventType::COMMAND_BLOCKED, command, user,
                            "Command blocked by security policy");
             return "";
         }
-        
+
         std::string sanitized = sanitizeCommand(command);
-        
+
         if (sanitized != command) {
-            logSecurityEvent(AuditEventType::COMMAND_EXECUTED, sanitized, user, 
+            logSecurityEvent(AuditEventType::COMMAND_EXECUTED, sanitized, user,
                            "Command was sanitized before execution");
         }
-        
+
         return sanitized;
     }
-    
-    auto executeSecureCommand(const std::string& command, const ExecutionConfig& config, 
+
+    auto executeSecureCommand(const std::string& command, const ExecutionConfig& config,
                              const std::string& user) -> ExecutionResult {
         ExecutionResult result;
-        
+
         std::string sanitizedCommand = validateAndSanitizeCommand(command, user);
         if (sanitizedCommand.empty()) {
             result.exitCode = -1;
@@ -121,19 +121,19 @@ public:
             result.wasKilled = true;
             return result;
         }
-        
+
         // Apply resource limits
         ExecutionConfig secureConfig = config;
         if (policy_.resourceLimits.maxExecutionTime.count() > 0) {
             secureConfig.timeout = std::min(secureConfig.timeout, policy_.resourceLimits.maxExecutionTime);
         }
         secureConfig.maxOutputSize = std::min(secureConfig.maxOutputSize, policy_.resourceLimits.maxOutputSize);
-        
+
         auto startTime = std::chrono::system_clock::now();
-        
+
         // Execute with enhanced monitoring
         result = executeCommandEnhanced(sanitizedCommand, secureConfig);
-        
+
         // Log execution event
         AuditEvent event;
         event.type = AuditEventType::COMMAND_EXECUTED;
@@ -142,76 +142,76 @@ public:
         event.timestamp = startTime;
         event.securityLevel = policy_.level;
         event.wasBlocked = false;
-        event.details = "Exit code: " + std::to_string(result.exitCode) + 
+        event.details = "Exit code: " + std::to_string(result.exitCode) +
                        ", Execution time: " + std::to_string(result.executionTime.count()) + "ms";
-        
+
         logAuditEvent(event);
-        
+
         return result;
     }
-    
+
     void logAuditEvent(const AuditEvent& event) {
         std::lock_guard<std::mutex> lock(auditMutex_);
-        
+
         auditEvents_.push_back(event);
-        
+
         // Keep only recent events in memory
         if (auditEvents_.size() > 1000) {
             auditEvents_.erase(auditEvents_.begin(), auditEvents_.begin() + 100);
         }
-        
+
         if (policy_.enableAuditLogging && auditFile_.is_open()) {
             writeAuditEventToFile(event);
         }
-        
+
         // Update statistics
         updateSecurityStatistics(event);
     }
-    
+
     auto getRecentAuditEvents(size_t count) const -> std::vector<AuditEvent> {
         std::lock_guard<std::mutex> lock(auditMutex_);
-        
+
         size_t startIndex = auditEvents_.size() > count ? auditEvents_.size() - count : 0;
         return std::vector<AuditEvent>(auditEvents_.begin() + startIndex, auditEvents_.end());
     }
-    
+
     auto getSecurityStatistics() const -> std::string {
         std::lock_guard<std::mutex> lock(auditMutex_);
-        
+
         std::ostringstream stats;
         stats << "Security Statistics:\n";
         stats << "  Total Commands: " << totalCommands_ << "\n";
         stats << "  Blocked Commands: " << blockedCommands_ << "\n";
         stats << "  Security Violations: " << securityViolations_ << "\n";
         stats << "  Current Security Level: " << securityLevelToString(policy_.level) << "\n";
-        
+
         if (totalCommands_ > 0) {
             double blockRate = (blockedCommands_ * 100.0) / totalCommands_;
             stats << "  Block Rate: " << std::fixed << std::setprecision(2) << blockRate << "%\n";
         }
-        
+
         return stats.str();
     }
-    
+
     void updateSecurityPolicy(const SecurityPolicy& policy) {
         std::lock_guard<std::mutex> lock(auditMutex_);
         policy_ = policy;
-        
+
         if (policy_.enableAuditLogging && !auditFile_.is_open()) {
             initializeAuditLogging();
         } else if (!policy_.enableAuditLogging && auditFile_.is_open()) {
             auditFile_.close();
         }
     }
-    
+
     auto getSecurityPolicy() const -> const SecurityPolicy& {
         return policy_;
     }
-    
+
     void startMonitoring(std::function<void(const AuditEvent&)> callback) {
         monitoringCallback_ = callback;
         monitoringActive_ = true;
-        
+
         monitoringThread_ = std::thread([this]() {
             while (monitoringActive_) {
                 // Monitor for suspicious patterns
@@ -220,7 +220,7 @@ public:
             }
         });
     }
-    
+
     void stopMonitoring() {
         monitoringActive_ = false;
         if (monitoringThread_.joinable()) {
@@ -232,17 +232,17 @@ private:
     std::string extractBaseCommand(const std::string& command) const {
         auto args = parseCommandArguments(command);
         if (args.empty()) return "";
-        
+
         std::string baseCommand = args[0];
         size_t lastSlash = baseCommand.find_last_of("/\\");
         if (lastSlash != std::string::npos) {
             baseCommand = baseCommand.substr(lastSlash + 1);
         }
-        
+
         return baseCommand;
     }
-    
-    void logSecurityEvent(AuditEventType type, const std::string& command, 
+
+    void logSecurityEvent(AuditEventType type, const std::string& command,
                          const std::string& user, const std::string& details) const {
         AuditEvent event;
         event.type = type;
@@ -252,10 +252,10 @@ private:
         event.details = details;
         event.securityLevel = policy_.level;
         event.wasBlocked = (type == AuditEventType::COMMAND_BLOCKED);
-        
+
         const_cast<Impl*>(this)->logAuditEvent(event);
     }
-    
+
     void initializeAuditLogging() {
         auditFile_.open(policy_.auditLogFile, std::ios::app);
         if (!auditFile_.is_open()) {
@@ -264,10 +264,10 @@ private:
             spdlog::info("Audit logging initialized: {}", policy_.auditLogFile);
         }
     }
-    
+
     void writeAuditEventToFile(const AuditEvent& event) {
         if (!auditFile_.is_open()) return;
-        
+
         auto time_t = std::chrono::system_clock::to_time_t(event.timestamp);
         auditFile_ << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S") << " | ";
         auditFile_ << auditEventTypeToString(event.type) << " | ";
@@ -276,48 +276,48 @@ private:
         auditFile_ << event.details << "\n";
         auditFile_.flush();
     }
-    
+
     void updateSecurityStatistics(const AuditEvent& event) {
         totalCommands_++;
-        
+
         if (event.type == AuditEventType::COMMAND_BLOCKED) {
             blockedCommands_++;
         } else if (event.type == AuditEventType::SECURITY_VIOLATION) {
             securityViolations_++;
         }
     }
-    
+
     void checkForSuspiciousActivity() {
         // Implementation for detecting suspicious patterns
         // This is a simplified version
         std::lock_guard<std::mutex> lock(auditMutex_);
-        
+
         if (auditEvents_.size() < 10) return;
-        
+
         // Check for rapid command execution (potential automation)
         auto now = std::chrono::system_clock::now();
         auto fiveMinutesAgo = now - std::chrono::minutes(5);
-        
+
         size_t recentCommands = 0;
         for (const auto& event : auditEvents_) {
             if (event.timestamp > fiveMinutesAgo) {
                 recentCommands++;
             }
         }
-        
+
         if (recentCommands > 50) { // More than 50 commands in 5 minutes
             AuditEvent suspiciousEvent;
             suspiciousEvent.type = AuditEventType::SUSPICIOUS_ACTIVITY;
             suspiciousEvent.timestamp = now;
-            suspiciousEvent.details = "High command execution rate detected: " + 
+            suspiciousEvent.details = "High command execution rate detected: " +
                                     std::to_string(recentCommands) + " commands in 5 minutes";
-            
+
             if (monitoringCallback_) {
                 monitoringCallback_(suspiciousEvent);
             }
         }
     }
-    
+
     std::string securityLevelToString(SecurityLevel level) const {
         switch (level) {
             case SecurityLevel::PERMISSIVE: return "Permissive";
@@ -327,7 +327,7 @@ private:
             default: return "Unknown";
         }
     }
-    
+
     std::string auditEventTypeToString(AuditEventType type) const {
         switch (type) {
             case AuditEventType::COMMAND_EXECUTED: return "EXECUTED";
@@ -344,12 +344,12 @@ private:
     mutable std::mutex auditMutex_;
     std::vector<AuditEvent> auditEvents_;
     std::ofstream auditFile_;
-    
+
     // Statistics
     std::atomic<size_t> totalCommands_{0};
     std::atomic<size_t> blockedCommands_{0};
     std::atomic<size_t> securityViolations_{0};
-    
+
     // Monitoring
     std::atomic<bool> monitoringActive_{false};
     std::thread monitoringThread_;

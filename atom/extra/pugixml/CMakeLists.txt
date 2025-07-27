@@ -90,34 +90,34 @@ target_link_libraries(concurrent_xml_benchmark
 # Tests (if Google Test is available)
 if(GTest_FOUND)
     enable_testing()
-    
+
     add_executable(concurrent_xml_tests
         tests/concurrent_tests.hpp
         tests/test_main.cpp
     )
-    
+
     target_link_libraries(concurrent_xml_tests
         concurrent_pugixml
         GTest::gtest
         GTest::gtest_main
     )
-    
+
     # Add individual test cases
-    add_test(NAME ThreadSafeNodeOperations 
+    add_test(NAME ThreadSafeNodeOperations
              COMMAND concurrent_xml_tests --gtest_filter=ConcurrentXmlTest.ThreadSafeNodeOperations)
-    add_test(NAME LockFreePoolPerformance 
+    add_test(NAME LockFreePoolPerformance
              COMMAND concurrent_xml_tests --gtest_filter=ConcurrentXmlTest.LockFreePoolPerformance)
-    add_test(NAME ParallelProcessing 
+    add_test(NAME ParallelProcessing
              COMMAND concurrent_xml_tests --gtest_filter=ConcurrentXmlTest.ParallelProcessing)
-    add_test(NAME QueryEnginePerformance 
+    add_test(NAME QueryEnginePerformance
              COMMAND concurrent_xml_tests --gtest_filter=ConcurrentXmlTest.QueryEnginePerformance)
-    add_test(NAME ThreadSafeBuilders 
+    add_test(NAME ThreadSafeBuilders
              COMMAND concurrent_xml_tests --gtest_filter=ConcurrentXmlTest.ThreadSafeBuilders)
-    add_test(NAME HighConcurrencyStressTest 
+    add_test(NAME HighConcurrencyStressTest
              COMMAND concurrent_xml_tests --gtest_filter=ConcurrentXmlTest.HighConcurrencyStressTest)
-    add_test(NAME MemoryPoolBenchmark 
+    add_test(NAME MemoryPoolBenchmark
              COMMAND concurrent_xml_tests --gtest_filter=ConcurrentXmlTest.MemoryPoolBenchmark)
-    
+
     # Set test properties
     set_tests_properties(HighConcurrencyStressTest PROPERTIES TIMEOUT 300)
     set_tests_properties(MemoryPoolBenchmark PROPERTIES TIMEOUT 120)
@@ -128,9 +128,9 @@ find_package(Doxygen QUIET)
 if(Doxygen_FOUND)
     set(DOXYGEN_IN ${CMAKE_CURRENT_SOURCE_DIR}/docs/Doxyfile.in)
     set(DOXYGEN_OUT ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
-    
+
     configure_file(${DOXYGEN_IN} ${DOXYGEN_OUT} @ONLY)
-    
+
     add_custom_target(docs
         COMMAND ${DOXYGEN_EXECUTABLE} ${DOXYGEN_OUT}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}

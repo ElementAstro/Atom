@@ -20,10 +20,10 @@ BiosInfoData MacOSBiosImplementation::fetchBiosInfo() {
         biosInfo.version = getIORegistryProperty("IOPlatformExpertDevice", "firmware-version");
         biosInfo.manufacturer = getIORegistryProperty("IOPlatformExpertDevice", "manufacturer");
         biosInfo.serialNumber = getIORegistryProperty("IOPlatformExpertDevice", "IOPlatformSerialNumber");
-        
+
         // Get system information
         std::string systemInfo = executeCommand("system_profiler SPHardwareDataType");
-        
+
         // Parse additional information from system_profiler output
         if (systemInfo.find("Boot ROM Version:") != std::string::npos) {
             size_t pos = systemInfo.find("Boot ROM Version:");
@@ -32,10 +32,10 @@ BiosInfoData MacOSBiosImplementation::fetchBiosInfo() {
                 biosInfo.version = systemInfo.substr(pos + 17, end - pos - 17);
             }
         }
-        
+
         // macOS systems typically use UEFI
         biosInfo.isUpgradeable = false; // Apple controls firmware updates
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Error fetching BIOS info: {}", e.what());
         throw;
@@ -52,19 +52,19 @@ BiosHealthStatus MacOSBiosImplementation::checkHealth() const {
     try {
         // Check system logs for firmware-related issues
         std::string logResult = executeCommand("log show --predicate 'subsystem == \"com.apple.kernel\"' --info --last 1d | grep -i 'firmware\\|efi\\|boot'");
-        
-        if (logResult.find("error") != std::string::npos || 
+
+        if (logResult.find("error") != std::string::npos ||
             logResult.find("fail") != std::string::npos) {
             status.isHealthy = false;
             status.errors.push_back("Firmware-related errors found in system logs");
         }
-        
+
         // Check hardware diagnostics
         std::string hwTest = executeCommand("system_profiler SPDiagnosticsDataType");
         if (hwTest.find("FAIL") != std::string::npos) {
             status.warnings.push_back("Hardware diagnostics indicate potential issues");
         }
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Failed to check BIOS health: {}", e.what());
         status.isHealthy = false;
@@ -81,13 +81,13 @@ BiosUpdateInfo MacOSBiosImplementation::checkForUpdates() const {
     try {
         // On macOS, firmware updates are handled by Software Update
         std::string updateCheck = executeCommand("softwareupdate -l");
-        
+
         if (updateCheck.find("Firmware") != std::string::npos ||
             updateCheck.find("EFI") != std::string::npos) {
             updateInfo.updateAvailable = true;
             updateInfo.updateUrl = "Use Software Update in System Preferences";
         }
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Failed to check for BIOS updates: {}", e.what());
     }
@@ -103,7 +103,7 @@ std::vector<std::string> MacOSBiosImplementation::getSMBIOSData() const {
         std::string hardwareInfo = executeCommand("system_profiler SPHardwareDataType");
         std::vector<std::string> lines = executeCommandLines("system_profiler SPHardwareDataType");
         smbiosData = lines;
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Failed to get SMBIOS data: {}", e.what());
     }
@@ -145,11 +145,11 @@ bool MacOSBiosImplementation::backupBiosSettings(const std::string& filepath) {
         if (!out) {
             throw std::runtime_error("Cannot open file for writing");
         }
-        
+
         // Backup NVRAM settings
         std::string nvramData = executeCommand("nvram -p");
         out << nvramData;
-        
+
         return true;
     } catch (const std::exception& e) {
         spdlog::error("Failed to backup BIOS settings: {}", e.what());
@@ -182,67 +182,67 @@ bool MacOSBiosImplementation::restoreBiosSettings(const std::string& filepath) {
 // Enhanced features implementation
 FirmwareInfo MacOSBiosImplementation::getFirmwareInfo() const {
     FirmwareInfo info;
-    
+
     try {
         info.type = "UEFI";
         info.secureBootCapable = true; // macOS has SIP
         info.tpmSupported = true; // Modern Macs have T2/Apple Silicon security
-        
+
         info.version = getIORegistryProperty("IOPlatformExpertDevice", "firmware-version");
         info.vendor = "Apple Inc.";
-        
+
         // Get build date from system info
         std::string systemInfo = executeCommand("system_profiler SPHardwareDataType");
         // Parse build date if available
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Failed to get firmware info: {}", e.what());
     }
-    
+
     return info;
 }
 
 BootConfiguration MacOSBiosImplementation::getBootConfiguration() const {
     BootConfiguration config;
-    
+
     try {
         config.uefiMode = true; // macOS always uses UEFI
         config.secureBootEnabled = isSecureBootSupported();
-        
+
         // Get boot device information
         std::string bootDevice = executeCommand("bless --info --getboot");
         config.currentBootDevice = bootDevice;
-        
+
         // Get available boot devices
         config.bootDevices = getAvailableBootDevices();
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Failed to get boot configuration: {}", e.what());
     }
-    
+
     return config;
 }
 
 BiosSecuritySettings MacOSBiosImplementation::getSecuritySettings() const {
     BiosSecuritySettings settings;
-    
+
     try {
         settings.secureBootEnabled = isSecureBootSupported();
         settings.tpmEnabled = true; // Modern Macs have security chips
-        
+
         // Check virtualization support
         std::string cpuInfo = executeCommand("sysctl -n machdep.cpu.features");
         settings.virtualizationEnabled = cpuInfo.find("VMX") != std::string::npos;
-        
+
         // Check hyper-threading
         std::string htInfo = executeCommand("sysctl -n machdep.cpu.thread_count");
         std::string coreInfo = executeCommand("sysctl -n machdep.cpu.core_count");
         settings.hyperThreadingEnabled = std::stoi(htInfo) > std::stoi(coreInfo);
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Failed to get security settings: {}", e.what());
     }
-    
+
     return settings;
 }
 
@@ -263,18 +263,18 @@ BiosOperationResult MacOSBiosImplementation::enableHyperThreading(bool enable) {
 
 std::vector<std::string> MacOSBiosImplementation::getAvailableBootDevices() const {
     std::vector<std::string> devices;
-    
+
     try {
         // Get mounted volumes that could be bootable
         std::vector<std::string> volumes = executeCommandLines("diskutil list | grep 'Apple_HFS\\|Apple_APFS'");
         for (const auto& volume : volumes) {
             devices.push_back(volume);
         }
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Failed to get boot devices: {}", e.what());
     }
-    
+
     return devices;
 }
 
@@ -286,7 +286,7 @@ bool MacOSBiosImplementation::validateBiosIntegrity() const {
             spdlog::info("System Integrity Protection is enabled");
             return true;
         }
-        
+
         spdlog::warn("System Integrity Protection is disabled");
         return false;
     } catch (const std::exception& e) {
@@ -300,7 +300,7 @@ std::string MacOSBiosImplementation::getIORegistryProperty(const std::string& se
     try {
         std::string command = "ioreg -l | grep '" + property + "'";
         std::string result = executeCommand(command);
-        
+
         // Parse the result to extract the property value
         size_t pos = result.find("=");
         if (pos != std::string::npos) {
@@ -310,11 +310,11 @@ std::string MacOSBiosImplementation::getIORegistryProperty(const std::string& se
             value.erase(value.find_last_not_of(" \t\"\n") + 1);
             return value;
         }
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Failed to get IORegistry property {}: {}", property, e.what());
     }
-    
+
     return "";
 }
 
@@ -357,15 +357,15 @@ CFStringRef MacOSBiosImplementation::createCFString(const std::string& str) cons
 
 std::string MacOSBiosImplementation::cfStringToString(CFStringRef cfStr) const {
     if (!cfStr) return "";
-    
+
     CFIndex length = CFStringGetLength(cfStr);
     CFIndex maxSize = CFStringGetMaximumSizeForEncoding(length, kCFStringEncodingUTF8) + 1;
     std::vector<char> buffer(maxSize);
-    
+
     if (CFStringGetCString(cfStr, buffer.data(), maxSize, kCFStringEncodingUTF8)) {
         return std::string(buffer.data());
     }
-    
+
     return "";
 }
 

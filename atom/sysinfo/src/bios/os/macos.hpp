@@ -161,7 +161,7 @@ public:
      * @param intervalMs Monitoring interval in milliseconds
      * @return true if monitoring started successfully
      */
-    auto startPerformanceMonitoring(SystemMonitorCallback callback, 
+    auto startPerformanceMonitoring(SystemMonitorCallback callback,
                                    uint32_t intervalMs = 1000) -> bool;
 
     /**
@@ -181,7 +181,7 @@ public:
      * @param maxEntries Maximum number of entries to retrieve
      * @return Log entries
      */
-    auto getSystemLogs(const std::string& predicate = "", 
+    auto getSystemLogs(const std::string& predicate = "",
                       uint32_t maxEntries = 100) -> std::vector<std::string>;
 
     /**
@@ -203,7 +203,7 @@ public:
      * @param action Action to perform (load, unload, start, stop)
      * @return Operation result
      */
-    auto manageService(const std::string& serviceName, 
+    auto manageService(const std::string& serviceName,
                       const std::string& action) -> OSOperationResult;
 
     /**
@@ -246,8 +246,8 @@ public:
      * @param value Preference value (empty to read)
      * @return Operation result or current value
      */
-    auto manageSystemPreference(const std::string& domain, 
-                               const std::string& key, 
+    auto manageSystemPreference(const std::string& domain,
+                               const std::string& key,
                                const std::string& value = "") -> std::string;
 
     /**
@@ -277,7 +277,7 @@ public:
 private:
     bool m_monitoringActive = false;
     std::thread m_monitoringThread;
-    
+
     // Helper functions
     auto executeSystemProfiler(const std::string& dataType) -> std::string;
     auto executeDefaults(const std::string& domain, const std::string& operation) -> std::string;

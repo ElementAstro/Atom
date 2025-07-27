@@ -8,113 +8,113 @@
 namespace atom::extra::curl::benchmark {
 
 BenchmarkSuite::BenchmarkSuite(const Config& config) : config_(config) {
-    spdlog::info("Initializing benchmark suite: {} threads, {} ops/thread, warmup: {}", 
+    spdlog::info("Initializing benchmark suite: {} threads, {} ops/thread, warmup: {}",
                  config_.thread_count, config_.operations_per_thread, config_.warmup_operations);
 }
 
 void BenchmarkSuite::runAll() {
     spdlog::info("Starting comprehensive benchmark suite...");
-    
+
     benchmarkConnectionPool();
     benchmarkSessionPool();
     benchmarkCache();
     benchmarkRateLimiter();
     benchmarkThreadPool();
     benchmarkMemoryPool();
-    
+
     validateThreadSafety();
     testScalability();
-    
+
     printResults();
 }
 
 void BenchmarkSuite::benchmarkConnectionPool() {
     spdlog::info("Benchmarking connection pool...");
-    
+
     auto metrics = runMultiThreadedBenchmark("ConnectionPool", [this](size_t thread_id) {
         benchmarks::ConnectionPoolBenchmark benchmark(100);
         warmup([&]() { benchmark.run(1); }, config_.warmup_operations);
         benchmark.run(config_.operations_per_thread);
         return benchmark.getMetrics();
     });
-    
+
     results_["ConnectionPool"] = metrics;
     spdlog::info("Connection pool benchmark completed: {:.2f} ops/sec", metrics.throughput);
 }
 
 void BenchmarkSuite::benchmarkSessionPool() {
     spdlog::info("Benchmarking session pool...");
-    
+
     auto metrics = runMultiThreadedBenchmark("SessionPool", [this](size_t thread_id) {
         benchmarks::SessionPoolBenchmark benchmark;
         warmup([&]() { benchmark.run(1); }, config_.warmup_operations);
         benchmark.run(config_.operations_per_thread);
         return benchmark.getMetrics();
     });
-    
+
     results_["SessionPool"] = metrics;
     spdlog::info("Session pool benchmark completed: {:.2f} ops/sec", metrics.throughput);
 }
 
 void BenchmarkSuite::benchmarkCache() {
     spdlog::info("Benchmarking cache...");
-    
+
     auto metrics = runMultiThreadedBenchmark("Cache", [this](size_t thread_id) {
         benchmarks::CacheBenchmark benchmark;
         warmup([&]() { benchmark.run(1); }, config_.warmup_operations);
         benchmark.run(config_.operations_per_thread);
         return benchmark.getMetrics();
     });
-    
+
     results_["Cache"] = metrics;
     spdlog::info("Cache benchmark completed: {:.2f} ops/sec", metrics.throughput);
 }
 
 void BenchmarkSuite::benchmarkRateLimiter() {
     spdlog::info("Benchmarking rate limiter...");
-    
+
     auto metrics = runMultiThreadedBenchmark("RateLimiter", [this](size_t thread_id) {
         benchmarks::RateLimiterBenchmark benchmark;
         warmup([&]() { benchmark.run(1); }, config_.warmup_operations);
         benchmark.run(config_.operations_per_thread);
         return benchmark.getMetrics();
     });
-    
+
     results_["RateLimiter"] = metrics;
     spdlog::info("Rate limiter benchmark completed: {:.2f} ops/sec", metrics.throughput);
 }
 
 void BenchmarkSuite::benchmarkThreadPool() {
     spdlog::info("Benchmarking thread pool...");
-    
+
     auto metrics = runMultiThreadedBenchmark("ThreadPool", [this](size_t thread_id) {
         benchmarks::ThreadPoolBenchmark benchmark;
         warmup([&]() { benchmark.run(1); }, config_.warmup_operations);
         benchmark.run(config_.operations_per_thread);
         return benchmark.getMetrics();
     });
-    
+
     results_["ThreadPool"] = metrics;
     spdlog::info("Thread pool benchmark completed: {:.2f} ops/sec", metrics.throughput);
 }
 
 void BenchmarkSuite::benchmarkMemoryPool() {
     spdlog::info("Benchmarking memory pool...");
-    
+
     auto metrics = runMultiThreadedBenchmark("MemoryPool", [this](size_t thread_id) {
         benchmarks::MemoryPoolBenchmark benchmark;
         warmup([&]() { benchmark.run(1); }, config_.warmup_operations);
         benchmark.run(config_.operations_per_thread);
         return benchmark.getMetrics();
     });
-    
+
     results_["MemoryPool"] = metrics;
     spdlog::info("Memory pool benchmark completed: {:.2f} ops/sec", metrics.throughput);
 }
 
 void BenchmarkSuite::validateThreadSafety() {
     spdlog::info("Validating thread safety...");
-    
+
     // Test connection pool thread safety
     bool connection_pool_safe = validateConcurrentOperations([](size_t iterations) {
         ConnectionPool pool(50);
@@ -125,42 +125,42 @@ void BenchmarkSuite::validateThreadSafety() {
             }
         }
     }, 1000);
-    
+
     // Test cache thread safety
     bool cache_safe = validateConcurrentOperations([](size_t iterations) {
         Cache cache;
         Response response;
         response.set_status_code(200);
         response.set_body("test");
-        
+
         for (size_t i = 0; i < iterations; ++i) {
             std::string url = "http://test" + std::to_string(i % 100) + ".com";
             cache.set(url, response);
             cache.get(url);
         }
     }, 1000);
-    
-    spdlog::info("Thread safety validation - ConnectionPool: {}, Cache: {}", 
-                 connection_pool_safe ? "PASS" : "FAIL", 
+
+    spdlog::info("Thread safety validation - ConnectionPool: {}, Cache: {}",
+                 connection_pool_safe ? "PASS" : "FAIL",
                  cache_safe ? "PASS" : "FAIL");
 }
 
 void BenchmarkSuite::testScalability() {
     spdlog::info("Testing scalability across different core counts...");
-    
+
     std::vector<size_t> thread_counts = {1, 2, 4, 8, 16, std::thread::hardware_concurrency()};
-    
+
     for (size_t threads : thread_counts) {
         if (threads > std::thread::hardware_concurrency() * 2) continue;
-        
+
         spdlog::info("Testing with {} threads", threads);
-        
+
         auto start = std::chrono::high_resolution_clock::now();
-        
+
         // Test connection pool scalability
         std::vector<std::future<void>> futures;
         ConnectionPool pool(threads * 10);
-        
+
         for (size_t i = 0; i < threads; ++i) {
             futures.emplace_back(std::async(std::launch::async, [&pool]() {
                 for (size_t j = 0; j < 1000; ++j) {
@@ -171,14 +171,14 @@ void BenchmarkSuite::testScalability() {
                 }
             }));
         }
-        
+
         for (auto& future : futures) {
             future.wait();
         }
-        
+
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        
+
         double throughput = (threads * 1000.0) / (duration.count() / 1000.0);
         spdlog::info("Scalability test with {} threads: {:.2f} ops/sec", threads, throughput);
     }
@@ -186,14 +186,14 @@ void BenchmarkSuite::testScalability() {
 
 void BenchmarkSuite::printResults() const {
     spdlog::info("\n=== BENCHMARK RESULTS ===");
-    
-    std::cout << std::left << std::setw(20) << "Component" 
-              << std::setw(15) << "Throughput" 
-              << std::setw(15) << "Avg Time" 
-              << std::setw(15) << "Min Time" 
+
+    std::cout << std::left << std::setw(20) << "Component"
+              << std::setw(15) << "Throughput"
+              << std::setw(15) << "Avg Time"
+              << std::setw(15) << "Min Time"
               << std::setw(15) << "Max Time" << std::endl;
     std::cout << std::string(80, '-') << std::endl;
-    
+
     for (const auto& [name, metrics] : results_) {
         std::cout << std::left << std::setw(20) << name
                   << std::setw(15) << std::fixed << std::setprecision(2) << metrics.throughput
@@ -201,22 +201,22 @@ void BenchmarkSuite::printResults() const {
                   << std::setw(15) << metrics.min_time.count() / 1000.0 << "μs"
                   << std::setw(15) << metrics.max_time.count() / 1000.0 << "μs" << std::endl;
     }
-    
+
     std::cout << std::string(80, '-') << std::endl;
 }
 
 template<typename F>
 PerformanceMeter::Metrics BenchmarkSuite::runMultiThreadedBenchmark(
     const std::string& name, F&& benchmark_func) {
-    
+
     std::vector<std::future<PerformanceMeter::Metrics>> futures;
-    
+
     for (size_t i = 0; i < config_.thread_count; ++i) {
         futures.emplace_back(std::async(std::launch::async, benchmark_func, i));
     }
-    
+
     PerformanceMeter::Metrics combined_metrics;
-    
+
     for (auto& future : futures) {
         auto metrics = future.get();
         combined_metrics.total_time += metrics.total_time;
@@ -224,7 +224,7 @@ PerformanceMeter::Metrics BenchmarkSuite::runMultiThreadedBenchmark(
         combined_metrics.min_time = std::min(combined_metrics.min_time, metrics.min_time);
         combined_metrics.max_time = std::max(combined_metrics.max_time, metrics.max_time);
     }
-    
+
     combined_metrics.calculate();
     return combined_metrics;
 }
@@ -240,15 +240,15 @@ template<typename F>
 bool BenchmarkSuite::validateConcurrentOperations(F&& func, size_t iterations) {
     try {
         std::vector<std::future<void>> futures;
-        
+
         for (size_t i = 0; i < config_.thread_count; ++i) {
             futures.emplace_back(std::async(std::launch::async, func, iterations));
         }
-        
+
         for (auto& future : futures) {
             future.wait();
         }
-        
+
         return true;
     } catch (const std::exception& e) {
         spdlog::error("Thread safety validation failed: {}", e.what());

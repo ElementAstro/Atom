@@ -33,7 +33,7 @@ std::mutex EnvAdvanced::sMonitorMutex;
 auto EnvAdvanced::applyProfile(const EnvProfile& profile, bool persistent) -> bool {
     try {
         spdlog::info("Applying environment profile: {}", profile.name);
-        
+
         // Apply regular environment variables
         size_t successCount = 0;
         for (const auto& [key, value] : profile.variables) {
@@ -41,19 +41,19 @@ auto EnvAdvanced::applyProfile(const EnvProfile& profile, bool persistent) -> bo
                 successCount++;
             }
         }
-        
+
         // Apply PATH entries
         for (const auto& pathEntry : profile.pathEntries) {
             EnvPath::addToPath(pathEntry);
         }
-        
+
         // Apply persistent variables if requested
         if (persistent) {
             for (const auto& [key, value] : profile.persistentVars) {
                 EnvPersistent::setPersistentEnv(key, value);
             }
         }
-        
+
         // Apply template if present
         if (!profile.envTemplate.name.empty()) {
             auto templateVars = EnvUtils::applyTemplate(profile.envTemplate);
@@ -61,12 +61,12 @@ auto EnvAdvanced::applyProfile(const EnvProfile& profile, bool persistent) -> bo
                 EnvCore::setEnv(key, value);
             }
         }
-        
-        spdlog::info("Applied profile '{}': {}/{} variables, {} PATH entries", 
-                     profile.name, successCount, profile.variables.size(), 
+
+        spdlog::info("Applied profile '{}': {}/{} variables, {} PATH entries",
+                     profile.name, successCount, profile.variables.size(),
                      profile.pathEntries.size());
         return true;
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Failed to apply profile '{}': {}", profile.name, e.what());
         return false;
@@ -76,10 +76,10 @@ auto EnvAdvanced::applyProfile(const EnvProfile& profile, bool persistent) -> bo
 auto EnvAdvanced::createProfileFromCurrent(const String& name, const String& description,
                                             bool includeSystem) -> EnvProfile {
     EnvProfile profile(name, description);
-    
+
     // Get current environment
     auto currentEnv = EnvCore::Environ();
-    
+
     if (includeSystem) {
         profile.variables = currentEnv;
     } else {
@@ -91,13 +91,13 @@ auto EnvAdvanced::createProfileFromCurrent(const String& name, const String& des
             }
         }
     }
-    
+
     // Get current PATH entries
     profile.pathEntries = EnvPath::getPathEntries();
-    
+
     spdlog::info("Created profile '{}' with {} variables and {} PATH entries",
                  name, profile.variables.size(), profile.pathEntries.size());
-    
+
     return profile;
 }
 
@@ -105,19 +105,19 @@ auto EnvAdvanced::saveProfile(const EnvProfile& profile, const String& filePath,
                               EnvFileFormat format) -> bool {
     try {
         String serialized = serializeProfile(profile, format);
-        
+
         std::ofstream file(std::string(filePath.c_str()));
         if (!file.is_open()) {
             spdlog::error("Failed to open file for writing: {}", filePath);
             return false;
         }
-        
+
         file << serialized;
         file.close();
-        
+
         spdlog::info("Saved profile '{}' to {}", profile.name, filePath);
         return true;
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Failed to save profile '{}': {}", profile.name, e.what());
         return false;
@@ -131,19 +131,19 @@ auto EnvAdvanced::loadProfile(const String& filePath, EnvFileFormat format) -> E
             spdlog::error("Failed to open file for reading: {}", filePath);
             return EnvProfile();
         }
-        
+
         std::stringstream buffer;
         buffer << file.rdbuf();
         String data = String(buffer.str());
-        
+
         if (format == EnvFileFormat::AUTO) {
             format = detectProfileFormat(filePath);
         }
-        
+
         auto profile = deserializeProfile(data, format);
         spdlog::info("Loaded profile '{}' from {}", profile.name, filePath);
         return profile;
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Failed to load profile from {}: {}", filePath, e.what());
         return EnvProfile();
@@ -152,13 +152,13 @@ auto EnvAdvanced::loadProfile(const String& filePath, EnvFileFormat format) -> E
 
 auto EnvAdvanced::listProfiles(const String& directory) -> Vector<String> {
     Vector<String> profiles;
-    
+
     try {
         for (const auto& entry : std::filesystem::directory_iterator(std::string(directory.c_str()))) {
             if (entry.is_regular_file()) {
                 String filename = String(entry.path().filename().string());
                 String ext = String(entry.path().extension().string());
-                
+
                 if (ext == ".json" || ext == ".yaml" || ext == ".yml" || ext == ".xml") {
                     profiles.push_back(filename);
                 }
@@ -167,36 +167,36 @@ auto EnvAdvanced::listProfiles(const String& directory) -> Vector<String> {
     } catch (const std::exception& e) {
         spdlog::error("Failed to list profiles in directory {}: {}", directory, e.what());
     }
-    
+
     return profiles;
 }
 
 auto EnvAdvanced::startMonitoring(EnvMonitorCallback callback, int interval) -> size_t {
     std::lock_guard<std::mutex> lock(sMonitorMutex);
-    
+
     size_t sessionId = sNextMonitorId++;
     sMonitorCallbacks[sessionId] = callback;
-    
+
     // Start monitoring thread
     std::thread monitorThread([sessionId, callback, interval]() {
         runMonitoringLoop(sessionId, callback, interval);
     });
     monitorThread.detach();
-    
+
     spdlog::info("Started environment monitoring session: {}", sessionId);
     return sessionId;
 }
 
 auto EnvAdvanced::stopMonitoring(size_t sessionId) -> bool {
     std::lock_guard<std::mutex> lock(sMonitorMutex);
-    
+
     auto it = sMonitorCallbacks.find(sessionId);
     if (it != sMonitorCallbacks.end()) {
         sMonitorCallbacks.erase(it);
         spdlog::info("Stopped environment monitoring session: {}", sessionId);
         return true;
     }
-    
+
     return false;
 }
 
@@ -210,10 +210,10 @@ auto EnvAdvanced::setEncryptedVar(const String& key, const String& value, bool p
         spdlog::error("No encryption provider set");
         return false;
     }
-    
+
     try {
         String encrypted = sEncryptionProvider->encrypt(value);
-        
+
         if (persistent) {
             return EnvPersistent::setPersistentEnv(key, encrypted) == PersistenceResult::SUCCESS;
         } else {
@@ -230,13 +230,13 @@ auto EnvAdvanced::getEncryptedVar(const String& key, const String& defaultValue)
         spdlog::error("No encryption provider set");
         return defaultValue;
     }
-    
+
     try {
         String encrypted = EnvCore::getEnv(key, "");
         if (encrypted.empty()) {
             return defaultValue;
         }
-        
+
         if (sEncryptionProvider->isEncrypted(encrypted)) {
             return sEncryptionProvider->decrypt(encrypted);
         } else {
@@ -250,32 +250,32 @@ auto EnvAdvanced::getEncryptedVar(const String& key, const String& defaultValue)
 
 auto EnvAdvanced::performHealthCheck() -> HashMap<String, String> {
     HashMap<String, String> results;
-    
+
     // Check core functionality
     results["core_functionality"] = "OK";
-    
+
     // Check PATH validity
     auto pathStats = EnvPath::getPathStats();
     results["path_total_entries"] = std::to_string(pathStats["total_entries"]);
     results["path_valid_entries"] = std::to_string(pathStats["valid_paths"]);
     results["path_invalid_entries"] = std::to_string(pathStats["invalid_paths"]);
-    
+
     // Check system information
     auto sysInfo = EnvSystem::getSystemInfo();
     results["system_os"] = sysInfo["os"];
     results["system_arch"] = sysInfo["architecture"];
-    
+
     // Check memory usage
     auto memInfo = EnvSystem::getMemoryInfo();
     if (!memInfo.empty()) {
         results["memory_total_mb"] = std::to_string(memInfo["total"] / (1024 * 1024));
         results["memory_available_mb"] = std::to_string(memInfo["available"] / (1024 * 1024));
     }
-    
+
     // Check environment variable count
     auto env = EnvCore::Environ();
     results["total_variables"] = std::to_string(env.size());
-    
+
     results["health_status"] = "HEALTHY";
     return results;
 }

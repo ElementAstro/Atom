@@ -45,14 +45,14 @@ auto stringToWstring(const std::string& str) -> std::wstring {
 auto getLocaleInfo(unsigned long type, const std::string& localeName) -> std::string {
     spdlog::debug("Getting locale info for type: {}", type);
     WCHAR buffer[LOCALE_NAME_MAX_LENGTH];
-    
+
     LPCWSTR localeNamePtr = LOCALE_NAME_USER_DEFAULT;
     std::wstring wLocaleName;
     if (!localeName.empty()) {
         wLocaleName = stringToWstring(localeName);
         localeNamePtr = wLocaleName.c_str();
     }
-    
+
     int result = GetLocaleInfoEx(localeNamePtr, type, buffer, LOCALE_NAME_MAX_LENGTH);
     if (result != 0) {
         spdlog::debug("Successfully retrieved locale info");
@@ -165,7 +165,7 @@ auto getPreferredUILanguages() -> std::vector<std::string> {
     std::vector<std::string> languages;
     ULONG numLanguages = 0;
     ULONG bufferSize = 0;
-    
+
     // Get buffer size
     if (GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &numLanguages, nullptr, &bufferSize)) {
         std::vector<WCHAR> buffer(bufferSize);
@@ -177,11 +177,11 @@ auto getPreferredUILanguages() -> std::vector<std::string> {
             }
         }
     }
-    
+
     if (languages.empty()) {
         languages.push_back(getDefaultLocale());
     }
-    
+
     return languages;
 }
 
@@ -271,8 +271,8 @@ auto formatCurrency(double amount, const std::string& locale) -> std::string {
     return symbol + std::to_string(amount);
 }
 
-auto formatDate(const std::chrono::system_clock::time_point& timestamp, 
-                const std::string& locale, 
+auto formatDate(const std::chrono::system_clock::time_point& timestamp,
+                const std::string& locale,
                 const std::string& format) -> std::string {
     // Implementation would use GetDateFormat API
     // For now, return a basic format
@@ -280,8 +280,8 @@ auto formatDate(const std::chrono::system_clock::time_point& timestamp,
     return std::to_string(time_t);
 }
 
-auto formatTime(const std::chrono::system_clock::time_point& timestamp, 
-                const std::string& locale, 
+auto formatTime(const std::chrono::system_clock::time_point& timestamp,
+                const std::string& locale,
                 const std::string& format) -> std::string {
     // Implementation would use GetTimeFormat API
     // For now, return a basic format

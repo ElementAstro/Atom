@@ -103,7 +103,7 @@ $CXX_COMPILER $CXX_FLAGS $INCLUDE_DIRS \
     ../test_memory_pool.cpp \
     -o memory_pool_tests
 
-# Object Pool Tests  
+# Object Pool Tests
 $CXX_COMPILER $CXX_FLAGS $INCLUDE_DIRS \
     -DSTANDALONE_TEST \
     ../test_object_pool.cpp \
@@ -137,7 +137,7 @@ echo "========================================================"
 # Run individual component tests if requested
 if [ "$1" = "--individual" ] || [ "$2" = "--individual" ]; then
     print_status "Running individual component tests..."
-    
+
     echo ""
     print_status "Running Memory Pool tests..."
     if ./memory_pool_tests; then
@@ -145,7 +145,7 @@ if [ "$1" = "--individual" ] || [ "$2" = "--individual" ]; then
     else
         print_warning "Memory Pool tests had issues"
     fi
-    
+
     echo ""
     print_status "Running Object Pool tests..."
     if ./object_pool_tests; then
@@ -153,7 +153,7 @@ if [ "$1" = "--individual" ] || [ "$2" = "--individual" ]; then
     else
         print_warning "Object Pool tests had issues"
     fi
-    
+
     echo ""
     print_status "Running Ring Buffer tests..."
     if ./ring_buffer_tests; then
@@ -168,7 +168,7 @@ if [ "$1" = "--benchmark" ] || [ "$2" = "--benchmark" ]; then
     echo ""
     print_status "Running performance benchmarks..."
     echo "This may take several minutes..."
-    
+
     # Run benchmarks multiple times for statistical significance
     for i in {1..3}; do
         echo ""
@@ -208,7 +208,7 @@ cat > ../test_results.md << EOF
 ## Test Configuration
 
 - Memory Tracking: Enabled
-- Performance Statistics: Enabled  
+- Performance Statistics: Enabled
 - Memory Prefetching: Enabled
 - Cache Optimization: Enabled
 

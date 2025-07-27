@@ -3,7 +3,7 @@
 
 cmake_minimum_required(VERSION 3.15)
 
-project(atom_sysinfo_bios_os 
+project(atom_sysinfo_bios_os
     VERSION 1.0.0
     DESCRIPTION "Enhanced Operating System Information Module"
     LANGUAGES CXX
@@ -92,21 +92,21 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         -Wall -Wextra -Wpedantic -Werror
         -Wno-unused-parameter -Wno-missing-field-initializers
     )
-    
+
     # Linux-specific libraries
     if(UNIX AND NOT APPLE)
         target_link_libraries(atom_sysinfo_bios_os PRIVATE
             pthread dl
         )
     endif()
-    
+
     # macOS-specific libraries
     if(APPLE)
         find_library(FOUNDATION_FRAMEWORK Foundation)
         find_library(IOKIT_FRAMEWORK IOKit)
         find_library(COREFOUNDATION_FRAMEWORK CoreFoundation)
         find_library(SYSTEMCONFIGURATION_FRAMEWORK SystemConfiguration)
-        
+
         target_link_libraries(atom_sysinfo_bios_os PRIVATE
             ${FOUNDATION_FRAMEWORK}
             ${IOKIT_FRAMEWORK}
@@ -153,7 +153,7 @@ if(DOXYGEN_FOUND)
     set(DOXYGEN_EXTRACT_ALL YES)
     set(DOXYGEN_GENERATE_HTML YES)
     set(DOXYGEN_GENERATE_XML YES)
-    
+
     doxygen_add_docs(atom_sysinfo_bios_os_docs
         ${CMAKE_CURRENT_SOURCE_DIR}
         COMMENT "Generating Enhanced OS Module documentation"

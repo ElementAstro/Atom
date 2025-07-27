@@ -12,17 +12,17 @@ set(EXAMPLES
 # Create example executables
 foreach(EXAMPLE ${EXAMPLES})
     add_executable(${EXAMPLE} ${EXAMPLE}.cpp)
-    
+
     target_link_libraries(${EXAMPLE}
         PRIVATE
             atom_sysinfo_sn
     )
-    
+
     set_target_properties(${EXAMPLE} PROPERTIES
         CXX_STANDARD 20
         CXX_STANDARD_REQUIRED ON
     )
-    
+
     # Include directories
     target_include_directories(${EXAMPLE}
         PRIVATE
@@ -43,7 +43,7 @@ if(INSTALL_EXAMPLES)
     install(TARGETS ${EXAMPLES}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/examples
     )
-    
+
     # Install source files for reference
     install(FILES
         basic_usage.cpp

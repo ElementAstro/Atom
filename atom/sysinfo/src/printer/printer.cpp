@@ -21,14 +21,14 @@ SystemInfoPrinter::SystemInfoPrinter() {
     defaultFormatterOptions_.format = OutputFormat::TABLE;
     defaultFormatterOptions_.colorEnabled = false;
     defaultFormatterOptions_.timestampEnabled = true;
-    
+
     defaultExportOptions_.format = ExportFormat::HTML;
     defaultExportOptions_.includeTimestamp = true;
     defaultExportOptions_.includeMetadata = true;
     defaultExportOptions_.title = "System Information Report";
 }
 
-SystemInfoPrinter::SystemInfoPrinter(const FormatterOptions& options) 
+SystemInfoPrinter::SystemInfoPrinter(const FormatterOptions& options)
     : defaultFormatterOptions_(options) {
     defaultExportOptions_.format = ExportFormat::HTML;
     defaultExportOptions_.includeTimestamp = true;
@@ -60,7 +60,7 @@ auto SystemInfoPrinter::generateReport(ReportType type, const ReportOptions& opt
     if (effectiveOptions.format == OutputFormat::TABLE) {
         effectiveOptions.format = defaultFormatterOptions_.format;
     }
-    
+
     switch (type) {
         case ReportType::FULL: {
             auto report = createReport<FullReport>(effectiveOptions);

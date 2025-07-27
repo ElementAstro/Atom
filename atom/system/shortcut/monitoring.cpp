@@ -22,7 +22,7 @@ ShortcutMonitor* ShortcutMonitor::instance_ = nullptr;
 std::string MonitoringEvent::toString() const {
     std::stringstream ss;
     ss << "Event: ";
-    
+
     switch (type) {
         case MonitoringEventType::ShortcutRegistered: ss << "ShortcutRegistered"; break;
         case MonitoringEventType::ShortcutUnregistered: ss << "ShortcutUnregistered"; break;
@@ -35,11 +35,11 @@ std::string MonitoringEvent::toString() const {
         case MonitoringEventType::ErrorOccurred: ss << "ErrorOccurred"; break;
         default: ss << "Unknown"; break;
     }
-    
+
     ss << ", Shortcut: " << shortcut.toString();
     if (!source.empty()) ss << ", Source: " << source;
     if (!description.empty()) ss << ", Description: " << description;
-    
+
     return ss.str();
 }
 
@@ -51,31 +51,31 @@ bool EventFilter::shouldProcess(const MonitoringEvent& event) const {
             return false;
         }
     }
-    
+
     // Check blocked sources
     if (!blockedSources.empty()) {
         if (std::find(blockedSources.begin(), blockedSources.end(), event.source) != blockedSources.end()) {
             return false;
         }
     }
-    
+
     // Check allowed sources
     if (!allowedSources.empty()) {
         if (std::find(allowedSources.begin(), allowedSources.end(), event.source) == allowedSources.end()) {
             return false;
         }
     }
-    
+
     // Apply custom filter
     if (customFilter && !customFilter(event)) {
         return false;
     }
-    
+
     return true;
 }
 
 // ShortcutMonitor implementation
-ShortcutMonitor::ShortcutMonitor(const MonitoringConfig& config) 
+ShortcutMonitor::ShortcutMonitor(const MonitoringConfig& config)
     : config_(config) {
 #ifdef _WIN32
     instance_ = this;
@@ -95,33 +95,33 @@ ShortcutMonitor::~ShortcutMonitor() {
 
 bool ShortcutMonitor::start() {
     SHORTCUT_ERROR_CONTEXT();
-    
+
     if (running_.load()) {
         spdlog::warn("Monitor is already running");
         return true;
     }
-    
+
     try {
         initializePlatformMonitoring();
-        
+
         stopRequested_.store(false);
         running_.store(true);
-        
+
         // Start monitoring threads
         monitoringThread_ = std::make_unique<std::thread>(&ShortcutMonitor::monitoringLoop, this);
         eventProcessingThread_ = std::make_unique<std::thread>(&ShortcutMonitor::eventProcessingLoop, this);
-        
+
         stats_.startTime = std::chrono::system_clock::now();
-        
+
         spdlog::info("ShortcutMonitor started successfully");
-        
+
         // Emit start event
-        MonitoringEvent startEvent(MonitoringEventType::SystemStateChanged, 
+        MonitoringEvent startEvent(MonitoringEventType::SystemStateChanged,
                                   AdvancedShortcut(), "ShortcutMonitor", "Monitoring started");
         emitEvent(startEvent);
-        
+
         return true;
-        
+
     } catch (const std::exception& e) {
         running_.store(false);
         spdlog::error("Failed to start ShortcutMonitor: {}", e.what());
@@ -133,12 +133,12 @@ void ShortcutMonitor::stop() {
     if (!running_.load()) {
         return;
     }
-    
+
     spdlog::info("Stopping ShortcutMonitor...");
-    
+
     stopRequested_.store(true);
     running_.store(false);
-    
+
     // Wait for threads to finish
     if (monitoringThread_ && monitoringThread_->joinable()) {
         monitoringThread_->join();
@@ -146,14 +146,14 @@ void ShortcutMonitor::stop() {
     if (eventProcessingThread_ && eventProcessingThread_->joinable()) {
         eventProcessingThread_->join();
     }
-    
+
     cleanupPlatformMonitoring();
-    
+
     // Emit stop event
-    MonitoringEvent stopEvent(MonitoringEventType::SystemStateChanged, 
+    MonitoringEvent stopEvent(MonitoringEventType::SystemStateChanged,
                              AdvancedShortcut(), "ShortcutMonitor", "Monitoring stopped");
     emitEvent(stopEvent);
-    
+
     spdlog::info("ShortcutMonitor stopped");
 }
 
@@ -174,11 +174,11 @@ void ShortcutMonitor::addShortcut(const AdvancedShortcut& shortcut, const std::s
         std::lock_guard<std::mutex> lock(shortcutMutex_);
         monitoredShortcuts_[shortcut] = owner;
     }
-    
-    MonitoringEvent event(MonitoringEventType::ShortcutRegistered, shortcut, owner, 
+
+    MonitoringEvent event(MonitoringEventType::ShortcutRegistered, shortcut, owner,
                          "Shortcut added to monitoring");
     emitEvent(event);
-    
+
     spdlog::debug("Added shortcut to monitoring: {}", shortcut.toString());
 }
 
@@ -192,11 +192,11 @@ void ShortcutMonitor::removeShortcut(const AdvancedShortcut& shortcut) {
             monitoredShortcuts_.erase(it);
         }
     }
-    
+
     MonitoringEvent event(MonitoringEventType::ShortcutUnregistered, shortcut, owner,
                          "Shortcut removed from monitoring");
     emitEvent(event);
-    
+
     spdlog::debug("Removed shortcut from monitoring: {}", shortcut.toString());
 }
 
@@ -204,11 +204,11 @@ std::vector<AdvancedShortcut> ShortcutMonitor::getMonitoredShortcuts() const {
     std::lock_guard<std::mutex> lock(shortcutMutex_);
     std::vector<AdvancedShortcut> result;
     result.reserve(monitoredShortcuts_.size());
-    
+
     for (const auto& [shortcut, owner] : monitoredShortcuts_) {
         result.push_back(shortcut);
     }
-    
+
     return result;
 }
 
@@ -216,34 +216,34 @@ void ShortcutMonitor::checkConflicts() {
     if (!config_.enableConflictDetection) {
         return;
     }
-    
+
     detectConflicts();
 }
 
 std::vector<MonitoringEvent> ShortcutMonitor::getRecentEvents(size_t maxCount) const {
     std::lock_guard<std::mutex> lock(eventMutex_);
-    
+
     std::vector<MonitoringEvent> result;
     size_t startIndex = eventHistory_.size() > maxCount ? eventHistory_.size() - maxCount : 0;
-    
+
     for (size_t i = startIndex; i < eventHistory_.size(); ++i) {
         result.push_back(eventHistory_[i]);
     }
-    
+
     return result;
 }
 
 std::vector<MonitoringEvent> ShortcutMonitor::getEventsByType(MonitoringEventType type, size_t maxCount) const {
     std::lock_guard<std::mutex> lock(eventMutex_);
-    
+
     std::vector<MonitoringEvent> result;
-    
+
     for (auto it = eventHistory_.rbegin(); it != eventHistory_.rend() && result.size() < maxCount; ++it) {
         if (it->type == type) {
             result.push_back(*it);
         }
     }
-    
+
     std::reverse(result.begin(), result.end());
     return result;
 }
@@ -262,17 +262,17 @@ void ShortcutMonitor::updateConfig(const MonitoringConfig& config) {
 ShortcutMonitor::MonitoringStats ShortcutMonitor::getStats() const {
     std::lock_guard<std::mutex> lock(statsMutex_);
     MonitoringStats stats = stats_;
-    
+
     if (running_.load()) {
         auto now = std::chrono::system_clock::now();
         stats.uptime = std::chrono::duration_cast<std::chrono::milliseconds>(now - stats_.startTime);
-        
+
         if (stats.uptime.count() > 0) {
-            stats.eventsPerSecond = static_cast<double>(stats.totalEvents) / 
+            stats.eventsPerSecond = static_cast<double>(stats.totalEvents) /
                                    (static_cast<double>(stats.uptime.count()) / 1000.0);
         }
     }
-    
+
     return stats;
 }
 
@@ -285,56 +285,56 @@ void ShortcutMonitor::resetStats() {
 
 void ShortcutMonitor::monitoringLoop() {
     spdlog::debug("Monitoring loop started");
-    
+
     while (!stopRequested_.load()) {
         try {
             if (config_.enableSystemStateMonitoring) {
                 checkSystemState();
             }
-            
+
             if (config_.enableConflictDetection) {
                 detectConflicts();
             }
-            
+
             updateStats();
-            
+
             std::this_thread::sleep_for(config_.pollingInterval);
-            
+
         } catch (const std::exception& e) {
             spdlog::error("Error in monitoring loop: {}", e.what());
-            
-            MonitoringEvent errorEvent(MonitoringEventType::ErrorOccurred, 
+
+            MonitoringEvent errorEvent(MonitoringEventType::ErrorOccurred,
                                      AdvancedShortcut(), "MonitoringLoop", e.what());
             emitEvent(errorEvent);
         }
     }
-    
+
     spdlog::debug("Monitoring loop stopped");
 }
 
 void ShortcutMonitor::eventProcessingLoop() {
     spdlog::debug("Event processing loop started");
-    
+
     while (!stopRequested_.load()) {
         try {
             std::unique_lock<std::mutex> lock(eventMutex_);
-            
+
             if (!eventQueue_.empty()) {
                 MonitoringEvent event = eventQueue_.front();
                 eventQueue_.pop();
                 lock.unlock();
-                
+
                 processEvent(event);
             } else {
                 lock.unlock();
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
-            
+
         } catch (const std::exception& e) {
             spdlog::error("Error in event processing loop: {}", e.what());
         }
     }
-    
+
     spdlog::debug("Event processing loop stopped");
 }
 
@@ -343,18 +343,18 @@ void ShortcutMonitor::processEvent(const MonitoringEvent& event) {
     {
         std::lock_guard<std::mutex> lock(eventMutex_);
         eventHistory_.push_back(event);
-        
+
         // Limit history size
         if (eventHistory_.size() > config_.maxEventQueueSize) {
             eventHistory_.erase(eventHistory_.begin());
         }
     }
-    
+
     // Log event if enabled
     if (config_.logEvents) {
         spdlog::info("Monitoring event: {}", event.toString());
     }
-    
+
     // Call registered callbacks
     std::lock_guard<std::mutex> lock(callbackMutex_);
     for (const auto& [callback, filter] : callbacks_) {
@@ -370,14 +370,14 @@ void ShortcutMonitor::processEvent(const MonitoringEvent& event) {
 
 void ShortcutMonitor::emitEvent(const MonitoringEvent& event) {
     std::lock_guard<std::mutex> lock(eventMutex_);
-    
+
     if (eventQueue_.size() >= config_.maxEventQueueSize) {
         spdlog::warn("Event queue is full, dropping oldest event");
         eventQueue_.pop();
     }
-    
+
     eventQueue_.push(event);
-    
+
     // Update stats
     {
         std::lock_guard<std::mutex> statsLock(statsMutex_);

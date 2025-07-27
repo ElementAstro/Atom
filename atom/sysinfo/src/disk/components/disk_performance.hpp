@@ -32,17 +32,17 @@ namespace atom::system {
  */
 struct ExtendedPerformanceMetrics {
     DiskPerformanceMetrics basic;
-    
+
     // IOPS metrics
     double readIOPS{0.0};
     double writeIOPS{0.0};
     double totalIOPS{0.0};
-    
+
     // Throughput metrics (MB/s)
     double readThroughputMBps{0.0};
     double writeThroughputMBps{0.0};
     double totalThroughputMBps{0.0};
-    
+
     // Latency statistics (microseconds)
     uint64_t minReadLatencyUs{0};
     uint64_t maxReadLatencyUs{0};
@@ -50,24 +50,24 @@ struct ExtendedPerformanceMetrics {
     uint64_t minWriteLatencyUs{0};
     uint64_t maxWriteLatencyUs{0};
     uint64_t avgWriteLatencyUs{0};
-    
+
     // Queue metrics
     double avgQueueDepth{0.0};
     uint32_t maxQueueDepth{0};
-    
+
     // Utilization metrics
     float diskUtilization{0.0f};  // Percentage
     float bandwidthUtilization{0.0f};  // Percentage
-    
+
     // Health prediction metrics
     float healthScore{100.0f};  // 0-100 scale
     uint32_t predictedLifespanDays{0};
-    
+
     // Timestamp
     std::chrono::system_clock::time_point timestamp{std::chrono::system_clock::now()};
-    
+
     ExtendedPerformanceMetrics() = default;
-    
+
     ExtendedPerformanceMetrics(const DiskPerformanceMetrics& basicMetrics)
         : basic(basicMetrics) {}
 };
@@ -85,7 +85,7 @@ struct BenchmarkConfig {
     bool readTest{true};
     bool mixedTest{true};
     float readWriteRatio{0.7f};  // 70% read, 30% write for mixed test
-    
+
     BenchmarkConfig() = default;
 };
 
@@ -99,7 +99,7 @@ struct PerformanceMonitorConfig {
     bool enableAnomalyDetection{true};
     float anomalyThreshold{2.0f};  // Standard deviations
     bool enableHealthPrediction{true};
-    
+
     PerformanceMonitorConfig() = default;
 };
 
@@ -109,25 +109,25 @@ struct PerformanceMonitorConfig {
 struct PerformanceTrend {
     std::string devicePath;
     std::chrono::system_clock::time_point analysisTime{std::chrono::system_clock::now()};
-    
+
     // Trend indicators (-1: declining, 0: stable, 1: improving)
     int iopstrend{0};
     int throughputTrend{0};
     int latencyTrend{0};
     int healthTrend{0};
-    
+
     // Confidence levels (0.0 - 1.0)
     float iopsTrendConfidence{0.0f};
     float throughputTrendConfidence{0.0f};
     float latencyTrendConfidence{0.0f};
     float healthTrendConfidence{0.0f};
-    
+
     // Predictions
     std::optional<uint32_t> predictedFailureDays;
     std::optional<float> predictedPerformanceDegradation;  // Percentage
-    
+
     std::vector<std::string> recommendations;
-    
+
     PerformanceTrend() = default;
 };
 
@@ -137,7 +137,7 @@ struct PerformanceTrend {
  * @param devicePath Path to the device
  * @return Extended performance metrics or nullopt if failed
  */
-[[nodiscard]] auto getCurrentPerformanceMetrics(const std::string& devicePath) 
+[[nodiscard]] auto getCurrentPerformanceMetrics(const std::string& devicePath)
     -> std::optional<ExtendedPerformanceMetrics>;
 
 /**
@@ -147,8 +147,8 @@ struct PerformanceTrend {
  * @param config Benchmark configuration
  * @return Benchmark results
  */
-[[nodiscard]] auto performBenchmark(const std::string& devicePath, 
-                                   const BenchmarkConfig& config = {}) 
+[[nodiscard]] auto performBenchmark(const std::string& devicePath,
+                                   const BenchmarkConfig& config = {})
     -> ExtendedPerformanceMetrics;
 
 /**
@@ -161,7 +161,7 @@ struct PerformanceTrend {
  */
 [[nodiscard]] auto startPerformanceMonitoring(const std::string& devicePath,
                                              std::function<void(const ExtendedPerformanceMetrics&)> callback,
-                                             const PerformanceMonitorConfig& config = {}) 
+                                             const PerformanceMonitorConfig& config = {})
     -> std::future<void>;
 
 /**
@@ -171,8 +171,8 @@ struct PerformanceTrend {
  * @param historyDays Number of days of history to analyze
  * @return Performance trend analysis
  */
-[[nodiscard]] auto analyzePerformanceTrends(const std::string& devicePath, 
-                                           uint32_t historyDays = 7) 
+[[nodiscard]] auto analyzePerformanceTrends(const std::string& devicePath,
+                                           uint32_t historyDays = 7)
     -> PerformanceTrend;
 
 /**
@@ -217,58 +217,58 @@ public:
     PerformanceManager();
     explicit PerformanceManager(const PerformanceMonitorConfig& config);
     ~PerformanceManager();
-    
+
     // Disable copy constructor and assignment
     PerformanceManager(const PerformanceManager&) = delete;
     PerformanceManager& operator=(const PerformanceManager&) = delete;
-    
+
     // Enable move constructor and assignment
     PerformanceManager(PerformanceManager&&) noexcept;
     PerformanceManager& operator=(PerformanceManager&&) noexcept;
-    
+
     /**
      * @brief Add device to performance monitoring
      */
     void addDevice(const std::string& devicePath);
-    
+
     /**
      * @brief Remove device from monitoring
      */
     void removeDevice(const std::string& devicePath);
-    
+
     /**
      * @brief Start monitoring all added devices
      */
     void startMonitoring(std::function<void(const std::string&, const ExtendedPerformanceMetrics&)> callback);
-    
+
     /**
      * @brief Stop performance monitoring
      */
     void stopMonitoring();
-    
+
     /**
      * @brief Get current metrics for a device
      */
     [[nodiscard]] std::optional<ExtendedPerformanceMetrics> getCurrentMetrics(const std::string& devicePath) const;
-    
+
     /**
      * @brief Get performance history for a device
      */
     [[nodiscard]] std::vector<ExtendedPerformanceMetrics> getPerformanceHistory(
         const std::string& devicePath, std::chrono::hours duration = std::chrono::hours(24)) const;
-    
+
     /**
      * @brief Perform benchmark on a device
      */
-    [[nodiscard]] ExtendedPerformanceMetrics benchmark(const std::string& devicePath, 
+    [[nodiscard]] ExtendedPerformanceMetrics benchmark(const std::string& devicePath,
                                                       const BenchmarkConfig& config = {});
-    
+
     /**
      * @brief Analyze trends for a device
      */
-    [[nodiscard]] PerformanceTrend analyzeTrends(const std::string& devicePath, 
+    [[nodiscard]] PerformanceTrend analyzeTrends(const std::string& devicePath,
                                                 uint32_t historyDays = 7) const;
-    
+
     /**
      * @brief Get monitoring statistics
      */
@@ -279,14 +279,14 @@ public:
         std::chrono::system_clock::time_point startTime;
         std::chrono::milliseconds uptime{0};
     };
-    
+
     [[nodiscard]] MonitoringStats getStats() const;
-    
+
     /**
      * @brief Update monitoring configuration
      */
     void updateConfig(const PerformanceMonitorConfig& config);
-    
+
     /**
      * @brief Get current configuration
      */

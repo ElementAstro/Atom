@@ -18,7 +18,7 @@ CronSecurity::CronSecurity() {
     security_features_["sandboxing"] = true;
     security_features_["command_validation"] = true;
     security_features_["audit_logging"] = true;
-    
+
     spdlog::info("CronSecurity initialized");
 }
 
@@ -29,27 +29,27 @@ CronSecurity::~CronSecurity() {
 
 auto CronSecurity::initialize() -> bool {
     std::lock_guard<std::mutex> lock(security_mutex_);
-    
+
     if (initialized_.load()) {
         spdlog::warn("CronSecurity is already initialized");
         return true;
     }
-    
+
     try {
         // Initialize default roles
         initializeDefaultRoles();
-        
+
         // Create default admin user
         auto admin_id = createUser("admin", "admin@localhost", {"admin"});
         if (!admin_id.has_value()) {
             spdlog::error("Failed to create default admin user");
             return false;
         }
-        
+
         initialized_.store(true);
         spdlog::info("CronSecurity initialized successfully");
         return true;
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Failed to initialize CronSecurity: {}", e.what());
         return false;
@@ -58,11 +58,11 @@ auto CronSecurity::initialize() -> bool {
 
 void CronSecurity::shutdown() {
     std::lock_guard<std::mutex> lock(security_mutex_);
-    
+
     if (!initialized_.load()) {
         return;
     }
-    
+
     // Clear all data
     users_.clear();
     username_to_id_.clear();
@@ -71,7 +71,7 @@ void CronSecurity::shutdown() {
     resource_limits_.clear();
     sandbox_configs_.clear();
     active_sandboxes_.clear();
-    
+
     initialized_.store(false);
     spdlog::info("CronSecurity shutdown completed");
 }
@@ -79,18 +79,18 @@ void CronSecurity::shutdown() {
 auto CronSecurity::createUser(const std::string& username, const std::string& email,
                              const std::vector<std::string>& roles) -> std::optional<std::string> {
     std::lock_guard<std::mutex> lock(security_mutex_);
-    
+
     // Check if username already exists
     if (username_to_id_.find(username) != username_to_id_.end()) {
         spdlog::warn("Username {} already exists", username);
         return std::nullopt;
     }
-    
+
     std::string user_id = generateUserId();
     UserAccount user(user_id, username);
     user.email = email;
     user.roles = roles;
-    
+
     // Validate roles exist
     for (const auto& role : roles) {
         if (roles_.find(role) == roles_.end()) {
@@ -98,31 +98,31 @@ auto CronSecurity::createUser(const std::string& username, const std::string& em
             return std::nullopt;
         }
     }
-    
+
     users_[user_id] = user;
     username_to_id_[username] = user_id;
-    
+
     logSecurityEvent(SecurityEvent(user_id, "create_user", username, true, "User created"));
     spdlog::info("Created user: {} ({})", username, user_id);
-    
+
     return user_id;
 }
 
 auto CronSecurity::deleteUser(const std::string& user_id) -> bool {
     std::lock_guard<std::mutex> lock(security_mutex_);
-    
+
     auto user_it = users_.find(user_id);
     if (user_it == users_.end()) {
         spdlog::warn("User {} not found", user_id);
         return false;
     }
-    
+
     std::string username = user_it->second.username;
-    
+
     // Remove from all data structures
     users_.erase(user_it);
     username_to_id_.erase(username);
-    
+
     // Remove active sessions
     auto session_it = active_sessions_.begin();
     while (session_it != active_sessions_.end()) {
@@ -132,10 +132,10 @@ auto CronSecurity::deleteUser(const std::string& user_id) -> bool {
             ++session_it;
         }
     }
-    
+
     logSecurityEvent(SecurityEvent(user_id, "delete_user", username, true, "User deleted"));
     spdlog::info("Deleted user: {} ({})", username, user_id);
-    
+
     return true;
 }
 
@@ -143,7 +143,7 @@ auto CronSecurity::createRole(const std::string& name, const std::string& descri
                              const std::unordered_map<std::string, PermissionLevel>& permissions)
     -> std::optional<std::string> {
     std::lock_guard<std::mutex> lock(security_mutex_);
-    
+
     // Check if role name already exists
     for (const auto& [role_id, role] : roles_) {
         if (role.name == name) {
@@ -151,66 +151,66 @@ auto CronSecurity::createRole(const std::string& name, const std::string& descri
             return std::nullopt;
         }
     }
-    
+
     std::string role_id = generateRoleId();
     Role role(role_id, name, description);
     role.permissions = permissions;
-    
+
     roles_[role_id] = role;
-    
+
     logSecurityEvent(SecurityEvent("system", "create_role", name, true, "Role created"));
     spdlog::info("Created role: {} ({})", name, role_id);
-    
+
     return role_id;
 }
 
 auto CronSecurity::assignRole(const std::string& user_id, const std::string& role_id) -> bool {
     std::lock_guard<std::mutex> lock(security_mutex_);
-    
+
     auto user_it = users_.find(user_id);
     if (user_it == users_.end()) {
         spdlog::warn("User {} not found", user_id);
         return false;
     }
-    
+
     if (roles_.find(role_id) == roles_.end()) {
         spdlog::warn("Role {} not found", role_id);
         return false;
     }
-    
+
     auto& user_roles = user_it->second.roles;
     if (std::find(user_roles.begin(), user_roles.end(), role_id) == user_roles.end()) {
         user_roles.push_back(role_id);
-        
+
         logSecurityEvent(SecurityEvent(user_id, "assign_role", role_id, true, "Role assigned"));
         spdlog::info("Assigned role {} to user {}", role_id, user_id);
         return true;
     }
-    
+
     spdlog::warn("User {} already has role {}", user_id, role_id);
     return false;
 }
 
 auto CronSecurity::removeRole(const std::string& user_id, const std::string& role_id) -> bool {
     std::lock_guard<std::mutex> lock(security_mutex_);
-    
+
     auto user_it = users_.find(user_id);
     if (user_it == users_.end()) {
         spdlog::warn("User {} not found", user_id);
         return false;
     }
-    
+
     auto& user_roles = user_it->second.roles;
     auto role_it = std::find(user_roles.begin(), user_roles.end(), role_id);
-    
+
     if (role_it != user_roles.end()) {
         user_roles.erase(role_it);
-        
+
         logSecurityEvent(SecurityEvent(user_id, "remove_role", role_id, true, "Role removed"));
         spdlog::info("Removed role {} from user {}", role_id, user_id);
         return true;
     }
-    
+
     spdlog::warn("User {} does not have role {}", user_id, role_id);
     return false;
 }
@@ -218,30 +218,30 @@ auto CronSecurity::removeRole(const std::string& user_id, const std::string& rol
 auto CronSecurity::authenticate(const std::string& username, const std::string& password)
     -> std::optional<SecurityContext> {
     std::lock_guard<std::mutex> lock(security_mutex_);
-    
+
     if (!isSecurityFeatureEnabled("authentication")) {
         // If authentication is disabled, create a default context
         SecurityContext context("anonymous", generateSessionId());
         context.roles.push_back("user");
         return context;
     }
-    
+
     auto username_it = username_to_id_.find(username);
     if (username_it == username_to_id_.end()) {
         logSecurityEvent(SecurityEvent("unknown", "authenticate", username, false, "User not found"));
         spdlog::warn("Authentication failed: user {} not found", username);
         return std::nullopt;
     }
-    
+
     std::string user_id = username_it->second;
     auto user_it = users_.find(user_id);
-    
+
     if (!user_it->second.is_active || user_it->second.is_locked) {
         logSecurityEvent(SecurityEvent(user_id, "authenticate", username, false, "Account inactive or locked"));
         spdlog::warn("Authentication failed: account {} is inactive or locked", username);
         return std::nullopt;
     }
-    
+
     // For now, simplified password check (in production, use proper hashing)
     if (password != "password") {  // Placeholder password check
         user_it->second.failed_login_attempts++;
@@ -249,74 +249,74 @@ auto CronSecurity::authenticate(const std::string& username, const std::string& 
             user_it->second.is_locked = true;
             logSecurityEvent(SecurityEvent(user_id, "account_locked", username, true, "Too many failed attempts"));
         }
-        
+
         logSecurityEvent(SecurityEvent(user_id, "authenticate", username, false, "Invalid password"));
         spdlog::warn("Authentication failed: invalid password for user {}", username);
         return std::nullopt;
     }
-    
+
     // Reset failed attempts on successful login
     user_it->second.failed_login_attempts = 0;
     user_it->second.last_login = std::chrono::system_clock::now();
-    
+
     // Create security context
     SecurityContext context(user_id, generateSessionId());
     context.roles = user_it->second.roles;
-    
+
     active_sessions_[context.session_id] = context;
-    
+
     logSecurityEvent(SecurityEvent(user_id, "authenticate", username, true, "Authentication successful"));
     spdlog::info("User {} authenticated successfully", username);
-    
+
     return context;
 }
 
 auto CronSecurity::validateContext(const SecurityContext& context) -> bool {
     std::lock_guard<std::mutex> lock(security_mutex_);
-    
+
     // Check if session exists
     auto session_it = active_sessions_.find(context.session_id);
     if (session_it == active_sessions_.end()) {
         return false;
     }
-    
+
     // Check if session is expired
     auto now = std::chrono::system_clock::now();
     if (now > context.expires_at) {
         active_sessions_.erase(session_it);
         return false;
     }
-    
+
     // Check if user still exists and is active
     auto user_it = users_.find(context.user_id);
     if (user_it == users_.end() || !user_it->second.is_active || user_it->second.is_locked) {
         active_sessions_.erase(session_it);
         return false;
     }
-    
+
     return true;
 }
 
 auto CronSecurity::checkPermission(const SecurityContext& context, const std::string& action,
                                   const std::string& resource) -> bool {
     std::lock_guard<std::mutex> lock(security_mutex_);
-    
+
     if (!isSecurityFeatureEnabled("authorization")) {
         return true; // Authorization disabled
     }
-    
+
     if (!validateContext(context)) {
         return false;
     }
-    
+
     auto user_it = users_.find(context.user_id);
     if (user_it == users_.end()) {
         return false;
     }
-    
+
     // Calculate effective permissions
     auto effective_permissions = calculateEffectivePermissions(user_it->second);
-    
+
     // Check specific resource permission
     auto resource_perm_it = effective_permissions.find(resource);
     if (resource_perm_it != effective_permissions.end()) {
@@ -328,10 +328,10 @@ auto CronSecurity::checkPermission(const SecurityContext& context, const std::st
         } else if (action == "admin" || action == "delete") {
             required_level = PermissionLevel::ADMIN;
         }
-        
+
         return resource_perm_it->second >= required_level;
     }
-    
+
     // Check default permission
     return user_it->second.default_permission >= PermissionLevel::READ;
 }

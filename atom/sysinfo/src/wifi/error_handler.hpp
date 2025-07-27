@@ -123,7 +123,7 @@ public:
      * @param file_name File where error occurred
      * @param line_number Line number where error occurred
      */
-    void logError(WiFiError error_code, const std::string& message, 
+    void logError(WiFiError error_code, const std::string& message,
                   const std::string& function_name, const std::string& file_name, int line_number);
 
     /**
@@ -174,7 +174,7 @@ private:
     mutable std::mutex error_mutex_;
     std::vector<ErrorEvent> error_history_;
     std::vector<ErrorCallback> error_callbacks_;
-    
+
     static constexpr size_t MAX_ERROR_HISTORY = 1000;
 };
 

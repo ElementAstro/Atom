@@ -76,22 +76,22 @@ public:
      */
     void record(std::chrono::nanoseconds duration) noexcept {
         auto duration_ns = static_cast<std::uint64_t>(duration.count());
-        
+
         count_.get().fetch_add(1, std::memory_order_relaxed);
         total_time_.get().fetch_add(duration_ns, std::memory_order_relaxed);
-        
+
         // Update min time
         auto current_min = min_time_.get().load(std::memory_order_relaxed);
-        while (duration_ns < current_min && 
-               !min_time_.get().compare_exchange_weak(current_min, duration_ns, 
+        while (duration_ns < current_min &&
+               !min_time_.get().compare_exchange_weak(current_min, duration_ns,
                                                      std::memory_order_relaxed)) {
             // Retry until successful or no longer minimum
         }
-        
+
         // Update max time
         auto current_max = max_time_.get().load(std::memory_order_relaxed);
-        while (duration_ns > current_max && 
-               !max_time_.get().compare_exchange_weak(current_max, duration_ns, 
+        while (duration_ns > current_max &&
+               !max_time_.get().compare_exchange_weak(current_max, duration_ns,
                                                      std::memory_order_relaxed)) {
             // Retry until successful or no longer maximum
         }
@@ -174,7 +174,7 @@ class performance_monitor {
 private:
     mutable reader_writer_spinlock mutex_;
     std::unordered_map<std::string, std::unique_ptr<performance_counter>> counters_;
-    
+
     // Singleton instance
     static std::unique_ptr<performance_monitor> instance_;
     static std::once_flag init_flag_;
@@ -211,16 +211,16 @@ public:
                 return *it->second;
             }
         }
-        
+
         // Need write lock to create new counter
         mutex_.lock();
-        
+
         // Double-check in case another thread created it
         auto it = counters_.find(name);
         if (it != counters_.end()) {
             return *it->second;
         }
-        
+
         // Create new counter
         auto counter = std::make_unique<performance_counter>();
         auto* counter_ptr = counter.get();
@@ -244,7 +244,7 @@ public:
      */
     void log_statistics() const {
         shared_lock_guard lock(mutex_);
-        
+
         spdlog::info("=== Performance Statistics ===");
         for (const auto& [name, counter] : counters_) {
             auto count = counter->count();

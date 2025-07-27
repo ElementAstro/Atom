@@ -36,8 +36,8 @@ elseif(UNIX AND NOT APPLE)
     target_link_libraries(atom_sysinfo_os PRIVATE ${CMAKE_THREAD_LIBS_INIT})
 elseif(APPLE)
     # macOS-specific libraries
-    target_link_libraries(atom_sysinfo_os PRIVATE 
-        "-framework CoreFoundation" 
+    target_link_libraries(atom_sysinfo_os PRIVATE
+        "-framework CoreFoundation"
         "-framework SystemConfiguration"
     )
 endif()

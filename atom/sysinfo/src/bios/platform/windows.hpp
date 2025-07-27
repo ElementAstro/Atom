@@ -20,10 +20,10 @@ class ComInitializer {
 public:
     explicit ComInitializer(COINIT coinit = COINIT_MULTITHREADED);
     ~ComInitializer();
-    
+
     ComInitializer(const ComInitializer&) = delete;
     ComInitializer& operator=(const ComInitializer&) = delete;
-    
+
     void release();
 
 private:
@@ -39,13 +39,13 @@ public:
     ComPtr() : ptr_(nullptr) {}
     explicit ComPtr(T* ptr) : ptr_(ptr) {}
     ~ComPtr();
-    
+
     ComPtr(ComPtr&& other) noexcept;
     ComPtr& operator=(ComPtr&& other) noexcept;
-    
+
     ComPtr(const ComPtr&) = delete;
     ComPtr& operator=(const ComPtr&) = delete;
-    
+
     T* get() const { return ptr_; }
     T** getAddressOf() { return &ptr_; }
     T* operator->() const { return ptr_; }
@@ -62,7 +62,7 @@ class WindowsBiosImplementation : public BiosImplementation {
 public:
     WindowsBiosImplementation() = default;
     ~WindowsBiosImplementation() override = default;
-    
+
     BiosInfoData fetchBiosInfo() override;
     BiosHealthStatus checkHealth() const override;
     BiosUpdateInfo checkForUpdates() const override;
@@ -73,7 +73,7 @@ public:
     bool restoreBiosSettings(const std::string& filepath) override;
     bool isSecureBootSupported() const override;
     bool isUEFIBootSupported() const override;
-    
+
     // Enhanced features
     FirmwareInfo getFirmwareInfo() const override;
     BootConfiguration getBootConfiguration() const override;

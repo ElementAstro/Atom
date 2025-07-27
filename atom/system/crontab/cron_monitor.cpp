@@ -23,24 +23,24 @@ CronMonitor::~CronMonitor() {
 
 auto CronMonitor::start() -> bool {
     std::lock_guard<std::mutex> lock(monitor_mutex_);
-    
+
     if (running_.load()) {
         spdlog::warn("CronMonitor is already running");
         return true;
     }
-    
+
     try {
         running_.store(true);
-        
+
         // Start monitoring thread
         monitor_thread_ = std::thread(&CronMonitor::monitorLoop, this);
-        
+
         // Start health check thread
         health_check_thread_ = std::thread(&CronMonitor::healthCheckLoop, this);
-        
+
         spdlog::info("CronMonitor started successfully");
         return true;
-        
+
     } catch (const std::exception& e) {
         running_.store(false);
         spdlog::error("Failed to start CronMonitor: {}", e.what());
@@ -54,18 +54,18 @@ void CronMonitor::stop() {
         if (!running_.load()) {
             return;
         }
-        
+
         running_.store(false);
     }
-    
+
     if (monitor_thread_.joinable()) {
         monitor_thread_.join();
     }
-    
+
     if (health_check_thread_.joinable()) {
         health_check_thread_.join();
     }
-    
+
     spdlog::info("CronMonitor stopped");
 }
 
@@ -75,63 +75,63 @@ auto CronMonitor::isRunning() const -> bool {
 
 void CronMonitor::logEvent(const MonitorEvent& event) {
     std::lock_guard<std::mutex> lock(monitor_mutex_);
-    
+
     // Add to event queue for processing
     event_queue_.push(event);
-    
+
     // Log to spdlog based on severity
     switch (event.severity) {
         case EventSeverity::DEBUG:
-            spdlog::debug("[{}] {}: {}", event.job_id, 
+            spdlog::debug("[{}] {}: {}", event.job_id,
                          static_cast<int>(event.type), event.message);
             break;
         case EventSeverity::INFO:
-            spdlog::info("[{}] {}: {}", event.job_id, 
+            spdlog::info("[{}] {}: {}", event.job_id,
                         static_cast<int>(event.type), event.message);
             break;
         case EventSeverity::WARNING:
-            spdlog::warn("[{}] {}: {}", event.job_id, 
+            spdlog::warn("[{}] {}: {}", event.job_id,
                         static_cast<int>(event.type), event.message);
             break;
         case EventSeverity::ERROR:
-            spdlog::error("[{}] {}: {}", event.job_id, 
+            spdlog::error("[{}] {}: {}", event.job_id,
                          static_cast<int>(event.type), event.message);
             break;
         case EventSeverity::CRITICAL:
-            spdlog::critical("[{}] {}: {}", event.job_id, 
+            spdlog::critical("[{}] {}: {}", event.job_id,
                             static_cast<int>(event.type), event.message);
             break;
     }
 }
 
-void CronMonitor::logJobStart(const std::string& job_id, 
+void CronMonitor::logJobStart(const std::string& job_id,
                              const std::unordered_map<std::string, std::string>& metadata) {
-    MonitorEvent event(generateEventId(), MonitorEventType::JOB_STARTED, 
+    MonitorEvent event(generateEventId(), MonitorEventType::JOB_STARTED,
                       EventSeverity::INFO, job_id, "Job started");
     event.metadata = metadata;
     logEvent(event);
 }
 
-void CronMonitor::logJobCompletion(const std::string& job_id, bool success, 
+void CronMonitor::logJobCompletion(const std::string& job_id, bool success,
                                   std::chrono::milliseconds execution_time,
                                   const std::unordered_map<std::string, std::string>& metadata) {
     MonitorEventType type = success ? MonitorEventType::JOB_COMPLETED : MonitorEventType::JOB_FAILED;
     EventSeverity severity = success ? EventSeverity::INFO : EventSeverity::ERROR;
-    
+
     std::string message = success ? "Job completed successfully" : "Job failed";
     message += " (execution time: " + std::to_string(execution_time.count()) + "ms)";
-    
+
     MonitorEvent event(generateEventId(), type, severity, job_id, message);
     event.metadata = metadata;
     event.metadata["execution_time_ms"] = std::to_string(execution_time.count());
     event.metadata["success"] = success ? "true" : "false";
-    
+
     logEvent(event);
 }
 
 void CronMonitor::logSystemError(const std::string& error_message,
                                 const std::unordered_map<std::string, std::string>& metadata) {
-    MonitorEvent event(generateEventId(), MonitorEventType::SYSTEM_ERROR, 
+    MonitorEvent event(generateEventId(), MonitorEventType::SYSTEM_ERROR,
                       EventSeverity::ERROR, "system", error_message);
     event.metadata = metadata;
     logEvent(event);
@@ -139,28 +139,28 @@ void CronMonitor::logSystemError(const std::string& error_message,
 
 void CronMonitor::recordMetrics(const PerformanceMetrics& metrics) {
     std::lock_guard<std::mutex> lock(monitor_mutex_);
-    
+
     if (!metrics.metric_id.empty() && metrics.metric_id != "system") {
         // Job-specific metrics
         auto& job_metrics = job_metrics_[metrics.metric_id];
         job_metrics.push_back(metrics);
-        
+
         // Limit metrics history per job
         if (job_metrics.size() > MAX_METRICS_PER_JOB) {
-            job_metrics.erase(job_metrics.begin(), 
+            job_metrics.erase(job_metrics.begin(),
                              job_metrics.begin() + (job_metrics.size() - MAX_METRICS_PER_JOB));
         }
     } else {
         // System-wide metrics
         system_metrics_.push_back(metrics);
-        
+
         // Limit system metrics history
         if (system_metrics_.size() > MAX_SYSTEM_METRICS) {
-            system_metrics_.erase(system_metrics_.begin(), 
+            system_metrics_.erase(system_metrics_.begin(),
                                  system_metrics_.begin() + (system_metrics_.size() - MAX_SYSTEM_METRICS));
         }
     }
-    
+
     // Check for metric-based alerts
     checkMetricAlerts(metrics);
 }
@@ -168,34 +168,34 @@ void CronMonitor::recordMetrics(const PerformanceMetrics& metrics) {
 auto CronMonitor::getJobMetrics(const std::string& job_id, std::chrono::minutes duration)
     -> std::vector<PerformanceMetrics> {
     std::lock_guard<std::mutex> lock(monitor_mutex_);
-    
+
     auto it = job_metrics_.find(job_id);
     if (it == job_metrics_.end()) {
         return {};
     }
-    
+
     auto cutoff_time = std::chrono::system_clock::now() - duration;
     std::vector<PerformanceMetrics> result;
-    
+
     std::copy_if(it->second.begin(), it->second.end(), std::back_inserter(result),
                 [cutoff_time](const PerformanceMetrics& metric) {
                     return metric.timestamp >= cutoff_time;
                 });
-    
+
     return result;
 }
 
 auto CronMonitor::getSystemMetrics(std::chrono::minutes duration) -> std::vector<PerformanceMetrics> {
     std::lock_guard<std::mutex> lock(monitor_mutex_);
-    
+
     auto cutoff_time = std::chrono::system_clock::now() - duration;
     std::vector<PerformanceMetrics> result;
-    
+
     std::copy_if(system_metrics_.begin(), system_metrics_.end(), std::back_inserter(result),
                 [cutoff_time](const PerformanceMetrics& metric) {
                     return metric.timestamp >= cutoff_time;
                 });
-    
+
     return result;
 }
 
@@ -203,140 +203,140 @@ auto CronMonitor::registerHealthCheck(const std::string& check_name,
                                      std::function<HealthCheckResult()> check_function,
                                      std::chrono::minutes interval) -> bool {
     std::lock_guard<std::mutex> lock(monitor_mutex_);
-    
+
     if (health_checks_.find(check_name) != health_checks_.end()) {
         spdlog::warn("Health check {} already exists", check_name);
         return false;
     }
-    
+
     health_checks_.emplace(check_name, HealthCheck(std::move(check_function), interval));
     spdlog::info("Registered health check: {} (interval: {}min)", check_name, interval.count());
-    
+
     return true;
 }
 
 auto CronMonitor::unregisterHealthCheck(const std::string& check_name) -> bool {
     std::lock_guard<std::mutex> lock(monitor_mutex_);
-    
+
     auto it = health_checks_.find(check_name);
     if (it != health_checks_.end()) {
         health_checks_.erase(it);
         spdlog::info("Unregistered health check: {}", check_name);
         return true;
     }
-    
+
     spdlog::warn("Health check {} not found", check_name);
     return false;
 }
 
 auto CronMonitor::getHealthStatus() -> std::unordered_map<std::string, HealthCheckResult> {
     std::lock_guard<std::mutex> lock(monitor_mutex_);
-    
+
     std::unordered_map<std::string, HealthCheckResult> result;
     for (const auto& [name, check] : health_checks_) {
         result[name] = check.last_result;
     }
-    
+
     return result;
 }
 
 auto CronMonitor::runHealthChecks() -> bool {
     std::lock_guard<std::mutex> lock(monitor_mutex_);
-    
+
     bool overall_healthy = true;
     auto now = std::chrono::system_clock::now();
-    
+
     for (auto& [name, check] : health_checks_) {
         try {
             auto start_time = std::chrono::steady_clock::now();
             auto result = check.check_function();
             auto end_time = std::chrono::steady_clock::now();
-            
+
             result.response_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                 end_time - start_time);
             result.last_check = now;
-            
+
             check.last_result = result;
             check.last_run = now;
-            
+
             if (!result.is_healthy) {
                 overall_healthy = false;
                 spdlog::warn("Health check {} failed: {}", name, result.status_message);
             } else {
                 spdlog::debug("Health check {} passed: {}", name, result.status_message);
             }
-            
+
         } catch (const std::exception& e) {
             overall_healthy = false;
-            check.last_result = HealthCheckResult(name, false, 
+            check.last_result = HealthCheckResult(name, false,
                                                  "Exception: " + std::string(e.what()));
             check.last_result.last_check = now;
             check.last_run = now;
-            
+
             spdlog::error("Health check {} threw exception: {}", name, e.what());
         }
     }
-    
+
     return overall_healthy;
 }
 
 auto CronMonitor::addAlertConfig(const AlertConfig& config) -> bool {
     std::lock_guard<std::mutex> lock(monitor_mutex_);
-    
+
     if (alert_configs_.find(config.alert_id) != alert_configs_.end()) {
         spdlog::warn("Alert config {} already exists", config.alert_id);
         return false;
     }
-    
+
     alert_configs_[config.alert_id] = config;
     spdlog::info("Added alert config: {} - {}", config.alert_id, config.name);
-    
+
     return true;
 }
 
 auto CronMonitor::removeAlertConfig(const std::string& alert_id) -> bool {
     std::lock_guard<std::mutex> lock(monitor_mutex_);
-    
+
     auto it = alert_configs_.find(alert_id);
     if (it != alert_configs_.end()) {
         alert_configs_.erase(it);
         spdlog::info("Removed alert config: {}", alert_id);
         return true;
     }
-    
+
     spdlog::warn("Alert config {} not found", alert_id);
     return false;
 }
 
 auto CronMonitor::getActiveAlerts() -> std::vector<Alert> {
     std::lock_guard<std::mutex> lock(monitor_mutex_);
-    
+
     std::vector<Alert> result;
     std::copy_if(active_alerts_.begin(), active_alerts_.end(), std::back_inserter(result),
                 [](const Alert& alert) {
                     return !alert.is_acknowledged;
                 });
-    
+
     return result;
 }
 
 auto CronMonitor::acknowledgeAlert(const std::string& alert_id, const std::string& acknowledged_by) -> bool {
     std::lock_guard<std::mutex> lock(monitor_mutex_);
-    
+
     auto it = std::find_if(active_alerts_.begin(), active_alerts_.end(),
                           [&alert_id](const Alert& alert) {
                               return alert.alert_id == alert_id;
                           });
-    
+
     if (it != active_alerts_.end()) {
         it->is_acknowledged = true;
         it->acknowledged_at = std::chrono::system_clock::now();
         it->acknowledged_by = acknowledged_by;
-        
+
         spdlog::info("Alert {} acknowledged by {}", alert_id, acknowledged_by);
         return true;
     }
-    
+
     spdlog::warn("Alert {} not found", alert_id);
     return false;
 }

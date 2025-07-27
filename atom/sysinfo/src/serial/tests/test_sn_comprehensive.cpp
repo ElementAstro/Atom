@@ -19,7 +19,7 @@ protected:
         config.cacheResults = true;
         config.cacheTimeout = std::chrono::seconds(30);
         config.enableLogging = true;
-        
+
         sysInfo = createSystemInfo(config);
         ASSERT_NE(sysInfo, nullptr);
     }
@@ -33,28 +33,28 @@ protected:
 
 TEST_F(SystemInfoComprehensiveTest, GetComprehensiveInfo) {
     auto result = sysInfo->getComprehensiveInfo();
-    
+
     if (result.success) {
         EXPECT_TRUE(result.data.isValid());
-        
+
         // Check hardware serials
         const auto& hwSerials = result.data.hardwareSerials;
         EXPECT_TRUE(hwSerials.isValid() || hwSerials.biosSerial.empty());
-        
+
         // Check system identification
         const auto& sysId = result.data.systemId;
         EXPECT_TRUE(sysId.isValid() || sysId.systemUuid.empty());
-        
+
         // Check timestamp
         auto now = std::chrono::system_clock::now();
         auto timeDiff = std::chrono::duration_cast<std::chrono::seconds>(now - result.data.lastUpdate);
         EXPECT_LT(timeDiff.count(), 60); // Should be recent
-        
+
         // Test string representation
         std::string infoStr = result.data.toString();
         EXPECT_FALSE(infoStr.empty());
         EXPECT_NE(infoStr.find("System Information"), std::string::npos);
-        
+
         // Test fingerprint generation
         std::string fingerprint = result.data.getSystemFingerprint();
         EXPECT_FALSE(fingerprint.empty());
@@ -68,25 +68,25 @@ TEST_F(SystemInfoComprehensiveTest, GetComprehensiveInfo) {
 
 TEST_F(SystemInfoComprehensiveTest, GetMemoryModules) {
     auto result = sysInfo->getMemoryModules();
-    
+
     if (result.success) {
         EXPECT_FALSE(result.data.empty());
-        
+
         for (const auto& module : result.data) {
             EXPECT_TRUE(module.isValid());
-            
+
             // Check size is reasonable
             if (module.sizeBytes > 0) {
                 EXPECT_GE(module.sizeBytes, 1024 * 1024); // At least 1MB
                 EXPECT_LE(module.sizeBytes, 1024ULL * 1024 * 1024 * 1024); // At most 1TB
             }
-            
+
             // Check speed is reasonable
             if (module.speedMHz > 0) {
                 EXPECT_GE(module.speedMHz, 100); // At least 100MHz
                 EXPECT_LE(module.speedMHz, 10000); // At most 10GHz
             }
-            
+
             // Test string representation
             std::string moduleStr = module.toString();
             EXPECT_FALSE(moduleStr.empty());
@@ -102,18 +102,18 @@ TEST_F(SystemInfoComprehensiveTest, GetMemoryModules) {
 
 TEST_F(SystemInfoComprehensiveTest, GetNetworkInterfaces) {
     auto result = sysInfo->getNetworkInterfaces();
-    
+
     if (result.success) {
         EXPECT_FALSE(result.data.empty());
-        
+
         for (const auto& interface : result.data) {
             EXPECT_TRUE(interface.isValid());
             EXPECT_FALSE(interface.name.empty());
             EXPECT_FALSE(interface.macAddress.empty());
-            
+
             // Validate MAC address format
             EXPECT_TRUE(SystemInfoUtils::isValidMacAddress(interface.macAddress));
-            
+
             // Test string representation
             std::string interfaceStr = interface.toString();
             EXPECT_FALSE(interfaceStr.empty());
@@ -137,21 +137,21 @@ TEST_F(SystemInfoComprehensiveTest, SystemIdQueries) {
         SystemIdType::DISK_SERIAL,
         SystemIdType::MEMORY_SERIAL
     };
-    
+
     for (auto idType : idTypes) {
         auto result = sysInfo->querySystemId(idType);
         EXPECT_TRUE(result.success);
         EXPECT_EQ(result.data.type, idType);
-        
+
         // Check timestamp is recent
         auto now = std::chrono::system_clock::now();
         auto timeDiff = std::chrono::duration_cast<std::chrono::seconds>(now - result.data.timestamp);
         EXPECT_LT(timeDiff.count(), 60);
-        
+
         // If value is available, it should be valid
         if (result.data.isAvailable) {
             EXPECT_FALSE(result.data.value.empty());
-            
+
             // Type-specific validation
             switch (idType) {
                 case SystemIdType::BIOS_SERIAL:
@@ -182,15 +182,15 @@ TEST_F(SystemInfoComprehensiveTest, SystemIdQueries) {
 
 TEST_F(SystemInfoComprehensiveTest, CachingBehavior) {
     // Test caching with different data types
-    
+
     // First calls should populate cache
     auto hw1 = sysInfo->getHardwareSerials();
     auto sys1 = sysInfo->getSystemIdentification();
     auto mem1 = sysInfo->getMemoryModules();
     auto net1 = sysInfo->getNetworkInterfaces();
-    
+
     EXPECT_TRUE(sysInfo->isCacheValid());
-    
+
     // Second calls should use cache (should be faster)
     auto start = std::chrono::high_resolution_clock::now();
     auto hw2 = sysInfo->getHardwareSerials();
@@ -198,17 +198,17 @@ TEST_F(SystemInfoComprehensiveTest, CachingBehavior) {
     auto mem2 = sysInfo->getMemoryModules();
     auto net2 = sysInfo->getNetworkInterfaces();
     auto end = std::chrono::high_resolution_clock::now();
-    
+
     // Cached calls should be very fast
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     EXPECT_LT(duration.count(), 100); // Should take less than 100ms
-    
+
     // Results should be identical
     if (hw1.success && hw2.success) {
         EXPECT_EQ(hw1.data.biosSerial, hw2.data.biosSerial);
         EXPECT_EQ(hw1.data.motherboardSerial, hw2.data.motherboardSerial);
     }
-    
+
     if (sys1.success && sys2.success) {
         EXPECT_EQ(sys1.data.systemUuid, sys2.data.systemUuid);
         EXPECT_EQ(sys1.data.machineId, sys2.data.machineId);
@@ -218,29 +218,29 @@ TEST_F(SystemInfoComprehensiveTest, CachingBehavior) {
 TEST_F(SystemInfoComprehensiveTest, RefreshAllData) {
     // Get initial data
     auto initial = sysInfo->getComprehensiveInfo();
-    
+
     // Refresh all data
     bool refreshSuccess = sysInfo->refreshAll();
     EXPECT_TRUE(refreshSuccess);
-    
+
     // Get data after refresh
     auto refreshed = sysInfo->getComprehensiveInfo();
-    
+
     // Both should be successful (or both fail)
     EXPECT_EQ(initial.success, refreshed.success);
-    
+
     if (initial.success && refreshed.success) {
         // Data should be consistent
-        EXPECT_EQ(initial.data.hardwareSerials.biosSerial, 
+        EXPECT_EQ(initial.data.hardwareSerials.biosSerial,
                  refreshed.data.hardwareSerials.biosSerial);
-        EXPECT_EQ(initial.data.systemId.systemUuid, 
+        EXPECT_EQ(initial.data.systemId.systemUuid,
                  refreshed.data.systemId.systemUuid);
     }
 }
 
 TEST_F(SystemInfoComprehensiveTest, ExportFormats) {
     auto result = sysInfo->getComprehensiveInfo();
-    
+
     if (result.success) {
         // Test JSON export with full data
         std::string jsonFull = sysInfo->exportToJson(true);
@@ -248,20 +248,20 @@ TEST_F(SystemInfoComprehensiveTest, ExportFormats) {
         EXPECT_NE(jsonFull.find("hardware_serials"), std::string::npos);
         EXPECT_NE(jsonFull.find("system_id"), std::string::npos);
         EXPECT_NE(jsonFull.find("platform"), std::string::npos);
-        
+
         // Test JSON export with minimal data
         std::string jsonMinimal = sysInfo->exportToJson(false);
         EXPECT_FALSE(jsonMinimal.empty());
         EXPECT_NE(jsonMinimal.find("platform"), std::string::npos);
         EXPECT_NE(jsonMinimal.find("fingerprint"), std::string::npos);
-        
+
         // Test XML export with full data
         std::string xmlFull = sysInfo->exportToXml(true);
         EXPECT_FALSE(xmlFull.empty());
         EXPECT_NE(xmlFull.find("<?xml"), std::string::npos);
         EXPECT_NE(xmlFull.find("<hardware_serials>"), std::string::npos);
         EXPECT_NE(xmlFull.find("<system_id>"), std::string::npos);
-        
+
         // Test XML export with minimal data
         std::string xmlMinimal = sysInfo->exportToXml(false);
         EXPECT_FALSE(xmlMinimal.empty());
@@ -273,7 +273,7 @@ TEST_F(SystemInfoComprehensiveTest, ExportFormats) {
 TEST_F(SystemInfoComprehensiveTest, SystemSummary) {
     std::string summary = sysInfo->getSummary();
     EXPECT_FALSE(summary.empty());
-    
+
     // Should contain key information
     EXPECT_NE(summary.find("System Information Summary"), std::string::npos);
     EXPECT_NE(summary.find("Platform:"), std::string::npos);
@@ -284,7 +284,7 @@ TEST_F(SystemInfoComprehensiveTest, SystemSummary) {
 TEST_F(SystemInfoComprehensiveTest, CollectionStatistics) {
     auto stats = sysInfo->getCollectionStats();
     EXPECT_FALSE(stats.empty());
-    
+
     // Check required statistics
     EXPECT_NE(stats.find("platform"), stats.end());
     EXPECT_NE(stats.find("supported"), stats.end());
@@ -292,7 +292,7 @@ TEST_F(SystemInfoComprehensiveTest, CollectionStatistics) {
     EXPECT_NE(stats.find("cache_age_seconds"), stats.end());
     EXPECT_NE(stats.find("caching_enabled"), stats.end());
     EXPECT_NE(stats.find("logging_enabled"), stats.end());
-    
+
     // Validate values
     EXPECT_TRUE(stats["supported"] == "true" || stats["supported"] == "false");
     EXPECT_TRUE(stats["cache_valid"] == "true" || stats["cache_valid"] == "false");
@@ -307,22 +307,22 @@ TEST_F(SystemInfoComprehensiveTest, ConfigurationPersistence) {
     newConfig.includeNetworkInterfaces = false;
     newConfig.cacheResults = false;
     newConfig.enableLogging = false;
-    
+
     sysInfo->updateConfig(newConfig);
-    
+
     // Get comprehensive info with new config
     auto result = sysInfo->getComprehensiveInfo();
-    
+
     // Should respect configuration
     if (result.success) {
         // Memory modules and network interfaces should be empty or minimal
         // (depending on implementation details)
-        EXPECT_TRUE(result.data.memoryModules.empty() || 
+        EXPECT_TRUE(result.data.memoryModules.empty() ||
                    result.data.memoryModules.size() <= 1);
-        EXPECT_TRUE(result.data.networkInterfaces.empty() || 
+        EXPECT_TRUE(result.data.networkInterfaces.empty() ||
                    result.data.networkInterfaces.size() <= 1);
     }
-    
+
     // Verify configuration was applied
     const auto& currentConfig = sysInfo->getConfig();
     EXPECT_EQ(currentConfig.includeMemoryModules, false);
@@ -333,15 +333,15 @@ TEST_F(SystemInfoComprehensiveTest, ConfigurationPersistence) {
 
 TEST_F(SystemInfoComprehensiveTest, ErrorRecovery) {
     // Test that the system can recover from errors
-    
+
     // Force an error by clearing cache and trying invalid operations
     sysInfo->clearCache();
-    
+
     // These should not crash the system
     auto result1 = sysInfo->querySystemId(static_cast<SystemIdType>(999));
     auto result2 = sysInfo->getHardwareSerials();
     auto result3 = sysInfo->getSystemIdentification();
-    
+
     // System should still be functional
     EXPECT_TRUE(sysInfo->isSupported());
     std::string fingerprint = sysInfo->getSystemFingerprint();
@@ -352,24 +352,24 @@ TEST_F(SystemInfoComprehensiveTest, ThreadSafety) {
     // Basic thread safety test
     std::vector<std::thread> threads;
     std::vector<std::string> fingerprints(4);
-    
+
     // Launch multiple threads to get fingerprints
     for (int i = 0; i < 4; ++i) {
         threads.emplace_back([this, &fingerprints, i]() {
             fingerprints[i] = sysInfo->getSystemFingerprint();
         });
     }
-    
+
     // Wait for all threads to complete
     for (auto& thread : threads) {
         thread.join();
     }
-    
+
     // All fingerprints should be identical
     for (int i = 1; i < 4; ++i) {
         EXPECT_EQ(fingerprints[0], fingerprints[i]);
     }
-    
+
     // All should be non-empty
     for (const auto& fp : fingerprints) {
         EXPECT_FALSE(fp.empty());

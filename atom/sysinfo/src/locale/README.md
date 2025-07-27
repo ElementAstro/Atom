@@ -69,7 +69,7 @@ if (manager.validateLocale("de_DE.UTF-8")) {
 // Set up locale change notifications
 auto callbackId = manager.registerChangeCallback(
     [](const std::string& oldLocale, const std::string& newLocale) {
-        std::cout << "Locale changed from " << oldLocale 
+        std::cout << "Locale changed from " << oldLocale
                   << " to " << newLocale << std::endl;
     }
 );
@@ -92,14 +92,14 @@ std::cout << "Detected locale: " << detected << std::endl;
 // Validate locale with detailed results
 auto result = LocaleValidator::validate("en_US.UTF-8", ValidationLevel::Complete);
 if (result.isValid) {
-    std::cout << "Locale is valid (confidence: " 
+    std::cout << "Locale is valid (confidence: "
               << result.confidenceScore << ")" << std::endl;
 } else {
     std::cout << "Validation errors:" << std::endl;
     for (const auto& error : result.errors) {
         std::cout << "  - " << error << std::endl;
     }
-    
+
     std::cout << "Suggestions:" << std::endl;
     for (const auto& suggestion : result.suggestions) {
         std::cout << "  - " << suggestion << std::endl;

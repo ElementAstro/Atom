@@ -62,7 +62,7 @@ elseif(APPLE)
     find_library(IOKIT_FRAMEWORK IOKit)
     find_library(COREFOUNDATION_FRAMEWORK CoreFoundation)
     find_library(SYSTEMCONFIGURATION_FRAMEWORK SystemConfiguration)
-    
+
     target_link_libraries(test_enhanced_os PRIVATE
         ${FOUNDATION_FRAMEWORK}
         ${IOKIT_FRAMEWORK}
@@ -203,11 +203,11 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clan
     find_program(GCOV_EXECUTABLE gcov)
     find_program(LCOV_EXECUTABLE lcov)
     find_program(GENHTML_EXECUTABLE genhtml)
-    
+
     if(GCOV_EXECUTABLE AND LCOV_EXECUTABLE AND GENHTML_EXECUTABLE)
         target_compile_options(test_enhanced_os PRIVATE --coverage)
         target_link_options(test_enhanced_os PRIVATE --coverage)
-        
+
         add_custom_target(coverage
             COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
             COMMAND ${LCOV_EXECUTABLE} --capture --directory . --output-file coverage.info
@@ -225,7 +225,7 @@ endif()
 find_program(VALGRIND_EXECUTABLE valgrind)
 if(VALGRIND_EXECUTABLE AND UNIX)
     add_custom_target(valgrind_tests
-        COMMAND ${VALGRIND_EXECUTABLE} --tool=memcheck --leak-check=full --show-leak-kinds=all 
+        COMMAND ${VALGRIND_EXECUTABLE} --tool=memcheck --leak-check=full --show-leak-kinds=all
                 --track-origins=yes --verbose --error-exitcode=1
                 $<TARGET_FILE:test_enhanced_os>
         DEPENDS test_enhanced_os

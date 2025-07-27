@@ -16,14 +16,14 @@ namespace atom::system {
 
 CommandThreadPool::CommandThreadPool(const CommandSystemConfig& config)
     : config_(config) {
-    
+
     // Start with minimum number of threads
     workers_.reserve(config_.maxThreads);
-    
+
     for (size_t i = 0; i < config_.minThreads; ++i) {
         workers_.emplace_back([this] { workerLoop(); });
     }
-    
+
     spdlog::info("CommandThreadPool initialized with {} threads", config_.minThreads);
 }
 
@@ -45,15 +45,15 @@ void CommandThreadPool::shutdown() {
         std::lock_guard<std::mutex> lock(queueMutex_);
         shutdown_ = true;
     }
-    
+
     condition_.notify_all();
-    
+
     for (auto& worker : workers_) {
         if (worker.joinable()) {
             worker.join();
         }
     }
-    
+
     workers_.clear();
     spdlog::info("CommandThreadPool shutdown complete");
 }
@@ -69,31 +69,31 @@ CommandThreadPool& CommandThreadPool::getInstance() {
 
 void CommandThreadPool::workerLoop() {
     activeThreads_++;
-    
+
     while (true) {
         std::shared_ptr<Task> task;
-        
+
         {
             std::unique_lock<std::mutex> lock(queueMutex_);
-            
+
             condition_.wait(lock, [this] {
                 return shutdown_ || !taskQueue_.empty();
             });
-            
+
             if (shutdown_ && taskQueue_.empty()) {
                 break;
             }
-            
+
             if (!taskQueue_.empty()) {
                 task = taskQueue_.top();
                 taskQueue_.pop();
                 const_cast<CommandSystemMetrics&>(COMMAND_METRICS()).queuedTasks--;
             }
         }
-        
+
         if (task) {
             TaskExecutionGuard guard;
-            
+
             try {
                 task->execute();
                 const_cast<CommandSystemMetrics&>(COMMAND_METRICS()).successfulCommands++;
@@ -106,7 +106,7 @@ void CommandThreadPool::workerLoop() {
             }
         }
     }
-    
+
     activeThreads_--;
 }
 
@@ -114,7 +114,7 @@ void CommandThreadPool::adjustThreadCount() {
     // Dynamic thread adjustment based on queue size and load
     size_t queueSize = getQueueSize();
     size_t currentThreads = workers_.size();
-    
+
     if (queueSize > currentThreads * 2 && currentThreads < config_.maxThreads) {
         // Add more threads if queue is backing up
         workers_.emplace_back([this] { workerLoop(); });
@@ -126,7 +126,7 @@ void CommandThreadPool::adjustThreadCount() {
 // TaskExecutionGuard Implementation
 // ============================================================================
 
-TaskExecutionGuard::TaskExecutionGuard() 
+TaskExecutionGuard::TaskExecutionGuard()
     : startTime_(std::chrono::steady_clock::now()) {
     const_cast<CommandSystemMetrics&>(COMMAND_METRICS()).totalCommands++;
 }
@@ -135,8 +135,8 @@ TaskExecutionGuard::~TaskExecutionGuard() {
     auto endTime = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
         endTime - startTime_);
-    
-    const_cast<CommandSystemMetrics&>(COMMAND_METRICS()).totalExecutionTime += 
+
+    const_cast<CommandSystemMetrics&>(COMMAND_METRICS()).totalExecutionTime +=
         duration.count();
 }
 

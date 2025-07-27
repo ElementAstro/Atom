@@ -15,14 +15,14 @@ namespace atom::extra::asio::concurrency {
 
 /**
  * @brief Adaptive spinlock with exponential backoff for optimal performance
- * 
+ *
  * This spinlock implementation adapts its behavior based on contention levels,
  * using CPU pause instructions for short waits and yielding for longer waits.
  */
 class adaptive_spinlock {
 private:
     cache_aligned<std::atomic<bool>> locked_{false};
-    
+
     // Backoff parameters
     static constexpr std::size_t initial_pause_count = 4;
     static constexpr std::size_t max_pause_count = 64;
@@ -34,7 +34,7 @@ public:
      * @brief Construct an unlocked adaptive spinlock
      */
     adaptive_spinlock() = default;
-    
+
     // Non-copyable, non-movable
     adaptive_spinlock(const adaptive_spinlock&) = delete;
     adaptive_spinlock& operator=(const adaptive_spinlock&) = delete;
@@ -47,7 +47,7 @@ public:
     void lock() noexcept {
         std::size_t pause_count = initial_pause_count;
         std::size_t iteration = 0;
-        
+
         while (true) {
             // Fast path: try to acquire immediately
             if (!locked_.get().exchange(true, std::memory_order_acquire)) {
@@ -56,14 +56,14 @@ public:
                 }
                 return;
             }
-            
+
             // Adaptive backoff strategy
             if (iteration < yield_threshold) {
                 // Phase 1: CPU pause with exponential backoff
                 for (std::size_t i = 0; i < pause_count; ++i) {
                     cpu_pause();
                 }
-                
+
                 // Exponential backoff up to maximum
                 if (pause_count < max_pause_count) {
                     pause_count *= 2;
@@ -74,12 +74,12 @@ public:
             } else {
                 // Phase 3: Brief sleep for heavily contended locks
                 std::this_thread::sleep_for(sleep_threshold);
-                
+
                 if (iteration % 1000 == 0) {
                     spdlog::warn("Adaptive spinlock heavily contended, iteration: {}", iteration);
                 }
             }
-            
+
             ++iteration;
         }
     }
@@ -144,14 +144,14 @@ public:
 
 /**
  * @brief Reader-writer spinlock with priority inheritance
- * 
+ *
  * Optimized for scenarios with many readers and few writers,
  * providing excellent read performance while ensuring writer fairness.
  */
 class reader_writer_spinlock {
 private:
     cache_aligned<std::atomic<std::int32_t>> state_{0};
-    
+
     // State encoding: positive = reader count, -1 = writer, 0 = unlocked
     static constexpr std::int32_t writer_flag = -1;
     static constexpr std::int32_t max_readers = std::numeric_limits<std::int32_t>::max();
@@ -173,26 +173,26 @@ public:
      */
     void lock_shared() noexcept {
         std::size_t iteration = 0;
-        
+
         while (true) {
             std::int32_t current = state_.get().load(std::memory_order_acquire);
-            
+
             // Can acquire read lock if no writer and not at max readers
             if (current >= 0 && current < max_readers) {
-                if (state_.get().compare_exchange_weak(current, current + 1, 
+                if (state_.get().compare_exchange_weak(current, current + 1,
                                                       std::memory_order_acquire)) {
                     spdlog::trace("Reader lock acquired, reader count: {}", current + 1);
                     return;
                 }
             }
-            
+
             // Adaptive backoff for readers
             if (iteration < 32) {
                 cpu_pause();
             } else {
                 std::this_thread::yield();
             }
-            
+
             ++iteration;
         }
     }
@@ -210,15 +210,15 @@ public:
      */
     void lock() noexcept {
         std::size_t iteration = 0;
-        
+
         while (true) {
             std::int32_t expected = 0;
-            if (state_.get().compare_exchange_weak(expected, writer_flag, 
+            if (state_.get().compare_exchange_weak(expected, writer_flag,
                                                   std::memory_order_acquire)) {
                 spdlog::trace("Writer lock acquired");
                 return;
             }
-            
+
             // Adaptive backoff for writers
             if (iteration < 16) {
                 cpu_pause();
@@ -227,7 +227,7 @@ public:
             } else {
                 std::this_thread::sleep_for(std::chrono::microseconds(1));
             }
-            
+
             ++iteration;
         }
     }
@@ -245,12 +245,12 @@ public:
      */
     bool try_lock_shared() noexcept {
         std::int32_t current = state_.get().load(std::memory_order_acquire);
-        
+
         if (current >= 0 && current < max_readers) {
-            return state_.get().compare_exchange_strong(current, current + 1, 
+            return state_.get().compare_exchange_strong(current, current + 1,
                                                        std::memory_order_acquire);
         }
-        
+
         return false;
     }
 
@@ -259,7 +259,7 @@ public:
      */
     bool try_lock() noexcept {
         std::int32_t expected = 0;
-        return state_.get().compare_exchange_strong(expected, writer_flag, 
+        return state_.get().compare_exchange_strong(expected, writer_flag,
                                                    std::memory_order_acquire);
     }
 };

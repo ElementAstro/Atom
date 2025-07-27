@@ -27,13 +27,13 @@ public:
     Impl() {
         initializeDetectionMethods();
     }
-    
+
     auto detect() -> VirtualizationInfo {
         VirtualizationInfo info;
         std::vector<DetectionResult> results;
-        
+
         spdlog::info("Starting comprehensive virtualization detection");
-        
+
         // Run all enabled detection methods
         for (const auto& method : detectionMethods) {
             if (method.enabled) {
@@ -43,7 +43,7 @@ public:
                     result.detected = method.detector();
                     result.confidence = result.detected ? method.weight : 0.0;
                     result.details = method.description;
-                    
+
                     results.push_back(result);
                     spdlog::debug("Detection method '{}': {}", method.name, result.detected ? "detected" : "not detected");
                 } catch (const std::exception& e) {
@@ -51,28 +51,28 @@ public:
                 }
             }
         }
-        
+
         // Calculate overall confidence
         info.confidence_score = calculateConfidenceScore(results);
         info.is_virtual = info.confidence_score > 0.3;
-        
+
         // Get detailed information if virtualization is detected
         if (info.is_virtual) {
             info.hypervisor_vendor = hypervisor::getHypervisorVendor();
             info.virtualization_type = hypervisor::hypervisorTypeToString(hypervisor::detectHypervisorType());
-            
+
             // Check for containers
             info.is_container = container::isContainer();
             if (info.is_container) {
                 info.container_type = container::containerTypeToString(container::detectContainerType());
             }
-            
+
             // Get cloud provider information
             auto cloudMetadata = hypervisor::cloud::getCloudMetadata();
             if (!cloudMetadata.empty() && cloudMetadata.count("provider")) {
                 info.cloud_provider = cloudMetadata["provider"];
             }
-            
+
             // Collect indicators from detection results
             for (const auto& result : results) {
                 if (result.detected) {
@@ -82,64 +82,64 @@ public:
                     info.detection_methods[result.method_name] = false;
                 }
             }
-            
+
             // Get hardware profile
             info.hardware_profile = getHardwareProfile();
         }
-        
-        spdlog::info("Virtualization detection completed. Confidence: {:.2f}, Virtual: {}", 
+
+        spdlog::info("Virtualization detection completed. Confidence: {:.2f}, Virtual: {}",
                     info.confidence_score, info.is_virtual);
-        
+
         return info;
     }
-    
+
     auto isVirtual() -> bool {
         // Quick check using most reliable methods
-        return detection::cpuid::isHypervisorPresent() || 
+        return detection::cpuid::isHypervisorPresent() ||
                detection::bios::checkBIOSInfo() ||
                container::isContainer();
     }
-    
+
     auto isContainer() -> bool {
         return container::isContainer();
     }
-    
+
     auto getConfidenceScore() -> double {
         auto info = detect();
         return info.confidence_score;
     }
-    
+
     auto getDetectionReport() -> std::string {
         auto info = detect();
-        
+
         std::ostringstream report;
         report << "=== Virtualization Detection Report ===\n\n";
         report << "Platform: " << platform::getPlatformName() << "\n";
         report << "Virtual Environment: " << (info.is_virtual ? "Yes" : "No") << "\n";
         report << "Confidence Score: " << (info.confidence_score * 100) << "%\n\n";
-        
+
         if (info.is_virtual) {
             report << "Virtualization Details:\n";
             report << "  Type: " << info.virtualization_type << "\n";
             report << "  Vendor: " << info.hypervisor_vendor << "\n";
-            
+
             if (info.is_container) {
                 report << "  Container: " << info.container_type << "\n";
             }
-            
+
             if (!info.cloud_provider.empty()) {
                 report << "  Cloud Provider: " << info.cloud_provider << "\n";
             }
-            
+
             if (!info.hardware_profile.empty()) {
                 report << "  Hardware Profile: " << info.hardware_profile << "\n";
             }
-            
+
             report << "\nDetection Methods:\n";
             for (const auto& [method, detected] : info.detection_methods) {
                 report << "  " << method << ": " << (detected ? "✓" : "✗") << "\n";
             }
-            
+
             if (!info.indicators.empty()) {
                 report << "\nIndicators:\n";
                 for (const auto& indicator : info.indicators) {
@@ -147,14 +147,14 @@ public:
                 }
             }
         }
-        
+
         return report.str();
     }
-    
+
     void setDetectionMethod(const std::string& method, bool enabled) {
         auto it = std::find_if(detectionMethods.begin(), detectionMethods.end(),
             [&method](const DetectionMethod& m) { return m.name == method; });
-        
+
         if (it != detectionMethods.end()) {
             it->enabled = enabled;
             spdlog::debug("Detection method '{}' {}", method, enabled ? "enabled" : "disabled");
@@ -162,7 +162,7 @@ public:
             spdlog::warn("Unknown detection method: {}", method);
         }
     }
-    
+
     auto getAvailableDetectionMethods() -> std::vector<std::string> {
         std::vector<std::string> methods;
         for (const auto& method : detectionMethods) {
@@ -173,7 +173,7 @@ public:
 
 private:
     std::vector<DetectionMethod> detectionMethods;
-    
+
     void initializeDetectionMethods() {
         detectionMethods = {
             {"CPUID", detection::cpuid::isHypervisorPresent, constants::CPUID_WEIGHT, true, "Check CPUID hypervisor bit"},
@@ -189,10 +189,10 @@ private:
             {"Filesystem", detection::filesystem::checkVirtualizationFiles, 0.15, true, "Check filesystem indicators"},
             {"Environment", detection::environment::checkVirtualizationEnvironment, 0.1, true, "Check environment variables"}
         };
-        
+
         spdlog::debug("Initialized {} detection methods", detectionMethods.size());
     }
-    
+
     auto getHardwareProfile() -> std::string {
         // Platform-specific hardware profiling
 #ifdef _WIN32

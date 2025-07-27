@@ -27,58 +27,58 @@ namespace cpuid {
     auto isHypervisorPresent() -> bool {
         spdlog::debug("Checking if running in virtual machine using CPUID");
         auto cpuInfo = getCPUInfo(constants::CPUID_FEATURES);
-        
+
         bool isVM = static_cast<bool>(cpuInfo[2] & (1u << constants::HYPERVISOR_PRESENT_BIT));
         spdlog::debug("Virtual machine detected via CPUID: {}", isVM);
         return isVM;
     }
-    
+
     auto getHypervisorVendor() -> std::string {
         spdlog::debug("Getting hypervisor vendor information");
         auto cpuInfo = getCPUInfo(constants::CPUID_HYPERVISOR);
-        
+
         std::array<char, constants::VENDOR_STRING_LENGTH + 1> vendor = {0};
         std::memcpy(vendor.data(), &cpuInfo[1], 4);
         std::memcpy(vendor.data() + 4, &cpuInfo[2], 4);
         std::memcpy(vendor.data() + 8, &cpuInfo[3], 4);
-        
+
         std::string vendorStr(vendor.data());
         spdlog::debug("Hypervisor vendor: {}", vendorStr);
         return vendorStr;
     }
-    
+
     auto getCPUVendor() -> std::string {
         auto cpuInfo = getCPUInfo(0);
-        
+
         std::array<char, 13> vendor = {0};
         std::memcpy(vendor.data(), &cpuInfo[1], 4);
         std::memcpy(vendor.data() + 4, &cpuInfo[3], 4);
         std::memcpy(vendor.data() + 8, &cpuInfo[2], 4);
-        
+
         return std::string(vendor.data());
     }
-    
+
     auto getVirtualizationFeatures() -> std::vector<std::string> {
         std::vector<std::string> features;
-        
+
         // Check for various virtualization-related CPU features
         auto cpuInfo = getCPUInfo(1);
-        
+
         if (cpuInfo[2] & (1u << 31)) {
             features.push_back("Hypervisor Present");
         }
-        
+
         // Check for VMX (Intel VT-x)
         if (cpuInfo[2] & (1u << 5)) {
             features.push_back("VMX (Intel VT-x)");
         }
-        
+
         // Check for SVM (AMD-V)
         auto extendedInfo = getCPUInfo(0x80000001);
         if (extendedInfo[2] & (1u << 2)) {
             features.push_back("SVM (AMD-V)");
         }
-        
+
         return features;
     }
 }
@@ -86,12 +86,12 @@ namespace cpuid {
 namespace bios {
     auto checkBIOSInfo() -> bool {
         spdlog::debug("Checking BIOS information for virtualization signs");
-        
+
 #ifdef _WIN32
         HKEY hKey;
         std::array<TCHAR, constants::BIOS_INFO_LENGTH> biosInfo;
         DWORD bufSize = sizeof(biosInfo);
-        
+
         if (RegOpenKeyEx(HKEY_LOCAL_MACHINE,
                          _T("HARDWARE\\DESCRIPTION\\System\\BIOS"), 0, KEY_READ,
                          &hKey) == ERROR_SUCCESS) {
@@ -99,7 +99,7 @@ namespace bios {
                 HKEY key;
                 ~RegKeyCloser() { RegCloseKey(key); }
             } keyCloser{hKey};
-            
+
             if (RegQueryValueEx(hKey, _T("SystemManufacturer"), nullptr, nullptr,
                                 reinterpret_cast<LPBYTE>(biosInfo.data()),
                                 &bufSize) == ERROR_SUCCESS) {
@@ -119,13 +119,13 @@ namespace bios {
 #endif
         return false;
     }
-    
+
     auto getBIOSManufacturer() -> std::string {
 #ifdef _WIN32
         HKEY hKey;
         std::array<TCHAR, constants::BIOS_INFO_LENGTH> biosInfo;
         DWORD bufSize = sizeof(biosInfo);
-        
+
         if (RegOpenKeyEx(HKEY_LOCAL_MACHINE,
                          _T("HARDWARE\\DESCRIPTION\\System\\BIOS"), 0, KEY_READ,
                          &hKey) == ERROR_SUCCESS) {
@@ -133,7 +133,7 @@ namespace bios {
                 HKEY key;
                 ~RegKeyCloser() { RegCloseKey(key); }
             } keyCloser{hKey};
-            
+
             if (RegQueryValueEx(hKey, _T("BIOSVendor"), nullptr, nullptr,
                                 reinterpret_cast<LPBYTE>(biosInfo.data()),
                                 &bufSize) == ERROR_SUCCESS) {
@@ -145,13 +145,13 @@ namespace bios {
 #endif
         return {};
     }
-    
+
     auto getSystemManufacturer() -> std::string {
 #ifdef _WIN32
         HKEY hKey;
         std::array<TCHAR, constants::BIOS_INFO_LENGTH> biosInfo;
         DWORD bufSize = sizeof(biosInfo);
-        
+
         if (RegOpenKeyEx(HKEY_LOCAL_MACHINE,
                          _T("HARDWARE\\DESCRIPTION\\System\\BIOS"), 0, KEY_READ,
                          &hKey) == ERROR_SUCCESS) {
@@ -159,7 +159,7 @@ namespace bios {
                 HKEY key;
                 ~RegKeyCloser() { RegCloseKey(key); }
             } keyCloser{hKey};
-            
+
             if (RegQueryValueEx(hKey, _T("SystemManufacturer"), nullptr, nullptr,
                                 reinterpret_cast<LPBYTE>(biosInfo.data()),
                                 &bufSize) == ERROR_SUCCESS) {
@@ -171,13 +171,13 @@ namespace bios {
 #endif
         return {};
     }
-    
+
     auto getProductName() -> std::string {
 #ifdef _WIN32
         HKEY hKey;
         std::array<TCHAR, constants::BIOS_INFO_LENGTH> biosInfo;
         DWORD bufSize = sizeof(biosInfo);
-        
+
         if (RegOpenKeyEx(HKEY_LOCAL_MACHINE,
                          _T("HARDWARE\\DESCRIPTION\\System\\BIOS"), 0, KEY_READ,
                          &hKey) == ERROR_SUCCESS) {
@@ -185,7 +185,7 @@ namespace bios {
                 HKEY key;
                 ~RegKeyCloser() { RegCloseKey(key); }
             } keyCloser{hKey};
-            
+
             if (RegQueryValueEx(hKey, _T("SystemProductName"), nullptr, nullptr,
                                 reinterpret_cast<LPBYTE>(biosInfo.data()),
                                 &bufSize) == ERROR_SUCCESS) {
@@ -197,13 +197,13 @@ namespace bios {
 #endif
         return {};
     }
-    
+
     auto getBIOSVersion() -> std::string {
 #ifdef _WIN32
         HKEY hKey;
         std::array<TCHAR, constants::BIOS_INFO_LENGTH> biosInfo;
         DWORD bufSize = sizeof(biosInfo);
-        
+
         if (RegOpenKeyEx(HKEY_LOCAL_MACHINE,
                          _T("HARDWARE\\DESCRIPTION\\System\\BIOS"), 0, KEY_READ,
                          &hKey) == ERROR_SUCCESS) {
@@ -211,7 +211,7 @@ namespace bios {
                 HKEY key;
                 ~RegKeyCloser() { RegCloseKey(key); }
             } keyCloser{hKey};
-            
+
             if (RegQueryValueEx(hKey, _T("BIOSVersion"), nullptr, nullptr,
                                 reinterpret_cast<LPBYTE>(biosInfo.data()),
                                 &bufSize) == ERROR_SUCCESS) {
@@ -229,17 +229,17 @@ namespace hardware {
     auto parseNetworkAdapterOutput(const std::string& output) -> bool {
         constexpr std::array<std::string_view, 5> vmNetKeywords = {
             "virbr", "vbox", "vmnet", "veth", "docker"};
-        
+
         return std::any_of(vmNetKeywords.begin(), vmNetKeywords.end(),
                            [&output](std::string_view keyword) {
                                return output.find(keyword) != std::string::npos;
                            }) ||
                containsVMKeywords(output);
     }
-    
+
     auto checkNetworkAdapters() -> bool {
         spdlog::debug("Checking network adapters for virtualization indicators");
-        
+
 #ifdef _WIN32
         std::string output = executeCommand("ipconfig /all");
 #else
@@ -248,19 +248,19 @@ namespace hardware {
             output = executeCommand("cat /proc/net/dev");
         }
 #endif
-        
+
         return parseNetworkAdapterOutput(output);
     }
-    
+
     auto getNetworkAdapters() -> std::vector<std::string> {
         std::vector<std::string> adapters;
-        
+
 #ifdef _WIN32
         std::string output = executeCommand("wmic path Win32_NetworkAdapter get Name");
 #else
         std::string output = executeCommand("ip link show");
 #endif
-        
+
         std::istringstream stream(output);
         std::string line;
         while (std::getline(stream, line)) {
@@ -268,13 +268,13 @@ namespace hardware {
                 adapters.push_back(line);
             }
         }
-        
+
         return adapters;
     }
-    
+
     auto checkDiskInfo() -> bool {
         spdlog::debug("Checking disk information for virtualization signs");
-        
+
 #ifdef _WIN32
         std::string output = executeCommand("wmic diskdrive get caption,model");
 #else
@@ -283,19 +283,19 @@ namespace hardware {
             output = executeCommand("cat /proc/partitions");
         }
 #endif
-        
+
         return containsVMKeywords(output);
     }
-    
+
     auto getDiskInfo() -> std::vector<std::string> {
         std::vector<std::string> disks;
-        
+
 #ifdef _WIN32
         std::string output = executeCommand("wmic diskdrive get caption,model");
 #else
         std::string output = executeCommand("lsblk -o NAME,MODEL,SIZE");
 #endif
-        
+
         std::istringstream stream(output);
         std::string line;
         while (std::getline(stream, line)) {
@@ -303,13 +303,13 @@ namespace hardware {
                 disks.push_back(line);
             }
         }
-        
+
         return disks;
     }
-    
+
     auto checkGraphicsCard() -> bool {
         spdlog::debug("Checking graphics card for virtualization indicators");
-        
+
 #ifdef _WIN32
         std::string output = executeCommand("wmic path win32_videocontroller get caption");
 #else
@@ -318,19 +318,19 @@ namespace hardware {
             output = executeCommand("cat /proc/driver/nvidia/cards 2>/dev/null || echo ''");
         }
 #endif
-        
+
         return containsVMKeywords(output);
     }
-    
+
     auto getGraphicsInfo() -> std::vector<std::string> {
         std::vector<std::string> graphics;
-        
+
 #ifdef _WIN32
         std::string output = executeCommand("wmic path win32_videocontroller get caption");
 #else
         std::string output = executeCommand("lspci | grep -i 'vga\\|3d\\|display'");
 #endif
-        
+
         std::istringstream stream(output);
         std::string line;
         while (std::getline(stream, line)) {
@@ -338,31 +338,31 @@ namespace hardware {
                 graphics.push_back(line);
             }
         }
-        
+
         return graphics;
     }
-    
+
     auto checkPCIBus() -> bool {
         spdlog::debug("Checking PCI bus for virtualization devices");
-        
+
 #ifdef _WIN32
         std::string output = executeCommand("wmic path Win32_PnPEntity get Name");
 #else
         std::string output = executeCommand("lspci");
 #endif
-        
+
         return containsVMKeywords(output);
     }
-    
+
     auto getPCIDevices() -> std::vector<std::string> {
         std::vector<std::string> devices;
-        
+
 #ifdef _WIN32
         std::string output = executeCommand("wmic path Win32_PnPEntity get Name");
 #else
         std::string output = executeCommand("lspci");
 #endif
-        
+
         std::istringstream stream(output);
         std::string line;
         while (std::getline(stream, line)) {
@@ -370,29 +370,29 @@ namespace hardware {
                 devices.push_back(line);
             }
         }
-        
+
         return devices;
     }
-    
+
     auto checkUSBDevices() -> bool {
 #ifdef _WIN32
         std::string output = executeCommand("wmic path Win32_USBHub get Name");
 #else
         std::string output = executeCommand("lsusb");
 #endif
-        
+
         return containsVMKeywords(output);
     }
-    
+
     auto getUSBDevices() -> std::vector<std::string> {
         std::vector<std::string> devices;
-        
+
 #ifdef _WIN32
         std::string output = executeCommand("wmic path Win32_USBHub get Name");
 #else
         std::string output = executeCommand("lsusb");
 #endif
-        
+
         std::istringstream stream(output);
         std::string line;
         while (std::getline(stream, line)) {
@@ -400,7 +400,7 @@ namespace hardware {
                 devices.push_back(line);
             }
         }
-        
+
         return devices;
     }
 }

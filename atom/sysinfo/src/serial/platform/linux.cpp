@@ -22,16 +22,16 @@ LinuxSystemInfo::LinuxSystemInfo() {
 
 SystemInfoResult<HardwareSerialData> LinuxSystemInfo::getHardwareSerials() {
     SystemInfoResult<HardwareSerialData> result;
-    
+
     try {
         result.data.biosSerial = validateSerial(readFile("/sys/class/dmi/id/product_serial"));
         result.data.motherboardSerial = validateSerial(readFile("/sys/class/dmi/id/board_serial"));
         result.data.cpuSerial = validateSerial(readFile("/proc/cpuinfo", "Serial"));
         result.data.diskSerials = getDiskSerials();
         result.data.lastUpdate = std::chrono::system_clock::now();
-        
+
         result.success = result.data.isValid();
-        
+
         if (!result.success) {
             result.error = SystemInfoError::HARDWARE_NOT_FOUND;
             result.errorMessage = "No valid hardware serial numbers found";
@@ -42,13 +42,13 @@ SystemInfoResult<HardwareSerialData> LinuxSystemInfo::getHardwareSerials() {
         result.errorMessage = e.what();
         lastError_ = e.what();
     }
-    
+
     return result;
 }
 
 SystemInfoResult<SystemIdentificationData> LinuxSystemInfo::getSystemIdentification() {
     SystemInfoResult<SystemIdentificationData> result;
-    
+
     try {
         result.data.systemUuid = getSystemUuid();
         result.data.machineId = getMachineId();
@@ -57,9 +57,9 @@ SystemInfoResult<SystemIdentificationData> LinuxSystemInfo::getSystemIdentificat
         result.data.domainName = getDomainName();
         result.data.macAddresses = getNetworkMacAddresses();
         result.data.lastUpdate = std::chrono::system_clock::now();
-        
+
         result.success = result.data.isValid();
-        
+
         if (!result.success) {
             result.error = SystemInfoError::HARDWARE_NOT_FOUND;
             result.errorMessage = "No valid system identification found";
@@ -70,17 +70,17 @@ SystemInfoResult<SystemIdentificationData> LinuxSystemInfo::getSystemIdentificat
         result.errorMessage = e.what();
         lastError_ = e.what();
     }
-    
+
     return result;
 }
 
 SystemInfoResult<std::vector<MemoryModuleInfo>> LinuxSystemInfo::getMemoryModules() {
     SystemInfoResult<std::vector<MemoryModuleInfo>> result;
-    
+
     try {
         // Try to get detailed memory information from DMI
         result.data = getMemoryModulesFromDmi();
-        
+
         // If DMI is not available, get basic info from /proc/meminfo
         if (result.data.empty()) {
             auto basicInfo = getMemoryInfoFromProc();
@@ -88,9 +88,9 @@ SystemInfoResult<std::vector<MemoryModuleInfo>> LinuxSystemInfo::getMemoryModule
                 result.data.push_back(basicInfo);
             }
         }
-        
+
         result.success = !result.data.empty();
-        
+
         if (!result.success) {
             result.error = SystemInfoError::HARDWARE_NOT_FOUND;
             result.errorMessage = "No memory module information found";
@@ -101,17 +101,17 @@ SystemInfoResult<std::vector<MemoryModuleInfo>> LinuxSystemInfo::getMemoryModule
         result.errorMessage = e.what();
         lastError_ = e.what();
     }
-    
+
     return result;
 }
 
 SystemInfoResult<std::vector<NetworkInterfaceInfo>> LinuxSystemInfo::getNetworkInterfaces() {
     SystemInfoResult<std::vector<NetworkInterfaceInfo>> result;
-    
+
     try {
         result.data = getNetworkInterfacesFromSys();
         result.success = !result.data.empty();
-        
+
         if (!result.success) {
             result.error = SystemInfoError::HARDWARE_NOT_FOUND;
             result.errorMessage = "No network interfaces found";
@@ -122,41 +122,41 @@ SystemInfoResult<std::vector<NetworkInterfaceInfo>> LinuxSystemInfo::getNetworkI
         result.errorMessage = e.what();
         lastError_ = e.what();
     }
-    
+
     return result;
 }
 
 SystemInfoResult<ComprehensiveSystemInfo> LinuxSystemInfo::getComprehensiveInfo(const SystemInfoConfig& config) {
     SystemInfoResult<ComprehensiveSystemInfo> result;
-    
+
     try {
         auto hardwareResult = getHardwareSerials();
         if (hardwareResult.success) {
             result.data.hardwareSerials = hardwareResult.data;
         }
-        
+
         auto systemIdResult = getSystemIdentification();
         if (systemIdResult.success) {
             result.data.systemId = systemIdResult.data;
         }
-        
+
         if (config.includeMemoryModules) {
             auto memoryResult = getMemoryModules();
             if (memoryResult.success) {
                 result.data.memoryModules = memoryResult.data;
             }
         }
-        
+
         if (config.includeNetworkInterfaces) {
             auto networkResult = getNetworkInterfaces();
             if (networkResult.success) {
                 result.data.networkInterfaces = networkResult.data;
             }
         }
-        
+
         result.data.lastUpdate = std::chrono::system_clock::now();
         result.success = result.data.isValid();
-        
+
         if (!result.success) {
             result.error = SystemInfoError::HARDWARE_NOT_FOUND;
             result.errorMessage = "No valid system information found";
@@ -167,7 +167,7 @@ SystemInfoResult<ComprehensiveSystemInfo> LinuxSystemInfo::getComprehensiveInfo(
         result.errorMessage = e.what();
         lastError_ = e.what();
     }
-    
+
     return result;
 }
 
@@ -175,7 +175,7 @@ SystemInfoResult<SystemIdQuery> LinuxSystemInfo::querySystemId(SystemIdType type
     SystemInfoResult<SystemIdQuery> result;
     result.data.type = type;
     result.data.timestamp = std::chrono::system_clock::now();
-    
+
     try {
         switch (type) {
             case SystemIdType::BIOS_SERIAL:
@@ -215,10 +215,10 @@ SystemInfoResult<SystemIdQuery> LinuxSystemInfo::querySystemId(SystemIdType type
                 break;
             }
         }
-        
+
         result.data.isAvailable = !result.data.value.empty();
         result.success = true;
-        
+
         if (!result.data.isAvailable) {
             result.data.errorMessage = "System identifier not available";
         }
@@ -229,7 +229,7 @@ SystemInfoResult<SystemIdQuery> LinuxSystemInfo::querySystemId(SystemIdType type
         result.data.errorMessage = e.what();
         lastError_ = e.what();
     }
-    
+
     return result;
 }
 
@@ -279,21 +279,21 @@ std::string LinuxSystemInfo::readFile(const std::string& path, const std::string
 
 std::vector<std::string> LinuxSystemInfo::readFileLines(const std::string& path) const {
     std::vector<std::string> lines;
-    
+
     if (!isFileReadable(path)) {
         return lines;
     }
-    
+
     std::ifstream file(path);
     if (!file.is_open()) {
         return lines;
     }
-    
+
     std::string line;
     while (std::getline(file, line)) {
         lines.push_back(trim(line));
     }
-    
+
     return lines;
 }
 

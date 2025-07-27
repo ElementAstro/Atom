@@ -4,11 +4,11 @@
 /**
  * @file battery.hpp
  * @brief Backward compatibility header for battery module
- * 
+ *
  * This header provides backward compatibility for existing code that includes
  * the battery module. It forwards to the new modular implementation and
  * provides namespace aliases for seamless migration.
- * 
+ *
  * @deprecated This compatibility header will be removed in a future version.
  * Please update your code to use the new include paths:
  * #include "atom/sysinfo/src/battery/battery.hpp"

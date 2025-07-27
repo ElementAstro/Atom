@@ -8,7 +8,7 @@ namespace atom::system::wm::macos {
 
 auto getSystemInfo() -> WMResult<SystemInfo> {
     spdlog::debug("Retrieving macOS system information");
-    
+
     SystemInfo info;
     info.desktopEnvironment = "macOS Aqua";
     info.windowManager = "Quartz Compositor";
@@ -20,34 +20,34 @@ auto getSystemInfo() -> WMResult<SystemInfo> {
     info.supportsVirtualDesktops = true;
     info.wmVersion = "macOS";
     info.wmFeatures = {"Mission Control", "Spaces", "Exposé", "Hot Corners"};
-    
+
     // Get theme info
     auto themeResult = getThemeInfo();
     if (!isError(themeResult)) {
         info.themeInfo = getValue(themeResult);
     }
-    
+
     // Get monitors
     auto monitorsResult = getMonitors();
     if (!isError(monitorsResult)) {
         info.monitors = getValue(monitorsResult);
     }
-    
+
     // Get spaces
     auto spacesResult = getSpaces();
     if (!isError(spacesResult)) {
         info.workspaces = getValue(spacesResult);
     }
-    
+
     spdlog::debug("macOS system info - DE: {}, WM: {}",
                   info.desktopEnvironment, info.windowManager);
-    
+
     return info;
 }
 
 auto getThemeInfo() -> WMResult<ThemeInfo> {
     ThemeInfo theme;
-    
+
     // macOS theme detection would require Objective-C/Swift code
     // For now, provide a basic implementation
     theme.type = ThemeType::AUTO; // macOS follows system preference
@@ -57,7 +57,7 @@ auto getThemeInfo() -> WMResult<ThemeInfo> {
     theme.backgroundColor = "#FFFFFF"; // Default light mode
     theme.foregroundColor = "#000000";
     theme.accentColor = "#007AFF"; // macOS blue
-    
+
     return theme;
 }
 
@@ -65,7 +65,7 @@ auto enumerateWindows() -> WMResult<std::vector<WindowInfo>> {
     // macOS window enumeration would require Core Graphics and Accessibility APIs
     // This is a placeholder implementation
     std::vector<WindowInfo> windows;
-    
+
     spdlog::warn("macOS window enumeration not fully implemented");
     return WMError::PLATFORM_NOT_SUPPORTED;
 }
@@ -78,7 +78,7 @@ auto getWindowInfo(uint64_t windowId) -> WMResult<WindowInfo> {
 
 auto getMonitors() -> WMResult<std::vector<MonitorInfo>> {
     std::vector<MonitorInfo> monitors;
-    
+
     // Basic implementation - would use Core Graphics for full implementation
     MonitorInfo primary;
     primary.id = 0;
@@ -88,14 +88,14 @@ auto getMonitors() -> WMResult<std::vector<MonitorInfo>> {
     primary.height = 1080;
     primary.refreshRate = 60;
     primary.scaleFactor = 2.0f; // Retina
-    
+
     monitors.push_back(primary);
     return monitors;
 }
 
 auto getSpaces() -> WMResult<std::vector<WorkspaceInfo>> {
     std::vector<WorkspaceInfo> spaces;
-    
+
     // Basic implementation - would use private APIs for full implementation
     WorkspaceInfo space;
     space.id = 0;
@@ -103,7 +103,7 @@ auto getSpaces() -> WMResult<std::vector<WorkspaceInfo>> {
     space.isActive = true;
     space.width = 1920;
     space.height = 1080;
-    
+
     spaces.push_back(space);
     return spaces;
 }

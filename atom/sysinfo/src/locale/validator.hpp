@@ -57,35 +57,35 @@ public:
      * @return ValidationResult with detailed validation information
      */
     static auto validate(const std::string& locale, ValidationLevel level = ValidationLevel::Standard) -> ValidationResult;
-    
+
     /**
      * @brief Validates locale format (syntax only)
      * @param locale The locale to validate
      * @return ValidationResult with format validation
      */
     static auto validateFormat(const std::string& locale) -> ValidationResult;
-    
+
     /**
      * @brief Validates locale availability on the system
      * @param locale The locale to validate
      * @return ValidationResult with availability validation
      */
     static auto validateAvailability(const std::string& locale) -> ValidationResult;
-    
+
     /**
      * @brief Validates locale functionality (can be used for formatting)
      * @param locale The locale to validate
      * @return ValidationResult with functionality validation
      */
     static auto validateFunctionality(const std::string& locale) -> ValidationResult;
-    
+
     /**
      * @brief Validates locale compatibility with system
      * @param locale The locale to validate
      * @return ValidationResult with compatibility validation
      */
     static auto validateCompatibility(const std::string& locale) -> ValidationResult;
-    
+
     /**
      * @brief Checks if two locales are compatible
      * @param locale1 First locale
@@ -93,7 +93,7 @@ public:
      * @return Compatibility score (0.0-1.0)
      */
     static auto checkCompatibility(const std::string& locale1, const std::string& locale2) -> double;
-    
+
     /**
      * @brief Gets suggested alternatives for an invalid locale
      * @param locale The invalid locale
@@ -101,43 +101,43 @@ public:
      * @return Vector of suggested locale alternatives
      */
     static auto getSuggestions(const std::string& locale, size_t maxSuggestions = 5) -> std::vector<std::string>;
-    
+
     /**
      * @brief Validates a list of locales and returns the best valid one
      * @param locales List of locales to validate
      * @param level Validation level to use
      * @return Best valid locale or empty string if none are valid
      */
-    static auto findBestValidLocale(const std::vector<std::string>& locales, 
+    static auto findBestValidLocale(const std::vector<std::string>& locales,
                                     ValidationLevel level = ValidationLevel::Standard) -> std::string;
-    
+
     /**
      * @brief Runs comprehensive locale system tests
      * @return ValidationResult with system test results
      */
     static auto runSystemTests() -> ValidationResult;
-    
+
     /**
      * @brief Tests locale formatting capabilities
      * @param locale The locale to test
      * @return ValidationResult with formatting test results
      */
     static auto testFormatting(const std::string& locale) -> ValidationResult;
-    
+
     /**
      * @brief Tests locale sorting/collation capabilities
      * @param locale The locale to test
      * @return ValidationResult with collation test results
      */
     static auto testCollation(const std::string& locale) -> ValidationResult;
-    
+
     /**
      * @brief Tests locale character classification
      * @param locale The locale to test
      * @return ValidationResult with character classification test results
      */
     static auto testCharacterClassification(const std::string& locale) -> ValidationResult;
-    
+
     /**
      * @brief Benchmarks locale performance
      * @param locale The locale to benchmark
@@ -163,49 +163,49 @@ public:
         std::vector<std::string> failureDetails;
         double executionTimeMs{0.0};
     };
-    
+
     /**
      * @brief Runs a comprehensive test suite for a locale
      * @param locale The locale to test
      * @return TestSuiteResult with detailed test results
      */
     static auto runTestSuite(const std::string& locale) -> TestSuiteResult;
-    
+
     /**
      * @brief Tests number formatting for a locale
      * @param locale The locale to test
      * @return Test result
      */
     static auto testNumberFormatting(const std::string& locale) -> bool;
-    
+
     /**
      * @brief Tests currency formatting for a locale
      * @param locale The locale to test
      * @return Test result
      */
     static auto testCurrencyFormatting(const std::string& locale) -> bool;
-    
+
     /**
      * @brief Tests date/time formatting for a locale
      * @param locale The locale to test
      * @return Test result
      */
     static auto testDateTimeFormatting(const std::string& locale) -> bool;
-    
+
     /**
      * @brief Tests string collation for a locale
      * @param locale The locale to test
      * @return Test result
      */
     static auto testStringCollation(const std::string& locale) -> bool;
-    
+
     /**
      * @brief Tests character case conversion for a locale
      * @param locale The locale to test
      * @return Test result
      */
     static auto testCaseConversion(const std::string& locale) -> bool;
-    
+
     /**
      * @brief Tests locale switching performance
      * @param fromLocale Source locale
@@ -213,10 +213,10 @@ public:
      * @param iterations Number of switch iterations
      * @return Average switch time in milliseconds
      */
-    static auto testSwitchingPerformance(const std::string& fromLocale, 
-                                         const std::string& toLocale, 
+    static auto testSwitchingPerformance(const std::string& fromLocale,
+                                         const std::string& toLocale,
                                          size_t iterations = 100) -> double;
-    
+
     /**
      * @brief Stress tests locale operations
      * @param locale The locale to stress test
@@ -243,14 +243,14 @@ public:
         std::vector<std::string> alternativeLocales;
         std::unordered_map<std::string, std::string> platformSpecificIssues;
     };
-    
+
     /**
      * @brief Checks locale compatibility across platforms
      * @param locale The locale to check
      * @return CompatibilityReport with detailed compatibility information
      */
     static auto checkCrossPlatformCompatibility(const std::string& locale) -> CompatibilityReport;
-    
+
     /**
      * @brief Finds portable locale alternatives
      * @param locale The locale to find alternatives for
@@ -258,14 +258,14 @@ public:
      * @return Vector of portable locale alternatives
      */
     static auto findPortableAlternatives(const std::string& locale, size_t maxAlternatives = 3) -> std::vector<std::string>;
-    
+
     /**
      * @brief Checks if a locale is likely to be available on most systems
      * @param locale The locale to check
      * @return Portability score (0.0-1.0)
      */
     static auto getPortabilityScore(const std::string& locale) -> double;
-    
+
     /**
      * @brief Gets platform-specific locale recommendations
      * @param platform Target platform ("windows", "linux", "macos")

@@ -49,10 +49,10 @@ struct MonitorEvent {
     std::string job_id;
     std::string message;
     std::unordered_map<std::string, std::string> metadata;
-    
+
     MonitorEvent(std::string id, MonitorEventType t, EventSeverity s, std::string j_id, std::string msg)
-        : event_id(std::move(id)), type(t), severity(s), 
-          timestamp(std::chrono::system_clock::now()), 
+        : event_id(std::move(id)), type(t), severity(s),
+          timestamp(std::chrono::system_clock::now()),
           job_id(std::move(j_id)), message(std::move(msg)) {}
 };
 
@@ -62,22 +62,22 @@ struct MonitorEvent {
 struct PerformanceMetrics {
     std::string metric_id;
     std::chrono::system_clock::time_point timestamp;
-    
+
     // Job-specific metrics
     std::chrono::milliseconds execution_time{0};
     std::chrono::milliseconds queue_time{0};
     size_t memory_usage_mb{0};
     double cpu_usage_percent{0.0};
     int exit_code{0};
-    
+
     // System-wide metrics
     size_t total_jobs_running{0};
     size_t total_jobs_queued{0};
     double system_load_average{0.0};
     size_t system_memory_usage_mb{0};
     double system_cpu_usage_percent{0.0};
-    
-    PerformanceMetrics(std::string id) : metric_id(std::move(id)), 
+
+    PerformanceMetrics(std::string id) : metric_id(std::move(id)),
                                         timestamp(std::chrono::system_clock::now()) {}
 };
 
@@ -91,7 +91,7 @@ struct HealthCheckResult {
     std::chrono::system_clock::time_point last_check;
     std::chrono::milliseconds response_time{0};
     std::unordered_map<std::string, std::string> details;
-    
+
     HealthCheckResult(std::string name, bool healthy, std::string msg)
         : check_name(std::move(name)), is_healthy(healthy), status_message(std::move(msg)),
           last_check(std::chrono::system_clock::now()) {}
@@ -109,7 +109,7 @@ struct AlertConfig {
     std::chrono::minutes cooldown_period{5};
     std::vector<std::string> notification_channels;
     bool is_enabled{true};
-    
+
     AlertConfig(std::string id, std::string n, std::string desc)
         : alert_id(std::move(id)), name(std::move(n)), description(std::move(desc)) {}
 };
@@ -127,7 +127,7 @@ struct Alert {
     bool is_acknowledged{false};
     std::chrono::system_clock::time_point acknowledged_at;
     std::string acknowledged_by;
-    
+
     Alert(std::string a_id, std::string c_id, EventSeverity sev, std::string msg)
         : alert_id(std::move(a_id)), config_id(std::move(c_id)), severity(sev),
           triggered_at(std::chrono::system_clock::now()), message(std::move(msg)) {}
@@ -142,52 +142,52 @@ public:
      * @brief Constructs a new CronMonitor
      */
     CronMonitor();
-    
+
     /**
      * @brief Destructor
      */
     ~CronMonitor();
-    
+
     // Disable copy operations
     CronMonitor(const CronMonitor&) = delete;
     CronMonitor& operator=(const CronMonitor&) = delete;
-    
+
     // Enable move operations
     CronMonitor(CronMonitor&&) noexcept = default;
     CronMonitor& operator=(CronMonitor&&) noexcept = default;
-    
+
     /**
      * @brief Starts the monitoring system
      * @return True if started successfully
      */
     auto start() -> bool;
-    
+
     /**
      * @brief Stops the monitoring system
      */
     void stop();
-    
+
     /**
      * @brief Checks if monitoring is active
      * @return True if monitoring is running
      */
     auto isRunning() const -> bool;
-    
+
     // Event logging
     /**
      * @brief Logs a monitoring event
      * @param event Event to log
      */
     void logEvent(const MonitorEvent& event);
-    
+
     /**
      * @brief Logs a job start event
      * @param job_id Job identifier
      * @param metadata Additional metadata
      */
-    void logJobStart(const std::string& job_id, 
+    void logJobStart(const std::string& job_id,
                     const std::unordered_map<std::string, std::string>& metadata = {});
-    
+
     /**
      * @brief Logs a job completion event
      * @param job_id Job identifier
@@ -195,10 +195,10 @@ public:
      * @param execution_time Time taken to execute
      * @param metadata Additional metadata
      */
-    void logJobCompletion(const std::string& job_id, bool success, 
+    void logJobCompletion(const std::string& job_id, bool success,
                          std::chrono::milliseconds execution_time,
                          const std::unordered_map<std::string, std::string>& metadata = {});
-    
+
     /**
      * @brief Logs a system error event
      * @param error_message Error description
@@ -206,24 +206,24 @@ public:
      */
     void logSystemError(const std::string& error_message,
                        const std::unordered_map<std::string, std::string>& metadata = {});
-    
+
     // Performance monitoring
     /**
      * @brief Records performance metrics
      * @param metrics Performance metrics to record
      */
     void recordMetrics(const PerformanceMetrics& metrics);
-    
+
     /**
      * @brief Gets recent performance metrics for a job
      * @param job_id Job identifier
      * @param duration Time range to query
      * @return Vector of performance metrics
      */
-    auto getJobMetrics(const std::string& job_id, 
+    auto getJobMetrics(const std::string& job_id,
                       std::chrono::minutes duration = std::chrono::minutes(60))
         -> std::vector<PerformanceMetrics>;
-    
+
     /**
      * @brief Gets system-wide performance metrics
      * @param duration Time range to query
@@ -231,7 +231,7 @@ public:
      */
     auto getSystemMetrics(std::chrono::minutes duration = std::chrono::minutes(60))
         -> std::vector<PerformanceMetrics>;
-    
+
     // Health checks
     /**
      * @brief Registers a health check
@@ -243,26 +243,26 @@ public:
     auto registerHealthCheck(const std::string& check_name,
                             std::function<HealthCheckResult()> check_function,
                             std::chrono::minutes interval = std::chrono::minutes(5)) -> bool;
-    
+
     /**
      * @brief Unregisters a health check
      * @param check_name Name of the health check to remove
      * @return True if removed successfully
      */
     auto unregisterHealthCheck(const std::string& check_name) -> bool;
-    
+
     /**
      * @brief Gets the latest health check results
      * @return Map of health check results
      */
     auto getHealthStatus() -> std::unordered_map<std::string, HealthCheckResult>;
-    
+
     /**
      * @brief Runs all health checks immediately
      * @return Overall health status
      */
     auto runHealthChecks() -> bool;
-    
+
     // Alerting
     /**
      * @brief Adds an alert configuration
@@ -270,20 +270,20 @@ public:
      * @return True if added successfully
      */
     auto addAlertConfig(const AlertConfig& config) -> bool;
-    
+
     /**
      * @brief Removes an alert configuration
      * @param alert_id Alert configuration ID
      * @return True if removed successfully
      */
     auto removeAlertConfig(const std::string& alert_id) -> bool;
-    
+
     /**
      * @brief Gets active alerts
      * @return Vector of active alerts
      */
     auto getActiveAlerts() -> std::vector<Alert>;
-    
+
     /**
      * @brief Acknowledges an alert
      * @param alert_id Alert ID
@@ -291,7 +291,7 @@ public:
      * @return True if acknowledged successfully
      */
     auto acknowledgeAlert(const std::string& alert_id, const std::string& acknowledged_by) -> bool;
-    
+
     // Query and reporting
     /**
      * @brief Queries events by criteria
@@ -305,14 +305,14 @@ public:
                     std::chrono::system_clock::time_point end_time,
                     const std::vector<MonitorEventType>& event_types = {},
                     const std::vector<std::string>& job_ids = {}) -> std::vector<MonitorEvent>;
-    
+
     /**
      * @brief Generates a monitoring report
      * @param duration Time range for the report
      * @return JSON-formatted report
      */
     auto generateReport(std::chrono::hours duration = std::chrono::hours(24)) -> std::string;
-    
+
     /**
      * @brief Exports monitoring data to file
      * @param filename Output filename
@@ -328,44 +328,44 @@ private:
     std::atomic<bool> running_{false};
     std::thread monitor_thread_;
     std::thread health_check_thread_;
-    
+
     // Event storage
     std::queue<MonitorEvent> event_queue_;
     std::vector<MonitorEvent> event_history_;
     static constexpr size_t MAX_EVENT_HISTORY = 10000;
-    
+
     // Metrics storage
     std::unordered_map<std::string, std::vector<PerformanceMetrics>> job_metrics_;
     std::vector<PerformanceMetrics> system_metrics_;
     static constexpr size_t MAX_METRICS_PER_JOB = 1000;
     static constexpr size_t MAX_SYSTEM_METRICS = 1000;
-    
+
     // Health checks
     struct HealthCheck {
         std::function<HealthCheckResult()> check_function;
         std::chrono::minutes interval;
         std::chrono::system_clock::time_point last_run;
         HealthCheckResult last_result;
-        
+
         HealthCheck(std::function<HealthCheckResult()> func, std::chrono::minutes intv)
-            : check_function(std::move(func)), interval(intv), 
+            : check_function(std::move(func)), interval(intv),
               last_run(std::chrono::system_clock::time_point::min()),
               last_result("", false, "Not run yet") {}
     };
     std::unordered_map<std::string, HealthCheck> health_checks_;
-    
+
     // Alerting
     std::unordered_map<std::string, AlertConfig> alert_configs_;
     std::vector<Alert> active_alerts_;
     std::unordered_map<std::string, std::chrono::system_clock::time_point> alert_cooldowns_;
-    
+
     // Internal methods
     void monitorLoop();
     void healthCheckLoop();
     void processEventQueue();
     void checkAlertConditions(const MonitorEvent& event);
     void checkMetricAlerts(const PerformanceMetrics& metrics);
-    void triggerAlert(const AlertConfig& config, const std::string& message, 
+    void triggerAlert(const AlertConfig& config, const std::string& message,
                      const std::unordered_map<std::string, std::string>& context = {});
     void cleanupOldData();
     auto generateEventId() -> std::string;

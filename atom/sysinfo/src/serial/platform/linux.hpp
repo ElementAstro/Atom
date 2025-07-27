@@ -10,7 +10,7 @@ namespace atom::system {
 
 /**
  * @brief Linux-specific implementation for system information collection
- * 
+ *
  * This class provides Linux-specific methods for collecting hardware serial numbers
  * and system identification information using filesystem interfaces and system calls.
  */
@@ -108,7 +108,7 @@ private:
      * @param delimiter Delimiter between key and value (default: ":")
      * @return Map of key-value pairs
      */
-    std::map<std::string, std::string> parseKeyValuePairs(const std::string& text, 
+    std::map<std::string, std::string> parseKeyValuePairs(const std::string& text,
                                                            const std::string& delimiter = ":") const;
 
     /**

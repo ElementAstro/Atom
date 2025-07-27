@@ -10,7 +10,7 @@ namespace atom::system {
 
 /**
  * @brief Windows-specific implementation for system information collection
- * 
+ *
  * This class provides Windows-specific methods for collecting hardware serial numbers
  * and system identification information using WMI (Windows Management Instrumentation).
  */
@@ -114,7 +114,7 @@ private:
      * @param properties Vector of property names to retrieve
      * @return Map of property name to value
      */
-    std::map<std::string, std::string> getWmiObjectProperties(const std::wstring& wmiClass, 
+    std::map<std::string, std::string> getWmiObjectProperties(const std::wstring& wmiClass,
                                                                const std::vector<std::wstring>& properties);
 
     /**

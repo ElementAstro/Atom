@@ -6,7 +6,7 @@ namespace atom::extra::asio::concurrency {
 std::unique_ptr<concurrency_manager> concurrency_manager::instance_;
 std::once_flag concurrency_manager::init_flag_;
 
-// Static member definitions for memory_manager  
+// Static member definitions for memory_manager
 std::unique_ptr<memory_manager> memory_manager::instance_;
 std::once_flag memory_manager::init_flag_;
 

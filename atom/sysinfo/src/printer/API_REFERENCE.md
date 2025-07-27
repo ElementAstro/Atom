@@ -17,24 +17,24 @@ class SystemInfoPrinter {
 public:
     SystemInfoPrinter();
     explicit SystemInfoPrinter(const FormatterOptions& options);
-    
+
     // Report generation
     auto generateReport(ReportType type) -> std::string;
     auto generateReport(ReportType type, const ReportOptions& options) -> std::string;
-    
+
     // Export functionality
     bool exportReport(const std::string& content, const std::string& filename, ExportFormat format);
-    
+
     // Configuration
     void setFormatterOptions(const FormatterOptions& options);
     void setExportOptions(const ExportOptions& options);
-    
+
     // Static legacy API (backward compatibility)
     static auto generateFullReport() -> std::string;
     static auto generateSimpleReport() -> std::string;
     static auto generatePerformanceReport() -> std::string;
     static auto generateSecurityReport() -> std::string;
-    
+
     static bool exportToHTML(const std::string& filename);
     static bool exportToJSON(const std::string& filename);
     static bool exportToMarkdown(const std::string& filename);
@@ -138,7 +138,7 @@ struct FormatterOptions {
     bool timestampEnabled = false;
     int tableWidth = 100;
     std::string indentation = "  ";
-    
+
     // Custom options map for formatter-specific settings
     std::unordered_map<std::string, std::string> customOptions;
 };
@@ -189,7 +189,7 @@ public:
     void setOptions(const FormatterOptions& options);
     void setStyle(FormatterStyle style);
     void setColorEnabled(bool enabled);
-    
+
 protected:
     // Utility methods available to all formatters
     auto createTableHeader(const std::string& title, int width = 100) -> std::string;
@@ -255,13 +255,13 @@ public:
     virtual auto exportToString(const std::string& content) -> std::string = 0;
     virtual auto getFileExtension() const -> std::string = 0;
     virtual auto getMimeType() const -> std::string = 0;
-    
+
     void setOptions(const ExportOptions& options);
-    
+
 protected:
     virtual auto escapeText(const std::string& text) const -> std::string = 0;
     virtual auto addMetadata(const std::string& content) const -> std::string = 0;
-    
+
     bool writeToFile(const std::string& content, const std::string& filename);
     auto getCurrentTimestamp() const -> std::string;
 };
@@ -303,12 +303,12 @@ All report generators inherit from `BaseReport`.
 class BaseReport {
 public:
     virtual auto generate() -> std::string = 0;
-    
+
     void setOptions(const ReportOptions& options);
-    
+
 protected:
     virtual auto getDefaultSections() const -> std::vector<ReportSection> = 0;
-    
+
     auto generateSection(ReportSection section) -> std::string;
     auto combineSections(const std::unordered_map<ReportSection, std::string>& sections) -> std::string;
     auto createHeader() -> std::string;
@@ -324,7 +324,7 @@ protected:
 class FullReport : public BaseReport {
 public:
     auto generate() -> std::string override;
-    
+
 protected:
     auto getDefaultSections() const -> std::vector<ReportSection> override;
     // Returns: {OS, CPU, MEMORY, DISK, GPU, BATTERY, BIOS, NETWORK, LOCALE, SYSTEM}
@@ -337,7 +337,7 @@ protected:
 class CustomReport : public BaseReport {
 public:
     auto generate() -> std::string override;
-    
+
 protected:
     auto getDefaultSections() const -> std::vector<ReportSection> override;
     // Returns: {} (empty - user must specify sections)

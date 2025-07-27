@@ -29,7 +29,7 @@ public:
         }
         total_++;
     }
-    
+
     static void printSummary() {
         std::cout << "\n=== Test Summary ===" << std::endl;
         std::cout << "Total: " << total_ << std::endl;
@@ -37,7 +37,7 @@ public:
         std::cout << "Failed: " << failed_ << std::endl;
         std::cout << "Success Rate: " << (total_ > 0 ? (passed_ * 100 / total_) : 0) << "%" << std::endl;
     }
-    
+
     static int getFailedCount() { return failed_; }
 
 private:
@@ -54,52 +54,52 @@ int TestRunner::failed_ = 0;
 bool testErrorToString() {
     std::string result = errorToString(WMError::NONE);
     if (result.empty()) return false;
-    
+
     result = errorToString(WMError::PLATFORM_NOT_SUPPORTED);
     if (result.empty()) return false;
-    
+
     result = errorToString(WMError::WINDOW_NOT_FOUND);
     if (result.empty()) return false;
-    
+
     return true;
 }
 
 bool testWindowStateToString() {
     std::string result = windowStateToString(WindowState::NORMAL);
     if (result.empty()) return false;
-    
+
     result = windowStateToString(WindowState::MINIMIZED);
     if (result.empty()) return false;
-    
+
     result = windowStateToString(WindowState::MAXIMIZED);
     if (result.empty()) return false;
-    
+
     return true;
 }
 
 bool testWindowTypeToString() {
     std::string result = windowTypeToString(WindowType::NORMAL);
     if (result.empty()) return false;
-    
+
     result = windowTypeToString(WindowType::DIALOG);
     if (result.empty()) return false;
-    
+
     result = windowTypeToString(WindowType::UTILITY);
     if (result.empty()) return false;
-    
+
     return true;
 }
 
 bool testThemeTypeToString() {
     std::string result = themeTypeToString(ThemeType::LIGHT);
     if (result.empty()) return false;
-    
+
     result = themeTypeToString(ThemeType::DARK);
     if (result.empty()) return false;
-    
+
     result = themeTypeToString(ThemeType::AUTO);
     if (result.empty()) return false;
-    
+
     return true;
 }
 
@@ -108,12 +108,12 @@ bool testResultHelpers() {
     WMResult<int> successResult = 42;
     if (isError(successResult)) return false;
     if (getValue(successResult) != 42) return false;
-    
+
     // Test with error result
     WMResult<int> errorResult = WMError::OPERATION_FAILED;
     if (!isError(errorResult)) return false;
     if (getError(errorResult) != WMError::OPERATION_FAILED) return false;
-    
+
     return true;
 }
 
@@ -133,9 +133,9 @@ bool testWindowInfoStructure() {
     window.isVisible = true;
     window.isActive = false;
     window.workspaceId = 1;
-    
+
     // Basic validation
-    return window.id == 12345 && 
+    return window.id == 12345 &&
            window.title == "Test Window" &&
            window.state == WindowState::NORMAL &&
            window.workspaceId.has_value() &&
@@ -151,7 +151,7 @@ bool testThemeInfoStructure() {
     theme.backgroundColor = "#2E2E2E";
     theme.foregroundColor = "#FFFFFF";
     theme.followsSystemTheme = true;
-    
+
     // Basic validation
     return theme.type == ThemeType::DARK &&
            theme.name == "Dark Theme" &&
@@ -169,7 +169,7 @@ bool testMonitorInfoStructure() {
     monitor.height = 1080;
     monitor.refreshRate = 60;
     monitor.scaleFactor = 1.0f;
-    
+
     // Basic validation
     return monitor.isPrimary &&
            monitor.width == 1920 &&
@@ -187,7 +187,7 @@ bool testWorkspaceInfoStructure() {
     workspace.y = 0;
     workspace.width = 1920;
     workspace.height = 1080;
-    
+
     // Basic validation
     return workspace.isActive &&
            workspace.windowIds.size() == 3 &&
@@ -206,7 +206,7 @@ bool testSystemInfoStructure() {
     info.supportsVirtualDesktops = true;
     info.wmVersion = "1.0";
     info.wmFeatures = {"Feature1", "Feature2"};
-    
+
     // Basic validation
     return info.supportsWorkspaces &&
            info.supportsVirtualDesktops &&

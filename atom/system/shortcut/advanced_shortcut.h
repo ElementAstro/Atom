@@ -66,46 +66,46 @@ public:
     std::chrono::milliseconds maxSequenceTime{2000}; // Max time for sequence
     std::string description;
     std::string category;
-    
+
     AdvancedShortcut(ShortcutType t = ShortcutType::Keyboard);
-    
+
     /**
      * @brief Create keyboard shortcut
      */
     static AdvancedShortcut createKeyboard(const Shortcut& shortcut);
-    
+
     /**
      * @brief Create mouse shortcut
      */
     static AdvancedShortcut createMouse(const std::vector<MouseButton>& buttons,
                                        const Shortcut& modifiers = Shortcut(0));
-    
+
     /**
      * @brief Create multimedia shortcut
      */
     static AdvancedShortcut createMultimedia(MultimediaKey key);
-    
+
     /**
      * @brief Create sequential shortcut
      */
     static AdvancedShortcut createSequential(const std::vector<Shortcut>& sequence,
                                             std::chrono::milliseconds maxTime = std::chrono::milliseconds(2000));
-    
+
     /**
      * @brief Convert to string representation
      */
     std::string toString() const;
-    
+
     /**
      * @brief Check if shortcut is valid
      */
     bool isValid() const;
-    
+
     /**
      * @brief Get hash for container usage
      */
     size_t hash() const;
-    
+
     /**
      * @brief Equality operator
      */
@@ -120,7 +120,7 @@ struct ShortcutConflict {
     AdvancedShortcut shortcut2;
     std::string conflictReason;
     enum class Severity { Low, Medium, High, Critical } severity;
-    
+
     ShortcutConflict(const AdvancedShortcut& s1, const AdvancedShortcut& s2,
                     const std::string& reason, Severity sev = Severity::Medium)
         : shortcut1(s1), shortcut2(s2), conflictReason(reason), severity(sev) {}
@@ -134,7 +134,7 @@ struct KeyMapping {
     AdvancedShortcut to;
     std::string application;  // Empty for global mapping
     bool enabled{true};
-    
+
     KeyMapping(const AdvancedShortcut& fromShortcut, const AdvancedShortcut& toShortcut,
               const std::string& app = "")
         : from(fromShortcut), to(toShortcut), application(app) {}
@@ -147,68 +147,68 @@ class AdvancedShortcutManager {
 public:
     AdvancedShortcutManager();
     ~AdvancedShortcutManager();
-    
+
     /**
      * @brief Register a shortcut
      */
     bool registerShortcut(const AdvancedShortcut& shortcut, const std::string& owner = "");
-    
+
     /**
      * @brief Unregister a shortcut
      */
     bool unregisterShortcut(const AdvancedShortcut& shortcut);
-    
+
     /**
      * @brief Check for conflicts with existing shortcuts
      */
     std::vector<ShortcutConflict> checkConflicts(const AdvancedShortcut& shortcut) const;
-    
+
     /**
      * @brief Get all registered shortcuts
      */
     std::vector<AdvancedShortcut> getAllShortcuts() const;
-    
+
     /**
      * @brief Get shortcuts by category
      */
     std::vector<AdvancedShortcut> getShortcutsByCategory(const std::string& category) const;
-    
+
     /**
      * @brief Add custom key mapping
      */
     void addKeyMapping(const KeyMapping& mapping);
-    
+
     /**
      * @brief Remove key mapping
      */
     void removeKeyMapping(const AdvancedShortcut& from);
-    
+
     /**
      * @brief Get all key mappings
      */
     std::vector<KeyMapping> getKeyMappings() const;
-    
+
     /**
      * @brief Resolve shortcut through mappings
      */
     AdvancedShortcut resolveShortcut(const AdvancedShortcut& shortcut,
                                    const std::string& application = "") const;
-    
+
     /**
      * @brief Auto-resolve conflicts by suggesting alternatives
      */
     std::vector<AdvancedShortcut> suggestAlternatives(const AdvancedShortcut& shortcut) const;
-    
+
     /**
      * @brief Export shortcuts to JSON
      */
     std::string exportToJson() const;
-    
+
     /**
      * @brief Import shortcuts from JSON
      */
     bool importFromJson(const std::string& json);
-    
+
     /**
      * @brief Clear all shortcuts and mappings
      */
@@ -217,7 +217,7 @@ public:
 private:
     std::unordered_map<AdvancedShortcut, std::string> registeredShortcuts_;
     std::vector<KeyMapping> keyMappings_;
-    
+
     bool hasConflict(const AdvancedShortcut& s1, const AdvancedShortcut& s2) const;
     std::string getConflictReason(const AdvancedShortcut& s1, const AdvancedShortcut& s2) const;
     ShortcutConflict::Severity assessConflictSeverity(const AdvancedShortcut& s1,
@@ -232,17 +232,17 @@ namespace multimedia_utils {
      * @brief Get virtual key code for multimedia key
      */
     uint32_t getVirtualKeyCode(MultimediaKey key);
-    
+
     /**
      * @brief Get multimedia key from virtual key code
      */
     MultimediaKey getMultimediaKey(uint32_t vkCode);
-    
+
     /**
      * @brief Check if virtual key is a multimedia key
      */
     bool isMultimediaKey(uint32_t vkCode);
-    
+
     /**
      * @brief Get human-readable name for multimedia key
      */
@@ -257,12 +257,12 @@ namespace mouse_utils {
      * @brief Convert mouse button to string
      */
     std::string mouseButtonToString(MouseButton button);
-    
+
     /**
      * @brief Parse mouse button from string
      */
     MouseButton stringToMouseButton(const std::string& str);
-    
+
     /**
      * @brief Check if mouse button combination is valid
      */

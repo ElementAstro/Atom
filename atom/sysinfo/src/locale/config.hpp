@@ -100,62 +100,62 @@ public:
      * @return Reference to the configuration manager instance
      */
     static auto getInstance() -> LocaleConfigManager&;
-    
+
     /**
      * @brief Loads configuration from file
      * @param filePath Path to configuration file
      * @return true if loaded successfully, false otherwise
      */
     auto loadFromFile(const std::string& filePath) -> bool;
-    
+
     /**
      * @brief Saves configuration to file
      * @param filePath Path to configuration file
      * @return true if saved successfully, false otherwise
      */
     auto saveToFile(const std::string& filePath) -> bool;
-    
+
     /**
      * @brief Loads configuration from environment variables
      */
     void loadFromEnvironment();
-    
+
     /**
      * @brief Gets the current configuration
      * @return Reference to the current configuration
      */
     auto getConfig() -> const LocaleConfig&;
-    
+
     /**
      * @brief Sets the configuration
      * @param config New configuration to set
      */
     void setConfig(const LocaleConfig& config);
-    
+
     /**
      * @brief Updates a specific configuration value
      * @param key Configuration key
      * @param value Configuration value
      */
     void updateConfig(const std::string& key, const std::string& value);
-    
+
     /**
      * @brief Resets configuration to defaults
      */
     void resetToDefaults();
-    
+
     /**
      * @brief Validates the current configuration
      * @return true if configuration is valid, false otherwise
      */
     auto validateConfig() -> bool;
-    
+
     /**
      * @brief Gets configuration as JSON string
      * @return JSON representation of configuration
      */
     auto toJson() -> std::string;
-    
+
     /**
      * @brief Loads configuration from JSON string
      * @param json JSON string containing configuration
@@ -180,55 +180,55 @@ public:
      * @param config Cache configuration
      */
     explicit LocaleCache(const CacheConfig& config);
-    
+
     /**
      * @brief Destructor
      */
     ~LocaleCache();
-    
+
     /**
      * @brief Stores locale information in cache
      * @param key Cache key
      * @param info Locale information to cache
      */
     void store(const std::string& key, const LocaleInfo& info);
-    
+
     /**
      * @brief Retrieves locale information from cache
      * @param key Cache key
      * @return Optional locale information if found
      */
     auto retrieve(const std::string& key) -> std::optional<LocaleInfo>;
-    
+
     /**
      * @brief Checks if a key exists in cache
      * @param key Cache key to check
      * @return true if key exists, false otherwise
      */
     auto exists(const std::string& key) -> bool;
-    
+
     /**
      * @brief Removes an entry from cache
      * @param key Cache key to remove
      */
     void remove(const std::string& key);
-    
+
     /**
      * @brief Clears all cache entries
      */
     void clear();
-    
+
     /**
      * @brief Gets cache statistics
      * @return Map of cache statistics
      */
     auto getStatistics() -> std::unordered_map<std::string, size_t>;
-    
+
     /**
      * @brief Performs cache maintenance (cleanup expired entries)
      */
     void maintenance();
-    
+
     /**
      * @brief Sets cache configuration
      * @param config New cache configuration
@@ -260,13 +260,13 @@ public:
         size_t cacheMisses{0};
         std::chrono::system_clock::time_point lastReset;
     };
-    
+
     /**
      * @brief Gets the singleton instance
      * @return Reference to the performance monitor instance
      */
     static auto getInstance() -> PerformanceMonitor&;
-    
+
     /**
      * @brief Records an operation execution time
      * @param operation Operation name
@@ -274,49 +274,49 @@ public:
      * @param success Whether the operation was successful
      */
     void recordOperation(const std::string& operation, double executionTime, bool success = true);
-    
+
     /**
      * @brief Records a cache hit
      * @param operation Operation name
      */
     void recordCacheHit(const std::string& operation);
-    
+
     /**
      * @brief Records a cache miss
      * @param operation Operation name
      */
     void recordCacheMiss(const std::string& operation);
-    
+
     /**
      * @brief Gets metrics for a specific operation
      * @param operation Operation name
      * @return Metrics for the operation
      */
     auto getMetrics(const std::string& operation) -> Metrics;
-    
+
     /**
      * @brief Gets all collected metrics
      * @return Map of operation names to metrics
      */
     auto getAllMetrics() -> std::unordered_map<std::string, Metrics>;
-    
+
     /**
      * @brief Resets metrics for a specific operation
      * @param operation Operation name
      */
     void resetMetrics(const std::string& operation);
-    
+
     /**
      * @brief Resets all metrics
      */
     void resetAllMetrics();
-    
+
     /**
      * @brief Enables or disables metrics collection
      * @param enabled Whether to enable metrics collection
      */
     void setEnabled(bool enabled);
-    
+
     /**
      * @brief Checks if metrics collection is enabled
      * @return true if enabled, false otherwise
@@ -339,12 +339,12 @@ public:
      * @param operation Operation name
      */
     explicit PerformanceTimer(const std::string& operation);
-    
+
     /**
      * @brief Destructor - records timing
      */
     ~PerformanceTimer();
-    
+
     /**
      * @brief Marks the operation as failed
      */

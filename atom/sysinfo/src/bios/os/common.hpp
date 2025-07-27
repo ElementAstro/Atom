@@ -121,7 +121,7 @@ struct EnhancedOSInfo {
     std::string timeZone;
     std::string charSet;
     bool isServer = false;
-    
+
     // Enhanced information
     OSType osType = OSType::UNKNOWN;
     OSArchitecture osArch = OSArchitecture::UNKNOWN;
@@ -130,43 +130,43 @@ struct EnhancedOSInfo {
     std::string edition;
     std::string productKey;
     std::string serialNumber;
-    
+
     // System metrics
     SystemPerformanceMetrics performance;
     SystemSecurityInfo security;
     NetworkConfiguration network;
     SystemEnvironment environment;
-    
+
     // Update information
     std::vector<std::string> installedUpdates;
     std::vector<std::string> availableUpdates;
     std::vector<std::string> installedSoftware;
-    
+
     // Hardware information
     std::string motherboardModel;
     std::string biosVersion;
     std::string cpuModel;
     uint64_t totalMemoryBytes = 0;
     uint64_t availableMemoryBytes = 0;
-    
+
     // Runtime information
     std::chrono::system_clock::time_point lastRefresh;
     std::chrono::seconds uptime{0};
-    
+
     EnhancedOSInfo() = default;
-    
+
     /**
      * @brief Converts the enhanced OS information to JSON format
      * @return JSON string representation
      */
     auto toJson() const -> std::string;
-    
+
     /**
      * @brief Converts to detailed string format
      * @return Detailed string representation
      */
     auto toDetailedString() const -> std::string;
-    
+
     /**
      * @brief Refreshes all dynamic information
      * @return true if successful, false otherwise

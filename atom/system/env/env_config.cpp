@@ -67,7 +67,7 @@ void EnvConfigManager::emitEvent(const EnvEvent& event) {
     if (!config_.enableEventLogging) {
         return;
     }
-    
+
     std::lock_guard<std::mutex> lock(callbackMutex_);
     for (const auto& [id, callback] : callbacks_) {
         try {
@@ -82,30 +82,30 @@ bool EnvConfigManager::loadFromFile(const String& filePath) {
     try {
         std::ifstream file(std::string(filePath.data(), filePath.size()));
         if (!file.is_open()) {
-            spdlog::warn("Could not open environment config file: {}", 
+            spdlog::warn("Could not open environment config file: {}",
                         std::string(filePath.data(), filePath.size()));
             return false;
         }
-        
+
         // Simple key-value parsing (could be enhanced with JSON/YAML)
         std::string line;
         EnvSystemConfig newConfig = config_;
-        
+
         while (std::getline(file, line)) {
             if (line.empty() || line[0] == '#') continue;
-            
+
             auto pos = line.find('=');
             if (pos == std::string::npos) continue;
-            
+
             std::string key = line.substr(0, pos);
             std::string value = line.substr(pos + 1);
-            
+
             // Remove whitespace
             key.erase(0, key.find_first_not_of(" \t"));
             key.erase(key.find_last_not_of(" \t") + 1);
             value.erase(0, value.find_first_not_of(" \t"));
             value.erase(value.find_last_not_of(" \t") + 1);
-            
+
             // Parse configuration values
             if (key == "enableGlobalCache") {
                 newConfig.enableGlobalCache = (value == "true" || value == "1");
@@ -124,14 +124,14 @@ bool EnvConfigManager::loadFromFile(const String& filePath) {
             }
             // Add more configuration options as needed
         }
-        
+
         updateConfig(newConfig);
-        spdlog::info("Environment configuration loaded from: {}", 
+        spdlog::info("Environment configuration loaded from: {}",
                     std::string(filePath.data(), filePath.size()));
         return true;
-        
+
     } catch (const std::exception& e) {
-        spdlog::error("Error loading environment configuration from {}: {}", 
+        spdlog::error("Error loading environment configuration from {}: {}",
                      std::string(filePath.data(), filePath.size()), e.what());
         return false;
     }
@@ -141,13 +141,13 @@ bool EnvConfigManager::saveToFile(const String& filePath) const {
     try {
         std::ofstream file(std::string(filePath.data(), filePath.size()));
         if (!file.is_open()) {
-            spdlog::error("Could not create environment config file: {}", 
+            spdlog::error("Could not create environment config file: {}",
                          std::string(filePath.data(), filePath.size()));
             return false;
         }
-        
+
         std::lock_guard<std::mutex> lock(configMutex_);
-        
+
         file << "# Environment System Configuration\n";
         file << "enableGlobalCache=" << (config_.enableGlobalCache ? "true" : "false") << "\n";
         file << "cacheTTL=" << config_.cacheTTL.count() << "\n";
@@ -167,27 +167,27 @@ bool EnvConfigManager::saveToFile(const String& filePath) const {
         file << "enableMemoryPooling=" << (config_.enableMemoryPooling ? "true" : "false") << "\n";
         file << "initialPoolSize=" << config_.initialPoolSize << "\n";
         file << "maxPoolSize=" << config_.maxPoolSize << "\n";
-        
-        spdlog::info("Environment configuration saved to: {}", 
+
+        spdlog::info("Environment configuration saved to: {}",
                     std::string(filePath.data(), filePath.size()));
         return true;
-        
+
     } catch (const std::exception& e) {
-        spdlog::error("Error saving environment configuration to {}: {}", 
+        spdlog::error("Error saving environment configuration to {}: {}",
                      std::string(filePath.data(), filePath.size()), e.what());
         return false;
     }
 }
 
-void EnvConfigManager::updateMetrics(EnvEventType type, const String& key, 
+void EnvConfigManager::updateMetrics(EnvEventType type, const String& key,
                                     std::chrono::microseconds executionTime) {
     if (!config_.enableMetrics) {
         return;
     }
-    
+
     metrics_.totalOperations++;
     metrics_.totalExecutionTime += executionTime.count();
-    
+
     switch (type) {
         case EnvEventType::VARIABLE_GET:
             metrics_.getOperations++;
@@ -220,7 +220,7 @@ void EnvConfigManager::updateMetrics(EnvEventType type, const String& key,
             metrics_.validationFailures++;
             break;
     }
-    
+
     // Emit event if enabled
     if (config_.enableEventLogging) {
         emitEvent(EnvEvent(type, key, "", ""));

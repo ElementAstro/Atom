@@ -25,7 +25,7 @@ auto MacOSBatteryProvider::getStringValue(void* dict, const char* key) -> std::s
     auto cfDict = static_cast<CFDictionaryRef>(dict);
     auto cfKey = CFStringCreateWithCString(kCFAllocatorDefault, key, kCFStringEncodingUTF8);
     CFUniquePtr<CFStringRef> keyPtr(cfKey);
-    
+
     if (auto value = static_cast<CFStringRef>(CFDictionaryGetValue(cfDict, cfKey))) {
         char buffer[256];
         if (CFStringGetCString(value, buffer, sizeof(buffer), kCFStringEncodingUTF8)) {
@@ -39,7 +39,7 @@ auto MacOSBatteryProvider::getIntValue(void* dict, const char* key) -> int {
     auto cfDict = static_cast<CFDictionaryRef>(dict);
     auto cfKey = CFStringCreateWithCString(kCFAllocatorDefault, key, kCFStringEncodingUTF8);
     CFUniquePtr<CFStringRef> keyPtr(cfKey);
-    
+
     if (auto value = static_cast<CFNumberRef>(CFDictionaryGetValue(cfDict, cfKey))) {
         int intVal;
         if (CFNumberGetValue(value, kCFNumberIntType, &intVal)) {
@@ -53,7 +53,7 @@ auto MacOSBatteryProvider::getFloatValue(void* dict, const char* key, float scal
     auto cfDict = static_cast<CFDictionaryRef>(dict);
     auto cfKey = CFStringCreateWithCString(kCFAllocatorDefault, key, kCFStringEncodingUTF8);
     CFUniquePtr<CFStringRef> keyPtr(cfKey);
-    
+
     if (auto value = static_cast<CFNumberRef>(CFDictionaryGetValue(cfDict, cfKey))) {
         double doubleVal;
         if (CFNumberGetValue(value, kCFNumberDoubleType, &doubleVal)) {
@@ -67,7 +67,7 @@ auto MacOSBatteryProvider::getBoolValue(void* dict, const char* key) -> bool {
     auto cfDict = static_cast<CFDictionaryRef>(dict);
     auto cfKey = CFStringCreateWithCString(kCFAllocatorDefault, key, kCFStringEncodingUTF8);
     CFUniquePtr<CFStringRef> keyPtr(cfKey);
-    
+
     if (auto value = static_cast<CFBooleanRef>(CFDictionaryGetValue(cfDict, cfKey))) {
         return CFBooleanGetValue(value);
     }
@@ -99,7 +99,7 @@ auto MacOSBatteryProvider::convertChemistry(const std::string& type) -> BatteryC
 
 auto MacOSBatteryProvider::getBatteryInfo() -> std::optional<BatteryInfo> {
     spdlog::debug("Getting macOS battery info via IOPowerSources");
-    
+
     CFUniquePtr<CFTypeRef> powerSourcesInfo(IOPSCopyPowerSourcesInfo());
     if (!powerSourcesInfo) {
         spdlog::error("Failed to copy power sources info");
@@ -123,7 +123,7 @@ auto MacOSBatteryProvider::getBatteryInfo() -> std::optional<BatteryInfo> {
         CFArrayGetValueAtIndex(powerSources.get(), 0));
 
     BatteryInfo info;
-    
+
     // Check if battery is present
     info.isBatteryPresent = getBoolValue(powerSource, kIOPSIsPresentKey);
     if (!info.isBatteryPresent) {
@@ -212,7 +212,7 @@ auto MacOSBatteryProvider::getDetailedBatteryInfo() -> BatteryResult {
     // Get max capacity
     int maxCapacity = getIntValue(psDesc, kIOPSMaxCapacityKey);
     int currentCapacity = getIntValue(psDesc, kIOPSCurrentCapacityKey);
-    
+
     if (maxCapacity > 0 && currentCapacity > 0) {
         // Estimate energy values based on capacity and voltage
         if (info.voltageNow > 0) {
@@ -239,7 +239,7 @@ auto MacOSBatteryProvider::getDetailedBatteryInfo() -> BatteryResult {
 
 auto MacOSBatteryProvider::getAllBatteries() -> MultiBatteryInfo {
     MultiBatteryInfo result;
-    
+
     CFUniquePtr<CFTypeRef> powerSourcesInfo(IOPSCopyPowerSourcesInfo());
     if (!powerSourcesInfo) {
         return result;
@@ -251,28 +251,28 @@ auto MacOSBatteryProvider::getAllBatteries() -> MultiBatteryInfo {
     }
 
     CFIndex count = CFArrayGetCount(powerSources.get());
-    
+
     for (CFIndex i = 0; i < count; ++i) {
         CFDictionaryRef powerSource = static_cast<CFDictionaryRef>(
             CFArrayGetValueAtIndex(powerSources.get(), i));
-        
+
         // Check if this is a battery (not AC adapter)
         std::string type = getStringValue(powerSource, kIOPSTypeKey);
         if (type != "InternalBattery" && type != "Battery") {
             continue;
         }
-        
+
         // Check if battery is present
         bool isPresent = getBoolValue(powerSource, kIOPSIsPresentKey);
         if (!isPresent) {
             continue;
         }
-        
+
         BatteryInfo info;
         info.isBatteryPresent = true;
         info.isCharging = getBoolValue(powerSource, kIOPSIsChargingKey);
         info.batteryLifePercent = static_cast<float>(getIntValue(powerSource, kIOPSCurrentCapacityKey));
-        
+
         // Get detailed information
         info.manufacturer = getStringValue(powerSource, kIOPSManufacturerKey);
         info.model = getStringValue(powerSource, kIOPSDeviceNameKey);
@@ -281,27 +281,27 @@ auto MacOSBatteryProvider::getAllBatteries() -> MultiBatteryInfo {
         info.temperature = getFloatValue(powerSource, kIOPSTemperatureKey, 0.01f);
         info.voltageNow = getFloatValue(powerSource, kIOPSVoltageKey, 0.001f);
         info.currentNow = getFloatValue(powerSource, kIOPSAmperageKey, 0.001f);
-        
+
         // Calculate power
         if (info.voltageNow > 0 && info.currentNow > 0) {
             info.powerNow = info.voltageNow * std::abs(info.currentNow);
         }
-        
+
         // Set timestamp
         info.lastUpdated = std::chrono::system_clock::now();
-        
+
         result.batteries.push_back(info);
         result.activeBatteryCount++;
-        
+
         // Add to totals
         result.totalEnergyRemaining += info.energyNow;
         result.totalCapacity += info.energyFull;
     }
-    
+
     // Set combined information
     if (!result.batteries.empty()) {
         result.combined = result.batteries[0];  // Use first battery as base
-        
+
         // Calculate average battery percentage
         if (result.batteries.size() > 1) {
             float totalPercent = 0.0f;
@@ -310,7 +310,7 @@ auto MacOSBatteryProvider::getAllBatteries() -> MultiBatteryInfo {
             }
             result.combined.batteryLifePercent = totalPercent / result.batteries.size();
         }
-        
+
         // Determine combined charging state
         bool anyCharging = false;
         for (const auto& battery : result.batteries) {
@@ -321,7 +321,7 @@ auto MacOSBatteryProvider::getAllBatteries() -> MultiBatteryInfo {
         }
         result.combined.isCharging = anyCharging;
     }
-    
+
     return result;
 }
 

@@ -10,7 +10,7 @@ if(NOT GTest_FOUND)
         googletest
         URL https://github.com/google/googletest/archive/03597a01ee50f33f9142a5612210725c0e7b1bc9.zip
     )
-    
+
     # For Windows: Prevent overriding the parent project's compiler/linker settings
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)

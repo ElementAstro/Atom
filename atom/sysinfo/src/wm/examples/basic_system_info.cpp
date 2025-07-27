@@ -1,7 +1,7 @@
 /**
  * @file basic_system_info.cpp
  * @brief Basic system information retrieval example
- * 
+ *
  * This example demonstrates how to retrieve basic system information
  * including desktop environment, window manager, and theme details.
  */
@@ -14,15 +14,15 @@ using namespace atom::system::wm;
 
 void printSystemInfo() {
     std::cout << "=== System Information ===" << std::endl;
-    
+
     auto result = getSystemInfo();
     if (isError(result)) {
         std::cout << "Error getting system info: " << errorToString(getError(result)) << std::endl;
         return;
     }
-    
+
     const auto& info = getValue(result);
-    
+
     std::cout << std::left;
     std::cout << std::setw(25) << "Desktop Environment:" << info.desktopEnvironment << std::endl;
     std::cout << std::setw(25) << "Window Manager:" << info.windowManager << std::endl;
@@ -33,7 +33,7 @@ void printSystemInfo() {
     std::cout << std::setw(25) << "WM Version:" << info.wmVersion << std::endl;
     std::cout << std::setw(25) << "Supports Workspaces:" << (info.supportsWorkspaces ? "Yes" : "No") << std::endl;
     std::cout << std::setw(25) << "Supports Virtual Desktops:" << (info.supportsVirtualDesktops ? "Yes" : "No") << std::endl;
-    
+
     if (!info.wmFeatures.empty()) {
         std::cout << std::setw(25) << "WM Features:";
         for (size_t i = 0; i < info.wmFeatures.size(); ++i) {
@@ -46,21 +46,21 @@ void printSystemInfo() {
 
 void printThemeInfo() {
     std::cout << "\n=== Theme Information ===" << std::endl;
-    
+
     auto result = getThemeInfo();
     if (isError(result)) {
         std::cout << "Error getting theme info: " << errorToString(getError(result)) << std::endl;
         return;
     }
-    
+
     const auto& theme = getValue(result);
-    
+
     std::cout << std::left;
     std::cout << std::setw(20) << "Theme Type:" << themeTypeToString(theme.type) << std::endl;
     std::cout << std::setw(20) << "Theme Name:" << theme.name << std::endl;
     std::cout << std::setw(20) << "Variant:" << theme.variant << std::endl;
     std::cout << std::setw(20) << "Follows System:" << (theme.followsSystemTheme ? "Yes" : "No") << std::endl;
-    
+
     if (!theme.backgroundColor.empty()) {
         std::cout << std::setw(20) << "Background Color:" << theme.backgroundColor << std::endl;
     }
@@ -74,15 +74,15 @@ void printThemeInfo() {
 
 void printMonitorInfo() {
     std::cout << "\n=== Monitor Information ===" << std::endl;
-    
+
     auto result = getMonitors();
     if (isError(result)) {
         std::cout << "Error getting monitor info: " << errorToString(getError(result)) << std::endl;
         return;
     }
-    
+
     const auto& monitors = getValue(result);
-    
+
     for (size_t i = 0; i < monitors.size(); ++i) {
         const auto& monitor = monitors[i];
         std::cout << "Monitor " << (i + 1) << ":" << std::endl;
@@ -98,20 +98,20 @@ void printMonitorInfo() {
 
 void printWorkspaceInfo() {
     std::cout << "=== Workspace Information ===" << std::endl;
-    
+
     auto result = getWorkspaces();
     if (isError(result)) {
         std::cout << "Error getting workspace info: " << errorToString(getError(result)) << std::endl;
         return;
     }
-    
+
     const auto& workspaces = getValue(result);
-    
+
     if (workspaces.empty()) {
         std::cout << "No workspaces found or not supported on this platform." << std::endl;
         return;
     }
-    
+
     for (const auto& workspace : workspaces) {
         std::cout << "Workspace " << workspace.id << ":" << std::endl;
         std::cout << "  Name: " << workspace.name << std::endl;
@@ -126,7 +126,7 @@ void printWorkspaceInfo() {
 int main() {
     std::cout << "Window Manager System Information Example" << std::endl;
     std::cout << "=========================================" << std::endl;
-    
+
     try {
         printSystemInfo();
         printThemeInfo();
@@ -136,6 +136,6 @@ int main() {
         std::cerr << "Exception: " << e.what() << std::endl;
         return 1;
     }
-    
+
     return 0;
 }

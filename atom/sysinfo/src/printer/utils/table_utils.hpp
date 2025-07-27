@@ -204,7 +204,7 @@ private:
  * @param padding The padding character
  * @return Formatted text
  */
-[[nodiscard]] auto formatText(const std::string& text, int width, 
+[[nodiscard]] auto formatText(const std::string& text, int width,
                              Alignment alignment = Alignment::LEFT,
                              char padding = ' ') -> std::string;
 
@@ -215,7 +215,7 @@ private:
  * @param ellipsis The ellipsis string to append
  * @return Truncated text
  */
-[[nodiscard]] auto truncateText(const std::string& text, int width, 
+[[nodiscard]] auto truncateText(const std::string& text, int width,
                                const std::string& ellipsis = "...") -> std::string;
 
 /**

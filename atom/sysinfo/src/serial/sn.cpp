@@ -20,14 +20,14 @@ public:
     std::chrono::system_clock::time_point lastCacheUpdate_;
     std::string lastError_;
     mutable std::mutex cacheMutex_;
-    
+
     // Cached data
     std::optional<HardwareSerialData> cachedHardwareSerials_;
     std::optional<SystemIdentificationData> cachedSystemId_;
     std::optional<std::vector<MemoryModuleInfo>> cachedMemoryModules_;
     std::optional<std::vector<NetworkInterfaceInfo>> cachedNetworkInterfaces_;
     std::optional<ComprehensiveSystemInfo> cachedComprehensiveInfo_;
-    
+
     // Platform-specific implementation
 #ifdef _WIN32
     std::unique_ptr<WindowsSystemInfo> platformImpl_;
@@ -52,7 +52,7 @@ public:
         if (forceRefresh || !config_.cacheResults) {
             return true;
         }
-        
+
         auto now = std::chrono::system_clock::now();
         auto cacheAge = std::chrono::duration_cast<std::chrono::seconds>(now - lastCacheUpdate_);
         return cacheAge > config_.cacheTimeout;
@@ -67,33 +67,33 @@ public:
         std::optional<T>& cache,
         std::function<SystemInfoResult<T>()> fetchFunc,
         bool forceRefresh) {
-        
+
         std::lock_guard<std::mutex> lock(cacheMutex_);
-        
+
         if (!shouldRefreshCache(forceRefresh) && cache.has_value()) {
             SystemInfoResult<T> result;
             result.data = cache.value();
             result.success = true;
             return result;
         }
-        
+
         auto result = fetchFunc();
         if (result.success && config_.cacheResults) {
             cache = result.data;
             updateCacheTimestamp();
         }
-        
+
         if (!result.success) {
             lastError_ = result.errorMessage;
         }
-        
+
         return result;
     }
 };
 
 SystemInfo::SystemInfo() : SystemInfo(SystemInfoConfig{}) {}
 
-SystemInfo::SystemInfo(const SystemInfoConfig& config) 
+SystemInfo::SystemInfo(const SystemInfoConfig& config)
     : impl_(std::make_unique<Impl>(config)) {
     spdlog::debug("SystemInfo instance created with config");
 }
@@ -102,7 +102,7 @@ SystemInfo::~SystemInfo() {
     spdlog::debug("SystemInfo instance destroyed");
 }
 
-SystemInfo::SystemInfo(SystemInfo&& other) noexcept 
+SystemInfo::SystemInfo(SystemInfo&& other) noexcept
     : impl_(std::move(other.impl_)) {
     spdlog::debug("SystemInfo move constructor called");
 }
@@ -197,7 +197,7 @@ std::string SystemInfo::getLastError() const {
 void SystemInfo::updateConfig(const SystemInfoConfig& config) {
     std::lock_guard<std::mutex> lock(impl_->cacheMutex_);
     impl_->config_ = config;
-    
+
     // Clear cache if caching is disabled
     if (!config.cacheResults) {
         clearCache();
@@ -232,15 +232,15 @@ std::chrono::seconds SystemInfo::getCacheAge() const {
 bool SystemInfo::refreshAll() {
     try {
         clearCache();
-        
+
         auto hardwareResult = getHardwareSerials(true);
         auto systemIdResult = getSystemIdentification(true);
         auto memoryResult = getMemoryModules(true);
         auto networkResult = getNetworkInterfaces(true);
         auto comprehensiveResult = getComprehensiveInfo(true);
-        
-        return hardwareResult.success || systemIdResult.success || 
-               memoryResult.success || networkResult.success || 
+
+        return hardwareResult.success || systemIdResult.success ||
+               memoryResult.success || networkResult.success ||
                comprehensiveResult.success;
     } catch (const std::exception& e) {
         impl_->lastError_ = e.what();
@@ -255,12 +255,12 @@ std::string SystemInfo::getSummary() const {
     oss << "Supported: " << (isSupported() ? "Yes" : "No") << "\n";
     oss << "Cache Valid: " << (isCacheValid() ? "Yes" : "No") << "\n";
     oss << "Cache Age: " << getCacheAge().count() << " seconds\n";
-    
+
     auto fingerprint = getSystemFingerprint(false);
     if (!fingerprint.empty()) {
         oss << "System Fingerprint: " << fingerprint.substr(0, 16) << "...\n";
     }
-    
+
     return oss.str();
 }
 
@@ -276,7 +276,7 @@ bool SystemInfo::validateIntegrity() const {
 
 std::map<std::string, std::string> SystemInfo::getCollectionStats() const {
     std::map<std::string, std::string> stats;
-    
+
     stats["platform"] = getPlatformName();
     stats["supported"] = isSupported() ? "true" : "false";
     stats["cache_valid"] = isCacheValid() ? "true" : "false";
@@ -284,7 +284,7 @@ std::map<std::string, std::string> SystemInfo::getCollectionStats() const {
     stats["cache_timeout_seconds"] = std::to_string(impl_->config_.cacheTimeout.count());
     stats["caching_enabled"] = impl_->config_.cacheResults ? "true" : "false";
     stats["logging_enabled"] = impl_->config_.enableLogging ? "true" : "false";
-    
+
     return stats;
 }
 

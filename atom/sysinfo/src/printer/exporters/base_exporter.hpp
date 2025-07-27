@@ -107,7 +107,7 @@ public:
      * @param defaultValue Default value if key not found
      * @return The option value or default
      */
-    [[nodiscard]] virtual auto getCustomOption(const std::string& key, 
+    [[nodiscard]] virtual auto getCustomOption(const std::string& key,
                                               const std::string& defaultValue = "") const -> std::string;
 
     /**

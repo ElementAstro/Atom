@@ -8,12 +8,12 @@ namespace atom::system {
 
 /**
  * @brief Enhanced system information class providing comprehensive hardware identification
- * 
+ *
  * This class serves as a unified interface for collecting various types of system
  * identification information including hardware serial numbers, system UUIDs,
  * network interfaces, memory modules, and more. It uses platform-specific
  * implementations internally while maintaining a consistent cross-platform API.
- * 
+ *
  * Features:
  * - Hardware serial numbers (BIOS, motherboard, CPU, disks)
  * - System identification (UUID, machine ID, MAC addresses)
@@ -256,7 +256,7 @@ namespace SystemInfoHelpers {
      * @param salt Optional salt for key generation
      * @return Hardware-based license key
      */
-    std::string generateHardwareLicenseKey(const ComprehensiveSystemInfo& info, 
+    std::string generateHardwareLicenseKey(const ComprehensiveSystemInfo& info,
                                            const std::string& salt = "");
 
     /**

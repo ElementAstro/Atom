@@ -42,7 +42,7 @@ struct VirtualizationInfo {
 
 /**
  * @brief Main virtualization detection class
- * 
+ *
  * This class provides a comprehensive interface for detecting and analyzing
  * virtualization environments. It combines multiple detection methods and
  * provides detailed information about the virtual environment.

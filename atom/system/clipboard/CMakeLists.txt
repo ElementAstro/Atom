@@ -75,8 +75,8 @@ add_library(${PROJECT_NAME}_object OBJECT ${CLIPBOARD_ALL_SOURCES})
 set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 
 # Include directories
-target_include_directories(${PROJECT_NAME}_object 
-    PUBLIC 
+target_include_directories(${PROJECT_NAME}_object
+    PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:include>
     PRIVATE
@@ -96,8 +96,8 @@ if(CLIPBOARD_PLATFORM_LIBS)
 endif()
 
 # Include directories for static library
-target_include_directories(${PROJECT_NAME} 
-    PUBLIC 
+target_include_directories(${PROJECT_NAME}
+    PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:include>
     PRIVATE
@@ -115,7 +115,7 @@ endif()
 # Set library properties
 set_target_properties(
   ${PROJECT_NAME}
-  PROPERTIES 
+  PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
     OUTPUT_NAME ${PROJECT_NAME}
@@ -134,7 +134,7 @@ install(
 
 # Install headers
 install(
-  FILES 
+  FILES
     clipboard.hpp
     clipboard_error.hpp
   DESTINATION include/atom/system/clipboard)

@@ -238,7 +238,7 @@ void demonstrateBasicLocaleOperations() {
     config.enablePhonetics = true;
 
     LocaleWrapper locale(config);
-    
+
     // Case conversions
     std::string text = "Hello World! This is a Test.";
     std::cout << "Original: " << text << std::endl;
@@ -285,28 +285,28 @@ void demonstrateAdvancedTokenization() {
 
 void demonstrateTextAnalysis() {
     std::cout << "\n=== Text Analysis ===" << std::endl;
-    
+
     std::string text = "The quick brown fox jumps over the lazy dog. "
                       "This pangram contains every letter of the alphabet. "
                       "It is commonly used for testing purposes in typography and computing.";
-    
+
     auto analysis = LocaleWrapper::analyzeText(text);
-    
+
     std::cout << "Text Analysis Results:" << std::endl;
     std::cout << "  Characters: " << analysis.characterCount << std::endl;
     std::cout << "  Words: " << analysis.wordCount << std::endl;
     std::cout << "  Sentences: " << analysis.sentenceCount << std::endl;
     // std::cout << "  Paragraphs: " << analysis.paragraphCount << std::endl;
-    std::cout << "  Readability Score: " << std::fixed << std::setprecision(2) 
+    std::cout << "  Readability Score: " << std::fixed << std::setprecision(2)
               << analysis.readabilityScore << std::endl;
     std::cout << "  Dominant Language: " << analysis.dominantLanguage << std::endl;
-    
+
     std::cout << "  Top 5 Most Frequent Words:" << std::endl;
     std::vector<std::pair<std::string, size_t>> sortedWords(
         analysis.wordFrequency.begin(), analysis.wordFrequency.end());
     std::sort(sortedWords.begin(), sortedWords.end(),
               [](const auto& a, const auto& b) { return a.second > b.second; });
-    
+
     for (size_t i = 0; i < std::min(size_t{5}, sortedWords.size()); ++i) {
         std::cout << "    " << sortedWords[i].first << ": " << sortedWords[i].second << std::endl;
     }
@@ -314,7 +314,7 @@ void demonstrateTextAnalysis() {
 
 void demonstratePhoneticMatching() {
     std::cout << "\n=== Phonetic Matching ===" << std::endl;
-    
+
     // Test phonetic matching
     std::vector<std::pair<std::string, std::string>> testPairs = {
         {"Smith", "Smyth"},
@@ -323,18 +323,18 @@ void demonstratePhoneticMatching() {
         {"Miller", "Muller"},
         {"Davis", "Davies"}
     };
-    
+
     for (const auto& pair : testPairs) {
         auto match = LocaleWrapper::phoneticMatch(pair.first, pair.second);
-        std::cout << "Phonetic match: " << match.original 
-                  << " -> " << match.phonetic 
+        std::cout << "Phonetic match: " << match.original
+                  << " -> " << match.phonetic
                   << " (similarity: " << match.similarity << ")" << std::endl;
     }
 }
 
 void demonstrateFuzzyMatching() {
     std::cout << "\n=== Fuzzy String Matching ===" << std::endl;
-    
+
     std::vector<std::pair<std::string, std::string>> testPairs = {
         {"kitten", "sitting"},
         {"Saturday", "Sunday"},
@@ -342,28 +342,28 @@ void demonstrateFuzzyMatching() {
         {"algorithm", "altorithm"},
         {"programming", "programing"}
     };
-    
+
     for (const auto& pair : testPairs) {
         double similarity = LocaleWrapper::fuzzyMatch(pair.first, pair.second);
-        std::cout << "Fuzzy match: '" << pair.first << "' vs '" << pair.second 
-                  << "' -> similarity: " << std::fixed << std::setprecision(3) 
+        std::cout << "Fuzzy match: '" << pair.first << "' vs '" << pair.second
+                  << "' -> similarity: " << std::fixed << std::setprecision(3)
                   << similarity << std::endl;
     }
 }
 
 void demonstratePerformanceMonitoring() {
     std::cout << "\n=== Performance Monitoring ===" << std::endl;
-    
+
     // Reset statistics
     LocaleWrapper::resetStatistics();
-    
+
     // Perform some operations
     LocaleWrapper locale("en_US.UTF-8");
     for (int i = 0; i < 100; ++i) {
         locale.toUpper("test string " + std::to_string(i));
         locale.toLower("test " + std::to_string(i));
     }
-    
+
     // Get statistics
     auto stats = LocaleWrapper::getStatistics();
     std::cout << "Performance Statistics:" << std::endl;
@@ -374,29 +374,29 @@ void demonstratePerformanceMonitoring() {
 
 void performanceTest() {
     std::cout << "\n=== Performance Test ===" << std::endl;
-    
+
     const size_t iterations = 1000;
     std::string testText = "The quick brown fox jumps over the lazy dog.";
-    
+
     LocaleWrapper::resetStatistics();
-    
+
     auto start = std::chrono::high_resolution_clock::now();
-    
+
     LocaleWrapper locale("en_US.UTF-8");
     for (size_t i = 0; i < iterations; ++i) {
         locale.toUpper(testText);
         locale.toLower(testText);
         LocaleWrapper::tokenize(testText);
     }
-    
+
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    
-    std::cout << "Processed " << iterations << " operations in " 
+
+    std::cout << "Processed " << iterations << " operations in "
               << duration.count() << " microseconds" << std::endl;
-    std::cout << "Average: " << static_cast<double>(duration.count()) / (iterations * 3) 
+    std::cout << "Average: " << static_cast<double>(duration.count()) / (iterations * 3)
               << " microseconds per operation" << std::endl;
-    
+
     auto stats = LocaleWrapper::getStatistics();
     std::cout << "Cache hit ratio: " << stats["cache_hit_ratio"] << "%" << std::endl;
 }
@@ -411,12 +411,12 @@ int main() {
         demonstrateFuzzyMatching();
         demonstratePerformanceMonitoring();
         performanceTest();
-        
+
         std::cout << "\n=== All locale tests completed successfully! ===" << std::endl;
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
-    
+
     return 0;
 }

@@ -24,10 +24,10 @@ PerformanceTimer::~PerformanceTimer() {
     if (!monitor.isEnabled()) {
         return;
     }
-    
+
     auto endTime = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime_);
-    
+
     PerformanceMetric metric;
     metric.name = name_;
     metric.category = category_;
@@ -35,7 +35,7 @@ PerformanceTimer::~PerformanceTimer() {
     metric.endTime = endTime;
     metric.duration = duration;
     metric.memoryUsage = getCurrentMemoryUsage();
-    
+
     monitor.recordMetric(metric);
 }
 
@@ -48,7 +48,7 @@ void PerformanceMonitor::recordMetric(const PerformanceMetric& metric) {
     if (!enabled_) {
         return;
     }
-    
+
     std::lock_guard<std::mutex> lock(mutex_);
     metrics_.push_back(metric);
 }
@@ -60,39 +60,39 @@ auto PerformanceMonitor::getMetrics() const -> std::vector<PerformanceMetric> {
 
 auto PerformanceMonitor::getMetricsByCategory(const std::string& category) const -> std::vector<PerformanceMetric> {
     std::lock_guard<std::mutex> lock(mutex_);
-    
+
     std::vector<PerformanceMetric> result;
     std::copy_if(metrics_.begin(), metrics_.end(), std::back_inserter(result),
                  [&category](const PerformanceMetric& metric) {
                      return metric.category == category;
                  });
-    
+
     return result;
 }
 
 auto PerformanceMonitor::getSummary() const -> std::string {
     std::lock_guard<std::mutex> lock(mutex_);
-    
+
     if (metrics_.empty()) {
         return "No performance metrics recorded.";
     }
-    
+
     std::stringstream ss;
     ss << "Performance Summary:\n";
     ss << "==================\n";
     ss << "Total operations: " << metrics_.size() << "\n\n";
-    
+
     // Group by category
     std::unordered_map<std::string, std::vector<PerformanceMetric>> byCategory;
     for (const auto& metric : metrics_) {
         byCategory[metric.category].push_back(metric);
     }
-    
+
     for (const auto& [category, categoryMetrics] : byCategory) {
         ss << "Category: " << category << "\n";
         ss << calculateStatistics(categoryMetrics) << "\n";
     }
-    
+
     return ss.str();
 }
 
@@ -127,7 +127,7 @@ auto getCurrentMemoryUsage() -> size_t {
 
 auto formatDuration(std::chrono::microseconds duration) -> std::string {
     auto us = duration.count();
-    
+
     if (us < 1000) {
         return std::to_string(us) + " μs";
     } else if (us < 1000000) {
@@ -141,26 +141,26 @@ auto calculateStatistics(const std::vector<PerformanceMetric>& metrics) -> std::
     if (metrics.empty()) {
         return "No metrics available.";
     }
-    
+
     std::vector<double> durations;
     durations.reserve(metrics.size());
-    
+
     for (const auto& metric : metrics) {
         durations.push_back(static_cast<double>(metric.duration.count()));
     }
-    
+
     std::sort(durations.begin(), durations.end());
-    
+
     double sum = std::accumulate(durations.begin(), durations.end(), 0.0);
     double mean = sum / durations.size();
-    
-    double median = durations.size() % 2 == 0 
+
+    double median = durations.size() % 2 == 0
         ? (durations[durations.size() / 2 - 1] + durations[durations.size() / 2]) / 2.0
         : durations[durations.size() / 2];
-    
+
     double min = durations.front();
     double max = durations.back();
-    
+
     std::stringstream ss;
     ss << std::fixed << std::setprecision(2);
     ss << "  Operations: " << metrics.size() << "\n";
@@ -168,7 +168,7 @@ auto calculateStatistics(const std::vector<PerformanceMetric>& metrics) -> std::
     ss << "  Median: " << formatDuration(std::chrono::microseconds(static_cast<long long>(median))) << "\n";
     ss << "  Min: " << formatDuration(std::chrono::microseconds(static_cast<long long>(min))) << "\n";
     ss << "  Max: " << formatDuration(std::chrono::microseconds(static_cast<long long>(max))) << "\n";
-    
+
     return ss.str();
 }
 

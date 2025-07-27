@@ -60,23 +60,23 @@ struct BatteryInfo {
     float batteryLifePercent = 0.0f;
     float batteryLifeTime = 0.0f;
     float batteryFullLifeTime = 0.0f;
-    
+
     // Energy information
     float energyNow = 0.0f;          // Current energy (Wh)
     float energyFull = 0.0f;         // Full charge energy (Wh)
     float energyDesign = 0.0f;       // Design energy (Wh)
     float powerNow = 0.0f;           // Current power consumption (W)
-    
+
     // Electrical properties
     float voltageNow = 0.0f;         // Current voltage (V)
     float voltageMin = 0.0f;         // Minimum voltage (V)
     float voltageMax = 0.0f;         // Maximum voltage (V)
     float currentNow = 0.0f;         // Current flow (A)
-    
+
     // Physical properties
     float temperature = 0.0f;        // Temperature (°C)
     int cycleCounts = 0;             // Charge cycles
-    
+
     // Device information
     std::string manufacturer;
     std::string model;
@@ -84,10 +84,10 @@ struct BatteryInfo {
     std::string technology;
     BatteryChemistry chemistry = BatteryChemistry::UNKNOWN;
     PowerState powerState = PowerState::UNKNOWN;
-    
+
     // Timestamps
     std::chrono::system_clock::time_point lastUpdated;
-    
+
     BatteryInfo() = default;
     BatteryInfo(const BatteryInfo&) = default;
     BatteryInfo(BatteryInfo&&) noexcept = default;
@@ -113,17 +113,17 @@ struct BatteryInfo {
      * @brief Estimate remaining usage time (hours).
      */
     [[nodiscard]] auto getEstimatedTimeRemaining() const -> float;
-    
+
     /**
      * @brief Get power consumption rate (W).
      */
     [[nodiscard]] auto getPowerConsumption() const -> float;
-    
+
     /**
      * @brief Check if battery is in critical state.
      */
     [[nodiscard]] auto isCritical() const -> bool;
-    
+
     /**
      * @brief Get battery age estimation based on cycles.
      */
@@ -144,7 +144,7 @@ struct MultiBatteryInfo {
     int activeBatteryCount = 0;
     float totalCapacity = 0.0f;
     float totalEnergyRemaining = 0.0f;
-    
+
     [[nodiscard]] auto isEmpty() const -> bool { return batteries.empty(); }
     [[nodiscard]] auto size() const -> size_t { return batteries.size(); }
     [[nodiscard]] auto getPrimaryBattery() const -> const BatteryInfo*;
@@ -204,10 +204,10 @@ struct BatteryStats {
 /**
  * @brief Power plan types
  */
-enum class PowerPlan { 
-    BALANCED, 
-    PERFORMANCE, 
-    POWER_SAVER, 
+enum class PowerPlan {
+    BALANCED,
+    PERFORMANCE,
+    POWER_SAVER,
     CUSTOM,
     ADAPTIVE,      // AI-based adaptive power management
     GAMING,        // Optimized for gaming

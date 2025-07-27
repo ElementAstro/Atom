@@ -21,7 +21,7 @@ if(WIN32)
 elseif(UNIX AND NOT APPLE)
     target_link_libraries(wifi_demo PRIVATE pthread)
 elseif(APPLE)
-    target_link_libraries(wifi_demo PRIVATE 
+    target_link_libraries(wifi_demo PRIVATE
         "-framework CoreFoundation"
         "-framework SystemConfiguration"
     )

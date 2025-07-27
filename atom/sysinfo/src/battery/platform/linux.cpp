@@ -17,7 +17,7 @@ auto LinuxBatteryProvider::readSysfsValue(const std::string& path) -> std::optio
     if (!file.is_open()) {
         return std::nullopt;
     }
-    
+
     std::string value;
     std::getline(file, value);
     return value;
@@ -29,7 +29,7 @@ auto LinuxBatteryProvider::readSysfsNumeric(const std::string& path) -> std::opt
     if (!strValue) {
         return std::nullopt;
     }
-    
+
     try {
         if constexpr (std::is_same_v<T, float>) {
             return std::stof(*strValue);
@@ -48,12 +48,12 @@ auto LinuxBatteryProvider::readSysfsNumeric(const std::string& path) -> std::opt
 
 auto LinuxBatteryProvider::getBatteryPaths() -> std::vector<std::string> {
     std::vector<std::string> paths;
-    
+
     try {
         for (const auto& entry : fs::directory_iterator("/sys/class/power_supply/")) {
             std::string path = entry.path().string();
             std::string typeFile = path + "/type";
-            
+
             auto type = readSysfsValue(typeFile);
             if (type && *type == "Battery") {
                 paths.push_back(path);
@@ -62,7 +62,7 @@ auto LinuxBatteryProvider::getBatteryPaths() -> std::vector<std::string> {
     } catch (const fs::filesystem_error& e) {
         spdlog::error("Filesystem error when scanning battery paths: {}", e.what());
     }
-    
+
     return paths;
 }
 
@@ -98,39 +98,39 @@ auto LinuxBatteryProvider::convertChemistry(const std::string& technology) -> Ba
 
 auto LinuxBatteryProvider::getBatteryInfo() -> std::optional<BatteryInfo> {
     spdlog::debug("Getting Linux battery info via sysfs");
-    
+
     auto batteryPaths = getBatteryPaths();
     if (batteryPaths.empty()) {
         spdlog::warn("No battery found in sysfs");
         return std::nullopt;
     }
-    
+
     // Use the first battery found
     std::string batteryPath = batteryPaths[0];
     BatteryInfo info;
-    
+
     // Check if battery is present
     auto presentOpt = readSysfsNumeric<int>(batteryPath + "/present");
     if (!presentOpt || *presentOpt == 0) {
         spdlog::debug("Battery marked as not present");
         return std::nullopt;
     }
-    
+
     info.isBatteryPresent = true;
-    
+
     // Get battery status
     auto statusOpt = readSysfsValue(batteryPath + "/status");
     if (statusOpt) {
         info.isCharging = (*statusOpt == "Charging" || *statusOpt == "Full");
         info.powerState = convertPowerState(*statusOpt);
     }
-    
+
     // Get capacity percentage
     auto capacityOpt = readSysfsNumeric<float>(batteryPath + "/capacity");
     if (capacityOpt) {
         info.batteryLifePercent = *capacityOpt;
     }
-    
+
     // Get energy values
     auto energyNowOpt = readSysfsNumeric<float>(batteryPath + "/energy_now");
     if (energyNowOpt) {
@@ -143,30 +143,30 @@ auto LinuxBatteryProvider::getBatteryInfo() -> std::optional<BatteryInfo> {
             info.energyNow = (*chargeNowOpt * *voltageNowOpt) / 1000000000000.0f;  // Convert to Wh
         }
     }
-    
+
     // Get voltage
     auto voltageNowOpt = readSysfsNumeric<float>(batteryPath + "/voltage_now");
     if (voltageNowOpt) {
         info.voltageNow = *voltageNowOpt / 1000000.0f;  // Convert to V
     }
-    
+
     // Get current
     auto currentNowOpt = readSysfsNumeric<float>(batteryPath + "/current_now");
     if (currentNowOpt) {
         info.currentNow = *currentNowOpt / 1000000.0f;  // Convert to A
     }
-    
+
     // Calculate power
     if (info.voltageNow > 0 && info.currentNow > 0) {
         info.powerNow = info.voltageNow * info.currentNow;
     }
-    
+
     // Set timestamp
     info.lastUpdated = std::chrono::system_clock::now();
-    
-    spdlog::debug("Battery level: {:.2f}%, charging: {}", 
+
+    spdlog::debug("Battery level: {:.2f}%, charging: {}",
                  info.batteryLifePercent, info.isCharging);
-    
+
     return info;
 }
 
@@ -175,128 +175,128 @@ auto LinuxBatteryProvider::getDetailedBatteryInfo() -> BatteryResult {
     if (!basicInfo) {
         return BatteryError::READ_ERROR;
     }
-    
+
     BatteryInfo info = std::move(*basicInfo);
     auto batteryPaths = getBatteryPaths();
-    
+
     if (batteryPaths.empty()) {
         return info;  // Return basic info if no battery path found
     }
-    
+
     std::string batteryPath = batteryPaths[0];
-    
+
     // Get energy values
     auto energyFullOpt = readSysfsNumeric<float>(batteryPath + "/energy_full");
     if (energyFullOpt) {
         info.energyFull = *energyFullOpt / 1000000.0f;  // Convert to Wh
     }
-    
+
     auto energyDesignOpt = readSysfsNumeric<float>(batteryPath + "/energy_full_design");
     if (energyDesignOpt) {
         info.energyDesign = *energyDesignOpt / 1000000.0f;  // Convert to Wh
     }
-    
+
     // Get cycle count
     auto cycleCountOpt = readSysfsNumeric<int>(batteryPath + "/cycle_count");
     if (cycleCountOpt) {
         info.cycleCounts = *cycleCountOpt;
     }
-    
+
     // Get temperature
     auto tempOpt = readSysfsNumeric<float>(batteryPath + "/temp");
     if (tempOpt) {
         info.temperature = *tempOpt / 10.0f;  // Convert to °C
     }
-    
+
     // Get manufacturer
     auto manufacturerOpt = readSysfsValue(batteryPath + "/manufacturer");
     if (manufacturerOpt) {
         info.manufacturer = *manufacturerOpt;
     }
-    
+
     // Get model name
     auto modelNameOpt = readSysfsValue(batteryPath + "/model_name");
     if (modelNameOpt) {
         info.model = *modelNameOpt;
     }
-    
+
     // Get serial number
     auto serialNumberOpt = readSysfsValue(batteryPath + "/serial_number");
     if (serialNumberOpt) {
         info.serialNumber = *serialNumberOpt;
     }
-    
+
     // Get technology
     auto technologyOpt = readSysfsValue(batteryPath + "/technology");
     if (technologyOpt) {
         info.technology = *technologyOpt;
         info.chemistry = convertChemistry(*technologyOpt);
     }
-    
+
     return info;
 }
 
 auto LinuxBatteryProvider::getAllBatteries() -> MultiBatteryInfo {
     MultiBatteryInfo result;
     auto batteryPaths = getBatteryPaths();
-    
+
     float totalEnergy = 0.0f;
     float totalEnergyFull = 0.0f;
-    
+
     for (const auto& path : batteryPaths) {
         // Check if battery is present
         auto presentOpt = readSysfsNumeric<int>(path + "/present");
         if (!presentOpt || *presentOpt == 0) {
             continue;
         }
-        
+
         BatteryInfo info;
         info.isBatteryPresent = true;
-        
+
         // Get battery status
         auto statusOpt = readSysfsValue(path + "/status");
         if (statusOpt) {
             info.isCharging = (*statusOpt == "Charging" || *statusOpt == "Full");
             info.powerState = convertPowerState(*statusOpt);
         }
-        
+
         // Get capacity percentage
         auto capacityOpt = readSysfsNumeric<float>(path + "/capacity");
         if (capacityOpt) {
             info.batteryLifePercent = *capacityOpt;
         }
-        
+
         // Get energy values
         auto energyNowOpt = readSysfsNumeric<float>(path + "/energy_now");
         if (energyNowOpt) {
             info.energyNow = *energyNowOpt / 1000000.0f;
             totalEnergy += info.energyNow;
         }
-        
+
         auto energyFullOpt = readSysfsNumeric<float>(path + "/energy_full");
         if (energyFullOpt) {
             info.energyFull = *energyFullOpt / 1000000.0f;
             totalEnergyFull += info.energyFull;
         }
-        
+
         // Add more detailed info
         auto detailedResult = getDetailedBatteryInfo();
         if (auto* detailedInfo = std::get_if<BatteryInfo>(&detailedResult)) {
             info = *detailedInfo;
         }
-        
+
         result.batteries.push_back(info);
         result.activeBatteryCount++;
     }
-    
+
     // Calculate combined stats
     if (!result.batteries.empty()) {
         result.totalCapacity = totalEnergyFull;
         result.totalEnergyRemaining = totalEnergy;
-        
+
         // Set combined info from first battery for now
         result.combined = result.batteries[0];
-        
+
         // Calculate average battery percentage
         if (totalEnergyFull > 0) {
             result.combined.batteryLifePercent = (totalEnergy / totalEnergyFull) * 100.0f;
@@ -307,7 +307,7 @@ auto LinuxBatteryProvider::getAllBatteries() -> MultiBatteryInfo {
             }
             result.combined.batteryLifePercent = avgPercent / result.batteries.size();
         }
-        
+
         // Determine combined charging state
         bool anyCharging = false;
         for (const auto& battery : result.batteries) {
@@ -318,7 +318,7 @@ auto LinuxBatteryProvider::getAllBatteries() -> MultiBatteryInfo {
         }
         result.combined.isCharging = anyCharging;
     }
-    
+
     return result;
 }
 
@@ -412,7 +412,7 @@ auto LinuxPowerManager::getAvailablePowerPlans() -> std::vector<std::string> {
         spdlog::warn("Failed to parse powerprofilesctl output, using defaults");
         plans = {"balanced", "performance", "power-saver"};
     }
-    
+
     return plans;
 }
 

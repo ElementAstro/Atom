@@ -25,7 +25,7 @@ struct CacheEntry {
     T data;
     std::chrono::steady_clock::time_point timestamp;
     std::chrono::seconds ttl;
-    
+
     [[nodiscard]] auto isExpired() const -> bool {
         auto now = std::chrono::steady_clock::now();
         return (now - timestamp) > ttl;
@@ -53,27 +53,27 @@ public:
      * @param ttl Time-to-live for this entry (optional)
      * @return Cached or computed value
      */
-    auto getOrCompute(const std::string& key, 
+    auto getOrCompute(const std::string& key,
                      std::function<T()> computer,
                      std::chrono::seconds ttl = std::chrono::seconds(0)) -> T {
         std::lock_guard<std::mutex> lock(mutex_);
-        
+
         auto it = cache_.find(key);
         if (it != cache_.end() && !it->second.isExpired()) {
             return it->second.data;
         }
-        
+
         // Compute new value
         T value = computer();
-        
+
         // Store in cache
         CacheEntry<T> entry;
         entry.data = value;
         entry.timestamp = std::chrono::steady_clock::now();
         entry.ttl = (ttl.count() > 0) ? ttl : defaultTtl_;
-        
+
         cache_[key] = entry;
-        
+
         return value;
     }
 
@@ -84,12 +84,12 @@ public:
      */
     auto get(const std::string& key) -> std::optional<T> {
         std::lock_guard<std::mutex> lock(mutex_);
-        
+
         auto it = cache_.find(key);
         if (it != cache_.end() && !it->second.isExpired()) {
             return it->second.data;
         }
-        
+
         return std::nullopt;
     }
 
@@ -99,15 +99,15 @@ public:
      * @param value Value to cache
      * @param ttl Time-to-live (optional)
      */
-    void put(const std::string& key, const T& value, 
+    void put(const std::string& key, const T& value,
              std::chrono::seconds ttl = std::chrono::seconds(0)) {
         std::lock_guard<std::mutex> lock(mutex_);
-        
+
         CacheEntry<T> entry;
         entry.data = value;
         entry.timestamp = std::chrono::steady_clock::now();
         entry.ttl = (ttl.count() > 0) ? ttl : defaultTtl_;
-        
+
         cache_[key] = entry;
     }
 
@@ -133,7 +133,7 @@ public:
      */
     void cleanup() {
         std::lock_guard<std::mutex> lock(mutex_);
-        
+
         auto it = cache_.begin();
         while (it != cache_.end()) {
             if (it->second.isExpired()) {
@@ -175,12 +175,12 @@ private:
 class SystemInfoCache {
 public:
     static SystemInfoCache& getInstance();
-    
+
     // Cache for different types of system information
     Cache<std::string> stringCache;
     Cache<double> numericCache;
     Cache<bool> booleanCache;
-    
+
 private:
     SystemInfoCache() = default;
 };

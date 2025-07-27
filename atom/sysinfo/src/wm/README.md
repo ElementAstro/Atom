@@ -38,7 +38,7 @@ The Window Manager module provides a unified API for interacting with window man
 | Linux    | ✅          | ✅          | ✅             | ✅         | ✅              |
 | macOS    | ✅          | ⚠️          | ⚠️             | ⚠️         | ✅              |
 
-✅ Fully supported  
+✅ Fully supported
 ⚠️ Basic support / Work in progress
 
 ## Quick Start
@@ -79,7 +79,7 @@ if (!isError(windowsResult)) {
         if (window.title.find("Notepad") != std::string::npos) {
             // Focus the window
             focusWindow(window.id);
-            
+
             // Move and resize
             moveWindow(window.id, 100, 100);
             resizeWindow(window.id, 800, 600);

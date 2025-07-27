@@ -35,30 +35,30 @@ auto getHypervisorVendor() -> std::string {
 
 auto detectHypervisorType() -> HypervisorType {
     std::string vendor = getHypervisorVendor();
-    
+
     if (vendor.find("VMware") != std::string::npos) {
         if (vmware::isESXi()) {
             return HypervisorType::VMWARE_ESXI;
         }
         return HypervisorType::VMWARE_WORKSTATION;
     }
-    
+
     if (vendor.find("VBoxVBox") != std::string::npos) {
         return HypervisorType::VIRTUALBOX;
     }
-    
+
     if (vendor.find("Microsoft") != std::string::npos) {
         return HypervisorType::HYPER_V;
     }
-    
+
     if (vendor.find("KVMKVMKVM") != std::string::npos) {
         return HypervisorType::KVM;
     }
-    
+
     if (vendor.find("XenVMMXen") != std::string::npos) {
         return HypervisorType::XEN;
     }
-    
+
     // Check for other indicators
     if (vmware::detect()) return HypervisorType::VMWARE_WORKSTATION;
     if (virtualbox::detect()) return HypervisorType::VIRTUALBOX;
@@ -67,7 +67,7 @@ auto detectHypervisorType() -> HypervisorType {
     if (xen::detect()) return HypervisorType::XEN;
     if (parallels::detect()) return HypervisorType::PARALLELS;
     if (cloud::detect()) return HypervisorType::CLOUD_HYPERVISOR;
-    
+
     return HypervisorType::UNKNOWN;
 }
 
@@ -76,7 +76,7 @@ auto getHypervisorInfo() -> HypervisorInfo {
     info.type = detectHypervisorType();
     info.name = hypervisorTypeToString(info.type);
     info.vendor = getHypervisorVendor();
-    
+
     switch (info.type) {
         case HypervisorType::VMWARE_WORKSTATION:
         case HypervisorType::VMWARE_ESXI:
@@ -84,54 +84,54 @@ auto getHypervisorInfo() -> HypervisorInfo {
             info.features = vmware::getFeatures();
             info.detection_confidence = 0.95;
             break;
-            
+
         case HypervisorType::VIRTUALBOX:
             info.version = virtualbox::getVersion();
             info.features = virtualbox::getFeatures();
             info.detection_confidence = 0.90;
             break;
-            
+
         case HypervisorType::HYPER_V:
             info.version = hyperv::getVersion();
             info.features = hyperv::getFeatures();
             info.detection_confidence = 0.90;
             break;
-            
+
         case HypervisorType::KVM:
             info.version = kvm::getVersion();
             info.features = kvm::getFeatures();
             info.detection_confidence = 0.85;
             break;
-            
+
         case HypervisorType::XEN:
             info.version = xen::getVersion();
             info.features = xen::getFeatures();
             info.detection_confidence = 0.85;
             break;
-            
+
         case HypervisorType::PARALLELS:
             info.version = parallels::getVersion();
             info.features = parallels::getFeatures();
             info.detection_confidence = 0.80;
             break;
-            
+
         case HypervisorType::CLOUD_HYPERVISOR:
             info.properties = cloud::getCloudMetadata();
             info.detection_confidence = 0.75;
             break;
-            
+
         default:
             info.detection_confidence = 0.0;
             break;
     }
-    
+
     return info;
 }
 
 auto isNestedVirtualization() -> bool {
     // Check for nested virtualization indicators
     auto cpuFeatures = detection::cpuid::getVirtualizationFeatures();
-    
+
     // If we're in a VM but have virtualization features, it might be nested
     bool inVM = detection::cpuid::isHypervisorPresent();
     bool hasVirtFeatures = std::any_of(cpuFeatures.begin(), cpuFeatures.end(),
@@ -139,7 +139,7 @@ auto isNestedVirtualization() -> bool {
             return feature.find("VMX") != std::string::npos ||
                    feature.find("SVM") != std::string::npos;
         });
-    
+
     return inVM && hasVirtFeatures;
 }
 
@@ -154,60 +154,60 @@ namespace vmware {
         if (vendor.find("VMware") != std::string::npos) {
             return true;
         }
-        
+
         // Check BIOS information
         std::string biosManufacturer = detection::bios::getBIOSManufacturer();
         std::string systemManufacturer = detection::bios::getSystemManufacturer();
-        
+
         return containsVMKeywords(biosManufacturer + " " + systemManufacturer);
     }
-    
+
     auto getVersion() -> std::string {
         // Try to get VMware Tools version
         std::string output = executeCommand("vmware-toolbox-cmd -v 2>/dev/null || echo ''");
         if (!output.empty()) {
             return output;
         }
-        
+
         // Check environment variable
         const char* version = std::getenv("VMWARE_TOOLS_VERSION");
         if (version) {
             return std::string(version);
         }
-        
+
         return "Unknown";
     }
-    
+
     auto isWorkstation() -> bool {
         std::string productName = detection::bios::getProductName();
         return productName.find("VMware Virtual Platform") != std::string::npos;
     }
-    
+
     auto isESXi() -> bool {
         std::string productName = detection::bios::getProductName();
         return productName.find("VMware7,1") != std::string::npos ||
                productName.find("ESXi") != std::string::npos;
     }
-    
+
     auto hasVMwareTools() -> bool {
         // Check for VMware Tools processes
         std::string processes = executeCommand("ps aux | grep vmtoolsd || echo ''");
         return !processes.empty() && processes.find("vmtoolsd") != std::string::npos;
     }
-    
+
     auto getFeatures() -> std::vector<std::string> {
         std::vector<std::string> features;
-        
+
         if (hasVMwareTools()) {
             features.push_back("VMware Tools");
         }
-        
+
         if (isWorkstation()) {
             features.push_back("Workstation");
         } else if (isESXi()) {
             features.push_back("ESXi");
         }
-        
+
         return features;
     }
 }
@@ -218,43 +218,43 @@ namespace virtualbox {
         if (vendor.find("VBoxVBox") != std::string::npos) {
             return true;
         }
-        
+
         std::string biosManufacturer = detection::bios::getBIOSManufacturer();
         std::string systemManufacturer = detection::bios::getSystemManufacturer();
-        
+
         return (biosManufacturer.find("innotek") != std::string::npos ||
                 systemManufacturer.find("innotek") != std::string::npos ||
                 biosManufacturer.find("Oracle") != std::string::npos);
     }
-    
+
     auto getVersion() -> std::string {
         const char* version = std::getenv("VBOX_VERSION");
         if (version) {
             return std::string(version);
         }
-        
+
         return "Unknown";
     }
-    
+
     auto hasGuestAdditions() -> bool {
         std::string processes = executeCommand("ps aux | grep VBoxService || echo ''");
         return !processes.empty() && processes.find("VBoxService") != std::string::npos;
     }
-    
+
     auto getFeatures() -> std::vector<std::string> {
         std::vector<std::string> features;
-        
+
         if (hasGuestAdditions()) {
             features.push_back("Guest Additions");
         }
-        
+
         if (checkHardware()) {
             features.push_back("VirtualBox Hardware");
         }
-        
+
         return features;
     }
-    
+
     auto checkHardware() -> bool {
         // Check for VirtualBox-specific hardware
         std::string pciDevices = executeCommand("lspci | grep -i virtualbox || echo ''");

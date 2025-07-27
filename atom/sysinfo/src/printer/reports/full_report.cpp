@@ -22,9 +22,9 @@ FullReport::FullReport(const ReportOptions& options) {
 
 auto FullReport::generate() -> std::string {
     spdlog::info("Generating full system report");
-    
+
     std::unordered_map<ReportSection, std::string> sectionContent;
-    
+
     // Generate content for each section
     for (const auto& section : options_.sections) {
         try {
@@ -37,26 +37,26 @@ auto FullReport::generate() -> std::string {
             sectionContent[section] = "Error generating " + sectionToString(section) + " information\n";
         }
     }
-    
+
     // Add timestamp to header if enabled
     std::string header = createHeader();
     if (options_.includeTimestamp) {
         auto now = std::chrono::system_clock::now();
         header += std::format("Generated at: {:%Y-%m-%d %H:%M:%S}\n\n", now);
     }
-    
+
     // Combine all sections
     std::string result = header;
-    
+
     for (const auto& section : options_.sections) {
         auto it = sectionContent.find(section);
         if (it != sectionContent.end() && !it->second.empty()) {
             result += it->second;
         }
     }
-    
+
     result += createFooter();
-    
+
     spdlog::info("Full system report generated successfully");
     return result;
 }

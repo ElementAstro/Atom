@@ -17,7 +17,7 @@ class DiskFormatter : public BaseFormatter {
 public:
     DiskFormatter() = default;
     explicit DiskFormatter(const FormatterOptions& options);
-    
+
     [[nodiscard]] auto format(const std::vector<DiskInfo>& disks) const -> std::string;
     [[nodiscard]] auto format(const std::vector<DiskInfo>& disks, const std::string& title) const -> std::string;
     [[nodiscard]] auto formatSingle(const DiskInfo& disk, int index = 0) const -> std::string;

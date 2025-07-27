@@ -267,7 +267,7 @@ WindowManager();
 
 ##### Methods
 ```cpp
-auto startMonitoring(WindowCallback callback, 
+auto startMonitoring(WindowCallback callback,
                     std::chrono::milliseconds interval = std::chrono::milliseconds(1000)) -> bool;
 ```
 Start monitoring window changes.
@@ -314,7 +314,7 @@ ThemeManager();
 Get current theme information.
 
 ```cpp
-auto startMonitoring(ThemeCallback callback, 
+auto startMonitoring(ThemeCallback callback,
                     std::chrono::milliseconds interval = std::chrono::milliseconds(5000)) -> bool;
 ```
 Start monitoring theme changes.
@@ -365,6 +365,6 @@ Rename a workspace (if supported).
 | getWorkspaces | ⚠️ | ✅ | ⚠️ |
 | Workspace Control | ❌ | ✅ | ⚠️ |
 
-✅ Fully supported  
-⚠️ Basic support / Work in progress  
+✅ Fully supported
+⚠️ Basic support / Work in progress
 ❌ Not supported

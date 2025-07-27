@@ -48,16 +48,16 @@ struct Statistics {
     T max{};
     T avg{};
     T stddev{};
-    
+
     Statistics() = default;
-    
+
     explicit Statistics(const std::vector<T>& values) {
         if (values.empty()) return;
-        
+
         min = *std::min_element(values.begin(), values.end());
         max = *std::max_element(values.begin(), values.end());
         avg = std::accumulate(values.begin(), values.end(), T{}) / values.size();
-        
+
         if (values.size() > 1) {
             T variance = 0;
             for (const auto& value : values) {
@@ -78,30 +78,30 @@ void addToHistory(const std::string& devicePath, const ExtendedPerformanceMetric
     std::lock_guard<std::mutex> lock(g_performanceCacheMutex);
     auto& history = g_performanceHistory[devicePath];
     history.push_back(metrics);
-    
+
     // Keep history size manageable
     if (history.size() > MAX_HISTORY_SIZE) {
         history.erase(history.begin(), history.begin() + (history.size() - MAX_HISTORY_SIZE));
     }
 }
 
-std::vector<ExtendedPerformanceMetrics> getHistory(const std::string& devicePath, 
+std::vector<ExtendedPerformanceMetrics> getHistory(const std::string& devicePath,
                                                   std::chrono::hours duration) {
     std::lock_guard<std::mutex> lock(g_performanceCacheMutex);
     auto it = g_performanceHistory.find(devicePath);
     if (it == g_performanceHistory.end()) {
         return {};
     }
-    
+
     const auto cutoffTime = std::chrono::system_clock::now() - duration;
     std::vector<ExtendedPerformanceMetrics> result;
-    
+
     for (const auto& metrics : it->second) {
         if (metrics.timestamp >= cutoffTime) {
             result.push_back(metrics);
         }
     }
-    
+
     return result;
 }
 }  // anonymous namespace
@@ -109,13 +109,13 @@ std::vector<ExtendedPerformanceMetrics> getHistory(const std::string& devicePath
 std::optional<ExtendedPerformanceMetrics> getCurrentPerformanceMetrics(const std::string& devicePath) {
     try {
         ExtendedPerformanceMetrics metrics;
-        
+
         // Get basic SMART data
         auto smartData = getDiskSmartData(devicePath);
         if (smartData) {
             metrics.basic = *smartData;
         }
-        
+
 #ifdef __linux__
         // Parse /proc/diskstats for detailed I/O statistics
         std::string deviceName = devicePath;
@@ -123,7 +123,7 @@ std::optional<ExtendedPerformanceMetrics> getCurrentPerformanceMetrics(const std
         if (lastSlash != std::string::npos) {
             deviceName = deviceName.substr(lastSlash + 1);
         }
-        
+
         std::ifstream diskstats("/proc/diskstats");
         std::string line;
         while (std::getline(diskstats, line)) {
@@ -132,10 +132,10 @@ std::optional<ExtendedPerformanceMetrics> getCurrentPerformanceMetrics(const std
             uint64_t readOps, readMerges, readSectors, readTicks;
             uint64_t writeOps, writeMerges, writeSectors, writeTicks;
             uint64_t inFlight, ioTicks, timeInQueue;
-            
+
             if (iss >> major >> minor >> name >> readOps >> readMerges >> readSectors >> readTicks >>
                       writeOps >> writeMerges >> writeSectors >> writeTicks >> inFlight >> ioTicks >> timeInQueue) {
-                
+
                 if (name == deviceName) {
                     metrics.basic.readOperations = readOps;
                     metrics.basic.writeOperations = writeOps;
@@ -144,41 +144,41 @@ std::optional<ExtendedPerformanceMetrics> getCurrentPerformanceMetrics(const std
                     metrics.basic.readLatencyMs = readTicks;
                     metrics.basic.writeLatencyMs = writeTicks;
                     metrics.basic.queueDepth = static_cast<uint32_t>(inFlight);
-                    
+
                     // Calculate derived metrics
                     if (ioTicks > 0) {
                         metrics.diskUtilization = (static_cast<float>(ioTicks) / 1000.0f) * 100.0f;
                     }
-                    
+
                     // Calculate IOPS and throughput (these would need time-based calculations in real implementation)
                     metrics.readIOPS = static_cast<double>(readOps);
                     metrics.writeIOPS = static_cast<double>(writeOps);
                     metrics.totalIOPS = metrics.readIOPS + metrics.writeIOPS;
-                    
+
                     constexpr double MB = 1024.0 * 1024.0;
                     metrics.readThroughputMBps = static_cast<double>(metrics.basic.readBytes) / MB;
                     metrics.writeThroughputMBps = static_cast<double>(metrics.basic.writeBytes) / MB;
                     metrics.totalThroughputMBps = metrics.readThroughputMBps + metrics.writeThroughputMBps;
-                    
+
                     break;
                 }
             }
         }
-        
+
         // Get temperature if available
         auto temp = getDiskTemperature(devicePath);
         if (temp) {
             metrics.basic.temperature = *temp;
         }
-        
+
 #endif
-        
+
         // Calculate health score (simplified algorithm)
         metrics.healthScore = 100.0f;
         if (metrics.basic.temperature > 60.0f) {
             metrics.healthScore -= (metrics.basic.temperature - 60.0f) * 2.0f;
         }
-        
+
         // Predict lifespan (very simplified)
         if (metrics.healthScore > 90.0f) {
             metrics.predictedLifespanDays = 1825;  // 5 years
@@ -189,9 +189,9 @@ std::optional<ExtendedPerformanceMetrics> getCurrentPerformanceMetrics(const std
         } else {
             metrics.predictedLifespanDays = 90;    // 3 months
         }
-        
+
         return metrics;
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Error getting performance metrics for {}: {}", devicePath, e.what());
         return std::nullopt;
@@ -200,94 +200,94 @@ std::optional<ExtendedPerformanceMetrics> getCurrentPerformanceMetrics(const std
 
 ExtendedPerformanceMetrics performBenchmark(const std::string& devicePath, const BenchmarkConfig& config) {
     ExtendedPerformanceMetrics result;
-    
+
     try {
         spdlog::info("Starting performance benchmark for device: {}", devicePath);
-        
+
         const size_t testSize = static_cast<size_t>(config.testSizeMB) * 1024 * 1024;
         const size_t blockSize = static_cast<size_t>(config.blockSizeKB) * 1024;
-        
+
         std::vector<char> testData(blockSize);
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<> dis(0, 255);
-        
+
         // Fill test data with random content
         std::generate(testData.begin(), testData.end(), [&]() {
             return static_cast<char>(dis(gen));
         });
-        
+
         auto startTime = std::chrono::high_resolution_clock::now();
-        
+
         // Write test
         if (config.writeTest) {
             const std::string testFile = devicePath + "_benchmark_test.tmp";
             std::ofstream file(testFile, std::ios::binary);
-            
+
             if (file.is_open()) {
                 auto writeStart = std::chrono::high_resolution_clock::now();
-                
+
                 for (size_t written = 0; written < testSize; written += blockSize) {
                     file.write(testData.data(), blockSize);
                     file.flush();
                 }
-                
+
                 auto writeEnd = std::chrono::high_resolution_clock::now();
                 auto writeDuration = std::chrono::duration_cast<std::chrono::microseconds>(writeEnd - writeStart);
-                
+
                 result.basic.writeOperations = testSize / blockSize;
                 result.basic.writeBytes = testSize;
                 result.avgWriteLatencyUs = writeDuration.count() / result.basic.writeOperations;
-                result.writeThroughputMBps = (static_cast<double>(testSize) / (1024.0 * 1024.0)) / 
+                result.writeThroughputMBps = (static_cast<double>(testSize) / (1024.0 * 1024.0)) /
                                            (writeDuration.count() / 1000000.0);
-                
+
                 file.close();
                 std::remove(testFile.c_str());
             }
         }
-        
+
         // Read test (using existing file or device)
         if (config.readTest) {
             std::ifstream file(devicePath, std::ios::binary);
             if (file.is_open()) {
                 auto readStart = std::chrono::high_resolution_clock::now();
-                
+
                 std::vector<char> readBuffer(blockSize);
                 size_t totalRead = 0;
-                
+
                 while (totalRead < testSize && file.read(readBuffer.data(), blockSize)) {
                     totalRead += file.gcount();
                 }
-                
+
                 auto readEnd = std::chrono::high_resolution_clock::now();
                 auto readDuration = std::chrono::duration_cast<std::chrono::microseconds>(readEnd - readStart);
-                
+
                 result.basic.readOperations = totalRead / blockSize;
                 result.basic.readBytes = totalRead;
                 result.avgReadLatencyUs = readDuration.count() / result.basic.readOperations;
-                result.readThroughputMBps = (static_cast<double>(totalRead) / (1024.0 * 1024.0)) / 
+                result.readThroughputMBps = (static_cast<double>(totalRead) / (1024.0 * 1024.0)) /
                                           (readDuration.count() / 1000000.0);
             }
         }
-        
+
         auto endTime = std::chrono::high_resolution_clock::now();
         auto totalDuration = std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime);
-        
+
         // Calculate IOPS
         result.readIOPS = static_cast<double>(result.basic.readOperations) / totalDuration.count();
         result.writeIOPS = static_cast<double>(result.basic.writeOperations) / totalDuration.count();
         result.totalIOPS = result.readIOPS + result.writeIOPS;
         result.totalThroughputMBps = result.readThroughputMBps + result.writeThroughputMBps;
-        
+
         spdlog::info("Benchmark completed for {}: Read IOPS: {:.2f}, Write IOPS: {:.2f}, "
                     "Read Throughput: {:.2f} MB/s, Write Throughput: {:.2f} MB/s",
-                    devicePath, result.readIOPS, result.writeIOPS, 
+                    devicePath, result.readIOPS, result.writeIOPS,
                     result.readThroughputMBps, result.writeThroughputMBps);
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Error during benchmark for {}: {}", devicePath, e.what());
     }
-    
+
     return result;
 }
 

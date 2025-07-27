@@ -36,7 +36,7 @@ if(NOT TARGET atom::atom_sysinfo_bios_os)
 endif()
 
 # Set include directories for backward compatibility
-get_target_property(ATOM_SYSINFO_BIOS_OS_INCLUDE_DIRS 
+get_target_property(ATOM_SYSINFO_BIOS_OS_INCLUDE_DIRS
     atom::atom_sysinfo_bios_os INTERFACE_INCLUDE_DIRECTORIES)
 
 message(STATUS "Found Enhanced OS Module: ${ATOM_SYSINFO_BIOS_OS_VERSION}")

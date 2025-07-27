@@ -25,7 +25,7 @@ namespace {
     std::string getIOKitStringProperty(io_service_t service, CFStringRef property) {
         CFTypeRef prop = IORegistryEntryCreateCFProperty(service, property, kCFAllocatorDefault, 0);
         if (!prop) return "";
-        
+
         std::string result;
         if (CFGetTypeID(prop) == CFStringGetTypeID()) {
             CFStringRef str = static_cast<CFStringRef>(prop);
@@ -39,7 +39,7 @@ namespace {
                 }
             }
         }
-        
+
         CFRelease(prop);
         return result;
     }
@@ -48,13 +48,13 @@ namespace {
     uint64_t getIOKitNumberProperty(io_service_t service, CFStringRef property) {
         CFTypeRef prop = IORegistryEntryCreateCFProperty(service, property, kCFAllocatorDefault, 0);
         if (!prop) return 0;
-        
+
         uint64_t result = 0;
         if (CFGetTypeID(prop) == CFNumberGetTypeID()) {
             CFNumberRef num = static_cast<CFNumberRef>(prop);
             CFNumberGetValue(num, kCFNumberSInt64Type, &result);
         }
-        
+
         CFRelease(prop);
         return result;
     }
@@ -62,7 +62,7 @@ namespace {
 
 auto getGPUInfoMacOS() -> std::string {
     spdlog::info("Starting macOS GPU information retrieval");
-    
+
     io_iterator_t iterator;
     CFMutableDictionaryRef matchDict = IOServiceMatching("IOPCIDevice");
 
@@ -133,7 +133,7 @@ auto getGPUInfoMacOS() -> std::string {
 
 auto getDetailedGPUInfoMacOS() -> std::vector<GPUInfo> {
     std::vector<GPUInfo> gpus;
-    
+
     io_iterator_t iterator;
     CFMutableDictionaryRef matchDict = IOServiceMatching("IOPCIDevice");
     if (!matchDict) return gpus;
@@ -177,7 +177,7 @@ auto getDetailedGPUInfoMacOS() -> std::vector<GPUInfo> {
             // Get vendor and device IDs
             uint64_t vendorId = getIOKitNumberProperty(service, CFSTR("vendor-id"));
             uint64_t deviceId = getIOKitNumberProperty(service, CFSTR("device-id"));
-            
+
             gpu.vendorId = std::to_string(vendorId);
             gpu.deviceId = std::to_string(deviceId);
 
@@ -195,7 +195,7 @@ auto getDetailedGPUInfoMacOS() -> std::vector<GPUInfo> {
             gpu.architecture = parseGPUArchitecture(gpu.name, gpu.vendor);
 
             // Determine GPU type
-            if (gpu.vendor == GPUVendor::INTEL || 
+            if (gpu.vendor == GPUVendor::INTEL ||
                 gpu.name.find("Integrated") != std::string::npos ||
                 gpu.vendor == GPUVendor::APPLE) {
                 gpu.type = GPUType::INTEGRATED;
@@ -247,10 +247,10 @@ auto getGPUInfoMacOS(int gpuIndex) -> GPUInfo {
 auto getGPUPerformanceMetricsMacOS(int gpuIndex) -> GPUPerformanceMetrics {
     GPUPerformanceMetrics metrics;
     metrics.timestamp = std::chrono::steady_clock::now();
-    
+
     // TODO: Implement performance metrics retrieval using IOKit or Metal
     // This would require additional macOS-specific APIs
-    
+
     return metrics;
 }
 

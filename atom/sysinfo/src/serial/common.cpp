@@ -9,7 +9,7 @@ namespace atom::system {
 
 // HardwareSerialData implementations
 bool HardwareSerialData::isValid() const {
-    return !biosSerial.empty() || !motherboardSerial.empty() || 
+    return !biosSerial.empty() || !motherboardSerial.empty() ||
            !cpuSerial.empty() || !diskSerials.empty();
 }
 
@@ -104,61 +104,61 @@ std::string NetworkInterfaceInfo::toString() const {
 
 // ComprehensiveSystemInfo implementations
 bool ComprehensiveSystemInfo::isValid() const {
-    return hardwareSerials.isValid() || systemId.isValid() || 
+    return hardwareSerials.isValid() || systemId.isValid() ||
            !memoryModules.empty() || !networkInterfaces.empty();
 }
 
 std::string ComprehensiveSystemInfo::toString() const {
     std::ostringstream oss;
     oss << "=== Comprehensive System Information ===\n\n";
-    
+
     oss << hardwareSerials.toString() << "\n";
     oss << systemId.toString() << "\n";
-    
+
     if (!memoryModules.empty()) {
         oss << "Memory Modules:\n";
         for (const auto& module : memoryModules) {
             oss << module.toString() << "\n";
         }
     }
-    
+
     if (!networkInterfaces.empty()) {
         oss << "Network Interfaces:\n";
         for (const auto& interface : networkInterfaces) {
             oss << interface.toString() << "\n";
         }
     }
-    
+
     if (!additionalProperties.empty()) {
         oss << "Additional Properties:\n";
         for (const auto& [key, value] : additionalProperties) {
             oss << "  " << key << ": " << value << "\n";
         }
     }
-    
+
     return oss.str();
 }
 
 std::string ComprehensiveSystemInfo::getSystemFingerprint() const {
     std::ostringstream oss;
-    
+
     // Combine key identifiers for fingerprint
     oss << hardwareSerials.biosSerial << "|";
     oss << hardwareSerials.motherboardSerial << "|";
     oss << hardwareSerials.cpuSerial << "|";
     oss << systemId.systemUuid << "|";
     oss << systemId.machineId << "|";
-    
+
     // Add first MAC address if available
     if (!systemId.macAddresses.empty()) {
         oss << systemId.macAddresses[0] << "|";
     }
-    
+
     // Add first disk serial if available
     if (!hardwareSerials.diskSerials.empty()) {
         oss << hardwareSerials.diskSerials[0] << "|";
     }
-    
+
     return SystemInfoUtils::generateHash(oss.str());
 }
 
@@ -184,7 +184,7 @@ std::string generateHash(const std::string& input) {
     // Simple hash implementation (in production, use a proper cryptographic hash)
     std::hash<std::string> hasher;
     auto hashValue = hasher(input);
-    
+
     std::ostringstream oss;
     oss << std::hex << hashValue;
     return oss.str();
@@ -194,19 +194,19 @@ bool isValidSerial(const std::string& serial) {
     if (serial.empty() || serial.length() < 3) {
         return false;
     }
-    
+
     // Check for common invalid patterns
     std::vector<std::string> invalidPatterns = {
         "N/A", "n/a", "Not Available", "Unknown", "Default", "0000000000",
         "FFFFFFFFFF", "...........", "----------"
     };
-    
+
     for (const auto& pattern : invalidPatterns) {
         if (serial.find(pattern) != std::string::npos) {
             return false;
         }
     }
-    
+
     return true;
 }
 
@@ -226,12 +226,12 @@ std::string formatBytes(uint64_t bytes) {
     const char* units[] = {"B", "KB", "MB", "GB", "TB"};
     int unitIndex = 0;
     double size = static_cast<double>(bytes);
-    
+
     while (size >= 1024.0 && unitIndex < 4) {
         size /= 1024.0;
         unitIndex++;
     }
-    
+
     std::ostringstream oss;
     oss << std::fixed << std::setprecision(1) << size << " " << units[unitIndex];
     return oss.str();
@@ -240,7 +240,7 @@ std::string formatBytes(uint64_t bytes) {
 std::string getCurrentTimestamp() {
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
-    
+
     std::ostringstream oss;
     oss << std::put_time(std::gmtime(&time_t), "%Y-%m-%dT%H:%M:%SZ");
     return oss.str();

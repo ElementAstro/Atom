@@ -28,19 +28,19 @@ ConfigManager::~ConfigManager() = default;
 bool ConfigManager::loadFromFile(const std::string& filename, ConfigFormat format) {
     SHORTCUT_ERROR_CONTEXT();
     SHORTCUT_ADD_CONTEXT("filename", filename);
-    
+
     try {
         std::ifstream file(filename);
         if (!file.is_open()) {
             SHORTCUT_THROW_SYSTEM("Failed to open configuration file", 0);
         }
-        
+
         std::stringstream buffer;
         buffer << file.rdbuf();
         file.close();
-        
+
         return loadFromString(buffer.str(), format);
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Failed to load configuration from file {}: {}", filename, e.what());
         return false;
@@ -50,21 +50,21 @@ bool ConfigManager::loadFromFile(const std::string& filename, ConfigFormat forma
 bool ConfigManager::saveToFile(const std::string& filename, ConfigFormat format) const {
     SHORTCUT_ERROR_CONTEXT();
     SHORTCUT_ADD_CONTEXT("filename", filename);
-    
+
     try {
         std::string data = exportToString(format);
-        
+
         std::ofstream file(filename);
         if (!file.is_open()) {
             SHORTCUT_THROW_SYSTEM("Failed to create configuration file", 0);
         }
-        
+
         file << data;
         file.close();
-        
+
         spdlog::debug("Configuration saved to file: {}", filename);
         return true;
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Failed to save configuration to file {}: {}", filename, e.what());
         return false;
@@ -73,7 +73,7 @@ bool ConfigManager::saveToFile(const std::string& filename, ConfigFormat format)
 
 bool ConfigManager::loadFromString(const std::string& data, ConfigFormat format) {
     SHORTCUT_ERROR_CONTEXT();
-    
+
     try {
         switch (format) {
             case ConfigFormat::JSON:
@@ -99,18 +99,18 @@ std::string ConfigManager::exportToString(ConfigFormat format) const {
 bool ConfigManager::setValue(const std::string& key, const ConfigValue& value) {
     SHORTCUT_ERROR_CONTEXT();
     SHORTCUT_ADD_CONTEXT("key", key);
-    
+
     auto it = entries_.find(key);
     if (it != entries_.end() && it->second.isReadOnly) {
         spdlog::warn("Attempted to modify read-only configuration key: {}", key);
         return false;
     }
-    
+
     ConfigValue oldValue;
     if (it != entries_.end()) {
         oldValue = it->second.value;
         it->second.value = value;
-        
+
         // Validate new value
         if (!it->second.isValid()) {
             it->second.value = oldValue; // Restore old value
@@ -120,7 +120,7 @@ bool ConfigManager::setValue(const std::string& key, const ConfigValue& value) {
     } else {
         entries_[key] = ConfigEntry(value);
     }
-    
+
     notifyChange(key, oldValue, value);
     spdlog::debug("Configuration key '{}' updated", key);
     return true;
@@ -142,7 +142,7 @@ bool ConfigManager::removeKey(const std::string& key) {
             spdlog::warn("Cannot remove required configuration key: {}", key);
             return false;
         }
-        
+
         ConfigValue oldValue = it->second.value;
         entries_.erase(it);
         notifyChange(key, oldValue, ConfigValue{});
@@ -155,23 +155,23 @@ bool ConfigManager::removeKey(const std::string& key) {
 std::vector<std::string> ConfigManager::getKeys() const {
     std::vector<std::string> keys;
     keys.reserve(entries_.size());
-    
+
     for (const auto& [key, entry] : entries_) {
         keys.push_back(key);
     }
-    
+
     return keys;
 }
 
 std::vector<std::string> ConfigManager::getKeysByTag(const std::string& tag) const {
     std::vector<std::string> keys;
-    
+
     for (const auto& [key, entry] : entries_) {
         if (std::find(entry.tags.begin(), entry.tags.end(), tag) != entry.tags.end()) {
             keys.push_back(key);
         }
     }
-    
+
     return keys;
 }
 
@@ -200,13 +200,13 @@ void ConfigManager::clearCallbacks() {
 
 std::vector<std::string> ConfigManager::validateAll() const {
     std::vector<std::string> errors;
-    
+
     for (const auto& [key, entry] : entries_) {
         if (!entry.isValid()) {
             errors.push_back("Invalid value for key: " + key);
         }
     }
-    
+
     return errors;
 }
 
@@ -250,7 +250,7 @@ void ConfigManager::notifyChange(const std::string& key, const ConfigValue& oldV
             }
         }
     }
-    
+
     // Notify global callbacks
     for (const auto& callback : globalCallbacks_) {
         try {
@@ -267,7 +267,7 @@ void ConfigManager::initializeDefaults() {
     registerEntry("detector.cache_ttl_ms", ConfigEntry(5000, "Cache time-to-live in milliseconds"));
     registerEntry("detector.max_cache_size", ConfigEntry(1000, "Maximum number of cached entries"));
     registerEntry("detector.enable_performance_monitoring", ConfigEntry(false, "Enable performance monitoring"));
-    
+
     // Monitoring settings
     registerEntry("monitoring.enabled", ConfigEntry(true, "Enable real-time monitoring"));
     registerEntry("monitoring.polling_interval_ms", ConfigEntry(100, "Monitoring polling interval in milliseconds"));
@@ -275,17 +275,17 @@ void ConfigManager::initializeDefaults() {
     registerEntry("monitoring.enable_keyboard_hooks", ConfigEntry(false, "Enable keyboard hooks (requires elevated privileges)"));
     registerEntry("monitoring.log_events", ConfigEntry(true, "Log monitoring events"));
     registerEntry("monitoring.max_event_queue_size", ConfigEntry(1000, "Maximum event queue size"));
-    
+
     // Error handling settings
     registerEntry("error.auto_recovery", ConfigEntry(true, "Enable automatic error recovery"));
     registerEntry("error.max_recovery_attempts", ConfigEntry(3, "Maximum recovery attempts"));
     registerEntry("error.log_level", ConfigEntry(std::string("info"), "Error logging level"));
-    
+
     // UI settings
     registerEntry("ui.theme", ConfigEntry(std::string("default"), "UI theme"));
     registerEntry("ui.show_notifications", ConfigEntry(true, "Show system notifications"));
     registerEntry("ui.notification_timeout_ms", ConfigEntry(5000, "Notification timeout in milliseconds"));
-    
+
     spdlog::debug("Default configuration entries initialized");
 }
 

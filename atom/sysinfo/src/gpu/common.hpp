@@ -31,20 +31,20 @@ struct GPUBenchmarkConfig {
     bool testCompute{true};                /**< Test compute performance */
     bool testMemory{true};                 /**< Test memory bandwidth */
     bool testGraphics{true};               /**< Test graphics performance */
-    
+
     // Memory test parameters
     size_t memoryTestSize{256 * 1024 * 1024}; /**< Memory test size in bytes */
     std::string memoryPattern{"sequential"};   /**< Memory access pattern */
-    
+
     // Compute test parameters
     std::string computeWorkload{"matrix_multiply"}; /**< Compute workload type */
     int workgroupSize{256};                /**< Compute workgroup size */
-    
+
     // Graphics test parameters
     int renderWidth{1920};                 /**< Render target width */
     int renderHeight{1080};                /**< Render target height */
     std::string shaderComplexity{"medium"}; /**< Shader complexity level */
-    
+
     GPUBenchmarkConfig() = default;
 } ATOM_ALIGNAS(32);
 
@@ -58,29 +58,29 @@ struct GPUBenchmarkResults {
     double computeScore{0.0};              /**< Compute performance score */
     double memoryScore{0.0};               /**< Memory performance score */
     double graphicsScore{0.0};             /**< Graphics performance score */
-    
+
     // Detailed metrics
     double memoryBandwidth{0.0};           /**< Memory bandwidth in GB/s */
     double computeThroughput{0.0};         /**< Compute throughput in GFLOPS */
     double fillRate{0.0};                  /**< Fill rate in Mpixels/s */
     double triangleRate{0.0};              /**< Triangle rate in Mtriangles/s */
-    
+
     // Performance characteristics
     double averageFrameTime{0.0};          /**< Average frame time in ms */
     double minFrameTime{0.0};              /**< Minimum frame time in ms */
     double maxFrameTime{0.0};              /**< Maximum frame time in ms */
     double frameTimeVariance{0.0};         /**< Frame time variance */
-    
+
     // Thermal and power during test
     double peakTemperature{0.0};           /**< Peak temperature during test */
     double averagePowerDraw{0.0};          /**< Average power draw during test */
     double peakPowerDraw{0.0};             /**< Peak power draw during test */
-    
+
     // Test metadata
     std::chrono::steady_clock::time_point testTime; /**< When test was performed */
     std::chrono::seconds testDuration;     /**< Actual test duration */
     std::string testConfiguration;         /**< Test configuration summary */
-    
+
     std::vector<double> frameTimeHistory;  /**< Frame time history */
     std::vector<double> temperatureHistory; /**< Temperature history */
     std::vector<double> powerHistory;      /**< Power draw history */
@@ -97,12 +97,12 @@ struct GPUMonitoringConfig {
     bool monitorPower{true};               /**< Monitor power consumption */
     bool monitorMemory{true};              /**< Monitor memory usage */
     bool monitorFanSpeed{true};            /**< Monitor fan speed */
-    
+
     // Thresholds for alerts
     double temperatureThreshold{85.0};     /**< Temperature alert threshold */
     double memoryThreshold{90.0};          /**< Memory usage alert threshold */
     double powerThreshold{95.0};           /**< Power usage alert threshold */
-    
+
     GPUMonitoringConfig() = default;
 } ATOM_ALIGNAS(32);
 
@@ -120,7 +120,7 @@ struct GPUAlert {
         DRIVER_ERROR,
         PERFORMANCE_DEGRADATION
     };
-    
+
     Type type;                             /**< Alert type */
     std::string message;                   /**< Alert message */
     double value;                          /**< Alert trigger value */

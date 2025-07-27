@@ -52,7 +52,7 @@ auto containerRuntimeToString(ContainerRuntime runtime) -> std::string {
 }
 
 auto isContainer() -> bool {
-    return docker::detect() || lxc::detect() || podman::detect() || 
+    return docker::detect() || lxc::detect() || podman::detect() ||
            kubernetes::detect() || systemd_nspawn::detect();
 }
 
@@ -67,7 +67,7 @@ auto detectContainerType() -> ContainerType {
     if (runtime::detectGVisor()) return ContainerType::GVISOR;
     if (runtime::detectFirecracker()) return ContainerType::FIRECRACKER_MICROVM;
     if (runtime::detectWASMContainer()) return ContainerType::WASM_CONTAINER;
-    
+
     return ContainerType::UNKNOWN;
 }
 
@@ -83,7 +83,7 @@ auto detectContainerRuntime() -> ContainerRuntime {
     if (runtime::detectGVisor()) return ContainerRuntime::GVISOR;
     if (runtime::detectFirecracker()) return ContainerRuntime::FIRECRACKER;
     if (runtime::detectWASMContainer()) return ContainerRuntime::WASM_RUNTIME;
-    
+
     return ContainerRuntime::UNKNOWN;
 }
 
@@ -92,7 +92,7 @@ auto getContainerInfo() -> ContainerInfo {
     info.type = detectContainerType();
     info.runtime = detectContainerRuntime();
     info.name = containerTypeToString(info.type);
-    
+
     switch (info.type) {
         case ContainerType::DOCKER:
             info.id = docker::getContainerID();
@@ -101,7 +101,7 @@ auto getContainerInfo() -> ContainerInfo {
             info.environment = docker::getDockerEnvironment();
             info.detection_confidence = 0.95;
             break;
-            
+
         case ContainerType::KUBERNETES_POD:
             info.id = kubernetes::getPodName();
             info.metadata["namespace"] = kubernetes::getNamespace();
@@ -110,35 +110,35 @@ auto getContainerInfo() -> ContainerInfo {
             info.environment = kubernetes::getKubernetesEnvironment();
             info.detection_confidence = 0.90;
             break;
-            
+
         case ContainerType::PODMAN:
             info.id = podman::getContainerID();
             info.version = podman::getPodmanVersion();
             info.detection_confidence = 0.85;
             break;
-            
+
         case ContainerType::LXC:
             info.id = lxc::getContainerName();
             info.version = lxc::getLXCVersion();
             info.detection_confidence = 0.80;
             break;
-            
+
         case ContainerType::LXD:
             info.id = lxc::getContainerName();
             info.version = lxc::getLXDVersion();
             info.detection_confidence = 0.80;
             break;
-            
+
         case ContainerType::SYSTEMD_NSPAWN:
             info.id = systemd_nspawn::getContainerName();
             info.detection_confidence = 0.75;
             break;
-            
+
         default:
             info.detection_confidence = 0.0;
             break;
     }
-    
+
     return info;
 }
 
@@ -146,36 +146,36 @@ auto getOrchestrationPlatform() -> std::string {
     if (kubernetes::detect()) {
         return "Kubernetes";
     }
-    
+
     // Check for Docker Swarm
     const char* swarmNodeId = std::getenv("DOCKER_SWARM_NODE_ID");
     if (swarmNodeId) {
         return "Docker Swarm";
     }
-    
+
     // Check for other orchestration platforms
     if (std::getenv("MESOS_TASK_ID")) {
         return "Apache Mesos";
     }
-    
+
     if (std::getenv("NOMAD_TASK_NAME")) {
         return "HashiCorp Nomad";
     }
-    
+
     return "None";
 }
 
 auto getNetworkingMode() -> std::string {
     // This is a simplified implementation
     // In practice, you'd need to check container runtime-specific configurations
-    
+
     if (docker::detect()) {
         // Check Docker networking mode
         std::string networkInfo = executeCommand("cat /proc/1/net/route 2>/dev/null || echo ''");
         if (networkInfo.find("docker0") != std::string::npos) {
             return "bridge";
         }
-        
+
         // Check for host networking
         std::string hostname = executeCommand("hostname");
         std::string hostHostname = executeCommand("cat /proc/sys/kernel/hostname 2>/dev/null || echo ''");
@@ -183,48 +183,48 @@ auto getNetworkingMode() -> std::string {
             return "host";
         }
     }
-    
+
     return "default";
 }
 
 auto getResourceLimits() -> std::unordered_map<std::string, std::string> {
     std::unordered_map<std::string, std::string> limits;
-    
+
     // Check cgroup limits
     std::string memoryLimit = readFileContent("/sys/fs/cgroup/memory/memory.limit_in_bytes");
     if (!memoryLimit.empty() && memoryLimit != "9223372036854775807\n") {
         limits["memory"] = memoryLimit;
     }
-    
+
     std::string cpuQuota = readFileContent("/sys/fs/cgroup/cpu/cpu.cfs_quota_us");
     if (!cpuQuota.empty() && cpuQuota != "-1\n") {
         limits["cpu_quota"] = cpuQuota;
     }
-    
+
     std::string cpuPeriod = readFileContent("/sys/fs/cgroup/cpu/cpu.cfs_period_us");
     if (!cpuPeriod.empty()) {
         limits["cpu_period"] = cpuPeriod;
     }
-    
+
     return limits;
 }
 
 namespace docker {
     auto detect() -> bool {
         spdlog::debug("Checking for Docker container environment");
-        
+
         if (hasDockerEnvFile()) {
             spdlog::debug("Docker environment file found");
             return true;
         }
-        
+
         return checkCgroups();
     }
-    
+
     auto hasDockerEnvFile() -> bool {
         return fileExists("/.dockerenv");
     }
-    
+
     auto checkCgroups() -> bool {
         std::ifstream cgroup("/proc/1/cgroup");
         if (cgroup.is_open()) {
@@ -238,7 +238,7 @@ namespace docker {
         }
         return false;
     }
-    
+
     auto getContainerID() -> std::string {
         std::ifstream cgroup("/proc/1/cgroup");
         if (cgroup.is_open()) {
@@ -258,23 +258,23 @@ namespace docker {
         }
         return "Unknown";
     }
-    
+
     auto getImageInfo() -> std::string {
         // Try to get image info from environment variables
         const char* imageName = std::getenv("DOCKER_IMAGE");
         if (imageName) {
             return std::string(imageName);
         }
-        
+
         // Try to get from hostname (often set to container ID)
         std::string hostname = executeCommand("hostname");
         if (hostname.length() == 12) {
             return "Unknown (ID: " + hostname + ")";
         }
-        
+
         return "Unknown";
     }
-    
+
     auto getDockerVersion() -> std::string {
         const char* version = std::getenv("DOCKER_VERSION");
         if (version) {
@@ -282,25 +282,25 @@ namespace docker {
         }
         return "Unknown";
     }
-    
+
     auto getDockerEnvironment() -> std::unordered_map<std::string, std::string> {
         std::unordered_map<std::string, std::string> env;
-        
+
         std::vector<std::string> dockerEnvVars = {
             "DOCKER_IMAGE", "DOCKER_VERSION", "DOCKER_CONTAINER",
             "HOSTNAME", "PATH", "HOME"
         };
-        
+
         for (const auto& var : dockerEnvVars) {
             const char* value = std::getenv(var.c_str());
             if (value) {
                 env[var] = std::string(value);
             }
         }
-        
+
         return env;
     }
-    
+
     auto checkDockerMounts() -> bool {
         std::string mounts = readFileContent("/proc/mounts");
         return mounts.find("overlay") != std::string::npos ||

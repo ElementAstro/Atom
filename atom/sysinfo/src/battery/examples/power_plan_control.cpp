@@ -1,7 +1,7 @@
 /**
  * @file power_plan_control.cpp
  * @brief Power plan control example
- * 
+ *
  * This example demonstrates how to control system power plans.
  */
 
@@ -69,7 +69,7 @@ bool setPowerPlan(PowerPlan plan) {
             break;
     }
     std::cout << "... ";
-    
+
     auto result = PowerPlanManager::setPowerPlan(plan);
     if (result && *result) {
         std::cout << "SUCCESS" << std::endl;
@@ -86,15 +86,15 @@ bool setPowerPlan(PowerPlan plan) {
 int main() {
     std::cout << "Power Plan Control Example" << std::endl;
     std::cout << "==========================" << std::endl << std::endl;
-    
+
     // Show current power plan
     printCurrentPowerPlan();
     std::cout << std::endl;
-    
+
     // Show available power plans
     printAvailablePowerPlans();
     std::cout << std::endl;
-    
+
     // Get battery info to make intelligent decisions
     auto batteryInfo = getBatteryInfo();
     if (batteryInfo && batteryInfo->isBatteryPresent) {
@@ -102,10 +102,10 @@ int main() {
         std::cout << "  Level: " << batteryInfo->batteryLifePercent << "%" << std::endl;
         std::cout << "  Charging: " << (batteryInfo->isCharging ? "Yes" : "No") << std::endl;
         std::cout << std::endl;
-        
+
         // Demonstrate automatic power plan selection based on battery state
         std::cout << "Demonstrating automatic power plan selection:" << std::endl;
-        
+
         PowerPlan recommendedPlan;
         if (batteryInfo->batteryLifePercent <= 20.0f && !batteryInfo->isCharging) {
             recommendedPlan = PowerPlan::POWER_SAVER;
@@ -117,43 +117,43 @@ int main() {
             recommendedPlan = PowerPlan::BALANCED;
             std::cout << "Normal conditions - recommending Balanced mode" << std::endl;
         }
-        
+
         // Apply the recommended plan
         if (setPowerPlan(recommendedPlan)) {
             std::cout << "Power plan applied successfully!" << std::endl;
         }
-        
+
     } else {
         std::cout << "No battery detected - demonstrating power plan switching anyway" << std::endl;
-        
+
         // Demonstrate switching between different power plans
         std::cout << "\nDemonstrating power plan switching:" << std::endl;
-        
+
         // Try to set to Performance
         if (setPowerPlan(PowerPlan::PERFORMANCE)) {
             std::cout << "Switched to Performance mode" << std::endl;
             printCurrentPowerPlan();
         }
-        
+
         std::cout << std::endl;
-        
+
         // Try to set to Power Saver
         if (setPowerPlan(PowerPlan::POWER_SAVER)) {
             std::cout << "Switched to Power Saver mode" << std::endl;
             printCurrentPowerPlan();
         }
-        
+
         std::cout << std::endl;
-        
+
         // Try to set back to Balanced
         if (setPowerPlan(PowerPlan::BALANCED)) {
             std::cout << "Switched back to Balanced mode" << std::endl;
             printCurrentPowerPlan();
         }
     }
-    
+
     std::cout << std::endl;
     std::cout << "Power plan control demo completed." << std::endl;
-    
+
     return 0;
 }

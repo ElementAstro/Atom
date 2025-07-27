@@ -17,9 +17,9 @@ bool JsonExporter::exportToFile(const std::string& content, const std::string& f
 
 auto JsonExporter::exportToString(const std::string& content) -> std::string {
     std::stringstream ss;
-    
+
     ss << "{\n";
-    
+
     if (options_.includeMetadata) {
         ss << "  \"metadata\": {\n";
         ss << "    \"title\": \"" << escapeText(options_.title) << "\",\n";
@@ -36,12 +36,12 @@ auto JsonExporter::exportToString(const std::string& content) -> std::string {
         ss << "    \"format\": \"json\"\n";
         ss << "  },\n";
     }
-    
+
     ss << "  \"system_information\": {\n";
     ss << convertToJson(content);
     ss << "  }\n";
     ss << "}\n";
-    
+
     return ss.str();
 }
 
@@ -63,23 +63,23 @@ auto JsonExporter::convertToJson(const std::string& content) const -> std::strin
 
 auto JsonExporter::escapeText(const std::string& text) const -> std::string {
     std::string result = text;
-    
+
     // Escape JSON special characters
     std::regex backslashRegex("\\\\");
     result = std::regex_replace(result, backslashRegex, "\\\\");
-    
+
     std::regex quotRegex("\"");
     result = std::regex_replace(result, quotRegex, "\\\"");
-    
+
     std::regex newlineRegex("\n");
     result = std::regex_replace(result, newlineRegex, "\\n");
-    
+
     std::regex tabRegex("\t");
     result = std::regex_replace(result, tabRegex, "\\t");
-    
+
     std::regex crRegex("\r");
     result = std::regex_replace(result, crRegex, "\\r");
-    
+
     return result;
 }
 

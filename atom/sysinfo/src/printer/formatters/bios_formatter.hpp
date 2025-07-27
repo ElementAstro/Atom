@@ -17,7 +17,7 @@ class BiosFormatter : public BaseFormatter {
 public:
     BiosFormatter() = default;
     explicit BiosFormatter(const FormatterOptions& options);
-    
+
     [[nodiscard]] auto format(const BiosInfoData& info) const -> std::string;
     [[nodiscard]] auto format(const BiosInfoData& info, const std::string& title) const -> std::string;
     [[nodiscard]] auto formatBasic(const BiosInfoData& info) const -> std::string;

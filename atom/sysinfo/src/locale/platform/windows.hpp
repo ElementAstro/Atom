@@ -170,8 +170,8 @@ auto formatCurrency(double amount, const std::string& locale) -> std::string;
  * @param format Optional custom format string
  * @return Formatted date string
  */
-auto formatDate(const std::chrono::system_clock::time_point& timestamp, 
-                const std::string& locale, 
+auto formatDate(const std::chrono::system_clock::time_point& timestamp,
+                const std::string& locale,
                 const std::string& format = "") -> std::string;
 
 /**
@@ -181,8 +181,8 @@ auto formatDate(const std::chrono::system_clock::time_point& timestamp,
  * @param format Optional custom format string
  * @return Formatted time string
  */
-auto formatTime(const std::chrono::system_clock::time_point& timestamp, 
-                const std::string& locale, 
+auto formatTime(const std::chrono::system_clock::time_point& timestamp,
+                const std::string& locale,
                 const std::string& format = "") -> std::string;
 
 } // namespace atom::system::locale::windows

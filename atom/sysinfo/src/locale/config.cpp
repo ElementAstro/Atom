@@ -14,24 +14,24 @@ namespace {
     bool parseEnvBool(const char* envVar, bool defaultValue = false) {
         const char* value = std::getenv(envVar);
         if (!value) return defaultValue;
-        
+
         std::string str(value);
         std::transform(str.begin(), str.end(), str.begin(), ::tolower);
         return str == "true" || str == "1" || str == "yes" || str == "on";
     }
-    
+
     // Helper function to parse environment variable as integer
     int parseEnvInt(const char* envVar, int defaultValue = 0) {
         const char* value = std::getenv(envVar);
         if (!value) return defaultValue;
-        
+
         try {
             return std::stoi(value);
         } catch (...) {
             return defaultValue;
         }
     }
-    
+
     // Helper function to parse environment variable as string
     std::string parseEnvString(const char* envVar, const std::string& defaultValue = "") {
         const char* value = std::getenv(envVar);
@@ -47,38 +47,38 @@ auto LocaleConfigManager::getInstance() -> LocaleConfigManager& {
 
 auto LocaleConfigManager::loadFromFile(const std::string& filePath) -> bool {
     std::lock_guard<std::mutex> lock(configMutex_);
-    
+
     try {
         std::ifstream file(filePath);
         if (!file.is_open()) {
             spdlog::warn("Could not open config file: {}", filePath);
             return false;
         }
-        
+
         // Simple key=value parser (in a real implementation, you might use JSON or YAML)
         std::string line;
         while (std::getline(file, line)) {
             if (line.empty() || line[0] == '#') continue;
-            
+
             size_t pos = line.find('=');
             if (pos != std::string::npos) {
                 std::string key = line.substr(0, pos);
                 std::string value = line.substr(pos + 1);
-                
+
                 // Trim whitespace
                 key.erase(0, key.find_first_not_of(" \t"));
                 key.erase(key.find_last_not_of(" \t") + 1);
                 value.erase(0, value.find_first_not_of(" \t"));
                 value.erase(value.find_last_not_of(" \t") + 1);
-                
+
                 updateConfig(key, value);
             }
         }
-        
+
         config_.configFilePath = filePath;
         spdlog::info("Loaded configuration from: {}", filePath);
         return true;
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Error loading config file {}: {}", filePath, e.what());
         return false;
@@ -87,29 +87,29 @@ auto LocaleConfigManager::loadFromFile(const std::string& filePath) -> bool {
 
 auto LocaleConfigManager::saveToFile(const std::string& filePath) -> bool {
     std::lock_guard<std::mutex> lock(configMutex_);
-    
+
     try {
         std::ofstream file(filePath);
         if (!file.is_open()) {
             spdlog::error("Could not create config file: {}", filePath);
             return false;
         }
-        
+
         file << "# Locale System Configuration\n";
         file << "# Generated automatically\n\n";
-        
+
         file << "default_locale=" << config_.defaultLocale << "\n";
         file << "log_level=" << static_cast<int>(config_.logLevel) << "\n";
         file << "enable_validation=" << (config_.enableValidation ? "true" : "false") << "\n";
         file << "enable_compatibility_checks=" << (config_.enableCompatibilityChecks ? "true" : "false") << "\n";
-        
+
         file << "\n# Cache Configuration\n";
         file << "cache_strategy=" << static_cast<int>(config_.cache.strategy) << "\n";
         file << "cache_timeout=" << config_.cache.timeout.count() << "\n";
         file << "cache_max_memory_entries=" << config_.cache.maxMemoryEntries << "\n";
         file << "cache_max_memory_size=" << config_.cache.maxMemorySize << "\n";
         file << "cache_enable_compression=" << (config_.cache.enableCompression ? "true" : "false") << "\n";
-        
+
         file << "\n# Performance Configuration\n";
         file << "perf_enable_lazy_loading=" << (config_.performance.enableLazyLoading ? "true" : "false") << "\n";
         file << "perf_enable_preloading=" << (config_.performance.enablePreloading ? "true" : "false") << "\n";
@@ -117,10 +117,10 @@ auto LocaleConfigManager::saveToFile(const std::string& filePath) -> bool {
         file << "perf_enable_async=" << (config_.performance.enableAsyncOperations ? "true" : "false") << "\n";
         file << "perf_operation_timeout=" << config_.performance.operationTimeout.count() << "\n";
         file << "perf_enable_metrics=" << (config_.performance.enableMetrics ? "true" : "false") << "\n";
-        
+
         spdlog::info("Saved configuration to: {}", filePath);
         return true;
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Error saving config file {}: {}", filePath, e.what());
         return false;
@@ -129,45 +129,45 @@ auto LocaleConfigManager::saveToFile(const std::string& filePath) -> bool {
 
 void LocaleConfigManager::loadFromEnvironment() {
     std::lock_guard<std::mutex> lock(configMutex_);
-    
+
     // Load basic configuration
     config_.defaultLocale = parseEnvString("LOCALE_DEFAULT", config_.defaultLocale);
     config_.enableValidation = parseEnvBool("LOCALE_ENABLE_VALIDATION", config_.enableValidation);
     config_.enableCompatibilityChecks = parseEnvBool("LOCALE_ENABLE_COMPATIBILITY", config_.enableCompatibilityChecks);
-    
+
     // Load cache configuration
     int cacheStrategy = parseEnvInt("LOCALE_CACHE_STRATEGY", static_cast<int>(config_.cache.strategy));
     if (cacheStrategy >= 0 && cacheStrategy <= 3) {
         config_.cache.strategy = static_cast<CacheStrategy>(cacheStrategy);
     }
-    
+
     int cacheTimeout = parseEnvInt("LOCALE_CACHE_TIMEOUT", config_.cache.timeout.count());
     if (cacheTimeout > 0) {
         config_.cache.timeout = std::chrono::seconds(cacheTimeout);
     }
-    
+
     config_.cache.maxMemoryEntries = parseEnvInt("LOCALE_CACHE_MAX_ENTRIES", config_.cache.maxMemoryEntries);
     config_.cache.enableCompression = parseEnvBool("LOCALE_CACHE_COMPRESSION", config_.cache.enableCompression);
     config_.cache.persistentCachePath = parseEnvString("LOCALE_CACHE_PATH", config_.cache.persistentCachePath);
-    
+
     // Load performance configuration
     config_.performance.enableLazyLoading = parseEnvBool("LOCALE_LAZY_LOADING", config_.performance.enableLazyLoading);
     config_.performance.enablePreloading = parseEnvBool("LOCALE_PRELOADING", config_.performance.enablePreloading);
     config_.performance.threadPoolSize = parseEnvInt("LOCALE_THREAD_POOL_SIZE", config_.performance.threadPoolSize);
     config_.performance.enableAsyncOperations = parseEnvBool("LOCALE_ASYNC_OPS", config_.performance.enableAsyncOperations);
     config_.performance.enableMetrics = parseEnvBool("LOCALE_METRICS", config_.performance.enableMetrics);
-    
+
     int operationTimeout = parseEnvInt("LOCALE_OPERATION_TIMEOUT", config_.performance.operationTimeout.count());
     if (operationTimeout > 0) {
         config_.performance.operationTimeout = std::chrono::milliseconds(operationTimeout);
     }
-    
+
     // Load log level
     int logLevel = parseEnvInt("LOCALE_LOG_LEVEL", static_cast<int>(config_.logLevel));
     if (logLevel >= 0 && logLevel <= 5) {
         config_.logLevel = static_cast<LogLevel>(logLevel);
     }
-    
+
     spdlog::info("Loaded configuration from environment variables");
 }
 
@@ -248,22 +248,22 @@ void LocaleConfigManager::resetToDefaults() {
 
 auto LocaleConfigManager::validateConfig() -> bool {
     std::lock_guard<std::mutex> lock(configMutex_);
-    
+
     // Basic validation
     if (config_.defaultLocale.empty()) {
         spdlog::error("Default locale cannot be empty");
         return false;
     }
-    
+
     if (config_.cache.maxMemoryEntries == 0) {
         spdlog::warn("Cache max memory entries is 0, caching will be ineffective");
     }
-    
+
     if (config_.performance.threadPoolSize == 0) {
         spdlog::warn("Thread pool size is 0, async operations will be disabled");
         config_.performance.enableAsyncOperations = false;
     }
-    
+
     return true;
 }
 

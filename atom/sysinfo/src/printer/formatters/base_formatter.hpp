@@ -123,7 +123,7 @@ public:
      * @param defaultValue Default value if key not found
      * @return The option value or default
      */
-    [[nodiscard]] virtual auto getCustomOption(const std::string& key, 
+    [[nodiscard]] virtual auto getCustomOption(const std::string& key,
                                               const std::string& defaultValue = "") const -> std::string;
 
 protected:
@@ -160,7 +160,7 @@ protected:
      * @param color The color code or name
      * @return Colorized text if color is enabled, otherwise original text
      */
-    [[nodiscard]] virtual auto colorize(const std::string& text, 
+    [[nodiscard]] virtual auto colorize(const std::string& text,
                                        const std::string& color) const -> std::string;
 
     /**
@@ -170,7 +170,7 @@ protected:
      * @param precision Number of decimal places
      * @return Formatted value with units
      */
-    [[nodiscard]] virtual auto formatWithUnits(double value, 
+    [[nodiscard]] virtual auto formatWithUnits(double value,
                                               const std::string& unit,
                                               int precision = 2) const -> std::string;
 

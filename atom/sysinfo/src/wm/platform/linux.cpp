@@ -64,7 +64,7 @@ auto getDesktopEnvironment() -> std::string {
 auto isWayland() -> bool {
     const char* waylandDisplay = std::getenv("WAYLAND_DISPLAY");
     const char* xdgSessionType = std::getenv("XDG_SESSION_TYPE");
-    
+
     return (waylandDisplay && strlen(waylandDisplay) > 0) ||
            (xdgSessionType && strcmp(xdgSessionType, "wayland") == 0);
 }
@@ -72,7 +72,7 @@ auto isWayland() -> bool {
 auto isX11() -> bool {
     const char* display = std::getenv("DISPLAY");
     const char* xdgSessionType = std::getenv("XDG_SESSION_TYPE");
-    
+
     return (display && strlen(display) > 0) ||
            (xdgSessionType && strcmp(xdgSessionType, "x11") == 0);
 }
@@ -166,15 +166,15 @@ auto getSystemInfo() -> WMResult<SystemInfo> {
 auto getThemeInfo() -> WMResult<ThemeInfo> {
     ThemeInfo theme;
     std::string de = getDesktopEnvironment();
-    
+
     if (de.find("GNOME") != std::string::npos) {
         theme.name = executeCommand(
             "gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null");
-        
+
         // Check for dark theme preference
         std::string colorScheme = executeCommand(
             "gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null");
-        
+
         if (colorScheme.find("dark") != std::string::npos) {
             theme.type = ThemeType::DARK;
             theme.variant = "dark";
@@ -185,13 +185,13 @@ auto getThemeInfo() -> WMResult<ThemeInfo> {
             theme.type = ThemeType::AUTO;
             theme.variant = "auto";
         }
-        
+
         theme.followsSystemTheme = true;
     } else if (de.find("KDE") != std::string::npos) {
         theme.name = executeCommand(
             "kreadconfig5 --group General --key ColorScheme 2>/dev/null");
-        
-        if (theme.name.find("Dark") != std::string::npos || 
+
+        if (theme.name.find("Dark") != std::string::npos ||
             theme.name.find("dark") != std::string::npos) {
             theme.type = ThemeType::DARK;
             theme.variant = "dark";
@@ -199,7 +199,7 @@ auto getThemeInfo() -> WMResult<ThemeInfo> {
             theme.type = ThemeType::LIGHT;
             theme.variant = "light";
         }
-        
+
         theme.followsSystemTheme = true;
     } else {
         theme.type = ThemeType::UNKNOWN;
@@ -207,7 +207,7 @@ auto getThemeInfo() -> WMResult<ThemeInfo> {
         theme.variant = "unknown";
         theme.followsSystemTheme = false;
     }
-    
+
     // Set default colors based on theme type
     if (theme.type == ThemeType::DARK) {
         theme.backgroundColor = "#2E2E2E";
@@ -218,39 +218,39 @@ auto getThemeInfo() -> WMResult<ThemeInfo> {
         theme.foregroundColor = "#000000";
         theme.accentColor = "#3584E4";
     }
-    
+
     return theme;
 }
 
 auto enumerateWindows() -> WMResult<std::vector<WindowInfo>> {
     std::vector<WindowInfo> windows;
-    
+
     // Use wmctrl to get window list
     std::string output = executeCommand("wmctrl -l -p -G 2>/dev/null");
     if (output == "Unknown" || output.empty()) {
         return WMError::OPERATION_FAILED;
     }
-    
+
     std::istringstream stream(output);
     std::string line;
-    
+
     while (std::getline(stream, line)) {
         if (line.empty()) continue;
-        
+
         std::istringstream lineStream(line);
         std::string windowIdStr, desktop, pid, x, y, width, height, hostname;
-        
+
         if (!(lineStream >> windowIdStr >> desktop >> pid >> x >> y >> width >> height >> hostname)) {
             continue;
         }
-        
+
         // Get the rest as window title
         std::string title;
         std::getline(lineStream, title);
         if (!title.empty() && title[0] == ' ') {
             title = title.substr(1); // Remove leading space
         }
-        
+
         WindowInfo info;
         try {
             info.id = std::stoull(windowIdStr, nullptr, 16); // Window ID is in hex
@@ -261,7 +261,7 @@ auto enumerateWindows() -> WMResult<std::vector<WindowInfo>> {
             info.height = std::stoi(height);
             info.title = title;
             info.isVisible = true; // wmctrl only shows visible windows
-            
+
             // Try to get process name
             std::string procPath = "/proc/" + pid + "/comm";
             std::ifstream procFile(procPath);
@@ -270,18 +270,18 @@ auto enumerateWindows() -> WMResult<std::vector<WindowInfo>> {
             } else {
                 info.processName = "Unknown";
             }
-            
+
             if (desktop != "-1") {
                 info.workspaceId = std::stoul(desktop);
             }
-            
+
             windows.push_back(info);
         } catch (const std::exception& e) {
             spdlog::warn("Failed to parse window info: {}", e.what());
             continue;
         }
     }
-    
+
     return windows;
 }
 
@@ -291,44 +291,44 @@ auto getWindowInfo(uint64_t windowId) -> WMResult<WindowInfo> {
     if (isError(windowsResult)) {
         return getError(windowsResult);
     }
-    
+
     const auto& windows = getValue(windowsResult);
     for (const auto& window : windows) {
         if (window.id == windowId) {
             return window;
         }
     }
-    
+
     return WMError::WINDOW_NOT_FOUND;
 }
 
 auto getMonitors() -> WMResult<std::vector<MonitorInfo>> {
     std::vector<MonitorInfo> monitors;
-    
+
     // Try xrandr first
     std::string output = executeCommand("xrandr --query 2>/dev/null | grep ' connected'");
     if (output != "Unknown" && !output.empty()) {
         std::istringstream stream(output);
         std::string line;
         uint32_t id = 0;
-        
+
         while (std::getline(stream, line)) {
             MonitorInfo monitor;
             monitor.id = id++;
-            
+
             // Parse xrandr output (format: "HDMI-1 connected 1920x1080+0+0 ...")
             std::istringstream lineStream(line);
             std::string name, status, geometry;
-            
+
             if (lineStream >> name >> status >> geometry) {
                 monitor.name = name;
                 monitor.isPrimary = (line.find("primary") != std::string::npos);
-                
+
                 // Parse geometry (1920x1080+0+0)
                 size_t xPos = geometry.find('x');
                 size_t plusPos1 = geometry.find('+', xPos);
                 size_t plusPos2 = geometry.find('+', plusPos1 + 1);
-                
+
                 if (xPos != std::string::npos && plusPos1 != std::string::npos) {
                     try {
                         monitor.width = std::stoi(geometry.substr(0, xPos));
@@ -343,15 +343,15 @@ auto getMonitors() -> WMResult<std::vector<MonitorInfo>> {
                         monitor.height = 1080;
                     }
                 }
-                
+
                 monitor.refreshRate = 60; // Default, could be parsed from xrandr
                 monitor.scaleFactor = 1.0f; // Could be detected
-                
+
                 monitors.push_back(monitor);
             }
         }
     }
-    
+
     // Fallback: create a default monitor
     if (monitors.empty()) {
         MonitorInfo monitor;
@@ -364,37 +364,37 @@ auto getMonitors() -> WMResult<std::vector<MonitorInfo>> {
         monitor.scaleFactor = 1.0f;
         monitors.push_back(monitor);
     }
-    
+
     return monitors;
 }
 
 auto getWorkspaces() -> WMResult<std::vector<WorkspaceInfo>> {
     std::vector<WorkspaceInfo> workspaces;
-    
+
     // Use wmctrl to get desktop list
     std::string output = executeCommand("wmctrl -d 2>/dev/null");
     if (output == "Unknown" || output.empty()) {
         return WMError::OPERATION_FAILED;
     }
-    
+
     std::istringstream stream(output);
     std::string line;
-    
+
     while (std::getline(stream, line)) {
         if (line.empty()) continue;
-        
+
         std::istringstream lineStream(line);
         std::string idStr, status, geometry, viewport, workarea;
-        
+
         if (!(lineStream >> idStr >> status)) {
             continue;
         }
-        
+
         WorkspaceInfo workspace;
         try {
             workspace.id = std::stoul(idStr);
             workspace.isActive = (status == "*");
-            
+
             // Get the rest as workspace name
             std::string name;
             std::getline(lineStream, name);
@@ -409,25 +409,25 @@ auto getWorkspaces() -> WMResult<std::vector<WorkspaceInfo>> {
             } else {
                 workspace.name = "Desktop " + std::to_string(workspace.id + 1);
             }
-            
+
             // Set default dimensions (could be parsed from geometry)
             workspace.width = 1920;
             workspace.height = 1080;
-            
+
             workspaces.push_back(workspace);
         } catch (const std::exception& e) {
             spdlog::warn("Failed to parse workspace info: {}", e.what());
             continue;
         }
     }
-    
+
     return workspaces;
 }
 
 auto setWindowState(uint64_t windowId, WindowState state) -> WMResult<bool> {
     std::string windowIdHex = std::to_string(windowId);
     std::string command;
-    
+
     switch (state) {
         case WindowState::MINIMIZED:
             command = "wmctrl -i -r " + windowIdHex + " -b add,hidden";
@@ -441,52 +441,52 @@ auto setWindowState(uint64_t windowId, WindowState state) -> WMResult<bool> {
         default:
             return WMError::INVALID_PARAMETER;
     }
-    
+
     std::string result = executeCommand(command);
     return result != "Unknown";
 }
 
 auto moveWindow(uint64_t windowId, int x, int y) -> WMResult<bool> {
-    std::string command = "wmctrl -i -r " + std::to_string(windowId) + 
+    std::string command = "wmctrl -i -r " + std::to_string(windowId) +
                          " -e 0," + std::to_string(x) + "," + std::to_string(y) + ",-1,-1";
-    
+
     std::string result = executeCommand(command);
     return result != "Unknown";
 }
 
 auto resizeWindow(uint64_t windowId, int width, int height) -> WMResult<bool> {
-    std::string command = "wmctrl -i -r " + std::to_string(windowId) + 
+    std::string command = "wmctrl -i -r " + std::to_string(windowId) +
                          " -e 0,-1,-1," + std::to_string(width) + "," + std::to_string(height);
-    
+
     std::string result = executeCommand(command);
     return result != "Unknown";
 }
 
 auto focusWindow(uint64_t windowId) -> WMResult<bool> {
     std::string command = "wmctrl -i -a " + std::to_string(windowId);
-    
+
     std::string result = executeCommand(command);
     return result != "Unknown";
 }
 
 auto closeWindow(uint64_t windowId) -> WMResult<bool> {
     std::string command = "wmctrl -i -c " + std::to_string(windowId);
-    
+
     std::string result = executeCommand(command);
     return result != "Unknown";
 }
 
 auto switchToWorkspace(uint32_t workspaceId) -> WMResult<bool> {
     std::string command = "wmctrl -s " + std::to_string(workspaceId);
-    
+
     std::string result = executeCommand(command);
     return result != "Unknown";
 }
 
 auto moveWindowToWorkspace(uint64_t windowId, uint32_t workspaceId) -> WMResult<bool> {
-    std::string command = "wmctrl -i -r " + std::to_string(windowId) + 
+    std::string command = "wmctrl -i -r " + std::to_string(windowId) +
                          " -t " + std::to_string(workspaceId);
-    
+
     std::string result = executeCommand(command);
     return result != "Unknown";
 }

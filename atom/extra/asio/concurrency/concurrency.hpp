@@ -3,7 +3,7 @@
 /**
  * @file concurrency.hpp
  * @brief Comprehensive concurrency framework with cutting-edge C++23 primitives
- * 
+ *
  * This header provides access to all advanced concurrency components:
  * - Lock-free data structures with hazard pointers
  * - Adaptive synchronization primitives
@@ -56,14 +56,14 @@ public:
             spdlog::trace("Object acquired from pool");
             return std::move(obj.value());
         }
-        
+
         // Allocate new object
         auto* raw_ptr = memory_pool_.allocate(std::forward<Args>(args)...);
         auto obj = std::unique_ptr<T>(raw_ptr);
-        
+
         total_allocated_.get().fetch_add(1, std::memory_order_relaxed);
         total_in_use_.get().fetch_add(1, std::memory_order_relaxed);
-        
+
         spdlog::trace("New object allocated for pool");
         return obj;
     }
@@ -104,7 +104,7 @@ class concurrency_manager {
 private:
     std::unique_ptr<work_stealing_thread_pool> thread_pool_;
     performance_monitor& perf_monitor_;
-    
+
     // Singleton instance
     static std::unique_ptr<concurrency_manager> instance_;
     static std::once_flag init_flag_;
@@ -113,9 +113,9 @@ private:
         // Initialize with optimal thread count
         auto thread_count = std::thread::hardware_concurrency();
         if (thread_count == 0) thread_count = 4;
-        
+
         thread_pool_ = std::make_unique<work_stealing_thread_pool>(thread_count);
-        
+
         spdlog::info("Concurrency manager initialized with {} threads", thread_count);
     }
 
@@ -169,9 +169,9 @@ public:
         spdlog::info("Thread pool size: {}", thread_pool_->size());
         spdlog::info("Pending tasks: {}", thread_pool_->pending_tasks());
         spdlog::info("Performance counters: {}", perf_monitor_.counter_count());
-        
+
         perf_monitor_.log_statistics();
-        
+
         spdlog::info("====================================");
     }
 };

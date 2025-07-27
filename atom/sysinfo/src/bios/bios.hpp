@@ -8,7 +8,7 @@ namespace atom::system {
 
 /**
  * @brief Singleton class for managing BIOS information and operations
- * 
+ *
  * This class provides a unified interface for BIOS operations across different platforms.
  * It uses platform-specific implementations internally while maintaining a consistent API.
  */
@@ -92,7 +92,7 @@ public:
     bool isUEFIBootSupported() const;
 
     // Enhanced features
-    
+
     /**
      * @brief Get detailed firmware information
      * @return Firmware information structure
@@ -206,7 +206,7 @@ public:
 private:
     BiosInfo();
     ~BiosInfo() = default;
-    
+
     // Prevent copying
     BiosInfo(const BiosInfo&) = delete;
     BiosInfo& operator=(const BiosInfo&) = delete;

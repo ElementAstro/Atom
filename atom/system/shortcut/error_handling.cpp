@@ -16,10 +16,10 @@ thread_local std::vector<ErrorContext> ErrorContextManager::contextStack_;
 std::string ErrorContext::toString() const {
     std::stringstream ss;
     ss << "Function: " << function << ", File: " << file << ":" << line;
-    
+
     auto time_t = std::chrono::system_clock::to_time_t(timestamp);
     ss << ", Time: " << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
-    
+
     if (!additionalInfo.empty()) {
         ss << ", Additional: {";
         bool first = true;
@@ -30,7 +30,7 @@ std::string ErrorContext::toString() const {
         }
         ss << "}";
     }
-    
+
     return ss.str();
 }
 
@@ -53,11 +53,11 @@ std::string ShortcutDetectorException::getDetailedMessage() const {
     ss << "[" << error_utils::severityToString(severity_) << "] "
        << "[" << error_utils::categoryToString(category_) << "] "
        << message_;
-    
+
     if (!context_.function.empty()) {
         ss << " (in " << context_.function << ")";
     }
-    
+
     return ss.str();
 }
 
@@ -115,15 +115,15 @@ void ErrorHandler::handleError(const ShortcutDetectorException& error) {
     // Update statistics
     stats_.totalErrors++;
     stats_.lastError = std::chrono::system_clock::now();
-    
-    if (error.getSeverity() == ErrorSeverity::Critical || 
+
+    if (error.getSeverity() == ErrorSeverity::Critical ||
         error.getSeverity() == ErrorSeverity::Fatal) {
         stats_.criticalErrors++;
     }
-    
+
     // Log the error
     std::string logMessage = error_utils::formatErrorMessage(error);
-    
+
     switch (error.getSeverity()) {
         case ErrorSeverity::Info:
             spdlog::info(logMessage);
@@ -139,13 +139,13 @@ void ErrorHandler::handleError(const ShortcutDetectorException& error) {
             spdlog::critical(logMessage);
             break;
     }
-    
+
     // Attempt recovery if enabled
     if (autoRecovery_ && attemptRecovery(error)) {
         stats_.recoveredErrors++;
         spdlog::info("Successfully recovered from error: {}", error.getMessage());
     }
-    
+
     // Call registered callbacks
     auto it = callbacks_.find(error.getSeverity());
     if (it != callbacks_.end()) {
@@ -181,7 +181,7 @@ bool ErrorHandler::attemptRecovery(const ShortcutDetectorException& error) {
             if (strategy->canHandle(error)) {
                 try {
                     if (strategy->recover(error)) {
-                        spdlog::debug("Recovery successful with strategy: {}", 
+                        spdlog::debug("Recovery successful with strategy: {}",
                                      strategy->getDescription());
                         return true;
                     }
@@ -195,8 +195,8 @@ bool ErrorHandler::attemptRecovery(const ShortcutDetectorException& error) {
 }
 
 // ErrorContextManager implementation
-ErrorContextManager::ErrorContextManager(const std::string& function, 
-                                        const std::string& file, 
+ErrorContextManager::ErrorContextManager(const std::string& function,
+                                        const std::string& file,
                                         int line) {
     contextStack_.emplace_back(function, file, line);
 }
@@ -258,21 +258,21 @@ std::string categoryToString(ErrorCategory category) {
 std::string getSystemErrorMessage(int errorCode) {
 #ifdef _WIN32
     if (errorCode == 0) return "Success";
-    
+
     LPSTR messageBuffer = nullptr;
     size_t size = FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL, errorCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
         (LPSTR)&messageBuffer, 0, NULL);
-    
+
     std::string message(messageBuffer, size);
     LocalFree(messageBuffer);
-    
+
     // Remove trailing newlines
     while (!message.empty() && (message.back() == '\n' || message.back() == '\r')) {
         message.pop_back();
     }
-    
+
     return message;
 #else
     return "Error code: " + std::to_string(errorCode);
@@ -282,12 +282,12 @@ std::string getSystemErrorMessage(int errorCode) {
 std::string formatErrorMessage(const ShortcutDetectorException& error) {
     std::stringstream ss;
     ss << error.getDetailedMessage();
-    
+
     const auto& context = error.getContext();
     if (!context.function.empty()) {
         ss << "\nContext: " << context.toString();
     }
-    
+
     // Add specific error type information
     if (auto sysError = dynamic_cast<const SystemException*>(&error)) {
         if (sysError->getSystemErrorCode() != 0) {
@@ -305,7 +305,7 @@ std::string formatErrorMessage(const ShortcutDetectorException& error) {
             ss << "\nConfig Key: " << configError->getConfigKey();
         }
     }
-    
+
     return ss.str();
 }
 

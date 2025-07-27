@@ -65,7 +65,7 @@ void CronConfigManager::emitEvent(const CronEvent& event) {
     if (!config_.enableMetrics) {
         return;
     }
-    
+
     std::lock_guard<std::mutex> lock(callbackMutex_);
     for (const auto& [id, callback] : callbacks_) {
         try {
@@ -83,26 +83,26 @@ bool CronConfigManager::loadFromFile(const std::string& filePath) {
             spdlog::warn("Could not open cron config file: {}", filePath);
             return false;
         }
-        
+
         // Simple key-value parsing (could be enhanced with JSON/YAML)
         std::string line;
         CronSystemConfig newConfig = config_;
-        
+
         while (std::getline(file, line)) {
             if (line.empty() || line[0] == '#') continue;
-            
+
             auto pos = line.find('=');
             if (pos == std::string::npos) continue;
-            
+
             std::string key = line.substr(0, pos);
             std::string value = line.substr(pos + 1);
-            
+
             // Remove whitespace
             key.erase(0, key.find_first_not_of(" \t"));
             key.erase(key.find_last_not_of(" \t") + 1);
             value.erase(0, value.find_first_not_of(" \t"));
             value.erase(value.find_last_not_of(" \t") + 1);
-            
+
             // Parse configuration values
             if (key == "maxJobs") {
                 newConfig.maxJobs = std::stoul(value);
@@ -123,11 +123,11 @@ bool CronConfigManager::loadFromFile(const std::string& filePath) {
             }
             // Add more configuration options as needed
         }
-        
+
         updateConfig(newConfig);
         spdlog::info("Cron configuration loaded from: {}", filePath);
         return true;
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Error loading cron configuration from {}: {}", filePath, e.what());
         return false;
@@ -141,9 +141,9 @@ bool CronConfigManager::saveToFile(const std::string& filePath) const {
             spdlog::error("Could not create cron config file: {}", filePath);
             return false;
         }
-        
+
         std::lock_guard<std::mutex> lock(configMutex_);
-        
+
         file << "# Cron System Configuration\n";
         file << "maxJobs=" << config_.maxJobs << "\n";
         file << "maxJobsPerUser=" << config_.maxJobsPerUser << "\n";
@@ -177,22 +177,22 @@ bool CronConfigManager::saveToFile(const std::string& filePath) const {
         file << "maxMemoryUsageMB=" << config_.maxMemoryUsageMB << "\n";
         file << "maxCpuUsagePercent=" << config_.maxCpuUsagePercent << "\n";
         file << "maxFileDescriptors=" << config_.maxFileDescriptors << "\n";
-        
+
         spdlog::info("Cron configuration saved to: {}", filePath);
         return true;
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Error saving cron configuration to {}: {}", filePath, e.what());
         return false;
     }
 }
 
-void CronConfigManager::updateMetrics(CronEventType type, const std::string& jobId, 
+void CronConfigManager::updateMetrics(CronEventType type, const std::string& jobId,
                                      std::chrono::microseconds executionTime) {
     if (!config_.enableMetrics) {
         return;
     }
-    
+
     switch (type) {
         case CronEventType::JOB_CREATED:
             metrics_.totalJobs++;
@@ -232,24 +232,24 @@ void CronConfigManager::updateMetrics(CronEventType type, const std::string& job
         default:
             break;
     }
-    
+
     // Update execution time metrics
     if (executionTime.count() > 0) {
         metrics_.totalExecutionTime += executionTime.count();
-        
+
         auto currentMin = metrics_.minExecutionTime.load();
-        while (executionTime.count() < currentMin && 
+        while (executionTime.count() < currentMin &&
                !metrics_.minExecutionTime.compare_exchange_weak(currentMin, executionTime.count())) {
             // Retry until successful
         }
-        
+
         auto currentMax = metrics_.maxExecutionTime.load();
-        while (executionTime.count() > currentMax && 
+        while (executionTime.count() > currentMax &&
                !metrics_.maxExecutionTime.compare_exchange_weak(currentMax, executionTime.count())) {
             // Retry until successful
         }
     }
-    
+
     // Emit event if enabled
     if (config_.enableMetrics) {
         emitEvent(CronEvent(type, jobId, "", ""));

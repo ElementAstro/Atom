@@ -38,14 +38,14 @@ void demonstrateFormatterStyles() {
 
         for (size_t i = 0; i < styles.size(); ++i) {
             std::cout << "--- " << styleNames[i] << " Style ---\n";
-            
+
             FormatterOptions options;
             options.style = styles[i];
             options.colorEnabled = false; // Disable colors for console output
-            
+
             CpuFormatter formatter(options);
             auto formatted = formatter.format(cpuInfo, "CPU Information (" + styleNames[i] + ")");
-            
+
             std::cout << formatted << "\n";
         }
 
@@ -75,14 +75,14 @@ void demonstrateOutputFormats() {
 
         for (size_t i = 0; i < formats.size(); ++i) {
             std::cout << "--- " << formatNames[i] << " Format ---\n";
-            
+
             FormatterOptions options;
             options.format = formats[i];
             options.style = FormatterStyle::STANDARD;
-            
+
             MemoryFormatter formatter(options);
             auto formatted = formatter.format(memInfo, "Memory Information (" + formatNames[i] + ")");
-            
+
             std::cout << formatted << "\n";
         }
 
@@ -113,7 +113,7 @@ void demonstrateCustomOptions() {
         options.indentation = "    "; // 4-space indentation
 
         BatteryFormatter formatter(options);
-        
+
         // Set custom options
         formatter.setCustomOption("show_icons", "true");
         formatter.setCustomOption("progress_bar_width", "25");
@@ -125,7 +125,7 @@ void demonstrateCustomOptions() {
         // Demonstrate different table widths
         std::cout << "--- Different Table Widths ---\n";
         std::vector<int> widths = {60, 80, 120};
-        
+
         for (int width : widths) {
             options.tableWidth = width;
             BatteryFormatter widthFormatter(options);
@@ -160,7 +160,7 @@ void demonstrateReportCustomization() {
 
         SystemInfoPrinter printer;
         auto customReport = printer.generateReport(ReportType::CUSTOM, reportOptions);
-        
+
         std::cout << "Custom report with selected sections:\n";
         std::cout << customReport.substr(0, 1000); // Show first 1000 characters
         if (customReport.length() > 1000) {

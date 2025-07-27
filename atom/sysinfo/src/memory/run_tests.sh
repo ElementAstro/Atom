@@ -41,11 +41,11 @@ command_exists() {
 # Function to build tests
 build_tests() {
     print_status "Building memory module tests..."
-    
+
     # Create build directory
     mkdir -p "${BUILD_DIR}"
     cd "${BUILD_DIR}"
-    
+
     # Configure with CMake
     if command_exists cmake; then
         cmake -DCMAKE_BUILD_TYPE=Release "${SCRIPT_DIR}"
@@ -61,7 +61,7 @@ build_tests() {
 run_all_tests() {
     print_status "Running all memory module tests..."
     cd "${BUILD_DIR}"
-    
+
     if [ -f "./memory_tests" ]; then
         ./memory_tests
         print_success "All tests completed"
@@ -76,7 +76,7 @@ run_test_category() {
     local category="$1"
     print_status "Running ${category} tests..."
     cd "${BUILD_DIR}"
-    
+
     if [ -f "./memory_tests" ]; then
         ./memory_tests --gtest_filter="*${category}*"
         print_success "${category} tests completed"
@@ -90,7 +90,7 @@ run_test_category() {
 run_benchmarks() {
     print_status "Running memory performance benchmarks..."
     cd "${BUILD_DIR}"
-    
+
     if [ -f "./memory_tests" ]; then
         ./memory_tests --gtest_filter="*Performance*:*Benchmark*"
         print_success "Benchmarks completed"
@@ -105,7 +105,7 @@ run_valgrind_tests() {
     if command_exists valgrind; then
         print_status "Running tests with Valgrind memory checking..."
         cd "${BUILD_DIR}"
-        
+
         if [ -f "./memory_tests" ]; then
             valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all \
                      --track-origins=yes --verbose ./memory_tests
@@ -124,28 +124,28 @@ generate_coverage() {
     if command_exists gcov; then
         print_status "Generating test coverage report..."
         cd "${BUILD_DIR}"
-        
+
         # Rebuild with coverage flags
         cmake -DCMAKE_BUILD_TYPE=Debug "${SCRIPT_DIR}"
         make -j$(nproc)
-        
+
         # Run tests
         ./memory_tests
-        
+
         # Generate coverage
         gcov *.cpp
-        
+
         if command_exists lcov; then
             lcov --capture --directory . --output-file coverage.info
             lcov --remove coverage.info '/usr/*' --output-file coverage.info
             lcov --list coverage.info
-            
+
             if command_exists genhtml; then
                 genhtml coverage.info --output-directory coverage_html
                 print_success "Coverage report generated in coverage_html/"
             fi
         fi
-        
+
         print_success "Coverage analysis completed"
     else
         print_warning "gcov not found. Cannot generate coverage report."
@@ -156,7 +156,7 @@ generate_coverage() {
 run_stress_tests() {
     print_status "Running memory stress tests..."
     cd "${BUILD_DIR}"
-    
+
     if [ -f "./memory_tests" ]; then
         # Run tests multiple times to stress the system
         for i in {1..5}; do

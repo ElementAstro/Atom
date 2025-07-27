@@ -93,13 +93,13 @@ struct GPUMemoryInfo {
     size_t usedMemory;            /**< Used GPU memory in bytes */
     size_t sharedMemory;          /**< Shared system memory in bytes */
     double memoryUsagePercent;    /**< Memory usage percentage */
-    
+
     // Memory specifications
     std::string memoryType;       /**< Memory type (GDDR6, HBM2, etc.) */
     int memoryBusWidth;           /**< Memory bus width in bits */
     double memoryClockSpeed;      /**< Memory clock speed in MHz */
     double memoryBandwidth;       /**< Memory bandwidth in GB/s */
-    
+
     std::chrono::steady_clock::time_point timestamp; /**< When measured */
 } ATOM_ALIGNAS(64);
 
@@ -113,29 +113,29 @@ struct GPUPerformanceMetrics {
     double memoryUtilization;     /**< Memory controller utilization */
     double encoderUtilization;    /**< Video encoder utilization */
     double decoderUtilization;    /**< Video decoder utilization */
-    
+
     // Clock speeds
     double coreClockSpeed;        /**< Current core clock in MHz */
     double memoryClockSpeed;      /**< Current memory clock in MHz */
     double baseClock;             /**< Base clock speed in MHz */
     double boostClock;            /**< Boost clock speed in MHz */
-    
+
     // Thermal information
     double temperature;           /**< GPU temperature in Celsius */
     double hotspotTemperature;    /**< Hotspot temperature in Celsius */
     double memoryTemperature;     /**< Memory temperature in Celsius */
     double maxTemperature;        /**< Maximum safe temperature */
-    
+
     // Power information
     double powerDraw;             /**< Current power draw in watts */
     double maxPowerLimit;         /**< Maximum power limit in watts */
     double powerLimit;            /**< Current power limit in watts */
     double powerEfficiency;       /**< Performance per watt */
-    
+
     // Fan information
     double fanSpeed;              /**< Fan speed percentage */
     int fanRPM;                   /**< Fan speed in RPM */
-    
+
     std::chrono::steady_clock::time_point timestamp; /**< When measured */
 } ATOM_ALIGNAS(64);
 
@@ -149,22 +149,22 @@ struct GPUComputeCapability {
     int shaderCores;              /**< Number of shader cores */
     int rtCores;                  /**< Number of RT cores (if available) */
     int tensorCores;              /**< Number of Tensor cores (if available) */
-    
+
     // Compute capability
     std::string computeCapability; /**< Compute capability version */
     std::vector<std::string> supportedAPIs; /**< Supported graphics APIs */
     std::vector<std::string> supportedComputeAPIs; /**< Supported compute APIs */
-    
+
     // Performance characteristics
     double peakFP32Performance;   /**< Peak FP32 performance in TFLOPS */
     double peakFP16Performance;   /**< Peak FP16 performance in TFLOPS */
     double peakINT8Performance;   /**< Peak INT8 performance in TOPS */
-    
+
     // Memory hierarchy
     size_t l1CacheSize;           /**< L1 cache size per SM */
     size_t l2CacheSize;           /**< L2 cache size */
     size_t sharedMemorySize;      /**< Shared memory size per block */
-    
+
     std::chrono::steady_clock::time_point timestamp; /**< When measured */
 } ATOM_ALIGNAS(64);
 
@@ -177,18 +177,18 @@ struct GPUDriverInfo {
     std::string driverDate;       /**< Driver release date */
     std::string driverProvider;   /**< Driver provider/vendor */
     std::string driverPath;       /**< Driver file path */
-    
+
     // API support
     std::string openGLVersion;    /**< OpenGL version */
     std::string vulkanVersion;    /**< Vulkan version */
     std::string directXVersion;   /**< DirectX version */
     std::string openCLVersion;    /**< OpenCL version */
     std::string cudaVersion;      /**< CUDA version (NVIDIA) */
-    
+
     // Driver features
     std::vector<std::string> supportedFeatures; /**< Supported driver features */
     bool isWHQLSigned;            /**< Whether driver is WHQL signed */
-    
+
     std::chrono::steady_clock::time_point timestamp; /**< When retrieved */
 } ATOM_ALIGNAS(64);
 
@@ -204,25 +204,25 @@ struct GPUInfo {
     GPUVendor vendor;             /**< GPU vendor */
     GPUType type;                 /**< GPU type */
     GPUArchitecture architecture; /**< GPU architecture */
-    
+
     // Hardware specifications
     std::string biosVersion;      /**< GPU BIOS version */
     std::string subsystemId;      /**< Subsystem ID */
     std::string busId;            /**< PCI bus ID */
     int pcieLanes;                /**< PCIe lanes */
     std::string pcieVersion;      /**< PCIe version */
-    
+
     // Memory and performance
     GPUMemoryInfo memoryInfo;     /**< Memory information */
     GPUPerformanceMetrics performance; /**< Performance metrics */
     GPUComputeCapability compute; /**< Compute capabilities */
     GPUDriverInfo driver;         /**< Driver information */
-    
+
     // Multi-GPU information
     int gpuIndex;                 /**< GPU index in multi-GPU setup */
     bool isPrimary;               /**< Whether this is the primary GPU */
     std::vector<std::string> connectedDisplays; /**< Connected displays */
-    
+
     std::chrono::steady_clock::time_point timestamp; /**< When information was gathered */
 } ATOM_ALIGNAS(128);
 
@@ -235,25 +235,25 @@ struct alignas(128) MonitorInfo {
     std::string identifier;       /**< Monitor identifier */
     std::string manufacturer;     /**< Monitor manufacturer */
     std::string serialNumber;     /**< Monitor serial number */
-    
+
     // Display specifications
     int width{0};                 /**< Screen width in pixels */
     int height{0};                /**< Screen height in pixels */
     int refreshRate{0};           /**< Refresh rate in Hz */
     double diagonalSize;          /**< Diagonal size in inches */
     double pixelDensity;          /**< Pixel density in PPI */
-    
+
     // Color and HDR support
     std::string colorSpace;       /**< Color space (sRGB, DCI-P3, etc.) */
     int bitDepth;                 /**< Color bit depth */
     bool hdrSupported;            /**< HDR support */
     std::vector<std::string> hdrFormats; /**< Supported HDR formats */
-    
+
     // Connection information
     std::string connectionType;   /**< Connection type (HDMI, DP, etc.) */
     std::string connectedGPU;     /**< Connected GPU identifier */
     bool isPrimary;               /**< Whether this is the primary monitor */
-    
+
     std::chrono::steady_clock::time_point timestamp; /**< When information was gathered */
 };
 

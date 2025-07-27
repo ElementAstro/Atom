@@ -40,28 +40,28 @@ struct LinearRegression {
     double slope{0.0};
     double intercept{0.0};
     double correlation{0.0};
-    
+
     LinearRegression(const std::vector<double>& x, const std::vector<double>& y) {
         if (x.size() != y.size() || x.size() < 2) {
             return;
         }
-        
+
         size_t n = x.size();
         double sumX = std::accumulate(x.begin(), x.end(), 0.0);
         double sumY = std::accumulate(y.begin(), y.end(), 0.0);
         double sumXY = 0.0, sumX2 = 0.0, sumY2 = 0.0;
-        
+
         for (size_t i = 0; i < n; ++i) {
             sumXY += x[i] * y[i];
             sumX2 += x[i] * x[i];
             sumY2 += y[i] * y[i];
         }
-        
+
         double denominator = n * sumX2 - sumX * sumX;
         if (std::abs(denominator) > 1e-10) {
             slope = (n * sumXY - sumX * sumY) / denominator;
             intercept = (sumY - slope * sumX) / n;
-            
+
             // Calculate correlation coefficient
             double numerator = n * sumXY - sumX * sumY;
             double denom1 = std::sqrt(n * sumX2 - sumX * sumX);
@@ -78,25 +78,25 @@ bool detectSeasonalPattern(const std::vector<double>& values, std::string& descr
     if (values.size() < 24) {  // Need at least 24 data points
         return false;
     }
-    
+
     // Simple seasonal detection based on autocorrelation
     std::vector<double> autocorr;
     for (size_t lag = 1; lag < std::min(values.size() / 2, size_t(24)); ++lag) {
         double correlation = 0.0;
         double mean = std::accumulate(values.begin(), values.end(), 0.0) / values.size();
-        
+
         double numerator = 0.0, denominator = 0.0;
         for (size_t i = lag; i < values.size(); ++i) {
             numerator += (values[i] - mean) * (values[i - lag] - mean);
             denominator += (values[i] - mean) * (values[i] - mean);
         }
-        
+
         if (denominator > 1e-10) {
             correlation = numerator / denominator;
         }
         autocorr.push_back(std::abs(correlation));
     }
-    
+
     // Find peak autocorrelation
     auto maxIt = std::max_element(autocorr.begin(), autocorr.end());
     if (maxIt != autocorr.end() && *maxIt > 0.3) {  // Threshold for seasonal pattern
@@ -106,7 +106,7 @@ bool detectSeasonalPattern(const std::vector<double>& values, std::string& descr
             return true;
         }
     }
-    
+
     return false;
 }
 
@@ -115,20 +115,20 @@ double calculateAnomalyScore(const std::vector<double>& values, double currentVa
     if (values.size() < 3) {
         return 0.0;
     }
-    
+
     double mean = std::accumulate(values.begin(), values.end(), 0.0) / values.size();
     double variance = 0.0;
-    
+
     for (double value : values) {
         variance += (value - mean) * (value - mean);
     }
     variance /= (values.size() - 1);
-    
+
     double stddev = std::sqrt(variance);
     if (stddev < 1e-10) {
         return 0.0;
     }
-    
+
     return std::abs(currentValue - mean) / stddev;
 }
 }  // anonymous namespace
@@ -136,7 +136,7 @@ double calculateAnomalyScore(const std::vector<double>& values, double currentVa
 UsagePattern analyzeUsagePatterns(const std::string& devicePath, uint32_t analysisDays) {
     UsagePattern pattern;
     pattern.devicePath = devicePath;
-    
+
     try {
         // Get historical disk usage data
         std::lock_guard<std::mutex> lock(g_analyticsCacheMutex);
@@ -145,129 +145,129 @@ UsagePattern analyzeUsagePatterns(const std::string& devicePath, uint32_t analys
             spdlog::warn("Insufficient usage history for pattern analysis: {}", devicePath);
             return pattern;
         }
-        
+
         const auto& history = it->second;
-        
+
         // Calculate daily growth rate
         std::vector<double> usageSizes;
         std::vector<double> timePoints;
-        
+
         for (size_t i = 0; i < history.size(); ++i) {
             usageSizes.push_back(static_cast<double>(history[i].getUsedSpace()));
             timePoints.push_back(static_cast<double>(i));
         }
-        
+
         LinearRegression regression(timePoints, usageSizes);
         pattern.avgDailyGrowthMB = regression.slope / (1024.0 * 1024.0);  // Convert to MB
-        
+
         // Simulate hourly and weekly patterns (in real implementation, this would use actual timestamps)
         std::random_device rd;
         std::mt19937 gen(rd());
         std::normal_distribution<> hourlyDist(0.5, 0.2);
         std::normal_distribution<> weeklyDist(0.7, 0.15);
-        
+
         for (size_t i = 0; i < 24; ++i) {
             pattern.hourlyUsagePattern[i] = std::max(0.0, hourlyDist(gen));
         }
-        
+
         for (size_t i = 0; i < 7; ++i) {
             pattern.weeklyUsagePattern[i] = std::max(0.0, weeklyDist(gen));
         }
-        
+
         // Find peak and minimum usage hours
         auto maxHourIt = std::max_element(pattern.hourlyUsagePattern.begin(), pattern.hourlyUsagePattern.end());
         auto minHourIt = std::min_element(pattern.hourlyUsagePattern.begin(), pattern.hourlyUsagePattern.end());
-        
+
         pattern.peakUsageHour = std::distance(pattern.hourlyUsagePattern.begin(), maxHourIt);
         pattern.minUsageHour = std::distance(pattern.hourlyUsagePattern.begin(), minHourIt);
-        
+
         // Predict days until full
         if (pattern.avgDailyGrowthMB > 0 && !history.empty()) {
             double currentFreeBytes = static_cast<double>(history.back().freeSpace);
             double freeMB = currentFreeBytes / (1024.0 * 1024.0);
             pattern.daysUntilFull = static_cast<uint32_t>(freeMB / pattern.avgDailyGrowthMB);
         }
-        
+
         // Project future size
-        pattern.projectedSizeGB = (static_cast<double>(history.back().getUsedSpace()) + 
+        pattern.projectedSizeGB = (static_cast<double>(history.back().getUsedSpace()) +
                                  pattern.avgDailyGrowthMB * 365 * 1024 * 1024) / (1024.0 * 1024.0 * 1024.0);
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Error analyzing usage patterns for {}: {}", devicePath, e.what());
     }
-    
+
     return pattern;
 }
 
 CapacityPlanningResult performCapacityPlanning(const std::string& devicePath, uint32_t projectionMonths) {
     CapacityPlanningResult result;
     result.devicePath = devicePath;
-    
+
     try {
         // Get current disk info
         auto diskInfo = getDiskInfoCached(devicePath);
         result.currentUsedBytes = diskInfo.getUsedSpace();
         result.currentTotalBytes = diskInfo.totalSpace;
         result.currentUsagePercent = diskInfo.usagePercent;
-        
+
         // Analyze usage patterns
         auto usagePattern = analyzeUsagePatterns(devicePath, 30);
-        
+
         // Calculate growth rates
         result.dailyGrowthRate = usagePattern.avgDailyGrowthMB * 1024 * 1024;  // Convert to bytes
         result.weeklyGrowthRate = result.dailyGrowthRate * 7;
         result.monthlyGrowthRate = result.dailyGrowthRate * 30;
-        
+
         // Project future usage
-        result.projectedUsedBytes6Months = result.currentUsedBytes + 
+        result.projectedUsedBytes6Months = result.currentUsedBytes +
             static_cast<uint64_t>(result.dailyGrowthRate * 180);
-        result.projectedUsedBytes1Year = result.currentUsedBytes + 
+        result.projectedUsedBytes1Year = result.currentUsedBytes +
             static_cast<uint64_t>(result.dailyGrowthRate * 365);
-        result.projectedUsedBytes2Years = result.currentUsedBytes + 
+        result.projectedUsedBytes2Years = result.currentUsedBytes +
             static_cast<uint64_t>(result.dailyGrowthRate * 730);
-        
+
         // Check if expansion is needed
-        float projected6MonthsPercent = (static_cast<float>(result.projectedUsedBytes6Months) / 
+        float projected6MonthsPercent = (static_cast<float>(result.projectedUsedBytes6Months) /
                                        result.currentTotalBytes) * 100.0f;
-        
+
         if (projected6MonthsPercent > 90.0f) {
             result.needsExpansion = true;
-            uint64_t additionalNeeded = result.projectedUsedBytes1Year - 
+            uint64_t additionalNeeded = result.projectedUsedBytes1Year -
                 static_cast<uint64_t>(result.currentTotalBytes * 0.8);  // Keep 20% free
             result.recommendedExpansionGB = static_cast<uint32_t>(additionalNeeded / (1024ULL * 1024 * 1024));
         }
-        
+
         // Calculate days until critical
         if (result.dailyGrowthRate > 0) {
-            uint64_t bytesUntilCritical = static_cast<uint64_t>(result.currentTotalBytes * 0.95) - 
+            uint64_t bytesUntilCritical = static_cast<uint64_t>(result.currentTotalBytes * 0.95) -
                                         result.currentUsedBytes;
             result.daysUntilCritical = static_cast<uint32_t>(bytesUntilCritical / result.dailyGrowthRate);
         }
-        
+
         // Generate recommendations
         if (result.currentUsagePercent > 80.0f) {
             result.recommendations.push_back("Current usage is high - monitor closely");
         }
-        
+
         if (result.needsExpansion) {
             result.recommendations.push_back("Expansion required within 6 months");
-            result.recommendations.push_back("Consider adding " + std::to_string(result.recommendedExpansionGB) + 
+            result.recommendations.push_back("Consider adding " + std::to_string(result.recommendedExpansionGB) +
                                            " GB of storage");
         }
-        
+
         if (result.daysUntilCritical < 90) {
-            result.recommendations.push_back("Critical capacity will be reached in " + 
+            result.recommendations.push_back("Critical capacity will be reached in " +
                                            std::to_string(result.daysUntilCritical) + " days");
         }
-        
+
         if (result.dailyGrowthRate > 1024 * 1024 * 1024) {  // > 1GB per day
             result.recommendations.push_back("High growth rate detected - investigate data retention policies");
         }
-        
+
     } catch (const std::exception& e) {
         spdlog::error("Error performing capacity planning for {}: {}", devicePath, e.what());
     }
-    
+
     return result;
 }
 

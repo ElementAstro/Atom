@@ -54,14 +54,14 @@ using namespace atom::system;
 // Get all disk information
 auto diskInfos = getDiskInfo(true);
 for (const auto& info : diskInfos) {
-    std::cout << "Device: " << info.devicePath 
+    std::cout << "Device: " << info.devicePath
               << ", Usage: " << info.usagePercent << "%" << std::endl;
 }
 
 // Get storage devices
 auto devices = getStorageDevices(true);
 for (const auto& device : devices) {
-    std::cout << "Device: " << device.devicePath 
+    std::cout << "Device: " << device.devicePath
               << ", Size: " << device.getFormattedSize() << std::endl;
 }
 ```
@@ -74,7 +74,7 @@ for (const auto& device : devices) {
 // Create and configure monitor
 DiskMonitor monitor;
 monitor.startMonitoring([](const DiskMonitorEventData& event) {
-    std::cout << "Event: " << static_cast<int>(event.eventType) 
+    std::cout << "Event: " << static_cast<int>(event.eventType)
               << " for device: " << event.devicePath << std::endl;
 });
 
@@ -148,7 +148,7 @@ if (capacityPlan.needsExpansion) {
 // Generate maintenance alerts
 auto alerts = generateMaintenanceAlerts("/dev/sda");
 for (const auto& alert : alerts) {
-    std::cout << "Alert: " << alert.message 
+    std::cout << "Alert: " << alert.message
               << " (Confidence: " << alert.confidence << ")" << std::endl;
 }
 ```

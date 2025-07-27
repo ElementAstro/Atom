@@ -38,7 +38,7 @@ struct HttpRequest {
     std::string remote_addr;
     uint16_t remote_port;
     std::chrono::steady_clock::time_point start_time;
-    
+
     // Helper methods
     std::optional<std::string> get_header(const std::string& name) const;
     std::optional<std::string> get_query_param(const std::string& name) const;
@@ -58,7 +58,7 @@ struct HttpResponse {
     std::unordered_map<std::string, std::string> headers;
     std::string body;
     bool sent = false;
-    
+
     // Helper methods
     void set_header(const std::string& name, const std::string& value);
     void set_content_type(const std::string& content_type);
@@ -81,7 +81,7 @@ public:
     HttpRequest request;
     HttpResponse response;
     std::unordered_map<std::string, std::any> data; // Context data storage
-    
+
     // Convenience methods
     void json(const std::string& json_data, int status = 200);
     void text(const std::string& text_data, int status = 200);
@@ -89,13 +89,13 @@ public:
     void file(const std::string& file_path);
     void error(int status, const std::string& message = "");
     void redirect(const std::string& location, int status = 302);
-    
+
     // Data access
     template<typename T>
     void set(const std::string& key, T&& value) {
         data[key] = std::forward<T>(value);
     }
-    
+
     template<typename T>
     std::optional<T> get(const std::string& key) const {
         auto it = data.find(key);
@@ -126,7 +126,7 @@ struct Route {
     std::vector<std::string> param_names;
     HttpHandler handler;
     std::vector<MiddlewareHandler> middleware;
-    
+
     Route(const std::string& m, const std::string& p, HttpHandler h);
     bool matches(const std::string& method, const std::string& path) const;
     void extract_params(const std::string& path, HttpRequest& request) const;
@@ -152,16 +152,16 @@ struct ServerConfig {
     bool enable_static_files = false;
     bool enable_directory_listing = false;
     std::string index_file = "index.html";
-    
+
     // SSL/TLS configuration
     bool enable_ssl = false;
     std::string ssl_cert_file;
     std::string ssl_key_file;
-    
+
     // Logging configuration
     bool enable_access_log = true;
     std::string access_log_format = "%h %l %u %t \"%r\" %>s %b";
-    
+
     // Performance tuning
     size_t tcp_backlog = 128;
     bool tcp_nodelay = true;
@@ -182,12 +182,12 @@ struct ServerStats {
     std::atomic<uint64_t> active_connections{0};
     std::atomic<uint64_t> total_connections{0};
     std::chrono::steady_clock::time_point start_time{std::chrono::steady_clock::now()};
-    
+
     // Performance metrics
     std::atomic<uint64_t> avg_response_time_ms{0};
     std::atomic<uint64_t> min_response_time_ms{UINT64_MAX};
     std::atomic<uint64_t> max_response_time_ms{0};
-    
+
     void reset() {
         total_requests = 0;
         successful_requests = 0;
@@ -201,12 +201,12 @@ struct ServerStats {
         min_response_time_ms = UINT64_MAX;
         max_response_time_ms = 0;
     }
-    
+
     double get_success_rate() const {
         auto total = total_requests.load();
         return total > 0 ? (double)successful_requests.load() / total * 100.0 : 0.0;
     }
-    
+
     double get_requests_per_second() const {
         auto uptime = std::chrono::duration_cast<std::chrono::seconds>(
             std::chrono::steady_clock::now() - start_time);
@@ -232,23 +232,23 @@ public:
     void head(const std::string& pattern, HttpHandler handler);
     void options(const std::string& pattern, HttpHandler handler);
     void route(const std::string& method, const std::string& pattern, HttpHandler handler);
-    
+
     // Middleware registration
     void use(MiddlewareHandler middleware);
     void use(const std::string& pattern, MiddlewareHandler middleware);
-    
+
     // Static file serving
     void static_files(const std::string& mount_path, const std::string& root_dir);
-    
+
     // Server control
     bool start();
     void stop();
     bool is_running() const { return running_; }
-    
+
     // Statistics
     ServerStats get_stats() const { return stats_; }
     void reset_stats() { stats_.reset(); }
-    
+
     // Configuration
     const ServerConfig& get_config() const { return config_; }
     void set_config(const ServerConfig& config);
@@ -256,37 +256,37 @@ public:
 private:
     struct Connection;
     struct RequestParser;
-    
+
     ServerConfig config_;
     uv_loop_t* loop_;
     bool loop_owned_;
     std::atomic<bool> running_{false};
     std::atomic<bool> shutdown_requested_{false};
-    
+
     uv_tcp_t server_;
     ServerStats stats_;
-    
+
     std::vector<Route> routes_;
     std::vector<MiddlewareHandler> global_middleware_;
     std::mutex routes_mutex_;
-    
+
     std::vector<std::thread> worker_threads_;
-    
+
     // Connection management
     std::unordered_map<uv_tcp_t*, std::unique_ptr<Connection>> connections_;
     std::mutex connections_mutex_;
-    
+
     // Server methods
     static void on_connection(uv_stream_t* server, int status);
     void handle_connection(uv_tcp_t* client);
     void handle_request(std::unique_ptr<Connection> conn, HttpContext& context);
     void send_response(Connection* conn, const HttpResponse& response);
     void close_connection(uv_tcp_t* client);
-    
+
     // Route matching
     const Route* find_route(const std::string& method, const std::string& path) const;
     bool execute_middleware(HttpContext& context, const std::vector<MiddlewareHandler>& middleware) const;
-    
+
     // Utility methods
     void setup_server();
     void cleanup();

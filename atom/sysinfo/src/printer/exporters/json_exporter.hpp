@@ -16,7 +16,7 @@ class JsonExporter : public BaseExporter {
 public:
     JsonExporter() = default;
     explicit JsonExporter(const ExportOptions& options);
-    
+
     bool exportToFile(const std::string& content, const std::string& filename) override;
     auto exportToString(const std::string& content) -> std::string override;
     [[nodiscard]] auto getFileExtension() const -> std::string override;

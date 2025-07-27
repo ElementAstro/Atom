@@ -18,12 +18,12 @@ namespace {
     const std::unordered_set<std::string> RTL_LANGUAGES = {
         "ar", "he", "fa", "ur", "yi", "ji", "iw", "ku", "ps", "sd"
     };
-    
+
     // Countries that typically use imperial measurements
     const std::unordered_set<std::string> IMPERIAL_COUNTRIES = {
         "US", "LR", "MM"
     };
-    
+
     // Countries that typically use Letter paper size
     const std::unordered_set<std::string> LETTER_COUNTRIES = {
         "US", "CA", "MX", "GT", "BZ", "SV", "HN", "NI", "CR", "PA", "CO", "VE", "CL", "PH"
@@ -32,12 +32,12 @@ namespace {
 
 auto getLanguageInfo(int item, const std::string& locale) -> std::string {
     std::string result;
-    
+
     if (!locale.empty()) {
         // Temporarily set locale
         char* oldLocale = setlocale(LC_ALL, nullptr);
         std::string savedLocale = oldLocale ? oldLocale : "C";
-        
+
         if (setlocale(LC_ALL, locale.c_str()) != nullptr) {
             char* info = nl_langinfo(item);
             if (info) {
@@ -53,7 +53,7 @@ auto getLanguageInfo(int item, const std::string& locale) -> std::string {
             result = info;
         }
     }
-    
+
     return result.empty() ? "Unknown" : result;
 }
 
@@ -81,7 +81,7 @@ auto getSystemLanguageInfo() -> LocaleInfo {
     localeInfo.thousandSeparator = getLanguageInfo(THOUSEP);
     localeInfo.dateFormat = getLanguageInfo(D_FMT);
     localeInfo.timeFormat = getLanguageInfo(T_FMT);
-    
+
     // Set additional properties
     localeInfo.isRTL = isRTLLocale(localeInfo.languageCode);
     localeInfo.measurementSystem = getMeasurementSystem(localeInfo.countryCode);
@@ -89,12 +89,12 @@ auto getSystemLanguageInfo() -> LocaleInfo {
     localeInfo.timeZone = getSystemTimeZone();
     localeInfo.firstDayOfWeek = getFirstDayOfWeek(localeInfo.localeName);
     localeInfo.weekendDays = getWeekendDays(localeInfo.localeName);
-    
+
     // Get AM/PM strings
     std::string amString = getLanguageInfo(AM_STR);
     std::string pmString = getLanguageInfo(PM_STR);
     localeInfo.amPmFormat = amString + "/" + pmString;
-    
+
     // Get currency code (extract from currency symbol if available)
     auto [symbol, code] = getCurrencyInfo(localeInfo.localeName);
     localeInfo.currencySymbol = symbol;
@@ -136,12 +136,12 @@ auto validateLocale(const std::string& locale) -> bool {
     // Try to set the locale temporarily
     char* oldLocale = setlocale(LC_ALL, nullptr);
     std::string savedLocale = oldLocale ? oldLocale : "C";
-    
+
     bool isValid = (setlocale(LC_ALL, locale.c_str()) != nullptr);
-    
+
     // Restore original locale
     setlocale(LC_ALL, savedLocale.c_str());
-    
+
     return isValid;
 }
 
@@ -166,7 +166,7 @@ auto setSystemLocale(const std::string& locale) -> LocaleError {
 
 auto getDefaultLocale() -> std::string {
     spdlog::debug("Getting Linux default locale");
-    
+
     // Try environment variables in order of preference
     const char* locale = getenv("LC_ALL");
     if (!locale || strlen(locale) == 0) {
@@ -178,12 +178,12 @@ auto getDefaultLocale() -> std::string {
     if (!locale || strlen(locale) == 0) {
         locale = setlocale(LC_ALL, nullptr);
     }
-    
+
     if (!locale) {
         spdlog::warn("Failed to get default locale, returning en_US.UTF-8");
         return "en_US.UTF-8";
     }
-    
+
     return std::string(locale);
 }
 
@@ -194,7 +194,7 @@ auto getLocaleFromEnvironment(const std::string& category) -> std::string {
 
 auto getPreferredLanguages() -> std::vector<std::string> {
     std::vector<std::string> languages;
-    
+
     // Check LANGUAGE environment variable (colon-separated list)
     const char* languageEnv = getenv("LANGUAGE");
     if (languageEnv) {
@@ -207,7 +207,7 @@ auto getPreferredLanguages() -> std::vector<std::string> {
             }
         }
     }
-    
+
     // Fallback to LANG if LANGUAGE is not set
     if (languages.empty()) {
         std::string defaultLang = getDefaultLocale();
@@ -215,7 +215,7 @@ auto getPreferredLanguages() -> std::vector<std::string> {
             languages.push_back(defaultLang);
         }
     }
-    
+
     return languages;
 }
 
@@ -228,7 +228,7 @@ auto isRTLLocale(const std::string& locale) -> bool {
 auto getCurrencyInfo(const std::string& locale) -> std::pair<std::string, std::string> {
     std::string symbol = getLanguageInfo(CRNCYSTR, locale);
     std::string code;
-    
+
     // Extract currency code from symbol if it follows the format "-USD$" or "+USD$"
     if (symbol.length() > 3) {
         if (symbol[0] == '-' || symbol[0] == '+') {
@@ -236,7 +236,7 @@ auto getCurrencyInfo(const std::string& locale) -> std::pair<std::string, std::s
             symbol = symbol.substr(4);
         }
     }
-    
+
     // Common currency mappings based on country
     if (code.empty()) {
         LocaleInfo info = parseLocaleString(locale);
@@ -251,19 +251,19 @@ auto getCurrencyInfo(const std::string& locale) -> std::pair<std::string, std::s
         else if (info.countryCode == "AU") code = "AUD";
         else code = "USD"; // Default fallback
     }
-    
+
     return {symbol, code};
 }
 
 auto getMeasurementSystem(const std::string& locale) -> MeasurementSystem {
     LocaleInfo info = parseLocaleString(locale);
-    return (IMPERIAL_COUNTRIES.find(info.countryCode) != IMPERIAL_COUNTRIES.end()) 
+    return (IMPERIAL_COUNTRIES.find(info.countryCode) != IMPERIAL_COUNTRIES.end())
            ? MeasurementSystem::Imperial : MeasurementSystem::Metric;
 }
 
 auto getPaperSize(const std::string& locale) -> PaperSize {
     LocaleInfo info = parseLocaleString(locale);
-    return (LETTER_COUNTRIES.find(info.countryCode) != LETTER_COUNTRIES.end()) 
+    return (LETTER_COUNTRIES.find(info.countryCode) != LETTER_COUNTRIES.end())
            ? PaperSize::Letter : PaperSize::A4;
 }
 
@@ -297,13 +297,13 @@ auto getSystemTimeZone() -> std::string {
             return timezone;
         }
     }
-    
+
     // Try TZ environment variable
     const char* tz = getenv("TZ");
     if (tz) {
         return std::string(tz);
     }
-    
+
     // Try to read symlink /etc/localtime
     char buffer[256];
     ssize_t len = readlink("/etc/localtime", buffer, sizeof(buffer) - 1);
@@ -315,7 +315,7 @@ auto getSystemTimeZone() -> std::string {
             return path.substr(pos + 10);
         }
     }
-    
+
     return "UTC";
 }
 
@@ -323,19 +323,19 @@ auto formatNumber(double number, const std::string& locale) -> std::string {
     // Save current locale
     char* oldLocale = setlocale(LC_NUMERIC, nullptr);
     std::string savedLocale = oldLocale ? oldLocale : "C";
-    
+
     // Set target locale
     if (setlocale(LC_NUMERIC, locale.c_str()) != nullptr) {
         // Use locale-specific formatting
         char buffer[64];
         snprintf(buffer, sizeof(buffer), "%.2f", number);
         std::string result(buffer);
-        
+
         // Restore locale
         setlocale(LC_NUMERIC, savedLocale.c_str());
         return result;
     }
-    
+
     // Fallback to default formatting
     setlocale(LC_NUMERIC, savedLocale.c_str());
     return std::to_string(number);
@@ -347,30 +347,30 @@ auto formatCurrency(double amount, const std::string& locale) -> std::string {
     return symbol + formattedNumber;
 }
 
-auto formatDate(const std::chrono::system_clock::time_point& timestamp, 
-                const std::string& locale, 
+auto formatDate(const std::chrono::system_clock::time_point& timestamp,
+                const std::string& locale,
                 const std::string& format) -> std::string {
     auto time_t = std::chrono::system_clock::to_time_t(timestamp);
     struct tm* tm_info = localtime(&time_t);
-    
+
     char buffer[256];
     std::string fmt = format.empty() ? getLanguageInfo(D_FMT, locale) : format;
     if (fmt.empty()) fmt = "%Y-%m-%d";
-    
+
     strftime(buffer, sizeof(buffer), fmt.c_str(), tm_info);
     return std::string(buffer);
 }
 
-auto formatTime(const std::chrono::system_clock::time_point& timestamp, 
-                const std::string& locale, 
+auto formatTime(const std::chrono::system_clock::time_point& timestamp,
+                const std::string& locale,
                 const std::string& format) -> std::string {
     auto time_t = std::chrono::system_clock::to_time_t(timestamp);
     struct tm* tm_info = localtime(&time_t);
-    
+
     char buffer[256];
     std::string fmt = format.empty() ? getLanguageInfo(T_FMT, locale) : format;
     if (fmt.empty()) fmt = "%H:%M:%S";
-    
+
     strftime(buffer, sizeof(buffer), fmt.c_str(), tm_info);
     return std::string(buffer);
 }
@@ -386,7 +386,7 @@ auto getSystemLocaleFromConfig() -> std::string {
             }
         }
     }
-    
+
     // Try /etc/default/locale (Debian/Ubuntu)
     std::ifstream defaultLocale("/etc/default/locale");
     if (defaultLocale.is_open()) {
@@ -402,7 +402,7 @@ auto getSystemLocaleFromConfig() -> std::string {
             }
         }
     }
-    
+
     return "";
 }
 
@@ -436,7 +436,7 @@ auto getCollationInfo(const std::string& locale) -> std::string {
     // Save current locale
     char* oldLocale = setlocale(LC_COLLATE, nullptr);
     std::string savedLocale = oldLocale ? oldLocale : "C";
-    
+
     std::string result;
     if (setlocale(LC_COLLATE, locale.c_str()) != nullptr) {
         // Get collation information - this is implementation specific
@@ -445,7 +445,7 @@ auto getCollationInfo(const std::string& locale) -> std::string {
     } else {
         result = "C";
     }
-    
+
     return result;
 }
 

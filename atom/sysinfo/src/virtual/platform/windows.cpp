@@ -23,7 +23,7 @@ namespace atom::system::virtual_env::platform::windows_impl {
 auto detectVirtualizationWindows() -> VirtualizationResult {
     VirtualizationResult result;
     result.platform = "Windows";
-    
+
     // Check registry for virtualization indicators
     auto regInfo = checkRegistryVirtualization();
     if (!regInfo.empty()) {
@@ -32,7 +32,7 @@ auto detectVirtualizationWindows() -> VirtualizationResult {
             result.confidence += 0.2;
         }
     }
-    
+
     // Check WMI for system information
     auto wmiInfo = getWMISystemInfo();
     if (!wmiInfo.empty()) {
@@ -43,21 +43,21 @@ auto detectVirtualizationWindows() -> VirtualizationResult {
             }
         }
     }
-    
+
     // Check for VM-specific services
     auto vmServices = checkVirtualizationServices();
     for (const auto& service : vmServices) {
         result.indicators.push_back("VM Service: " + service);
         result.confidence += 0.1;
     }
-    
+
     // Check for VM-specific processes
     auto vmProcesses = checkVirtualizationProcesses();
     for (const auto& process : vmProcesses) {
         result.indicators.push_back("VM Process: " + process);
         result.confidence += 0.1;
     }
-    
+
     // Check hardware information
     auto hwInfo = checkHardwareVirtualization();
     if (!hwInfo.empty()) {
@@ -66,17 +66,17 @@ auto detectVirtualizationWindows() -> VirtualizationResult {
             result.confidence += 0.15;
         }
     }
-    
+
     // Limit confidence to 1.0
     result.confidence = std::min(result.confidence, 1.0);
     result.is_virtual = result.confidence > 0.3;
-    
+
     return result;
 }
 
 auto checkRegistryVirtualization() -> std::vector<std::string> {
     std::vector<std::string> indicators;
-    
+
     // Check for VMware registry entries
     HKEY hKey;
     if (RegOpenKeyEx(HKEY_LOCAL_MACHINE,
@@ -85,7 +85,7 @@ auto checkRegistryVirtualization() -> std::vector<std::string> {
         indicators.push_back("VMware Tools registry key found");
         RegCloseKey(hKey);
     }
-    
+
     // Check for VirtualBox registry entries
     if (RegOpenKeyEx(HKEY_LOCAL_MACHINE,
                      _T("SOFTWARE\\Oracle\\VirtualBox Guest Additions"), 0, KEY_READ,
@@ -93,7 +93,7 @@ auto checkRegistryVirtualization() -> std::vector<std::string> {
         indicators.push_back("VirtualBox Guest Additions registry key found");
         RegCloseKey(hKey);
     }
-    
+
     // Check for Hyper-V registry entries
     if (RegOpenKeyEx(HKEY_LOCAL_MACHINE,
                      _T("SOFTWARE\\Microsoft\\Virtual Machine\\Guest\\Parameters"), 0, KEY_READ,
@@ -101,15 +101,15 @@ auto checkRegistryVirtualization() -> std::vector<std::string> {
         indicators.push_back("Hyper-V guest registry key found");
         RegCloseKey(hKey);
     }
-    
+
     // Check system BIOS information
     if (RegOpenKeyEx(HKEY_LOCAL_MACHINE,
                      _T("HARDWARE\\DESCRIPTION\\System\\BIOS"), 0, KEY_READ,
                      &hKey) == ERROR_SUCCESS) {
-        
+
         std::array<TCHAR, 256> biosInfo;
         DWORD bufSize = sizeof(biosInfo);
-        
+
         if (RegQueryValueEx(hKey, _T("SystemManufacturer"), nullptr, nullptr,
                             reinterpret_cast<LPBYTE>(biosInfo.data()),
                             &bufSize) == ERROR_SUCCESS) {
@@ -118,7 +118,7 @@ auto checkRegistryVirtualization() -> std::vector<std::string> {
                 indicators.push_back("BIOS SystemManufacturer: " + manufacturer);
             }
         }
-        
+
         bufSize = sizeof(biosInfo);
         if (RegQueryValueEx(hKey, _T("SystemProductName"), nullptr, nullptr,
                             reinterpret_cast<LPBYTE>(biosInfo.data()),
@@ -128,24 +128,24 @@ auto checkRegistryVirtualization() -> std::vector<std::string> {
                 indicators.push_back("BIOS SystemProductName: " + productName);
             }
         }
-        
+
         RegCloseKey(hKey);
     }
-    
+
     return indicators;
 }
 
 auto getWMISystemInfo() -> std::unordered_map<std::string, std::string> {
     std::unordered_map<std::string, std::string> info;
-    
+
     HRESULT hres;
-    
+
     // Initialize COM
     hres = CoInitializeEx(0, COINIT_MULTITHREADED);
     if (FAILED(hres)) {
         return info;
     }
-    
+
     // Set general COM security levels
     hres = CoInitializeSecurity(
         nullptr,
@@ -158,12 +158,12 @@ auto getWMISystemInfo() -> std::unordered_map<std::string, std::string> {
         EOAC_NONE,                   // Additional capabilities
         nullptr                      // Reserved
     );
-    
+
     if (FAILED(hres)) {
         CoUninitialize();
         return info;
     }
-    
+
     // Obtain the initial locator to WMI
     IWbemLocator *pLoc = nullptr;
     hres = CoCreateInstance(
@@ -171,12 +171,12 @@ auto getWMISystemInfo() -> std::unordered_map<std::string, std::string> {
         0,
         CLSCTX_INPROC_SERVER,
         IID_IWbemLocator, (LPVOID *) &pLoc);
-    
+
     if (FAILED(hres)) {
         CoUninitialize();
         return info;
     }
-    
+
     // Connect to WMI through the IWbemLocator::ConnectServer method
     IWbemServices *pSvc = nullptr;
     hres = pLoc->ConnectServer(
@@ -189,13 +189,13 @@ auto getWMISystemInfo() -> std::unordered_map<std::string, std::string> {
         0,                       // Context object
         &pSvc                    // pointer to IWbemServices proxy
     );
-    
+
     if (FAILED(hres)) {
         pLoc->Release();
         CoUninitialize();
         return info;
     }
-    
+
     // Set security levels on the proxy
     hres = CoSetProxyBlanket(
         pSvc,                        // Indicates the proxy to set
@@ -207,14 +207,14 @@ auto getWMISystemInfo() -> std::unordered_map<std::string, std::string> {
         nullptr,                     // client identity
         EOAC_NONE                    // proxy capabilities
     );
-    
+
     if (FAILED(hres)) {
         pSvc->Release();
         pLoc->Release();
         CoUninitialize();
         return info;
     }
-    
+
     // Query for computer system information
     IEnumWbemClassObject* pEnumerator = nullptr;
     hres = pSvc->ExecQuery(
@@ -223,61 +223,61 @@ auto getWMISystemInfo() -> std::unordered_map<std::string, std::string> {
         WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
         nullptr,
         &pEnumerator);
-    
+
     if (SUCCEEDED(hres)) {
         IWbemClassObject *pclsObj = nullptr;
         ULONG uReturn = 0;
-        
+
         while (pEnumerator) {
             HRESULT hr = pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
-            
+
             if (0 == uReturn) {
                 break;
             }
-            
+
             VARIANT vtProp;
-            
+
             // Get Manufacturer
             hr = pclsObj->Get(L"Manufacturer", 0, &vtProp, 0, 0);
             if (SUCCEEDED(hr) && vtProp.vt == VT_BSTR) {
                 info["Manufacturer"] = _com_util::ConvertBSTRToString(vtProp.bstrVal);
             }
             VariantClear(&vtProp);
-            
+
             // Get Model
             hr = pclsObj->Get(L"Model", 0, &vtProp, 0, 0);
             if (SUCCEEDED(hr) && vtProp.vt == VT_BSTR) {
                 info["Model"] = _com_util::ConvertBSTRToString(vtProp.bstrVal);
             }
             VariantClear(&vtProp);
-            
+
             pclsObj->Release();
         }
-        
+
         pEnumerator->Release();
     }
-    
+
     // Cleanup
     pSvc->Release();
     pLoc->Release();
     CoUninitialize();
-    
+
     return info;
 }
 
 auto checkVirtualizationServices() -> std::vector<std::string> {
     std::vector<std::string> vmServices;
-    
+
     std::vector<std::string> serviceNames = {
         "VMTools", "VBoxService", "vmicheartbeat", "vmicvss",
         "vmicshutdown", "vmicexchange", "QEMU Guest Agent"
     };
-    
+
     SC_HANDLE scManager = OpenSCManager(nullptr, nullptr, SC_MANAGER_ENUMERATE_SERVICE);
     if (scManager == nullptr) {
         return vmServices;
     }
-    
+
     for (const auto& serviceName : serviceNames) {
         SC_HANDLE service = OpenService(scManager, serviceName.c_str(), SERVICE_QUERY_STATUS);
         if (service != nullptr) {
@@ -285,64 +285,64 @@ auto checkVirtualizationServices() -> std::vector<std::string> {
             CloseServiceHandle(service);
         }
     }
-    
+
     CloseServiceHandle(scManager);
     return vmServices;
 }
 
 auto checkVirtualizationProcesses() -> std::vector<std::string> {
     std::vector<std::string> vmProcesses;
-    
+
     std::string output = executeCommand("tasklist");
-    
+
     std::vector<std::string> processNames = {
         "vmtoolsd.exe", "VBoxService.exe", "VBoxTray.exe",
         "qemu-ga.exe", "xenservice.exe"
     };
-    
+
     for (const auto& processName : processNames) {
         if (output.find(processName) != std::string::npos) {
             vmProcesses.push_back(processName);
         }
     }
-    
+
     return vmProcesses;
 }
 
 auto checkHardwareVirtualization() -> std::vector<std::string> {
     std::vector<std::string> hwInfo;
-    
+
     // Check PCI devices
     std::string pciOutput = executeCommand("wmic path Win32_PnPEntity get Name");
     if (containsVMKeywords(pciOutput)) {
         hwInfo.push_back("VM PCI devices detected");
     }
-    
+
     // Check video controller
     std::string videoOutput = executeCommand("wmic path win32_videocontroller get caption");
     if (containsVMKeywords(videoOutput)) {
         hwInfo.push_back("VM video controller detected");
     }
-    
+
     // Check disk drives
     std::string diskOutput = executeCommand("wmic diskdrive get caption,model");
     if (containsVMKeywords(diskOutput)) {
         hwInfo.push_back("VM disk drives detected");
     }
-    
+
     // Check network adapters
     std::string netOutput = executeCommand("wmic path Win32_NetworkAdapter get Name");
     if (containsVMKeywords(netOutput)) {
         hwInfo.push_back("VM network adapters detected");
     }
-    
+
     return hwInfo;
 }
 
 auto getWindowsVirtualizationType() -> std::string {
     // Check WMI system information
     auto wmiInfo = getWMISystemInfo();
-    
+
     if (wmiInfo.count("Manufacturer")) {
         const std::string& manufacturer = wmiInfo["Manufacturer"];
         if (manufacturer.find("VMware") != std::string::npos) {
@@ -362,7 +362,7 @@ auto getWindowsVirtualizationType() -> std::string {
             return "Xen";
         }
     }
-    
+
     if (wmiInfo.count("Model")) {
         const std::string& model = wmiInfo["Model"];
         if (model.find("Virtual Machine") != std::string::npos) {
@@ -375,7 +375,7 @@ auto getWindowsVirtualizationType() -> std::string {
             return "VirtualBox";
         }
     }
-    
+
     // Check registry for more specific information
     auto regInfo = checkRegistryVirtualization();
     for (const auto& info : regInfo) {
@@ -389,7 +389,7 @@ auto getWindowsVirtualizationType() -> std::string {
             return "Hyper-V";
         }
     }
-    
+
     return "Unknown";
 }
 

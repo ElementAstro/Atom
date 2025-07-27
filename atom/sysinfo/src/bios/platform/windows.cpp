@@ -30,8 +30,8 @@ ComInitializer::~ComInitializer() {
     }
 }
 
-void ComInitializer::release() { 
-    initialized_ = false; 
+void ComInitializer::release() {
+    initialized_ = false;
 }
 
 // ComPtr template implementations
@@ -43,8 +43,8 @@ ComPtr<T>::~ComPtr() {
 }
 
 template <typename T>
-ComPtr<T>::ComPtr(ComPtr&& other) noexcept : ptr_(other.ptr_) { 
-    other.ptr_ = nullptr; 
+ComPtr<T>::ComPtr(ComPtr&& other) noexcept : ptr_(other.ptr_) {
+    other.ptr_ = nullptr;
 }
 
 template <typename T>

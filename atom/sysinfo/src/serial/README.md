@@ -29,7 +29,7 @@ A comprehensive, cross-platform C++ library for collecting system hardware ident
 int main() {
     // Create system info instance
     auto sysInfo = atom::system::createSystemInfo();
-    
+
     // Get hardware serial numbers
     auto hardwareResult = sysInfo->getHardwareSerials();
     if (hardwareResult.success) {
@@ -37,11 +37,11 @@ int main() {
         std::cout << "Motherboard Serial: " << hardwareResult.data.motherboardSerial << std::endl;
         std::cout << "CPU Serial: " << hardwareResult.data.cpuSerial << std::endl;
     }
-    
+
     // Get system fingerprint
     std::string fingerprint = sysInfo->getSystemFingerprint();
     std::cout << "System Fingerprint: " << fingerprint << std::endl;
-    
+
     return 0;
 }
 ```
@@ -54,22 +54,22 @@ int main() {
 int main() {
     // Original API still works
     HardwareInfo hwInfo;
-    
+
     std::cout << "BIOS Serial: " << hwInfo.getBiosSerialNumber() << std::endl;
     std::cout << "Motherboard Serial: " << hwInfo.getMotherboardSerialNumber() << std::endl;
     std::cout << "CPU Serial: " << hwInfo.getCpuSerialNumber() << std::endl;
-    
+
     auto diskSerials = hwInfo.getDiskSerialNumbers();
     for (const auto& serial : diskSerials) {
         std::cout << "Disk Serial: " << serial << std::endl;
     }
-    
+
     // Access enhanced features
     if (hwInfo.isEnhancedModeAvailable()) {
         std::string fingerprint = hwInfo.getSystemFingerprint();
         std::cout << "System Fingerprint: " << fingerprint << std::endl;
     }
-    
+
     return 0;
 }
 ```
@@ -87,19 +87,19 @@ int main() {
     config.cacheResults = true;
     config.cacheTimeout = std::chrono::minutes(10);
     config.enableLogging = true;
-    
+
     auto sysInfo = atom::system::createSystemInfo(config);
-    
+
     // Get comprehensive system information
     auto result = sysInfo->getComprehensiveInfo();
     if (result.success) {
         std::cout << result.data.toString() << std::endl;
-        
+
         // Export to JSON
         std::string json = sysInfo->exportToJson(true);
         std::cout << "JSON Export:\n" << json << std::endl;
     }
-    
+
     return 0;
 }
 ```

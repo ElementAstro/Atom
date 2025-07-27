@@ -44,7 +44,7 @@ int main() {
         std::cout << "5. Using legacy API...\n";
         auto legacyReport = SystemInfoPrinter::generateFullReport();
         std::cout << "Legacy report generated (" << legacyReport.length() << " characters)\n";
-        
+
         bool legacyHtmlSuccess = SystemInfoPrinter::exportToHTML("legacy_report.html");
         std::cout << "Legacy HTML export " << (legacyHtmlSuccess ? "successful" : "failed") << "\n\n";
 
