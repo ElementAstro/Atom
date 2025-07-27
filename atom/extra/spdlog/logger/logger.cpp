@@ -61,18 +61,32 @@ bool Logger::should_log_internal(Level level) const {
 
 void Logger::log_internal(Level level, const std::string& message) {
     try {
-        if (!filter_->should_log(message, level, context_)) {
+        // Fast path: check sampling first (cheapest operation)
+        if (!sampler_->should_sample()) {
+            stats_.sampled_logs.fetch_add(1);
+            return;
+        }
+
+        // Use string_view for filter check to avoid copying
+        if (!filter_->should_log(std::string_view(message), level, context_)) {
             stats_.filtered_logs.fetch_add(1);
             return;
         }
 
-        std::string enhanced_message = message;
+        // Optimize message enhancement with pre-allocated buffer
         if (!context_.empty()) {
-            enhanced_message = enrich_message_with_context(message, context_);
+            thread_local std::string enhanced_buffer;
+            enhanced_buffer.clear();
+            enhanced_buffer.reserve(message.size() + 128); // Reserve space for context
+
+            enrich_message_with_context_fast(message, context_, enhanced_buffer);
+            logger_->log(static_cast<spdlog::level::level_enum>(level),
+                         enhanced_buffer);
+        } else {
+            logger_->log(static_cast<spdlog::level::level_enum>(level),
+                         message);
         }
 
-        logger_->log(static_cast<spdlog::level::level_enum>(level),
-                     enhanced_message);
         stats_.total_logs.fetch_add(1);
 
     } catch (...) {
@@ -87,27 +101,53 @@ std::string Logger::enrich_message_with_context(const std::string& message,
         return message;
     }
 
-    std::string enriched = message;
+    thread_local std::string buffer;
+    buffer.clear();
+    buffer.reserve(message.size() + 128);
 
-    std::string context_str;
+    enrich_message_with_context_fast(message, ctx, buffer);
+    return buffer;
+}
+
+void Logger::enrich_message_with_context_fast(const std::string& message,
+                                              const LogContext& ctx,
+                                              std::string& buffer) const {
+    if (ctx.empty()) {
+        buffer = message;
+        return;
+    }
+
+    buffer.clear();
+    buffer += "[";
+
+    bool has_context = false;
     if (!ctx.user_id().empty()) {
-        context_str += std::format("user={} ", ctx.user_id());
+        buffer += std::format("user={} ", ctx.user_id());
+        has_context = true;
     }
     if (!ctx.session_id().empty()) {
-        context_str += std::format("session={} ", ctx.session_id());
+        buffer += std::format("session={} ", ctx.session_id());
+        has_context = true;
     }
     if (!ctx.trace_id().empty()) {
-        context_str += std::format("trace={} ", ctx.trace_id());
+        buffer += std::format("trace={} ", ctx.trace_id());
+        has_context = true;
     }
     if (!ctx.request_id().empty()) {
-        context_str += std::format("request={} ", ctx.request_id());
+        buffer += std::format("request={} ", ctx.request_id());
+        has_context = true;
     }
 
-    if (!context_str.empty()) {
-        enriched = std::format("[{}] {}", context_str, message);
+    if (has_context) {
+        // Remove trailing space
+        if (!buffer.empty() && buffer.back() == ' ') {
+            buffer.pop_back();
+        }
+        buffer += "] ";
+        buffer += message;
+    } else {
+        buffer = message;
     }
-
-    return enriched;
 }
 
 void Logger::emit_event(LogEvent event, const std::any& data) {

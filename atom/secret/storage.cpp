@@ -8,6 +8,12 @@
 #include <shared_mutex>
 #include <string>
 #include <system_error>
+#include <sstream>
+#include <iomanip>
+
+#ifdef ENABLE_COMPRESSION
+#include <zlib.h>
+#endif
 
 #include "spdlog/spdlog.h"
 
@@ -149,9 +155,112 @@ std::string getMacOSStatusString(OSStatus status) {
 namespace atom::secret {
 
 /**
+ * @brief Legacy storage interface for backward compatibility.
+ */
+class LegacySecureStorage {
+public:
+    virtual ~LegacySecureStorage() = default;
+    virtual bool store(std::string_view key, std::string_view data) const = 0;
+    virtual std::string retrieve(std::string_view key) const = 0;
+    virtual bool remove(std::string_view key) const = 0;
+    virtual std::vector<std::string> getAllKeys() const = 0;
+
+protected:
+    mutable std::shared_mutex mutex_;
+};
+
+/**
+ * @brief Adapter to wrap legacy storage implementations.
+ */
+class LegacyStorageAdapter : public SecureStorage {
+public:
+    explicit LegacyStorageAdapter(std::unique_ptr<LegacySecureStorage> legacy)
+        : legacy_(std::move(legacy)) {}
+
+    StorageResult store(std::string_view key, std::string_view data) override {
+        bool success = legacy_->store(key, data);
+        return success ? StorageResult() :
+            StorageResult::Failure(ErrorCode::StorageUnavailable, std::string("Store operation failed"));
+    }
+
+    Result<std::string> retrieve(std::string_view key) override {
+        std::string result = legacy_->retrieve(key);
+        return result.empty() ?
+            Result<std::string>::Failure(ErrorCode::StorageNotFound, std::string("Key not found")) :
+            Result<std::string>(std::move(result));
+    }
+
+    StorageResult remove(std::string_view key) override {
+        bool success = legacy_->remove(key);
+        return success ? StorageResult() :
+            StorageResult::Failure(ErrorCode::StorageUnavailable, std::string("Remove operation failed"));
+    }
+
+    Result<std::vector<std::string>> getAllKeys() override {
+        auto keys = legacy_->getAllKeys();
+        return Result<std::vector<std::string>>(std::move(keys));
+    }
+
+    Result<std::vector<StorageResult>> batchOperation(
+        const std::vector<BatchOperation>& operations) override {
+        std::vector<StorageResult> results;
+        results.reserve(operations.size());
+
+        for (const auto& op : operations) {
+            switch (op.operation) {
+                case BatchOperation::Type::Store:
+                    results.push_back(store(op.key, op.data));
+                    break;
+                case BatchOperation::Type::Remove:
+                    results.push_back(remove(op.key));
+                    break;
+            }
+        }
+
+        return Result<std::vector<StorageResult>>(std::move(results));
+    }
+
+    Result<bool> exists(std::string_view key) override {
+        auto result = retrieve(key);
+        return Result<bool>(!result.isError());
+    }
+
+    Result<size_t> getSize(std::string_view key) override {
+        auto result = retrieve(key);
+        if (result.isError()) {
+            return Result<size_t>::Failure(result.errorCode(), result.errorMessage());
+        }
+        return Result<size_t>(result.value().size());
+    }
+
+    void clearCache() override {
+        // No-op for legacy implementations
+    }
+
+    StorageMetrics getMetrics() const override {
+        return StorageMetrics{}; // Return empty metrics
+    }
+
+    void configure(const StorageOptions& /*options*/) override {
+        // No-op for legacy implementations
+    }
+
+    StorageResult createBackup(const std::string& /*backupPath*/ = "") override {
+        return StorageResult::Failure(ErrorCode::PlatformError, std::string("Backup not supported in legacy mode"));
+    }
+
+    StorageResult restoreFromBackup(const std::string& /*backupPath*/) override {
+        return StorageResult::Failure(ErrorCode::PlatformError, std::string("Restore not supported in legacy mode"));
+    }
+
+private:
+    std::unique_ptr<LegacySecureStorage> legacy_;
+};
+
+/**
  * @brief Base FileSecureStorage class implementation (used as fallback)
  */
-class FileSecureStorage : public SecureStorage {
+class FileSecureStorage : public LegacySecureStorage {
 private:
     std::string appName_;
     std::filesystem::path storageDir_;
@@ -316,7 +425,7 @@ private:
 /**
  * @brief Windows implementation using Credential Manager
  */
-class WindowsSecureStorage : public SecureStorage {
+class WindowsSecureStorage : public LegacySecureStorage {
 private:
     std::string appName_;
 
@@ -512,7 +621,7 @@ public:
 /**
  * @brief macOS implementation using Keychain
  */
-class MacSecureStorage : public SecureStorage {
+class MacSecureStorage : public LegacySecureStorage {
 private:
     std::string serviceName_;
 
@@ -768,7 +877,7 @@ public:
 /**
  * @brief Linux implementation with libsecret
  */
-class LinuxSecureStorage : public SecureStorage {
+class LinuxSecureStorage : public LegacySecureStorage {
 private:
     std::string schemaName_;
 
@@ -918,16 +1027,458 @@ public:
 };
 #endif
 
-std::unique_ptr<SecureStorage> SecureStorage::create(std::string_view appName) {
+std::unique_ptr<SecureStorage> SecureStorage::create(
+    std::string_view appName,
+    const StorageOptions& options) {
+
+    // Create the appropriate legacy backend
+    std::unique_ptr<LegacySecureStorage> legacy;
+
 #if defined(_WIN32)
-    return std::make_unique<WindowsSecureStorage>(appName);
+    legacy = std::make_unique<WindowsSecureStorage>(appName);
 #elif defined(__APPLE__)
-    return std::make_unique<MacSecureStorage>(appName);
+    legacy = std::make_unique<MacSecureStorage>(appName);
 #elif defined(__linux__) && defined(USE_LIBSECRET)
-    return std::make_unique<LinuxSecureStorage>(appName);
+    legacy = std::make_unique<LinuxSecureStorage>(appName);
 #else
-    return std::make_unique<FileSecureStorage>(appName);
+    legacy = std::make_unique<FileSecureStorage>(appName);
 #endif
+
+    // Wrap in adapter
+    auto adapter = std::make_unique<LegacyStorageAdapter>(std::move(legacy));
+
+    // Wrap in enhanced storage if any advanced features are enabled
+    if (options.enableCaching || options.enableCompression || options.enableBackup) {
+        return std::make_unique<EnhancedSecureStorage>(std::move(adapter), options);
+    }
+
+    return adapter;
+}
+
+// EnhancedSecureStorage implementation
+EnhancedSecureStorage::EnhancedSecureStorage(
+    std::unique_ptr<SecureStorage> backend,
+    const StorageOptions& options)
+    : backend_(std::move(backend)), options_(options), appName_("enhanced") {
+
+    spdlog::info("Enhanced secure storage initialized with caching={}, compression={}, backup={}",
+                options_.enableCaching, options_.enableCompression, options_.enableBackup);
+}
+
+StorageResult EnhancedSecureStorage::store(std::string_view key, std::string_view data) {
+    auto start = std::chrono::steady_clock::now();
+
+    std::string processedData(data);
+
+    // Apply compression if enabled
+    if (options_.enableCompression) {
+        processedData = compressData(data);
+    }
+
+    // Store in backend
+    auto result = backend_->store(key, processedData);
+
+    // Update cache if successful and caching is enabled
+    if (result.isSuccess() && options_.enableCaching) {
+        std::unique_lock lock(mutex_);
+
+        // Evict expired entries
+        evictExpiredCacheEntries();
+
+        // Evict LRU entry if cache is full
+        if (cache_.size() >= options_.maxCacheSize) {
+            evictLRUCacheEntry();
+        }
+
+        // Add to cache
+        cache_[std::string(key)] = CacheEntry{
+            std::string(data), // Store uncompressed data in cache
+            std::chrono::system_clock::now(),
+            1
+        };
+    }
+
+    // Update metrics
+    auto end = std::chrono::steady_clock::now();
+    auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    updateMetrics(result.isSuccess(), latency);
+
+    return result;
+}
+
+Result<std::string> EnhancedSecureStorage::retrieve(std::string_view key) {
+    auto start = std::chrono::steady_clock::now();
+
+    // Check cache first if enabled
+    if (options_.enableCaching) {
+        std::unique_lock lock(mutex_);
+        auto it = cache_.find(std::string(key));
+        if (it != cache_.end() && !it->second.isExpired(options_.cacheExpiry)) {
+            it->second.accessCount++;
+            it->second.timestamp = std::chrono::system_clock::now();
+
+            auto end = std::chrono::steady_clock::now();
+            auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+            updateMetrics(true, latency);
+            metrics_.cacheHits++;
+
+            return Result<std::string>(it->second.data);
+        } else if (it != cache_.end()) {
+            // Remove expired entry
+            cache_.erase(it);
+        }
+        metrics_.cacheMisses++;
+    }
+
+    // Retrieve from backend
+    auto result = backend_->retrieve(key);
+
+    if (result.isSuccess()) {
+        std::string data = result.value();
+
+        // Decompress if needed
+        if (options_.enableCompression) {
+            data = decompressData(data);
+        }
+
+        // Add to cache if enabled
+        if (options_.enableCaching) {
+            std::unique_lock lock(mutex_);
+
+            // Evict expired entries
+            evictExpiredCacheEntries();
+
+            // Evict LRU entry if cache is full
+            if (cache_.size() >= options_.maxCacheSize) {
+                evictLRUCacheEntry();
+            }
+
+            cache_[std::string(key)] = CacheEntry{
+                data,
+                std::chrono::system_clock::now(),
+                1
+            };
+        }
+
+        auto end = std::chrono::steady_clock::now();
+        auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        updateMetrics(true, latency);
+
+        return Result<std::string>(std::move(data));
+    }
+
+    auto end = std::chrono::steady_clock::now();
+    auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    updateMetrics(false, latency);
+
+    return result;
+}
+
+StorageResult EnhancedSecureStorage::remove(std::string_view key) {
+    auto start = std::chrono::steady_clock::now();
+
+    // Remove from backend
+    auto result = backend_->remove(key);
+
+    // Remove from cache if successful and caching is enabled
+    if (result.isSuccess() && options_.enableCaching) {
+        std::unique_lock lock(mutex_);
+        cache_.erase(std::string(key));
+    }
+
+    // Update metrics
+    auto end = std::chrono::steady_clock::now();
+    auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    updateMetrics(result.isSuccess(), latency);
+
+    return result;
+}
+
+Result<std::vector<std::string>> EnhancedSecureStorage::getAllKeys() {
+    return backend_->getAllKeys();
+}
+
+Result<std::vector<StorageResult>> EnhancedSecureStorage::batchOperation(
+    const std::vector<BatchOperation>& operations) {
+
+    auto start = std::chrono::steady_clock::now();
+
+    // Use backend's batch operation if available, otherwise fall back to individual operations
+    auto result = backend_->batchOperation(operations);
+
+    // Update cache for successful operations if caching is enabled
+    if (result.isSuccess() && options_.enableCaching) {
+        std::unique_lock lock(mutex_);
+
+        const auto& results = result.value();
+        for (size_t i = 0; i < operations.size() && i < results.size(); ++i) {
+            if (results[i].isSuccess()) {
+                const auto& op = operations[i];
+                if (op.operation == BatchOperation::Type::Store) {
+                    // Evict if needed
+                    if (cache_.size() >= options_.maxCacheSize) {
+                        evictLRUCacheEntry();
+                    }
+
+                    cache_[op.key] = CacheEntry{
+                        op.data,
+                        std::chrono::system_clock::now(),
+                        1
+                    };
+                } else if (op.operation == BatchOperation::Type::Remove) {
+                    cache_.erase(op.key);
+                }
+            }
+        }
+    }
+
+    // Update metrics
+    auto end = std::chrono::steady_clock::now();
+    auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    updateMetrics(result.isSuccess(), latency);
+
+    return result;
+}
+
+Result<bool> EnhancedSecureStorage::exists(std::string_view key) {
+    // Check cache first if enabled
+    if (options_.enableCaching) {
+        std::shared_lock lock(mutex_);
+        auto it = cache_.find(std::string(key));
+        if (it != cache_.end() && !it->second.isExpired(options_.cacheExpiry)) {
+            return Result<bool>(true);
+        }
+    }
+
+    return backend_->exists(key);
+}
+
+Result<size_t> EnhancedSecureStorage::getSize(std::string_view key) {
+    // Check cache first if enabled
+    if (options_.enableCaching) {
+        std::shared_lock lock(mutex_);
+        auto it = cache_.find(std::string(key));
+        if (it != cache_.end() && !it->second.isExpired(options_.cacheExpiry)) {
+            return Result<size_t>(it->second.data.size());
+        }
+    }
+
+    return backend_->getSize(key);
+}
+
+void EnhancedSecureStorage::clearCache() {
+    if (options_.enableCaching) {
+        std::unique_lock lock(mutex_);
+        cache_.clear();
+        spdlog::debug("Storage cache cleared");
+    }
+}
+
+StorageMetrics EnhancedSecureStorage::getMetrics() const {
+    std::shared_lock lock(mutex_);
+    return metrics_;
+}
+
+void EnhancedSecureStorage::configure(const StorageOptions& options) {
+    std::unique_lock lock(mutex_);
+
+    // If caching is being disabled, clear the cache
+    if (options_.enableCaching && !options.enableCaching) {
+        cache_.clear();
+    }
+
+    options_ = options;
+    spdlog::info("Storage configuration updated");
+}
+
+StorageResult EnhancedSecureStorage::createBackup(const std::string& backupPath) {
+    if (!options_.enableBackup) {
+        return StorageResult::Failure(ErrorCode::InvalidState,
+            std::string("Backup is not enabled"));
+    }
+
+    std::string path = backupPath.empty() ? generateBackupPath() : backupPath;
+
+    // Get all keys and data
+    auto keysResult = getAllKeys();
+    if (keysResult.isError()) {
+        return StorageResult::Failure(keysResult.errorCode(), keysResult.errorMessage());
+    }
+
+    try {
+        std::ofstream backup(path, std::ios::binary);
+        if (!backup) {
+            return StorageResult::Failure(ErrorCode::FileSystemError,
+                std::string("Failed to create backup file: " + path));
+        }
+
+        const auto& keys = keysResult.value();
+
+        // Write header
+        backup << "ATOM_SECRET_BACKUP_V1\n";
+        backup << keys.size() << "\n";
+
+        // Write each entry
+        for (const auto& key : keys) {
+            auto dataResult = retrieve(key);
+            if (dataResult.isSuccess()) {
+                const auto& data = dataResult.value();
+                backup << key.length() << "\n";
+                backup.write(key.data(), key.length());
+                backup << "\n" << data.length() << "\n";
+                backup.write(data.data(), data.length());
+                backup << "\n";
+            }
+        }
+
+        backup.close();
+        spdlog::info("Backup created successfully: {}", path);
+        return StorageResult();
+
+    } catch (const std::exception& e) {
+        return StorageResult::Failure(ErrorCode::FileSystemError,
+            std::string("Backup creation failed: ") + e.what());
+    }
+}
+
+StorageResult EnhancedSecureStorage::restoreFromBackup(const std::string& backupPath) {
+    try {
+        std::ifstream backup(backupPath, std::ios::binary);
+        if (!backup) {
+            return StorageResult::Failure(ErrorCode::FileSystemError,
+                std::string("Failed to open backup file: " + backupPath));
+        }
+
+        std::string header;
+        std::getline(backup, header);
+        if (header != "ATOM_SECRET_BACKUP_V1") {
+            return StorageResult::Failure(ErrorCode::StorageCorrupted,
+                std::string("Invalid backup file format"));
+        }
+
+        size_t entryCount;
+        backup >> entryCount;
+        backup.ignore(); // Skip newline
+
+        for (size_t i = 0; i < entryCount; ++i) {
+            size_t keyLength;
+            backup >> keyLength;
+            backup.ignore(); // Skip newline
+
+            std::string key(keyLength, '\0');
+            backup.read(&key[0], keyLength);
+            backup.ignore(); // Skip newline
+
+            size_t dataLength;
+            backup >> dataLength;
+            backup.ignore(); // Skip newline
+
+            std::string data(dataLength, '\0');
+            backup.read(&data[0], dataLength);
+            backup.ignore(); // Skip newline
+
+            auto result = store(key, data);
+            if (result.isError()) {
+                spdlog::warn("Failed to restore entry '{}': {}", key, result.errorMessage());
+            }
+        }
+
+        backup.close();
+        spdlog::info("Backup restored successfully from: {}", backupPath);
+        return StorageResult();
+
+    } catch (const std::exception& e) {
+        return StorageResult::Failure(ErrorCode::FileSystemError,
+            std::string("Backup restoration failed: ") + e.what());
+    }
+}
+
+// Helper methods implementation
+std::string EnhancedSecureStorage::compressData(std::string_view data) const {
+#ifdef ENABLE_COMPRESSION
+    if (data.empty()) return std::string(data);
+
+    uLongf compressedSize = compressBound(data.size());
+    std::string compressed(compressedSize, '\0');
+
+    int result = compress(reinterpret_cast<Bytef*>(&compressed[0]), &compressedSize,
+                         reinterpret_cast<const Bytef*>(data.data()), data.size());
+
+    if (result == Z_OK) {
+        compressed.resize(compressedSize);
+        return compressed;
+    } else {
+        spdlog::warn("Compression failed, storing uncompressed data");
+        return std::string(data);
+    }
+#else
+    return std::string(data);
+#endif
+}
+
+std::string EnhancedSecureStorage::decompressData(std::string_view data) const {
+#ifdef ENABLE_COMPRESSION
+    if (data.empty()) return std::string(data);
+
+    // Try to decompress, if it fails assume it's uncompressed data
+    uLongf decompressedSize = data.size() * 4; // Initial guess
+    std::string decompressed(decompressedSize, '\0');
+
+    int result = uncompress(reinterpret_cast<Bytef*>(&decompressed[0]), &decompressedSize,
+                           reinterpret_cast<const Bytef*>(data.data()), data.size());
+
+    if (result == Z_OK) {
+        decompressed.resize(decompressedSize);
+        return decompressed;
+    } else {
+        // Assume it's uncompressed data
+        return std::string(data);
+    }
+#else
+    return std::string(data);
+#endif
+}
+
+void EnhancedSecureStorage::updateMetrics(bool success, std::chrono::milliseconds latency) {
+    std::unique_lock lock(mutex_);
+    metrics_.totalOperations++;
+    if (success) {
+        metrics_.successfulOperations++;
+    }
+    metrics_.totalLatency += latency;
+    metrics_.lastOperation = std::chrono::system_clock::now();
+}
+
+void EnhancedSecureStorage::evictExpiredCacheEntries() {
+    auto it = cache_.begin();
+    while (it != cache_.end()) {
+        if (it->second.isExpired(options_.cacheExpiry)) {
+            it = cache_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void EnhancedSecureStorage::evictLRUCacheEntry() {
+    if (cache_.empty()) return;
+
+    auto lru = cache_.begin();
+    for (auto it = cache_.begin(); it != cache_.end(); ++it) {
+        if (it->second.timestamp < lru->second.timestamp) {
+            lru = it;
+        }
+    }
+    cache_.erase(lru);
+}
+
+std::string EnhancedSecureStorage::generateBackupPath() const {
+    auto now = std::chrono::system_clock::now();
+    auto time_t = std::chrono::system_clock::to_time_t(now);
+
+    std::stringstream ss;
+    ss << appName_ << "_backup_" << std::put_time(std::localtime(&time_t), "%Y%m%d_%H%M%S") << ".bak";
+    return ss.str();
 }
 
 }  // namespace atom::secret

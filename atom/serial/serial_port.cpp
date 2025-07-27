@@ -48,7 +48,12 @@ std::string SerialPort::readUntil(char terminator,
                                   std::chrono::milliseconds timeout,
                                   bool includeTerminator) {
     std::string result;
+    result.reserve(256); // Pre-allocate reasonable buffer size
+
     const auto startTime = std::chrono::steady_clock::now();
+    constexpr size_t CHUNK_SIZE = 64; // Read in larger chunks
+    std::vector<uint8_t> buffer;
+    buffer.reserve(CHUNK_SIZE);
 
     while (true) {
         const auto now = std::chrono::steady_clock::now();
@@ -61,23 +66,28 @@ std::string SerialPort::readUntil(char terminator,
         }
 
         const auto remainingTime = timeout - elapsed;
-        auto buffer = impl_->readExactly(1, remainingTime);
 
-        if (buffer.empty()) {
-            continue;
-        }
-
-        const char c = static_cast<char>(buffer[0]);
-        if (c == terminator) {
-            if (includeTerminator) {
-                result.push_back(c);
+        // Try to read available data first, fall back to smaller read if nothing available
+        auto chunk = impl_->readAvailable();
+        if (chunk.empty()) {
+            chunk = impl_->readExactly(1, remainingTime);
+            if (chunk.empty()) {
+                continue;
             }
-            break;
         }
-        result.push_back(c);
-    }
 
-    return result;
+        // Process the chunk looking for terminator
+        for (size_t i = 0; i < chunk.size(); ++i) {
+            const char c = static_cast<char>(chunk[i]);
+            if (c == terminator) {
+                if (includeTerminator) {
+                    result.push_back(c);
+                }
+                return result;
+            }
+            result.push_back(c);
+        }
+    }
 }
 
 std::vector<uint8_t> SerialPort::readUntilSequence(
@@ -88,10 +98,13 @@ std::vector<uint8_t> SerialPort::readUntilSequence(
     }
 
     std::vector<uint8_t> result;
-    std::vector<uint8_t> buffer;
-    buffer.reserve(sequence.size());
+    result.reserve(512); // Pre-allocate reasonable buffer size
 
     const auto startTime = std::chrono::steady_clock::now();
+
+    // Use Boyer-Moore-like approach for efficient sequence matching
+    const size_t seqLen = sequence.size();
+    size_t matchPos = 0;
 
     while (true) {
         const auto now = std::chrono::steady_clock::now();
@@ -105,31 +118,37 @@ std::vector<uint8_t> SerialPort::readUntilSequence(
         }
 
         const auto remainingTime = timeout - elapsed;
-        auto chunk = impl_->readExactly(1, remainingTime);
 
+        // Try to read available data first, fall back to smaller read if nothing available
+        auto chunk = impl_->readAvailable();
         if (chunk.empty()) {
-            continue;
-        }
-
-        const uint8_t byte = chunk[0];
-        result.push_back(byte);
-
-        buffer.push_back(byte);
-        if (buffer.size() > sequence.size()) {
-            buffer.erase(buffer.begin());
-        }
-
-        if (buffer.size() == sequence.size() &&
-            std::equal(buffer.begin(), buffer.end(), sequence.begin())) {
-            if (!includeSequence) {
-                result.erase(result.end() - static_cast<long>(sequence.size()),
-                             result.end());
+            chunk = impl_->readExactly(1, remainingTime);
+            if (chunk.empty()) {
+                continue;
             }
-            break;
+        }
+
+        // Process the chunk looking for sequence
+        for (size_t i = 0; i < chunk.size(); ++i) {
+            const uint8_t byte = chunk[i];
+            result.push_back(byte);
+
+            if (byte == sequence[matchPos]) {
+                ++matchPos;
+                if (matchPos == seqLen) {
+                    // Found complete sequence
+                    if (!includeSequence) {
+                        result.erase(result.end() - static_cast<long>(seqLen),
+                                     result.end());
+                    }
+                    return result;
+                }
+            } else {
+                // Reset match position, but check if current byte starts a new match
+                matchPos = (byte == sequence[0]) ? 1 : 0;
+            }
         }
     }
-
-    return result;
 }
 
 void SerialPort::asyncRead(size_t maxBytes,
@@ -162,14 +181,48 @@ size_t SerialPort::write(std::span<const uint8_t> data) {
 }
 
 std::future<size_t> SerialPort::asyncWrite(std::span<const uint8_t> data) {
-    return std::async(std::launch::async,
-                      [this, data]() { return write(data); });
+    // Create a promise/future pair for the result
+    auto promise = std::make_shared<std::promise<size_t>>();
+    auto future = promise->get_future();
+
+    // Copy data to ensure it remains valid during async operation
+    std::vector<uint8_t> dataCopy(data.begin(), data.end());
+
+    // Use thread pool or async mechanism for better resource management
+    try {
+        // Use std::async with async policy for better thread management
+        // Store the future to ensure the task runs
+        static thread_local std::vector<std::future<void>> asyncTasks;
+
+        auto task = std::async(std::launch::async, [this, promise, dataCopy = std::move(dataCopy)]() {
+            try {
+                auto result = write(std::span<const uint8_t>(dataCopy));
+                promise->set_value(result);
+            } catch (...) {
+                promise->set_exception(std::current_exception());
+            }
+        });
+
+        // Clean up completed tasks periodically
+        asyncTasks.erase(
+            std::remove_if(asyncTasks.begin(), asyncTasks.end(),
+                [](const std::future<void>& f) {
+                    return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+                }),
+            asyncTasks.end());
+
+        asyncTasks.push_back(std::move(task));
+    } catch (...) {
+        promise->set_exception(std::current_exception());
+    }
+
+    return future;
 }
 
 std::future<size_t> SerialPort::asyncWrite(std::string_view data) {
-    return std::async(std::launch::async, [this, data = std::string(data)]() {
-        return write(data);
-    });
+    // Convert to span and delegate to the optimized version
+    return asyncWrite(std::span<const uint8_t>(
+        reinterpret_cast<const uint8_t*>(data.data()), data.size()));
 }
 
 void SerialPort::flush() { impl_->flush(); }
@@ -210,6 +263,39 @@ std::optional<std::string> SerialPort::tryOpen(std::string_view portName,
     } catch (const SerialException& e) {
         return e.what();
     }
+}
+
+Result<std::vector<uint8_t>> SerialPort::tryRead(size_t maxBytes) noexcept {
+    try {
+        return read(maxBytes);
+    } catch (const SerialPortNotOpenException&) {
+        return SerialError{SerialError::Code::PortNotOpen, "Port is not open"};
+    } catch (const SerialTimeoutException&) {
+        return SerialError{SerialError::Code::Timeout, "Read operation timed out"};
+    } catch (const SerialIOException& e) {
+        return SerialError{SerialError::Code::IOError, e.what()};
+    } catch (const std::exception& e) {
+        return SerialError{SerialError::Code::IOError, e.what()};
+    }
+}
+
+Result<size_t> SerialPort::tryWrite(std::span<const uint8_t> data) noexcept {
+    try {
+        return write(data);
+    } catch (const SerialPortNotOpenException&) {
+        return SerialError{SerialError::Code::PortNotOpen, "Port is not open"};
+    } catch (const SerialTimeoutException&) {
+        return SerialError{SerialError::Code::Timeout, "Write operation timed out"};
+    } catch (const SerialIOException& e) {
+        return SerialError{SerialError::Code::IOError, e.what()};
+    } catch (const std::exception& e) {
+        return SerialError{SerialError::Code::IOError, e.what()};
+    }
+}
+
+Result<size_t> SerialPort::tryWrite(std::string_view data) noexcept {
+    return tryWrite(std::span<const uint8_t>(
+        reinterpret_cast<const uint8_t*>(data.data()), data.size()));
 }
 
 }  // namespace serial

@@ -18,6 +18,8 @@
 #include <string_view>
 #include <vector>
 
+#include "database_base.hpp"
+
 namespace atom::database {
 
 /**
@@ -143,6 +145,39 @@ public:
      */
     bool ping();
 
+    // Enhanced database operations
+    /**
+     * @brief Gets database performance statistics.
+     * @return DatabaseStatistics object with performance metrics.
+     */
+    [[nodiscard]] DatabaseStatistics get_statistics() const;
+
+    /**
+     * @brief Gets connection pool statistics.
+     * @return Map of pool statistics.
+     */
+    [[nodiscard]] std::unordered_map<std::string, size_t> get_pool_stats() const;
+
+    /**
+     * @brief Checks if the database connection is healthy.
+     * @return True if healthy, false otherwise.
+     */
+    [[nodiscard]] bool is_healthy() const;
+
+    /**
+     * @brief Executes a query asynchronously.
+     * @param query The SQL query to execute.
+     * @return Future containing the number of affected rows.
+     */
+    [[nodiscard]] std::future<uint64_t> execute_async(std::string_view query);
+
+    /**
+     * @brief Executes multiple queries in a batch.
+     * @param queries Vector of SQL queries to execute.
+     * @return Vector of affected row counts.
+     */
+    [[nodiscard]] std::vector<uint64_t> execute_batch(const std::vector<std::string>& queries);
+
 private:
     class Impl;
     std::unique_ptr<Impl> p_impl_;
@@ -182,6 +217,12 @@ public:
 private:
     friend class MysqlDB;
     explicit ResultSet(MYSQL_RES* result);
+
+public:
+    // Factory method for MysqlDB to create ResultSet instances
+    static std::unique_ptr<ResultSet> create(MYSQL_RES* result) {
+        return std::unique_ptr<ResultSet>(new ResultSet(result));
+    }
 
     std::unique_ptr<MYSQL_RES, decltype(&mysql_free_result)> result_;
     MYSQL_ROW current_row_ = nullptr;
@@ -227,9 +268,14 @@ private:
 
     std::unique_ptr<MYSQL, std::function<void(MYSQL*)>> conn_;
     bool committed_or_rolled_back_ = false;
+
+public:
+    // Factory method for MysqlDB to create Transaction instances
+    static std::unique_ptr<Transaction> create(std::unique_ptr<MYSQL, std::function<void(MYSQL*)>> conn) {
+        return std::unique_ptr<Transaction>(new Transaction(std::move(conn)));
+    }
 };
 
-}  // namespace database
-}  // namespace atom
+}  // namespace atom::database
 
 #endif  // ATOM_SEARCH_MYSQL_HPP

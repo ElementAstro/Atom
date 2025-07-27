@@ -77,6 +77,17 @@ std::vector<BluetoothDeviceInfo> BluetoothSerial::getPairedDevices() {
     return impl_->getPairedDevices();
 }
 
+std::vector<BluetoothDeviceInfo> BluetoothSerial::getCachedDevices(
+    std::chrono::minutes maxAge) const {
+    // TODO: Implement in platform-specific implementations
+    (void)maxAge; // Suppress unused parameter warning
+    return {}; // Return empty vector for now
+}
+
+void BluetoothSerial::clearDeviceCache() {
+    // TODO: Implement in platform-specific implementations
+}
+
 std::vector<uint8_t> BluetoothSerial::read(size_t maxBytes) {
     return impl_->read(maxBytes);
 }
@@ -115,6 +126,58 @@ void BluetoothSerial::setConnectionListener(
 
 BluetoothSerial::Statistics BluetoothSerial::getStatistics() const {
     return impl_->getStatistics();
+}
+
+std::vector<uint8_t> BluetoothSerial::readBulk(size_t maxBytes) {
+    // Optimized bulk read with larger buffer and reduced overhead
+    std::vector<uint8_t> buffer;
+    buffer.reserve(maxBytes);
+
+    // Read in larger chunks for better performance
+    constexpr size_t CHUNK_SIZE = 1024;
+    size_t totalRead = 0;
+
+    while (totalRead < maxBytes) {
+        size_t toRead = std::min(CHUNK_SIZE, maxBytes - totalRead);
+        auto chunk = impl_->read(toRead);
+
+        if (chunk.empty()) {
+            break; // No more data available
+        }
+
+        buffer.insert(buffer.end(), chunk.begin(), chunk.end());
+        totalRead += chunk.size();
+
+        if (chunk.size() < toRead) {
+            break; // Less data available than requested
+        }
+    }
+
+    return buffer;
+}
+
+size_t BluetoothSerial::writeBulk(std::span<const uint8_t> data) {
+    // Optimized bulk write with batching for better performance
+    if (data.empty()) {
+        return 0;
+    }
+
+    constexpr size_t BATCH_SIZE = 2048;
+    size_t totalWritten = 0;
+
+    for (size_t offset = 0; offset < data.size(); offset += BATCH_SIZE) {
+        size_t chunkSize = std::min(BATCH_SIZE, data.size() - offset);
+        auto chunk = data.subspan(offset, chunkSize);
+
+        size_t written = impl_->write(chunk);
+        totalWritten += written;
+
+        if (written < chunkSize) {
+            break; // Partial write, stop here
+        }
+    }
+
+    return totalWritten;
 }
 
 }  // namespace serial

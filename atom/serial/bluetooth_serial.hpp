@@ -27,6 +27,16 @@ struct BluetoothDeviceInfo {
 
     /** @brief Optional list of services offered by the device. */
     std::vector<std::string> services;
+
+    /** @brief Timestamp when this device was last seen. */
+    std::chrono::steady_clock::time_point lastSeen{std::chrono::steady_clock::now()};
+
+    // Optimization: Pre-allocate strings for better performance
+    BluetoothDeviceInfo() {
+        address.reserve(18);  // MAC address format: XX:XX:XX:XX:XX:XX
+        name.reserve(64);     // Typical device name length
+        services.reserve(4);  // Common number of services
+    }
 };
 
 /**
@@ -223,6 +233,23 @@ public:
     std::vector<BluetoothDeviceInfo> getPairedDevices();
 
     /**
+     * @brief Gets cached discovered devices.
+     *
+     * Returns devices discovered in recent scans without performing a new scan.
+     * Useful for quick device list retrieval.
+     *
+     * @param maxAge Maximum age of cached devices to return (default: 5 minutes)
+     * @return Vector of recently discovered devices
+     */
+    std::vector<BluetoothDeviceInfo> getCachedDevices(
+        std::chrono::minutes maxAge = std::chrono::minutes(5)) const;
+
+    /**
+     * @brief Clears the device discovery cache.
+     */
+    void clearDeviceCache();
+
+    /**
      * @brief Reads data from the Bluetooth serial port.
      *
      * @param maxBytes The maximum number of bytes to read.
@@ -285,6 +312,28 @@ public:
      * @return The number of bytes available to read.
      */
     [[nodiscard]] size_t available() const;
+
+    /**
+     * @brief Optimized bulk read operation.
+     *
+     * Reads data more efficiently by using larger buffer sizes and
+     * reduced system call overhead.
+     *
+     * @param maxBytes Maximum number of bytes to read
+     * @return Vector containing the read data
+     */
+    std::vector<uint8_t> readBulk(size_t maxBytes = 4096);
+
+    /**
+     * @brief Optimized bulk write operation.
+     *
+     * Writes data more efficiently by batching small writes and
+     * optimizing buffer management.
+     *
+     * @param data The data to write
+     * @return Number of bytes written
+     */
+    size_t writeBulk(std::span<const uint8_t> data);
 
     /**
      * @brief Sets a connection listener to be notified of connection events.

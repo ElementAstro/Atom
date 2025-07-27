@@ -10,27 +10,98 @@
 #include <spdlog/spdlog.h>
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <exception>
+#include <functional>
 #include <future>
 #include <memory>
 #include <mutex>
 #include <queue>
+#include <regex>
 #include <set>
 #include <shared_mutex>
 #include <string>
 #include <string_view>
 #include <thread>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
-
-#include "atom/containers/high_performance.hpp"
 
 namespace atom::search {
 
-using atom::containers::HashMap;
-using atom::containers::HashSet;
-using atom::containers::String;
-using atom::containers::Vector;
+using String = std::string;
+template<typename K, typename V>
+using HashMap = std::unordered_map<K, V>;
+template<typename T>
+using HashSet = std::unordered_set<T>;
+template<typename T>
+using Vector = std::vector<T>;
+
+/**
+ * @brief Hash function for String pairs used in TF-IDF cache
+ */
+struct StringPairHash {
+    std::size_t operator()(const std::pair<String, String>& p) const noexcept {
+        std::size_t h1 = std::hash<String>{}(p.first);
+        std::size_t h2 = std::hash<String>{}(p.second);
+        return h1 ^ (h2 << 1);
+    }
+};
+
+/**
+ * @brief Configuration options for the search engine.
+ */
+struct SearchConfig {
+    size_t max_results = 100;           ///< Maximum results per search
+    double score_threshold = 0.0;       ///< Minimum score threshold
+    bool enable_stemming = false;       ///< Enable word stemming
+    bool enable_fuzzy = true;           ///< Enable fuzzy matching
+    size_t cache_size = 1000;          ///< Search result cache size
+    std::chrono::milliseconds cache_ttl{300000}; ///< Cache TTL (5 minutes)
+
+    // Performance optimization settings
+    size_t tokenized_cache_size = 5000;  ///< Maximum tokenized content cache entries per shard
+    size_t tf_idf_cache_size = 10000;    ///< Maximum TF-IDF cache entries per shard
+    bool enable_performance_caching = true; ///< Enable performance caches
+
+    // Similarity search settings
+    double min_similarity_threshold = 0.01; ///< Minimum similarity for semantic search
+    bool use_cosine_similarity = true;      ///< Use cosine similarity (vs Jaccard)
+
+    // Enhanced features
+    bool enable_semantic_search = true;     ///< Enable semantic search capabilities
+    bool enable_ranked_autocomplete = true; ///< Enable frequency-based autocomplete ranking
+};
+
+/**
+ * @brief Search result pagination parameters.
+ */
+struct SearchPagination {
+    size_t offset = 0;                  ///< Result offset
+    size_t limit = 50;                  ///< Maximum results to return
+};
+
+/**
+ * @brief Search performance metrics.
+ */
+struct SearchMetrics {
+    std::atomic<uint64_t> total_searches{0};
+    std::atomic<uint64_t> cache_hits{0};
+    std::atomic<uint64_t> cache_misses{0};
+    std::atomic<uint64_t> total_documents_indexed{0};
+    std::atomic<uint64_t> total_search_time_ms{0};
+
+    double get_cache_hit_ratio() const noexcept {
+        uint64_t total = cache_hits.load() + cache_misses.load();
+        return total > 0 ? static_cast<double>(cache_hits.load()) / total : 0.0;
+    }
+
+    double get_average_search_time_ms() const noexcept {
+        uint64_t searches = total_searches.load();
+        return searches > 0 ? static_cast<double>(total_search_time_ms.load()) / searches : 0.0;
+    }
+};
 
 /**
  * @brief Base exception class for search engine errors.
@@ -92,6 +163,8 @@ public:
     explicit SearchOperationException(const std::string& message)
         : SearchEngineException("Search operation error: " + message) {}
 };
+
+
 
 /**
  * @brief Represents a searchable document.
@@ -202,6 +275,31 @@ private:
 };
 
 /**
+ * @brief Enhanced search result with metadata.
+ */
+struct SearchResult {
+    std::shared_ptr<Document> document;
+    double score = 0.0;
+    std::vector<std::string> matched_terms;
+    std::string snippet;  ///< Content snippet with highlighted terms
+
+    SearchResult() = default;
+    SearchResult(std::shared_ptr<Document> doc, double s)
+        : document(std::move(doc)), score(s) {}
+};
+
+/**
+ * @brief Search results with pagination and metadata.
+ */
+struct SearchResults {
+    std::vector<SearchResult> results;
+    size_t total_count = 0;
+    size_t offset = 0;
+    double search_time_ms = 0.0;
+    bool from_cache = false;
+};
+
+/**
  * @brief A high-performance, thread-safe, sharded search engine.
  *
  * This search engine uses a sharded architecture to provide high-concurrency
@@ -214,8 +312,9 @@ public:
      * @brief Constructs the SearchEngine.
      * @param num_threads The number of worker threads for background tasks. If 0,
      * defaults to hardware concurrency.
+     * @param config Search engine configuration options.
      */
-    explicit SearchEngine(unsigned num_threads = 0);
+    explicit SearchEngine(unsigned num_threads = 0, SearchConfig config = {});
 
     /**
      * @brief Destructor. Stops worker threads and cleans up resources.
@@ -260,6 +359,15 @@ public:
         const std::string& tag);
 
     /**
+     * @brief Enhanced search for documents matching a single tag with pagination.
+     * @param tag The tag to search for.
+     * @param pagination Pagination parameters.
+     * @return SearchResults with metadata.
+     */
+    [[nodiscard]] SearchResults search_by_tag_enhanced(
+        const std::string& tag, const SearchPagination& pagination = {});
+
+    /**
      * @brief Performs a fuzzy search for documents by tag.
      * @param tag The tag to search for.
      * @param tolerance The maximum Levenshtein distance.
@@ -267,6 +375,16 @@ public:
      */
     [[nodiscard]] std::vector<std::shared_ptr<Document>> fuzzy_search_by_tag(
         const std::string& tag, int tolerance);
+
+    /**
+     * @brief Enhanced fuzzy search with pagination and scoring.
+     * @param tag The tag to search for.
+     * @param tolerance The maximum Levenshtein distance.
+     * @param pagination Pagination parameters.
+     * @return SearchResults with metadata.
+     */
+    [[nodiscard]] SearchResults fuzzy_search_by_tag_enhanced(
+        const std::string& tag, int tolerance, const SearchPagination& pagination = {});
 
     /**
      * @brief Searches for documents matching a list of tags.
@@ -277,12 +395,30 @@ public:
         const std::vector<std::string>& tags);
 
     /**
+     * @brief Enhanced search for documents matching multiple tags.
+     * @param tags The tags to search for.
+     * @param pagination Pagination parameters.
+     * @return SearchResults with metadata.
+     */
+    [[nodiscard]] SearchResults search_by_tags_enhanced(
+        const std::vector<std::string>& tags, const SearchPagination& pagination = {});
+
+    /**
      * @brief Searches document content for a query string.
      * @param query The query string.
      * @return A vector of documents, ranked by relevance.
      */
     [[nodiscard]] std::vector<std::shared_ptr<Document>> search_by_content(
         const String& query);
+
+    /**
+     * @brief Enhanced content search with pagination and snippets.
+     * @param query The query string.
+     * @param pagination Pagination parameters.
+     * @return SearchResults with metadata and content snippets.
+     */
+    [[nodiscard]] SearchResults search_by_content_enhanced(
+        const String& query, const SearchPagination& pagination = {});
 
     /**
      * @brief Performs a boolean search (AND, OR, NOT).
@@ -293,6 +429,42 @@ public:
         const String& query);
 
     /**
+     * @brief Enhanced boolean search with full operator support.
+     * @param query The boolean query string (supports AND, OR, NOT, parentheses).
+     * @param pagination Pagination parameters.
+     * @return SearchResults with metadata.
+     */
+    [[nodiscard]] SearchResults boolean_search_enhanced(
+        const String& query, const SearchPagination& pagination = {});
+
+    /**
+     * @brief Performs phrase search for exact phrase matching.
+     * @param phrase The phrase to search for.
+     * @param pagination Pagination parameters.
+     * @return SearchResults with metadata.
+     */
+    [[nodiscard]] SearchResults phrase_search(
+        const String& phrase, const SearchPagination& pagination = {});
+
+    /**
+     * @brief Performs wildcard search with pattern matching.
+     * @param pattern The wildcard pattern (* and ? supported).
+     * @param pagination Pagination parameters.
+     * @return SearchResults with metadata.
+     */
+    [[nodiscard]] SearchResults wildcard_search(
+        const String& pattern, const SearchPagination& pagination = {});
+
+    /**
+     * @brief Performs regex search on document content.
+     * @param regex_pattern The regular expression pattern.
+     * @param pagination Pagination parameters.
+     * @return SearchResults with metadata.
+     */
+    [[nodiscard]] SearchResults regex_search(
+        const String& regex_pattern, const SearchPagination& pagination = {});
+
+    /**
      * @brief Provides autocomplete suggestions for a prefix.
      * @param prefix The prefix to complete.
      * @param max_results The maximum number of suggestions to return.
@@ -300,6 +472,35 @@ public:
      */
     [[nodiscard]] std::vector<String> auto_complete(const String& prefix,
                                                     size_t max_results = 10);
+
+    /**
+     * @brief Enhanced autocomplete with frequency-based ranking.
+     * @param prefix The prefix to complete.
+     * @param max_results The maximum number of suggestions to return.
+     * @return A vector of suggestion strings ranked by frequency.
+     */
+    [[nodiscard]] std::vector<std::pair<String, size_t>> auto_complete_ranked(
+        const String& prefix, size_t max_results = 10);
+
+    /**
+     * @brief Finds documents similar to a given document.
+     * @param doc_id The ID of the reference document.
+     * @param max_results The maximum number of similar documents to return.
+     * @param min_similarity Minimum similarity threshold (0.0 to 1.0).
+     * @return A vector of similar documents with similarity scores.
+     */
+    [[nodiscard]] std::vector<std::pair<std::shared_ptr<Document>, double>>
+    find_similar_documents(const String& doc_id, size_t max_results = 10,
+                          double min_similarity = 0.1);
+
+    /**
+     * @brief Performs semantic search using document similarity.
+     * @param query_text The query text to find similar documents for.
+     * @param pagination Pagination parameters.
+     * @return SearchResults with semantically similar documents.
+     */
+    [[nodiscard]] SearchResults semantic_search(
+        const String& query_text, const SearchPagination& pagination = {});
 
     /**
      * @brief Saves the entire search index to a file.
@@ -339,13 +540,83 @@ public:
      */
     [[nodiscard]] std::vector<String> get_all_document_ids() const;
 
+    /**
+     * @brief Bulk insert multiple documents efficiently.
+     * @param documents Vector of documents to insert.
+     * @return Number of successfully inserted documents.
+     */
+    size_t bulk_insert(const std::vector<Document>& documents);
+
+    /**
+     * @brief Bulk update multiple documents efficiently.
+     * @param documents Vector of documents to update.
+     * @return Number of successfully updated documents.
+     */
+    size_t bulk_update(const std::vector<Document>& documents);
+
+    /**
+     * @brief Bulk delete multiple documents efficiently.
+     * @param doc_ids Vector of document IDs to delete.
+     * @return Number of successfully deleted documents.
+     */
+    size_t bulk_delete(const std::vector<String>& doc_ids);
+
+    /**
+     * @brief Gets search performance metrics.
+     * @return Current search metrics.
+     */
+    [[nodiscard]] const SearchMetrics& get_metrics() const noexcept {
+        return metrics_;
+    }
+
+    /**
+     * @brief Resets all performance metrics.
+     */
+    void reset_metrics() noexcept;
+
+    /**
+     * @brief Gets current search engine configuration.
+     * @return Current configuration.
+     */
+    [[nodiscard]] const SearchConfig& get_config() const noexcept {
+        return config_;
+    }
+
+    /**
+     * @brief Updates search engine configuration.
+     * @param config New configuration.
+     */
+    void update_config(const SearchConfig& config);
+
+    /**
+     * @brief Optimizes the search index for better performance.
+     */
+    void optimize_index();
+
+    /**
+     * @brief Gets index statistics.
+     * @return Map of statistic name to value.
+     */
+    [[nodiscard]] std::unordered_map<std::string, size_t> get_index_stats() const;
+
 private:
     struct Shard {
         HashMap<String, std::shared_ptr<Document>> documents;
         HashMap<std::string, std::vector<String>> tag_index;
         HashMap<String, HashSet<String>> content_index;
         HashMap<String, int> doc_frequency;
+
+        // Performance optimizations
+        HashMap<String, std::vector<String>> tokenized_content_cache; ///< Cache tokenized content
+        std::unordered_map<std::pair<String, String>, double, StringPairHash> tf_idf_cache; ///< Cache TF-IDF calculations
+        mutable std::atomic<size_t> cache_hits{0};
+        mutable std::atomic<size_t> cache_misses{0};
+
         mutable std::shared_mutex mutex;
+        mutable std::shared_mutex cache_mutex; ///< Separate mutex for cache operations
+
+        // Constructor
+        Shard() : cache_hits(0), cache_misses(0) {}
     };
 
     /**
@@ -394,7 +665,6 @@ private:
     };
 
     Shard& get_shard(const String& key) const;
-    Shard& get_shard(const std::string& key) const;
 
     void add_content_to_index(Shard& doc_shard,
                               const std::shared_ptr<Document>& doc);
@@ -414,6 +684,47 @@ private:
     void stop_worker_threads();
     void worker_function();
 
+    // Enhanced helper methods
+    [[nodiscard]] std::string generate_cache_key(const std::string& query,
+                                                 const SearchPagination& pagination) const;
+    [[nodiscard]] bool get_cached_result(const std::string& cache_key, SearchResults& result) const;
+    void cache_result(const std::string& cache_key, const SearchResults& result) const;
+    void cleanup_expired_cache() const;
+
+    [[nodiscard]] std::string generate_snippet(const Document& doc,
+                                              const std::vector<std::string>& terms,
+                                              size_t max_length = 200) const;
+    [[nodiscard]] std::vector<std::string> extract_matched_terms(const Document& doc,
+                                                                const std::vector<std::string>& query_terms) const;
+
+    // Enhanced TF-IDF with caching
+    [[nodiscard]] double tf_idf_cached(const Document& doc, std::string_view term) const;
+    [[nodiscard]] std::vector<String> get_cached_tokens(const String& doc_id, const String& content) const;
+    void cache_tokenized_content(const String& doc_id, const std::vector<String>& tokens) const;
+    void invalidate_content_cache(const String& doc_id) const;
+
+    // Stemming support
+    [[nodiscard]] std::string stem_word(const std::string& word) const;
+    [[nodiscard]] std::vector<String> tokenize_with_stemming(const String& content) const;
+
+    // Performance optimization helpers
+    [[nodiscard]] std::vector<String> tokenize_content_optimized(const String& content) const;
+    void clear_performance_caches() const;
+
+    // Similarity calculation helpers
+    [[nodiscard]] double calculate_cosine_similarity(const Document& doc1, const Document& doc2) const;
+    [[nodiscard]] double calculate_jaccard_similarity(const Document& doc1, const Document& doc2) const;
+    [[nodiscard]] std::unordered_map<String, double> create_tf_vector(const Document& doc) const;
+
+    // Boolean query parsing
+    struct BooleanQuery {
+        enum class Operator { AND, OR, NOT };
+        std::vector<std::string> terms;
+        std::vector<Operator> operators;
+    };
+    [[nodiscard]] BooleanQuery parse_boolean_query(const String& query) const;
+    [[nodiscard]] std::vector<std::shared_ptr<Document>> execute_boolean_query(const BooleanQuery& query) const;
+
     const unsigned int num_threads_;
     std::vector<std::unique_ptr<Shard>> shards_;
     const size_t shard_mask_;
@@ -422,6 +733,14 @@ private:
     std::unique_ptr<ConcurrentQueue<SearchTask>> task_queue_;
     std::vector<std::thread> worker_threads_;
     std::atomic<bool> stop_workers_{false};
+
+    // Configuration and metrics
+    SearchConfig config_;
+    mutable SearchMetrics metrics_;
+
+    // Search result cache
+    mutable std::unordered_map<std::string, std::pair<SearchResults, std::chrono::steady_clock::time_point>> result_cache_;
+    mutable std::mutex cache_mutex_;
 };
 
 }  // namespace atom::search

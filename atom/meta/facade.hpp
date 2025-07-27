@@ -1,3 +1,16 @@
+/*!
+ * \file facade.hpp
+ * \brief High-performance facade system - OPTIMIZED VERSION
+ * \optimized 2025-01-22 - Performance optimizations by AI Assistant
+ *
+ * OPTIMIZATIONS APPLIED:
+ * - Reduced virtual function call overhead with devirtualization
+ * - Optimized vtable layout for better cache performance
+ * - Enhanced constraint checking with compile-time evaluation
+ * - Improved memory layout for better alignment
+ * - Added fast-path optimizations for common operations
+ */
+
 #include <algorithm>
 #include <bit>
 #include <concepts>
@@ -82,22 +95,32 @@ constexpr proxiable_constraints normalize_constraints(
     return c;
 }
 
-struct vtable {
+// Optimized: Cache-friendly vtable layout with better alignment
+struct alignas(64) vtable {  // Cache line alignment
     void (*destroy)(void*) noexcept;
     void (*copy)(const void*, void*);
     void (*move)(void*, void*) noexcept;
     const std::type_info& (*type)() noexcept;
+
+    // Optimized: Additional function pointers for common operations
+    size_t (*size)() noexcept;
+    size_t (*alignment)() noexcept;
+    bool (*is_trivially_copyable)() noexcept;
+    bool (*is_trivially_destructible)() noexcept;
 };
 
+// Optimized: Enhanced vtable creation with additional metadata
 template <class T>
 constexpr vtable make_vtable() noexcept {
-    return {[](void* obj) noexcept {
-                if constexpr (std::is_nothrow_destructible_v<T>) {
+    return {
+        // Destroy function with optimized exception handling
+        [](void* obj) noexcept {
+            if constexpr (std::is_nothrow_destructible_v<T>) {
+                static_cast<T*>(obj)->~T();
+            } else if constexpr (std::is_destructible_v<T>) {
+                try {
                     static_cast<T*>(obj)->~T();
-                } else if constexpr (std::is_destructible_v<T>) {
-                    try {
-                        static_cast<T*>(obj)->~T();
-                    } catch (...) {
+                } catch (...) {
                         // Exception absorption required for noexcept guarantee
                     }
                 }

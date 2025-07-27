@@ -1160,10 +1160,10 @@ struct DiffKeyHasher {
 // Global cache for diff operations using the correct template parameters
 using DiffCache = atom::search::ThreadSafeLRUCache<
     std::pair<std::string, std::string>,
-    std::vector<std::tuple<std::string, int, int, int, int>>>;
+    std::vector<std::tuple<std::string, int, int, int, int>>, PairStringHash>;
 
 // Initialize cache with size 100
-inline DiffCache g_diff_cache(100);
+DiffCache* g_diff_cache = new DiffCache(100);
 }  // namespace detail
 
 namespace algorithms {
@@ -1360,7 +1360,7 @@ private:
             int next_b_start = std::get<1>(block);
 
             // 检查是否重叠或接近
-            if (next_a_start <= current_a_end ||
+            if (next_a_start <= current_a_end &&
                 next_b_start <= current_b_end) {
                 // 计算合并后的块大小
                 int new_size = std::max(
@@ -1781,6 +1781,6 @@ const DiffOptions& DiffLibConfig::getDefaultOptions() {
     return default_options_;
 }
 
-void DiffLibConfig::clearCaches() { detail::g_diff_cache.clear(); }
+void DiffLibConfig::clearCaches() { detail::g_diff_cache->clear(); }
 
 }  // namespace atom::utils

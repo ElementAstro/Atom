@@ -20,14 +20,23 @@
 namespace atom::async::io {
 
 BaseCompressor::BaseCompressor(asio::io_context& io_context,
-                               const fs::path& output_file)
-    : io_context_(io_context), output_stream_(io_context) {
-    spdlog::info("BaseCompressor constructor with output_file: {}",
-                 output_file.string());
+                               const fs::path& output_file,
+                               const CompressionConfig& config)
+    : io_context_(io_context), output_stream_(io_context), config_(config) {
+    spdlog::info("BaseCompressor constructor with output_file: {}, chunk_size: {}, compression_level: {}",
+                 output_file.string(), config_.chunk_size, config_.compression_level);
 
     if (output_file.empty()) {
         throw std::invalid_argument("Output file path cannot be empty");
     }
+
+    // Validate configuration
+    if (!utils::validateConfig(config_)) {
+        throw std::invalid_argument("Invalid compression configuration");
+    }
+
+    // Initialize dynamic buffer with configured size
+    out_buffer_.resize(config_.chunk_size);
 
     if (!output_file.parent_path().empty() &&
         !fs::exists(output_file.parent_path())) {
@@ -36,11 +45,14 @@ BaseCompressor::BaseCompressor(asio::io_context& io_context,
 
     openOutputFile(output_file);
 
+    // Initialize compression statistics
+    stats_.start_time = std::chrono::steady_clock::now();
+
     zlib_stream_.zalloc = Z_NULL;
     zlib_stream_.zfree = Z_NULL;
     zlib_stream_.opaque = Z_NULL;
 
-    int result = deflateInit2(&zlib_stream_, Z_BEST_SPEED, Z_DEFLATED, 15 | 16,
+    int result = deflateInit2(&zlib_stream_, config_.compression_level, Z_DEFLATED, 15 | 16,
                               8, Z_DEFAULT_STRATEGY);
     if (result != Z_OK) {
         spdlog::error("Failed to initialize zlib: error code {}", result);
@@ -60,6 +72,43 @@ BaseCompressor::~BaseCompressor() noexcept {
         }
     } catch (...) {
         spdlog::error("Exception during BaseCompressor destruction");
+    }
+}
+
+void BaseCompressor::cancel() {
+    cancelled_.store(true, std::memory_order_release);
+    spdlog::info("Compression operation cancelled");
+}
+
+void BaseCompressor::setProgressCallback(ProgressCallback callback) {
+    progress_callback_ = std::move(callback);
+}
+
+void BaseCompressor::setCompletionCallback(CompletionCallback callback) {
+    completion_callback_ = std::move(callback);
+}
+
+const CompressionStats& BaseCompressor::getStats() const noexcept {
+    return stats_;
+}
+
+void BaseCompressor::updateProgress(std::size_t bytes_processed) {
+    stats_.bytes_processed += bytes_processed;
+
+    if (config_.enable_progress_reporting && progress_callback_ &&
+        total_size_estimate_ > 0) {
+        double percentage = static_cast<double>(stats_.bytes_processed) / total_size_estimate_ * 100.0;
+        progress_callback_(stats_.bytes_processed, total_size_estimate_, percentage);
+    }
+}
+
+void BaseCompressor::notifyCompletion(const std::error_code& ec) {
+    stats_.end_time = std::chrono::steady_clock::now();
+    stats_.updateRatio();
+    stats_.updateThroughput();
+
+    if (completion_callback_) {
+        completion_callback_(ec, stats_);
     }
 }
 
@@ -156,8 +205,10 @@ void BaseCompressor::finishCompression() {
 
 SingleFileCompressor::SingleFileCompressor(asio::io_context& io_context,
                                            const fs::path& input_file,
-                                           const fs::path& output_file)
-    : BaseCompressor(io_context, output_file), input_stream_(io_context) {
+                                           const fs::path& output_file,
+                                           const CompressionConfig& config)
+    : BaseCompressor(io_context, output_file, config),
+      input_stream_(io_context), input_file_(input_file) {
     if (!fs::exists(input_file)) {
         throw std::invalid_argument("Input file does not exist: " +
                                     input_file.string());
@@ -168,10 +219,38 @@ SingleFileCompressor::SingleFileCompressor(asio::io_context& io_context,
                                     input_file.string());
     }
 
+    // Initialize dynamic input buffer
+    in_buffer_.resize(config_.chunk_size);
+
+    // Set total size estimate for progress reporting
+    try {
+        total_size_estimate_ = fs::file_size(input_file);
+    } catch (const fs::filesystem_error& e) {
+        spdlog::warn("Could not determine file size for progress reporting: {}", e.what());
+        total_size_estimate_ = 0;
+    }
+
     openInputFile(input_file);
 }
 
-void SingleFileCompressor::start() { doRead(); }
+void SingleFileCompressor::start() {
+    if (cancelled_.load(std::memory_order_acquire)) {
+        notifyCompletion(asio::error::operation_aborted);
+        return;
+    }
+    doRead();
+}
+
+void SingleFileCompressor::cancel() {
+    BaseCompressor::cancel();
+    if (input_stream_.is_open()) {
+        std::error_code ec;
+        input_stream_.cancel(ec);
+        if (ec) {
+            spdlog::warn("Error cancelling input stream: {}", ec.message());
+        }
+    }
+}
 
 void SingleFileCompressor::openInputFile(const fs::path& input_file) {
 #ifdef _WIN32
@@ -197,10 +276,21 @@ void SingleFileCompressor::openInputFile(const fs::path& input_file) {
 }
 
 void SingleFileCompressor::doRead() {
+    if (cancelled_.load(std::memory_order_acquire)) {
+        notifyCompletion(asio::error::operation_aborted);
+        return;
+    }
+
     input_stream_.async_read_some(
         asio::buffer(in_buffer_),
         [this](std::error_code ec, std::size_t bytes_transferred) {
+            if (cancelled_.load(std::memory_order_acquire)) {
+                notifyCompletion(asio::error::operation_aborted);
+                return;
+            }
+
             if (!ec) {
+                updateProgress(bytes_transferred);
                 zlib_stream_.avail_in = bytes_transferred;
                 zlib_stream_.next_in =
                     reinterpret_cast<Bytef*>(in_buffer_.data());
@@ -208,8 +298,10 @@ void SingleFileCompressor::doRead() {
             } else {
                 if (ec != asio::error::eof) {
                     spdlog::error("Error during file read: {}", ec.message());
+                    notifyCompletion(ec);
+                } else {
+                    finishCompression();
                 }
-                finishCompression();
             }
         });
 }
@@ -218,8 +310,9 @@ void SingleFileCompressor::onAfterWrite() { doRead(); }
 
 DirectoryCompressor::DirectoryCompressor(asio::io_context& io_context,
                                          fs::path input_dir,
-                                         const fs::path& output_file)
-    : BaseCompressor(io_context, output_file),
+                                         const fs::path& output_file,
+                                         const CompressionConfig& config)
+    : BaseCompressor(io_context, output_file, config),
       input_dir_(std::move(input_dir)) {
     if (!fs::exists(input_dir_)) {
         throw std::invalid_argument("Input directory does not exist: " +
@@ -230,52 +323,93 @@ DirectoryCompressor::DirectoryCompressor(asio::io_context& io_context,
         throw std::invalid_argument("Input is not a directory: " +
                                     input_dir_.string());
     }
+
+    // Initialize dynamic input buffer
+    in_buffer_.resize(config_.chunk_size);
+
+    // Estimate total size for progress reporting
+    if (config_.enable_progress_reporting) {
+        total_size_estimate_ = utils::estimateDirectorySize(input_dir_);
+    }
 }
 
 void DirectoryCompressor::start() {
-    files_to_compress_.clear();
-    files_to_compress_.reserve(1000);
-    total_bytes_processed_ = 0;
-
-    std::vector<fs::path> all_entries;
-    all_entries.reserve(1000);
-
-    if (fs::exists(input_dir_) && fs::is_directory(input_dir_)) {
-        for (const auto& entry : fs::recursive_directory_iterator(input_dir_)) {
-            all_entries.push_back(entry.path());
-        }
-    } else {
-        spdlog::error(
-            "Input directory does not exist or is not a directory: {}",
-            input_dir_.string());
+    if (cancelled_.load(std::memory_order_acquire)) {
+        notifyCompletion(asio::error::operation_aborted);
         return;
     }
 
-    std::mutex file_list_mutex;
-    std::for_each(std::execution::par_unseq, all_entries.begin(),
-                  all_entries.end(), [&](const fs::path& path) {
-                      if (fs::is_regular_file(path)) {
-                          std::lock_guard<std::mutex> lock(file_list_mutex);
-                          files_to_compress_.push_back(path);
-                      }
-                  });
+    // Use async directory scanning for better performance
+    scanDirectoryAsync();
+}
 
-    if (!files_to_compress_.empty()) {
-        std::sort(std::execution::par_unseq, files_to_compress_.begin(),
-                  files_to_compress_.end(),
-                  [](const fs::path& a, const fs::path& b) {
-                      try {
-                          return fs::file_size(a) < fs::file_size(b);
-                      } catch (...) {
-                          return false;
-                      }
-                  });
-
-        doCompressNextFile();
-    } else {
-        spdlog::warn("No files to compress in directory: {}",
-                     input_dir_.string());
+void DirectoryCompressor::cancel() {
+    BaseCompressor::cancel();
+    if (input_stream_.is_open()) {
+        input_stream_.close();
     }
+}
+
+void DirectoryCompressor::scanDirectoryAsync() {
+    // Post directory scanning to thread pool to avoid blocking
+    asio::post(io_context_, [this]() {
+        try {
+            files_to_compress_.clear();
+            files_to_compress_.reserve(1000);
+            total_bytes_processed_ = 0;
+            current_file_index_ = 0;
+
+            std::vector<fs::path> all_entries;
+            all_entries.reserve(1000);
+
+            if (fs::exists(input_dir_) && fs::is_directory(input_dir_)) {
+                for (const auto& entry : fs::recursive_directory_iterator(input_dir_)) {
+                    if (cancelled_.load(std::memory_order_acquire)) {
+                        notifyCompletion(asio::error::operation_aborted);
+                        return;
+                    }
+                    all_entries.push_back(entry.path());
+                }
+            } else {
+                spdlog::error("Input directory does not exist or is not a directory: {}",
+                             input_dir_.string());
+                notifyCompletion(std::make_error_code(std::errc::no_such_file_or_directory));
+                return;
+            }
+
+            // Filter regular files in parallel
+            std::mutex file_list_mutex;
+            std::for_each(std::execution::par_unseq, all_entries.begin(),
+                          all_entries.end(), [&](const fs::path& path) {
+                              if (fs::is_regular_file(path)) {
+                                  std::lock_guard<std::mutex> lock(file_list_mutex);
+                                  files_to_compress_.push_back(path);
+                              }
+                          });
+
+            if (!files_to_compress_.empty()) {
+                // Sort by file size for better compression efficiency
+                std::sort(std::execution::par_unseq, files_to_compress_.begin(),
+                          files_to_compress_.end(),
+                          [](const fs::path& a, const fs::path& b) {
+                              try {
+                                  return fs::file_size(a) > fs::file_size(b); // Larger files first
+                              } catch (...) {
+                                  return false;
+                              }
+                          });
+
+                spdlog::info("Found {} files to compress", files_to_compress_.size());
+                doCompressNextFile();
+            } else {
+                spdlog::warn("No files to compress in directory: {}", input_dir_.string());
+                notifyCompletion({});
+            }
+        } catch (const std::exception& e) {
+            spdlog::error("Error during directory scanning: {}", e.what());
+            notifyCompletion(std::make_error_code(std::errc::io_error));
+        }
+    });
 }
 
 void DirectoryCompressor::doCompressNextFile() {
@@ -321,8 +455,52 @@ void DirectoryCompressor::doRead() {
 
 void DirectoryCompressor::onAfterWrite() { doRead(); }
 
-BaseDecompressor::BaseDecompressor(asio::io_context& io_context) noexcept
-    : io_context_(io_context) {}
+BaseDecompressor::BaseDecompressor(asio::io_context& io_context,
+                                   const CompressionConfig& config) noexcept
+    : io_context_(io_context), config_(config) {
+    // Initialize dynamic buffer with configured size
+    in_buffer_.resize(config_.chunk_size);
+
+    // Initialize decompression statistics
+    stats_.start_time = std::chrono::steady_clock::now();
+}
+
+void BaseDecompressor::cancel() {
+    cancelled_.store(true, std::memory_order_release);
+    spdlog::info("Decompression operation cancelled");
+}
+
+void BaseDecompressor::setProgressCallback(ProgressCallback callback) {
+    progress_callback_ = std::move(callback);
+}
+
+void BaseDecompressor::setCompletionCallback(CompletionCallback callback) {
+    completion_callback_ = std::move(callback);
+}
+
+const CompressionStats& BaseDecompressor::getStats() const noexcept {
+    return stats_;
+}
+
+void BaseDecompressor::updateProgress(std::size_t bytes_processed) {
+    stats_.bytes_processed += bytes_processed;
+
+    if (config_.enable_progress_reporting && progress_callback_ &&
+        total_size_estimate_ > 0) {
+        double percentage = static_cast<double>(stats_.bytes_processed) / total_size_estimate_ * 100.0;
+        progress_callback_(stats_.bytes_processed, total_size_estimate_, percentage);
+    }
+}
+
+void BaseDecompressor::notifyCompletion(const std::error_code& ec) {
+    stats_.end_time = std::chrono::steady_clock::now();
+    stats_.updateRatio();
+    stats_.updateThroughput();
+
+    if (completion_callback_) {
+        completion_callback_(ec, stats_);
+    }
+}
 
 void BaseDecompressor::decompress(gzFile source, StreamHandle& output_stream) {
     if (!source) {
@@ -363,8 +541,9 @@ void BaseDecompressor::doRead() {
 
 SingleFileDecompressor::SingleFileDecompressor(asio::io_context& io_context,
                                                fs::path input_file,
-                                               fs::path output_folder)
-    : BaseDecompressor(io_context),
+                                               fs::path output_folder,
+                                               const CompressionConfig& config)
+    : BaseDecompressor(io_context, config),
       input_file_(std::move(input_file)),
       output_folder_(std::move(output_folder)),
       output_stream_(io_context) {
@@ -379,11 +558,25 @@ SingleFileDecompressor::SingleFileDecompressor(asio::io_context& io_context,
     if (!fs::exists(output_folder_)) {
         fs::create_directories(output_folder_);
     }
+
+    // Set total size estimate for progress reporting
+    try {
+        total_size_estimate_ = fs::file_size(input_file_);
+    } catch (const fs::filesystem_error& e) {
+        spdlog::warn("Could not determine file size for progress reporting: {}", e.what());
+        total_size_estimate_ = 0;
+    }
 }
 
 void SingleFileDecompressor::start() {
+    if (cancelled_.load(std::memory_order_acquire)) {
+        notifyCompletion(asio::error::operation_aborted);
+        return;
+    }
+
     if (!fs::exists(input_file_)) {
         spdlog::error("Input file does not exist: {}", input_file_.string());
+        notifyCompletion(std::make_error_code(std::errc::no_such_file_or_directory));
         return;
     }
 
@@ -428,16 +621,29 @@ void SingleFileDecompressor::start() {
     decompress(inputHandle, output_stream_);
 }
 
+void SingleFileDecompressor::cancel() {
+    BaseDecompressor::cancel();
+    if (output_stream_.is_open()) {
+        std::error_code ec;
+        output_stream_.cancel(ec);
+        if (ec) {
+            spdlog::warn("Error cancelling output stream: {}", ec.message());
+        }
+    }
+}
+
 void SingleFileDecompressor::done() {
     if (output_stream_.is_open()) {
         output_stream_.close();
     }
+    notifyCompletion({});
 }
 
 DirectoryDecompressor::DirectoryDecompressor(asio::io_context& io_context,
                                              const fs::path& input_dir,
-                                             const fs::path& output_folder)
-    : BaseDecompressor(io_context),
+                                             const fs::path& output_folder,
+                                             const CompressionConfig& config)
+    : BaseDecompressor(io_context, config),
       input_dir_(input_dir),
       output_folder_(output_folder),
       output_stream_(io_context) {
@@ -457,6 +663,11 @@ DirectoryDecompressor::DirectoryDecompressor(asio::io_context& io_context,
 
     if (!fs::exists(output_folder_)) {
         fs::create_directories(output_folder_);
+    }
+
+    // Estimate total size for progress reporting
+    if (config_.enable_progress_reporting) {
+        total_size_estimate_ = utils::estimateDirectorySize(input_dir_);
     }
 }
 
@@ -885,5 +1096,216 @@ void GetZipFileSize::getSize() {
                       nested_e.what());
     }
 }
+
+// BufferPool implementation
+BufferPool& BufferPool::getInstance() {
+    static BufferPool instance;
+    return instance;
+}
+
+std::vector<char> BufferPool::getBuffer(std::size_t size) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto& pool = pools_[size];
+    if (!pool.empty()) {
+        auto buffer = std::move(pool.back());
+        pool.pop_back();
+        return buffer;
+    }
+    return std::vector<char>(size);
+}
+
+void BufferPool::returnBuffer(std::vector<char>&& buffer) {
+    if (buffer.empty()) return;
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto size = buffer.size();
+    auto& pool = pools_[size];
+    if (pool.size() < 10) { // Limit pool size to prevent memory bloat
+        buffer.clear();
+        buffer.shrink_to_fit();
+        buffer.resize(size);
+        pool.push_back(std::move(buffer));
+    }
+}
+
+// FormatDetector implementation
+CompressionFormat FormatDetector::detectFormat(const fs::path& file_path) {
+    std::ifstream file(file_path, std::ios::binary);
+    if (!file) {
+        return CompressionFormat::UNKNOWN;
+    }
+
+    std::vector<char> header(10);
+    file.read(header.data(), header.size());
+    auto bytes_read = file.gcount();
+    header.resize(bytes_read);
+
+    return detectFormat(header);
+}
+
+CompressionFormat FormatDetector::detectFormat(const std::vector<char>& data) {
+    if (data.size() < 2) {
+        return CompressionFormat::UNKNOWN;
+    }
+
+    if (isGzipFormat(data)) {
+        return CompressionFormat::GZIP;
+    }
+
+    if (isZlibFormat(data)) {
+        return CompressionFormat::ZLIB;
+    }
+
+    if (isZipFormat(data)) {
+        return CompressionFormat::ZIP;
+    }
+
+    return CompressionFormat::UNKNOWN;
+}
+
+bool FormatDetector::isGzipFormat(const std::vector<char>& header) {
+    return header.size() >= 2 &&
+           static_cast<unsigned char>(header[0]) == 0x1f &&
+           static_cast<unsigned char>(header[1]) == 0x8b;
+}
+
+bool FormatDetector::isZlibFormat(const std::vector<char>& header) {
+    if (header.size() < 2) return false;
+
+    unsigned char b1 = static_cast<unsigned char>(header[0]);
+    unsigned char b2 = static_cast<unsigned char>(header[1]);
+
+    // Check zlib header format
+    return ((b1 & 0x0f) == 0x08) && ((b1 * 256 + b2) % 31 == 0);
+}
+
+bool FormatDetector::isZipFormat(const std::vector<char>& header) {
+    return header.size() >= 4 &&
+           header[0] == 'P' && header[1] == 'K' &&
+           (header[2] == 0x03 || header[2] == 0x05 || header[2] == 0x07) &&
+           (header[3] == 0x04 || header[3] == 0x06 || header[3] == 0x08);
+}
+
+// Factory functions implementation
+namespace factory {
+
+std::unique_ptr<SingleFileCompressor> createFileCompressor(
+    asio::io_context& io_context,
+    const fs::path& input_file,
+    const fs::path& output_file,
+    const CompressionConfig& config) {
+
+    auto optimal_config = config;
+    if (optimal_config.chunk_size == DEFAULT_CHUNK_SIZE) {
+        try {
+            auto file_size = fs::file_size(input_file);
+            optimal_config = utils::createOptimalConfig(file_size);
+        } catch (const fs::filesystem_error&) {
+            // Use default config if file size cannot be determined
+        }
+    }
+
+    return std::make_unique<SingleFileCompressor>(io_context, input_file, output_file, optimal_config);
+}
+
+std::unique_ptr<DirectoryCompressor> createDirectoryCompressor(
+    asio::io_context& io_context,
+    const fs::path& input_dir,
+    const fs::path& output_file,
+    const CompressionConfig& config) {
+
+    auto optimal_config = config;
+    if (optimal_config.chunk_size == DEFAULT_CHUNK_SIZE) {
+        auto dir_size = utils::estimateDirectorySize(input_dir);
+        optimal_config = utils::createOptimalConfig(dir_size);
+    }
+
+    return std::make_unique<DirectoryCompressor>(io_context, input_dir, output_file, optimal_config);
+}
+
+std::unique_ptr<SingleFileDecompressor> createFileDecompressor(
+    asio::io_context& io_context,
+    const fs::path& input_file,
+    const fs::path& output_folder,
+    const CompressionConfig& config) {
+
+    return std::make_unique<SingleFileDecompressor>(io_context, input_file, output_folder, config);
+}
+
+std::unique_ptr<DirectoryDecompressor> createDirectoryDecompressor(
+    asio::io_context& io_context,
+    const fs::path& input_dir,
+    const fs::path& output_folder,
+    const CompressionConfig& config) {
+
+    return std::make_unique<DirectoryDecompressor>(io_context, input_dir, output_folder, config);
+}
+
+} // namespace factory
+
+// Utility functions implementation
+namespace utils {
+
+std::size_t estimateDirectorySize(const fs::path& directory) {
+    std::size_t total_size = 0;
+    std::error_code ec;
+
+    for (const auto& entry : fs::recursive_directory_iterator(directory, ec)) {
+        if (ec) {
+            spdlog::warn("Error accessing directory entry: {}", ec.message());
+            continue;
+        }
+
+        if (entry.is_regular_file(ec) && !ec) {
+            auto file_size = entry.file_size(ec);
+            if (!ec) {
+                total_size += file_size;
+            }
+        }
+    }
+
+    return total_size;
+}
+
+bool validateConfig(const CompressionConfig& config) {
+    return config.chunk_size >= MIN_CHUNK_SIZE &&
+           config.chunk_size <= MAX_CHUNK_SIZE &&
+           config.compression_level >= Z_NO_COMPRESSION &&
+           config.compression_level <= Z_BEST_COMPRESSION;
+}
+
+std::size_t getOptimalChunkSize(std::size_t file_size) {
+    if (file_size < 1024 * 1024) {          // < 1MB
+        return MIN_CHUNK_SIZE;
+    } else if (file_size < 10 * 1024 * 1024) { // < 10MB
+        return DEFAULT_CHUNK_SIZE;
+    } else if (file_size < 100 * 1024 * 1024) { // < 100MB
+        return 128 * 1024;                   // 128KB
+    } else {
+        return MAX_CHUNK_SIZE;               // 1MB for large files
+    }
+}
+
+CompressionConfig createOptimalConfig(std::size_t file_size) {
+    CompressionConfig config;
+    config.chunk_size = getOptimalChunkSize(file_size);
+
+    // Adjust compression level based on file size
+    if (file_size < 1024 * 1024) {          // < 1MB - prioritize speed
+        config.compression_level = Z_BEST_SPEED;
+    } else if (file_size < 100 * 1024 * 1024) { // < 100MB - balanced
+        config.compression_level = Z_DEFAULT_COMPRESSION;
+    } else {                                 // >= 100MB - prioritize compression
+        config.compression_level = Z_BEST_COMPRESSION;
+    }
+
+    // Enable progress reporting for large files
+    config.enable_progress_reporting = file_size > 10 * 1024 * 1024; // > 10MB
+    config.enable_statistics = true;
+
+    return config;
+}
+
+} // namespace utils
 
 }  // namespace atom::async::io

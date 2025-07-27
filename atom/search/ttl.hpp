@@ -3,16 +3,15 @@
 
 #include <spdlog/spdlog.h>
 
-#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
-#include <exception>
 #include <functional>
+#include <future>
 #include <list>
+#include <map>
 #include <memory>
 #include <mutex>
-#include <numeric>
 #include <optional>
 #include <shared_mutex>
 #include <thread>
@@ -26,8 +25,7 @@ namespace atom::search {
  */
 class TTLCacheException : public std::runtime_error {
 public:
-    explicit TTLCacheException(const std::string& message)
-        : std::runtime_error(message) {}
+    explicit TTLCacheException(const std::string& message);
 };
 
 /**
@@ -41,6 +39,34 @@ struct CacheStatistics {
     size_t current_size{0};
     size_t max_capacity{0};
     double hit_rate{0.0};
+
+    // Enhanced statistics
+    std::atomic<size_t> memory_usage_bytes{0};
+    std::atomic<size_t> lazy_expirations{0};
+    std::atomic<size_t> cleanup_operations{0};
+    std::atomic<size_t> batch_operations{0};
+    std::atomic<uint64_t> total_access_time_ns{0};
+    std::atomic<uint64_t> total_cleanup_time_ns{0};
+    std::atomic<size_t> compression_saves_bytes{0};
+
+    CacheStatistics() = default;
+    CacheStatistics(CacheStatistics&& other);
+
+    // Utility methods
+    double get_hit_ratio() const noexcept {
+        size_t total = hits.load() + misses.load();
+        return total > 0 ? static_cast<double>(hits.load()) / total : 0.0;
+    }
+
+    double get_memory_usage_mb() const noexcept {
+        return static_cast<double>(memory_usage_bytes.load()) / (1024.0 * 1024.0);
+    }
+
+    double get_average_access_time_ns() const noexcept {
+        size_t total_accesses = hits.load() + misses.load();
+        return total_accesses > 0 ?
+            static_cast<double>(total_access_time_ns.load()) / total_accesses : 0.0;
+    }
 };
 
 /**
@@ -51,22 +77,28 @@ struct CacheConfig {
     bool enable_statistics{true};
     bool thread_safe{true};
     size_t cleanup_batch_size{100};
+
+    // Enhanced configuration options
+    bool enable_lazy_expiration{true};      ///< Remove expired items on access
+    bool enable_memory_tracking{false};     ///< Track memory usage
+    size_t max_memory_mb{0};               ///< Memory limit (0 = unlimited)
+    bool enable_compression{false};         ///< Enable value compression
+    size_t compression_threshold{1024};     ///< Compress values larger than this
+
+    // Performance tuning
+    bool enable_expiration_index{true};     ///< Use expiration time index for faster cleanup
+    size_t expiration_index_granularity{1000}; ///< Time granularity for expiration index (ms)
+    bool enable_batch_optimization{true};   ///< Optimize batch operations
+
+    // Monitoring and health
+    bool enable_health_monitoring{true};    ///< Enable health monitoring
+    double memory_pressure_threshold{0.8};  ///< Memory pressure threshold
+    size_t max_cleanup_time_ms{10};        ///< Max time to spend in cleanup per iteration
 };
 
 /**
  * @brief A high-performance, thread-safe Time-to-Live (TTL) Cache with an
  * LRU eviction policy.
- *
- * This implementation uses a sharded, lock-based approach to achieve high
- * concurrency and scalability on multi-core architectures. It is designed for
- * minimal contention and high throughput by partitioning the cache space and
- * using per-shard locks.
- *
- * @tparam Key The type of the cache keys (must be hashable).
- * @tparam Value The type of the cache values.
- * @tparam Hash The hash function type for keys (defaults to std::hash<Key>).
- * @tparam KeyEqual The key equality comparison type (defaults to
- * std::equal_to<Key>).
  */
 template <typename Key, typename Value, typename Hash = std::hash<Key>,
           typename KeyEqual = std::equal_to<Key>>
@@ -83,14 +115,6 @@ public:
 
     /**
      * @brief Constructs a TTLCache with the specified parameters.
-     *
-     * @param ttl Duration after which items expire and are removed from cache.
-     * @param max_capacity Maximum number of items the cache can hold.
-     * @param cleanup_interval Optional interval for cleanup operations
-     * (defaults to ttl/2).
-     * @param config Optional configuration for cache behavior.
-     * @param eviction_callback Optional callback for eviction events.
-     * @throws TTLCacheException if ttl <= 0 or max_capacity == 0
      */
     explicit TTLCache(Duration ttl, size_t max_capacity,
                       std::optional<Duration> cleanup_interval = std::nullopt,
@@ -107,228 +131,80 @@ public:
     TTLCache(TTLCache&&) = delete;
     TTLCache& operator=(TTLCache&&) = delete;
 
-    /**
-     * @brief Inserts or updates a key-value pair in the cache.
-     *
-     * @param key The key to insert or update.
-     * @param value The value associated with the key.
-     * @param custom_ttl Optional custom TTL for this specific item.
-     */
+    // **Basic Operations**
     void put(const Key& key, const Value& value,
              std::optional<Duration> custom_ttl = std::nullopt);
 
-    /**
-     * @brief Inserts or updates a key-value pair using move semantics.
-     *
-     * @param key The key to insert or update.
-     * @param value The value to be moved into the cache.
-     * @param custom_ttl Optional custom TTL for this specific item.
-     */
     void put(const Key& key, Value&& value,
              std::optional<Duration> custom_ttl = std::nullopt);
 
-    /**
-     * @brief Emplace constructs a value directly in the cache.
-     *
-     * @tparam Args Constructor argument types for Value.
-     * @param key The key for the new entry.
-     * @param custom_ttl Optional custom TTL for this specific item.
-     * @param args Arguments to forward to Value constructor.
-     */
     template <typename... Args>
     void emplace(const Key& key, std::optional<Duration> custom_ttl,
                  Args&&... args);
 
-    /**
-     * @brief Batch insertion of multiple key-value pairs.
-     *
-     * @param items Vector of key-value pairs to insert.
-     * @param custom_ttl Optional custom TTL for all items in the batch.
-     */
     void batch_put(const std::vector<std::pair<Key, Value>>& items,
                    std::optional<Duration> custom_ttl = std::nullopt);
 
-    /**
-     * @brief Retrieves the value associated with the given key.
-     *
-     * @param key The key whose associated value is to be retrieved.
-     * @param update_access_time Whether to update the access time (default:
-     * true).
-     * @return An optional containing the value if found and not expired.
-     */
     [[nodiscard]] std::optional<Value> get(const Key& key,
                                            bool update_access_time = true);
 
-    /**
-     * @brief Retrieves the value as a shared pointer to avoid copies.
-     *
-     * @param key The key whose associated value is to be retrieved.
-     * @param update_access_time Whether to update the access time (default:
-     * true).
-     * @return A shared pointer to the value if found and not expired.
-     */
     [[nodiscard]] ValuePtr get_shared(const Key& key,
                                       bool update_access_time = true);
 
-    /**
-     * @brief Batch retrieval of multiple values by keys.
-     *
-     * @param keys Vector of keys to retrieve.
-     * @param update_access_time Whether to update access times (default: true).
-     * @return Vector of optional values corresponding to the keys.
-     */
     [[nodiscard]] ValueContainer batch_get(const KeyContainer& keys,
                                            bool update_access_time = true);
 
-    /**
-     * @brief Retrieves a value or computes it if not present.
-     *
-     * @tparam Factory Function type that produces a Value.
-     * @param key The key to lookup or create.
-     * @param factory Function to create the value if not present.
-     * @param custom_ttl Optional custom TTL for the computed value.
-     * @return The value from cache or newly computed value.
-     */
     template <typename Factory>
     Value get_or_compute(const Key& key, Factory&& factory,
                          std::optional<Duration> custom_ttl = std::nullopt);
 
-    /**
-     * @brief Removes an item from the cache.
-     *
-     * @param key The key to remove.
-     * @return true if the item was found and removed, false otherwise.
-     */
     bool remove(const Key& key) noexcept;
-
-    /**
-     * @brief Removes multiple items from the cache.
-     *
-     * @param keys Vector of keys to remove.
-     * @return Number of items actually removed.
-     */
     size_t batch_remove(const KeyContainer& keys) noexcept;
 
-    /**
-     * @brief Checks if a key exists in the cache and has not expired.
-     *
-     * @param key The key to check.
-     * @return true if the key exists and has not expired.
-     */
+    // **Query Operations**
     [[nodiscard]] bool contains(const Key& key) const noexcept;
-
-    /**
-     * @brief Updates the TTL for an existing key.
-     *
-     * @param key The key whose TTL should be updated.
-     * @param new_ttl The new TTL duration.
-     * @return true if the key was found and updated, false otherwise.
-     */
-    bool update_ttl(const Key& key, Duration new_ttl) noexcept;
-
-    /**
-     * @brief Gets the remaining TTL for a key.
-     *
-     * @param key The key to check.
-     * @return The remaining TTL duration, or nullopt if key doesn't exist.
-     */
     [[nodiscard]] std::optional<Duration> get_remaining_ttl(
         const Key& key) const noexcept;
+    bool update_ttl(const Key& key, Duration new_ttl) noexcept;
 
-    /**
-     * @brief Manually triggers an immediate cleanup operation.
-     */
+    // **Management Operations**
     void force_cleanup() noexcept;
+    void clear() noexcept;
+    void resize(size_t new_capacity);
 
-    /**
-     * @brief Gets comprehensive cache statistics.
-     *
-     * @return Current cache statistics.
-     */
+    // **Statistics and Information**
     [[nodiscard]] CacheStatistics get_statistics() const noexcept;
-
-    /**
-     * @brief Resets hit/miss counters and other statistics.
-     */
     void reset_statistics() noexcept;
-
-    /**
-     * @brief Gets the cache hit rate.
-     *
-     * @return The ratio of cache hits to total accesses.
-     */
     [[nodiscard]] double hit_rate() const noexcept;
-
-    /**
-     * @brief Gets the current number of items in the cache.
-     *
-     * @return The number of items in the cache.
-     */
     [[nodiscard]] size_t size() const noexcept;
-
-    /**
-     * @brief Checks if the cache is empty.
-     *
-     * @return true if the cache contains no items.
-     */
     [[nodiscard]] bool empty() const noexcept;
-
-    /**
-     * @brief Gets the maximum capacity of the cache.
-     *
-     * @return The maximum capacity of the cache.
-     */
     [[nodiscard]] constexpr size_t capacity() const noexcept {
         return max_capacity_;
     }
-
-    /**
-     * @brief Gets the default TTL duration of the cache.
-     *
-     * @return The default TTL duration.
-     */
     [[nodiscard]] constexpr Duration ttl() const noexcept { return ttl_; }
-
-    /**
-     * @brief Gets all keys currently in the cache.
-     *
-     * @return Vector containing all keys (not expired).
-     */
     [[nodiscard]] KeyContainer get_keys() const;
 
-    /**
-     * @brief Clears all items from the cache and resets statistics.
-     */
-    void clear() noexcept;
-
-    /**
-     * @brief Resizes the cache to a new maximum capacity.
-     *
-     * @param new_capacity The new maximum capacity.
-     * @throws TTLCacheException if new_capacity == 0
-     */
-    void resize(size_t new_capacity);
-
-    /**
-     * @brief Sets or updates the eviction callback.
-     *
-     * @param callback The new eviction callback function.
-     */
+    // **Configuration**
     void set_eviction_callback(EvictionCallback callback) noexcept;
-
-    /**
-     * @brief Updates the cache configuration.
-     *
-     * @param new_config The new configuration settings.
-     */
     void update_config(const CacheConfig& new_config) noexcept;
-
-    /**
-     * @brief Gets the current cache configuration.
-     *
-     * @return The current configuration settings.
-     */
     [[nodiscard]] CacheConfig get_config() const noexcept;
+
+    // **Enhanced Operations**
+    [[nodiscard]] size_t get_memory_usage() const noexcept;
+    [[nodiscard]] bool is_healthy() const noexcept;
+    void optimize() noexcept;
+    [[nodiscard]] std::unordered_map<std::string, std::string> get_health_report() const;
+    [[nodiscard]] std::unordered_map<std::string, double> get_efficiency_metrics() const;
+
+    // **Async Operations**
+    [[nodiscard]] std::future<std::optional<Value>> async_get(const Key& key);
+    [[nodiscard]] std::future<void> async_put(const Key& key, const Value& value,
+                                              std::optional<Duration> custom_ttl = std::nullopt);
+
+    // **Advanced Features**
+    void warm_cache(const std::function<std::vector<std::pair<Key, Value>>()>& loader,
+                    std::optional<Duration> custom_ttl = std::nullopt);
+    [[nodiscard]] std::vector<std::unordered_map<std::string, size_t>> get_shard_stats() const;
 
 private:
     struct CacheItem {
@@ -338,24 +214,12 @@ private:
         TimePoint access_time;
 
         CacheItem(const Key& k, const Value& v, const TimePoint& expiry,
-                  const TimePoint& access)
-            : key(k),
-              value(std::make_shared<Value>(v)),
-              expiry_time(expiry),
-              access_time(access) {}
+                  const TimePoint& access);
         CacheItem(const Key& k, Value&& v, const TimePoint& expiry,
-                  const TimePoint& access)
-            : key(k),
-              value(std::make_shared<Value>(std::move(v))),
-              expiry_time(expiry),
-              access_time(access) {}
+                  const TimePoint& access);
         template <typename... Args>
         CacheItem(const Key& k, const TimePoint& expiry,
-                  const TimePoint& access, Args&&... args)
-            : key(k),
-              value(std::make_shared<Value>(std::forward<Args>(args)...)),
-              expiry_time(expiry),
-              access_time(access) {}
+                  const TimePoint& access, Args&&... args);
     };
 
     using CacheList = std::list<CacheItem>;
@@ -363,13 +227,24 @@ private:
         std::unordered_map<Key, typename CacheList::iterator, Hash, KeyEqual>;
 
     struct Shard {
-        explicit Shard(size_t capacity) : max_capacity(capacity) {}
+        explicit Shard(size_t capacity);
         CacheList list;
         CacheMap map;
         mutable std::shared_mutex mutex;
         size_t max_capacity;
+
+        // Enhanced shard features
+        std::atomic<size_t> memory_usage{0};
+        std::multimap<TimePoint, typename CacheList::iterator> expiration_index;
+        mutable std::atomic<size_t> lazy_cleanup_count{0};
+
+        // Performance optimization
+        void update_expiration_index(typename CacheList::iterator item, const TimePoint& old_expiry);
+        void remove_from_expiration_index(typename CacheList::iterator item);
+        size_t cleanup_expired_optimized(const TimePoint& now, size_t max_items);
     };
 
+    // **Private Methods**
     Shard& get_shard(const Key& key) const;
 
     template <typename V>
@@ -379,6 +254,7 @@ private:
     void move_to_front(Shard& shard, typename CacheList::iterator item);
     void evict_items(Shard& shard, size_t count) noexcept;
     void cleanup_expired_items(Shard& shard) noexcept;
+    void cleanup_expired_items_optimized(Shard& shard) noexcept;
     void notify_eviction(const Key& key, const Value& value,
                          bool expired) noexcept;
     [[nodiscard]] inline bool is_expired(
@@ -386,6 +262,15 @@ private:
     void cleaner_task() noexcept;
     void cleanup() noexcept;
 
+    // Enhanced private methods
+    void lazy_cleanup_expired(Shard& shard, const Key& key) noexcept;
+    size_t estimate_value_size(const Value& value) const noexcept;
+    void update_memory_usage(Shard& shard, const Key& key, const Value& value, bool adding) noexcept;
+    Value compress_value(const Value& value) const;
+    Value decompress_value(const Value& value) const;
+    void enforce_memory_limits() noexcept;
+
+    // **Member Variables**
     Duration ttl_;
     Duration cleanup_interval_;
     std::atomic<size_t> max_capacity_;
@@ -401,12 +286,81 @@ private:
     std::atomic<size_t> eviction_count_{0};
     std::atomic<size_t> expiration_count_{0};
 
+    // Enhanced statistics
+    std::atomic<size_t> lazy_expirations_{0};
+    std::atomic<size_t> cleanup_operations_{0};
+    std::atomic<size_t> batch_operations_{0};
+    std::atomic<uint64_t> total_access_time_ns_{0};
+    std::atomic<uint64_t> total_cleanup_time_ns_{0};
+    std::atomic<size_t> compression_saves_bytes_{0};
+    std::atomic<size_t> memory_usage_bytes_{0};
+
     std::thread cleaner_thread_;
     std::atomic<bool> stop_flag_{false};
-    std::mutex cleanup_mutex_;
+    mutable std::mutex cleanup_mutex_;
     std::condition_variable cleanup_cv_;
 };
 
+}  // namespace atom::search
+
+#endif  // ATOM_SEARCH_TTL_CACHE_HPP
+
+#ifndef ATOM_SEARCH_TTL_CACHE_IMPL_HPP
+#define ATOM_SEARCH_TTL_CACHE_IMPL_HPP
+
+#include "ttl.hpp"
+
+namespace atom::search {
+
+// **TTLCacheException Implementation**
+inline TTLCacheException::TTLCacheException(const std::string& message)
+    : std::runtime_error(message) {}
+
+// **CacheStatistics Implementation**
+inline CacheStatistics::CacheStatistics(CacheStatistics&& other) {
+    hits = other.hits.load();
+    misses = other.misses.load();
+    evictions = other.evictions.load();
+    expirations = other.expirations.load();
+    current_size = other.current_size;
+    max_capacity = other.max_capacity;
+    hit_rate = other.hit_rate;
+}
+
+// **CacheItem Implementations**
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+TTLCache<Key, Value, Hash, KeyEqual>::CacheItem::CacheItem(
+    const Key& k, const Value& v, const TimePoint& expiry,
+    const TimePoint& access)
+    : key(k),
+      value(std::make_shared<Value>(v)),
+      expiry_time(expiry),
+      access_time(access) {}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+TTLCache<Key, Value, Hash, KeyEqual>::CacheItem::CacheItem(
+    const Key& k, Value&& v, const TimePoint& expiry, const TimePoint& access)
+    : key(k),
+      value(std::make_shared<Value>(std::move(v))),
+      expiry_time(expiry),
+      access_time(access) {}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+template <typename... Args>
+TTLCache<Key, Value, Hash, KeyEqual>::CacheItem::CacheItem(
+    const Key& k, const TimePoint& expiry, const TimePoint& access,
+    Args&&... args)
+    : key(k),
+      value(std::make_shared<Value>(std::forward<Args>(args)...)),
+      expiry_time(expiry),
+      access_time(access) {}
+
+// **Shard Implementation**
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+TTLCache<Key, Value, Hash, KeyEqual>::Shard::Shard(size_t capacity)
+    : max_capacity(capacity) {}
+
+// **TTLCache Constructor**
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
 TTLCache<Key, Value, Hash, KeyEqual>::TTLCache(
     Duration ttl, size_t max_capacity, std::optional<Duration> cleanup_interval,
@@ -420,9 +374,11 @@ TTLCache<Key, Value, Hash, KeyEqual>::TTLCache(
           size_t shard_count = 1;
           if (config_.thread_safe) {
               shard_count = std::thread::hardware_concurrency();
-              if (shard_count == 0) shard_count = 4;
+              if (shard_count == 0)
+                  shard_count = 4;
               size_t power = 1;
-              while (power < shard_count) power <<= 1;
+              while (power < shard_count)
+                  power <<= 1;
               shard_count = power;
           }
           return shard_count - 1;
@@ -437,6 +393,7 @@ TTLCache<Key, Value, Hash, KeyEqual>::TTLCache(
     size_t shard_count = shard_mask_ + 1;
     shards_.reserve(shard_count);
     size_t per_shard_capacity = (max_capacity + shard_count - 1) / shard_count;
+
     for (size_t i = 0; i < shard_count; ++i) {
         shards_.emplace_back(std::make_unique<Shard>(per_shard_capacity));
     }
@@ -452,6 +409,7 @@ TTLCache<Key, Value, Hash, KeyEqual>::TTLCache(
     }
 }
 
+// **TTLCache Destructor**
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
 TTLCache<Key, Value, Hash, KeyEqual>::~TTLCache() noexcept {
     stop_flag_ = true;
@@ -459,6 +417,13 @@ TTLCache<Key, Value, Hash, KeyEqual>::~TTLCache() noexcept {
     if (cleaner_thread_.joinable()) {
         cleaner_thread_.join();
     }
+}
+
+// **Private Helper Methods**
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+auto TTLCache<Key, Value, Hash, KeyEqual>::get_shard(const Key& key) const
+    -> Shard& {
+    return *shards_[std::hash<Key>{}(key)&shard_mask_];
 }
 
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
@@ -473,8 +438,7 @@ void TTLCache<Key, Value, Hash, KeyEqual>::put_impl(
 
         auto it = shard.map.find(key);
         if (it != shard.map.end()) {
-            it->second->value =
-                std::make_shared<Value>(std::forward<V>(value));
+            it->second->value = std::make_shared<Value>(std::forward<V>(value));
             it->second->expiry_time = expiry;
             it->second->access_time = now;
             move_to_front(shard, it->second);
@@ -496,6 +460,67 @@ void TTLCache<Key, Value, Hash, KeyEqual>::put_impl(
     }
 }
 
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+void TTLCache<Key, Value, Hash, KeyEqual>::move_to_front(
+    Shard& shard, typename CacheList::iterator item) {
+    if (item != shard.list.begin()) {
+        shard.list.splice(shard.list.begin(), shard.list, item);
+    }
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+void TTLCache<Key, Value, Hash, KeyEqual>::evict_items(Shard& shard,
+                                                       size_t count) noexcept {
+    for (size_t i = 0; i < count && !shard.list.empty(); ++i) {
+        auto& last = shard.list.back();
+        notify_eviction(last.key, *(last.value), false);
+        shard.map.erase(last.key);
+        shard.list.pop_back();
+        current_size_--;
+        if (config_.enable_statistics)
+            eviction_count_++;
+    }
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+void TTLCache<Key, Value, Hash, KeyEqual>::cleanup_expired_items(
+    Shard& shard) noexcept {
+    size_t batch_count = 0;
+    for (auto it = shard.list.begin();
+         it != shard.list.end() && batch_count < config_.cleanup_batch_size;) {
+        if (is_expired(it->expiry_time)) {
+            notify_eviction(it->key, *(it->value), true);
+            shard.map.erase(it->key);
+            it = shard.list.erase(it);
+            current_size_--;
+            batch_count++;
+            if (config_.enable_statistics)
+                expiration_count_++;
+        } else {
+            ++it;
+        }
+    }
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+void TTLCache<Key, Value, Hash, KeyEqual>::notify_eviction(
+    const Key& key, const Value& value, bool expired) noexcept {
+    try {
+        if (eviction_callback_) {
+            eviction_callback_(key, value, expired);
+        }
+    } catch (const std::exception& e) {
+        spdlog::error("Exception in eviction callback: {}", e.what());
+    }
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+inline bool TTLCache<Key, Value, Hash, KeyEqual>::is_expired(
+    const TimePoint& expiry_time) const noexcept {
+    return expiry_time <= Clock::now();
+}
+
+// **Public Method Implementations**
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
 void TTLCache<Key, Value, Hash, KeyEqual>::put(
     const Key& key, const Value& value, std::optional<Duration> custom_ttl) {
@@ -519,8 +544,6 @@ void TTLCache<Key, Value, Hash, KeyEqual>::emplace(
         auto expiry = now + custom_ttl.value_or(ttl_);
 
         if (shard.map.count(key)) {
-            // In-place update not straightforward, fall back to remove and
-            // insert
             auto it = shard.map.find(key);
             notify_eviction(it->second->key, *(it->second->value), false);
             shard.list.erase(it->second);
@@ -549,24 +572,31 @@ template <typename Key, typename Value, typename Hash, typename KeyEqual>
 void TTLCache<Key, Value, Hash, KeyEqual>::batch_put(
     const std::vector<std::pair<Key, Value>>& items,
     std::optional<Duration> custom_ttl) {
-    if (items.empty()) return;
+    if (items.empty())
+        return;
+
     try {
         auto ttl_to_use = custom_ttl.value_or(ttl_);
         std::vector<std::vector<std::pair<Key, Value>>> keys_by_shard(
             shards_.size());
+
         for (const auto& item : items) {
             keys_by_shard[std::hash<Key>{}(item.first) & shard_mask_].push_back(
                 item);
         }
 
         for (size_t i = 0; i < shards_.size(); ++i) {
-            if (keys_by_shard[i].empty()) continue;
+            if (keys_by_shard[i].empty())
+                continue;
+
             auto& shard = *shards_[i];
             std::unique_lock lock(shard.mutex);
             auto now = Clock::now();
+
             for (const auto& item : keys_by_shard[i]) {
                 auto expiry = now + ttl_to_use;
                 auto it = shard.map.find(item.first);
+
                 if (it != shard.map.end()) {
                     it->second->value = std::make_shared<Value>(item.second);
                     it->second->expiry_time = expiry;
@@ -598,56 +628,102 @@ std::optional<Value> TTLCache<Key, Value, Hash, KeyEqual>::get(
 }
 
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
-auto TTLCache<Key, Value, Hash, KeyEqual>::get_shared(
-    const Key& key, bool update_access_time) -> ValuePtr {
+auto TTLCache<Key, Value, Hash, KeyEqual>::get_shared(const Key& key,
+                                                      bool update_access_time)
+    -> ValuePtr {
     try {
         auto& shard = get_shard(key);
+        auto start_time = config_.enable_statistics ? Clock::now() : TimePoint{};
+
         if (update_access_time) {
             std::unique_lock lock(shard.mutex);
             auto it = shard.map.find(key);
-            if (it == shard.map.end() || is_expired(it->second->expiry_time)) {
-                if (config_.enable_statistics) miss_count_++;
+            if (it == shard.map.end()) {
+                if (config_.enable_statistics)
+                    miss_count_++;
                 return nullptr;
             }
+
+            // Check expiration and perform lazy cleanup if enabled
+            if (is_expired(it->second->expiry_time)) {
+                if (config_.enable_lazy_expiration) {
+                    // Remove expired item immediately
+                    notify_eviction(it->second->key, *(it->second->value), true);
+                    shard.remove_from_expiration_index(it->second);
+                    shard.list.erase(it->second);
+                    shard.map.erase(it);
+                    current_size_--;
+                    shard.lazy_cleanup_count++;
+                    if (config_.enable_statistics)
+                        lazy_expirations_++;
+                }
+                if (config_.enable_statistics)
+                    miss_count_++;
+                return nullptr;
+            }
+
             it->second->access_time = Clock::now();
             move_to_front(shard, it->second);
-            if (config_.enable_statistics) hit_count_++;
+            if (config_.enable_statistics) {
+                hit_count_++;
+                if (start_time != TimePoint{}) {
+                    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        Clock::now() - start_time).count();
+                    total_access_time_ns_.fetch_add(duration);
+                }
+            }
             return it->second->value;
         } else {
             std::shared_lock lock(shard.mutex);
             auto it = shard.map.find(key);
             if (it == shard.map.end() || is_expired(it->second->expiry_time)) {
-                if (config_.enable_statistics) miss_count_++;
+                if (config_.enable_statistics)
+                    miss_count_++;
                 return nullptr;
             }
-            if (config_.enable_statistics) hit_count_++;
+            if (config_.enable_statistics) {
+                hit_count_++;
+                if (start_time != TimePoint{}) {
+                    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        Clock::now() - start_time).count();
+                    total_access_time_ns_.fetch_add(duration);
+                }
+            }
             return it->second->value;
         }
     } catch (const std::exception& e) {
         spdlog::error("Error getting item from cache: {}", e.what());
-        if (config_.enable_statistics) miss_count_++;
+        if (config_.enable_statistics)
+            miss_count_++;
         return nullptr;
     }
 }
 
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
-auto TTLCache<Key, Value, Hash, KeyEqual>::batch_get(
-    const KeyContainer& keys, bool update_access_time) -> ValueContainer {
-    if (keys.empty()) return {};
+auto TTLCache<Key, Value, Hash, KeyEqual>::batch_get(const KeyContainer& keys,
+                                                     bool update_access_time)
+    -> ValueContainer {
+    if (keys.empty())
+        return {};
 
     ValueContainer results(keys.size());
     std::unordered_map<const Key*, size_t> key_to_idx;
-    for (size_t i = 0; i < keys.size(); ++i) key_to_idx[&keys[i]] = i;
+    for (size_t i = 0; i < keys.size(); ++i) {
+        key_to_idx[&keys[i]] = i;
+    }
 
     std::vector<std::vector<const Key*>> keys_by_shard(shards_.size());
     for (const auto& key : keys) {
-        keys_by_shard[std::hash<Key>{}(key) & shard_mask_].push_back(&key);
+        keys_by_shard[std::hash<Key>{}(key)&shard_mask_].push_back(&key);
     }
 
     for (size_t i = 0; i < shards_.size(); ++i) {
-        if (keys_by_shard[i].empty()) continue;
+        if (keys_by_shard[i].empty())
+            continue;
+
         auto& shard = *shards_[i];
         auto now = Clock::now();
+
         if (update_access_time) {
             std::unique_lock lock(shard.mutex);
             for (const Key* key_ptr : keys_by_shard[i]) {
@@ -657,9 +733,11 @@ auto TTLCache<Key, Value, Hash, KeyEqual>::batch_get(
                     it->second->access_time = now;
                     move_to_front(shard, it->second);
                     results[key_to_idx[key_ptr]] = *(it->second->value);
-                    if (config_.enable_statistics) hit_count_++;
+                    if (config_.enable_statistics)
+                        hit_count_++;
                 } else {
-                    if (config_.enable_statistics) miss_count_++;
+                    if (config_.enable_statistics)
+                        miss_count_++;
                 }
             }
         } else {
@@ -669,9 +747,11 @@ auto TTLCache<Key, Value, Hash, KeyEqual>::batch_get(
                 if (it != shard.map.end() &&
                     !is_expired(it->second->expiry_time)) {
                     results[key_to_idx[key_ptr]] = *(it->second->value);
-                    if (config_.enable_statistics) hit_count_++;
+                    if (config_.enable_statistics)
+                        hit_count_++;
                 } else {
-                    if (config_.enable_statistics) miss_count_++;
+                    if (config_.enable_statistics)
+                        miss_count_++;
                 }
             }
         }
@@ -716,15 +796,19 @@ bool TTLCache<Key, Value, Hash, KeyEqual>::remove(const Key& key) noexcept {
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
 size_t TTLCache<Key, Value, Hash, KeyEqual>::batch_remove(
     const KeyContainer& keys) noexcept {
-    if (keys.empty()) return 0;
+    if (keys.empty())
+        return 0;
+
     size_t removed_count = 0;
     std::vector<std::vector<Key>> keys_by_shard(shards_.size());
     for (const auto& key : keys) {
-        keys_by_shard[std::hash<Key>{}(key) & shard_mask_].push_back(key);
+        keys_by_shard[std::hash<Key>{}(key)&shard_mask_].push_back(key);
     }
 
     for (size_t i = 0; i < shards_.size(); ++i) {
-        if (keys_by_shard[i].empty()) continue;
+        if (keys_by_shard[i].empty())
+            continue;
+
         auto& shard = *shards_[i];
         std::unique_lock lock(shard.mutex);
         for (const auto& key : keys_by_shard[i]) {
@@ -812,8 +896,7 @@ CacheStatistics TTLCache<Key, Value, Hash, KeyEqual>::get_statistics()
     stats.max_capacity = max_capacity_.load();
 
     size_t total = stats.hits + stats.misses;
-    stats.hit_rate =
-        total > 0 ? static_cast<double>(stats.hits) / total : 0.0;
+    stats.hit_rate = total > 0 ? static_cast<double>(stats.hits) / total : 0.0;
     return stats;
 }
 
@@ -829,7 +912,9 @@ void TTLCache<Key, Value, Hash, KeyEqual>::reset_statistics() noexcept {
 
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
 double TTLCache<Key, Value, Hash, KeyEqual>::hit_rate() const noexcept {
-    if (!config_.enable_statistics) return 0.0;
+    if (!config_.enable_statistics)
+        return 0.0;
+
     size_t hits = hit_count_.load();
     size_t misses = miss_count_.load();
     size_t total = hits + misses;
@@ -850,6 +935,7 @@ template <typename Key, typename Value, typename Hash, typename KeyEqual>
 auto TTLCache<Key, Value, Hash, KeyEqual>::get_keys() const -> KeyContainer {
     KeyContainer all_keys;
     all_keys.reserve(size());
+
     for (const auto& shard_ptr : shards_) {
         std::shared_lock lock(shard_ptr->mutex);
         for (const auto& item : shard_ptr->list) {
@@ -886,9 +972,11 @@ void TTLCache<Key, Value, Hash, KeyEqual>::resize(size_t new_capacity) {
     if (new_capacity == 0) {
         throw TTLCacheException("New capacity must be greater than zero");
     }
+
     max_capacity_ = new_capacity;
     size_t per_shard_capacity =
         (new_capacity + shards_.size() - 1) / shards_.size();
+
     for (auto& shard_ptr : shards_) {
         std::unique_lock lock(shard_ptr->mutex);
         shard_ptr->max_capacity = per_shard_capacity;
@@ -914,75 +1002,8 @@ void TTLCache<Key, Value, Hash, KeyEqual>::update_config(
 
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
 CacheConfig TTLCache<Key, Value, Hash, KeyEqual>::get_config() const noexcept {
-    std::lock_guard<std::mutex> lock(
-        const_cast<std::mutex&>(cleanup_mutex_));
+    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(cleanup_mutex_));
     return config_;
-}
-
-template <typename Key, typename Value, typename Hash, typename KeyEqual>
-auto TTLCache<Key, Value, Hash, KeyEqual>::get_shard(const Key& key) const
-    -> Shard& {
-    return *shards_[std::hash<Key>{}(key) & shard_mask_];
-}
-
-template <typename Key, typename Value, typename Hash, typename KeyEqual>
-void TTLCache<Key, Value, Hash, KeyEqual>::move_to_front(
-    Shard& shard, typename CacheList::iterator item) {
-    if (item != shard.list.begin()) {
-        shard.list.splice(shard.list.begin(), shard.list, item);
-    }
-}
-
-template <typename Key, typename Value, typename Hash, typename KeyEqual>
-void TTLCache<Key, Value, Hash, KeyEqual>::evict_items(Shard& shard,
-                                                       size_t count) noexcept {
-    for (size_t i = 0; i < count && !shard.list.empty(); ++i) {
-        auto& last = shard.list.back();
-        notify_eviction(last.key, *(last.value), false);
-        shard.map.erase(last.key);
-        shard.list.pop_back();
-        current_size_--;
-        if (config_.enable_statistics) eviction_count_++;
-    }
-}
-
-template <typename Key, typename Value, typename Hash, typename KeyEqual>
-void TTLCache<Key, Value, Hash, KeyEqual>::cleanup_expired_items(
-    Shard& shard) noexcept {
-    auto now = Clock::now();
-    size_t batch_count = 0;
-
-    for (auto it = shard.list.begin();
-         it != shard.list.end() && batch_count < config_.cleanup_batch_size;) {
-        if (is_expired(it->expiry_time)) {
-            notify_eviction(it->key, *(it->value), true);
-            shard.map.erase(it->key);
-            it = shard.list.erase(it);
-            current_size_--;
-            batch_count++;
-            if (config_.enable_statistics) expiration_count_++;
-        } else {
-            ++it;
-        }
-    }
-}
-
-template <typename Key, typename Value, typename Hash, typename KeyEqual>
-void TTLCache<Key, Value, Hash, KeyEqual>::notify_eviction(
-    const Key& key, const Value& value, bool expired) noexcept {
-    try {
-        if (eviction_callback_) {
-            eviction_callback_(key, value, expired);
-        }
-    } catch (const std::exception& e) {
-        spdlog::error("Exception in eviction callback: {}", e.what());
-    }
-}
-
-template <typename Key, typename Value, typename Hash, typename KeyEqual>
-inline bool TTLCache<Key, Value, Hash, KeyEqual>::is_expired(
-    const TimePoint& expiry_time) const noexcept {
-    return expiry_time <= Clock::now();
 }
 
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
@@ -992,7 +1013,8 @@ void TTLCache<Key, Value, Hash, KeyEqual>::cleaner_task() noexcept {
             std::unique_lock<std::mutex> lock(cleanup_mutex_);
             cleanup_cv_.wait_for(lock, cleanup_interval_,
                                  [this] { return stop_flag_.load(); });
-            if (stop_flag_) break;
+            if (stop_flag_)
+                break;
             lock.unlock();
             cleanup();
         } catch (const std::exception& e) {
@@ -1003,17 +1025,376 @@ void TTLCache<Key, Value, Hash, KeyEqual>::cleaner_task() noexcept {
 
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
 void TTLCache<Key, Value, Hash, KeyEqual>::cleanup() noexcept {
+    auto start_time = config_.enable_statistics ? Clock::now() : TimePoint{};
+
     for (auto& shard_ptr : shards_) {
-        if (stop_flag_) return;
+        if (stop_flag_)
+            return;
         try {
             std::unique_lock lock(shard_ptr->mutex);
-            cleanup_expired_items(*shard_ptr);
+            if (config_.enable_expiration_index) {
+                cleanup_expired_items_optimized(*shard_ptr);
+            } else {
+                cleanup_expired_items(*shard_ptr);
+            }
         } catch (const std::exception& e) {
             spdlog::error("Error during shard cleanup: {}", e.what());
         }
     }
+
+    if (config_.enable_statistics && start_time != TimePoint{}) {
+        auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            Clock::now() - start_time).count();
+        total_cleanup_time_ns_.fetch_add(duration);
+        cleanup_operations_++;
+    }
+}
+
+// Implementation of enhanced methods
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+void TTLCache<Key, Value, Hash, KeyEqual>::cleanup_expired_items_optimized(
+    Shard& shard) noexcept {
+    if (!config_.enable_expiration_index) {
+        cleanup_expired_items(shard);
+        return;
+    }
+
+    auto now = Clock::now();
+    size_t cleaned = shard.cleanup_expired_optimized(now, config_.cleanup_batch_size);
+
+    if (config_.enable_statistics) {
+        expiration_count_.fetch_add(cleaned);
+    }
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+size_t TTLCache<Key, Value, Hash, KeyEqual>::get_memory_usage() const noexcept {
+    if (config_.enable_memory_tracking) {
+        return memory_usage_bytes_.load();
+    }
+
+    // Estimate memory usage
+    size_t total_memory = 0;
+    size_t current_size = size();
+
+    // Rough estimation: each entry has key + value + overhead
+    total_memory += current_size * (sizeof(Key) + sizeof(Value) + 128); // 128 bytes overhead
+    total_memory += shards_.size() * sizeof(Shard);
+
+    return total_memory;
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+bool TTLCache<Key, Value, Hash, KeyEqual>::is_healthy() const noexcept {
+    if (!config_.enable_health_monitoring) {
+        return true;
+    }
+
+    // Check memory limits
+    if (config_.max_memory_mb > 0) {
+        double memory_mb = static_cast<double>(get_memory_usage()) / (1024.0 * 1024.0);
+        if (memory_mb > config_.max_memory_mb) {
+            return false;
+        }
+    }
+
+    // Check hit ratio if we have enough operations
+    if (config_.enable_statistics) {
+        size_t total_ops = hit_count_.load() + miss_count_.load();
+        if (total_ops > 100) {  // Only check if we have enough data
+            double hit_ratio = static_cast<double>(hit_count_.load()) / total_ops;
+            if (hit_ratio < 0.1) {  // Less than 10% hit ratio is concerning
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+void TTLCache<Key, Value, Hash, KeyEqual>::optimize() noexcept {
+    spdlog::info("Starting TTL cache optimization...");
+
+    // Force cleanup of expired items
+    cleanup();
+
+    // Enforce memory limits if configured
+    if (config_.max_memory_mb > 0) {
+        enforce_memory_limits();
+    }
+
+    spdlog::info("TTL cache optimization completed");
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+std::unordered_map<std::string, std::string>
+TTLCache<Key, Value, Hash, KeyEqual>::get_health_report() const {
+    std::unordered_map<std::string, std::string> report;
+
+    if (!config_.enable_health_monitoring) {
+        report["status"] = "MONITORING_DISABLED";
+        return report;
+    }
+
+    auto stats = get_statistics();
+    double hit_ratio = stats.get_hit_ratio();
+    double memory_usage_mb = stats.get_memory_usage_mb();
+
+    // Overall health assessment
+    if (hit_ratio < 0.1 && (stats.hits + stats.misses) > 100) {
+        report["status"] = "UNHEALTHY";
+        report["hit_ratio_warning"] = "Hit ratio (" + std::to_string(hit_ratio) +
+                                     ") is very low";
+    } else if (hit_ratio < 0.5 && (stats.hits + stats.misses) > 100) {
+        report["status"] = "WARNING";
+        report["hit_ratio_info"] = "Hit ratio could be improved";
+    } else {
+        report["status"] = "HEALTHY";
+    }
+
+    // Memory health
+    if (config_.max_memory_mb > 0) {
+        double memory_usage_ratio = memory_usage_mb / config_.max_memory_mb;
+        if (memory_usage_ratio > config_.memory_pressure_threshold) {
+            report["memory_warning"] = "Memory usage (" + std::to_string(memory_usage_mb) +
+                                      "MB) is above threshold (" + std::to_string(config_.memory_pressure_threshold * 100) + "%)";
+        }
+    }
+
+    // Expiration health
+    if (config_.enable_statistics) {
+        size_t total_ops = stats.hits + stats.misses;
+        if (total_ops > 0 && (static_cast<double>(stats.expirations) / total_ops) > 0.5) {
+            report["expiration_warning"] = "High expiration rate detected - consider increasing TTL";
+        }
+    }
+
+    return report;
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+std::unordered_map<std::string, double>
+TTLCache<Key, Value, Hash, KeyEqual>::get_efficiency_metrics() const {
+    std::unordered_map<std::string, double> metrics;
+
+    auto stats = get_statistics();
+
+    // Basic efficiency metrics
+    metrics["hit_ratio"] = stats.get_hit_ratio();
+    metrics["memory_efficiency"] = size() > 0 ?
+        static_cast<double>(get_memory_usage()) / size() : 0.0;
+
+    // Load factor
+    metrics["load_factor"] = static_cast<double>(size()) / capacity();
+
+    // Expiration efficiency
+    size_t total_ops = stats.hits + stats.misses;
+    metrics["expiration_rate"] = total_ops > 0 ?
+        static_cast<double>(stats.expirations) / total_ops : 0.0;
+
+    // Performance metrics
+    if (config_.enable_statistics) {
+        metrics["avg_access_time_ns"] = stats.get_average_access_time_ns();
+        metrics["cleanup_operations"] = static_cast<double>(cleanup_operations_.load());
+        metrics["lazy_expirations"] = static_cast<double>(lazy_expirations_.load());
+    }
+
+    return metrics;
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+std::future<std::optional<Value>>
+TTLCache<Key, Value, Hash, KeyEqual>::async_get(const Key& key) {
+    return std::async(std::launch::async, [this, key]() {
+        return get(key);
+    });
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+std::future<void> TTLCache<Key, Value, Hash, KeyEqual>::async_put(
+    const Key& key, const Value& value, std::optional<Duration> custom_ttl) {
+    return std::async(std::launch::async, [this, key, value, custom_ttl]() {
+        put(key, value, custom_ttl);
+    });
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+void TTLCache<Key, Value, Hash, KeyEqual>::warm_cache(
+    const std::function<std::vector<std::pair<Key, Value>>()>& loader,
+    std::optional<Duration> custom_ttl) {
+
+    try {
+        auto items = loader();
+        spdlog::info("Warming TTL cache with {} items", items.size());
+
+        batch_put(items, custom_ttl);
+
+        spdlog::info("TTL cache warming completed successfully");
+    } catch (const std::exception& e) {
+        spdlog::error("TTL cache warming failed: {}", e.what());
+    }
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+std::vector<std::unordered_map<std::string, size_t>>
+TTLCache<Key, Value, Hash, KeyEqual>::get_shard_stats() const {
+    std::vector<std::unordered_map<std::string, size_t>> stats;
+    stats.reserve(shards_.size());
+
+    for (size_t i = 0; i < shards_.size(); ++i) {
+        std::unordered_map<std::string, size_t> shard_stats;
+        std::shared_lock lock(shards_[i]->mutex);
+
+        shard_stats["shard_id"] = i;
+        shard_stats["size"] = shards_[i]->list.size();
+        shard_stats["max_capacity"] = shards_[i]->max_capacity;
+        shard_stats["memory_usage"] = shards_[i]->memory_usage.load();
+        shard_stats["lazy_cleanup_count"] = shards_[i]->lazy_cleanup_count.load();
+        shard_stats["load_factor"] = static_cast<size_t>(
+            (static_cast<double>(shards_[i]->list.size()) / shards_[i]->max_capacity) * 100);
+
+        stats.push_back(std::move(shard_stats));
+    }
+
+    return stats;
+}
+
+// Implementation of Shard enhanced methods
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+void TTLCache<Key, Value, Hash, KeyEqual>::Shard::update_expiration_index(
+    typename CacheList::iterator item, const TimePoint& old_expiry) {
+    // Remove old entry if it exists
+    if (old_expiry != TimePoint{}) {
+        auto range = expiration_index.equal_range(old_expiry);
+        for (auto it = range.first; it != range.second; ++it) {
+            if (it->second == item) {
+                expiration_index.erase(it);
+                break;
+            }
+        }
+    }
+
+    // Add new entry
+    expiration_index.emplace(item->expiry_time, item);
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+void TTLCache<Key, Value, Hash, KeyEqual>::Shard::remove_from_expiration_index(
+    typename CacheList::iterator item) {
+    auto range = expiration_index.equal_range(item->expiry_time);
+    for (auto it = range.first; it != range.second; ++it) {
+        if (it->second == item) {
+            expiration_index.erase(it);
+            break;
+        }
+    }
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+size_t TTLCache<Key, Value, Hash, KeyEqual>::Shard::cleanup_expired_optimized(
+    const TimePoint& now, size_t max_items) {
+    size_t cleaned = 0;
+
+    // Use expiration index for efficient cleanup
+    auto it = expiration_index.begin();
+    while (it != expiration_index.end() && it->first <= now && cleaned < max_items) {
+        auto list_it = it->second;
+
+        // Verify the item is still in the list and expired
+        if (list_it->expiry_time <= now) {
+            // Remove from map and list
+            map.erase(list_it->key);
+            list.erase(list_it);
+
+            // Remove from expiration index
+            it = expiration_index.erase(it);
+            cleaned++;
+        } else {
+            ++it;
+        }
+    }
+
+    return cleaned;
+}
+
+// Implementation of utility methods
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+size_t TTLCache<Key, Value, Hash, KeyEqual>::estimate_value_size(const Value& value) const noexcept {
+    if constexpr (std::is_arithmetic_v<Value>) {
+        return sizeof(Value);
+    } else if constexpr (std::is_same_v<Value, std::string>) {
+        return sizeof(std::string) + value.capacity();
+    } else if constexpr (requires { value.size(); }) {
+        // For containers with size() method
+        return sizeof(Value) + value.size() * sizeof(typename Value::value_type);
+    } else {
+        // Default estimation for complex types
+        return sizeof(Value) + 64;  // Base size + estimated overhead
+    }
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+void TTLCache<Key, Value, Hash, KeyEqual>::update_memory_usage(
+    Shard& shard, const Key& /* key */, const Value& value, bool adding) noexcept {
+    if (!config_.enable_memory_tracking) return;
+
+    size_t key_size = sizeof(Key);
+    size_t value_size = estimate_value_size(value);
+    size_t total_size = key_size + value_size + sizeof(CacheItem);
+
+    if (adding) {
+        shard.memory_usage.fetch_add(total_size);
+        memory_usage_bytes_.fetch_add(total_size);
+    } else {
+        shard.memory_usage.fetch_sub(total_size);
+        memory_usage_bytes_.fetch_sub(total_size);
+    }
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+void TTLCache<Key, Value, Hash, KeyEqual>::enforce_memory_limits() noexcept {
+    if (config_.max_memory_mb == 0) return;
+
+    size_t max_bytes = config_.max_memory_mb * 1024 * 1024;
+    size_t current_bytes = get_memory_usage();
+
+    if (current_bytes > max_bytes) {
+        spdlog::info("Enforcing memory limits: current {} MB, limit {} MB",
+                     current_bytes / (1024 * 1024), config_.max_memory_mb);
+
+        // Force cleanup and eviction until under limit
+
+        for (auto& shard_ptr : shards_) {
+            if (get_memory_usage() <= max_bytes) break;
+
+            std::unique_lock lock(shard_ptr->mutex);
+            size_t items_to_evict = shard_ptr->list.size() / 5;  // Evict 20% from this shard
+            evict_items(*shard_ptr, items_to_evict);
+        }
+    }
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+Value TTLCache<Key, Value, Hash, KeyEqual>::compress_value(const Value& value) const {
+    // Placeholder for compression - would need actual compression library
+    if (config_.enable_compression) {
+        // TODO: Implement actual compression
+        spdlog::debug("Compression not yet implemented");
+    }
+    return value;
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+Value TTLCache<Key, Value, Hash, KeyEqual>::decompress_value(const Value& value) const {
+    // Placeholder for decompression - would need actual compression library
+    if (config_.enable_compression) {
+        // TODO: Implement actual decompression
+        spdlog::debug("Decompression not yet implemented");
+    }
+    return value;
 }
 
 }  // namespace atom::search
 
-#endif  // ATOM_SEARCH_TTL_CACHE_HPP
+#endif  // ATOM_SEARCH_TTL_CACHE_IMPL_HPP

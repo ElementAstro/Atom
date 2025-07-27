@@ -65,7 +65,8 @@ namespace serial {
 
 namespace {
 // Constants for performance optimization
-constexpr size_t INITIAL_PORT_VECTOR_SIZE = 16;
+constexpr size_t INITIAL_PORT_VECTOR_SIZE = 32;  // Increased for better pre-allocation
+constexpr size_t EXPECTED_PORT_INFO_STRING_SIZE = 128;  // For string pre-allocation
 constexpr std::chrono::milliseconds DEFAULT_CACHE_CLEANUP_INTERVAL{
     300000};  // 5 minutes
 constexpr size_t MAX_CONSECUTIVE_ERRORS = 5;
@@ -91,19 +92,64 @@ uint16_t parse_hex(const std::string& hex_str) {
     }
 }
 
-// Extract VID/PID from various hardware ID formats
-std::pair<uint16_t, uint16_t> extract_vid_pid(const std::string& hardware_id) {
-    // Common patterns: USB\\VID_1A86&PID_7523, VID_1A86&PID_7523, etc.
-    std::regex vid_pid_regex(R"(VID_([0-9A-Fa-f]{4}).*?PID_([0-9A-Fa-f]{4}))",
-                             std::regex_constants::icase);
-    std::smatch match;
+// Helper function to create optimized PortInfo with pre-allocated strings
+SerialPortScanner::PortInfo create_optimized_port_info() {
+    SerialPortScanner::PortInfo info;
+    // Pre-allocate string capacity to reduce reallocations
+    info.device.reserve(EXPECTED_PORT_INFO_STRING_SIZE);
+    info.description.reserve(EXPECTED_PORT_INFO_STRING_SIZE);
+    info.hardware_id.reserve(EXPECTED_PORT_INFO_STRING_SIZE);
+    info.vendor_id.reserve(16);
+    info.product_id.reserve(16);
+    info.serial_number.reserve(64);
+    info.manufacturer.reserve(EXPECTED_PORT_INFO_STRING_SIZE);
+    info.location.reserve(EXPECTED_PORT_INFO_STRING_SIZE);
+    info.ch340_model.reserve(32);
+    info.last_error.reserve(256);
+    return info;
+}
 
-    if (std::regex_search(hardware_id, match, vid_pid_regex) &&
-        match.size() >= 3) {
-        return {parse_hex(match[1].str()), parse_hex(match[2].str())};
+// Extract VID/PID from various hardware ID formats - optimized version
+std::pair<uint16_t, uint16_t> extract_vid_pid(const std::string& hardware_id) {
+    // Fast string-based parsing instead of regex
+    // Common patterns: USB\\VID_1A86&PID_7523, VID_1A86&PID_7523, etc.
+
+    // Convert to uppercase for case-insensitive matching
+    std::string upper_id;
+    upper_id.reserve(hardware_id.size());
+    for (char c : hardware_id) {
+        upper_id.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
     }
 
-    return {0, 0};
+    // Find VID pattern
+    size_t vid_pos = upper_id.find("VID_");
+    if (vid_pos == std::string::npos) {
+        return {0, 0};
+    }
+
+    // Extract VID (4 hex digits after VID_)
+    vid_pos += 4; // Skip "VID_"
+    if (vid_pos + 4 > upper_id.size()) {
+        return {0, 0};
+    }
+
+    uint16_t vid = parse_hex(upper_id.substr(vid_pos, 4));
+
+    // Find PID pattern
+    size_t pid_pos = upper_id.find("PID_", vid_pos);
+    if (pid_pos == std::string::npos) {
+        return {0, 0};
+    }
+
+    // Extract PID (4 hex digits after PID_)
+    pid_pos += 4; // Skip "PID_"
+    if (pid_pos + 4 > upper_id.size()) {
+        return {0, 0};
+    }
+
+    uint16_t pid = parse_hex(upper_id.substr(pid_pos, 4));
+
+    return {vid, pid};
 }
 
 }  // anonymous namespace
@@ -390,6 +436,16 @@ void SerialPortScanner::cleanup_cache() const noexcept {
         return;
     }
 
+    // Use a more efficient approach: find the oldest entries directly
+    // without creating a full vector and sorting
+    const size_t target_size = config_.max_cache_size * 3 / 4;
+    const size_t to_remove = port_cache_.size() - target_size;
+
+    if (to_remove == 0) {
+        return;
+    }
+
+    // Use partial_sort to find only the oldest entries we need to remove
     std::vector<std::pair<std::chrono::steady_clock::time_point, std::string>>
         entries;
     entries.reserve(port_cache_.size());
@@ -398,13 +454,17 @@ void SerialPortScanner::cleanup_cache() const noexcept {
         entries.emplace_back(entry.timestamp, name);
     }
 
-    // Sort by timestamp (oldest first)
-    std::sort(entries.begin(), entries.end());
+    // Only sort the portion we need to remove
+    std::partial_sort(entries.begin(), entries.begin() + to_remove, entries.end());
 
-    // Remove oldest entries to get back to reasonable size
-    size_t to_remove = port_cache_.size() - (config_.max_cache_size * 3 / 4);
-    for (size_t i = 0; i < to_remove && i < entries.size(); ++i) {
+    // Remove the oldest entries
+    for (size_t i = 0; i < to_remove; ++i) {
         port_cache_.erase(entries[i].second);
+    }
+
+    if (config_.enable_debug_logging) {
+        spdlog::debug("Cache cleanup: removed {} entries, {} remaining",
+                      to_remove, port_cache_.size());
     }
     spdlog::info("Cleaned up {} cache entries, {} entries remaining", to_remove,
                  port_cache_.size());
@@ -883,6 +943,68 @@ void SerialPortScanner::reset_statistics() noexcept {
     spdlog::info("Scanner statistics reset");
 }
 
+SerialPortScanner::Result<std::unordered_map<std::string, bool>>
+SerialPortScanner::check_ports_availability(const std::vector<std::string>& port_names) {
+    if (port_names.empty()) {
+        return ErrorInfo("Port names list cannot be empty", 0, "check_ports_availability");
+    }
+
+    std::unordered_map<std::string, bool> results;
+    results.reserve(port_names.size());
+
+    std::vector<std::string> uncached_ports;
+    uncached_ports.reserve(port_names.size());
+
+    // First pass: check cache for all ports
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        for (const auto& port_name : port_names) {
+            if (is_cache_valid(port_name)) {
+                auto it = port_cache_.find(port_name);
+                if (it != port_cache_.end()) {
+                    results[port_name] = it->second.is_available;
+                    stats_.cache_hits.fetch_add(1);
+                    continue;
+                }
+            }
+            uncached_ports.push_back(port_name);
+            stats_.cache_misses.fetch_add(1);
+        }
+    }
+
+    // Second pass: batch check uncached ports
+    for (const auto& port_name : uncached_ports) {
+        try {
+            bool available = false;
+
+#ifdef _WIN32
+            HANDLE handle = CreateFileA(
+                port_name.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
+                nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+            available = (handle != INVALID_HANDLE_VALUE);
+            if (handle != INVALID_HANDLE_VALUE) {
+                CloseHandle(handle);
+            }
+#else
+            int fd = open(port_name.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
+            available = (fd != -1);
+            if (fd != -1) {
+                close(fd);
+            }
+#endif
+
+            results[port_name] = available;
+            update_cache(port_name, available);
+
+        } catch (const std::exception& e) {
+            results[port_name] = false;
+            update_cache(port_name, false, e.what());
+        }
+    }
+
+    return results;
+}
+
 SerialPortScanner::Result<bool> SerialPortScanner::is_port_available(
     std::string_view port_name) {
     if (port_name.empty()) {
@@ -938,6 +1060,46 @@ void SerialPortScanner::refresh_cache() {
     known_ports_.clear();
     last_port_refresh_ = std::chrono::steady_clock::now();
     spdlog::info("Port cache refreshed");
+}
+
+void SerialPortScanner::optimize_cache() {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+
+    size_t removed_count = 0;
+
+    // Remove expired entries
+    for (auto it = port_cache_.begin(); it != port_cache_.end();) {
+        if (it->second.is_expired(config_.cache_ttl)) {
+            it = port_cache_.erase(it);
+            ++removed_count;
+        } else {
+            ++it;
+        }
+    }
+
+    // If cache is still too large, apply LRU eviction based on access count
+    if (port_cache_.size() > config_.max_cache_size) {
+        std::vector<std::pair<uint32_t, std::string>> access_counts;
+        access_counts.reserve(port_cache_.size());
+
+        for (const auto& [name, entry] : port_cache_) {
+            access_counts.emplace_back(entry.access_count, name);
+        }
+
+        // Sort by access count (least accessed first)
+        std::sort(access_counts.begin(), access_counts.end());
+
+        const size_t to_remove = port_cache_.size() - (config_.max_cache_size * 3 / 4);
+        for (size_t i = 0; i < to_remove && i < access_counts.size(); ++i) {
+            port_cache_.erase(access_counts[i].second);
+            ++removed_count;
+        }
+    }
+
+    if (config_.enable_debug_logging && removed_count > 0) {
+        spdlog::debug("Cache optimization: removed {} entries, {} remaining",
+                      removed_count, port_cache_.size());
+    }
 }
 
 std::string SerialPortScanner::get_cache_info() const {

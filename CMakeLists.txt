@@ -212,6 +212,11 @@ if(ATOM_BUILD_TESTS)
   add_subdirectory(tests)
 endif()
 
+# Add secret module test if secret module is enabled
+if(ATOM_BUILD_SECRET)
+  include(test_secret_CMakeLists.txt)
+endif()
+
 # -----------------------------------------------------------------------------
 # Documentation
 # -----------------------------------------------------------------------------

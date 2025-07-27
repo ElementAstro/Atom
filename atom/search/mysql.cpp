@@ -183,7 +183,7 @@ std::unique_ptr<ResultSet> MysqlDB::query(std::string_view query) {
         }
         throw MySQLException(mysql_error(conn.get()));
     }
-    return std::make_unique<ResultSet>(result);
+    return ResultSet::create(result);
 }
 
 template <typename... Args>
@@ -222,11 +222,11 @@ std::unique_ptr<ResultSet> MysqlDB::query(std::string_view query,
         throw MySQLException(mysql_stmt_error(stmt));
     }
 
-    return std::make_unique<ResultSet>(result);
+    return ResultSet::create(result);
 }
 
 std::unique_ptr<Transaction> MysqlDB::begin_transaction() {
-    return std::make_unique<Transaction>(p_impl_->pool_.acquire());
+    return Transaction::create(p_impl_->pool_.acquire());
 }
 
 void MysqlDB::with_transaction(const std::function<void(MYSQL&)>& func) {
@@ -377,5 +377,4 @@ template uint64_t MysqlDB::execute<std::string_view>(std::string_view,
 
 template std::unique_ptr<ResultSet> MysqlDB::query<int>(std::string_view, int&&);
 
-}  // namespace database
-}  // namespace atom
+}  // namespace atom::database

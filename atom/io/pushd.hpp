@@ -1,6 +1,8 @@
 #ifndef ATOM_IO_PUSHD_HPP
 #define ATOM_IO_PUSHD_HPP
 
+#include <atomic>
+#include <chrono>
 #include <concepts>
 #include <coroutine>
 #include <filesystem>
@@ -25,8 +27,85 @@ namespace atom::io {
 
 class DirectoryStackImpl;
 
+// Forward declarations
+struct DirectoryStackOptions;
+struct DirectoryStackStats;
+
+// Callback types
+using ProgressCallback = std::function<void(size_t processed, size_t total, double percentage)>;
+using StackChangeCallback = std::function<void(const std::filesystem::path& old_dir, const std::filesystem::path& new_dir)>;
+
 template <typename T>
 concept PathLike = std::convertible_to<T, std::filesystem::path>;
+
+/**
+ * @brief Enhanced options for directory stack operations
+ */
+struct DirectoryStackOptions {
+    bool enable_logging{true};          ///< Enable detailed logging
+    bool enable_statistics{false};      ///< Enable performance statistics
+    bool enable_validation{true};       ///< Enable path validation
+    bool enable_history{false};         ///< Enable operation history
+    size_t max_stack_size{100};         ///< Maximum stack size
+    size_t max_history_size{50};        ///< Maximum history size
+    std::chrono::milliseconds timeout{30000}; ///< Operation timeout
+
+    // Callbacks
+    StackChangeCallback change_callback; ///< Directory change callback
+
+    /**
+     * @brief Creates options optimized for performance
+     */
+    static DirectoryStackOptions createFastOptions() {
+        DirectoryStackOptions options;
+        options.enable_logging = false;
+        options.enable_statistics = false;
+        options.enable_validation = false;
+        options.enable_history = false;
+        return options;
+    }
+
+    /**
+     * @brief Creates options for comprehensive operations
+     */
+    static DirectoryStackOptions createDetailedOptions() {
+        DirectoryStackOptions options;
+        options.enable_logging = true;
+        options.enable_statistics = true;
+        options.enable_validation = true;
+        options.enable_history = true;
+        return options;
+    }
+};
+
+/**
+ * @brief Statistics for directory stack operations
+ */
+struct DirectoryStackStats {
+    std::atomic<uint64_t> pushd_operations{0};
+    std::atomic<uint64_t> popd_operations{0};
+    std::atomic<uint64_t> failed_operations{0};
+    std::atomic<uint64_t> validation_failures{0};
+    std::chrono::steady_clock::time_point start_time;
+
+    void reset() {
+        pushd_operations = 0;
+        popd_operations = 0;
+        failed_operations = 0;
+        validation_failures = 0;
+        start_time = std::chrono::steady_clock::now();
+    }
+
+    double getOperationsPerSecond() const {
+        auto now = std::chrono::steady_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - start_time);
+        if (duration.count() > 0) {
+            auto total_ops = pushd_operations.load() + popd_operations.load();
+            return static_cast<double>(total_ops) / duration.count();
+        }
+        return 0.0;
+    }
+};
 
 class DirectoryStack {
 public:
@@ -267,6 +346,72 @@ public:
      */
     [[nodiscard]] auto getCurrentDirectory() const
         -> Task<std::filesystem::path>;
+
+    // Enhanced methods with options and statistics
+
+    /**
+     * @brief Set options for directory stack operations
+     * @param options New options to apply
+     */
+    void setOptions(const DirectoryStackOptions& options);
+
+    /**
+     * @brief Get current options
+     * @return Current options
+     */
+    [[nodiscard]] auto getOptions() const -> DirectoryStackOptions;
+
+    /**
+     * @brief Get operation statistics
+     * @return Current statistics
+     */
+    [[nodiscard]] auto getStats() const -> DirectoryStackStats;
+
+    /**
+     * @brief Reset operation statistics
+     */
+    void resetStats();
+
+    /**
+     * @brief Get operation history
+     * @return Vector of recent operations
+     */
+    [[nodiscard]] auto getHistory() const -> Vector<std::string>;
+
+    /**
+     * @brief Validate stack integrity
+     * @return True if stack is valid
+     */
+    [[nodiscard]] auto validateStack() const -> bool;
+
+    /**
+     * @brief Batch push multiple directories
+     * @param directories Vector of directories to push
+     * @param progress_callback Progress callback
+     * @return Task for completion
+     */
+    [[nodiscard]] auto batchPushd(const Vector<std::filesystem::path>& directories,
+                                 ProgressCallback progress_callback = nullptr) -> Task<void>;
+
+    /**
+     * @brief Find directory in stack
+     * @param path Directory path to find
+     * @return Index if found, -1 otherwise
+     */
+    [[nodiscard]] auto findDirectory(const std::filesystem::path& path) const -> int;
+
+    /**
+     * @brief Get stack as JSON string
+     * @return JSON representation of stack
+     */
+    [[nodiscard]] auto toJson() const -> std::string;
+
+    /**
+     * @brief Load stack from JSON string
+     * @param json JSON string to load from
+     * @return True if successful
+     */
+    auto fromJson(const std::string& json) -> bool;
 
 private:
     std::unique_ptr<DirectoryStackImpl> impl_;

@@ -1,11 +1,11 @@
 /**
  * @file virtual.hpp
- * @brief Virtualization and container detection functionality
+ * @brief Virtualization and container detection functionality (Compatibility Layer)
  *
- * This file contains definitions for detecting and analyzing virtualization
- * environments. It provides utilities for identifying if the current system is
- * running inside a virtual machine or container, as well as determining the
- * specific type of virtualization.
+ * This file provides backward compatibility for the original virtual.hpp API
+ * while internally using the new modular virtual detection system.
+ *
+ * For new code, consider using the enhanced API in virtual/virtual.hpp
  *
  * @copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
@@ -14,6 +14,9 @@
 #define ATOM_SYSINFO_VIRTUAL_HPP
 
 #include <string>
+
+// Include the new modular virtual detection system
+#include "src/virtual/virtual.hpp"
 
 namespace atom::system {
 
@@ -26,7 +29,9 @@ namespace atom::system {
  * @return std::string The vendor string of the hypervisor, or empty if no
  * hypervisor is detected
  */
-auto getHypervisorVendor() -> std::string;
+inline auto getHypervisorVendor() -> std::string {
+    return virtual_env::hypervisor::getHypervisorVendor();
+}
 
 /**
  * @brief Detects if the system is running inside a virtual machine
@@ -36,7 +41,9 @@ auto getHypervisorVendor() -> std::string;
  *
  * @return bool True if the system is a virtual machine, false otherwise
  */
-auto isVirtualMachine() -> bool;
+inline auto isVirtualMachine() -> bool {
+    return virtual_env::isVirtualEnvironment();
+}
 
 /**
  * @brief Checks BIOS information to identify if the system is a virtual machine
@@ -49,7 +56,9 @@ auto isVirtualMachine() -> bool;
  * @return bool True if the BIOS information suggests a virtual machine, false
  * otherwise
  */
-auto checkBIOS() -> bool;
+inline auto checkBIOS() -> bool {
+    return virtual_env::detection::bios::checkBIOSInfo();
+}
 
 /**
  * @brief Checks the network adapter for common virtual machine adapters
@@ -61,7 +70,9 @@ auto checkBIOS() -> bool;
  * @return bool True if a virtual machine network adapter is found, false
  * otherwise
  */
-auto checkNetworkAdapter() -> bool;
+inline auto checkNetworkAdapter() -> bool {
+    return virtual_env::detection::hardware::checkNetworkAdapters();
+}
 
 /**
  * @brief Checks disk information for identifiers commonly used by virtual
@@ -74,7 +85,9 @@ auto checkNetworkAdapter() -> bool;
  * @return bool True if virtual machine disk identifiers are found, false
  * otherwise
  */
-auto checkDisk() -> bool;
+inline auto checkDisk() -> bool {
+    return virtual_env::detection::hardware::checkDiskInfo();
+}
 
 /**
  * @brief Checks the graphics card device for signs of virtualization
@@ -87,7 +100,9 @@ auto checkDisk() -> bool;
  * @return bool True if a virtual machine graphics card is detected, false
  * otherwise
  */
-auto checkGraphicsCard() -> bool;
+inline auto checkGraphicsCard() -> bool {
+    return virtual_env::detection::hardware::checkGraphicsCard();
+}
 
 /**
  * @brief Checks for the presence of common virtual machine processes
@@ -98,7 +113,9 @@ auto checkGraphicsCard() -> bool;
  *
  * @return bool True if virtual machine processes are found, false otherwise
  */
-auto checkProcesses() -> bool;
+inline auto checkProcesses() -> bool {
+    return virtual_env::detection::processes::checkVirtualizationProcesses();
+}
 
 /**
  * @brief Checks PCI bus devices for virtualization indicators
@@ -110,7 +127,9 @@ auto checkProcesses() -> bool;
  * @return bool True if virtual machine PCI bus devices are found, false
  * otherwise
  */
-auto checkPCIBus() -> bool;
+inline auto checkPCIBus() -> bool {
+    return virtual_env::detection::hardware::checkPCIBus();
+}
 
 /**
  * @brief Detects time drift and offset issues that may indicate a virtual
@@ -124,7 +143,9 @@ auto checkPCIBus() -> bool;
  * @return bool True if time drift or offset issues are detected, false
  * otherwise
  */
-auto checkTimeDrift() -> bool;
+inline auto checkTimeDrift() -> bool {
+    return virtual_env::detection::timing::checkTimeDrift();
+}
 
 /**
  * @brief Detects if the system is running inside a Docker container
@@ -135,7 +156,9 @@ auto checkTimeDrift() -> bool;
  *
  * @return bool True if running in a Docker container, false otherwise
  */
-auto isDockerContainer() -> bool;
+inline auto isDockerContainer() -> bool {
+    return virtual_env::container::docker::detect();
+}
 
 /**
  * @brief Comprehensive virtualization detection with confidence score
@@ -148,7 +171,10 @@ auto isDockerContainer() -> bool;
  * @return double Confidence score between 0.0 and 1.0, with higher values
  *                indicating greater likelihood of virtualization
  */
-auto getVirtualizationConfidence() -> double;
+inline auto getVirtualizationConfidence() -> double {
+    virtual_env::VirtualizationDetector detector;
+    return detector.getConfidenceScore();
+}
 
 /**
  * @brief Detects the specific type of virtualization technology in use
@@ -160,7 +186,9 @@ auto getVirtualizationConfidence() -> double;
  * @return std::string Name of the detected virtualization technology, or
  *                     "Unknown" if the type cannot be determined
  */
-auto getVirtualizationType() -> std::string;
+inline auto getVirtualizationType() -> std::string {
+    return virtual_env::getVirtualizationType();
+}
 
 /**
  * @brief Detects if the system is running inside a container
@@ -170,7 +198,9 @@ auto getVirtualizationType() -> std::string;
  *
  * @return bool True if running in any type of container, false otherwise
  */
-auto isContainer() -> bool;
+inline auto isContainer() -> bool {
+    return virtual_env::isContainerEnvironment();
+}
 
 /**
  * @brief Gets the container type if running in a containerized environment
@@ -181,7 +211,9 @@ auto isContainer() -> bool;
  * @return std::string Name of the container technology (e.g., "Docker", "LXC"),
  *                     or empty string if not in a container
  */
-auto getContainerType() -> std::string;
+inline auto getContainerType() -> std::string {
+    return virtual_env::getContainerType();
+}
 
 }  // namespace atom::system
 

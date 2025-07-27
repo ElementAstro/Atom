@@ -14,19 +14,23 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
-#include <nlohmann/json.hpp>
+
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
 #include <unordered_map>
 #include <vector>
+#include "concurrency_primitives.hpp"
+#include "connection_pool.hpp"
+#include "performance_monitor.hpp"
+#include "lock_free_queue.hpp"
+#include "memory_pool.hpp"
 
 namespace beast = boost::beast;
 namespace http = beast::http;
 namespace net = boost::asio;
 using tcp = boost::asio::ip::tcp;
-using json = nlohmann::json;
 
 template <typename T>
 concept HttpResponseHandler =
@@ -34,10 +38,7 @@ concept HttpResponseHandler =
         { h(ec, res) } -> std::same_as<void>;
     };
 
-template <typename T>
-concept JsonResponseHandler = requires(T h, beast::error_code ec, json j) {
-    { h(ec, j) } -> std::same_as<void>;
-};
+
 
 template <typename T>
 concept BatchResponseHandler =
@@ -52,21 +53,28 @@ concept FileCompletionHandler =
     };
 
 /**
- * @brief High-performance HTTP client for synchronous and asynchronous HTTP
- * requests
+ * @brief High-performance HTTP client with advanced concurrency primitives
  *
  * This class provides a comprehensive HTTP client implementation using
- * Boost.Beast, supporting both synchronous and asynchronous operations with
- * connection pooling, retry logic, and batch processing capabilities.
+ * Boost.Beast with cutting-edge C++ concurrency features including:
+ * - Lock-free connection pooling with hazard pointers
+ * - Work-stealing thread pools for batch processing
+ * - NUMA-aware memory allocation
+ * - Lock-free performance monitoring
+ * - Advanced synchronization mechanisms
  */
 class HttpClient : public std::enable_shared_from_this<HttpClient> {
 public:
     /**
-     * @brief Constructs an HttpClient with optimized I/O context
+     * @brief Constructs an HttpClient with advanced concurrency features
      * @param ioc The I/O context for asynchronous operations
+     * @param enable_connection_pool Enable lock-free connection pooling
+     * @param enable_performance_monitoring Enable lock-free performance monitoring
      * @throws std::bad_alloc If memory allocation fails
      */
-    explicit HttpClient(net::io_context& ioc);
+    explicit HttpClient(net::io_context& ioc,
+                       bool enable_connection_pool = true,
+                       bool enable_performance_monitoring = true);
 
     HttpClient(const HttpClient&) = delete;
     HttpClient& operator=(const HttpClient&) = delete;
@@ -131,42 +139,7 @@ public:
         std::string_view content_type = "", std::string_view body = "",
         const std::unordered_map<std::string, std::string>& headers = {});
 
-    /**
-     * @brief Sends a synchronous JSON request with automatic parsing
-     * @param method The HTTP method
-     * @param host The server hostname
-     * @param port The server port
-     * @param target The target URI path
-     * @param json_body The JSON request body
-     * @param headers Additional headers
-     * @return The parsed JSON response
-     * @throws std::invalid_argument If host or port is empty
-     * @throws beast::system_error On connection failure
-     * @throws json::exception If JSON parsing fails
-     */
-    [[nodiscard]] auto jsonRequest(
-        http::verb method, std::string_view host, std::string_view port,
-        std::string_view target, const json& json_body = {},
-        const std::unordered_map<std::string, std::string>& headers = {})
-        -> json;
 
-    /**
-     * @brief Sends an asynchronous JSON request with automatic parsing
-     * @param method The HTTP method
-     * @param host The server hostname
-     * @param port The server port
-     * @param target The target URI path
-     * @param handler The JSON completion handler
-     * @param json_body The JSON request body
-     * @param headers Additional headers
-     * @throws std::invalid_argument If host or port is empty
-     */
-    template <JsonResponseHandler ResponseHandler>
-    void asyncJsonRequest(
-        http::verb method, std::string_view host, std::string_view port,
-        std::string_view target, ResponseHandler&& handler,
-        const json& json_body = {},
-        const std::unordered_map<std::string, std::string>& headers = {});
 
     /**
      * @brief Uploads a file using multipart form data
@@ -246,10 +219,11 @@ public:
         -> std::vector<http::response<http::string_body>>;
 
     /**
-     * @brief Sends multiple asynchronous requests in parallel batch
+     * @brief Sends multiple asynchronous requests using work-stealing thread pool
      * @param requests Vector of request tuples
      * @param handler The batch completion handler
      * @param headers Common headers for all requests
+     * @param max_concurrent_requests Maximum concurrent requests (0 = unlimited)
      * @throws std::invalid_argument If any parameters are invalid
      */
     template <BatchResponseHandler ResponseHandler>
@@ -257,20 +231,69 @@ public:
         const std::vector<std::tuple<http::verb, std::string, std::string,
                                      std::string>>& requests,
         ResponseHandler&& handler,
-        const std::unordered_map<std::string, std::string>& headers = {});
+        const std::unordered_map<std::string, std::string>& headers = {},
+        std::size_t max_concurrent_requests = 0);
 
     /**
-     * @brief Runs the I/O context with optimized thread pool
+     * @brief Sends multiple requests using lock-free work-stealing scheduler
+     * @param requests Vector of request tuples
+     * @param headers Common headers for all requests
+     * @param num_worker_threads Number of worker threads for processing
+     * @return Vector of responses in the same order as requests
+     */
+    [[nodiscard]] auto batchRequestWorkStealing(
+        const std::vector<std::tuple<http::verb, std::string, std::string,
+                                     std::string>>& requests,
+        const std::unordered_map<std::string, std::string>& headers = {},
+        std::size_t num_worker_threads = std::thread::hardware_concurrency())
+        -> std::vector<http::response<http::string_body>>;
+
+    /**
+     * @brief Runs the I/O context with NUMA-aware work-stealing thread pool
      * @param num_threads The number of worker threads
      * @throws std::invalid_argument If num_threads is zero
      */
     void runWithThreadPool(size_t num_threads);
+
+    /**
+     * @brief Configures connection pool settings
+     * @param max_connections_per_host Maximum connections per host
+     * @param max_idle_time Maximum idle time before connection cleanup
+     * @param connection_timeout Connection timeout duration
+     */
+    void configureConnectionPool(std::size_t max_connections_per_host = 20,
+                                std::chrono::seconds max_idle_time = std::chrono::seconds{300},
+                                std::chrono::seconds connection_timeout = std::chrono::seconds{30});
+
+    /**
+     * @brief Returns comprehensive performance statistics
+     */
+    [[nodiscard]] atom::beast::monitoring::PerformanceMonitor::PerformanceStats getPerformanceStatistics() const;
+
+    /**
+     * @brief Resets all performance counters
+     */
+    void resetPerformanceStatistics();
+
+    /**
+     * @brief Logs current performance summary
+     */
+    void logPerformanceSummary() const;
 
 private:
     tcp::resolver resolver_;
     beast::tcp_stream stream_;
     std::unordered_map<std::string, std::string> default_headers_;
     std::chrono::seconds timeout_{30};
+
+    // Advanced concurrency components
+    std::unique_ptr<atom::beast::pool::LockFreeConnectionPool> connection_pool_;
+    atom::beast::monitoring::PerformanceMonitor* performance_monitor_;
+    std::unique_ptr<atom::beast::concurrency::WorkStealingDeque<std::function<void()>>> work_queue_;
+
+    // Configuration flags
+    bool connection_pool_enabled_{true};
+    bool performance_monitoring_enabled_{true};
 
     void validateHostPort(std::string_view host, std::string_view port) const;
     void setupRequest(
@@ -334,38 +357,15 @@ void HttpClient::asyncRequest(
         });
 }
 
-template <JsonResponseHandler ResponseHandler>
-void HttpClient::asyncJsonRequest(
-    http::verb method, std::string_view host, std::string_view port,
-    std::string_view target, ResponseHandler&& handler, const json& json_body,
-    const std::unordered_map<std::string, std::string>& headers) {
-    asyncRequest(
-        method, host, port, target,
-        [handler = std::forward<ResponseHandler>(handler)](
-            beast::error_code ec,
-            http::response<http::string_body> res) mutable {
-            if (ec) {
-                handler(ec, {});
-            } else {
-                try {
-                    auto parsed_json = json::parse(res.body());
-                    handler({}, std::move(parsed_json));
-                } catch (const json::parse_error& e) {
-                    handler(beast::error_code{e.id, beast::generic_category()},
-                            {});
-                }
-            }
-        },
-        11, "application/json", json_body.empty() ? "" : json_body.dump(),
-        headers);
-}
+
 
 template <BatchResponseHandler ResponseHandler>
 void HttpClient::asyncBatchRequest(
     const std::vector<std::tuple<http::verb, std::string, std::string,
                                  std::string>>& requests,
     ResponseHandler&& handler,
-    const std::unordered_map<std::string, std::string>& headers) {
+    const std::unordered_map<std::string, std::string>& headers,
+    std::size_t max_concurrent_requests) {
     auto responses =
         std::make_shared<std::vector<http::response<http::string_body>>>();
     auto remaining = std::make_shared<std::atomic<size_t>>(requests.size());

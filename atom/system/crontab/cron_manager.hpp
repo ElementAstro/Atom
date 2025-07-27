@@ -5,31 +5,100 @@
 #include <unordered_map>
 #include <vector>
 #include <chrono>
+#include <memory>
+#include <shared_mutex>
+#include <atomic>
+#include <set>
+#include <queue>
+#include <optional>
 
 #include "cron_job.hpp"
 #include "cron_validation.hpp"
 
 /**
- * @brief Manages a collection of Cron jobs.
+ * @brief Job execution statistics for monitoring
+ */
+struct JobStats {
+    std::atomic<uint64_t> total_executions{0};
+    std::atomic<uint64_t> successful_executions{0};
+    std::atomic<uint64_t> failed_executions{0};
+    std::chrono::system_clock::time_point last_execution;
+    std::chrono::milliseconds avg_execution_time{0};
+
+    double getSuccessRate() const {
+        uint64_t total = total_executions.load();
+        return total > 0 ? static_cast<double>(successful_executions.load()) / total : 0.0;
+    }
+};
+
+/**
+ * @brief Cache for frequently accessed job data
+ */
+struct JobCache {
+    std::unordered_map<std::string, std::weak_ptr<CronJob>> job_cache;
+    std::unordered_map<std::string, std::vector<std::string>> category_cache;
+    std::set<std::string> enabled_jobs_cache;
+    std::priority_queue<std::pair<JobPriority, std::string>> priority_queue_cache;
+    std::atomic<bool> cache_valid{false};
+
+    void invalidate() { cache_valid.store(false); }
+    bool isValid() const { return cache_valid.load(); }
+    void markValid() { cache_valid.store(true); }
+};
+
+/**
+ * @brief Optimized Cron job manager with enhanced performance and concurrency support.
+ *
+ * Optimizations:
+ * - Thread-safe operations with shared_mutex for read/write separation
+ * - Efficient indexing with multiple data structures
+ * - Smart pointer management for memory efficiency
+ * - Caching layer for frequently accessed data
+ * - Batch operations for better performance
+ * - Priority-based job scheduling
  */
 class CronManager {
 public:
     /**
-     * @brief Constructs a new CronManager object.
+     * @brief Constructs a new CronManager object with optimized initialization.
      */
     CronManager();
 
     /**
-     * @brief Destroys the CronManager object.
+     * @brief Destroys the CronManager object with proper cleanup.
      */
     ~CronManager();
 
+    // Disable copy operations to prevent accidental expensive copies
+    CronManager(const CronManager&) = delete;
+    CronManager& operator=(const CronManager&) = delete;
+
+    // Move operations need custom implementation due to mutex members
+    CronManager(CronManager&&) noexcept;
+    CronManager& operator=(CronManager&&) noexcept;
+
     /**
-     * @brief Adds a new Cron job.
+     * @brief Adds a new Cron job with move semantics.
      * @param job The CronJob object to be added.
      * @return True if the job was added successfully, false otherwise.
      */
-    auto createCronJob(const CronJob& job) -> bool;
+    auto createCronJob(CronJob job) -> bool;
+
+    /**
+     * @brief Creates a job from parameters with perfect forwarding.
+     * @param args Arguments to construct the CronJob.
+     * @return True if the job was created successfully, false otherwise.
+     */
+    template<typename... Args>
+    auto emplaceJob(Args&&... args) -> bool {
+        std::unique_lock<std::shared_mutex> lock(jobs_mutex_);
+        try {
+            auto job = std::make_shared<CronJob>(std::forward<Args>(args)...);
+            return addJobInternal(std::move(job));
+        } catch (const std::exception&) {
+            return false;
+        }
+    }
 
     /**
      * @brief Creates a new job with a special time expression.
@@ -275,14 +344,70 @@ public:
      */
     auto getJobsByPriority() -> std::vector<CronJob>;
 
-private:
-    std::vector<CronJob> jobs_;
-    std::unordered_map<std::string, size_t> jobIndex_;
-    std::unordered_map<std::string, std::vector<size_t>> categoryIndex_;
+    /**
+     * @brief Enhanced batch operations for better performance.
+     */
+    auto batchCreateJobsOptimized(std::vector<CronJob> jobs) -> size_t;
+    auto batchUpdateJobs(const std::vector<std::pair<std::string, CronJob>>& updates) -> size_t;
 
-    void refreshJobIndex();
-    auto validateJob(const CronJob& job) -> bool;
-    auto handleJobFailure(const std::string& id) -> bool;
+    /**
+     * @brief Advanced querying with caching.
+     */
+    auto getJobsByCategory(const std::string& category) -> std::vector<std::shared_ptr<CronJob>>;
+    auto getJobsByStatus(JobStatus status) -> std::vector<std::shared_ptr<CronJob>>;
+    auto getJobsByPriorityRange(JobPriority min_priority, JobPriority max_priority)
+        -> std::vector<std::shared_ptr<CronJob>>;
+
+    /**
+     * @brief Performance monitoring.
+     */
+    auto getJobStats(const std::string& job_id) -> std::optional<JobStats>;
+    auto getOverallStats() -> JobStats;
+    void recordJobExecution(const std::string& job_id, bool success,
+                           std::chrono::milliseconds execution_time);
+
+    /**
+     * @brief Cache management.
+     */
+    void invalidateCache();
+    void rebuildCache();
+    auto getCachedJob(const std::string& job_id) -> std::shared_ptr<CronJob>;
+
+private:
+    // Core data storage with smart pointers for efficient memory management
+    std::unordered_map<std::string, std::shared_ptr<CronJob>> jobs_;
+
+    // Multiple indices for fast lookups
+    std::unordered_map<std::string, std::string> command_to_id_index_;
+    std::unordered_map<std::string, std::vector<std::string>> category_index_;
+    std::unordered_map<JobStatus, std::set<std::string>> status_index_;
+    std::unordered_map<JobPriority, std::set<std::string>> priority_index_;
+
+    // Performance monitoring
+    std::unordered_map<std::string, JobStats> job_stats_;
+
+    // Caching layer
+    mutable JobCache cache_;
+
+    // Thread safety
+    mutable std::shared_mutex jobs_mutex_;
+    mutable std::shared_mutex stats_mutex_;
+    mutable std::shared_mutex cache_mutex_;
+
+    // Configuration
+    std::atomic<size_t> max_jobs_{10000};
+    std::atomic<bool> auto_cleanup_enabled_{true};
+
+    // Internal helper methods
+    auto addJobInternal(std::shared_ptr<CronJob> job) -> bool;
+    auto removeJobInternal(const std::string& job_id) -> bool;
+    void updateIndices(const std::string& job_id, const CronJob& job);
+    void removeFromIndices(const std::string& job_id, const CronJob& job);
+    auto validateJobInternal(const CronJob& job) -> bool;
+    auto generateJobId(const CronJob& job) -> std::string;
+    void cleanupExpiredJobs();
+    auto findJobById(const std::string& job_id) -> std::shared_ptr<CronJob>;
+    auto findJobByCommand(const std::string& command) -> std::shared_ptr<CronJob>;
 };
 
 #endif // CRON_MANAGER_HPP

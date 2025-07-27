@@ -11,15 +11,17 @@
 #include <chrono>
 #include <concepts>
 #include <memory>
-#include <nlohmann/json.hpp>
+
 #include <string>
 #include <string_view>
+#include "concurrency_primitives.hpp"
+#include "lock_free_queue.hpp"
+#include "performance_monitor.hpp"
 
 namespace beast = boost::beast;
 namespace net = boost::asio;
 namespace websocket = beast::websocket;
 using tcp = boost::asio::ip::tcp;
-using json = nlohmann::json;
 
 template <typename T>
 concept CompletionHandler = requires(T h, beast::error_code ec) {
@@ -38,15 +40,19 @@ concept ReadCompletionHandler =
         { h(ec, s) } -> std::same_as<void>;
     };
 
-template <typename T>
-concept JsonCompletionHandler = requires(T h, beast::error_code ec, json j) {
-    { h(ec, j) } -> std::same_as<void>;
-};
+
 
 /**
  * @class WSClient
- * @brief A WebSocket client class for managing WebSocket connections and
- * communication.
+ * @brief High-performance WebSocket client with advanced concurrency features
+ *
+ * This class provides a comprehensive WebSocket client implementation using
+ * Boost.Beast with cutting-edge C++ concurrency features including:
+ * - Lock-free message queues with backpressure control
+ * - Atomic connection state management
+ * - High-performance message buffering
+ * - Lock-free performance monitoring
+ * - Advanced memory management
  */
 class WSClient : public std::enable_shared_from_this<WSClient> {
 public:
@@ -60,8 +66,8 @@ public:
 
     WSClient(const WSClient&) = delete;
     WSClient& operator=(const WSClient&) = delete;
-    WSClient(WSClient&&) noexcept = default;
-    WSClient& operator=(WSClient&&) noexcept = default;
+    WSClient(WSClient&&) = delete;
+    WSClient& operator=(WSClient&&) = delete;
     ~WSClient() noexcept;
 
     /**
@@ -118,6 +124,47 @@ public:
     [[nodiscard]] bool isConnected() const noexcept;
 
     /**
+     * @brief Configures message queue settings
+     * @param max_queue_size Maximum number of messages in queue
+     * @param backpressure_threshold Threshold for enabling backpressure
+     */
+    void configureMessageQueue(std::size_t max_queue_size = 10000,
+                              std::size_t backpressure_threshold = 8000);
+
+    /**
+     * @brief Enables or disables backpressure control
+     * @param enabled Whether to enable backpressure
+     */
+    void setBackpressureEnabled(bool enabled) noexcept;
+
+    /**
+     * @brief Returns current queue statistics
+     */
+    struct QueueStatistics {
+        std::size_t incoming_queue_size;
+        std::size_t outgoing_queue_size;
+        std::size_t max_queue_size;
+        bool backpressure_active;
+        std::size_t backpressure_threshold;
+    };
+
+    [[nodiscard]] QueueStatistics getQueueStatistics() const noexcept;
+
+    /**
+     * @brief Tries to receive a message from the lock-free queue (non-blocking)
+     * @param message Output parameter for the received message
+     * @return True if a message was received, false if queue is empty
+     */
+    [[nodiscard]] bool tryReceiveMessage(std::string& message) noexcept;
+
+    /**
+     * @brief Tries to send a message using the lock-free queue (non-blocking)
+     * @param message The message to send
+     * @return True if message was queued, false if queue is full
+     */
+    [[nodiscard]] bool trySendMessage(std::string_view message) noexcept;
+
+    /**
      * @brief Closes the WebSocket connection.
      * @throws beast::system_error On closing failure.
      */
@@ -157,20 +204,7 @@ public:
     template <CompletionHandler CloseHandler>
     void asyncClose(CloseHandler&& handler);
 
-    /**
-     * @brief Asynchronously sends a JSON object to the WebSocket server.
-     * @param json_data The JSON object to send.
-     * @param handler The handler to call when the operation completes.
-     */
-    template <DataCompletionHandler JsonWriteHandler>
-    void asyncSendJson(const json& json_data, JsonWriteHandler&& handler);
 
-    /**
-     * @brief Asynchronously receives a JSON object from the WebSocket server.
-     * @param handler The handler to call when the operation completes.
-     */
-    template <JsonCompletionHandler JsonHandler>
-    void asyncReceiveJson(JsonHandler&& handler);
 
 private:
     /**
@@ -204,9 +238,20 @@ private:
     std::chrono::seconds reconnect_interval_{5};
     int max_retries_{3};
     int retry_count_{0};
-    bool is_connected_{false};
+    std::atomic<bool> is_connected_{false};
     std::string last_host_;
     std::string last_port_;
+
+    // Advanced concurrency components
+    std::unique_ptr<atom::beast::concurrency::LockFreeMPMCQueue<std::string>> incoming_message_queue_;
+    std::unique_ptr<atom::beast::concurrency::LockFreeMPMCQueue<std::string>> outgoing_message_queue_;
+    std::atomic<std::size_t> max_queue_size_{10000};
+    std::atomic<std::size_t> current_queue_size_{0};
+    atom::beast::monitoring::PerformanceMonitor* performance_monitor_;
+
+    // Backpressure control
+    std::atomic<bool> backpressure_enabled_{false};
+    std::atomic<std::size_t> backpressure_threshold_{8000};
 };
 
 template <CompletionHandler ConnectHandler>
@@ -334,63 +379,7 @@ void WSClient::asyncClose(CloseHandler&& handler) {
                      });
 }
 
-template <DataCompletionHandler JsonWriteHandler>
-void WSClient::asyncSendJson(const json& json_data,
-                             JsonWriteHandler&& handler) {
-    if (!is_connected_) {
-        net::post(
-            ws_->get_executor(),
-            [handler = std::forward<JsonWriteHandler>(handler)]() mutable {
-                handler(beast::error_code{net::error::not_connected,
-                                          beast::generic_category()},
-                        0);
-            });
-        return;
-    }
 
-    try {
-        std::string message = json_data.dump();
-        asyncSend(message, std::forward<JsonWriteHandler>(handler));
-    } catch (const json::exception& e) {
-        spdlog::error("JSON serialization error: {}", e.what());
-        net::post(
-            ws_->get_executor(),
-            [handler = std::forward<JsonWriteHandler>(handler)]() mutable {
-                handler(beast::error_code{net::error::invalid_argument,
-                                          beast::generic_category()},
-                        0);
-            });
-    }
-}
-
-template <JsonCompletionHandler JsonHandler>
-void WSClient::asyncReceiveJson(JsonHandler&& handler) {
-    if (!is_connected_) {
-        net::post(ws_->get_executor(),
-                  [handler = std::forward<JsonHandler>(handler)]() mutable {
-                      handler(beast::error_code{net::error::not_connected,
-                                                beast::generic_category()},
-                              json{});
-                  });
-        return;
-    }
-
-    asyncReceive([handler = std::forward<JsonHandler>(handler),
-                  self = shared_from_this()](beast::error_code ec,
-                                             const std::string& message) {
-        if (ec) {
-            handler(ec, json{});
-        } else {
-            try {
-                auto json_data = json::parse(message);
-                handler(ec, std::move(json_data));
-            } catch (const json::parse_error& e) {
-                handler(beast::error_code{e.id, beast::generic_category()},
-                        json{});
-            }
-        }
-    });
-}
 
 template <CompletionHandler ConnectHandler>
 void WSClient::handleConnectError(beast::error_code ec,

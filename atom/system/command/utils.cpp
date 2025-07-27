@@ -6,14 +6,194 @@
 
 #include "utils.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <cstdlib>
+#include <fstream>
+#include <regex>
+#include <set>
 #include <sstream>
+#include <unordered_set>
 
 #include "executor.hpp"
+
+#ifdef _WIN32
+// Windows headers would go here
+#else
+#include <unistd.h>
+#include <sys/stat.h>
+#endif
 
 #include <spdlog/spdlog.h>
 
 namespace atom::system {
+
+// Global data for enhanced utilities
+namespace {
+    const std::unordered_set<std::string> DANGEROUS_COMMANDS = {
+        "rm", "del", "format", "fdisk", "mkfs", "dd", "shutdown", "reboot",
+        "halt", "poweroff", "init", "kill", "killall", "pkill", "chmod", "chown"
+    };
+
+    const std::unordered_set<std::string> PRIVILEGED_COMMANDS = {
+        "sudo", "su", "mount", "umount", "iptables", "systemctl", "service",
+        "passwd", "useradd", "userdel", "groupadd", "groupdel"
+    };
+
+    const std::regex SHELL_INJECTION_PATTERN(R"([;&|`$(){}[\]<>*?])");
+    const std::regex COMMAND_PATTERN(R"(^\s*([^\s]+))");
+}
+
+auto validateCommandDetailed(const std::string &command) -> ValidationResult {
+    ValidationResult result;
+
+    if (command.empty()) {
+        result.errorMessage = "Command is empty";
+        return result;
+    }
+
+    // Check for shell injection patterns
+    if (std::regex_search(command, SHELL_INJECTION_PATTERN)) {
+        result.warnings.push_back("Command contains potentially dangerous shell characters");
+        result.securityScore -= 0.3;
+    }
+
+    // Extract base command
+    std::smatch match;
+    if (std::regex_search(command, match, COMMAND_PATTERN)) {
+        std::string baseCommand = match[1].str();
+
+        // Remove path if present
+        size_t lastSlash = baseCommand.find_last_of("/\\");
+        if (lastSlash != std::string::npos) {
+            baseCommand = baseCommand.substr(lastSlash + 1);
+        }
+
+        // Check against dangerous commands
+        if (DANGEROUS_COMMANDS.find(baseCommand) != DANGEROUS_COMMANDS.end()) {
+            result.warnings.push_back("Command '" + baseCommand + "' is potentially dangerous");
+            result.securityScore -= 0.5;
+        }
+
+        // Check against privileged commands
+        if (PRIVILEGED_COMMANDS.find(baseCommand) != PRIVILEGED_COMMANDS.end()) {
+            result.warnings.push_back("Command '" + baseCommand + "' requires elevated privileges");
+            result.securityScore -= 0.2;
+        }
+    }
+
+    // Calculate final security score (0.0 to 1.0)
+    result.securityScore = std::max(0.0, 1.0 + result.securityScore);
+
+    // Command is valid if security score is above threshold
+    result.isValid = result.securityScore >= 0.3;
+
+    if (!result.isValid) {
+        result.errorMessage = "Command failed security validation";
+    }
+
+    spdlog::debug("Command validation: '{}', valid: {}, score: {:.2f}",
+                  command, result.isValid, result.securityScore);
+
+    return result;
+}
+
+auto sanitizeCommand(const std::string &command) -> std::string {
+    std::string sanitized = command;
+
+    // Remove or escape dangerous characters
+    std::regex dangerousChars(R"([;&|`$])");
+    sanitized = std::regex_replace(sanitized, dangerousChars, "");
+
+    // Trim whitespace
+    sanitized.erase(0, sanitized.find_first_not_of(" \t\n\r"));
+    sanitized.erase(sanitized.find_last_not_of(" \t\n\r") + 1);
+
+    spdlog::debug("Sanitized command: '{}' -> '{}'", command, sanitized);
+    return sanitized;
+}
+
+auto parseCommandArguments(const std::string &command) -> std::vector<std::string> {
+    std::vector<std::string> args;
+    std::istringstream iss(command);
+    std::string arg;
+
+    bool inQuotes = false;
+    char quoteChar = '\0';
+    std::string currentArg;
+
+    for (char c : command) {
+        if (!inQuotes && (c == '"' || c == '\'')) {
+            inQuotes = true;
+            quoteChar = c;
+        } else if (inQuotes && c == quoteChar) {
+            inQuotes = false;
+            quoteChar = '\0';
+        } else if (!inQuotes && std::isspace(c)) {
+            if (!currentArg.empty()) {
+                args.push_back(currentArg);
+                currentArg.clear();
+            }
+        } else {
+            currentArg += c;
+        }
+    }
+
+    if (!currentArg.empty()) {
+        args.push_back(currentArg);
+    }
+
+    spdlog::debug("Parsed {} arguments from command: '{}'", args.size(), command);
+    return args;
+}
+
+auto buildCommandString(const std::vector<std::string> &args) -> std::string {
+    if (args.empty()) {
+        return "";
+    }
+
+    std::ostringstream oss;
+    for (size_t i = 0; i < args.size(); ++i) {
+        if (i > 0) {
+            oss << " ";
+        }
+
+        const std::string &arg = args[i];
+        // Quote arguments that contain spaces or special characters
+        if (arg.find_first_of(" \t\n\r\"'") != std::string::npos) {
+            oss << "\"" << arg << "\"";
+        } else {
+            oss << arg;
+        }
+    }
+
+    std::string result = oss.str();
+    spdlog::debug("Built command string from {} arguments: '{}'", args.size(), result);
+    return result;
+}
+
+auto getCommandMetrics(const std::string &command) -> CommandMetrics {
+    CommandMetrics metrics;
+
+    auto startTime = std::chrono::steady_clock::now();
+
+    ExecutionConfig config;
+    config.enableLogging = false; // Avoid recursive logging
+    auto result = executeCommandEnhanced(command, config);
+
+    auto endTime = std::chrono::steady_clock::now();
+
+    metrics.executionTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+        endTime - startTime);
+    metrics.outputSize = result.output.size();
+    metrics.wasSuccessful = (result.exitCode == 0);
+
+    spdlog::debug("Command metrics for '{}': time={}ms, output={}bytes, success={}",
+                  command, metrics.executionTime.count(), metrics.outputSize,
+                  metrics.wasSuccessful);
+
+    return metrics;
+}
 
 auto isCommandAvailable(const std::string &command) -> bool {
     std::string checkCommand;
@@ -62,6 +242,226 @@ auto pipeCommands(const std::string &firstCommand,
     auto result = executeCommand(combinedCommand);
     spdlog::debug("Pipe commands completed");
     return result;
+}
+
+auto executeCommandGetLinesEnhanced(
+    const std::string &command,
+    bool trimWhitespace,
+    bool skipEmptyLines,
+    size_t maxLines) -> std::vector<std::string> {
+
+    spdlog::debug("Executing enhanced command and getting lines: {}", command);
+
+    std::vector<std::string> lines;
+    auto output = executeCommand(command);
+
+    std::istringstream ss(output);
+    std::string line;
+    size_t lineCount = 0;
+
+    while (std::getline(ss, line) && (maxLines == 0 || lineCount < maxLines)) {
+        // Remove carriage return if present
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+
+        // Trim whitespace if requested
+        if (trimWhitespace) {
+            line.erase(0, line.find_first_not_of(" \t"));
+            line.erase(line.find_last_not_of(" \t") + 1);
+        }
+
+        // Skip empty lines if requested
+        if (skipEmptyLines && line.empty()) {
+            continue;
+        }
+
+        lines.push_back(line);
+        lineCount++;
+    }
+
+    spdlog::debug("Enhanced command returned {} lines", lines.size());
+    return lines;
+}
+
+auto pipeCommandsEnhanced(
+    const std::vector<std::string> &commands,
+    const PipeConfig &config) -> ExecutionResult {
+
+    spdlog::debug("Enhanced piping {} commands", commands.size());
+
+    ExecutionResult result;
+
+    if (commands.empty()) {
+        result.exitCode = -1;
+        result.error = "No commands provided for piping";
+        return result;
+    }
+
+    // Validate commands if requested
+    if (config.validateCommands) {
+        for (const auto &command : commands) {
+            auto validation = validateCommandDetailed(command);
+            if (!validation.isValid) {
+                result.exitCode = -1;
+                result.error = "Command validation failed: " + validation.errorMessage;
+                return result;
+            }
+        }
+    }
+
+    auto startTime = std::chrono::steady_clock::now();
+
+    // Build the piped command
+    std::ostringstream pipeCommand;
+    for (size_t i = 0; i < commands.size(); ++i) {
+        if (i > 0) {
+            pipeCommand << " | ";
+        }
+        pipeCommand << commands[i];
+    }
+
+    // Add stderr capture if requested
+    if (config.captureStderr) {
+        pipeCommand << " 2>&1";
+    }
+
+    ExecutionConfig execConfig;
+    execConfig.timeout = config.timeout;
+    execConfig.maxOutputSize = config.maxOutputSize;
+
+    result = executeCommandEnhanced(pipeCommand.str(), execConfig);
+
+    auto endTime = std::chrono::steady_clock::now();
+    result.executionTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+        endTime - startTime);
+
+    spdlog::debug("Enhanced pipe commands completed in {}ms",
+                  result.executionTime.count());
+
+    return result;
+}
+
+auto findCommandPath(const std::string &command) -> std::string {
+    spdlog::debug("Finding path for command: {}", command);
+
+#ifdef _WIN32
+    std::string whereCommand = "where " + command;
+#else
+    std::string whereCommand = "which " + command;
+#endif
+
+    auto output = executeCommand(whereCommand);
+
+    // Get the first line (first match)
+    std::istringstream ss(output);
+    std::string path;
+    if (std::getline(ss, path)) {
+        // Remove carriage return if present
+        if (!path.empty() && path.back() == '\r') {
+            path.pop_back();
+        }
+        spdlog::debug("Found command path: {}", path);
+        return path;
+    }
+
+    spdlog::debug("Command path not found for: {}", command);
+    return "";
+}
+
+auto getSystemAliases() -> std::unordered_map<std::string, std::string> {
+    std::unordered_map<std::string, std::string> aliases;
+
+#ifdef _WIN32
+    // Windows doesn't have traditional aliases, but we could check doskey
+    spdlog::debug("Alias detection not implemented for Windows");
+#else
+    auto output = executeCommand("alias 2>/dev/null || true");
+    std::istringstream ss(output);
+    std::string line;
+
+    std::regex aliasPattern(R"(alias\s+([^=]+)='([^']*)')");
+
+    while (std::getline(ss, line)) {
+        std::smatch match;
+        if (std::regex_search(line, match, aliasPattern)) {
+            std::string aliasName = match[1].str();
+            std::string aliasValue = match[2].str();
+            aliases[aliasName] = aliasValue;
+        }
+    }
+#endif
+
+    spdlog::debug("Found {} system aliases", aliases.size());
+    return aliases;
+}
+
+auto expandCommandAliases(const std::string &command) -> std::string {
+    auto aliases = getSystemAliases();
+
+    auto args = parseCommandArguments(command);
+    if (args.empty()) {
+        return command;
+    }
+
+    std::string baseCommand = args[0];
+    auto it = aliases.find(baseCommand);
+
+    if (it != aliases.end()) {
+        // Replace the base command with its alias expansion
+        args[0] = it->second;
+        std::string expanded = buildCommandString(args);
+        spdlog::debug("Expanded alias: '{}' -> '{}'", command, expanded);
+        return expanded;
+    }
+
+    return command;
+}
+
+auto getCommandCompletions(
+    const std::string &partialCommand,
+    size_t maxSuggestions) -> std::vector<std::string> {
+
+    std::vector<std::string> completions;
+
+#ifdef _WIN32
+    // Windows command completion would be more complex
+    spdlog::debug("Command completion not fully implemented for Windows");
+#else
+    // Use bash completion if available
+    std::string bashCommand = "compgen -c " + partialCommand + " 2>/dev/null | head -" +
+                             std::to_string(maxSuggestions);
+
+    auto lines = executeCommandGetLines(bashCommand);
+    for (const auto &line : lines) {
+        if (!line.empty()) {
+            completions.push_back(line);
+        }
+    }
+#endif
+
+    spdlog::debug("Found {} completions for '{}'", completions.size(), partialCommand);
+    return completions;
+}
+
+auto requiresElevatedPrivileges(const std::string &command) -> bool {
+    auto args = parseCommandArguments(command);
+    if (args.empty()) {
+        return false;
+    }
+
+    std::string baseCommand = args[0];
+
+    // Remove path if present
+    size_t lastSlash = baseCommand.find_last_of("/\\");
+    if (lastSlash != std::string::npos) {
+        baseCommand = baseCommand.substr(lastSlash + 1);
+    }
+
+    bool requiresPrivileges = PRIVILEGED_COMMANDS.find(baseCommand) != PRIVILEGED_COMMANDS.end();
+
+    spdlog::debug("Command '{}' requires elevated privileges: {}", command, requiresPrivileges);
+    return requiresPrivileges;
 }
 
 }  // namespace atom::system

@@ -10,9 +10,57 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <variant>
 #include <vector>
 
 namespace serial {
+
+/**
+ * @brief Error information for non-exception error handling
+ */
+struct SerialError {
+    enum class Code {
+        None = 0,
+        PortNotOpen,
+        Timeout,
+        IOError,
+        ConfigError,
+        InvalidParameter,
+        PermissionDenied,
+        DeviceNotFound,
+        ResourceBusy,
+        SystemError
+    };
+
+    Code code{Code::None};
+    std::string message;
+    int systemErrorCode{0}; // Platform-specific error code
+
+    SerialError() = default;
+    SerialError(Code c, std::string msg, int sysCode = 0)
+        : code(c), message(std::move(msg)), systemErrorCode(sysCode) {}
+
+    [[nodiscard]] bool hasError() const noexcept { return code != Code::None; }
+    explicit operator bool() const noexcept { return hasError(); }
+
+    /**
+     * @brief Get a human-readable description of the error
+     */
+    [[nodiscard]] std::string getDescription() const {
+        std::string desc = message;
+        if (systemErrorCode != 0) {
+            desc += " (System error: " + std::to_string(systemErrorCode) + ")";
+        }
+        return desc;
+    }
+};
+
+/**
+ * @brief Result type for operations that can fail without exceptions
+ * @tparam T The success value type
+ */
+template<typename T>
+using Result = std::variant<T, SerialError>;
 
 /**
  * @brief Base class for all serial port related exceptions.
@@ -66,6 +114,90 @@ public:
     explicit SerialConfigException(const std::string& message)
         : SerialException("Configuration error: " + message) {}
 };
+
+/**
+ * @brief Helper to check if a Result contains a value
+ */
+template<typename T>
+[[nodiscard]] bool isOk(const Result<T>& result) noexcept {
+    return std::holds_alternative<T>(result);
+}
+
+/**
+ * @brief Helper to extract value from Result (throws if error)
+ */
+template<typename T>
+[[nodiscard]] T getValue(const Result<T>& result) {
+    if (auto* value = std::get_if<T>(&result)) {
+        return *value;
+    }
+    const auto& error = std::get<SerialError>(result);
+    throw SerialException(error.message);
+}
+
+/**
+ * @brief Helper to extract error from Result
+ */
+template<typename T>
+[[nodiscard]] SerialError getError(const Result<T>& result) noexcept {
+    if (auto* error = std::get_if<SerialError>(&result)) {
+        return *error;
+    }
+    return {};
+}
+
+/**
+ * @brief RAII helper for automatic resource cleanup
+ */
+template<typename Resource, typename Deleter>
+class ResourceGuard {
+public:
+    ResourceGuard(Resource resource, Deleter deleter)
+        : resource_(resource), deleter_(std::move(deleter)), active_(true) {}
+
+    ~ResourceGuard() {
+        if (active_) {
+            deleter_(resource_);
+        }
+    }
+
+    ResourceGuard(const ResourceGuard&) = delete;
+    ResourceGuard& operator=(const ResourceGuard&) = delete;
+
+    ResourceGuard(ResourceGuard&& other) noexcept
+        : resource_(other.resource_), deleter_(std::move(other.deleter_)), active_(other.active_) {
+        other.active_ = false;
+    }
+
+    ResourceGuard& operator=(ResourceGuard&& other) noexcept {
+        if (this != &other) {
+            if (active_) {
+                deleter_(resource_);
+            }
+            resource_ = other.resource_;
+            deleter_ = std::move(other.deleter_);
+            active_ = other.active_;
+            other.active_ = false;
+        }
+        return *this;
+    }
+
+    void release() noexcept { active_ = false; }
+    Resource get() const noexcept { return resource_; }
+
+private:
+    Resource resource_;
+    Deleter deleter_;
+    bool active_;
+};
+
+/**
+ * @brief Helper function to create resource guards
+ */
+template<typename Resource, typename Deleter>
+auto makeResourceGuard(Resource resource, Deleter deleter) {
+    return ResourceGuard<Resource, Deleter>(resource, std::move(deleter));
+}
 
 /**
  * @brief Structure for serial port parameter configuration.
@@ -143,11 +275,17 @@ public:
     }
 
     // Add public setters for timeouts
-    void setReadTimeout(std::chrono::milliseconds timeout) {
+    void setReadTimeout(std::chrono::milliseconds timeout) noexcept {
         readTimeout = timeout;
     }
-    void setWriteTimeout(std::chrono::milliseconds timeout) {
+    void setWriteTimeout(std::chrono::milliseconds timeout) noexcept {
         writeTimeout = timeout;
+    }
+
+    // Add validation method for better error handling
+    [[nodiscard]] bool isValid() const noexcept {
+        return baudRate > 0 && dataBits >= 5 && dataBits <= 8 &&
+               readTimeout.count() >= 0 && writeTimeout.count() >= 0;
     }
 
 private:
@@ -363,6 +501,44 @@ public:
      */
     std::optional<std::string> tryOpen(std::string_view portName,
                                        const SerialConfig& config = {});
+
+    /**
+     * @brief Non-throwing version of read operation.
+     * @param maxBytes The maximum number of bytes to read.
+     * @return Result containing either the data or error information.
+     */
+    [[nodiscard]] Result<std::vector<uint8_t>> tryRead(size_t maxBytes) noexcept;
+
+    /**
+     * @brief Non-throwing version of write operation.
+     * @param data The data to write.
+     * @return Result containing either bytes written or error information.
+     */
+    [[nodiscard]] Result<size_t> tryWrite(std::span<const uint8_t> data) noexcept;
+
+    /**
+     * @brief Non-throwing version of write operation for strings.
+     * @param data The string to write.
+     * @return Result containing either bytes written or error information.
+     */
+    [[nodiscard]] Result<size_t> tryWrite(std::string_view data) noexcept;
+
+    /**
+     * @brief Get performance statistics for the serial port
+     * @return Struct containing performance metrics
+     */
+    struct PerformanceStats {
+        size_t totalBytesRead{0};
+        size_t totalBytesWritten{0};
+        size_t totalReadOperations{0};
+        size_t totalWriteOperations{0};
+        std::chrono::milliseconds totalReadTime{0};
+        std::chrono::milliseconds totalWriteTime{0};
+        size_t bufferPoolHits{0};
+        size_t bufferPoolMisses{0};
+    };
+
+    [[nodiscard]] PerformanceStats getPerformanceStats() const;
 
 private:
     std::unique_ptr<SerialPortImpl> impl_;

@@ -10,62 +10,89 @@ project(
   VERSION 1.0.0
   LANGUAGES C CXX)
 
-# 添加子模块子目录
-add_subdirectory(memory)
-add_subdirectory(wifi)
+# Add common utilities first
+add_subdirectory(common)
 
-# Sources and Headers
-set(SOURCES
-    battery.cpp bios.cpp gpu.cpp locale.cpp os.cpp
-    # wifi.cpp is now in its own subdirectory
-    wm.cpp)
+# Add reorganized module subdirectories
+add_subdirectory(src/bios)
+add_subdirectory(src/memory)
+add_subdirectory(src/wifi)
+add_subdirectory(src/os)
+add_subdirectory(src/virtual)
+add_subdirectory(src/gpu)
+add_subdirectory(src/printer)
+add_subdirectory(src/battery)
+add_subdirectory(src/wm)
+add_subdirectory(src/locale)
+add_subdirectory(src/serial)
+add_subdirectory(src/cpu)
+add_subdirectory(src/disk)
 
-# CPU component files
-set(CPU_SOURCES cpu/common.cpp cpu/windows.cpp cpu/linux.cpp cpu/macos.cpp
-                cpu/freebsd.cpp)
-
-set(CPU_HEADERS cpu/common.hpp)
-
-set(HEADERS
+# Compatibility headers (root level headers that forward to src/)
+set(COMPATIBILITY_HEADERS
     battery.hpp
     bios.hpp
+    cpu.hpp
     disk.hpp
     gpu.hpp
     locale.hpp
     memory.hpp
     os.hpp
+    sn.hpp
+    virtual.hpp
     wifi.hpp
-    wm.hpp)
+    wm.hpp
+    sysinfo_printer.hpp
+)
 
-set(LIBS loguru atom_sysinfo_memory atom_sysinfo_wifi ${CMAKE_THREAD_LIBS_INIT})
+# No more root-level source files - everything is in src/ subdirectories
+set(SOURCES)
+set(HEADERS ${COMPATIBILITY_HEADERS})
 
-# Build Object Library
-add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS} ${CPU_SOURCES}
-                                          ${CPU_HEADERS})
-set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
+set(LIBS loguru
+    atom_sysinfo_bios
+    atom_sysinfo_memory
+    atom_sysinfo_wifi
+    atom_sysinfo_os
+    atom_sysinfo_virtual
+    atom_sysinfo_gpu
+    atom_sysinfo_printer
+    atom_sysinfo_battery
+    atom_sysinfo_wm
+    atom_sysinfo_locale
+    atom_sysinfo_serial
+    atom_sysinfo_cpu
+    atom_sysinfo_disk
+    ${CMAKE_THREAD_LIBS_INIT})
 
-target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
+# Build Interface Library (header-only compatibility layer)
+add_library(${PROJECT_NAME} INTERFACE)
 
-# Build Static Library
-add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
-target_include_directories(${PROJECT_NAME} PUBLIC .)
+# Link all the modular libraries
+target_link_libraries(${PROJECT_NAME} INTERFACE ${LIBS})
 
-# Platform-specific libraries
-if(WIN32)
-  target_link_libraries(${PROJECT_NAME} PRIVATE pdh wlanapi ws2_32 setupapi)
-endif()
-
-# Set library properties
-set_target_properties(
-  ${PROJECT_NAME}
-  PROPERTIES VERSION ${PROJECT_VERSION}
-             SOVERSION ${PROJECT_VERSION_MAJOR}
-             OUTPUT_NAME ${PROJECT_NAME})
+# Include directories for compatibility headers
+target_include_directories(${PROJECT_NAME} INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
+)
 
 # Installation
-install(
-  TARGETS ${PROJECT_NAME}
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  PUBLIC_HEADER DESTINATION include/${PROJECT_NAME})
+install(TARGETS ${PROJECT_NAME}
+    EXPORT ${PROJECT_NAME}Targets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+# Install compatibility headers
+install(FILES ${COMPATIBILITY_HEADERS}
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/sysinfo
+)
+
+# Export targets
+install(EXPORT ${PROJECT_NAME}Targets
+    FILE ${PROJECT_NAME}Targets.cmake
+    NAMESPACE atom::sysinfo::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
+)

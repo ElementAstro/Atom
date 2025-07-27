@@ -6,25 +6,52 @@
 #include <regex>
 #include <shared_mutex>
 #include <typeindex>
+#include <algorithm>
+#include <fstream>
+#include <filesystem>
+#include <random>
+
 
 namespace msgbus {
 
-class MessageBus {
+/**
+ * @class EnhancedMessageBus
+ * @brief High-performance message bus with advanced features
+ */
+class EnhancedMessageBus {
 public:
-    explicit MessageBus(const BackPressureConfig& config = {})
+    explicit EnhancedMessageBus(const MessageBusConfig& config = {})
         : config_(config), shutdown_(false), handler_id_counter_(0) {
+
         // **Initialize libuv loop**
         loop_ = std::make_unique<uv_loop_t>();
         uv_loop_init(loop_.get());
 
+        // **Initialize priority queues**
+        if (config_.enable_priority_queues) {
+            for (int i = 0; i <= static_cast<int>(MessagePriority::CRITICAL); ++i) {
+                priority_queues_.emplace_back();
+            }
+        }
+
+        // **Start worker threads**
+        for (size_t i = 0; i < config_.worker_thread_count; ++i) {
+            worker_threads_.emplace_back([this, i]() { worker_thread_loop(i); });
+        }
+
         // **Start event loop thread**
         event_thread_ = std::thread([this]() { run_event_loop(); });
 
-        spdlog::info("MessageBus initialized with max queue size: {}",
-                     config_.max_queue_size);
+        // **Start metrics thread if enabled**
+        if (config_.enable_metrics) {
+            metrics_thread_ = std::thread([this]() { metrics_loop(); });
+        }
+
+        spdlog::info("Enhanced MessageBus initialized with {} worker threads, max queue size: {}",
+                     config_.worker_thread_count, config_.max_queue_size);
     }
 
-    ~MessageBus() { shutdown(); }
+    ~EnhancedMessageBus() { shutdown(); }
 
     // **Template-based subscription**
     template <MessageType T, MessageHandler<T> Handler>
@@ -77,43 +104,87 @@ public:
             registration_id, topic_pattern, std::move(cleanup));
     }
 
-    // **Publish message**
+    // **Enhanced publish message with priority support**
     template <MessageType T>
     Result<void> publish(const std::string& topic, T&& message,
-                         const std::string& sender_id = "") {
+                         const std::string& sender_id = "",
+                         MessagePriority priority = MessagePriority::NORMAL,
+                         DeliveryGuarantee guarantee = DeliveryGuarantee::AT_MOST_ONCE) {
         if (shutdown_.load()) {
             return std::unexpected(MessageBusError::ShutdownInProgress);
         }
 
         auto envelope = std::make_shared<MessageEnvelope<T>>(
-            topic, std::forward<T>(message), sender_id);
+            topic, std::forward<T>(message), sender_id, priority, guarantee);
 
-        // **Queue message for async processing**
+        // Check message expiry
+        if (envelope->is_expired()) {
+            stats_.messages_dropped++;
+            return std::unexpected(MessageBusError::MessageExpired);
+        }
+
+        // **Queue message based on priority**
+        if (config_.enable_priority_queues) {
+            return queue_priority_message(envelope, topic);
+        } else {
+            return queue_regular_message(envelope, topic);
+        }
+    }
+
+    // **Batch publish for better performance**
+    template <MessageType T>
+    Result<void> publish_batch(const std::vector<std::pair<std::string, T>>& messages,
+                              const std::string& sender_id = "",
+                              MessagePriority priority = MessagePriority::NORMAL) {
+        if (shutdown_.load()) {
+            return std::unexpected(MessageBusError::ShutdownInProgress);
+        }
+
+        std::vector<std::shared_ptr<MessageEnvelope<T>>> envelopes;
+        envelopes.reserve(messages.size());
+
+        for (const auto& [topic, message] : messages) {
+            auto envelope = std::make_shared<MessageEnvelope<T>>(
+                topic, message, sender_id, priority);
+
+            if (!envelope->is_expired()) {
+                envelopes.push_back(envelope);
+            } else {
+                stats_.messages_dropped++;
+            }
+        }
+
+        if (envelopes.empty()) {
+            return {};
+        }
+
+        // **Batch queue messages**
         {
             std::unique_lock<std::mutex> lock(message_queue_mutex_);
 
-            if (message_queue_.size() >= config_.max_queue_size) {
-                if (config_.drop_oldest && !message_queue_.empty()) {
-                    message_queue_.pop();
-                    spdlog::warn(
-                        "Dropped oldest message due to queue overflow");
-                } else {
-                    spdlog::warn("Message queue full, dropping message");
-                    return std::unexpected(MessageBusError::QueueFull);
+            for (auto& envelope : envelopes) {
+                if (message_queue_.size() >= config_.max_queue_size) {
+                    if (config_.drop_oldest && !message_queue_.empty()) {
+                        message_queue_.pop();
+                        stats_.messages_dropped++;
+                    } else {
+                        stats_.messages_dropped++;
+                        continue;
+                    }
                 }
-            }
 
-            message_queue_.emplace([this, envelope, topic,
-                                    type_index = std::type_index(typeid(T))]() {
-                deliver_message(type_index, topic, *envelope);
-            });
+                message_queue_.emplace([this, envelope,
+                                      type_index = std::type_index(typeid(T))]() {
+                    deliver_message(type_index, envelope->topic, *envelope);
+                });
+            }
         }
 
         // **Signal event loop**
         uv_async_send(&async_handle_);
 
-        spdlog::debug("Published message to topic '{}' with ID {}", topic,
-                      envelope->message_id);
+        stats_.messages_sent += envelopes.size();
+        spdlog::debug("Published batch of {} messages", envelopes.size());
 
         return {};
     }
@@ -173,7 +244,7 @@ public:
     }
 
     static auto get_instance() {
-        static MessageBus instance;
+        static EnhancedMessageBus instance;
         return &instance;
     }
 
@@ -321,11 +392,146 @@ private:
     using TopicHandlers = std::unordered_map<std::string, HandlerMap>;
     using TypeHandlers = std::unordered_map<std::type_index, TopicHandlers>;
 
-    BackPressureConfig config_;
+    // **Helper methods for priority queuing**
+    template <MessageType T>
+    Result<void> queue_priority_message(std::shared_ptr<MessageEnvelope<T>> envelope,
+                                       const std::string& topic) {
+        auto priority_index = static_cast<size_t>(envelope->priority);
+
+        std::unique_lock<std::mutex> lock(priority_queue_mutex_);
+
+        if (priority_queues_[priority_index].size() >= config_.max_priority_queue_size) {
+            if (config_.drop_oldest && !priority_queues_[priority_index].empty()) {
+                priority_queues_[priority_index].pop();
+                stats_.messages_dropped++;
+            } else {
+                stats_.messages_dropped++;
+                return std::unexpected(MessageBusError::QueueFull);
+            }
+        }
+
+        priority_queues_[priority_index].emplace([this, envelope, topic,
+                                                 type_index = std::type_index(typeid(T))]() {
+            deliver_message(type_index, topic, *envelope);
+        });
+
+        uv_async_send(&async_handle_);
+        stats_.messages_sent++;
+
+        return {};
+    }
+
+    template <MessageType T>
+    Result<void> queue_regular_message(std::shared_ptr<MessageEnvelope<T>> envelope,
+                                      const std::string& topic) {
+        std::unique_lock<std::mutex> lock(message_queue_mutex_);
+
+        if (message_queue_.size() >= config_.max_queue_size) {
+            if (config_.drop_oldest && !message_queue_.empty()) {
+                message_queue_.pop();
+                stats_.messages_dropped++;
+            } else {
+                stats_.messages_dropped++;
+                return std::unexpected(MessageBusError::QueueFull);
+            }
+        }
+
+        message_queue_.emplace([this, envelope, topic,
+                              type_index = std::type_index(typeid(T))]() {
+            deliver_message(type_index, topic, *envelope);
+        });
+
+        uv_async_send(&async_handle_);
+        stats_.messages_sent++;
+
+        return {};
+    }
+
+    void worker_thread_loop(size_t worker_id) {
+        spdlog::debug("Worker thread {} started", worker_id);
+
+        while (!shutdown_.load()) {
+            std::function<void()> task;
+
+            // Try to get high priority tasks first
+            if (config_.enable_priority_queues) {
+                if (get_priority_task(task)) {
+                    try {
+                        task();
+                    } catch (const std::exception& e) {
+                        spdlog::error("Worker {} task execution error: {}", worker_id, e.what());
+                    }
+                    continue;
+                }
+            }
+
+            // Get regular tasks
+            {
+                std::unique_lock<std::mutex> lock(message_queue_mutex_);
+                if (!message_queue_.empty()) {
+                    task = std::move(message_queue_.front());
+                    message_queue_.pop();
+                } else {
+                    // No work available, sleep briefly
+                    lock.unlock();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    continue;
+                }
+            }
+
+            try {
+                task();
+            } catch (const std::exception& e) {
+                spdlog::error("Worker {} task execution error: {}", worker_id, e.what());
+            }
+        }
+
+        spdlog::debug("Worker thread {} stopped", worker_id);
+    }
+
+    bool get_priority_task(std::function<void()>& task) {
+        std::unique_lock<std::mutex> lock(priority_queue_mutex_);
+
+        // Check from highest to lowest priority
+        for (int i = static_cast<int>(MessagePriority::CRITICAL); i >= 0; --i) {
+            if (!priority_queues_[i].empty()) {
+                task = std::move(priority_queues_[i].front());
+                priority_queues_[i].pop();
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    void metrics_loop() {
+        while (!shutdown_.load()) {
+            std::this_thread::sleep_for(config_.metrics_interval);
+
+            if (shutdown_.load()) break;
+
+            // Log metrics
+            auto uptime = std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::steady_clock::now() - stats_.start_time);
+
+            spdlog::info("MessageBus Metrics - Uptime: {}s, Sent: {}, Received: {}, Dropped: {}, "
+                        "Errors: {}, Bytes Sent: {}, Bytes Received: {}",
+                        uptime.count(),
+                        stats_.messages_sent.load(),
+                        stats_.messages_received.load(),
+                        stats_.messages_dropped.load(),
+                        stats_.serialization_errors.load(),
+                        stats_.bytes_sent.load(),
+                        stats_.bytes_received.load());
+        }
+    }
+
+    MessageBusConfig config_;
     std::atomic<bool> shutdown_;
     std::atomic<uint64_t> handler_id_counter_;
     std::atomic<std::chrono::milliseconds> avg_delivery_time_{
         std::chrono::milliseconds(0)};
+    MessageStats stats_;
 
     mutable std::shared_mutex handlers_mutex_;
     TypeHandlers handlers_;
@@ -333,9 +539,14 @@ private:
     mutable std::mutex message_queue_mutex_;
     std::queue<std::function<void()>> message_queue_;
 
+    mutable std::mutex priority_queue_mutex_;
+    std::vector<std::queue<std::function<void()>>> priority_queues_;
+
     std::unique_ptr<uv_loop_t> loop_;
     uv_async_t async_handle_;
     std::thread event_thread_;
+    std::vector<std::thread> worker_threads_;
+    std::thread metrics_thread_;
 };
 
 // **Coroutine implementation**
@@ -345,7 +556,7 @@ bool MessageAwaiter<T>::await_suspend(std::coroutine_handle<Promise> handle) {
     promise_ = std::make_shared<std::promise<Result<MessageEnvelope<T>>>>();
 
     // **Set up temporary subscription**
-    auto bus = MessageBus::get_instance();
+    auto bus = EnhancedMessageBus::get_instance();
     auto subscription = bus->subscribe<T>(
         topic,
         [promise = promise_, this](const T& msg) {
@@ -372,5 +583,8 @@ Result<MessageEnvelope<T>> MessageAwaiter<T>::await_resume() {
     auto future = promise_->get_future();
     return future.get();
 }
+
+// **Backward compatibility alias**
+using MessageBus = EnhancedMessageBus;
 
 }  // namespace msgbus

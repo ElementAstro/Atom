@@ -524,11 +524,30 @@ public:
     [[nodiscard]] Result<bool> is_port_available(std::string_view port_name);
 
     /**
+     * @brief Batch check availability of multiple ports
+     *
+     * More efficient than checking ports individually when checking many ports.
+     *
+     * @param port_names Vector of port names to check
+     * @return Result containing map of port names to availability status
+     */
+    [[nodiscard]] Result<std::unordered_map<std::string, bool>>
+    check_ports_availability(const std::vector<std::string>& port_names);
+
+    /**
      * @brief Force refresh of port cache
      *
      * Clears the cache and forces a fresh scan on next operation.
      */
     void refresh_cache();
+
+    /**
+     * @brief Optimize cache for better performance
+     *
+     * Performs cache maintenance including removing expired entries
+     * and optimizing memory layout.
+     */
+    void optimize_cache();
 
     /**
      * @brief Get cache statistics

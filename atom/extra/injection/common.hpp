@@ -1,12 +1,27 @@
 #pragma once
 
+#include <atomic>
 #include <concepts>
 #include <functional>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <tuple>
 #include <type_traits>
 #include <vector>
+#include <thread>
+#include <chrono>
+
+#ifdef __has_include
+#if __has_include(<spdlog/spdlog.h>)
+#include <spdlog/spdlog.h>
+#define ATOM_HAS_SPDLOG 1
+#else
+#define ATOM_HAS_SPDLOG 0
+#endif
+#else
+#define ATOM_HAS_SPDLOG 0
+#endif
 
 namespace atom::extra {
 

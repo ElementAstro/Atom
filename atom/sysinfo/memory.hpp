@@ -12,6 +12,6 @@
 #ifndef ATOM_SYSTEM_MODULE_MEMORY_COMPAT_HPP
 #define ATOM_SYSTEM_MODULE_MEMORY_COMPAT_HPP
 
-#include "atom/sysinfo/memory/memory.hpp"
+#include "src/memory/memory.hpp"
 
 #endif  // ATOM_SYSTEM_MODULE_MEMORY_COMPAT_HPP

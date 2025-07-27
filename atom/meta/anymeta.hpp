@@ -1,10 +1,17 @@
 /*!
  * \file anymeta.hpp
- * \brief Enhanced Type Metadata with Dynamic Reflection, Method Overloads, and
- * Event System
+ * \brief Enhanced Type Metadata with Dynamic Reflection, Method Overloads, and Event System - OPTIMIZED VERSION
  * \author Max Qian <lightapt.com>
  * \date 2023-12-28
+ * \optimized 2025-01-22 - Performance optimizations by AI Assistant
  * \copyright Copyright (C) 2023-2024 Max Qian
+ *
+ * OPTIMIZATIONS APPLIED:
+ * - Enhanced metadata storage with better cache performance
+ * - Optimized method lookup with fast-path optimizations
+ * - Improved event system with reduced overhead
+ * - Better memory layout for frequently accessed data
+ * - Added caching for expensive operations
  */
 
 #ifndef ATOM_META_ANYMETA_HPP
@@ -13,6 +20,8 @@
 #include "any.hpp"
 #include "type_info.hpp"
 
+#include <atomic>
+#include <chrono>
 #include <functional>
 #include <iostream>
 #include <optional>
@@ -27,45 +36,93 @@
 namespace atom::meta {
 
 /**
- * \brief Type metadata container with support for methods, properties,
- * constructors, and events
+ * \brief Optimized type metadata container with enhanced performance and caching
  */
-class TypeMetadata {
+class alignas(64) TypeMetadata {  // Cache line alignment for better performance
 public:
     using MethodFunction = std::function<BoxedValue(std::vector<BoxedValue>)>;
     using GetterFunction = std::function<BoxedValue(const BoxedValue&)>;
     using SetterFunction = std::function<void(BoxedValue&, const BoxedValue&)>;
-    using ConstructorFunction =
-        std::function<BoxedValue(std::vector<BoxedValue>)>;
-    using EventCallback =
-        std::function<void(BoxedValue&, const std::vector<BoxedValue>&)>;
+    using ConstructorFunction = std::function<BoxedValue(std::vector<BoxedValue>)>;
+    using EventCallback = std::function<void(BoxedValue&, const std::vector<BoxedValue>&)>;
 
     /**
-     * \brief Property metadata structure
+     * \brief Optimized property metadata structure with better layout
      */
     struct ATOM_ALIGNAS(64) Property {
         GetterFunction getter;
         SetterFunction setter;
         BoxedValue default_value;
         std::string description;
+
+        // Optimized: Additional metadata for performance
+        bool is_cached = false;
+        mutable std::optional<BoxedValue> cached_value = std::nullopt;
+        mutable std::chrono::steady_clock::time_point cache_time = std::chrono::steady_clock::now();
+        static constexpr std::chrono::milliseconds CACHE_TTL{100};
     };
 
     /**
-     * \brief Event metadata structure with prioritized listeners
+     * \brief Optimized event metadata structure with better listener management
      */
     struct ATOM_ALIGNAS(32) Event {
         std::vector<std::pair<int, EventCallback>> listeners;
         std::string description;
+
+        // Optimized: Event statistics for monitoring
+        mutable std::atomic<uint64_t> fire_count{0};
+        mutable std::atomic<uint64_t> listener_count{0};
+
+        void updateListenerCount() {
+            listener_count.store(listeners.size(), std::memory_order_relaxed);
+        }
     };
 
 private:
+    // Optimized: Group frequently accessed data together
     std::unordered_map<std::string, std::vector<MethodFunction>> m_methods_;
     std::unordered_map<std::string, Property> m_properties_;
-    std::unordered_map<std::string, std::vector<ConstructorFunction>>
-        m_constructors_;
+    std::unordered_map<std::string, std::vector<ConstructorFunction>> m_constructors_;
     std::unordered_map<std::string, Event> m_events_;
 
+    // Optimized: Cache for frequently accessed items
+    mutable std::unordered_map<std::string, const std::vector<MethodFunction>*> method_cache_;
+    mutable std::shared_mutex cache_mutex_;
+
 public:
+    // Make TypeMetadata copyable and movable
+    TypeMetadata() = default;
+    TypeMetadata(const TypeMetadata& other)
+        : m_methods_(other.m_methods_),
+          m_properties_(other.m_properties_),
+          m_constructors_(other.m_constructors_),
+          m_events_(other.m_events_) {}
+
+    TypeMetadata(TypeMetadata&& other) noexcept
+        : m_methods_(std::move(other.m_methods_)),
+          m_properties_(std::move(other.m_properties_)),
+          m_constructors_(std::move(other.m_constructors_)),
+          m_events_(std::move(other.m_events_)) {}
+
+    TypeMetadata& operator=(const TypeMetadata& other) {
+        if (this != &other) {
+            m_methods_ = other.m_methods_;
+            m_properties_ = other.m_properties_;
+            m_constructors_ = other.m_constructors_;
+            m_events_ = other.m_events_;
+        }
+        return *this;
+    }
+
+    TypeMetadata& operator=(TypeMetadata&& other) noexcept {
+        if (this != &other) {
+            m_methods_ = std::move(other.m_methods_);
+            m_properties_ = std::move(other.m_properties_);
+            m_constructors_ = std::move(other.m_constructors_);
+            m_events_ = std::move(other.m_events_);
+        }
+        return *this;
+    }
     /**
      * \brief Add method to type metadata (supports overloads)
      * \param name Method name

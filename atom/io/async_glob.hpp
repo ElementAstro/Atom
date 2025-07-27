@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <concepts>
 #include <coroutine>
@@ -10,10 +11,14 @@
 #include <regex>
 #include <span>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <chrono>
+#include <functional>
+#include <mutex>
 
 #include <spdlog/spdlog.h>
 #include <asio.hpp>
@@ -22,6 +27,43 @@
 namespace atom::io {
 
 namespace fs = std::filesystem;
+
+// Configuration structure for glob operations
+struct GlobConfig {
+    std::size_t max_thread_count = std::thread::hardware_concurrency();
+    std::size_t pattern_cache_size = 1000;
+    std::size_t parallel_threshold = 100;  // Minimum items for parallel processing
+    bool enable_progress_reporting = false;
+    bool enable_statistics = true;
+    bool enable_pattern_optimization = true;
+    std::chrono::milliseconds operation_timeout{30000};  // 30 seconds default
+    bool follow_symlinks = true;
+    bool case_sensitive = true;
+    std::size_t max_recursion_depth = 100;
+};
+
+// Statistics for async glob operations
+struct AsyncGlobStats {
+    std::size_t files_processed = 0;
+    std::size_t directories_processed = 0;
+    std::size_t matches_found = 0;
+    std::chrono::steady_clock::time_point start_time;
+    std::chrono::steady_clock::time_point end_time;
+    double processing_time_ms = 0.0;
+    std::size_t cache_hits = 0;
+    std::size_t cache_misses = 0;
+
+    void updateProcessingTime() {
+        processing_time_ms = std::chrono::duration<double, std::milli>(
+            end_time - start_time).count();
+    }
+};
+
+// Progress callback type
+using ProgressCallback = std::function<void(std::size_t processed, std::size_t total, double percentage)>;
+
+// Completion callback type
+using CompletionCallback = std::function<void(const std::error_code& ec, const std::vector<fs::path>& results, const AsyncGlobStats& stats)>;
 
 // Concept for validating callback types
 template <typename T>
@@ -38,6 +80,7 @@ public:
     public:
         struct Promise {
             T result;
+            std::exception_ptr exception;
 
             Task<T> get_return_object() {
                 return Task{
@@ -49,7 +92,7 @@ public:
 
             void return_value(T value) noexcept { result = std::move(value); }
 
-            void unhandled_exception() { std::terminate(); }
+            void unhandled_exception() { exception = std::current_exception(); }
         };
 
         using promise_type = Promise;
@@ -75,9 +118,19 @@ public:
         Task(const Task&) = delete;
         Task& operator=(const Task&) = delete;
 
-        T get_result() const& { return handle_.promise().result; }
+        T get_result() const& {
+            if (handle_.promise().exception) {
+                std::rethrow_exception(handle_.promise().exception);
+            }
+            return handle_.promise().result;
+        }
 
-        T&& get_result() && { return std::move(handle_.promise().result); }
+        T&& get_result() && {
+            if (handle_.promise().exception) {
+                std::rethrow_exception(handle_.promise().exception);
+            }
+            return std::move(handle_.promise().result);
+        }
 
     private:
         std::coroutine_handle<Promise> handle_;
@@ -86,8 +139,9 @@ public:
     /**
      * @brief Constructs an AsyncGlob object.
      * @param io_context The ASIO I/O context.
+     * @param config Configuration for glob operations.
      */
-    explicit AsyncGlob(asio::io_context& io_context) noexcept;
+    explicit AsyncGlob(asio::io_context& io_context, const GlobConfig& config = {}) noexcept;
 
     /**
      * @brief Performs a glob operation to match files.
@@ -124,6 +178,36 @@ public:
     [[nodiscard]] std::vector<fs::path> glob_sync(std::string_view pathname,
                                                   bool recursive = false,
                                                   bool dironly = false);
+
+    /**
+     * @brief Performs a glob operation with progress reporting.
+     * @param pathname The pattern to match files.
+     * @param progress_callback Callback for progress updates.
+     * @param completion_callback Callback for completion with results and stats.
+     * @param recursive Whether to search directories recursively.
+     * @param dironly Whether to match directories only.
+     */
+    void glob_with_progress(std::string_view pathname,
+                           ProgressCallback progress_callback,
+                           CompletionCallback completion_callback,
+                           bool recursive = false, bool dironly = false);
+
+    /**
+     * @brief Cancels all ongoing glob operations.
+     */
+    void cancel_all();
+
+    /**
+     * @brief Gets current statistics for glob operations.
+     * @return Current glob statistics.
+     */
+    [[nodiscard]] const AsyncGlobStats& getStats() const noexcept;
+
+    /**
+     * @brief Updates the configuration for future operations.
+     * @param config New configuration settings.
+     */
+    void updateConfig(const GlobConfig& config);
 
 private:
     /**
@@ -249,32 +333,79 @@ private:
     void glob0(const fs::path& dirname, const fs::path& basename, bool dironly,
                Callback&& callback);
 
-    // Thread pool for parallel processing
-    std::unique_ptr<std::vector<std::thread>> thread_pool_;
+    /**
+     * @brief Optimizes a glob pattern for better performance.
+     * @param pattern The original glob pattern.
+     * @return Optimized pattern or empty string if no optimization possible.
+     */
+    [[nodiscard]] std::string optimizePattern(std::string_view pattern) const;
 
-    // Cache for compiled regex patterns
-    mutable std::unordered_map<std::string, std::shared_ptr<std::regex>>
-        pattern_cache_;
+    /**
+     * @brief Checks if a pattern can be optimized to avoid regex.
+     * @param pattern The glob pattern to check.
+     * @return True if pattern can be optimized, false otherwise.
+     */
+    [[nodiscard]] bool canOptimizePattern(std::string_view pattern) const noexcept;
+
+    /**
+     * @brief Performs fast string matching without regex for simple patterns.
+     * @param name The filename to match.
+     * @param pattern The simple pattern to match against.
+     * @return True if the name matches the pattern.
+     */
+    [[nodiscard]] bool fastMatch(std::string_view name, std::string_view pattern) const noexcept;
+
+    /**
+     * @brief Updates progress and calls progress callback if set.
+     * @param processed Number of items processed.
+     * @param total Total number of items.
+     */
+    void updateProgress(std::size_t processed, std::size_t total);
+
+    /**
+     * @brief Cleans up expired entries from pattern cache.
+     */
+    void cleanupPatternCache();
+
+    // Configuration and state
+    GlobConfig config_;
+    mutable AsyncGlobStats stats_;
+    std::atomic<bool> cancelled_{false};
+
+    // Progress tracking
+    ProgressCallback progress_callback_;
+    CompletionCallback completion_callback_;
+    std::atomic<std::size_t> total_items_{0};
+    std::atomic<std::size_t> processed_items_{0};
+
+    // Thread pool for parallel processing
+    std::unique_ptr<asio::thread_pool> thread_pool_;
+
+    // Cache for compiled regex patterns with LRU eviction
+    mutable std::unordered_map<std::string, std::shared_ptr<std::regex>> pattern_cache_;
+    mutable std::unordered_map<std::string, std::chrono::steady_clock::time_point> cache_access_times_;
     mutable std::mutex pattern_cache_mutex_;
 
     asio::io_context& io_context_;  ///< The ASIO I/O context.
 };
 
-}  // namespace atom::io
-
-#pragma once
-
-namespace atom::io {
+// Template implementations
 
 template <GlobCallbackInvocable Callback>
 void AsyncGlob::iterDirectory(const fs::path& dirname, bool dironly,
                               Callback&& callback) {
-    spdlog::info(
-        "AsyncGlob::iterDirectory called with dirname: {}, dironly: {}",
-        dirname.string(), dironly);
+    if (config_.enable_statistics) {
+        spdlog::debug("AsyncGlob::iterDirectory called with dirname: {}, dironly: {}",
+                     dirname.string(), dironly);
+    }
 
-    io_context_.post([dirname, dironly,
+    io_context_.post([this, dirname, dironly,
                       callback = std::forward<Callback>(callback)]() mutable {
+        if (cancelled_.load(std::memory_order_acquire)) {
+            callback({});
+            return;
+        }
+
         std::vector<fs::path> result;
         auto currentDirectory = dirname;
         if (currentDirectory.empty()) {
@@ -283,18 +414,27 @@ void AsyncGlob::iterDirectory(const fs::path& dirname, bool dironly,
 
         // Validate the directory exists before iterating
         if (!fs::exists(currentDirectory)) {
-            spdlog::warn("Directory does not exist: {}",
-                         currentDirectory.string());
+            if (config_.enable_statistics) {
+                spdlog::debug("Directory does not exist: {}", currentDirectory.string());
+            }
             callback({});
             return;
         }
 
         try {
+            // Configure directory options based on config
+            auto dir_options = fs::directory_options::skip_permission_denied;
+            if (config_.follow_symlinks) {
+                dir_options |= fs::directory_options::follow_directory_symlink;
+            }
+
             // Iterate through directory safely, handling any errors
-            for (const auto& entry : fs::directory_iterator(
-                     currentDirectory,
-                     fs::directory_options::follow_directory_symlink |
-                         fs::directory_options::skip_permission_denied)) {
+            for (const auto& entry : fs::directory_iterator(currentDirectory, dir_options)) {
+                if (cancelled_.load(std::memory_order_acquire)) {
+                    callback({});
+                    return;
+                }
+
                 if (!dironly || entry.is_directory()) {
                     if (dirname.is_absolute()) {
                         result.push_back(entry.path());
@@ -316,9 +456,10 @@ void AsyncGlob::iterDirectory(const fs::path& dirname, bool dironly,
 template <GlobCallbackInvocable Callback>
 void AsyncGlob::glob2(const fs::path& dirname, std::string_view pattern,
                       bool dironly, Callback&& callback) {
-    spdlog::info(
-        "AsyncGlob::glob2 called with dirname: {}, pattern: {}, dironly: {}",
-        dirname.string(), pattern, dironly);
+    if (config_.enable_statistics) {
+        spdlog::debug("AsyncGlob::glob2 called with dirname: {}, pattern: {}, dironly: {}",
+                     dirname.string(), pattern, dironly);
+    }
 
     assert(isRecursive(pattern));
     this->rlistdir(dirname, dironly,
@@ -329,36 +470,52 @@ void AsyncGlob::glob2(const fs::path& dirname, std::string_view pattern,
 template <GlobCallbackInvocable Callback>
 void AsyncGlob::glob1(const fs::path& dirname, std::string_view pattern,
                       bool dironly, Callback&& callback) {
-    spdlog::info(
-        "AsyncGlob::glob1 called with dirname: {}, pattern: {}, dironly: {}",
-        dirname.string(), pattern, dironly);
+    if (config_.enable_statistics) {
+        spdlog::debug("AsyncGlob::glob1 called with dirname: {}, pattern: {}, dironly: {}",
+                     dirname.string(), pattern, dironly);
+    }
 
     iterDirectory(
         dirname, dironly,
         [this, pattern = std::string(pattern),
          callback = std::forward<Callback>(callback)](
             std::vector<fs::path> names) mutable {
+            if (cancelled_.load(std::memory_order_acquire)) {
+                callback({});
+                return;
+            }
+
             std::vector<fs::path> filteredNames;
             filteredNames.reserve(names.size());
 
-            // Extract the base names for matching
-            std::vector<fs::path> baseNames;
-            baseNames.reserve(names.size());
+            // Check if we can use fast matching for simple patterns
+            if (config_.enable_pattern_optimization && canOptimizePattern(pattern)) {
+                // Use fast string matching for simple patterns
+                for (const auto& name : names) {
+                    if (fastMatch(name.filename().string(), pattern)) {
+                        filteredNames.push_back(name);
+                    }
+                }
+            } else {
+                // Extract the base names for matching
+                std::vector<fs::path> baseNames;
+                baseNames.reserve(names.size());
 
-            for (const auto& name : names) {
-                baseNames.push_back(name.filename());
-            }
+                for (const auto& name : names) {
+                    baseNames.push_back(name.filename());
+                }
 
-            // Filter names based on pattern
-            auto matchedNames = filter(baseNames, pattern);
+                // Filter names based on pattern
+                auto matchedNames = filter(baseNames, pattern);
 
-            // Convert back to full paths
-            for (const auto& name : names) {
-                if (std::find_if(matchedNames.begin(), matchedNames.end(),
-                                 [&name](const fs::path& match) {
-                                     return match == name.filename();
-                                 }) != matchedNames.end()) {
-                    filteredNames.push_back(name);
+                // Convert back to full paths
+                for (const auto& name : names) {
+                    if (std::find_if(matchedNames.begin(), matchedNames.end(),
+                                     [&name](const fs::path& match) {
+                                         return match == name.filename();
+                                     }) != matchedNames.end()) {
+                        filteredNames.push_back(name);
+                    }
                 }
             }
 
@@ -369,9 +526,10 @@ void AsyncGlob::glob1(const fs::path& dirname, std::string_view pattern,
 template <GlobCallbackInvocable Callback>
 void AsyncGlob::glob0(const fs::path& dirname, const fs::path& basename,
                       bool dironly, Callback&& callback) {
-    spdlog::info(
-        "AsyncGlob::glob0 called with dirname: {}, basename: {}, dironly: {}",
-        dirname.string(), basename.string(), dironly);
+    if (config_.enable_statistics) {
+        spdlog::debug("AsyncGlob::glob0 called with dirname: {}, basename: {}, dironly: {}",
+                     dirname.string(), basename.string(), dironly);
+    }
 
     fs::path path;
     if (dirname.empty()) {
@@ -380,8 +538,13 @@ void AsyncGlob::glob0(const fs::path& dirname, const fs::path& basename,
         path = dirname / basename;
     }
 
-    io_context_.post([path = std::move(path), dironly,
+    io_context_.post([this, path = std::move(path), dironly,
                       callback = std::forward<Callback>(callback)]() mutable {
+        if (cancelled_.load(std::memory_order_acquire)) {
+            callback({});
+            return;
+        }
+
         std::vector<fs::path> result;
 
         try {
@@ -399,9 +562,16 @@ void AsyncGlob::glob0(const fs::path& dirname, const fs::path& basename,
 template <GlobCallbackInvocable Callback>
 void AsyncGlob::glob(std::string_view pathname, Callback&& callback,
                      bool recursive, bool dironly) {
-    spdlog::info(
-        "AsyncGlob::glob called with pathname: {}, recursive: {}, dironly: {}",
-        pathname, recursive, dironly);
+    if (config_.enable_statistics) {
+        spdlog::debug("AsyncGlob::glob called with pathname: {}, recursive: {}, dironly: {}",
+                     pathname, recursive, dironly);
+        stats_.start_time = std::chrono::steady_clock::now();
+    }
+
+    if (cancelled_.load(std::memory_order_acquire)) {
+        callback({});
+        return;
+    }
 
     try {
         std::string pathnameStr(pathname);
@@ -455,10 +625,10 @@ void AsyncGlob::glob(std::string_view pathname, Callback&& callback,
 
 inline AsyncGlob::Task<std::vector<fs::path>> AsyncGlob::glob_async(
     std::string_view pathname, bool recursive, bool dironly) {
-    spdlog::info(
-        "AsyncGlob::glob_async called with pathname: {}, recursive: {}, "
-        "dironly: {}",
-        pathname, recursive, dironly);
+    if (config_.enable_statistics) {
+        spdlog::debug("AsyncGlob::glob_async called with pathname: {}, recursive: {}, dironly: {}",
+                     pathname, recursive, dironly);
+    }
 
     std::vector<fs::path> result;
 
@@ -472,6 +642,13 @@ inline AsyncGlob::Task<std::vector<fs::path>> AsyncGlob::glob_async(
                 promise.set_value(std::move(paths));
             },
             recursive, dironly);
+
+        // Use timeout to prevent indefinite waiting
+        if (future.wait_for(config_.operation_timeout) == std::future_status::timeout) {
+            cancelled_.store(true, std::memory_order_release);
+            THROW_EXCEPTION("Glob operation timed out after {} ms",
+                           config_.operation_timeout.count());
+        }
 
         result = future.get();
     } catch (const std::exception& e) {

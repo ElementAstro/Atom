@@ -2,30 +2,108 @@
 
 #include <algorithm>
 #include <chrono>
+#include <utility>
 
 #include "cron_storage.hpp"
 #include "cron_system.hpp"
+#include "cron_config.hpp"
+#include "cron_cache.hpp"
+#include "cron_thread_pool.hpp"
 #include "spdlog/spdlog.h"
 
 CronManager::CronManager() {
-    jobs_ = CronSystem::listSystemJobs();
-    jobs_.reserve(1000);
-    refreshJobIndex();
+    // Load existing jobs from system with optimized storage
+    auto system_jobs = CronSystem::listSystemJobs();
+
+    std::unique_lock<std::shared_mutex> lock(jobs_mutex_);
+    jobs_.reserve(system_jobs.size() + 1000); // Reserve space for growth
+
+    for (auto& job : system_jobs) {
+        auto job_ptr = std::make_shared<CronJob>(std::move(job));
+        std::string job_id = job_ptr->getId();
+        jobs_[job_id] = job_ptr;
+        updateIndices(job_id, *job_ptr);
+    }
+
+    spdlog::info("CronManager initialized with {} jobs", jobs_.size());
 }
 
-CronManager::~CronManager() { exportToCrontab(); }
-
-void CronManager::refreshJobIndex() {
-    jobIndex_.clear();
-    categoryIndex_.clear();
-
-    for (size_t i = 0; i < jobs_.size(); ++i) {
-        jobIndex_[jobs_[i].getId()] = i;
-        categoryIndex_[jobs_[i].category_].push_back(i);
+CronManager::~CronManager() {
+    try {
+        exportToCrontab();
+        spdlog::info("CronManager destroyed, exported {} jobs", jobs_.size());
+    } catch (const std::exception& e) {
+        spdlog::error("Error during CronManager destruction: {}", e.what());
     }
 }
 
-auto CronManager::validateJob(const CronJob& job) -> bool {
+CronManager::CronManager(CronManager&& other) noexcept {
+    std::unique_lock<std::shared_mutex> lock(other.jobs_mutex_);
+    jobs_ = std::move(other.jobs_);
+    command_to_id_index_ = std::move(other.command_to_id_index_);
+    category_index_ = std::move(other.category_index_);
+    status_index_ = std::move(other.status_index_);
+    priority_index_ = std::move(other.priority_index_);
+    job_stats_ = std::move(other.job_stats_);
+    max_jobs_ = other.max_jobs_.load();
+    auto_cleanup_enabled_ = other.auto_cleanup_enabled_.load();
+}
+
+CronManager& CronManager::operator=(CronManager&& other) noexcept {
+    if (this != &other) {
+        std::unique_lock<std::shared_mutex> lock1(jobs_mutex_, std::defer_lock);
+        std::unique_lock<std::shared_mutex> lock2(other.jobs_mutex_, std::defer_lock);
+        std::lock(lock1, lock2);
+
+        jobs_ = std::move(other.jobs_);
+        command_to_id_index_ = std::move(other.command_to_id_index_);
+        category_index_ = std::move(other.category_index_);
+        status_index_ = std::move(other.status_index_);
+        priority_index_ = std::move(other.priority_index_);
+        job_stats_ = std::move(other.job_stats_);
+        max_jobs_ = other.max_jobs_.load();
+        auto_cleanup_enabled_ = other.auto_cleanup_enabled_.load();
+    }
+    return *this;
+}
+
+void CronManager::updateIndices(const std::string& job_id, const CronJob& job) {
+    // Update command to ID mapping
+    command_to_id_index_[job.command_] = job_id;
+
+    // Update category index
+    category_index_[job.getCategory()].push_back(job_id);
+
+    // Update status index
+    status_index_[job.getStatus()].insert(job_id);
+
+    // Update priority index
+    priority_index_[job.getPriority()].insert(job_id);
+
+    // Invalidate cache
+    invalidateCache();
+}
+
+void CronManager::removeFromIndices(const std::string& job_id, const CronJob& job) {
+    // Remove from command mapping
+    command_to_id_index_.erase(job.command_);
+
+    // Remove from category index
+    auto& category_jobs = category_index_[job.getCategory()];
+    category_jobs.erase(std::remove(category_jobs.begin(), category_jobs.end(), job_id),
+                       category_jobs.end());
+
+    // Remove from status index
+    status_index_[job.getStatus()].erase(job_id);
+
+    // Remove from priority index
+    priority_index_[job.getPriority()].erase(job_id);
+
+    // Invalidate cache
+    invalidateCache();
+}
+
+auto CronManager::validateJobInternal(const CronJob& job) -> bool {
     if (job.time_.empty() || job.command_.empty()) {
         spdlog::error("Invalid job: time or command is empty");
         return false;
@@ -43,35 +121,96 @@ auto CronManager::convertSpecialExpression(const std::string& specialExpr)
     return CronValidation::convertSpecialExpression(specialExpr);
 }
 
-auto CronManager::createCronJob(const CronJob& job) -> bool {
+auto CronManager::createCronJob(CronJob job) -> bool {
     spdlog::info("Creating Cron job: {} {}", job.time_, job.command_);
 
-    if (!validateJob(job)) {
+    if (!validateJobInternal(job)) {
         spdlog::error("Invalid cron job");
         return false;
     }
 
-    auto isDuplicate = std::any_of(
-        jobs_.begin(), jobs_.end(), [&job](const CronJob& existingJob) {
-            return existingJob.command_ == job.command_ &&
-                   existingJob.time_ == job.time_;
-        });
+    std::unique_lock<std::shared_mutex> lock(jobs_mutex_);
 
-    if (isDuplicate) {
-        spdlog::warn("Duplicate cron job");
+    // Check for duplicates using command index
+    auto it = command_to_id_index_.find(job.command_);
+    if (it != command_to_id_index_.end()) {
+        auto existing_job = jobs_[it->second];
+        if (existing_job && existing_job->time_ == job.time_) {
+            spdlog::warn("Duplicate cron job");
+            return false;
+        }
+    }
+
+    // Check job limit
+    if (jobs_.size() >= max_jobs_.load()) {
+        spdlog::error("Maximum job limit reached: {}", max_jobs_.load());
         return false;
     }
 
-    if (!CronSystem::addJobToSystem(job)) {
+    auto job_ptr = std::make_shared<CronJob>(std::move(job));
+    return addJobInternal(job_ptr);
+}
+
+auto CronManager::addJobInternal(std::shared_ptr<CronJob> job) -> bool {
+    if (!job) return false;
+
+    std::string job_id = generateJobId(*job);
+
+    if (!CronSystem::addJobToSystem(*job)) {
         spdlog::error("Failed to add job to system crontab");
         return false;
     }
 
-    jobs_.push_back(job);
-    refreshJobIndex();
+    jobs_[job_id] = job;
+    updateIndices(job_id, *job);
 
-    spdlog::info("Cron job created successfully");
+    spdlog::info("Cron job created successfully with ID: {}", job_id);
     return true;
+}
+
+auto CronManager::generateJobId(const CronJob& job) -> std::string {
+    return job.getId(); // Use the existing ID generation from CronJob
+}
+
+void CronManager::invalidateCache() {
+    std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+    cache_.invalidate();
+}
+
+void CronManager::rebuildCache() {
+    std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+    cache_.job_cache.clear();
+    cache_.category_cache.clear();
+    cache_.enabled_jobs_cache.clear();
+
+    // Rebuild cache from current data
+    for (const auto& [job_id, job_ptr] : jobs_) {
+        if (job_ptr) {
+            cache_.job_cache[job_id] = job_ptr;
+            if (job_ptr->isEnabled()) {
+                cache_.enabled_jobs_cache.insert(job_id);
+            }
+        }
+    }
+
+    cache_.markValid();
+}
+
+auto CronManager::getCachedJob(const std::string& job_id) -> std::shared_ptr<CronJob> {
+    std::shared_lock<std::shared_mutex> lock(cache_mutex_);
+
+    if (!cache_.isValid()) {
+        lock.unlock();
+        rebuildCache();
+        lock.lock();
+    }
+
+    auto it = cache_.job_cache.find(job_id);
+    if (it != cache_.job_cache.end()) {
+        return it->second.lock(); // Convert weak_ptr to shared_ptr
+    }
+
+    return nullptr;
 }
 
 auto CronManager::createJobWithSpecialTime(
@@ -88,79 +227,96 @@ auto CronManager::createJobWithSpecialTime(
     }
 
     CronJob job(standardTime, command, enabled, category, description);
-    job.priority_ = priority;
-    job.max_retries_ = maxRetries;
-    job.one_time_ = oneTime;
+    job.setPriority(static_cast<JobPriority>(std::clamp(priority, 1, 10)));
+    job.setMaxRetries(static_cast<uint8_t>(maxRetries));
+    job.setOneTime(oneTime);
 
-    return createCronJob(job);
+    return createCronJob(std::move(job));
 }
 
 auto CronManager::deleteCronJob(const std::string& command) -> bool {
     spdlog::info("Deleting Cron job with command: {}", command);
 
-    if (!CronSystem::removeJobFromSystem(command)) {
+    std::unique_lock<std::shared_mutex> lock(jobs_mutex_);
+
+    // Find job by command
+    auto cmd_it = command_to_id_index_.find(command);
+    if (cmd_it == command_to_id_index_.end()) {
+        spdlog::error("Failed to find job with command: {}", command);
+        return false;
+    }
+
+    return removeJobInternal(cmd_it->second);
+}
+
+auto CronManager::deleteCronJobById(const std::string& id) -> bool {
+    spdlog::info("Deleting Cron job with ID: {}", id);
+
+    std::unique_lock<std::shared_mutex> lock(jobs_mutex_);
+    return removeJobInternal(id);
+}
+
+auto CronManager::removeJobInternal(const std::string& job_id) -> bool {
+    auto it = jobs_.find(job_id);
+    if (it == jobs_.end()) {
+        spdlog::error("Failed to find job with ID: {}", job_id);
+        return false;
+    }
+
+    auto job_ptr = it->second;
+    if (!job_ptr) {
+        spdlog::error("Job pointer is null for ID: {}", job_id);
+        return false;
+    }
+
+    if (!CronSystem::removeJobFromSystem(job_ptr->command_)) {
         spdlog::error("Failed to remove job from system crontab");
         return false;
     }
 
-    const auto originalSize = jobs_.size();
-    jobs_.erase(std::remove_if(jobs_.begin(), jobs_.end(),
-                               [&command](const CronJob& job) {
-                                   return job.command_ == command;
-                               }),
-                jobs_.end());
+    // Remove from indices
+    removeFromIndices(job_id, *job_ptr);
 
-    if (jobs_.size() < originalSize) {
-        refreshJobIndex();
-        spdlog::info("Cron job deleted successfully");
-        return true;
-    }
+    // Remove from main storage
+    jobs_.erase(it);
 
-    spdlog::error("Failed to delete Cron job");
-    return false;
-}
-
-auto CronManager::deleteCronJobById(const std::string& id) -> bool {
-    auto it = jobIndex_.find(id);
-    if (it != jobIndex_.end()) {
-        return deleteCronJob(jobs_[it->second].command_);
-    }
-    spdlog::error("Failed to find job with ID: {}", id);
-    return false;
+    spdlog::info("Cron job deleted successfully: {}", job_id);
+    return true;
 }
 
 auto CronManager::listCronJobs() -> std::vector<CronJob> {
     spdlog::info("Listing all Cron jobs");
 
-    // Merge with system jobs to ensure consistency
-    auto systemJobs = CronSystem::listSystemJobs();
+    std::shared_lock<std::shared_mutex> lock(jobs_mutex_);
 
-    // Update existing jobs with system data
-    for (const auto& systemJob : systemJobs) {
-        auto existingIt = std::find_if(jobs_.begin(), jobs_.end(),
-                                       [&systemJob](const CronJob& job) {
-                                           return job.command_ == systemJob.command_;
-                                       });
+    std::vector<CronJob> result;
+    result.reserve(jobs_.size());
 
-        if (existingIt != jobs_.end()) {
-            existingIt->time_ = systemJob.time_;
-            existingIt->enabled_ = true;
-        } else {
-            jobs_.push_back(systemJob);
+    for (const auto& [job_id, job_ptr] : jobs_) {
+        if (job_ptr) {
+            // Create a new CronJob with the same data (since copy is deleted)
+            CronJob job_copy(job_ptr->time_, job_ptr->command_,
+                           job_ptr->isEnabled(), job_ptr->getCategory(),
+                           job_ptr->getDescription());
+            job_copy.setPriority(job_ptr->getPriority());
+            job_copy.setMaxRetries(job_ptr->getMaxRetries());
+            job_copy.setOneTime(job_ptr->isOneTime());
+            result.push_back(std::move(job_copy));
         }
     }
 
-    refreshJobIndex();
-    spdlog::info("Retrieved {} Cron jobs", jobs_.size());
-    return jobs_;
+    spdlog::info("Retrieved {} Cron jobs", result.size());
+    return result;
 }
 
 auto CronManager::listCronJobsByCategory(const std::string& category)
     -> std::vector<CronJob> {
     spdlog::info("Listing Cron jobs in category: {}", category);
 
-    auto it = categoryIndex_.find(category);
-    if (it == categoryIndex_.end()) {
+    std::shared_lock<std::shared_mutex> lock(jobs_mutex_);
+
+    auto it = category_index_.find(category);
+    if (it == category_index_.end()) {
         spdlog::info("Found 0 jobs in category {}", category);
         return {};
     }
@@ -168,9 +324,17 @@ auto CronManager::listCronJobsByCategory(const std::string& category)
     std::vector<CronJob> filteredJobs;
     filteredJobs.reserve(it->second.size());
 
-    for (size_t index : it->second) {
-        if (index < jobs_.size()) {
-            filteredJobs.push_back(jobs_[index]);
+    for (const std::string& job_id : it->second) {
+        auto job_it = jobs_.find(job_id);
+        if (job_it != jobs_.end() && job_it->second) {
+            auto job_ptr = job_it->second;
+            CronJob job_copy(job_ptr->time_, job_ptr->command_,
+                           job_ptr->isEnabled(), job_ptr->getCategory(),
+                           job_ptr->getDescription());
+            job_copy.setPriority(job_ptr->getPriority());
+            job_copy.setMaxRetries(job_ptr->getMaxRetries());
+            job_copy.setOneTime(job_ptr->isOneTime());
+            filteredJobs.push_back(std::move(job_copy));
         }
     }
 
@@ -179,10 +343,12 @@ auto CronManager::listCronJobsByCategory(const std::string& category)
 }
 
 auto CronManager::getCategories() -> std::vector<std::string> {
-    std::vector<std::string> result;
-    result.reserve(categoryIndex_.size());
+    std::shared_lock<std::shared_mutex> lock(jobs_mutex_);
 
-    for (const auto& [category, _] : categoryIndex_) {
+    std::vector<std::string> result;
+    result.reserve(category_index_.size());
+
+    for (const auto& [category, _] : category_index_) {
         result.push_back(category);
     }
 
@@ -191,7 +357,8 @@ auto CronManager::getCategories() -> std::vector<std::string> {
 }
 
 auto CronManager::exportToJSON(const std::string& filename) -> bool {
-    return CronStorage::exportToJSON(jobs_, filename);
+    auto job_list = listCronJobs(); // This creates copies we can export
+    return CronStorage::exportToJSON(job_list, filename);
 }
 
 auto CronManager::importFromJSON(const std::string& filename) -> bool {
@@ -203,8 +370,8 @@ auto CronManager::importFromJSON(const std::string& filename) -> bool {
     }
 
     int successCount = 0;
-    for (const auto& job : importedJobs) {
-        if (createCronJob(job)) {
+    for (auto& job : importedJobs) {
+        if (createCronJob(std::move(job))) {
             ++successCount;
         } else {
             spdlog::warn("Failed to import job: {} {}", job.time_, job.command_);

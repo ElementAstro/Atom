@@ -104,6 +104,13 @@ set_target_properties(
              SOVERSION ${PROJECT_VERSION_MAJOR}
              OUTPUT_NAME ${PROJECT_NAME})
 
+# Add clipboard subdirectory
+option(BUILD_CLIPBOARD "Build clipboard component" ON)
+if(BUILD_CLIPBOARD)
+  add_subdirectory(clipboard)
+  list(APPEND LIBS atom-system-clipboard)
+endif()
+
 # Installation
 install(
   TARGETS ${PROJECT_NAME}

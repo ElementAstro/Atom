@@ -13,14 +13,14 @@
 #include <stdexcept>
 #include <string_view>
 
+#include <sqlite3.h>
 #include <spdlog/spdlog.h>
-
-#include "atom/containers/high_performance.hpp"
 
 namespace atom::search {
 
-using atom::containers::String;
-using atom::containers::Vector;
+using String = std::string;
+template<typename T>
+using Vector = std::vector<T>;
 
 /**
  * @brief Custom exception class for SQLite-related errors.
@@ -37,7 +37,28 @@ public:
     explicit SQLiteException(const std::string& msg) : std::runtime_error(msg) {}
 };
 
-class TransactionContext;
+/**
+ * @brief Context for database transactions.
+ *
+ * Provides access to the SQLite connection within a transaction.
+ */
+class TransactionContext {
+public:
+    /**
+     * @brief Constructs a TransactionContext with a SQLite connection.
+     * @param conn The SQLite connection handle.
+     */
+    explicit TransactionContext(sqlite3* conn) : conn_(conn) {}
+
+    /**
+     * @brief Gets the SQLite connection handle.
+     * @return Pointer to the SQLite connection.
+     */
+    sqlite3* get_connection() const noexcept { return conn_; }
+
+private:
+    sqlite3* conn_;
+};
 
 /**
  * @class SqliteDB

@@ -11,7 +11,7 @@ project(
   LANGUAGES C CXX)
 
 # Sources and Headers
-set(SOURCES encryption.cpp storage.cpp password_manager.cpp)
+set(SOURCES common.cpp encryption.cpp storage.cpp password_manager.cpp)
 
 set(HEADERS common.hpp encryption.hpp password_entry.hpp storage.hpp password_manager.hpp result.hpp)
 
@@ -45,3 +45,17 @@ set_target_properties(
   PROPERTIES VERSION ${PROJECT_VERSION}
              SOVERSION ${PROJECT_VERSION_MAJOR}
              OUTPUT_NAME ${PROJECT_NAME})
+
+# Add tests subdirectory
+option(BUILD_TESTS "Build tests" ON)
+if(BUILD_TESTS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+  enable_testing()
+  add_subdirectory(tests)
+endif()
+
+# Install targets
+install(FILES ${HEADERS} DESTINATION include/atom/secret)
+install(TARGETS ${PROJECT_NAME}
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin)

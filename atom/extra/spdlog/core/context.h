@@ -3,13 +3,14 @@
 #include <any>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 
 namespace modern_log {
 
 /**
  * @class LogContext
- * @brief Structured logging context for carrying contextual information.
+ * @brief High-performance structured logging context for carrying contextual information.
  *
  * This class encapsulates structured context information for log entries,
  * such as user ID, session ID, trace ID, request ID, and arbitrary custom
@@ -17,6 +18,13 @@ namespace modern_log {
  * provides accessors for retrieving context values. The context can be
  * serialized to JSON, merged with another context, cleared, and checked for
  * emptiness.
+ *
+ * Performance optimizations:
+ * - Uses string_view for read-only operations
+ * - Implements copy-on-write for expensive operations
+ * - Caches JSON serialization
+ * - Uses move semantics extensively
+ * - Optimized memory layout
  */
 class LogContext {
 private:
@@ -27,6 +35,12 @@ private:
     std::unordered_map<std::string, std::any>
         custom_fields_;  ///< Arbitrary custom fields.
 
+    // Performance optimization fields
+    mutable std::string cached_json_;  ///< Cached JSON representation
+    mutable bool json_cache_valid_ = false;  ///< Whether JSON cache is valid
+    mutable size_t hash_cache_ = 0;  ///< Cached hash value
+    mutable bool hash_cache_valid_ = false;  ///< Whether hash cache is valid
+
 public:
     /**
      * @brief Set the user ID for the context (chainable).
@@ -35,6 +49,7 @@ public:
      */
     LogContext& with_user(std::string_view user) {
         user_id_ = user;
+        invalidate_caches();
         return *this;
     }
 
@@ -45,6 +60,7 @@ public:
      */
     LogContext& with_session(std::string_view session) {
         session_id_ = session;
+        invalidate_caches();
         return *this;
     }
 
@@ -55,6 +71,7 @@ public:
      */
     LogContext& with_trace(std::string_view trace) {
         trace_id_ = trace;
+        invalidate_caches();
         return *this;
     }
 
@@ -65,6 +82,7 @@ public:
      */
     LogContext& with_request(std::string_view request) {
         request_id_ = request;
+        invalidate_caches();
         return *this;
     }
 
@@ -126,21 +144,40 @@ public:
     }
 
     /**
-     * @brief Serialize the context to a JSON string.
+     * @brief Serialize the context to a JSON string (cached for performance).
      * @return JSON representation of the context.
      */
     std::string to_json() const;
 
     /**
+     * @brief Fast JSON serialization using pre-allocated buffer.
+     * @param buffer Pre-allocated string buffer to write to.
+     */
+    void to_json_fast(std::string& buffer) const;
+
+    /**
+     * @brief Get JSON representation as string_view (cached).
+     * @return String view of cached JSON.
+     */
+    std::string_view to_json_view() const;
+
+    /**
      * @brief Merge this context with another, preferring values from the other
-     * context.
+     * context (optimized with move semantics).
      * @param other The other LogContext to merge from.
      * @return A new LogContext containing merged values.
      */
     LogContext merge(const LogContext& other) const;
 
     /**
-     * @brief Clear all fields in the context.
+     * @brief In-place merge with another context (more efficient).
+     * @param other The other LogContext to merge from.
+     * @return Reference to this context.
+     */
+    LogContext& merge_inplace(const LogContext& other);
+
+    /**
+     * @brief Clear all fields in the context and invalidate caches.
      */
     void clear();
 
@@ -149,6 +186,28 @@ public:
      * @return True if all fields are empty, false otherwise.
      */
     bool empty() const;
+
+    /**
+     * @brief Get hash code for the context (cached for performance).
+     * @return Hash value of the context.
+     */
+    size_t hash() const;
+
+    /**
+     * @brief Fast equality comparison.
+     * @param other The other context to compare with.
+     * @return True if contexts are equal.
+     */
+    bool equals_fast(const LogContext& other) const;
+
+private:
+    /**
+     * @brief Invalidate all cached values when context changes.
+     */
+    void invalidate_caches() const {
+        json_cache_valid_ = false;
+        hash_cache_valid_ = false;
+    }
 };
 
 }  // namespace modern_log

@@ -1,48 +1,29 @@
-/*
- * gpu.hpp
+/**
+ * @file gpu.hpp
+ * @brief GPU information functionality (compatibility header)
  *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ * This file serves as a compatibility header that includes the modular GPU
+ * system. It maintains backward compatibility with existing code that includes
+ * this header while providing access to the enhanced GPU functionality.
+ *
+ * @copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-/*************************************************
+#ifndef ATOM_SYSTEM_MODULE_GPU_COMPAT_HPP
+#define ATOM_SYSTEM_MODULE_GPU_COMPAT_HPP
 
-Date: 2024-2-21
+// Include the new modular GPU system
+#include "src/gpu/gpu.hpp"
 
-Description: System Information Module - GPU
+// For backward compatibility, also include common utilities
+#include "src/gpu/common.hpp"
 
-**************************************************/
-
-#ifndef ATOM_SYSTEM_MODULE_GPU_HPP
-#define ATOM_SYSTEM_MODULE_GPU_HPP
-
-#include <string>
-#include <vector>
-
+// Legacy namespace alias for backward compatibility
 namespace atom::system {
 
-/**
- * @brief Get GPU information from the system
- * @return std::string GPU information as a formatted string
- */
-[[nodiscard]] auto getGPUInfo() -> std::string;
-
-/**
- * @brief Structure containing monitor information
- */
-struct alignas(128) MonitorInfo {
-    std::string model;       ///< Monitor model name
-    std::string identifier;  ///< Monitor identifier
-    int width{0};            ///< Screen width in pixels
-    int height{0};           ///< Screen height in pixels
-    int refreshRate{0};      ///< Refresh rate in Hz
-};
-
-/**
- * @brief Get information for all connected monitors
- * @return std::vector<MonitorInfo> Vector containing all monitor information
- */
-[[nodiscard]] auto getAllMonitorsInfo() -> std::vector<MonitorInfo>;
+// Legacy MonitorInfo structure is now defined in gpu/gpu.hpp
+// All functions are now defined in gpu/gpu.hpp
 
 }  // namespace atom::system
 
-#endif
+#endif  // ATOM_SYSTEM_MODULE_GPU_COMPAT_HPP

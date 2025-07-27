@@ -6,6 +6,9 @@ set(ATOM_SYSTEM_CRONTAB_SOURCES
     crontab/cron_system.cpp
     crontab/cron_storage.cpp
     crontab/cron_manager.cpp
+    crontab/cron_scheduler.cpp
+    crontab/cron_monitor.cpp
+    crontab/cron_security.cpp
 )
 
 set(ATOM_SYSTEM_CRONTAB_HEADERS
@@ -14,6 +17,9 @@ set(ATOM_SYSTEM_CRONTAB_HEADERS
     crontab/cron_system.hpp
     crontab/cron_storage.hpp
     crontab/cron_manager.hpp
+    crontab/cron_scheduler.hpp
+    crontab/cron_monitor.hpp
+    crontab/cron_security.hpp
 )
 
 # Add sources to parent target
@@ -24,3 +30,9 @@ target_sources(atom-shared PRIVATE ${ATOM_SYSTEM_CRONTAB_SOURCES})
 install(FILES ${ATOM_SYSTEM_CRONTAB_HEADERS}
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/system/crontab
 )
+
+# Add tests subdirectory
+option(BUILD_CRON_TESTS "Build cron system tests" ON)
+if(BUILD_CRON_TESTS)
+    add_subdirectory(tests)
+endif()

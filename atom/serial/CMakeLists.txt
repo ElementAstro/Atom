@@ -17,6 +17,23 @@ endif()
 # Create library target
 add_library(${LIB_NAME} ${SOURCES} ${HEADERS})
 
+# Set C++ standard requirements
+target_compile_features(${LIB_NAME} PUBLIC cxx_std_20)
+
+# Add compiler-specific optimizations
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(${LIB_NAME} PRIVATE
+        -Wall -Wextra -Wpedantic
+        -O3 -march=native
+        -ffast-math
+    )
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+    target_compile_options(${LIB_NAME} PRIVATE
+        /W4 /O2 /arch:AVX2
+        /fp:fast
+    )
+endif()
+
 # Setup include directories
 target_include_directories(
   ${LIB_NAME} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
@@ -76,4 +93,17 @@ install(
 
 install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/serial)
 
-message(STATUS "Serial module configured")
+# Add test executable (optional)
+option(BUILD_SERIAL_TESTS "Build serial communication tests" OFF)
+if(BUILD_SERIAL_TESTS)
+    add_executable(test_serial_cross_platform test_cross_platform.cpp)
+    target_link_libraries(test_serial_cross_platform PRIVATE ${LIB_NAME})
+    target_compile_features(test_serial_cross_platform PRIVATE cxx_std_20)
+
+    # Add test to CTest if available
+    if(CMAKE_TESTING_ENABLED)
+        add_test(NAME SerialCrossPlatformTest COMMAND test_serial_cross_platform)
+    endif()
+endif()
+
+message(STATUS "Serial module configured with cross-platform optimizations")

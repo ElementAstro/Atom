@@ -1,5 +1,6 @@
 #include "session.hpp"
 #include <filesystem>
+#include <spdlog/spdlog.h>
 
 #include "connection_pool.hpp"
 #include "error.hpp"
@@ -11,8 +12,10 @@ Session::Session()
     curl_global_init(CURL_GLOBAL_ALL);
     handle_ = curl_easy_init();
     if (!handle_) {
+        spdlog::error("Failed to initialize curl session");
         throw Error(CURLE_FAILED_INIT, "Failed to initialize curl");
     }
+    spdlog::debug("Created new curl session");
 }
 
 Session::Session(ConnectionPool* pool)
@@ -20,8 +23,10 @@ Session::Session(ConnectionPool* pool)
     curl_global_init(CURL_GLOBAL_ALL);
     handle_ = pool ? pool->acquire() : curl_easy_init();
     if (!handle_) {
+        spdlog::error("Failed to initialize curl session with connection pool");
         throw Error(CURLE_FAILED_INIT, "Failed to initialize curl");
     }
+    spdlog::debug("Created curl session with connection pool");
 }
 
 Session::~Session() {
@@ -124,7 +129,7 @@ Response Session::get(std::string_view url,
                       const std::map<std::string, std::string>& params) {
     std::string full_url = std::string(url);
 
-    // 添加查询参数
+    // Add query parameters
     if (!params.empty()) {
         full_url += (full_url.find('?') == std::string::npos) ? '?' : '&';
 
@@ -223,9 +228,9 @@ Response Session::download(std::string_view url, std::string_view filepath,
 
     FILE* file = nullptr;
     if (resume_from) {
-        file = fopen(std::string(filepath).c_str(), "a+b");  // 追加模式
+        file = fopen(std::string(filepath).c_str(), "a+b");  // Append mode
     } else {
-        file = fopen(std::string(filepath).c_str(), "wb");  // 写入模式
+        file = fopen(std::string(filepath).c_str(), "wb");  // Write mode
     }
 
     if (!file) {
@@ -572,7 +577,7 @@ size_t Session::header_callback(char* buffer, size_t size, size_t nitems,
         std::string name = header.substr(0, pos);
         std::string value = header.substr(pos + 1);
 
-        // 修剪空白
+        // Trim whitespace
         name.erase(0, name.find_first_not_of(" \t"));
         name.erase(name.find_last_not_of(" \t\r\n") + 1);
 

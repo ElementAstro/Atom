@@ -1,36 +1,72 @@
 #include "session_pool.hpp"
 #include "session.hpp"
+#include <algorithm>
 
 namespace atom::extra::curl {
-SessionPool::SessionPool(size_t max_sessions) : max_sessions_(max_sessions) {}
+
+SessionPool::SessionPool(const Config& config) : config_(config) {
+    spdlog::info("Initializing simplified session pool with max_pool_size: {}, timeout: {}s",
+                 config_.max_pool_size, config_.timeout.count());
+
+    // Pre-allocate some sessions
+    available_sessions_.reserve(config_.max_pool_size);
+}
 
 SessionPool::~SessionPool() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    pool_.clear();  // 智能指针自动清理
+    spdlog::info("Destroying session pool. Stats - Acquired: {}, Released: {}, Created: {}, Cache hits: {}",
+                 stats_.acquire_count.load(), stats_.release_count.load(),
+                 stats_.create_count.load(), stats_.cache_hits.load());
 }
 
 std::shared_ptr<Session> SessionPool::acquire() {
-    std::unique_lock<std::mutex> lock(mutex_);
+    stats_.acquire_count.fetch_add(1, std::memory_order_relaxed);
 
-    if (!pool_.empty()) {
-        auto session = pool_.back();
-        pool_.pop_back();
-        return session;
+    // Try to get session from pool
+    {
+        std::lock_guard<std::mutex> lock(pool_mutex_);
+        if (!available_sessions_.empty()) {
+            auto session = available_sessions_.back();
+            available_sessions_.pop_back();
+            stats_.cache_hits.fetch_add(1, std::memory_order_relaxed);
+            return session;
+        }
     }
 
-    // 如果池为空，创建新的会话
-    return std::make_shared<Session>();
+    // Pool miss - create new session
+    stats_.cache_misses.fetch_add(1, std::memory_order_relaxed);
+    return createSession();
 }
 
 void SessionPool::release(std::shared_ptr<Session> session) {
-    if (!session)
+    if (!session) {
         return;
-
-    std::unique_lock<std::mutex> lock(mutex_);
-
-    if (pool_.size() < max_sessions_) {
-        pool_.push_back(std::move(session));
     }
-    // 如果池已满，session 会自动析构
+
+    stats_.release_count.fetch_add(1, std::memory_order_relaxed);
+
+    // Session will be reused as-is (reset is private)
+
+    // Return to pool if there's space
+    {
+        std::lock_guard<std::mutex> lock(pool_mutex_);
+        if (available_sessions_.size() < config_.max_pool_size) {
+            available_sessions_.push_back(session);
+            return;
+        }
+    }
+
+    // Pool is full, session will be destroyed automatically
+    stats_.contention_count.fetch_add(1, std::memory_order_relaxed);
 }
+
+size_t SessionPool::size() const noexcept {
+    // Return approximate size without locking for performance
+    return available_sessions_.size();
+}
+
+std::shared_ptr<Session> SessionPool::createSession() {
+    stats_.create_count.fetch_add(1, std::memory_order_relaxed);
+    return std::make_shared<Session>();
+}
+
 }  // namespace atom::extra::curl

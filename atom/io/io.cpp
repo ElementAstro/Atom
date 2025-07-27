@@ -233,4 +233,99 @@ auto getExecutableNameFromPath(std::string_view path) -> std::string {
     }
 }
 
+// Enhanced I/O functions implementation
+
+std::vector<IOResult> batchFileOperations(
+    const std::vector<FileOperation>& operations,
+    ProgressCallback progress_callback,
+    const IOOptions& options) {
+
+    std::vector<IOResult> results;
+    results.reserve(operations.size());
+
+    // Use options for logging control
+    bool enable_logging = options.enable_logging;
+
+    for (size_t i = 0; i < operations.size(); ++i) {
+        const auto& op = operations[i];
+        IOResult result;
+        result.operation_type = [&op]() {
+            switch (op.type) {
+                case FileOperation::COPY: return "copy";
+                case FileOperation::MOVE: return "move";
+                case FileOperation::DELETE: return "delete";
+                case FileOperation::CREATE_DIR: return "create_dir";
+                default: return "unknown";
+            }
+        }();
+
+        auto op_start = std::chrono::steady_clock::now();
+
+        try {
+            if (enable_logging) {
+                spdlog::debug("Executing {} operation: {} -> {}", result.operation_type, op.source_path, op.dest_path);
+            }
+
+            switch (op.type) {
+                case FileOperation::COPY:
+                    if (copyFile(op.source_path, op.dest_path)) {
+                        result.success = true;
+                        if (fs::exists(op.dest_path)) {
+                            result.bytes_processed = fs::file_size(op.dest_path);
+                        }
+                    } else {
+                        result.error_message = "Copy operation failed";
+                    }
+                    break;
+
+                case FileOperation::MOVE:
+                    if (moveFile(op.source_path, op.dest_path)) {
+                        result.success = true;
+                        if (fs::exists(op.dest_path)) {
+                            result.bytes_processed = fs::file_size(op.dest_path);
+                        }
+                    } else {
+                        result.error_message = "Move operation failed";
+                    }
+                    break;
+
+                case FileOperation::DELETE:
+                    if (fs::remove(op.source_path)) {
+                        result.success = true;
+                    } else {
+                        result.error_message = "Delete operation failed";
+                    }
+                    break;
+
+                case FileOperation::CREATE_DIR:
+                    if (createDirectory(op.source_path)) {
+                        result.success = true;
+                    } else {
+                        result.error_message = "Directory creation failed";
+                    }
+                    break;
+            }
+
+            result.files_processed = 1;
+
+        } catch (const std::exception& e) {
+            result.success = false;
+            result.error_message = e.what();
+        }
+
+        auto op_end = std::chrono::steady_clock::now();
+        result.processing_time = std::chrono::duration_cast<std::chrono::milliseconds>(op_end - op_start);
+
+        results.push_back(result);
+
+        // Report progress
+        if (progress_callback) {
+            double percentage = static_cast<double>(i + 1) / operations.size() * 100.0;
+            progress_callback(i + 1, operations.size(), percentage);
+        }
+    }
+
+    return results;
+}
+
 }  // namespace atom::io

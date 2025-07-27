@@ -2403,4 +2403,298 @@ decompressData<std::span<const char>>(const std::span<const char>&, size_t,
                                       const DecompressionOptions&);
 #endif
 
+// Enhanced compression functions implementation
+
+CompressionResult compressFileWithProgress(
+    std::string_view file_path, std::string_view output_folder,
+    ProgressCallback progress_callback,
+    const CompressionOptions& options) {
+
+    CompressionOptions enhanced_options = options;
+    enhanced_options.enable_progress_reporting = true;
+    enhanced_options.progress_callback = progress_callback;
+
+    return compressFile(file_path, output_folder, enhanced_options);
+}
+
+std::future<CompressionResult> compressFileAsync(
+    std::string_view file_path, std::string_view output_folder,
+    CompletionCallback completion_callback,
+    const CompressionOptions& options) {
+
+    return std::async(std::launch::async, [=]() {
+        auto result = compressFile(file_path, output_folder, options);
+        if (completion_callback) {
+            completion_callback(result);
+        }
+        return result;
+    });
+}
+
+CompressionResult decompressFileWithProgress(
+    std::string_view file_path, std::string_view output_folder,
+    ProgressCallback progress_callback,
+    const DecompressionOptions& options) {
+
+    DecompressionOptions enhanced_options = options;
+    enhanced_options.enable_progress_reporting = true;
+    enhanced_options.progress_callback = progress_callback;
+
+    return decompressFile(file_path, output_folder, enhanced_options);
+}
+
+std::future<CompressionResult> decompressFileAsync(
+    std::string_view file_path, std::string_view output_folder,
+    CompletionCallback completion_callback,
+    const DecompressionOptions& options) {
+
+    return std::async(std::launch::async, [=]() {
+        auto result = decompressFile(file_path, output_folder, options);
+        if (completion_callback) {
+            completion_callback(result);
+        }
+        return result;
+    });
+}
+
+// CompressionStats implementation
+CompressionStats& CompressionStats::getInstance() {
+    static CompressionStats instance;
+    return instance;
+}
+
+void CompressionStats::recordOperation(const CompressionResult& result) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    total_operations_++;
+
+    if (result.success) {
+        successful_operations_++;
+        total_compression_ratio_ += result.compression_ratio;
+        total_throughput_ += result.throughput_mbps;
+    } else {
+        failed_operations_++;
+    }
+}
+
+void CompressionStats::reset() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    total_operations_ = 0;
+    successful_operations_ = 0;
+    failed_operations_ = 0;
+    total_compression_ratio_ = 0.0;
+    total_throughput_ = 0.0;
+}
+
+size_t CompressionStats::getTotalOperations() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return total_operations_;
+}
+
+size_t CompressionStats::getSuccessfulOperations() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return successful_operations_;
+}
+
+size_t CompressionStats::getFailedOperations() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return failed_operations_;
+}
+
+double CompressionStats::getAverageCompressionRatio() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return successful_operations_ > 0 ?
+           total_compression_ratio_ / successful_operations_ : 0.0;
+}
+
+double CompressionStats::getAverageThroughput() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return successful_operations_ > 0 ?
+           total_throughput_ / successful_operations_ : 0.0;
+}
+
+// CompressionBufferPool implementation
+CompressionBufferPool& CompressionBufferPool::getInstance() {
+    static CompressionBufferPool instance;
+    return instance;
+}
+
+Vector<unsigned char> CompressionBufferPool::getBuffer(size_t size) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto& pool = pools_[size];
+    if (!pool.empty()) {
+        auto buffer = std::move(pool.back());
+        pool.pop_back();
+        return buffer;
+    }
+
+    return Vector<unsigned char>(size);
+}
+
+void CompressionBufferPool::returnBuffer(Vector<unsigned char>&& buffer) {
+    if (buffer.empty()) return;
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto size = buffer.size();
+    auto& pool = pools_[size];
+
+    if (pool.size() < 10) { // Limit pool size
+        buffer.clear();
+        buffer.resize(size);
+        pool.push_back(std::move(buffer));
+    }
+}
+
+void CompressionBufferPool::clear() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    pools_.clear();
+}
+
+// CompressionFormatDetector implementation
+CompressionFormat CompressionFormatDetector::detectFormat(std::string_view file_path) {
+    std::ifstream file(file_path.data(), std::ios::binary);
+    if (!file) {
+        return CompressionFormat::UNKNOWN;
+    }
+
+    Vector<unsigned char> header(10);
+    file.read(reinterpret_cast<char*>(header.data()), header.size());
+    auto bytes_read = file.gcount();
+    header.resize(bytes_read);
+
+    return detectFormat(header);
+}
+
+CompressionFormat CompressionFormatDetector::detectFormat(const Vector<unsigned char>& data) {
+    if (data.size() < 2) {
+        return CompressionFormat::UNKNOWN;
+    }
+
+    if (isGzipFormat(data)) {
+        return CompressionFormat::GZIP;
+    }
+
+    if (isZlibFormat(data)) {
+        return CompressionFormat::ZLIB;
+    }
+
+    if (isZipFormat(data)) {
+        return CompressionFormat::ZIP;
+    }
+
+    return CompressionFormat::UNKNOWN;
+}
+
+String CompressionFormatDetector::getFormatName(CompressionFormat format) {
+    switch (format) {
+        case CompressionFormat::GZIP: return "GZIP";
+        case CompressionFormat::ZLIB: return "ZLIB";
+        case CompressionFormat::ZIP: return "ZIP";
+        case CompressionFormat::BZIP2: return "BZIP2";
+        case CompressionFormat::XZ: return "XZ";
+        default: return "UNKNOWN";
+    }
+}
+
+Vector<String> CompressionFormatDetector::getSupportedExtensions(CompressionFormat format) {
+    switch (format) {
+        case CompressionFormat::GZIP: return {".gz", ".gzip"};
+        case CompressionFormat::ZLIB: return {".zlib"};
+        case CompressionFormat::ZIP: return {".zip"};
+        case CompressionFormat::BZIP2: return {".bz2", ".bzip2"};
+        case CompressionFormat::XZ: return {".xz"};
+        default: return {};
+    }
+}
+
+bool CompressionFormatDetector::isGzipFormat(const Vector<unsigned char>& header) {
+    return header.size() >= 2 && header[0] == 0x1f && header[1] == 0x8b;
+}
+
+bool CompressionFormatDetector::isZlibFormat(const Vector<unsigned char>& header) {
+    if (header.size() < 2) return false;
+
+    unsigned char b1 = header[0];
+    unsigned char b2 = header[1];
+
+    return ((b1 & 0x0f) == 0x08) && ((b1 * 256 + b2) % 31 == 0);
+}
+
+bool CompressionFormatDetector::isZipFormat(const Vector<unsigned char>& header) {
+    return header.size() >= 4 &&
+           header[0] == 'P' && header[1] == 'K' &&
+           (header[2] == 0x03 || header[2] == 0x05) &&
+           (header[3] == 0x04 || header[3] == 0x06);
+}
+
+// Utility functions implementation
+namespace utils {
+
+double estimateCompressionRatio(const Vector<unsigned char>& data,
+                               const CompressionOptions& options) {
+    if (data.empty()) return 0.0;
+
+    // Simple heuristic based on data entropy and compression level
+    size_t unique_bytes = 0;
+    std::array<bool, 256> seen = {};
+
+    for (auto byte : data) {
+        if (!seen[byte]) {
+            seen[byte] = true;
+            unique_bytes++;
+        }
+    }
+
+    double entropy = static_cast<double>(unique_bytes) / 256.0;
+    double base_ratio = 0.3 + (entropy * 0.4); // 30-70% based on entropy
+
+    // Adjust for compression level
+    int level = options.level == -1 ? 6 : options.level;
+    double level_factor = 1.0 - (level * 0.05); // Better compression = lower ratio
+
+    return base_ratio * level_factor;
+}
+
+size_t getOptimalChunkSize(size_t file_size) {
+    if (file_size < 1024 * 1024) {          // < 1MB
+        return 8192;                         // 8KB
+    } else if (file_size < 10 * 1024 * 1024) { // < 10MB
+        return 16384;                        // 16KB
+    } else if (file_size < 100 * 1024 * 1024) { // < 100MB
+        return 32768;                        // 32KB
+    } else {
+        return 65536;                        // 64KB for large files
+    }
+}
+
+bool validateCompressionOptions(const CompressionOptions& options) {
+    return options.level >= -1 && options.level <= 9 &&
+           options.chunk_size >= 1024 && options.chunk_size <= 1024 * 1024 &&
+           options.num_threads > 0 && options.num_threads <= 64;
+}
+
+bool validateDecompressionOptions(const DecompressionOptions& options) {
+    return options.chunk_size >= 1024 && options.chunk_size <= 1024 * 1024 &&
+           options.num_threads > 0 && options.num_threads <= 64;
+}
+
+CompressionOptions createOptimalOptions(size_t file_size, const String& profile) {
+    CompressionOptions options;
+
+    if (profile == "fast") {
+        options = CompressionOptions::createFastProfile();
+    } else if (profile == "best") {
+        options = CompressionOptions::createBestProfile();
+    } else {
+        options = CompressionOptions::createBalancedProfile();
+    }
+
+    // Adjust chunk size based on file size
+    options.chunk_size = getOptimalChunkSize(file_size);
+
+    return options;
+}
+
+} // namespace utils
+
 }  // namespace atom::io

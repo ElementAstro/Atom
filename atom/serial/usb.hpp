@@ -29,6 +29,7 @@ namespace atom::serial {
 class UsbContext;
 class UsbDevice;
 class UsbTransfer;
+class UsbTransferPool;
 
 /**
  * @brief Concept defining requirements for hotplug event handlers
@@ -113,6 +114,37 @@ struct UsbOperation {
             handle.destroy();
         }
     }
+};
+
+/**
+ * @brief Pool for reusing USB transfer objects
+ *
+ * Manages a pool of UsbTransfer objects to reduce allocation overhead
+ * in high-frequency USB operations.
+ */
+class UsbTransferPool {
+public:
+    /**
+     * @brief Get a transfer from the pool or create a new one
+     * @return Shared pointer to a UsbTransfer object
+     */
+    static std::shared_ptr<UsbTransfer> acquire();
+
+    /**
+     * @brief Return a transfer to the pool for reuse
+     * @param transfer The transfer to return to the pool
+     */
+    static void release(std::shared_ptr<UsbTransfer> transfer);
+
+    /**
+     * @brief Clear the pool and free all cached transfers
+     */
+    static void clear();
+
+private:
+    static std::vector<std::shared_ptr<UsbTransfer>> pool_;
+    static std::mutex pool_mutex_;
+    static constexpr size_t MAX_POOL_SIZE = 16;
 };
 
 /**
@@ -201,6 +233,14 @@ public:
      * @return Number of bytes actually transferred
      */
     int getActualLength() const;
+
+    /**
+     * @brief Reset the transfer for reuse
+     *
+     * Clears internal state to allow the transfer object to be reused
+     * from the transfer pool.
+     */
+    void reset() noexcept;
 
 private:
     libusb_transfer* transfer_;
@@ -406,11 +446,21 @@ public:
      */
     std::pair<uint16_t, uint16_t> getIds() const;
 
+    /**
+     * @brief Gets the cached device descriptor
+     * @return Reference to the cached descriptor
+     */
+    [[nodiscard]] const libusb_device_descriptor& getDescriptor() const;
+
 private:
     UsbContext& context_;
     libusb_device* device_;
     libusb_device_handle* handle_;
     std::vector<int> claimed_interfaces_;
+
+    // Cached descriptor for performance
+    mutable std::optional<libusb_device_descriptor> cached_descriptor_;
+    mutable std::mutex descriptor_mutex_;
 
     void ensureOpen();
 

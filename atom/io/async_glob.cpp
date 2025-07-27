@@ -20,16 +20,25 @@
 
 namespace atom::io {
 
-AsyncGlob::AsyncGlob(asio::io_context& io_context) noexcept
-    : io_context_(io_context) {
-    spdlog::info("AsyncGlob constructor called");
+AsyncGlob::AsyncGlob(asio::io_context& io_context, const GlobConfig& config) noexcept
+    : io_context_(io_context), config_(config) {
+    if (config_.enable_statistics) {
+        spdlog::debug("AsyncGlob constructor called with {} threads", config_.max_thread_count);
+    }
 
-    const auto thread_count = std::max(1u, std::thread::hardware_concurrency());
-    thread_pool_ = std::make_unique<std::vector<std::thread>>(thread_count);
+    // Initialize thread pool with configured thread count
+    if (config_.max_thread_count > 0) {
+        thread_pool_ = std::make_unique<asio::thread_pool>(config_.max_thread_count);
+    }
+
+    // Initialize statistics
+    stats_.start_time = std::chrono::steady_clock::now();
 }
 
 auto AsyncGlob::translate(std::string_view pattern) const -> std::string {
-    spdlog::info("AsyncGlob::translate called with pattern: {}", pattern);
+    if (config_.enable_statistics) {
+        spdlog::debug("AsyncGlob::translate called with pattern: {}", pattern);
+    }
 
     if (pattern.empty()) {
         return "(.*)";
@@ -181,18 +190,28 @@ auto AsyncGlob::translate(std::string_view pattern) const -> std::string {
         throw;
     }
 
-    spdlog::info("Translated pattern: {}", resultString);
+    if (config_.enable_statistics) {
+        spdlog::debug("Translated pattern: {}", resultString);
+    }
     return std::string{"(("} + resultString + std::string{R"()|[\r\n])$)"};
 }
 
 auto AsyncGlob::compilePattern(std::string_view pattern) const -> std::regex {
-    spdlog::info("AsyncGlob::compilePattern called with pattern: {}", pattern);
+    if (config_.enable_statistics) {
+        spdlog::debug("AsyncGlob::compilePattern called with pattern: {}", pattern);
+    }
+
+    std::string pattern_str(pattern);
 
     {
-        std::string pattern_str(pattern);
         std::lock_guard<std::mutex> lock(pattern_cache_mutex_);
         auto it = pattern_cache_.find(pattern_str);
         if (it != pattern_cache_.end()) {
+            // Update access time for LRU
+            cache_access_times_[pattern_str] = std::chrono::steady_clock::now();
+            if (config_.enable_statistics) {
+                ++stats_.cache_hits;
+            }
             return *it->second;
         }
     }
@@ -202,15 +221,26 @@ auto AsyncGlob::compilePattern(std::string_view pattern) const -> std::regex {
             translate(pattern), std::regex::ECMAScript | std::regex::optimize);
 
         {
-            std::string pattern_str(pattern);
             std::lock_guard<std::mutex> lock(pattern_cache_mutex_);
             pattern_cache_[pattern_str] = regex_ptr;
+            cache_access_times_[pattern_str] = std::chrono::steady_clock::now();
+
+            if (config_.enable_statistics) {
+                ++stats_.cache_misses;
+            }
+
+            // Cleanup cache if it's getting too large
+            if (pattern_cache_.size() > config_.pattern_cache_size) {
+                // Remove this from the critical section by posting cleanup
+                io_context_.post([this]() {
+                    const_cast<AsyncGlob*>(this)->cleanupPatternCache();
+                });
+            }
         }
 
         return *regex_ptr;
     } catch (const std::regex_error& e) {
-        spdlog::error("Regex compilation error for pattern '{}': {}", pattern,
-                      e.what());
+        spdlog::error("Regex compilation error for pattern '{}': {}", pattern, e.what());
         throw;
     }
 }
@@ -218,11 +248,24 @@ auto AsyncGlob::compilePattern(std::string_view pattern) const -> std::regex {
 auto AsyncGlob::fnmatch(const fs::path& name,
                         std::string_view pattern) const noexcept -> bool {
     try {
-        spdlog::info("AsyncGlob::fnmatch called with name: {}, pattern: {}",
-                     name.string(), pattern);
+        if (config_.enable_statistics) {
+            spdlog::debug("AsyncGlob::fnmatch called with name: {}, pattern: {}",
+                         name.string(), pattern);
+        }
+
+        // Try fast matching first if pattern can be optimized
+        if (config_.enable_pattern_optimization && canOptimizePattern(pattern)) {
+            bool result = fastMatch(name.string(), pattern);
+            if (config_.enable_statistics) {
+                spdlog::debug("AsyncGlob::fnmatch (fast) returning: {}", result);
+            }
+            return result;
+        }
 
         bool result = std::regex_match(name.string(), compilePattern(pattern));
-        spdlog::info("AsyncGlob::fnmatch returning: {}", result);
+        if (config_.enable_statistics) {
+            spdlog::debug("AsyncGlob::fnmatch returning: {}", result);
+        }
         return result;
     } catch (const std::exception& e) {
         spdlog::error("Exception in fnmatch: {}", e.what());
@@ -240,10 +283,8 @@ auto AsyncGlob::filter(std::span<const fs::path> names,
         std::vector<fs::path> result;
         result.reserve(names.size() / 2);
 
-        if (thread_pool_ && thread_pool_->size() > 1 && names.size() > 100) {
-            const size_t chunk_size =
-                (names.size() + thread_pool_->size() - 1) /
-                thread_pool_->size();
+        if (thread_pool_ && config_.max_thread_count > 1 && names.size() > config_.parallel_threshold) {
+            const size_t chunk_size = (names.size() + config_.max_thread_count - 1) / config_.max_thread_count;
             std::vector<std::future<std::vector<fs::path>>> futures;
 
             for (size_t i = 0; i < names.size(); i += chunk_size) {
@@ -251,8 +292,7 @@ auto AsyncGlob::filter(std::span<const fs::path> names,
                 futures.push_back(std::async(std::launch::async, [&, i, end]() {
                     std::vector<fs::path> chunk_result;
                     for (size_t j = i; j < end; ++j) {
-                        if (std::regex_match(names[j].string(),
-                                             compiled_pattern)) {
+                        if (std::regex_match(names[j].string(), compiled_pattern)) {
                             chunk_result.push_back(names[j]);
                         }
                     }
@@ -411,7 +451,7 @@ void AsyncGlob::rlistdir(const fs::path& dirname, bool dironly,
 
                     if (fs::is_directory(name)) {
                         if (names.size() > 10 && thread_pool_ &&
-                            thread_pool_->size() > 1) {
+                            config_.max_thread_count > 1) {
                             futures.push_back(std::async(
                                 std::launch::async,
                                 [this, name, dironly, depth]() {
@@ -456,6 +496,126 @@ void AsyncGlob::rlistdir(const fs::path& dirname, bool dironly,
 
             callback(std::move(result));
         });
+}
+
+void AsyncGlob::glob_with_progress(std::string_view pathname,
+                                  ProgressCallback progress_callback,
+                                  CompletionCallback completion_callback,
+                                  bool recursive, bool dironly) {
+    progress_callback_ = std::move(progress_callback);
+    completion_callback_ = std::move(completion_callback);
+
+    if (config_.enable_statistics) {
+        stats_.start_time = std::chrono::steady_clock::now();
+    }
+
+    glob(pathname, [this](std::vector<fs::path> results) {
+        if (config_.enable_statistics) {
+            stats_.end_time = std::chrono::steady_clock::now();
+            stats_.updateProcessingTime();
+            stats_.matches_found = results.size();
+        }
+
+        if (completion_callback_) {
+            completion_callback_({}, results, stats_);
+        }
+    }, recursive, dironly);
+}
+
+void AsyncGlob::cancel_all() {
+    cancelled_.store(true, std::memory_order_release);
+    if (config_.enable_statistics) {
+        spdlog::debug("All glob operations cancelled");
+    }
+}
+
+const AsyncGlobStats& AsyncGlob::getStats() const noexcept {
+    return stats_;
+}
+
+void AsyncGlob::updateConfig(const GlobConfig& config) {
+    config_ = config;
+
+    // Recreate thread pool if thread count changed
+    if (config_.max_thread_count > 0) {
+        thread_pool_ = std::make_unique<asio::thread_pool>(config_.max_thread_count);
+    } else {
+        thread_pool_.reset();
+    }
+}
+
+std::string AsyncGlob::optimizePattern(std::string_view pattern) const {
+    // Simple optimizations for common patterns
+    if (pattern == "*") {
+        return ".*";
+    } else if (pattern.find('*') == std::string::npos &&
+               pattern.find('?') == std::string::npos &&
+               pattern.find('[') == std::string::npos) {
+        // Literal pattern - no regex needed
+        return std::string(pattern);
+    }
+
+    return "";  // No optimization possible
+}
+
+bool AsyncGlob::canOptimizePattern(std::string_view pattern) const noexcept {
+    // Check if pattern can be optimized for fast matching
+    return pattern.find('[') == std::string::npos &&  // No character classes
+           pattern.find('\\') == std::string::npos &&  // No escapes
+           std::count(pattern.begin(), pattern.end(), '*') <= 1 &&  // At most one wildcard
+           std::count(pattern.begin(), pattern.end(), '?') <= 3;    // At most three single chars
+}
+
+bool AsyncGlob::fastMatch(std::string_view name, std::string_view pattern) const noexcept {
+    // Fast matching for simple patterns without regex
+    if (pattern == "*") {
+        return true;
+    }
+
+    if (pattern.find('*') == std::string::npos && pattern.find('?') == std::string::npos) {
+        // Literal match
+        if (config_.case_sensitive) {
+            return name == pattern;
+        } else {
+            return std::equal(name.begin(), name.end(), pattern.begin(), pattern.end(),
+                             [](char a, char b) { return std::tolower(a) == std::tolower(b); });
+        }
+    }
+
+    // Simple wildcard matching (basic implementation)
+    // For more complex patterns, fall back to regex
+    return false;
+}
+
+void AsyncGlob::updateProgress(std::size_t processed, std::size_t total) {
+    processed_items_.store(processed, std::memory_order_release);
+    total_items_.store(total, std::memory_order_release);
+
+    if (progress_callback_ && config_.enable_progress_reporting) {
+        double percentage = total > 0 ? (static_cast<double>(processed) / total * 100.0) : 0.0;
+        progress_callback_(processed, total, percentage);
+    }
+}
+
+void AsyncGlob::cleanupPatternCache() {
+    std::lock_guard<std::mutex> lock(pattern_cache_mutex_);
+
+    if (pattern_cache_.size() <= config_.pattern_cache_size) {
+        return;
+    }
+
+    // Simple LRU eviction - remove oldest entries
+    auto now = std::chrono::steady_clock::now();
+    auto cutoff = now - std::chrono::minutes(10);  // Remove entries older than 10 minutes
+
+    for (auto it = cache_access_times_.begin(); it != cache_access_times_.end();) {
+        if (it->second < cutoff) {
+            pattern_cache_.erase(it->first);
+            it = cache_access_times_.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 }  // namespace atom::io

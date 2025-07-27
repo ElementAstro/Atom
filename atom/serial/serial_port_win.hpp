@@ -14,6 +14,7 @@
 #include <shared_mutex>
 #include <thread>
 #include "serial_port.hpp"
+#include "serial_buffer_pool.hpp"
 
 #ifdef _MSC_VER
 #pragma comment(lib, "setupapi.lib")
@@ -77,10 +78,27 @@ public:
 
         if (handle_ == INVALID_HANDLE_VALUE) {
             const DWORD error = GetLastError();
-            const std::string errorMsg = getLastErrorAsString(error);
-            const std::string message =
-                "Cannot open serial port: " + std::string(portName) + " (" +
-                errorMsg + ")";
+            std::string message = "Cannot open serial port: " + std::string(portName);
+
+            // Provide more specific error messages based on Windows error codes
+            switch (error) {
+                case ERROR_FILE_NOT_FOUND:
+                    message += " (Port not found - check if device exists)";
+                    break;
+                case ERROR_ACCESS_DENIED:
+                    message += " (Access denied - port may be in use or insufficient permissions)";
+                    break;
+                case ERROR_SHARING_VIOLATION:
+                    message += " (Sharing violation - port is already open by another process)";
+                    break;
+                case ERROR_INVALID_NAME:
+                    message += " (Invalid port name)";
+                    break;
+                default:
+                    message += " (" + getLastErrorAsString(error) + ")";
+                    break;
+            }
+
             spdlog::error(message);
             throw SerialException(message);
         }
@@ -140,11 +158,14 @@ public:
             return {};
         }
 
-        std::vector<uint8_t> buffer(maxBytes);
+        // Use buffer pool for better memory management
+        auto buffer = SerialBufferPool::acquire(maxBytes);
+        buffer.resize(maxBytes);
         DWORD bytesRead = 0;
 
         if (!ReadFile(handle_, buffer.data(), static_cast<DWORD>(maxBytes),
                       &bytesRead, nullptr)) {
+            SerialBufferPool::release(std::move(buffer));
             const DWORD error = GetLastError();
             if (error == ERROR_TIMEOUT) {
                 throw SerialTimeoutException();
@@ -157,6 +178,11 @@ public:
         }
 
         buffer.resize(bytesRead);
+
+        // Update performance statistics
+        totalBytesRead_.fetch_add(bytesRead, std::memory_order_relaxed);
+        totalReadOps_.fetch_add(1, std::memory_order_relaxed);
+
         return buffer;
     }
 
@@ -263,7 +289,8 @@ public:
                         }
                     }
 
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    // Use adaptive sleep based on data availability (consistent with Unix)
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }
             } catch (...) {
                 spdlog::error("Unexpected error in async read thread");
@@ -308,6 +335,83 @@ public:
     }
 
     /**
+     * @brief Optimized bulk read operation
+     *
+     * Reads data more efficiently by minimizing system calls and
+     * using optimized buffer management.
+     */
+    std::vector<uint8_t> readBulk(size_t maxBytes) {
+        std::unique_lock<std::shared_mutex> lock(mutex_);
+        checkPortOpen();
+
+        if (maxBytes == 0) {
+            return {};
+        }
+
+        auto buffer = SerialBufferPool::acquire(maxBytes);
+        buffer.resize(maxBytes);
+
+        // Use a single read call for better performance
+        DWORD bytesRead = 0;
+        if (!ReadFile(handle_, buffer.data(), static_cast<DWORD>(maxBytes),
+                      &bytesRead, nullptr)) {
+            SerialBufferPool::release(std::move(buffer));
+            const DWORD error = GetLastError();
+            if (error == ERROR_TIMEOUT) {
+                return {}; // Return empty on timeout for bulk operations
+            }
+            throw SerialIOException("Bulk read error: " + getLastErrorAsString(error));
+        }
+
+        buffer.resize(bytesRead);
+        return buffer;
+    }
+
+    /**
+     * @brief Optimized bulk write operation
+     *
+     * Writes data more efficiently by batching writes and
+     * reducing system call overhead.
+     */
+    size_t writeBulk(std::span<const uint8_t> data) {
+        std::unique_lock<std::shared_mutex> lock(mutex_);
+        checkPortOpen();
+
+        if (data.empty()) {
+            return 0;
+        }
+
+        size_t totalWritten = 0;
+        constexpr size_t CHUNK_SIZE = 4096; // Optimal chunk size for most systems
+
+        while (totalWritten < data.size()) {
+            const size_t remaining = data.size() - totalWritten;
+            const size_t chunkSize = std::min(CHUNK_SIZE, remaining);
+
+            const auto chunk = data.subspan(totalWritten, chunkSize);
+            DWORD bytesWritten = 0;
+
+            if (!WriteFile(handle_, chunk.data(), static_cast<DWORD>(chunk.size()),
+                           &bytesWritten, nullptr)) {
+                const DWORD error = GetLastError();
+                if (error == ERROR_TIMEOUT) {
+                    // Partial write on timeout, return what we've written
+                    break;
+                }
+                throw SerialIOException("Bulk write error: " + getLastErrorAsString(error));
+            }
+
+            totalWritten += bytesWritten;
+
+            if (bytesWritten < chunkSize) {
+                break; // Partial write, stop here
+            }
+        }
+
+        return totalWritten;
+    }
+
+    /**
      * @brief Writes data to the serial port.
      *
      * @param data Data to write to the port
@@ -339,6 +443,10 @@ public:
                 throw SerialIOException(errorMsg);
             }
         }
+
+        // Update performance statistics
+        totalBytesWritten_.fetch_add(bytesWritten, std::memory_order_relaxed);
+        totalWriteOps_.fetch_add(1, std::memory_order_relaxed);
 
         return bytesWritten;
     }
@@ -577,6 +685,12 @@ private:
     std::atomic<bool> asyncReadActive_;
     std::mutex asyncMutex_;
     std::condition_variable asyncCv_;
+
+    // Performance tracking (thread-safe)
+    mutable std::atomic<size_t> totalBytesRead_{0};
+    mutable std::atomic<size_t> totalBytesWritten_{0};
+    mutable std::atomic<size_t> totalReadOps_{0};
+    mutable std::atomic<size_t> totalWriteOps_{0};
 
     /**
      * @brief Applies current configuration to the serial port.

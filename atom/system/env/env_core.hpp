@@ -60,6 +60,34 @@ using EnvChangeCallback = std::function<void(
     const String& key, const String& oldValue, const String& newValue)>;
 
 /**
+ * @brief Environment variable validation level enumeration
+ */
+enum class ValidationLevel {
+    NONE,     // No validation
+    BASIC,    // Basic key/value validation
+    STRICT    // Strict validation with type checking
+};
+
+/**
+ * @brief Environment variable validation callback
+ */
+using EnvValidationCallback = std::function<bool(
+    const String& key, const String& value)>;
+
+/**
+ * @brief Environment variable cache entry
+ */
+struct EnvCacheEntry {
+    String value;
+    std::chrono::steady_clock::time_point timestamp;
+    bool isValid;
+
+    EnvCacheEntry() : isValid(false) {}
+    EnvCacheEntry(const String& val)
+        : value(val), timestamp(std::chrono::steady_clock::now()), isValid(true) {}
+};
+
+/**
  * @brief Core environment variable management class
  */
 class EnvCore {
@@ -275,6 +303,85 @@ public:
      */
     static auto unregisterChangeNotification(size_t id) -> bool;
 
+    // ========== NEW OPTIMIZED FEATURES ==========
+
+    /**
+     * @brief Sets multiple environment variables in a batch operation
+     * @param vars Map of key-value pairs to set
+     * @param notify Whether to trigger change notifications
+     * @return Number of successfully set variables
+     */
+    static auto setBatch(const HashMap<String, String>& vars, bool notify = true) -> size_t;
+
+    /**
+     * @brief Gets multiple environment variables in a batch operation
+     * @param keys Vector of keys to retrieve
+     * @return Map of found key-value pairs
+     */
+    static auto getBatch(const Vector<String>& keys) -> HashMap<String, String>;
+
+    /**
+     * @brief Validates an environment variable key and value
+     * @param key The key to validate
+     * @param value The value to validate
+     * @param level Validation level
+     * @return True if valid, false otherwise
+     */
+    static auto validateVariable(const String& key, const String& value,
+                                ValidationLevel level = ValidationLevel::BASIC) -> bool;
+
+    /**
+     * @brief Registers a custom validation callback
+     * @param callback Validation function
+     * @return Validation ID for unregistration
+     */
+    static auto registerValidationCallback(EnvValidationCallback callback) -> size_t;
+
+    /**
+     * @brief Unregisters a validation callback
+     * @param id Validation ID
+     * @return True if successfully unregistered
+     */
+    static auto unregisterValidationCallback(size_t id) -> bool;
+
+    /**
+     * @brief Enables or disables environment variable caching
+     * @param enabled Whether to enable caching
+     * @param ttl_seconds Cache time-to-live in seconds (default: 300)
+     */
+    static void setCachingEnabled(bool enabled, int ttl_seconds = 300);
+
+    /**
+     * @brief Clears the environment variable cache
+     */
+    static void clearCache();
+
+    /**
+     * @brief Gets cache statistics
+     * @return Map containing cache hit/miss statistics
+     */
+    static auto getCacheStats() -> HashMap<String, size_t>;
+
+    /**
+     * @brief Backs up current environment variables
+     * @param name Backup name identifier
+     * @return True if backup was successful
+     */
+    static auto backupEnvironment(const String& name) -> bool;
+
+    /**
+     * @brief Restores environment variables from backup
+     * @param name Backup name identifier
+     * @return True if restore was successful
+     */
+    static auto restoreEnvironment(const String& name) -> bool;
+
+    /**
+     * @brief Lists available environment backups
+     * @return Vector of backup names
+     */
+    static auto listBackups() -> Vector<String>;
+
 #if ATOM_ENABLE_DEBUG
     /**
      * @brief Prints all environment variables
@@ -285,18 +392,47 @@ public:
      * @brief Prints all command-line arguments
      */
     void printAllArgs() const;
+
+    /**
+     * @brief Prints cache statistics and contents
+     */
+    static void printCacheInfo();
 #endif
 
 private:
     class Impl;
     std::shared_ptr<Impl> impl_;
 
+    // Notification system
     static HashMap<size_t, EnvChangeCallback> sChangeCallbacks;
     static std::mutex sCallbackMutex;
     static size_t sNextCallbackId;
 
+    // Validation system
+    static HashMap<size_t, EnvValidationCallback> sValidationCallbacks;
+    static std::mutex sValidationMutex;
+    static size_t sNextValidationId;
+
+    // Caching system
+    static HashMap<String, EnvCacheEntry> sCache;
+    static std::mutex sCacheMutex;
+    static std::atomic<bool> sCachingEnabled;
+    static std::atomic<int> sCacheTtlSeconds;
+    static std::atomic<size_t> sCacheHits;
+    static std::atomic<size_t> sCacheMisses;
+
+    // Backup system
+    static HashMap<String, HashMap<String, String>> sBackups;
+    static std::mutex sBackupMutex;
+
     static void notifyChangeCallbacks(const String& key, const String& oldValue,
                                       const String& newValue);
+
+    static auto runValidationCallbacks(const String& key, const String& value) -> bool;
+
+    static auto getCachedValue(const String& key) -> std::optional<String>;
+    static void setCachedValue(const String& key, const String& value);
+    static auto isCacheEntryValid(const EnvCacheEntry& entry) -> bool;
 
     template <typename T>
     static T convertFromString(const String& str, const T& defaultValue);

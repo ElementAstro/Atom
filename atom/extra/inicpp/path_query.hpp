@@ -3,9 +3,13 @@
 
 #include <string>
 #include <vector>
-#include "common.hpp"
+#include <sstream>
 
 namespace inicpp {
+
+// Forward declarations - these functions are defined in section.hpp and file.hpp
+auto splitPath(const std::string& path) -> std::vector<std::string>;
+auto joinPath(const std::vector<std::string>& paths) -> std::string;
 
 /**
  * @class PathQuery
@@ -25,7 +29,7 @@ public:
      * @brief 从路径字符串构造
      * @param path 格式为 "section.subsection.field" 的路径字符串
      */
-    explicit PathQuery(std::string_view path) : pathParts_(splitPath(path)) {}
+    explicit PathQuery(std::string_view path) : pathParts_(splitPath(std::string(path))) {}
 
     /**
      * @brief 从路径部分构造

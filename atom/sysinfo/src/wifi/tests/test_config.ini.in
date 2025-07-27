@@ -1,0 +1,50 @@
+# WiFi Module Test Configuration
+# This file is used for testing the configuration system
+
+# Timeout settings (milliseconds)
+ping_timeout=3000
+command_timeout=8000
+connection_timeout=25000
+scan_timeout=12000
+
+# Cache settings
+cache_ttl_wifi_info=10
+cache_ttl_network_stats=8
+cache_ttl_interface_list=100
+cache_ttl_available_networks=25
+max_cache_size=50
+
+# Performance settings
+max_concurrent_operations=2
+buffer_size=32768
+retry_attempts=2
+retry_delay=800
+
+# Quality analysis settings
+jitter_packet_count=5
+jitter_interval=150
+packet_loss_test_count=25
+throughput_test_duration=3
+
+# Monitoring settings
+monitoring_interval=20
+quality_assessment_interval=180
+max_history_size=500
+enable_background_monitoring=true
+
+# Error handling settings
+max_error_history=250
+enable_error_callbacks=true
+
+# Host settings
+preferred_ping_host=8.8.8.8
+backup_ping_host=1.1.1.1
+speed_test_server=speedtest.net
+
+# Advanced settings
+enable_ipv6=true
+enable_detailed_logging=true
+enable_performance_metrics=true
+signal_strength_threshold=-75.0
+packet_loss_threshold=3.0
+jitter_threshold=40.0

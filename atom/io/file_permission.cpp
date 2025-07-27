@@ -6,6 +6,9 @@
 #include <filesystem>
 #include <optional>
 #include <string_view>
+#include <sstream>
+#include <thread>
+#include <future>
 
 #ifdef ATOM_USE_BOOST
 #include <boost/filesystem.hpp>
@@ -19,6 +22,8 @@ namespace fs = std::filesystem;
 #else
 #include <sys/stat.h>
 #include <unistd.h>
+#include <pwd.h>
+#include <grp.h>
 #endif
 #include <sys/types.h>
 #endif
@@ -424,5 +429,445 @@ void changeFilePermissions(const fs::path& filePath,
             filePath.string() + "'");
     }
 }
+
+// Enhanced PermissionInfo methods implementation
+uint32_t PermissionInfo::toOctal() const {
+    return octalPermissions;
+}
+
+bool PermissionInfo::hasPermission(char permission, int position) const {
+    if (position < 0 || position >= static_cast<int>(permissionString.size())) {
+        return false;
+    }
+    return permissionString[position] == permission;
+}
+
+String PermissionInfo::getDescription() const {
+    std::ostringstream oss;
+    oss << "Permissions: " << permissionString << " (";
+    oss << std::oct << octalPermissions << std::dec << ")";
+    if (!owner.empty()) {
+        oss << ", Owner: " << owner;
+    }
+    if (!group.empty()) {
+        oss << ", Group: " << group;
+    }
+    return String(oss.str());
+}
+
+// Enhanced function implementations
+PermissionInfo getPermissionInfo(const std::filesystem::path& filePath,
+                                const PermissionOptions& options) {
+    auto start_time = std::chrono::steady_clock::now();
+
+    // Check cache first
+    if (options.enableCaching) {
+        auto cached = PermissionCache::getInstance().get(filePath);
+        if (cached && cached->isValid(options.cacheMaxAge)) {
+            return *cached;
+        }
+    }
+
+    PermissionInfo info;
+    info.filePath = String(filePath.string());
+    info.retrievalTime = start_time;
+
+    try {
+        // Get basic permissions
+        info.permissionString = String(getFilePermissions(filePath.string()));
+        if (info.permissionString.empty()) {
+            throw std::runtime_error("Failed to get file permissions");
+        }
+
+        // Convert to octal
+        info.octalPermissions = utils::stringToOctal(info.permissionString);
+
+        // Set convenience flags
+        info.isReadable = info.permissionString[0] == 'r';
+        info.isWritable = info.permissionString[1] == 'w';
+        info.isExecutable = info.permissionString[2] == 'x';
+
+        // Get ownership information if requested
+        if (options.includeOwnership) {
+#ifndef _WIN32
+            struct stat fileStat;
+            if (stat(filePath.c_str(), &fileStat) == 0) {
+                info.unixMode = fileStat.st_mode;
+                info.uid = fileStat.st_uid;
+                info.gid = fileStat.st_gid;
+
+                // Get owner name
+                struct passwd* pw = getpwuid(fileStat.st_uid);
+                if (pw) {
+                    info.owner = String(pw->pw_name);
+                }
+
+                // Get group name
+                struct group* gr = getgrgid(fileStat.st_gid);
+                if (gr) {
+                    info.group = String(gr->gr_name);
+                }
+            }
+#endif
+        }
+
+        auto end_time = std::chrono::steady_clock::now();
+        info.retrievalDuration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+        // Cache the result
+        if (options.enableCaching) {
+            PermissionCache::getInstance().put(filePath, info);
+        }
+
+        return info;
+
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to get permission info for {}: {}", filePath.string(), e.what());
+        throw;
+    }
+}
+
+void getPermissionInfoAsync(const std::filesystem::path& filePath,
+                           PermissionCallback callback,
+                           PermissionErrorCallback errorCallback,
+                           const PermissionOptions& options) {
+    std::thread([=]() {
+        try {
+            auto info = getPermissionInfo(filePath, options);
+            if (callback) {
+                callback(info);
+            }
+        } catch (const std::exception& e) {
+            if (errorCallback) {
+                errorCallback(String(e.what()));
+            }
+        }
+    }).detach();
+}
+
+Vector<PermissionInfo> getMultiplePermissionInfo(const Vector<std::filesystem::path>& filePaths,
+                                                 const PermissionOptions& options) {
+    Vector<PermissionInfo> results;
+    results.reserve(filePaths.size());
+
+    for (const auto& path : filePaths) {
+        try {
+            results.push_back(getPermissionInfo(path, options));
+        } catch (const std::exception& e) {
+            spdlog::warn("Failed to get permission info for {}: {}", path.string(), e.what());
+            // Continue with other files
+        }
+    }
+
+    return results;
+}
+
+std::future<Vector<PermissionInfo>> getMultiplePermissionInfoAsync(
+    const Vector<std::filesystem::path>& filePaths,
+    PermissionCallback callback,
+    ProgressCallback progressCallback,
+    const PermissionOptions& options) {
+
+    return std::async(std::launch::async, [=]() {
+        Vector<PermissionInfo> results;
+        results.reserve(filePaths.size());
+
+        for (size_t i = 0; i < filePaths.size(); ++i) {
+            try {
+                auto info = getPermissionInfo(filePaths[i], options);
+                results.push_back(info);
+
+                if (callback) {
+                    callback(info);
+                }
+
+                if (progressCallback) {
+                    double percentage = static_cast<double>(i + 1) / filePaths.size() * 100.0;
+                    progressCallback(i + 1, filePaths.size(), percentage);
+                }
+            } catch (const std::exception& e) {
+                spdlog::warn("Failed to get permission info for {}: {}", filePaths[i].string(), e.what());
+            }
+        }
+
+        return results;
+    });
+}
+
+void changeFilePermissionsEx(const std::filesystem::path& filePath,
+                            const String& permissions,
+                            const PermissionOptions& options) {
+    try {
+        // Validate input
+        if (!utils::isValidPermissionString(permissions)) {
+            throw std::invalid_argument("Invalid permission format: " + permissions);
+        }
+
+        // Use existing function for now
+        changeFilePermissions(filePath, permissions);
+
+        // Clear cache entry if caching is enabled
+        if (options.enableCaching) {
+            // Note: We'd need to implement cache invalidation
+            PermissionCache::getInstance().clear(); // Simple approach for now
+        }
+
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to change permissions for {}: {}", filePath.string(), e.what());
+        throw;
+    }
+}
+
+// PermissionCache implementation
+PermissionCache& PermissionCache::getInstance() {
+    static PermissionCache instance;
+    return instance;
+}
+
+std::optional<PermissionInfo> PermissionCache::get(const std::filesystem::path& path) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = cache_.find(String(path.string()));
+    if (it != cache_.end() && it->second.isValid()) {
+        hit_count_++;
+        return it->second;
+    }
+
+    miss_count_++;
+    return std::nullopt;
+}
+
+void PermissionCache::put(const std::filesystem::path& path, const PermissionInfo& info) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    cache_[String(path.string())] = info;
+}
+
+void PermissionCache::clear() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    cache_.clear();
+}
+
+void PermissionCache::cleanup() {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    for (auto it = cache_.begin(); it != cache_.end();) {
+        if (!it->second.isValid()) {
+            it = cache_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+size_t PermissionCache::size() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return cache_.size();
+}
+
+size_t PermissionCache::getHitCount() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return hit_count_;
+}
+
+size_t PermissionCache::getMissCount() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return miss_count_;
+}
+
+void PermissionCache::resetStats() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    hit_count_ = 0;
+    miss_count_ = 0;
+}
+
+// PermissionAnalyzer implementation
+String PermissionAnalyzer::comparePermissions(const PermissionInfo& info1, const PermissionInfo& info2) {
+    std::ostringstream oss;
+
+    if (info1.permissionString == info2.permissionString) {
+        oss << "Permissions are identical: " << info1.permissionString;
+    } else {
+        oss << "Permissions differ:\n";
+        oss << "  File 1: " << info1.permissionString << " (" << std::oct << info1.octalPermissions << std::dec << ")\n";
+        oss << "  File 2: " << info2.permissionString << " (" << std::oct << info2.octalPermissions << std::dec << ")";
+
+        // Highlight differences
+        for (size_t i = 0; i < std::min(info1.permissionString.size(), info2.permissionString.size()); ++i) {
+            if (info1.permissionString[i] != info2.permissionString[i]) {
+                oss << "\n  Difference at position " << i << ": '"
+                    << info1.permissionString[i] << "' vs '" << info2.permissionString[i] << "'";
+            }
+        }
+    }
+
+    return String(oss.str());
+}
+
+String PermissionAnalyzer::suggestPermissions(const std::filesystem::path& filePath) {
+    try {
+        if (std::filesystem::is_directory(filePath)) {
+            return "rwxr-xr-x"; // 755 for directories
+        } else if (std::filesystem::is_regular_file(filePath)) {
+            // Check if it's an executable
+            auto extension = filePath.extension().string();
+            if (extension == ".exe" || extension == ".sh" || extension == ".py" || extension.empty()) {
+                // Check if file has execute permission or is a script
+                auto current_perms = getFilePermissions(filePath.string());
+                if (!current_perms.empty() && (current_perms[2] == 'x' || current_perms[5] == 'x' || current_perms[8] == 'x')) {
+                    return "rwxr-xr-x"; // 755 for executables
+                }
+            }
+            return "rw-r--r--"; // 644 for regular files
+        } else {
+            return "rw-r--r--"; // Default for other file types
+        }
+    } catch (const std::exception& e) {
+        spdlog::warn("Failed to suggest permissions for {}: {}", filePath.string(), e.what());
+        return "rw-r--r--"; // Safe default
+    }
+}
+
+bool PermissionAnalyzer::validatePermissionString(const String& permissions) {
+    return utils::isValidPermissionString(permissions);
+}
+
+String PermissionAnalyzer::convertPermissionFormat(const String& input, const String& fromFormat, const String& toFormat) {
+    try {
+        if (fromFormat == "string" && toFormat == "octal") {
+            uint32_t octal = utils::stringToOctal(input);
+            std::ostringstream oss;
+            oss << std::oct << octal;
+            return String(oss.str());
+        } else if (fromFormat == "octal" && toFormat == "string") {
+            uint32_t octal = std::stoul(input, nullptr, 8);
+            return utils::octalToString(octal);
+        } else {
+            return input; // No conversion needed or unsupported
+        }
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to convert permission format: {}", e.what());
+        return input;
+    }
+}
+
+bool PermissionAnalyzer::arePermissionsSecure(const PermissionInfo& info) {
+    // Check for common security issues
+
+    // World-writable files are generally insecure
+    if (info.permissionString.size() >= 8 && info.permissionString[7] == 'w') {
+        return false;
+    }
+
+    // World-writable directories without sticky bit are insecure
+    if (info.permissionString.size() >= 8 && info.permissionString[7] == 'w' &&
+        info.permissionString[8] == 'x') {
+        // Check for sticky bit (would need more detailed analysis)
+        return false;
+    }
+
+    // Files with no owner permissions are suspicious
+    if (info.permissionString.size() >= 3 &&
+        info.permissionString[0] == '-' && info.permissionString[1] == '-' && info.permissionString[2] == '-') {
+        return false;
+    }
+
+    return true; // Passed basic security checks
+}
+
+// Utility functions implementation
+namespace utils {
+
+String octalToString(uint32_t octal) {
+    std::array<char, 9> permissions;
+
+    // Owner permissions
+    permissions[0] = (octal & 0400) ? 'r' : '-';
+    permissions[1] = (octal & 0200) ? 'w' : '-';
+    permissions[2] = (octal & 0100) ? 'x' : '-';
+
+    // Group permissions
+    permissions[3] = (octal & 0040) ? 'r' : '-';
+    permissions[4] = (octal & 0020) ? 'w' : '-';
+    permissions[5] = (octal & 0010) ? 'x' : '-';
+
+    // Other permissions
+    permissions[6] = (octal & 0004) ? 'r' : '-';
+    permissions[7] = (octal & 0002) ? 'w' : '-';
+    permissions[8] = (octal & 0001) ? 'x' : '-';
+
+    return String(permissions.begin(), permissions.end());
+}
+
+uint32_t stringToOctal(const String& permissions) {
+    if (permissions.size() != 9) {
+        throw std::invalid_argument("Invalid permission string length");
+    }
+
+    uint32_t octal = 0;
+
+    // Owner permissions
+    if (permissions[0] == 'r') octal |= 0400;
+    if (permissions[1] == 'w') octal |= 0200;
+    if (permissions[2] == 'x') octal |= 0100;
+
+    // Group permissions
+    if (permissions[3] == 'r') octal |= 0040;
+    if (permissions[4] == 'w') octal |= 0020;
+    if (permissions[5] == 'x') octal |= 0010;
+
+    // Other permissions
+    if (permissions[6] == 'r') octal |= 0004;
+    if (permissions[7] == 'w') octal |= 0002;
+    if (permissions[8] == 'x') octal |= 0001;
+
+    return octal;
+}
+
+bool isValidPermissionString(const String& permissions) {
+    if (permissions.size() != 9) {
+        return false;
+    }
+
+    for (char c : permissions) {
+        if (c != 'r' && c != 'w' && c != 'x' && c != '-') {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+String getDefaultPermissions(const std::filesystem::path& filePath) {
+    return PermissionAnalyzer::suggestPermissions(filePath);
+}
+
+String formatPermissions(const PermissionInfo& info, const String& format) {
+    if (format == "octal") {
+        std::ostringstream oss;
+        oss << std::oct << info.octalPermissions;
+        return String(oss.str());
+    } else if (format == "detailed") {
+        return info.getDescription();
+    } else {
+        return info.permissionString; // Default string format
+    }
+}
+
+PermissionOptions getOptimalOptions(const String& useCase) {
+    if (useCase == "fast") {
+        return PermissionOptions::createFastOptions();
+    } else if (useCase == "detailed") {
+        return PermissionOptions::createDetailedOptions();
+    } else {
+        // Balanced default
+        PermissionOptions options;
+        options.includeOwnership = false;
+        options.enableCaching = true;
+        options.enableStatistics = true;
+        return options;
+    }
+}
+
+} // namespace utils
 
 }  // namespace atom::io

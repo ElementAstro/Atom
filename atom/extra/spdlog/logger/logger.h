@@ -339,6 +339,16 @@ private:
                                             const LogContext& ctx) const;
 
     /**
+     * @brief Fast context enrichment using pre-allocated buffer.
+     * @param message Original message.
+     * @param ctx Context to add.
+     * @param buffer Pre-allocated buffer to write to.
+     */
+    void enrich_message_with_context_fast(const std::string& message,
+                                          const LogContext& ctx,
+                                          std::string& buffer) const;
+
+    /**
      * @brief Emit a log event to the event system.
      * @param event LogEvent type.
      * @param data Optional event data.

@@ -13,6 +13,7 @@ set_license("GPL3")
 
 -- Define source files
 local source_files = {
+    "common.cpp",
     "encryption.cpp",
     "storage.cpp",
     "password_manager.cpp"

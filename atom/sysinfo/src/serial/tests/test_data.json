@@ -1,0 +1,213 @@
+{
+  "test_hardware_serials": {
+    "valid_serials": [
+      "ABC123DEF456",
+      "1234567890ABCDEF",
+      "SERIAL-NUMBER-123",
+      "HW-SN-789456123",
+      "MOTHERBOARD-456789"
+    ],
+    "invalid_serials": [
+      "",
+      "N/A",
+      "Not Available",
+      "Default",
+      "To Be Filled By O.E.M.",
+      "System Serial Number",
+      "0000000000",
+      "FFFFFFFFFF",
+      "..........",
+      "----------",
+      "AB"
+    ]
+  },
+  "test_mac_addresses": {
+    "valid_macs": [
+      "00:11:22:33:44:55",
+      "AA:BB:CC:DD:EE:FF",
+      "00-11-22-33-44-55",
+      "aa:bb:cc:dd:ee:ff",
+      "FF:FF:FF:FF:FF:FF",
+      "00:00:00:00:00:00"
+    ],
+    "invalid_macs": [
+      "",
+      "00:11:22:33:44",
+      "00:11:22:33:44:55:66",
+      "GG:HH:II:JJ:KK:LL",
+      "00.11.22.33.44.55",
+      "00:11:22:33:44:ZZ"
+    ]
+  },
+  "test_uuids": {
+    "valid_uuids": [
+      "550e8400-e29b-41d4-a716-446655440000",
+      "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+      "12345678-1234-1234-1234-123456789abc",
+      "00000000-0000-0000-0000-000000000000",
+      "ffffffff-ffff-ffff-ffff-ffffffffffff"
+    ],
+    "invalid_uuids": [
+      "",
+      "550e8400-e29b-41d4-a716",
+      "550e8400-e29b-41d4-a716-446655440000-extra",
+      "550e8400_e29b_41d4_a716_446655440000",
+      "gggggggg-gggg-gggg-gggg-gggggggggggg",
+      "550e8400-e29b-41d4-a716-44665544000"
+    ]
+  },
+  "test_memory_sizes": {
+    "valid_sizes": [
+      {"input": "1024", "expected_bytes": 1024},
+      {"input": "1 KB", "expected_bytes": 1024},
+      {"input": "1 MB", "expected_bytes": 1048576},
+      {"input": "1 GB", "expected_bytes": 1073741824},
+      {"input": "8 GB", "expected_bytes": 8589934592},
+      {"input": "16384 MB", "expected_bytes": 17179869184}
+    ],
+    "invalid_sizes": [
+      "",
+      "invalid",
+      "-1",
+      "1 XB"
+    ]
+  },
+  "test_system_info": {
+    "sample_hardware_serials": {
+      "biosSerial": "BIOS123456789",
+      "motherboardSerial": "MB987654321",
+      "cpuSerial": "CPU456789123",
+      "diskSerials": ["DISK1-123456", "DISK2-789012"]
+    },
+    "sample_system_id": {
+      "systemUuid": "550e8400-e29b-41d4-a716-446655440000",
+      "machineId": "machine123456789",
+      "bootId": "boot987654321",
+      "hostname": "test-hostname",
+      "domainName": "test.domain.com",
+      "macAddresses": ["00:11:22:33:44:55", "AA:BB:CC:DD:EE:FF"]
+    },
+    "sample_memory_modules": [
+      {
+        "serialNumber": "MEM123456789",
+        "manufacturer": "Crucial",
+        "partNumber": "CT8G4DFS824A",
+        "type": "DDR4",
+        "sizeBytes": 8589934592,
+        "speedMHz": 2400,
+        "formFactor": "DIMM",
+        "slot": 1
+      },
+      {
+        "serialNumber": "MEM987654321",
+        "manufacturer": "Kingston",
+        "partNumber": "KVR24N17S8/8",
+        "type": "DDR4",
+        "sizeBytes": 8589934592,
+        "speedMHz": 2400,
+        "formFactor": "DIMM",
+        "slot": 2
+      }
+    ],
+    "sample_network_interfaces": [
+      {
+        "name": "eth0",
+        "macAddress": "00:11:22:33:44:55",
+        "type": "Ethernet",
+        "manufacturer": "Intel",
+        "driver": "e1000e",
+        "isActive": true,
+        "ipAddresses": ["192.168.1.100", "fe80::211:22ff:fe33:4455"]
+      },
+      {
+        "name": "wlan0",
+        "macAddress": "AA:BB:CC:DD:EE:FF",
+        "type": "IEEE 802.11",
+        "manufacturer": "Broadcom",
+        "driver": "brcmfmac",
+        "isActive": false,
+        "ipAddresses": []
+      }
+    ]
+  },
+  "test_configurations": {
+    "minimal_config": {
+      "includeMemoryModules": false,
+      "includeNetworkInterfaces": false,
+      "includeDiskSerials": false,
+      "includeSystemUuid": true,
+      "includeMacAddresses": true,
+      "cacheResults": false,
+      "cacheTimeout": 0,
+      "enableLogging": false
+    },
+    "full_config": {
+      "includeMemoryModules": true,
+      "includeNetworkInterfaces": true,
+      "includeDiskSerials": true,
+      "includeSystemUuid": true,
+      "includeMacAddresses": true,
+      "cacheResults": true,
+      "cacheTimeout": 300,
+      "enableLogging": true
+    },
+    "performance_config": {
+      "includeMemoryModules": true,
+      "includeNetworkInterfaces": true,
+      "includeDiskSerials": true,
+      "includeSystemUuid": true,
+      "includeMacAddresses": true,
+      "cacheResults": true,
+      "cacheTimeout": 600,
+      "enableLogging": false
+    }
+  },
+  "test_error_scenarios": {
+    "access_denied": {
+      "description": "Simulate access denied error",
+      "expected_error": "ACCESS_DENIED"
+    },
+    "not_supported": {
+      "description": "Simulate not supported error",
+      "expected_error": "NOT_SUPPORTED"
+    },
+    "hardware_not_found": {
+      "description": "Simulate hardware not found error",
+      "expected_error": "HARDWARE_NOT_FOUND"
+    },
+    "invalid_data": {
+      "description": "Simulate invalid data error",
+      "expected_error": "INVALID_DATA"
+    },
+    "timeout": {
+      "description": "Simulate timeout error",
+      "expected_error": "TIMEOUT"
+    }
+  },
+  "test_fingerprints": {
+    "sample_fingerprints": [
+      "a1b2c3d4e5f6g7h8",
+      "1234567890abcdef",
+      "fedcba0987654321",
+      "aaaaaaaaaaaaaaaa",
+      "1111111111111111"
+    ],
+    "similarity_tests": [
+      {
+        "fingerprint1": "a1b2c3d4e5f6g7h8",
+        "fingerprint2": "a1b2c3d4e5f6g7h8",
+        "expected_similarity": 1.0
+      },
+      {
+        "fingerprint1": "a1b2c3d4e5f6g7h8",
+        "fingerprint2": "a1b2c3d4e5f6g7h9",
+        "expected_similarity": 0.9375
+      },
+      {
+        "fingerprint1": "a1b2c3d4e5f6g7h8",
+        "fingerprint2": "xxxxxxxxxxxxxxxx",
+        "expected_similarity": 0.0
+      }
+    ]
+  }
+}

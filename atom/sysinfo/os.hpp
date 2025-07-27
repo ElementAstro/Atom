@@ -1,9 +1,21 @@
 /**
  * @file os.hpp
- * @brief Operating System Information Module
+ * @brief Operating System Information Module - Enhanced Compatibility Header
  *
- * This file contains definitions for retrieving comprehensive operating system
- * information across different platforms including Windows, Linux, and macOS.
+ * This file provides backward compatibility by including the new enhanced
+ * OS implementation from the BIOS folder. All functionality has been moved
+ * to the bios/os/ subdirectory while maintaining the same public API and
+ * adding comprehensive new features.
+ *
+ * The enhanced implementation provides:
+ * - Advanced system monitoring and performance metrics
+ * - Comprehensive security analysis and management
+ * - Real-time system health monitoring
+ * - Cross-platform system optimization
+ * - Enhanced hardware and software detection
+ * - System backup and restore capabilities
+ * - Network configuration management
+ * - Event logging and analysis
  *
  * @copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
@@ -11,157 +23,57 @@
 #ifndef ATOM_SYSTEM_MODULE_OS_HPP
 #define ATOM_SYSTEM_MODULE_OS_HPP
 
-#include <chrono>
-#include <string>
-#include <vector>
+// Include the new enhanced modular OS implementation
+#include "src/os/os.hpp"
 
-#include "atom/macro.hpp"
-
+// Legacy compatibility - ensure all original functions are available
 namespace atom::system {
 
-/**
- * @struct OperatingSystemInfo
- * @brief Comprehensive information about the operating system
- *
- * Contains detailed information about the operating system including
- * version details, architecture, boot time, and system configuration.
- */
-struct OperatingSystemInfo {
-    std::string osName;        /**< The name of the operating system */
-    std::string osVersion;     /**< The version of the operating system */
-    std::string kernelVersion; /**< The version of the kernel */
-    std::string architecture;  /**< The architecture of the operating system */
-    std::string
-        compiler; /**< The compiler used to compile the operating system */
-    std::string computerName; /**< The name of the computer */
-    std::string bootTime;     /**< System boot time */
-    std::string installDate;  /**< OS installation date */
-    std::string lastUpdate;   /**< Last system update time */
-    std::string timeZone;     /**< System timezone */
-    std::string charSet;      /**< System character set */
-    bool isServer;            /**< Whether the OS is server version */
-    std::vector<std::string> installedUpdates; /**< List of installed updates */
+// Re-export the original OperatingSystemInfo structure for compatibility
+using OriginalOperatingSystemInfo = OperatingSystemInfo;
 
-    OperatingSystemInfo() = default;
+// Provide legacy function aliases for backward compatibility
+inline auto getOSInfo() -> OperatingSystemInfo {
+    return getOperatingSystemInfo();
+}
 
-    /**
-     * @brief Converts the OS information to JSON format
-     * @return JSON string representation of the OS information
-     */
-    std::string toJson() const;
+inline auto getOSName() -> std::string {
+    auto info = getOperatingSystemInfo();
+    return info.osName;
+}
 
-    /**
-     * @brief Converts the OS information to detailed string format
-     * @return Detailed string representation of the OS information
-     */
-    std::string toDetailedString() const;
+inline auto getOSVersion() -> std::string {
+    auto info = getOperatingSystemInfo();
+    return info.osVersion;
+}
 
-    /**
-     * @brief Converts the OS information to JSON string format
-     * @return JSON string representation of the OS information
-     */
-    std::string toJsonString() const;
-} ATOM_ALIGNAS(128);
+inline auto getKernelVersion() -> std::string {
+    auto info = getOperatingSystemInfo();
+    return info.kernelVersion;
+}
 
-/**
- * @brief Retrieves comprehensive information about the operating system
- *
- * Queries the operating system for detailed information including name,
- * version, kernel details, architecture, and other system properties.
- *
- * @return OperatingSystemInfo struct containing the operating system
- * information
- */
-OperatingSystemInfo getOperatingSystemInfo();
+inline auto getArchitecture() -> std::string {
+    auto info = getOperatingSystemInfo();
+    return info.architecture;
+}
 
-/**
- * @brief Checks if the operating system is running in a Windows Subsystem for
- * Linux (WSL) environment
- *
- * Detects whether the current environment is running under WSL by examining
- * system files and environment indicators.
- *
- * @return true if the operating system is running in a WSL environment, false
- * otherwise
- */
-auto isWsl() -> bool;
+// Enhanced functionality access
+inline auto getEnhancedOSManager() -> EnhancedOSManager& {
+    return EnhancedOSManager::getInstance();
+}
 
-/**
- * @brief Retrieves the system uptime
- *
- * Calculates the duration since the system was last booted.
- *
- * @return The system uptime as a duration in seconds
- */
-auto getSystemUptime() -> std::chrono::seconds;
+inline auto getSystemMetrics() -> SystemPerformanceMetrics {
+    return EnhancedOSManager::getInstance().getPerformanceMetrics();
+}
 
-/**
- * @brief Retrieves the last boot time of the system
- *
- * Determines when the system was last started by calculating the boot time
- * based on current time and uptime.
- *
- * @return The last boot time as a formatted string
- */
-auto getLastBootTime() -> std::string;
+inline auto getSystemSecurity() -> SystemSecurityInfo {
+    return EnhancedOSManager::getInstance().getSecurityInfo();
+}
 
-/**
- * @brief Retrieves the system timezone
- *
- * Gets the current timezone configuration of the system.
- *
- * @return The system timezone as a string
- */
-auto getSystemTimeZone() -> std::string;
-
-/**
- * @brief Retrieves the list of installed updates
- *
- * Queries the system for a list of installed updates, patches, or packages
- * depending on the operating system.
- *
- * @return A vector containing the names of installed updates
- */
-auto getInstalledUpdates() -> std::vector<std::string>;
-
-/**
- * @brief Checks for available updates
- *
- * Queries the system or update repositories for available updates
- * that can be installed.
- *
- * @return A vector containing the names of available updates
- */
-auto checkForUpdates() -> std::vector<std::string>;
-
-/**
- * @brief Retrieves the system language
- *
- * Gets the primary language configured for the system.
- *
- * @return The system language as a string
- */
-auto getSystemLanguage() -> std::string;
-
-/**
- * @brief Retrieves the system encoding
- *
- * Gets the character encoding used by the system.
- *
- * @return The system encoding as a string
- */
-auto getSystemEncoding() -> std::string;
-
-/**
- * @brief Checks if the operating system is a server edition
- *
- * Determines whether the current OS installation is a server variant
- * or desktop/workstation variant.
- *
- * @return true if the operating system is a server edition, false otherwise
- */
-auto isServerEdition() -> bool;
+inline auto getNetworkInfo() -> NetworkConfiguration {
+    return EnhancedOSManager::getInstance().getNetworkConfiguration();
+}
 
 }  // namespace atom::system
 
-#endif
+#endif  // ATOM_SYSTEM_MODULE_OS_HPP

@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <future>
 #include <memory>
 #include <optional>
 #include <ranges>
@@ -33,12 +34,106 @@ namespace fs = std::filesystem;
 
 namespace atom::io {
 
+// Forward declarations
+struct IOOptions;
+struct IOResult;
+class IOCache;
+class IOStats;
+
+// Callback types
+using ProgressCallback = std::function<void(size_t processed, size_t total, double percentage)>;
+using IOCallback = std::function<void(const IOResult&)>;
+
 // Concepts for path-like types
 template <typename T>
 concept PathLike =
     std::convertible_to<T, fs::path> || std::convertible_to<T, std::string> ||
     std::convertible_to<T, std::string_view> ||
     std::convertible_to<T, const char*>;
+
+/**
+ * @brief Enhanced I/O options for customizable behavior
+ */
+struct IOOptions {
+    bool enable_logging{true};          ///< Enable detailed logging
+    bool enable_caching{false};         ///< Enable operation caching
+    bool enable_statistics{false};      ///< Enable performance statistics
+    bool enable_progress{false};        ///< Enable progress reporting
+    bool verify_operations{true};       ///< Verify operations completed successfully
+    bool create_missing_dirs{true};     ///< Create missing parent directories
+    std::chrono::milliseconds timeout{30000}; ///< Operation timeout
+
+    // Callbacks
+    ProgressCallback progress_callback; ///< Progress reporting callback
+
+    /**
+     * @brief Creates options optimized for performance
+     */
+    static IOOptions createFastOptions() {
+        IOOptions options;
+        options.enable_logging = false;
+        options.enable_caching = true;
+        options.enable_statistics = false;
+        options.verify_operations = false;
+        return options;
+    }
+
+    /**
+     * @brief Creates options for comprehensive operations
+     */
+    static IOOptions createDetailedOptions() {
+        IOOptions options;
+        options.enable_logging = true;
+        options.enable_caching = true;
+        options.enable_statistics = true;
+        options.enable_progress = true;
+        options.verify_operations = true;
+        return options;
+    }
+};
+
+/**
+ * @brief Enhanced I/O result with metadata
+ */
+struct IOResult {
+    bool success{false};                ///< Whether operation succeeded
+    std::string error_message;          ///< Error message if failed
+    size_t bytes_processed{0};          ///< Bytes processed
+    size_t files_processed{0};          ///< Files processed
+    std::chrono::milliseconds processing_time{0}; ///< Time taken
+    std::string operation_type;         ///< Type of operation performed
+
+    /**
+     * @brief Creates a successful result
+     */
+    static IOResult success_result(const std::string& operation = "") {
+        IOResult result;
+        result.success = true;
+        result.operation_type = operation;
+        return result;
+    }
+
+    /**
+     * @brief Creates an error result
+     */
+    static IOResult error_result(const std::string& error, const std::string& operation = "") {
+        IOResult result;
+        result.success = false;
+        result.error_message = error;
+        result.operation_type = operation;
+        return result;
+    }
+
+    /**
+     * @brief Gets processing throughput in bytes per second
+     */
+    double getThroughput() const {
+        if (processing_time.count() > 0) {
+            return static_cast<double>(bytes_processed) / (processing_time.count() / 1000.0);
+        }
+        return 0.0;
+    }
+};
 
 /**
  * @brief Creates a directory with the specified path.
@@ -484,6 +579,68 @@ auto searchExecutableFiles(const P& dir, std::string_view searchStr)
 template <PathLike P>
 auto classifyFiles(const P& directory)
     -> std::unordered_map<std::string, std::vector<std::string>>;
+
+// Enhanced I/O functions with options and results
+
+/**
+ * @brief Enhanced file copy with options and result
+ * @param src_path Source file path
+ * @param dst_path Destination file path
+ * @param options I/O options
+ * @return IOResult with operation details
+ */
+template <PathLike P1, PathLike P2>
+IOResult copyFileEx(const P1& src_path, const P2& dst_path, const IOOptions& options = {});
+
+/**
+ * @brief Enhanced file move with options and result
+ * @param src_path Source file path
+ * @param dst_path Destination file path
+ * @param options I/O options
+ * @return IOResult with operation details
+ */
+template <PathLike P1, PathLike P2>
+IOResult moveFileEx(const P1& src_path, const P2& dst_path, const IOOptions& options = {});
+
+/**
+ * @brief Enhanced directory creation with options and result
+ * @param path Directory path to create
+ * @param options I/O options
+ * @return IOResult with operation details
+ */
+template <PathLike P>
+IOResult createDirectoryEx(const P& path, const IOOptions& options = {});
+
+/**
+ * @brief Batch file operations with progress reporting
+ * @param operations Vector of file operations to perform
+ * @param progress_callback Progress callback function
+ * @param options I/O options
+ * @return Vector of IOResult for each operation
+ */
+struct FileOperation {
+    enum Type { COPY, MOVE, DELETE, CREATE_DIR } type;
+    std::string source_path;
+    std::string dest_path;
+};
+
+std::vector<IOResult> batchFileOperations(
+    const std::vector<FileOperation>& operations,
+    ProgressCallback progress_callback = nullptr,
+    const IOOptions& options = {});
+
+/**
+ * @brief Asynchronous file copy
+ * @param src_path Source file path
+ * @param dst_path Destination file path
+ * @param callback Completion callback
+ * @param options I/O options
+ * @return Future containing IOResult
+ */
+template <PathLike P1, PathLike P2>
+std::future<IOResult> copyFileAsync(const P1& src_path, const P2& dst_path,
+                                   IOCallback callback = nullptr,
+                                   const IOOptions& options = {});
 
 }  // namespace atom::io
 

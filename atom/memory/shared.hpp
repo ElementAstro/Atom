@@ -14,6 +14,12 @@
 #include <thread>
 #include <type_traits>
 #include <vector>
+#include <unordered_map>
+
+// Cache line size for alignment optimizations
+#ifndef CACHE_LINE_SIZE
+#define CACHE_LINE_SIZE 64
+#endif
 
 #include <spdlog/spdlog.h>
 #include "atom/error/exception.hpp"
@@ -124,20 +130,115 @@ private:
         ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, __VA_ARGS__)
 
 /**
- * @brief Header structure stored at the beginning of shared memory
+ * @brief Performance statistics for SharedMemory operations
  */
-struct SharedMemoryHeader {
+struct alignas(CACHE_LINE_SIZE) SharedMemoryStats {
+    std::atomic<size_t> read_operations{0};      ///< Total read operations
+    std::atomic<size_t> write_operations{0};     ///< Total write operations
+    std::atomic<size_t> lock_acquisitions{0};    ///< Lock acquisition attempts
+    std::atomic<size_t> lock_timeouts{0};        ///< Lock timeout events
+    std::atomic<size_t> version_conflicts{0};    ///< Version conflict events
+    std::atomic<size_t> resize_operations{0};    ///< Resize operations
+    std::atomic<size_t> callback_invocations{0}; ///< Change callback invocations
+    std::atomic<uint64_t> total_read_time{0};    ///< Total read time (ns)
+    std::atomic<uint64_t> total_write_time{0};   ///< Total write time (ns)
+    std::atomic<uint64_t> total_lock_time{0};    ///< Total lock wait time (ns)
+    std::atomic<uint64_t> max_read_time{0};      ///< Maximum read time (ns)
+    std::atomic<uint64_t> max_write_time{0};     ///< Maximum write time (ns)
+    std::atomic<uint64_t> max_lock_time{0};      ///< Maximum lock wait time (ns)
+    std::atomic<size_t> memory_usage{0};         ///< Current memory usage
+    std::atomic<size_t> peak_memory_usage{0};    ///< Peak memory usage
+
+    void reset() noexcept {
+        read_operations = 0; write_operations = 0; lock_acquisitions = 0;
+        lock_timeouts = 0; version_conflicts = 0; resize_operations = 0;
+        callback_invocations = 0; total_read_time = 0; total_write_time = 0;
+        total_lock_time = 0; max_read_time = 0; max_write_time = 0;
+        max_lock_time = 0; memory_usage = 0; peak_memory_usage = 0;
+    }
+
+    double getAverageReadTime() const noexcept {
+        size_t count = read_operations.load();
+        return count > 0 ? static_cast<double>(total_read_time.load()) / count : 0.0;
+    }
+
+    double getAverageWriteTime() const noexcept {
+        size_t count = write_operations.load();
+        return count > 0 ? static_cast<double>(total_write_time.load()) / count : 0.0;
+    }
+
+    double getAverageLockTime() const noexcept {
+        size_t count = lock_acquisitions.load();
+        return count > 0 ? static_cast<double>(total_lock_time.load()) / count : 0.0;
+    }
+
+    double getLockTimeoutRatio() const noexcept {
+        size_t total = lock_acquisitions.load();
+        return total > 0 ? static_cast<double>(lock_timeouts.load()) / total : 0.0;
+    }
+
+    // Create a copyable snapshot of the statistics
+    void snapshot(SharedMemoryStats& copy) const noexcept {
+        copy.read_operations.store(read_operations.load());
+        copy.write_operations.store(write_operations.load());
+        copy.lock_acquisitions.store(lock_acquisitions.load());
+        copy.lock_timeouts.store(lock_timeouts.load());
+        copy.version_conflicts.store(version_conflicts.load());
+        copy.resize_operations.store(resize_operations.load());
+        copy.callback_invocations.store(callback_invocations.load());
+        copy.total_read_time.store(total_read_time.load());
+        copy.total_write_time.store(total_write_time.load());
+        copy.total_lock_time.store(total_lock_time.load());
+        copy.max_read_time.store(max_read_time.load());
+        copy.max_write_time.store(max_write_time.load());
+        copy.max_lock_time.store(max_lock_time.load());
+        copy.memory_usage.store(memory_usage.load());
+        copy.peak_memory_usage.store(peak_memory_usage.load());
+    }
+};
+
+/**
+ * @brief Configuration for SharedMemory optimizations
+ */
+struct SharedMemoryConfig {
+    bool enable_stats{true};              ///< Enable performance statistics
+    bool enable_version_checking{true};   ///< Enable version conflict detection
+    bool enable_memory_prefetching{true}; ///< Enable memory prefetching
+    bool enable_auto_recovery{true};      ///< Enable automatic error recovery
+    std::chrono::milliseconds default_timeout{1000}; ///< Default operation timeout
+    std::chrono::milliseconds lock_retry_interval{1}; ///< Lock retry interval
+    size_t max_retry_attempts{100};       ///< Maximum retry attempts for operations
+    size_t memory_alignment{CACHE_LINE_SIZE}; ///< Memory alignment for performance
+};
+
+/**
+ * @brief Enhanced header structure stored at the beginning of shared memory
+ */
+struct alignas(CACHE_LINE_SIZE) SharedMemoryHeader {
     std::atomic_flag accessLock;
     std::atomic<std::size_t> size;
     std::atomic<uint64_t> version;
     std::atomic<bool> initialized;
+    std::atomic<uint64_t> creation_time;  ///< Creation timestamp
+    std::atomic<uint64_t> last_access_time; ///< Last access timestamp
+    std::atomic<size_t> access_count;     ///< Total access count
+    std::atomic<uint32_t> checksum;       ///< Data integrity checksum
+    char creator_info[64];                ///< Creator process information
+    char reserved[64];                    ///< Reserved for future use
 };
 
 /**
- * @brief Enhanced cross-platform shared memory implementation.
+ * @brief Enhanced cross-platform shared memory implementation with advanced features.
  *
- * @tparam T The type of data stored in shared memory, must be trivially
- * copyable.
+ * Features:
+ * - Comprehensive performance monitoring and statistics
+ * - Enhanced error handling and automatic recovery
+ * - Cross-platform compatibility optimizations
+ * - Memory integrity checking with checksums
+ * - Configurable timeouts and retry mechanisms
+ * - Cache-aligned data structures for better performance
+ *
+ * @tparam T The type of data stored in shared memory, must be trivially copyable.
  */
 template <TriviallyCopyable T>
 class SharedMemory : public NonCopyable {
@@ -145,14 +246,16 @@ public:
     using ChangeCallback = std::function<void(const T&)>;
 
     /**
-     * @brief Constructs a new SharedMemory object.
+     * @brief Constructs a new SharedMemory object with enhanced configuration.
      *
      * @param name The name of the shared memory.
      * @param create Whether to create new shared memory.
      * @param initialData Optional initial data to write to shared memory.
+     * @param config Configuration options for performance and behavior.
      */
     explicit SharedMemory(std::string_view name, bool create = true,
-                          const std::optional<T>& initialData = std::nullopt);
+                          const std::optional<T>& initialData = std::nullopt,
+                          const SharedMemoryConfig& config = SharedMemoryConfig{});
 
     /**
      * @brief Destructor for SharedMemory.
@@ -418,6 +521,12 @@ private:
     std::jthread watchThread_;
     std::atomic<bool> stopWatching_{false};
 
+    // Enhanced features
+    SharedMemoryConfig config_;
+    mutable SharedMemoryStats stats_;
+    std::unordered_map<std::string, std::string> metadata_;
+    mutable std::atomic<uint64_t> last_operation_time_{0};
+
     void unmap() noexcept;
     void mapMemory(bool create, std::size_t size);
     void startWatchThread();
@@ -425,17 +534,150 @@ private:
     void platformSpecificInit();
     void platformSpecificCleanup() noexcept;
     static std::string getLastErrorMessage();
+
+    // Enhanced helper methods
+    void updateTimingStats(uint64_t duration, bool is_read) const noexcept;
+    uint32_t calculateChecksum(const void* data, size_t size) const noexcept;
+    void validateDataIntegrity() const;
+    void initializeCreatorInfo();
+    void handleRecoveryOperation();
+
+public:
+    /**
+     * @brief Get performance statistics
+     *
+     * @param stats Reference to statistics structure to fill
+     */
+    void getStats(SharedMemoryStats& stats) const {
+        std::lock_guard lock(mutex_);
+        stats_.snapshot(stats);
+    }
+
+    /**
+     * @brief Reset performance statistics
+     */
+    void resetStats() {
+        std::lock_guard lock(mutex_);
+        stats_.reset();
+    }
+
+    /**
+     * @brief Get performance metrics
+     *
+     * @return Tuple of (avg_read_time, avg_write_time, avg_lock_time, lock_timeout_ratio)
+     */
+    [[nodiscard]] auto getPerformanceMetrics() const -> std::tuple<double, double, double, double> {
+        std::lock_guard lock(mutex_);
+        return std::make_tuple(
+            stats_.getAverageReadTime(),
+            stats_.getAverageWriteTime(),
+            stats_.getAverageLockTime(),
+            stats_.getLockTimeoutRatio()
+        );
+    }
+
+    /**
+     * @brief Get memory usage information
+     *
+     * @return Tuple of (current_usage, peak_usage, total_size)
+     */
+    [[nodiscard]] auto getMemoryUsage() const -> std::tuple<size_t, size_t, size_t> {
+        std::lock_guard lock(mutex_);
+        return std::make_tuple(
+            stats_.memory_usage.load(),
+            stats_.peak_memory_usage.load(),
+            totalSize_
+        );
+    }
+
+    /**
+     * @brief Get current configuration
+     *
+     * @return Current configuration settings
+     */
+    [[nodiscard]] const SharedMemoryConfig& getConfig() const noexcept {
+        return config_;
+    }
+
+    /**
+     * @brief Update configuration
+     *
+     * @param new_config New configuration to apply
+     */
+    void updateConfig(const SharedMemoryConfig& new_config) {
+        std::lock_guard lock(mutex_);
+        config_ = new_config;
+    }
+
+    /**
+     * @brief Validate data integrity using checksum
+     *
+     * @return True if data integrity is valid
+     */
+    [[nodiscard]] bool validateIntegrity() const {
+        if (!config_.enable_version_checking) {
+            return true;  // Validation disabled
+        }
+
+        try {
+            validateDataIntegrity();
+            return true;
+        } catch (...) {
+            return false;
+        }
+    }
+
+    /**
+     * @brief Get metadata about the shared memory
+     *
+     * @return Map of metadata key-value pairs
+     */
+    [[nodiscard]] std::unordered_map<std::string, std::string> getMetadata() const {
+        std::lock_guard lock(mutex_);
+        auto result = metadata_;
+
+        // Add runtime metadata
+        result["creation_time"] = std::to_string(header_->creation_time.load());
+        result["last_access_time"] = std::to_string(header_->last_access_time.load());
+        result["access_count"] = std::to_string(header_->access_count.load());
+        result["version"] = std::to_string(header_->version.load());
+        result["size"] = std::to_string(totalSize_);
+        result["is_creator"] = isCreator_ ? "true" : "false";
+
+        return result;
+    }
+
+    /**
+     * @brief Set metadata for the shared memory
+     *
+     * @param key Metadata key
+     * @param value Metadata value
+     */
+    void setMetadata(const std::string& key, const std::string& value) {
+        std::lock_guard lock(mutex_);
+        metadata_[key] = value;
+    }
 };
 
 template <TriviallyCopyable T>
 SharedMemory<T>::SharedMemory(std::string_view name, bool create,
-                              const std::optional<T>& initialData)
-    : name_(name), isCreator_(create) {
+                              const std::optional<T>& initialData,
+                              const SharedMemoryConfig& config)
+    : name_(name), isCreator_(create), config_(config) {
     totalSize_ = sizeof(SharedMemoryHeader) + sizeof(T);
 
     try {
         mapMemory(create, totalSize_);
         platformSpecificInit();
+
+        // Initialize enhanced header fields if creating
+        if (create) {
+            initializeCreatorInfo();
+            header_->creation_time.store(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now().time_since_epoch()).count(),
+                std::memory_order_release);
+        }
 
         if (create && initialData) {
             withLock(
@@ -443,11 +685,34 @@ SharedMemory<T>::SharedMemory(std::string_view name, bool create,
                     std::memcpy(getDataPtr(), &(*initialData), sizeof(T));
                     header_->initialized.store(true, std::memory_order_release);
                     header_->version.fetch_add(1, std::memory_order_release);
+
+                    // Calculate and store checksum for data integrity
+                    if (config_.enable_version_checking) {
+                        uint32_t checksum = calculateChecksum(getDataPtr(), sizeof(T));
+                        header_->checksum.store(checksum, std::memory_order_release);
+                    }
+
+                    header_->last_access_time.store(
+                        std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            std::chrono::steady_clock::now().time_since_epoch()).count(),
+                        std::memory_order_release);
+
                     spdlog::info(
                         "Initialized shared memory '{}' with initial data",
                         name_);
                 },
-                std::chrono::milliseconds(100));
+                config_.default_timeout);
+        }
+
+        // Update memory usage statistics
+        if (config_.enable_stats) {
+            stats_.memory_usage.store(totalSize_, std::memory_order_relaxed);
+            size_t current_peak = stats_.peak_memory_usage.load(std::memory_order_relaxed);
+            while (totalSize_ > current_peak &&
+                   !stats_.peak_memory_usage.compare_exchange_weak(current_peak, totalSize_,
+                                                                  std::memory_order_relaxed)) {
+                // Keep trying until we successfully update or find a larger value
+            }
         }
 
         startWatchThread();
@@ -759,21 +1024,62 @@ template <typename Func>
 auto SharedMemory<T>::withLock(Func&& func,
                                std::chrono::milliseconds timeout) const
     -> decltype(std::forward<Func>(func)()) {
+    auto lock_start_time = std::chrono::high_resolution_clock::now();
+
+    if (config_.enable_stats) {
+        stats_.lock_acquisitions.fetch_add(1, std::memory_order_relaxed);
+    }
+
     std::unique_lock lock(mutex_);
     auto startTime = std::chrono::steady_clock::now();
+    size_t retry_count = 0;
 
     while (header_->accessLock.test_and_set(std::memory_order_acquire)) {
         if (timeout != std::chrono::milliseconds(0) &&
             std::chrono::steady_clock::now() - startTime >= timeout) {
+            if (config_.enable_stats) {
+                stats_.lock_timeouts.fetch_add(1, std::memory_order_relaxed);
+            }
+
+            // Attempt auto-recovery if enabled
+            if (config_.enable_auto_recovery && retry_count < config_.max_retry_attempts) {
+                handleRecoveryOperation();
+                ++retry_count;
+                startTime = std::chrono::steady_clock::now();  // Reset timeout
+                continue;
+            }
+
             THROW_SHARED_MEMORY_ERROR_WITH_CODE(
                 "Failed to acquire mutex within timeout for shared memory: " +
-                    name_,
+                    name_ + " (retries: " + std::to_string(retry_count) + ")",
                 SharedMemoryException::ErrorCode::TIMEOUT);
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::this_thread::sleep_for(config_.lock_retry_interval);
+    }
+
+    // Update lock timing statistics
+    if (config_.enable_stats) {
+        auto lock_end_time = std::chrono::high_resolution_clock::now();
+        auto lock_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            lock_end_time - lock_start_time).count();
+        stats_.total_lock_time.fetch_add(lock_duration, std::memory_order_relaxed);
+
+        uint64_t current_max = stats_.max_lock_time.load(std::memory_order_relaxed);
+        while (lock_duration > current_max &&
+               !stats_.max_lock_time.compare_exchange_weak(current_max, lock_duration,
+                                                          std::memory_order_relaxed)) {
+            // Keep trying until we successfully update or find a larger value
+        }
     }
 
     try {
+        // Update last access time
+        header_->last_access_time.store(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count(),
+            std::memory_order_relaxed);
+        header_->access_count.fetch_add(1, std::memory_order_relaxed);
+
         if constexpr (std::is_void_v<decltype(std::forward<Func>(func)())>) {
             std::forward<Func>(func)();
             header_->accessLock.clear(std::memory_order_release);
@@ -1166,6 +1472,112 @@ auto SharedMemory<T>::getNativeHandle() const -> void* {
 #else
     return reinterpret_cast<void*>(static_cast<intptr_t>(fd_));
 #endif
+}
+
+// Implementation of enhanced helper methods
+
+template <TriviallyCopyable T>
+void SharedMemory<T>::updateTimingStats(uint64_t duration, bool is_read) const noexcept {
+    if (!config_.enable_stats) return;
+
+    if (is_read) {
+        stats_.total_read_time.fetch_add(duration, std::memory_order_relaxed);
+        uint64_t current_max = stats_.max_read_time.load(std::memory_order_relaxed);
+        while (duration > current_max &&
+               !stats_.max_read_time.compare_exchange_weak(current_max, duration,
+                                                          std::memory_order_relaxed)) {
+            // Keep trying until we successfully update or find a larger value
+        }
+    } else {
+        stats_.total_write_time.fetch_add(duration, std::memory_order_relaxed);
+        uint64_t current_max = stats_.max_write_time.load(std::memory_order_relaxed);
+        while (duration > current_max &&
+               !stats_.max_write_time.compare_exchange_weak(current_max, duration,
+                                                           std::memory_order_relaxed)) {
+            // Keep trying until we successfully update or find a larger value
+        }
+    }
+}
+
+template <TriviallyCopyable T>
+uint32_t SharedMemory<T>::calculateChecksum(const void* data, size_t size) const noexcept {
+    // Simple CRC32-like checksum implementation
+    uint32_t checksum = 0xFFFFFFFF;
+    const uint8_t* bytes = static_cast<const uint8_t*>(data);
+
+    for (size_t i = 0; i < size; ++i) {
+        checksum ^= bytes[i];
+        for (int j = 0; j < 8; ++j) {
+            if (checksum & 1) {
+                checksum = (checksum >> 1) ^ 0xEDB88320;
+            } else {
+                checksum >>= 1;
+            }
+        }
+    }
+
+    return ~checksum;
+}
+
+template <TriviallyCopyable T>
+void SharedMemory<T>::validateDataIntegrity() const {
+    if (!config_.enable_version_checking || !header_->initialized.load()) {
+        return;
+    }
+
+    uint32_t stored_checksum = header_->checksum.load(std::memory_order_acquire);
+    uint32_t calculated_checksum = calculateChecksum(getDataPtr(), sizeof(T));
+
+    if (stored_checksum != calculated_checksum) {
+        if (config_.enable_stats) {
+            stats_.version_conflicts.fetch_add(1, std::memory_order_relaxed);
+        }
+
+        THROW_SHARED_MEMORY_ERROR_WITH_CODE(
+            "Data integrity validation failed for shared memory: " + name_ +
+            " (stored: " + std::to_string(stored_checksum) +
+            ", calculated: " + std::to_string(calculated_checksum) + ")",
+            SharedMemoryException::ErrorCode::UNKNOWN);
+    }
+}
+
+template <TriviallyCopyable T>
+void SharedMemory<T>::initializeCreatorInfo() {
+    if (!isCreator_) return;
+
+    // Get process information
+    std::string process_info = "pid:" + std::to_string(getpid());
+
+#ifdef _WIN32
+    process_info += ",tid:" + std::to_string(GetCurrentThreadId());
+#else
+    process_info += ",tid:" + std::to_string(pthread_self());
+#endif
+
+    // Copy to header (ensure null termination)
+    size_t copy_size = std::min(process_info.size(), sizeof(header_->creator_info) - 1);
+    std::memcpy(header_->creator_info, process_info.c_str(), copy_size);
+    header_->creator_info[copy_size] = '\0';
+}
+
+template <TriviallyCopyable T>
+void SharedMemory<T>::handleRecoveryOperation() {
+    if (!config_.enable_auto_recovery) return;
+
+    try {
+        // Clear the access lock if it's stuck
+        header_->accessLock.clear(std::memory_order_release);
+
+        // Log recovery attempt
+        spdlog::warn("Attempting auto-recovery for shared memory: {}", name_);
+
+        // Brief delay to allow other processes to complete
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+    } catch (...) {
+        // Recovery failed, but don't throw - let the original operation handle the timeout
+        spdlog::error("Auto-recovery failed for shared memory: {}", name_);
+    }
 }
 
 }  // namespace atom::connection

@@ -3,15 +3,24 @@
 
 #include <algorithm>
 #include <chrono>
+#include <spdlog/spdlog.h>
 
 namespace mqtt {
 
-Client::Client(bool auto_start_io) : gen_(rd_()) {
+// Namespace alias for concurrency primitives
+namespace concurrency = atom::extra::asio::concurrency;
+
+Client::Client(bool auto_start_io)
+    : perf_monitor_(concurrency::performance_monitor::instance())
+    , gen_(rd_()) {
+
     keep_alive_timer_ = std::make_unique<asio::steady_timer>(io_context_);
     ping_timeout_timer_ = std::make_unique<asio::steady_timer>(io_context_);
     reconnect_timer_ = std::make_unique<asio::steady_timer>(io_context_);
 
     reset_stats();
+
+    spdlog::info("Advanced MQTT client initialized with cutting-edge concurrency primitives");
 
     if (auto_start_io) {
         start_io_thread();
@@ -26,6 +35,8 @@ Client::~Client() {
 void Client::async_connect(const std::string& host, uint16_t port,
                            const ConnectionOptions& options,
                            ConnectionHandler callback) {
+    ATOM_MEASURE_PERFORMANCE("mqtt_async_connect");
+
     if (state_.load() != ConnectionState::DISCONNECTED) {
         if (callback) {
             asio::post(io_context_,
@@ -45,6 +56,8 @@ void Client::async_connect(const std::string& host, uint16_t port,
     }
 
     state_.store(ConnectionState::CONNECTING);
+
+    spdlog::info("Initiating MQTT connection to {}:{} with advanced concurrency", host, port);
 
     asio::post(io_context_, [this]() { perform_connect(); });
 }
@@ -86,6 +99,8 @@ void Client::disconnect(ErrorCode reason) {
 
 void Client::async_publish(Message message,
                            std::function<void(ErrorCode)> callback) {
+    ATOM_MEASURE_PERFORMANCE("mqtt_async_publish");
+
     if (!is_connected()) {
         if (callback) {
             asio::post(io_context_,
@@ -94,28 +109,41 @@ void Client::async_publish(Message message,
         return;
     }
 
-    asio::post(io_context_, [this, message = std::move(message),
-                             callback = std::move(callback)]() mutable {
-        uint16_t packet_id = 0;
-        if (message.qos != QoS::AT_MOST_ONCE) {
-            packet_id = generate_packet_id();
-            message.packet_id = packet_id;
+    // Use lock-free queue for high-performance message queuing
+    outbound_message_queue_.push(std::move(message));
 
-            // Store pending operation for QoS > 0
-            std::lock_guard lock(pending_operations_mutex_);
-            pending_operations_[packet_id] =
-                PendingOperation{.message = message,
-                                 .timestamp = std::chrono::steady_clock::now(),
-                                 .retry_count = 0,
-                                 .callback = callback};
-        }
+    // Submit to work-stealing thread pool for optimal performance
+    auto& concurrency_mgr = concurrency::get_concurrency_manager();
+    concurrency_mgr.submit_monitored("mqtt_process_outbound", [this, callback = std::move(callback)]() mutable {
+        if (auto opt_message = outbound_message_queue_.try_pop()) {
+            auto message = std::move(opt_message.value());
 
-        auto packet = PacketCodec::serialize_publish(message, packet_id);
-        send_packet(packet);
+            uint16_t packet_id = 0;
+            if (message.qos != QoS::AT_MOST_ONCE) {
+                packet_id = generate_packet_id();
+                message.packet_id = packet_id;
 
-        // For QoS 0, call callback immediately
-        if (message.qos == QoS::AT_MOST_ONCE && callback) {
-            callback(ErrorCode::SUCCESS);
+                // Store pending operation for QoS > 0 with high-performance locking
+                pending_operations_lock_.lock();
+                pending_operations_[packet_id] =
+                    PendingOperation{.message = message,
+                                     .timestamp = std::chrono::steady_clock::now(),
+                                     .retry_count = 0,
+                                     .callback = callback};
+                pending_operations_lock_.unlock();
+            }
+
+            auto packet = PacketCodec::serialize_publish(message, packet_id);
+
+            // Post back to IO context for actual sending
+            asio::post(io_context_, [this, packet = std::move(packet), callback, message]() {
+                send_packet(packet);
+
+                // For QoS 0, call callback immediately
+                if (message.qos == QoS::AT_MOST_ONCE && callback) {
+                    callback(ErrorCode::SUCCESS);
+                }
+            });
         }
     });
 }
@@ -149,13 +177,15 @@ void Client::async_subscribe(
         io_context_, [this, subscriptions, callback = std::move(callback)]() {
             uint16_t packet_id = generate_packet_id();
 
-            // Store pending operation
-            std::lock_guard lock(pending_operations_mutex_);
+            // Store pending operation with high-performance locking
+            pending_operations_lock_.lock();
             pending_operations_[packet_id] = PendingOperation{
+                .message = Message{}, // Empty message for subscription operations
                 .timestamp = std::chrono::steady_clock::now(),
                 .retry_count = 0,
                 .callback =
                     [callback](ErrorCode) { /* Will be handled in SUBACK */ }};
+            pending_operations_lock_.unlock();
 
             auto packet =
                 PacketCodec::serialize_subscribe(subscriptions, packet_id);
@@ -192,13 +222,15 @@ void Client::async_unsubscribe(
                              callback = std::move(callback)]() {
         uint16_t packet_id = generate_packet_id();
 
-        // Store pending operation
-        std::lock_guard lock(pending_operations_mutex_);
+        // Store pending operation with high-performance locking
+        pending_operations_lock_.lock();
         pending_operations_[packet_id] = PendingOperation{
+            .message = Message{}, // Empty message for unsubscription operations
             .timestamp = std::chrono::steady_clock::now(),
             .retry_count = 0,
             .callback =
                 [callback](ErrorCode) { /* Will be handled in UNSUBACK */ }};
+        pending_operations_lock_.unlock();
 
         auto packet =
             PacketCodec::serialize_unsubscribe(topic_filters, packet_id);
@@ -514,8 +546,9 @@ void Client::schedule_reconnect() {
 void Client::handle_reconnect_timer() {
     if (auto_reconnect_ && state_.load() == ConnectionState::DISCONNECTED) {
         {
-            std::unique_lock lock(stats_mutex_);
+            stats_lock_.lock();
             stats_.reconnect_count++;
+            stats_lock_.unlock();
         }
 
         state_.store(ConnectionState::CONNECTING);
@@ -566,8 +599,9 @@ void Client::handle_connack(std::span<const uint8_t> data) {
     last_packet_received_ = std::chrono::steady_clock::now();
 
     {
-        std::unique_lock lock(stats_mutex_);
+        stats_lock_.lock();
         stats_.connected_since = std::chrono::steady_clock::now();
+        stats_lock_.unlock();
     }
 
     // Start keep-alive
@@ -604,10 +638,11 @@ void Client::handle_publish(const PacketHeader& header,
         send_packet(pubrec);
     }
 
-    // Update statistics
+    // Update statistics with high-performance locking
     {
-        std::unique_lock lock(stats_mutex_);
+        stats_lock_.lock();
         stats_.messages_received++;
+        stats_lock_.unlock();
     }
 
     // Notify message handler
@@ -624,13 +659,18 @@ void Client::handle_puback(std::span<const uint8_t> data) {
 
     uint16_t packet_id = (static_cast<uint16_t>(data[0]) << 8) | data[1];
 
-    std::lock_guard lock(pending_operations_mutex_);
+    pending_operations_lock_.lock_shared();
     auto it = pending_operations_.find(packet_id);
     if (it != pending_operations_.end()) {
         if (it->second.callback) {
             it->second.callback(ErrorCode::SUCCESS);
         }
-        pending_operations_.erase(it);
+        pending_operations_lock_.unlock_shared();
+        pending_operations_lock_.lock();
+        pending_operations_.erase(packet_id);
+        pending_operations_lock_.unlock();
+    } else {
+        pending_operations_lock_.unlock_shared();
     }
 }
 
@@ -675,13 +715,18 @@ void Client::handle_pubcomp(std::span<const uint8_t> data) {
 
     uint16_t packet_id = (static_cast<uint16_t>(data[0]) << 8) | data[1];
 
-    std::lock_guard lock(pending_operations_mutex_);
+    pending_operations_lock_.lock_shared();
     auto it = pending_operations_.find(packet_id);
     if (it != pending_operations_.end()) {
         if (it->second.callback) {
             it->second.callback(ErrorCode::SUCCESS);
         }
-        pending_operations_.erase(it);
+        pending_operations_lock_.unlock_shared();
+        pending_operations_lock_.lock();
+        pending_operations_.erase(packet_id);
+        pending_operations_lock_.unlock();
+    } else {
+        pending_operations_lock_.unlock_shared();
     }
 }
 
@@ -698,8 +743,9 @@ void Client::handle_suback(std::span<const uint8_t> data) {
     // results
     if (data.size() >= 2) {
         uint16_t packet_id = (static_cast<uint16_t>(data[0]) << 8) | data[1];
-        std::lock_guard lock(pending_operations_mutex_);
+        pending_operations_lock_.lock();
         pending_operations_.erase(packet_id);
+        pending_operations_lock_.unlock();
     }
 }
 
@@ -716,8 +762,9 @@ void Client::handle_unsuback(std::span<const uint8_t> data) {
     // results
     if (data.size() >= 2) {
         uint16_t packet_id = (static_cast<uint16_t>(data[0]) << 8) | data[1];
-        std::lock_guard lock(pending_operations_mutex_);
+        pending_operations_lock_.lock();
         pending_operations_.erase(packet_id);
+        pending_operations_lock_.unlock();
     }
 }
 
@@ -727,18 +774,24 @@ void Client::handle_pingresp() {
 }
 
 void Client::update_stats_sent(size_t bytes) {
-    std::unique_lock lock(stats_mutex_);
+    ATOM_MEASURE_PERFORMANCE("mqtt_stats_update");
+    stats_lock_.lock();
     stats_.bytes_sent += bytes;
     stats_.messages_sent++;
+    stats_lock_.unlock();
 }
 
 void Client::update_stats_received(size_t bytes) {
-    std::unique_lock lock(stats_mutex_);
+    ATOM_MEASURE_PERFORMANCE("mqtt_stats_update");
+    stats_lock_.lock();
     stats_.bytes_received += bytes;
+    stats_lock_.unlock();
 }
 
 void Client::cleanup_pending_operations() {
-    std::lock_guard lock(pending_operations_mutex_);
+    ATOM_MEASURE_PERFORMANCE("mqtt_cleanup_operations");
+
+    pending_operations_lock_.lock();
 
     for (auto& [packet_id, operation] : pending_operations_) {
         if (operation.callback) {
@@ -747,6 +800,9 @@ void Client::cleanup_pending_operations() {
     }
 
     pending_operations_.clear();
+    pending_operations_lock_.unlock();
+
+    spdlog::debug("Cleaned up all pending MQTT operations");
 }
 
 void Client::notify_error(ErrorCode error) {

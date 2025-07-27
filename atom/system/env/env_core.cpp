@@ -18,6 +18,9 @@ Description: Core environment variable management implementation
 #include <filesystem>
 #include <shared_mutex>
 
+#include "env_cache.hpp"
+#include "env_config.hpp"
+
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -37,9 +40,27 @@ namespace fs = std::filesystem;
 
 namespace atom::utils {
 
+// Notification system
 HashMap<size_t, EnvChangeCallback> EnvCore::sChangeCallbacks;
 std::mutex EnvCore::sCallbackMutex;
 size_t EnvCore::sNextCallbackId = 1;
+
+// Validation system
+HashMap<size_t, EnvValidationCallback> EnvCore::sValidationCallbacks;
+std::mutex EnvCore::sValidationMutex;
+size_t EnvCore::sNextValidationId = 1;
+
+// Caching system
+HashMap<String, EnvCacheEntry> EnvCore::sCache;
+std::mutex EnvCore::sCacheMutex;
+std::atomic<bool> EnvCore::sCachingEnabled{false};
+std::atomic<int> EnvCore::sCacheTtlSeconds{300};
+std::atomic<size_t> EnvCore::sCacheHits{0};
+std::atomic<size_t> EnvCore::sCacheMisses{0};
+
+// Backup system
+HashMap<String, HashMap<String, String>> EnvCore::sBackups;
+std::mutex EnvCore::sBackupMutex;
 
 void EnvCore::notifyChangeCallbacks(const String& key, const String& oldValue,
                                     const String& newValue) {
@@ -249,6 +270,7 @@ auto EnvCore::get(const String& key, const String& default_value) -> String {
 }
 
 auto EnvCore::setEnv(const String& key, const String& val) -> bool {
+    ENV_TIMER(EnvEventType::VARIABLE_SET, key);
     spdlog::debug("Setting environment variable: {}={}", key, val);
 
     String oldValue = getEnv(key, "");
@@ -260,10 +282,19 @@ auto EnvCore::setEnv(const String& key, const String& val) -> bool {
 #endif
 
     if (result) {
+        // Update cache
+        if (ENV_CONFIG().enableGlobalCache) {
+            EnvCacheManager::getInstance().cacheEnvVar(key, val);
+        }
+
+        // Emit event
+        ENV_EMIT_EVENT(EnvEventType::VARIABLE_SET, key, val, "");
+
         notifyChangeCallbacks(key, oldValue, val);
         spdlog::debug("Successfully set environment variable: {}", key);
     } else {
         spdlog::error("Failed to set environment variable: {}", key);
+        ENV_EMIT_EVENT(EnvEventType::ERROR_OCCURRED, key, val, "Failed to set variable");
     }
 
     return result;
@@ -287,6 +318,16 @@ auto EnvCore::setEnvMultiple(const HashMap<String, String>& vars) -> bool {
 }
 
 auto EnvCore::getEnv(const String& key, const String& default_value) -> String {
+    ENV_TIMER(EnvEventType::VARIABLE_GET, key);
+
+    // Check cache first
+    if (ENV_CONFIG().enableGlobalCache) {
+        auto cached = EnvCacheManager::getInstance().getEnvVar(key);
+        if (cached) {
+            return *cached;
+        }
+    }
+
 #ifdef _WIN32
     DWORD needed = GetEnvironmentVariableA(key.c_str(), nullptr, 0);
     if (needed == 0) {
@@ -308,7 +349,6 @@ auto EnvCore::getEnv(const String& key, const String& default_value) -> String {
     }
     String value(buf.data(), ret);
     spdlog::debug("Retrieved environment variable: {}={}", key, value);
-    return value;
 #else
     const char* v = ::getenv(key.c_str());
     if (v == nullptr) {
@@ -317,8 +357,14 @@ auto EnvCore::getEnv(const String& key, const String& default_value) -> String {
     }
     String value(v);
     spdlog::debug("Retrieved environment variable: {}={}", key, value);
-    return value;
 #endif
+
+    // Cache the result
+    if (ENV_CONFIG().enableGlobalCache) {
+        EnvCacheManager::getInstance().cacheEnvVar(key, value);
+    }
+
+    return value;
 }
 
 void EnvCore::unsetEnv(const String& name) {
@@ -417,6 +463,238 @@ auto EnvCore::unregisterChangeNotification(size_t id) -> bool {
     return result;
 }
 
+// ========== NEW OPTIMIZED IMPLEMENTATIONS ==========
+
+auto EnvCore::setBatch(const HashMap<String, String>& vars, bool notify) -> size_t {
+    spdlog::debug("Setting {} environment variables in batch", vars.size());
+    size_t successCount = 0;
+
+    for (const auto& [key, value] : vars) {
+        if (validateVariable(key, value)) {
+            String oldValue = getEnv(key, "");
+            if (setEnv(key, value)) {
+                successCount++;
+                if (notify) {
+                    notifyChangeCallbacks(key, oldValue, value);
+                }
+            }
+        } else {
+            spdlog::warn("Skipping invalid variable in batch: {}={}", key, value);
+        }
+    }
+
+    spdlog::debug("Successfully set {}/{} variables in batch", successCount, vars.size());
+    return successCount;
+}
+
+auto EnvCore::getBatch(const Vector<String>& keys) -> HashMap<String, String> {
+    spdlog::debug("Getting {} environment variables in batch", keys.size());
+    HashMap<String, String> result;
+    result.reserve(keys.size());
+
+    for (const auto& key : keys) {
+        // Try cache first if enabled
+        if (sCachingEnabled.load()) {
+            auto cachedValue = getCachedValue(key);
+            if (cachedValue.has_value()) {
+                result[key] = cachedValue.value();
+                sCacheHits.fetch_add(1);
+                continue;
+            }
+            sCacheMisses.fetch_add(1);
+        }
+
+        String value = getEnv(key, "");
+        if (!value.empty()) {
+            result[key] = value;
+            if (sCachingEnabled.load()) {
+                setCachedValue(key, value);
+            }
+        }
+    }
+
+    spdlog::debug("Retrieved {}/{} variables in batch", result.size(), keys.size());
+    return result;
+}
+
+auto EnvCore::validateVariable(const String& key, const String& value, ValidationLevel level) -> bool {
+    // Basic validation
+    if (level >= ValidationLevel::BASIC) {
+        if (key.empty()) {
+            spdlog::debug("Validation failed: empty key");
+            return false;
+        }
+
+        // Check for invalid characters in key
+        for (char c : key) {
+            if (!std::isalnum(c) && c != '_') {
+                spdlog::debug("Validation failed: invalid character '{}' in key '{}'", c, key);
+                return false;
+            }
+        }
+
+        // Key should not start with a digit
+        if (std::isdigit(key[0])) {
+            spdlog::debug("Validation failed: key '{}' starts with digit", key);
+            return false;
+        }
+    }
+
+    // Strict validation
+    if (level >= ValidationLevel::STRICT) {
+        // Check for null bytes in value
+        if (value.find('\0') != String::npos) {
+            spdlog::debug("Validation failed: null byte in value for key '{}'", key);
+            return false;
+        }
+
+        // Check value length (reasonable limit)
+        if (value.length() > 32768) {  // 32KB limit
+            spdlog::debug("Validation failed: value too long for key '{}'", key);
+            return false;
+        }
+    }
+
+    // Run custom validation callbacks
+    return runValidationCallbacks(key, value);
+}
+
+auto EnvCore::registerValidationCallback(EnvValidationCallback callback) -> size_t {
+    std::lock_guard<std::mutex> lock(sValidationMutex);
+    size_t id = sNextValidationId++;
+    sValidationCallbacks[id] = callback;
+    spdlog::debug("Registered validation callback with id: {}", id);
+    return id;
+}
+
+auto EnvCore::unregisterValidationCallback(size_t id) -> bool {
+    std::lock_guard<std::mutex> lock(sValidationMutex);
+    bool result = sValidationCallbacks.erase(id) > 0;
+    spdlog::debug("Unregistered validation callback id: {}, success: {}", id, result);
+    return result;
+}
+
+void EnvCore::setCachingEnabled(bool enabled, int ttl_seconds) {
+    sCachingEnabled.store(enabled);
+    sCacheTtlSeconds.store(ttl_seconds);
+    spdlog::debug("Environment caching {}, TTL: {} seconds",
+                  enabled ? "enabled" : "disabled", ttl_seconds);
+
+    if (!enabled) {
+        clearCache();
+    }
+}
+
+void EnvCore::clearCache() {
+    std::lock_guard<std::mutex> lock(sCacheMutex);
+    sCache.clear();
+    sCacheHits.store(0);
+    sCacheMisses.store(0);
+    spdlog::debug("Environment cache cleared");
+}
+
+auto EnvCore::getCacheStats() -> HashMap<String, size_t> {
+    HashMap<String, size_t> stats;
+    stats["hits"] = sCacheHits.load();
+    stats["misses"] = sCacheMisses.load();
+    stats["entries"] = sCache.size();
+    stats["enabled"] = sCachingEnabled.load() ? 1 : 0;
+    stats["ttl_seconds"] = static_cast<size_t>(sCacheTtlSeconds.load());
+    return stats;
+}
+
+auto EnvCore::backupEnvironment(const String& name) -> bool {
+    try {
+        std::lock_guard<std::mutex> lock(sBackupMutex);
+        sBackups[name] = Environ();
+        spdlog::debug("Created environment backup: {}", name);
+        return true;
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to create environment backup '{}': {}", name, e.what());
+        return false;
+    }
+}
+
+auto EnvCore::restoreEnvironment(const String& name) -> bool {
+    try {
+        std::lock_guard<std::mutex> lock(sBackupMutex);
+        auto it = sBackups.find(name);
+        if (it == sBackups.end()) {
+            spdlog::error("Environment backup '{}' not found", name);
+            return false;
+        }
+
+        // Clear current environment and restore from backup
+        auto currentEnv = Environ();
+        for (const auto& [key, value] : currentEnv) {
+            unsetEnv(key);
+        }
+
+        for (const auto& [key, value] : it->second) {
+            setEnv(key, value);
+        }
+
+        spdlog::debug("Restored environment from backup: {}", name);
+        return true;
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to restore environment backup '{}': {}", name, e.what());
+        return false;
+    }
+}
+
+auto EnvCore::listBackups() -> Vector<String> {
+    std::lock_guard<std::mutex> lock(sBackupMutex);
+    Vector<String> names;
+    names.reserve(sBackups.size());
+
+    for (const auto& [name, backup] : sBackups) {
+        names.push_back(name);
+    }
+
+    return names;
+}
+
+// Helper method implementations
+auto EnvCore::runValidationCallbacks(const String& key, const String& value) -> bool {
+    std::lock_guard<std::mutex> lock(sValidationMutex);
+    for (const auto& [id, callback] : sValidationCallbacks) {
+        try {
+            if (!callback(key, value)) {
+                spdlog::debug("Validation callback {} rejected variable: {}={}", id, key, value);
+                return false;
+            }
+        } catch (const std::exception& e) {
+            spdlog::error("Exception in validation callback {}: {}", id, e.what());
+            return false;
+        }
+    }
+    return true;
+}
+
+auto EnvCore::getCachedValue(const String& key) -> std::optional<String> {
+    std::lock_guard<std::mutex> lock(sCacheMutex);
+    auto it = sCache.find(key);
+    if (it != sCache.end() && isCacheEntryValid(it->second)) {
+        return it->second.value;
+    }
+    return std::nullopt;
+}
+
+void EnvCore::setCachedValue(const String& key, const String& value) {
+    std::lock_guard<std::mutex> lock(sCacheMutex);
+    sCache[key] = EnvCacheEntry(value);
+}
+
+auto EnvCore::isCacheEntryValid(const EnvCacheEntry& entry) -> bool {
+    if (!entry.isValid) {
+        return false;
+    }
+
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - entry.timestamp);
+    return elapsed.count() < sCacheTtlSeconds.load();
+}
+
 #if ATOM_ENABLE_DEBUG
 void EnvCore::printAllVariables() {
     spdlog::debug("Printing all environment variables");
@@ -431,6 +709,21 @@ void EnvCore::printAllArgs() const {
     std::shared_lock lock(impl_->mMutex);
     for (const auto& [key, value] : impl_->mArgs) {
         spdlog::debug("Argument: {}={}", key, value);
+    }
+}
+
+void EnvCore::printCacheInfo() {
+    auto stats = getCacheStats();
+    spdlog::debug("Environment Cache Statistics:");
+    spdlog::debug("  Enabled: {}", stats["enabled"] ? "Yes" : "No");
+    spdlog::debug("  Entries: {}", stats["entries"]);
+    spdlog::debug("  Hits: {}", stats["hits"]);
+    spdlog::debug("  Misses: {}", stats["misses"]);
+    spdlog::debug("  TTL: {} seconds", stats["ttl_seconds"]);
+
+    if (stats["hits"] + stats["misses"] > 0) {
+        double hitRate = static_cast<double>(stats["hits"]) / (stats["hits"] + stats["misses"]) * 100.0;
+        spdlog::debug("  Hit Rate: {:.2f}%", hitRate);
     }
 }
 #endif

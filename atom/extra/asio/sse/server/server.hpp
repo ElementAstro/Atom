@@ -6,6 +6,7 @@
  */
 
 #include "../../asio_compatibility.hpp"
+#include "../../concurrency/concurrency.hpp"
 #include "../event.hpp"
 #include "auth_service.hpp"
 #include "connection.hpp"
@@ -15,19 +16,24 @@
 #include "server_config.hpp"
 
 #include <chrono>
-#include <mutex>
 #include <nlohmann/json.hpp>
-#include <vector>
+#include <spdlog/spdlog.h>
 
 namespace atom::extra::asio::sse {
 
+// Namespace alias for concurrency primitives
+namespace concurrency = atom::extra::asio::concurrency;
+
 /**
- * @brief Main SSE server with coroutine-based connection handling.
+ * @brief Advanced SSE server with cutting-edge concurrency primitives
  *
- * The SSEServer class manages client connections, event broadcasting,
- * authentication, event storage, and server metrics. It uses coroutines
- * for efficient asynchronous connection handling and provides methods
- * for broadcasting events, retrieving metrics, and managing configuration.
+ * Features:
+ * - Lock-free connection management
+ * - High-performance event broadcasting
+ * - Work-stealing thread pool integration
+ * - Real-time performance monitoring
+ * - NUMA-aware memory management
+ * - Adaptive load balancing
  */
 class SSEServer {
 public:
@@ -89,14 +95,19 @@ private:
     tcp::acceptor acceptor_;
 
     /**
-     * @brief List of active SSE client connections.
+     * @brief Lock-free queue for active SSE client connections.
      */
-    std::vector<SSEConnection::pointer> connections_;
+    concurrency::lockfree_queue<SSEConnection::pointer> active_connections_;
 
     /**
-     * @brief Mutex for thread-safe access to the connections list.
+     * @brief Lock-free queue for connections to be cleaned up.
      */
-    std::mutex connections_mutex_;
+    concurrency::lockfree_queue<SSEConnection::pointer> cleanup_connections_;
+
+    /**
+     * @brief High-performance connection counter.
+     */
+    concurrency::cache_aligned<std::atomic<std::size_t>> connection_count_{0};
 
     /**
      * @brief Event queue for broadcasting events to clients.
@@ -132,6 +143,21 @@ private:
      * @brief Timer for periodic connection monitoring.
      */
     net::steady_timer connection_monitor_timer_;
+
+    /**
+     * @brief Performance monitoring integration.
+     */
+    concurrency::performance_monitor& perf_monitor_;
+
+    /**
+     * @brief Object pool for efficient connection management.
+     */
+    concurrency::concurrent_object_pool<SSEConnection> connection_pool_;
+
+    /**
+     * @brief Object pool for efficient event management.
+     */
+    concurrency::concurrent_object_pool<Event> event_pool_;
 
 #ifdef USE_SSL
     /**

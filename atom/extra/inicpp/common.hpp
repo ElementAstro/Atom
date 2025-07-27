@@ -7,8 +7,17 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <atomic>
+#include <thread>
+#include <chrono>
 
 #include "atom/macro.hpp"
+
+#if ATOM_HAS_SPDLOG
+#include <spdlog/spdlog.h>
+#include <spdlog/async.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
+#endif
 
 // Configuration macro definitions
 #ifndef INICPP_CONFIG_USE_BOOST
