@@ -164,11 +164,13 @@ auto Env::loadFromFile(const std::filesystem::path& filePath, bool overwrite)
 
 // PATH methods - delegate to EnvPath
 auto Env::addToPath(const String& path, bool prepend) -> bool {
-    return EnvPath::addToPath(path, prepend);
+    auto result = EnvPath::addToPath(path, prepend);
+    return result == PathOperationResult::SUCCESS;
 }
 
 auto Env::removeFromPath(const String& path) -> bool {
-    return EnvPath::removeFromPath(path);
+    auto result = EnvPath::removeFromPath(path);
+    return result == PathOperationResult::SUCCESS;
 }
 
 auto Env::isInPath(const String& path) -> bool {
@@ -182,11 +184,13 @@ auto Env::getPathEntries() -> Vector<String> {
 // Persistent methods - delegate to EnvPersistent
 auto Env::setPersistentEnv(const String& key, const String& val,
                            PersistLevel level) -> bool {
-    return EnvPersistent::setPersistentEnv(key, val, level);
+    auto result = EnvPersistent::setPersistentEnv(key, val, level);
+    return result == PersistenceResult::SUCCESS;
 }
 
 auto Env::deletePersistentEnv(const String& key, PersistLevel level) -> bool {
-    return EnvPersistent::deletePersistentEnv(key, level);
+    auto result = EnvPersistent::deletePersistentEnv(key, level);
+    return result == PersistenceResult::SUCCESS;
 }
 
 // Utility methods - delegate to EnvUtils

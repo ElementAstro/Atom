@@ -21,7 +21,7 @@ Description: System Information Module - Disk Monitoring
 #include <memory>
 #include <vector>
 
-#include "atom/sysinfo/disk/disk_types.hpp"
+#include "disk_types.hpp"
 
 namespace atom::system {
 

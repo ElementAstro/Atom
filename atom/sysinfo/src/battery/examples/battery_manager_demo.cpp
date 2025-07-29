@@ -6,7 +6,7 @@
  * including alerts, statistics, and data recording.
  */
 
-#include "atom/sysinfo/battery/battery.hpp"
+#include "../battery.hpp"
 #include <iostream>
 #include <iomanip>
 #include <chrono>

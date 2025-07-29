@@ -13,6 +13,7 @@ add_executable(wifi_demo wifi_demo.cpp)
 target_link_libraries(wifi_demo
     PRIVATE
     atom_sysinfo_wifi
+    loguru
 )
 
 # Platform-specific libraries

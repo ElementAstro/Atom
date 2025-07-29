@@ -124,10 +124,10 @@ struct DiskInfo {
     std::chrono::system_clock::time_point lastUpdated{std::chrono::system_clock::now()};
 
     // Default constructor
-    constexpr DiskInfo() noexcept = default;
+    DiskInfo() noexcept = default;
 
     // Constructor with basic parameters
-    constexpr DiskInfo(std::string_view pathView, std::string_view devicePathView,
+    DiskInfo(std::string_view pathView, std::string_view devicePathView,
                       uint64_t total, uint64_t free) noexcept
         : path(pathView), devicePath(devicePathView), totalSpace(total),
           freeSpace(free), availableSpace(free) {
@@ -199,10 +199,10 @@ struct StorageDevice {
     std::chrono::system_clock::time_point lastSeen{std::chrono::system_clock::now()};
 
     // Default constructor
-    constexpr StorageDevice() noexcept = default;
+    StorageDevice() noexcept = default;
 
     // Constructor with basic parameters
-    constexpr StorageDevice(std::string_view devicePathView, std::string_view modelView,
+    StorageDevice(std::string_view devicePathView, std::string_view modelView,
                            uint64_t size) noexcept
         : devicePath(devicePathView), model(modelView), sizeBytes(size) {}
 

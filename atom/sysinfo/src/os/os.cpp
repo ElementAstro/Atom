@@ -8,11 +8,11 @@
 
 // Include platform-specific implementations
 #ifdef _WIN32
-#include "windows.hpp"
+#include "platform/windows.hpp"
 #elif defined(__linux__) || defined(__linux)
-#include "linux.hpp"
+#include "platform/linux.hpp"
 #elif defined(__APPLE__)
-#include "macos.hpp"
+#include "platform/macos.hpp"
 #endif
 
 namespace atom::system {

@@ -12,18 +12,18 @@ Description: System Information Module - Wifi Information
 
 **************************************************/
 
-#include "atom/sysinfo/wifi/wifi.hpp"
-#include "atom/sysinfo/wifi/common.hpp"
-#include "atom/sysinfo/wifi/error_handler.hpp"
+#include "wifi.hpp"
+#include "common.hpp"
+#include "error_handler.hpp"
 
 #ifdef _WIN32
-#include "atom/sysinfo/wifi/windows.hpp"
+#include "platform/windows.hpp"
 namespace impl = atom::system::windows;
 #elif defined(__linux__)
-#include "atom/sysinfo/wifi/linux.hpp"
+#include "platform/linux.hpp"
 namespace impl = atom::system::linux;
 #elif defined(__APPLE__)
-#include "atom/sysinfo/wifi/macos.hpp"
+#include "platform/macos.hpp"
 namespace impl = atom::system::macos;
 #endif
 

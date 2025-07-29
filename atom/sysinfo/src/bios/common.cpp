@@ -7,11 +7,11 @@
 #include <cctype>
 
 #ifdef _WIN32
-#include "windows.hpp"
+#include "platform/windows.hpp"
 #elif __linux__
-#include "linux.hpp"
+#include "platform/linux.hpp"
 #elif __APPLE__
-#include "macos.hpp"
+#include "platform/macos.hpp"
 #endif
 
 namespace atom::system {

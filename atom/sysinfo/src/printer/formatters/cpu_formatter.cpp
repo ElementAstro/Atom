@@ -192,28 +192,28 @@ auto CpuFormatter::formatCacheSizes(const CacheSizes& caches) const -> std::stri
     std::stringstream ss;
     
     bool hasCache = false;
-    if (caches.l1DataCache > 0 || caches.l1InstructionCache > 0 || 
-        caches.l2Cache > 0 || caches.l3Cache > 0) {
+    if (caches.l1d > 0 || caches.l1i > 0 ||
+        caches.l2 > 0 || caches.l3 > 0) {
         hasCache = true;
     }
-    
+
     if (!hasCache) {
         return "";
     }
-    
+
     ss << createTableHeader("CPU Cache Information");
-    
-    if (caches.l1DataCache > 0) {
-        ss << createTableRow("L1 Data Cache", formatBytes(caches.l1DataCache));
+
+    if (caches.l1d > 0) {
+        ss << createTableRow("L1 Data Cache", formatBytes(caches.l1d));
     }
-    if (caches.l1InstructionCache > 0) {
-        ss << createTableRow("L1 Instruction Cache", formatBytes(caches.l1InstructionCache));
+    if (caches.l1i > 0) {
+        ss << createTableRow("L1 Instruction Cache", formatBytes(caches.l1i));
     }
-    if (caches.l2Cache > 0) {
-        ss << createTableRow("L2 Cache", formatBytes(caches.l2Cache));
+    if (caches.l2 > 0) {
+        ss << createTableRow("L2 Cache", formatBytes(caches.l2));
     }
-    if (caches.l3Cache > 0) {
-        ss << createTableRow("L3 Cache", formatBytes(caches.l3Cache));
+    if (caches.l3 > 0) {
+        ss << createTableRow("L3 Cache", formatBytes(caches.l3));
     }
     
     ss << createTableFooter();

@@ -6,6 +6,15 @@ set(MEMORY_SOURCES
     common.cpp
 )
 
+# Add platform-specific sources
+if(WIN32)
+    list(APPEND MEMORY_SOURCES platform/windows.cpp)
+elseif(UNIX AND NOT APPLE)
+    list(APPEND MEMORY_SOURCES platform/linux.cpp)
+elseif(APPLE)
+    list(APPEND MEMORY_SOURCES platform/macos.cpp)
+endif()
+
 # 创建内存模块的库
 add_library(atom_sysinfo_memory STATIC ${MEMORY_SOURCES})
 

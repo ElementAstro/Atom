@@ -12,9 +12,9 @@ Description: System Information Module - Disk Performance Monitoring
 
 **************************************************/
 
-#include "atom/sysinfo/disk/disk_performance.hpp"
-#include "atom/sysinfo/disk/disk_info.hpp"
-#include "atom/sysinfo/disk/disk_util.hpp"
+#include "disk_performance.hpp"
+#include "disk_info.hpp"
+#include "../common/disk_util.hpp"
 
 #include <algorithm>
 #include <atomic>

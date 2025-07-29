@@ -12,9 +12,11 @@
 #define ATOM_SYSINFO_PRINTER_FORMATTERS_BATTERY_FORMATTER_HPP
 
 #include "base_formatter.hpp"
-#include "../battery.hpp"
+#include "../../battery/common.hpp"
 
 namespace atom::system {
+
+using battery::BatteryInfo;
 
 /**
  * @class BatteryFormatter

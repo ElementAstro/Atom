@@ -7,6 +7,7 @@
 #include "../formatters/disk_formatter.hpp"
 #include "../exporters/html_exporter.hpp"
 #include "../exporters/json_exporter.hpp"
+#include "../../battery/battery.hpp"
 #include <spdlog/spdlog.h>
 #include <algorithm>
 
@@ -99,9 +100,9 @@ auto BaseReport::generateSection(ReportSection section) -> std::string {
                 return std::static_pointer_cast<MemoryFormatter>(formatter)->format(memInfo);
             }
             case ReportSection::BATTERY: {
-                auto batteryResult = getDetailedBatteryInfo();
-                if (std::holds_alternative<BatteryInfo>(batteryResult)) {
-                    const auto& batteryInfo = std::get<BatteryInfo>(batteryResult);
+                auto batteryResult = battery::getDetailedBatteryInfo();
+                if (std::holds_alternative<battery::BatteryInfo>(batteryResult)) {
+                    const auto& batteryInfo = std::get<battery::BatteryInfo>(batteryResult);
                     return std::static_pointer_cast<BatteryFormatter>(formatter)->format(batteryInfo);
                 }
                 return "Battery information not available\n";

@@ -268,8 +268,7 @@ class BuildSystem:
             'relwithdebinfo': 'RelWithDebInfo',
             'minsizerel': 'MinSizeRel'
         }
-        cmake_args.extend(
-            ['-DCMAKE_BUILD_TYPE', build_type_map[args.build_type]])
+        cmake_args.append(f'-DCMAKE_BUILD_TYPE={build_type_map[args.build_type]}')
 
         # Batch feature configuration
         features = [

@@ -44,6 +44,15 @@ set(WM_SOURCES
     wm.cpp
 )
 
+# Add platform-specific sources
+if(WIN32)
+    list(APPEND WM_SOURCES platform/windows.cpp)
+elseif(UNIX AND NOT APPLE)
+    list(APPEND WM_SOURCES platform/linux.cpp)
+elseif(APPLE)
+    list(APPEND WM_SOURCES platform/macos.cpp)
+endif()
+
 # Header files
 set(WM_HEADERS
     common.hpp

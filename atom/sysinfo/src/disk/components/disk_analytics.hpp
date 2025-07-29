@@ -22,8 +22,8 @@ Description: System Information Module - Disk Analytics and Predictive Maintenan
 #include <string>
 #include <vector>
 
-#include "atom/sysinfo/disk/disk_types.hpp"
-#include "atom/sysinfo/disk/disk_performance.hpp"
+#include "disk_types.hpp"
+#include "disk_performance.hpp"
 
 namespace atom::system {
 

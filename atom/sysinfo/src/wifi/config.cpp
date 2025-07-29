@@ -17,6 +17,7 @@ Description: System Information Module - WiFi Configuration Implementation
 #include <algorithm>
 #include <cstdlib>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <numeric>
 #include <sstream>
@@ -344,6 +345,7 @@ void WiFiConfigManager::registerChangeCallback(std::function<void(const WiFiConf
 }
 
 void WiFiConfigManager::notifyConfigurationChange() {
+    std::lock_guard lock(config_mutex_);
     for (const auto& callback : change_callbacks_) {
         try {
             callback(wifi_config_, performance_config_);

@@ -19,6 +19,18 @@ set(BATTERY_HEADERS
     common.hpp
 )
 
+# Add platform-specific sources
+if(WIN32)
+    list(APPEND BATTERY_SOURCES platform/windows.cpp)
+    list(APPEND BATTERY_HEADERS platform/windows.hpp)
+elseif(UNIX AND NOT APPLE)
+    list(APPEND BATTERY_SOURCES platform/linux.cpp)
+    list(APPEND BATTERY_HEADERS platform/linux.hpp)
+elseif(APPLE)
+    list(APPEND BATTERY_SOURCES platform/macos.cpp)
+    list(APPEND BATTERY_HEADERS platform/macos.hpp)
+endif()
+
 # Create the library
 add_library(atom_sysinfo_battery ${BATTERY_SOURCES} ${BATTERY_HEADERS})
 

@@ -23,7 +23,7 @@ Description: System Information Module - Disk Performance Monitoring
 #include <string>
 #include <vector>
 
-#include "atom/sysinfo/disk/disk_types.hpp"
+#include "disk_types.hpp"
 
 namespace atom::system {
 

@@ -12,10 +12,10 @@ Description: System Information Module - Disk Monitoring
 
 **************************************************/
 
-#include "atom/sysinfo/disk/disk_monitor.hpp"
-#include "atom/sysinfo/disk/disk_device.hpp"
-#include "atom/sysinfo/disk/disk_info.hpp"
-#include "atom/sysinfo/disk/disk_security.hpp"
+#include "disk_monitor.hpp"
+#include "disk_device.hpp"
+#include "disk_info.hpp"
+#include "disk_security.hpp"
 
 #include <algorithm>
 #include <atomic>

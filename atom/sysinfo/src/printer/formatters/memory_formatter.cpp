@@ -53,8 +53,8 @@ auto MemoryFormatter::format(const MemoryInfo& info, const std::string& title) c
     ss << createTableFooter();
     
     // Add memory slots information if available and in detailed mode
-    if ((options_.style == FormatterStyle::DETAILED || options_.style == FormatterStyle::VERBOSE) && 
-        !info.memorySlots.empty()) {
+    if ((options_.style == FormatterStyle::DETAILED || options_.style == FormatterStyle::VERBOSE) &&
+        !info.slots.empty()) {
         ss << formatMemorySlots(info);
     }
     
@@ -111,16 +111,16 @@ auto MemoryFormatter::formatVirtualMemory(const MemoryInfo& info) const -> std::
 }
 
 auto MemoryFormatter::formatMemorySlots(const MemoryInfo& info) const -> std::string {
-    if (info.memorySlots.empty()) {
+    if (info.slots.empty()) {
         return "";
     }
-    
+
     std::stringstream ss;
-    
+
     ss << createTableHeader("Memory Slots Information");
-    
-    for (size_t i = 0; i < info.memorySlots.size(); ++i) {
-        const auto& slot = info.memorySlots[i];
+
+    for (size_t i = 0; i < info.slots.size(); ++i) {
+        const auto& slot = info.slots[i];
         ss << formatMemorySlot(slot, static_cast<int>(i + 1));
     }
     

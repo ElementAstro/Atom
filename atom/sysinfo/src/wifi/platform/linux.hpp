@@ -9,8 +9,8 @@
 
 #ifdef __linux__
 
-#include "common.hpp"
-#include "wifi.hpp"
+#include "../common.hpp"
+#include "../wifi.hpp"
 
 namespace atom::system::linux {
 

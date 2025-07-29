@@ -15,7 +15,7 @@ Description: System Information Module - CPU Common Header
 #ifndef ATOM_SYSTEM_MODULE_CPU_COMMON_HPP
 #define ATOM_SYSTEM_MODULE_CPU_COMMON_HPP
 
-#include "../cpu.hpp"
+#include "cpu.hpp"
 
 #include <atomic>
 #include <chrono>

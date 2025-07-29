@@ -6,11 +6,11 @@
 
 // Platform-specific includes
 #ifdef _WIN32
-#include "windows.hpp"
+#include "platform/windows.hpp"
 #elif __linux__
-#include "linux.hpp"
+#include "platform/linux.hpp"
 #elif __APPLE__
-#include "macos.hpp"
+#include "platform/macos.hpp"
 #endif
 
 #include <algorithm>
@@ -201,7 +201,7 @@ private:
             return wmiInfo["Model"];
         }
 #elif __linux__
-        auto dmiInfo = linux_impl::getDMIInfo();
+        auto dmiInfo = platform::linux_impl::getDMIInfo();
         if (dmiInfo.count("product_name")) {
             return dmiInfo["product_name"];
         }

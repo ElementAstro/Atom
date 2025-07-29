@@ -6,15 +6,15 @@
 
 namespace atom::system {
 
-LocaleFormatter::LocaleFormatter(const FormatterOptions& options) {
+LocaleInfoFormatter::LocaleInfoFormatter(const FormatterOptions& options) {
     setOptions(options);
 }
 
-auto LocaleFormatter::format(const LocaleInfo& info) const -> std::string {
+auto LocaleInfoFormatter::format(const LocaleInfo& info) const -> std::string {
     return format(info, "Locale Information");
 }
 
-auto LocaleFormatter::format(const LocaleInfo& info, const std::string& title) const -> std::string {
+auto LocaleInfoFormatter::format(const LocaleInfo& info, const std::string& title) const -> std::string {
     std::stringstream ss;
 
     ss << createTableHeader(title);
@@ -64,12 +64,8 @@ auto LocaleFormatter::format(const LocaleInfo& info, const std::string& title) c
 
     // Verbose mode additional information
     if (options_.style == FormatterStyle::VERBOSE) {
-        if (!info.measurementSystem.empty()) {
-            ss << createTableRow("Measurement System", info.measurementSystem);
-        }
-        if (!info.paperSize.empty()) {
-            ss << createTableRow("Paper Size", info.paperSize);
-        }
+        ss << createTableRow("Measurement System", locale::measurementSystemToString(info.measurementSystem));
+        ss << createTableRow("Paper Size", locale::paperSizeToString(info.paperSize));
         ss << createTableRow("Right-to-Left", info.isRTL ? "Yes" : "No");
     }
 
@@ -78,7 +74,7 @@ auto LocaleFormatter::format(const LocaleInfo& info, const std::string& title) c
     return addTimestamp(ss.str());
 }
 
-auto LocaleFormatter::formatBasic(const LocaleInfo& info) const -> std::string {
+auto LocaleInfoFormatter::formatBasic(const LocaleInfo& info) const -> std::string {
     return std::format("{} ({}), {} ({})",
                       info.languageDisplayName,
                       info.languageCode,
@@ -86,7 +82,7 @@ auto LocaleFormatter::formatBasic(const LocaleInfo& info) const -> std::string {
                       info.countryCode);
 }
 
-auto LocaleFormatter::formatRegional(const LocaleInfo& info) const -> std::string {
+auto LocaleInfoFormatter::formatRegional(const LocaleInfo& info) const -> std::string {
     std::stringstream ss;
 
     ss << createTableHeader("Regional Settings");
@@ -94,19 +90,15 @@ auto LocaleFormatter::formatRegional(const LocaleInfo& info) const -> std::strin
     ss << createTableRow("Country", info.countryDisplayName);
     ss << createTableRow("Character Encoding", info.characterEncoding);
 
-    if (!info.measurementSystem.empty()) {
-        ss << createTableRow("Measurement System", info.measurementSystem);
-    }
-    if (!info.paperSize.empty()) {
-        ss << createTableRow("Paper Size", info.paperSize);
-    }
+    ss << createTableRow("Measurement System", locale::measurementSystemToString(info.measurementSystem));
+    ss << createTableRow("Paper Size", locale::paperSizeToString(info.paperSize));
 
     ss << createTableFooter();
 
     return ss.str();
 }
 
-auto LocaleFormatter::formatPreferences(const LocaleInfo& info) const -> std::string {
+auto LocaleInfoFormatter::formatPreferences(const LocaleInfo& info) const -> std::string {
     std::stringstream ss;
 
     ss << createTableHeader("Formatting Preferences");
@@ -131,14 +123,14 @@ auto LocaleFormatter::formatPreferences(const LocaleInfo& info) const -> std::st
     return ss.str();
 }
 
-auto LocaleFormatter::formatLanguageWithFlag(const std::string& languageCode,
+auto LocaleInfoFormatter::formatLanguageWithFlag(const std::string& languageCode,
                                             const std::string& displayName) const -> std::string {
     // For now, just return the display name
     // In a full implementation, you could add language-specific icons or flags
     return displayName;
 }
 
-auto LocaleFormatter::formatCountryWithFlag(const std::string& countryCode,
+auto LocaleInfoFormatter::formatCountryWithFlag(const std::string& countryCode,
                                            const std::string& displayName) const -> std::string {
     if (options_.style == FormatterStyle::VERBOSE) {
         auto flag = getFlagEmoji(countryCode);
@@ -149,7 +141,7 @@ auto LocaleFormatter::formatCountryWithFlag(const std::string& countryCode,
     return displayName;
 }
 
-auto LocaleFormatter::getFlagEmoji(const std::string& countryCode) const -> std::string {
+auto LocaleInfoFormatter::getFlagEmoji(const std::string& countryCode) const -> std::string {
     // Simple flag emoji mapping for common countries
     static const std::unordered_map<std::string, std::string> flagMap = {
         {"US", "🇺🇸"}, {"GB", "🇬🇧"}, {"CA", "🇨🇦"}, {"AU", "🇦🇺"},
@@ -163,7 +155,7 @@ auto LocaleFormatter::getFlagEmoji(const std::string& countryCode) const -> std:
     return (it != flagMap.end()) ? it->second : "";
 }
 
-auto LocaleFormatter::formatEncodingWithDescription(const std::string& encoding) const -> std::string {
+auto LocaleInfoFormatter::formatEncodingWithDescription(const std::string& encoding) const -> std::string {
     static const std::unordered_map<std::string, std::string> encodingDescriptions = {
         {"UTF-8", "UTF-8 (Unicode Transformation Format 8-bit)"},
         {"UTF-16", "UTF-16 (Unicode Transformation Format 16-bit)"},

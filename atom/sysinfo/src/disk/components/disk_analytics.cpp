@@ -12,9 +12,9 @@ Description: System Information Module - Disk Analytics and Predictive Maintenan
 
 **************************************************/
 
-#include "atom/sysinfo/disk/disk_analytics.hpp"
-#include "atom/sysinfo/disk/disk_info.hpp"
-#include "atom/sysinfo/disk/disk_performance.hpp"
+#include "disk_analytics.hpp"
+#include "disk_info.hpp"
+#include "disk_performance.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -22,6 +22,7 @@ Description: System Information Module - Disk Analytics and Predictive Maintenan
 #include <future>
 #include <mutex>
 #include <numeric>
+#include <random>
 #include <thread>
 #include <unordered_map>
 

@@ -168,14 +168,10 @@ public:
 
     using PathCache = std::unordered_map<std::pair<TypeInfo, TypeInfo>, ConversionPath, TypeInfoPairHash>;
 
-private:
-    // Optimized: Group frequently accessed data together
-    mutable PathCache path_cache_;
-    mutable std::shared_mutex path_cache_mutex_;
-    static constexpr std::chrono::minutes CACHE_TTL{10};  // Cache time-to-live
-
+public:
     /*!
      * \brief Constructor that registers built-in types.
+     * \note Prefer using createShared() for creating instances.
      */
     TypeCaster() { registerBuiltinTypes(); }
 
@@ -186,6 +182,26 @@ private:
     static auto createShared() -> std::shared_ptr<TypeCaster> {
         return std::make_shared<TypeCaster>();
     }
+
+    /*!
+     * \brief Gets a list of registered types.
+     * \return A vector of registered type names.
+     */
+    auto getRegisteredTypes() const -> std::vector<std::string> {
+        std::shared_lock typeLock(type_mutex_);
+        std::vector<std::string> typeNames;
+        typeNames.reserve(type_name_map_.size());
+        for (const auto& [name, info] : type_name_map_) {
+            typeNames.push_back(name);
+        }
+        return typeNames;
+    }
+
+private:
+    // Optimized: Group frequently accessed data together
+    mutable PathCache path_cache_;
+    mutable std::shared_mutex path_cache_mutex_;
+    static constexpr std::chrono::minutes CACHE_TTL{10};  // Cache time-to-live
 
     /*!
      * \brief Optimized conversion with caching for better performance
@@ -355,20 +371,6 @@ private:
         auto srcIt = conversions_.find(src);
         return srcIt != conversions_.end() &&
                srcIt->second.find(dst) != srcIt->second.end();
-    }
-
-    /*!
-     * \brief Gets a list of registered types.
-     * \return A vector of registered type names.
-     */
-    auto getRegisteredTypes() const -> std::vector<std::string> {
-        std::shared_lock typeLock(type_mutex_);
-        std::vector<std::string> typeNames;
-        typeNames.reserve(type_name_map_.size());
-        for (const auto& [name, info] : type_name_map_) {
-            typeNames.push_back(name);
-        }
-        return typeNames;
     }
 
     /*!

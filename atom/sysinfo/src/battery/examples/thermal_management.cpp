@@ -3,7 +3,7 @@
  * @brief Thermal management example
  */
 
-#include "atom/sysinfo/battery/battery.hpp"
+#include "../battery.hpp"
 #include <iostream>
 #include <iomanip>
 

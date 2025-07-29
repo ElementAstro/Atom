@@ -16,9 +16,12 @@ Description: System Information Module - WiFi Configuration and Performance Tuni
 #define ATOM_SYSTEM_MODULE_WIFI_CONFIG_HPP
 
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
+#include <mutex>
 
 #include "atom/macro.hpp"
 

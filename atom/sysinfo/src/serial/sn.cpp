@@ -7,9 +7,9 @@
 #include <filesystem>
 
 #ifdef _WIN32
-#include "windows.hpp"
+#include "platform/windows.hpp"
 #else
-#include "linux.hpp"
+#include "platform/linux.hpp"
 #endif
 
 namespace atom::system {

@@ -23,11 +23,11 @@ Description: System Information Module - Disk
  */
 
 // Include all disk submodule headers
-#include "atom/sysinfo/disk/disk_device.hpp"
-#include "atom/sysinfo/disk/disk_info.hpp"
-#include "atom/sysinfo/disk/disk_monitor.hpp"
-#include "atom/sysinfo/disk/disk_security.hpp"
-#include "atom/sysinfo/disk/disk_types.hpp"
-#include "atom/sysinfo/disk/disk_util.hpp"
+#include "components/disk_device.hpp"
+#include "components/disk_info.hpp"
+#include "components/disk_monitor.hpp"
+#include "components/disk_security.hpp"
+#include "components/disk_types.hpp"
+#include "common/disk_util.hpp"
 
 #endif  // ATOM_SYSTEM_MODULE_DISK_HPP

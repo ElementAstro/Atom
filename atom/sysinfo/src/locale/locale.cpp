@@ -3,12 +3,12 @@
 
 // Platform-specific includes
 #ifdef _WIN32
-#include "windows.hpp"
+#include "platform/windows.hpp"
 #elif defined(__APPLE__)
-#include "macos.hpp"
-#include "linux.hpp" // For fallback functionality
+#include "platform/macos.hpp"
+#include "platform/linux.hpp" // For fallback functionality
 #else
-#include "linux.hpp"
+#include "platform/linux.hpp"
 #endif
 
 #include <algorithm>

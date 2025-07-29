@@ -47,7 +47,7 @@ std::vector<MemoryCompressionInfo> g_compressionHistory;
 
 // Enhanced leak detection globals
 std::atomic<bool> g_leakMonitoringActive(false);
-std::vector<MemoryLeak> g_detectedLeaks;
+std::vector<atom::system::MemoryLeak> g_detectedLeaks;
 std::vector<MemoryInfo> g_memoryHistory;
 std::mutex g_leakDetectionMutex;
 
@@ -77,8 +77,8 @@ auto formatByteSize(unsigned long long bytes) -> std::string {
 /**
  * @brief Enhanced byte size formatting with custom options
  */
-auto formatByteSizeAdvanced(unsigned long long bytes, bool binary = true,
-                           int precision = 2, bool showUnit = true) -> std::string {
+auto formatByteSizeAdvanced(unsigned long long bytes, bool binary,
+                           int precision, bool showUnit) -> std::string {
     if (bytes == 0) {
         return showUnit ? "0 B" : "0";
     }
@@ -201,7 +201,7 @@ auto parseByteSize(const std::string& sizeStr) -> unsigned long long {
  * @brief Enhanced memory benchmarking with statistical analysis
  */
 auto benchmarkMemoryAdvanced(size_t testSizeBytes, int iterations,
-                           const std::string& pattern, bool warmup = true) -> std::map<std::string, double> {
+                           const std::string& pattern, bool warmup) -> std::map<std::string, double> {
     std::map<std::string, double> results;
 
     if (testSizeBytes == 0 || iterations <= 0) {
@@ -311,7 +311,7 @@ auto benchmarkMemoryAdvanced(size_t testSizeBytes, int iterations,
 /**
  * @brief Memory latency profiler with cache analysis
  */
-auto profileMemoryLatency(size_t maxSize = 64 * 1024 * 1024) -> std::map<size_t, double> {
+auto profileMemoryLatency(size_t maxSize) -> std::map<size_t, double> {
     std::map<size_t, double> latencyProfile;
 
     // Test different memory sizes to identify cache levels
@@ -353,7 +353,7 @@ auto profileMemoryLatency(size_t maxSize = 64 * 1024 * 1024) -> std::map<size_t,
 /**
  * @brief System memory stress test
  */
-auto stressTestMemory(std::chrono::seconds duration, size_t maxMemoryMB = 1024) -> std::map<std::string, double> {
+auto stressTestMemory(std::chrono::seconds duration, size_t maxMemoryMB) -> std::map<std::string, double> {
     std::map<std::string, double> results;
 
     const auto startTime = std::chrono::steady_clock::now();
@@ -551,10 +551,10 @@ auto benchmarkMemoryDetailed(size_t testSizeBytes, int iterations,
 }
 
 // Enhanced leak detection helper functions
-auto detectGradualLeaks(const LeakDetectionConfig& config) -> std::vector<MemoryLeak>;
-auto detectSuddenLeaks(const LeakDetectionConfig& config) -> std::vector<MemoryLeak>;
-auto detectPeriodicLeaks(const LeakDetectionConfig& config) -> std::vector<MemoryLeak>;
-auto detectAllocationTrackingLeaks(const LeakDetectionConfig& config) -> std::vector<MemoryLeak>;
+auto detectGradualLeaks(const LeakDetectionConfig& config) -> std::vector<atom::system::MemoryLeak>;
+auto detectSuddenLeaks(const LeakDetectionConfig& config) -> std::vector<atom::system::MemoryLeak>;
+auto detectPeriodicLeaks(const LeakDetectionConfig& config) -> std::vector<atom::system::MemoryLeak>;
+auto detectAllocationTrackingLeaks(const LeakDetectionConfig& config) -> std::vector<atom::system::MemoryLeak>;
 
 }  // namespace internal
 
@@ -2173,10 +2173,10 @@ auto optimizeNumaAllocation() -> std::vector<std::string> {
     return recommendations;
 }
 
-auto detectMemoryLeaksEnhanced(const LeakDetectionConfig& config) -> std::vector<MemoryLeak> {
+auto detectMemoryLeaksEnhanced(const LeakDetectionConfig& config) -> std::vector<atom::system::MemoryLeak> {
     spdlog::info("Starting enhanced memory leak detection");
 
-    std::vector<MemoryLeak> detectedLeaks;
+    std::vector<atom::system::MemoryLeak> detectedLeaks;
     std::lock_guard<std::mutex> lock(internal::g_leakDetectionMutex);
 
     try {
@@ -2233,7 +2233,7 @@ auto detectMemoryLeaksEnhanced(const LeakDetectionConfig& config) -> std::vector
         // Filter leaks by confidence threshold
         detectedLeaks.erase(
             std::remove_if(detectedLeaks.begin(), detectedLeaks.end(),
-                          [&config](const MemoryLeak& leak) {
+                          [&config](const atom::system::MemoryLeak& leak) {
                               return leak.confidence < config.confidenceThreshold;
                           }),
             detectedLeaks.end());
@@ -2252,8 +2252,8 @@ auto detectMemoryLeaksEnhanced(const LeakDetectionConfig& config) -> std::vector
     return detectedLeaks;
 }
 
-auto detectGradualLeaks(const LeakDetectionConfig& config) -> std::vector<MemoryLeak> {
-    std::vector<MemoryLeak> gradualLeaks;
+auto detectGradualLeaks(const LeakDetectionConfig& config) -> std::vector<atom::system::MemoryLeak> {
+    std::vector<atom::system::MemoryLeak> gradualLeaks;
 
     if (internal::g_memoryHistory.size() < 5) {
         return gradualLeaks;
@@ -2298,10 +2298,10 @@ auto detectGradualLeaks(const LeakDetectionConfig& config) -> std::vector<Memory
 
     // Detect gradual leak if there's strong positive correlation and significant slope
     if (correlation > 0.8 && slope > static_cast<double>(config.minimumLeakSize)) {
-        MemoryLeak leak{};
+        atom::system::MemoryLeak leak{};
         leak.leakId = "gradual_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-        leak.severity = slope > 1024 * 1024 ? LeakSeverity::HIGH : LeakSeverity::MEDIUM; // 1MB threshold
-        leak.type = LeakType::GRADUAL;
+        leak.severity = slope > 1024 * 1024 ? atom::system::LeakSeverity::HIGH : atom::system::LeakSeverity::MEDIUM; // 1MB threshold
+        leak.type = atom::system::LeakType::GRADUAL;
         leak.leakRate = static_cast<size_t>(slope); // bytes per measurement interval
         leak.confidence = correlation * 100.0;
         leak.sourceLocation = "Unknown (system-wide analysis)";
@@ -2318,7 +2318,7 @@ auto detectGradualLeaks(const LeakDetectionConfig& config) -> std::vector<Memory
 
         leak.recommendations.push_back("Monitor process memory usage to identify leaking process");
         leak.recommendations.push_back("Use memory profiling tools to identify leak source");
-        if (leak.severity >= LeakSeverity::HIGH) {
+        if (leak.severity >= atom::system::LeakSeverity::HIGH) {
             leak.recommendations.push_back("Consider restarting affected processes");
         }
 
@@ -2328,8 +2328,8 @@ auto detectGradualLeaks(const LeakDetectionConfig& config) -> std::vector<Memory
     return gradualLeaks;
 }
 
-auto detectSuddenLeaks(const LeakDetectionConfig& config) -> std::vector<MemoryLeak> {
-    std::vector<MemoryLeak> suddenLeaks;
+auto detectSuddenLeaks(const LeakDetectionConfig& config) -> std::vector<atom::system::MemoryLeak> {
+    std::vector<atom::system::MemoryLeak> suddenLeaks;
 
     if (internal::g_memoryHistory.size() < 3) {
         return suddenLeaks;
@@ -2348,10 +2348,10 @@ auto detectSuddenLeaks(const LeakDetectionConfig& config) -> std::vector<MemoryL
         if (current.workingSetSize > avgPrevious + config.minimumLeakSize) {
             size_t increase = current.workingSetSize - avgPrevious;
 
-            MemoryLeak leak{};
+            atom::system::MemoryLeak leak{};
             leak.leakId = "sudden_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-            leak.severity = increase > 10 * 1024 * 1024 ? LeakSeverity::CRITICAL : LeakSeverity::HIGH;
-            leak.type = LeakType::SUDDEN;
+            leak.severity = increase > 10 * 1024 * 1024 ? atom::system::LeakSeverity::CRITICAL : atom::system::LeakSeverity::HIGH;
+            leak.type = atom::system::LeakType::SUDDEN;
             leak.totalLeakedBytes = increase;
             leak.confidence = 85.0; // High confidence for sudden spikes
             leak.sourceLocation = "Unknown (sudden allocation)";
@@ -2376,8 +2376,8 @@ auto detectSuddenLeaks(const LeakDetectionConfig& config) -> std::vector<MemoryL
     return suddenLeaks;
 }
 
-auto detectPeriodicLeaks(const LeakDetectionConfig& config) -> std::vector<MemoryLeak> {
-    std::vector<MemoryLeak> periodicLeaks;
+auto detectPeriodicLeaks(const LeakDetectionConfig& config) -> std::vector<atom::system::MemoryLeak> {
+    std::vector<atom::system::MemoryLeak> periodicLeaks;
 
     if (internal::g_memoryHistory.size() < 10) {
         return periodicLeaks; // Need more data for pattern detection
@@ -2432,10 +2432,10 @@ auto detectPeriodicLeaks(const LeakDetectionConfig& config) -> std::vector<Memor
     // Look for strong periodic correlations
     for (size_t i = 0; i < autocorr.size(); ++i) {
         if (autocorr[i] > 0.7) { // Strong correlation threshold
-            MemoryLeak leak{};
+            atom::system::MemoryLeak leak{};
             leak.leakId = "periodic_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-            leak.severity = LeakSeverity::MEDIUM;
-            leak.type = LeakType::PERIODIC;
+            leak.severity = atom::system::LeakSeverity::MEDIUM;
+            leak.type = atom::system::LeakType::PERIODIC;
             leak.confidence = autocorr[i] * 100.0;
             leak.sourceLocation = "Unknown (periodic pattern)";
             leak.processName = "System";
@@ -2479,8 +2479,8 @@ auto detectPeriodicLeaks(const LeakDetectionConfig& config) -> std::vector<Memor
     return periodicLeaks;
 }
 
-auto detectAllocationTrackingLeaks(const LeakDetectionConfig& config) -> std::vector<MemoryLeak> {
-    std::vector<MemoryLeak> trackingLeaks;
+auto detectAllocationTrackingLeaks(const LeakDetectionConfig& config) -> std::vector<atom::system::MemoryLeak> {
+    std::vector<atom::system::MemoryLeak> trackingLeaks;
 
     if (!internal::g_allocationTrackingActive) {
         return trackingLeaks;
@@ -2520,10 +2520,10 @@ auto detectAllocationTrackingLeaks(const LeakDetectionConfig& config) -> std::ve
         // Check if this looks like a leak
         double oldRatio = static_cast<double>(oldAllocations) / allocations.size();
         if (oldRatio > 0.5 && totalSize > config.minimumLeakSize) {
-            MemoryLeak leak{};
+            atom::system::MemoryLeak leak{};
             leak.leakId = "tracking_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-            leak.severity = totalSize > 10 * 1024 * 1024 ? LeakSeverity::HIGH : LeakSeverity::MEDIUM;
-            leak.type = LeakType::PERSISTENT;
+            leak.severity = totalSize > 10 * 1024 * 1024 ? atom::system::LeakSeverity::HIGH : atom::system::LeakSeverity::MEDIUM;
+            leak.type = atom::system::LeakType::PERSISTENT;
             leak.confidence = oldRatio * 100.0;
             leak.sourceLocation = location;
             leak.processName = "Current Process";
@@ -2566,10 +2566,10 @@ auto detectAllocationTrackingLeaks(const LeakDetectionConfig& config) -> std::ve
 
 }  // namespace internal
 
-auto analyzeLeakPatterns(const std::vector<MemoryLeak>& leaks) -> std::vector<MemoryLeak> {
+auto analyzeLeakPatterns(const std::vector<atom::system::MemoryLeak>& leaks) -> std::vector<atom::system::MemoryLeak> {
     spdlog::debug("Analyzing leak patterns for {} leaks", leaks.size());
 
-    std::vector<MemoryLeak> analyzedLeaks = leaks;
+    std::vector<atom::system::MemoryLeak> analyzedLeaks = leaks;
 
     // Pattern analysis and enhancement
     for (auto& leak : analyzedLeaks) {
@@ -2587,18 +2587,18 @@ auto analyzeLeakPatterns(const std::vector<MemoryLeak>& leaks) -> std::vector<Me
         // Size factor - larger leaks are more significant
         if (leak.totalLeakedBytes > 100 * 1024 * 1024) { // > 100MB
             confidenceBoost += 15.0;
-            leak.severity = LeakSeverity::CRITICAL;
+            leak.severity = atom::system::LeakSeverity::CRITICAL;
         } else if (leak.totalLeakedBytes > 10 * 1024 * 1024) { // > 10MB
             confidenceBoost += 10.0;
-            if (leak.severity < LeakSeverity::HIGH) {
-                leak.severity = LeakSeverity::HIGH;
+            if (leak.severity < atom::system::LeakSeverity::HIGH) {
+                leak.severity = atom::system::LeakSeverity::HIGH;
             }
         }
 
         // Rate factor - fast leaks are more concerning
         if (leak.leakRate > 1024 * 1024) { // > 1MB/s
             confidenceBoost += 20.0;
-            leak.severity = LeakSeverity::CRITICAL;
+            leak.severity = atom::system::LeakSeverity::CRITICAL;
         } else if (leak.leakRate > 1024) { // > 1KB/s
             confidenceBoost += 10.0;
         }
@@ -2608,16 +2608,16 @@ auto analyzeLeakPatterns(const std::vector<MemoryLeak>& leaks) -> std::vector<Me
 
         // Add pattern-specific recommendations
         switch (leak.type) {
-            case LeakType::GRADUAL:
+            case atom::system::LeakType::GRADUAL:
                 leak.recommendations.push_back("Gradual leak detected - check for accumulating data structures");
                 break;
-            case LeakType::SUDDEN:
+            case atom::system::LeakType::SUDDEN:
                 leak.recommendations.push_back("Sudden leak detected - investigate recent changes or events");
                 break;
-            case LeakType::PERIODIC:
+            case atom::system::LeakType::PERIODIC:
                 leak.recommendations.push_back("Periodic leak detected - check scheduled tasks or timers");
                 break;
-            case LeakType::PERSISTENT:
+            case atom::system::LeakType::PERSISTENT:
                 leak.recommendations.push_back("Persistent leak detected - review object lifecycle management");
                 break;
             default:
@@ -2625,10 +2625,10 @@ auto analyzeLeakPatterns(const std::vector<MemoryLeak>& leaks) -> std::vector<Me
         }
 
         // Add severity-specific recommendations
-        if (leak.severity >= LeakSeverity::HIGH) {
+        if (leak.severity >= atom::system::LeakSeverity::HIGH) {
             leak.recommendations.push_back("High severity leak - consider immediate action");
         }
-        if (leak.severity == LeakSeverity::CRITICAL) {
+        if (leak.severity == atom::system::LeakSeverity::CRITICAL) {
             leak.recommendations.push_back("CRITICAL leak - immediate intervention required");
         }
     }

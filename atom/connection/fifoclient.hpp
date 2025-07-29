@@ -48,9 +48,8 @@ enum class FifoError {
     DecryptionFailed
 };
 
-inline std::error_code make_error_code(FifoError e) {
-    return std::error_code(static_cast<int>(e), std::generic_category());
-}
+// make_error_code is defined in fifoclient.cpp
+[[nodiscard]] std::error_code make_error_code(FifoError e);
 
 /**
  * @brief Enum representing message priority levels

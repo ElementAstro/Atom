@@ -12,9 +12,9 @@ Description: System Information Module - Disk Information
 
 **************************************************/
 
-#include "atom/sysinfo/disk/disk_info.hpp"
-#include "atom/sysinfo/disk/disk_device.hpp"
-#include "atom/sysinfo/disk/disk_util.hpp"
+#include "disk_info.hpp"
+#include "disk_device.hpp"
+#include "../common/disk_util.hpp"
 
 #include <atomic>
 #include <chrono>

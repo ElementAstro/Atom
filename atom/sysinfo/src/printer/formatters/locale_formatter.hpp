@@ -16,25 +16,27 @@
 
 namespace atom::system {
 
+using locale::LocaleInfo;
+
 /**
- * @class LocaleFormatter
+ * @class LocaleInfoFormatter
  * @brief Formatter for locale information
  *
  * This class provides specialized formatting for locale information including
  * language, country, character encoding, time/date formats, and currency.
  */
-class LocaleFormatter : public BaseFormatter {
+class LocaleInfoFormatter : public BaseFormatter {
 public:
     /**
      * @brief Default constructor
      */
-    LocaleFormatter() = default;
+    LocaleInfoFormatter() = default;
 
     /**
      * @brief Constructor with options
      * @param options Initial formatting options
      */
-    explicit LocaleFormatter(const FormatterOptions& options);
+    explicit LocaleInfoFormatter(const FormatterOptions& options);
 
     /**
      * @brief Format locale information as a string

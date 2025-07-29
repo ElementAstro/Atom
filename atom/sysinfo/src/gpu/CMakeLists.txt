@@ -6,6 +6,15 @@ set(GPU_SOURCES
     common.cpp
 )
 
+# Add platform-specific sources
+if(WIN32)
+    list(APPEND GPU_SOURCES platform/windows.cpp)
+elseif(UNIX AND NOT APPLE)
+    list(APPEND GPU_SOURCES platform/linux.cpp)
+elseif(APPLE)
+    list(APPEND GPU_SOURCES platform/macos.cpp)
+endif()
+
 # Create GPU module library
 add_library(atom_sysinfo_gpu STATIC ${GPU_SOURCES})
 
@@ -97,8 +106,5 @@ install(FILES
     DESTINATION include/atom/sysinfo/gpu
 )
 
-# Export targets for find_package support
-export(TARGETS atom_sysinfo_gpu
-    FILE "${CMAKE_CURRENT_BINARY_DIR}/atom_sysinfo_gpu_targets.cmake"
-    NAMESPACE atom::
-)
+# Export removed to avoid dependency issues with loguru
+# Individual modules should be used directly rather than exported

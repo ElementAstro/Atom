@@ -17,11 +17,11 @@ Description: System Information Module - Memory Implementation
 
 // 包含平台特定的头文件
 #ifdef _WIN32
-#include "windows.hpp"
+#include "platform/windows.hpp"
 #elif defined(__linux__)
-#include "linux.hpp"
+#include "platform/linux.hpp"
 #elif defined(__APPLE__)
-#include "macos.hpp"
+#include "platform/macos.hpp"
 #endif
 
 namespace atom::system {

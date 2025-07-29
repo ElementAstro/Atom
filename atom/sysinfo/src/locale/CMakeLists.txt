@@ -39,6 +39,15 @@ set(LOCALE_SOURCES
     config.cpp
 )
 
+# Add platform-specific sources
+if(WIN32)
+    list(APPEND LOCALE_SOURCES platform/windows.cpp)
+elseif(UNIX AND NOT APPLE)
+    list(APPEND LOCALE_SOURCES platform/linux.cpp)
+elseif(APPLE)
+    list(APPEND LOCALE_SOURCES platform/macos.cpp)
+endif()
+
 # Add validation sources if enabled
 if(LOCALE_ENABLE_VALIDATION)
     list(APPEND LOCALE_SOURCES validator.cpp)

@@ -823,8 +823,8 @@ ThreadSafeLRUCache<Key, Value, Hash>::ThreadSafeLRUCache(
     size_t max_shard_size =
         (max_size + concurrency_level_ - 1) / concurrency_level_;
     for (size_t i = 0; i < concurrency_level_; ++i) {
-        shards_.emplace_back(std::make_unique<LRUCacheShard<Key, Value, Hash>>(
-            max_shard_size, this));
+        shards_.emplace_back(std::unique_ptr<LRUCacheShard<Key, Value, Hash>>(
+            new LRUCacheShard<Key, Value, Hash>(max_shard_size, this)));
     }
 
     if (config_.cleanup_interval.count() > 0) {
@@ -856,8 +856,8 @@ ThreadSafeLRUCache<Key, Value, Hash>::ThreadSafeLRUCache(const LRUCacheConfig& c
     size_t max_shard_size =
         (config.max_size + concurrency_level_ - 1) / concurrency_level_;
     for (size_t i = 0; i < concurrency_level_; ++i) {
-        shards_.emplace_back(std::make_unique<LRUCacheShard<Key, Value, Hash>>(
-            max_shard_size, this));
+        shards_.emplace_back(std::unique_ptr<LRUCacheShard<Key, Value, Hash>>(
+            new LRUCacheShard<Key, Value, Hash>(max_shard_size, this)));
     }
 
     if (config.cleanup_interval.count() > 0) {

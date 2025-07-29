@@ -11,6 +11,15 @@ set(VIRTUAL_SOURCES
     container.cpp
 )
 
+# Add platform-specific sources
+if(WIN32)
+    list(APPEND VIRTUAL_SOURCES platform/windows.cpp)
+elseif(UNIX AND NOT APPLE)
+    list(APPEND VIRTUAL_SOURCES platform/linux.cpp)
+elseif(APPLE)
+    list(APPEND VIRTUAL_SOURCES platform/macos.cpp)
+endif()
+
 # Define header files
 set(VIRTUAL_HEADERS
     virtual.hpp

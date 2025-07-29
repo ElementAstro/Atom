@@ -14,6 +14,18 @@ set(ATOM_SYSINFO_SN_SOURCES
     sn.cpp
 )
 
+# Add platform-specific sources
+if(WIN32)
+    list(APPEND ATOM_SYSINFO_SN_SOURCES platform/windows.cpp)
+    list(APPEND ATOM_SYSINFO_SN_HEADERS platform/windows.hpp)
+elseif(UNIX AND NOT APPLE)
+    list(APPEND ATOM_SYSINFO_SN_SOURCES platform/linux.cpp)
+    list(APPEND ATOM_SYSINFO_SN_HEADERS platform/linux.hpp)
+elseif(APPLE)
+    list(APPEND ATOM_SYSINFO_SN_SOURCES platform/macos.cpp)
+    list(APPEND ATOM_SYSINFO_SN_HEADERS platform/macos.hpp)
+endif()
+
 set(ATOM_SYSINFO_SN_HEADERS
     common.hpp
     sn.hpp

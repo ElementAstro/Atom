@@ -8,6 +8,15 @@ set(OS_SOURCES
     common.cpp
 )
 
+# Add platform-specific sources
+if(WIN32)
+    list(APPEND OS_SOURCES platform/windows.cpp)
+elseif(UNIX AND NOT APPLE)
+    list(APPEND OS_SOURCES platform/linux.cpp)
+elseif(APPLE)
+    list(APPEND OS_SOURCES platform/macos.cpp)
+endif()
+
 # Create the OS module library
 add_library(atom_sysinfo_os STATIC ${OS_SOURCES})
 

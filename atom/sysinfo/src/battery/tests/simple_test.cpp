@@ -5,7 +5,7 @@
  * Basic tests for the battery module functionality without external testing frameworks.
  */
 
-#include "atom/sysinfo/battery/battery.hpp"
+#include "../battery.hpp"
 #include <iostream>
 #include <cassert>
 #include <chrono>

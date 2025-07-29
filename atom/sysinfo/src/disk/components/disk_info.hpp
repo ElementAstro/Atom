@@ -22,7 +22,7 @@ Description: System Information Module - Disk Information
 #include <utility>
 #include <vector>
 
-#include "atom/sysinfo/disk/disk_types.hpp"
+#include "disk_types.hpp"
 
 namespace atom::system {
 
@@ -37,6 +37,14 @@ namespace atom::system {
  * @return A vector of DiskInfo structures
  */
 [[nodiscard]] auto getDiskInfo(bool includeRemovable = true) -> std::vector<DiskInfo>;
+
+/**
+ * @brief Retrieves cached disk information for a specific path.
+ *
+ * @param path The disk path to get information for
+ * @return DiskInfo structure for the specified path
+ */
+[[nodiscard]] auto getDiskInfoCached(const std::string& path) -> DiskInfo;
 
 /**
  * @brief Retrieves the disk usage information for all available disks.

@@ -12,7 +12,7 @@ Description: System Information Module - Disk Devices
 
 **************************************************/
 
-#include "atom/sysinfo/disk/disk_device.hpp"
+#include "disk_device.hpp"
 
 #include <algorithm>
 #include <atomic>

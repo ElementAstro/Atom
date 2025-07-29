@@ -10,6 +10,15 @@ set(WIFI_SOURCES
     config.cpp
 )
 
+# Add platform-specific sources
+if(WIN32)
+    list(APPEND WIFI_SOURCES platform/windows.cpp)
+elseif(UNIX AND NOT APPLE)
+    list(APPEND WIFI_SOURCES platform/linux.cpp)
+elseif(APPLE)
+    list(APPEND WIFI_SOURCES platform/macos.cpp)
+endif()
+
 # Create the target library
 add_library(atom_sysinfo_wifi ${WIFI_SOURCES})
 

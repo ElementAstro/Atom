@@ -57,22 +57,22 @@ inline auto getArchitecture() -> std::string {
     return info.architecture;
 }
 
-// Enhanced functionality access
-inline auto getEnhancedOSManager() -> EnhancedOSManager& {
-    return EnhancedOSManager::getInstance();
-}
+// Enhanced functionality access - commented out until BIOS OS module is properly integrated
+// inline auto getEnhancedOSManager() -> EnhancedOSManager& {
+//     return EnhancedOSManager::getInstance();
+// }
 
-inline auto getSystemMetrics() -> SystemPerformanceMetrics {
-    return EnhancedOSManager::getInstance().getPerformanceMetrics();
-}
+// inline auto getSystemMetrics() -> SystemPerformanceMetrics {
+//     return EnhancedOSManager::getInstance().getPerformanceMetrics();
+// }
 
-inline auto getSystemSecurity() -> SystemSecurityInfo {
-    return EnhancedOSManager::getInstance().getSecurityInfo();
-}
+// inline auto getSystemSecurity() -> SystemSecurityInfo {
+//     return EnhancedOSManager::getInstance().getSecurityInfo();
+// }
 
-inline auto getNetworkInfo() -> NetworkConfiguration {
-    return EnhancedOSManager::getInstance().getNetworkConfiguration();
-}
+// inline auto getNetworkInfo() -> NetworkConfiguration {
+//     return EnhancedOSManager::getInstance().getNetworkConfiguration();
+// }
 
 }  // namespace atom::system
 

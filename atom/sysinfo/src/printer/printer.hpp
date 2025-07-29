@@ -33,6 +33,9 @@
 
 namespace atom::system {
 
+// Import types from submodules
+using battery::BatteryInfo;
+
 /**
  * @class SystemInfoPrinter
  * @brief Main system information printer and formatter

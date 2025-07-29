@@ -12,7 +12,7 @@ Description: System Information Module - Disk Utilities
 
 **************************************************/
 
-#include "atom/sysinfo/disk/disk_util.hpp"
+#include "disk_util.hpp"
 
 #include <algorithm>
 #include <array>

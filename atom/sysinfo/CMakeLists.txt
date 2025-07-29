@@ -77,22 +77,11 @@ target_include_directories(${PROJECT_NAME} INTERFACE
     $<INSTALL_INTERFACE:include>
 )
 
-# Installation
-install(TARGETS ${PROJECT_NAME}
-    EXPORT ${PROJECT_NAME}Targets
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
+# Installation - only install headers, not the interface library
+# The interface library is just for convenience and shouldn't be exported
+# Individual modules handle their own exports
 
 # Install compatibility headers
 install(FILES ${COMPATIBILITY_HEADERS}
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/sysinfo
-)
-
-# Export targets
-install(EXPORT ${PROJECT_NAME}Targets
-    FILE ${PROJECT_NAME}Targets.cmake
-    NAMESPACE atom::sysinfo::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
 )
