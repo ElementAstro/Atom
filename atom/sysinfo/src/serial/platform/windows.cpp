@@ -188,7 +188,7 @@ public:
         return results;
     }
 
-    std::map<std::string, std::string> getWmiObjectProperties(const std::wstring& wmiClass, 
+    std::map<std::string, std::string> getWmiObjectProperties(const std::wstring& wmiClass,
                                                                const std::vector<std::wstring>& properties) {
         std::map<std::string, std::string> result;
         if (!initializeWmi()) return result;
@@ -280,7 +280,7 @@ WindowsSystemInfo::~WindowsSystemInfo() {
     spdlog::debug("WindowsSystemInfo instance destroyed");
 }
 
-WindowsSystemInfo::WindowsSystemInfo(WindowsSystemInfo&& other) noexcept 
+WindowsSystemInfo::WindowsSystemInfo(WindowsSystemInfo&& other) noexcept
     : impl_(std::move(other.impl_)) {
     spdlog::debug("WindowsSystemInfo move constructor called");
 }
@@ -295,12 +295,12 @@ WindowsSystemInfo& WindowsSystemInfo::operator=(WindowsSystemInfo&& other) noexc
 
 SystemInfoResult<HardwareSerialData> WindowsSystemInfo::getHardwareSerials() {
     SystemInfoResult<HardwareSerialData> result;
-    
+
     try {
         result.data.biosSerial = validateSerial(impl_->getWmiProperty(L"Win32_BIOS", L"SerialNumber"));
         result.data.motherboardSerial = validateSerial(impl_->getWmiProperty(L"Win32_BaseBoard", L"SerialNumber"));
         result.data.cpuSerial = validateSerial(impl_->getWmiProperty(L"Win32_Processor", L"ProcessorId"));
-        
+
         auto diskSerials = impl_->getWmiPropertyMultiple(L"Win32_DiskDrive", L"SerialNumber");
         for (const auto& serial : diskSerials) {
             std::string cleanSerial = validateSerial(serial);
@@ -308,10 +308,10 @@ SystemInfoResult<HardwareSerialData> WindowsSystemInfo::getHardwareSerials() {
                 result.data.diskSerials.push_back(cleanSerial);
             }
         }
-        
+
         result.data.lastUpdate = std::chrono::system_clock::now();
         result.success = result.data.isValid();
-        
+
         if (!result.success) {
             result.error = SystemInfoError::HARDWARE_NOT_FOUND;
             result.errorMessage = "No valid hardware serial numbers found";
@@ -321,7 +321,7 @@ SystemInfoResult<HardwareSerialData> WindowsSystemInfo::getHardwareSerials() {
         result.error = SystemInfoError::UNKNOWN_ERROR;
         result.errorMessage = e.what();
     }
-    
+
     return result;
 }
 
@@ -329,18 +329,18 @@ std::string WindowsSystemInfo::validateSerial(const std::string& serial) {
     if (!SystemInfoUtils::isValidSerial(serial)) {
         return "";
     }
-    
+
     // Additional Windows-specific validation
     std::string cleaned = serial;
-    
+
     // Remove common Windows placeholder values
-    if (cleaned == "To Be Filled By O.E.M." || 
+    if (cleaned == "To Be Filled By O.E.M." ||
         cleaned == "System Serial Number" ||
         cleaned == "Default string" ||
         cleaned.find("OEM") != std::string::npos) {
         return "";
     }
-    
+
     return cleaned;
 }
 

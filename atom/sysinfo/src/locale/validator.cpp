@@ -11,15 +11,15 @@ namespace atom::system::locale {
 namespace {
     // Common portable locales across platforms
     const std::vector<std::string> PORTABLE_LOCALES = {
-        "C", "POSIX", "en_US.UTF-8", "en_GB.UTF-8", "de_DE.UTF-8", 
+        "C", "POSIX", "en_US.UTF-8", "en_GB.UTF-8", "de_DE.UTF-8",
         "fr_FR.UTF-8", "es_ES.UTF-8", "it_IT.UTF-8", "ja_JP.UTF-8",
         "ko_KR.UTF-8", "zh_CN.UTF-8", "ru_RU.UTF-8"
     };
-    
+
     // Platform-specific locale patterns
     const std::unordered_map<std::string, std::vector<std::string>> PLATFORM_PATTERNS = {
         {"windows", {"en-US", "de-DE", "fr-FR", "es-ES", "it-IT", "ja-JP", "ko-KR", "zh-CN", "ru-RU"}},
-        {"linux", {"en_US.UTF-8", "de_DE.UTF-8", "fr_FR.UTF-8", "es_ES.UTF-8", "it_IT.UTF-8", 
+        {"linux", {"en_US.UTF-8", "de_DE.UTF-8", "fr_FR.UTF-8", "es_ES.UTF-8", "it_IT.UTF-8",
                    "ja_JP.UTF-8", "ko_KR.UTF-8", "zh_CN.UTF-8", "ru_RU.UTF-8"}},
         {"macos", {"en_US", "de_DE", "fr_FR", "es_ES", "it_IT", "ja_JP", "ko_KR", "zh_CN", "ru_RU"}}
     };
@@ -28,23 +28,23 @@ namespace {
 auto LocaleValidator::validate(const std::string& locale, ValidationLevel level) -> ValidationResult {
     ValidationResult result;
     result.level = level;
-    
+
     if (locale.empty()) {
         result.errors.push_back("Locale string is empty");
         return result;
     }
-    
+
     // Basic format validation
     auto formatResult = validateFormat(locale);
     result.errors.insert(result.errors.end(), formatResult.errors.begin(), formatResult.errors.end());
     result.warnings.insert(result.warnings.end(), formatResult.warnings.begin(), formatResult.warnings.end());
-    
+
     if (level == ValidationLevel::Basic) {
         result.isValid = formatResult.isValid;
         result.confidenceScore = formatResult.confidenceScore;
         return result;
     }
-    
+
     // Standard validation includes availability check
     if (level >= ValidationLevel::Standard) {
         auto availabilityResult = validateAvailability(locale);
@@ -53,7 +53,7 @@ auto LocaleValidator::validate(const std::string& locale, ValidationLevel level)
         }
         result.warnings.insert(result.warnings.end(), availabilityResult.warnings.begin(), availabilityResult.warnings.end());
     }
-    
+
     // Strict validation includes functionality check
     if (level >= ValidationLevel::Strict) {
         auto functionalityResult = validateFunctionality(locale);
@@ -62,7 +62,7 @@ auto LocaleValidator::validate(const std::string& locale, ValidationLevel level)
         }
         result.warnings.insert(result.warnings.end(), functionalityResult.warnings.begin(), functionalityResult.warnings.end());
     }
-    
+
     // Complete validation includes compatibility check
     if (level == ValidationLevel::Complete) {
         auto compatibilityResult = validateCompatibility(locale);
@@ -71,9 +71,9 @@ auto LocaleValidator::validate(const std::string& locale, ValidationLevel level)
         }
         result.warnings.insert(result.warnings.end(), compatibilityResult.warnings.begin(), compatibilityResult.warnings.end());
     }
-    
+
     result.isValid = result.errors.empty();
-    
+
     // Calculate confidence score
     double baseScore = formatResult.confidenceScore;
     if (result.isValid) {
@@ -83,24 +83,24 @@ auto LocaleValidator::validate(const std::string& locale, ValidationLevel level)
         baseScore += 0.2; // Bonus for no warnings
     }
     result.confidenceScore = std::min(1.0, baseScore);
-    
+
     // Add suggestions if not valid
     if (!result.isValid) {
         result.suggestions = getSuggestions(locale, 3);
     }
-    
+
     return result;
 }
 
 auto LocaleValidator::validateFormat(const std::string& locale) -> ValidationResult {
     ValidationResult result;
     result.level = ValidationLevel::Basic;
-    
+
     if (locale.empty()) {
         result.errors.push_back("Empty locale string");
         return result;
     }
-    
+
     // Check basic format using regex
     std::regex localeRegex(R"(^([a-z]{2,3})(?:_([A-Z]{2}))?(?:\.([^@]+))?(?:@(.+))?$)");
     if (!std::regex_match(locale, localeRegex)) {
@@ -111,20 +111,20 @@ auto LocaleValidator::validateFormat(const std::string& locale) -> ValidationRes
             return result;
         }
     }
-    
+
     // Parse and validate components
     auto info = parseLocaleString(locale);
-    
+
     // Validate language code
     if (info.languageCode.length() < 2 || info.languageCode.length() > 3) {
         result.warnings.push_back("Unusual language code length: " + info.languageCode);
     }
-    
+
     // Validate country code
     if (!info.countryCode.empty() && info.countryCode.length() != 2) {
         result.warnings.push_back("Invalid country code length: " + info.countryCode);
     }
-    
+
     // Check for common encoding
     if (!info.characterEncoding.empty()) {
         std::vector<std::string> commonEncodings = {"UTF-8", "utf8", "ISO-8859-1", "ASCII"};
@@ -132,22 +132,22 @@ auto LocaleValidator::validateFormat(const std::string& locale) -> ValidationRes
             result.warnings.push_back("Uncommon character encoding: " + info.characterEncoding);
         }
     }
-    
+
     result.isValid = result.errors.empty();
     result.confidenceScore = result.isValid ? (result.warnings.empty() ? 1.0 : 0.8) : 0.2;
-    
+
     return result;
 }
 
 auto LocaleValidator::validateAvailability(const std::string& locale) -> ValidationResult {
     ValidationResult result;
     result.level = ValidationLevel::Standard;
-    
+
     try {
         atom::system::LocaleManager manager;
         if (!manager.validateLocale(locale)) {
             result.errors.push_back("Locale not available on system: " + locale);
-            
+
             // Check if it's in available locales list
             auto available = manager.getAvailableLocales();
             if (std::find(available.begin(), available.end(), locale) == available.end()) {
@@ -160,51 +160,51 @@ auto LocaleValidator::validateAvailability(const std::string& locale) -> Validat
     } catch (const std::exception& e) {
         result.errors.push_back("Error checking locale availability: " + std::string(e.what()));
     }
-    
+
     return result;
 }
 
 auto LocaleValidator::validateFunctionality(const std::string& locale) -> ValidationResult {
     ValidationResult result;
     result.level = ValidationLevel::Strict;
-    
+
     try {
         // Test basic functionality
         atom::system::LocaleFormatter formatter(locale);
-        
+
         // Test number formatting
         std::string numberTest = formatter.formatNumber(1234.56, 2);
         if (numberTest.empty()) {
             result.errors.push_back("Number formatting failed");
         }
-        
+
         // Test currency formatting
         std::string currencyTest = formatter.formatCurrency(123.45);
         if (currencyTest.empty()) {
             result.warnings.push_back("Currency formatting may not work properly");
         }
-        
+
         // Test date formatting
         auto now = std::chrono::system_clock::now();
         std::string dateTest = formatter.formatDate(now);
         if (dateTest.empty()) {
             result.warnings.push_back("Date formatting may not work properly");
         }
-        
+
         result.isValid = result.errors.empty();
         result.confidenceScore = result.isValid ? (result.warnings.empty() ? 1.0 : 0.7) : 0.3;
-        
+
     } catch (const std::exception& e) {
         result.errors.push_back("Functionality test failed: " + std::string(e.what()));
     }
-    
+
     return result;
 }
 
 auto LocaleValidator::validateCompatibility(const std::string& locale) -> ValidationResult {
     ValidationResult result;
     result.level = ValidationLevel::Complete;
-    
+
     // Check if locale is in portable list
     if (std::find(PORTABLE_LOCALES.begin(), PORTABLE_LOCALES.end(), locale) != PORTABLE_LOCALES.end()) {
         result.isValid = true;
@@ -215,7 +215,7 @@ auto LocaleValidator::validateCompatibility(const std::string& locale) -> Valida
         result.confidenceScore = 0.6;
         result.metadata["portability"] = "medium";
     }
-    
+
     // Check encoding compatibility
     auto info = parseLocaleString(locale);
     if (info.characterEncoding == "UTF-8" || info.characterEncoding == "utf8") {
@@ -227,29 +227,29 @@ auto LocaleValidator::validateCompatibility(const std::string& locale) -> Valida
         result.warnings.push_back("Non-UTF-8 encoding may cause compatibility issues");
         result.metadata["encoding_compatibility"] = "limited";
     }
-    
+
     return result;
 }
 
 auto LocaleValidator::checkCompatibility(const std::string& locale1, const std::string& locale2) -> double {
     if (locale1 == locale2) return 1.0;
-    
+
     auto info1 = parseLocaleString(locale1);
     auto info2 = parseLocaleString(locale2);
-    
+
     double score = 0.0;
-    
+
     // Language compatibility
     if (info1.languageCode == info2.languageCode) {
         score += 0.5;
-        
+
         // Country compatibility
         if (info1.countryCode == info2.countryCode) {
             score += 0.3;
         } else if (info1.countryCode.empty() || info2.countryCode.empty()) {
             score += 0.1; // Partial compatibility
         }
-        
+
         // Encoding compatibility
         if (info1.characterEncoding == info2.characterEncoding) {
             score += 0.2;
@@ -260,26 +260,26 @@ auto LocaleValidator::checkCompatibility(const std::string& locale1, const std::
             score += 0.1;
         }
     }
-    
+
     return std::min(1.0, score);
 }
 
 auto LocaleValidator::getSuggestions(const std::string& locale, size_t maxSuggestions) -> std::vector<std::string> {
     std::vector<std::string> suggestions;
-    
+
     if (locale.empty()) {
         suggestions = {"en_US.UTF-8", "C", "POSIX"};
         suggestions.resize(std::min(suggestions.size(), maxSuggestions));
         return suggestions;
     }
-    
+
     auto info = parseLocaleString(locale);
-    
+
     // Try to get available locales
     try {
         atom::system::LocaleManager manager;
         auto available = manager.getAvailableLocales();
-        
+
         // Find similar locales
         std::vector<std::pair<std::string, double>> scored;
         for (const auto& availableLocale : available) {
@@ -288,24 +288,24 @@ auto LocaleValidator::getSuggestions(const std::string& locale, size_t maxSugges
                 scored.emplace_back(availableLocale, score);
             }
         }
-        
+
         // Sort by score
-        std::sort(scored.begin(), scored.end(), 
+        std::sort(scored.begin(), scored.end(),
                   [](const auto& a, const auto& b) { return a.second > b.second; });
-        
+
         // Extract top suggestions
         for (const auto& [suggestedLocale, score] : scored) {
             if (suggestions.size() >= maxSuggestions) break;
             suggestions.push_back(suggestedLocale);
         }
-        
+
     } catch (...) {
         // Fallback suggestions
         if (!info.languageCode.empty()) {
             suggestions.push_back(info.languageCode + "_" + info.languageCode + ".UTF-8");
         }
     }
-    
+
     // Add common fallbacks if we don't have enough suggestions
     if (suggestions.size() < maxSuggestions) {
         std::vector<std::string> fallbacks = {"en_US.UTF-8", "C", "POSIX"};
@@ -316,29 +316,29 @@ auto LocaleValidator::getSuggestions(const std::string& locale, size_t maxSugges
             }
         }
     }
-    
+
     suggestions.resize(std::min(suggestions.size(), maxSuggestions));
     return suggestions;
 }
 
 auto LocaleValidator::findBestValidLocale(const std::vector<std::string>& locales, ValidationLevel level) -> std::string {
     std::vector<std::pair<std::string, double>> scored;
-    
+
     for (const auto& locale : locales) {
         auto result = validate(locale, level);
         if (result.isValid) {
             scored.emplace_back(locale, result.confidenceScore);
         }
     }
-    
+
     if (scored.empty()) {
         return "";
     }
-    
+
     // Sort by confidence score
-    std::sort(scored.begin(), scored.end(), 
+    std::sort(scored.begin(), scored.end(),
               [](const auto& a, const auto& b) { return a.second > b.second; });
-    
+
     return scored[0].first;
 }
 

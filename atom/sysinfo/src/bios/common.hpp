@@ -162,7 +162,7 @@ struct BiosDiagnostics {
 class BiosImplementation {
 public:
     virtual ~BiosImplementation() = default;
-    
+
     virtual BiosInfoData fetchBiosInfo() = 0;
     virtual BiosHealthStatus checkHealth() const = 0;
     virtual BiosUpdateInfo checkForUpdates() const = 0;
@@ -173,7 +173,7 @@ public:
     virtual bool restoreBiosSettings(const std::string& filepath) = 0;
     virtual bool isSecureBootSupported() const = 0;
     virtual bool isUEFIBootSupported() const = 0;
-    
+
     // New enhanced features
     virtual FirmwareInfo getFirmwareInfo() const = 0;
     virtual BootConfiguration getBootConfiguration() const = 0;

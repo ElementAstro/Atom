@@ -17,7 +17,7 @@ class LinuxBiosImplementation : public BiosImplementation {
 public:
     LinuxBiosImplementation() = default;
     ~LinuxBiosImplementation() override = default;
-    
+
     BiosInfoData fetchBiosInfo() override;
     BiosHealthStatus checkHealth() const override;
     BiosUpdateInfo checkForUpdates() const override;
@@ -28,7 +28,7 @@ public:
     bool restoreBiosSettings(const std::string& filepath) override;
     bool isSecureBootSupported() const override;
     bool isUEFIBootSupported() const override;
-    
+
     // Enhanced features
     FirmwareInfo getFirmwareInfo() const override;
     BootConfiguration getBootConfiguration() const override;

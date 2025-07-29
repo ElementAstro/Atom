@@ -60,7 +60,7 @@ public:
 };
 
 template<typename T>
-thread_local std::array<std::atomic<T*>, hazard_pointer<T>::max_hazard_pointers> 
+thread_local std::array<std::atomic<T*>, hazard_pointer<T>::max_hazard_pointers>
     hazard_pointer<T>::hazard_ptrs_{};
 
 template<typename T>
@@ -75,14 +75,14 @@ struct alignas(cache_line_size) queue_node {
     std::optional<T> data;
 
     queue_node() = default;
-    
+
     template<typename... Args>
     explicit queue_node(Args&&... args) : data(std::forward<Args>(args)...) {}
 };
 
 /**
  * @brief High-performance lock-free multi-producer multi-consumer queue
- * 
+ *
  * This implementation uses hazard pointers for safe memory reclamation and provides
  * excellent performance characteristics for concurrent access patterns.
  */
@@ -90,7 +90,7 @@ template<typename T>
 class lockfree_queue {
 private:
     using node_type = queue_node<T>;
-    
+
     cache_aligned<std::atomic<node_type*>> head_;
     cache_aligned<std::atomic<node_type*>> tail_;
     cache_aligned<std::atomic<std::size_t>> size_;
@@ -116,7 +116,7 @@ public:
         auto dummy = new node_type;
         head_.get().store(dummy, std::memory_order_relaxed);
         tail_.get().store(dummy, std::memory_order_relaxed);
-        
+
         spdlog::debug("Lock-free queue initialized with dummy node");
     }
 
@@ -127,11 +127,11 @@ public:
         while (auto item = try_pop()) {
             // Items are automatically destroyed
         }
-        
+
         // Clean up dummy node
         auto head = head_.get().load(std::memory_order_relaxed);
         delete head;
-        
+
         spdlog::debug("Lock-free queue destroyed");
     }
 
@@ -149,10 +149,10 @@ public:
         auto new_node = new node_type(std::forward<U>(item));
         auto prev_tail = tail_.get().exchange(new_node, std::memory_order_acq_rel);
         prev_tail->next.store(new_node, std::memory_order_release);
-        
+
         size_.get().fetch_add(1, std::memory_order_relaxed);
-        
-        spdlog::trace("Item pushed to lock-free queue, size: {}", 
+
+        spdlog::trace("Item pushed to lock-free queue, size: {}",
                      size_.get().load(std::memory_order_relaxed));
     }
 
@@ -163,34 +163,34 @@ public:
     std::optional<T> try_pop() {
         auto head = head_.get().load(std::memory_order_acquire);
         auto hazard_index = hazard_pointer<node_type>::acquire(head);
-        
+
         // Verify head hasn't changed
         if (head != head_.get().load(std::memory_order_acquire)) {
             hazard_pointer<node_type>::release(hazard_index);
             return std::nullopt;
         }
-        
+
         auto next = head->next.load(std::memory_order_acquire);
         if (!next) {
             hazard_pointer<node_type>::release(hazard_index);
             return std::nullopt;
         }
-        
+
         if (head_.get().compare_exchange_weak(head, next, std::memory_order_release)) {
             hazard_pointer<node_type>::release(hazard_index);
-            
+
             auto result = std::move(next->data);
             retire_node(head);
-            
+
             if (result) {
                 size_.get().fetch_sub(1, std::memory_order_relaxed);
-                spdlog::trace("Item popped from lock-free queue, size: {}", 
+                spdlog::trace("Item popped from lock-free queue, size: {}",
                              size_.get().load(std::memory_order_relaxed));
             }
-            
+
             return result;
         }
-        
+
         hazard_pointer<node_type>::release(hazard_index);
         return std::nullopt;
     }

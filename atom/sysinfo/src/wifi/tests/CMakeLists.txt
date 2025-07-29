@@ -35,7 +35,7 @@ if(WIN32)
 elseif(UNIX AND NOT APPLE)
     target_link_libraries(wifi_tests PRIVATE pthread)
 elseif(APPLE)
-    target_link_libraries(wifi_tests PRIVATE 
+    target_link_libraries(wifi_tests PRIVATE
         "-framework CoreFoundation"
         "-framework SystemConfiguration"
     )
@@ -82,11 +82,11 @@ elseif(UNIX AND NOT APPLE)
     target_link_libraries(wifi_basic_tests PRIVATE pthread)
     target_link_libraries(wifi_advanced_tests PRIVATE pthread)
 elseif(APPLE)
-    target_link_libraries(wifi_basic_tests PRIVATE 
+    target_link_libraries(wifi_basic_tests PRIVATE
         "-framework CoreFoundation"
         "-framework SystemConfiguration"
     )
-    target_link_libraries(wifi_advanced_tests PRIVATE 
+    target_link_libraries(wifi_advanced_tests PRIVATE
         "-framework CoreFoundation"
         "-framework SystemConfiguration"
     )
@@ -151,11 +151,11 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND CMAKE_COMPILER_IS_GNUCXX)
     find_program(GCOV_PROGRAM gcov)
     find_program(LCOV_PROGRAM lcov)
     find_program(GENHTML_PROGRAM genhtml)
-    
+
     if(GCOV_PROGRAM AND LCOV_PROGRAM AND GENHTML_PROGRAM)
         target_compile_options(wifi_tests PRIVATE --coverage)
         target_link_options(wifi_tests PRIVATE --coverage)
-        
+
         add_custom_target(wifi_coverage
             COMMAND ${LCOV_PROGRAM} --directory . --zerocounters
             COMMAND wifi_tests

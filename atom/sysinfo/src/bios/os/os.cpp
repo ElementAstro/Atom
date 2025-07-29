@@ -42,13 +42,13 @@ public:
 
     auto getEnhancedOSInfo(bool forceRefresh) -> EnhancedOSInfo {
         std::lock_guard<std::mutex> lock(m_mutex);
-        
+
         auto now = std::chrono::system_clock::now();
-        if (forceRefresh || !m_cachedInfo.has_value() || 
+        if (forceRefresh || !m_cachedInfo.has_value() ||
             (now - m_lastRefresh) > std::chrono::minutes(5)) {
-            
+
             spdlog::debug("Refreshing enhanced OS information");
-            
+
 #ifdef _WIN32
             WindowsOSImplementation impl;
             m_cachedInfo = impl.getEnhancedOSInfo();
@@ -67,11 +67,11 @@ public:
             info.osVersion = "Unknown";
             m_cachedInfo = info;
 #endif
-            
+
             m_lastRefresh = now;
             spdlog::info("Enhanced OS information refreshed successfully");
         }
-        
+
         return m_cachedInfo.value();
     }
 
@@ -122,7 +122,7 @@ public:
 
     auto startMonitoring(const SystemMonitoringConfig& config) -> bool {
         std::lock_guard<std::mutex> lock(m_mutex);
-        
+
         if (m_monitoringActive.load()) {
             spdlog::warn("System monitoring is already active");
             return false;
@@ -142,14 +142,14 @@ public:
 
     void stopMonitoring() {
         std::lock_guard<std::mutex> lock(m_mutex);
-        
+
         if (m_monitoringActive.load()) {
             m_monitoringActive.store(false);
-            
+
             if (m_monitoringThread.joinable()) {
                 m_monitoringThread.join();
             }
-            
+
             spdlog::info("Enhanced system monitoring stopped");
         }
     }
@@ -187,19 +187,19 @@ public:
 
         // Add common health checks
         auto metrics = getPerformanceMetrics();
-        
+
         if (metrics.memoryUsagePercent > 90.0) {
-            results.push_back("WARNING: High memory usage detected (" + 
+            results.push_back("WARNING: High memory usage detected (" +
                             std::to_string(metrics.memoryUsagePercent) + "%)");
         }
-        
+
         if (metrics.cpuUsagePercent > 80.0) {
-            results.push_back("WARNING: High CPU usage detected (" + 
+            results.push_back("WARNING: High CPU usage detected (" +
                             std::to_string(metrics.cpuUsagePercent) + "%)");
         }
-        
+
         if (metrics.diskUsagePercent > 85.0) {
-            results.push_back("WARNING: High disk usage detected (" + 
+            results.push_back("WARNING: High disk usage detected (" +
                             std::to_string(metrics.diskUsagePercent) + "%)");
         }
 
@@ -276,13 +276,13 @@ private:
     SystemMonitoringConfig m_config;
     SystemMonitorCallback m_performanceCallback;
     SecurityEventCallback m_securityCallback;
-    
+
     std::optional<EnhancedOSInfo> m_cachedInfo;
     std::chrono::system_clock::time_point m_lastRefresh;
 
     void monitoringLoop() {
         spdlog::debug("Starting monitoring loop");
-        
+
         auto lastPerformanceCheck = std::chrono::steady_clock::now();
         auto lastSecurityCheck = std::chrono::steady_clock::now();
         auto lastNetworkCheck = std::chrono::steady_clock::now();
@@ -291,16 +291,16 @@ private:
             auto now = std::chrono::steady_clock::now();
 
             // Performance monitoring
-            if (m_config.enablePerformanceMonitoring && 
+            if (m_config.enablePerformanceMonitoring &&
                 (now - lastPerformanceCheck) >= std::chrono::milliseconds(m_config.performanceIntervalMs)) {
-                
+
                 try {
                     auto metrics = getPerformanceMetrics();
-                    
+
                     if (m_performanceCallback) {
                         m_performanceCallback(metrics);
                     }
-                    
+
                     lastPerformanceCheck = now;
                 } catch (const std::exception& e) {
                     spdlog::error("Error in performance monitoring: {}", e.what());
@@ -308,21 +308,21 @@ private:
             }
 
             // Security monitoring
-            if (m_config.enableSecurityMonitoring && 
+            if (m_config.enableSecurityMonitoring &&
                 (now - lastSecurityCheck) >= std::chrono::milliseconds(m_config.securityIntervalMs)) {
-                
+
                 try {
                     auto secInfo = getSecurityInfo();
-                    
+
                     // Check for security events
                     if (!secInfo.firewallEnabled && m_securityCallback) {
                         m_securityCallback("FIREWALL_DISABLED", "System firewall is disabled");
                     }
-                    
+
                     if (!secInfo.antivirusEnabled && m_securityCallback) {
                         m_securityCallback("ANTIVIRUS_DISABLED", "Antivirus protection is disabled");
                     }
-                    
+
                     lastSecurityCheck = now;
                 } catch (const std::exception& e) {
                     spdlog::error("Error in security monitoring: {}", e.what());
@@ -332,7 +332,7 @@ private:
             // Sleep for a short interval
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
-        
+
         spdlog::debug("Monitoring loop ended");
     }
 };
@@ -344,7 +344,7 @@ auto EnhancedOSManager::getInstance() -> EnhancedOSManager& {
     return instance;
 }
 
-EnhancedOSManager::EnhancedOSManager() 
+EnhancedOSManager::EnhancedOSManager()
     : m_impl(std::make_unique<EnhancedOSManagerImpl>()) {
     spdlog::debug("EnhancedOSManager instance created");
 }
@@ -411,10 +411,10 @@ auto EnhancedOSManager::analyzeResourceUsage() -> std::unordered_map<std::string
 
 auto getOperatingSystemInfo() -> OperatingSystemInfo {
     spdlog::debug("Getting basic operating system information (legacy)");
-    
+
     auto& manager = EnhancedOSManager::getInstance();
     auto enhancedInfo = manager.getEnhancedOSInfo();
-    
+
     // Convert enhanced info to legacy format
     OperatingSystemInfo legacyInfo;
     legacyInfo.osName = enhancedInfo.osName;
@@ -429,7 +429,7 @@ auto getOperatingSystemInfo() -> OperatingSystemInfo {
     legacyInfo.charSet = enhancedInfo.charSet;
     legacyInfo.isServer = enhancedInfo.isServer;
     legacyInfo.installedUpdates = enhancedInfo.installedUpdates;
-    
+
     return legacyInfo;
 }
 
@@ -440,7 +440,7 @@ auto getEnhancedOperatingSystemInfo() -> EnhancedOSInfo {
 
 auto getComputerName() -> std::optional<std::string> {
     spdlog::debug("Getting computer name");
-    
+
 #ifdef _WIN32
     return getComputerNameWindows();
 #elif defined(__linux__) || defined(__linux)
@@ -454,7 +454,7 @@ auto getComputerName() -> std::optional<std::string> {
 
 auto getSystemUptime() -> std::chrono::seconds {
     spdlog::debug("Getting system uptime");
-    
+
 #ifdef _WIN32
     return getSystemUptimeWindows();
 #elif defined(__linux__) || defined(__linux)
@@ -476,7 +476,7 @@ auto getLastBootTime() -> std::string {
 
 auto getSystemTimeZone() -> std::string {
     spdlog::debug("Getting system timezone");
-    
+
 #ifdef _WIN32
     return getSystemTimeZoneWindows();
 #elif defined(__linux__) || defined(__linux)
@@ -490,7 +490,7 @@ auto getSystemTimeZone() -> std::string {
 
 auto getInstalledUpdates() -> std::vector<std::string> {
     spdlog::debug("Getting installed updates");
-    
+
 #ifdef _WIN32
     return getInstalledUpdatesWindows();
 #elif defined(__linux__) || defined(__linux)
@@ -504,7 +504,7 @@ auto getInstalledUpdates() -> std::vector<std::string> {
 
 auto getSystemLanguage() -> std::string {
     spdlog::debug("Getting system language");
-    
+
 #ifdef _WIN32
     return getSystemLanguageWindows();
 #elif defined(__linux__) || defined(__linux)
@@ -518,7 +518,7 @@ auto getSystemLanguage() -> std::string {
 
 auto getSystemEncoding() -> std::string {
     spdlog::debug("Getting system encoding");
-    
+
 #ifdef _WIN32
     return getSystemEncodingWindows();
 #elif defined(__linux__) || defined(__linux)
@@ -532,7 +532,7 @@ auto getSystemEncoding() -> std::string {
 
 auto isServerEdition() -> bool {
     spdlog::debug("Checking if OS is server edition");
-    
+
 #ifdef _WIN32
     return isServerEditionWindows();
 #elif defined(__linux__) || defined(__linux)
@@ -546,13 +546,13 @@ auto isServerEdition() -> bool {
 
 auto detectVirtualization() -> std::string {
     spdlog::debug("Detecting virtualization environment");
-    
+
     // Check for common virtualization indicators
     auto wslInfo = detectWSL();
     if (wslInfo.has_value()) {
         return wslInfo.value();
     }
-    
+
     // Platform-specific virtualization detection would go here
     return "";
 }

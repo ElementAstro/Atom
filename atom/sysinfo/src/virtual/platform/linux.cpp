@@ -14,13 +14,13 @@ namespace atom::system::virtual_env::platform::linux_impl {
 auto detectVirtualizationLinux() -> VirtualizationResult {
     VirtualizationResult result;
     result.platform = "Linux";
-    
+
     // Check /proc/cpuinfo for hypervisor flag
     if (checkCPUInfoHypervisor()) {
         result.indicators.push_back("Hypervisor flag in /proc/cpuinfo");
         result.confidence += 0.3;
     }
-    
+
     // Check DMI information
     auto dmiInfo = getDMIInfo();
     if (!dmiInfo.empty()) {
@@ -31,14 +31,14 @@ auto detectVirtualizationLinux() -> VirtualizationResult {
             }
         }
     }
-    
+
     // Check for virtualization-specific files
     auto vmFiles = checkVirtualizationFiles();
     for (const auto& file : vmFiles) {
         result.indicators.push_back("VM file: " + file);
         result.confidence += 0.1;
     }
-    
+
     // Check cgroups for container indicators
     auto cgroupInfo = checkCgroups();
     if (!cgroupInfo.empty()) {
@@ -46,31 +46,31 @@ auto detectVirtualizationLinux() -> VirtualizationResult {
         result.confidence += 0.2;
         result.container_type = cgroupInfo;
     }
-    
+
     // Check kernel modules
     auto vmModules = checkKernelModules();
     for (const auto& module : vmModules) {
         result.indicators.push_back("VM kernel module: " + module);
         result.confidence += 0.1;
     }
-    
+
     // Check /proc/devices for VM devices
     auto vmDevices = checkVirtualDevices();
     for (const auto& device : vmDevices) {
         result.indicators.push_back("VM device: " + device);
         result.confidence += 0.1;
     }
-    
+
     // Check systemd for container environment
     if (checkSystemdContainer()) {
         result.indicators.push_back("systemd container environment");
         result.confidence += 0.2;
     }
-    
+
     // Limit confidence to 1.0
     result.confidence = std::min(result.confidence, 1.0);
     result.is_virtual = result.confidence > 0.3;
-    
+
     return result;
 }
 
@@ -79,10 +79,10 @@ auto checkCPUInfoHypervisor() -> bool {
     if (!cpuinfo.is_open()) {
         return false;
     }
-    
+
     std::string line;
     while (std::getline(cpuinfo, line)) {
-        if (line.find("flags") != std::string::npos || 
+        if (line.find("flags") != std::string::npos ||
             line.find("Features") != std::string::npos) {
             if (line.find("hypervisor") != std::string::npos) {
                 spdlog::debug("Hypervisor flag found in /proc/cpuinfo");
@@ -90,13 +90,13 @@ auto checkCPUInfoHypervisor() -> bool {
             }
         }
     }
-    
+
     return false;
 }
 
 auto getDMIInfo() -> std::unordered_map<std::string, std::string> {
     std::unordered_map<std::string, std::string> dmiInfo;
-    
+
     std::vector<std::pair<std::string, std::string>> dmiFiles = {
         {"sys_vendor", "/sys/class/dmi/id/sys_vendor"},
         {"product_name", "/sys/class/dmi/id/product_name"},
@@ -106,7 +106,7 @@ auto getDMIInfo() -> std::unordered_map<std::string, std::string> {
         {"board_vendor", "/sys/class/dmi/id/board_vendor"},
         {"board_name", "/sys/class/dmi/id/board_name"}
     };
-    
+
     for (const auto& [key, path] : dmiFiles) {
         std::string content = readFileContent(path);
         if (!content.empty()) {
@@ -118,13 +118,13 @@ auto getDMIInfo() -> std::unordered_map<std::string, std::string> {
             spdlog::debug("DMI {}: {}", key, content);
         }
     }
-    
+
     return dmiInfo;
 }
 
 auto checkVirtualizationFiles() -> std::vector<std::string> {
     std::vector<std::string> foundFiles;
-    
+
     std::vector<std::string> vmFiles = {
         "/.dockerenv",
         "/run/.containerenv",
@@ -137,14 +137,14 @@ auto checkVirtualizationFiles() -> std::vector<std::string> {
         "/sys/bus/pci/devices/0000:00:04.0", // VirtualBox
         "/sys/bus/pci/devices/0000:00:0f.0"  // VMware
     };
-    
+
     for (const auto& file : vmFiles) {
         if (fileExists(file)) {
             foundFiles.push_back(file);
             spdlog::debug("Found virtualization file: {}", file);
         }
     }
-    
+
     return foundFiles;
 }
 
@@ -153,7 +153,7 @@ auto checkCgroups() -> std::string {
     if (!cgroup.is_open()) {
         return {};
     }
-    
+
     std::string line;
     while (std::getline(cgroup, line)) {
         if (line.find("docker") != std::string::npos) {
@@ -168,28 +168,28 @@ auto checkCgroups() -> std::string {
         if (line.find("libpod") != std::string::npos) {
             return "Podman";
         }
-        if (line.find("systemd") != std::string::npos && 
+        if (line.find("systemd") != std::string::npos &&
             line.find("machine.slice") != std::string::npos) {
             return "systemd-nspawn";
         }
     }
-    
+
     return {};
 }
 
 auto checkKernelModules() -> std::vector<std::string> {
     std::vector<std::string> vmModules;
-    
+
     std::ifstream modules("/proc/modules");
     if (!modules.is_open()) {
         return vmModules;
     }
-    
+
     std::vector<std::string> vmModuleNames = {
         "vmw_", "vbox", "virtio", "xen", "kvm", "qemu",
         "vmci", "vmxnet", "vmmouse", "vmwgfx"
     };
-    
+
     std::string line;
     while (std::getline(modules, line)) {
         for (const auto& vmModule : vmModuleNames) {
@@ -204,22 +204,22 @@ auto checkKernelModules() -> std::vector<std::string> {
             }
         }
     }
-    
+
     return vmModules;
 }
 
 auto checkVirtualDevices() -> std::vector<std::string> {
     std::vector<std::string> vmDevices;
-    
+
     std::ifstream devices("/proc/devices");
     if (!devices.is_open()) {
         return vmDevices;
     }
-    
+
     std::vector<std::string> vmDeviceNames = {
         "vmci", "vboxguest", "vboxuser", "vmware"
     };
-    
+
     std::string line;
     while (std::getline(devices, line)) {
         for (const auto& vmDevice : vmDeviceNames) {
@@ -230,7 +230,7 @@ auto checkVirtualDevices() -> std::vector<std::string> {
             }
         }
     }
-    
+
     return vmDevices;
 }
 
@@ -241,27 +241,27 @@ auto checkSystemdContainer() -> bool {
         spdlog::debug("Container environment variable: {}", container);
         return true;
     }
-    
+
     // Check systemd machine info
     std::string machineInfo = readFileContent("/run/systemd/container");
     if (!machineInfo.empty()) {
         spdlog::debug("systemd container info: {}", machineInfo);
         return true;
     }
-    
+
     return false;
 }
 
 auto getLinuxVirtualizationType() -> std::string {
     // Check DMI information first
     auto dmiInfo = getDMIInfo();
-    
+
     if (dmiInfo.count("sys_vendor")) {
         const std::string& vendor = dmiInfo["sys_vendor"];
         if (vendor.find("VMware") != std::string::npos) {
             return "VMware";
         }
-        if (vendor.find("innotek") != std::string::npos || 
+        if (vendor.find("innotek") != std::string::npos ||
             vendor.find("Oracle") != std::string::npos) {
             return "VirtualBox";
         }
@@ -275,13 +275,13 @@ auto getLinuxVirtualizationType() -> std::string {
             return "Xen";
         }
     }
-    
+
     // Check for container types
     std::string containerType = checkCgroups();
     if (!containerType.empty()) {
         return containerType;
     }
-    
+
     // Check hypervisor type from /sys/hypervisor/type
     std::string hypervisorType = readFileContent("/sys/hypervisor/type");
     if (!hypervisorType.empty()) {
@@ -290,7 +290,7 @@ auto getLinuxVirtualizationType() -> std::string {
         }
         return hypervisorType;
     }
-    
+
     // Check kernel modules for hints
     auto modules = checkKernelModules();
     for (const auto& module : modules) {
@@ -307,18 +307,18 @@ auto getLinuxVirtualizationType() -> std::string {
             return "Xen";
         }
     }
-    
+
     return "Unknown";
 }
 
 auto getLinuxContainerInfo() -> ContainerInfo {
     ContainerInfo info;
-    
+
     // Check for Docker
     if (fileExists("/.dockerenv")) {
         info.type = "Docker";
         info.runtime = "Docker Engine";
-        
+
         // Try to get container ID from cgroup
         std::ifstream cgroup("/proc/1/cgroup");
         if (cgroup.is_open()) {
@@ -341,7 +341,7 @@ auto getLinuxContainerInfo() -> ContainerInfo {
     else if (fileExists("/run/.containerenv")) {
         info.type = "Podman";
         info.runtime = "Podman";
-        
+
         std::string containerEnv = readFileContent("/run/.containerenv");
         // Parse container ID from .containerenv
         size_t idPos = containerEnv.find("id=");
@@ -357,7 +357,7 @@ auto getLinuxContainerInfo() -> ContainerInfo {
     else if (checkCgroups().find("lxc") != std::string::npos) {
         info.type = "LXC";
         info.runtime = "LXC";
-        
+
         if (fileExists("/run/lxd_config")) {
             info.type = "LXD";
             info.runtime = "LXD";
@@ -367,19 +367,19 @@ auto getLinuxContainerInfo() -> ContainerInfo {
     else if (fileExists("/var/run/secrets/kubernetes.io/serviceaccount/token")) {
         info.type = "Kubernetes Pod";
         info.runtime = "Kubernetes";
-        
+
         const char* podName = std::getenv("HOSTNAME");
         if (podName) {
             info.id = std::string(podName);
         }
-        
+
         std::string ns = readFileContent("/var/run/secrets/kubernetes.io/serviceaccount/namespace");
         if (!ns.empty() && ns.back() == '\n') {
             ns.pop_back();
         }
         info.namespace_name = ns;
     }
-    
+
     return info;
 }
 

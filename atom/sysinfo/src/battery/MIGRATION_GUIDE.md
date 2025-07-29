@@ -92,7 +92,7 @@ auto allBatteries = getAllBatteries();
 if (!allBatteries.isEmpty()) {
     std::cout << "Found " << allBatteries.size() << " batteries" << std::endl;
     std::cout << "Combined level: " << allBatteries.combined.batteryLifePercent << "%" << std::endl;
-    
+
     for (const auto& battery : allBatteries.batteries) {
         std::cout << "Battery: " << battery.batteryLifePercent << "%" << std::endl;
     }
@@ -153,7 +153,7 @@ if (auto* info = std::get_if<BatteryInfo>(&result)) {
 // Enable adaptive power management
 if (AdaptivePowerManager::enableAdaptivePower()) {
     std::cout << "Adaptive power management enabled" << std::endl;
-    
+
     // Set optimization profile
     AdaptivePowerManager::setOptimizationProfile("gaming");
 }
@@ -202,18 +202,18 @@ if (temp) {
 // Check if calibration is needed
 if (BatteryCalibrator::needsCalibration()) {
     std::cout << "Battery calibration recommended" << std::endl;
-    
+
     // Start calibration
     if (BatteryCalibrator::startCalibration()) {
         std::cout << "Calibration started" << std::endl;
-        
+
         // Monitor progress
         while (BatteryCalibrator::isCalibrating()) {
             float progress = BatteryCalibrator::getCalibrationProgress();
             std::cout << "Calibration progress: " << progress << "%" << std::endl;
             std::this_thread::sleep_for(std::chrono::seconds(10));
         }
-        
+
         std::cout << "Calibration completed" << std::endl;
     }
 }

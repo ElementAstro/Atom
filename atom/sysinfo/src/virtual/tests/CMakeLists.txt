@@ -78,12 +78,12 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND CMAKE_COMPILER_IS_GNUCXX)
     find_program(GCOV_PROGRAM gcov)
     find_program(LCOV_PROGRAM lcov)
     find_program(GENHTML_PROGRAM genhtml)
-    
+
     if(GCOV_PROGRAM AND LCOV_PROGRAM AND GENHTML_PROGRAM)
         # Add coverage flags
         target_compile_options(virtual_tests PRIVATE --coverage)
         target_link_options(virtual_tests PRIVATE --coverage)
-        
+
         add_custom_target(virtual_coverage
             COMMAND ${LCOV_PROGRAM} --directory . --zerocounters
             COMMAND virtual_tests

@@ -42,7 +42,7 @@ public:
     task() = default;
     task(task&&) = default;
     task& operator=(task&&) = default;
-    
+
     // Non-copyable
     task(const task&) = delete;
     task& operator=(const task&) = delete;
@@ -118,7 +118,7 @@ public:
 
 /**
  * @brief High-performance work-stealing thread pool
- * 
+ *
  * Features:
  * - Work-stealing for optimal load balancing
  * - NUMA-aware thread placement
@@ -129,7 +129,7 @@ class work_stealing_thread_pool {
 private:
     std::vector<std::unique_ptr<work_stealing_deque>> local_queues_;
     lockfree_queue<task> global_queue_;
-    
+
 #ifdef ATOM_HAS_JTHREAD
     std::vector<std::jthread> threads_;
     std::stop_source stop_source_;
@@ -152,7 +152,7 @@ private:
 #endif
         thread_index_ = index;
         rng_.seed(std::random_device{}() + index);
-        
+
         spdlog::info("Work-stealing thread {} started", index);
 
 #ifdef ATOM_HAS_JTHREAD
@@ -161,29 +161,29 @@ private:
         while (!stop_flag_.load(std::memory_order_acquire)) {
 #endif
             task t;
-            
+
             // Try to get task from local queue first
             if (local_queues_[index]->try_pop_front(t)) {
                 t();
                 continue;
             }
-            
+
             // Try to steal from other threads
             if (try_steal_task(t)) {
                 t();
                 continue;
             }
-            
+
             // Try global queue
             if (auto opt_task = global_queue_.try_pop()) {
                 opt_task.value()();
                 continue;
             }
-            
+
             // No work available, yield
             std::this_thread::yield();
         }
-        
+
         spdlog::info("Work-stealing thread {} stopped", index);
     }
 
@@ -195,10 +195,10 @@ private:
         if (thread_count <= 1) {
             return false;
         }
-        
+
         // Random starting point to avoid bias
         std::size_t start = rng_() % thread_count;
-        
+
         for (std::size_t i = 0; i < thread_count - 1; ++i) {
             std::size_t target = (start + i) % thread_count;
             if (target != thread_index_ && local_queues_[target]->try_steal_back(t)) {
@@ -206,7 +206,7 @@ private:
                 return true;
             }
         }
-        
+
         return false;
     }
 
@@ -222,26 +222,26 @@ public:
                 num_threads = 4; // Fallback
             }
         }
-        
+
         thread_count_.store(num_threads, std::memory_order_relaxed);
-        
+
         // Create local queues
         local_queues_.reserve(num_threads);
         for (std::size_t i = 0; i < num_threads; ++i) {
             local_queues_.emplace_back(std::make_unique<work_stealing_deque>());
         }
-        
+
         // Start worker threads
         threads_.reserve(num_threads);
         for (std::size_t i = 0; i < num_threads; ++i) {
 #ifdef ATOM_HAS_JTHREAD
-            threads_.emplace_back(&work_stealing_thread_pool::worker_thread, this, 
+            threads_.emplace_back(&work_stealing_thread_pool::worker_thread, this,
                                  stop_source_.get_token(), i);
 #else
             threads_.emplace_back(&work_stealing_thread_pool::worker_thread, this, i);
 #endif
         }
-        
+
         spdlog::info("Work-stealing thread pool started with {} threads", num_threads);
     }
 
@@ -260,7 +260,7 @@ public:
                 thread.join();
             }
         }
-        
+
         spdlog::info("Work-stealing thread pool stopped");
     }
 
@@ -279,15 +279,15 @@ public:
     template<typename F, typename... Args>
     auto submit(F&& f, Args&&... args) -> std::future<std::invoke_result_t<F, Args...>> {
         using return_type = std::invoke_result_t<F, Args...>;
-        
+
         auto task_ptr = std::make_shared<std::packaged_task<return_type()>>(
             std::bind(std::forward<F>(f), std::forward<Args>(args)...)
         );
-        
+
         auto future = task_ptr->get_future();
-        
+
         task t([task_ptr]() { (*task_ptr)(); });
-        
+
         // Try to add to local queue if called from worker thread
         if (thread_index_ < local_queues_.size()) {
             local_queues_[thread_index_]->push_front(std::move(t));
@@ -297,7 +297,7 @@ public:
             global_queue_.push(std::move(t));
             spdlog::trace("Task submitted to global queue");
         }
-        
+
         return future;
     }
 
@@ -321,7 +321,7 @@ public:
 };
 
 // Thread-local storage definitions
-thread_local std::size_t work_stealing_thread_pool::thread_index_ = 
+thread_local std::size_t work_stealing_thread_pool::thread_index_ =
     std::numeric_limits<std::size_t>::max();
 thread_local std::mt19937 work_stealing_thread_pool::rng_;
 

@@ -22,10 +22,10 @@ void signalHandler(int signal) {
 int main() {
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
-    
+
     std::cout << "Adaptive Power Management Example" << std::endl;
     std::cout << "=================================" << std::endl << std::endl;
-    
+
     // Show available profiles
     auto profiles = AdaptivePowerManager::getAvailableProfiles();
     std::cout << "Available optimization profiles:" << std::endl;
@@ -33,18 +33,18 @@ int main() {
         std::cout << "  - " << profile << std::endl;
     }
     std::cout << std::endl;
-    
+
     // Set initial profile
     AdaptivePowerManager::setOptimizationProfile("balanced");
-    std::cout << "Set optimization profile to: " 
+    std::cout << "Set optimization profile to: "
               << AdaptivePowerManager::getCurrentProfile() << std::endl;
-    
+
     // Enable adaptive power management
     if (AdaptivePowerManager::enableAdaptivePower()) {
         std::cout << "Adaptive power management enabled" << std::endl;
         std::cout << "The system will automatically adjust power settings based on battery state" << std::endl;
         std::cout << "Press Ctrl+C to exit" << std::endl << std::endl;
-        
+
         // Monitor for a while
         while (g_running) {
             auto batteryInfo = getBatteryInfo();
@@ -52,7 +52,7 @@ int main() {
                 std::cout << "Battery: " << std::fixed << std::setprecision(1)
                           << batteryInfo->batteryLifePercent << "% | ";
                 std::cout << "Charging: " << (batteryInfo->isCharging ? "Yes" : "No") << " | ";
-                
+
                 auto currentPlan = PowerPlanManager::getCurrentPowerPlan();
                 if (currentPlan) {
                     std::cout << "Power Plan: ";
@@ -65,15 +65,15 @@ int main() {
                 }
                 std::cout << std::endl;
             }
-            
+
             std::this_thread::sleep_for(std::chrono::seconds(5));
         }
-        
+
         AdaptivePowerManager::disableAdaptivePower();
         std::cout << "Adaptive power management disabled" << std::endl;
     } else {
         std::cout << "Failed to enable adaptive power management" << std::endl;
     }
-    
+
     return 0;
 }

@@ -58,9 +58,9 @@ struct NetworkEventData {
 struct TimestampedNetworkStats {
     NetworkStats stats;
     std::chrono::steady_clock::time_point timestamp;
-    
+
     TimestampedNetworkStats() : timestamp(std::chrono::steady_clock::now()) {}
-    explicit TimestampedNetworkStats(const NetworkStats& s) 
+    explicit TimestampedNetworkStats(const NetworkStats& s)
         : stats(s), timestamp(std::chrono::steady_clock::now()) {}
 } ATOM_ALIGNAS(32);
 
@@ -175,21 +175,21 @@ private:
     void monitoringLoop();
     void processStats(const NetworkStats& current_stats);
     void detectAndEmitEvents(const NetworkStats& current_stats, const NetworkStats& previous_stats);
-    void emitEvent(NetworkEvent event_type, const std::string& description, 
+    void emitEvent(NetworkEvent event_type, const std::string& description,
                    const std::unordered_map<std::string, std::string>& metadata = {});
 
     MonitorConfig config_;
     std::atomic<bool> running_{false};
     std::unique_ptr<std::thread> monitor_thread_;
-    
+
     mutable std::mutex stats_mutex_;
     std::queue<TimestampedNetworkStats> stats_history_;
     NetworkStats current_stats_;
     NetworkStats previous_stats_;
-    
+
     mutable std::mutex events_mutex_;
     std::queue<NetworkEventData> recent_events_;
-    
+
     mutable std::mutex callbacks_mutex_;
     std::vector<NetworkEventCallback> event_callbacks_;
 };

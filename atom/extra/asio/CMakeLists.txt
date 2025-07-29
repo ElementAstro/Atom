@@ -95,7 +95,7 @@ set(ASIO_SOURCES
     concurrency/memory_manager.hpp
     concurrency/concurrency.hpp
     concurrency/concurrency.cpp
-    
+
     # Enhanced MQTT implementation
     mqtt/client.cpp
     mqtt/client.hpp
@@ -103,7 +103,7 @@ set(ASIO_SOURCES
     mqtt/packet.hpp
     mqtt/protocol.hpp
     mqtt/types.hpp
-    
+
     # Enhanced SSE implementation
     sse/event.cpp
     sse/event.hpp
@@ -126,7 +126,7 @@ set(ASIO_SOURCES
     sse/server/server.hpp
     sse/server/server_config.cpp
     sse/server/server_config.hpp
-    
+
     # Core compatibility layer
     asio_compatibility.hpp
 )
@@ -191,20 +191,20 @@ endif()
 option(ATOM_ASIO_BUILD_TESTS "Build ASIO tests" OFF)
 if(ATOM_ASIO_BUILD_TESTS)
     find_package(GTest REQUIRED)
-    
+
     add_executable(atom-asio-tests
         mqtt/test_client.hpp
         mqtt/test_packet.hpp
         mqtt/test_protocol.hpp
         mqtt/test_types.hpp
     )
-    
+
     target_link_libraries(atom-asio-tests
         PRIVATE
             atom-asio-advanced
             GTest::gtest_main
     )
-    
+
     # Enable testing
     enable_testing()
     add_test(NAME AsioTests COMMAND atom-asio-tests)
@@ -214,13 +214,13 @@ endif()
 option(ATOM_ASIO_BUILD_BENCHMARKS "Build ASIO benchmarks" OFF)
 if(ATOM_ASIO_BUILD_BENCHMARKS)
     find_package(benchmark REQUIRED)
-    
+
     add_executable(atom-asio-benchmarks
         benchmarks/mqtt_benchmark.cpp
         benchmarks/sse_benchmark.cpp
         benchmarks/concurrency_benchmark.cpp
     )
-    
+
     target_link_libraries(atom-asio-benchmarks
         PRIVATE
             atom-asio-advanced

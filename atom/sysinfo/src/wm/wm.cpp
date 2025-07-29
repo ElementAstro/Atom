@@ -230,43 +230,43 @@ auto WindowManager::startMonitoring(WindowCallback callback, std::chrono::millis
 
     windowCallback_ = std::move(callback);
     isMonitoring_ = true;
-    
+
     // Start monitoring thread
     monitoringThread_ = std::thread([this, interval]() {
         std::vector<WindowInfo> previousWindows;
-        
+
         while (isMonitoring_) {
             auto windowsResult = enumerateWindows();
             if (!isError(windowsResult)) {
                 const auto& currentWindows = getValue(windowsResult);
-                
+
                 // Compare with previous windows to detect changes
                 for (const auto& window : currentWindows) {
                     bool isNew = std::none_of(previousWindows.begin(), previousWindows.end(),
                         [&window](const WindowInfo& prev) { return prev.id == window.id; });
-                    
+
                     if (isNew && windowCallback_) {
                         windowCallback_(window, true); // Window added
                     }
                 }
-                
+
                 // Check for removed windows
                 for (const auto& prevWindow : previousWindows) {
                     bool isRemoved = std::none_of(currentWindows.begin(), currentWindows.end(),
                         [&prevWindow](const WindowInfo& current) { return current.id == prevWindow.id; });
-                    
+
                     if (isRemoved && windowCallback_) {
                         windowCallback_(prevWindow, false); // Window removed
                     }
                 }
-                
+
                 previousWindows = currentWindows;
             }
-            
+
             std::this_thread::sleep_for(interval);
         }
     });
-    
+
     return true;
 }
 
@@ -301,7 +301,7 @@ auto ThemeManager::startMonitoring(ThemeCallback callback, std::chrono::millisec
 
     themeCallback_ = std::move(callback);
     isMonitoring_ = true;
-    
+
     // Start monitoring thread
     monitoringThread_ = std::thread([this, interval]() {
         auto previousThemeResult = getThemeInfo();
@@ -309,29 +309,29 @@ auto ThemeManager::startMonitoring(ThemeCallback callback, std::chrono::millisec
         if (!isError(previousThemeResult)) {
             previousTheme = getValue(previousThemeResult);
         }
-        
+
         while (isMonitoring_) {
             auto currentThemeResult = getThemeInfo();
             if (!isError(currentThemeResult)) {
                 const auto& currentTheme = getValue(currentThemeResult);
-                
+
                 // Check if theme changed
                 if (currentTheme.type != previousTheme.type ||
                     currentTheme.name != previousTheme.name ||
                     currentTheme.variant != previousTheme.variant) {
-                    
+
                     if (themeCallback_) {
                         themeCallback_(currentTheme);
                     }
-                    
+
                     previousTheme = currentTheme;
                 }
             }
-            
+
             std::this_thread::sleep_for(interval);
         }
     });
-    
+
     return true;
 }
 

@@ -8,10 +8,10 @@ target("atom-sysinfo-disk")
 
     -- Main source files
     add_files("disk.cpp")
-    
+
     -- Common functionality
     add_files("common/disk_util.cpp")
-    
+
     -- Component sources
     add_files("components/disk_device.cpp")
     add_files("components/disk_info.cpp")

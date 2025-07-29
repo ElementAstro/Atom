@@ -58,7 +58,7 @@ if(WIN32)
             oleaut32
             advapi32
     )
-    
+
     # Windows-specific compile definitions
     target_compile_definitions(atom_sysinfo_virtual
         PRIVATE
@@ -66,14 +66,14 @@ if(WIN32)
             NOMINMAX
             _WIN32_WINNT=0x0601  # Windows 7 or later
     )
-    
+
 elseif(UNIX AND NOT APPLE)
     # Linux-specific libraries
     target_link_libraries(atom_sysinfo_virtual
         PRIVATE
             ${CMAKE_THREAD_LIBS_INIT}
     )
-    
+
     # Check for optional libraries
     find_package(PkgConfig QUIET)
     if(PkgConfig_FOUND)
@@ -84,20 +84,20 @@ elseif(UNIX AND NOT APPLE)
             target_compile_definitions(atom_sysinfo_virtual PRIVATE HAVE_SYSTEMD)
         endif()
     endif()
-    
+
 elseif(APPLE)
     # macOS-specific frameworks
     find_library(IOKIT_FRAMEWORK IOKit)
     find_library(COREFOUNDATION_FRAMEWORK CoreFoundation)
     find_library(SECURITY_FRAMEWORK Security)
-    
+
     target_link_libraries(atom_sysinfo_virtual
         PRIVATE
             ${IOKIT_FRAMEWORK}
             ${COREFOUNDATION_FRAMEWORK}
             ${SECURITY_FRAMEWORK}
     )
-    
+
     # Optional: Hypervisor framework (macOS 10.15+)
     find_library(HYPERVISOR_FRAMEWORK Hypervisor)
     if(HYPERVISOR_FRAMEWORK)

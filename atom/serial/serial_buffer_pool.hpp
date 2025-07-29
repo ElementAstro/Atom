@@ -8,7 +8,7 @@ namespace serial {
 
 /**
  * @brief Cross-platform buffer pool for efficient memory management in serial operations
- * 
+ *
  * This buffer pool is designed to work consistently across all platforms,
  * reducing memory allocations and improving performance for serial I/O operations.
  */

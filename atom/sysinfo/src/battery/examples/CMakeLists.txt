@@ -16,13 +16,13 @@ set(EXAMPLES
 
 foreach(EXAMPLE ${EXAMPLES})
     add_executable(${EXAMPLE} ${EXAMPLE}.cpp)
-    target_link_libraries(${EXAMPLE} 
-        PRIVATE 
+    target_link_libraries(${EXAMPLE}
+        PRIVATE
             atom_sysinfo_battery
             spdlog::spdlog
     )
     target_compile_features(${EXAMPLE} PRIVATE cxx_std_20)
-    
+
     # Set output directory
     set_target_properties(${EXAMPLE} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/examples

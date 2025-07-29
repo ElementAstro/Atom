@@ -20,27 +20,27 @@ public:
      * @brief Get basic battery information using sysfs
      */
     static auto getBatteryInfo() -> std::optional<BatteryInfo>;
-    
+
     /**
      * @brief Get detailed battery information
      */
     static auto getDetailedBatteryInfo() -> BatteryResult;
-    
+
     /**
      * @brief Get information for all batteries in the system
      */
     static auto getAllBatteries() -> MultiBatteryInfo;
-    
+
     /**
      * @brief Get battery information using UPower
      */
     static auto getBatteryInfoUPower() -> std::optional<BatteryInfo>;
-    
+
     /**
      * @brief Get thermal information for battery
      */
     static auto getBatteryThermalInfo() -> std::optional<float>;
-    
+
     /**
      * @brief Check if system supports advanced battery features
      */
@@ -51,23 +51,23 @@ private:
      * @brief Helper to read a value from sysfs
      */
     static auto readSysfsValue(const std::string& path) -> std::optional<std::string>;
-    
+
     /**
      * @brief Helper to read a numeric value from sysfs
      */
     template<typename T>
     static auto readSysfsNumeric(const std::string& path) -> std::optional<T>;
-    
+
     /**
      * @brief Get list of battery paths in sysfs
      */
     static auto getBatteryPaths() -> std::vector<std::string>;
-    
+
     /**
      * @brief Convert Linux power supply status to PowerState
      */
     static auto convertPowerState(const std::string& status) -> PowerState;
-    
+
     /**
      * @brief Convert Linux battery technology to BatteryChemistry
      */
@@ -83,27 +83,27 @@ public:
      * @brief Set active power plan using powerprofilesctl
      */
     static auto setPowerPlan(PowerPlan plan) -> std::optional<bool>;
-    
+
     /**
      * @brief Get current active power plan
      */
     static auto getCurrentPowerPlan() -> std::optional<PowerPlan>;
-    
+
     /**
      * @brief Get list of available power plans
      */
     static auto getAvailablePowerPlans() -> std::vector<std::string>;
-    
+
     /**
      * @brief Check if TLP is available
      */
     static auto isTLPAvailable() -> bool;
-    
+
     /**
      * @brief Set TLP profile
      */
     static auto setTLPProfile(const std::string& profile) -> bool;
-    
+
     /**
      * @brief Check if power-profiles-daemon is available
      */
@@ -119,17 +119,17 @@ public:
      * @brief Get system thermal zones
      */
     static auto getThermalZones() -> std::vector<std::pair<std::string, float>>;
-    
+
     /**
      * @brief Get CPU temperature
      */
     static auto getCpuTemperature() -> std::optional<float>;
-    
+
     /**
      * @brief Check if thermal throttling is active
      */
     static auto isThermalThrottling() -> bool;
-    
+
     /**
      * @brief Set thermal policy
      */

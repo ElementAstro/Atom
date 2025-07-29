@@ -40,12 +40,12 @@ auto parseFile(const std::string& filePath) -> std::pair<std::string, std::strin
     spdlog::debug("Parsing file: {}", filePath);
     std::ifstream file(filePath);
     std::string osName, osVersion;
-    
+
     if (!file.is_open()) {
         spdlog::error("Failed to open file: {}", filePath);
         return {"", ""};
     }
-    
+
     std::string line;
     while (std::getline(file, line)) {
         if (line.find("NAME=") == 0) {
@@ -60,31 +60,31 @@ auto parseFile(const std::string& filePath) -> std::pair<std::string, std::strin
             osVersion = line.substr(16);
         }
     }
-    
+
     spdlog::info("Parsed OS info - Name: {}, Version: {}", osName, osVersion);
     return {osName, osVersion};
 }
 
 auto detectWSL() -> std::optional<std::string> {
     spdlog::debug("Detecting WSL environment");
-    
+
 #ifdef __linux__
     std::ifstream procVersion("/proc/version");
     if (procVersion.is_open()) {
         std::string line;
         std::getline(procVersion, line);
         procVersion.close();
-        
-        if (line.find("microsoft") != std::string::npos || 
+
+        if (line.find("microsoft") != std::string::npos ||
             line.find("WSL") != std::string::npos) {
-            
+
             // Try to determine WSL version
             std::ifstream wslConf("/proc/sys/kernel/osrelease");
             if (wslConf.is_open()) {
                 std::string osrelease;
                 std::getline(wslConf, osrelease);
                 wslConf.close();
-                
+
                 if (osrelease.find("WSL2") != std::string::npos) {
                     spdlog::info("Detected WSL2 environment");
                     return "WSL2";
@@ -93,37 +93,37 @@ auto detectWSL() -> std::optional<std::string> {
                     return "WSL1";
                 }
             }
-            
+
             spdlog::info("Detected WSL environment (version unknown)");
             return "WSL";
         }
     }
 #endif
-    
+
     return std::nullopt;
 }
 
 auto executeCommand(const std::string& command) -> std::string {
     spdlog::debug("Executing command: {}", command);
-    
+
     std::array<char, 128> buffer;
     std::string result;
-    
+
     std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.c_str(), "r"), pclose);
     if (!pipe) {
         spdlog::error("Failed to execute command: {}", command);
         return "";
     }
-    
+
     while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
         result += buffer.data();
     }
-    
+
     // Remove trailing newline
     if (!result.empty() && result.back() == '\n') {
         result.pop_back();
     }
-    
+
     spdlog::debug("Command output: {}", result);
     return result;
 }
@@ -133,13 +133,13 @@ auto executeCommandLines(const std::string& command) -> std::vector<std::string>
     std::vector<std::string> lines;
     std::istringstream stream(output);
     std::string line;
-    
+
     while (std::getline(stream, line)) {
         if (!line.empty()) {
             lines.push_back(line);
         }
     }
-    
+
     return lines;
 }
 
@@ -194,7 +194,7 @@ auto detectOSArchitecture() -> OSArchitecture {
 #ifdef _WIN32
     SYSTEM_INFO sysInfo;
     GetSystemInfo(&sysInfo);
-    
+
     switch (sysInfo.wProcessorArchitecture) {
         case PROCESSOR_ARCHITECTURE_AMD64:
             return OSArchitecture::X64;
@@ -211,7 +211,7 @@ auto detectOSArchitecture() -> OSArchitecture {
     struct utsname unameData;
     if (uname(&unameData) == 0) {
         std::string machine = unameData.machine;
-        
+
         if (machine == "x86_64" || machine == "amd64") {
             return OSArchitecture::X64;
         } else if (machine == "i386" || machine == "i686") {
@@ -227,7 +227,7 @@ auto detectOSArchitecture() -> OSArchitecture {
         }
     }
 #endif
-    
+
     return OSArchitecture::UNKNOWN;
 }
 
@@ -267,22 +267,22 @@ auto EnhancedOSInfo::toDetailedString() const -> std::string {
     details << "Uptime: " << uptime.count() << " seconds\n";
     details << "Total Memory: " << totalMemoryBytes << " bytes\n";
     details << "Available Memory: " << availableMemoryBytes << " bytes\n";
-    
+
     if (!buildNumber.empty()) {
         details << "Build Number: " << buildNumber << "\n";
     }
-    
+
     if (!edition.empty()) {
         details << "Edition: " << edition << "\n";
     }
-    
+
     return details.str();
 }
 
 auto checkForUpdates() -> std::vector<std::string> {
     spdlog::debug("Checking for available updates");
     std::vector<std::string> updates;
-    
+
 #ifdef _WIN32
     // Windows Update check would require WUA API
     spdlog::info("Windows update check requires WUA API implementation");
@@ -294,7 +294,7 @@ auto checkForUpdates() -> std::vector<std::string> {
             updates.push_back(line);
         }
     }
-    
+
     // If apt is not available, try yum/dnf
     if (updates.empty()) {
         auto yumOutput = executeCommandLines("yum check-update 2>/dev/null");
@@ -308,7 +308,7 @@ auto checkForUpdates() -> std::vector<std::string> {
     auto brewOutput = executeCommandLines("brew outdated 2>/dev/null");
     updates = brewOutput;
 #endif
-    
+
     spdlog::info("Found {} available updates", updates.size());
     return updates;
 }

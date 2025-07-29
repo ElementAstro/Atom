@@ -15,24 +15,24 @@ auto BiosFormatter::format(const BiosInfoData& info) const -> std::string {
 
 auto BiosFormatter::format(const BiosInfoData& info, const std::string& title) const -> std::string {
     std::stringstream ss;
-    
+
     ss << createTableHeader(title);
     ss << createTableRow("Vendor", info.manufacturer);
     ss << createTableRow("Version", info.version);
     ss << createTableRow("Release Date", info.releaseDate);
-    
+
     if (!info.serialNumber.empty()) {
         ss << createTableRow("Serial Number", info.serialNumber);
     }
-    
+
     if (!info.characteristics.empty()) {
         ss << createTableRow("Characteristics", info.characteristics);
     }
-    
+
     ss << createTableRow("Upgradeable", info.isUpgradeable ? "Yes" : "No");
-    
+
     ss << createTableFooter();
-    
+
     return addTimestamp(ss.str());
 }
 

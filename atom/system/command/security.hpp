@@ -96,7 +96,7 @@ public:
      * @param user The user attempting to execute the command
      * @return true if command is allowed
      */
-    ATOM_NODISCARD auto isCommandAllowed(const std::string& command, 
+    ATOM_NODISCARD auto isCommandAllowed(const std::string& command,
                                         const std::string& user = "") const -> bool;
 
     /**

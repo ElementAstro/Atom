@@ -19,7 +19,7 @@ using namespace atom::system::locale;
 
 void demonstrateValidationLevels() {
     std::cout << "=== Validation Levels Demonstration ===" << std::endl;
-    
+
     std::vector<std::string> testLocales = {
         "en_US.UTF-8",      // Valid, common locale
         "de_DE.UTF-8",      // Valid, common locale
@@ -31,59 +31,59 @@ void demonstrateValidationLevels() {
         "en",               // Language only
         ""                  // Empty string
     };
-    
+
     std::vector<ValidationLevel> levels = {
         ValidationLevel::Basic,
         ValidationLevel::Standard,
         ValidationLevel::Strict,
         ValidationLevel::Complete
     };
-    
+
     const char* levelNames[] = {"Basic", "Standard", "Strict", "Complete"};
-    
+
     for (size_t i = 0; i < levels.size(); ++i) {
         std::cout << "Validation Level: " << levelNames[i] << std::endl;
         std::cout << std::string(50, '-') << std::endl;
-        
+
         for (const auto& locale : testLocales) {
             auto result = LocaleValidator::validate(locale, levels[i]);
-            
+
             std::cout << "Locale: " << std::setw(15) << (locale.empty() ? "(empty)" : locale)
                       << " | Valid: " << std::setw(5) << (result.isValid ? "Yes" : "No")
-                      << " | Confidence: " << std::setw(4) << std::fixed << std::setprecision(2) 
+                      << " | Confidence: " << std::setw(4) << std::fixed << std::setprecision(2)
                       << result.confidenceScore << std::endl;
-            
+
             if (!result.errors.empty()) {
                 std::cout << "  Errors:" << std::endl;
                 for (const auto& error : result.errors) {
                     std::cout << "    - " << error << std::endl;
                 }
             }
-            
+
             if (!result.warnings.empty()) {
                 std::cout << "  Warnings:" << std::endl;
                 for (const auto& warning : result.warnings) {
                     std::cout << "    - " << warning << std::endl;
                 }
             }
-            
+
             if (!result.suggestions.empty()) {
                 std::cout << "  Suggestions:" << std::endl;
                 for (const auto& suggestion : result.suggestions) {
                     std::cout << "    - " << suggestion << std::endl;
                 }
             }
-            
+
             std::cout << std::endl;
         }
-        
+
         std::cout << std::endl;
     }
 }
 
 void demonstrateFormatValidation() {
     std::cout << "=== Format Validation Demonstration ===" << std::endl;
-    
+
     std::vector<std::string> formatTests = {
         "en_US.UTF-8",          // Perfect format
         "en_US",                // No encoding
@@ -106,28 +106,28 @@ void demonstrateFormatValidation() {
         "en US",                // Space instead of underscore
         ""                      // Empty
     };
-    
+
     for (const auto& locale : formatTests) {
         auto result = LocaleValidator::validateFormat(locale);
-        
+
         std::cout << "Format: " << std::setw(20) << (locale.empty() ? "(empty)" : locale)
                   << " | Valid: " << std::setw(5) << (result.isValid ? "Yes" : "No")
-                  << " | Score: " << std::setw(4) << std::fixed << std::setprecision(2) 
+                  << " | Score: " << std::setw(4) << std::fixed << std::setprecision(2)
                   << result.confidenceScore;
-        
+
         if (!result.errors.empty()) {
             std::cout << " | Error: " << result.errors[0];
         }
-        
+
         std::cout << std::endl;
     }
-    
+
     std::cout << std::endl;
 }
 
 void demonstrateCompatibilityChecking() {
     std::cout << "=== Compatibility Checking Demonstration ===" << std::endl;
-    
+
     std::vector<std::pair<std::string, std::string>> compatibilityTests = {
         {"en_US.UTF-8", "en_US.UTF-8"},     // Identical
         {"en_US.UTF-8", "en_US"},           // Same but different encoding
@@ -139,15 +139,15 @@ void demonstrateCompatibilityChecking() {
         {"en", "en_US"},                    // Language vs full locale
         {"invalid", "en_US.UTF-8"}          // Invalid vs valid
     };
-    
+
     for (const auto& [locale1, locale2] : compatibilityTests) {
         double compatibility = LocaleValidator::checkCompatibility(locale1, locale2);
-        
-        std::cout << "Compatibility: " << std::setw(15) << locale1 
+
+        std::cout << "Compatibility: " << std::setw(15) << locale1
                   << " <-> " << std::setw(15) << locale2
-                  << " | Score: " << std::setw(4) << std::fixed << std::setprecision(2) 
+                  << " | Score: " << std::setw(4) << std::fixed << std::setprecision(2)
                   << compatibility;
-        
+
         if (compatibility >= 0.8) {
             std::cout << " (High)";
         } else if (compatibility >= 0.5) {
@@ -157,16 +157,16 @@ void demonstrateCompatibilityChecking() {
         } else {
             std::cout << " (None)";
         }
-        
+
         std::cout << std::endl;
     }
-    
+
     std::cout << std::endl;
 }
 
 void demonstrateSuggestions() {
     std::cout << "=== Suggestion System Demonstration ===" << std::endl;
-    
+
     std::vector<std::string> invalidLocales = {
         "invalid_locale",
         "en-US",            // Wrong format
@@ -177,10 +177,10 @@ void demonstrateSuggestions() {
         "",                 // Empty
         "xx_YY.UTF-8"       // Non-existent but valid format
     };
-    
+
     for (const auto& locale : invalidLocales) {
         std::cout << "Invalid locale: " << (locale.empty() ? "(empty)" : locale) << std::endl;
-        
+
         auto suggestions = LocaleValidator::getSuggestions(locale, 5);
         if (!suggestions.empty()) {
             std::cout << "  Suggestions:" << std::endl;
@@ -190,14 +190,14 @@ void demonstrateSuggestions() {
         } else {
             std::cout << "  No suggestions available" << std::endl;
         }
-        
+
         std::cout << std::endl;
     }
 }
 
 void demonstrateBestValidLocale() {
     std::cout << "=== Best Valid Locale Selection ===" << std::endl;
-    
+
     std::vector<std::vector<std::string>> localeLists = {
         {"en_US.UTF-8", "de_DE.UTF-8", "fr_FR.UTF-8"},           // All valid
         {"invalid1", "en_US.UTF-8", "invalid2"},                 // Mixed valid/invalid
@@ -206,10 +206,10 @@ void demonstrateBestValidLocale() {
         {"C", "POSIX", "en_US.UTF-8"},                           // Special cases
         {}                                                        // Empty list
     };
-    
+
     for (size_t i = 0; i < localeLists.size(); ++i) {
         const auto& locales = localeLists[i];
-        
+
         std::cout << "Test " << (i + 1) << " - Input locales: ";
         if (locales.empty()) {
             std::cout << "(empty list)";
@@ -220,73 +220,73 @@ void demonstrateBestValidLocale() {
             }
         }
         std::cout << std::endl;
-        
+
         auto best = LocaleValidator::findBestValidLocale(locales, ValidationLevel::Standard);
         if (!best.empty()) {
             std::cout << "  Best valid locale: " << best << std::endl;
         } else {
             std::cout << "  No valid locale found" << std::endl;
         }
-        
+
         std::cout << std::endl;
     }
 }
 
 void demonstrateSystemTests() {
     std::cout << "=== System Tests Demonstration ===" << std::endl;
-    
+
     auto systemResult = LocaleValidator::runSystemTests();
-    
+
     std::cout << "System Test Results:" << std::endl;
     std::cout << "  Valid: " << (systemResult.isValid ? "Yes" : "No") << std::endl;
-    std::cout << "  Confidence: " << std::fixed << std::setprecision(2) 
+    std::cout << "  Confidence: " << std::fixed << std::setprecision(2)
               << systemResult.confidenceScore << std::endl;
-    
+
     if (!systemResult.errors.empty()) {
         std::cout << "  Errors:" << std::endl;
         for (const auto& error : systemResult.errors) {
             std::cout << "    - " << error << std::endl;
         }
     }
-    
+
     if (!systemResult.warnings.empty()) {
         std::cout << "  Warnings:" << std::endl;
         for (const auto& warning : systemResult.warnings) {
             std::cout << "    - " << warning << std::endl;
         }
     }
-    
+
     if (!systemResult.metadata.empty()) {
         std::cout << "  Metadata:" << std::endl;
         for (const auto& [key, value] : systemResult.metadata) {
             std::cout << "    " << key << ": " << value << std::endl;
         }
     }
-    
+
     std::cout << std::endl;
 }
 
 void demonstratePerformanceBenchmark() {
     std::cout << "=== Performance Benchmark ===" << std::endl;
-    
+
     std::vector<std::string> testLocales = {
         "en_US.UTF-8",
         "de_DE.UTF-8",
         "fr_FR.UTF-8",
         "C"
     };
-    
+
     for (const auto& locale : testLocales) {
         std::cout << "Benchmarking locale: " << locale << std::endl;
-        
+
         auto metrics = LocaleValidator::benchmarkPerformance(locale, 1000);
-        
+
         for (const auto& [operation, timeUs] : metrics) {
-            std::cout << "  " << std::setw(20) << operation 
-                      << ": " << std::setw(8) << std::fixed << std::setprecision(3) 
+            std::cout << "  " << std::setw(20) << operation
+                      << ": " << std::setw(8) << std::fixed << std::setprecision(3)
                       << timeUs << " μs/op" << std::endl;
         }
-        
+
         std::cout << std::endl;
     }
 }
@@ -295,7 +295,7 @@ int main() {
     std::cout << "Locale Module - Validation and Testing Demonstration" << std::endl;
     std::cout << "====================================================" << std::endl;
     std::cout << std::endl;
-    
+
     try {
         demonstrateValidationLevels();
         demonstrateFormatValidation();
@@ -304,13 +304,13 @@ int main() {
         demonstrateBestValidLocale();
         demonstrateSystemTests();
         demonstratePerformanceBenchmark();
-        
+
         std::cout << "Validation demonstration completed successfully!" << std::endl;
-        
+
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
-    
+
     return 0;
 }

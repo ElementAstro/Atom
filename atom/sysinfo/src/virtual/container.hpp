@@ -84,43 +84,43 @@ namespace docker {
      * @return bool True if Docker container detected
      */
     auto detect() -> bool;
-    
+
     /**
      * @brief Check for .dockerenv file
      * @return bool True if .dockerenv exists
      */
     auto hasDockerEnvFile() -> bool;
-    
+
     /**
      * @brief Check Docker cgroup information
      * @return bool True if Docker cgroups detected
      */
     auto checkCgroups() -> bool;
-    
+
     /**
      * @brief Get Docker container ID
      * @return std::string Container ID
      */
     auto getContainerID() -> std::string;
-    
+
     /**
      * @brief Get Docker image information
      * @return std::string Image name and tag
      */
     auto getImageInfo() -> std::string;
-    
+
     /**
      * @brief Get Docker version
      * @return std::string Docker version
      */
     auto getDockerVersion() -> std::string;
-    
+
     /**
      * @brief Get Docker environment variables
      * @return std::unordered_map<std::string, std::string> Environment variables
      */
     auto getDockerEnvironment() -> std::unordered_map<std::string, std::string>;
-    
+
     /**
      * @brief Check for Docker-specific mount points
      * @return bool True if Docker mounts detected
@@ -137,37 +137,37 @@ namespace lxc {
      * @return bool True if LXC container detected
      */
     auto detect() -> bool;
-    
+
     /**
      * @brief Detect LXD container
      * @return bool True if LXD container detected
      */
     auto detectLXD() -> bool;
-    
+
     /**
      * @brief Check LXC cgroup information
      * @return bool True if LXC cgroups detected
      */
     auto checkCgroups() -> bool;
-    
+
     /**
      * @brief Get LXC container name
      * @return std::string Container name
      */
     auto getContainerName() -> std::string;
-    
+
     /**
      * @brief Get LXC version
      * @return std::string LXC version
      */
     auto getLXCVersion() -> std::string;
-    
+
     /**
      * @brief Get LXD version
      * @return std::string LXD version
      */
     auto getLXDVersion() -> std::string;
-    
+
     /**
      * @brief Check for LXC-specific files
      * @return bool True if LXC files detected
@@ -184,25 +184,25 @@ namespace podman {
      * @return bool True if Podman container detected
      */
     auto detect() -> bool;
-    
+
     /**
      * @brief Check for .containerenv file
      * @return bool True if .containerenv exists
      */
     auto hasContainerEnvFile() -> bool;
-    
+
     /**
      * @brief Get Podman container ID
      * @return std::string Container ID
      */
     auto getContainerID() -> std::string;
-    
+
     /**
      * @brief Get Podman version
      * @return std::string Podman version
      */
     auto getPodmanVersion() -> std::string;
-    
+
     /**
      * @brief Check Podman cgroup information
      * @return bool True if Podman cgroups detected
@@ -219,43 +219,43 @@ namespace kubernetes {
      * @return bool True if Kubernetes pod detected
      */
     auto detect() -> bool;
-    
+
     /**
      * @brief Check for Kubernetes service account
      * @return bool True if service account detected
      */
     auto hasServiceAccount() -> bool;
-    
+
     /**
      * @brief Get pod name
      * @return std::string Pod name
      */
     auto getPodName() -> std::string;
-    
+
     /**
      * @brief Get namespace
      * @return std::string Namespace
      */
     auto getNamespace() -> std::string;
-    
+
     /**
      * @brief Get node name
      * @return std::string Node name
      */
     auto getNodeName() -> std::string;
-    
+
     /**
      * @brief Get Kubernetes version
      * @return std::string Kubernetes version
      */
     auto getKubernetesVersion() -> std::string;
-    
+
     /**
      * @brief Get Kubernetes environment variables
      * @return std::unordered_map<std::string, std::string> Environment variables
      */
     auto getKubernetesEnvironment() -> std::unordered_map<std::string, std::string>;
-    
+
     /**
      * @brief Check for Kubernetes-specific mount points
      * @return bool True if Kubernetes mounts detected
@@ -272,13 +272,13 @@ namespace systemd_nspawn {
      * @return bool True if systemd-nspawn detected
      */
     auto detect() -> bool;
-    
+
     /**
      * @brief Get container name
      * @return std::string Container name
      */
     auto getContainerName() -> std::string;
-    
+
     /**
      * @brief Check systemd-nspawn environment
      * @return bool True if systemd-nspawn environment detected
@@ -295,37 +295,37 @@ namespace runtime {
      * @return bool True if containerd detected
      */
     auto detectContainerd() -> bool;
-    
+
     /**
      * @brief Detect CRI-O runtime
      * @return bool True if CRI-O detected
      */
     auto detectCRIO() -> bool;
-    
+
     /**
      * @brief Detect Kata Containers
      * @return bool True if Kata Containers detected
      */
     auto detectKataContainers() -> bool;
-    
+
     /**
      * @brief Detect gVisor
      * @return bool True if gVisor detected
      */
     auto detectGVisor() -> bool;
-    
+
     /**
      * @brief Detect Firecracker microVM
      * @return bool True if Firecracker detected
      */
     auto detectFirecracker() -> bool;
-    
+
     /**
      * @brief Detect WebAssembly container
      * @return bool True if WASM container detected
      */
     auto detectWASMContainer() -> bool;
-    
+
     /**
      * @brief Get container runtime information
      * @return std::string Runtime name and version
@@ -342,25 +342,25 @@ namespace security {
      * @return bool True if running in privileged mode
      */
     auto isPrivileged() -> bool;
-    
+
     /**
      * @brief Check for security profiles (AppArmor, SELinux)
      * @return std::vector<std::string> Active security profiles
      */
     auto getSecurityProfiles() -> std::vector<std::string>;
-    
+
     /**
      * @brief Check for capability restrictions
      * @return std::vector<std::string> Available capabilities
      */
     auto getCapabilities() -> std::vector<std::string>;
-    
+
     /**
      * @brief Check for namespace isolation
      * @return std::unordered_map<std::string, bool> Namespace isolation status
      */
     auto getNamespaceIsolation() -> std::unordered_map<std::string, bool>;
-    
+
     /**
      * @brief Check for seccomp profile
      * @return bool True if seccomp profile active

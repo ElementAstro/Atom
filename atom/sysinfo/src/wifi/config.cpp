@@ -32,45 +32,45 @@ WiFiConfigManager::WiFiConfigManager() {
 
 auto WiFiConfigManager::loadFromFile(const std::string& config_file) -> bool {
     std::lock_guard lock(config_mutex_);
-    
+
     std::ifstream file(config_file);
     if (!file.is_open()) {
         LOG_F(ERROR, "Failed to open configuration file: {}", config_file);
         return false;
     }
-    
+
     std::string line;
     int line_number = 0;
-    
+
     while (std::getline(file, line)) {
         line_number++;
-        
+
         // Skip empty lines and comments
         if (line.empty() || line[0] == '#') {
             continue;
         }
-        
+
         // Parse key=value pairs
         size_t equals_pos = line.find('=');
         if (equals_pos == std::string::npos) {
             LOG_F(WARNING, "Invalid configuration line {} in {}: {}", line_number, config_file, line);
             continue;
         }
-        
+
         std::string key = line.substr(0, equals_pos);
         std::string value = line.substr(equals_pos + 1);
-        
+
         // Trim whitespace
         key.erase(0, key.find_first_not_of(" \t"));
         key.erase(key.find_last_not_of(" \t") + 1);
         value.erase(0, value.find_first_not_of(" \t"));
         value.erase(value.find_last_not_of(" \t") + 1);
-        
+
         if (!setParameter(key, value)) {
             LOG_F(WARNING, "Failed to set configuration parameter: {} = {}", key, value);
         }
     }
-    
+
     LOG_F(INFO, "Configuration loaded from file: {}", config_file);
     notifyConfigurationChange();
     return true;
@@ -78,23 +78,23 @@ auto WiFiConfigManager::loadFromFile(const std::string& config_file) -> bool {
 
 auto WiFiConfigManager::saveToFile(const std::string& config_file) const -> bool {
     std::lock_guard lock(config_mutex_);
-    
+
     std::ofstream file(config_file);
     if (!file.is_open()) {
         LOG_F(ERROR, "Failed to create configuration file: {}", config_file);
         return false;
     }
-    
+
     file << "# WiFi Module Configuration\n";
     file << "# Generated automatically - modify with care\n\n";
-    
+
     // Write timeout settings
     file << "# Timeout settings (milliseconds)\n";
     file << "ping_timeout=" << wifi_config_.ping_timeout.count() << "\n";
     file << "command_timeout=" << wifi_config_.command_timeout.count() << "\n";
     file << "connection_timeout=" << wifi_config_.connection_timeout.count() << "\n";
     file << "scan_timeout=" << wifi_config_.scan_timeout.count() << "\n\n";
-    
+
     // Write cache settings
     file << "# Cache settings\n";
     file << "cache_ttl_wifi_info=" << wifi_config_.cache_ttl_wifi_info.count() << "\n";
@@ -102,55 +102,55 @@ auto WiFiConfigManager::saveToFile(const std::string& config_file) const -> bool
     file << "cache_ttl_interface_list=" << wifi_config_.cache_ttl_interface_list.count() << "\n";
     file << "cache_ttl_available_networks=" << wifi_config_.cache_ttl_available_networks.count() << "\n";
     file << "max_cache_size=" << wifi_config_.max_cache_size << "\n\n";
-    
+
     // Write performance settings
     file << "# Performance settings\n";
     file << "max_concurrent_operations=" << wifi_config_.max_concurrent_operations << "\n";
     file << "buffer_size=" << wifi_config_.buffer_size << "\n";
     file << "retry_attempts=" << wifi_config_.retry_attempts << "\n";
     file << "retry_delay=" << wifi_config_.retry_delay.count() << "\n\n";
-    
+
     // Write monitoring settings
     file << "# Monitoring settings\n";
     file << "monitoring_interval=" << wifi_config_.monitoring_interval.count() << "\n";
     file << "quality_assessment_interval=" << wifi_config_.quality_assessment_interval.count() << "\n";
     file << "max_history_size=" << wifi_config_.max_history_size << "\n";
     file << "enable_background_monitoring=" << (wifi_config_.enable_background_monitoring ? "true" : "false") << "\n\n";
-    
+
     // Write host settings
     file << "# Host settings\n";
     file << "preferred_ping_host=" << wifi_config_.preferred_ping_host << "\n";
     file << "backup_ping_host=" << wifi_config_.backup_ping_host << "\n";
     file << "speed_test_server=" << wifi_config_.speed_test_server << "\n\n";
-    
+
     LOG_F(INFO, "Configuration saved to file: {}", config_file);
     return true;
 }
 
 void WiFiConfigManager::loadFromEnvironment() {
     std::lock_guard lock(config_mutex_);
-    
+
     // Check for environment variable overrides
     const char* env_ping_timeout = std::getenv("WIFI_PING_TIMEOUT");
     if (env_ping_timeout) {
         wifi_config_.ping_timeout = parseTimeValue(env_ping_timeout);
     }
-    
+
     const char* env_cache_size = std::getenv("WIFI_MAX_CACHE_SIZE");
     if (env_cache_size) {
         wifi_config_.max_cache_size = parseSizeValue(env_cache_size);
     }
-    
+
     const char* env_monitoring = std::getenv("WIFI_ENABLE_MONITORING");
     if (env_monitoring) {
         wifi_config_.enable_background_monitoring = parseBoolValue(env_monitoring);
     }
-    
+
     const char* env_ping_host = std::getenv("WIFI_PING_HOST");
     if (env_ping_host) {
         wifi_config_.preferred_ping_host = env_ping_host;
     }
-    
+
     LOG_F(INFO, "Configuration loaded from environment variables");
     notifyConfigurationChange();
 }
@@ -194,7 +194,7 @@ auto WiFiConfigManager::setParameter(const std::string& key, const std::string& 
         wifi_config_.scan_timeout = parseTimeValue(value);
         return true;
     }
-    
+
     // Cache settings
     else if (key == "cache_ttl_wifi_info") {
         wifi_config_.cache_ttl_wifi_info = std::chrono::seconds(std::stoi(value));
@@ -206,7 +206,7 @@ auto WiFiConfigManager::setParameter(const std::string& key, const std::string& 
         wifi_config_.max_cache_size = parseSizeValue(value);
         return true;
     }
-    
+
     // Performance settings
     else if (key == "max_concurrent_operations") {
         wifi_config_.max_concurrent_operations = std::stoi(value);
@@ -218,7 +218,7 @@ auto WiFiConfigManager::setParameter(const std::string& key, const std::string& 
         wifi_config_.retry_attempts = std::stoi(value);
         return true;
     }
-    
+
     // Boolean settings
     else if (key == "enable_background_monitoring") {
         wifi_config_.enable_background_monitoring = parseBoolValue(value);
@@ -227,7 +227,7 @@ auto WiFiConfigManager::setParameter(const std::string& key, const std::string& 
         wifi_config_.enable_ipv6 = parseBoolValue(value);
         return true;
     }
-    
+
     // String settings
     else if (key == "preferred_ping_host") {
         wifi_config_.preferred_ping_host = value;
@@ -239,14 +239,14 @@ auto WiFiConfigManager::setParameter(const std::string& key, const std::string& 
         wifi_config_.speed_test_server = value;
         return true;
     }
-    
+
     LOG_F(WARNING, "Unknown configuration parameter: {}", key);
     return false;
 }
 
 auto WiFiConfigManager::getParameter(const std::string& key) const -> std::string {
     std::lock_guard lock(config_mutex_);
-    
+
     if (key == "ping_timeout") {
         return std::to_string(wifi_config_.ping_timeout.count());
     } else if (key == "max_cache_size") {
@@ -256,7 +256,7 @@ auto WiFiConfigManager::getParameter(const std::string& key) const -> std::strin
     } else if (key == "preferred_ping_host") {
         return wifi_config_.preferred_ping_host;
     }
-    
+
     return "";
 }
 
@@ -271,7 +271,7 @@ void WiFiConfigManager::resetToDefaults() {
 auto WiFiConfigManager::validateConfiguration() const -> std::vector<std::string> {
     std::lock_guard lock(config_mutex_);
     std::vector<std::string> errors;
-    
+
     // Validate timeout values
     if (wifi_config_.ping_timeout.count() <= 0) {
         errors.push_back("ping_timeout must be positive");
@@ -279,12 +279,12 @@ auto WiFiConfigManager::validateConfiguration() const -> std::vector<std::string
     if (wifi_config_.command_timeout.count() <= 0) {
         errors.push_back("command_timeout must be positive");
     }
-    
+
     // Validate cache settings
     if (wifi_config_.max_cache_size == 0) {
         errors.push_back("max_cache_size must be greater than 0");
     }
-    
+
     // Validate performance settings
     if (wifi_config_.max_concurrent_operations <= 0) {
         errors.push_back("max_concurrent_operations must be positive");
@@ -292,19 +292,19 @@ auto WiFiConfigManager::validateConfiguration() const -> std::vector<std::string
     if (wifi_config_.buffer_size == 0) {
         errors.push_back("buffer_size must be greater than 0");
     }
-    
+
     // Validate host settings
     if (wifi_config_.preferred_ping_host.empty()) {
         errors.push_back("preferred_ping_host cannot be empty");
     }
-    
+
     return errors;
 }
 
 auto WiFiConfigManager::toString() const -> std::string {
     std::lock_guard lock(config_mutex_);
     std::ostringstream oss;
-    
+
     oss << "WiFi Configuration:\n";
     oss << "  Ping Timeout: " << wifi_config_.ping_timeout.count() << "ms\n";
     oss << "  Command Timeout: " << wifi_config_.command_timeout.count() << "ms\n";
@@ -313,27 +313,27 @@ auto WiFiConfigManager::toString() const -> std::string {
     oss << "  Buffer Size: " << wifi_config_.buffer_size << " bytes\n";
     oss << "  Preferred Ping Host: " << wifi_config_.preferred_ping_host << "\n";
     oss << "  Background Monitoring: " << (wifi_config_.enable_background_monitoring ? "enabled" : "disabled") << "\n";
-    
+
     return oss.str();
 }
 
 void WiFiConfigManager::autoTune() {
     std::lock_guard lock(config_mutex_);
-    
+
     // Auto-detect optimal thread count
     unsigned int hardware_threads = std::thread::hardware_concurrency();
     if (hardware_threads > 0) {
         wifi_config_.max_concurrent_operations = std::min(static_cast<int>(hardware_threads), 8);
         performance_config_.thread_pool_size = hardware_threads;
     }
-    
+
     // Adjust buffer size based on available memory (simplified)
     wifi_config_.buffer_size = 65536; // Default to 64KB
-    
+
     // Enable optimizations based on system capabilities
     performance_config_.enable_parallel_processing = (hardware_threads > 1);
     performance_config_.enable_async_io = true;
-    
+
     LOG_F(INFO, "Configuration auto-tuned for system capabilities");
     notifyConfigurationChange();
 }

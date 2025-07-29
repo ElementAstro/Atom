@@ -23,11 +23,11 @@ if is_mode("release") then
     add_cxflags("-fomit-frame-pointer", "-finline-functions", "-fdevirtualize-at-ltrans")
     add_cxflags("-fno-semantic-interposition", "-fipa-pta", "-floop-nest-optimize")
     add_cxflags("-ftree-vectorize", "-fvect-cost-model=dynamic")
-    
+
     -- Enable LTO for maximum performance
     add_cxflags("-flto")
     add_ldflags("-flto", "-fuse-linker-plugin")
-    
+
     -- MSVC specific optimizations
     if is_plat("windows") then
         add_cxflags("/O2", "/Oi", "/Ot", "/GL", "/arch:AVX2")
@@ -47,7 +47,7 @@ add_requires("numa", {optional = true, system = true})
 -- Advanced concurrency feature definitions
 add_defines(
     "ATOM_ASIO_ENABLE_ADVANCED_CONCURRENCY=1",
-    "ATOM_ASIO_ENABLE_LOCK_FREE=1", 
+    "ATOM_ASIO_ENABLE_LOCK_FREE=1",
     "ATOM_ASIO_ENABLE_PERFORMANCE_MONITORING=1",
     "ATOM_HAS_SPDLOG=1",
     "ATOM_USE_WORK_STEALING_POOL=1",
@@ -107,26 +107,26 @@ local headers = {
     "concurrency/performance_monitor.hpp",
     "concurrency/memory_manager.hpp",
     "concurrency/concurrency.hpp",
-    
+
     -- Enhanced MQTT implementation
     "mqtt/client.hpp",
-    "mqtt/packet.hpp", 
+    "mqtt/packet.hpp",
     "mqtt/protocol.hpp",
     "mqtt/types.hpp",
-    
+
     -- Enhanced SSE implementation
     "sse/event.hpp",
     "sse/event_store.hpp",
     "sse/sse.hpp",
     "sse/server/auth_service.hpp",
     "sse/server/connection.hpp",
-    "sse/server/event_queue.hpp", 
+    "sse/server/event_queue.hpp",
     "sse/server/event_store.hpp",
     "sse/server/http_request.hpp",
     "sse/server/metrics.hpp",
     "sse/server/server.hpp",
     "sse/server/server_config.hpp",
-    
+
     -- Core compatibility layer
     "asio_compatibility.hpp"
 }
@@ -134,43 +134,43 @@ local headers = {
 -- Main static library target
 target("atom-asio-advanced")
     set_kind("static")
-    
+
     -- Add source files
     add_files(sources)
-    
+
     -- Add header files
     add_headerfiles(headers)
-    
+
     -- Include directories
     add_includedirs(".", {public = true})
     add_includedirs("..", {public = true})
-    
+
     -- Required packages
     add_packages("spdlog", "openssl", "nlohmann_json")
-    
+
     -- System libraries
     add_syslinks("pthread")
-    
+
     -- Platform-specific libraries
     if is_plat("windows") then
         add_syslinks("ws2_32", "wsock32")
     elseif is_plat("linux") then
         add_syslinks("rt", "dl")
     end
-    
+
     -- Enable position independent code
     add_cxflags("-fPIC")
-    
+
     -- Advanced C++23 features
     add_cxflags("-fcoroutines", "-fconcepts", "-fmodules-ts")
-    
+
     -- Memory safety and debugging (debug mode)
     if is_mode("debug") then
         add_cxflags("-fsanitize=address", "-fsanitize=undefined")
         add_cxflags("-fstack-protector-strong", "-D_FORTIFY_SOURCE=2")
         add_ldflags("-fsanitize=address", "-fsanitize=undefined")
     end
-    
+
     -- Set target directory
     set_targetdir("$(buildir)/lib")
     set_objectdir("$(buildir)/obj")
@@ -179,37 +179,37 @@ target("atom-asio-advanced")
 target("atom-asio-tests")
     set_kind("binary")
     set_default(false)
-    
+
     -- Test source files
     add_files("tests/*.cpp")
-    
+
     -- Dependencies
     add_deps("atom-asio-advanced")
     add_packages("gtest")
-    
+
     -- Include directories
     add_includedirs(".")
-    
+
     -- Enable only if tests are requested
     if has_config("tests") then
         set_default(true)
     end
 
--- Benchmark target (optional)  
+-- Benchmark target (optional)
 target("atom-asio-benchmarks")
     set_kind("binary")
     set_default(false)
-    
+
     -- Benchmark source files
     add_files("benchmarks/*.cpp")
-    
+
     -- Dependencies
     add_deps("atom-asio-advanced")
     add_packages("benchmark")
-    
+
     -- Include directories
     add_includedirs(".")
-    
+
     -- Enable only if benchmarks are requested
     if has_config("benchmarks") then
         set_default(true)
@@ -219,23 +219,23 @@ target("atom-asio-benchmarks")
 target("mqtt-example")
     set_kind("binary")
     set_default(false)
-    
+
     add_files("examples/mqtt_example.cpp")
     add_deps("atom-asio-advanced")
     add_includedirs(".")
-    
+
     if has_config("examples") then
         set_default(true)
     end
 
 target("sse-example")
-    set_kind("binary") 
+    set_kind("binary")
     set_default(false)
-    
+
     add_files("examples/sse_example.cpp")
     add_deps("atom-asio-advanced")
     add_includedirs(".")
-    
+
     if has_config("examples") then
         set_default(true)
     end
@@ -248,7 +248,7 @@ option("tests")
 
 option("benchmarks")
     set_default(false)
-    set_showmenu(true) 
+    set_showmenu(true)
     set_description("Build performance benchmarks")
 
 option("examples")

@@ -37,7 +37,7 @@ class PerformanceTimer {
 public:
     explicit PerformanceTimer(const std::string& name, const std::string& category = "general");
     ~PerformanceTimer();
-    
+
     // Non-copyable, non-movable
     PerformanceTimer(const PerformanceTimer&) = delete;
     PerformanceTimer& operator=(const PerformanceTimer&) = delete;
@@ -57,43 +57,43 @@ private:
 class PerformanceMonitor {
 public:
     static PerformanceMonitor& getInstance();
-    
+
     /**
      * @brief Record a performance metric
      * @param metric The metric to record
      */
     void recordMetric(const PerformanceMetric& metric);
-    
+
     /**
      * @brief Get all recorded metrics
      * @return Vector of all metrics
      */
     [[nodiscard]] auto getMetrics() const -> std::vector<PerformanceMetric>;
-    
+
     /**
      * @brief Get metrics by category
      * @param category The category to filter by
      * @return Vector of metrics in the category
      */
     [[nodiscard]] auto getMetricsByCategory(const std::string& category) const -> std::vector<PerformanceMetric>;
-    
+
     /**
      * @brief Get performance summary
      * @return Formatted performance summary string
      */
     [[nodiscard]] auto getSummary() const -> std::string;
-    
+
     /**
      * @brief Clear all recorded metrics
      */
     void clear();
-    
+
     /**
      * @brief Enable/disable performance monitoring
      * @param enabled Whether to enable monitoring
      */
     void setEnabled(bool enabled);
-    
+
     /**
      * @brief Check if monitoring is enabled
      * @return true if monitoring is enabled
@@ -102,7 +102,7 @@ public:
 
 private:
     PerformanceMonitor() = default;
-    
+
     std::vector<PerformanceMetric> metrics_;
     mutable std::mutex mutex_;
     bool enabled_ = false;

@@ -36,20 +36,20 @@ enum class MemoryOrder : int {
 class AtomicRefCount {
 private:
     mutable std::atomic<uint32_t> count_{1};
-    
+
 public:
     AtomicRefCount() = default;
     AtomicRefCount(const AtomicRefCount&) : count_{1} {}
     AtomicRefCount& operator=(const AtomicRefCount&) { return *this; }
-    
+
     void add_ref() const noexcept {
         count_.fetch_add(1, std::memory_order_relaxed);
     }
-    
+
     [[nodiscard]] bool release() const noexcept {
         return count_.fetch_sub(1, std::memory_order_acq_rel) == 1;
     }
-    
+
     [[nodiscard]] uint32_t use_count() const noexcept {
         return count_.load(std::memory_order_acquire);
     }
@@ -62,39 +62,39 @@ template<typename T>
 class AtomicPtr {
 private:
     std::atomic<T*> ptr_{nullptr};
-    
+
 public:
     AtomicPtr() = default;
     explicit AtomicPtr(T* p) : ptr_(p) {}
-    
+
     AtomicPtr(const AtomicPtr&) = delete;
     AtomicPtr& operator=(const AtomicPtr&) = delete;
-    
+
     AtomicPtr(AtomicPtr&& other) noexcept : ptr_(other.ptr_.exchange(nullptr)) {}
-    
+
     AtomicPtr& operator=(AtomicPtr&& other) noexcept {
         if (this != &other) {
             delete ptr_.exchange(other.ptr_.exchange(nullptr));
         }
         return *this;
     }
-    
+
     ~AtomicPtr() { delete ptr_.load(); }
-    
+
     [[nodiscard]] T* load(MemoryOrder order = MemoryOrder::Acquire) const noexcept {
         return ptr_.load(static_cast<std::memory_order>(order));
     }
-    
+
     void store(T* desired, MemoryOrder order = MemoryOrder::Release) noexcept {
         delete ptr_.exchange(desired, static_cast<std::memory_order>(order));
     }
-    
+
     [[nodiscard]] bool compare_exchange_weak(T*& expected, T* desired,
                                            MemoryOrder order = MemoryOrder::AcqRel) noexcept {
-        return ptr_.compare_exchange_weak(expected, desired, 
+        return ptr_.compare_exchange_weak(expected, desired,
                                         static_cast<std::memory_order>(order));
     }
-    
+
     [[nodiscard]] bool compare_exchange_strong(T*& expected, T* desired,
                                              MemoryOrder order = MemoryOrder::AcqRel) noexcept {
         return ptr_.compare_exchange_strong(expected, desired,
@@ -110,7 +110,7 @@ private:
     mutable std::atomic<uint32_t> state_{0};
     static constexpr uint32_t WRITER_BIT = 1u << 31;
     static constexpr uint32_t READER_MASK = ~WRITER_BIT;
-    
+
 public:
     class ReadLock {
         const OptimizedRWLock* lock_;
@@ -122,7 +122,7 @@ public:
         ReadLock(const ReadLock&) = delete;
         ReadLock& operator=(const ReadLock&) = delete;
     };
-    
+
     class WriteLock {
         const OptimizedRWLock* lock_;
     public:
@@ -133,7 +133,7 @@ public:
         WriteLock(const WriteLock&) = delete;
         WriteLock& operator=(const WriteLock&) = delete;
     };
-    
+
     void lock_shared() const {
         uint32_t state = state_.load(std::memory_order_acquire);
         while (true) {
@@ -142,18 +142,18 @@ public:
                 state = state_.load(std::memory_order_acquire);
                 continue;
             }
-            
-            if (state_.compare_exchange_weak(state, state + 1, 
+
+            if (state_.compare_exchange_weak(state, state + 1,
                                            std::memory_order_acquire)) {
                 break;
             }
         }
     }
-    
+
     void unlock_shared() const noexcept {
         state_.fetch_sub(1, std::memory_order_release);
     }
-    
+
     void lock() const {
         uint32_t expected = 0;
         while (!state_.compare_exchange_weak(expected, WRITER_BIT,
@@ -162,11 +162,11 @@ public:
             std::this_thread::yield();
         }
     }
-    
+
     void unlock() const noexcept {
         state_.store(0, std::memory_order_release);
     }
-    
+
     [[nodiscard]] ReadLock read_lock() const { return ReadLock(*this); }
     [[nodiscard]] WriteLock write_lock() const { return WriteLock(*this); }
 };
@@ -180,28 +180,28 @@ private:
     mutable OptimizedRWLock lock_;
     mutable AtomicRefCount ref_count_;
     std::shared_ptr<spdlog::logger> logger_;
-    
-    void log_operation(std::string_view operation, 
+
+    void log_operation(std::string_view operation,
                       const std::source_location& loc = std::source_location::current()) const {
         if (logger_) {
-            logger_->trace("ThreadSafeNode::{} called from {}:{}", 
+            logger_->trace("ThreadSafeNode::{} called from {}:{}",
                           operation, loc.file_name(), loc.line());
         }
     }
-    
+
 public:
-    explicit ThreadSafeNode(pugi::xml_node node, 
+    explicit ThreadSafeNode(pugi::xml_node node,
                            std::shared_ptr<spdlog::logger> logger = nullptr)
         : node_(node), logger_(logger) {
         log_operation("constructor");
     }
-    
-    ThreadSafeNode(const ThreadSafeNode& other) 
+
+    ThreadSafeNode(const ThreadSafeNode& other)
         : node_(other.node_), logger_(other.logger_) {
         other.ref_count_.add_ref();
         log_operation("copy_constructor");
     }
-    
+
     ThreadSafeNode& operator=(const ThreadSafeNode& other) {
         if (this != &other) {
             if (ref_count_.release()) {
@@ -214,13 +214,13 @@ public:
         }
         return *this;
     }
-    
+
     ~ThreadSafeNode() {
         if (ref_count_.release()) {
             log_operation("destructor_final");
         }
     }
-    
+
     /**
      * @brief Thread-safe name access
      */
@@ -229,7 +229,7 @@ public:
         log_operation("name");
         return node_.name();
     }
-    
+
     /**
      * @brief Thread-safe text content access
      */
@@ -238,7 +238,7 @@ public:
         log_operation("text");
         return node_.child_value();
     }
-    
+
     /**
      * @brief Thread-safe attribute access with optional return
      */
@@ -251,7 +251,7 @@ public:
         }
         return std::string{attr.value()};
     }
-    
+
     /**
      * @brief Thread-safe child node access
      */
@@ -264,7 +264,7 @@ public:
         }
         return ThreadSafeNode{child_node, logger_};
     }
-    
+
     /**
      * @brief Thread-safe children collection
      */
@@ -277,7 +277,7 @@ public:
         }
         return result;
     }
-    
+
     /**
      * @brief Thread-safe node modification with write lock
      */
@@ -286,7 +286,7 @@ public:
         log_operation("set_text");
         node_.text().set(value.data());
     }
-    
+
     /**
      * @brief Thread-safe attribute setting
      */
@@ -295,7 +295,7 @@ public:
         log_operation("set_attribute");
         node_.attribute(name.data()).set_value(value.data());
     }
-    
+
     /**
      * @brief Thread-safe child appending
      */
@@ -308,7 +308,7 @@ public:
         }
         return ThreadSafeNode{child, logger_};
     }
-    
+
     /**
      * @brief Check if node is valid
      */
@@ -316,14 +316,14 @@ public:
         auto lock = lock_.read_lock();
         return node_.empty();
     }
-    
+
     /**
      * @brief Get reference count for debugging
      */
     [[nodiscard]] uint32_t use_count() const noexcept {
         return ref_count_.use_count();
     }
-    
+
     /**
      * @brief Access to underlying pugi node (use with caution)
      */

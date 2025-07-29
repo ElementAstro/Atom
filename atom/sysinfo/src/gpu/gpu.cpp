@@ -37,7 +37,7 @@ namespace {
 
 auto getGPUInfo() -> std::string {
     spdlog::info("Getting GPU information");
-    
+
 #ifdef _WIN32
     return getGPUInfoWindows();
 #elif defined(__linux__)
@@ -52,7 +52,7 @@ auto getGPUInfo() -> std::string {
 
 auto getAllMonitorsInfo() -> std::vector<MonitorInfo> {
     spdlog::info("Getting monitor information");
-    
+
 #ifdef _WIN32
     return getAllMonitorsInfoWindows();
 #elif defined(__linux__)
@@ -67,7 +67,7 @@ auto getAllMonitorsInfo() -> std::vector<MonitorInfo> {
 
 auto getDetailedGPUInfo() -> std::vector<GPUInfo> {
     spdlog::info("Getting detailed GPU information");
-    
+
 #ifdef _WIN32
     return getDetailedGPUInfoWindows();
 #elif defined(__linux__)
@@ -82,7 +82,7 @@ auto getDetailedGPUInfo() -> std::vector<GPUInfo> {
 
 auto getGPUCount() -> int {
     spdlog::debug("Getting GPU count");
-    
+
 #ifdef _WIN32
     return getGPUCountWindows();
 #elif defined(__linux__)
@@ -96,12 +96,12 @@ auto getGPUCount() -> int {
 
 auto getGPUInfo(int gpuIndex) -> GPUInfo {
     spdlog::debug("Getting GPU info for index {}", gpuIndex);
-    
+
     if (gpuIndex < 0) {
         spdlog::error("Invalid GPU index: {}", gpuIndex);
         return GPUInfo{};
     }
-    
+
 #ifdef _WIN32
     return getGPUInfoWindows(gpuIndex);
 #elif defined(__linux__)
@@ -115,12 +115,12 @@ auto getGPUInfo(int gpuIndex) -> GPUInfo {
 
 auto getGPUPerformanceMetrics(int gpuIndex) -> GPUPerformanceMetrics {
     spdlog::debug("Getting GPU performance metrics for index {}", gpuIndex);
-    
+
     if (gpuIndex < 0) {
         spdlog::error("Invalid GPU index: {}", gpuIndex);
         return GPUPerformanceMetrics{};
     }
-    
+
 #ifdef _WIN32
     return getGPUPerformanceMetricsWindows(gpuIndex);
 #elif defined(__linux__)
@@ -134,12 +134,12 @@ auto getGPUPerformanceMetrics(int gpuIndex) -> GPUPerformanceMetrics {
 
 auto getGPUMemoryInfo(int gpuIndex) -> GPUMemoryInfo {
     spdlog::debug("Getting GPU memory info for index {}", gpuIndex);
-    
+
     if (gpuIndex < 0) {
         spdlog::error("Invalid GPU index: {}", gpuIndex);
         return GPUMemoryInfo{};
     }
-    
+
 #ifdef _WIN32
     return getGPUMemoryInfoWindows(gpuIndex);
 #elif defined(__linux__)
@@ -153,12 +153,12 @@ auto getGPUMemoryInfo(int gpuIndex) -> GPUMemoryInfo {
 
 auto getGPUTemperature(int gpuIndex) -> double {
     spdlog::debug("Getting GPU temperature for index {}", gpuIndex);
-    
+
     if (gpuIndex < 0) {
         spdlog::error("Invalid GPU index: {}", gpuIndex);
         return 0.0;
     }
-    
+
 #ifdef _WIN32
     return getGPUTemperatureWindows(gpuIndex);
 #elif defined(__linux__)
@@ -172,12 +172,12 @@ auto getGPUTemperature(int gpuIndex) -> double {
 
 auto getGPUUtilization(int gpuIndex) -> double {
     spdlog::debug("Getting GPU utilization for index {}", gpuIndex);
-    
+
     if (gpuIndex < 0) {
         spdlog::error("Invalid GPU index: {}", gpuIndex);
         return 0.0;
     }
-    
+
 #ifdef _WIN32
     return getGPUUtilizationWindows(gpuIndex);
 #elif defined(__linux__)
@@ -193,12 +193,12 @@ auto getGPUUtilization(int gpuIndex) -> double {
 
 auto benchmarkGPU(int gpuIndex, const GPUBenchmarkConfig& config) -> GPUBenchmarkResults {
     spdlog::info("Starting GPU benchmark for index {}", gpuIndex);
-    
+
     if (gpuIndex < 0) {
         spdlog::error("Invalid GPU index: {}", gpuIndex);
         return GPUBenchmarkResults{};
     }
-    
+
 #ifdef _WIN32
     return benchmarkGPUWindows(gpuIndex, config);
 #elif defined(__linux__)
@@ -214,72 +214,72 @@ auto benchmarkGPU(int gpuIndex, const GPUBenchmarkConfig& config) -> GPUBenchmar
 auto startGPUMonitoring(int gpuIndex, const GPUMonitoringConfig& config,
                        std::function<void(const GPUPerformanceMetrics&)> callback) -> bool {
     std::lock_guard<std::mutex> lock(monitoringMutex);
-    
+
     if (monitoringActive[gpuIndex]) {
         spdlog::warn("GPU monitoring already active for index {}", gpuIndex);
         return false;
     }
-    
+
     spdlog::info("Starting GPU monitoring for index {}", gpuIndex);
-    
+
     monitoringActive[gpuIndex] = true;
     monitoringConfigs[gpuIndex] = config;
     monitoringCallbacks[gpuIndex] = callback;
-    
+
     monitoringThreads[gpuIndex] = std::thread([gpuIndex, config, callback]() {
         while (monitoringActive[gpuIndex]) {
             auto metrics = getGPUPerformanceMetrics(gpuIndex);
-            
+
             // Check for alerts
             if (config.monitorTemperature && metrics.temperature > config.temperatureThreshold) {
-                spdlog::warn("GPU {} temperature alert: {}°C > {}°C", 
+                spdlog::warn("GPU {} temperature alert: {}°C > {}°C",
                            gpuIndex, metrics.temperature, config.temperatureThreshold);
             }
-            
+
             if (config.monitorMemory) {
                 auto memInfo = getGPUMemoryInfo(gpuIndex);
                 if (memInfo.memoryUsagePercent > config.memoryThreshold) {
-                    spdlog::warn("GPU {} memory usage alert: {}% > {}%", 
+                    spdlog::warn("GPU {} memory usage alert: {}% > {}%",
                                gpuIndex, memInfo.memoryUsagePercent, config.memoryThreshold);
                 }
             }
-            
-            if (config.monitorPower && metrics.powerDraw > 0 && 
-                metrics.maxPowerLimit > 0 && 
+
+            if (config.monitorPower && metrics.powerDraw > 0 &&
+                metrics.maxPowerLimit > 0 &&
                 (metrics.powerDraw / metrics.maxPowerLimit * 100.0) > config.powerThreshold) {
-                spdlog::warn("GPU {} power usage alert: {}W ({}%)", 
-                           gpuIndex, metrics.powerDraw, 
+                spdlog::warn("GPU {} power usage alert: {}W ({}%)",
+                           gpuIndex, metrics.powerDraw,
                            metrics.powerDraw / metrics.maxPowerLimit * 100.0);
             }
-            
+
             callback(metrics);
             std::this_thread::sleep_for(config.updateInterval);
         }
     });
-    
+
     return true;
 }
 
 auto stopGPUMonitoring(int gpuIndex) -> bool {
     std::lock_guard<std::mutex> lock(monitoringMutex);
-    
+
     if (!monitoringActive[gpuIndex]) {
         spdlog::warn("GPU monitoring not active for index {}", gpuIndex);
         return false;
     }
-    
+
     spdlog::info("Stopping GPU monitoring for index {}", gpuIndex);
-    
+
     monitoringActive[gpuIndex] = false;
-    
+
     if (monitoringThreads[gpuIndex].joinable()) {
         monitoringThreads[gpuIndex].join();
     }
-    
+
     monitoringThreads.erase(gpuIndex);
     monitoringConfigs.erase(gpuIndex);
     monitoringCallbacks.erase(gpuIndex);
-    
+
     return true;
 }
 
@@ -296,25 +296,25 @@ auto getGPUComputeCapability(int gpuIndex) -> GPUComputeCapability {
 auto getPrimaryGPU() -> GPUInfo {
     auto gpus = getDetailedGPUInfo();
     if (gpus.empty()) return GPUInfo{};
-    
+
     // Find primary GPU (first discrete GPU or first GPU if no discrete found)
-    auto discreteGPU = std::find_if(gpus.begin(), gpus.end(), 
+    auto discreteGPU = std::find_if(gpus.begin(), gpus.end(),
                                    [](const GPUInfo& gpu) { return gpu.type == GPUType::DISCRETE; });
-    
+
     if (discreteGPU != gpus.end()) {
         return *discreteGPU;
     }
-    
+
     return gpus[0];
 }
 
 auto getGPUsByVendor(GPUVendor vendor) -> std::vector<GPUInfo> {
     auto allGPUs = getDetailedGPUInfo();
     std::vector<GPUInfo> filteredGPUs;
-    
+
     std::copy_if(allGPUs.begin(), allGPUs.end(), std::back_inserter(filteredGPUs),
                 [vendor](const GPUInfo& gpu) { return gpu.vendor == vendor; });
-    
+
     return filteredGPUs;
 }
 

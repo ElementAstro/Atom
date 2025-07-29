@@ -32,7 +32,7 @@ public:
         std::chrono::nanoseconds avg_time{0};
         uint64_t operations = 0;
         double throughput = 0.0;  // operations per second
-        
+
         void calculate() {
             if (operations > 0) {
                 avg_time = total_time / operations;
@@ -40,26 +40,26 @@ public:
             }
         }
     };
-    
+
     void start() {
         start_time_ = std::chrono::high_resolution_clock::now();
     }
-    
+
     void stop() {
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration = end_time - start_time_;
-        
+
         metrics_.total_time += duration;
         metrics_.min_time = std::min(metrics_.min_time, duration);
         metrics_.max_time = std::max(metrics_.max_time, duration);
         metrics_.operations++;
     }
-    
+
     const Metrics& getMetrics() {
         metrics_.calculate();
         return metrics_;
     }
-    
+
     void reset() {
         metrics_ = Metrics{};
     }
@@ -79,11 +79,11 @@ public:
         size_t operations_per_thread = 10000;
         size_t warmup_operations = 1000;
         bool enable_detailed_logging = false;
-        
+
         static Config createDefault() {
             return Config{};
         }
-        
+
         static Config createStressTest() {
             Config config;
             config.thread_count = std::thread::hardware_concurrency() * 2;
@@ -92,54 +92,54 @@ public:
             return config;
         }
     };
-    
+
     explicit BenchmarkSuite(const Config& config = Config::createDefault());
-    
+
     /**
      * @brief Run all benchmarks
      */
     void runAll();
-    
+
     /**
      * @brief Benchmark connection pool performance
      */
     void benchmarkConnectionPool();
-    
+
     /**
      * @brief Benchmark session pool performance
      */
     void benchmarkSessionPool();
-    
+
     /**
      * @brief Benchmark cache performance
      */
     void benchmarkCache();
-    
+
     /**
      * @brief Benchmark rate limiter performance
      */
     void benchmarkRateLimiter();
-    
+
     /**
      * @brief Benchmark thread pool performance
      */
     void benchmarkThreadPool();
-    
+
     /**
      * @brief Benchmark memory pool performance
      */
     void benchmarkMemoryPool();
-    
+
     /**
      * @brief Thread safety validation tests
      */
     void validateThreadSafety();
-    
+
     /**
      * @brief Scalability tests across different core counts
      */
     void testScalability();
-    
+
     /**
      * @brief Print comprehensive results
      */
@@ -148,20 +148,20 @@ public:
 private:
     const Config config_;
     std::map<std::string, PerformanceMeter::Metrics> results_;
-    
+
     /**
      * @brief Run benchmark with multiple threads
      */
     template<typename F>
     PerformanceMeter::Metrics runMultiThreadedBenchmark(
         const std::string& name, F&& benchmark_func);
-    
+
     /**
      * @brief Warmup phase to stabilize performance
      */
     template<typename F>
     void warmup(F&& func, size_t iterations);
-    
+
     /**
      * @brief Validate that operations are thread-safe
      */
@@ -216,7 +216,7 @@ private:
     mutable PerformanceMeter meter_;
     std::vector<std::string> test_urls_;
     std::vector<Response> test_responses_;
-    
+
     void generateTestData();
 };
 
@@ -253,7 +253,7 @@ private:
  */
 class MemoryPoolBenchmark {
 public:
-    explicit MemoryPoolBenchmark(const MemoryPool<std::vector<char>>::Config& config = 
+    explicit MemoryPoolBenchmark(const MemoryPool<std::vector<char>>::Config& config =
                                 MemoryPool<std::vector<char>>::Config::createDefault());
     void run(size_t iterations);
     PerformanceMeter::Metrics getMetrics() const { return meter_.getMetrics(); }
@@ -286,7 +286,7 @@ public:
         size_t memory_mb = 0;
         size_t peak_memory_mb = 0;
     };
-    
+
     void start();
     void stop();
     Usage getUsage() const { return usage_; }
@@ -295,7 +295,7 @@ private:
     Usage usage_;
     std::atomic<bool> monitoring_{false};
     std::thread monitor_thread_;
-    
+
     void monitorLoop();
 };
 

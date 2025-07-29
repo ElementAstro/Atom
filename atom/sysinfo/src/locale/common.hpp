@@ -93,7 +93,7 @@ struct LocaleInfo {
     MeasurementSystem measurementSystem{MeasurementSystem::Metric}; /**< Measurement system */
     PaperSize paperSize{PaperSize::A4}; /**< Default paper size */
     std::chrono::seconds cacheTimeout{300}; /**< Cache timeout duration in seconds */
-    
+
     // Extended properties
     std::string scriptCode;          /**< ISO 15924 script code (e.g., "Latn") */
     std::string variantCode;         /**< Locale variant code */
@@ -102,12 +102,12 @@ struct LocaleInfo {
     std::vector<std::string> weekendDays; /**< Weekend days */
     std::string amPmFormat;          /**< AM/PM format strings */
     std::string listSeparator;       /**< List separator (e.g., ";") */
-    
+
     /**
      * @brief Equality comparison operator
      */
     bool operator==(const LocaleInfo& other) const;
-    
+
     /**
      * @brief Inequality comparison operator
      */

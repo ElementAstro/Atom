@@ -36,7 +36,7 @@ public:
     std::atomic<size_t> nextCallbackId{1};
     std::mutex callbackMutex;
     std::chrono::seconds cacheTimeout{300};
-    
+
     auto getCurrentLocaleImpl() -> LocaleInfo {
 #ifdef _WIN32
         return locale::windows::getSystemLanguageInfo();
@@ -46,7 +46,7 @@ public:
         return locale::linux_impl::getSystemLanguageInfo();
 #endif
     }
-    
+
     auto getAvailableLocalesImpl() -> std::vector<std::string> {
 #ifdef _WIN32
         return locale::windows::getAvailableLocales();
@@ -56,7 +56,7 @@ public:
         return locale::linux_impl::getAvailableLocales();
 #endif
     }
-    
+
     auto validateLocaleImpl(const std::string& locale) -> bool {
 #ifdef _WIN32
         return locale::windows::validateLocale(locale);
@@ -66,10 +66,10 @@ public:
         return locale::linux_impl::validateLocale(locale);
 #endif
     }
-    
+
     auto setLocaleImpl(const std::string& locale) -> LocaleError {
         std::string oldLocale = getCurrentLocaleImpl().localeName;
-        
+
 #ifdef _WIN32
         auto result = locale::windows::setSystemLocale(locale);
 #elif defined(__APPLE__)
@@ -77,13 +77,13 @@ public:
 #else
         auto result = locale::linux_impl::setSystemLocale(locale);
 #endif
-        
+
         if (result == LocaleError::None) {
             notifyCallbacks(oldLocale, locale);
         }
         return result;
     }
-    
+
     auto getDefaultLocaleImpl() -> std::string {
 #ifdef _WIN32
         return locale::windows::getDefaultLocale();
@@ -93,7 +93,7 @@ public:
         return locale::linux_impl::getDefaultLocale();
 #endif
     }
-    
+
     auto getPreferredLanguagesImpl() -> std::vector<std::string> {
 #ifdef _WIN32
         return locale::windows::getPreferredUILanguages();
@@ -103,7 +103,7 @@ public:
         return locale::linux_impl::getPreferredLanguages();
 #endif
     }
-    
+
     void notifyCallbacks(const std::string& oldLocale, const std::string& newLocale) {
         std::lock_guard<std::mutex> lock(callbackMutex);
         for (const auto& [id, callback] : callbacks) {
@@ -208,13 +208,13 @@ void LocaleManager::setPreferences(const LocalePreferences& preferences) {
 class LocaleFormatter::Impl {
 public:
     std::string currentLocale;
-    
+
     explicit Impl(const std::string& locale) : currentLocale(locale) {
         if (currentLocale.empty()) {
             currentLocale = getSystemLanguageInfo().localeName;
         }
     }
-    
+
     auto formatNumberImpl(double number, int precision) -> std::string {
         std::string result;
 #ifdef _WIN32
@@ -283,7 +283,7 @@ public:
         return locale::linux_impl::getCurrencyInfo(locale);
 #endif
     }
-    
+
     auto formatDateImpl(const std::chrono::system_clock::time_point& timestamp, const std::string& style) -> std::string {
 #ifdef _WIN32
         return locale::windows::formatDate(timestamp, currentLocale, style);
@@ -293,7 +293,7 @@ public:
         return locale::linux_impl::formatDate(timestamp, currentLocale, style);
 #endif
     }
-    
+
     auto formatTimeImpl(const std::chrono::system_clock::time_point& timestamp, const std::string& style) -> std::string {
 #ifdef _WIN32
         return locale::windows::formatTime(timestamp, currentLocale, style);
@@ -336,7 +336,7 @@ auto LocaleFormatter::formatTime(const std::chrono::system_clock::time_point& ti
     return pImpl->formatTimeImpl(timestamp, style);
 }
 
-auto LocaleFormatter::formatDateTime(const std::chrono::system_clock::time_point& timestamp, 
+auto LocaleFormatter::formatDateTime(const std::chrono::system_clock::time_point& timestamp,
                                      const std::string& dateStyle, const std::string& timeStyle) -> std::string {
     return formatDate(timestamp, dateStyle) + " " + formatTime(timestamp, timeStyle);
 }

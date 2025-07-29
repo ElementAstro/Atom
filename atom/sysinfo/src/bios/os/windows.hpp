@@ -160,7 +160,7 @@ public:
      * @param intervalMs Monitoring interval in milliseconds
      * @return true if monitoring started successfully
      */
-    auto startPerformanceMonitoring(SystemMonitorCallback callback, 
+    auto startPerformanceMonitoring(SystemMonitorCallback callback,
                                    uint32_t intervalMs = 1000) -> bool;
 
     /**
@@ -180,7 +180,7 @@ public:
      * @param maxEvents Maximum number of events to retrieve
      * @return Event log entries
      */
-    auto getEventLogs(const std::string& logName = "System", 
+    auto getEventLogs(const std::string& logName = "System",
                      uint32_t maxEvents = 100) -> std::vector<std::string>;
 
     /**
@@ -202,7 +202,7 @@ public:
      * @param action Action to perform (start, stop, restart, enable, disable)
      * @return Operation result
      */
-    auto manageService(const std::string& serviceName, 
+    auto manageService(const std::string& serviceName,
                       const std::string& action) -> OSOperationResult;
 
     /**
@@ -250,7 +250,7 @@ public:
      * @param enable Enable or disable the feature
      * @return Operation result
      */
-    auto manageWindowsFeature(const std::string& featureName, 
+    auto manageWindowsFeature(const std::string& featureName,
                              bool enable) -> OSOperationResult;
 
     /**
@@ -271,7 +271,7 @@ private:
     std::thread m_monitoringThread;
     void* m_wmiLocator = nullptr;
     void* m_wmiServices = nullptr;
-    
+
     // Helper functions
     auto initializeWMI() -> bool;
     void cleanupWMI();

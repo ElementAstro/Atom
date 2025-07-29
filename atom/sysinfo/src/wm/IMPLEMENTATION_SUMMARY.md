@@ -13,19 +13,19 @@ atom/sysinfo/wm/
 ├── IMPLEMENTATION_SUMMARY.md   # This file
 ├── CMakeLists.txt              # Build configuration
 ├── atom_sysinfo_wm_config.cmake.in  # CMake package config
-├── 
+├──
 ├── common.hpp                  # Common types and utilities
 ├── common.cpp                  # Common implementations
 ├── wm.hpp                      # Main API header
 ├── wm.cpp                      # Cross-platform implementations
-├── 
+├──
 ├── windows.hpp                 # Windows-specific declarations
 ├── windows.cpp                 # Windows-specific implementations
 ├── linux.hpp                   # Linux-specific declarations
 ├── linux.cpp                   # Linux-specific implementations
 ├── macos.hpp                   # macOS-specific declarations
 ├── macos.cpp                   # macOS-specific implementations
-├── 
+├──
 ├── examples/                   # Usage examples
 │   ├── CMakeLists.txt
 │   ├── basic_system_info.cpp

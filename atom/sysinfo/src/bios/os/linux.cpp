@@ -30,30 +30,30 @@ namespace atom::system {
 auto LinuxOSImplementation::getEnhancedOSInfo() -> EnhancedOSInfo {
     spdlog::debug("Getting enhanced Linux OS information");
     EnhancedOSInfo info;
-    
+
     // Get basic information
     auto distInfo = getDistributionInfo();
     info.osName = distInfo.name;
     info.osVersion = distInfo.version;
     info.osType = OSType::LINUX;
     info.osArch = detectOSArchitecture();
-    
+
     // Get kernel information
     auto kernelInfo = getKernelInfo();
     info.kernelVersion = kernelInfo.version;
-    
+
     // Get computer name
     std::array<char, 256> hostname;
     if (gethostname(hostname.data(), hostname.size()) == 0) {
         info.computerName = hostname.data();
     }
-    
+
     // Get architecture
     struct utsname unameData;
     if (uname(&unameData) == 0) {
         info.architecture = unameData.machine;
     }
-    
+
     // Get uptime
     struct sysinfo si;
     if (sysinfo(&si) == 0) {
@@ -61,29 +61,29 @@ auto LinuxOSImplementation::getEnhancedOSInfo() -> EnhancedOSInfo {
         info.totalMemoryBytes = si.totalram * si.mem_unit;
         info.availableMemoryBytes = si.freeram * si.mem_unit;
     }
-    
+
     // Get performance metrics
     info.performance = getPerformanceMetrics();
-    
+
     // Get security information
     info.security = getSecurityInfo();
-    
+
     // Get network configuration
     info.network = getNetworkConfig();
-    
+
     // Get environment
     info.environment = getSystemEnvironment();
-    
+
     // Get container information
     auto containerInfo = getContainerInfo();
     if (containerInfo.isContainer) {
         info.environment.environmentVariables["CONTAINER_TYPE"] = containerInfo.containerType;
         info.environment.environmentVariables["CONTAINER_RUNTIME"] = containerInfo.containerRuntime;
     }
-    
+
     // Set timestamps
     info.lastRefresh = std::chrono::system_clock::now();
-    
+
     spdlog::info("Successfully retrieved enhanced Linux OS information");
     return info;
 }
@@ -99,9 +99,9 @@ auto LinuxOSImplementation::getKernelInfo() -> LinuxKernelInfo {
 auto LinuxOSImplementation::getSystemServices() -> LinuxSystemServices {
     spdlog::debug("Getting Linux system services information");
     LinuxSystemServices services;
-    
+
     services.initSystem = detectInitSystem();
-    
+
     if (services.initSystem == "systemd") {
         // Get systemd services
         auto activeServices = executeCommandLines("systemctl list-units --type=service --state=active --no-pager --no-legend");
@@ -113,7 +113,7 @@ auto LinuxOSImplementation::getSystemServices() -> LinuxSystemServices {
                 services.activeServices.push_back(serviceName);
             }
         }
-        
+
         auto failedServices = executeCommandLines("systemctl list-units --type=service --state=failed --no-pager --no-legend");
         for (const auto& line : failedServices) {
             std::istringstream iss(line);
@@ -124,31 +124,31 @@ auto LinuxOSImplementation::getSystemServices() -> LinuxSystemServices {
             }
         }
     }
-    
+
     return services;
 }
 
 auto LinuxOSImplementation::getPackageInfo() -> LinuxPackageInfo {
     spdlog::debug("Getting Linux package information");
     LinuxPackageInfo packageInfo;
-    
+
     packageInfo.packageManager = detectPackageManager();
-    
+
     if (packageInfo.packageManager == "apt") {
         // Get installed packages
         auto installedPackages = executeCommandLines("dpkg -l | grep '^ii' | awk '{print $2}'");
         packageInfo.installedPackages = installedPackages;
         packageInfo.totalPackages = installedPackages.size();
-        
+
         // Get available updates
         auto availableUpdates = executeCommandLines("apt list --upgradable 2>/dev/null | grep -v 'Listing...'");
         packageInfo.availableUpdates = availableUpdates;
         packageInfo.upgradablePackages = availableUpdates.size();
-        
+
         // Get security updates
         auto securityUpdates = executeCommandLines("apt list --upgradable 2>/dev/null | grep -i security");
         packageInfo.securityUpdates = securityUpdates;
-        
+
         // Get repositories
         auto repositories = executeCommandLines("grep -h '^deb ' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null");
         packageInfo.repositories = repositories;
@@ -157,13 +157,13 @@ auto LinuxOSImplementation::getPackageInfo() -> LinuxPackageInfo {
         auto installedPackages = executeCommandLines("rpm -qa --queryformat '%{NAME}\n'");
         packageInfo.installedPackages = installedPackages;
         packageInfo.totalPackages = installedPackages.size();
-        
+
         // Get available updates
         auto availableUpdates = executeCommandLines(packageInfo.packageManager + " check-update 2>/dev/null | grep -v '^$'");
         packageInfo.availableUpdates = availableUpdates;
         packageInfo.upgradablePackages = availableUpdates.size();
     }
-    
+
     return packageInfo;
 }
 
@@ -174,13 +174,13 @@ auto LinuxOSImplementation::getContainerInfo() -> LinuxContainerInfo {
 auto LinuxOSImplementation::getPerformanceMetrics() -> SystemPerformanceMetrics {
     spdlog::debug("Getting Linux performance metrics");
     SystemPerformanceMetrics metrics;
-    
+
     // Get memory usage
     std::ifstream meminfo("/proc/meminfo");
     if (meminfo.is_open()) {
         std::string line;
         uint64_t totalMem = 0, availableMem = 0;
-        
+
         while (std::getline(meminfo, line)) {
             if (line.find("MemTotal:") == 0) {
                 totalMem = std::stoull(line.substr(9));
@@ -188,13 +188,13 @@ auto LinuxOSImplementation::getPerformanceMetrics() -> SystemPerformanceMetrics 
                 availableMem = std::stoull(line.substr(13));
             }
         }
-        
+
         if (totalMem > 0) {
-            metrics.memoryUsagePercent = 
+            metrics.memoryUsagePercent =
                 static_cast<double>(totalMem - availableMem) / totalMem * 100.0;
         }
     }
-    
+
     // Get CPU usage (simplified)
     std::ifstream loadavg("/proc/loadavg");
     if (loadavg.is_open()) {
@@ -202,58 +202,58 @@ auto LinuxOSImplementation::getPerformanceMetrics() -> SystemPerformanceMetrics 
         loadavg >> load1min;
         metrics.cpuUsagePercent = load1min * 100.0; // Simplified calculation
     }
-    
+
     // Get process count
     auto processCount = executeCommand("ps aux | wc -l");
     if (!processCount.empty()) {
         metrics.processCount = std::stoull(processCount);
     }
-    
+
     // Get disk usage for root filesystem
     auto diskUsage = executeCommand("df / | tail -1 | awk '{print $5}' | sed 's/%//'");
     if (!diskUsage.empty()) {
         metrics.diskUsagePercent = std::stod(diskUsage);
     }
-    
+
     return metrics;
 }
 
 auto LinuxOSImplementation::getSecurityInfo() -> SystemSecurityInfo {
     spdlog::debug("Getting Linux security information");
     SystemSecurityInfo secInfo;
-    
+
     // Check firewall status
     auto ufwStatus = executeCommand("ufw status 2>/dev/null");
     secInfo.firewallEnabled = ufwStatus.find("active") != std::string::npos;
-    
+
     if (!secInfo.firewallEnabled) {
         auto iptablesStatus = executeCommand("iptables -L 2>/dev/null | wc -l");
         secInfo.firewallEnabled = !iptablesStatus.empty() && std::stoi(iptablesStatus) > 8;
     }
-    
+
     // Check SELinux
     auto selinuxStatus = executeCommand("getenforce 2>/dev/null");
     if (!selinuxStatus.empty()) {
         secInfo.securityFeatures.push_back("SELinux: " + selinuxStatus);
     }
-    
+
     // Check AppArmor
     auto apparmorStatus = executeCommand("aa-status 2>/dev/null | head -1");
     if (!apparmorStatus.empty()) {
         secInfo.securityFeatures.push_back("AppArmor: " + apparmorStatus);
     }
-    
+
     // Check for antivirus
     auto clamavStatus = executeCommand("which clamav 2>/dev/null");
     secInfo.antivirusEnabled = !clamavStatus.empty();
-    
+
     return secInfo;
 }
 
 auto LinuxOSImplementation::getNetworkConfig() -> NetworkConfiguration {
     spdlog::debug("Getting Linux network configuration");
     NetworkConfiguration netConfig;
-    
+
     // Get default route interface
     auto defaultRoute = executeCommand("ip route show default | head -1");
     if (!defaultRoute.empty()) {
@@ -266,7 +266,7 @@ auto LinuxOSImplementation::getNetworkConfig() -> NetworkConfiguration {
             }
         }
     }
-    
+
     if (!netConfig.primaryInterface.empty()) {
         // Get IP address
         auto ipAddr = executeCommand("ip addr show " + netConfig.primaryInterface + " | grep 'inet ' | head -1");
@@ -275,7 +275,7 @@ auto LinuxOSImplementation::getNetworkConfig() -> NetworkConfiguration {
         if (std::regex_search(ipAddr, match, ipRegex)) {
             netConfig.ipAddress = match[1].str();
         }
-        
+
         // Get MAC address
         auto macAddr = executeCommand("ip link show " + netConfig.primaryInterface + " | grep 'link/ether'");
         std::regex macRegex(R"(link/ether ([a-fA-F0-9:]{17}))");
@@ -283,7 +283,7 @@ auto LinuxOSImplementation::getNetworkConfig() -> NetworkConfiguration {
             netConfig.macAddress = match[1].str();
         }
     }
-    
+
     // Get DNS servers
     std::ifstream resolvConf("/etc/resolv.conf");
     if (resolvConf.is_open()) {
@@ -299,7 +299,7 @@ auto LinuxOSImplementation::getNetworkConfig() -> NetworkConfiguration {
             }
         }
     }
-    
+
     return netConfig;
 }
 
@@ -307,22 +307,22 @@ auto LinuxOSImplementation::getNetworkConfig() -> NetworkConfiguration {
 auto LinuxOSImplementation::parseOSRelease() -> LinuxDistributionInfo {
     spdlog::debug("Parsing /etc/os-release");
     LinuxDistributionInfo distInfo;
-    
+
     std::ifstream osRelease("/etc/os-release");
     if (osRelease.is_open()) {
         std::string line;
         while (std::getline(osRelease, line)) {
             auto pos = line.find('=');
             if (pos == std::string::npos) continue;
-            
+
             std::string key = line.substr(0, pos);
             std::string value = line.substr(pos + 1);
-            
+
             // Remove quotes
             if (value.front() == '"' && value.back() == '"') {
                 value = value.substr(1, value.length() - 2);
             }
-            
+
             if (key == "NAME") {
                 distInfo.name = value;
             } else if (key == "VERSION") {
@@ -346,28 +346,28 @@ auto LinuxOSImplementation::parseOSRelease() -> LinuxDistributionInfo {
             }
         }
     }
-    
+
     return distInfo;
 }
 
 auto LinuxOSImplementation::parseKernelVersion() -> LinuxKernelInfo {
     spdlog::debug("Parsing kernel version information");
     LinuxKernelInfo kernelInfo;
-    
+
     struct utsname unameData;
     if (uname(&unameData) == 0) {
         kernelInfo.version = unameData.release;
         kernelInfo.release = unameData.version;
     }
-    
+
     // Check for realtime kernel
     kernelInfo.isRealtime = kernelInfo.version.find("rt") != std::string::npos;
     kernelInfo.isLowLatency = kernelInfo.version.find("lowlatency") != std::string::npos;
-    
+
     // Get loaded modules
     auto modules = executeCommandLines("lsmod | tail -n +2 | awk '{print $1}'");
     kernelInfo.modules = modules;
-    
+
     return kernelInfo;
 }
 
@@ -400,7 +400,7 @@ auto LinuxOSImplementation::detectInitSystem() -> std::string {
 auto LinuxOSImplementation::detectContainerEnvironment() -> LinuxContainerInfo {
     spdlog::debug("Detecting container environment");
     LinuxContainerInfo containerInfo;
-    
+
     // Check for Docker
     std::ifstream dockerEnv("/.dockerenv");
     if (dockerEnv.good()) {
@@ -408,7 +408,7 @@ auto LinuxOSImplementation::detectContainerEnvironment() -> LinuxContainerInfo {
         containerInfo.containerType = "docker";
         containerInfo.containerRuntime = "docker";
     }
-    
+
     // Check for LXC
     if (!containerInfo.isContainer) {
         std::ifstream cgroupFile("/proc/1/cgroup");
@@ -427,7 +427,7 @@ auto LinuxOSImplementation::detectContainerEnvironment() -> LinuxContainerInfo {
             }
         }
     }
-    
+
     return containerInfo;
 }
 
@@ -443,7 +443,7 @@ auto getComputerNameLinux() -> std::optional<std::string> {
 void getOperatingSystemInfoLinux(OperatingSystemInfo& osInfo) {
     LinuxOSImplementation impl;
     auto enhancedInfo = impl.getEnhancedOSInfo();
-    
+
     osInfo.osName = enhancedInfo.osName;
     osInfo.osVersion = enhancedInfo.osVersion;
     osInfo.kernelVersion = enhancedInfo.kernelVersion;
@@ -492,7 +492,7 @@ auto isServerEditionLinux() -> bool {
     if (hostname.find("server") != std::string::npos) {
         return true;
     }
-    
+
     // Check for GUI
     auto display = executeCommand("echo $DISPLAY");
     return display.empty();

@@ -24,44 +24,44 @@ struct CronSystemConfig {
     size_t maxJobsPerUser{1000};
     size_t maxExecutionHistory{100};
     std::chrono::minutes jobTimeout{60};
-    
+
     // Scheduler settings
     std::chrono::milliseconds schedulerInterval{1000};
     size_t maxConcurrentJobs{50};
     bool enableJobDependencies{true};
     bool enableJobPriorities{true};
-    
+
     // Thread pool settings
     size_t minThreads{2};
     size_t maxThreads{20};
     std::chrono::seconds threadIdleTimeout{300};
     bool enableDynamicScaling{true};
-    
+
     // Storage settings
     bool enablePersistence{true};
     std::chrono::minutes saveInterval{5};
     bool enableCompression{true};
     bool enableEncryption{false};
     size_t maxBackupFiles{5};
-    
+
     // Monitoring settings
     bool enableMetrics{true};
     std::chrono::seconds metricsUpdateInterval{10};
     bool enableHealthChecks{true};
     std::chrono::minutes healthCheckInterval{5};
-    
+
     // Security settings
     bool enableAuthentication{true};
     bool enableAuthorization{true};
     bool enableAuditLogging{true};
     size_t maxAuditLogSize{10000};
-    
+
     // Performance settings
     bool enableCaching{true};
     size_t cacheSize{1000};
     std::chrono::minutes cacheTTL{30};
     bool enableMemoryPooling{true};
-    
+
     // Resource limits
     size_t maxMemoryUsageMB{512};
     double maxCpuUsagePercent{80.0};
@@ -78,37 +78,37 @@ struct CronSystemMetrics {
     std::atomic<uint64_t> completedJobs{0};
     std::atomic<uint64_t> failedJobs{0};
     std::atomic<uint64_t> skippedJobs{0};
-    
+
     // Execution statistics
     std::atomic<uint64_t> totalExecutions{0};
     std::atomic<uint64_t> successfulExecutions{0};
     std::atomic<uint64_t> failedExecutions{0};
     std::atomic<uint64_t> timeoutExecutions{0};
-    
+
     // Performance metrics
     std::atomic<uint64_t> totalExecutionTime{0}; // microseconds
     std::atomic<uint64_t> minExecutionTime{UINT64_MAX};
     std::atomic<uint64_t> maxExecutionTime{0};
     std::atomic<uint64_t> schedulingLatency{0}; // microseconds
-    
+
     // Resource usage
     std::atomic<uint64_t> memoryUsageBytes{0};
     std::atomic<uint64_t> peakMemoryUsageBytes{0};
     std::atomic<uint32_t> activeThreads{0};
     std::atomic<uint32_t> peakActiveThreads{0};
-    
+
     // Cache statistics
     std::atomic<uint64_t> cacheHits{0};
     std::atomic<uint64_t> cacheMisses{0};
     std::atomic<uint64_t> cacheEvictions{0};
-    
+
     // Error tracking
     std::atomic<uint64_t> validationErrors{0};
     std::atomic<uint64_t> securityViolations{0};
     std::atomic<uint64_t> systemErrors{0};
-    
+
     std::chrono::steady_clock::time_point startTime{std::chrono::steady_clock::now()};
-    
+
     void reset() noexcept {
         totalJobs = 0;
         activeJobs = 0;
@@ -135,22 +135,22 @@ struct CronSystemMetrics {
         systemErrors = 0;
         startTime = std::chrono::steady_clock::now();
     }
-    
+
     double getSuccessRate() const noexcept {
         auto total = totalExecutions.load();
         return total > 0 ? static_cast<double>(successfulExecutions.load()) / total : 0.0;
     }
-    
+
     double getAverageExecutionTime() const noexcept {
         auto total = totalExecutions.load();
         return total > 0 ? static_cast<double>(totalExecutionTime.load()) / total : 0.0;
     }
-    
+
     double getCacheHitRatio() const noexcept {
         auto total = cacheHits.load() + cacheMisses.load();
         return total > 0 ? static_cast<double>(cacheHits.load()) / total : 0.0;
     }
-    
+
     std::chrono::seconds getUptime() const noexcept {
         return std::chrono::duration_cast<std::chrono::seconds>(
             std::chrono::steady_clock::now() - startTime);
@@ -188,10 +188,10 @@ struct CronEvent {
     std::string details;
     std::chrono::steady_clock::time_point timestamp;
     std::unordered_map<std::string, std::string> metadata;
-    
-    CronEvent(CronEventType t, const std::string& jid = "", const std::string& uid = "", 
+
+    CronEvent(CronEventType t, const std::string& jid = "", const std::string& uid = "",
               const std::string& d = "")
-        : type(t), jobId(jid), userId(uid), details(d), 
+        : type(t), jobId(jid), userId(uid), details(d),
           timestamp(std::chrono::steady_clock::now()) {}
 };
 
@@ -206,69 +206,69 @@ using CronEventCallback = std::function<void(const CronEvent& event)>;
 class CronConfigManager {
 public:
     static CronConfigManager& getInstance();
-    
+
     /**
      * @brief Get current configuration
      */
     const CronSystemConfig& getConfig() const;
-    
+
     /**
      * @brief Update configuration
      */
     void updateConfig(const CronSystemConfig& config);
-    
+
     /**
      * @brief Get performance metrics
      */
     const CronSystemMetrics& getMetrics() const;
-    
+
     /**
      * @brief Reset performance metrics
      */
     void resetMetrics();
-    
+
     /**
      * @brief Register event callback
      */
     size_t registerEventCallback(CronEventCallback callback);
-    
+
     /**
      * @brief Unregister event callback
      */
     bool unregisterEventCallback(size_t id);
-    
+
     /**
      * @brief Emit event to all registered callbacks
      */
     void emitEvent(const CronEvent& event);
-    
+
     /**
      * @brief Load configuration from file
      */
     bool loadFromFile(const std::string& filePath);
-    
+
     /**
      * @brief Save configuration to file
      */
     bool saveToFile(const std::string& filePath) const;
-    
+
     /**
      * @brief Update metrics
      */
-    void updateMetrics(CronEventType type, const std::string& jobId = "", 
+    void updateMetrics(CronEventType type, const std::string& jobId = "",
                       std::chrono::microseconds executionTime = std::chrono::microseconds::zero());
 
 private:
     CronConfigManager();
     ~CronConfigManager() = default;
-    
+
     CronConfigManager(const CronConfigManager&) = delete;
     CronConfigManager& operator=(const CronConfigManager&) = delete;
-    
+
     mutable std::mutex configMutex_;
     CronSystemConfig config_;
     mutable CronSystemMetrics metrics_;
-    
+
     mutable std::mutex callbackMutex_;
     std::unordered_map<size_t, CronEventCallback> callbacks_;
     std::atomic<size_t> nextCallbackId_{1};
@@ -287,7 +287,7 @@ class CronExecutionTimer {
 public:
     explicit CronExecutionTimer(CronEventType type, const std::string& jobId = "")
         : type_(type), jobId_(jobId), startTime_(std::chrono::steady_clock::now()) {}
-    
+
     ~CronExecutionTimer() {
         auto endTime = std::chrono::steady_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(

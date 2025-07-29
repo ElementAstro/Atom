@@ -86,7 +86,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     if(GCOV_PATH)
         target_compile_options(${TEST_TARGET_NAME} PRIVATE --coverage)
         target_link_options(${TEST_TARGET_NAME} PRIVATE --coverage)
-        
+
         add_custom_target(memory_coverage
             COMMAND ${TEST_TARGET_NAME}
             COMMAND gcov ${TEST_SOURCES}
@@ -100,7 +100,7 @@ endif()
 find_program(VALGRIND_PATH valgrind)
 if(VALGRIND_PATH)
     add_custom_target(run_memory_tests_valgrind
-        COMMAND ${VALGRIND_PATH} --tool=memcheck --leak-check=full --show-leak-kinds=all 
+        COMMAND ${VALGRIND_PATH} --tool=memcheck --leak-check=full --show-leak-kinds=all
                 --track-origins=yes --verbose ${TEST_TARGET_NAME}
         DEPENDS ${TEST_TARGET_NAME}
         COMMENT "Running memory tests with Valgrind"

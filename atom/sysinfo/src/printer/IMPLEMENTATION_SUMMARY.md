@@ -14,7 +14,7 @@ The new architecture follows a clean separation of concerns:
 sysinfo_printer/
 ├── printer.hpp/cpp           # Main enhanced API
 ├── formatters/               # Component-specific formatters
-├── exporters/               # Export format implementations  
+├── exporters/               # Export format implementations
 ├── reports/                 # Report generators
 ├── utils/                   # Utility libraries
 ├── templates/               # Template files

@@ -104,7 +104,7 @@ auto getGPUInfoWindows() -> std::string {
 
 auto getDetailedGPUInfoWindows() -> std::vector<GPUInfo> {
     std::vector<GPUInfo> gpus;
-    
+
     IWbemServices* pSvc = getWMIService();
     if (!pSvc) {
         spdlog::error("Failed to get WMI service for GPU information");
@@ -112,7 +112,7 @@ auto getDetailedGPUInfoWindows() -> std::vector<GPUInfo> {
     }
 
     IEnumWbemClassObject* pEnumerator = nullptr;
-    HRESULT hr = pSvc->ExecQuery(bstr_t("WQL"), 
+    HRESULT hr = pSvc->ExecQuery(bstr_t("WQL"),
                                 bstr_t("SELECT * FROM Win32_VideoController"),
                                 WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
                                 nullptr, &pEnumerator);
@@ -177,7 +177,7 @@ auto getDetailedGPUInfoWindows() -> std::vector<GPUInfo> {
         gpu.architecture = parseGPUArchitecture(gpu.name, gpu.vendor);
 
         // Determine GPU type (simplified logic)
-        if (gpu.name.find("Intel") != std::string::npos && 
+        if (gpu.name.find("Intel") != std::string::npos &&
             gpu.name.find("UHD") != std::string::npos) {
             gpu.type = GPUType::INTEGRATED;
         } else {
@@ -214,10 +214,10 @@ auto getGPUInfoWindows(int gpuIndex) -> GPUInfo {
 auto getGPUPerformanceMetricsWindows(int gpuIndex) -> GPUPerformanceMetrics {
     GPUPerformanceMetrics metrics;
     metrics.timestamp = std::chrono::steady_clock::now();
-    
+
     // TODO: Implement performance metrics retrieval using Windows Performance Counters
     // This would require additional Windows APIs and performance counter queries
-    
+
     return metrics;
 }
 

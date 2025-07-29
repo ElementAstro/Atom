@@ -28,7 +28,7 @@ template<typename T>
 class numa_allocator {
 private:
     int numa_node_;
-    
+
 public:
     using value_type = T;
     using pointer = T*;
@@ -139,7 +139,7 @@ private:
         std::atomic<std::size_t> next_free{0};
         std::unique_ptr<chunk> next;
         int numa_node;
-        
+
         explicit chunk(int node) : numa_node(node) {}
     };
 
@@ -155,20 +155,20 @@ private:
     std::unique_ptr<chunk> allocate_chunk() {
 #ifdef ATOM_HAS_NUMA
         auto chunk_ptr = std::make_unique<chunk>(preferred_numa_node_);
-        
+
         // Bind chunk memory to NUMA node
         if (numa_available() >= 0) {
             unsigned long nodemask = 1UL << preferred_numa_node_;
-            mbind(chunk_ptr.get(), sizeof(chunk), MPOL_BIND, &nodemask, 
+            mbind(chunk_ptr.get(), sizeof(chunk), MPOL_BIND, &nodemask,
                   sizeof(nodemask) * 8, MPOL_MF_STRICT);
         }
-        
+
         spdlog::debug("Allocated new memory chunk on NUMA node {}", preferred_numa_node_);
 #else
         auto chunk_ptr = std::make_unique<chunk>(-1);
         spdlog::debug("Allocated new memory chunk (no NUMA support)");
 #endif
-        
+
         total_chunks_.get().fetch_add(1, std::memory_order_relaxed);
         return chunk_ptr;
     }
@@ -183,11 +183,11 @@ public:
             preferred_numa_node_ = numa_node_of_cpu(sched_getcpu());
         }
 #endif
-        
+
         auto initial_chunk = allocate_chunk();
         current_chunk_.get().store(initial_chunk.release(), std::memory_order_release);
-        
-        spdlog::info("NUMA memory pool initialized for type: {}, node: {}", 
+
+        spdlog::info("NUMA memory pool initialized for type: {}, node: {}",
                     typeid(T).name(), preferred_numa_node_);
     }
 
@@ -201,11 +201,11 @@ public:
             delete chunk_ptr;
             chunk_ptr = next;
         }
-        
+
         auto chunks = total_chunks_.get().load(std::memory_order_relaxed);
         auto allocated = total_allocated_.get().load(std::memory_order_relaxed);
-        
-        spdlog::info("NUMA memory pool destroyed: {} chunks, {} objects allocated", 
+
+        spdlog::info("NUMA memory pool destroyed: {} chunks, {} objects allocated",
                     chunks, allocated);
     }
 
@@ -221,37 +221,37 @@ public:
     template<typename... Args>
     T* allocate(Args&&... args) {
         auto* chunk_ptr = current_chunk_.get().load(std::memory_order_acquire);
-        
+
         while (chunk_ptr) {
             auto index = chunk_ptr->next_free.fetch_add(1, std::memory_order_acq_rel);
-            
+
             if (index < ChunkSize) {
                 // Successfully allocated from this chunk
                 auto* obj = new (&chunk_ptr->data[index]) T(std::forward<Args>(args)...);
                 total_allocated_.get().fetch_add(1, std::memory_order_relaxed);
                 return obj;
             }
-            
+
             // Chunk is full, try to allocate a new one
             adaptive_lock_guard lock(allocation_lock_);
-            
+
             // Check if another thread already allocated a new chunk
             auto* current = current_chunk_.get().load(std::memory_order_acquire);
             if (current != chunk_ptr) {
                 chunk_ptr = current;
                 continue;
             }
-            
+
             // Allocate new chunk
             auto new_chunk = allocate_chunk();
             auto* new_chunk_ptr = new_chunk.get();
-            
+
             chunk_ptr->next = std::move(new_chunk);
             current_chunk_.get().store(new_chunk_ptr, std::memory_order_release);
-            
+
             chunk_ptr = new_chunk_ptr;
         }
-        
+
         // Should never reach here
         throw std::bad_alloc();
     }
@@ -281,7 +281,7 @@ class memory_manager {
 private:
     std::unordered_map<std::thread::id, int> thread_numa_mapping_;
     reader_writer_spinlock mapping_lock_;
-    
+
     // Singleton instance
     static std::unique_ptr<memory_manager> instance_;
     static std::once_flag init_flag_;
@@ -314,7 +314,7 @@ public:
      */
     int get_optimal_numa_node() {
         auto thread_id = std::this_thread::get_id();
-        
+
         // Try read lock first
         {
             shared_lock_guard read_lock(mapping_lock_);
@@ -323,25 +323,25 @@ public:
                 return it->second;
             }
         }
-        
+
         // Need write lock to create mapping
         adaptive_lock_guard write_lock(mapping_lock_);
-        
+
         // Double-check
         auto it = thread_numa_mapping_.find(thread_id);
         if (it != thread_numa_mapping_.end()) {
             return it->second;
         }
-        
+
 #ifdef ATOM_HAS_NUMA
         int numa_node = numa_node_of_cpu(sched_getcpu());
 #else
         int numa_node = 0;
 #endif
-        
+
         thread_numa_mapping_[thread_id] = numa_node;
         spdlog::debug("Mapped thread to NUMA node {}", numa_node);
-        
+
         return numa_node;
     }
 

@@ -18,23 +18,23 @@ struct BatteryInfo {
     float batteryLifePercent = 0.0f;
     float batteryLifeTime = 0.0f;
     float batteryFullLifeTime = 0.0f;
-    
+
     // Energy information
     float energyNow = 0.0f;          // Current energy (Wh)
     float energyFull = 0.0f;         // Full charge energy (Wh)
     float energyDesign = 0.0f;       // Design energy (Wh)
     float powerNow = 0.0f;           // Current power consumption (W)
-    
+
     // Electrical properties
     float voltageNow = 0.0f;         // Current voltage (V)
     float voltageMin = 0.0f;         // Minimum voltage (V)
     float voltageMax = 0.0f;         // Maximum voltage (V)
     float currentNow = 0.0f;         // Current flow (A)
-    
+
     // Physical properties
     float temperature = 0.0f;        // Temperature (°C)
     int cycleCounts = 0;             // Charge cycles
-    
+
     // Device information
     std::string manufacturer;
     std::string model;
@@ -42,10 +42,10 @@ struct BatteryInfo {
     std::string technology;
     BatteryChemistry chemistry = BatteryChemistry::UNKNOWN;
     PowerState powerState = PowerState::UNKNOWN;
-    
+
     // Timestamps
     std::chrono::system_clock::time_point lastUpdated;
-    
+
     // Methods
     auto getBatteryHealth() const -> float;
     auto getEstimatedTimeRemaining() const -> float;
@@ -154,8 +154,8 @@ Real-time battery status monitoring.
 class BatteryMonitor {
 public:
     using BatteryCallback = std::function<void(const BatteryInfo&)>;
-    
-    static auto startMonitoring(BatteryCallback callback, 
+
+    static auto startMonitoring(BatteryCallback callback,
                                unsigned int interval_ms = 1000) -> bool;
     static void stopMonitoring();
     static auto isMonitoring() noexcept -> bool;
@@ -177,9 +177,9 @@ Advanced battery management with alerts, statistics, and data recording.
 class BatteryManager {
 public:
     using AlertCallback = std::function<void(AlertType alert, const BatteryInfo&)>;
-    
+
     static auto getInstance() -> BatteryManager&;
-    
+
     void setAlertCallback(AlertCallback callback);
     void setAlertSettings(const BatteryAlertSettings& settings);
     auto getStats() const -> const BatteryStats&;
@@ -187,7 +187,7 @@ public:
     void stopRecording();
     auto startMonitoring(unsigned int interval_ms = 10000) -> bool;
     void stopMonitoring();
-    auto getHistory(unsigned int maxEntries = 0) const 
+    auto getHistory(unsigned int maxEntries = 0) const
         -> std::vector<std::pair<std::chrono::system_clock::time_point, BatteryInfo>>;
 };
 ```

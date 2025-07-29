@@ -37,7 +37,7 @@ auto NetworkMonitor::start() -> bool {
 
     LOG_F(INFO, "Starting network monitoring");
     running_.store(true);
-    
+
     try {
         monitor_thread_ = std::make_unique<std::thread>(&NetworkMonitor::monitoringLoop, this);
         LOG_F(INFO, "Network monitoring started successfully");
@@ -56,12 +56,12 @@ void NetworkMonitor::stop() {
 
     LOG_F(INFO, "Stopping network monitoring");
     running_.store(false);
-    
+
     if (monitor_thread_ && monitor_thread_->joinable()) {
         monitor_thread_->join();
     }
     monitor_thread_.reset();
-    
+
     LOG_F(INFO, "Network monitoring stopped");
 }
 
@@ -83,10 +83,10 @@ auto NetworkMonitor::getCurrentStats() const -> NetworkStats {
 auto NetworkMonitor::getStatsHistory(std::chrono::minutes duration) const -> std::vector<TimestampedNetworkStats> {
     std::lock_guard lock(stats_mutex_);
     std::vector<TimestampedNetworkStats> result;
-    
+
     auto cutoff_time = std::chrono::steady_clock::now() - duration;
     auto temp_queue = stats_history_;
-    
+
     while (!temp_queue.empty()) {
         const auto& stats = temp_queue.front();
         if (stats.timestamp >= cutoff_time) {
@@ -94,17 +94,17 @@ auto NetworkMonitor::getStatsHistory(std::chrono::minutes duration) const -> std
         }
         temp_queue.pop();
     }
-    
+
     return result;
 }
 
 auto NetworkMonitor::getRecentEvents(std::chrono::minutes duration) const -> std::vector<NetworkEventData> {
     std::lock_guard lock(events_mutex_);
     std::vector<NetworkEventData> result;
-    
+
     auto cutoff_time = std::chrono::steady_clock::now() - duration;
     auto temp_queue = recent_events_;
-    
+
     while (!temp_queue.empty()) {
         const auto& event = temp_queue.front();
         if (event.timestamp >= cutoff_time) {
@@ -112,7 +112,7 @@ auto NetworkMonitor::getRecentEvents(std::chrono::minutes duration) const -> std
         }
         temp_queue.pop();
     }
-    
+
     return result;
 }
 
@@ -121,7 +121,7 @@ auto NetworkMonitor::getAverageStats(std::chrono::minutes duration) const -> Net
     if (history.empty()) {
         return NetworkStats{};
     }
-    
+
     NetworkStats avg{};
     for (const auto& timestamped_stats : history) {
         const auto& stats = timestamped_stats.stats;
@@ -131,14 +131,14 @@ auto NetworkMonitor::getAverageStats(std::chrono::minutes duration) const -> Net
         avg.packetLoss += stats.packetLoss;
         avg.signalStrength += stats.signalStrength;
     }
-    
+
     size_t count = history.size();
     avg.downloadSpeed /= count;
     avg.uploadSpeed /= count;
     avg.latency /= count;
     avg.packetLoss /= count;
     avg.signalStrength /= count;
-    
+
     return avg;
 }
 
@@ -147,10 +147,10 @@ auto NetworkMonitor::getPeakStats(std::chrono::minutes duration) const -> Networ
     if (history.empty()) {
         return NetworkStats{};
     }
-    
+
     NetworkStats peak{};
     bool first = true;
-    
+
     for (const auto& timestamped_stats : history) {
         const auto& stats = timestamped_stats.stats;
         if (first) {
@@ -164,7 +164,7 @@ auto NetworkMonitor::getPeakStats(std::chrono::minutes duration) const -> Networ
             peak.signalStrength = std::max(peak.signalStrength, stats.signalStrength);
         }
     }
-    
+
     return peak;
 }
 
@@ -175,14 +175,14 @@ void NetworkMonitor::clearHistory() {
             stats_history_.pop();
         }
     }
-    
+
     {
         std::lock_guard lock(events_mutex_);
         while (!recent_events_.empty()) {
             recent_events_.pop();
         }
     }
-    
+
     LOG_F(INFO, "Network monitoring history cleared");
 }
 
@@ -197,19 +197,19 @@ auto NetworkMonitor::getConfig() const -> MonitorConfig {
 
 void NetworkMonitor::monitoringLoop() {
     LOG_F(INFO, "Network monitoring loop started");
-    
+
     while (running_.load()) {
         try {
             auto current_stats = getNetworkStats();
             processStats(current_stats);
-            
+
             std::this_thread::sleep_for(config_.polling_interval);
         } catch (const std::exception& e) {
             LOG_F(ERROR, "Error in monitoring loop: {}", e.what());
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
     }
-    
+
     LOG_F(INFO, "Network monitoring loop ended");
 }
 
@@ -218,16 +218,16 @@ void NetworkMonitor::processStats(const NetworkStats& current_stats) {
         std::lock_guard lock(stats_mutex_);
         previous_stats_ = current_stats_;
         current_stats_ = current_stats;
-        
+
         // Add to history
         stats_history_.emplace(current_stats);
-        
+
         // Maintain history size limit
         while (stats_history_.size() > config_.max_history_size) {
             stats_history_.pop();
         }
     }
-    
+
     // Detect and emit events if enabled
     if (config_.enable_event_callbacks) {
         detectAndEmitEvents(current_stats, previous_stats_);
@@ -240,22 +240,22 @@ void NetworkMonitor::detectAndEmitEvents(const NetworkStats& current_stats, cons
         std::unordered_map<std::string, std::string> metadata;
         metadata["previous_signal"] = std::to_string(previous_stats.signalStrength);
         metadata["current_signal"] = std::to_string(current_stats.signalStrength);
-        
-        emitEvent(NetworkEvent::SIGNAL_STRENGTH_CHANGED, 
+
+        emitEvent(NetworkEvent::SIGNAL_STRENGTH_CHANGED,
                  "Signal strength changed significantly", metadata);
     }
-    
+
     // Check for bandwidth changes
     double bandwidth_change = std::abs(current_stats.downloadSpeed - previous_stats.downloadSpeed);
     if (bandwidth_change >= config_.bandwidth_threshold_change) {
         std::unordered_map<std::string, std::string> metadata;
         metadata["previous_download"] = std::to_string(previous_stats.downloadSpeed);
         metadata["current_download"] = std::to_string(current_stats.downloadSpeed);
-        
-        emitEvent(NetworkEvent::BANDWIDTH_CHANGED, 
+
+        emitEvent(NetworkEvent::BANDWIDTH_CHANGED,
                  "Bandwidth changed significantly", metadata);
     }
-    
+
     // Check for connection loss (high latency or no signal)
     if (current_stats.latency < 0 && previous_stats.latency >= 0) {
         emitEvent(NetworkEvent::CONNECTION_LOST, "Network connection lost");
@@ -264,25 +264,25 @@ void NetworkMonitor::detectAndEmitEvents(const NetworkStats& current_stats, cons
     }
 }
 
-void NetworkMonitor::emitEvent(NetworkEvent event_type, const std::string& description, 
+void NetworkMonitor::emitEvent(NetworkEvent event_type, const std::string& description,
                               const std::unordered_map<std::string, std::string>& metadata) {
     NetworkEventData event_data;
     event_data.event_type = event_type;
     event_data.timestamp = std::chrono::steady_clock::now();
     event_data.description = description;
     event_data.metadata = metadata;
-    
+
     // Add to recent events
     {
         std::lock_guard lock(events_mutex_);
         recent_events_.push(event_data);
-        
+
         // Maintain events queue size (keep last 1000 events)
         while (recent_events_.size() > 1000) {
             recent_events_.pop();
         }
     }
-    
+
     // Call registered callbacks
     {
         std::lock_guard lock(callbacks_mutex_);
@@ -294,7 +294,7 @@ void NetworkMonitor::emitEvent(NetworkEvent event_type, const std::string& descr
             }
         }
     }
-    
+
     LOG_F(INFO, "Network event emitted: {}", description);
 }
 

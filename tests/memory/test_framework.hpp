@@ -36,7 +36,7 @@ struct BenchmarkResult {
     size_t memory_used;
     double operations_per_second;
     std::string additional_info;
-    
+
     double getAverageTimeNs() const {
         return static_cast<double>(duration.count()) / iterations;
     }
@@ -103,7 +103,7 @@ private:
     std::atomic<size_t> failed_tests_{0};
     std::atomic<size_t> skipped_tests_{0};
     bool verbose_output_ = true;
-    
+
 public:
     /**
      * @brief Add a test case
@@ -116,7 +116,7 @@ public:
         test_case.test_function = std::move(test_func);
         test_cases_.push_back(std::move(test_case));
     }
-    
+
     /**
      * @brief Add a benchmark test
      */
@@ -128,7 +128,7 @@ public:
         test_case.benchmark_function = std::move(benchmark_func);
         test_cases_.push_back(std::move(test_case));
     }
-    
+
     /**
      * @brief Add a memory leak detection test
      */
@@ -140,7 +140,7 @@ public:
         test_case.leak_test_function = std::move(leak_func);
         test_cases_.push_back(std::move(test_case));
     }
-    
+
     /**
      * @brief Add a thread safety test
      */
@@ -152,75 +152,75 @@ public:
         test_case.thread_safety_function = std::move(thread_func);
         test_cases_.push_back(std::move(test_case));
     }
-    
+
     /**
      * @brief Run all tests
      */
     void runAllTests() {
         std::cout << "=== Memory System Test Framework ===" << std::endl;
         std::cout << "Running " << test_cases_.size() << " test cases..." << std::endl;
-        
+
         auto start_time = std::chrono::high_resolution_clock::now();
-        
+
         for (const auto& test_case : test_cases_) {
             if (!test_case.enabled) {
                 recordResult(test_case.name, TestStatus::SKIPPED, "Test disabled", {});
                 continue;
             }
-            
+
             runSingleTest(test_case);
         }
-        
+
         auto end_time = std::chrono::high_resolution_clock::now();
         auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
             end_time - start_time);
-        
+
         printSummary(total_duration);
     }
-    
+
     /**
      * @brief Get test results
      */
     const std::vector<TestResult>& getResults() const {
         return results_;
     }
-    
+
     /**
      * @brief Set verbose output
      */
     void setVerbose(bool verbose) {
         verbose_output_ = verbose;
     }
-    
+
 private:
     void runSingleTest(const TestCase& test_case) {
         if (verbose_output_) {
             std::cout << "Running: " << test_case.name << " - " << test_case.description << std::endl;
         }
-        
+
         auto start_time = std::chrono::high_resolution_clock::now();
         TestResult result;
         result.test_name = test_case.name;
         result.status = TestStatus::PASSED;
-        
+
         try {
             // Run basic test function
             if (test_case.test_function) {
                 auto test_future = std::async(std::launch::async, test_case.test_function);
                 if (test_future.wait_for(test_case.timeout) == std::future_status::timeout) {
                     result.status = TestStatus::TIMEOUT;
-                    result.error_message = "Test timed out after " + 
+                    result.error_message = "Test timed out after " +
                         std::to_string(test_case.timeout.count()) + "ms";
                 } else {
                     test_future.get(); // This will throw if the test failed
                 }
             }
-            
+
             // Run benchmark if available
             if (test_case.benchmark_function && result.status == TestStatus::PASSED) {
                 result.benchmark = test_case.benchmark_function();
             }
-            
+
             // Run leak detection if available
             if (test_case.leak_test_function && result.status == TestStatus::PASSED) {
                 result.leak_detection = test_case.leak_test_function();
@@ -228,7 +228,7 @@ private:
                     result.additional_info += "Memory leaks detected! ";
                 }
             }
-            
+
             // Run thread safety test if available
             if (test_case.thread_safety_function && result.status == TestStatus::PASSED) {
                 result.thread_safety = test_case.thread_safety_function();
@@ -236,7 +236,7 @@ private:
                     result.additional_info += "Thread safety issues detected! ";
                 }
             }
-            
+
         } catch (const std::exception& e) {
             result.status = TestStatus::FAILED;
             result.error_message = e.what();
@@ -244,22 +244,22 @@ private:
             result.status = TestStatus::FAILED;
             result.error_message = "Unknown exception occurred";
         }
-        
+
         auto end_time = std::chrono::high_resolution_clock::now();
         result.execution_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
             end_time - start_time);
-        
+
         recordResult(result);
-        
+
         if (verbose_output_) {
             printTestResult(result);
         }
     }
-    
+
     void recordResult(const TestResult& result) {
         std::lock_guard<std::mutex> lock(results_mutex_);
         results_.push_back(result);
-        
+
         switch (result.status) {
             case TestStatus::PASSED:
                 passed_tests_.fetch_add(1);
@@ -273,8 +273,8 @@ private:
                 break;
         }
     }
-    
-    void recordResult(const std::string& name, TestStatus status, 
+
+    void recordResult(const std::string& name, TestStatus status,
                      const std::string& error, std::chrono::nanoseconds duration) {
         TestResult result;
         result.test_name = name;
@@ -283,7 +283,7 @@ private:
         result.execution_time = duration;
         recordResult(result);
     }
-    
+
     void printTestResult(const TestResult& result) {
         std::string status_str;
         switch (result.status) {
@@ -292,28 +292,28 @@ private:
             case TestStatus::SKIPPED: status_str = "SKIPPED"; break;
             case TestStatus::TIMEOUT: status_str = "TIMEOUT"; break;
         }
-        
-        std::cout << "  " << status_str << " (" 
-                  << std::chrono::duration_cast<std::chrono::milliseconds>(result.execution_time).count() 
+
+        std::cout << "  " << status_str << " ("
+                  << std::chrono::duration_cast<std::chrono::milliseconds>(result.execution_time).count()
                   << "ms)";
-        
+
         if (!result.error_message.empty()) {
             std::cout << " - " << result.error_message;
         }
-        
+
         if (!result.additional_info.empty()) {
             std::cout << " - " << result.additional_info;
         }
-        
+
         std::cout << std::endl;
-        
+
         // Print benchmark results if available
         if (result.benchmark.iterations > 0) {
-            std::cout << "    Benchmark: " << result.benchmark.operations_per_second 
+            std::cout << "    Benchmark: " << result.benchmark.operations_per_second
                       << " ops/sec, avg: " << result.benchmark.getAverageTimeNs() << "ns" << std::endl;
         }
     }
-    
+
     void printSummary(std::chrono::milliseconds total_duration) {
         std::cout << "\n=== Test Summary ===" << std::endl;
         std::cout << "Total tests: " << test_cases_.size() << std::endl;
@@ -321,7 +321,7 @@ private:
         std::cout << "Failed: " << failed_tests_.load() << std::endl;
         std::cout << "Skipped: " << skipped_tests_.load() << std::endl;
         std::cout << "Total time: " << total_duration.count() << "ms" << std::endl;
-        
+
         if (failed_tests_.load() == 0) {
             std::cout << "All tests PASSED! ✅" << std::endl;
         } else {

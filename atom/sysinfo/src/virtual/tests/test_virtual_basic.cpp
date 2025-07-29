@@ -12,7 +12,7 @@ protected:
     void SetUp() override {
         // Setup test environment
     }
-    
+
     void TearDown() override {
         // Cleanup test environment
     }
@@ -21,7 +21,7 @@ protected:
 // Test basic virtualization detection
 TEST_F(VirtualDetectionTest, BasicVirtualizationDetection) {
     VirtualizationDetector detector;
-    
+
     // Test that detection doesn't crash
     EXPECT_NO_THROW({
         auto info = detector.detect();
@@ -37,17 +37,17 @@ TEST_F(VirtualDetectionTest, IndividualDetectionMethods) {
         bool result = detection::cpuid::isHypervisorPresent();
         // Result can be true or false, just ensure it doesn't crash
     });
-    
+
     // Test BIOS detection
     EXPECT_NO_THROW({
         bool result = detection::bios::checkBIOSInfo();
     });
-    
+
     // Test hardware detection
     EXPECT_NO_THROW({
         bool result = detection::hardware::checkNetworkAdapters();
     });
-    
+
     // Test process detection
     EXPECT_NO_THROW({
         bool result = detection::processes::checkVirtualizationProcesses();
@@ -60,13 +60,13 @@ TEST_F(VirtualDetectionTest, HypervisorDetection) {
         auto vendor = hypervisor::getHypervisorVendor();
         auto type = hypervisor::detectHypervisorType();
         auto info = hypervisor::getHypervisorInfo();
-        
+
         // Vendor can be empty if no hypervisor
         EXPECT_GE(vendor.length(), 0);
-        
+
         // Type should be valid enum value
         EXPECT_NE(hypervisor::hypervisorTypeToString(type), "");
-        
+
         // Info should have valid confidence
         EXPECT_GE(info.detection_confidence, 0.0);
         EXPECT_LE(info.detection_confidence, 1.0);
@@ -80,12 +80,12 @@ TEST_F(VirtualDetectionTest, ContainerDetection) {
         auto containerType = container::detectContainerType();
         auto containerRuntime = container::detectContainerRuntime();
         auto containerInfo = container::getContainerInfo();
-        
+
         // If container is detected, type should not be unknown
         if (isContainer) {
             EXPECT_NE(containerType, container::ContainerType::UNKNOWN);
         }
-        
+
         // Container info should have valid confidence
         EXPECT_GE(containerInfo.detection_confidence, 0.0);
         EXPECT_LE(containerInfo.detection_confidence, 1.0);
@@ -97,11 +97,11 @@ TEST_F(VirtualDetectionTest, PlatformSpecificDetection) {
     EXPECT_NO_THROW({
         std::string platformName = platform::getPlatformName();
         EXPECT_FALSE(platformName.empty());
-        
+
         bool isWindows = platform::isWindows();
         bool isLinux = platform::isLinux();
         bool isMacOS = platform::isMacOS();
-        
+
         // Exactly one platform should be true
         int platformCount = (isWindows ? 1 : 0) + (isLinux ? 1 : 0) + (isMacOS ? 1 : 0);
         EXPECT_EQ(platformCount, 1);
@@ -116,19 +116,19 @@ TEST_F(VirtualDetectionTest, UtilityFunctions) {
     EXPECT_TRUE(containsVMKeywords("QEMU"));
     EXPECT_FALSE(containsVMKeywords("Dell Inc."));
     EXPECT_FALSE(containsVMKeywords("HP"));
-    
+
     // Test container keyword detection
     EXPECT_TRUE(containsContainerKeywords("docker"));
     EXPECT_TRUE(containsContainerKeywords("lxc"));
     EXPECT_TRUE(containsContainerKeywords("kubepods"));
     EXPECT_FALSE(containsContainerKeywords("systemd"));
-    
+
     // Test cloud keyword detection
     EXPECT_TRUE(containsCloudKeywords("amazon"));
     EXPECT_TRUE(containsCloudKeywords("google"));
     EXPECT_TRUE(containsCloudKeywords("azure"));
     EXPECT_FALSE(containsCloudKeywords("local"));
-    
+
     // Test string utilities
     EXPECT_EQ(toLowercase("HELLO"), "hello");
     EXPECT_EQ(toLowercase("MiXeD"), "mixed");
@@ -142,7 +142,7 @@ TEST_F(VirtualDetectionTest, ConfidenceCalculation) {
         {"Method2", false, 0.0, "Test method 2", {}},
         {"Method3", true, 0.6, "Test method 3", {}}
     };
-    
+
     double confidence = calculateConfidenceScore(results);
     EXPECT_GE(confidence, 0.0);
     EXPECT_LE(confidence, 1.0);
@@ -151,7 +151,7 @@ TEST_F(VirtualDetectionTest, ConfidenceCalculation) {
 // Test detection report generation
 TEST_F(VirtualDetectionTest, DetectionReport) {
     VirtualizationDetector detector;
-    
+
     EXPECT_NO_THROW({
         std::string report = detector.getDetectionReport();
         EXPECT_FALSE(report.empty());
@@ -162,10 +162,10 @@ TEST_F(VirtualDetectionTest, DetectionReport) {
 // Test method enabling/disabling
 TEST_F(VirtualDetectionTest, MethodControl) {
     VirtualizationDetector detector;
-    
+
     auto methods = detector.getAvailableDetectionMethods();
     EXPECT_FALSE(methods.empty());
-    
+
     // Test enabling/disabling methods
     for (const auto& method : methods) {
         EXPECT_NO_THROW({
@@ -183,7 +183,7 @@ TEST_F(VirtualDetectionTest, GlobalFunctions) {
         std::string virtType = getVirtualizationType();
         std::string containerType = getContainerType();
         auto info = getVirtualizationInfo();
-        
+
         // Functions should not crash and return valid data
         EXPECT_GE(virtType.length(), 0);
         EXPECT_GE(containerType.length(), 0);
@@ -195,12 +195,12 @@ TEST_F(VirtualDetectionTest, GlobalFunctions) {
 // Test error handling
 TEST_F(VirtualDetectionTest, ErrorHandling) {
     VirtualizationDetector detector;
-    
+
     // Test with invalid method name
     EXPECT_NO_THROW({
         detector.setDetectionMethod("InvalidMethod", true);
     });
-    
+
     // Test multiple detections
     EXPECT_NO_THROW({
         for (int i = 0; i < 5; ++i) {

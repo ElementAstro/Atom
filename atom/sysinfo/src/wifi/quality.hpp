@@ -174,8 +174,8 @@ private:
      * @param signal_quality Signal quality score
      * @return Overall quality score (0.0 to 1.0)
      */
-    ATOM_NODISCARD static auto calculateOverallQuality(double jitter, double packet_loss, 
-                                                       double throughput, double stability, 
+    ATOM_NODISCARD static auto calculateOverallQuality(double jitter, double packet_loss,
+                                                       double throughput, double stability,
                                                        double signal_quality) -> double;
 
     /**
@@ -264,11 +264,11 @@ private:
     std::chrono::seconds assessment_interval_;
     std::atomic<bool> running_{false};
     std::unique_ptr<std::thread> monitor_thread_;
-    
+
     mutable std::mutex metrics_mutex_;
     std::vector<QualityMetrics> quality_history_;
     std::optional<QualityMetrics> latest_metrics_;
-    
+
     std::function<void(const QualityMetrics&, QualityLevel)> alert_callback_;
     QualityLevel alert_threshold_{QualityLevel::POOR};
 };

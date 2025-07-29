@@ -21,19 +21,19 @@ CronScheduler::~CronScheduler() {
 
 auto CronScheduler::start() -> bool {
     std::lock_guard<std::mutex> lock(scheduler_mutex_);
-    
+
     if (running_.load()) {
         spdlog::warn("CronScheduler is already running");
         return true;
     }
-    
+
     try {
         running_.store(true);
         scheduler_thread_ = std::thread(&CronScheduler::schedulerLoop, this);
-        
+
         spdlog::info("CronScheduler started successfully");
         return true;
-        
+
     } catch (const std::exception& e) {
         running_.store(false);
         spdlog::error("Failed to start CronScheduler: {}", e.what());
@@ -47,15 +47,15 @@ void CronScheduler::stop() {
         if (!running_.load()) {
             return;
         }
-        
+
         running_.store(false);
         scheduler_cv_.notify_all();
     }
-    
+
     if (scheduler_thread_.joinable()) {
         scheduler_thread_.join();
     }
-    
+
     spdlog::info("CronScheduler stopped");
 }
 
@@ -68,57 +68,57 @@ auto CronScheduler::addJob(std::shared_ptr<CronJob> job, const ScheduleConfig& c
         spdlog::error("Cannot add null job to scheduler");
         return false;
     }
-    
+
     std::lock_guard<std::mutex> lock(scheduler_mutex_);
-    
+
     std::string job_id = job->getId();
-    
+
     // Check if job already exists
     if (jobs_.find(job_id) != jobs_.end()) {
         spdlog::warn("Job {} already exists in scheduler", job_id);
         return false;
     }
-    
+
     // Add job and configuration
     jobs_[job_id] = job;
     job_schedules_[job_id] = config;
-    
+
     // Calculate initial next execution time
     auto next_time = calculateNextExecution(job_id);
     if (next_time.has_value()) {
         next_executions_[job_id] = next_time.value();
     }
-    
+
     spdlog::info("Added job {} to scheduler with pattern {}", job_id, static_cast<int>(config.pattern));
     scheduler_cv_.notify_one();
-    
+
     return true;
 }
 
 auto CronScheduler::removeJob(const std::string& job_id) -> bool {
     std::lock_guard<std::mutex> lock(scheduler_mutex_);
-    
+
     auto job_it = jobs_.find(job_id);
     if (job_it == jobs_.end()) {
         spdlog::warn("Job {} not found in scheduler", job_id);
         return false;
     }
-    
+
     // Remove from all data structures
     jobs_.erase(job_it);
     job_schedules_.erase(job_id);
     next_executions_.erase(job_id);
     job_completions_.erase(job_id);
-    
+
     // Remove dependencies involving this job
     dependencies_.erase(
         std::remove_if(dependencies_.begin(), dependencies_.end(),
                       [&job_id](const JobDependency& dep) {
-                          return dep.dependent_job_id == job_id || 
+                          return dep.dependent_job_id == job_id ||
                                  dep.prerequisite_job_id == job_id;
                       }),
         dependencies_.end());
-    
+
     // Remove conditions for this job
     auto cond_it = conditions_.begin();
     while (cond_it != conditions_.end()) {
@@ -128,23 +128,23 @@ auto CronScheduler::removeJob(const std::string& job_id) -> bool {
             ++cond_it;
         }
     }
-    
+
     spdlog::info("Removed job {} from scheduler", job_id);
     return true;
 }
 
 auto CronScheduler::updateJobSchedule(const std::string& job_id, const ScheduleConfig& config) -> bool {
     std::lock_guard<std::mutex> lock(scheduler_mutex_);
-    
+
     auto job_it = jobs_.find(job_id);
     if (job_it == jobs_.end()) {
         spdlog::warn("Job {} not found in scheduler", job_id);
         return false;
     }
-    
+
     // Update configuration
     job_schedules_[job_id] = config;
-    
+
     // Recalculate next execution time
     auto next_time = calculateNextExecution(job_id);
     if (next_time.has_value()) {
@@ -152,108 +152,108 @@ auto CronScheduler::updateJobSchedule(const std::string& job_id, const ScheduleC
     } else {
         next_executions_.erase(job_id);
     }
-    
+
     spdlog::info("Updated schedule for job {} with pattern {}", job_id, static_cast<int>(config.pattern));
     scheduler_cv_.notify_one();
-    
+
     return true;
 }
 
 auto CronScheduler::addDependency(const JobDependency& dependency) -> bool {
     std::lock_guard<std::mutex> lock(scheduler_mutex_);
-    
+
     // Validate that both jobs exist
     if (jobs_.find(dependency.dependent_job_id) == jobs_.end() ||
         jobs_.find(dependency.prerequisite_job_id) == jobs_.end()) {
         spdlog::error("Cannot add dependency: one or both jobs do not exist");
         return false;
     }
-    
+
     // Check for circular dependencies (simplified check)
     for (const auto& dep : dependencies_) {
         if (dep.dependent_job_id == dependency.prerequisite_job_id &&
             dep.prerequisite_job_id == dependency.dependent_job_id) {
-            spdlog::error("Circular dependency detected between {} and {}", 
+            spdlog::error("Circular dependency detected between {} and {}",
                          dependency.dependent_job_id, dependency.prerequisite_job_id);
             return false;
         }
     }
-    
+
     dependencies_.push_back(dependency);
-    spdlog::info("Added dependency: {} depends on {} (type: {})", 
-                dependency.dependent_job_id, dependency.prerequisite_job_id, 
+    spdlog::info("Added dependency: {} depends on {} (type: {})",
+                dependency.dependent_job_id, dependency.prerequisite_job_id,
                 static_cast<int>(dependency.type));
-    
+
     return true;
 }
 
-auto CronScheduler::removeDependency(const std::string& dependent_job_id, 
+auto CronScheduler::removeDependency(const std::string& dependent_job_id,
                                     const std::string& prerequisite_job_id) -> bool {
     std::lock_guard<std::mutex> lock(scheduler_mutex_);
-    
+
     auto it = std::find_if(dependencies_.begin(), dependencies_.end(),
                           [&](const JobDependency& dep) {
                               return dep.dependent_job_id == dependent_job_id &&
                                      dep.prerequisite_job_id == prerequisite_job_id;
                           });
-    
+
     if (it != dependencies_.end()) {
         dependencies_.erase(it);
-        spdlog::info("Removed dependency: {} no longer depends on {}", 
+        spdlog::info("Removed dependency: {} no longer depends on {}",
                     dependent_job_id, prerequisite_job_id);
         return true;
     }
-    
+
     spdlog::warn("Dependency not found: {} -> {}", dependent_job_id, prerequisite_job_id);
     return false;
 }
 
 auto CronScheduler::getJobDependencies(const std::string& job_id) -> std::vector<JobDependency> {
     std::lock_guard<std::mutex> lock(scheduler_mutex_);
-    
+
     std::vector<JobDependency> result;
     std::copy_if(dependencies_.begin(), dependencies_.end(), std::back_inserter(result),
                 [&job_id](const JobDependency& dep) {
                     return dep.dependent_job_id == job_id;
                 });
-    
+
     return result;
 }
 
 auto CronScheduler::addCondition(const ExecutionCondition& condition) -> bool {
     std::lock_guard<std::mutex> lock(scheduler_mutex_);
-    
+
     // Validate that the job exists
     if (jobs_.find(condition.job_id) == jobs_.end()) {
         spdlog::error("Cannot add condition: job {} does not exist", condition.job_id);
         return false;
     }
-    
+
     conditions_[condition.condition_id] = condition;
-    spdlog::info("Added execution condition {} for job {}", 
+    spdlog::info("Added execution condition {} for job {}",
                 condition.condition_id, condition.job_id);
-    
+
     return true;
 }
 
 auto CronScheduler::removeCondition(const std::string& condition_id) -> bool {
     std::lock_guard<std::mutex> lock(scheduler_mutex_);
-    
+
     auto it = conditions_.find(condition_id);
     if (it != conditions_.end()) {
-        spdlog::info("Removed execution condition {} for job {}", 
+        spdlog::info("Removed execution condition {} for job {}",
                     condition_id, it->second.job_id);
         conditions_.erase(it);
         return true;
     }
-    
+
     spdlog::warn("Condition {} not found", condition_id);
     return false;
 }
 
 auto CronScheduler::evaluateConditions(const std::string& job_id) -> bool {
     std::lock_guard<std::mutex> lock(scheduler_mutex_);
-    
+
     for (const auto& [condition_id, condition] : conditions_) {
         if (condition.job_id == job_id && condition.is_enabled) {
             try {
@@ -267,15 +267,15 @@ auto CronScheduler::evaluateConditions(const std::string& job_id) -> bool {
             }
         }
     }
-    
+
     return true;
 }
 
 void CronScheduler::setDefaultTimezone(const TimezoneInfo& timezone) {
     std::lock_guard<std::mutex> lock(scheduler_mutex_);
     default_timezone_ = timezone;
-    spdlog::info("Set default timezone to {} (UTC{}{})", 
-                timezone.timezone_id, 
+    spdlog::info("Set default timezone to {} (UTC{}{})",
+                timezone.timezone_id,
                 timezone.utc_offset_minutes >= 0 ? "+" : "",
                 timezone.utc_offset_minutes / 60);
 }

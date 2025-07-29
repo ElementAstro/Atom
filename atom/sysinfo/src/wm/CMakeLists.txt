@@ -31,7 +31,7 @@ elseif(APPLE)
     find_library(CORE_GRAPHICS_FRAMEWORK CoreGraphics)
     find_library(CORE_FOUNDATION_FRAMEWORK CoreFoundation)
     find_library(APPLICATION_SERVICES_FRAMEWORK ApplicationServices)
-    set(PLATFORM_LIBS 
+    set(PLATFORM_LIBS
         ${CORE_GRAPHICS_FRAMEWORK}
         ${CORE_FOUNDATION_FRAMEWORK}
         ${APPLICATION_SERVICES_FRAMEWORK}

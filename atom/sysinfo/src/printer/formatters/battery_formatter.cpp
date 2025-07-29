@@ -16,49 +16,49 @@ auto BatteryFormatter::format(const BatteryInfo& info) const -> std::string {
 
 auto BatteryFormatter::format(const BatteryInfo& info, const std::string& title) const -> std::string {
     std::stringstream ss;
-    
+
     ss << createTableHeader(title);
-    
+
     // Battery presence
     ss << createTableRow("Battery Present", info.isBatteryPresent ? "Yes" : "No");
-    
+
     if (!info.isBatteryPresent) {
         ss << createTableFooter();
         return addTimestamp(ss.str());
     }
-    
+
     // Charging status
     ss << createTableRow("Charging Status", formatChargingStatus(info.isCharging));
-    
+
     // Battery level
     ss << createTableRow("Battery Level", formatLevelWithColor(info.batteryLifePercent));
-    
+
     // Battery level visualization for detailed styles
     if (options_.style == FormatterStyle::DETAILED || options_.style == FormatterStyle::VERBOSE) {
         ss << createTableRow("Level Visualization", createBatteryLevelBar(info.batteryLifePercent, 25));
-        
+
         // Add battery icon
         if (options_.style == FormatterStyle::VERBOSE) {
             ss << createTableRow("Status Icon", getBatteryIcon(info.batteryLifePercent, info.isCharging));
         }
     }
-    
+
     // Time remaining
     if (info.batteryLifeTime > 0) {
         ss << createTableRow("Time Remaining", formatTimeDuration(info.batteryLifeTime));
     }
-    
+
     // Battery health
     float health = info.getBatteryHealth();
     if (health > 0) {
         ss << createTableRow("Battery Health", formatHealthWithColor(health));
     }
-    
+
     // Temperature
     if (info.temperature > 0) {
         ss << createTableRow("Temperature", formatTemperatureWithColor(info.temperature));
     }
-    
+
     // Additional details for verbose style
     if (options_.style == FormatterStyle::VERBOSE) {
         if (!info.manufacturer.empty()) {
@@ -74,9 +74,9 @@ auto BatteryFormatter::format(const BatteryInfo& info, const std::string& title)
             ss << createTableRow("Cycle Count", std::to_string(info.cycleCounts));
         }
     }
-    
+
     ss << createTableFooter();
-    
+
     return addTimestamp(ss.str());
 }
 
@@ -84,74 +84,74 @@ auto BatteryFormatter::formatBasic(const BatteryInfo& info) const -> std::string
     if (!info.isBatteryPresent) {
         return "No battery present";
     }
-    
+
     std::string status = info.isCharging ? "Charging" : "Discharging";
-    return std::format("{}% ({})", 
-                      static_cast<int>(info.batteryLifePercent), 
+    return std::format("{}% ({})",
+                      static_cast<int>(info.batteryLifePercent),
                       status);
 }
 
 auto BatteryFormatter::formatHealth(const BatteryInfo& info) const -> std::string {
     std::stringstream ss;
-    
+
     ss << createTableHeader("Battery Health");
-    
+
     if (!info.isBatteryPresent) {
         ss << createTableRow("Status", "No battery present");
         ss << createTableFooter();
         return ss.str();
     }
-    
+
     float health = info.getBatteryHealth();
     ss << createTableRow("Health", formatHealthWithColor(health));
-    
+
     if (info.cycleCounts > 0) {
         ss << createTableRow("Cycle Count", std::to_string(info.cycleCounts));
     }
-    
+
     if (info.energyDesign > 0 && info.energyFull > 0) {
         float designCapacity = (info.energyFull / info.energyDesign) * 100.0f;
         ss << createTableRow("Design Capacity", formatPercentage(designCapacity));
     }
-    
+
     ss << createTableFooter();
-    
+
     return ss.str();
 }
 
 auto BatteryFormatter::formatPower(const BatteryInfo& info) const -> std::string {
     std::stringstream ss;
-    
+
     ss << createTableHeader("Battery Power Information");
-    
+
     if (!info.isBatteryPresent) {
         ss << createTableRow("Status", "No battery present");
         ss << createTableFooter();
         return ss.str();
     }
-    
+
     if (info.voltageNow > 0) {
         ss << createTableRow("Voltage", formatWithUnits(info.voltageNow, "V"));
     }
-    
+
     if (info.currentNow > 0) {
         ss << createTableRow("Current", formatWithUnits(info.currentNow, "A"));
     }
-    
+
     if (info.energyNow > 0) {
         ss << createTableRow("Current Energy", formatWithUnits(info.energyNow, "Wh"));
     }
-    
+
     if (info.energyFull > 0) {
         ss << createTableRow("Full Energy", formatWithUnits(info.energyFull, "Wh"));
     }
-    
+
     if (info.energyDesign > 0) {
         ss << createTableRow("Design Energy", formatWithUnits(info.energyDesign, "Wh"));
     }
-    
+
     ss << createTableFooter();
-    
+
     return ss.str();
 }
 
@@ -204,10 +204,10 @@ auto BatteryFormatter::createBatteryLevelBar(float level, int width) const -> st
         int filled = static_cast<int>((level / 100.0) * width);
         return "[" + std::string(filled, '#') + std::string(width - filled, '-') + "]";
     }
-    
+
     int filled = static_cast<int>((level / 100.0) * width);
     std::string bar = "[";
-    
+
     for (int i = 0; i < width; ++i) {
         if (i < filled) {
             if (level > 50) {
@@ -221,7 +221,7 @@ auto BatteryFormatter::createBatteryLevelBar(float level, int width) const -> st
             bar += "░";
         }
     }
-    
+
     bar += "]";
     return bar;
 }
@@ -230,11 +230,11 @@ auto BatteryFormatter::formatTimeDuration(float minutes) const -> std::string {
     if (minutes <= 0) {
         return "Unknown";
     }
-    
+
     int totalMinutes = static_cast<int>(std::round(minutes));
     int hours = totalMinutes / 60;
     int mins = totalMinutes % 60;
-    
+
     if (hours > 0) {
         return std::format("{}h {}m", hours, mins);
     } else {
@@ -246,7 +246,7 @@ auto BatteryFormatter::getBatteryIcon(float level, bool isCharging) const -> std
     if (isCharging) {
         return "🔌";
     }
-    
+
     if (level > 75) return "🔋";
     if (level > 50) return "🔋";
     if (level > 25) return "🪫";

@@ -44,14 +44,14 @@ struct ErrorContext {
     int line;
     std::chrono::system_clock::time_point timestamp;
     std::unordered_map<std::string, std::string> additionalInfo;
-    
+
     ErrorContext(const std::string& func = "", const std::string& f = "", int l = 0)
         : function(func), file(f), line(l), timestamp(std::chrono::system_clock::now()) {}
-    
+
     void addInfo(const std::string& key, const std::string& value) {
         additionalInfo[key] = value;
     }
-    
+
     std::string toString() const;
 };
 
@@ -60,25 +60,25 @@ struct ErrorContext {
  */
 class ShortcutDetectorException : public std::exception {
 public:
-    ShortcutDetectorException(const std::string& message, 
+    ShortcutDetectorException(const std::string& message,
                              ErrorSeverity severity = ErrorSeverity::Error,
                              ErrorCategory category = ErrorCategory::Logic,
                              const ErrorContext& context = ErrorContext());
-    
+
     virtual ~ShortcutDetectorException() noexcept = default;
-    
+
     const char* what() const noexcept override;
-    
+
     ErrorSeverity getSeverity() const noexcept { return severity_; }
     ErrorCategory getCategory() const noexcept { return category_; }
     const ErrorContext& getContext() const noexcept { return context_; }
     const std::string& getMessage() const noexcept { return message_; }
-    
+
     /**
      * @brief Get detailed error information
      */
     std::string getDetailedMessage() const;
-    
+
     /**
      * @brief Get error code (derived from category and severity)
      */
@@ -97,10 +97,10 @@ protected:
  */
 class SystemException : public ShortcutDetectorException {
 public:
-    SystemException(const std::string& message, 
+    SystemException(const std::string& message,
                    const ErrorContext& context = ErrorContext(),
                    int systemErrorCode = 0);
-    
+
     int getSystemErrorCode() const noexcept { return systemErrorCode_; }
     std::string getSystemErrorMessage() const;
 
@@ -117,7 +117,7 @@ public:
                        const std::string& fieldName = "",
                        const std::string& fieldValue = "",
                        const ErrorContext& context = ErrorContext());
-    
+
     const std::string& getFieldName() const noexcept { return fieldName_; }
     const std::string& getFieldValue() const noexcept { return fieldValue_; }
 
@@ -134,7 +134,7 @@ public:
     ConfigurationException(const std::string& message,
                           const std::string& configKey = "",
                           const ErrorContext& context = ErrorContext());
-    
+
     const std::string& getConfigKey() const noexcept { return configKey_; }
 
 private:
@@ -149,7 +149,7 @@ public:
     PermissionException(const std::string& message,
                        const std::string& requiredPermission = "",
                        const ErrorContext& context = ErrorContext());
-    
+
     const std::string& getRequiredPermission() const noexcept { return requiredPermission_; }
 
 private:
@@ -165,7 +165,7 @@ public:
                      const std::string& resourceType = "",
                      const std::string& resourceId = "",
                      const ErrorContext& context = ErrorContext());
-    
+
     const std::string& getResourceType() const noexcept { return resourceType_; }
     const std::string& getResourceId() const noexcept { return resourceId_; }
 
@@ -180,18 +180,18 @@ private:
 class ErrorRecoveryStrategy {
 public:
     virtual ~ErrorRecoveryStrategy() = default;
-    
+
     /**
      * @brief Attempt to recover from the error
      * @return true if recovery was successful, false otherwise
      */
     virtual bool recover(const ShortcutDetectorException& error) = 0;
-    
+
     /**
      * @brief Get description of the recovery strategy
      */
     virtual std::string getDescription() const = 0;
-    
+
     /**
      * @brief Check if this strategy can handle the given error
      */
@@ -204,35 +204,35 @@ public:
 class ErrorHandler {
 public:
     using ErrorCallback = std::function<void(const ShortcutDetectorException&)>;
-    
+
     ErrorHandler();
     ~ErrorHandler();
-    
+
     /**
      * @brief Handle an exception
      */
     void handleError(const ShortcutDetectorException& error);
-    
+
     /**
      * @brief Register error callback
      */
     void registerCallback(ErrorSeverity severity, ErrorCallback callback);
-    
+
     /**
      * @brief Register recovery strategy
      */
     void registerRecoveryStrategy(std::unique_ptr<ErrorRecoveryStrategy> strategy);
-    
+
     /**
      * @brief Enable/disable automatic recovery
      */
     void setAutoRecovery(bool enabled) { autoRecovery_ = enabled; }
-    
+
     /**
      * @brief Set maximum recovery attempts
      */
     void setMaxRecoveryAttempts(int maxAttempts) { maxRecoveryAttempts_ = maxAttempts; }
-    
+
     /**
      * @brief Get error statistics
      */
@@ -242,9 +242,9 @@ public:
         size_t criticalErrors = 0;
         std::chrono::system_clock::time_point lastError;
     };
-    
+
     ErrorStats getErrorStats() const;
-    
+
     /**
      * @brief Clear error statistics
      */
@@ -256,7 +256,7 @@ private:
     bool autoRecovery_;
     int maxRecoveryAttempts_;
     ErrorStats stats_;
-    
+
     bool attemptRecovery(const ShortcutDetectorException& error);
 };
 
@@ -267,9 +267,9 @@ class ErrorContextManager {
 public:
     ErrorContextManager(const std::string& function, const std::string& file, int line);
     ~ErrorContextManager();
-    
+
     void addContext(const std::string& key, const std::string& value);
-    
+
     static ErrorContext getCurrentContext();
 
 private:
@@ -318,17 +318,17 @@ namespace error_utils {
      * @brief Convert error severity to string
      */
     std::string severityToString(ErrorSeverity severity);
-    
+
     /**
      * @brief Convert error category to string
      */
     std::string categoryToString(ErrorCategory category);
-    
+
     /**
      * @brief Get system error message from error code
      */
     std::string getSystemErrorMessage(int errorCode);
-    
+
     /**
      * @brief Format error message with context
      */

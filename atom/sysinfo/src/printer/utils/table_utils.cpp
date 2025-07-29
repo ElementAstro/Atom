@@ -39,18 +39,18 @@ auto TableBuilder::build() const -> std::string {
     if (columns_.empty()) {
         return "";
     }
-    
+
     // Make a copy to calculate widths
     auto builder = *this;
     builder.calculateColumnWidths();
-    
+
     std::stringstream ss;
-    
+
     // Top border
     if (options_.showBorders) {
         ss << builder.formatBorder(true) << "\n";
     }
-    
+
     // Header
     if (options_.showHeaders) {
         ss << builder.formatHeader() << "\n";
@@ -58,7 +58,7 @@ auto TableBuilder::build() const -> std::string {
             ss << builder.formatBorder(false) << "\n";
         }
     }
-    
+
     // Rows
     for (size_t i = 0; i < rows_.size(); ++i) {
         if (separatorRows_[i]) {
@@ -69,12 +69,12 @@ auto TableBuilder::build() const -> std::string {
             ss << builder.formatRow(rows_[i]) << "\n";
         }
     }
-    
+
     // Bottom border
     if (options_.showBorders) {
         ss << builder.formatBorder(true) << "\n";
     }
-    
+
     return ss.str();
 }
 
@@ -87,13 +87,13 @@ auto TableBuilder::clear() -> TableBuilder& {
 
 void TableBuilder::calculateColumnWidths() {
     if (columns_.empty()) return;
-    
+
     // Calculate content widths
     for (auto& column : columns_) {
         if (column.autoSize) {
             // Start with header width
             column.width = static_cast<int>(column.header.length());
-            
+
             // Check all rows for this column
             size_t colIndex = &column - &columns_[0];
             for (const auto& row : rows_) {
@@ -101,33 +101,33 @@ void TableBuilder::calculateColumnWidths() {
                     column.width = std::max(column.width, static_cast<int>(row[colIndex].length()));
                 }
             }
-            
+
             // Add padding
             column.width += 2;
         }
     }
-    
+
     // Adjust for total width if needed
     int totalUsed = 0;
     int autoColumns = 0;
-    
+
     for (const auto& column : columns_) {
         totalUsed += column.width;
         if (column.autoSize) {
             autoColumns++;
         }
     }
-    
+
     // Add border characters
     if (options_.showBorders) {
         totalUsed += static_cast<int>(columns_.size()) + 1;
     }
-    
+
     // Adjust if exceeding total width
     if (totalUsed > options_.totalWidth && autoColumns > 0) {
         int excess = totalUsed - options_.totalWidth;
         int reduction = excess / autoColumns;
-        
+
         for (auto& column : columns_) {
             if (column.autoSize && column.width > reduction + 5) {
                 column.width -= reduction;
@@ -140,29 +140,29 @@ auto TableBuilder::formatRow(const std::vector<std::string>& cells, bool isSepar
     if (isSeparator) {
         return formatBorder(false);
     }
-    
+
     std::stringstream ss;
     auto borderChars = getBorderChars();
-    
+
     if (options_.showBorders) {
         ss << borderChars["vertical"];
     }
-    
+
     for (size_t i = 0; i < columns_.size(); ++i) {
         std::string cellContent = (i < cells.size()) ? cells[i] : "";
         std::string formatted = alignText(cellContent, columns_[i].width, columns_[i].alignment);
-        
+
         ss << options_.padding << formatted << options_.padding;
-        
+
         if (options_.showBorders && i < columns_.size() - 1) {
             ss << borderChars["vertical"];
         }
     }
-    
+
     if (options_.showBorders) {
         ss << borderChars["vertical"];
     }
-    
+
     return ss.str();
 }
 
@@ -177,15 +177,15 @@ auto TableBuilder::formatHeader() const -> std::string {
 auto TableBuilder::formatBorder(bool isTop) const -> std::string {
     auto borderChars = getBorderChars();
     std::stringstream ss;
-    
+
     // Corner character
     ss << (isTop ? borderChars["top_left"] : borderChars["bottom_left"]);
-    
+
     for (size_t i = 0; i < columns_.size(); ++i) {
         // Horizontal line
         int lineWidth = columns_[i].width + 2 * static_cast<int>(options_.padding.length());
         ss << std::string(lineWidth, borderChars["horizontal"][0]);
-        
+
         // Junction or corner
         if (i < columns_.size() - 1) {
             ss << (isTop ? borderChars["top_junction"] : borderChars["bottom_junction"]);
@@ -193,7 +193,7 @@ auto TableBuilder::formatBorder(bool isTop) const -> std::string {
             ss << (isTop ? borderChars["top_right"] : borderChars["bottom_right"]);
         }
     }
-    
+
     return ss.str();
 }
 
@@ -201,9 +201,9 @@ auto TableBuilder::alignText(const std::string& text, int width, Alignment align
     if (static_cast<int>(text.length()) >= width) {
         return text.substr(0, width);
     }
-    
+
     int padding = width - static_cast<int>(text.length());
-    
+
     switch (alignment) {
         case Alignment::LEFT:
             return text + std::string(padding, ' ');
@@ -253,7 +253,7 @@ auto createSimpleTable(const std::string& title,
                       const std::unordered_map<std::string, std::string>& data,
                       const TableOptions& options) -> std::string {
     TableBuilder builder(options);
-    
+
     if (!title.empty()) {
         builder.addColumn(title, 0, Alignment::LEFT)
                .addColumn("Value", 0, Alignment::LEFT);
@@ -261,11 +261,11 @@ auto createSimpleTable(const std::string& title,
         builder.addColumn("Property", 0, Alignment::LEFT)
                .addColumn("Value", 0, Alignment::LEFT);
     }
-    
+
     for (const auto& [key, value] : data) {
         builder.addRow({key, value});
     }
-    
+
     return builder.build();
 }
 
@@ -273,15 +273,15 @@ auto createTable(const std::vector<std::string>& headers,
                 const std::vector<std::vector<std::string>>& rows,
                 const TableOptions& options) -> std::string {
     TableBuilder builder(options);
-    
+
     for (const auto& header : headers) {
         builder.addColumn(header);
     }
-    
+
     for (const auto& row : rows) {
         builder.addRow(row);
     }
-    
+
     return builder.build();
 }
 
@@ -289,9 +289,9 @@ auto formatText(const std::string& text, int width, Alignment alignment, char pa
     if (static_cast<int>(text.length()) >= width) {
         return text.substr(0, width);
     }
-    
+
     int padSize = width - static_cast<int>(text.length());
-    
+
     switch (alignment) {
         case Alignment::LEFT:
             return text + std::string(padSize, padding);
@@ -311,11 +311,11 @@ auto truncateText(const std::string& text, int width, const std::string& ellipsi
     if (static_cast<int>(text.length()) <= width) {
         return text;
     }
-    
+
     if (width <= static_cast<int>(ellipsis.length())) {
         return ellipsis.substr(0, width);
     }
-    
+
     return text.substr(0, width - static_cast<int>(ellipsis.length())) + ellipsis;
 }
 
@@ -324,7 +324,7 @@ auto wrapText(const std::string& text, int width) -> std::vector<std::string> {
     std::istringstream words(text);
     std::string word;
     std::string currentLine;
-    
+
     while (words >> word) {
         if (currentLine.empty()) {
             currentLine = word;
@@ -335,11 +335,11 @@ auto wrapText(const std::string& text, int width) -> std::vector<std::string> {
             currentLine = word;
         }
     }
-    
+
     if (!currentLine.empty()) {
         lines.push_back(currentLine);
     }
-    
+
     return lines;
 }
 

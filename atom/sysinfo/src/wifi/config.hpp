@@ -36,42 +36,42 @@ struct WiFiConfig {
     std::chrono::milliseconds command_timeout{10000};
     std::chrono::milliseconds connection_timeout{30000};
     std::chrono::milliseconds scan_timeout{15000};
-    
+
     // Cache settings
     std::chrono::seconds cache_ttl_wifi_info{15};
     std::chrono::seconds cache_ttl_network_stats{10};
     std::chrono::seconds cache_ttl_interface_list{120};
     std::chrono::seconds cache_ttl_available_networks{30};
     size_t max_cache_size{100};
-    
+
     // Performance settings
     int max_concurrent_operations{4};
     size_t buffer_size{65536};
     int retry_attempts{3};
     std::chrono::milliseconds retry_delay{1000};
-    
+
     // Quality analysis settings
     int jitter_packet_count{10};
     std::chrono::milliseconds jitter_interval{100};
     int packet_loss_test_count{50};
     std::chrono::seconds throughput_test_duration{5};
-    
+
     // Monitoring settings
     std::chrono::seconds monitoring_interval{30};
     std::chrono::seconds quality_assessment_interval{300};
     size_t max_history_size{1000};
     bool enable_background_monitoring{true};
-    
+
     // Error handling settings
     size_t max_error_history{500};
     bool enable_error_callbacks{true};
     std::chrono::minutes error_rate_window{60};
-    
+
     // Platform-specific settings
     std::string preferred_ping_host{"8.8.8.8"};
     std::string backup_ping_host{"1.1.1.1"};
     std::string speed_test_server{"speedtest.net"};
-    
+
     // Advanced settings
     bool enable_ipv6{true};
     bool enable_detailed_logging{false};
@@ -89,22 +89,22 @@ struct PerformanceConfig {
     bool enable_memory_pooling{true};
     size_t memory_pool_size{1024 * 1024}; // 1MB
     bool enable_string_interning{true};
-    
+
     // CPU optimization
     bool enable_parallel_processing{true};
     int thread_pool_size{0}; // 0 = auto-detect
     bool enable_cpu_affinity{false};
-    
+
     // I/O optimization
     bool enable_async_io{true};
     size_t io_buffer_size{32768};
     int max_concurrent_io{8};
-    
+
     // Network optimization
     bool enable_connection_pooling{true};
     int max_connections_per_host{4};
     std::chrono::seconds connection_keep_alive{30};
-    
+
     // Cache optimization
     bool enable_adaptive_caching{true};
     double cache_hit_ratio_target{0.8};
@@ -276,7 +276,7 @@ public:
      * @param duration Time period to analyze
      * @return Cache hit ratio (0.0 to 1.0)
      */
-    ATOM_NODISCARD auto getCacheHitRatio(const std::string& cache_name, 
+    ATOM_NODISCARD auto getCacheHitRatio(const std::string& cache_name,
                                         std::chrono::hours duration = std::chrono::hours{1}) const -> double;
 
     /**

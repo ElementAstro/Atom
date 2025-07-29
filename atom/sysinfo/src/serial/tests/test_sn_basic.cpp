@@ -29,7 +29,7 @@ TEST_F(SystemInfoBasicTest, CreateSystemInfo) {
 TEST_F(SystemInfoBasicTest, GetPlatformName) {
     std::string platform = sysInfo->getPlatformName();
     EXPECT_FALSE(platform.empty());
-    
+
 #ifdef _WIN32
     EXPECT_EQ(platform, "Windows");
 #else
@@ -39,12 +39,12 @@ TEST_F(SystemInfoBasicTest, GetPlatformName) {
 
 TEST_F(SystemInfoBasicTest, GetHardwareSerials) {
     auto result = sysInfo->getHardwareSerials();
-    
+
     // Should succeed or fail gracefully
     if (result.success) {
         // At least one serial should be available on most systems
         EXPECT_TRUE(result.data.isValid());
-        
+
         // Check that serials are reasonable (not empty or placeholder values)
         if (!result.data.biosSerial.empty()) {
             EXPECT_TRUE(SystemInfoUtils::isValidSerial(result.data.biosSerial));
@@ -64,22 +64,22 @@ TEST_F(SystemInfoBasicTest, GetHardwareSerials) {
 
 TEST_F(SystemInfoBasicTest, GetSystemIdentification) {
     auto result = sysInfo->getSystemIdentification();
-    
+
     if (result.success) {
         EXPECT_TRUE(result.data.isValid());
-        
+
         // Check UUID format if available
         if (!result.data.systemUuid.empty()) {
             EXPECT_TRUE(SystemInfoUtils::isValidUuid(result.data.systemUuid));
         }
-        
+
         // Check MAC addresses if available
         for (const auto& mac : result.data.macAddresses) {
             if (!mac.empty()) {
                 EXPECT_TRUE(SystemInfoUtils::isValidMacAddress(mac));
             }
         }
-        
+
         // Hostname should be available on most systems
         EXPECT_FALSE(result.data.hostname.empty());
     } else {
@@ -89,7 +89,7 @@ TEST_F(SystemInfoBasicTest, GetSystemIdentification) {
 
 TEST_F(SystemInfoBasicTest, GetSystemFingerprint) {
     std::string fingerprint = sysInfo->getSystemFingerprint();
-    
+
     // Fingerprint should be generated even if some data is missing
     EXPECT_FALSE(fingerprint.empty());
     EXPECT_GE(fingerprint.length(), 8); // Should be at least 8 characters
@@ -100,11 +100,11 @@ TEST_F(SystemInfoBasicTest, QuerySpecificSystemId) {
     auto biosResult = sysInfo->querySystemId(SystemIdType::BIOS_SERIAL);
     EXPECT_TRUE(biosResult.success);
     EXPECT_EQ(biosResult.data.type, SystemIdType::BIOS_SERIAL);
-    
+
     auto uuidResult = sysInfo->querySystemId(SystemIdType::SYSTEM_UUID);
     EXPECT_TRUE(uuidResult.success);
     EXPECT_EQ(uuidResult.data.type, SystemIdType::SYSTEM_UUID);
-    
+
     auto macResult = sysInfo->querySystemId(SystemIdType::MAC_ADDRESS);
     EXPECT_TRUE(macResult.success);
     EXPECT_EQ(macResult.data.type, SystemIdType::MAC_ADDRESS);
@@ -116,9 +116,9 @@ TEST_F(SystemInfoBasicTest, ConfigurationHandling) {
     config.includeMemoryModules = false;
     config.includeNetworkInterfaces = false;
     config.cacheResults = false;
-    
+
     sysInfo->updateConfig(config);
-    
+
     const auto& currentConfig = sysInfo->getConfig();
     EXPECT_EQ(currentConfig.includeMemoryModules, false);
     EXPECT_EQ(currentConfig.includeNetworkInterfaces, false);
@@ -131,19 +131,19 @@ TEST_F(SystemInfoBasicTest, CacheManagement) {
     config.cacheResults = true;
     config.cacheTimeout = std::chrono::seconds(1);
     sysInfo->updateConfig(config);
-    
+
     // First call should populate cache
     auto result1 = sysInfo->getHardwareSerials();
     EXPECT_TRUE(sysInfo->isCacheValid());
-    
+
     // Second call should use cache
     auto result2 = sysInfo->getHardwareSerials();
     EXPECT_TRUE(sysInfo->isCacheValid());
-    
+
     // Wait for cache to expire
     std::this_thread::sleep_for(std::chrono::seconds(2));
     EXPECT_FALSE(sysInfo->isCacheValid());
-    
+
     // Clear cache manually
     sysInfo->clearCache();
     EXPECT_FALSE(sysInfo->isCacheValid());
@@ -162,7 +162,7 @@ TEST_F(SystemInfoBasicTest, ExportFunctionality) {
     EXPECT_FALSE(json.empty());
     EXPECT_NE(json.find("platform"), std::string::npos);
     EXPECT_NE(json.find("timestamp"), std::string::npos);
-    
+
     // Test XML export
     std::string xml = sysInfo->exportToXml(false);
     EXPECT_FALSE(xml.empty());
@@ -173,10 +173,10 @@ TEST_F(SystemInfoBasicTest, ExportFunctionality) {
 TEST_F(SystemInfoBasicTest, UtilityFunctions) {
     // Test utility functions
     EXPECT_TRUE(isSystemInfoAvailable());
-    
+
     std::string quickFingerprint = getQuickSystemFingerprint();
     EXPECT_FALSE(quickFingerprint.empty());
-    
+
     auto capabilities = getPlatformCapabilities();
     EXPECT_FALSE(capabilities.empty());
 }
@@ -186,7 +186,7 @@ TEST_F(SystemInfoBasicTest, ValidationAndIntegrity) {
     bool isValid = sysInfo->validateIntegrity();
     // Should not crash and return a boolean
     EXPECT_TRUE(isValid || !isValid); // Always true, just checking no crash
-    
+
     // Test collection stats
     auto stats = sysInfo->getCollectionStats();
     EXPECT_FALSE(stats.empty());
@@ -202,7 +202,7 @@ TEST_F(SystemInfoUtilsTest, SerialValidation) {
     EXPECT_TRUE(SystemInfoUtils::isValidSerial("ABC123DEF456"));
     EXPECT_TRUE(SystemInfoUtils::isValidSerial("1234567890"));
     EXPECT_TRUE(SystemInfoUtils::isValidSerial("SERIAL-NUMBER-123"));
-    
+
     // Invalid serials
     EXPECT_FALSE(SystemInfoUtils::isValidSerial(""));
     EXPECT_FALSE(SystemInfoUtils::isValidSerial("N/A"));
@@ -218,7 +218,7 @@ TEST_F(SystemInfoUtilsTest, MacAddressValidation) {
     EXPECT_TRUE(SystemInfoUtils::isValidMacAddress("AA:BB:CC:DD:EE:FF"));
     EXPECT_TRUE(SystemInfoUtils::isValidMacAddress("00-11-22-33-44-55"));
     EXPECT_TRUE(SystemInfoUtils::isValidMacAddress("aa:bb:cc:dd:ee:ff"));
-    
+
     // Invalid MAC addresses
     EXPECT_FALSE(SystemInfoUtils::isValidMacAddress(""));
     EXPECT_FALSE(SystemInfoUtils::isValidMacAddress("00:11:22:33:44"));
@@ -232,7 +232,7 @@ TEST_F(SystemInfoUtilsTest, UuidValidation) {
     EXPECT_TRUE(SystemInfoUtils::isValidUuid("550e8400-e29b-41d4-a716-446655440000"));
     EXPECT_TRUE(SystemInfoUtils::isValidUuid("6ba7b810-9dad-11d1-80b4-00c04fd430c8"));
     EXPECT_TRUE(SystemInfoUtils::isValidUuid("12345678-1234-1234-1234-123456789abc"));
-    
+
     // Invalid UUIDs
     EXPECT_FALSE(SystemInfoUtils::isValidUuid(""));
     EXPECT_FALSE(SystemInfoUtils::isValidUuid("550e8400-e29b-41d4-a716"));
@@ -253,13 +253,13 @@ TEST_F(SystemInfoUtilsTest, HashGeneration) {
     std::string hash1 = SystemInfoUtils::generateHash("test string");
     std::string hash2 = SystemInfoUtils::generateHash("test string");
     std::string hash3 = SystemInfoUtils::generateHash("different string");
-    
+
     // Same input should produce same hash
     EXPECT_EQ(hash1, hash2);
-    
+
     // Different input should produce different hash
     EXPECT_NE(hash1, hash3);
-    
+
     // Hash should not be empty
     EXPECT_FALSE(hash1.empty());
 }
@@ -267,7 +267,7 @@ TEST_F(SystemInfoUtilsTest, HashGeneration) {
 TEST_F(SystemInfoUtilsTest, TimestampGeneration) {
     std::string timestamp = SystemInfoUtils::getCurrentTimestamp();
     EXPECT_FALSE(timestamp.empty());
-    
+
     // Should be in ISO 8601 format (basic check)
     EXPECT_NE(timestamp.find("T"), std::string::npos);
     EXPECT_NE(timestamp.find("Z"), std::string::npos);

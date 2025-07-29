@@ -123,7 +123,7 @@ public:
      * @param interval Monitoring interval (default: 1000ms)
      * @return true if monitoring started successfully
      */
-    auto startMonitoring(WindowCallback callback, 
+    auto startMonitoring(WindowCallback callback,
                         std::chrono::milliseconds interval = std::chrono::milliseconds(1000)) -> bool;
 
     /**
@@ -151,7 +151,7 @@ public:
 
         std::vector<WindowInfo> filtered;
         const auto& windows = getValue(windowsResult);
-        
+
         std::copy_if(windows.begin(), windows.end(), std::back_inserter(filtered), filter);
         return filtered;
     }
@@ -202,7 +202,7 @@ public:
      * @param interval Monitoring interval (default: 5000ms)
      * @return true if monitoring started successfully
      */
-    auto startMonitoring(ThemeCallback callback, 
+    auto startMonitoring(ThemeCallback callback,
                         std::chrono::milliseconds interval = std::chrono::milliseconds(5000)) -> bool;
 
     /**

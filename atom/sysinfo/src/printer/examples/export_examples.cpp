@@ -24,10 +24,10 @@ void demonstrateBasicExports() {
     try {
         // Create a printer instance
         SystemInfoPrinter printer;
-        
+
         // Generate a full report
         auto report = printer.generateReport(ReportType::FULL);
-        
+
         // Export to different formats
         std::cout << "1. Exporting to HTML...\n";
         bool htmlSuccess = printer.exportReport(report, "basic_export.html", ExportFormat::HTML);
@@ -60,7 +60,7 @@ void demonstrateCustomExportOptions() {
     try {
         SystemInfoPrinter printer;
         auto report = printer.generateReport(ReportType::PERFORMANCE);
-        
+
         // Configure custom export options
         ExportOptions options;
         options.title = "Custom Performance Report";
@@ -69,9 +69,9 @@ void demonstrateCustomExportOptions() {
         options.includeTimestamp = true;
         options.includeMetadata = true;
         options.prettyPrint = true;
-        
+
         printer.setExportOptions(options);
-        
+
         std::cout << "1. Custom HTML export with metadata...\n";
         bool htmlSuccess = printer.exportReport(report, "custom_performance.html", ExportFormat::HTML);
         std::cout << "Custom HTML export " << (htmlSuccess ? "successful" : "failed") << "\n\n";
@@ -80,7 +80,7 @@ void demonstrateCustomExportOptions() {
         options.title = "Performance Data Export";
         options.description = "Machine-readable performance data";
         printer.setExportOptions(options);
-        
+
         std::cout << "2. Custom JSON export with different metadata...\n";
         bool jsonSuccess = printer.exportReport(report, "custom_performance.json", ExportFormat::JSON);
         std::cout << "Custom JSON export " << (jsonSuccess ? "successful" : "failed") << "\n\n";
@@ -97,17 +97,17 @@ void demonstrateDirectExporters() {
         // Generate content
         SystemInfoPrinter printer;
         auto content = printer.generateReport(ReportType::SIMPLE);
-        
+
         // Use exporters directly
         std::cout << "1. Using HTML exporter directly...\n";
         ExportOptions htmlOptions;
         htmlOptions.title = "Direct HTML Export";
         htmlOptions.includeTimestamp = true;
-        
+
         HtmlExporter htmlExporter(htmlOptions);
         bool htmlSuccess = htmlExporter.exportToFile(content, "direct_export.html");
         std::cout << "Direct HTML export " << (htmlSuccess ? "successful" : "failed") << "\n";
-        
+
         // Get HTML as string
         auto htmlString = htmlExporter.exportToString(content);
         std::cout << "HTML string length: " << htmlString.length() << " characters\n\n";
@@ -116,11 +116,11 @@ void demonstrateDirectExporters() {
         ExportOptions jsonOptions;
         jsonOptions.title = "Direct JSON Export";
         jsonOptions.prettyPrint = true;
-        
+
         JsonExporter jsonExporter(jsonOptions);
         bool jsonSuccess = jsonExporter.exportToFile(content, "direct_export.json");
         std::cout << "Direct JSON export " << (jsonSuccess ? "successful" : "failed") << "\n";
-        
+
         auto jsonString = jsonExporter.exportToString(content);
         std::cout << "JSON string length: " << jsonString.length() << " characters\n\n";
 

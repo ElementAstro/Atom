@@ -18,7 +18,7 @@ auto getComputerNameWindows() -> std::optional<std::string> {
     constexpr size_t bufferSize = 256;
     std::array<char, bufferSize> buffer;
     auto size = static_cast<DWORD>(buffer.size());
-    
+
     if (GetComputerNameA(buffer.data(), &size)) {
         spdlog::info("Successfully retrieved computer name: {}", buffer.data());
         return std::string(buffer.data());
@@ -33,7 +33,7 @@ void getOperatingSystemInfoWindows(OperatingSystemInfo& osInfo) {
     OSVERSIONINFOEX osvi;
     ZeroMemory(&osvi, sizeof(OSVERSIONINFOEX));
     osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
-    
+
     if (GetVersionEx(reinterpret_cast<LPOSVERSIONINFO>(&osvi))) {
         osInfo.osName = "Windows";
         osInfo.osVersion = std::format("{}.{} (Build {})", osvi.dwMajorVersion,
@@ -63,7 +63,7 @@ auto getSystemTimeZoneWindows() -> std::string {
 auto getInstalledUpdatesWindows() -> std::vector<std::string> {
     spdlog::debug("Getting installed updates on Windows");
     std::vector<std::string> updates;
-    
+
     std::array<char, 128> buffer;
     std::string command =
         "powershell -Command \"Get-HotFix | Select-Object HotFixID\"";
@@ -83,7 +83,7 @@ auto getInstalledUpdatesWindows() -> std::vector<std::string> {
             }
         }
     }
-    
+
     spdlog::info("Found {} installed updates on Windows", updates.size());
     return updates;
 }

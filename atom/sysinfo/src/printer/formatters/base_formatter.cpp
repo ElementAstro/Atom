@@ -50,7 +50,7 @@ auto BaseFormatter::createTableRow(const std::string& label, const std::string& 
     int effectiveWidth = (width > 0) ? width : getTableWidth();
     int labelWidth = effectiveWidth * 0.4; // 40% for label
     int valueWidth = effectiveWidth - labelWidth - 5; // Rest for value, minus separators
-    
+
     switch (options_.format) {
         case OutputFormat::TABLE:
             return std::format("| {:<{}} | {:<{}} |\n", label, labelWidth, value, valueWidth);
@@ -71,7 +71,7 @@ auto BaseFormatter::createTableRow(const std::string& label, const std::string& 
 
 auto BaseFormatter::createTableHeader(const std::string& title, int width) const -> std::string {
     int effectiveWidth = (width > 0) ? width : getTableWidth();
-    
+
     switch (options_.format) {
         case OutputFormat::TABLE: {
             std::stringstream ss;
@@ -98,7 +98,7 @@ auto BaseFormatter::createTableHeader(const std::string& title, int width) const
 
 auto BaseFormatter::createTableFooter(int width) const -> std::string {
     int effectiveWidth = (width > 0) ? width : getTableWidth();
-    
+
     switch (options_.format) {
         case OutputFormat::TABLE:
             return std::string(effectiveWidth, '-') + "\n\n";
@@ -121,12 +121,12 @@ auto BaseFormatter::colorize(const std::string& text, const std::string& color) 
     if (!options_.colorEnabled) {
         return text;
     }
-    
+
     auto it = colorCodes_.find(color);
     if (it != colorCodes_.end()) {
         return it->second + text + colorCodes_.at("reset");
     }
-    
+
     return text;
 }
 
@@ -140,15 +140,15 @@ auto BaseFormatter::formatWithUnits(double value, const std::string& unit, int p
 auto BaseFormatter::formatBytes(uint64_t bytes, int precision) const -> std::string {
     const char* units[] = {"B", "KB", "MB", "GB", "TB", "PB"};
     const size_t numUnits = sizeof(units) / sizeof(units[0]);
-    
+
     double value = static_cast<double>(bytes);
     size_t unitIndex = 0;
-    
+
     while (value >= 1024.0 && unitIndex < numUnits - 1) {
         value /= 1024.0;
         ++unitIndex;
     }
-    
+
     return formatWithUnits(value, units[unitIndex], precision);
 }
 
@@ -176,13 +176,13 @@ auto BaseFormatter::addTimestamp(const std::string& content) const -> std::strin
     if (!options_.timestampEnabled) {
         return content;
     }
-    
+
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
-    
+
     std::stringstream ss;
     ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
-    
+
     return std::format("Generated at: {}\n\n{}", ss.str(), content);
 }
 

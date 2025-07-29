@@ -19,11 +19,11 @@ using namespace atom::system;
 
 void demonstrateBasicInfo() {
     std::cout << "\n=== Basic System Information ===" << std::endl;
-    
+
     // Get enhanced OS information
     auto& manager = EnhancedOSManager::getInstance();
     auto osInfo = manager.getEnhancedOSInfo();
-    
+
     std::cout << "Operating System: " << osInfo.osName << std::endl;
     std::cout << "Version: " << osInfo.osVersion << std::endl;
     std::cout << "Architecture: " << osArchitectureToString(osInfo.osArch) << std::endl;
@@ -38,10 +38,10 @@ void demonstrateBasicInfo() {
 
 void demonstratePerformanceMetrics() {
     std::cout << "\n=== Performance Metrics ===" << std::endl;
-    
+
     auto& manager = EnhancedOSManager::getInstance();
     auto metrics = manager.getPerformanceMetrics();
-    
+
     std::cout << "CPU Usage: " << metrics.cpuUsagePercent << "%" << std::endl;
     std::cout << "Memory Usage: " << metrics.memoryUsagePercent << "%" << std::endl;
     std::cout << "Disk Usage: " << metrics.diskUsagePercent << "%" << std::endl;
@@ -53,23 +53,23 @@ void demonstratePerformanceMetrics() {
 
 void demonstrateSecurityInfo() {
     std::cout << "\n=== Security Information ===" << std::endl;
-    
+
     auto& manager = EnhancedOSManager::getInstance();
     auto secInfo = manager.getSecurityInfo();
-    
+
     std::cout << "Firewall Enabled: " << (secInfo.firewallEnabled ? "Yes" : "No") << std::endl;
     std::cout << "Antivirus Enabled: " << (secInfo.antivirusEnabled ? "Yes" : "No") << std::endl;
     std::cout << "Encryption Enabled: " << (secInfo.encryptionEnabled ? "Yes" : "No") << std::endl;
     std::cout << "Secure Boot Enabled: " << (secInfo.secureBootEnabled ? "Yes" : "No") << std::endl;
     std::cout << "TPM Enabled: " << (secInfo.tpmEnabled ? "Yes" : "No") << std::endl;
-    
+
     if (!secInfo.securityFeatures.empty()) {
         std::cout << "Security Features:" << std::endl;
         for (const auto& feature : secInfo.securityFeatures) {
             std::cout << "  - " << feature << std::endl;
         }
     }
-    
+
     if (!secInfo.vulnerabilities.empty()) {
         std::cout << "Vulnerabilities:" << std::endl;
         for (const auto& vuln : secInfo.vulnerabilities) {
@@ -80,24 +80,24 @@ void demonstrateSecurityInfo() {
 
 void demonstrateNetworkInfo() {
     std::cout << "\n=== Network Configuration ===" << std::endl;
-    
+
     auto& manager = EnhancedOSManager::getInstance();
     auto netConfig = manager.getNetworkConfiguration();
-    
+
     std::cout << "Primary Interface: " << netConfig.primaryInterface << std::endl;
     std::cout << "IP Address: " << netConfig.ipAddress << std::endl;
     std::cout << "Subnet Mask: " << netConfig.subnetMask << std::endl;
     std::cout << "Gateway: " << netConfig.gateway << std::endl;
     std::cout << "MAC Address: " << netConfig.macAddress << std::endl;
     std::cout << "DHCP Enabled: " << (netConfig.dhcpEnabled ? "Yes" : "No") << std::endl;
-    
+
     if (!netConfig.dnsServers.empty()) {
         std::cout << "DNS Servers:" << std::endl;
         for (const auto& dns : netConfig.dnsServers) {
             std::cout << "  - " << dns << std::endl;
         }
     }
-    
+
     if (!netConfig.additionalInterfaces.empty()) {
         std::cout << "Additional Interfaces:" << std::endl;
         for (const auto& [name, ip] : netConfig.additionalInterfaces) {
@@ -108,10 +108,10 @@ void demonstrateNetworkInfo() {
 
 void demonstrateHealthCheck() {
     std::cout << "\n=== System Health Check ===" << std::endl;
-    
+
     auto& manager = EnhancedOSManager::getInstance();
     auto healthResults = manager.performHealthCheck();
-    
+
     if (healthResults.empty()) {
         std::cout << "System health check passed - no issues found." << std::endl;
     } else {
@@ -124,10 +124,10 @@ void demonstrateHealthCheck() {
 
 void demonstrateResourceAnalysis() {
     std::cout << "\n=== Resource Usage Analysis ===" << std::endl;
-    
+
     auto& manager = EnhancedOSManager::getInstance();
     auto resourceUsage = manager.analyzeResourceUsage();
-    
+
     for (const auto& [resource, usage] : resourceUsage) {
         std::cout << resource << ": " << usage << std::endl;
     }
@@ -136,34 +136,34 @@ void demonstrateResourceAnalysis() {
 void demonstrateMonitoring() {
     std::cout << "\n=== Performance Monitoring Demo ===" << std::endl;
     std::cout << "Starting 10-second monitoring session..." << std::endl;
-    
+
     auto& manager = EnhancedOSManager::getInstance();
-    
+
     // Set up monitoring configuration
     SystemMonitoringConfig config;
     config.performanceIntervalMs = 2000; // 2 seconds
     config.enablePerformanceMonitoring = true;
     config.enableSecurityMonitoring = true;
-    
+
     // Set up callbacks
     manager.setPerformanceCallback([](const SystemPerformanceMetrics& metrics) {
-        std::cout << "[MONITOR] CPU: " << std::fixed << std::setprecision(1) 
-                  << metrics.cpuUsagePercent << "%, Memory: " 
-                  << metrics.memoryUsagePercent << "%, Disk: " 
+        std::cout << "[MONITOR] CPU: " << std::fixed << std::setprecision(1)
+                  << metrics.cpuUsagePercent << "%, Memory: "
+                  << metrics.memoryUsagePercent << "%, Disk: "
                   << metrics.diskUsagePercent << "%" << std::endl;
     });
-    
+
     manager.setSecurityCallback([](const std::string& event, const std::string& details) {
         std::cout << "[SECURITY] " << event << ": " << details << std::endl;
     });
-    
+
     // Start monitoring
     if (manager.startMonitoring(config)) {
         std::cout << "Monitoring started successfully." << std::endl;
-        
+
         // Monitor for 10 seconds
         std::this_thread::sleep_for(std::chrono::seconds(10));
-        
+
         // Stop monitoring
         manager.stopMonitoring();
         std::cout << "Monitoring stopped." << std::endl;
@@ -174,23 +174,23 @@ void demonstrateMonitoring() {
 
 void demonstrateLegacyCompatibility() {
     std::cout << "\n=== Legacy Compatibility ===" << std::endl;
-    
+
     // Original API still works
     auto osInfo = getOperatingSystemInfo();
     std::cout << "Legacy OS Name: " << osInfo.osName << std::endl;
     std::cout << "Legacy OS Version: " << osInfo.osVersion << std::endl;
-    
+
     // Convenience functions
     std::cout << "Computer Name: " << getComputerName().value_or("Unknown") << std::endl;
     std::cout << "System Uptime: " << getSystemUptime().count() << " seconds" << std::endl;
     std::cout << "System Language: " << getSystemLanguage() << std::endl;
     std::cout << "System Encoding: " << getSystemEncoding() << std::endl;
     std::cout << "Server Edition: " << (isServerEdition() ? "Yes" : "No") << std::endl;
-    
+
     // Enhanced convenience functions
     auto metrics = getSystemMetrics();
     std::cout << "Quick CPU Usage: " << metrics.cpuUsagePercent << "%" << std::endl;
-    
+
     auto security = getSystemSecurity();
     std::cout << "Quick Firewall Status: " << (security.firewallEnabled ? "Enabled" : "Disabled") << std::endl;
 }
@@ -198,7 +198,7 @@ void demonstrateLegacyCompatibility() {
 int main() {
     std::cout << "Enhanced OS Module - Basic Usage Example" << std::endl;
     std::cout << "=========================================" << std::endl;
-    
+
     try {
         // Demonstrate basic functionality
         demonstrateBasicInfo();
@@ -207,19 +207,19 @@ int main() {
         demonstrateNetworkInfo();
         demonstrateHealthCheck();
         demonstrateResourceAnalysis();
-        
+
         // Demonstrate monitoring (optional - can be commented out for quick testing)
         // demonstrateMonitoring();
-        
+
         // Demonstrate legacy compatibility
         demonstrateLegacyCompatibility();
-        
+
         std::cout << "\n=== Example completed successfully ===" << std::endl;
-        
+
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
-    
+
     return 0;
 }

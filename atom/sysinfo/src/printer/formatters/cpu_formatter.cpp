@@ -15,18 +15,18 @@ auto CpuFormatter::format(const CpuInfo& info) const -> std::string {
 
 auto CpuFormatter::format(const CpuInfo& info, const std::string& title) const -> std::string {
     std::stringstream ss;
-    
+
     ss << createTableHeader(title);
-    
+
     // Basic information
     ss << createTableRow("Model", info.model);
     ss << createTableRow("Vendor", formatVendor(info.vendor));
     ss << createTableRow("Architecture", formatArchitecture(info.architecture));
-    
+
     // Core information
     ss << createTableRow("Physical Cores", std::to_string(info.numPhysicalCores));
     ss << createTableRow("Logical Cores", std::to_string(info.numLogicalCores));
-    
+
     // Frequency information
     ss << createTableRow("Base Frequency", formatFrequency(info.baseFrequency * 1e9));
     if (info.maxFrequency > 0) {
@@ -35,7 +35,7 @@ auto CpuFormatter::format(const CpuInfo& info, const std::string& title) const -
     if (info.minFrequency > 0) {
         ss << createTableRow("Min Frequency", formatFrequency(info.minFrequency * 1e9));
     }
-    
+
     // Performance metrics
     if (info.usage >= 0) {
         ss << createTableRow("Current Usage", formatUsageWithColor(info.usage));
@@ -43,17 +43,17 @@ auto CpuFormatter::format(const CpuInfo& info, const std::string& title) const -
             ss << createTableRow("Usage Bar", createProgressBar(info.usage));
         }
     }
-    
+
     // Thermal information
     if (info.temperature > 0) {
         ss << createTableRow("Temperature", formatTemperatureWithColor(info.temperature));
     }
-    
+
     // Socket information
     if (!info.socketType.empty()) {
         ss << createTableRow("Socket Type", info.socketType);
     }
-    
+
     // Cache information (detailed styles only)
     if (options_.style == FormatterStyle::DETAILED || options_.style == FormatterStyle::VERBOSE) {
         auto cacheInfo = formatCacheSizes(info.caches);
@@ -61,50 +61,50 @@ auto CpuFormatter::format(const CpuInfo& info, const std::string& title) const -
             ss << cacheInfo;
         }
     }
-    
+
     ss << createTableFooter();
-    
+
     return addTimestamp(ss.str());
 }
 
 auto CpuFormatter::formatBasic(const CpuInfo& info) const -> std::string {
-    return std::format("{} ({} cores, {} threads) @ {}", 
-                      info.model, 
-                      info.numPhysicalCores, 
+    return std::format("{} ({} cores, {} threads) @ {}",
+                      info.model,
+                      info.numPhysicalCores,
                       info.numLogicalCores,
                       formatFrequency(info.baseFrequency * 1e9));
 }
 
 auto CpuFormatter::formatPerformance(const CpuInfo& info) const -> std::string {
     std::stringstream ss;
-    
+
     ss << createTableHeader("CPU Performance");
     ss << createTableRow("Model", info.model);
     ss << createTableRow("Base Frequency", formatFrequency(info.baseFrequency * 1e9));
-    
+
     if (info.usage >= 0) {
         ss << createTableRow("Current Usage", formatUsageWithColor(info.usage));
         ss << createTableRow("Usage Visualization", createProgressBar(info.usage, 30));
     }
-    
+
     if (info.temperature > 0) {
         ss << createTableRow("Temperature", formatTemperatureWithColor(info.temperature));
     }
-    
+
     ss << createTableFooter();
-    
+
     return ss.str();
 }
 
 auto CpuFormatter::formatThermal(const CpuInfo& info) const -> std::string {
     std::stringstream ss;
-    
+
     ss << createTableHeader("CPU Thermal Information");
     ss << createTableRow("Model", info.model);
-    
+
     if (info.temperature > 0) {
         ss << createTableRow("Current Temperature", formatTemperatureWithColor(info.temperature));
-        
+
         // Add thermal status based on temperature
         std::string thermalStatus;
         if (info.temperature < 50) {
@@ -120,9 +120,9 @@ auto CpuFormatter::formatThermal(const CpuInfo& info) const -> std::string {
     } else {
         ss << createTableRow("Temperature", "Not available");
     }
-    
+
     ss << createTableFooter();
-    
+
     return ss.str();
 }
 
@@ -190,16 +190,18 @@ auto CpuFormatter::getTemperatureColor(float temperature) const -> std::string {
 
 auto CpuFormatter::formatCacheSizes(const CacheSizes& caches) const -> std::string {
     std::stringstream ss;
-    
+
     bool hasCache = false;
     if (caches.l1d > 0 || caches.l1i > 0 ||
         caches.l2 > 0 || caches.l3 > 0) {
         hasCache = true;
     }
 
+
     if (!hasCache) {
         return "";
     }
+
 
     ss << createTableHeader("CPU Cache Information");
 
@@ -215,9 +217,9 @@ auto CpuFormatter::formatCacheSizes(const CacheSizes& caches) const -> std::stri
     if (caches.l3 > 0) {
         ss << createTableRow("L3 Cache", formatBytes(caches.l3));
     }
-    
+
     ss << createTableFooter();
-    
+
     return ss.str();
 }
 
@@ -226,10 +228,10 @@ auto CpuFormatter::createProgressBar(float percentage, int width) const -> std::
         int filled = static_cast<int>((percentage / 100.0) * width);
         return "[" + std::string(filled, '#') + std::string(width - filled, '-') + "]";
     }
-    
+
     int filled = static_cast<int>((percentage / 100.0) * width);
     std::string bar = "[";
-    
+
     for (int i = 0; i < width; ++i) {
         if (i < filled) {
             if (percentage < 30) {
@@ -243,7 +245,7 @@ auto CpuFormatter::createProgressBar(float percentage, int width) const -> std::
             bar += "░";
         }
     }
-    
+
     bar += "]";
     return bar;
 }

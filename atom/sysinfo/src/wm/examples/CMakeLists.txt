@@ -12,25 +12,25 @@ set(EXAMPLES
 # Create executables for each example
 foreach(EXAMPLE ${EXAMPLES})
     add_executable(${EXAMPLE} ${EXAMPLE}.cpp)
-    
+
     target_link_libraries(${EXAMPLE}
         PRIVATE
             atom_sysinfo_wm
             spdlog::spdlog
     )
-    
+
     target_include_directories(${EXAMPLE}
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/..
     )
-    
+
     # Compiler options
     if(MSVC)
         target_compile_options(${EXAMPLE} PRIVATE /W4)
     else()
         target_compile_options(${EXAMPLE} PRIVATE -Wall -Wextra -Wpedantic)
     endif()
-    
+
     # Set output directory
     set_target_properties(${EXAMPLE} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/examples
@@ -43,7 +43,7 @@ if(INSTALL_WM_EXAMPLES)
     install(TARGETS ${EXAMPLES}
         RUNTIME DESTINATION bin/examples
     )
-    
+
     # Install source files as documentation
     install(FILES
         basic_system_info.cpp

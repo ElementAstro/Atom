@@ -45,14 +45,14 @@ AdvancedShortcut AdvancedShortcut::createSequential(const std::vector<Shortcut>&
 
 std::string AdvancedShortcut::toString() const {
     std::stringstream ss;
-    
+
     switch (type) {
         case ShortcutType::Keyboard:
             if (!keySequence.empty()) {
                 ss << keySequence[0].toString();
             }
             break;
-            
+
         case ShortcutType::Mouse:
             if (!keySequence.empty()) {
                 ss << keySequence[0].toString() << "+";
@@ -62,13 +62,13 @@ std::string AdvancedShortcut::toString() const {
                 ss << mouse_utils::mouseButtonToString(mouseButtons[i]);
             }
             break;
-            
+
         case ShortcutType::Multimedia:
             if (!multimediaKeys.empty()) {
                 ss << multimedia_utils::getKeyName(multimediaKeys[0]);
             }
             break;
-            
+
         case ShortcutType::Sequential:
             for (size_t i = 0; i < keySequence.size(); ++i) {
                 if (i > 0) ss << " → ";
@@ -76,20 +76,20 @@ std::string AdvancedShortcut::toString() const {
             }
             ss << " (max " << maxSequenceTime.count() << "ms)";
             break;
-            
+
         case ShortcutType::Gesture:
             ss << "Gesture";
             break;
-            
+
         case ShortcutType::Combination:
             ss << "Complex Combination";
             break;
     }
-    
+
     if (!description.empty()) {
         ss << " (" << description << ")";
     }
-    
+
     return ss.str();
 }
 
@@ -97,19 +97,19 @@ bool AdvancedShortcut::isValid() const {
     switch (type) {
         case ShortcutType::Keyboard:
             return !keySequence.empty() && keySequence[0].isValid();
-            
+
         case ShortcutType::Mouse:
-            return !mouseButtons.empty() && 
+            return !mouseButtons.empty() &&
                    mouse_utils::isValidMouseCombination(mouseButtons);
-            
+
         case ShortcutType::Multimedia:
             return !multimediaKeys.empty();
-            
+
         case ShortcutType::Sequential:
-            return keySequence.size() >= 2 && 
+            return keySequence.size() >= 2 &&
                    std::all_of(keySequence.begin(), keySequence.end(),
                               [](const Shortcut& s) { return s.isValid(); });
-            
+
         default:
             return false;
     }
@@ -117,19 +117,19 @@ bool AdvancedShortcut::isValid() const {
 
 size_t AdvancedShortcut::hash() const {
     size_t h = std::hash<int>{}(static_cast<int>(type));
-    
+
     for (const auto& key : keySequence) {
         h ^= key.hash() + 0x9e3779b9 + (h << 6) + (h >> 2);
     }
-    
+
     for (const auto& button : mouseButtons) {
         h ^= std::hash<int>{}(static_cast<int>(button)) + 0x9e3779b9 + (h << 6) + (h >> 2);
     }
-    
+
     for (const auto& mmKey : multimediaKeys) {
         h ^= std::hash<int>{}(static_cast<int>(mmKey)) + 0x9e3779b9 + (h << 6) + (h >> 2);
     }
-    
+
     return h;
 }
 
@@ -153,7 +153,7 @@ bool AdvancedShortcutManager::registerShortcut(const AdvancedShortcut& shortcut,
         spdlog::warn("Attempted to register invalid shortcut: {}", shortcut.toString());
         return false;
     }
-    
+
     auto conflicts = checkConflicts(shortcut);
     if (!conflicts.empty()) {
         spdlog::warn("Shortcut {} has {} conflicts", shortcut.toString(), conflicts.size());
@@ -164,7 +164,7 @@ bool AdvancedShortcutManager::registerShortcut(const AdvancedShortcut& shortcut,
             }
         }
     }
-    
+
     registeredShortcuts_[shortcut] = owner;
     spdlog::debug("Registered shortcut: {} (owner: {})", shortcut.toString(), owner);
     return true;
@@ -182,7 +182,7 @@ bool AdvancedShortcutManager::unregisterShortcut(const AdvancedShortcut& shortcu
 
 std::vector<ShortcutConflict> AdvancedShortcutManager::checkConflicts(const AdvancedShortcut& shortcut) const {
     std::vector<ShortcutConflict> conflicts;
-    
+
     for (const auto& [existing, owner] : registeredShortcuts_) {
         if (hasConflict(shortcut, existing)) {
             std::string reason = getConflictReason(shortcut, existing);
@@ -190,30 +190,30 @@ std::vector<ShortcutConflict> AdvancedShortcutManager::checkConflicts(const Adva
             conflicts.emplace_back(shortcut, existing, reason, severity);
         }
     }
-    
+
     return conflicts;
 }
 
 std::vector<AdvancedShortcut> AdvancedShortcutManager::getAllShortcuts() const {
     std::vector<AdvancedShortcut> result;
     result.reserve(registeredShortcuts_.size());
-    
+
     for (const auto& [shortcut, owner] : registeredShortcuts_) {
         result.push_back(shortcut);
     }
-    
+
     return result;
 }
 
 std::vector<AdvancedShortcut> AdvancedShortcutManager::getShortcutsByCategory(const std::string& category) const {
     std::vector<AdvancedShortcut> result;
-    
+
     for (const auto& [shortcut, owner] : registeredShortcuts_) {
         if (shortcut.category == category) {
             result.push_back(shortcut);
         }
     }
-    
+
     return result;
 }
 
@@ -251,16 +251,16 @@ AdvancedShortcut AdvancedShortcutManager::resolveShortcut(const AdvancedShortcut
             }
         }
     }
-    
+
     return shortcut; // No mapping found, return original
 }
 
 std::vector<AdvancedShortcut> AdvancedShortcutManager::suggestAlternatives(const AdvancedShortcut& shortcut) const {
     std::vector<AdvancedShortcut> alternatives;
-    
+
     if (shortcut.type == ShortcutType::Keyboard && !shortcut.keySequence.empty()) {
         const Shortcut& original = shortcut.keySequence[0];
-        
+
         // Suggest alternatives with different modifier combinations
         std::vector<std::tuple<bool, bool, bool, bool>> modifierCombos = {
             {true, true, false, false},   // Ctrl+Alt
@@ -270,17 +270,17 @@ std::vector<AdvancedShortcut> AdvancedShortcutManager::suggestAlternatives(const
             {false, false, false, true},  // Win only
             {true, false, false, true},   // Ctrl+Win
         };
-        
+
         for (const auto& [ctrl, alt, shift, win] : modifierCombos) {
             Shortcut alternative(original.vkCode, ctrl, alt, shift, win);
             AdvancedShortcut altShortcut = AdvancedShortcut::createKeyboard(alternative);
-            
+
             if (checkConflicts(altShortcut).empty()) {
                 alternatives.push_back(altShortcut);
             }
         }
     }
-    
+
     return alternatives;
 }
 
@@ -297,20 +297,20 @@ bool AdvancedShortcutManager::hasConflict(const AdvancedShortcut& s1, const Adva
             case ShortcutType::Keyboard:
                 return !s1.keySequence.empty() && !s2.keySequence.empty() &&
                        s1.keySequence[0] == s2.keySequence[0];
-                       
+
             case ShortcutType::Mouse:
                 return s1.mouseButtons == s2.mouseButtons &&
                        (s1.keySequence.empty() || s2.keySequence.empty() ||
                         s1.keySequence[0] == s2.keySequence[0]);
-                        
+
             case ShortcutType::Multimedia:
                 return s1.multimediaKeys == s2.multimediaKeys;
-                
+
             default:
                 return false;
         }
     }
-    
+
     return false;
 }
 
@@ -327,12 +327,12 @@ ShortcutConflict::Severity AdvancedShortcutManager::assessConflictSeverity(const
     if (s1.category == "System" || s2.category == "System") {
         return ShortcutConflict::Severity::Critical;
     }
-    
+
     // Same application shortcuts are high severity
     if (s1.category == s2.category && !s1.category.empty()) {
         return ShortcutConflict::Severity::High;
     }
-    
+
     return ShortcutConflict::Severity::Medium;
 }
 

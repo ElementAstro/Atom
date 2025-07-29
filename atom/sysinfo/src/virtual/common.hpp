@@ -29,11 +29,11 @@ namespace constants {
     constexpr int VENDOR_STRING_LENGTH = 12;
     constexpr int BIOS_INFO_LENGTH = 256;
     constexpr int HYPERVISOR_PRESENT_BIT = 31;
-    
+
     // Time drift detection constants
     constexpr int TIME_DRIFT_UPPER_BOUND = 1050;
     constexpr int TIME_DRIFT_LOWER_BOUND = 950;
-    
+
     // Detection weights
     constexpr double CPUID_WEIGHT = 0.25;
     constexpr double BIOS_WEIGHT = 0.20;
@@ -50,15 +50,15 @@ namespace constants {
  */
 namespace keywords {
     constexpr std::array<std::string_view, 12> VM_KEYWORDS = {
-        "VMware", "VirtualBox", "QEMU", "Xen", "KVM", "Hyper-V", 
+        "VMware", "VirtualBox", "QEMU", "Xen", "KVM", "Hyper-V",
         "Parallels", "VirtIO", "Virtual", "vbox", "vmware", "qemu"
     };
-    
+
     constexpr std::array<std::string_view, 8> CONTAINER_KEYWORDS = {
-        "docker", "lxc", "kubepods", "containerd", "podman", 
+        "docker", "lxc", "kubepods", "containerd", "podman",
         "systemd-nspawn", "rkt", "garden"
     };
-    
+
     constexpr std::array<std::string_view, 6> CLOUD_KEYWORDS = {
         "amazon", "google", "microsoft", "azure", "aws", "gcp"
     };
@@ -104,7 +104,7 @@ auto executeCommand(std::string_view command) -> std::string;
  * @return bool True if any keyword is found
  */
 template<size_t N>
-auto containsKeywords(std::string_view text, 
+auto containsKeywords(std::string_view text,
                      const std::array<std::string_view, N>& keywords) -> bool;
 
 /**
@@ -179,19 +179,19 @@ namespace platform {
      * @return bool True if Windows
      */
     auto isWindows() -> bool;
-    
+
     /**
      * @brief Check if running on Linux
      * @return bool True if Linux
      */
     auto isLinux() -> bool;
-    
+
     /**
      * @brief Check if running on macOS
      * @return bool True if macOS
      */
     auto isMacOS() -> bool;
-    
+
     /**
      * @brief Get platform name
      * @return std::string Platform name

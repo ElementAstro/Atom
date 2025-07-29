@@ -159,7 +159,7 @@ public:
      * @param intervalMs Monitoring interval in milliseconds
      * @return true if monitoring started successfully
      */
-    auto startPerformanceMonitoring(SystemMonitorCallback callback, 
+    auto startPerformanceMonitoring(SystemMonitorCallback callback,
                                    uint32_t intervalMs = 1000) -> bool;
 
     /**
@@ -179,7 +179,7 @@ public:
      * @param lines Number of lines to retrieve
      * @return Log entries
      */
-    auto getSystemLogs(const std::string& service = "", 
+    auto getSystemLogs(const std::string& service = "",
                       uint32_t lines = 100) -> std::vector<std::string>;
 
     /**
@@ -201,7 +201,7 @@ public:
      * @param action Action to perform (start, stop, restart, enable, disable)
      * @return Operation result
      */
-    auto manageService(const std::string& service, 
+    auto manageService(const std::string& service,
                       const std::string& action) -> OSOperationResult;
 
     /**
@@ -239,7 +239,7 @@ public:
 private:
     bool m_monitoringActive = false;
     std::thread m_monitoringThread;
-    
+
     // Helper functions
     auto parseOSRelease() -> LinuxDistributionInfo;
     auto parseKernelVersion() -> LinuxKernelInfo;

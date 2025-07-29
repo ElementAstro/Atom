@@ -150,15 +150,15 @@ void testDeprecatedFunctions() {
         // Test deprecated global functions (should still work but with warnings)
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        
+
         auto globalReport = generateSystemReport();
         assert(!globalReport.empty());
         std::cout << "✓ generateSystemReport() (deprecated) works\n";
 
         bool globalHtmlSuccess = exportSystemReportToHTML("test_global.html");
-        std::cout << "✓ exportSystemReportToHTML() (deprecated) " 
+        std::cout << "✓ exportSystemReportToHTML() (deprecated) "
                   << (globalHtmlSuccess ? "succeeded" : "failed") << "\n";
-        
+
         #pragma GCC diagnostic pop
 
     } catch (const std::exception& e) {
@@ -173,13 +173,13 @@ int main() {
     try {
         testLegacyAPI();
         std::cout << "\n";
-        
+
         testHelperFunctions();
         std::cout << "\n";
-        
+
         testComponentFormatters();
         std::cout << "\n";
-        
+
         testDeprecatedFunctions();
         std::cout << "\n";
 

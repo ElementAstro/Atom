@@ -20,7 +20,7 @@ BiosInfoData LinuxBiosImplementation::fetchBiosInfo() {
 
         for (const auto& cmd : commands) {
             std::string result = executeCommand(cmd);
-            
+
             biosInfo.version = parseDmidecodeField(result, "Version:");
             if (biosInfo.manufacturer.empty()) {
                 biosInfo.manufacturer = parseDmidecodeField(result, "Vendor:");
@@ -34,7 +34,7 @@ BiosInfoData LinuxBiosImplementation::fetchBiosInfo() {
             if (biosInfo.characteristics.empty()) {
                 biosInfo.characteristics = parseDmidecodeField(result, "Characteristics:");
             }
-            
+
             if (result.find("BIOS is upgradeable") != std::string::npos) {
                 biosInfo.isUpgradeable = true;
             }
@@ -198,7 +198,7 @@ bool LinuxBiosImplementation::isUEFIBootSupported() const {
     } catch (...) {
         // Ignore errors
     }
-    
+
     return false;
 }
 

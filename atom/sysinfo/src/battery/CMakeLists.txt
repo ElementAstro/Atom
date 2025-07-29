@@ -63,8 +63,8 @@ if(WIN32)
 elseif(APPLE)
     find_library(IOKIT_FRAMEWORK IOKit)
     find_library(COREFOUNDATION_FRAMEWORK CoreFoundation)
-    target_link_libraries(atom_sysinfo_battery PRIVATE 
-        ${IOKIT_FRAMEWORK} 
+    target_link_libraries(atom_sysinfo_battery PRIVATE
+        ${IOKIT_FRAMEWORK}
         ${COREFOUNDATION_FRAMEWORK}
     )
 endif()

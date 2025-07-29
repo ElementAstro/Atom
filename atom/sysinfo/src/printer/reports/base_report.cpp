@@ -70,7 +70,7 @@ bool BaseReport::exportToFile(const std::string& filename, ExportFormat format) 
             spdlog::error("Failed to create exporter for format");
             return false;
         }
-        
+
         return exporter->exportToFile(content, filename);
     } catch (const std::exception& e) {
         spdlog::error("Error exporting report to file {}: {}", filename, e.what());
@@ -85,7 +85,7 @@ auto BaseReport::generateSection(ReportSection section) -> std::string {
             spdlog::warn("No formatter available for section: {}", sectionToString(section));
             return "";
         }
-        
+
         switch (section) {
             case ReportSection::OS: {
                 auto osInfo = getOperatingSystemInfo();
@@ -127,7 +127,7 @@ auto BaseReport::generateSection(ReportSection section) -> std::string {
 
 auto BaseReport::getFormatter(ReportSection section) -> std::shared_ptr<BaseFormatter> {
     auto formatterOptions = createFormatterOptions();
-    
+
     switch (section) {
         case ReportSection::OS:
             return std::make_shared<OsFormatter>(formatterOptions);
@@ -148,7 +148,7 @@ auto BaseReport::getFormatter(ReportSection section) -> std::shared_ptr<BaseForm
 
 auto BaseReport::getExporter(ExportFormat format) -> std::shared_ptr<BaseExporter> {
     auto exporterOptions = createExporterOptions();
-    
+
     switch (format) {
         case ExportFormat::HTML:
             return std::make_shared<HtmlExporter>(exporterOptions);
@@ -172,20 +172,20 @@ auto BaseReport::createFooter() -> std::string {
 
 auto BaseReport::combineSections(const std::unordered_map<ReportSection, std::string>& sections) -> std::string {
     std::string result = createHeader();
-    
+
     for (const auto& section : options_.sections) {
         auto it = sections.find(section);
         if (it != sections.end() && !it->second.empty()) {
             result += it->second;
         }
     }
-    
+
     result += createFooter();
     return result;
 }
 
 auto BaseReport::getDefaultSections() const -> std::vector<ReportSection> {
-    return {ReportSection::OS, ReportSection::CPU, ReportSection::MEMORY, 
+    return {ReportSection::OS, ReportSection::CPU, ReportSection::MEMORY,
             ReportSection::DISK, ReportSection::BATTERY, ReportSection::BIOS};
 }
 
@@ -209,7 +209,7 @@ auto BaseReport::applyTemplate(const std::string& content) -> std::string {
     if (options_.templatePath.empty()) {
         return content;
     }
-    
+
     // Template application would be implemented here
     return content;
 }

@@ -12,18 +12,18 @@ namespace {
     // Helper function to convert CFString to std::string
     std::string cfStringToString(CFStringRef cfStr) {
         if (!cfStr) return "";
-        
+
         CFIndex length = CFStringGetLength(cfStr);
         CFIndex maxSize = CFStringGetMaximumSizeForEncoding(length, kCFStringEncodingUTF8) + 1;
         std::string result(maxSize, '\0');
-        
+
         if (CFStringGetCString(cfStr, &result[0], maxSize, kCFStringEncodingUTF8)) {
             result.resize(strlen(result.c_str()));
             return result;
         }
         return "";
     }
-    
+
     // Helper function to create CFString from std::string
     CFStringRef stringToCFString(const std::string& str) {
         return CFStringCreateWithCString(kCFAllocatorDefault, str.c_str(), kCFStringEncodingUTF8);
@@ -32,7 +32,7 @@ namespace {
 
 auto getCFLocaleInfo(const std::string& key, const std::string& locale) -> std::string {
     CFLocaleRef cfLocale;
-    
+
     if (!locale.empty()) {
         CFStringRef localeIdentifier = stringToCFString(locale);
         cfLocale = CFLocaleCreate(kCFAllocatorDefault, localeIdentifier);
@@ -40,15 +40,15 @@ auto getCFLocaleInfo(const std::string& key, const std::string& locale) -> std::
     } else {
         cfLocale = CFLocaleCopyCurrent();
     }
-    
+
     if (!cfLocale) {
         return "";
     }
-    
+
     CFStringRef keyRef = stringToCFString(key);
     CFTypeRef value = CFLocaleGetValue(cfLocale, keyRef);
     CFRelease(keyRef);
-    
+
     std::string result;
     if (value) {
         if (CFGetTypeID(value) == CFStringGetTypeID()) {
@@ -60,7 +60,7 @@ auto getCFLocaleInfo(const std::string& key, const std::string& locale) -> std::
             }
         }
     }
-    
+
     CFRelease(cfLocale);
     return result;
 }
@@ -74,10 +74,10 @@ auto getSystemLanguageInfo() -> LocaleInfo {
     if (currentLocale) {
         CFStringRef localeIdentifier = CFLocaleGetIdentifier(currentLocale);
         localeInfo.localeName = cfStringToString(localeIdentifier);
-        
+
         // Parse the locale identifier
         localeInfo = parseLocaleString(localeInfo.localeName);
-        
+
         // Get detailed information using Core Foundation
         localeInfo.languageDisplayName = getCFLocaleInfo("kCFLocaleLanguageCode");
         localeInfo.countryDisplayName = getCFLocaleInfo("kCFLocaleCountryCode");
@@ -86,10 +86,10 @@ auto getSystemLanguageInfo() -> LocaleInfo {
         localeInfo.decimalSymbol = getCFLocaleInfo("kCFLocaleDecimalSeparator");
         localeInfo.thousandSeparator = getCFLocaleInfo("kCFLocaleGroupingSeparator");
         localeInfo.characterEncoding = "UTF-8";
-        
+
         CFRelease(currentLocale);
     }
-    
+
     // Set additional properties
     localeInfo.isRTL = isRTLLocale(localeInfo.languageCode);
     localeInfo.measurementSystem = getMeasurementSystem(localeInfo.localeName);
@@ -97,17 +97,17 @@ auto getSystemLanguageInfo() -> LocaleInfo {
     localeInfo.timeZone = getSystemTimeZone();
     localeInfo.firstDayOfWeek = getFirstDayOfWeek(localeInfo.localeName);
     localeInfo.weekendDays = getWeekendDays(localeInfo.localeName);
-    
+
     // Get formatting information
     NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
     [dateFormatter setLocale:[NSLocale currentLocale]];
     [dateFormatter setDateStyle:NSDateFormatterShortStyle];
     localeInfo.dateFormat = std::string([[dateFormatter dateFormat] UTF8String]);
-    
+
     [dateFormatter setDateStyle:NSDateFormatterNoStyle];
     [dateFormatter setTimeStyle:NSDateFormatterShortStyle];
     localeInfo.timeFormat = std::string([[dateFormatter dateFormat] UTF8String]);
-    
+
     [dateFormatter release];
 
     spdlog::info("Successfully retrieved macOS locale information for: {}", localeInfo.localeName);
@@ -116,12 +116,12 @@ auto getSystemLanguageInfo() -> LocaleInfo {
 
 auto getAvailableLocales() -> std::vector<std::string> {
     std::vector<std::string> locales;
-    
+
     NSArray *availableLocaleIdentifiers = [NSLocale availableLocaleIdentifiers];
     for (NSString *identifier in availableLocaleIdentifiers) {
         locales.push_back(std::string([identifier UTF8String]));
     }
-    
+
     spdlog::info("Found {} available locales on macOS", locales.size());
     return locales;
 }
@@ -130,12 +130,12 @@ auto validateLocale(const std::string& locale) -> bool {
     if (locale.empty()) {
         return false;
     }
-    
+
     NSString *localeIdentifier = [NSString stringWithUTF8String:locale.c_str()];
     NSLocale *testLocale = [[NSLocale alloc] initWithLocaleIdentifier:localeIdentifier];
     bool isValid = (testLocale != nil);
     [testLocale release];
-    
+
     return isValid;
 }
 
@@ -158,7 +158,7 @@ auto setSystemLocale(const std::string& locale) -> LocaleError {
 
 auto getDefaultLocale() -> std::string {
     spdlog::debug("Getting macOS default locale");
-    
+
     NSLocale *currentLocale = [NSLocale currentLocale];
     NSString *localeIdentifier = [currentLocale localeIdentifier];
     return std::string([localeIdentifier UTF8String]);
@@ -166,12 +166,12 @@ auto getDefaultLocale() -> std::string {
 
 auto getPreferredLanguages() -> std::vector<std::string> {
     std::vector<std::string> languages;
-    
+
     NSArray *preferredLanguages = [NSLocale preferredLanguages];
     for (NSString *language in preferredLanguages) {
         languages.push_back(std::string([language UTF8String]));
     }
-    
+
     return languages;
 }
 
@@ -182,10 +182,10 @@ auto getCurrentLocale() -> std::string {
 auto isRTLLocale(const std::string& locale) -> bool {
     NSString *localeIdentifier = [NSString stringWithUTF8String:locale.c_str()];
     NSLocale *testLocale = [[NSLocale alloc] initWithLocaleIdentifier:localeIdentifier];
-    
+
     NSLocaleLanguageDirection direction = [NSLocale characterDirectionForLanguage:[testLocale objectForKey:NSLocaleLanguageCode]];
     bool isRTL = (direction == NSLocaleLanguageDirectionRightToLeft);
-    
+
     [testLocale release];
     return isRTL;
 }
@@ -199,10 +199,10 @@ auto getCurrencyInfo(const std::string& locale) -> std::pair<std::string, std::s
 auto getMeasurementSystem(const std::string& locale) -> MeasurementSystem {
     NSString *localeIdentifier = [NSString stringWithUTF8String:locale.c_str()];
     NSLocale *testLocale = [[NSLocale alloc] initWithLocaleIdentifier:localeIdentifier];
-    
+
     NSNumber *usesMetric = [testLocale objectForKey:NSLocaleUsesMetricSystem];
     bool isMetric = [usesMetric boolValue];
-    
+
     [testLocale release];
     return isMetric ? MeasurementSystem::Metric : MeasurementSystem::US;
 }
@@ -219,17 +219,17 @@ auto getPaperSize(const std::string& locale) -> PaperSize {
 auto getFirstDayOfWeek(const std::string& locale) -> std::string {
     NSString *localeIdentifier = [NSString stringWithUTF8String:locale.c_str()];
     NSLocale *testLocale = [[NSLocale alloc] initWithLocaleIdentifier:localeIdentifier];
-    
+
     NSCalendar *calendar = [[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierGregorian];
     [calendar setLocale:testLocale];
-    
+
     NSInteger firstWeekday = [calendar firstWeekday];
     const std::vector<std::string> days = {
         "", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
     };
-    
+
     std::string result = (firstWeekday >= 1 && firstWeekday <= 7) ? days[firstWeekday] : "Monday";
-    
+
     [calendar release];
     [testLocale release];
     return result;
@@ -248,15 +248,15 @@ auto getSystemTimeZone() -> std::string {
 auto formatNumber(double number, const std::string& locale) -> std::string {
     NSString *localeIdentifier = [NSString stringWithUTF8String:locale.c_str()];
     NSLocale *testLocale = [[NSLocale alloc] initWithLocaleIdentifier:localeIdentifier];
-    
+
     NSNumberFormatter *formatter = [[NSNumberFormatter alloc] init];
     [formatter setLocale:testLocale];
     [formatter setNumberStyle:NSNumberFormatterDecimalStyle];
-    
+
     NSNumber *number_obj = [NSNumber numberWithDouble:number];
     NSString *formatted = [formatter stringFromNumber:number_obj];
     std::string result = std::string([formatted UTF8String]);
-    
+
     [formatter release];
     [testLocale release];
     return result;
@@ -265,29 +265,29 @@ auto formatNumber(double number, const std::string& locale) -> std::string {
 auto formatCurrency(double amount, const std::string& locale) -> std::string {
     NSString *localeIdentifier = [NSString stringWithUTF8String:locale.c_str()];
     NSLocale *testLocale = [[NSLocale alloc] initWithLocaleIdentifier:localeIdentifier];
-    
+
     NSNumberFormatter *formatter = [[NSNumberFormatter alloc] init];
     [formatter setLocale:testLocale];
     [formatter setNumberStyle:NSNumberFormatterCurrencyStyle];
-    
+
     NSNumber *amount_obj = [NSNumber numberWithDouble:amount];
     NSString *formatted = [formatter stringFromNumber:amount_obj];
     std::string result = std::string([formatted UTF8String]);
-    
+
     [formatter release];
     [testLocale release];
     return result;
 }
 
-auto formatDate(const std::chrono::system_clock::time_point& timestamp, 
-                const std::string& locale, 
+auto formatDate(const std::chrono::system_clock::time_point& timestamp,
+                const std::string& locale,
                 const std::string& format) -> std::string {
     NSString *localeIdentifier = [NSString stringWithUTF8String:locale.c_str()];
     NSLocale *testLocale = [[NSLocale alloc] initWithLocaleIdentifier:localeIdentifier];
-    
+
     NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
     [formatter setLocale:testLocale];
-    
+
     if (!format.empty()) {
         NSString *formatString = [NSString stringWithUTF8String:format.c_str()];
         [formatter setDateFormat:formatString];
@@ -295,26 +295,26 @@ auto formatDate(const std::chrono::system_clock::time_point& timestamp,
         [formatter setDateStyle:NSDateFormatterShortStyle];
         [formatter setTimeStyle:NSDateFormatterNoStyle];
     }
-    
+
     auto time_t = std::chrono::system_clock::to_time_t(timestamp);
     NSDate *date = [NSDate dateWithTimeIntervalSince1970:time_t];
     NSString *formatted = [formatter stringFromDate:date];
     std::string result = std::string([formatted UTF8String]);
-    
+
     [formatter release];
     [testLocale release];
     return result;
 }
 
-auto formatTime(const std::chrono::system_clock::time_point& timestamp, 
-                const std::string& locale, 
+auto formatTime(const std::chrono::system_clock::time_point& timestamp,
+                const std::string& locale,
                 const std::string& format) -> std::string {
     NSString *localeIdentifier = [NSString stringWithUTF8String:locale.c_str()];
     NSLocale *testLocale = [[NSLocale alloc] initWithLocaleIdentifier:localeIdentifier];
-    
+
     NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
     [formatter setLocale:testLocale];
-    
+
     if (!format.empty()) {
         NSString *formatString = [NSString stringWithUTF8String:format.c_str()];
         [formatter setDateFormat:formatString];
@@ -322,12 +322,12 @@ auto formatTime(const std::chrono::system_clock::time_point& timestamp,
         [formatter setDateStyle:NSDateFormatterNoStyle];
         [formatter setTimeStyle:NSDateFormatterShortStyle];
     }
-    
+
     auto time_t = std::chrono::system_clock::to_time_t(timestamp);
     NSDate *date = [NSDate dateWithTimeIntervalSince1970:time_t];
     NSString *formatted = [formatter stringFromDate:date];
     std::string result = std::string([formatted UTF8String]);
-    
+
     [formatter release];
     [testLocale release];
     return result;
@@ -348,33 +348,33 @@ auto getSystemLanguage() -> std::string {
 auto getCalendarIdentifier(const std::string& locale) -> std::string {
     NSString *localeIdentifier = [NSString stringWithUTF8String:locale.c_str()];
     NSLocale *testLocale = [[NSLocale alloc] initWithLocaleIdentifier:localeIdentifier];
-    
+
     NSCalendar *calendar = [NSCalendar currentCalendar];
     [calendar setLocale:testLocale];
-    
+
     NSString *identifier = [calendar calendarIdentifier];
     std::string result = std::string([identifier UTF8String]);
-    
+
     [testLocale release];
     return result;
 }
 
 auto getNumberFormattingStyle(const std::string& locale) -> std::string {
-    return getCFLocaleInfo("kCFLocaleDecimalSeparator", locale) + " / " + 
+    return getCFLocaleInfo("kCFLocaleDecimalSeparator", locale) + " / " +
            getCFLocaleInfo("kCFLocaleGroupingSeparator", locale);
 }
 
 auto getDateFormattingStyle(const std::string& locale) -> std::string {
     NSString *localeIdentifier = [NSString stringWithUTF8String:locale.c_str()];
     NSLocale *testLocale = [[NSLocale alloc] initWithLocaleIdentifier:localeIdentifier];
-    
+
     NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
     [formatter setLocale:testLocale];
     [formatter setDateStyle:NSDateFormatterShortStyle];
-    
+
     NSString *format = [formatter dateFormat];
     std::string result = std::string([format UTF8String]);
-    
+
     [formatter release];
     [testLocale release];
     return result;
@@ -383,14 +383,14 @@ auto getDateFormattingStyle(const std::string& locale) -> std::string {
 auto getTimeFormattingStyle(const std::string& locale) -> std::string {
     NSString *localeIdentifier = [NSString stringWithUTF8String:locale.c_str()];
     NSLocale *testLocale = [[NSLocale alloc] initWithLocaleIdentifier:localeIdentifier];
-    
+
     NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
     [formatter setLocale:testLocale];
     [formatter setTimeStyle:NSDateFormatterShortStyle];
-    
+
     NSString *format = [formatter dateFormat];
     std::string result = std::string([format UTF8String]);
-    
+
     [formatter release];
     [testLocale release];
     return result;
@@ -400,10 +400,10 @@ auto uses24HourFormat() -> bool {
     NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
     [formatter setLocale:[NSLocale currentLocale]];
     [formatter setTimeStyle:NSDateFormatterShortStyle];
-    
+
     NSString *format = [formatter dateFormat];
     bool uses24Hour = ([format rangeOfString:@"H"].location != NSNotFound);
-    
+
     [formatter release];
     return uses24Hour;
 }

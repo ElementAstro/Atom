@@ -36,10 +36,10 @@ target_link_libraries(atom_sysinfo_gpu
 
 # Platform-specific library linking
 if(WIN32)
-    target_link_libraries(atom_sysinfo_gpu PRIVATE 
-        setupapi 
-        wbemuuid 
-        ole32 
+    target_link_libraries(atom_sysinfo_gpu PRIVATE
+        setupapi
+        wbemuuid
+        ole32
         oleaut32
         gdi32
         user32
@@ -49,24 +49,24 @@ elseif(UNIX AND NOT APPLE)
     find_package(Threads REQUIRED)
     find_package(X11)
     target_link_libraries(atom_sysinfo_gpu PRIVATE ${CMAKE_THREAD_LIBS_INIT})
-    
+
     if(X11_FOUND)
         target_link_libraries(atom_sysinfo_gpu PRIVATE ${X11_LIBRARIES})
         if(X11_Xrandr_FOUND)
             target_link_libraries(atom_sysinfo_gpu PRIVATE ${X11_Xrandr_LIB})
         endif()
     endif()
-    
+
     # Optional: Link with DRM libraries if available
     find_library(DRM_LIBRARY drm)
     if(DRM_LIBRARY)
         target_link_libraries(atom_sysinfo_gpu PRIVATE ${DRM_LIBRARY})
     endif()
-    
+
 elseif(APPLE)
     # macOS-specific frameworks
-    target_link_libraries(atom_sysinfo_gpu PRIVATE 
-        "-framework CoreFoundation" 
+    target_link_libraries(atom_sysinfo_gpu PRIVATE
+        "-framework CoreFoundation"
         "-framework IOKit"
         "-framework CoreGraphics"
         "-framework Metal"

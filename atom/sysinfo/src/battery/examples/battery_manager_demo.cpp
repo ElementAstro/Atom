@@ -1,7 +1,7 @@
 /**
  * @file battery_manager_demo.cpp
  * @brief Battery manager demonstration
- * 
+ *
  * This example demonstrates the advanced features of BatteryManager
  * including alerts, statistics, and data recording.
  */
@@ -28,7 +28,7 @@ void signalHandler(int signal) {
 // Alert callback function
 void alertCallback(AlertType alertType, const BatteryInfo& info) {
     std::cout << "\n*** BATTERY ALERT ***" << std::endl;
-    
+
     switch (alertType) {
         case AlertType::LOW_BATTERY:
             std::cout << "LOW BATTERY: " << std::fixed << std::setprecision(1)
@@ -65,7 +65,7 @@ void alertCallback(AlertType alertType, const BatteryInfo& info) {
             std::cout << "FULL CHARGE REACHED" << std::endl;
             break;
     }
-    
+
     std::cout << "*********************\n" << std::endl;
 }
 
@@ -93,21 +93,21 @@ int main() {
     // Set up signal handling
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
-    
+
     std::cout << "Battery Manager Demo" << std::endl;
     std::cout << "====================" << std::endl;
     std::cout << "Press Ctrl+C to exit" << std::endl << std::endl;
-    
+
     // Check if battery is present
     auto batteryInfo = getBatteryInfo();
     if (!batteryInfo || !batteryInfo->isBatteryPresent) {
         std::cout << "No battery detected!" << std::endl;
         return 1;
     }
-    
+
     // Get battery manager instance
     auto& manager = BatteryManager::getInstance();
-    
+
     // Configure alert settings
     BatteryAlertSettings alertSettings;
     alertSettings.lowBatteryThreshold = 30.0f;      // Alert at 30%
@@ -117,10 +117,10 @@ int main() {
     alertSettings.enableTemperatureAlerts = true;
     alertSettings.enableHealthAlerts = true;
     alertSettings.enableCycleAlerts = true;
-    
+
     manager.setAlertSettings(alertSettings);
     manager.setAlertCallback(alertCallback);
-    
+
     // Start recording to a log file
     std::string logFile = "battery_log.csv";
     if (manager.startRecording(logFile)) {
@@ -129,13 +129,13 @@ int main() {
         std::cout << "Failed to start recording, continuing with memory-only mode" << std::endl;
         manager.startRecording();  // Memory-only recording
     }
-    
+
     // Start monitoring with 5-second interval
     if (!manager.startMonitoring(5000)) {
         std::cout << "Failed to start battery monitoring!" << std::endl;
         return 1;
     }
-    
+
     std::cout << "Battery manager started. Monitoring every 5 seconds." << std::endl;
     std::cout << "Alerts configured:" << std::endl;
     std::cout << "  - Low battery: " << alertSettings.lowBatteryThreshold << "%" << std::endl;
@@ -143,18 +143,18 @@ int main() {
     std::cout << "  - High temperature: " << alertSettings.highTempThreshold << "°C" << std::endl;
     std::cout << "  - Low health: " << alertSettings.lowHealthThreshold << "%" << std::endl;
     std::cout << std::endl;
-    
+
     // Main loop - print statistics every 30 seconds
     auto lastStatsTime = std::chrono::steady_clock::now();
     const auto statsInterval = std::chrono::seconds(30);
-    
+
     while (g_running) {
         auto now = std::chrono::steady_clock::now();
-        
+
         if (now - lastStatsTime >= statsInterval) {
             const auto& stats = manager.getStats();
             printStats(stats);
-            
+
             // Print history summary
             auto history = manager.getHistory(10);  // Last 10 entries
             if (!history.empty()) {
@@ -166,22 +166,22 @@ int main() {
                               << entry.second.batteryLifePercent << "%" << std::endl;
                 }
             }
-            
+
             lastStatsTime = now;
         }
-        
+
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-    
+
     // Stop monitoring and recording
     manager.stopMonitoring();
     manager.stopRecording();
-    
+
     std::cout << "\nFinal statistics:" << std::endl;
     const auto& finalStats = manager.getStats();
     printStats(finalStats);
-    
+
     std::cout << "Battery manager demo completed." << std::endl;
-    
+
     return 0;
 }

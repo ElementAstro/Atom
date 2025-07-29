@@ -4,11 +4,11 @@
 /**
  * @file disk.hpp
  * @brief Backward compatibility header for disk module
- * 
+ *
  * This header provides backward compatibility for existing code that includes
  * the disk module. It forwards to the new modular implementation and
  * provides namespace aliases for seamless migration.
- * 
+ *
  * @deprecated This compatibility header will be removed in a future version.
  * Please update your code to use the new include paths:
  * #include "atom/sysinfo/src/disk/disk.hpp"
