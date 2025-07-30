@@ -183,6 +183,10 @@ FifoClient::FifoClient(std::string_view fifoPath)
 
 FifoClient::~FifoClient() = default;
 
+FifoClient::FifoClient(FifoClient &&) noexcept = default;
+
+auto FifoClient::operator=(FifoClient &&) noexcept -> FifoClient & = default;
+
 void FifoClient::open(std::string_view fifoPath) { pimpl_->open(fifoPath); }
 
 auto FifoClient::write(std::string_view data,

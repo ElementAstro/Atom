@@ -287,6 +287,16 @@ public:
     explicit SimulatedAnnealing(const Builder& builder);
 
     /**
+     * @brief Move constructor.
+     */
+    SimulatedAnnealing(SimulatedAnnealing&& other) noexcept;
+
+    /**
+     * @brief Move assignment operator.
+     */
+    SimulatedAnnealing& operator=(SimulatedAnnealing&& other) noexcept;
+
+    /**
      * @brief Sets the cooling schedule based on the specified strategy.
      * @param strategy The annealing strategy to use.
      */
@@ -388,6 +398,57 @@ SimulatedAnnealing<ProblemType, SolutionType>::SimulatedAnnealing(
         static_cast<int>(cooling_strategy_), cooling_rate_);
     setCoolingSchedule(cooling_strategy_);
     start_time_ = std::chrono::steady_clock::now();
+}
+
+template <typename ProblemType, typename SolutionType>
+    requires AnnealingProblem<ProblemType, SolutionType>
+SimulatedAnnealing<ProblemType, SolutionType>::SimulatedAnnealing(SimulatedAnnealing&& other) noexcept
+    : problem_instance_(other.problem_instance_),
+      cooling_schedule_(std::move(other.cooling_schedule_)),
+      max_iterations_(other.max_iterations_),
+      initial_temperature_(other.initial_temperature_),
+      cooling_strategy_(other.cooling_strategy_),
+      progress_callback_(std::move(other.progress_callback_)),
+      stop_condition_(std::move(other.stop_condition_)),
+      should_stop_(other.should_stop_.load()),
+      best_solution_(std::move(other.best_solution_)),
+      best_energy_(other.best_energy_),
+      cooling_rate_(other.cooling_rate_),
+      restart_interval_(other.restart_interval_),
+      current_restart_(other.current_restart_),
+      total_restarts_(other.total_restarts_.load()),
+      total_steps_(other.total_steps_.load()),
+      accepted_steps_(other.accepted_steps_.load()),
+      rejected_steps_(other.rejected_steps_.load()),
+      start_time_(other.start_time_),
+      energy_history_(std::move(other.energy_history_)) {
+}
+
+template <typename ProblemType, typename SolutionType>
+    requires AnnealingProblem<ProblemType, SolutionType>
+SimulatedAnnealing<ProblemType, SolutionType>& SimulatedAnnealing<ProblemType, SolutionType>::operator=(SimulatedAnnealing&& other) noexcept {
+    if (this != &other) {
+        problem_instance_ = other.problem_instance_;
+        cooling_schedule_ = std::move(other.cooling_schedule_);
+        max_iterations_ = other.max_iterations_;
+        initial_temperature_ = other.initial_temperature_;
+        cooling_strategy_ = other.cooling_strategy_;
+        progress_callback_ = std::move(other.progress_callback_);
+        stop_condition_ = std::move(other.stop_condition_);
+        should_stop_.store(other.should_stop_.load());
+        best_solution_ = std::move(other.best_solution_);
+        best_energy_ = other.best_energy_;
+        cooling_rate_ = other.cooling_rate_;
+        restart_interval_ = other.restart_interval_;
+        current_restart_ = other.current_restart_;
+        total_restarts_.store(other.total_restarts_.load());
+        total_steps_.store(other.total_steps_.load());
+        accepted_steps_.store(other.accepted_steps_.load());
+        rejected_steps_.store(other.rejected_steps_.load());
+        start_time_ = other.start_time_;
+        energy_history_ = std::move(other.energy_history_);
+    }
+    return *this;
 }
 
 template <typename ProblemType, typename SolutionType>

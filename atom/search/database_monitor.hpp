@@ -190,8 +190,9 @@ class DatabaseHealthMonitor {
 public:
     using HealthCheckFunction = std::function<HealthReport()>;
 
-    DatabaseHealthMonitor(std::chrono::seconds check_interval = std::chrono::seconds(60))
-        : check_interval_(check_interval), running_(false) {}
+    template<typename Rep, typename Period>
+    DatabaseHealthMonitor(std::chrono::duration<Rep, Period> check_interval = std::chrono::seconds(60))
+        : check_interval_(std::chrono::duration_cast<std::chrono::seconds>(check_interval)), running_(false) {}
 
     ~DatabaseHealthMonitor() {
         stop();

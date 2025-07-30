@@ -117,6 +117,33 @@ private:
     ErrorCode code_{ErrorCode::UNKNOWN};
 };
 
+/**
+ * @brief Stream insertion operator for SharedMemoryException::ErrorCode
+ * @param os Output stream
+ * @param code Error code to output
+ * @return Reference to output stream
+ */
+inline std::ostream& operator<<(std::ostream& os, const SharedMemoryException::ErrorCode& code) {
+    switch (code) {
+        case SharedMemoryException::ErrorCode::CREATION_FAILED:
+            return os << "CREATION_FAILED";
+        case SharedMemoryException::ErrorCode::MAPPING_FAILED:
+            return os << "MAPPING_FAILED";
+        case SharedMemoryException::ErrorCode::ACCESS_DENIED:
+            return os << "ACCESS_DENIED";
+        case SharedMemoryException::ErrorCode::TIMEOUT:
+            return os << "TIMEOUT";
+        case SharedMemoryException::ErrorCode::SIZE_ERROR:
+            return os << "SIZE_ERROR";
+        case SharedMemoryException::ErrorCode::ALREADY_EXISTS:
+            return os << "ALREADY_EXISTS";
+        case SharedMemoryException::ErrorCode::NOT_FOUND:
+            return os << "NOT_FOUND";
+        default:
+            return os << "UNKNOWN";
+    }
+}
+
 #define THROW_SHARED_MEMORY_ERROR_WITH_CODE(message, code) \
     throw atom::connection::SharedMemoryException(         \
         ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, message, code)
@@ -267,11 +294,11 @@ public:
      *
      * @param data The data to write.
      * @param timeout The operation timeout.
-     * @param notifyListeners Whether to notify listeners.
+     * @param notify Whether to notify listeners.
      */
     void write(const T& data,
                std::chrono::milliseconds timeout = std::chrono::milliseconds(0),
-               bool notifyListeners = true);
+               bool notify = true);
 
     /**
      * @brief Reads data from shared memory.
@@ -540,7 +567,7 @@ private:
     uint32_t calculateChecksum(const void* data, size_t size) const noexcept;
     void validateDataIntegrity() const;
     void initializeCreatorInfo();
-    void handleRecoveryOperation();
+    void handleRecoveryOperation() const;
 
 public:
     /**
@@ -1096,7 +1123,7 @@ auto SharedMemory<T>::withLock(Func&& func,
 
 template <TriviallyCopyable T>
 void SharedMemory<T>::write(const T& data, std::chrono::milliseconds timeout,
-                            bool notifyListeners) {
+                            bool notify) {
     withLock(
         [&]() {
             std::memcpy(getDataPtr(), &data, sizeof(T));
@@ -1118,7 +1145,7 @@ void SharedMemory<T>::write(const T& data, std::chrono::milliseconds timeout,
         },
         timeout);
 
-    if (notifyListeners) {
+    if (notify) {
         notifyListeners(data);
         changeCondition_.notify_all();
     }
@@ -1561,7 +1588,7 @@ void SharedMemory<T>::initializeCreatorInfo() {
 }
 
 template <TriviallyCopyable T>
-void SharedMemory<T>::handleRecoveryOperation() {
+void SharedMemory<T>::handleRecoveryOperation() const {
     if (!config_.enable_auto_recovery) return;
 
     try {
@@ -1578,6 +1605,32 @@ void SharedMemory<T>::handleRecoveryOperation() {
         // Recovery failed, but don't throw - let the original operation handle the timeout
         spdlog::error("Auto-recovery failed for shared memory: {}", name_);
     }
+}
+
+template <TriviallyCopyable T>
+auto SharedMemory<T>::waitForChange(std::chrono::milliseconds timeout) -> bool {
+    // Simple implementation - check if version has changed
+    if (!header_) return false;
+
+    auto start_time = std::chrono::steady_clock::now();
+    uint64_t initial_version = header_->version.load(std::memory_order_acquire);
+
+    while (std::chrono::steady_clock::now() - start_time < timeout) {
+        uint64_t current_version = header_->version.load(std::memory_order_acquire);
+        if (current_version != initial_version) {
+            return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    return false;
+}
+
+template <TriviallyCopyable T>
+void SharedMemory<T>::startWatchThread() {
+    // Stub implementation - in a full implementation this would start a background thread
+    // to monitor changes, but for now we'll just do nothing to avoid linking errors
+    // TODO: Implement proper watch thread functionality
 }
 
 }  // namespace atom::connection

@@ -93,6 +93,31 @@ struct CacheMetrics {
     std::atomic<uint64_t> total_operations{0};
     std::atomic<size_t> memory_usage_bytes{0};
 
+    // Custom copy constructor
+    CacheMetrics(const CacheMetrics& other)
+        : hit_count(other.hit_count.load()),
+          miss_count(other.miss_count.load()),
+          eviction_count(other.eviction_count.load()),
+          expiration_count(other.expiration_count.load()),
+          total_operations(other.total_operations.load()),
+          memory_usage_bytes(other.memory_usage_bytes.load()) {}
+
+    // Custom assignment operator
+    CacheMetrics& operator=(const CacheMetrics& other) {
+        if (this != &other) {
+            hit_count.store(other.hit_count.load());
+            miss_count.store(other.miss_count.load());
+            eviction_count.store(other.eviction_count.load());
+            expiration_count.store(other.expiration_count.load());
+            total_operations.store(other.total_operations.load());
+            memory_usage_bytes.store(other.memory_usage_bytes.load());
+        }
+        return *this;
+    }
+
+    // Default constructor
+    CacheMetrics() = default;
+
     // Enhanced metrics
     std::atomic<uint64_t> insert_count{0};
     std::atomic<uint64_t> remove_count{0};
@@ -457,6 +482,48 @@ private:
         CacheEntry(const T& v, TimePoint ct, Duration et, size_t size = 0)
             : value(v), creation_time(ct), expiration_time(et),
               last_access_time(ct), estimated_size(size) {}
+
+        // Copy constructor
+        CacheEntry(const CacheEntry& other)
+            : value(other.value), creation_time(other.creation_time),
+              expiration_time(other.expiration_time),
+              access_count(other.access_count.load()),
+              last_access_time(other.last_access_time),
+              estimated_size(other.estimated_size) {}
+
+        // Move constructor
+        CacheEntry(CacheEntry&& other) noexcept
+            : value(std::move(other.value)), creation_time(other.creation_time),
+              expiration_time(other.expiration_time),
+              access_count(other.access_count.load()),
+              last_access_time(other.last_access_time),
+              estimated_size(other.estimated_size) {}
+
+        // Copy assignment operator
+        CacheEntry& operator=(const CacheEntry& other) {
+            if (this != &other) {
+                value = other.value;
+                creation_time = other.creation_time;
+                expiration_time = other.expiration_time;
+                access_count.store(other.access_count.load());
+                last_access_time = other.last_access_time;
+                estimated_size = other.estimated_size;
+            }
+            return *this;
+        }
+
+        // Move assignment operator
+        CacheEntry& operator=(CacheEntry&& other) noexcept {
+            if (this != &other) {
+                value = std::move(other.value);
+                creation_time = other.creation_time;
+                expiration_time = other.expiration_time;
+                access_count.store(other.access_count.load());
+                last_access_time = other.last_access_time;
+                estimated_size = other.estimated_size;
+            }
+            return *this;
+        }
     };
 
     struct Shard {

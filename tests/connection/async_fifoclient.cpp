@@ -94,7 +94,7 @@ namespace {
      while ((fd = ::open(path.c_str(), O_RDONLY)) == -1 && errno == EINTR);
 
     if (fd == -1) {
-      FAIL() << "Failed to open FIFO for reading: " << strerror(errno);
+      ADD_FAILURE() << "Failed to open FIFO for reading: " << strerror(errno);
       return "";
     }
 
@@ -105,13 +105,13 @@ namespace {
       if (bytes_read == -1) {
          if (errno == EINTR) continue;
          ::close(fd);
-         FAIL() << "Failed to read from FIFO: " << strerror(errno);
+         ADD_FAILURE() << "Failed to read from FIFO: " << strerror(errno);
          return "";
       }
       if (bytes_read == 0) {
         // EOF before reading expected size
         ::close(fd);
-        FAIL() << "EOF encountered before reading expected size from FIFO";
+        ADD_FAILURE() << "EOF encountered before reading expected size from FIFO";
         return "";
       }
       total_read += bytes_read;

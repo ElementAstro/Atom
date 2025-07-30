@@ -66,7 +66,7 @@ TEST_F(ThreadSafeLRUCacheTest, Keys) {
 TEST_F(ThreadSafeLRUCacheTest, PopLru) {
     cache->put("key1", 1);
     cache->put("key2", 2);
-    auto lru = cache->popLru();
+    auto lru = cache->pop_lru();
     ASSERT_TRUE(lru.has_value());
     EXPECT_EQ(lru->first, "key1");
     EXPECT_EQ(lru->second, 1);
@@ -236,7 +236,7 @@ TEST_F(ThreadSafeLRUCacheTest, GetStatistics) {
     auto val1 = cache->get("key1");         // Hit // Capture return value
     auto val2 = cache->get("nonexistent");  // Miss // Capture return value
 
-    auto stats = cache->getStatistics();
+    auto stats = cache->get_statistics();
 
     EXPECT_EQ(stats.hitCount, 1);
     EXPECT_EQ(stats.missCount, 1);
@@ -296,7 +296,7 @@ TEST_F(ThreadSafeLRUCacheTest, EmptyOperations) {
     EXPECT_FALSE(val.has_value());
     EXPECT_EQ(cache->getShared("any"), nullptr);
 
-    auto lru = cache->popLru();
+    auto lru = cache->pop_lru();
     EXPECT_FALSE(lru.has_value());
 
     std::vector<std::string> emptyVec;
@@ -547,13 +547,13 @@ TEST_F(ThreadSafeLRUCacheTest, DefaultTTL) {
 TEST_F(ThreadSafeLRUCacheTest, AsyncGet) {
     cache->put("async_key", 123);
 
-    auto futureValue = cache->asyncGet("async_key");
+    auto futureValue = cache->async_get("async_key");
     auto value = futureValue.get();  // Wait for the async operation to complete
 
     ASSERT_TRUE(value.has_value());
     EXPECT_EQ(value.value(), 123);
 
-    auto futureNonExistent = cache->asyncGet("nonexistent_async");
+    auto futureNonExistent = cache->async_get("nonexistent_async");
     auto nonExistentValue = futureNonExistent.get();
     EXPECT_FALSE(nonExistentValue.has_value());
 }
@@ -574,13 +574,13 @@ TEST_F(ThreadSafeLRUCacheTest, ResetStatistics) {
     auto val1 = cache->get("key1");  // Hit // Capture return value
     auto val2 = cache->get("key2");  // Miss // Capture return value
 
-    auto statsBefore = cache->getStatistics();
+    auto statsBefore = cache->get_statistics();
     EXPECT_EQ(statsBefore.hitCount, 1);
     EXPECT_EQ(statsBefore.missCount, 1);
 
     cache->resetStatistics();
 
-    auto statsAfter = cache->getStatistics();
+    auto statsAfter = cache->get_statistics();
     EXPECT_EQ(statsAfter.hitCount, 0);
     EXPECT_EQ(statsAfter.missCount, 0);
 }

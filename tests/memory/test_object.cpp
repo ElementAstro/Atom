@@ -435,8 +435,8 @@ TEST_F(ObjectPoolTest, WaitTimeTracking) {
     // Check stats
     auto stats = pool.getStats();
     EXPECT_EQ(stats.wait_count, 1);
-    EXPECT_GT(stats.total_wait_time.count(), 0);
-    EXPECT_GT(stats.max_wait_time.count(), 0);
+    EXPECT_GT(stats.total_wait_time, 0);
+    EXPECT_GT(stats.max_wait_time, 0);
 }
 
 // Test for move semantics

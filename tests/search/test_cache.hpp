@@ -38,14 +38,14 @@ TEST_F(ResourceCacheTest, Remove) {
 
 TEST_F(ResourceCacheTest, AsyncGet) {
     cache->insert("key1", 1, std::chrono::seconds(10));
-    auto future = cache->asyncGet("key1");
+    auto future = cache->async_get("key1");
     auto value = future.get();
     ASSERT_TRUE(value.has_value());
     EXPECT_EQ(value.value(), 1);
 }
 
 TEST_F(ResourceCacheTest, AsyncInsert) {
-    auto future = cache->asyncInsert("key1", 1, std::chrono::seconds(10));
+    auto future = cache->async_insert("key1", 1, std::chrono::seconds(10));
     future.get();
     EXPECT_TRUE(cache->contains("key1"));
 }
@@ -82,17 +82,17 @@ TEST_F(ResourceCacheTest, EvictOldest) {
 TEST_F(ResourceCacheTest, IsExpired) {
     cache->insert("key1", 1, std::chrono::seconds(1));
     std::this_thread::sleep_for(std::chrono::seconds(2));
-    EXPECT_TRUE(cache->isExpired("key1"));
+    EXPECT_TRUE(cache->is_expired("key1"));
 }
 
 TEST_F(ResourceCacheTest, AsyncLoad) {
-    auto future = cache->asyncLoad("key1", []() { return 1; });
+    auto future = cache->async_load("key1", []() { return 1; });
     future.get();
     EXPECT_TRUE(cache->contains("key1"));
 }
 
 TEST_F(ResourceCacheTest, SetMaxSize) {
-    cache->setMaxSize(2);
+    cache->set_max_size(2);
     cache->insert("key1", 1, std::chrono::seconds(10));
     cache->insert("key2", 2, std::chrono::seconds(10));
     cache->insert("key3", 3, std::chrono::seconds(10));
@@ -102,14 +102,14 @@ TEST_F(ResourceCacheTest, SetMaxSize) {
 
 TEST_F(ResourceCacheTest, SetExpirationTime) {
     cache->insert("key1", 1, std::chrono::seconds(10));
-    cache->setExpirationTime("key1", std::chrono::seconds(1));
+    cache->set_expiration_time("key1", std::chrono::seconds(1));
     std::this_thread::sleep_for(std::chrono::seconds(2));
-    EXPECT_TRUE(cache->isExpired("key1"));
+    EXPECT_TRUE(cache->is_expired("key1"));
 }
 
 TEST_F(ResourceCacheTest, InsertBatch) {
     std::vector<std::pair<std::string, int>> items = {{"key1", 1}, {"key2", 2}};
-    cache->insertBatch(items, std::chrono::seconds(10));
+    cache->insert_batch(items, std::chrono::seconds(10));
     EXPECT_TRUE(cache->contains("key1"));
     EXPECT_TRUE(cache->contains("key2"));
 }
@@ -118,7 +118,7 @@ TEST_F(ResourceCacheTest, RemoveBatch) {
     cache->insert("key1", 1, std::chrono::seconds(10));
     cache->insert("key2", 2, std::chrono::seconds(10));
     std::vector<std::string> keys = {"key1", "key2"};
-    cache->removeBatch(keys);
+    cache->remove_batch(keys);
     EXPECT_FALSE(cache->contains("key1"));
     EXPECT_FALSE(cache->contains("key2"));
 }
@@ -127,7 +127,7 @@ TEST_F(ResourceCacheTest, GetStatistics) {
     cache->insert("key1", 1, std::chrono::seconds(10));
     cache->get("key1");
     cache->get("key2");
-    auto [hits, misses] = cache->getStatistics();
+    auto [hits, misses] = cache->get_statistics();
     EXPECT_EQ(hits, 1);
     EXPECT_EQ(misses, 1);
 }
@@ -135,7 +135,7 @@ TEST_F(ResourceCacheTest, GetStatistics) {
 TEST_F(ResourceCacheTest, OnInsertCallback) {
     bool callbackCalled = false;
     String insertedKey;
-    cache->onInsert([&](const String &key) {
+    cache->on_insert([&](const String &key) {
         callbackCalled = true;
         insertedKey = key;
     });
@@ -149,7 +149,7 @@ TEST_F(ResourceCacheTest, OnInsertCallback) {
 TEST_F(ResourceCacheTest, OnRemoveCallback) {
     bool callbackCalled = false;
     String removedKey;
-    cache->onRemove([&](const String &key) {
+    cache->on_remove([&](const String &key) {
         callbackCalled = true;
         removedKey = key;
     });
@@ -179,13 +179,13 @@ TEST_F(ResourceCacheTest, ReadWriteToFile) {
     cache->insert("file_key2", 200, std::chrono::seconds(10));
 
     // Write to file
-    cache->writeToFile(filePath, serializer);
+    cache->write_to_file(filePath, serializer);
 
     // Clear cache and read from file
     cache->clear();
     EXPECT_TRUE(cache->empty());
 
-    cache->readFromFile(filePath, deserializer);
+    cache->read_from_file(filePath, deserializer);
 
     // Verify contents
     EXPECT_TRUE(cache->contains("file_key1"));
@@ -215,13 +215,13 @@ TEST_F(ResourceCacheTest, ReadWriteToJsonFile) {
     cache->insert("json_key2", 400, std::chrono::seconds(10));
 
     // Write to JSON file
-    cache->writeToJsonFile(filePath, toJson);
+    cache->write_to_json_file(filePath, toJson);
 
     // Clear cache and read from JSON file
     cache->clear();
     EXPECT_TRUE(cache->empty());
 
-    cache->readFromJsonFile(filePath, fromJson);
+    cache->read_from_json_file(filePath, fromJson);
 
     // Verify contents
     EXPECT_TRUE(cache->contains("json_key1"));
@@ -253,7 +253,7 @@ TEST_F(ResourceCacheTest, ExpirationAndCleanup) {
 
 TEST_F(ResourceCacheTest, LRUEvictionOrder) {
     // Set max size to 3 for easier testing
-    cache->setMaxSize(3);
+    cache->set_max_size(3);
 
     // Insert 3 items
     cache->insert("lru_key1", 1,

@@ -27,6 +27,20 @@ public:
         : std::runtime_error(message) {}
 };
 
+// Forward declaration for type trait
+template <typename... Types>
+class VariantWrapper;
+
+// Type trait to detect VariantWrapper types
+template <typename T>
+struct is_variant_wrapper : std::false_type {};
+
+template <typename... Types>
+struct is_variant_wrapper<VariantWrapper<Types...>> : std::true_type {};
+
+template <typename T>
+inline constexpr bool is_variant_wrapper_v = is_variant_wrapper<T>::value;
+
 /**
  * @brief A thread-safe wrapper class for std::variant with additional utility
  * functions.
@@ -66,7 +80,8 @@ public:
      */
     template <typename T>
     explicit VariantWrapper(T&& value) noexcept(
-        std::is_nothrow_constructible_v<VariantType, T>);
+        std::is_nothrow_constructible_v<VariantType, T>)
+        requires (!is_variant_wrapper_v<std::decay_t<T>>);
 
     /**
      * @brief Copy constructor with thread safety.
@@ -104,7 +119,8 @@ public:
      */
     template <typename T>
     auto operator=(T&& value) noexcept(
-        std::is_nothrow_assignable_v<VariantType, T>) -> VariantWrapper&;
+        std::is_nothrow_assignable_v<VariantType, T>) -> VariantWrapper&
+        requires (!is_variant_wrapper_v<std::decay_t<T>>);
 
     /**
      * @brief Gets the name of the type currently held by the variant.
@@ -252,7 +268,8 @@ VariantWrapper<Types...>::
 template <typename... Types>
 template <typename T>
 VariantWrapper<Types...>::VariantWrapper(T&& value) noexcept(
-    std::is_nothrow_constructible_v<VariantType, T>) {
+    std::is_nothrow_constructible_v<VariantType, T>)
+    requires (!is_variant_wrapper_v<std::decay_t<T>>) {
     static_assert(
         is_valid_type_v<T> || std::is_same_v<std::decay_t<T>, std::monostate>,
         "Type not supported by this VariantWrapper");
@@ -295,7 +312,8 @@ auto VariantWrapper<Types...>::operator=(VariantWrapper&& other) noexcept
 template <typename... Types>
 template <typename T>
 auto VariantWrapper<Types...>::operator=(T&& value) noexcept(
-    std::is_nothrow_assignable_v<VariantType, T>) -> VariantWrapper& {
+    std::is_nothrow_assignable_v<VariantType, T>) -> VariantWrapper&
+    requires (!is_variant_wrapper_v<std::decay_t<T>>) {
     static_assert(
         is_valid_type_v<T> || std::is_same_v<std::decay_t<T>, std::monostate>,
         "Type not supported by this VariantWrapper");

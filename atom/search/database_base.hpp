@@ -326,8 +326,9 @@ protected:
 template<typename ResultType>
 class QueryCache {
 public:
-    QueryCache(size_t max_size, std::chrono::seconds ttl)
-        : max_size_(max_size), ttl_(ttl) {}
+    template<typename Rep, typename Period>
+    QueryCache(size_t max_size, std::chrono::duration<Rep, Period> ttl)
+        : max_size_(max_size), ttl_(std::chrono::duration_cast<std::chrono::seconds>(ttl)) {}
 
     std::optional<ResultType> get(const std::string& query) {
         std::lock_guard<std::mutex> lock(mutex_);

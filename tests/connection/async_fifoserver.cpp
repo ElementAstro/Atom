@@ -215,7 +215,7 @@ TEST_F(FifoServerTest, ReceiveSingleMessage) {
 
     // Simulate a client writing a message
     std::string test_message = "Hello, FIFO!";
-    std::thread client_thread(&FifoServerTest::clientWrite, fifo_path,
+    std::thread client_thread(&FifoServerTest::clientWrite, this, fifo_path,
                               test_message);
 
     // Wait for the handler to be called (or a timeout)

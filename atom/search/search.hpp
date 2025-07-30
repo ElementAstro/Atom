@@ -185,6 +185,16 @@ public:
                       std::initializer_list<std::string> tags = {});
 
     /**
+     * @brief Constructs a Document with vector of tags.
+     * @param id The unique identifier for the document.
+     * @param content The main content of the document.
+     * @param tags A vector of tags.
+     * @throws DocumentValidationException if any validation fails.
+     */
+    explicit Document(String id, String content,
+                      const std::vector<std::string>& tags);
+
+    /**
      * @brief Default destructor.
      */
     ~Document() = default;
@@ -599,6 +609,20 @@ public:
      */
     [[nodiscard]] std::unordered_map<std::string, size_t> get_index_stats() const;
 
+    // Similarity calculation methods (made public for testing)
+    [[nodiscard]] double calculate_cosine_similarity(const Document& doc1, const Document& doc2) const;
+    [[nodiscard]] double calculate_jaccard_similarity(const Document& doc1, const Document& doc2) const;
+    [[nodiscard]] std::unordered_map<String, double> create_tf_vector(const Document& doc) const;
+
+    // Boolean query methods (made public for testing)
+    struct BooleanQuery {
+        enum class Operator { AND, OR, NOT };
+        std::vector<std::string> terms;
+        std::vector<Operator> operators;
+    };
+    [[nodiscard]] BooleanQuery parse_boolean_query(const String& query) const;
+    [[nodiscard]] std::vector<std::shared_ptr<Document>> execute_boolean_query(const BooleanQuery& query) const;
+
 private:
     struct Shard {
         HashMap<String, std::shared_ptr<Document>> documents;
@@ -711,19 +735,7 @@ private:
     [[nodiscard]] std::vector<String> tokenize_content_optimized(const String& content) const;
     void clear_performance_caches() const;
 
-    // Similarity calculation helpers
-    [[nodiscard]] double calculate_cosine_similarity(const Document& doc1, const Document& doc2) const;
-    [[nodiscard]] double calculate_jaccard_similarity(const Document& doc1, const Document& doc2) const;
-    [[nodiscard]] std::unordered_map<String, double> create_tf_vector(const Document& doc) const;
-
-    // Boolean query parsing
-    struct BooleanQuery {
-        enum class Operator { AND, OR, NOT };
-        std::vector<std::string> terms;
-        std::vector<Operator> operators;
-    };
-    [[nodiscard]] BooleanQuery parse_boolean_query(const String& query) const;
-    [[nodiscard]] std::vector<std::shared_ptr<Document>> execute_boolean_query(const BooleanQuery& query) const;
+    // Other private helper methods
 
     const unsigned int num_threads_;
     std::vector<std::unique_ptr<Shard>> shards_;

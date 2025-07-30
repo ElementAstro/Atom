@@ -666,16 +666,12 @@ public:
         using U = typename std::make_unsigned<Int>::type;
         U uval = static_cast<U>(value);
         int count = 0;
-        // Use std::popcount from C++20 for potentially better performance
-        if constexpr (__cplusplus >= 202002L) {
-            return std::popcount(uval);
-        } else {
-            while (uval) {
-                count += uval & 1;
-                uval >>= 1;
-            }
-            return count;
+        // Manual implementation for compatibility
+        while (uval) {
+            count += uval & 1;
+            uval >>= 1;
         }
+        return count;
     }
 
     static constexpr int count_zeros(Int value) {
@@ -686,25 +682,21 @@ public:
         // Use unsigned type for bitwise operations
         using U = typename std::make_unsigned<Int>::type;
         U uval = static_cast<U>(value);
-        // Use std::countl_zero from C++20 for potentially better performance
-        if constexpr (__cplusplus >= 202002L) {
-            return std::countl_zero(uval);
-        } else {
-            if (uval == 0)
-                return sizeof(Int) * 8;
+        // Manual implementation for compatibility
+        if (uval == 0)
+            return sizeof(Int) * 8;
 
-            int zeros = 0;
-            const int total_bits = sizeof(Int) * 8;
+        int zeros = 0;
+        const int total_bits = sizeof(Int) * 8;
 
-            for (int i = total_bits - 1; i >= 0; --i) {
-                if ((uval & (static_cast<U>(1) << i)) == 0) {
-                    zeros++;
-                } else {
-                    break;
-                }
+        for (int i = total_bits - 1; i >= 0; --i) {
+            if ((uval & (static_cast<U>(1) << i)) == 0) {
+                zeros++;
+            } else {
+                break;
             }
-            return zeros;
         }
+        return zeros;
     }
 
     static constexpr int trailing_zeros(Int value) {
@@ -1672,6 +1664,9 @@ public:
 
 class F32 : public FloatMethods<f32> {
 public:
+    // Alias for compatibility with tests
+    static constexpr f32 NAN = FloatMethods<f32>::NAN_VAL;
+
     static Result<f32> from_str(const std::string& s) {
         return FloatMethods<f32>::from_str(s);
     }
@@ -1954,19 +1949,19 @@ Enumerate<Container> enumerate(Container& container) {
 }
 }  // namespace atom::algorithm
 
-// Using declarations for convenience
-using i8 = atom::algorithm::I8;
-using i16 = atom::algorithm::I16;
-using i32 = atom::algorithm::I32;
-using i64 = atom::algorithm::I64;
-using u8 = atom::algorithm::U8;
-using u16 = atom::algorithm::U16;
-using u32 = atom::algorithm::U32;
-using u64 = atom::algorithm::U64;
-using isize = atom::algorithm::Isize;
-using usize = atom::algorithm::Usize;
-using f32 = atom::algorithm::F32;
-using f64 = atom::algorithm::F64;
+// Using declarations for convenience - commented out to avoid conflicts
+// using i8 = atom::algorithm::I8;
+// using i16 = atom::algorithm::I16;
+// using i32 = atom::algorithm::I32;
+// using i64 = atom::algorithm::I64;
+// using u8 = atom::algorithm::U8;
+// using u16 = atom::algorithm::U16;
+// using u32 = atom::algorithm::U32;
+// using u64 = atom::algorithm::U64;
+// using isize = atom::algorithm::Isize;
+// using usize = atom::algorithm::Usize;
+// using f32 = atom::algorithm::F32;
+// using f64 = atom::algorithm::F64;
 
 // Note on Concurrency and Performance:
 // The provided code primarily implements value-based numeric operations and

@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <functional>
+#include <future>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -526,11 +527,11 @@ public:
     }
 };
 
-// Static member definitions
-std::atomic<size_t> MemoryUsageTracker::allocated_bytes_{0};
-std::atomic<size_t> MemoryUsageTracker::allocation_count_{0};
-std::mutex MemoryUsageTracker::allocation_map_mutex_;
-std::unordered_map<void*, size_t> MemoryUsageTracker::allocation_map_;
+// Static member definitions - using inline to avoid multiple definition errors
+inline std::atomic<size_t> MemoryUsageTracker::allocated_bytes_{0};
+inline std::atomic<size_t> MemoryUsageTracker::allocation_count_{0};
+inline std::mutex MemoryUsageTracker::allocation_map_mutex_;
+inline std::unordered_map<void*, size_t> MemoryUsageTracker::allocation_map_;
 
 /**
  * @brief Thread safety testing utilities

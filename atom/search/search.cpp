@@ -30,6 +30,15 @@ Document::Document(String id, String content,
     spdlog::info("Document created with id: {}", std::string(id_));
 }
 
+Document::Document(String id, String content,
+                   const std::vector<std::string>& tags)
+    : id_(std::move(id)),
+      content_(std::move(content)),
+      tags_{tags.begin(), tags.end()} {
+    validate();
+    spdlog::info("Document created with id: {}", std::string(id_));
+}
+
 Document::Document(const Document& other)
     : id_(other.id_),
       content_(other.content_),

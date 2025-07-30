@@ -379,6 +379,19 @@ public:
     }
 
     /**
+     * @brief Replace all occurrences of a substring with another string (parallel version).
+     * @param oldStr String to be replaced
+     * @param newStr Replacement string
+     * @return Number of replacements made
+     * @throws StringException if memory allocation fails
+     */
+    auto replaceAllParallel(const String& oldStr, const String& newStr) -> size_t {
+        // For now, just delegate to the regular replaceAll method
+        // In a full implementation, this could use parallel algorithms for very large strings
+        return replaceAll(oldStr, newStr);
+    }
+
+    /**
      * @brief Convert string to uppercase.
      * @return New string with all characters converted to uppercase
      * @throws StringException if memory allocation fails
@@ -386,12 +399,12 @@ public:
     [[nodiscard]] auto toUpper() const -> String {
         try {
             String result;
-            result.m_data_.reserve(m_data_.length());
+            result.m_data_.resize(m_data_.length());
 #ifdef ATOM_USE_BOOST
             result.m_data_ = boost::to_upper_copy(m_data_);
 #else
             std::transform(std::execution::par_unseq, m_data_.begin(),
-                           m_data_.end(), std::back_inserter(result.m_data_),
+                           m_data_.end(), result.m_data_.begin(),
                            [](unsigned char c) { return std::toupper(c); });
 #endif
             return result;
@@ -409,12 +422,12 @@ public:
     [[nodiscard]] auto toLower() const -> String {
         try {
             String result;
-            result.m_data_.reserve(m_data_.length());
+            result.m_data_.resize(m_data_.length());
 #ifdef ATOM_USE_BOOST
             result.m_data_ = boost::to_lower_copy(m_data_);
 #else
             std::transform(std::execution::par_unseq, m_data_.begin(),
-                           m_data_.end(), std::back_inserter(result.m_data_),
+                           m_data_.end(), result.m_data_.begin(),
                            [](unsigned char c) { return std::tolower(c); });
 #endif
             return result;

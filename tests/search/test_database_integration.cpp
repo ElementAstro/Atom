@@ -393,7 +393,7 @@ TEST_F(DatabaseIntegrationTest, ConfigurationEdgeCases) {
     min_config.pool_size = 0;
     min_config.min_pool_size = 0;
     min_config.max_pool_size = 1;
-    min_config.connection_timeout = 1ms;
+    min_config.connection_timeout = std::chrono::duration_cast<std::chrono::seconds>(1ms);
     min_config.query_cache_size = 1;
     min_config.max_retry_attempts = 1;
 

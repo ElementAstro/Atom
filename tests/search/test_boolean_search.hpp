@@ -185,9 +185,9 @@ TEST_F(BooleanSearchTest, BooleanQuerySingleTerm) {
     EXPECT_EQ(ids, expected);
 }
 
-// Test boolean search integration (using the main boolean_search method)
+// Test boolean search integration (using the enhanced boolean_search method)
 TEST_F(BooleanSearchTest, BooleanSearchIntegration) {
-    auto results = engine->boolean_search("machine AND learning");
+    auto results = engine->boolean_search_enhanced("machine AND learning");
 
     EXPECT_FALSE(results.results.empty());
     EXPECT_GT(results.total_count, 0);
@@ -210,7 +210,7 @@ TEST_F(BooleanSearchTest, BooleanSearchIntegration) {
 // Test boolean search with pagination
 TEST_F(BooleanSearchTest, BooleanSearchWithPagination) {
     SearchPagination pagination{0, 1};  // Get only first result
-    auto results = engine->boolean_search("machine OR learning OR data", pagination);
+    auto results = engine->boolean_search_enhanced("machine OR learning OR data", pagination);
 
     EXPECT_LE(results.results.size(), 1);
     EXPECT_EQ(results.offset, 0);
@@ -224,7 +224,7 @@ TEST_F(BooleanSearchTest, BooleanSearchWithPagination) {
 // Test boolean search performance
 TEST_F(BooleanSearchTest, BooleanSearchPerformance) {
     auto start = std::chrono::high_resolution_clock::now();
-    auto results = engine->boolean_search("machine AND learning OR data NOT vision");
+    auto results = engine->boolean_search_enhanced("machine AND learning OR data NOT vision");
     auto end = std::chrono::high_resolution_clock::now();
 
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -246,8 +246,12 @@ TEST_F(BooleanSearchTest, BooleanQueryOperatorPrecedence) {
 
     // Results might be different due to different operator precedence
     // This test mainly ensures the parsing and execution don't crash
-    EXPECT_NO_THROW(engine->execute_boolean_query(query1));
-    EXPECT_NO_THROW(engine->execute_boolean_query(query2));
+    EXPECT_NO_THROW([&]() {
+        auto results1 = engine->execute_boolean_query(query1);
+        auto results2 = engine->execute_boolean_query(query2);
+        (void)results1; // Suppress unused variable warning
+        (void)results2; // Suppress unused variable warning
+    }());
 }
 
 // Test boolean search with special characters in terms
@@ -259,8 +263,8 @@ TEST_F(BooleanSearchTest, BooleanSearchSpecialCharacters) {
     auto results = engine->boolean_search("programming AND language");
 
     bool found_special = false;
-    for (const auto& result : results.results) {
-        if (std::string(result.document->get_id()) == "special") {
+    for (const auto& doc : results) {
+        if (std::string(doc->get_id()) == "special") {
             found_special = true;
             break;
         }

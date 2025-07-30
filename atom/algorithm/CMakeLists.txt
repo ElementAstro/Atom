@@ -59,3 +59,6 @@ set_target_properties(
              OUTPUT_NAME ${PROJECT_NAME})
 
 install(TARGETS ${PROJECT_NAME} ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+
+# Register this module as an Atom module
+set_property(GLOBAL APPEND PROPERTY ATOM_MODULE_TARGETS ${PROJECT_NAME})

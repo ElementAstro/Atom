@@ -38,9 +38,12 @@ public:
      * @param error The error value to convert and wrap
      */
     template <typename T>
-        requires std::is_same_v<E, std::string> &&
-                 std::convertible_to<T, std::string>
-    constexpr explicit Error(T&& error) : error_(std::forward<T>(error)) {}
+    constexpr explicit Error(T&& error,
+        typename std::enable_if_t<
+            std::is_same_v<E, std::string> &&
+            std::is_convertible_v<T, std::string>
+        >* = nullptr)
+        : error_(std::forward<T>(error)) {}
 
     /**
      * @brief Gets a const reference to the wrapped error value.
@@ -67,6 +70,17 @@ public:
     constexpr bool operator==(const Error& other) const
         noexcept(noexcept(error_ == other.error_)) {
         return error_ == other.error_;
+    }
+
+    /**
+     * @brief Equality comparison operator with underlying error type.
+     *
+     * @param other The error value to compare with
+     * @return true if the wrapped error equals the given error, false otherwise
+     */
+    constexpr bool operator==(const E& other) const
+        noexcept(noexcept(error_ == other)) {
+        return error_ == other;
     }
 
     /**
@@ -103,8 +117,8 @@ public:
      * @param other The unexpected<Error<U>> to unwrap
      */
     template <typename U>
-        requires std::same_as<E, U>
-    constexpr unexpected(const unexpected<Error<U>>& other) noexcept(
+    constexpr unexpected(const unexpected<Error<U>>& other,
+        typename std::enable_if_t<std::is_same_v<E, U>>* = nullptr) noexcept(
         std::is_nothrow_copy_constructible_v<E>)
         : error_(other.error().error()) {}
 
@@ -116,8 +130,8 @@ public:
      * @param other The unexpected<Error<U>> to unwrap
      */
     template <typename U>
-        requires std::same_as<E, U>
-    constexpr unexpected(unexpected<Error<U>>&& other) noexcept(
+    constexpr unexpected(unexpected<Error<U>>&& other,
+        typename std::enable_if_t<std::is_same_v<E, U>>* = nullptr) noexcept(
         std::is_nothrow_move_constructible_v<E>)
         : error_(std::move(other).error().error()) {}
     /**
@@ -127,8 +141,8 @@ public:
      * @param error The error value
      */
     template <typename U = E>
-        requires std::constructible_from<E, U>
-    constexpr explicit unexpected(U&& error) noexcept(
+    constexpr explicit unexpected(U&& error,
+        typename std::enable_if_t<std::is_constructible_v<E, U>>* = nullptr) noexcept(
         std::is_nothrow_constructible_v<E, U>)
         : error_(std::forward<U>(error)) {}
 
@@ -140,8 +154,8 @@ public:
      * @param other The unexpected<Error<U>> to unwrap
      */
     template <typename U>
-        requires std::constructible_from<E, U>
-    constexpr unexpected(const unexpected<Error<U>>& other) noexcept(
+    constexpr unexpected(const unexpected<Error<U>>& other,
+        typename std::enable_if_t<std::is_constructible_v<E, U>>* = nullptr) noexcept(
         std::is_nothrow_constructible_v<E, const U&>)
         : error_(other.error().error()) {}
 
@@ -153,8 +167,8 @@ public:
      * @param other The unexpected<Error<U>> to unwrap
      */
     template <typename U>
-        requires std::constructible_from<E, U>
-    constexpr unexpected(unexpected<Error<U>>&& other) noexcept(
+    constexpr unexpected(unexpected<Error<U>>&& other,
+        typename std::enable_if_t<std::is_constructible_v<E, U>>* = nullptr) noexcept(
         std::is_nothrow_constructible_v<E, U>)
         : error_(std::move(other).error().error()) {}
 
@@ -877,8 +891,8 @@ public:
      * @param error The error to store
      */
     template <typename U>
-        requires std::constructible_from<Error<E>, U>
-    constexpr expected(U&& error) noexcept(
+    constexpr expected(U&& error,
+        typename std::enable_if_t<std::is_constructible_v<Error<E>, U>>* = nullptr) noexcept(
         std::is_nothrow_constructible_v<Error<E>, U>)
         : value_(std::forward<U>(error)) {}
 
@@ -889,8 +903,8 @@ public:
      * @param unex The unexpected error
      */
     template <typename U>
-        requires std::constructible_from<E, U>
-    constexpr expected(const unexpected<U>& unex) noexcept(
+    constexpr expected(const unexpected<U>& unex,
+        typename std::enable_if_t<std::is_constructible_v<E, U>>* = nullptr) noexcept(
         std::is_nothrow_constructible_v<E, const U&>)
         : value_(Error<E>(unex.error())) {}
 
@@ -902,8 +916,8 @@ public:
      * @param unex The unexpected error
      */
     template <typename U>
-        requires std::constructible_from<E, U>
-    constexpr expected(unexpected<U>&& unex) noexcept(
+    constexpr expected(unexpected<U>&& unex,
+        typename std::enable_if_t<std::is_constructible_v<E, U>>* = nullptr) noexcept(
         std::is_nothrow_constructible_v<E, U>)
         : value_(Error<E>(std::move(unex).error())) {}
 

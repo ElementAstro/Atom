@@ -48,8 +48,8 @@ public:
 
   FifoClient(const FifoClient &) = delete;
   auto operator=(const FifoClient &) -> FifoClient & = delete;
-  FifoClient(FifoClient &&) noexcept = default;
-  auto operator=(FifoClient &&) noexcept -> FifoClient & = default;
+  FifoClient(FifoClient &&) noexcept;
+  auto operator=(FifoClient &&) noexcept -> FifoClient &;
 
   /**
    * @brief Opens the FIFO at the specified path.

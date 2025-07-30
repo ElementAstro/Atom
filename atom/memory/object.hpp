@@ -130,6 +130,59 @@ public:
             total_acquisition_time = 0; max_acquisition_time = 0;
             total_validation_time = 0; total_lock_wait_time = 0;
         }
+
+        // Custom copy constructor
+        PoolStats(const PoolStats& other) noexcept
+            : hits(other.hits.load()),
+              misses(other.misses.load()),
+              cleanups(other.cleanups.load()),
+              peak_usage(other.peak_usage.load()),
+              wait_count(other.wait_count.load()),
+              timeout_count(other.timeout_count.load()),
+              total_acquisitions(other.total_acquisitions.load()),
+              total_releases(other.total_releases.load()),
+              validation_failures(other.validation_failures.load()),
+              cleanup_operations(other.cleanup_operations.load()),
+              batch_acquisitions(other.batch_acquisitions.load()),
+              memory_reuses(other.memory_reuses.load()),
+              memory_allocations(other.memory_allocations.load()),
+              lock_contentions(other.lock_contentions.load()),
+              total_wait_time(other.total_wait_time.load()),
+              max_wait_time(other.max_wait_time.load()),
+              total_acquisition_time(other.total_acquisition_time.load()),
+              max_acquisition_time(other.max_acquisition_time.load()),
+              total_validation_time(other.total_validation_time.load()),
+              total_lock_wait_time(other.total_lock_wait_time.load()) {}
+
+        // Custom assignment operator
+        PoolStats& operator=(const PoolStats& other) noexcept {
+            if (this != &other) {
+                hits.store(other.hits.load());
+                misses.store(other.misses.load());
+                cleanups.store(other.cleanups.load());
+                peak_usage.store(other.peak_usage.load());
+                wait_count.store(other.wait_count.load());
+                timeout_count.store(other.timeout_count.load());
+                total_acquisitions.store(other.total_acquisitions.load());
+                total_releases.store(other.total_releases.load());
+                validation_failures.store(other.validation_failures.load());
+                cleanup_operations.store(other.cleanup_operations.load());
+                batch_acquisitions.store(other.batch_acquisitions.load());
+                memory_reuses.store(other.memory_reuses.load());
+                memory_allocations.store(other.memory_allocations.load());
+                lock_contentions.store(other.lock_contentions.load());
+                total_wait_time.store(other.total_wait_time.load());
+                max_wait_time.store(other.max_wait_time.load());
+                total_acquisition_time.store(other.total_acquisition_time.load());
+                max_acquisition_time.store(other.max_acquisition_time.load());
+                total_validation_time.store(other.total_validation_time.load());
+                total_lock_wait_time.store(other.total_lock_wait_time.load());
+            }
+            return *this;
+        }
+
+        // Default constructor
+        PoolStats() = default;
     };
 
     /**
@@ -365,9 +418,13 @@ public:
 
         if (config_.enable_stats && waited) {
             auto wait_duration = std::chrono::steady_clock::now() - start_time;
-            stats_.total_wait_time += wait_duration;
-            stats_.max_wait_time =
-                std::max(stats_.max_wait_time, wait_duration);
+            auto wait_duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(wait_duration).count();
+            stats_.total_wait_time += wait_duration_ns;
+            auto current_max = stats_.max_wait_time.load();
+            while (wait_duration_ns > current_max &&
+                   !stats_.max_wait_time.compare_exchange_weak(current_max, wait_duration_ns)) {
+                // Retry if another thread updated max_wait_time
+            }
         }
 
         if (config_.enable_auto_cleanup) {
@@ -430,9 +487,13 @@ public:
                         if (waited) {
                             auto wait_duration =
                                 std::chrono::steady_clock::now() - start_time;
-                            stats_.total_wait_time += wait_duration;
-                            stats_.max_wait_time =
-                                std::max(stats_.max_wait_time, wait_duration);
+                            auto wait_duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(wait_duration).count();
+                            stats_.total_wait_time += wait_duration_ns;
+                            auto current_max = stats_.max_wait_time.load();
+                            while (wait_duration_ns > current_max &&
+                                   !stats_.max_wait_time.compare_exchange_weak(current_max, wait_duration_ns)) {
+                                // Retry if another thread updated max_wait_time
+                            }
                         }
                     }
 
@@ -449,9 +510,13 @@ public:
                     if (waited) {
                         auto wait_duration =
                             std::chrono::steady_clock::now() - start_time;
-                        stats_.total_wait_time += wait_duration;
-                        stats_.max_wait_time =
-                            std::max(stats_.max_wait_time, wait_duration);
+                        auto wait_duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(wait_duration).count();
+                        stats_.total_wait_time += wait_duration_ns;
+                        auto current_max = stats_.max_wait_time.load();
+                        while (wait_duration_ns > current_max &&
+                               !stats_.max_wait_time.compare_exchange_weak(current_max, wait_duration_ns)) {
+                            // Retry if another thread updated max_wait_time
+                        }
                     }
                 }
 
@@ -515,9 +580,13 @@ public:
         // Calculate wait time if tracking stats
         if (config_.enable_stats && waited) {
             auto wait_duration = std::chrono::steady_clock::now() - start_time;
-            stats_.total_wait_time += wait_duration;
-            stats_.max_wait_time =
-                std::max(stats_.max_wait_time, wait_duration);
+            auto wait_duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(wait_duration).count();
+            stats_.total_wait_time += wait_duration_ns;
+            auto current_max = stats_.max_wait_time.load();
+            while (wait_duration_ns > current_max &&
+                   !stats_.max_wait_time.compare_exchange_weak(current_max, wait_duration_ns)) {
+                // Retry if another thread updated max_wait_time
+            }
         }
 
         // First take objects from the pool
@@ -696,7 +765,7 @@ public:
         }
 
         std::unique_lock lock(mutex_);
-        stats_ = PoolStats{};
+        stats_.reset();
     }
 
     /**

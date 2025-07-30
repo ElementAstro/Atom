@@ -277,6 +277,58 @@ struct ThreadMemoryStats {
 
     ThreadMemoryStats(std::thread::id id)
         : threadId(id), firstActivity(std::chrono::steady_clock::now()), lastActivity(firstActivity) {}
+
+    // Copy constructor
+    ThreadMemoryStats(const ThreadMemoryStats& other)
+        : threadId(other.threadId),
+          allocations(other.allocations.load()),
+          deallocations(other.deallocations.load()),
+          currentMemory(other.currentMemory.load()),
+          peakMemory(other.peakMemory.load()),
+          crossThreadFrees(other.crossThreadFrees.load()),
+          firstActivity(other.firstActivity),
+          lastActivity(other.lastActivity) {}
+
+    // Move constructor
+    ThreadMemoryStats(ThreadMemoryStats&& other) noexcept
+        : threadId(other.threadId),
+          allocations(other.allocations.load()),
+          deallocations(other.deallocations.load()),
+          currentMemory(other.currentMemory.load()),
+          peakMemory(other.peakMemory.load()),
+          crossThreadFrees(other.crossThreadFrees.load()),
+          firstActivity(other.firstActivity),
+          lastActivity(other.lastActivity) {}
+
+    // Copy assignment operator
+    ThreadMemoryStats& operator=(const ThreadMemoryStats& other) {
+        if (this != &other) {
+            threadId = other.threadId;
+            allocations.store(other.allocations.load());
+            deallocations.store(other.deallocations.load());
+            currentMemory.store(other.currentMemory.load());
+            peakMemory.store(other.peakMemory.load());
+            crossThreadFrees.store(other.crossThreadFrees.load());
+            firstActivity = other.firstActivity;
+            lastActivity = other.lastActivity;
+        }
+        return *this;
+    }
+
+    // Move assignment operator
+    ThreadMemoryStats& operator=(ThreadMemoryStats&& other) noexcept {
+        if (this != &other) {
+            threadId = other.threadId;
+            allocations.store(other.allocations.load());
+            deallocations.store(other.deallocations.load());
+            currentMemory.store(other.currentMemory.load());
+            peakMemory.store(other.peakMemory.load());
+            crossThreadFrees.store(other.crossThreadFrees.load());
+            firstActivity = other.firstActivity;
+            lastActivity = other.lastActivity;
+        }
+        return *this;
+    }
 };
 
 /**

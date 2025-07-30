@@ -60,7 +60,7 @@ set(LIBS loguru
     atom_sysinfo_battery
     atom_sysinfo_wm
     atom_sysinfo_locale
-    atom_sysinfo_serial
+    atom_sysinfo_sn
     atom_sysinfo_cpu
     atom_sysinfo_disk
     ${CMAKE_THREAD_LIBS_INIT})

@@ -80,6 +80,61 @@ struct LRUCacheMetrics {
     std::atomic<uint64_t> prefetch_count{0};
     std::atomic<uint64_t> compression_saves_bytes{0};
 
+    // Default constructor
+    LRUCacheMetrics() = default;
+
+    // Copy constructor
+    LRUCacheMetrics(const LRUCacheMetrics& other)
+        : hit_count(other.hit_count.load()),
+          miss_count(other.miss_count.load()),
+          eviction_count(other.eviction_count.load()),
+          expiration_count(other.expiration_count.load()),
+          total_operations(other.total_operations.load()),
+          memory_usage_bytes(other.memory_usage_bytes.load()),
+          prefetch_count(other.prefetch_count.load()),
+          compression_saves_bytes(other.compression_saves_bytes.load()) {}
+
+    // Move constructor
+    LRUCacheMetrics(LRUCacheMetrics&& other) noexcept
+        : hit_count(other.hit_count.load()),
+          miss_count(other.miss_count.load()),
+          eviction_count(other.eviction_count.load()),
+          expiration_count(other.expiration_count.load()),
+          total_operations(other.total_operations.load()),
+          memory_usage_bytes(other.memory_usage_bytes.load()),
+          prefetch_count(other.prefetch_count.load()),
+          compression_saves_bytes(other.compression_saves_bytes.load()) {}
+
+    // Copy assignment operator
+    LRUCacheMetrics& operator=(const LRUCacheMetrics& other) {
+        if (this != &other) {
+            hit_count.store(other.hit_count.load());
+            miss_count.store(other.miss_count.load());
+            eviction_count.store(other.eviction_count.load());
+            expiration_count.store(other.expiration_count.load());
+            total_operations.store(other.total_operations.load());
+            memory_usage_bytes.store(other.memory_usage_bytes.load());
+            prefetch_count.store(other.prefetch_count.load());
+            compression_saves_bytes.store(other.compression_saves_bytes.load());
+        }
+        return *this;
+    }
+
+    // Move assignment operator
+    LRUCacheMetrics& operator=(LRUCacheMetrics&& other) noexcept {
+        if (this != &other) {
+            hit_count.store(other.hit_count.load());
+            miss_count.store(other.miss_count.load());
+            eviction_count.store(other.eviction_count.load());
+            expiration_count.store(other.expiration_count.load());
+            total_operations.store(other.total_operations.load());
+            memory_usage_bytes.store(other.memory_usage_bytes.load());
+            prefetch_count.store(other.prefetch_count.load());
+            compression_saves_bytes.store(other.compression_saves_bytes.load());
+        }
+        return *this;
+    }
+
     double get_hit_ratio() const noexcept {
         uint64_t total = hit_count.load() + miss_count.load();
         return total > 0 ? static_cast<double>(hit_count.load()) / total : 0.0;
@@ -139,6 +194,7 @@ private:
     void putBatch(const std::vector<KeyValuePair>& items,
                   std::optional<std::chrono::seconds> ttl);
     bool erase(const Key& key);
+    bool remove(const Key& key) { return erase(key); }  // Alias for erase for compatibility
     void clear();
     size_t size() const;
     size_t maxSize() const;
@@ -536,7 +592,7 @@ private:
     std::optional<std::chrono::seconds> default_ttl_;
 
     // Background cleanup
-    std::unique_ptr<std::jthread> cleanup_thread_;
+    std::unique_ptr<std::thread> cleanup_thread_;
     std::atomic<bool> stop_cleanup_{false};
 
     // Performance optimizations
@@ -545,13 +601,6 @@ private:
 };
 
 }  // namespace atom::search
-
-#endif  // ATOM_SEARCH_LRU_HPP
-
-#ifndef ATOM_SEARCH_LRU_TPP
-#define ATOM_SEARCH_LRU_TPP
-
-#include "lru.hpp"
 
 // Implementation for PairStringHash
 inline std::size_t PairStringHash::operator()(
@@ -567,13 +616,13 @@ namespace atom::search {
 // LRUCacheShard Implementation
 
 template <typename Key, typename Value, typename Hash>
-LRUCacheShard<Key, Value, Hash>::LRUCacheShard(
-    size_t max_shard_size, ThreadSafeLRUCache<Key, Value, Hash>* parent)
+atom::search::LRUCacheShard<Key, Value, Hash>::LRUCacheShard(
+    size_t max_shard_size, atom::search::ThreadSafeLRUCache<Key, Value, Hash>* parent)
     : max_size_(max_shard_size), parent_(parent) {}
 
 template <typename Key, typename Value, typename Hash>
-typename LRUCacheShard<Key, Value, Hash>::ValuePtr
-LRUCacheShard<Key, Value, Hash>::getShared(const Key& key) {
+typename atom::search::LRUCacheShard<Key, Value, Hash>::ValuePtr
+atom::search::LRUCacheShard<Key, Value, Hash>::getShared(const Key& key) {
     std::unique_lock lock(mutex_);
     auto it = cache_items_map_.find(key);
 
@@ -595,7 +644,7 @@ LRUCacheShard<Key, Value, Hash>::getShared(const Key& key) {
 }
 
 template <typename Key, typename Value, typename Hash>
-void LRUCacheShard<Key, Value, Hash>::put(
+void atom::search::LRUCacheShard<Key, Value, Hash>::put(
     const Key& key, Value value, std::optional<std::chrono::seconds> ttl) {
     std::unique_lock lock(mutex_);
     auto effective_ttl = ttl.has_value() ? ttl : parent_->default_ttl_;
@@ -621,7 +670,7 @@ void LRUCacheShard<Key, Value, Hash>::put(
 }
 
 template <typename Key, typename Value, typename Hash>
-void LRUCacheShard<Key, Value, Hash>::putBatch(
+void atom::search::LRUCacheShard<Key, Value, Hash>::putBatch(
     const std::vector<KeyValuePair>& items,
     std::optional<std::chrono::seconds> ttl) {
     std::unique_lock lock(mutex_);
@@ -650,7 +699,7 @@ void LRUCacheShard<Key, Value, Hash>::putBatch(
 }
 
 template <typename Key, typename Value, typename Hash>
-bool LRUCacheShard<Key, Value, Hash>::erase(const Key& key) {
+bool atom::search::LRUCacheShard<Key, Value, Hash>::erase(const Key& key) {
     std::unique_lock lock(mutex_);
     auto it = cache_items_map_.find(key);
     if (it == cache_items_map_.end()) {
@@ -664,32 +713,32 @@ bool LRUCacheShard<Key, Value, Hash>::erase(const Key& key) {
 }
 
 template <typename Key, typename Value, typename Hash>
-void LRUCacheShard<Key, Value, Hash>::clear() {
+void atom::search::LRUCacheShard<Key, Value, Hash>::clear() {
     std::unique_lock lock(mutex_);
     cache_items_map_.clear();
     cache_items_list_.clear();
 }
 
 template <typename Key, typename Value, typename Hash>
-size_t LRUCacheShard<Key, Value, Hash>::size() const {
+size_t atom::search::LRUCacheShard<Key, Value, Hash>::size() const {
     std::shared_lock lock(mutex_);
     return cache_items_map_.size();
 }
 
 template <typename Key, typename Value, typename Hash>
-size_t LRUCacheShard<Key, Value, Hash>::maxSize() const {
+size_t atom::search::LRUCacheShard<Key, Value, Hash>::maxSize() const {
     return max_size_;
 }
 
 template <typename Key, typename Value, typename Hash>
-bool LRUCacheShard<Key, Value, Hash>::contains(const Key& key) const {
+bool atom::search::LRUCacheShard<Key, Value, Hash>::contains(const Key& key) const {
     std::shared_lock lock(mutex_);
     auto it = cache_items_map_.find(key);
     return it != cache_items_map_.end() && !isExpired(it->second);
 }
 
 template <typename Key, typename Value, typename Hash>
-size_t LRUCacheShard<Key, Value, Hash>::pruneExpired() {
+size_t atom::search::LRUCacheShard<Key, Value, Hash>::pruneExpired() {
     std::unique_lock lock(mutex_);
     size_t pruned_count = 0;
     auto it = cache_items_list_.begin();
@@ -709,14 +758,14 @@ size_t LRUCacheShard<Key, Value, Hash>::pruneExpired() {
 }
 
 template <typename Key, typename Value, typename Hash>
-void LRUCacheShard<Key, Value, Hash>::resize(size_t new_max_size) {
+void atom::search::LRUCacheShard<Key, Value, Hash>::resize(size_t new_max_size) {
     std::unique_lock lock(mutex_);
     max_size_ = new_max_size;
     trim();
 }
 
 template <typename Key, typename Value, typename Hash>
-std::vector<Key> LRUCacheShard<Key, Value, Hash>::keys() const {
+std::vector<Key> atom::search::LRUCacheShard<Key, Value, Hash>::keys() const {
     std::shared_lock lock(mutex_);
     std::vector<Key> all_keys;
     all_keys.reserve(cache_items_list_.size());
@@ -727,7 +776,7 @@ std::vector<Key> LRUCacheShard<Key, Value, Hash>::keys() const {
 }
 
 template <typename Key, typename Value, typename Hash>
-std::vector<Value> LRUCacheShard<Key, Value, Hash>::values() const {
+std::vector<Value> atom::search::LRUCacheShard<Key, Value, Hash>::values() const {
     std::shared_lock lock(mutex_);
     std::vector<Value> all_values;
     all_values.reserve(cache_items_list_.size());
@@ -738,7 +787,7 @@ std::vector<Value> LRUCacheShard<Key, Value, Hash>::values() const {
 }
 
 template <typename Key, typename Value, typename Hash>
-void LRUCacheShard<Key, Value, Hash>::saveToStream(std::ofstream& ofs) const {
+void atom::search::LRUCacheShard<Key, Value, Hash>::saveToStream(std::ofstream& ofs) const {
     std::shared_lock lock(mutex_);
     for (const auto& pair : cache_items_list_) {
         auto it = cache_items_map_.find(pair.first);
@@ -780,13 +829,13 @@ void LRUCacheShard<Key, Value, Hash>::saveToStream(std::ofstream& ofs) const {
 }
 
 template <typename Key, typename Value, typename Hash>
-bool LRUCacheShard<Key, Value, Hash>::isExpired(const CacheItem& item) const {
+bool atom::search::LRUCacheShard<Key, Value, Hash>::isExpired(const CacheItem& item) const {
     return item.expiryTime != TimePoint::max() &&
            Clock::now() > item.expiryTime;
 }
 
 template <typename Key, typename Value, typename Hash>
-void LRUCacheShard<Key, Value, Hash>::trim() {
+void atom::search::LRUCacheShard<Key, Value, Hash>::trim() {
     while (cache_items_map_.size() > max_size_) {
         if (cache_items_list_.empty())
             return;
@@ -801,7 +850,7 @@ void LRUCacheShard<Key, Value, Hash>::trim() {
 // ThreadSafeLRUCache Implementation
 
 template <typename Key, typename Value, typename Hash>
-ThreadSafeLRUCache<Key, Value, Hash>::ThreadSafeLRUCache(
+atom::search::ThreadSafeLRUCache<Key, Value, Hash>::ThreadSafeLRUCache(
     size_t max_size, size_t concurrency_level)
     : max_size_(max_size),
       concurrency_level_(concurrency_level > 0
@@ -833,7 +882,7 @@ ThreadSafeLRUCache<Key, Value, Hash>::ThreadSafeLRUCache(
 }
 
 template <typename Key, typename Value, typename Hash>
-ThreadSafeLRUCache<Key, Value, Hash>::ThreadSafeLRUCache(const LRUCacheConfig& config)
+atom::search::ThreadSafeLRUCache<Key, Value, Hash>::ThreadSafeLRUCache(const LRUCacheConfig& config)
     : max_size_(config.max_size),
       concurrency_level_(config.concurrency_level > 0
                              ? config.concurrency_level
@@ -866,7 +915,7 @@ ThreadSafeLRUCache<Key, Value, Hash>::ThreadSafeLRUCache(const LRUCacheConfig& c
 }
 
 template <typename Key, typename Value, typename Hash>
-std::optional<Value> ThreadSafeLRUCache<Key, Value, Hash>::get(const Key& key) {
+std::optional<Value> atom::search::ThreadSafeLRUCache<Key, Value, Hash>::get(const Key& key) {
     auto sharedPtr = getShared(key);
     if (sharedPtr) {
         return *sharedPtr;
@@ -875,14 +924,14 @@ std::optional<Value> ThreadSafeLRUCache<Key, Value, Hash>::get(const Key& key) {
 }
 
 template <typename Key, typename Value, typename Hash>
-typename ThreadSafeLRUCache<Key, Value, Hash>::ValuePtr
-ThreadSafeLRUCache<Key, Value, Hash>::getShared(const Key& key) {
+typename atom::search::ThreadSafeLRUCache<Key, Value, Hash>::ValuePtr
+atom::search::ThreadSafeLRUCache<Key, Value, Hash>::getShared(const Key& key) {
     return get_shard(key).getShared(key);
 }
 
 template <typename Key, typename Value, typename Hash>
-typename ThreadSafeLRUCache<Key, Value, Hash>::BatchValueType
-ThreadSafeLRUCache<Key, Value, Hash>::getBatch(const BatchKeyType& keys) {
+typename atom::search::ThreadSafeLRUCache<Key, Value, Hash>::BatchValueType
+atom::search::ThreadSafeLRUCache<Key, Value, Hash>::getBatch(const BatchKeyType& keys) {
     BatchValueType results;
     results.reserve(keys.size());
     for (const auto& key : keys) {
@@ -935,6 +984,8 @@ template <typename Key, typename Value, typename Hash>
 bool ThreadSafeLRUCache<Key, Value, Hash>::erase(const Key& key) {
     return get_shard(key).erase(key);
 }
+
+
 
 template <typename Key, typename Value, typename Hash>
 void ThreadSafeLRUCache<Key, Value, Hash>::clear() {
@@ -1360,10 +1411,11 @@ size_t ThreadSafeLRUCache<Key, Value, Hash>::estimateValueSize(const Value& valu
         return sizeof(Value);
     } else if constexpr (std::is_same_v<Value, std::string>) {
         return sizeof(std::string) + value.capacity();
-    } else if constexpr (requires { value.size(); }) {
-        // For containers with size() method
-        return sizeof(Value) + value.size() * sizeof(typename Value::value_type);
     } else {
+        // For other types, try to detect if they have a size() method
+        // This is a simplified approach without C++20 concepts
+        return sizeof(Value);
+    }
         // Default estimation for complex types
         return sizeof(Value) + 64;  // Base size + estimated overhead
     }
@@ -1372,7 +1424,7 @@ size_t ThreadSafeLRUCache<Key, Value, Hash>::estimateValueSize(const Value& valu
 // Implementation of enhanced methods
 template <typename Key, typename Value, typename Hash>
 std::unordered_map<std::string, std::string>
-ThreadSafeLRUCache<Key, Value, Hash>::getHealthReport() const {
+atom::search::ThreadSafeLRUCache<Key, Value, Hash>::getHealthReport() const {
     std::unordered_map<std::string, std::string> report;
 
     auto metrics = getMetrics();
@@ -1419,7 +1471,7 @@ ThreadSafeLRUCache<Key, Value, Hash>::getHealthReport() const {
 
 template <typename Key, typename Value, typename Hash>
 std::unordered_map<std::string, double>
-ThreadSafeLRUCache<Key, Value, Hash>::getEfficiencyMetrics() const {
+atom::search::ThreadSafeLRUCache<Key, Value, Hash>::getEfficiencyMetrics() const {
     std::unordered_map<std::string, double> metrics;
 
     auto cache_metrics = getMetrics();
@@ -1449,7 +1501,7 @@ ThreadSafeLRUCache<Key, Value, Hash>::getEfficiencyMetrics() const {
 }
 
 template <typename Key, typename Value, typename Hash>
-void ThreadSafeLRUCache<Key, Value, Hash>::warmCache(
+void atom::search::ThreadSafeLRUCache<Key, Value, Hash>::warmCache(
     const std::function<std::vector<KeyValuePair>()>& loader,
     std::optional<std::chrono::seconds> ttl) {
 
@@ -1466,7 +1518,7 @@ void ThreadSafeLRUCache<Key, Value, Hash>::warmCache(
 }
 
 template <typename Key, typename Value, typename Hash>
-void ThreadSafeLRUCache<Key, Value, Hash>::setAdaptiveSizing(bool enabled) {
+void atom::search::ThreadSafeLRUCache<Key, Value, Hash>::setAdaptiveSizing(bool enabled) {
     config_.enable_adaptive_sizing = enabled;
 
     if (enabled) {
@@ -1479,7 +1531,7 @@ void ThreadSafeLRUCache<Key, Value, Hash>::setAdaptiveSizing(bool enabled) {
 
 template <typename Key, typename Value, typename Hash>
 std::unordered_map<std::string, double>
-ThreadSafeLRUCache<Key, Value, Hash>::getLoadBalanceMetrics() const {
+atom::search::ThreadSafeLRUCache<Key, Value, Hash>::getLoadBalanceMetrics() const {
     std::unordered_map<std::string, double> metrics;
 
     std::vector<size_t> shard_sizes;
@@ -1527,18 +1579,18 @@ ThreadSafeLRUCache<Key, Value, Hash>::getLoadBalanceMetrics() const {
 
 // Cleanup thread implementation
 template <typename Key, typename Value, typename Hash>
-void ThreadSafeLRUCache<Key, Value, Hash>::startCleanupThread() {
+void atom::search::ThreadSafeLRUCache<Key, Value, Hash>::startCleanupThread() {
     if (cleanup_thread_) {
         stopCleanupThread();
     }
 
     stop_cleanup_.store(false);
-    cleanup_thread_ = std::make_unique<std::jthread>([this] { cleanupWorker(); });
+    cleanup_thread_ = std::make_unique<std::thread>([this] { cleanupWorker(); });
     spdlog::info("LRU cache cleanup thread started");
 }
 
 template <typename Key, typename Value, typename Hash>
-void ThreadSafeLRUCache<Key, Value, Hash>::stopCleanupThread() {
+void atom::search::ThreadSafeLRUCache<Key, Value, Hash>::stopCleanupThread() {
     if (cleanup_thread_) {
         stop_cleanup_.store(true);
         cleanup_thread_.reset();
@@ -1547,7 +1599,7 @@ void ThreadSafeLRUCache<Key, Value, Hash>::stopCleanupThread() {
 }
 
 template <typename Key, typename Value, typename Hash>
-void ThreadSafeLRUCache<Key, Value, Hash>::cleanupWorker() {
+void atom::search::ThreadSafeLRUCache<Key, Value, Hash>::cleanupWorker() {
     while (!stop_cleanup_.load()) {
         std::this_thread::sleep_for(config_.cleanup_interval);
 
@@ -1568,6 +1620,4 @@ void ThreadSafeLRUCache<Key, Value, Hash>::cleanupWorker() {
     }
 }
 
-}  // namespace atom::search
-
-#endif  // ATOM_SEARCH_LRU_TPP
+#endif  // ATOM_SEARCH_LRU_HPP

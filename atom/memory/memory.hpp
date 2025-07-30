@@ -192,6 +192,9 @@ struct MemoryTag {
     std::string file;
     int line;
 
+    // Default constructor
+    MemoryTag() : name("unknown"), file("unknown"), line(0) {}
+
     MemoryTag(std::string tag_name, std::string file_name, int line_num)
         : name(std::move(tag_name)),
           file(std::move(file_name)),

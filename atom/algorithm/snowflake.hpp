@@ -54,7 +54,7 @@ public:
      * @param worker_id The invalid worker ID.
      * @param max The maximum allowed worker ID.
      */
-    InvalidWorkerIdException(u64 worker_id, u64 max)
+    InvalidWorkerIdException(std::uint64_t worker_id, std::uint64_t max)
         : SnowflakeException("Worker ID " + std::to_string(worker_id) +
                              " exceeds maximum of " + std::to_string(max)) {}
 };
@@ -74,7 +74,7 @@ public:
      * @param datacenter_id The invalid datacenter ID.
      * @param max The maximum allowed datacenter ID.
      */
-    InvalidDatacenterIdException(u64 datacenter_id, u64 max)
+    InvalidDatacenterIdException(std::uint64_t datacenter_id, std::uint64_t max)
         : SnowflakeException("Datacenter ID " + std::to_string(datacenter_id) +
                              " exceeds maximum of " + std::to_string(max)) {}
 };
@@ -93,7 +93,7 @@ public:
      *
      * @param timestamp The invalid timestamp.
      */
-    InvalidTimestampException(u64 timestamp)
+    InvalidTimestampException(std::uint64_t timestamp)
         : SnowflakeException("Timestamp " + std::to_string(timestamp) +
                              " is invalid or out of range.") {}
 };
@@ -158,9 +158,9 @@ public:
 
 // Cache-aligned structure for thread-local data
 struct alignas(64) ThreadLocalState {
-    u64 last_timestamp;
-    u64 sequence;
-    u64 padding[6];  // Pad to full cache line
+    std::uint64_t last_timestamp;
+    std::uint64_t sequence;
+    std::uint64_t padding[6];  // Pad to full cache line
 };
 
 /**
@@ -175,7 +175,7 @@ struct alignas(64) ThreadLocalState {
  * @tparam Lock The lock type to use for thread safety. Defaults to
  * SnowflakeNonLock for no locking.
  */
-template <u64 Twepoch, typename Lock = AtomicSnowflakeLock>
+template <std::uint64_t Twepoch, typename Lock = AtomicSnowflakeLock>
 class Snowflake {
     static_assert(std::is_same_v<Lock, SnowflakeNonLock> ||
                       std::is_same_v<Lock, AtomicSnowflakeLock> ||
@@ -194,53 +194,53 @@ public:
      * @brief The custom epoch (in milliseconds) used as the starting point for
      * timestamp generation.
      */
-    static constexpr u64 TWEPOCH = Twepoch;
+    static constexpr std::uint64_t TWEPOCH = Twepoch;
 
     /**
      * @brief The number of bits used to represent the worker ID.
      */
-    static constexpr u64 WORKER_ID_BITS = 5;
+    static constexpr std::uint64_t WORKER_ID_BITS = 5;
 
     /**
      * @brief The number of bits used to represent the datacenter ID.
      */
-    static constexpr u64 DATACENTER_ID_BITS = 5;
+    static constexpr std::uint64_t DATACENTER_ID_BITS = 5;
 
     /**
      * @brief The maximum value that can be assigned to a worker ID.
      */
-    static constexpr u64 MAX_WORKER_ID = (1ULL << WORKER_ID_BITS) - 1;
+    static constexpr std::uint64_t MAX_WORKER_ID = (1ULL << WORKER_ID_BITS) - 1;
 
     /**
      * @brief The maximum value that can be assigned to a datacenter ID.
      */
-    static constexpr u64 MAX_DATACENTER_ID = (1ULL << DATACENTER_ID_BITS) - 1;
+    static constexpr std::uint64_t MAX_DATACENTER_ID = (1ULL << DATACENTER_ID_BITS) - 1;
 
     /**
      * @brief The number of bits used to represent the sequence number.
      */
-    static constexpr u64 SEQUENCE_BITS = 12;
+    static constexpr std::uint64_t SEQUENCE_BITS = 12;
 
     /**
      * @brief The number of bits to shift the worker ID to the left.
      */
-    static constexpr u64 WORKER_ID_SHIFT = SEQUENCE_BITS;
+    static constexpr std::uint64_t WORKER_ID_SHIFT = SEQUENCE_BITS;
 
     /**
      * @brief The number of bits to shift the datacenter ID to the left.
      */
-    static constexpr u64 DATACENTER_ID_SHIFT = SEQUENCE_BITS + WORKER_ID_BITS;
+    static constexpr std::uint64_t DATACENTER_ID_SHIFT = SEQUENCE_BITS + WORKER_ID_BITS;
 
     /**
      * @brief The number of bits to shift the timestamp to the left.
      */
-    static constexpr u64 TIMESTAMP_LEFT_SHIFT =
+    static constexpr std::uint64_t TIMESTAMP_LEFT_SHIFT =
         SEQUENCE_BITS + WORKER_ID_BITS + DATACENTER_ID_BITS;
 
     /**
      * @brief A mask used to extract the sequence number from an ID.
      */
-    static constexpr u64 SEQUENCE_MASK = (1ULL << SEQUENCE_BITS) - 1;
+    static constexpr std::uint64_t SEQUENCE_MASK = (1ULL << SEQUENCE_BITS) - 1;
 
     /**
      * @brief Constructs a Snowflake ID generator with specified worker and
@@ -255,7 +255,7 @@ public:
      * @throws InvalidDatacenterIdException If the datacenter_id is greater than
      * MAX_DATACENTER_ID.
      */
-    explicit Snowflake(u64 worker_id = 0, u64 datacenter_id = 0)
+    explicit Snowflake(std::uint64_t worker_id = 0, std::uint64_t datacenter_id = 0)
         : workerid_(worker_id), datacenterid_(datacenter_id) {
         initialize();
     }
@@ -281,7 +281,7 @@ public:
      * @throws InvalidDatacenterIdException If the datacenter_id is greater than
      * MAX_DATACENTER_ID.
      */
-    void init(u64 worker_id, u64 datacenter_id) {
+    void init(std::uint64_t worker_id, std::uint64_t datacenter_id) {
         if constexpr (std::is_same_v<Lock, SnowflakeNonLock>) {
             // No locking needed
         } else {
@@ -312,13 +312,13 @@ public:
      * @throws InvalidTimestampException If the system clock is adjusted
      * backwards or if there is an issue with timestamp generation.
      */
-    template <usize N = 1>
-    [[nodiscard]] auto nextid() -> std::array<u64, N> {
-        std::array<u64, N> ids;
+    template <std::size_t N = 1>
+    [[nodiscard]] auto nextid() -> std::array<std::uint64_t, N> {
+        std::array<std::uint64_t, N> ids;
 
         // Fast path for single ID generation
         if constexpr (N == 1) {
-            return generate_single_id();
+            return generate_single_id<N>();
         }
 
         // Optimized batch generation
@@ -337,12 +337,12 @@ public:
     }
 
     // Optimized validation with branch prediction hints
-    [[nodiscard]] bool validateId(u64 id) const noexcept {
-        const u64 decrypted = id ^ secret_key_.load(std::memory_order_relaxed);
-        const u64 timestamp = (decrypted >> TIMESTAMP_LEFT_SHIFT) + TWEPOCH;
-        const u64 datacenter_id =
+    [[nodiscard]] bool validateId(std::uint64_t id) const noexcept {
+        const std::uint64_t decrypted = id ^ secret_key_.load(std::memory_order_relaxed);
+        const std::uint64_t timestamp = (decrypted >> TIMESTAMP_LEFT_SHIFT) + TWEPOCH;
+        const std::uint64_t datacenter_id =
             (decrypted >> DATACENTER_ID_SHIFT) & MAX_DATACENTER_ID;
-        const u64 worker_id = (decrypted >> WORKER_ID_SHIFT) & MAX_WORKER_ID;
+        const std::uint64_t worker_id = (decrypted >> WORKER_ID_SHIFT) & MAX_WORKER_ID;
 
         return datacenter_id == datacenterid_.load(std::memory_order_relaxed) &&
                worker_id == workerid_.load(std::memory_order_relaxed) &&
@@ -358,7 +358,7 @@ public:
      * @return The timestamp (in milliseconds since the epoch) extracted from
      * the ID.
      */
-    [[nodiscard]] constexpr u64 extractTimestamp(u64 id) const noexcept {
+    [[nodiscard]] constexpr std::uint64_t extractTimestamp(std::uint64_t id) const noexcept {
         return ((id ^ secret_key_.load(std::memory_order_relaxed)) >>
                 TIMESTAMP_LEFT_SHIFT) +
                TWEPOCH;
@@ -376,9 +376,9 @@ public:
      * @param worker_id A reference to store the extracted worker ID.
      * @param sequence A reference to store the extracted sequence number.
      */
-    void parseId(u64 encrypted_id, u64 &timestamp, u64 &datacenter_id,
-                 u64 &worker_id, u64 &sequence) const noexcept {
-        const u64 id =
+    void parseId(std::uint64_t encrypted_id, std::uint64_t &timestamp, std::uint64_t &datacenter_id,
+                 std::uint64_t &worker_id, std::uint64_t &sequence) const noexcept {
+        const std::uint64_t id =
             encrypted_id ^ secret_key_.load(std::memory_order_relaxed);
 
         timestamp = (id >> TIMESTAMP_LEFT_SHIFT) + TWEPOCH;
@@ -413,7 +413,7 @@ public:
      *
      * @return The current worker ID.
      */
-    [[nodiscard]] auto getWorkerId() const noexcept -> u64 {
+    [[nodiscard]] auto getWorkerId() const noexcept -> std::uint64_t {
         return workerid_.load(std::memory_order_relaxed);
     }
 
@@ -422,7 +422,7 @@ public:
      *
      * @return The current datacenter ID.
      */
-    [[nodiscard]] auto getDatacenterId() const noexcept -> u64 {
+    [[nodiscard]] auto getDatacenterId() const noexcept -> std::uint64_t {
         return datacenterid_.load(std::memory_order_relaxed);
     }
 
@@ -433,18 +433,18 @@ public:
         /**
          * @brief The total number of IDs generated by this instance.
          */
-        std::atomic<u64> total_ids_generated{0};
+        std::atomic<std::uint64_t> total_ids_generated{0};
 
         /**
          * @brief The number of times the sequence number rolled over.
          */
-        std::atomic<u64> sequence_rollovers{0};
+        std::atomic<std::uint64_t> sequence_rollovers{0};
 
         /**
          * @brief The number of times the generator had to wait for the next
          * millisecond due to clock synchronization issues.
          */
-        std::atomic<u64> timestamp_wait_count{0};
+        std::atomic<std::uint64_t> timestamp_wait_count{0};
     };
 
     /**
@@ -515,23 +515,23 @@ public:
 
 private:
     // Cache-aligned atomic members
-    alignas(64) std::atomic<u64> workerid_{0};
-    alignas(64) std::atomic<u64> datacenterid_{0};
-    alignas(64) std::atomic<u64> sequence_{0};
-    alignas(64) std::atomic<u64> last_timestamp_{0};
-    alignas(64) std::atomic<u64> secret_key_{0};
+    alignas(64) std::atomic<std::uint64_t> workerid_{0};
+    alignas(64) std::atomic<std::uint64_t> datacenterid_{0};
+    alignas(64) std::atomic<std::uint64_t> sequence_{0};
+    alignas(64) std::atomic<std::uint64_t> last_timestamp_{0};
+    alignas(64) std::atomic<std::uint64_t> secret_key_{0};
 
     mutable Lock lock_;
     mutable Statistics statistics_;
 
     // High-resolution timestamp with optimized caching
-    alignas(64) mutable std::atomic<u64> cached_timestamp_{0};
+    alignas(64) mutable std::atomic<std::uint64_t> cached_timestamp_{0};
     alignas(64) mutable std::atomic<
         std::chrono::steady_clock::time_point> cached_time_point_{};
 
     const std::chrono::steady_clock::time_point start_time_point_ =
         std::chrono::steady_clock::now();
-    const u64 start_millisecond_ = get_system_millis();
+    const std::uint64_t start_millisecond_ = get_system_millis();
 
     // Thread-local state for better cache locality
     static thread_local ThreadLocalState thread_state_;
@@ -550,7 +550,7 @@ private:
     void initialize() {
         std::random_device rd;
         std::mt19937_64 eng(rd());
-        std::uniform_int_distribution<u64> distr;
+        std::uniform_int_distribution<std::uint64_t> distr;
         secret_key_.store(distr(eng), std::memory_order_relaxed);
 
         if (workerid_.load(std::memory_order_relaxed) > MAX_WORKER_ID)
@@ -571,15 +571,15 @@ private:
      *
      * @return The current system time in milliseconds since the epoch.
      */
-    [[nodiscard]] auto get_system_millis() const noexcept -> u64 {
-        return static_cast<u64>(
+    [[nodiscard]] auto get_system_millis() const noexcept -> std::uint64_t {
+        return static_cast<std::uint64_t>(
             std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch())
                 .count());
     }
 
     // Optimized timestamp generation with reduced system calls
-    [[nodiscard]] auto get_current_timestamp() const noexcept -> u64 {
+    [[nodiscard]] auto get_current_timestamp() const noexcept -> std::uint64_t {
         const auto now = std::chrono::steady_clock::now();
         const auto cached_time =
             cached_time_point_.load(std::memory_order_relaxed);
@@ -592,7 +592,7 @@ private:
         const auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(
                               now - start_time_point_)
                               .count();
-        const u64 timestamp = start_millisecond_ + static_cast<u64>(diff);
+        const std::uint64_t timestamp = start_millisecond_ + static_cast<std::uint64_t>(diff);
 
         // Update cache atomically
         cached_timestamp_.store(timestamp, std::memory_order_relaxed);
@@ -602,20 +602,20 @@ private:
     }
 
     // Optimized single ID generation
-    template <usize N>
-    [[nodiscard]] auto generate_single_id() -> std::array<u64, N> {
+    template <std::size_t N>
+    [[nodiscard]] auto generate_single_id() -> std::array<std::uint64_t, N> {
         static_assert(N == 1);
 
-        const u64 timestamp = get_current_timestamp();
-        u64 current_sequence;
-        u64 last_ts = last_timestamp_.load(std::memory_order_relaxed);
+        const std::uint64_t timestamp = get_current_timestamp();
+        std::uint64_t current_sequence;
+        std::uint64_t last_ts = last_timestamp_.load(std::memory_order_relaxed);
 
         if (timestamp == last_ts) [[likely]] {
             current_sequence =
                 sequence_.fetch_add(1, std::memory_order_relaxed) + 1;
             if ((current_sequence & SEQUENCE_MASK) == 0) [[unlikely]] {
                 // Sequence overflow, wait for next millisecond
-                const u64 next_ts = wait_next_millis(timestamp);
+                const std::uint64_t next_ts = wait_next_millis(timestamp);
                 last_timestamp_.store(next_ts, std::memory_order_relaxed);
                 sequence_.store(0, std::memory_order_relaxed);
                 current_sequence = 0;
@@ -631,7 +631,7 @@ private:
         current_sequence &= SEQUENCE_MASK;
         statistics_.total_ids_generated.fetch_add(1, std::memory_order_relaxed);
 
-        const u64 id =
+        const std::uint64_t id =
             ((timestamp - TWEPOCH) << TIMESTAMP_LEFT_SHIFT) |
             (datacenterid_.load(std::memory_order_relaxed)
              << DATACENTER_ID_SHIFT) |
@@ -642,12 +642,12 @@ private:
     }
 
     // Lock-free batch generation for single-threaded scenarios
-    template <usize N>
-    void generate_batch_lockfree(std::array<u64, N> &ids, u64 timestamp) {
-        u64 current_sequence = sequence_.load(std::memory_order_relaxed);
-        u64 last_ts = last_timestamp_.load(std::memory_order_relaxed);
+    template <std::size_t N>
+    void generate_batch_lockfree(std::array<std::uint64_t, N> &ids, std::uint64_t timestamp) {
+        std::uint64_t current_sequence = sequence_.load(std::memory_order_relaxed);
+        std::uint64_t last_ts = last_timestamp_.load(std::memory_order_relaxed);
 
-        for (usize i = 0; i < N; ++i) {
+        for (std::size_t i = 0; i < N; ++i) {
             if (timestamp == last_ts) {
                 ++current_sequence;
                 if ((current_sequence & SEQUENCE_MASK) == 0) [[unlikely]] {
@@ -662,8 +662,8 @@ private:
                 current_sequence = 0;
             }
 
-            const u64 masked_sequence = current_sequence & SEQUENCE_MASK;
-            const u64 id =
+            const std::uint64_t masked_sequence = current_sequence & SEQUENCE_MASK;
+            const std::uint64_t id =
                 ((timestamp - TWEPOCH) << TIMESTAMP_LEFT_SHIFT) |
                 (datacenterid_.load(std::memory_order_relaxed)
                  << DATACENTER_ID_SHIFT) |
@@ -679,16 +679,16 @@ private:
     }
 
     // Thread-safe batch generation
-    template <usize N>
-    void generate_batch_threadsafe(std::array<u64, N> &ids, u64 timestamp) {
-        u64 current_sequence = sequence_.load(std::memory_order_relaxed);
-        u64 last_ts = last_timestamp_.load(std::memory_order_relaxed);
+    template <std::size_t N>
+    void generate_batch_threadsafe(std::array<std::uint64_t, N> &ids, std::uint64_t timestamp) {
+        std::uint64_t current_sequence = sequence_.load(std::memory_order_relaxed);
+        std::uint64_t last_ts = last_timestamp_.load(std::memory_order_relaxed);
 
         if (timestamp < last_ts) [[unlikely]] {
             throw InvalidTimestampException(timestamp);
         }
 
-        for (usize i = 0; i < N; ++i) {
+        for (std::size_t i = 0; i < N; ++i) {
             if (timestamp == last_ts) {
                 ++current_sequence;
                 if ((current_sequence & SEQUENCE_MASK) == 0) [[unlikely]] {
@@ -703,8 +703,8 @@ private:
                 current_sequence = 0;
             }
 
-            const u64 masked_sequence = current_sequence & SEQUENCE_MASK;
-            const u64 id =
+            const std::uint64_t masked_sequence = current_sequence & SEQUENCE_MASK;
+            const std::uint64_t id =
                 ((timestamp - TWEPOCH) << TIMESTAMP_LEFT_SHIFT) |
                 (datacenterid_.load(std::memory_order_relaxed)
                  << DATACENTER_ID_SHIFT) |
@@ -730,8 +730,8 @@ private:
      * @param last The last generated timestamp.
      * @return The next valid timestamp.
      */
-    [[nodiscard]] auto wait_next_millis(u64 last) const -> u64 {
-        u64 timestamp = get_current_timestamp();
+    [[nodiscard]] auto wait_next_millis(std::uint64_t last) const -> std::uint64_t {
+        std::uint64_t timestamp = get_current_timestamp();
         while (timestamp <= last) {
             // Use CPU pause for better performance in spin-wait
             _mm_pause();
@@ -764,7 +764,7 @@ private:
 };
 
 // Thread-local storage initialization
-template <u64 Twepoch, typename Lock>
+template <std::uint64_t Twepoch, typename Lock>
 thread_local ThreadLocalState  // Removed typename Snowflake<Twepoch, Lock>::
     Snowflake<Twepoch, Lock>::thread_state_{};
 

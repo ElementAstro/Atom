@@ -35,9 +35,9 @@ protected:
 // Test cosine similarity calculation
 TEST_F(SimilaritySearchTest, CosineSimilarityCalculation) {
     // Get documents for similarity testing
-    auto doc1 = std::make_shared<Document>("test1", "machine learning algorithms", std::vector<std::string>{"test"});
-    auto doc2 = std::make_shared<Document>("test2", "machine learning models", std::vector<std::string>{"test"});
-    auto doc3 = std::make_shared<Document>("test3", "football soccer games", std::vector<std::string>{"test"});
+    auto doc1 = std::make_shared<Document>("test1", "machine learning algorithms", std::initializer_list<std::string>{"test"});
+    auto doc2 = std::make_shared<Document>("test2", "machine learning models", std::initializer_list<std::string>{"test"});
+    auto doc3 = std::make_shared<Document>("test3", "football soccer games", std::initializer_list<std::string>{"test"});
 
     // Calculate similarities
     double sim_similar = engine->calculate_cosine_similarity(*doc1, *doc2);
@@ -59,9 +59,9 @@ TEST_F(SimilaritySearchTest, CosineSimilarityCalculation) {
 
 // Test Jaccard similarity calculation
 TEST_F(SimilaritySearchTest, JaccardSimilarityCalculation) {
-    auto doc1 = std::make_shared<Document>("test1", "machine learning algorithms", std::vector<std::string>{"test"});
-    auto doc2 = std::make_shared<Document>("test2", "machine learning models", std::vector<std::string>{"test"});
-    auto doc3 = std::make_shared<Document>("test3", "football soccer games", std::vector<std::string>{"test"});
+    auto doc1 = std::make_shared<Document>("test1", "machine learning algorithms", std::initializer_list<std::string>{"test"});
+    auto doc2 = std::make_shared<Document>("test2", "machine learning models", std::initializer_list<std::string>{"test"});
+    auto doc3 = std::make_shared<Document>("test3", "football soccer games", std::initializer_list<std::string>{"test"});
 
     double jaccard_similar = engine->calculate_jaccard_similarity(*doc1, *doc2);
     double jaccard_different = engine->calculate_jaccard_similarity(*doc1, *doc3);
@@ -82,7 +82,7 @@ TEST_F(SimilaritySearchTest, JaccardSimilarityCalculation) {
 
 // Test TF vector creation
 TEST_F(SimilaritySearchTest, TFVectorCreation) {
-    auto doc = std::make_shared<Document>("test", "machine learning machine algorithms", std::vector<std::string>{"test"});
+    auto doc = std::make_shared<Document>("test", "machine learning machine algorithms", std::initializer_list<std::string>{"test"});
 
     auto tf_vector = engine->create_tf_vector(*doc);
 
@@ -231,9 +231,9 @@ TEST_F(SimilaritySearchTest, SemanticSearchPerformance) {
 // Test similarity calculations with edge cases
 TEST_F(SimilaritySearchTest, SimilarityEdgeCases) {
     // Empty documents
-    auto empty_doc1 = std::make_shared<Document>("empty1", "   ", std::vector<std::string>{"test"});
-    auto empty_doc2 = std::make_shared<Document>("empty2", "   ", std::vector<std::string>{"test"});
-    auto normal_doc = std::make_shared<Document>("normal", "machine learning", std::vector<std::string>{"test"});
+    auto empty_doc1 = std::make_shared<Document>("empty1", "   ", std::initializer_list<std::string>{"test"});
+    auto empty_doc2 = std::make_shared<Document>("empty2", "   ", std::initializer_list<std::string>{"test"});
+    auto normal_doc = std::make_shared<Document>("normal", "machine learning", std::initializer_list<std::string>{"test"});
 
     // Similarity between empty documents should be 0
     double empty_similarity = engine->calculate_cosine_similarity(*empty_doc1, *empty_doc2);
@@ -244,9 +244,9 @@ TEST_F(SimilaritySearchTest, SimilarityEdgeCases) {
     EXPECT_EQ(empty_normal_similarity, 0.0);
 
     // Single word documents
-    auto single1 = std::make_shared<Document>("single1", "machine", std::vector<std::string>{"test"});
-    auto single2 = std::make_shared<Document>("single2", "machine", std::vector<std::string>{"test"});
-    auto single3 = std::make_shared<Document>("single3", "learning", std::vector<std::string>{"test"});
+    auto single1 = std::make_shared<Document>("single1", "machine", std::initializer_list<std::string>{"test"});
+    auto single2 = std::make_shared<Document>("single2", "machine", std::initializer_list<std::string>{"test"});
+    auto single3 = std::make_shared<Document>("single3", "learning", std::initializer_list<std::string>{"test"});
 
     // Identical single words should have similarity 1.0
     double identical_single = engine->calculate_cosine_similarity(*single1, *single2);
