@@ -266,5 +266,3 @@ TEST_F(MHashTest, ThreadSafety) {
         }
     }
 }
-
-

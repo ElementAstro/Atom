@@ -451,5 +451,3 @@ TEST_F(SHA1Test, BinaryData) {
         EXPECT_TRUE((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'));
     }
 }
-
-

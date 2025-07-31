@@ -204,5 +204,3 @@ TEST(MathTest, ModPow) {
     // precomputed value.
     EXPECT_EQ(res, 1);
 }
-
-
