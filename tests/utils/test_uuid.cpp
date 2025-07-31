@@ -99,9 +99,9 @@ TEST_F(UUIDTest, SpanConstructor) {
 TEST_F(UUIDTest, SpanConstructorInvalidLength) {
     std::array<uint8_t, 8> shortData = {0x01, 0x23, 0x45, 0x67,
                                         0x89, 0xab, 0xcd, 0xef};
-    std::span<const uint8_t> shortSpan(shortData);
 
-    EXPECT_THROW(UUID(shortSpan), std::invalid_argument);
+    // Test C++17 compatible constructor
+    EXPECT_THROW(UUID(shortData.data(), shortData.size()), std::invalid_argument);
 }
 
 // Test toString method

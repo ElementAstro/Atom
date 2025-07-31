@@ -296,6 +296,13 @@ UUID::UUID(std::span<const uint8_t> bytes) {
     std::copy(bytes.begin(), bytes.end(), data_.begin());
 }
 
+UUID::UUID(const uint8_t* bytes, size_t size) {
+    if (size != 16) {
+        throw std::invalid_argument("UUID must be exactly 16 bytes");
+    }
+    std::copy(bytes, bytes + size, data_.begin());
+}
+
 auto UUID::toString() const -> std::string {
     try {
         std::ostringstream oss;

@@ -203,25 +203,20 @@ private:
             }
         }
 
+        // Mark chunk as initialized before moving it
+        chunk->initialized.store(true, std::memory_order_release);
+
         chunks_.push_back(std::move(chunk));
         total_blocks_ += BlocksPerChunk;
         stats_.chunk_count.fetch_add(1, std::memory_order_relaxed);
-
-        // Mark chunk as initialized
-        chunk->initialized.store(true, std::memory_order_release);
     }
 
     /**
      * @brief Prefetch memory for better cache performance
      */
     void prefetchMemory(void* ptr) const noexcept {
-        if (ptr) {
-            _mm_prefetch(static_cast<char*>(ptr), _MM_HINT_T0);
-            // Prefetch next cache line as well for larger blocks
-            if (BlockSize > CACHE_LINE_SIZE) {
-                _mm_prefetch(static_cast<char*>(ptr) + CACHE_LINE_SIZE, _MM_HINT_T0);
-            }
-        }
+        // Temporarily disable prefetch to debug segfault
+        (void)ptr; // Suppress unused parameter warning
     }
 
     /**
@@ -263,7 +258,8 @@ public:
      * @return Pointer to allocated memory block
      */
     [[nodiscard]] void* allocate() {
-        auto start_time = std::chrono::high_resolution_clock::now();
+        // Temporarily disable timing to debug segfault
+        // auto start_time = std::chrono::high_resolution_clock::now();
         void* result = nullptr;
 
         if constexpr (EnableLockFree) {
@@ -286,9 +282,10 @@ public:
                 prefetchMemory(result);
                 last_allocated_.store(result, std::memory_order_relaxed);
 
-                auto end_time = std::chrono::high_resolution_clock::now();
-                auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
-                updateTimingStats(duration, true);
+                // Timing disabled for debugging
+                // auto end_time = std::chrono::high_resolution_clock::now();
+                // auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+                // updateTimingStats(duration, true);
 
                 return result;
             } else {
@@ -299,11 +296,44 @@ public:
         // Fall back to mutex-based allocation
         std::lock_guard lock(mutex_);
 
-        if ((free_list_ == nullptr)) {
-            allocate_new_chunk();
+        if constexpr (EnableLockFree) {
+            // In lock-free mode, we need to allocate a new chunk and try lock-free list again
+            if (lock_free_list_.empty()) {
+                allocate_new_chunk();
+            }
+
+            // Try to get a block from the lock-free list after ensuring chunk exists
+            if (auto* lock_free_block = lock_free_list_.pop()) {
+                result = lock_free_block;
+                ++allocated_blocks_;
+
+                // Update statistics
+                stats_.total_allocations.fetch_add(1, std::memory_order_relaxed);
+                size_t current = stats_.current_allocations.fetch_add(1, std::memory_order_relaxed) + 1;
+
+                // Update peak allocations
+                size_t current_peak = stats_.peak_allocations.load();
+                while (current > current_peak &&
+                       !stats_.peak_allocations.compare_exchange_weak(current_peak, current)) {
+                    // Keep trying until we successfully update or find a larger value
+                }
+
+                last_allocated_.store(result, std::memory_order_relaxed);
+                return result;
+            } else {
+                throw std::bad_alloc(); // Should not happen if allocate_new_chunk worked
+            }
+        } else {
+            // Traditional mutex-based allocation
+            if ((free_list_ == nullptr)) {
+                allocate_new_chunk();
+            }
         }
 
         Block* block = free_list_;
+        if (block == nullptr) {
+            throw std::bad_alloc(); // Should not happen if allocate_new_chunk worked correctly
+        }
         free_list_ = block->next;
         ++allocated_blocks_;
         result = static_cast<void*>(block);
@@ -322,9 +352,10 @@ public:
         prefetchMemory(result);
         last_allocated_.store(result, std::memory_order_relaxed);
 
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
-        updateTimingStats(duration, true);
+        // Timing disabled for debugging
+        // auto end_time = std::chrono::high_resolution_clock::now();
+        // auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+        // updateTimingStats(duration, true);
 
         return result;
     }

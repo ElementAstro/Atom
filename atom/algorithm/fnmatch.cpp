@@ -510,4 +510,37 @@ atom::algorithm::filter<std::vector<std::string>, std::vector<std::string>>(
     const std::vector<std::string>&, const std::vector<std::string>&, int,
     bool);
 
+// Additional template instantiations for test cases
+template bool atom::algorithm::fnmatch<const char(&)[5], const char(&)[4]>(const char(&)[5], const char(&)[4], int);
+template bool atom::algorithm::fnmatch<const char(&)[11], const char(&)[11]>(const char(&)[11], const char(&)[11], int);
+template bool atom::algorithm::fnmatch<const char(&)[12], const char(&)[12]>(const char(&)[12], const char(&)[12], int);
+template bool atom::algorithm::fnmatch<const char(&)[17], const char(&)[24]>(const char(&)[17], const char(&)[24], int);
+template bool atom::algorithm::fnmatch<const char(&)[2], std::string&>(const char(&)[2], std::string&, int);
+template bool atom::algorithm::fnmatch<std::string&, std::string&>(std::string&, std::string&, int);
+template bool atom::algorithm::fnmatch<const char(&)[6], const std::string&>(const char(&)[6], const std::string&, int);
+template bool atom::algorithm::fnmatch<const char(&)[4], const char(&)[4]>(const char(&)[4], const char(&)[4], int);
+
+// Additional instantiations for missing test cases
+template bool atom::algorithm::fnmatch<const char(&)[2], const char(&)[9]>(const char(&)[2], const char(&)[9], int);
+template bool atom::algorithm::fnmatch<const char(&)[2], const char(&)[2]>(const char(&)[2], const char(&)[2], int);
+template bool atom::algorithm::fnmatch<const char(&)[2], const char(&)[3]>(const char(&)[2], const char(&)[3], int);
+template bool atom::algorithm::fnmatch<const char(&)[6], const char(&)[9]>(const char(&)[6], const char(&)[9], int);
+template bool atom::algorithm::fnmatch<std::string_view&, std::string_view&>(std::string_view&, std::string_view&, int);
+template bool atom::algorithm::fnmatch<const char*&, const char*&>(const char*&, const char*&, int);
+template bool atom::algorithm::fnmatch<std::string&, std::string_view&>(std::string&, std::string_view&, int);
+template bool atom::algorithm::fnmatch<std::string_view&, const char*&>(std::string_view&, const char*&, int);
+template bool atom::algorithm::fnmatch<const char*&, std::string&>(const char*&, std::string&, int);
+
+template atom::type::expected<bool, atom::algorithm::FnmatchError> atom::algorithm::fnmatch_nothrow<const char(&)[5], const char(&)[4]>(const char(&)[5], const char(&)[4], int) noexcept;
+template atom::type::expected<bool, atom::algorithm::FnmatchError> atom::algorithm::fnmatch_nothrow<const char(&)[4], const char(&)[4]>(const char(&)[4], const char(&)[4], int) noexcept;
+
+template atom::type::expected<std::string, atom::algorithm::FnmatchError> atom::algorithm::translate<const char(&)[5]>(const char(&)[5], int) noexcept;
+template atom::type::expected<std::string, atom::algorithm::FnmatchError> atom::algorithm::translate<const char(&)[6]>(const char(&)[6], int) noexcept;
+template atom::type::expected<std::string, atom::algorithm::FnmatchError> atom::algorithm::translate<const char(&)[2]>(const char(&)[2], int) noexcept;
+template atom::type::expected<std::string, atom::algorithm::FnmatchError> atom::algorithm::translate<const char(&)[9]>(const char(&)[9], int) noexcept;
+template atom::type::expected<std::string, atom::algorithm::FnmatchError> atom::algorithm::translate<const char(&)[7]>(const char(&)[7], int) noexcept;
+template atom::type::expected<std::string, atom::algorithm::FnmatchError> atom::algorithm::translate<const char(&)[14]>(const char(&)[14], int) noexcept;
+template atom::type::expected<std::string, atom::algorithm::FnmatchError> atom::algorithm::translate<const char(&)[16]>(const char(&)[16], int) noexcept;
+template atom::type::expected<std::string, atom::algorithm::FnmatchError> atom::algorithm::translate<const char(&)[11]>(const char(&)[11], int) noexcept;
+
 }  // namespace atom::algorithm

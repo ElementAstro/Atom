@@ -19,7 +19,7 @@ protected:
         config_.enable_health_monitoring = true;
     }
 
-    CacheConfig config_;
+    TTLCacheConfig config_;
 };
 
 // Test expiration index functionality
@@ -85,7 +85,7 @@ TEST_F(TTLAdvancedFeaturesTest, BatchOperationsOptimization) {
     auto batch_results = cache.batch_get(keys_to_get);
     EXPECT_EQ(batch_results.size(), 25);
 
-    for (const auto& [key, value] : batch_results) {
+    for (const auto& value : batch_results) {
         EXPECT_TRUE(value.has_value());
     }
 
@@ -199,7 +199,7 @@ TEST_F(TTLAdvancedFeaturesTest, ConfigurationUpdates) {
     EXPECT_TRUE(current_config.enable_lazy_expiration);
 
     // Test updating configuration
-    CacheConfig new_config = config_;
+    TTLCacheConfig new_config = config_;
     new_config.cleanup_batch_size = 200;
     new_config.enable_compression = true;
     new_config.max_memory_mb = 5;

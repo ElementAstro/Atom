@@ -55,7 +55,7 @@ public:
          * @brief Move constructor.
          */
         Entry(Entry&& other) noexcept
-            : count(other.count.load(std::memory_order_relaxed)),
+            : count(other.count.load(std::memory_order_acquire)),
               value(std::move(other.value)) {}
 
         /**
@@ -64,8 +64,8 @@ public:
         auto operator=(Entry&& other) noexcept -> Entry& {
             if (this != &other) {
                 value = std::move(other.value);
-                count.store(other.count.load(std::memory_order_relaxed),
-                            std::memory_order_relaxed);
+                count.store(other.count.load(std::memory_order_acquire),
+                            std::memory_order_release);
             }
             return *this;
         }
@@ -202,6 +202,7 @@ public:
 private:
     mutable std::vector<std::shared_mutex>
         mutexes_;  ///< Vector of mutexes for lock striping.
+    mutable std::shared_mutex global_mutex_;  ///< Global mutex for table operations.
     std::unordered_map<Key, Entry> table_;  ///< The underlying hash table.
     std::atomic<bool> stopSorting{
         false};  ///< Flag to indicate whether to stop automatic sorting.
@@ -233,6 +234,8 @@ CountingHashTable<Key, Value>::CountingHashTable(size_t num_mutexes,
                                                  size_t initial_bucket_count)
     : mutexes_(num_mutexes), num_mutexes_(num_mutexes) {
     table_.reserve(initial_bucket_count);
+    // Set a high max load factor to prevent rehashing during concurrent operations
+    table_.max_load_factor(2.0f);
 }
 
 template <typename Key, typename Value>
@@ -250,13 +253,15 @@ size_t CountingHashTable<Key, Value>::getMutexIndex(const Key& key) const {
 template <typename Key, typename Value>
     requires std::equality_comparable<Key> && std::movable<Value>
 void CountingHashTable<Key, Value>::insert(const Key& key, const Value& value) {
-    size_t index = getMutexIndex(key);
-    std::unique_lock lock(mutexes_[index]);
+    std::unique_lock lock(global_mutex_);
     auto it = table_.find(key);
     if (it == table_.end()) {
-        table_.emplace(key, Entry(value));
+        Entry entry(value);
+        entry.count.store(1, std::memory_order_relaxed);  // Initial access count
+        table_.emplace(key, std::move(entry));
     } else {
         it->second.value = value;  // Assuming value can be copied
+        it->second.count.fetch_add(1, std::memory_order_relaxed);  // Increment on update
     }
 }
 
@@ -264,22 +269,16 @@ template <typename Key, typename Value>
     requires std::equality_comparable<Key> && std::movable<Value>
 void CountingHashTable<Key, Value>::insertBatch(
     const std::vector<std::pair<Key, Value>>& items) {
-    // Group items by mutex to minimize locking overhead
-    std::unordered_map<size_t, std::vector<std::pair<Key, Value>>> grouped;
+    std::unique_lock lock(global_mutex_);
     for (const auto& [key, value] : items) {
-        size_t index = getMutexIndex(key);
-        grouped[index].emplace_back(key, value);
-    }
-
-    for (auto& [index, group] : grouped) {
-        std::unique_lock lock(mutexes_[index]);
-        for (auto& [key, value] : group) {
-            auto it = table_.find(key);
-            if (it == table_.end()) {
-                table_.emplace(key, Entry(value));
-            } else {
-                it->second.value = value;  // Assuming value can be copied
-            }
+        auto it = table_.find(key);
+        if (it == table_.end()) {
+            Entry entry(value);
+            entry.count.store(1, std::memory_order_relaxed);  // Initial access count
+            table_.emplace(key, std::move(entry));
+        } else {
+            it->second.value = value;  // Assuming value can be copied
+            it->second.count.fetch_add(1, std::memory_order_relaxed);  // Increment on update
         }
     }
 }
@@ -288,8 +287,7 @@ template <typename Key, typename Value>
     requires std::equality_comparable<Key> && std::movable<Value>
 auto CountingHashTable<Key, Value>::get(const Key& key)
     -> std::optional<Value> {
-    size_t index = getMutexIndex(key);
-    std::shared_lock lock(mutexes_[index]);
+    std::shared_lock lock(global_mutex_);
     auto it = table_.find(key);
     if (it != table_.end()) {
         it->second.count.fetch_add(1, std::memory_order_relaxed);
@@ -302,8 +300,7 @@ template <typename Key, typename Value>
     requires std::equality_comparable<Key> && std::movable<Value>
 auto CountingHashTable<Key, Value>::getAccessCount(const Key& key) const
     -> std::optional<size_t> {
-    size_t index = getMutexIndex(key);
-    std::shared_lock lock(mutexes_[index]);
+    std::shared_lock lock(global_mutex_);
     auto it = table_.find(key);
     if (it != table_.end()) {
         return it->second.count.load(std::memory_order_relaxed);
@@ -318,23 +315,14 @@ auto CountingHashTable<Key, Value>::getBatch(const std::vector<Key>& keys)
     std::vector<std::optional<Value>> results;
     results.reserve(keys.size());
 
-    // Group keys by mutex to minimize locking overhead
-    std::unordered_map<size_t, std::vector<const Key*>> grouped;
+    std::shared_lock lock(global_mutex_);
     for (const auto& key : keys) {
-        size_t index = getMutexIndex(key);
-        grouped[index].emplace_back(&key);
-    }
-
-    for (auto& [index, group] : grouped) {
-        std::shared_lock lock(mutexes_[index]);
-        for (const auto* keyPtr : group) {
-            auto it = table_.find(*keyPtr);
-            if (it != table_.end()) {
-                it->second.count.fetch_add(1, std::memory_order_relaxed);
-                results.emplace_back(it->second.value);
-            } else {
-                results.emplace_back(std::nullopt);
-            }
+        auto it = table_.find(key);
+        if (it != table_.end()) {
+            it->second.count.fetch_add(1, std::memory_order_relaxed);
+            results.emplace_back(it->second.value);
+        } else {
+            results.emplace_back(std::nullopt);
         }
     }
 
@@ -344,17 +332,14 @@ auto CountingHashTable<Key, Value>::getBatch(const std::vector<Key>& keys)
 template <typename Key, typename Value>
     requires std::equality_comparable<Key> && std::movable<Value>
 auto CountingHashTable<Key, Value>::erase(const Key& key) -> bool {
-    size_t index = getMutexIndex(key);
-    std::unique_lock lock(mutexes_[index]);
+    std::unique_lock lock(global_mutex_);
     return table_.erase(key) > 0;
 }
 
 template <typename Key, typename Value>
     requires std::equality_comparable<Key> && std::movable<Value>
 void CountingHashTable<Key, Value>::clear() {
-    for (size_t i = 0; i < num_mutexes_; ++i) {
-        std::unique_lock lock(mutexes_[i]);
-    }
+    std::unique_lock lock(global_mutex_);
     table_.clear();
 }
 
@@ -365,19 +350,11 @@ auto CountingHashTable<Key, Value>::getAllEntries() const
     std::vector<std::pair<Key, EntryData>> entries;
     entries.reserve(table_.size());
 
-    // Lock all mutexes in a consistent order to avoid deadlocks
-    for (size_t i = 0; i < num_mutexes_; ++i) {
-        mutexes_[i].lock();
-    }
-
+    std::shared_lock lock(global_mutex_);
     for (const auto& [key, entry] : table_) {
         entries.emplace_back(
             key, EntryData{entry.count.load(std::memory_order_relaxed),
                            entry.value});
-    }
-
-    for (size_t i = 0; i < num_mutexes_; ++i) {
-        mutexes_[i].unlock();
     }
 
     return entries;
@@ -393,9 +370,8 @@ void CountingHashTable<Key, Value>::sortEntriesByCountDesc() {
     });
 
     // Rebuild the table
+    std::unique_lock lock(global_mutex_);
     for (auto& [key, entryData] : entries) {
-        size_t index = getMutexIndex(key);
-        std::unique_lock lock(mutexes_[index]);
         auto it = table_.find(key);
         if (it != table_.end()) {
             it->second.value = std::move(entryData.value);
@@ -464,9 +440,8 @@ void CountingHashTable<Key, Value>::sortingWorker(
                   });
 
         // Rebuild the table
+        std::unique_lock lock(global_mutex_);
         for (auto& [key, entryData] : entries) {
-            size_t index = getMutexIndex(key);
-            std::unique_lock lock(mutexes_[index]);
             auto it = table_.find(key);
             if (it != table_.end()) {
                 it->second.value = std::move(entryData.value);
@@ -495,10 +470,7 @@ auto CountingHashTable<Key, Value>::serializeToJson() const -> json {
 template <typename Key, typename Value>
     requires std::equality_comparable<Key> && std::movable<Value>
 void CountingHashTable<Key, Value>::deserializeFromJson(const json& j) {
-    // Lock all mutexes in a consistent order to avoid deadlocks
-    for (size_t i = 0; i < num_mutexes_; ++i) {
-        mutexes_[i].lock();
-    }
+    std::unique_lock lock(global_mutex_);
     table_.clear();
     for (const auto& item : j) {
         Key key = item.at("key").get<Key>();
@@ -507,9 +479,6 @@ void CountingHashTable<Key, Value>::deserializeFromJson(const json& j) {
         Entry entry(std::move(value));
         entry.count.store(count, std::memory_order_relaxed);
         table_.emplace(std::move(key), std::move(entry));
-    }
-    for (size_t i = 0; i < num_mutexes_; ++i) {
-        mutexes_[i].unlock();
     }
 }
 

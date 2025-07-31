@@ -323,7 +323,7 @@ void ErrorStack::printFilteredErrorStack() const {
         std::lock_guard lock(mutex_);
 
         for (const auto& error : errorStack_) {
-            if (!std::ranges::contains(filteredModules_, error.moduleName)) {
+            if (std::find(filteredModules_.begin(), filteredModules_.end(), error.moduleName) == filteredModules_.end()) {
                 spdlog::error(
                     "{} [{}] [{}] {}",
                     std::string(errorLevelToString(error.level)),
@@ -349,8 +349,7 @@ auto ErrorStack::getFilteredErrorsByModule(std::string_view moduleName) const
                      std::back_inserter(errors),
                      [&moduleNameStr, this](const ErrorInfo& error) {
                          return error.moduleName == moduleNameStr &&
-                                !std::ranges::contains(filteredModules_,
-                                                       error.moduleName);
+                                std::find(filteredModules_.begin(), filteredModules_.end(), error.moduleName) == filteredModules_.end();
                      });
 
         return errors;
@@ -373,8 +372,7 @@ auto ErrorStack::getFilteredErrorsByLevel(ErrorLevel level) const
                      [level, this](const ErrorInfo& error) {
                          return static_cast<int>(error.level) >=
                                     static_cast<int>(level) &&
-                                !std::ranges::contains(filteredModules_,
-                                                       error.moduleName);
+                                std::find(filteredModules_.begin(), filteredModules_.end(), error.moduleName) == filteredModules_.end();
                      });
 
         return errors;
@@ -396,8 +394,7 @@ auto ErrorStack::getFilteredErrorsByCategory(ErrorCategory category) const
                      std::back_inserter(errors),
                      [category, this](const ErrorInfo& error) {
                          return error.category == category &&
-                                !std::ranges::contains(filteredModules_,
-                                                       error.moduleName);
+                                std::find(filteredModules_.begin(), filteredModules_.end(), error.moduleName) == filteredModules_.end();
                      });
 
         return errors;
@@ -424,8 +421,7 @@ auto ErrorStack::getErrorsInTimeRange(time_t start, time_t end) const
             errorStack_.begin(), errorStack_.end(), std::back_inserter(errors),
             [start, end, this](const ErrorInfo& error) {
                 return error.timestamp >= start && error.timestamp <= end &&
-                       !std::ranges::contains(filteredModules_,
-                                              error.moduleName);
+                       std::find(filteredModules_.begin(), filteredModules_.end(), error.moduleName) == filteredModules_.end();
             });
 
         return errors;

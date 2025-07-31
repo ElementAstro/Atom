@@ -36,7 +36,7 @@ public:
 
     bool connect(const std::string& host, uint16_t port) {
         asio::error_code ec;
-        asio::ip::tcp::resolver resolver(socket_.get_executor().context());
+        asio::ip::tcp::resolver resolver(socket_.get_executor());
         auto endpoints = resolver.resolve(host, std::to_string(port), ec);
         if (ec)
             return false;

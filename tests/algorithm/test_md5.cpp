@@ -13,7 +13,7 @@ using namespace atom::algorithm;
 using namespace std::chrono_literals;
 
 // Helper function to generate random data
-std::vector<std::byte> generateRandomBytes(size_t size) {
+std::vector<std::byte> generateRandomBytesMd5(size_t size) {
     std::vector<std::byte> data(size);
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -121,7 +121,7 @@ TEST_F(MD5Test, BinaryData) {
 TEST_F(MD5Test, LargeData) {
     // Create 1MB of random data
     const size_t dataSize = 1024 * 1024;
-    std::vector<std::byte> largeData = generateRandomBytes(dataSize);
+    std::vector<std::byte> largeData = generateRandomBytesMd5(dataSize);
 
     // Hash the large data
     std::string hash = MD5::encryptBinary(largeData);
@@ -229,7 +229,7 @@ TEST_F(MD5Test, FileContent) {
     fileData.insert(fileData.end(), header_ptr, header_ptr + header.size());
 
     // Add some binary data
-    std::vector<std::byte> binaryPart = generateRandomBytes(1000);
+    std::vector<std::byte> binaryPart = generateRandomBytesMd5(1000);
     fileData.insert(fileData.end(), binaryPart.begin(), binaryPart.end());
 
     // Add a text footer
@@ -247,7 +247,7 @@ TEST_F(MD5Test, FileContent) {
 // Test performance with large data
 TEST_F(MD5Test, Performance) {
     const size_t dataSize = 10 * 1024 * 1024;  // 10 MB
-    auto largeData = generateRandomBytes(dataSize);
+    auto largeData = generateRandomBytesMd5(dataSize);
 
     auto start = std::chrono::high_resolution_clock::now();
     std::string hash = MD5::encryptBinary(largeData);
@@ -336,7 +336,7 @@ TEST_F(MD5Test, ConsistencyWithDifferentSources) {
 // Test mixing binary and string operations
 TEST_F(MD5Test, MixedOperations) {
     // Create some binary data
-    std::vector<std::byte> binaryData = generateRandomBytes(100);
+    std::vector<std::byte> binaryData = generateRandomBytesMd5(100);
 
     // Create a string copy of the same data
     std::string stringData;

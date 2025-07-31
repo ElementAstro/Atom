@@ -239,8 +239,9 @@ public:
      * @param variantWrapper The VariantWrapper to output
      * @return Reference to the output stream
      */
+    template <typename... U>
     friend auto operator<<(std::ostream& outputStream,
-                           const VariantWrapper& variantWrapper)
+                           const VariantWrapper<U...>& variantWrapper)
         -> std::ostream&;
 
     /**
@@ -249,6 +250,9 @@ public:
     ~VariantWrapper() = default;
 
 private:
+    // Friend declaration to allow access between different template instantiations
+    template <typename... OtherTypes>
+    friend class VariantWrapper;
     VariantType variant_{std::in_place_index<0>};
     mutable std::shared_mutex mutex_;
 
@@ -262,8 +266,19 @@ template <typename... OtherTypes>
 VariantWrapper<Types...>::
     VariantWrapper(const VariantWrapper<OtherTypes...>& other) noexcept(
         std::is_nothrow_copy_constructible_v<
-            std::variant<std::monostate, OtherTypes...>>)
-    : variant_(other.withThreadSafety([&other]() { return other.variant_; })) {}
+            std::variant<std::monostate, OtherTypes...>>) {
+    other.withThreadSafety([this, &other]() {
+        std::visit([this](const auto& value) {
+            using ValueType = std::decay_t<decltype(value)>;
+            if constexpr (is_valid_type_v<ValueType> || std::is_same_v<ValueType, std::monostate>) {
+                variant_ = value;
+            } else {
+                // Type not supported in target variant, use monostate
+                variant_ = std::monostate{};
+            }
+        }, other.variant_);
+    });
+}
 
 template <typename... Types>
 template <typename T>

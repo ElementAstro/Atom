@@ -17,6 +17,21 @@
 
 namespace atom::algorithm {
 
+// Helper type trait to detect std::complex types
+template<typename T>
+struct is_complex : std::false_type {};
+
+template<typename T>
+struct is_complex<std::complex<T>> : std::true_type {};
+
+template<typename T>
+inline constexpr bool is_complex_v = is_complex<T>::value;
+
+// Ensure type aliases are available
+using usize = std::size_t;
+using i32 = std::int32_t;
+using u32 = std::uint32_t;
+
 /**
  * @brief Forward declaration of the Matrix class template.
  *
@@ -163,8 +178,7 @@ public:
         sum_sq = std::accumulate(
             data_.begin(), data_.end(), T{}, [](T current_sum, const T& elem) {
                 // Use std::norm for complex numbers
-                if constexpr (std::is_same_v<
-                                  T, std::complex<typename T::value_type>>) {
+                if constexpr (is_complex_v<T>) {
                     return current_sum + std::norm(elem);
                 } else {
                     return current_sum + elem * elem;
@@ -231,9 +245,7 @@ public:
                       "Symmetry is only defined for square matrices");
         for (usize i = 0; i < Rows; ++i) {
             for (usize j = i + 1; j < Cols; ++j) {
-                if constexpr (std::is_floating_point_v<T> ||
-                              std::is_same_v<
-                                  T, std::complex<typename T::value_type>>) {
+                if constexpr (std::is_floating_point_v<T> || is_complex_v<T>) {
                     if (std::abs((*this)(i, j) - (*this)(j, i)) > tolerance) {
                         return false;
                     }
@@ -298,10 +310,7 @@ public:
         for (usize i = 0; i < Rows; ++i) {
             for (usize j = 0; j < Cols; ++j) {
                 if (i == j) {
-                    if constexpr (std::is_floating_point_v<T> ||
-                                  std::is_same_v<
-                                      T,
-                                      std::complex<typename T::value_type>>) {
+                    if constexpr (std::is_floating_point_v<T> || is_complex_v<T>) {
                         if (std::abs((*this)(i, j) - T{1}) > tolerance)
                             return false;
                     } else {  // Integral types
@@ -309,10 +318,7 @@ public:
                             return false;
                     }
                 } else {
-                    if constexpr (std::is_floating_point_v<T> ||
-                                  std::is_same_v<
-                                      T,
-                                      std::complex<typename T::value_type>>) {
+                    if constexpr (std::is_floating_point_v<T> || is_complex_v<T>) {
                         if (std::abs((*this)(i, j)) > tolerance)
                             return false;
                     } else {  // Integral types
@@ -364,8 +370,7 @@ public:
                       "Inverse is only defined for square matrices");
         const T det = determinant();
         // Using a small tolerance for floating-point comparison
-        if constexpr (std::is_floating_point_v<T> ||
-                      std::is_same_v<T, std::complex<typename T::value_type>>) {
+        if constexpr (std::is_floating_point_v<T> || is_complex_v<T>) {
             if (std::abs(det) < 1e-10) {
                 THROW_RUNTIME_ERROR("Matrix is singular (non-invertible)");
             }
@@ -688,8 +693,7 @@ auto luDecomposition(const Matrix<T, Size, Size>& m)
 
     for (usize k = 0; k < Size; ++k) {  // k is the pivot row/column index
         // Check pivot element in U
-        if constexpr (std::is_floating_point_v<T> ||
-                      std::is_same_v<T, std::complex<typename T::value_type>>) {
+        if constexpr (std::is_floating_point_v<T> || is_complex_v<T>) {
             if (std::abs(U(k, k)) < 1e-10) {
                 THROW_RUNTIME_ERROR(
                     "LU decomposition failed: pivot element is zero or near "
@@ -777,9 +781,7 @@ auto singularValueDecomposition(const Matrix<T, Rows, Cols>& m)
             T v_dot_v = std::inner_product(v.begin(), v.end(), v.begin(), T{0});
 
             T lambda = T{0};
-            if constexpr (std::is_floating_point_v<T> ||
-                          std::is_same_v<
-                              T, std::complex<typename T::value_type>>) {
+            if constexpr (std::is_floating_point_v<T> || is_complex_v<T>) {
                 if (std::abs(v_dot_v) > 1e-15) {  // Avoid division by zero
                     lambda = v_new_dot_v / v_dot_v;
                 } else {
@@ -798,9 +800,7 @@ auto singularValueDecomposition(const Matrix<T, Rows, Cols>& m)
             // Normalize v_new
             T norm_v_new = std::sqrt(std::inner_product(
                 v_new.begin(), v_new.end(), v_new.begin(), T{0}));
-            if constexpr (std::is_floating_point_v<T> ||
-                          std::is_same_v<
-                              T, std::complex<typename T::value_type>>) {
+            if constexpr (std::is_floating_point_v<T> || is_complex_v<T>) {
                 if (std::abs(norm_v_new) > 1e-15) {  // Avoid division by zero
                     for (auto& val : v_new) {
                         val /= norm_v_new;
@@ -821,9 +821,7 @@ auto singularValueDecomposition(const Matrix<T, Rows, Cols>& m)
             }
 
             // Check for convergence
-            if constexpr (std::is_floating_point_v<T> ||
-                          std::is_same_v<
-                              T, std::complex<typename T::value_type>>) {
+            if constexpr (std::is_floating_point_v<T> || is_complex_v<T>) {
                 if (std::abs(lambda - lambda_old) < tol) {
                     // Deflate the matrix: current_mtm = current_mtm - lambda *
                     // v * v^T
@@ -869,8 +867,7 @@ auto singularValueDecomposition(const Matrix<T, Rows, Cols>& m)
     for (usize i = 0; i < n; ++i) {
         T sigma = powerIteration_with_deflation(current_mtm);
         // Only add positive singular values (or values above a tolerance)
-        if constexpr (std::is_floating_point_v<T> ||
-                      std::is_same_v<T, std::complex<typename T::value_type>>) {
+        if constexpr (std::is_floating_point_v<T> || is_complex_v<T>) {
             if (std::abs(sigma) > 1e-10) {
                 singularValues.push_back(
                     std::abs(sigma));  // Singular values are non-negative
@@ -927,8 +924,7 @@ auto randomMatrix(T min = 0, T max = 1) -> Matrix<T, Rows, Cols> {
         for (auto& elem : result.getData()) {
             elem = dis(gen);
         }
-    } else if constexpr (std::is_same_v<T,
-                                        std::complex<typename T::value_type>>) {
+    } else if constexpr (is_complex_v<T>) {
         using RealT = typename T::value_type;
         std::uniform_real_distribution<RealT> dis_real(static_cast<RealT>(min),
                                                        static_cast<RealT>(max));

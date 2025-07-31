@@ -225,8 +225,14 @@ public:
         }
         buffer_.push_back(item);
         success = true;
+
+        // Update atomic indices for lock-free reads if enabled
+        if (config_.enable_lock_free_reads) {
+            atomic_head_.store(buffer_.size(), std::memory_order_release);
+            atomic_count_.store(buffer_.size(), std::memory_order_release);
+        }
 #else
-        if (full()) {
+        if (count_ == max_size_) {  // Use direct check to avoid deadlock
             if (config_.enable_stats) {
                 stats_.push_failures.fetch_add(1, std::memory_order_relaxed);
             }
@@ -285,13 +291,25 @@ public:
             return false;
         }
         buffer_.push_back(std::move(item));
+
+        // Update atomic indices for lock-free reads if enabled
+        if (config_.enable_lock_free_reads) {
+            atomic_head_.store(buffer_.size(), std::memory_order_release);
+            atomic_count_.store(buffer_.size(), std::memory_order_release);
+        }
 #else
-        if (full()) {
+        if (count_ == max_size_) {  // Use direct check to avoid deadlock
             return false;
         }
         buffer_[head_] = std::move(item);  // Use move assignment
         head_ = (head_ + 1) % max_size_;
         ++count_;
+
+        // Update atomic indices for lock-free reads if enabled
+        if (config_.enable_lock_free_reads) {
+            atomic_head_.store(head_, std::memory_order_release);
+            atomic_count_.store(count_, std::memory_order_release);
+        }
 #endif
         return true;
     }
@@ -307,7 +325,7 @@ public:
         buffer_.push_back(item);
 #else
         buffer_[head_] = item;
-        if (full()) {
+        if (count_ == max_size_) {  // Use direct check to avoid deadlock
             tail_ = (tail_ + 1) % max_size_;
         } else {
             ++count_;
@@ -328,7 +346,7 @@ public:
         buffer_.push_back(std::move(item));
 #else
         buffer_[head_] = std::move(item);
-        if (full()) {
+        if (count_ == max_size_) {  // Use direct check to avoid deadlock
             tail_ = (tail_ + 1) % max_size_;
         } else {
             ++count_;
@@ -362,8 +380,14 @@ public:
         T item = buffer_.front();
         buffer_.pop_front();
         result = std::move(item);
+
+        // Update atomic indices for lock-free reads if enabled
+        if (config_.enable_lock_free_reads) {
+            atomic_tail_.store(buffer_.size(), std::memory_order_release);
+            atomic_count_.store(buffer_.size(), std::memory_order_release);
+        }
 #else
-        if (empty()) {
+        if (count_ == 0) {  // Use direct check to avoid deadlock
             if (config_.enable_stats) {
                 stats_.pop_failures.fetch_add(1, std::memory_order_relaxed);
             }
@@ -526,7 +550,7 @@ public:
             }
             buffer_.push_back(item);
 #else
-            if (full()) {
+            if (count_ == max_size_) {  // Use direct check to avoid deadlock
                 break;
             }
             prefetchElement(head_);
@@ -584,7 +608,8 @@ public:
 
         std::lock_guard lock(mutex_);
 
-        size_t to_pop = std::min(max_items, size());
+        size_t current_size = count_;  // Use direct access to avoid deadlock
+        size_t to_pop = std::min(max_items, current_size);
         result.reserve(to_pop);
 
         for (size_t i = 0; i < to_pop; ++i) {
@@ -595,7 +620,7 @@ public:
             result.push_back(buffer_.front());
             buffer_.pop_front();
 #else
-            if (empty()) {
+            if (count_ == 0) {  // Use direct check to avoid deadlock
                 break;
             }
             prefetchElement(tail_);
@@ -733,7 +758,7 @@ public:
         }
         return buffer_.front();
 #else
-        if (empty()) {
+        if (count_ == 0) {  // Use direct check to avoid deadlock
             return std::nullopt;
         }
         // Return a copy, as the internal element might be moved out by pop()
@@ -755,7 +780,7 @@ public:
         }
         return buffer_.back();
 #else
-        if (empty()) {
+        if (count_ == 0) {  // Use direct check to avoid deadlock
             return std::nullopt;
         }
         size_t backIndex = (head_ + max_size_ - 1) % max_size_;
@@ -794,7 +819,7 @@ public:
     std::vector<T> view() const {
         std::lock_guard lock(mutex_);
         std::vector<T> combined;
-        combined.reserve(size());
+        combined.reserve(count_);  // Use direct access to avoid deadlock
 #ifdef ATOM_USE_BOOST
         std::copy(buffer_.begin(), buffer_.end(), std::back_inserter(combined));
 #else
@@ -883,7 +908,7 @@ public:
      */
     void resize(size_t new_size) {
         std::lock_guard lock(mutex_);
-        if (new_size < size()) {
+        if (new_size < count_) {  // Use direct check to avoid deadlock
             throw std::runtime_error(
                 "New size cannot be smaller than current number of elements.");
         }
@@ -917,7 +942,7 @@ public:
      */
     auto at(size_t index) const -> std::optional<T> {
         std::lock_guard lock(mutex_);
-        if (index >= size()) {
+        if (index >= count_) {  // Use direct check to avoid deadlock
             return std::nullopt;
         }
 #ifdef ATOM_USE_BOOST
@@ -1003,7 +1028,7 @@ public:
      */
     void rotate(int n) {
         std::lock_guard lock(mutex_);
-        if (empty() || n == 0) {
+        if (count_ == 0 || n == 0) {  // Use direct check to avoid deadlock
             return;
         }
 

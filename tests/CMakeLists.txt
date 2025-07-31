@@ -9,6 +9,9 @@
 cmake_minimum_required(VERSION 3.20)
 project(lithium.test C CXX)
 
+# Enable testing
+enable_testing()
+
 # Conditionally add test subdirectories based on build options
 
 # Algorithm tests

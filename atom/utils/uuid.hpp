@@ -70,6 +70,14 @@ public:
     explicit UUID(std::span<const uint8_t> bytes);
 
     /**
+     * @brief Constructs a UUID from a byte array (C++17 compatible)
+     * @param bytes Pointer to byte array
+     * @param size Size of the byte array, must be exactly 16
+     * @throws std::invalid_argument If size is not 16 bytes
+     */
+    UUID(const uint8_t* bytes, size_t size);
+
+    /**
      * @brief Converts the UUID to a string representation.
      * @return A string representation of the UUID.
      */

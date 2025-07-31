@@ -185,7 +185,7 @@ TEST_F(ResourceCacheTest, ReadWriteToFile) {
     cache->clear();
     EXPECT_TRUE(cache->empty());
 
-    cache->read_from_file(filePath, deserializer);
+    cache->read_from_file(filePath, deserializer, std::chrono::seconds(3600));
 
     // Verify contents
     EXPECT_TRUE(cache->contains("file_key1"));
@@ -221,7 +221,7 @@ TEST_F(ResourceCacheTest, ReadWriteToJsonFile) {
     cache->clear();
     EXPECT_TRUE(cache->empty());
 
-    cache->read_from_json_file(filePath, fromJson);
+    cache->read_from_json_file(filePath, fromJson, std::chrono::seconds(3600));
 
     // Verify contents
     EXPECT_TRUE(cache->contains("json_key1"));

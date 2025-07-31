@@ -466,9 +466,9 @@ void SimulatedAnnealing<ProblemType, SolutionType>::setCoolingSchedule(
             };
             break;
         case AnnealingStrategy::EXPONENTIAL:
-            cooling_schedule_ = [this](int iteration) {
-                return initial_temperature_ *
-                       std::pow(cooling_rate_, iteration);
+            cooling_schedule_ = [initial_temp = initial_temperature_,
+                                cooling_rate = cooling_rate_](int iteration) {
+                return initial_temp * std::pow(cooling_rate, iteration);
             };
             break;
         case AnnealingStrategy::LOGARITHMIC:
@@ -559,6 +559,8 @@ void SimulatedAnnealing<ProblemType, SolutionType>::optimizeThread(
         for (int iteration = 0;
              iteration < max_iterations_ && !should_stop_.load(); ++iteration) {
             double temperature = cooling_schedule_(iteration);
+            spdlog::info("Iteration {}: cooling_rate_={}, initial_temperature_={}, temperature={}",
+                        iteration, cooling_rate_, initial_temperature_, temperature);
             if (temperature <= 0) {
                 spdlog::warn(
                     "Temperature has reached zero or below at iteration {}.",

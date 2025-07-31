@@ -140,67 +140,31 @@ template <ConvolutionNumeric T = f64>
     i32 numThreads = static_cast<i32>(std::thread::hardware_concurrency()))
     -> std::vector<std::vector<f64>>;
 
-/**
- * @brief Computes 2D Discrete Fourier Transform
- *
- * @tparam T Type of the input data
- * @param signal 2D input signal in spatial domain
- * @param numThreads Number of threads to use (default: all available cores)
- * @param stopToken Token for cooperative cancellation
- * @return std::future<std::vector<std::vector<std::complex<T>>>> Frequency
- * domain representation
- */
-template <ConvolutionNumeric T = f64>
-[[nodiscard]] auto dfT2D(const std::vector<std::vector<T>>& signal,
-                         i32 numThreads = static_cast<i32>(
-                             std::thread::hardware_concurrency()),
-                         std::stop_token stopToken = {})
-    -> std::future<std::vector<std::vector<std::complex<T>>>>;
+// Template version removed - use concrete f64 version below
 
-/**
- * @brief Computes inverse 2D Discrete Fourier Transform
- *
- * @tparam T Type of the data
- * @param spectrum 2D input in frequency domain
- * @param numThreads Number of threads to use (default: all available cores)
- * @param stopToken Token for cooperative cancellation
- * @return std::future<std::vector<std::vector<T>>> Spatial domain
- * representation
- */
-template <ConvolutionNumeric T = f64>
+// Template version removed - use concrete f64 version below
+
+// Template version removed - use concrete f64 version below
+
+// Template version removed - use concrete f64 version below
+
+// Async versions
+[[nodiscard]] auto dfT2D(
+    const std::vector<std::vector<f64>>& signal,
+    i32 numThreads, std::stop_token stopToken)
+    -> std::future<std::vector<std::vector<std::complex<f64>>>>;
+
 [[nodiscard]] auto idfT2D(
-    const std::vector<std::vector<std::complex<T>>>& spectrum,
-    i32 numThreads = static_cast<i32>(std::thread::hardware_concurrency()),
-    std::stop_token stopToken = {}) -> std::future<std::vector<std::vector<T>>>;
+    const std::vector<std::vector<std::complex<f64>>>& spectrum,
+    i32 numThreads, std::stop_token stopToken)
+    -> std::future<std::vector<std::vector<f64>>>;
 
-/**
- * @brief Generates a 2D Gaussian kernel for image filtering
- *
- * @tparam T Type of the kernel data
- * @param size Size of the kernel (should be odd)
- * @param sigma Standard deviation of the Gaussian distribution
- * @return std::vector<std::vector<T>> Gaussian kernel
- */
-template <ConvolutionNumeric T = f64>
-[[nodiscard]] auto generateGaussianKernel(i32 size, f64 sigma)
-    -> std::vector<std::vector<T>>;
-
-/**
- * @brief Applies a Gaussian filter to an image
- *
- * @tparam T Type of the image data
- * @param image Input image as 2D matrix
- * @param kernel Gaussian kernel to apply
- * @param options Configuration options for the filtering
- * @param stopToken Token for cooperative cancellation
- * @return std::future<std::vector<std::vector<T>>> Filtered image
- */
-template <ConvolutionNumeric T = f64>
 [[nodiscard]] auto applyGaussianFilter(
-    const std::vector<std::vector<T>>& image,
-    const std::vector<std::vector<T>>& kernel,
-    const ConvolutionOptions<T>& options = {},
-    std::stop_token stopToken = {}) -> std::future<std::vector<std::vector<T>>>;
+    const std::vector<std::vector<f64>>& image,
+    const std::vector<std::vector<f64>>& kernel,
+    const ConvolutionOptions<f64>& options,
+    std::stop_token stopToken)
+    -> std::future<std::vector<std::vector<f64>>>;
 
 // Legacy overloads for backward compatibility
 [[nodiscard]] auto dfT2D(

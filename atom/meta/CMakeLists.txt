@@ -18,15 +18,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Optimization flags for performance
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    if(MSVC)
-        target_compile_options(${PROJECT_NAME}_object PRIVATE /O2 /Ob2 /DNDEBUG)
-    else()
-        target_compile_options(${PROJECT_NAME}_object PRIVATE -O3 -march=native -DNDEBUG)
-    endif()
-endif()
-
 # Sources (implementation files)
 set(SOURCES
     global_ptr.cpp

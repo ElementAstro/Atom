@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 #include <chrono>
 #include <thread>
 #include <future>
@@ -84,7 +85,7 @@ TEST_F(LRUAdvancedFeaturesTest, CacheOptimization) {
 
     // Insert items with short expiration
     for (int i = 0; i < 20; ++i) {
-        cache.put("opt_key_" + std::to_string(i), "value", 50ms);
+        cache.put("opt_key_" + std::to_string(i), "value", std::optional<std::chrono::milliseconds>(50ms));
     }
 
     EXPECT_EQ(cache.size(), 20);
@@ -120,7 +121,7 @@ TEST_F(LRUAdvancedFeaturesTest, ThreadSafety) {
                 // Mix of operations
                 switch (i % 6) {
                     case 0:
-                        cache.put(key, value, 5s);
+                        cache.put(key, value, std::optional<std::chrono::seconds>(5s));
                         break;
                     case 1:
                         cache.get(key);
@@ -253,8 +254,14 @@ TEST_F(LRUAdvancedFeaturesTest, ConfigurationValidation) {
     LRUCacheConfig invalid_config;
     invalid_config.max_size = 0;  // Invalid
 
-    EXPECT_THROW(ThreadSafeLRUCache<std::string, std::string> cache(invalid_config),
-                 std::invalid_argument);
+    // Test invalid configuration throws exception
+    bool threw_exception = false;
+    try {
+        ThreadSafeLRUCache<std::string, std::string> cache(invalid_config);
+    } catch (const std::invalid_argument&) {
+        threw_exception = true;
+    }
+    EXPECT_TRUE(threw_exception);
 
     // Test valid configuration updates
     ThreadSafeLRUCache<std::string, std::string> cache(config_);
@@ -302,7 +309,7 @@ TEST_F(LRUAdvancedFeaturesTest, CleanupThreadLifecycle) {
 
     // Insert items with short TTL
     for (int i = 0; i < 10; ++i) {
-        cache->put("cleanup_key_" + std::to_string(i), "value", 50ms);
+        cache->put("cleanup_key_" + std::to_string(i), "value", std::optional<std::chrono::milliseconds>(50ms));
     }
 
     EXPECT_EQ(cache->size(), 10);
@@ -332,7 +339,7 @@ TEST_F(LRUAdvancedFeaturesTest, BatchOperationsWithTTL) {
     }
 
     // Insert batch with TTL
-    cache.putBatch(batch_items, 100ms);
+    cache.putBatch(batch_items, std::optional<std::chrono::milliseconds>(100ms));
 
     // Verify all items are present
     EXPECT_EQ(cache.size(), 20);

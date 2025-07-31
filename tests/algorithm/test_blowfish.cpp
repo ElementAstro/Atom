@@ -12,7 +12,7 @@
 using namespace atom::algorithm;
 
 // Helper functions
-std::vector<std::byte> generateRandomBytes(size_t count) {
+std::vector<std::byte> generateRandomBytesBlowfish(size_t count) {
     std::vector<std::byte> result(count);
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -99,7 +99,7 @@ TEST_F(BlowfishTest, Constructor) {
     EXPECT_NO_THROW(Blowfish(std::span<const std::byte>(min_key)));
 
     // Test with maximum key length (56 bytes)
-    std::vector<std::byte> max_key = generateRandomBytes(56);
+    std::vector<std::byte> max_key = generateRandomBytesBlowfish(56);
     EXPECT_NO_THROW(Blowfish(std::span<const std::byte>(max_key)));
 }
 
@@ -111,7 +111,7 @@ TEST_F(BlowfishTest, KeyValidation) {
                  std::runtime_error);
 
     // Test with key that's too long (should throw)
-    std::vector<std::byte> long_key = generateRandomBytes(57);
+    std::vector<std::byte> long_key = generateRandomBytesBlowfish(57);
     EXPECT_THROW(Blowfish(std::span<const std::byte>(long_key)),
                  std::runtime_error);
 }
@@ -354,7 +354,7 @@ TEST_F(BlowfishTest, DifferentKeys) {
 TEST_F(BlowfishTest, VariousDataSizes) {
     // Test with different sizes from 8 bytes to 64 bytes
     for (size_t size = 8; size <= 64; size += 8) {
-        std::vector<std::byte> data = generateRandomBytes(size);
+        std::vector<std::byte> data = generateRandomBytesBlowfish(size);
         std::vector<std::byte> original = data;
 
         // Encrypt
@@ -375,7 +375,7 @@ TEST_F(BlowfishTest, VariousDataSizes) {
 TEST_F(BlowfishTest, LargeData) {
     // Create a large chunk of data (1MB)
     size_t size = 1024 * 1024;  // 1MB
-    std::vector<std::byte> large_data = generateRandomBytes(size);
+    std::vector<std::byte> large_data = generateRandomBytesBlowfish(size);
 
     // Make sure it's a multiple of BLOCK_SIZE
     while (large_data.size() % 8 != 0) {
@@ -463,7 +463,7 @@ TEST_F(BlowfishTest, CrossPlatformConsistency) {
 TEST_F(BlowfishTest, ParallelEncryption) {
     // Create a large data set to ensure multiple threads are used
     std::vector<std::byte> large_data =
-        generateRandomBytes(1024 * 1024);  // 1MB
+        generateRandomBytesBlowfish(1024 * 1024);  // 1MB
 
     // Make sure it's a multiple of BLOCK_SIZE
     while (large_data.size() % 8 != 0) {
@@ -487,9 +487,4 @@ TEST_F(BlowfishTest, ParallelEncryption) {
     EXPECT_EQ(large_data, copy);
 }
 
-int main(int argc, char** argv) {
-    // Initialize Google Test
-    ::testing::InitGoogleTest(&argc, argv);
-    spdlog::set_level(spdlog::level::off);
-    return RUN_ALL_TESTS();
-}
+

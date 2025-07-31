@@ -5,6 +5,7 @@
 #include <functional>
 #include <numeric>
 #include <optional>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -194,7 +195,6 @@ public:
     template <typename UnaryFunction>
     auto cpFilter(UnaryFunction filter_func) const -> cstream<C> {
         C c;
-        c.reserve(container_ref_.size());
         std::copy_if(container_ref_.begin(), container_ref_.end(),
                      std::back_inserter(c), filter_func);
         return cstream<C>(std::move(c));
@@ -318,8 +318,12 @@ public:
      * @brief Gets the minimum element in the container.
      *
      * @return value_type The minimum element.
+     * @throws std::runtime_error if the container is empty.
      */
     auto min() const -> value_type {
+        if (container_ref_.empty()) {
+            throw std::runtime_error("Cannot get minimum of empty container");
+        }
         return *std::min_element(container_ref_.begin(), container_ref_.end());
     }
 
@@ -327,8 +331,12 @@ public:
      * @brief Gets the maximum element in the container.
      *
      * @return value_type The maximum element.
+     * @throws std::runtime_error if the container is empty.
      */
     auto max() const -> value_type {
+        if (container_ref_.empty()) {
+            throw std::runtime_error("Cannot get maximum of empty container");
+        }
         return *std::max_element(container_ref_.begin(), container_ref_.end());
     }
 
@@ -336,8 +344,12 @@ public:
      * @brief Calculates the mean of the elements in the container.
      *
      * @return double The mean value.
+     * @throws std::runtime_error if the container is empty.
      */
     [[nodiscard]] auto mean() const -> double {
+        if (container_ref_.empty()) {
+            throw std::runtime_error("Cannot calculate mean of empty container");
+        }
         return static_cast<double>(accumulate()) / static_cast<double>(size());
     }
 
@@ -381,7 +393,6 @@ public:
     template <typename UnaryFunction>
     auto map(UnaryFunction f) const -> cstream<C> {
         C c;
-        c.reserve(container_ref_.size());
         std::transform(container_ref_.begin(), container_ref_.end(),
                        std::back_inserter(c), f);
         return cstream<C>(std::move(c));

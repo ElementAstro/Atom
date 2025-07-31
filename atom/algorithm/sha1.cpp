@@ -327,26 +327,7 @@ void SHA1::processBlockSIMD(const u8* block) noexcept {
 }
 #endif
 
-template <usize N>
-auto bytesToHex(const std::array<u8, N>& bytes) noexcept -> std::string {
-    static constexpr char HEX_CHARS[] = "0123456789abcdef";
-    std::string result(N * 2, ' ');
 
-    for (usize i = 0; i < N; ++i) {
-        result[i * 2] = HEX_CHARS[(bytes[i] >> 4) & 0xF];
-        result[i * 2 + 1] = HEX_CHARS[bytes[i] & 0xF];
-    }
-
-    return result;
-}
-
-// Specialization for SHA1::DIGEST_SIZE
-template <>
-auto bytesToHex<SHA1::DIGEST_SIZE>(
-    const std::array<u8, SHA1::DIGEST_SIZE>& bytes) noexcept -> std::string {
-    // You can add specific optimizations here if needed, otherwise just call the generic version
-    return bytesToHex<SHA1::DIGEST_SIZE>(bytes);
-}
 
 template <ByteContainer... Containers>
 auto computeHashesInParallel(const Containers&... containers)

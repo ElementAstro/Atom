@@ -209,6 +209,7 @@ if(ATOM_BUILD_PYTHON_BINDINGS)
   add_subdirectory(python)
 endif()
 if(ATOM_BUILD_TESTS)
+  enable_testing()
   add_subdirectory(tests)
 endif()
 

@@ -76,7 +76,7 @@ TEST_F(LRUCacheOptimizationTest, OptimizedBatchOperations) {
     }
 
     auto start = std::chrono::high_resolution_clock::now();
-    cache.putBatch(batch_items, 10s);
+    cache.putBatch(batch_items, std::optional<std::chrono::seconds>(10s));
     auto end = std::chrono::high_resolution_clock::now();
 
     auto batch_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
@@ -85,7 +85,7 @@ TEST_F(LRUCacheOptimizationTest, OptimizedBatchOperations) {
     ThreadSafeLRUCache<std::string, std::string> individual_cache(config_);
     start = std::chrono::high_resolution_clock::now();
     for (const auto& [key, value] : batch_items) {
-        individual_cache.put(key, value, 10s);
+        individual_cache.put(key, value, std::optional<std::chrono::seconds>(10s));
     }
     end = std::chrono::high_resolution_clock::now();
 
@@ -108,8 +108,8 @@ TEST_F(LRUCacheOptimizationTest, EnhancedMetrics) {
     ThreadSafeLRUCache<std::string, std::string> cache(config_);
 
     // Perform various operations
-    cache.put("test1", "value1", 10s);
-    cache.put("test2", "value2", 10s);
+    cache.put("test1", "value1", std::optional<std::chrono::seconds>(10s));
+    cache.put("test2", "value2", std::optional<std::chrono::seconds>(10s));
     cache.get("test1");
     cache.get("test1");  // Hit
     cache.get("nonexistent");  // Miss
@@ -328,7 +328,7 @@ TEST_F(LRUCacheOptimizationTest, BackgroundCleanup) {
 
     // Insert items with short TTL
     for (int i = 0; i < 20; ++i) {
-        cache.put("expire_key_" + std::to_string(i), "value", 50ms);
+        cache.put("expire_key_" + std::to_string(i), "value", std::optional<std::chrono::milliseconds>(50ms));
     }
 
     EXPECT_EQ(cache.size(), 20);

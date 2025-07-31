@@ -219,7 +219,7 @@ TEST_F(CacheAdvancedFeaturesTest, CacheOptimization) {
 
     // Insert items with short expiration
     for (int i = 0; i < 20; ++i) {
-        cache.insert("opt_key_" + std::to_string(i), "value", 50ms);
+        cache.insert("opt_key_" + std::to_string(i), "value", std::chrono::duration_cast<std::chrono::seconds>(50ms));
     }
 
     EXPECT_EQ(cache.size(), 20);

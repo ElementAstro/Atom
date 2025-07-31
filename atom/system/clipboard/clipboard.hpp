@@ -168,7 +168,7 @@ public:
     constexpr const T* operator->() const noexcept { return &*m_value; }
     constexpr T* operator->() noexcept { return &*m_value; }
 
-    constexpr std::error_code error() const noexcept { return m_error; }
+    std::error_code error() const noexcept { return m_error; }
 
     template <typename U>
     constexpr T value_or(U&& default_value) const& {
@@ -203,7 +203,7 @@ public:
             throw std::runtime_error("ClipboardResult has error");
     }
 
-    constexpr std::error_code error() const noexcept { return m_error; }
+    std::error_code error() const noexcept { return m_error; }
 };
 
 /**

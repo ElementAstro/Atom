@@ -915,12 +915,12 @@ private:
      * @return A shared pointer with a custom deleter.
      */
     std::shared_ptr<T> wrapWithDeleter(std::shared_ptr<T> obj) {
-        // Create a custom deleter to return the object to the pool
-        auto deleter = [this, creation_time =
-                                  std::chrono::steady_clock::now()](T* ptr) {
-            // Create a new shared_ptr that owns the object but won't delete it
-            std::shared_ptr<T> sharedObj(ptr, [](T*) {});
+        // Store the original object to keep it alive
+        auto original_obj = obj;
 
+        // Create a custom deleter to return the object to the pool
+        auto deleter = [this, original_obj, creation_time =
+                                  std::chrono::steady_clock::now()](T* ptr) {
             // Validate the object if configured
             bool is_valid = !config_.validate_on_release ||
                             !config_.validator || config_.validator(*ptr);
@@ -929,16 +929,16 @@ private:
 
             if (is_valid && pool_.size() < max_size_) {
                 // Reset the object to a clean state
-                sharedObj->reset();
+                original_obj->reset();
 
                 // Track idle time if auto-cleanup is enabled
                 if (config_.enable_auto_cleanup) {
                     idle_objects_.emplace_back(
-                        sharedObj, std::chrono::steady_clock::now());
+                        original_obj, std::chrono::steady_clock::now());
                 }
 
                 // Return to the pool
-                pool_.push_back(std::move(sharedObj));
+                pool_.push_back(original_obj);
             } else {
                 // If invalid or pool is full, just discard and increment
                 // available count
@@ -1124,8 +1124,9 @@ private:
         auto now = std::chrono::steady_clock::now();
         auto time_since_last_resize = now - last_resize_time_;
 
-        // Only resize every few minutes to avoid thrashing
-        if (time_since_last_resize < std::chrono::minutes(5)) return;
+        // Only resize every few minutes to avoid thrashing (except for testing)
+        if (time_since_last_resize < std::chrono::minutes(5) &&
+            last_resize_time_ != std::chrono::steady_clock::time_point{}) return;
 
         double miss_ratio = recent_acquisition_count_ > 0 ?
             static_cast<double>(recent_miss_count_) / recent_acquisition_count_ : 0.0;

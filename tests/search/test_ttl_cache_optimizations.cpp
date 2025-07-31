@@ -23,7 +23,7 @@ protected:
         config_.enable_health_monitoring = true;
     }
 
-    CacheConfig config_;
+    TTLCacheConfig config_;
 };
 
 // Test enhanced configuration

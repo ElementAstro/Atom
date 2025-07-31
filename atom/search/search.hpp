@@ -277,6 +277,18 @@ public:
         click_count_.store(count, std::memory_order_relaxed);
     }
 
+    // Compatibility aliases for camelCase method names
+    [[nodiscard]] std::string_view getId() const noexcept { return get_id(); }
+    [[nodiscard]] std::string_view getContent() const noexcept { return get_content(); }
+    [[nodiscard]] const std::set<std::string>& getTags() const noexcept { return get_tags(); }
+    [[nodiscard]] int getClickCount() const noexcept { return get_click_count(); }
+    void setContent(String content) { set_content(std::move(content)); }
+    void addTag(const std::string& tag) { add_tag(tag); }
+    void removeTag(const std::string& tag) { remove_tag(tag); }
+    void incrementClickCount() noexcept { increment_click_count(); }
+    void setClickCount(int count) noexcept { set_click_count(count); }
+    void resetClickCount() noexcept { set_click_count(0); }
+
 private:
     String id_;
     String content_;
@@ -549,6 +561,22 @@ public:
      * @return A vector of all document IDs.
      */
     [[nodiscard]] std::vector<String> get_all_document_ids() const;
+
+    // Compatibility aliases for camelCase method names
+    [[nodiscard]] size_t getDocumentCount() const noexcept { return get_document_count(); }
+    [[nodiscard]] std::vector<String> getAllDocumentIds() const { return get_all_document_ids(); }
+    void saveIndex(const std::string& filename) const { save_index(filename); }
+    void loadIndex(const std::string& filename) { load_index(filename); }
+    void addDocument(const Document& doc) { add_document(doc); }
+    void addDocument(Document&& doc) { add_document(std::move(doc)); }
+    void updateDocument(const Document& doc) { update_document(doc); }
+    void removeDocument(const String& id) { remove_document(id); }
+    [[nodiscard]] std::vector<std::shared_ptr<Document>> searchByContent(const String& query) { return search_by_content(query); }
+    [[nodiscard]] std::vector<std::shared_ptr<Document>> searchByTag(const String& tag) { return search_by_tag(tag); }
+    [[nodiscard]] std::vector<std::shared_ptr<Document>> searchByTags(const std::vector<String>& tags) { return search_by_tags(tags); }
+    [[nodiscard]] std::vector<std::shared_ptr<Document>> booleanSearch(const String& query) { return boolean_search(query); }
+    [[nodiscard]] std::vector<std::shared_ptr<Document>> fuzzySearchByTag(const String& tag, int max_distance = 2) { return fuzzy_search_by_tag(tag, max_distance); }
+    [[nodiscard]] std::vector<String> autoComplete(const String& prefix, size_t max_suggestions = 10) { return auto_complete(prefix, max_suggestions); }
 
     /**
      * @brief Bulk insert multiple documents efficiently.

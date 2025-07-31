@@ -31,7 +31,7 @@ TEST_F(ArgsTest, SetAndGet) {
 
 TEST_F(ArgsTest, SetAndGetMacros) {
     SET_ARGUMENT(args, test_int, 42);
-    SET_ARGUMENT(args, test_string, "hello");
+    SET_ARGUMENT(args, test_string, std::string("hello"));
 
     EXPECT_EQ(GET_ARGUMENT(args, test_int, int), 42);
     EXPECT_EQ(GET_ARGUMENT(args, test_string, std::string), "hello");

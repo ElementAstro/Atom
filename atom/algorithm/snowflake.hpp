@@ -445,15 +445,35 @@ public:
          * millisecond due to clock synchronization issues.
          */
         std::atomic<std::uint64_t> timestamp_wait_count{0};
+
+        // Delete copy constructor and assignment operator
+        Statistics(const Statistics&) = delete;
+        Statistics& operator=(const Statistics&) = delete;
+
+        // Default constructor
+        Statistics() = default;
+    };
+
+    /**
+     * @brief Structure for returning statistics values (copyable).
+     */
+    struct StatisticsSnapshot {
+        std::uint64_t total_ids_generated;
+        std::uint64_t sequence_rollovers;
+        std::uint64_t timestamp_wait_count;
     };
 
     /**
      * @brief Retrieves statistics about ID generation.
      *
-     * @return A Statistics object containing information about ID generation.
+     * @return A StatisticsSnapshot object containing information about ID generation.
      */
-    [[nodiscard]] auto getStatistics() const noexcept -> Statistics {
-        return statistics_;
+    [[nodiscard]] auto getStatistics() const noexcept -> StatisticsSnapshot {
+        return {
+            statistics_.total_ids_generated.load(std::memory_order_relaxed),
+            statistics_.sequence_rollovers.load(std::memory_order_relaxed),
+            statistics_.timestamp_wait_count.load(std::memory_order_relaxed)
+        };
     }
 
     /**

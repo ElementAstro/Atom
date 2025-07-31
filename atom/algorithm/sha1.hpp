@@ -232,12 +232,17 @@ private:
  */
 template <usize N>
 [[nodiscard]] auto bytesToHex(const std::array<u8, N>& bytes) noexcept
-    -> std::string;
+    -> std::string {
+    static constexpr char HEX_CHARS[] = "0123456789abcdef";
+    std::string result(N * 2, ' ');
 
-// Explicit specialization declaration for SHA1::DIGEST_SIZE
-template <>
-[[nodiscard]] auto bytesToHex<SHA1::DIGEST_SIZE>(
-    const std::array<u8, SHA1::DIGEST_SIZE>& bytes) noexcept -> std::string;
+    for (usize i = 0; i < N; ++i) {
+        result[i * 2] = HEX_CHARS[(bytes[i] >> 4) & 0xF];
+        result[i * 2 + 1] = HEX_CHARS[bytes[i] & 0xF];
+    }
+
+    return result;
+}
 
 /**
  * @brief Computes SHA-1 hashes of multiple containers in parallel.

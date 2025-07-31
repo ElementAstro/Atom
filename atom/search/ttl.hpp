@@ -50,7 +50,10 @@ struct CacheStatistics {
     std::atomic<size_t> compression_saves_bytes{0};
 
     CacheStatistics() = default;
-    CacheStatistics(CacheStatistics&& other);
+    CacheStatistics(const CacheStatistics& other) noexcept;
+    CacheStatistics(CacheStatistics&& other) noexcept;
+    CacheStatistics& operator=(const CacheStatistics& other) noexcept;
+    CacheStatistics& operator=(CacheStatistics&& other) noexcept;
 
     // Utility methods
     double get_hit_ratio() const noexcept {
@@ -72,7 +75,7 @@ struct CacheStatistics {
 /**
  * @brief Configuration options for TTL Cache behavior.
  */
-struct CacheConfig {
+struct TTLCacheConfig {
     bool enable_automatic_cleanup{true};
     bool enable_statistics{true};
     bool thread_safe{true};
@@ -118,7 +121,7 @@ public:
      */
     explicit TTLCache(Duration ttl, size_t max_capacity,
                       std::optional<Duration> cleanup_interval = std::nullopt,
-                      CacheConfig config = CacheConfig{},
+                      TTLCacheConfig config = TTLCacheConfig{},
                       EvictionCallback eviction_callback = nullptr);
 
     /**
@@ -186,8 +189,8 @@ public:
 
     // **Configuration**
     void set_eviction_callback(EvictionCallback callback) noexcept;
-    void update_config(const CacheConfig& new_config) noexcept;
-    [[nodiscard]] CacheConfig get_config() const noexcept;
+    void update_config(const TTLCacheConfig& new_config) noexcept;
+    [[nodiscard]] TTLCacheConfig get_config() const noexcept;
 
     // **Enhanced Operations**
     [[nodiscard]] size_t get_memory_usage() const noexcept;
@@ -274,7 +277,7 @@ private:
     Duration ttl_;
     Duration cleanup_interval_;
     std::atomic<size_t> max_capacity_;
-    CacheConfig config_;
+    TTLCacheConfig config_;
     EvictionCallback eviction_callback_;
 
     std::vector<std::unique_ptr<Shard>> shards_;
@@ -317,7 +320,7 @@ inline TTLCacheException::TTLCacheException(const std::string& message)
     : std::runtime_error(message) {}
 
 // **CacheStatistics Implementation**
-inline CacheStatistics::CacheStatistics(CacheStatistics&& other) {
+inline CacheStatistics::CacheStatistics(const CacheStatistics& other) noexcept {
     hits = other.hits.load();
     misses = other.misses.load();
     evictions = other.evictions.load();
@@ -325,6 +328,70 @@ inline CacheStatistics::CacheStatistics(CacheStatistics&& other) {
     current_size = other.current_size;
     max_capacity = other.max_capacity;
     hit_rate = other.hit_rate;
+    memory_usage_bytes = other.memory_usage_bytes.load();
+    lazy_expirations = other.lazy_expirations.load();
+    cleanup_operations = other.cleanup_operations.load();
+    batch_operations = other.batch_operations.load();
+    total_access_time_ns = other.total_access_time_ns.load();
+    total_cleanup_time_ns = other.total_cleanup_time_ns.load();
+    compression_saves_bytes = other.compression_saves_bytes.load();
+}
+
+inline CacheStatistics::CacheStatistics(CacheStatistics&& other) noexcept {
+    hits = other.hits.load();
+    misses = other.misses.load();
+    evictions = other.evictions.load();
+    expirations = other.expirations.load();
+    current_size = other.current_size;
+    max_capacity = other.max_capacity;
+    hit_rate = other.hit_rate;
+    memory_usage_bytes = other.memory_usage_bytes.load();
+    lazy_expirations = other.lazy_expirations.load();
+    cleanup_operations = other.cleanup_operations.load();
+    batch_operations = other.batch_operations.load();
+    total_access_time_ns = other.total_access_time_ns.load();
+    total_cleanup_time_ns = other.total_cleanup_time_ns.load();
+    compression_saves_bytes = other.compression_saves_bytes.load();
+}
+
+inline CacheStatistics& CacheStatistics::operator=(const CacheStatistics& other) noexcept {
+    if (this != &other) {
+        hits = other.hits.load();
+        misses = other.misses.load();
+        evictions = other.evictions.load();
+        expirations = other.expirations.load();
+        current_size = other.current_size;
+        max_capacity = other.max_capacity;
+        hit_rate = other.hit_rate;
+        memory_usage_bytes = other.memory_usage_bytes.load();
+        lazy_expirations = other.lazy_expirations.load();
+        cleanup_operations = other.cleanup_operations.load();
+        batch_operations = other.batch_operations.load();
+        total_access_time_ns = other.total_access_time_ns.load();
+        total_cleanup_time_ns = other.total_cleanup_time_ns.load();
+        compression_saves_bytes = other.compression_saves_bytes.load();
+    }
+    return *this;
+}
+
+inline CacheStatistics& CacheStatistics::operator=(CacheStatistics&& other) noexcept {
+    if (this != &other) {
+        hits = other.hits.load();
+        misses = other.misses.load();
+        evictions = other.evictions.load();
+        expirations = other.expirations.load();
+        current_size = other.current_size;
+        max_capacity = other.max_capacity;
+        hit_rate = other.hit_rate;
+        memory_usage_bytes = other.memory_usage_bytes.load();
+        lazy_expirations = other.lazy_expirations.load();
+        cleanup_operations = other.cleanup_operations.load();
+        batch_operations = other.batch_operations.load();
+        total_access_time_ns = other.total_access_time_ns.load();
+        total_cleanup_time_ns = other.total_cleanup_time_ns.load();
+        compression_saves_bytes = other.compression_saves_bytes.load();
+    }
+    return *this;
 }
 
 // **CacheItem Implementations**
@@ -364,7 +431,7 @@ TTLCache<Key, Value, Hash, KeyEqual>::Shard::Shard(size_t capacity)
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
 TTLCache<Key, Value, Hash, KeyEqual>::TTLCache(
     Duration ttl, size_t max_capacity, std::optional<Duration> cleanup_interval,
-    CacheConfig config, EvictionCallback eviction_callback)
+    TTLCacheConfig config, EvictionCallback eviction_callback)
     : ttl_(ttl),
       cleanup_interval_(cleanup_interval.value_or(ttl / 2)),
       max_capacity_(max_capacity),
@@ -995,13 +1062,13 @@ void TTLCache<Key, Value, Hash, KeyEqual>::set_eviction_callback(
 
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
 void TTLCache<Key, Value, Hash, KeyEqual>::update_config(
-    const CacheConfig& new_config) noexcept {
+    const TTLCacheConfig& new_config) noexcept {
     std::lock_guard<std::mutex> lock(cleanup_mutex_);
     config_ = new_config;
 }
 
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
-CacheConfig TTLCache<Key, Value, Hash, KeyEqual>::get_config() const noexcept {
+TTLCacheConfig TTLCache<Key, Value, Hash, KeyEqual>::get_config() const noexcept {
     std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(cleanup_mutex_));
     return config_;
 }

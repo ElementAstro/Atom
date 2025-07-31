@@ -40,7 +40,7 @@ struct LRUCacheConfig {
     bool enable_statistics = true;                   ///< Enable performance statistics
     bool enable_compression = false;                 ///< Enable value compression
     size_t max_memory_mb = 0;                       ///< Memory limit (0 = unlimited)
-    std::chrono::seconds cleanup_interval{60};      ///< Cleanup interval for expired items
+    std::chrono::milliseconds cleanup_interval{60000};  ///< Cleanup interval for expired items
     bool enable_prefetching = false;                ///< Enable predictive prefetching
     double prefetch_threshold = 0.8;                ///< Load factor threshold for prefetching
 
@@ -298,16 +298,42 @@ public:
      * @param value The value to associate with the key.
      * @param ttl Optional time-to-live duration for the cache item.
      */
+    template<typename Duration = std::chrono::seconds>
     void put(const Key& key, Value value,
-             std::optional<std::chrono::seconds> ttl = std::nullopt);
+             std::optional<Duration> ttl = std::nullopt) {
+        std::optional<std::chrono::seconds> ttl_seconds;
+        if (ttl.has_value()) {
+            ttl_seconds = std::chrono::duration_cast<std::chrono::seconds>(ttl.value());
+        }
+        put_impl(key, std::move(value), ttl_seconds);
+    }
+
+private:
+    void put_impl(const Key& key, Value value,
+                  std::optional<std::chrono::seconds> ttl);
+
+public:
 
     /**
      * @brief Inserts or updates a batch of values in the cache.
      * @param items Vector of key-value pairs to insert.
      * @param ttl Optional time-to-live duration for all cache items.
      */
+    template<typename Duration = std::chrono::seconds>
     void putBatch(const std::vector<KeyValuePair>& items,
-                  std::optional<std::chrono::seconds> ttl = std::nullopt);
+                  std::optional<Duration> ttl = std::nullopt) {
+        std::optional<std::chrono::seconds> ttl_seconds;
+        if (ttl.has_value()) {
+            ttl_seconds = std::chrono::duration_cast<std::chrono::seconds>(ttl.value());
+        }
+        putBatch_impl(items, ttl_seconds);
+    }
+
+private:
+    void putBatch_impl(const std::vector<KeyValuePair>& items,
+                       std::optional<std::chrono::seconds> ttl);
+
+public:
 
     /**
      * @brief Erases an item from the cache.
@@ -317,9 +343,30 @@ public:
     bool erase(const Key& key);
 
     /**
+     * @brief Alias for erase method for compatibility.
+     * @param key The key of the item to remove.
+     * @return True if the item was found and removed, false otherwise.
+     */
+    bool remove(const Key& key) { return erase(key); }
+
+    /**
      * @brief Clears all items from the cache.
      */
     void clear();
+
+    /**
+     * @brief Removes and returns the least recently used item.
+     * @return An optional containing the LRU key-value pair if cache is not empty,
+     * otherwise std::nullopt.
+     */
+    [[nodiscard]] std::optional<KeyValuePair> popLru();
+
+    /**
+     * @brief Alias for popLru method for compatibility.
+     * @return An optional containing the LRU key-value pair if cache is not empty,
+     * otherwise std::nullopt.
+     */
+    [[nodiscard]] std::optional<KeyValuePair> pop_lru() { return popLru(); }
 
     /**
      * @brief Retrieves all keys in the cache.
@@ -396,6 +443,12 @@ public:
     [[nodiscard]] CacheStatistics getStatistics() const;
 
     /**
+     * @brief Alias for getStatistics method for compatibility.
+     * @return A CacheStatistics struct.
+     */
+    [[nodiscard]] CacheStatistics get_statistics() const { return getStatistics(); }
+
+    /**
      * @brief Resets cache statistics (hits and misses).
      */
     void resetStatistics() noexcept;
@@ -427,6 +480,14 @@ public:
      * otherwise std::nullopt.
      */
     [[nodiscard]] std::future<std::optional<Value>> asyncGet(const Key& key);
+
+    /**
+     * @brief Alias for asyncGet method for compatibility.
+     * @param key The key of the item to retrieve.
+     * @return A future containing an optional with the value if found,
+     * otherwise std::nullopt.
+     */
+    [[nodiscard]] std::future<std::optional<Value>> async_get(const Key& key) { return asyncGet(key); }
 
     /**
      * @brief Asynchronously inserts or updates a value in the cache.
@@ -946,13 +1007,13 @@ bool ThreadSafeLRUCache<Key, Value, Hash>::contains(const Key& key) const {
 }
 
 template <typename Key, typename Value, typename Hash>
-void ThreadSafeLRUCache<Key, Value, Hash>::put(
+void ThreadSafeLRUCache<Key, Value, Hash>::put_impl(
     const Key& key, Value value, std::optional<std::chrono::seconds> ttl) {
     get_shard(key).put(key, std::move(value), ttl);
 }
 
 template <typename Key, typename Value, typename Hash>
-void ThreadSafeLRUCache<Key, Value, Hash>::putBatch(
+void ThreadSafeLRUCache<Key, Value, Hash>::putBatch_impl(
     const std::vector<KeyValuePair>& items,
     std::optional<std::chrono::seconds> ttl) {
     if (items.empty()) return;
@@ -994,6 +1055,31 @@ void ThreadSafeLRUCache<Key, Value, Hash>::clear() {
     }
     if (on_clear_)
         on_clear_();
+}
+
+template <typename Key, typename Value, typename Hash>
+std::optional<typename ThreadSafeLRUCache<Key, Value, Hash>::KeyValuePair>
+ThreadSafeLRUCache<Key, Value, Hash>::popLru() {
+    // Find the shard with the least recently used item (at the back of the list)
+    std::optional<KeyValuePair> lru_item;
+
+    for (auto& shard : shards_) {
+        std::unique_lock lock(shard->mutex_);
+        if (!shard->cache_items_list_.empty()) {
+            // The back of the list contains the least recently used item
+            auto& back_item = shard->cache_items_list_.back();
+            auto it = shard->cache_items_map_.find(back_item.first);
+            if (it != shard->cache_items_map_.end()) {
+                lru_item = back_item;
+                // Remove the item from this shard
+                shard->cache_items_map_.erase(it);
+                shard->cache_items_list_.pop_back();
+                break;  // Found and removed the LRU item
+            }
+        }
+    }
+
+    return lru_item;
 }
 
 template <typename Key, typename Value, typename Hash>

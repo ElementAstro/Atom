@@ -957,7 +957,10 @@ auto deconvolve2D(const std::vector<std::vector<f64>>& signal,
 // 2D Discrete Fourier Transform (2D DFT)
 auto dfT2D(const std::vector<std::vector<f64>>& signal, i32 numThreads)
     -> std::vector<std::vector<std::complex<f64>>> {
-    return dfT2D(signal, numThreads, {}).get();
+    // Call the async version with explicit parameters to avoid recursion
+    std::stop_token token{};
+    auto future = dfT2D(signal, numThreads, token);
+    return future.get();
 }
 
 auto dfT2D(const std::vector<std::vector<f64>>& signal, i32 numThreads,
@@ -1027,7 +1030,10 @@ auto dfT2D(const std::vector<std::vector<f64>>& signal, i32 numThreads,
 // 2D Inverse Discrete Fourier Transform (2D IDFT)
 auto idfT2D(const std::vector<std::vector<std::complex<f64>>>& spectrum,
             i32 numThreads) -> std::vector<std::vector<f64>> {
-    return idfT2D(spectrum, numThreads, {}).get();
+    // Call the async version with explicit parameters to avoid recursion
+    std::stop_token token{};
+    auto future = idfT2D(spectrum, numThreads, token);
+    return future.get();
 }
 
 auto idfT2D(const std::vector<std::vector<std::complex<f64>>>& spectrum,
@@ -1127,8 +1133,34 @@ auto generateGaussianKernel(i32 size, f64 sigma)
 auto applyGaussianFilter(const std::vector<std::vector<f64>>& image,
                          const std::vector<std::vector<f64>>& kernel)
     -> std::vector<std::vector<f64>> {
-    ConvolutionOptions<f64> options;
-    return applyGaussianFilter(image, kernel, options, {}).get();
+    // Simple direct implementation for legacy compatibility
+    const usize imageHeight = image.size();
+    const usize imageWidth = image[0].size();
+    const usize kernelSize = kernel.size();
+    const usize kernelRadius = kernelSize / 2;
+
+    std::vector<std::vector<f64>> filteredImage(
+        imageHeight, std::vector<f64>(imageWidth, 0.0));
+
+    for (usize i = 0; i < imageHeight; ++i) {
+        for (usize j = 0; j < imageWidth; ++j) {
+            f64 sum = 0.0;
+            for (usize ki = 0; ki < kernelSize; ++ki) {
+                for (usize kj = 0; kj < kernelSize; ++kj) {
+                    const auto ii = static_cast<i32>(i + ki) - static_cast<i32>(kernelRadius);
+                    const auto jj = static_cast<i32>(j + kj) - static_cast<i32>(kernelRadius);
+
+                    if (ii >= 0 && ii < static_cast<i32>(imageHeight) &&
+                        jj >= 0 && jj < static_cast<i32>(imageWidth)) {
+                        sum += image[ii][jj] * kernel[ki][kj];
+                    }
+                }
+            }
+            filteredImage[i][j] = sum;
+        }
+    }
+
+    return filteredImage;
 }
 
 auto applyGaussianFilter(const std::vector<std::vector<f64>>& image,
@@ -1170,6 +1202,8 @@ auto applyGaussianFilter(const std::vector<std::vector<f64>>& image,
             return filteredImage;
         });
 }
+
+// Since f64 is just double, no template specializations needed
 
 }  // namespace atom::algorithm
 

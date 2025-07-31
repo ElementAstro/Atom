@@ -120,7 +120,7 @@ TEST_F(ThreadSafeLRUCacheTest, LoadFromFile) {
 }
 
 TEST_F(ThreadSafeLRUCacheTest, Expiry) {
-    cache->put("key1", 1, std::chrono::seconds(1));
+    cache->put("key1", 1, std::optional<std::chrono::seconds>(std::chrono::seconds(1)));
     std::this_thread::sleep_for(std::chrono::seconds(2));
     auto val = cache->get("key1");  // Capture return value
     EXPECT_FALSE(val.has_value());
@@ -184,7 +184,7 @@ TEST_F(ThreadSafeLRUCacheTest, BatchOperations) {
 
 TEST_F(ThreadSafeLRUCacheTest, PruneExpired) {
     // Add items with short TTL
-    cache->put("key1", 1, std::chrono::seconds(1));
+    cache->put("key1", 1, std::optional<std::chrono::seconds>(std::chrono::seconds(1)));
     cache->put("key2", 2);  // No TTL
 
     // Wait for expiration
@@ -214,9 +214,12 @@ TEST_F(ThreadSafeLRUCacheTest, Prefetch) {
                                : 0;
     };
 
-    size_t prefetchedCount = cache->prefetch(keysToPrefetch, loader);
+    auto predictor = [&keysToPrefetch]() { return keysToPrefetch; };
+    auto optionalLoader = [&loader](const std::string& key) -> std::optional<int> {
+        return loader(key);
+    };
+    cache->prefetch(predictor, optionalLoader);
 
-    EXPECT_EQ(prefetchedCount, 3);
     EXPECT_EQ(loaderCallCount, 3);
 
     // Verify the items were added
@@ -226,8 +229,7 @@ TEST_F(ThreadSafeLRUCacheTest, Prefetch) {
 
     // Second prefetch should not call the loader for existing keys
     loaderCallCount = 0;
-    prefetchedCount = cache->prefetch(keysToPrefetch, loader);
-    EXPECT_EQ(prefetchedCount, 0);
+    cache->prefetch(predictor, optionalLoader);
     EXPECT_EQ(loaderCallCount, 0);
 }
 
@@ -249,8 +251,8 @@ TEST_F(ThreadSafeLRUCacheTest, GetStatistics) {
 TEST_F(ThreadSafeLRUCacheTest, TimeToLiveExpiration) {
     // Add item with short TTL
     cache->put("key1", 1,
-               std::chrono::duration_cast<std::chrono::seconds>(
-                   std::chrono::milliseconds(50)));
+               std::optional<std::chrono::seconds>(std::chrono::duration_cast<std::chrono::seconds>(
+                   std::chrono::milliseconds(50))));
 
     // Should be available immediately
     auto val1 = cache->get("key1");  // Capture return value
@@ -355,7 +357,7 @@ TEST_F(ThreadSafeLRUCacheTest, EdgeCases) {
 
     // Test with negative TTL (should fail gracefully)
     try {
-        cache->put("negative", 42, std::chrono::seconds(-10));
+        cache->put("negative", 42, std::optional<std::chrono::seconds>(std::chrono::seconds(-10)));
         auto val = cache->get("negative");  // Capture return value
         // Implementation-dependent whether this succeeds, but shouldn't crash
     } catch (const std::exception&) {
@@ -586,7 +588,7 @@ TEST_F(ThreadSafeLRUCacheTest, ResetStatistics) {
 }
 
 TEST_F(ThreadSafeLRUCacheTest, ContainsRespectsExpiry) {
-    cache->put("expiring_key", 1, std::chrono::seconds(1));
+    cache->put("expiring_key", 1, std::optional<std::chrono::seconds>(std::chrono::seconds(1)));
 
     // Should contain immediately
     EXPECT_TRUE(cache->contains("expiring_key"));
@@ -602,7 +604,7 @@ TEST_F(ThreadSafeLRUCacheTest, PutBatchWithTTL) {
     std::vector<ThreadSafeLRUCache<std::string, int>::KeyValuePair> items = {
         {"batch_ttl_key1", 10}, {"batch_ttl_key2", 20}};
 
-    cache->putBatch(items, std::chrono::seconds(1));
+    cache->putBatch(items, std::optional<std::chrono::seconds>(std::chrono::seconds(1)));
 
     // Should contain immediately
     EXPECT_TRUE(cache->contains("batch_ttl_key1"));
@@ -624,7 +626,14 @@ TEST_F(ThreadSafeLRUCacheTest, PrefetchWithTTL) {
         return key == "prefetch_ttl_key1" ? 111 : 222;
     };
 
-    cache->prefetch(keysToPrefetch, loader, std::chrono::seconds(1));
+    // Set default TTL for prefetched items
+    cache->setDefaultTTL(std::chrono::seconds(1));
+
+    auto predictor = [&keysToPrefetch]() { return keysToPrefetch; };
+    auto optionalLoader = [&loader](const std::string& key) -> std::optional<int> {
+        return loader(key);
+    };
+    cache->prefetch(predictor, optionalLoader);
 
     // Should contain immediately
     EXPECT_TRUE(cache->contains("prefetch_ttl_key1"));

@@ -16,6 +16,7 @@ set(SOURCES
     fifoserver.cpp
     sockethub.cpp
     tcpclient.cpp
+    ttybase.cpp
     udpclient.cpp
     udpserver.cpp)
 
@@ -25,6 +26,7 @@ set(HEADERS
     fifoserver.hpp
     sockethub.hpp
     tcpclient.hpp
+    ttybase.hpp
     udpclient.hpp
     udpserver.hpp)
 

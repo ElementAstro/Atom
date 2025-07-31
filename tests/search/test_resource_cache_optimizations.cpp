@@ -126,12 +126,12 @@ TEST_F(ResourceCacheOptimizationTest, OptimizedBatchOperations) {
 // Test deferred cleanup optimization
 TEST_F(ResourceCacheOptimizationTest, DeferredCleanup) {
     config_.enable_deferred_cleanup = true;
-    config_.cleanup_interval = 100ms;  // Fast cleanup for testing
+    config_.cleanup_interval = std::chrono::duration_cast<std::chrono::seconds>(100ms);  // Fast cleanup for testing
     ResourceCache<std::string> cache(config_);
 
     // Insert items with short expiration
     for (int i = 0; i < 20; ++i) {
-        cache.insert("expire_key_" + std::to_string(i), "value_" + std::to_string(i), 50ms);
+        cache.insert("expire_key_" + std::to_string(i), "value_" + std::to_string(i), std::chrono::duration_cast<std::chrono::seconds>(50ms));
     }
 
     EXPECT_EQ(cache.size(), 20);

@@ -93,6 +93,50 @@ auto teaDecrypt(u32& value0, u32& value1,
     }
 }
 
+// XTEA encryption function
+auto xteaEncrypt(u32& value0, u32& value1, const XTEAKey& key) noexcept(false) -> void {
+    try {
+        if (!isValidKey(key)) {
+            spdlog::error("Invalid key provided for XTEA encryption");
+            throw TEAException("Invalid key for XTEA encryption");
+        }
+
+        u32 sum = 0;
+        for (i32 i = 0; i < NUM_ROUNDS; ++i) {
+            value0 += (((value1 << SHIFT_4) ^ (value1 >> SHIFT_5)) + value1) ^ (sum + key[sum & 3]);
+            sum += DELTA;
+            value1 += (((value0 << SHIFT_4) ^ (value0 >> SHIFT_5)) + value0) ^ (sum + key[(sum >> 11) & 3]);
+        }
+    } catch (const TEAException&) {
+        throw;
+    } catch (const std::exception& e) {
+        spdlog::error("XTEA encryption error: {}", e.what());
+        throw TEAException(std::string("XTEA encryption error: ") + e.what());
+    }
+}
+
+// XTEA decryption function
+auto xteaDecrypt(u32& value0, u32& value1, const XTEAKey& key) noexcept(false) -> void {
+    try {
+        if (!isValidKey(key)) {
+            spdlog::error("Invalid key provided for XTEA decryption");
+            throw TEAException("Invalid key for XTEA decryption");
+        }
+
+        u32 sum = DELTA * NUM_ROUNDS;
+        for (i32 i = 0; i < NUM_ROUNDS; ++i) {
+            value1 -= (((value0 << SHIFT_4) ^ (value0 >> SHIFT_5)) + value0) ^ (sum + key[(sum >> 11) & 3]);
+            sum -= DELTA;
+            value0 -= (((value1 << SHIFT_4) ^ (value1 >> SHIFT_5)) + value1) ^ (sum + key[sum & 3]);
+        }
+    } catch (const TEAException&) {
+        throw;
+    } catch (const std::exception& e) {
+        spdlog::error("XTEA decryption error: {}", e.what());
+        throw TEAException(std::string("XTEA decryption error: ") + e.what());
+    }
+}
+
 // Optimized byte conversion function using compile-time conditional branches
 static inline u32 byteToNative(u8 byte, i32 position) noexcept {
     u32 value = static_cast<u32>(byte) << (position * BYTE_SHIFT);
@@ -515,4 +559,86 @@ template auto toUint32Vector<std::vector<u8>>(const std::vector<u8>& data)
 
 template auto toByteArray<std::vector<u32>>(const std::vector<u32>& data)
     -> std::vector<u8>;
+// Implementation of span-based XXTEA functions
+auto xxteaEncryptSpan(std::span<const u32> input, std::span<u32> output,
+                      std::span<const u32, 4> inputKey) -> void {
+    if (input.size() != output.size()) {
+        throw std::runtime_error("Input and output spans must have the same size");
+    }
+
+    if (input.empty()) {
+        return;
+    }
+
+    // Copy input to output first
+    std::copy(input.begin(), input.end(), output.begin());
+
+    // Apply XXTEA encryption in-place on output
+    const u32 n = static_cast<u32>(output.size());
+    const u32 rounds = 6 + 52 / n;
+    u32 sum = 0;
+    const u32 delta = 0x9E3779B9;
+
+    for (u32 round = 0; round < rounds; ++round) {
+        sum += delta;
+        const u32 e = (sum >> 2) & 3;
+
+        for (u32 p = 0; p < n - 1; ++p) {
+            const u32 y = output[p + 1];
+            const u32 z = output[p];
+            const u32 mx = ((z >> 5 ^ y << 2) + (y >> 3 ^ z << 4)) ^
+                          ((sum ^ y) + (inputKey[(p & 3) ^ e] ^ z));
+            output[p] += mx;
+        }
+
+        // Handle the last element
+        const u32 y = output[0];
+        const u32 z = output[n - 1];
+        const u32 mx = ((z >> 5 ^ y << 2) + (y >> 3 ^ z << 4)) ^
+                      ((sum ^ y) + (inputKey[((n - 1) & 3) ^ e] ^ z));
+        output[n - 1] += mx;
+    }
+}
+
+auto xxteaDecryptSpan(std::span<const u32> input, std::span<u32> output,
+                      std::span<const u32, 4> inputKey) -> void {
+    if (input.size() != output.size()) {
+        throw std::runtime_error("Input and output spans must have the same size");
+    }
+
+    if (input.empty()) {
+        return;
+    }
+
+    // Copy input to output first
+    std::copy(input.begin(), input.end(), output.begin());
+
+    // Apply XXTEA decryption in-place on output
+    const u32 n = static_cast<u32>(output.size());
+    const u32 rounds = 6 + 52 / n;
+    const u32 delta = 0x9E3779B9;
+    u32 sum = rounds * delta;
+
+    for (u32 round = 0; round < rounds; ++round) {
+        const u32 e = (sum >> 2) & 3;
+
+        // Handle the last element first in decryption
+        const u32 y = output[0];
+        const u32 z = output[n - 1];
+        const u32 mx = ((z >> 5 ^ y << 2) + (y >> 3 ^ z << 4)) ^
+                      ((sum ^ y) + (inputKey[((n - 1) & 3) ^ e] ^ z));
+        output[n - 1] -= mx;
+
+        for (u32 p = n - 1; p > 0; --p) {
+            const u32 y = output[p];
+            const u32 z = output[p - 1];
+            const u32 mx = ((z >> 5 ^ y << 2) + (y >> 3 ^ z << 4)) ^
+                          ((sum ^ y) + (inputKey[(p & 3) ^ e] ^ z));
+            output[p - 1] -= mx;
+        }
+
+        sum -= delta;
+    }
+}
+
 }  // namespace atom::algorithm
