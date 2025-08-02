@@ -96,7 +96,7 @@ function Invoke-CoverageBadge {
         & python @arguments
 
         $exitCode = $LASTEXITCODE
-        
+
         Write-Host ""
         if ($exitCode -eq 0) {
             Write-Host "✅ Coverage badge generation completed successfully!" -ForegroundColor Green

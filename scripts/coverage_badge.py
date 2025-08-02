@@ -89,7 +89,7 @@ def generate_coverage_badges(coverage_file: Path) -> Dict[str, str]:
         badges["python"] = generate_badge_url(
             "Python%20coverage", f"{python_pct:.1f}%25", python_color
         )
-        
+
     except FileNotFoundError:
         print(f"❌ Coverage file not found: {coverage_file}")
         if is_windows():
@@ -135,7 +135,7 @@ def update_readme_badges(readme_file: Path, badges_markdown: str) -> bool:
     try:
         # Use UTF-8 encoding and handle different line endings
         content = readme_file.read_text(encoding='utf-8')
-        
+
         # Normalize line endings for cross-platform compatibility
         content = content.replace('\r\n', '\n').replace('\r', '\n')
 

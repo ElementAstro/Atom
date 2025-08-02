@@ -69,7 +69,7 @@ echo Usage: %~nx0 [OPTIONS]
 echo.
 echo Options:
 echo   --coverage-file PATH    Path to coverage JSON file
-echo   --readme-file PATH      Path to README.md file  
+echo   --readme-file PATH      Path to README.md file
 echo   --output FORMAT         Output format: markdown, urls, update-readme
 echo   --help, -h, /?          Show this help message
 echo.
