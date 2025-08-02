@@ -63,25 +63,26 @@ def generate_coverage_badges(coverage_file: Path) -> Dict[str, str]:
         print(f"Coverage file not found: {coverage_file}")
         return badges
 
+
     try:
         # Use UTF-8 encoding explicitly for cross-platform compatibility
         with open(coverage_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        
+
         # Overall coverage badge
         overall_pct = data.get("overall", {}).get("coverage_percentage", 0)
         overall_color = get_coverage_color(overall_pct)
         badges["overall"] = generate_badge_url(
             "coverage", f"{overall_pct:.1f}%25", overall_color
         )
-        
+
         # C++ coverage badge
         cpp_pct = data.get("cpp", {}).get("coverage_percentage", 0)
         cpp_color = get_coverage_color(cpp_pct)
         badges["cpp"] = generate_badge_url(
             "C%2B%2B%20coverage", f"{cpp_pct:.1f}%25", cpp_color
         )
-        
+
         # Python coverage badge
         python_pct = data.get("python", {}).get("coverage_percentage", 0)
         python_color = get_coverage_color(python_pct)
@@ -109,16 +110,16 @@ def generate_coverage_badges(coverage_file: Path) -> Dict[str, str]:
 def generate_badge_markdown(badges: Dict[str, str]) -> str:
     """Generate markdown for coverage badges."""
     markdown_lines = []
-    
+
     if "overall" in badges:
         markdown_lines.append(f"![Coverage]({badges['overall']})")
-    
+
     if "cpp" in badges:
         markdown_lines.append(f"![C++ Coverage]({badges['cpp']})")
-    
+
     if "python" in badges:
         markdown_lines.append(f"![Python Coverage]({badges['python']})")
-    
+
     return " ".join(markdown_lines)
 
 def update_readme_badges(readme_file: Path, badges_markdown: str) -> bool:
@@ -129,6 +130,7 @@ def update_readme_badges(readme_file: Path, badges_markdown: str) -> bool:
     if not readme_file.exists():
         print(f"README file not found: {readme_file}")
         return False
+
 
     try:
         # Use UTF-8 encoding and handle different line endings
@@ -141,8 +143,10 @@ def update_readme_badges(readme_file: Path, badges_markdown: str) -> bool:
         start_marker = "<!-- COVERAGE-BADGES-START -->"
         end_marker = "<!-- COVERAGE-BADGES-END -->"
 
+
         start_idx = content.find(start_marker)
         end_idx = content.find(end_marker)
+
 
         if start_idx != -1 and end_idx != -1:
             # Replace existing badges
@@ -156,11 +160,13 @@ def update_readme_badges(readme_file: Path, badges_markdown: str) -> bool:
             lines = content.split('\n')
             insert_idx = 0
 
+
             # Find the first heading
             for i, line in enumerate(lines):
                 if line.startswith('# '):
                     insert_idx = i + 1
                     break
+
 
             # Insert badges section
             badge_section = [
@@ -170,6 +176,7 @@ def update_readme_badges(readme_file: Path, badges_markdown: str) -> bool:
                 end_marker,
                 ""
             ]
+
 
             lines[insert_idx:insert_idx] = badge_section
             new_content = '\n'.join(lines)
@@ -232,6 +239,7 @@ Examples:
         """
     )
 
+
     parser.add_argument(
         "--coverage-file",
         type=Path,
@@ -239,21 +247,23 @@ Examples:
         help="Path to coverage JSON file"
     )
 
+
     parser.add_argument(
         "--readme-file",
         type=Path,
         default=get_default_readme_file(),
         help="Path to README.md file"
     )
-    
+
     parser.add_argument(
         "--output",
         choices=["markdown", "urls", "update-readme"],
         default="update-readme",
         help="Output format"
     )
-    
+
     args = parser.parse_args()
+
 
     print("Coverage Badge Generator")
     print("=" * 25)
@@ -278,17 +288,17 @@ Examples:
         else:
             print("💡 Try running: make coverage-unified")
         return 1
-    
+
     if args.output == "urls":
         print("Coverage Badge URLs:")
         for name, url in badges.items():
             print(f"{name}: {url}")
-    
+
     elif args.output == "markdown":
         markdown = generate_badge_markdown(badges)
         print("Coverage Badges Markdown:")
         print(markdown)
-    
+
     elif args.output == "update-readme":
         markdown = generate_badge_markdown(badges)
         success = update_readme_badges(readme_file, markdown)

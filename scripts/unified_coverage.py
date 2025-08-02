@@ -30,7 +30,7 @@ def print_colored(message: str, color: str = Colors.NC) -> None:
 
 class UnifiedCoverageReporter:
     """Generate unified coverage reports for C++ and Python."""
-    
+
     def __init__(self, project_root: Path):
         self.project_root = project_root
         self.build_dir = project_root / "build"
@@ -38,49 +38,49 @@ class UnifiedCoverageReporter:
         self.cpp_coverage_dir = self.coverage_dir / "cpp"
         self.python_coverage_dir = self.coverage_dir / "python"
         self.unified_dir = self.coverage_dir / "unified"
-        
+
         # Ensure directories exist
         self.coverage_dir.mkdir(exist_ok=True)
         self.unified_dir.mkdir(exist_ok=True)
-    
+
     def run_cpp_coverage(self) -> bool:
         """Run C++ coverage analysis."""
         print_colored("Running C++ coverage analysis...", Colors.BLUE)
-        
+
         try:
             # Build with coverage
             result = subprocess.run([
                 "cmake", "--build", str(self.build_dir), "--target", "coverage"
             ], capture_output=True, text=True, cwd=self.project_root)
-            
+
             if result.returncode != 0:
                 print_colored(f"C++ coverage failed: {result.stderr}", Colors.RED)
                 return False
-            
+
             print_colored("C++ coverage completed successfully", Colors.GREEN)
             return True
-            
+
         except Exception as e:
             print_colored(f"Error running C++ coverage: {e}", Colors.RED)
             return False
-    
+
     def run_python_coverage(self) -> bool:
         """Run Python coverage analysis."""
         print_colored("Running Python coverage analysis...", Colors.BLUE)
-        
+
         try:
             # Run Python coverage
             result = subprocess.run([
                 sys.executable, "scripts/python_coverage.py", "--no-run"
             ], capture_output=True, text=True, cwd=self.project_root)
-            
+
             if result.returncode != 0:
                 print_colored(f"Python coverage setup failed: {result.stderr}", Colors.RED)
                 return False
-            
+
             # Run tests with coverage
             result = subprocess.run([
-                sys.executable, "-m", "pytest", 
+                sys.executable, "-m", "pytest",
                 "python/tests/",
                 "--cov=atom",
                 "--cov=python",
@@ -88,17 +88,17 @@ class UnifiedCoverageReporter:
                 f"--cov-report=html:{self.python_coverage_dir}/html",
                 "--cov-branch"
             ], capture_output=True, text=True, cwd=self.project_root)
-            
+
             if result.returncode != 0:
                 print_colored("Python tests failed, but continuing with coverage...", Colors.YELLOW)
-            
+
             print_colored("Python coverage completed", Colors.GREEN)
             return True
-            
+
         except Exception as e:
             print_colored(f"Error running Python coverage: {e}", Colors.RED)
             return False
-    
+
     def parse_cpp_coverage(self) -> Dict:
         """Parse C++ coverage data from lcov info files."""
         coverage_data = {
@@ -108,17 +108,17 @@ class UnifiedCoverageReporter:
             "coverage_percentage": 0.0,
             "modules": {}
         }
-        
+
         # Look for lcov info files
         cpp_info_file = self.build_dir / "coverage" / "coverage_cleaned.info"
         if not cpp_info_file.exists():
             print_colored("C++ coverage info file not found", Colors.YELLOW)
             return coverage_data
-        
+
         try:
             with open(cpp_info_file, 'r') as f:
                 content = f.read()
-            
+
             # Parse lcov format
             current_file = None
             for line in content.split('\n'):
@@ -130,17 +130,17 @@ class UnifiedCoverageReporter:
                 elif line.startswith('LF:'):
                     total = int(line[3:])
                     coverage_data["total_lines"] += total
-            
+
             if coverage_data["total_lines"] > 0:
                 coverage_data["coverage_percentage"] = (
                     coverage_data["covered_lines"] / coverage_data["total_lines"] * 100
                 )
-            
+
         except Exception as e:
             print_colored(f"Error parsing C++ coverage: {e}", Colors.RED)
-        
+
         return coverage_data
-    
+
     def parse_python_coverage(self) -> Dict:
         """Parse Python coverage data from XML report."""
         coverage_data = {
@@ -150,16 +150,16 @@ class UnifiedCoverageReporter:
             "coverage_percentage": 0.0,
             "modules": {}
         }
-        
+
         xml_file = self.python_coverage_dir / "coverage.xml"
         if not xml_file.exists():
             print_colored("Python coverage XML file not found", Colors.YELLOW)
             return coverage_data
-        
+
         try:
             tree = ET.parse(xml_file)
             root = tree.getroot()
-            
+
             # Parse coverage XML
             for package in root.findall('.//package'):
                 for class_elem in package.findall('classes/class'):
@@ -170,22 +170,22 @@ class UnifiedCoverageReporter:
                             coverage_data["total_lines"] += 1
                             if line.get('hits', '0') != '0':
                                 coverage_data["covered_lines"] += 1
-            
+
             # Get overall coverage from root
             if 'line-rate' in root.attrib:
                 coverage_data["coverage_percentage"] = float(root.attrib['line-rate']) * 100
-            
+
         except Exception as e:
             print_colored(f"Error parsing Python coverage: {e}", Colors.RED)
-        
+
         return coverage_data
-    
+
     def generate_unified_report(self, cpp_data: Dict, python_data: Dict) -> str:
         """Generate unified HTML coverage report."""
         total_lines = cpp_data["total_lines"] + python_data["total_lines"]
         total_covered = cpp_data["covered_lines"] + python_data["covered_lines"]
         overall_coverage = (total_covered / total_lines * 100) if total_lines > 0 else 0
-        
+
         html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -299,7 +299,7 @@ class UnifiedCoverageReporter:
             <h1>Atom Project Coverage Report</h1>
             <p>Unified C++ and Python Coverage Analysis</p>
         </div>
-        
+
         <div class="summary">
             <div class="metric-card">
                 <div class="metric-value">{overall_coverage:.1f}%</div>
@@ -317,7 +317,7 @@ class UnifiedCoverageReporter:
                 <div class="metric-label">Covered Lines</div>
             </div>
         </div>
-        
+
         <div class="language-section">
             <div class="language-title">🔧 C++ Coverage</div>
             <div class="summary">
@@ -338,7 +338,7 @@ class UnifiedCoverageReporter:
                 </div>
             </div>
         </div>
-        
+
         <div class="language-section">
             <div class="language-title">🐍 Python Coverage</div>
             <div class="summary">
@@ -359,31 +359,31 @@ class UnifiedCoverageReporter:
                 </div>
             </div>
         </div>
-        
+
         <div class="links">
             <a href="../build/coverage/html/index.html" class="link-button">📊 C++ Detailed Report</a>
             <a href="../python/html/index.html" class="link-button">🐍 Python Detailed Report</a>
             <a href="coverage.json" class="link-button">📄 JSON Report</a>
         </div>
-        
+
         <div class="timestamp">
             Generated on {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         </div>
     </div>
 </body>
 </html>"""
-        
+
         report_file = self.unified_dir / "index.html"
         report_file.write_text(html_content)
-        
+
         return str(report_file)
-    
+
     def generate_json_report(self, cpp_data: Dict, python_data: Dict) -> str:
         """Generate JSON coverage report for CI/CD integration."""
         total_lines = cpp_data["total_lines"] + python_data["total_lines"]
         total_covered = cpp_data["covered_lines"] + python_data["covered_lines"]
         overall_coverage = (total_covered / total_lines * 100) if total_lines > 0 else 0
-        
+
         json_data = {
             "timestamp": __import__('datetime').datetime.now().isoformat(),
             "overall": {
@@ -394,86 +394,86 @@ class UnifiedCoverageReporter:
             "cpp": cpp_data,
             "python": python_data
         }
-        
+
         json_file = self.unified_dir / "coverage.json"
         with open(json_file, 'w') as f:
             json.dump(json_data, f, indent=2)
-        
+
         return str(json_file)
-    
+
     def run_unified_coverage(self, skip_cpp: bool = False, skip_python: bool = False) -> bool:
         """Run unified coverage analysis."""
         print_colored("Starting unified coverage analysis...", Colors.BLUE)
-        
+
         cpp_success = True
         python_success = True
-        
+
         if not skip_cpp:
             cpp_success = self.run_cpp_coverage()
-        
+
         if not skip_python:
             python_success = self.run_python_coverage()
-        
+
         # Parse coverage data
         cpp_data = self.parse_cpp_coverage()
         python_data = self.parse_python_coverage()
-        
+
         # Generate reports
         html_report = self.generate_unified_report(cpp_data, python_data)
         json_report = self.generate_json_report(cpp_data, python_data)
-        
+
         print_colored(f"Unified HTML report: {html_report}", Colors.GREEN)
         print_colored(f"JSON report: {json_report}", Colors.GREEN)
-        
+
         return cpp_success and python_success
 
 def main():
     """Main function."""
     import argparse
-    
+
     parser = argparse.ArgumentParser(
         description="Generate unified coverage reports for C++ and Python",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    
+
     parser.add_argument(
         "--skip-cpp",
         action="store_true",
         help="Skip C++ coverage analysis"
     )
-    
+
     parser.add_argument(
         "--skip-python",
         action="store_true",
         help="Skip Python coverage analysis"
     )
-    
+
     parser.add_argument(
         "--open",
         action="store_true",
         help="Open the unified report in browser"
     )
-    
+
     args = parser.parse_args()
-    
+
     project_root = Path.cwd()
-    
+
     print_colored("Atom Unified Coverage Reporter", Colors.BLUE)
     print_colored("=" * 30, Colors.BLUE)
-    
+
     reporter = UnifiedCoverageReporter(project_root)
     success = reporter.run_unified_coverage(
         skip_cpp=args.skip_cpp,
         skip_python=args.skip_python
     )
-    
+
     if args.open:
         report_file = project_root / "coverage" / "unified" / "index.html"
         if report_file.exists():
             webbrowser.open(f"file://{report_file.absolute()}")
         else:
             print_colored("Unified report not found", Colors.RED)
-    
+
     return 0 if success else 1
 
 if __name__ == "__main__":

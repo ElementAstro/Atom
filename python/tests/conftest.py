@@ -22,49 +22,49 @@ def atom_modules():
         modules.append("algorithm")
     except ImportError:
         pass
-    
+
     try:
         import atom_connection
         modules.append("connection")
     except ImportError:
         pass
-    
+
     try:
         import atom_error
         modules.append("error")
     except ImportError:
         pass
-    
+
     try:
         import atom_io
         modules.append("io")
     except ImportError:
         pass
-    
+
     try:
         import atom_search
         modules.append("search")
     except ImportError:
         pass
-    
+
     try:
         import atom_sysinfo
         modules.append("sysinfo")
     except ImportError:
         pass
-    
+
     try:
         import atom_type
         modules.append("type")
     except ImportError:
         pass
-    
+
     try:
         import atom_web
         modules.append("web")
     except ImportError:
         pass
-    
+
     return modules
 
 @pytest.fixture
@@ -105,11 +105,11 @@ def pytest_collection_modifyitems(config, items):
         # Add slow marker to tests with 'slow' in name
         if "slow" in item.name.lower():
             item.add_marker(pytest.mark.slow)
-        
+
         # Add integration marker to tests with 'integration' in name
         if "integration" in item.name.lower():
             item.add_marker(pytest.mark.integration)
-        
+
         # Add benchmark marker to tests with 'benchmark' in name
         if "benchmark" in item.name.lower():
             item.add_marker(pytest.mark.benchmark)

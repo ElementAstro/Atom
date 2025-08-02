@@ -51,19 +51,19 @@ print_usage() {
 # Function to check if required tools are available
 check_tools() {
     local missing_tools=()
-    
+
     if ! command -v gcov &> /dev/null; then
         missing_tools+=("gcov")
     fi
-    
+
     if ! command -v lcov &> /dev/null; then
         missing_tools+=("lcov")
     fi
-    
+
     if ! command -v genhtml &> /dev/null; then
         missing_tools+=("genhtml")
     fi
-    
+
     if [ ${#missing_tools[@]} -ne 0 ]; then
         echo -e "${RED}Error: Missing required tools: ${missing_tools[*]}${NC}"
         echo "Please install lcov package (includes gcov, lcov, and genhtml)"
@@ -77,23 +77,23 @@ check_tools() {
 # Function to configure and build with coverage
 build_with_coverage() {
     echo -e "${BLUE}Configuring build with coverage enabled...${NC}"
-    
+
     if [ "$CLEAN_BUILD" = true ]; then
         echo -e "${YELLOW}Cleaning build directory...${NC}"
         rm -rf "$BUILD_DIR"
     fi
-    
+
     mkdir -p "$BUILD_DIR"
     cd "$BUILD_DIR"
-    
+
     cmake .. -DCMAKE_BUILD_TYPE=Debug \
              -DATOM_ENABLE_COVERAGE=ON \
              -DATOM_COVERAGE_HTML=ON \
              -DATOM_BUILD_TESTS=ON
-    
+
     echo -e "${BLUE}Building project...${NC}"
     make -j$(nproc)
-    
+
     cd ..
 }
 
@@ -103,7 +103,7 @@ run_full_coverage() {
     cd "$BUILD_DIR"
     make coverage
     cd ..
-    
+
     local report_path="$BUILD_DIR/coverage/html/index.html"
     if [ -f "$report_path" ]; then
         echo -e "${GREEN}Coverage report generated: $report_path${NC}"
@@ -122,12 +122,12 @@ run_module_coverage() {
         echo -e "${RED}Error: Module name required for module coverage${NC}"
         exit 1
     fi
-    
+
     echo -e "${GREEN}Running coverage analysis for module: $MODULE${NC}"
     cd "$BUILD_DIR"
     make "coverage-$MODULE"
     cd ..
-    
+
     local report_path="$BUILD_DIR/coverage/${MODULE}_html/index.html"
     if [ -f "$report_path" ]; then
         echo -e "${GREEN}Module coverage report generated: $report_path${NC}"
@@ -155,7 +155,7 @@ generate_report() {
     cd "$BUILD_DIR"
     make coverage-capture coverage-html
     cd ..
-    
+
     local report_path="$BUILD_DIR/coverage/html/index.html"
     if [ -f "$report_path" ]; then
         echo -e "${GREEN}Coverage report generated: $report_path${NC}"
@@ -172,7 +172,7 @@ generate_report() {
 open_report() {
     local report_path="$1"
     echo -e "${BLUE}Opening coverage report in browser...${NC}"
-    
+
     if command -v xdg-open &> /dev/null; then
         xdg-open "$report_path"
     elif command -v open &> /dev/null; then
