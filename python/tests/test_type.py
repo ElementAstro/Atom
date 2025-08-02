@@ -14,29 +14,29 @@ except ImportError:
     TYPE_AVAILABLE = False
 
 pytestmark = pytest.mark.skipif(
-    not TYPE_AVAILABLE, 
+    not TYPE_AVAILABLE,
     reason="atom_type module not available"
 )
 
 class TestTypeModule:
     """Test cases for the type module."""
-    
+
     def test_module_import(self):
         """Test that the type module can be imported."""
         assert atom_type is not None
-    
+
     def test_module_attributes(self):
         """Test that the module has expected attributes."""
         assert hasattr(atom_type, '__doc__')
 
 class TestTypeFunctionality:
     """Test cases for type functionality."""
-    
+
     def test_basic_functionality(self):
         """Test basic type functionality."""
         # TODO: Implement basic functionality tests
         pass
-    
+
     @pytest.mark.integration
     def test_integration(self):
         """Test type integration."""
@@ -46,7 +46,7 @@ class TestTypeFunctionality:
 @pytest.mark.slow
 class TestTypePerformance:
     """Performance tests for type module."""
-    
+
     def test_performance(self):
         """Test type performance."""
         # TODO: Implement performance tests

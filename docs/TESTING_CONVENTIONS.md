@@ -35,7 +35,7 @@ python/tests/
 
 ### C++ Test Files
 - **Pattern**: `test_<module_name>.cpp` or `test_<specific_feature>.cpp`
-- **Examples**: 
+- **Examples**:
   - `test_algorithm.cpp`
   - `test_memory_pool.cpp`
   - `test_hash.cpp`
@@ -132,11 +132,11 @@ TEST_F(MemoryPoolTest, AllocateExceedingBlockSize) {
 ```python
 class TestMemoryPool:
     """Test cases for memory pool functionality.
-    
+
     Tests various aspects of memory pool including allocation,
     deallocation, and memory management edge cases.
     """
-    
+
     def test_allocate_exceeding_block_size(self):
         """Test that allocation exceeding block size raises exception."""
         # Test implementation

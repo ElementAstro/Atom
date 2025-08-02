@@ -70,14 +70,14 @@ def get_coverage_data() -> Optional[Dict]:
 def main():
     """Main function."""
     project_root = Path.cwd()
-    
+
     print_colored(f"{Colors.CYAN}{Colors.BOLD}Atom Testing & Coverage System Status{Colors.NC}")
     print_colored(f"{Colors.CYAN}Project: {project_root.name}{Colors.NC}")
     print_colored(f"{Colors.CYAN}Path: {project_root}{Colors.NC}")
-    
+
     # System Dependencies
     print_section("System Dependencies")
-    
+
     dependencies = {
         "C++ Tools": {
             "cmake": check_command("cmake"),
@@ -95,50 +95,50 @@ def main():
             "coverage": check_python_package("coverage"),
         }
     }
-    
+
     for category, tools in dependencies.items():
         print_colored(f"\n{Colors.BOLD}{category}:{Colors.NC}")
         for tool, available in tools.items():
             status = f"{Colors.GREEN}✓{Colors.NC}" if available else f"{Colors.RED}✗{Colors.NC}"
             print(f"  {status} {tool}")
-    
+
     # Test Directory Structure
     print_section("Test Directory Structure")
-    
+
     cpp_test_dir = project_root / "tests"
     python_test_dir = project_root / "python" / "tests"
-    
+
     print_colored(f"\n{Colors.BOLD}C++ Tests ({cpp_test_dir}):{Colors.NC}")
     if cpp_test_dir.exists():
         cpp_modules = [d.name for d in cpp_test_dir.iterdir() if d.is_dir()]
         cpp_test_files = get_file_count(cpp_test_dir, "*.cpp")
         cpp_header_files = get_file_count(cpp_test_dir, "*.hpp")
-        
+
         print(f"  📁 Modules: {len(cpp_modules)}")
         print(f"  📄 Test files (.cpp): {cpp_test_files}")
         print(f"  📄 Header files (.hpp): {cpp_header_files}")
         print(f"  📂 Modules: {', '.join(sorted(cpp_modules))}")
     else:
         print_colored("  ❌ Directory not found", Colors.RED)
-    
+
     print_colored(f"\n{Colors.BOLD}Python Tests ({python_test_dir}):{Colors.NC}")
     if python_test_dir.exists():
         python_test_files = get_file_count(python_test_dir, "test_*.py")
         python_all_files = get_file_count(python_test_dir, "*.py")
-        
+
         print(f"  📄 Test files: {python_test_files}")
         print(f"  📄 Total Python files: {python_all_files}")
-        
+
         # List test files
         test_files = [f.name for f in python_test_dir.glob("test_*.py")]
         if test_files:
             print(f"  📂 Test files: {', '.join(sorted(test_files))}")
     else:
         print_colored("  ❌ Directory not found", Colors.RED)
-    
+
     # Configuration Files
     print_section("Configuration Files")
-    
+
     config_files = {
         "CMakeLists.txt": project_root / "CMakeLists.txt",
         "pyproject.toml": project_root / "pyproject.toml",
@@ -148,14 +148,14 @@ def main():
         "Test Build Options": project_root / "cmake" / "TestsBuildOptions.cmake",
         "GitHub Actions": project_root / ".github" / "workflows" / "coverage.yml",
     }
-    
+
     for name, path in config_files.items():
         status = f"{Colors.GREEN}✓{Colors.NC}" if path.exists() else f"{Colors.RED}✗{Colors.NC}"
         print(f"  {status} {name}")
-    
+
     # Scripts
     print_section("Coverage Scripts")
-    
+
     scripts_dir = project_root / "scripts"
     scripts = {
         "Unified Coverage": "unified_coverage.py",
@@ -166,23 +166,23 @@ def main():
         "Test Migrator": "migrate_test_conventions.py",
         "Test Reorganizer": "reorganize_tests.py",
     }
-    
+
     for name, script in scripts.items():
         script_path = scripts_dir / script
         status = f"{Colors.GREEN}✓{Colors.NC}" if script_path.exists() else f"{Colors.RED}✗{Colors.NC}"
         executable = "🔧" if script_path.exists() and os.access(script_path, os.X_OK) else ""
         print(f"  {status} {name} {executable}")
-    
+
     # Documentation
     print_section("Documentation")
-    
+
     docs_dir = project_root / "docs"
     docs = {
         "Testing Conventions": "TESTING_CONVENTIONS.md",
         "Coverage Guide": "COVERAGE_GUIDE.md",
         "Test README": project_root / "tests" / "README.md",
     }
-    
+
     for name, doc in docs.items():
         if isinstance(doc, str):
             doc_path = docs_dir / doc
@@ -190,41 +190,41 @@ def main():
             doc_path = doc
         status = f"{Colors.GREEN}✓{Colors.NC}" if doc_path.exists() else f"{Colors.RED}✗{Colors.NC}"
         print(f"  {status} {name}")
-    
+
     # Coverage Status
     print_section("Coverage Status")
-    
+
     coverage_data = get_coverage_data()
     if coverage_data:
         overall = coverage_data.get("overall", {})
         cpp = coverage_data.get("cpp", {})
         python = coverage_data.get("python", {})
-        
+
         print_colored(f"\n{Colors.BOLD}Latest Coverage Results:{Colors.NC}")
         print(f"  🎯 Overall: {overall.get('coverage_percentage', 0):.1f}%")
         print(f"  🔧 C++: {cpp.get('coverage_percentage', 0):.1f}%")
         print(f"  🐍 Python: {python.get('coverage_percentage', 0):.1f}%")
         print(f"  📊 Total Lines: {overall.get('total_lines', 0):,}")
         print(f"  ✅ Covered Lines: {overall.get('covered_lines', 0):,}")
-        
+
         timestamp = coverage_data.get("timestamp", "Unknown")
         print(f"  🕒 Generated: {timestamp}")
     else:
         print_colored("  ❌ No coverage data found", Colors.YELLOW)
         print("     Run 'make coverage-unified' to generate coverage reports")
-    
+
     # Build Status
     print_section("Build System Status")
-    
+
     build_dir = project_root / "build"
     if build_dir.exists():
         print_colored(f"  ✅ Build directory exists: {build_dir}", Colors.GREEN)
-        
+
         # Check for CMake cache
         cmake_cache = build_dir / "CMakeCache.txt"
         if cmake_cache.exists():
             print("  ✅ CMake configured")
-            
+
             # Check for coverage configuration
             try:
                 with open(cmake_cache, 'r') as f:
@@ -240,10 +240,10 @@ def main():
     else:
         print_colored("  ❌ Build directory not found", Colors.YELLOW)
         print("     Run 'cmake -B build' to configure build")
-    
+
     # Quick Start Guide
     print_section("Quick Start Commands")
-    
+
     commands = [
         ("Configure build with coverage", "cmake -B build -DATOM_ENABLE_COVERAGE=ON"),
         ("Build project", "make build"),
@@ -252,13 +252,13 @@ def main():
         ("Check test conventions", "python scripts/check_test_conventions.py"),
         ("View coverage guide", "cat docs/COVERAGE_GUIDE.md"),
     ]
-    
+
     for description, command in commands:
         print(f"  📝 {description}:")
         print_colored(f"     {command}", Colors.CYAN)
-    
+
     print_colored(f"\n{Colors.GREEN}✨ Testing system status check complete!{Colors.NC}")
-    
+
     return 0
 
 if __name__ == "__main__":
