@@ -242,6 +242,15 @@ public:
         typename GridType::value_type::value_type fill_color,
         const FloodFillConfig& config);
 
+    // Non-template overloads for std::vector<std::vector<i32>> - these are the actual implementations
+    [[nodiscard]] static usize fillSIMD(
+        std::vector<std::vector<i32>>& grid, i32 start_x, i32 start_y,
+        i32 target_color, i32 fill_color, const FloodFillConfig& config);
+
+    [[nodiscard]] static usize fillBlockOptimized(
+        std::vector<std::vector<i32>>& grid, i32 start_x, i32 start_y,
+        i32 target_color, i32 fill_color, const FloodFillConfig& config);
+
     /**
      * @brief Specialized BFS flood fill method for
      * std::vector<std::vector<i32>>

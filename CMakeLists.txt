@@ -3,6 +3,18 @@
 # Author: Max Qian
 
 cmake_minimum_required(VERSION 3.21)
+
+# Enable policy for better cross-platform support
+if(POLICY CMP0091)
+    cmake_policy(SET CMP0091 NEW) # MSVC runtime library flags
+endif()
+if(POLICY CMP0092)
+    cmake_policy(SET CMP0092 NEW) # MSVC warning flags
+endif()
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW) # ExternalProject download timestamps
+endif()
+
 project(
   Atom
   LANGUAGES C CXX
@@ -12,11 +24,24 @@ project(
 )
 
 # -----------------------------------------------------------------------------
+# Build Performance Optimization
+# -----------------------------------------------------------------------------
+# Enable faster builds with object libraries and unity builds
+set(CMAKE_UNITY_BUILD_BATCH_SIZE 16 CACHE STRING "Unity build batch size")
+option(ATOM_ENABLE_UNITY_BUILD "Enable unity builds for faster compilation" OFF)
+
+# Enable compile commands for IDE support
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "Enable compile_commands.json generation" FORCE)
+
+# -----------------------------------------------------------------------------
 # Include CMake Modules
 # -----------------------------------------------------------------------------
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(cmake/GitVersion.cmake)
 include(cmake/VersionConfig.cmake)
+include(cmake/BuildOptimization.cmake)
+include(cmake/BuildPerformanceMonitor.cmake)
+include(cmake/CrossPlatformSupport.cmake)
 include(cmake/PlatformSpecifics.cmake)
 include(cmake/compiler_options.cmake)
 include(cmake/module_dependencies.cmake)
@@ -28,23 +53,38 @@ include(cmake/CoverageConfig.cmake)
 # -----------------------------------------------------------------------------
 # Options
 # -----------------------------------------------------------------------------
+# Package management options
 option(USE_VCPKG "Use vcpkg package manager" OFF)
 option(UPDATE_VCPKG_BASELINE "Update vcpkg baseline to latest" OFF)
+
+# Build configuration options
 option(ATOM_BUILD_EXAMPLES "Build examples" ON)
 option(ATOM_BUILD_EXAMPLES_SELECTIVE "Enable selective building of example modules" OFF)
 option(ATOM_BUILD_TESTS "Build tests" ON)
 option(ATOM_BUILD_TESTS_SELECTIVE "Enable selective building of test modules" OFF)
 option(ATOM_BUILD_PYTHON_BINDINGS "Build Python bindings" OFF)
 option(ATOM_BUILD_DOCS "Build documentation" OFF)
+option(ATOM_BUILD_ALL "Build all Atom modules" ON)
+
+# Performance and optimization options
+option(ATOM_ENABLE_LTO "Enable Link Time Optimization" OFF)
+option(ATOM_ENABLE_CCACHE "Enable ccache for faster rebuilds" ON)
+option(ATOM_ENABLE_PRECOMPILED_HEADERS "Enable precompiled headers" ON)
+option(ATOM_ENABLE_PARALLEL_BUILD "Enable parallel build optimizations" ON)
+
+# Analysis and debugging options
 option(ATOM_ENABLE_COVERAGE "Enable code coverage analysis" OFF)
 option(ATOM_COVERAGE_HTML "Generate HTML coverage reports" ON)
+option(ATOM_ENABLE_SANITIZERS "Enable AddressSanitizer and UBSan" OFF)
+option(ATOM_ENABLE_STATIC_ANALYSIS "Enable static analysis tools" OFF)
+
+# Feature options
 option(ATOM_USE_BOOST "Enable Boost high-performance data structures" OFF)
 option(ATOM_USE_BOOST_LOCKFREE "Enable Boost lock-free data structures" OFF)
 option(ATOM_USE_BOOST_CONTAINER "Enable Boost container library" OFF)
 option(ATOM_USE_BOOST_GRAPH "Enable Boost graph library" OFF)
 option(ATOM_USE_BOOST_INTRUSIVE "Enable Boost intrusive containers" OFF)
 option(ATOM_USE_PYBIND11 "Enable pybind11 support" ${ATOM_BUILD_PYTHON_BINDINGS})
-option(ATOM_BUILD_ALL "Build all Atom modules" ON)
 
 # Module build options
 foreach(MODULE
@@ -54,11 +94,37 @@ foreach(MODULE
 endforeach()
 
 # -----------------------------------------------------------------------------
-# C++ Standard
+# C++ Standard and Compiler Requirements
 # -----------------------------------------------------------------------------
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_C_STANDARD 17)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+
+# Enable position independent code for shared libraries
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+# -----------------------------------------------------------------------------
+# Cross-Platform Compiler Optimizations
+# -----------------------------------------------------------------------------
+# Enable Link Time Optimization if requested and supported
+if(ATOM_ENABLE_LTO)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT lto_supported OUTPUT lto_error)
+    if(lto_supported)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+        message(STATUS "Link Time Optimization enabled")
+    else()
+        message(WARNING "LTO is not supported: ${lto_error}")
+    endif()
+endif()
+
+# Enable precompiled headers if supported and requested
+if(ATOM_ENABLE_PRECOMPILED_HEADERS AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.16")
+    set(CMAKE_PCH_INSTANTIATE_TEMPLATES ON)
+    message(STATUS "Precompiled headers enabled")
+endif()
 
 # -----------------------------------------------------------------------------
 # Version Definitions
@@ -191,6 +257,21 @@ configure_file(
   ${CMAKE_CURRENT_BINARY_DIR}/atom_version_info.h
   @ONLY
 )
+
+# -----------------------------------------------------------------------------
+# Cross-Platform Support Setup
+# -----------------------------------------------------------------------------
+setup_cross_platform_support()
+
+# -----------------------------------------------------------------------------
+# Build Optimization Setup
+# -----------------------------------------------------------------------------
+setup_build_optimizations()
+
+# -----------------------------------------------------------------------------
+# Build Performance Monitoring Setup
+# -----------------------------------------------------------------------------
+enable_build_performance_monitoring()
 
 # -----------------------------------------------------------------------------
 # Ninja Generator Support

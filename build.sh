@@ -210,51 +210,140 @@ if [[ "$SHOW_HELP" == "y" ]]; then
     exit 0
 fi
 
-# Auto-detect optimal settings
+# Enhanced system capability detection
 detect_system_capabilities() {
     log_info "Detecting system capabilities..."
+
+    # Detect operating system
+    OS_TYPE=$(uname -s)
+    case "$OS_TYPE" in
+        Linux*)     OS_NAME="Linux";;
+        Darwin*)    OS_NAME="macOS";;
+        CYGWIN*)    OS_NAME="Windows";;
+        MINGW*)     OS_NAME="Windows";;
+        MSYS*)      OS_NAME="Windows";;
+        *)          OS_NAME="Unknown";;
+    esac
+
+    # Detect architecture
+    ARCH=$(uname -m)
+    case "$ARCH" in
+        x86_64|amd64)   ARCH_NAME="x64";;
+        i386|i686)      ARCH_NAME="x86";;
+        aarch64|arm64)  ARCH_NAME="arm64";;
+        armv7l)         ARCH_NAME="arm";;
+        *)              ARCH_NAME="unknown";;
+    esac
+
+    log_info "Detected platform: $OS_NAME ($ARCH_NAME)"
 
     # Detect number of CPU cores if not specified
     if [[ -z "$PARALLEL_JOBS" ]]; then
         if command -v nproc &> /dev/null; then
             PARALLEL_JOBS=$(nproc)
-        elif command -v sysctl &> /dev/null && [[ "$(uname)" == "Darwin" ]]; then
+        elif command -v sysctl &> /dev/null && [[ "$OS_NAME" == "macOS" ]]; then
             PARALLEL_JOBS=$(sysctl -n hw.ncpu)
+        elif [[ "$OS_NAME" == "Windows" ]] && command -v wmic &> /dev/null; then
+            PARALLEL_JOBS=$(wmic cpu get NumberOfCores /value | grep -o '[0-9]*' | head -1)
         else
             PARALLEL_JOBS=4  # Default to 4 cores
         fi
     fi
 
-    # Auto-detect ccache if not explicitly set
+    # Auto-detect compiler cache tools
     if [[ "$CCACHE_ENABLE" == "auto" ]]; then
         if command -v ccache &> /dev/null; then
             CCACHE_ENABLE="y"
+            CACHE_TOOL="ccache"
             log_info "ccache detected and will be used"
+        elif command -v sccache &> /dev/null; then
+            CCACHE_ENABLE="y"
+            CACHE_TOOL="sccache"
+            log_info "sccache detected and will be used"
         else
             CCACHE_ENABLE="n"
-            log_warn "ccache not found, compilation caching disabled"
+            log_warn "No compiler cache found (ccache/sccache), compilation caching disabled"
         fi
     fi
 
-    # Check available memory
+    # Enhanced memory detection
     local available_memory_gb=0
-    if [[ -f /proc/meminfo ]]; then
+    local total_memory_gb=0
+
+    if [[ "$OS_NAME" == "Linux" ]] && [[ -f /proc/meminfo ]]; then
         available_memory_gb=$(awk '/MemAvailable/{printf "%.0f", $2/1024/1024}' /proc/meminfo)
-    elif command -v vm_stat &> /dev/null; then
-        # macOS
+        total_memory_gb=$(awk '/MemTotal/{printf "%.0f", $2/1024/1024}' /proc/meminfo)
+    elif [[ "$OS_NAME" == "macOS" ]] && command -v vm_stat &> /dev/null; then
+        # macOS memory detection
         local page_size=$(vm_stat | head -1 | awk '{print $8}')
         local free_pages=$(vm_stat | grep "Pages free" | awk '{print $3}' | sed 's/\.//')
-        available_memory_gb=$((free_pages * page_size / 1024 / 1024 / 1024))
+        local inactive_pages=$(vm_stat | grep "Pages inactive" | awk '{print $3}' | sed 's/\.//')
+        available_memory_gb=$(((free_pages + inactive_pages) * page_size / 1024 / 1024 / 1024))
+
+        # Get total memory
+        total_memory_gb=$(sysctl -n hw.memsize | awk '{printf "%.0f", $1/1024/1024/1024}')
+    elif [[ "$OS_NAME" == "Windows" ]] && command -v wmic &> /dev/null; then
+        # Windows memory detection
+        total_memory_gb=$(wmic computersystem get TotalPhysicalMemory /value | grep -o '[0-9]*' | awk '{printf "%.0f", $1/1024/1024/1024}')
+        available_memory_gb=$((total_memory_gb * 80 / 100))  # Estimate 80% available
+    else
+        # Fallback defaults
+        total_memory_gb=8
+        available_memory_gb=6
     fi
 
-    # Adjust parallel jobs based on available memory (roughly 2GB per job for C++)
-    if [[ $available_memory_gb -gt 0 ]] && [[ $PARALLEL_JOBS -gt $((available_memory_gb / 2)) ]]; then
-        local suggested_jobs=$((available_memory_gb / 2))
-        if [[ $suggested_jobs -gt 0 ]]; then
-            log_warn "Reducing parallel jobs from $PARALLEL_JOBS to $suggested_jobs due to memory constraints"
-            PARALLEL_JOBS=$suggested_jobs
-        fi
+    log_info "Memory: ${available_memory_gb}GB available / ${total_memory_gb}GB total"
+
+    # Intelligent parallel job calculation
+    local memory_per_job=2  # Base memory per job in GB
+
+    # Adjust based on build type and architecture
+    if [[ "$BUILD_TYPE" == "debug" ]]; then
+        memory_per_job=1.5  # Debug builds use less memory
+    elif [[ "$BUILD_TYPE" == "release" ]]; then
+        memory_per_job=2.5  # Release builds with optimizations use more
     fi
+
+    # Adjust for architecture
+    if [[ "$ARCH_NAME" == "arm64" ]] || [[ "$ARCH_NAME" == "arm" ]]; then
+        memory_per_job=$(echo "$memory_per_job * 0.8" | bc -l 2>/dev/null || echo "1.6")
+    fi
+
+    local memory_limited_jobs=$((available_memory_gb * 10 / (memory_per_job * 10)))
+
+    # Platform-specific CPU job limits
+    local cpu_limited_jobs=$PARALLEL_JOBS
+    case "$OS_NAME" in
+        "Linux")
+            # Linux handles parallel builds well
+            if [[ $PARALLEL_JOBS -gt 16 ]]; then
+                cpu_limited_jobs=$((PARALLEL_JOBS - 2))
+            fi
+            ;;
+        "macOS")
+            # macOS can be more memory constrained
+            cpu_limited_jobs=$((PARALLEL_JOBS > 1 ? PARALLEL_JOBS - 1 : 1))
+            ;;
+        "Windows")
+            # Windows - be conservative
+            cpu_limited_jobs=$((PARALLEL_JOBS > 12 ? 12 : PARALLEL_JOBS))
+            ;;
+    esac
+
+    # Use the more conservative limit
+    if [[ $memory_limited_jobs -lt $cpu_limited_jobs ]]; then
+        PARALLEL_JOBS=$memory_limited_jobs
+        log_warn "Limiting parallel jobs to $PARALLEL_JOBS due to memory constraints"
+    else
+        PARALLEL_JOBS=$cpu_limited_jobs
+    fi
+
+    # Ensure at least 1 job
+    if [[ $PARALLEL_JOBS -lt 1 ]]; then
+        PARALLEL_JOBS=1
+    fi
+
+    log_info "Optimized for $PARALLEL_JOBS parallel jobs"
 }
 
 # Detect system capabilities

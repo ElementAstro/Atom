@@ -150,23 +150,47 @@ class BuildSystem:
         if requested_jobs:
             return min(requested_jobs, max_cores)
 
-        # More sophisticated calculation
-        # Consider both CPU and memory constraints
-        memory_limited_jobs = max(
-            1, int(available_memory / 1.5))  # 1.5GB per job
+        # More sophisticated calculation considering build type and compiler
+        # C++ compilation is memory-intensive, especially with templates
+        base_memory_per_job = 2.0  # Base memory per job in GB
+
+        # Adjust memory requirements based on build type
+        if hasattr(self, '_current_build_type'):
+            if self._current_build_type == 'debug':
+                base_memory_per_job = 1.5  # Debug builds use less memory
+            elif self._current_build_type == 'release':
+                base_memory_per_job = 2.5  # Release builds with optimizations use more
+
+        memory_limited_jobs = max(1, int(available_memory / base_memory_per_job))
 
         # Consider platform-specific optimizations
         if caps['platform'] == 'linux':
             # Linux typically handles more parallel jobs better
             cpu_limited_jobs = max_cores
-        else:
-            # Be more conservative on other platforms
+            # But be more conservative with high core counts
+            if max_cores > 16:
+                cpu_limited_jobs = max_cores - 2
+        elif caps['platform'] == 'darwin':  # macOS
+            # macOS can be more memory constrained
             cpu_limited_jobs = max(1, max_cores - 1)
+        else:  # Windows
+            # Windows can handle parallel builds well but be conservative
+            cpu_limited_jobs = max(1, min(max_cores, 12))
+
+        # Consider compiler type
+        if caps.get('has_clang', False):
+            # Clang can be more memory efficient
+            memory_limited_jobs = int(memory_limited_jobs * 1.2)
+        elif caps.get('has_gcc', False):
+            # GCC can use more memory with heavy template instantiation
+            memory_limited_jobs = int(memory_limited_jobs * 0.9)
 
         optimal_jobs = min(cpu_limited_jobs, memory_limited_jobs, 20)
+        optimal_jobs = max(1, optimal_jobs)  # Ensure at least 1 job
 
         logger.info(
             f"System: {max_cores} cores, {available_memory:.1f}GB available memory")
+        logger.info(f"Memory per job: {base_memory_per_job}GB, Platform: {caps['platform']}")
         logger.info(f"Optimal parallel jobs: {optimal_jobs}")
 
         return optimal_jobs
@@ -250,6 +274,9 @@ class BuildSystem:
         """Build using CMake with optimizations"""
         logger.info("Building with CMake...")
 
+        # Store build type for optimization calculations
+        self._current_build_type = args.build_type
+
         # Prepare CMake arguments efficiently
         cmake_args = [
             'cmake',
@@ -270,6 +297,25 @@ class BuildSystem:
         }
         cmake_args.append(f'-DCMAKE_BUILD_TYPE={build_type_map[args.build_type]}')
 
+        # Enable build optimizations
+        optimization_features = [
+            ('ccache', 'ATOM_ENABLE_CCACHE'),
+            ('lto', 'ATOM_ENABLE_LTO'),
+            ('unity_build', 'ATOM_ENABLE_UNITY_BUILD'),
+            ('precompiled_headers', 'ATOM_ENABLE_PRECOMPILED_HEADERS'),
+        ]
+
+        # Auto-enable optimizations based on build type and system capabilities
+        if args.build_type in ['release', 'relwithdebinfo']:
+            if not hasattr(args, 'ccache'):
+                args.ccache = True
+            if not hasattr(args, 'precompiled_headers'):
+                args.precompiled_headers = True
+
+        # Enable unity build for faster compilation if not explicitly disabled
+        if not hasattr(args, 'unity_build') and self.system_caps.capabilities['memory_gb'] >= 8:
+            args.unity_build = True
+
         # Batch feature configuration
         features = [
             ('python', 'ATOM_BUILD_PYTHON_BINDINGS'),
@@ -285,6 +331,12 @@ class BuildSystem:
                         for feature, cmake_var in features
                         if getattr(args, feature, False)]
         cmake_args.extend(feature_args)
+
+        # Add optimization feature args
+        optimization_args = [f'-D{cmake_var}=ON'
+                           for feature, cmake_var in optimization_features
+                           if getattr(args, feature, False)]
+        cmake_args.extend(optimization_args)
 
         # Optimization options
         if args.lto:
@@ -598,6 +650,14 @@ Examples:
                         help='Enable code coverage')
     parser.add_argument('--sanitizers', action='store_true',
                         help='Enable sanitizers')
+    parser.add_argument('--unity-build', action='store_true',
+                        help='Enable unity builds for faster compilation')
+    parser.add_argument('--precompiled-headers', action='store_true',
+                        help='Enable precompiled headers')
+    parser.add_argument('--native-optimization', action='store_true',
+                        help='Enable native CPU optimizations (-march=native)')
+    parser.add_argument('--profile-guided-optimization', action='store_true',
+                        help='Enable profile-guided optimization (PGO)')
 
     # Build options
     parser.add_argument('--clean', action='store_true',

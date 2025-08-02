@@ -99,6 +99,16 @@ if(ATOM_TEST_BUILD_WEB AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/web/CMakeLists.tx
   add_subdirectory(web)
 endif()
 
+# Async tests
+if(ATOM_TEST_BUILD_ASYNC AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/async/CMakeLists.txt")
+  add_subdirectory(async)
+endif()
+
+# Components tests
+if(ATOM_TEST_BUILD_COMPONENTS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/components/CMakeLists.txt")
+  add_subdirectory(components)
+endif()
+
 # Set test targets grouping
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(TEST_GROUP_NAME "Tests")

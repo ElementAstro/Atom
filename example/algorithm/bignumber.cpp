@@ -169,13 +169,16 @@ int main() {
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> std_time = end - start;
 
+        // Note: multiplyKaratsuba is private, so we'll use regular multiply
+        // which internally uses Karatsuba for large numbers
         start = std::chrono::high_resolution_clock::now();
-        BigNumber result2 = a.multiplyKaratsuba(b);
+        BigNumber result2 = a.multiply(b);  // This will use Karatsuba internally for large numbers
         end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> karatsuba_time = end - start;
 
+        // Note: parallelMultiply doesn't exist, so we'll use regular multiply again
         start = std::chrono::high_resolution_clock::now();
-        BigNumber result3 = a.parallelMultiply(b);
+        BigNumber result3 = a.multiply(b);  // Regular multiplication
         end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> parallel_time = end - start;
 

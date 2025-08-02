@@ -287,4 +287,94 @@ template usize FloodFill::processRowSIMD<f32>(f32*, i32, i32, f32, f32);
 template usize FloodFill::processRowSIMD<u8>(u8*, i32, i32, u8, u8);
 #endif
 
+// Template method implementations are removed - only non-template implementations below
+
+// Non-template implementations for common grid types
+usize FloodFill::fillSIMD(std::vector<std::vector<i32>>& grid, i32 start_x, i32 start_y,
+                          i32 target_color, i32 fill_color, const FloodFillConfig& config) {
+    spdlog::info("Starting SIMD Flood Fill at position ({}, {})", start_x, start_y);
+
+    if (grid.empty() || grid[0].empty()) {
+        THROW_INVALID_ARGUMENT("Grid cannot be empty");
+    }
+
+    i32 rows = static_cast<i32>(grid.size());
+    i32 cols = static_cast<i32>(grid[0].size());
+
+    if (start_x < 0 || start_x >= rows || start_y < 0 || start_y >= cols) {
+        THROW_INVALID_ARGUMENT("Starting coordinates out of bounds");
+    }
+
+    if (grid[static_cast<usize>(start_x)][static_cast<usize>(start_y)] != target_color ||
+        target_color == fill_color) {
+        return 0;
+    }
+
+    usize total_filled = 0;
+    std::queue<std::pair<i32, i32>> toVisitQueue;
+    std::vector<std::vector<bool>> visited(static_cast<usize>(rows),
+                                          std::vector<bool>(static_cast<usize>(cols), false));
+
+    toVisitQueue.emplace(start_x, start_y);
+    visited[static_cast<usize>(start_x)][static_cast<usize>(start_y)] = true;
+
+    const auto directions = getDirections(config.connectivity);
+
+    while (!toVisitQueue.empty()) {
+        auto [x, y] = toVisitQueue.front();
+        toVisitQueue.pop();
+
+        if (grid[static_cast<usize>(x)][static_cast<usize>(y)] == target_color) {
+            // Use SIMD processing for the current row if available
+#if defined(__x86_64__) || defined(_M_X64)
+            total_filled += processRowSIMD(grid[static_cast<usize>(x)].data(), y, 1,
+                                          target_color, fill_color);
+#else
+            grid[static_cast<usize>(x)][static_cast<usize>(y)] = fill_color;
+            total_filled++;
+#endif
+
+            // Add neighbors to queue
+            for (const auto& [dx, dy] : directions) {
+                i32 newX = x + dx;
+                i32 newY = y + dy;
+
+                if (newX >= 0 && newX < rows && newY >= 0 && newY < cols &&
+                    !visited[static_cast<usize>(newX)][static_cast<usize>(newY)] &&
+                    grid[static_cast<usize>(newX)][static_cast<usize>(newY)] == target_color) {
+                    visited[static_cast<usize>(newX)][static_cast<usize>(newY)] = true;
+                    toVisitQueue.emplace(newX, newY);
+                }
+            }
+        }
+    }
+
+    return total_filled;
+}
+
+usize FloodFill::fillBlockOptimized(std::vector<std::vector<i32>>& grid, i32 start_x, i32 start_y,
+                                   i32 target_color, i32 fill_color, const FloodFillConfig& config) {
+    spdlog::info("Starting Block Optimized Flood Fill at position ({}, {})", start_x, start_y);
+
+    if (grid.empty() || grid[0].empty()) {
+        THROW_INVALID_ARGUMENT("Grid cannot be empty");
+    }
+
+    i32 rows = static_cast<i32>(grid.size());
+    i32 cols = static_cast<i32>(grid[0].size());
+
+    if (start_x < 0 || start_x >= rows || start_y < 0 || start_y >= cols) {
+        THROW_INVALID_ARGUMENT("Starting coordinates out of bounds");
+    }
+
+    if (grid[static_cast<usize>(start_x)][static_cast<usize>(start_y)] != target_color ||
+        target_color == fill_color) {
+        return 0;
+    }
+
+    // For simplicity, fall back to regular BFS for now
+    // A full block-optimized implementation would be more complex
+    return fillBFS(grid, start_x, start_y, target_color, fill_color, config.connectivity);
+}
+
 }  // namespace atom::algorithm

@@ -50,7 +50,7 @@ int main() {
     std::cout << std::endl;
 
     std::vector<uint32_t> encryptedXXTEAData =
-        xxteaEncrypt(xxteaData, xxteaKey);
+        xxteaEncrypt(xxteaData, std::span<const uint32_t, 4>(xxteaKey.data(), 4));
     std::cout << "Encrypted XXTEA data: ";
     for (const auto& val : encryptedXXTEAData) {
         std::cout << std::hex << val << " ";
@@ -58,7 +58,7 @@ int main() {
     std::cout << std::endl;
 
     std::vector<uint32_t> decryptedXXTEAData =
-        xxteaDecrypt(encryptedXXTEAData, xxteaKey);
+        xxteaDecrypt(encryptedXXTEAData, std::span<const uint32_t, 4>(xxteaKey.data(), 4));
     std::cout << "Decrypted XXTEA data: ";
     for (const auto& val : decryptedXXTEAData) {
         std::cout << std::hex << val << " ";

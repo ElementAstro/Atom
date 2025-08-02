@@ -100,7 +100,7 @@ int main() {
 
     // Change selection strategy to TopHeavySelectionStrategy
     selector.setSelectionStrategy(
-        std::make_unique<TopHeavySelectionStrategy<double>>());
+        std::make_unique<WeightSelector<double>::TopHeavySelectionStrategy>());
     selectedIndex = selector.select();
     std::cout << "Selected index with TopHeavySelectionStrategy: "
               << selectedIndex << std::endl;

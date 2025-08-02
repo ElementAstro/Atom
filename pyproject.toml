@@ -1,12 +1,15 @@
 [build-system]
 requires = [
-    "setuptools>=65",
-    "wheel",
-    "pybind11>=2.10.0",
+    "setuptools>=68.0.0",
+    "wheel>=0.40.0",
+    "pybind11>=2.11.0",
     "cmake>=3.21.0",
     "ninja; platform_system!='Windows'",
+    "scikit-build-core>=0.5.0",
+    "pathspec",
+    "packaging",
 ]
-build-backend = "setuptools.build_meta"
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "atom"
@@ -147,3 +150,122 @@ title = "Atom Python Coverage Report"
 
 [tool.coverage.xml]
 output = "coverage/python/coverage.xml"
+
+# -----------------------------------------------------------------------------
+# Scikit-build-core configuration for optimized C++ extension building
+# -----------------------------------------------------------------------------
+[tool.scikit-build]
+# Minimum CMake version
+cmake.minimum-version = "3.21"
+
+# Build directory
+build-dir = "build/{wheel_tag}"
+
+# CMake configuration
+cmake.args = [
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DATOM_BUILD_PYTHON_BINDINGS=ON",
+    "-DATOM_ENABLE_CCACHE=ON",
+    "-DATOM_ENABLE_LTO=ON",
+    "-DATOM_ENABLE_PRECOMPILED_HEADERS=ON",
+    "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+]
+
+# Platform-specific CMake arguments
+cmake.define = { "CMAKE_OSX_DEPLOYMENT_TARGET" = "10.15" }
+
+# Ninja generator preference
+cmake.build-type = "Release"
+ninja.make-fallback = true
+
+# Parallel build configuration
+cmake.build.parallel = true
+
+# Install configuration
+install.components = ["python"]
+install.strip = false
+
+# Wheel configuration
+wheel.expand-macos-universal-tags = true
+wheel.install-dir = "atom"
+wheel.packages = ["python/atom"]
+
+# Source distribution configuration
+sdist.include = [
+    "atom/**/*.hpp",
+    "atom/**/*.h",
+    "cmake/**/*.cmake",
+    "extra/**/*",
+    "python/**/*.cpp",
+    "python/**/*.hpp",
+    "python/**/*.py",
+    "CMakeLists.txt",
+    "pyproject.toml",
+    "README.md",
+    "LICENSE",
+]
+
+sdist.exclude = [
+    "build/**",
+    "dist/**",
+    "**/__pycache__/**",
+    "**/*.pyc",
+    "**/*.pyo",
+    ".git/**",
+    ".github/**",
+    "docs/**",
+    "tests/**",
+    "example/**",
+]
+
+# Metadata configuration
+metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
+
+# -----------------------------------------------------------------------------
+# Cross-platform wheel building configuration
+# -----------------------------------------------------------------------------
+[tool.cibuildwheel]
+# Build wheels for these Python versions
+build = ["cp39-*", "cp310-*", "cp311-*", "cp312-*"]
+
+# Skip 32-bit builds and PyPy
+skip = ["*-win32", "*-manylinux_i686", "pp*"]
+
+# Build configuration
+build-verbosity = 1
+
+# Environment variables for all platforms
+environment = { CMAKE_BUILD_PARALLEL_LEVEL = "4" }
+
+# Platform-specific configurations
+[tool.cibuildwheel.linux]
+before-all = [
+    "yum install -y cmake3 ninja-build ccache || apt-get update && apt-get install -y cmake ninja-build ccache",
+]
+
+[tool.cibuildwheel.linux.environment]
+CMAKE_BUILD_PARALLEL_LEVEL = "4"
+CCACHE_DIR = "/tmp/ccache"
+CC = "ccache gcc"
+CXX = "ccache g++"
+
+[tool.cibuildwheel.macos]
+before-all = [
+    "brew install cmake ninja ccache",
+]
+
+[tool.cibuildwheel.macos.environment]
+CMAKE_BUILD_PARALLEL_LEVEL = "4"
+CCACHE_DIR = "/tmp/ccache"
+CC = "ccache clang"
+CXX = "ccache clang++"
+MACOSX_DEPLOYMENT_TARGET = "10.15"
+
+[tool.cibuildwheel.windows]
+before-all = [
+    "choco install cmake ninja -y",
+]
+
+[tool.cibuildwheel.windows.environment]
+CMAKE_BUILD_PARALLEL_LEVEL = "4"
+CMAKE_GENERATOR = "Ninja"

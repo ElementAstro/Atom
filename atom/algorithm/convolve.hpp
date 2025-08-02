@@ -127,6 +127,19 @@ template <ConvolutionNumeric T = f64>
     const ConvolutionOptions<T>& options = {},
     std::stop_token stopToken = {}) -> std::future<std::vector<std::vector<T>>>;
 
+// Non-template overloads for f64 (double) type - these are the actual implementations
+[[nodiscard]] auto convolve2D(
+    const std::vector<std::vector<f64>>& input,
+    const std::vector<std::vector<f64>>& kernel,
+    const ConvolutionOptions<f64>& options,
+    std::stop_token stopToken = {}) -> std::future<std::vector<std::vector<f64>>>;
+
+[[nodiscard]] auto deconvolve2D(
+    const std::vector<std::vector<f64>>& signal,
+    const std::vector<std::vector<f64>>& kernel,
+    const ConvolutionOptions<f64>& options,
+    std::stop_token stopToken = {}) -> std::future<std::vector<std::vector<f64>>>;
+
 // Legacy overloads for backward compatibility
 [[nodiscard]] auto convolve2D(
     const std::vector<std::vector<f64>>& input,
@@ -344,6 +357,15 @@ template <ConvolutionNumeric T = f64>
                          usize padRight,
                          PaddingMode mode = PaddingMode::SAME)
     -> std::vector<std::vector<T>>;
+
+// Non-template overload for f64 (double) type
+[[nodiscard]] auto pad2D(const std::vector<std::vector<f64>>& input,
+                         usize padTop,
+                         usize padBottom,
+                         usize padLeft,
+                         usize padRight,
+                         PaddingMode mode = PaddingMode::SAME)
+    -> std::vector<std::vector<f64>>;
 
 /**
  * @brief Get output dimensions after convolution operation

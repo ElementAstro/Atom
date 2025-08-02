@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(atom_async.test)
+project(atom_meta.test)
 
 find_package(GTest QUIET)
 
@@ -23,7 +23,7 @@ file(GLOB_RECURSE TEST_SOURCES ${PROJECT_SOURCE_DIR}/*.cpp)
 if(TEST_SOURCES)
     add_executable(${PROJECT_NAME} ${TEST_SOURCES})
 
-    target_link_libraries(${PROJECT_NAME} gtest gtest_main gmock gmock_main atom-async atom-error loguru)
+    target_link_libraries(${PROJECT_NAME} gtest gtest_main gmock gmock_main atom-meta atom-error loguru)
 
     # Register tests with CTest
     add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})

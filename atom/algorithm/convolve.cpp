@@ -16,10 +16,13 @@ and deconvolution with optional OpenCL support.
 #include "convolve.hpp"
 #include "rust_numeric.hpp"
 
+#include "atom/macro.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <future>
 #include <numbers>
+#include <source_location>
 #include <stop_token>
 #include <thread>
 #include <utility>
@@ -1203,7 +1206,287 @@ auto applyGaussianFilter(const std::vector<std::vector<f64>>& image,
         });
 }
 
-// Since f64 is just double, no template specializations needed
+// Template class implementations
+
+// Convolution1D implementation
+template <ConvolutionNumeric T>
+auto Convolution1D<T>::convolve(const std::vector<T>& signal,
+                               const std::vector<T>& kernel,
+                               PaddingMode paddingMode,
+                               i32 stride,
+                               i32 numThreads) -> std::vector<T> {
+    if (signal.empty() || kernel.empty()) {
+        THROW_CONVOLVE_ERROR("Signal and kernel cannot be empty");
+    }
+
+    const usize signalSize = signal.size();
+    const usize kernelSize = kernel.size();
+
+    // Calculate output size based on padding mode
+    usize outputSize;
+    switch (paddingMode) {
+        case PaddingMode::VALID:
+            outputSize = (signalSize >= kernelSize) ?
+                        (signalSize - kernelSize + 1 + stride - 1) / stride : 0;
+            break;
+        case PaddingMode::SAME:
+            outputSize = (signalSize + stride - 1) / stride;
+            break;
+        case PaddingMode::FULL:
+            outputSize = (signalSize + kernelSize - 1 + stride - 1) / stride;
+            break;
+    }
+
+    if (outputSize == 0) {
+        return {};
+    }
+
+    std::vector<T> result(outputSize, T{});
+
+    // Determine padding
+    i32 padLeft = 0;
+    if (paddingMode == PaddingMode::SAME) {
+        padLeft = static_cast<i32>(kernelSize - 1) / 2;
+    } else if (paddingMode == PaddingMode::FULL) {
+        padLeft = static_cast<i32>(kernelSize - 1);
+    }
+
+    // Perform convolution
+    for (usize i = 0; i < outputSize; ++i) {
+        T sum = T{};
+        i32 signalIndex = static_cast<i32>(i * stride) - padLeft;
+
+        for (usize k = 0; k < kernelSize; ++k) {
+            i32 idx = signalIndex + static_cast<i32>(k);
+            if (idx >= 0 && idx < static_cast<i32>(signalSize)) {
+                sum += signal[static_cast<usize>(idx)] * kernel[kernelSize - 1 - k];
+            }
+        }
+        result[i] = sum;
+    }
+
+    return result;
+}
+
+template <ConvolutionNumeric T>
+auto Convolution1D<T>::deconvolve(const std::vector<T>& signal,
+                                 const std::vector<T>& kernel,
+                                 i32 numIterations) -> std::vector<T> {
+    if (signal.empty() || kernel.empty()) {
+        THROW_CONVOLVE_ERROR("Signal and kernel cannot be empty");
+    }
+
+    // Simple iterative deconvolution using Richardson-Lucy algorithm
+    std::vector<T> estimate = signal;  // Initial estimate
+
+    for (i32 iter = 0; iter < numIterations; ++iter) {
+        auto convolved = convolve(estimate, kernel, PaddingMode::SAME);
+
+        // Update estimate
+        for (usize i = 0; i < estimate.size(); ++i) {
+            if (convolved[i] != T{}) {
+                estimate[i] *= signal[i] / convolved[i];
+            }
+        }
+    }
+
+    return estimate;
+}
+
+// ConvolutionFilters implementation
+template <ConvolutionNumeric T>
+auto ConvolutionFilters<T>::applySobel(const std::vector<std::vector<T>>& image,
+                                      const ConvolutionOptions<T>& options)
+    -> std::vector<std::vector<T>> {
+    if (image.empty() || image[0].empty()) {
+        THROW_CONVOLVE_ERROR("Image cannot be empty");
+    }
+
+    // For now, only support double (f64) type since that's what's implemented
+    if constexpr (std::is_same_v<T, f64>) {
+        // Sobel X kernel
+        std::vector<std::vector<f64>> sobelX = {
+            {-1.0, 0.0, 1.0},
+            {-2.0, 0.0, 2.0},
+            {-1.0, 0.0, 1.0}
+        };
+
+        // Sobel Y kernel
+        std::vector<std::vector<f64>> sobelY = {
+            {-1.0, -2.0, -1.0},
+            {0.0, 0.0, 0.0},
+            {1.0, 2.0, 1.0}
+        };
+
+        // Convert options to f64 version
+        ConvolutionOptions<f64> f64Options;
+        f64Options.paddingMode = options.paddingMode;
+        f64Options.strideX = options.strideX;
+        f64Options.strideY = options.strideY;
+        f64Options.numThreads = options.numThreads;
+        f64Options.useOpenCL = options.useOpenCL;
+        f64Options.useSIMD = options.useSIMD;
+        f64Options.tileSize = options.tileSize;
+
+        // Apply both kernels using the available f64 implementation
+        // Call the non-template version that actually exists
+        auto gradX = convolve2D(image, sobelX, f64Options, {}).get();
+        auto gradY = convolve2D(image, sobelY, f64Options, {}).get();
+
+        // Compute magnitude
+        std::vector<std::vector<T>> result(gradX.size(),
+                                          std::vector<T>(gradX[0].size()));
+
+        for (usize i = 0; i < gradX.size(); ++i) {
+            for (usize j = 0; j < gradX[i].size(); ++j) {
+                result[i][j] = static_cast<T>(std::sqrt(gradX[i][j] * gradX[i][j] +
+                                                       gradY[i][j] * gradY[i][j]));
+            }
+        }
+
+        return result;
+    } else {
+        // For other types, throw an error for now
+        THROW_CONVOLVE_ERROR("Sobel filter is currently only implemented for double type");
+    }
+}
+
+template <ConvolutionNumeric T>
+auto ConvolutionFilters<T>::applyLaplacian(const std::vector<std::vector<T>>& image,
+                                          const ConvolutionOptions<T>& options)
+    -> std::vector<std::vector<T>> {
+    if (image.empty() || image[0].empty()) {
+        THROW_CONVOLVE_ERROR("Image cannot be empty");
+    }
+
+    // For now, only support double (f64) type since that's what's implemented
+    if constexpr (std::is_same_v<T, f64>) {
+        // Laplacian kernel
+        std::vector<std::vector<f64>> laplacian = {
+            {0.0, -1.0, 0.0},
+            {-1.0, 4.0, -1.0},
+            {0.0, -1.0, 0.0}
+        };
+
+        // Convert options to f64 version
+        ConvolutionOptions<f64> f64Options;
+        f64Options.paddingMode = options.paddingMode;
+        f64Options.strideX = options.strideX;
+        f64Options.strideY = options.strideY;
+        f64Options.numThreads = options.numThreads;
+        f64Options.useOpenCL = options.useOpenCL;
+        f64Options.useSIMD = options.useSIMD;
+        f64Options.tileSize = options.tileSize;
+
+        auto result_f64 = convolve2D(image, laplacian, f64Options, {}).get();
+
+        // Convert result back to T type
+        std::vector<std::vector<T>> result(result_f64.size(),
+                                          std::vector<T>(result_f64[0].size()));
+        for (usize i = 0; i < result_f64.size(); ++i) {
+            for (usize j = 0; j < result_f64[i].size(); ++j) {
+                result[i][j] = static_cast<T>(result_f64[i][j]);
+            }
+        }
+
+        return result;
+    } else {
+        // For other types, throw an error for now
+        THROW_CONVOLVE_ERROR("Laplacian filter is currently only implemented for double type");
+    }
+}
+
+// FrequencyDomainConvolution implementation
+template <ConvolutionNumeric T>
+FrequencyDomainConvolution<T>::FrequencyDomainConvolution(usize inputHeight,
+                                                         usize inputWidth,
+                                                         usize kernelHeight,
+                                                         usize kernelWidth) {
+    padded_height_ = inputHeight + kernelHeight - 1;
+    padded_width_ = inputWidth + kernelWidth - 1;
+    frequency_space_buffer_.resize(padded_height_,
+                                  std::vector<std::complex<T>>(padded_width_));
+}
+
+template <ConvolutionNumeric T>
+auto FrequencyDomainConvolution<T>::convolve(const std::vector<std::vector<T>>& input,
+                                            const std::vector<std::vector<T>>& kernel,
+                                            const ConvolutionOptions<T>& options)
+    -> std::vector<std::vector<T>> {
+    if (input.empty() || input[0].empty() || kernel.empty() || kernel[0].empty()) {
+        THROW_CONVOLVE_ERROR("Input and kernel cannot be empty");
+    }
+
+    // For now, only support double (f64) type since that's what's implemented
+    if constexpr (std::is_same_v<T, f64>) {
+        // Convert options to f64 version
+        ConvolutionOptions<f64> f64Options;
+        f64Options.paddingMode = options.paddingMode;
+        f64Options.strideX = options.strideX;
+        f64Options.strideY = options.strideY;
+        f64Options.numThreads = options.numThreads;
+        f64Options.useOpenCL = options.useOpenCL;
+        f64Options.useSIMD = options.useSIMD;
+        f64Options.tileSize = options.tileSize;
+
+        // Fall back to spatial domain convolution using the available f64 implementation
+        return convolve2D(input, kernel, f64Options, {}).get();
+    } else {
+        // For other types, throw an error for now
+        THROW_CONVOLVE_ERROR("FrequencyDomainConvolution is currently only implemented for double type");
+    }
+}
+
+// Explicit template instantiations for common types
+template class Convolution1D<float>;
+template class Convolution1D<double>;
+template class ConvolutionFilters<float>;
+template class ConvolutionFilters<double>;
+template class FrequencyDomainConvolution<float>;
+template class FrequencyDomainConvolution<double>;
+
+// Non-template wrapper functions for common types
+auto pad2D(const std::vector<std::vector<f64>>& input,
+           usize padTop, usize padBottom, usize padLeft, usize padRight,
+           PaddingMode mode) -> std::vector<std::vector<f64>> {
+    // Provide a direct implementation instead of calling the template version
+    if (input.empty() || input[0].empty()) {
+        return {};
+    }
+
+    const usize inputHeight = input.size();
+    const usize inputWidth = input[0].size();
+    const usize outputHeight = inputHeight + padTop + padBottom;
+    const usize outputWidth = inputWidth + padLeft + padRight;
+
+    std::vector<std::vector<f64>> result(outputHeight, std::vector<f64>(outputWidth, 0.0));
+
+    // Copy input to the center of the padded result
+    for (usize i = 0; i < inputHeight; ++i) {
+        for (usize j = 0; j < inputWidth; ++j) {
+            result[i + padTop][j + padLeft] = input[i][j];
+        }
+    }
+
+    // Apply padding mode
+    switch (mode) {
+        case PaddingMode::SAME:
+        case PaddingMode::VALID:
+        case PaddingMode::FULL:
+            // For these modes, zero padding is sufficient (already done above)
+            break;
+    }
+
+    return result;
+}
+
+// Note: Template functions like pad2D need their implementations to be visible
+// at the point of instantiation. The above wrapper provides a non-template interface.
+
+// Note: The template functions convolve2D and deconvolve2D are only implemented for f64 (double)
+// The template class implementations have been updated to work with the available functions
+
+// Since f64 is just double, no additional template specializations needed
 
 }  // namespace atom::algorithm
 

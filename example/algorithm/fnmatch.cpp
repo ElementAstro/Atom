@@ -57,14 +57,16 @@ int main() {
     // Example usage of translate
     {
         std::string pattern = "*.txt";
-        std::string regex;
-
-        bool success = atom::algorithm::translate(pattern, regex);
+        auto result = atom::algorithm::translate(pattern);
 
         std::cout << "\nPattern: " << pattern << std::endl;
-        std::cout << "Translated regex: " << regex << std::endl;
-        std::cout << "Translation successful: " << std::boolalpha << success
-                  << std::endl;
+        if (result.has_value()) {
+            std::cout << "Translated regex: " << result.value() << std::endl;
+            std::cout << "Translation successful: " << std::boolalpha << true
+                      << std::endl;
+        } else {
+            std::cout << "Translation failed with error code: " << static_cast<int>(result.error().error()) << std::endl;
+        }
     }
 
     return 0;

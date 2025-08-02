@@ -503,8 +503,15 @@ atom::algorithm::fnmatch_nothrow<std::string, std::string>(std::string&&,
                                                            int) noexcept;
 template atom::type::expected<std::string, atom::algorithm::FnmatchError>
 atom::algorithm::translate<std::string>(std::string&&, int) noexcept;
+// Add instantiation for lvalue reference
+template atom::type::expected<std::string, atom::algorithm::FnmatchError>
+atom::algorithm::translate<std::string&>(std::string&, int) noexcept;
+
 template bool atom::algorithm::filter<std::vector<std::string>, std::string>(
     const std::vector<std::string>&, std::string&&, int);
+// Add instantiation for lvalue reference
+template bool atom::algorithm::filter<std::vector<std::string>, std::string&>(
+    const std::vector<std::string>&, std::string&, int);
 template std::vector<std::string>
 atom::algorithm::filter<std::vector<std::string>, std::vector<std::string>>(
     const std::vector<std::string>&, const std::vector<std::string>&, int,

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(atom_ioutils.test)
+project(atom_utils.test)
 
 find_package(GTest QUIET)
 

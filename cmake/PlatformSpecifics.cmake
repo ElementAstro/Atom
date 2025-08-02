@@ -101,20 +101,94 @@ if(MINGW OR LOCAL_MSYS2_ENV)
     endif()
 endif()
 
-if(UNIX AND NOT APPLE)
-    # Enable ccache if available, with enhanced error handling and user guidance
+# -----------------------------------------------------------------------------
+# Cross-Platform Compiler Cache Setup
+# -----------------------------------------------------------------------------
+if(ATOM_ENABLE_CCACHE)
+    # Try to find ccache or sccache
     find_program(CCACHE_PROGRAM ccache)
+    find_program(SCCACHE_PROGRAM sccache)
+
+    set(CACHE_PROGRAM "")
     if(CCACHE_PROGRAM)
-        message(STATUS "ccache found: enabling compiler cache support at ${CCACHE_PROGRAM}")
-        set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE_PROGRAM} CACHE STRING "C compiler launcher" FORCE)
-        if(NOT CMAKE_C_COMPILER_LAUNCHER STREQUAL CCACHE_PROGRAM)
-            message(WARNING "Failed to set CMAKE_C_COMPILER_LAUNCHER to ccache. Please check your CMake version and permissions.")
+        set(CACHE_PROGRAM ${CCACHE_PROGRAM})
+        set(CACHE_NAME "ccache")
+    elseif(SCCACHE_PROGRAM)
+        set(CACHE_PROGRAM ${SCCACHE_PROGRAM})
+        set(CACHE_NAME "sccache")
+    endif()
+
+    if(CACHE_PROGRAM)
+        message(STATUS "${CACHE_NAME} found: enabling compiler cache support at ${CACHE_PROGRAM}")
+
+        # Configure cache settings
+        if(CACHE_NAME STREQUAL "ccache")
+            # Set ccache configuration for optimal performance
+            set(ENV{CCACHE_MAXSIZE} "5G")
+            set(ENV{CCACHE_COMPRESS} "1")
+            set(ENV{CCACHE_COMPRESSLEVEL} "6")
+            set(ENV{CCACHE_SLOPPINESS} "file_macro,locale,time_macros")
         endif()
-        set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM} CACHE STRING "CXX compiler launcher" FORCE)
-        if(NOT CMAKE_CXX_COMPILER_LAUNCHER STREQUAL CCACHE_PROGRAM)
-            message(WARNING "Failed to set CMAKE_CXX_COMPILER_LAUNCHER to ccache. Please check your CMake version and permissions.")
+
+        set(CMAKE_C_COMPILER_LAUNCHER ${CACHE_PROGRAM} CACHE STRING "C compiler launcher" FORCE)
+        set(CMAKE_CXX_COMPILER_LAUNCHER ${CACHE_PROGRAM} CACHE STRING "CXX compiler launcher" FORCE)
+
+        # Verify the setup worked
+        if(NOT CMAKE_C_COMPILER_LAUNCHER STREQUAL CACHE_PROGRAM)
+            message(WARNING "Failed to set CMAKE_C_COMPILER_LAUNCHER to ${CACHE_NAME}. Please check your CMake version and permissions.")
+        endif()
+        if(NOT CMAKE_CXX_COMPILER_LAUNCHER STREQUAL CACHE_PROGRAM)
+            message(WARNING "Failed to set CMAKE_CXX_COMPILER_LAUNCHER to ${CACHE_NAME}. Please check your CMake version and permissions.")
         endif()
     else()
-        message(WARNING "ccache not found: compiler cache support disabled.\nRecommendation: On Linux, you can install ccache via package manager, e.g.: sudo apt install ccache or sudo yum install ccache")
+        message(WARNING "No compiler cache found (ccache/sccache): compilation caching disabled.")
+        if(UNIX AND NOT APPLE)
+            message(STATUS "Recommendation: Install ccache via package manager, e.g.: sudo apt install ccache or sudo yum install ccache")
+        elseif(APPLE)
+            message(STATUS "Recommendation: Install ccache via Homebrew: brew install ccache")
+        elseif(WIN32)
+            message(STATUS "Recommendation: Install sccache from https://github.com/mozilla/sccache/releases")
+        endif()
+    endif()
+endif()
+
+# -----------------------------------------------------------------------------
+# Platform-Specific Optimizations
+# -----------------------------------------------------------------------------
+if(UNIX AND NOT APPLE)
+    # Linux-specific optimizations
+    add_compile_definitions(PLATFORM_LINUX)
+
+    # Enable GNU-specific optimizations
+    if(CMAKE_COMPILER_IS_GNUCXX)
+        add_compile_options(-fstack-protector-strong)
+        if(CMAKE_BUILD_TYPE STREQUAL "Release")
+            add_compile_options(-march=native -mtune=native)
+        endif()
+    endif()
+
+elseif(APPLE)
+    # macOS-specific optimizations
+    add_compile_definitions(PLATFORM_MACOS)
+
+    # Set minimum macOS version for better compatibility
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum macOS deployment target")
+
+    # Use libc++ on macOS
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+
+elseif(WIN32)
+    # Windows-specific optimizations
+    add_compile_definitions(PLATFORM_WINDOWS)
+    add_compile_definitions(_WIN32_WINNT=0x0A00) # Windows 10
+    add_compile_definitions(NOMINMAX) # Prevent min/max macro conflicts
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+
+    # Enable parallel compilation on MSVC
+    if(MSVC)
+        add_compile_options(/MP)
+        # Use faster PDB generation
+        add_compile_options(/Zi)
+        add_link_options(/DEBUG:FASTLINK)
     endif()
 endif()
