@@ -481,5 +481,3 @@ TEST_F(TEATest, RandomData) {
         expectEqualVectors(decrypted_parallel, data);
     }
 }
-
-

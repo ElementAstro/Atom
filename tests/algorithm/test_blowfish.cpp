@@ -486,5 +486,3 @@ TEST_F(BlowfishTest, ParallelEncryption) {
     // Verify decryption worked
     EXPECT_EQ(large_data, copy);
 }
-
-
