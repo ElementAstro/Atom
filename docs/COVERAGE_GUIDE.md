@@ -96,6 +96,24 @@ Comprehensive C++ coverage analysis with multiple options.
 ### 4. Coverage Badge Generator (`scripts/coverage_badge.py`)
 Generates coverage badges for README and documentation.
 
+**Cross-platform usage:**
+
+```bash
+# Unix/Linux/macOS
+python scripts/coverage_badge.py
+
+# Windows Command Prompt
+python scripts\coverage_badge.py
+# or use the batch wrapper
+scripts\coverage_badge.bat
+
+# Windows PowerShell
+.\scripts\coverage_badge.ps1
+# or
+python scripts\coverage_badge.py
+```
+
+**Options:**
 ```bash
 # Update README with coverage badges
 python scripts/coverage_badge.py
@@ -105,6 +123,9 @@ python scripts/coverage_badge.py --output markdown
 
 # Generate badge URLs
 python scripts/coverage_badge.py --output urls
+
+# Windows-specific paths
+python scripts/coverage_badge.py --coverage-file coverage\unified\coverage.json
 ```
 
 ## Build System Integration
@@ -315,6 +336,46 @@ if TYPE_CHECKING:  # pragma: no cover
     # Type checking imports
     from typing import Optional
 ```
+
+## Platform-Specific Considerations
+
+### Windows Support
+
+The coverage system fully supports Windows with the following considerations:
+
+#### Path Handling
+- Use backslashes (`\`) or forward slashes (`/`) in paths
+- The system automatically normalizes paths for the current platform
+- Batch and PowerShell wrappers handle path conversion
+
+#### Encoding
+- All files are read/written with UTF-8 encoding
+- Console output uses UTF-8 for proper Unicode display
+- Line endings are automatically converted (CRLF on Windows, LF on Unix)
+
+#### Execution Methods
+```cmd
+REM Command Prompt
+python scripts\coverage_badge.py
+scripts\coverage_badge.bat
+
+REM PowerShell
+.\scripts\coverage_badge.ps1
+python scripts\coverage_badge.py
+```
+
+#### Common Windows Issues
+- **Permission errors**: Run as administrator or close files in editors
+- **Unicode display**: Use Windows Terminal or Git Bash for better Unicode support
+- **Path issues**: Use quotes around paths with spaces
+- **Python not found**: Install from python.org or Microsoft Store
+
+### macOS/Linux Support
+
+Standard Unix behavior with additional features:
+- Native path handling with forward slashes
+- Full Unicode terminal support
+- Standard shell script execution
 
 ## Troubleshooting
 
