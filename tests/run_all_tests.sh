@@ -24,7 +24,7 @@ PARALLEL_JOBS=$(nproc)
 # Test modules
 TEST_MODULES=(
     "algorithm"
-    "async" 
+    "async"
     "components"
     "connection"
     "error"
@@ -75,61 +75,61 @@ command_exists() {
 # Function to check dependencies
 check_dependencies() {
     print_header "Checking Dependencies"
-    
+
     local missing_deps=()
-    
+
     if ! command_exists cmake; then
         missing_deps+=("cmake")
     fi
-    
+
     if ! command_exists make; then
         missing_deps+=("make")
     fi
-    
+
     if ! command_exists g++; then
         missing_deps+=("g++")
     fi
-    
+
     if [ ${#missing_deps[@]} -ne 0 ]; then
         print_error "Missing dependencies: ${missing_deps[*]}"
         print_error "Please install the missing dependencies and try again."
         exit 1
     fi
-    
+
     print_success "All dependencies are available"
 }
 
 # Function to configure build
 configure_build() {
     print_header "Configuring Build"
-    
+
     cd "$PROJECT_ROOT"
-    
+
     # Create build directory if it doesn't exist
     mkdir -p "$BUILD_DIR"
-    
+
     # Configure with CMake
     print_status "Running CMake configuration..."
     cmake -B "$BUILD_DIR" \
           -DCMAKE_BUILD_TYPE=Release \
           -DATOM_ENABLE_TESTING=ON \
           -DATOM_TEST_BUILD_ALL=ON
-    
+
     print_success "Build configured successfully"
 }
 
 # Function to build tests
 build_tests() {
     print_header "Building Tests"
-    
+
     cd "$BUILD_DIR"
-    
+
     print_status "Building all test modules with $PARALLEL_JOBS parallel jobs..."
     make -j"$PARALLEL_JOBS" || {
         print_error "Build failed"
         return 1
     }
-    
+
     print_success "All tests built successfully"
 }
 
@@ -137,9 +137,9 @@ build_tests() {
 run_test_module() {
     local module="$1"
     local test_executable="${TEST_BUILD_DIR}/atom_${module}.test"
-    
+
     print_status "Running $module tests..."
-    
+
     if [ -f "$test_executable" ]; then
         if "$test_executable"; then
             print_success "$module tests passed"
@@ -157,11 +157,11 @@ run_test_module() {
 # Function to run all tests
 run_all_tests() {
     print_header "Running All Tests"
-    
+
     local failed_modules=()
     local passed_modules=()
     local skipped_modules=()
-    
+
     for module in "${TEST_MODULES[@]}"; do
         if run_test_module "$module"; then
             if [ -f "${TEST_BUILD_DIR}/atom_${module}.test" ]; then
@@ -173,21 +173,21 @@ run_all_tests() {
             failed_modules+=("$module")
         fi
     done
-    
+
     # Print summary
     print_header "Test Summary"
-    
+
     echo -e "${GREEN}Passed modules (${#passed_modules[@]}):${NC} ${passed_modules[*]}"
-    
+
     if [ ${#skipped_modules[@]} -ne 0 ]; then
         echo -e "${YELLOW}Skipped modules (${#skipped_modules[@]}):${NC} ${skipped_modules[*]}"
     fi
-    
+
     if [ ${#failed_modules[@]} -ne 0 ]; then
         echo -e "${RED}Failed modules (${#failed_modules[@]}):${NC} ${failed_modules[*]}"
         return 1
     fi
-    
+
     print_success "All available tests passed!"
     return 0
 }
@@ -195,9 +195,9 @@ run_all_tests() {
 # Function to run with CTest
 run_ctest() {
     print_header "Running Tests with CTest"
-    
+
     cd "$BUILD_DIR"
-    
+
     print_status "Running CTest..."
     if ctest --output-on-failure --parallel "$PARALLEL_JOBS"; then
         print_success "All CTest tests passed"
@@ -235,7 +235,7 @@ main() {
     local run_only=false
     local use_ctest=false
     local specific_module=""
-    
+
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -270,12 +270,12 @@ main() {
                 ;;
         esac
     done
-    
+
     print_header "Atom Test Runner"
-    
+
     # Check dependencies first
     check_dependencies
-    
+
     # Execute based on options
     if [ "$configure_only" = true ]; then
         configure_build
@@ -294,7 +294,7 @@ main() {
         # Default: configure, build, and run
         configure_build
         build_tests
-        
+
         if [ -n "$specific_module" ]; then
             run_test_module "$specific_module"
         elif [ "$use_ctest" = true ]; then

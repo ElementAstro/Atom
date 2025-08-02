@@ -22,7 +22,7 @@ function(detect_system_capabilities)
     else()
         set(ATOM_CPU_CORES 4 PARENT_SCOPE) # Default fallback
     endif()
-    
+
     # Detect available memory (Linux/macOS)
     if(UNIX)
         if(APPLE)
@@ -56,7 +56,7 @@ function(detect_system_capabilities)
         # Windows - use default
         set(ATOM_MEMORY_GB 8 PARENT_SCOPE)
     endif()
-    
+
     message(STATUS "Detected system: ${ATOM_CPU_CORES} CPU cores, ${ATOM_MEMORY_GB}GB RAM")
 endfunction()
 
@@ -65,39 +65,39 @@ endfunction()
 # -----------------------------------------------------------------------------
 function(optimize_parallel_build)
     detect_system_capabilities()
-    
+
     # Calculate optimal parallel jobs
     # Consider both CPU and memory constraints
     math(EXPR MEMORY_LIMITED_JOBS "${ATOM_MEMORY_GB} / 2") # 2GB per job
     set(CPU_LIMITED_JOBS ${ATOM_CPU_CORES})
-    
+
     # Use the more conservative limit
     if(MEMORY_LIMITED_JOBS LESS CPU_LIMITED_JOBS)
         set(OPTIMAL_JOBS ${MEMORY_LIMITED_JOBS})
     else()
         set(OPTIMAL_JOBS ${CPU_LIMITED_JOBS})
     endif()
-    
+
     # Ensure at least 1 job and at most 16 jobs
     if(OPTIMAL_JOBS LESS 1)
         set(OPTIMAL_JOBS 1)
     elseif(OPTIMAL_JOBS GREATER 16)
         set(OPTIMAL_JOBS 16)
     endif()
-    
+
     # Set parallel build options
     if(CMAKE_GENERATOR MATCHES "Ninja")
         # Ninja handles parallelism automatically, but we can set a limit
         set(CMAKE_JOB_POOL_COMPILE compile_pool)
         set(CMAKE_JOB_POOL_LINK link_pool)
-        set_property(GLOBAL PROPERTY JOB_POOLS 
-            compile_pool=${OPTIMAL_JOBS} 
+        set_property(GLOBAL PROPERTY JOB_POOLS
+            compile_pool=${OPTIMAL_JOBS}
             link_pool=2) # Limit link jobs to prevent memory issues
     elseif(CMAKE_GENERATOR MATCHES "Make")
         # For Make, set MAKEFLAGS
         set(ENV{MAKEFLAGS} "-j${OPTIMAL_JOBS}")
     endif()
-    
+
     message(STATUS "Optimized for ${OPTIMAL_JOBS} parallel jobs")
     set(ATOM_PARALLEL_JOBS ${OPTIMAL_JOBS} PARENT_SCOPE)
 endfunction()
@@ -108,13 +108,13 @@ endfunction()
 function(apply_compiler_optimizations)
     # Check for compiler-specific optimization flags
     set(OPTIMIZATION_FLAGS "")
-    
+
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
         # GCC-specific optimizations
         check_cxx_compiler_flag(-ffast-math HAS_FAST_MATH)
         check_cxx_compiler_flag(-funroll-loops HAS_UNROLL_LOOPS)
         check_cxx_compiler_flag(-fomit-frame-pointer HAS_OMIT_FRAME_POINTER)
-        
+
         if(CMAKE_BUILD_TYPE STREQUAL "Release")
             if(HAS_FAST_MATH)
                 list(APPEND OPTIMIZATION_FLAGS -ffast-math)
@@ -126,12 +126,12 @@ function(apply_compiler_optimizations)
                 list(APPEND OPTIMIZATION_FLAGS -fomit-frame-pointer)
             endif()
         endif()
-        
+
     elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         # Clang-specific optimizations
         check_cxx_compiler_flag(-ffast-math HAS_FAST_MATH)
         check_cxx_compiler_flag(-funroll-loops HAS_UNROLL_LOOPS)
-        
+
         if(CMAKE_BUILD_TYPE STREQUAL "Release")
             if(HAS_FAST_MATH)
                 list(APPEND OPTIMIZATION_FLAGS -ffast-math)
@@ -140,14 +140,14 @@ function(apply_compiler_optimizations)
                 list(APPEND OPTIMIZATION_FLAGS -funroll-loops)
             endif()
         endif()
-        
+
     elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         # MSVC-specific optimizations
         if(CMAKE_BUILD_TYPE STREQUAL "Release")
             list(APPEND OPTIMIZATION_FLAGS /Ox /Ob2 /Oi /Ot /Oy /GL)
         endif()
     endif()
-    
+
     if(OPTIMIZATION_FLAGS)
         add_compile_options(${OPTIMIZATION_FLAGS})
         message(STATUS "Applied compiler optimizations: ${OPTIMIZATION_FLAGS}")
@@ -186,7 +186,7 @@ function(setup_precompiled_headers TARGET_NAME)
             <chrono>
             <filesystem>
         )
-        
+
         target_precompile_headers(${TARGET_NAME} PRIVATE ${PCH_HEADERS})
         message(STATUS "Precompiled headers configured for ${TARGET_NAME}")
     endif()
@@ -200,15 +200,15 @@ function(configure_build_cache)
     if(NOT DEFINED CMAKE_CACHE_DIR)
         set(CMAKE_CACHE_DIR "${CMAKE_BINARY_DIR}/.cache" CACHE PATH "Build cache directory")
     endif()
-    
+
     # Create cache directory
     file(MAKE_DIRECTORY ${CMAKE_CACHE_DIR})
-    
+
     # Set cache-related variables
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CACHE_DIR}/lib)
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CACHE_DIR}/lib)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CACHE_DIR}/bin)
-    
+
     message(STATUS "Build cache configured at ${CMAKE_CACHE_DIR}")
 endfunction()
 
@@ -217,16 +217,16 @@ endfunction()
 # -----------------------------------------------------------------------------
 function(setup_build_optimizations)
     message(STATUS "Setting up build optimizations...")
-    
+
     # Apply system-specific optimizations
     optimize_parallel_build()
-    
+
     # Apply compiler optimizations
     apply_compiler_optimizations()
-    
+
     # Configure build cache
     configure_build_cache()
-    
+
     message(STATUS "Build optimizations configured successfully")
 endfunction()
 
@@ -236,15 +236,15 @@ endfunction()
 function(optimize_target TARGET_NAME)
     # Apply unity build if enabled
     configure_unity_build(${TARGET_NAME})
-    
+
     # Setup precompiled headers if enabled
     setup_precompiled_headers(${TARGET_NAME})
-    
+
     # Set target-specific properties for better performance
     set_target_properties(${TARGET_NAME} PROPERTIES
         CXX_VISIBILITY_PRESET hidden
         VISIBILITY_INLINES_HIDDEN ON
     )
-    
+
     message(STATUS "Target optimizations applied to ${TARGET_NAME}")
 endfunction()

@@ -25,8 +25,8 @@ if(TEST_SOURCES)
     add_executable(${PROJECT_NAME} ${TEST_SOURCES})
 
     # Link with common libraries and external dependencies
-    target_link_libraries(${PROJECT_NAME} 
-        gtest gtest_main gmock gmock_main 
+    target_link_libraries(${PROJECT_NAME}
+        gtest gtest_main gmock gmock_main
         atom-error loguru
     )
 
