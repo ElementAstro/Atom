@@ -247,8 +247,11 @@ public:
      */
     [[nodiscard]] auto find(const String& str, size_t pos = 0) const noexcept
         -> size_t {
-        if (pos >= m_data_.length() || str.empty()) {
+        if (pos > m_data_.length()) {
             return NPOS;
+        }
+        if (str.empty()) {
+            return pos;  // Empty string is found at the starting position
         }
         return m_data_.find(str.m_data_, pos);
     }

@@ -297,6 +297,11 @@ public:
     SimulatedAnnealing& operator=(SimulatedAnnealing&& other) noexcept;
 
     /**
+     * @brief Destructor - ensures proper cleanup of resources.
+     */
+    ~SimulatedAnnealing() = default;
+
+    /**
      * @brief Sets the cooling schedule based on the specified strategy.
      * @param strategy The annealing strategy to use.
      */
@@ -638,17 +643,17 @@ template <typename ProblemType, typename SolutionType>
     requires AnnealingProblem<ProblemType, SolutionType>
 auto SimulatedAnnealing<ProblemType, SolutionType>::optimize(int numThreads)
     -> SolutionType {
+    spdlog::info("Starting optimization with {} threads.", numThreads);
+    if (numThreads < 1) {
+        spdlog::warn("Invalid number of threads ({}). Defaulting to 1.",
+                     numThreads);
+        numThreads = 1;
+    }
+
+    std::vector<std::jthread> threads;
+    threads.reserve(numThreads);
+
     try {
-        spdlog::info("Starting optimization with {} threads.", numThreads);
-        if (numThreads < 1) {
-            spdlog::warn("Invalid number of threads ({}). Defaulting to 1.",
-                         numThreads);
-            numThreads = 1;
-        }
-
-        std::vector<std::jthread> threads;
-        threads.reserve(numThreads);
-
         std::random_device rd;  // Use a single random_device for seeding
         for (int threadIndex = 0; threadIndex < numThreads; ++threadIndex) {
             // Generate a unique seed for each thread
@@ -658,16 +663,51 @@ auto SimulatedAnnealing<ProblemType, SolutionType>::optimize(int numThreads)
                                 .time_since_epoch()
                                 .count()) +
                         threadIndex);
-            threads.emplace_back([this, seed]() { optimizeThread(seed); });
+            // Use explicit capture to avoid potential issues with 'this' pointer
+            threads.emplace_back([this, seed]() {
+                try {
+                    optimizeThread(seed);
+                } catch (const std::exception& e) {
+                    spdlog::error("Exception in thread: {}", e.what());
+                } catch (...) {
+                    spdlog::error("Unknown exception in thread");
+                }
+            });
             spdlog::info("Launched optimization thread {}.", threadIndex + 1);
         }
 
+        // Wait for all threads to complete
+        for (auto& thread : threads) {
+            if (thread.joinable()) {
+                thread.join();
+            }
+        }
+
+        // Reset the stop flag for potential future use
+        should_stop_.store(false);
+
     } catch (const std::exception& e) {
         spdlog::error("Exception in optimize: {}", e.what());
+
+        // Signal all threads to stop and ensure proper cleanup
+        should_stop_.store(true);
+
+        // Ensure all threads are properly joined even in case of exception
+        for (auto& thread : threads) {
+            if (thread.joinable()) {
+                thread.join();
+            }
+        }
+
+        // Reset the stop flag
+        should_stop_.store(false);
         throw;
     }
 
     spdlog::info("Optimization completed with best energy: {}", best_energy_);
+
+    // Return a copy of the best solution with proper locking
+    std::lock_guard lock(best_mutex_);
     return best_solution_;
 }
 

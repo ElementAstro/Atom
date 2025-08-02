@@ -396,13 +396,23 @@ TEST(PodVectorGrowthFactorTest, CustomGrowthFactor) {
     // 默认增长因子为 2
     PodVector<int> default_vec;
     int default_initial = default_vec.capacity();
-    default_vec.reserve(default_initial + 1);  // 触发增长
+
+    // 填满初始容量，然后再添加一个元素触发增长
+    for (int i = 0; i < default_initial; ++i) {
+        default_vec.pushBack(i);
+    }
+    default_vec.pushBack(default_initial);  // 触发增长
     EXPECT_GE(default_vec.capacity(), default_initial * 2);
 
     // 增长因子为 3
     PodVector<int, 3> custom_vec;
     int custom_initial = custom_vec.capacity();
-    custom_vec.reserve(custom_initial + 1);  // 触发增长
+
+    // 填满初始容量，然后再添加一个元素触发增长
+    for (int i = 0; i < custom_initial; ++i) {
+        custom_vec.pushBack(i);
+    }
+    custom_vec.pushBack(custom_initial);  // 触发增长
     EXPECT_GE(custom_vec.capacity(), custom_initial * 3);
 }
 

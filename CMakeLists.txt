@@ -23,6 +23,7 @@ include(cmake/module_dependencies.cmake)
 include(cmake/ExamplesBuildOptions.cmake)
 include(cmake/TestsBuildOptions.cmake)
 include(cmake/ScanModule.cmake)
+include(cmake/CoverageConfig.cmake)
 
 # -----------------------------------------------------------------------------
 # Options
@@ -35,6 +36,8 @@ option(ATOM_BUILD_TESTS "Build tests" ON)
 option(ATOM_BUILD_TESTS_SELECTIVE "Enable selective building of test modules" OFF)
 option(ATOM_BUILD_PYTHON_BINDINGS "Build Python bindings" OFF)
 option(ATOM_BUILD_DOCS "Build documentation" OFF)
+option(ATOM_ENABLE_COVERAGE "Enable code coverage analysis" OFF)
+option(ATOM_COVERAGE_HTML "Generate HTML coverage reports" ON)
 option(ATOM_USE_BOOST "Enable Boost high-performance data structures" OFF)
 option(ATOM_USE_BOOST_LOCKFREE "Enable Boost lock-free data structures" OFF)
 option(ATOM_USE_BOOST_CONTAINER "Enable Boost container library" OFF)
@@ -198,6 +201,11 @@ if(CMAKE_GENERATOR STREQUAL "Ninja" OR CMAKE_GENERATOR MATCHES "Ninja")
 endif()
 
 # -----------------------------------------------------------------------------
+# Coverage Configuration
+# -----------------------------------------------------------------------------
+setup_coverage_reporting()
+
+# -----------------------------------------------------------------------------
 # Subdirectories
 # -----------------------------------------------------------------------------
 add_subdirectory(atom)
@@ -212,6 +220,100 @@ if(ATOM_BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)
 endif()
+
+# -----------------------------------------------------------------------------
+# Coverage Targets
+# -----------------------------------------------------------------------------
+if(ATOM_ENABLE_COVERAGE AND LCOV_PROGRAM AND GENHTML_PROGRAM)
+  # Create coverage output directory
+  set(COVERAGE_OUTPUT_DIR "${CMAKE_BINARY_DIR}/coverage")
+  file(MAKE_DIRECTORY ${COVERAGE_OUTPUT_DIR})
+
+  # Coverage data files
+  set(COVERAGE_INFO_FILE "${COVERAGE_OUTPUT_DIR}/coverage.info")
+  set(COVERAGE_CLEANED_FILE "${COVERAGE_OUTPUT_DIR}/coverage_cleaned.info")
+  set(COVERAGE_HTML_DIR "${COVERAGE_OUTPUT_DIR}/html")
+
+  # Reset coverage counters
+  add_custom_target(coverage-reset
+    COMMAND ${LCOV_PROGRAM} --directory . --zerocounters
+    COMMENT "Resetting coverage counters"
+  )
+
+  # Generate coverage data
+  add_custom_target(coverage-capture
+    COMMAND ${LCOV_PROGRAM} --directory . --capture --output-file ${COVERAGE_INFO_FILE}
+    COMMAND ${LCOV_PROGRAM} --remove ${COVERAGE_INFO_FILE}
+      '/usr/*'
+      '*/tests/*'
+      '*/test/*'
+      '*/example/*'
+      '*/examples/*'
+      '*/third_party/*'
+      '*/external/*'
+      '*/build/*'
+      '*/_deps/*'
+      --output-file ${COVERAGE_CLEANED_FILE}
+    DEPENDS coverage-reset
+    COMMENT "Capturing coverage data"
+  )
+
+  # Generate HTML coverage report
+  add_custom_target(coverage-html
+    COMMAND ${GENHTML_PROGRAM} ${COVERAGE_CLEANED_FILE}
+      --output-directory ${COVERAGE_HTML_DIR}
+      --title "Atom Coverage Report"
+      --show-details
+      --legend
+      --demangle-cpp
+    DEPENDS coverage-capture
+    COMMENT "Generating HTML coverage report in ${COVERAGE_HTML_DIR}"
+  )
+
+  # Main coverage target that runs tests and generates report
+  add_custom_target(coverage
+    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+    DEPENDS coverage-html
+    COMMENT "Running tests and generating coverage report"
+  )
+
+  # Coverage target for individual modules
+  foreach(MODULE algorithm async components connection error image io log memory meta search secret serial sysinfo system type utils web)
+    string(TOUPPER ${MODULE} MODULE_UPPER)
+    if(ATOM_BUILD_${MODULE_UPPER})
+      add_custom_target(coverage-${MODULE}
+        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -R ".*${MODULE}.*"
+        COMMAND ${LCOV_PROGRAM} --directory . --capture --output-file ${COVERAGE_OUTPUT_DIR}/${MODULE}_coverage.info
+        COMMAND ${LCOV_PROGRAM} --remove ${COVERAGE_OUTPUT_DIR}/${MODULE}_coverage.info
+          '/usr/*'
+          '*/tests/*'
+          '*/test/*'
+          '*/example/*'
+          '*/examples/*'
+          '*/third_party/*'
+          '*/external/*'
+          '*/build/*'
+          '*/_deps/*'
+          --output-file ${COVERAGE_OUTPUT_DIR}/${MODULE}_coverage_cleaned.info
+        COMMAND ${GENHTML_PROGRAM} ${COVERAGE_OUTPUT_DIR}/${MODULE}_coverage_cleaned.info
+          --output-directory ${COVERAGE_OUTPUT_DIR}/${MODULE}_html
+          --title "Atom ${MODULE} Coverage Report"
+          --show-details
+          --legend
+          --demangle-cpp
+        DEPENDS coverage-reset
+        COMMENT "Generating coverage report for ${MODULE} module"
+      )
+    endif()
+  endforeach()
+
+  message(STATUS "Coverage targets added: coverage, coverage-reset, coverage-capture, coverage-html")
+  message(STATUS "Module-specific coverage targets: coverage-<module>")
+  message(STATUS "Coverage reports will be generated in: ${COVERAGE_HTML_DIR}")
+endif()
+
+# Print coverage configuration summary
+print_coverage_info()
 
 # Secret module tests are handled by the regular tests directory structure
 

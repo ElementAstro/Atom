@@ -300,7 +300,12 @@
                 "_common-debug-config",
                 "_features-config",
                 "_coverage-config"
-            ]
+            ],
+            "cacheVariables": {
+                "ATOM_ENABLE_COVERAGE": "ON",
+                "ATOM_COVERAGE_HTML": "ON",
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
         },
         {
             "name": "minimal",

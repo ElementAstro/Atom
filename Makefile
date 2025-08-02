@@ -124,10 +124,50 @@ endif
 
 ## Run tests with coverage analysis
 test-coverage:
-	@$(MAKE) build BUILD_TYPE=Debug CMAKE_ARGS="-DCMAKE_CXX_FLAGS=--coverage"
-	@$(MAKE) test
+	@echo "$(GREEN)Building with coverage enabled...$(NC)"
+	@$(MAKE) build BUILD_TYPE=Debug CMAKE_ARGS="-DATOM_ENABLE_COVERAGE=ON"
+	@echo "$(GREEN)Running tests and generating coverage report...$(NC)"
+	@cd $(BUILD_DIR) && $(MAKE) coverage
+	@echo "$(GREEN)Coverage report generated in $(BUILD_DIR)/coverage/html/index.html$(NC)"
+
+## Generate coverage report without running tests
+coverage-report:
 	@echo "$(GREEN)Generating coverage report...$(NC)"
-	@which gcov >/dev/null && find $(BUILD_DIR) -name "*.gcno" -exec gcov {} \; || echo "$(YELLOW)gcov not found$(NC)"
+	@cd $(BUILD_DIR) && $(MAKE) coverage-capture coverage-html
+	@echo "$(GREEN)Coverage report generated in $(BUILD_DIR)/coverage/html/index.html$(NC)"
+
+## Reset coverage counters
+coverage-reset:
+	@echo "$(GREEN)Resetting coverage counters...$(NC)"
+	@cd $(BUILD_DIR) && $(MAKE) coverage-reset
+
+## Generate coverage for specific module (usage: make coverage-module MODULE=algorithm)
+coverage-module:
+	@if [ -z "$(MODULE)" ]; then \
+		echo "$(RED)Error: MODULE parameter is required. Usage: make coverage-module MODULE=algorithm$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)Generating coverage for $(MODULE) module...$(NC)"
+	@cd $(BUILD_DIR) && $(MAKE) coverage-$(MODULE)
+	@echo "$(GREEN)Coverage report for $(MODULE) generated in $(BUILD_DIR)/coverage/$(MODULE)_html/index.html$(NC)"
+
+## Generate unified coverage report (C++ and Python)
+coverage-unified:
+	@echo "$(GREEN)Generating unified coverage report...$(NC)"
+	@python scripts/unified_coverage.py
+	@echo "$(GREEN)Unified coverage report generated in coverage/unified/index.html$(NC)"
+
+## Generate unified coverage report and open in browser
+coverage-unified-open:
+	@echo "$(GREEN)Generating unified coverage report...$(NC)"
+	@python scripts/unified_coverage.py --open
+	@echo "$(GREEN)Unified coverage report opened in browser$(NC)"
+
+## Python-only coverage
+coverage-python:
+	@echo "$(GREEN)Generating Python coverage report...$(NC)"
+	@python scripts/python_coverage.py
+	@echo "$(GREEN)Python coverage report generated in coverage/python/html/index.html$(NC)"
 
 ## Install the project
 install: build

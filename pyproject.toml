@@ -85,21 +85,65 @@ disallow_untyped_defs = true
 
 [tool.pytest.ini_options]
 minversion = "7.0"
-addopts = "-ra -q --strict-markers"
+addopts = [
+    "-ra",
+    "-q",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=atom",
+    "--cov-report=html:coverage/python/html",
+    "--cov-report=xml:coverage/python/coverage.xml",
+    "--cov-report=term-missing",
+    "--cov-branch",
+    "--cov-fail-under=75"
+]
 testpaths = ["tests", "python/tests"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
+    "benchmark: marks tests as performance benchmarks",
+    "unit: marks tests as unit tests",
+    "functional: marks tests as functional tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
 ]
 
 [tool.coverage.run]
-source = ["atom"]
-omit = ["*/tests/*"]
+source = ["atom", "python"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+    "*/build/*",
+    "*/dist/*",
+    "*/.venv/*",
+    "*/venv/*",
+    "*/env/*",
+]
+branch = true
+data_file = "coverage/python/.coverage"
 
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
+    "def __str__",
     "raise AssertionError",
     "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
 ]
+show_missing = true
+skip_covered = false
+precision = 2
+
+[tool.coverage.html]
+directory = "coverage/python/html"
+title = "Atom Python Coverage Report"
+
+[tool.coverage.xml]
+output = "coverage/python/coverage.xml"

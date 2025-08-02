@@ -893,12 +893,20 @@ TTYBase& TTYBase::operator=(TTYBase&& other) noexcept = default;
 
 TTYBase::TTYResponse TTYBase::read(std::span<uint8_t> buffer, uint8_t timeout,
                                    uint32_t& nbytesRead) {
+    if (!m_pImpl) {
+        nbytesRead = 0;
+        return TTYResponse::Errno;  // Object has been moved
+    }
     return m_pImpl->read(buffer, timeout, nbytesRead);
 }
 
 TTYBase::TTYResponse TTYBase::readSection(std::span<uint8_t> buffer,
                                           uint8_t stopByte, uint8_t timeout,
                                           uint32_t& nbytesRead) {
+    if (!m_pImpl) {
+        nbytesRead = 0;
+        return TTYResponse::Errno;  // Object has been moved
+    }
     return m_pImpl->readSection(buffer, stopByte, timeout, nbytesRead);
 }
 
@@ -936,22 +944,46 @@ std::future<std::pair<TTYBase::TTYResponse, uint32_t>> TTYBase::writeAsync(
 TTYBase::TTYResponse TTYBase::connect(std::string_view device, uint32_t bitRate,
                                       uint8_t wordSize, uint8_t parity,
                                       uint8_t stopBits) {
+    if (!m_pImpl) {
+        return TTYResponse::Errno;  // Object has been moved
+    }
     return m_pImpl->connect(device, bitRate, wordSize, parity, stopBits);
 }
 
 TTYBase::TTYResponse TTYBase::disconnect() noexcept {
+    if (!m_pImpl) {
+        return TTYResponse::OK;  // Already disconnected (moved-from object)
+    }
     return m_pImpl->disconnect();
 }
 
-void TTYBase::setDebug(bool enabled) noexcept { m_pImpl->setDebug(enabled); }
+void TTYBase::setDebug(bool enabled) noexcept {
+    if (!m_pImpl) {
+        return;  // No-op for moved-from object
+    }
+    m_pImpl->setDebug(enabled);
+}
 
 std::string TTYBase::getErrorMessage(TTYResponse code) const noexcept {
+    if (!m_pImpl) {
+        return "Object has been moved";
+    }
     return m_pImpl->getErrorMessage(code);
 }
 
-int TTYBase::getPortFD() const noexcept { return m_pImpl->getPortFD(); }
+int TTYBase::getPortFD() const noexcept {
+    if (!m_pImpl) {
+        return -1;  // Default value for moved-from object
+    }
+    return m_pImpl->getPortFD();
+}
 
-bool TTYBase::isConnected() const noexcept { return m_pImpl->isConnected(); }
+bool TTYBase::isConnected() const noexcept {
+    if (!m_pImpl) {
+        return false;  // Default value for moved-from object
+    }
+    return m_pImpl->isConnected();
+}
 
 void TTYBase::startAsyncRead() { m_pImpl->startAsyncRead(); }
 

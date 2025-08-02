@@ -1,8 +1,7 @@
 #include "rjson.hpp"
 #include <cmath>
-#include <sstream>
 #include <stdexcept>
-#include "atom/error/exception.hpp"
+#include <variant>
 
 namespace atom::type {
 
@@ -22,35 +21,35 @@ auto JsonValue::type() const -> Type { return type_; }
 
 auto JsonValue::asString() const -> const std::string& {
     if (type_ != Type::String) {
-        THROW_INVALID_ARGUMENT("Not a string");
+        throw std::bad_variant_access{};
     }
     return std::get<std::string>(value_);
 }
 
 auto JsonValue::asNumber() const -> double {
     if (type_ != Type::Number) {
-        THROW_INVALID_ARGUMENT("Not a number");
+        throw std::bad_variant_access{};
     }
     return std::get<double>(value_);
 }
 
 auto JsonValue::asBool() const -> bool {
     if (type_ != Type::Bool) {
-        THROW_INVALID_ARGUMENT("Not a bool");
+        throw std::bad_variant_access{};
     }
     return std::get<bool>(value_);
 }
 
 auto JsonValue::asObject() const -> const JsonObject& {
     if (type_ != Type::Object) {
-        THROW_INVALID_ARGUMENT("Not an object");
+        throw std::bad_variant_access{};
     }
     return std::get<JsonObject>(value_);
 }
 
 auto JsonValue::asArray() const -> const JsonArray& {
     if (type_ != Type::Array) {
-        THROW_INVALID_ARGUMENT("Not an array");
+        throw std::bad_variant_access{};
     }
     return std::get<JsonArray>(value_);
 }
@@ -59,10 +58,37 @@ auto JsonValue::toString() const -> std::string {
     switch (type_) {
         case Type::Null:
             return "null";
-        case Type::String:
-            return "\"" + asString() + "\"";
-        case Type::Number:
-            return std::to_string(asNumber());
+        case Type::String: {
+            std::string escaped = asString();
+            // Escape special characters
+            std::string result = "\"";
+            for (char c : escaped) {
+                switch (c) {
+                    case '"': result += "\\\""; break;
+                    case '\\': result += "\\\\"; break;
+                    case '\n': result += "\\n"; break;
+                    case '\r': result += "\\r"; break;
+                    case '\t': result += "\\t"; break;
+                    default: result += c; break;
+                }
+            }
+            result += "\"";
+            return result;
+        }
+        case Type::Number: {
+            double num = asNumber();
+            // Check if it's an integer
+            if (num == std::floor(num) && std::isfinite(num)) {
+                return std::to_string(static_cast<long long>(num));
+            } else {
+                // Use a more precise formatting for floating point
+                std::string result = std::to_string(num);
+                // Remove trailing zeros after decimal point
+                result.erase(result.find_last_not_of('0') + 1, std::string::npos);
+                result.erase(result.find_last_not_of('.') + 1, std::string::npos);
+                return result;
+            }
+        }
         case Type::Bool:
             return asBool() ? "true" : "false";
         case Type::Object: {
@@ -89,20 +115,20 @@ auto JsonValue::toString() const -> std::string {
             return result;
         }
     }
-    THROW_INVALID_ARGUMENT("Unknown type");
+    throw std::runtime_error("Unknown type");
 }
 
 // Overloaded operators for object and array access
 auto JsonValue::operator[](const std::string& key) const -> const JsonValue& {
     if (type_ != Type::Object) {
-        THROW_INVALID_ARGUMENT("Not an object");
+        throw std::bad_variant_access{};
     }
     return asObject().at(key);
 }
 
 auto JsonValue::operator[](size_t index) const -> const JsonValue& {
     if (type_ != Type::Array) {
-        THROW_INVALID_ARGUMENT("Not an array");
+        throw std::bad_variant_access{};
     }
     return asArray().at(index);
 }
@@ -135,19 +161,22 @@ auto JsonParser::parseValue(const std::string& str,
     if ((std::isdigit(str[index]) != 0) || str[index] == '-') {
         return JsonValue(parseNumber(str, index));
     }
-    THROW_INVALID_ARGUMENT("Invalid JSON value");
+    throw std::runtime_error("Invalid JSON value");
 }
 
 auto JsonParser::parseString(const std::string& str,
                              size_t& index) -> std::string {
     ++index;  // Skip opening quote
     std::string result;
-    while (str[index] != '"') {
+    while (index < str.length() && str[index] != '"') {
         if (str[index] == '\\') {
             result += parseEscapedChar(str, index);
         } else {
             result += str[index++];
         }
+    }
+    if (index >= str.length()) {
+        throw std::runtime_error("Unterminated string");
     }
     ++index;  // Skip closing quote
     return result;
@@ -174,38 +203,60 @@ auto JsonParser::parseEscapedChar(const std::string& str,
         case 't':
             return '\t';
         default:
-            THROW_INVALID_ARGUMENT("Invalid escape sequence");
+            throw std::runtime_error("Invalid escape sequence");
     }
 }
 
 auto JsonParser::parseNumber(const std::string& str, size_t& index) -> double {
     size_t startIndex = index;
     bool hasDecimal = false;
-    bool hasExponent = false;
+    bool hasDigitsAfterDecimal = false;
 
     if (str[index] == '-') {
         ++index;
     }
 
-    while ((std::isdigit(str[index]) != 0) || str[index] == '.') {
+    // Must have at least one digit before decimal point or after minus sign
+    if (index >= str.length() || !std::isdigit(str[index])) {
+        throw std::runtime_error("Invalid number format: no digits");
+    }
+
+    while (index < str.length() && ((std::isdigit(str[index]) != 0) || str[index] == '.')) {
         if (str[index] == '.') {
             if (hasDecimal) {
-                THROW_INVALID_ARGUMENT(
+                throw std::runtime_error(
                     "Invalid number format: multiple decimal points");
             }
             hasDecimal = true;
+            ++index;
+            // Check if there are digits after decimal point
+            if (index < str.length() && std::isdigit(str[index])) {
+                hasDigitsAfterDecimal = true;
+            }
+        } else {
+            if (hasDecimal) {
+                hasDigitsAfterDecimal = true;
+            }
+            ++index;
         }
-        ++index;
+    }
+
+    // If we have a decimal point, we must have digits after it
+    if (hasDecimal && !hasDigitsAfterDecimal) {
+        throw std::runtime_error("Invalid number format: no digits after decimal point");
     }
 
     // Check for scientific notation (e or E)
-    if (str[index] == 'e' || str[index] == 'E') {
-        hasExponent = true;
+    if (index < str.length() && (str[index] == 'e' || str[index] == 'E')) {
         ++index;
-        if (str[index] == '+' || str[index] == '-') {
+        if (index < str.length() && (str[index] == '+' || str[index] == '-')) {
             ++index;
         }
-        while (std::isdigit(str[index]) != 0) {
+        // Must have at least one digit in exponent
+        if (index >= str.length() || !std::isdigit(str[index])) {
+            throw std::runtime_error("Invalid number format: no digits in exponent");
+        }
+        while (index < str.length() && std::isdigit(str[index]) != 0) {
             ++index;
         }
     }
@@ -213,9 +264,9 @@ auto JsonParser::parseNumber(const std::string& str, size_t& index) -> double {
     try {
         return std::stod(str.substr(startIndex, index - startIndex));
     } catch (const std::invalid_argument&) {
-        THROW_INVALID_ARGUMENT("Invalid number format");
+        throw std::runtime_error("Invalid number format");
     } catch (const std::out_of_range&) {
-        THROW_INVALID_ARGUMENT("Number out of range");
+        throw std::runtime_error("Number out of range");
     }
 }
 
@@ -228,14 +279,14 @@ auto JsonParser::parseBool(const std::string& str, size_t& index) -> bool {
         index += 5;
         return false;
     }
-    THROW_INVALID_ARGUMENT("Invalid boolean value");
+    throw std::runtime_error("Invalid boolean value");
 }
 
 void JsonParser::parseNull(const std::string& str, size_t& index) {
     if (str.substr(index, 4) == "null") {
         index += 4;
     } else {
-        THROW_INVALID_ARGUMENT("Invalid null value");
+        throw std::runtime_error("Invalid null value");
     }
 }
 
@@ -247,13 +298,13 @@ auto JsonParser::parseObject(const std::string& str,
 
     while (str[index] != '}') {
         if (str[index] != '"') {
-            THROW_INVALID_ARGUMENT("Expected string key in JSON object");
+            throw std::runtime_error("Expected string key in JSON object");
         }
         std::string key = parseString(str, index);
         skipWhitespace(str, index);
 
         if (str[index] != ':') {
-            THROW_INVALID_ARGUMENT("Expected ':' after key in JSON object");
+            throw std::runtime_error("Expected ':' after key in JSON object");
         }
         ++index;  // Skip ':'
         skipWhitespace(str, index);
@@ -265,7 +316,7 @@ auto JsonParser::parseObject(const std::string& str,
         if (str[index] == ',') {
             ++index;  // Skip comma and continue
         } else if (str[index] != '}') {
-            THROW_INVALID_ARGUMENT("Expected ',' or '}' in JSON object");
+            throw std::runtime_error("Expected ',' or '}' in JSON object");
         }
         skipWhitespace(str, index);
     }
@@ -286,7 +337,7 @@ auto JsonParser::parseArray(const std::string& str,
         if (str[index] == ',') {
             ++index;  // Skip comma and continue
         } else if (str[index] != ']') {
-            THROW_INVALID_ARGUMENT("Expected ',' or ']' in JSON array");
+            throw std::runtime_error("Expected ',' or ']' in JSON array");
         }
         skipWhitespace(str, index);
     }

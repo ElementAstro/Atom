@@ -260,7 +260,9 @@ public:
      */
     explicit ThreadSafeLRUCache(const LRUCacheConfig& config);
 
-    ~ThreadSafeLRUCache() = default;
+    ~ThreadSafeLRUCache() {
+        stopCleanupThread();
+    }
 
     /**
      * @brief Retrieves a value from the cache.
@@ -1679,6 +1681,9 @@ template <typename Key, typename Value, typename Hash>
 void atom::search::ThreadSafeLRUCache<Key, Value, Hash>::stopCleanupThread() {
     if (cleanup_thread_) {
         stop_cleanup_.store(true);
+        if (cleanup_thread_->joinable()) {
+            cleanup_thread_->join();
+        }
         cleanup_thread_.reset();
         spdlog::info("LRU cache cleanup thread stopped");
     }

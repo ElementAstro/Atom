@@ -2,8 +2,7 @@
 #define ATOM_TYPE_UINT_HPP
 
 #include <cstdint>
-
-#include "atom/error/exception.hpp"
+#include <stdexcept>
 
 /// Maximum value for uint8_t
 constexpr uint8_t MAX_UINT8 = 0xFF;
@@ -25,7 +24,7 @@ constexpr uint32_t MAX_UINT32 = 0xFFFFFFFF;
  */
 constexpr auto operator""_u8(unsigned long long value) -> uint8_t {
     if (value > MAX_UINT8) {  // uint8_t maximum value is 0xFF
-        THROW_OUT_OF_RANGE("Value exceeds uint8_t range");
+        throw std::out_of_range("Value exceeds uint8_t range");
     }
     return static_cast<uint8_t>(value);
 }
@@ -41,7 +40,7 @@ constexpr auto operator""_u8(unsigned long long value) -> uint8_t {
  */
 constexpr auto operator""_u16(unsigned long long value) -> uint16_t {
     if (value > MAX_UINT16) {  // uint16_t maximum value is 0xFFFF
-        THROW_OUT_OF_RANGE("Value exceeds uint16_t range");
+        throw std::out_of_range("Value exceeds uint16_t range");
     }
     return static_cast<uint16_t>(value);
 }
@@ -57,7 +56,7 @@ constexpr auto operator""_u16(unsigned long long value) -> uint16_t {
  */
 constexpr auto operator""_u32(unsigned long long value) -> uint32_t {
     if (value > MAX_UINT32) {  // uint32_t maximum value is 0xFFFFFFFF
-        THROW_OUT_OF_RANGE("Value exceeds uint32_t range");
+        throw std::out_of_range("Value exceeds uint32_t range");
     }
     return static_cast<uint32_t>(value);
 }
