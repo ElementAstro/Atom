@@ -138,11 +138,13 @@ TEST_F(BlowfishTest, BlockEncryptDecrypt) {
 
 // Test data encryption/decryption with std::byte
 TEST_F(BlowfishTest, DataEncryptDecryptWithByte) {
-    // Make a copy of the plaintext
+    // Make a copy of the plaintext with extra space for PKCS7 padding
     std::vector<std::byte> encrypted = plaintext;
+    encrypted.resize(plaintext.size() + 8);  // Add space for PKCS7 padding
 
     // Encrypt the data
-    blowfish->encrypt_data(std::span<std::byte>(encrypted));
+    usize data_length = plaintext.size();
+    blowfish->encrypt_data(std::span<std::byte>(encrypted), data_length);
 
     // The encrypted data should be different from the plaintext
     EXPECT_NE(encrypted, plaintext);
@@ -167,9 +169,11 @@ TEST_F(BlowfishTest, DataEncryptDecryptWithChar) {
     std::string text = bytesToString(plaintext);
     std::vector<char> char_data(text.begin(), text.end());
     std::vector<char> encrypted = char_data;
+    encrypted.resize(char_data.size() + 8);  // Add space for PKCS7 padding
 
     // Encrypt the data
-    blowfish->encrypt_data(std::span<char>(encrypted));
+    usize data_length = char_data.size();
+    blowfish->encrypt_data(std::span<char>(encrypted), data_length);
 
     // The encrypted data should be different
     bool is_different = false;
@@ -201,9 +205,11 @@ TEST_F(BlowfishTest, DataEncryptDecryptWithUnsignedChar) {
         uchar_data.push_back(static_cast<unsigned char>(b));
     }
     std::vector<unsigned char> encrypted = uchar_data;
+    encrypted.resize(uchar_data.size() + 8);  // Add space for PKCS7 padding
 
     // Encrypt the data
-    blowfish->encrypt_data(std::span<unsigned char>(encrypted));
+    usize data_length = uchar_data.size();
+    blowfish->encrypt_data(std::span<unsigned char>(encrypted), data_length);
 
     // The encrypted data should be different
     bool is_different = false;
@@ -253,14 +259,21 @@ TEST_F(BlowfishTest, FileEncryptDecrypt) {
 
 // Test block size validation
 TEST_F(BlowfishTest, BlockSizeValidation) {
-    // Test with data that's not a multiple of BLOCK_SIZE
-    std::vector<std::byte> invalid_data(7);
-    EXPECT_THROW(blowfish->encrypt_data(std::span<std::byte>(invalid_data)),
-                 std::runtime_error);
+    // Test encryption with various data sizes - PKCS7 padding should handle any size
+    std::vector<std::byte> data1(7 + 8);  // 7 bytes data + 8 bytes padding space
+    usize length1 = 7;
+    EXPECT_NO_THROW(blowfish->encrypt_data(std::span<std::byte>(data1), length1));
 
     // Test with data that is a multiple of BLOCK_SIZE
-    std::vector<std::byte> valid_data(16);
-    EXPECT_NO_THROW(blowfish->encrypt_data(std::span<std::byte>(valid_data)));
+    std::vector<std::byte> data2(16 + 8);  // 16 bytes data + 8 bytes padding space
+    usize length2 = 16;
+    EXPECT_NO_THROW(blowfish->encrypt_data(std::span<std::byte>(data2), length2));
+
+    // Test decryption with invalid block size (should throw)
+    std::vector<std::byte> invalid_decrypt_data(7);  // 7 bytes - not a multiple of BLOCK_SIZE
+    usize invalid_decrypt_length = 7;
+    EXPECT_THROW(blowfish->decrypt_data(std::span<std::byte>(invalid_decrypt_data), invalid_decrypt_length),
+                 std::runtime_error);
 }
 
 // Test padding and removal
@@ -269,27 +282,16 @@ TEST_F(BlowfishTest, PaddingAndRemoval) {
     std::vector<std::byte> odd_plaintext =
         stringToBytes("This is a test message with odd length!");
 
-    // Create a buffer large enough for padding (size + up to BLOCK_SIZE
-    // additional bytes)
-    size_t buffer_size = odd_plaintext.size() + 8;
-    std::vector<std::byte> buffer(buffer_size);
-    std::copy(odd_plaintext.begin(), odd_plaintext.end(), buffer.begin());
+    // Create a buffer large enough for padding
+    std::vector<std::byte> encrypted = odd_plaintext;
+    encrypted.resize(odd_plaintext.size() + 8);  // Add space for padding
 
-    // Manual padding
-    size_t length = odd_plaintext.size();
-    size_t padding_length = 8 - (length % 8);
-    if (padding_length == 0)
-        padding_length = 8;
-
-    // Encrypt the data (which includes padding)
-    std::vector<std::byte> encrypted = buffer;
-    encrypted.resize(length + padding_length);  // Ensure right size for padding
-
-    // Now encrypt the padded data
-    blowfish->encrypt_data(std::span<std::byte>(encrypted));
+    // Encrypt the data (encrypt_data will handle padding automatically)
+    usize encrypt_length = odd_plaintext.size();
+    blowfish->encrypt_data(std::span<std::byte>(encrypted), encrypt_length);
 
     // Decrypt the data
-    size_t decrypt_length = encrypted.size();
+    usize decrypt_length = encrypt_length;  // Use the encrypted length
     blowfish->decrypt_data(std::span<std::byte>(encrypted), decrypt_length);
 
     // Resize to the actual length after removing padding
@@ -316,38 +318,55 @@ TEST_F(BlowfishTest, DifferentKeys) {
     std::vector<std::byte> encrypted1 = plaintext;
     std::vector<std::byte> encrypted2 = plaintext;
 
-    bf1.encrypt_data(
-        std::span<std::byte>(encrypted1.data(), encrypted1.size()));
-    bf2.encrypt_data(
-        std::span<std::byte>(encrypted2.data(), encrypted2.size()));
+    usize length1 = plaintext.size();
+    usize length2 = plaintext.size();
+    encrypted1.resize(plaintext.size() + 8);  // Add space for padding
+    encrypted2.resize(plaintext.size() + 8);  // Add space for padding
+
+    bf1.encrypt_data(std::span<std::byte>(encrypted1), length1);
+    bf2.encrypt_data(std::span<std::byte>(encrypted2), length2);
 
     // The two encryptions should be different
     EXPECT_NE(encrypted1, encrypted2);
 
     // But they should both decrypt properly with their respective keys
-    size_t length1 = encrypted1.size();
-    size_t length2 = encrypted2.size();
+    size_t decrypt_length1 = length1;  // Use the encrypted length, not buffer size
+    size_t decrypt_length2 = length2;
 
     bf1.decrypt_data(std::span<std::byte>(encrypted1.data(), encrypted1.size()),
-                     length1);
+                     decrypt_length1);
     bf2.decrypt_data(std::span<std::byte>(encrypted2.data(), encrypted2.size()),
-                     length2);
+                     decrypt_length2);
 
-    encrypted1.resize(length1);
-    encrypted2.resize(length2);
+    encrypted1.resize(decrypt_length1);
+    encrypted2.resize(decrypt_length2);
 
     EXPECT_EQ(encrypted1, plaintext);
     EXPECT_EQ(encrypted2, plaintext);
 
-    // Using the wrong key should result in incorrect decryption
-    std::vector<std::byte> encrypted_copy = encrypted1;
-    size_t wrong_length = encrypted_copy.size();
-    bf2.decrypt_data(
-        std::span<std::byte>(encrypted_copy.data(), encrypted_copy.size()),
-        wrong_length);
-    encrypted_copy.resize(wrong_length);
+    // Using the wrong key should result in incorrect decryption or exception
+    // Re-encrypt with bf1 to get fresh encrypted data
+    std::vector<std::byte> encrypted_copy = plaintext;
+    encrypted_copy.resize(plaintext.size() + 8);
+    usize copy_length = plaintext.size();
+    bf1.encrypt_data(std::span<std::byte>(encrypted_copy), copy_length);
 
-    EXPECT_NE(encrypted_copy, plaintext);
+    // Now try to decrypt with wrong key (bf2)
+    // This should either throw an exception (due to invalid padding) or produce garbage
+    size_t wrong_length = copy_length;
+    bool decryption_failed = false;
+    try {
+        bf2.decrypt_data(std::span<std::byte>(encrypted_copy), wrong_length);
+        encrypted_copy.resize(wrong_length);
+        // If decryption succeeded, the result should be different from plaintext
+        EXPECT_NE(encrypted_copy, plaintext);
+    } catch (const std::runtime_error&) {
+        // Exception is expected when padding is invalid
+        decryption_failed = true;
+    }
+
+    // Either decryption failed with exception or produced different result
+    EXPECT_TRUE(decryption_failed || encrypted_copy != plaintext);
 }
 
 // Test with various data sizes
@@ -358,7 +377,9 @@ TEST_F(BlowfishTest, VariousDataSizes) {
         std::vector<std::byte> original = data;
 
         // Encrypt
-        blowfish->encrypt_data(std::span<std::byte>(data));
+        data.resize(size + 8);  // Add space for padding
+        usize data_length = size;
+        blowfish->encrypt_data(std::span<std::byte>(data), data_length);
         EXPECT_NE(data, original);
 
         // Decrypt
@@ -385,8 +406,11 @@ TEST_F(BlowfishTest, LargeData) {
     std::vector<std::byte> original = large_data;
 
     // Encrypt the large data
+    usize original_size = large_data.size();
+    large_data.resize(original_size + 8);  // Add space for padding
+    usize large_data_length = original_size;
     auto start = std::chrono::high_resolution_clock::now();
-    blowfish->encrypt_data(std::span<std::byte>(large_data));
+    blowfish->encrypt_data(std::span<std::byte>(large_data), large_data_length);
     auto encrypt_end = std::chrono::high_resolution_clock::now();
 
     // Verify encryption worked
@@ -416,8 +440,9 @@ TEST_F(BlowfishTest, LargeData) {
 // Test with invalid padding
 TEST_F(BlowfishTest, InvalidPadding) {
     // Create a valid encrypted block with proper padding
-    std::vector<std::byte> valid_data(16, std::byte{0});
-    blowfish->encrypt_data(std::span<std::byte>(valid_data));
+    std::vector<std::byte> valid_data(16 + 8, std::byte{0});  // 16 bytes + padding space
+    usize valid_data_length = 16;
+    blowfish->encrypt_data(std::span<std::byte>(valid_data), valid_data_length);
 
     // Corrupt the padding by changing the last byte to an invalid value (>8)
     valid_data[valid_data.size() - 1] = std::byte{20};  // Invalid padding value
@@ -445,15 +470,17 @@ TEST_F(BlowfishTest, CrossPlatformConsistency) {
     auto known_bf = Blowfish(
         std::span<const std::byte>(known_key.data(), known_key.size()));
     std::vector<std::byte> known_ciphertext = known_plaintext;
-    known_bf.encrypt_data(
-        std::span<std::byte>(known_ciphertext.data(), known_ciphertext.size()));
+    known_ciphertext.resize(known_plaintext.size() + 8);  // Add space for padding
+    usize known_length = known_plaintext.size();
+    known_bf.encrypt_data(std::span<std::byte>(known_ciphertext), known_length);
 
     // Encrypt with our implementation
     auto our_bf = Blowfish(
         std::span<const std::byte>(known_key.data(), known_key.size()));
     std::vector<std::byte> our_ciphertext = known_plaintext;
-    our_bf.encrypt_data(
-        std::span<std::byte>(our_ciphertext.data(), our_ciphertext.size()));
+    our_ciphertext.resize(known_plaintext.size() + 8);  // Add space for padding
+    usize our_length = known_plaintext.size();
+    our_bf.encrypt_data(std::span<std::byte>(our_ciphertext), our_length);
 
     // Check that the results match
     EXPECT_EQ(our_ciphertext, known_ciphertext);
@@ -473,7 +500,10 @@ TEST_F(BlowfishTest, ParallelEncryption) {
     std::vector<std::byte> copy = large_data;
 
     // Encrypt data (will use multiple threads)
-    blowfish->encrypt_data(std::span<std::byte>(large_data));
+    usize parallel_original_size = large_data.size();
+    large_data.resize(parallel_original_size + 8);  // Add space for padding
+    usize parallel_data_length = parallel_original_size;
+    blowfish->encrypt_data(std::span<std::byte>(large_data), parallel_data_length);
 
     // Verify encryption worked
     EXPECT_NE(large_data, copy);

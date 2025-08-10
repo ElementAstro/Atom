@@ -180,6 +180,40 @@ private:
             flags.readonly = is_readonly;
             flags.isConst = false;
         }
+
+        /*!
+         * \brief Copy constructor for Data struct
+         * \param other The other Data to copy from
+         */
+        Data(const Data& other)
+            : obj(other.obj),
+              typeInfo(other.typeInfo),
+              attrs(other.attrs),
+              flags(other.flags),
+              constDataPtr(other.constDataPtr),
+              creationTime(getCurrentTimeMicros()),
+              modificationTime(getCurrentTimeMicros()),
+              accessCount(other.accessCount.load()) {
+        }
+
+        /*!
+         * \brief Copy assignment operator for Data struct
+         * \param other The other Data to copy from
+         * \return Reference to this Data
+         */
+        Data& operator=(const Data& other) {
+            if (this != &other) {
+                obj = other.obj;
+                typeInfo = other.typeInfo;
+                attrs = other.attrs;
+                flags = other.flags;
+                constDataPtr = other.constDataPtr;
+                creationTime = getCurrentTimeMicros();
+                modificationTime = getCurrentTimeMicros();
+                accessCount.store(other.accessCount.load());
+            }
+            return *this;
+        }
     };
 
     std::shared_ptr<Data> data_;

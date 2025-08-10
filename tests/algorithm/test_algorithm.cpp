@@ -387,11 +387,9 @@ TEST_F(BoyerMooreTest, BasicPatternMatching) {
     BoyerMoore bm("ABABC");
     auto result = bm.search("ABABCABABABC");
 
-    // Note: Current implementation finds first match correctly
-    // TODO: Fix overlapping pattern detection to find all matches
-    ASSERT_GE(result.size(), 1);
+    ASSERT_EQ(result.size(), 2);
     EXPECT_EQ(result[0], 0);
-    // EXPECT_EQ(result[1], 7); // Second match not currently detected
+    EXPECT_EQ(result[1], 7);
 }
 
 TEST_F(BoyerMooreTest, EmptyPattern) {

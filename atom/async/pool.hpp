@@ -190,6 +190,26 @@ public:
     }
 
     /**
+     * @brief Adds an element to the back of the queue
+     * @param value The element to add (const reference)
+     * @throws ThreadPoolError If the queue is full or if the add operation
+     * fails
+     */
+    void pushBack(const T& value) {
+        std::scoped_lock lock(mutex_);
+        if (data_.size() >= max_size) {
+            spdlog::error("ThreadSafeQueue is full, cannot pushBack.");
+            throw ThreadPoolError("Queue is full");
+        }
+        try {
+            data_.push_back(value);
+        } catch (const std::exception& e) {
+            spdlog::error("Failed to pushBack to ThreadSafeQueue: {}", e.what());
+            throw ThreadPoolError("Failed to pushBack to ThreadSafeQueue");
+        }
+    }
+
+    /**
      * @brief Adds an element to the front of the queue
      * @param value The element to add (rvalue reference)
      * @throws ThreadPoolError If the queue is full or if the add operation
@@ -439,6 +459,19 @@ public:
      */
     void pushBack(T&& value) {
         if (!queue_.push(std::forward<T>(value))) {
+            spdlog::error("Boost lockfree queue is full or push failed.");
+            throw ThreadPoolError(
+                "Boost lockfree queue is full or push failed");
+        }
+    }
+
+    /**
+     * @brief Push an element to the back of the queue
+     * @param value Element to push (const reference)
+     * @throws ThreadPoolError if the queue is full or push fails
+     */
+    void pushBack(const T& value) {
+        if (!queue_.push(value)) {
             spdlog::error("Boost lockfree queue is full or push failed.");
             throw ThreadPoolError(
                 "Boost lockfree queue is full or push failed");

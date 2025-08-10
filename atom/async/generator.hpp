@@ -676,8 +676,7 @@ public:
                         if (done_.load(std::memory_order_acquire))
                             break;
                         // Use pushBack for ThreadSafeQueue
-                        queue_.pushBack(
-                            item);  // Item is copied/moved into the queue
+                        queue_.pushBack(item);  // Item is copied into the queue
                         // Yield to allow consumer to catch up if queue is full
                         while (
                             queue_.size() > 100 &&

@@ -71,10 +71,11 @@ public:
     /**
      * @brief Encrypts a span of data.
      * @tparam T The type of the data, must satisfy ByteType.
-     * @param data The data to encrypt.
+     * @param data The buffer containing data to encrypt (must have space for padding).
+     * @param length The length of actual data to encrypt, will be updated to include padding.
      */
     template <ByteType T>
-    void encrypt_data(std::span<T> data);
+    void encrypt_data(std::span<T> data, usize& length);
 
     /**
      * @brief Decrypts a span of data.

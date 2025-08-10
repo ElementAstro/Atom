@@ -768,4 +768,185 @@ TEST_F(FifoServerTest, SetErrorHandlerReplaces) {
     server->stop();
 }
 
+// ============================================================================
+// ENHANCED TESTS FOR COMPREHENSIVE COVERAGE
+// ============================================================================
+
+// Test multi-client scenario with concurrent connections
+TEST_F(FifoServerTest, MultiClientConcurrentConnections) {
+#ifdef _WIN32
+    GTEST_SKIP() << "Skipping on Windows due to Unix-specific FIFO behavior";
+#endif
+
+    server = std::make_unique<FifoServer>(fifo_path);
+    std::vector<std::string> received_messages;
+    std::mutex messages_mutex;
+    std::vector<FifoServer::ClientEvent> client_events;
+    std::mutex events_mutex;
+
+    // Set up message handler
+    server->setMessageHandler([&](std::string_view data) {
+        std::lock_guard<std::mutex> lock(messages_mutex);
+        received_messages.emplace_back(data);
+    });
+
+    // Set up client handler
+    server->setClientHandler([&](FifoServer::ClientEvent event) {
+        std::lock_guard<std::mutex> lock(events_mutex);
+        client_events.push_back(event);
+    });
+
+    server->start([&](std::string_view data) {
+        std::lock_guard<std::mutex> lock(messages_mutex);
+        received_messages.emplace_back(data);
+    });
+
+    const int num_clients = 5;
+    std::vector<std::thread> client_threads;
+
+    // Start multiple clients concurrently
+    for (int i = 0; i < num_clients; ++i) {
+        client_threads.emplace_back([this, i]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10 * i)); // Stagger connections
+            std::string message = "Message from client " + std::to_string(i);
+            clientWrite(fifo_path, message);
+        });
+    }
+
+    // Wait for all clients to complete
+    for (auto& thread : client_threads) {
+        thread.join();
+    }
+
+    // Give server time to process all messages
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    // Verify all messages were received
+    EXPECT_EQ(received_messages.size(), num_clients);
+    for (int i = 0; i < num_clients; ++i) {
+        std::string expected = "Message from client " + std::to_string(i);
+        EXPECT_TRUE(std::find(received_messages.begin(), received_messages.end(), expected) != received_messages.end());
+    }
+
+    server->stop();
+}
+
+// Test server performance under load
+TEST_F(FifoServerTest, PerformanceUnderLoad) {
+#ifdef _WIN32
+    GTEST_SKIP() << "Skipping on Windows due to Unix-specific FIFO behavior";
+#endif
+
+    server = std::make_unique<FifoServer>(fifo_path);
+    std::atomic<int> message_count{0};
+    std::atomic<int> error_count{0};
+
+    // Set up message handler
+    server->setMessageHandler([&](std::string_view data) {
+        message_count.fetch_add(1);
+    });
+
+    // Set up error handler
+    server->setErrorHandler([&](const asio::error_code& ec) {
+        error_count.fetch_add(1);
+    });
+
+    server->start([&](std::string_view data) {
+        message_count.fetch_add(1);
+    });
+
+    const int num_messages = 100;
+    const int num_threads = 10;
+    std::vector<std::thread> client_threads;
+
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    // Start multiple threads sending messages rapidly
+    for (int t = 0; t < num_threads; ++t) {
+        client_threads.emplace_back([this, t, num_messages, num_threads]() {
+            for (int i = 0; i < num_messages / num_threads; ++i) {
+                std::string message = "Load test message " + std::to_string(t) + "_" + std::to_string(i);
+                clientWrite(fifo_path, message);
+                std::this_thread::sleep_for(std::chrono::microseconds(100)); // Small delay
+            }
+        });
+    }
+
+    // Wait for all threads to complete
+    for (auto& thread : client_threads) {
+        thread.join();
+    }
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+    // Give server time to process remaining messages
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    // Verify performance metrics
+    EXPECT_GT(message_count.load(), num_messages / 2); // At least half should succeed
+    EXPECT_LT(duration.count(), 5000); // Should complete within 5 seconds
+
+    // Error count should be reasonable (some errors expected under load)
+    EXPECT_LT(error_count.load(), num_messages / 4); // Less than 25% error rate
+
+    server->stop();
+}
+
+// Test error handling and recovery
+TEST_F(FifoServerTest, ErrorHandlingAndRecovery) {
+#ifdef _WIN32
+    GTEST_SKIP() << "Skipping on Windows due to Unix-specific FIFO behavior";
+#endif
+
+    server = std::make_unique<FifoServer>(fifo_path);
+    std::vector<asio::error_code> errors;
+    std::mutex errors_mutex;
+    std::atomic<int> message_count{0};
+
+    // Set up error handler
+    server->setErrorHandler([&](const asio::error_code& ec) {
+        std::lock_guard<std::mutex> lock(errors_mutex);
+        errors.push_back(ec);
+    });
+
+    // Set up message handler
+    server->setMessageHandler([&](std::string_view data) {
+        message_count.fetch_add(1);
+    });
+
+    server->start([&](std::string_view data) {
+        message_count.fetch_add(1);
+    });
+
+    // First, cause some errors by writing without readers
+    for (int i = 0; i < 3; ++i) {
+        auto future = server->write("Error message " + std::to_string(i));
+        future.wait_for(std::chrono::milliseconds(100));
+        EXPECT_FALSE(future.get()); // Should fail
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    // Now test recovery with successful operations
+    std::thread client_thread([this]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        for (int i = 0; i < 3; ++i) {
+            clientWrite(fifo_path, "Recovery message " + std::to_string(i));
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    });
+
+    client_thread.join();
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    // Verify error handling
+    EXPECT_GT(errors.size(), 0); // Should have captured some errors
+
+    // Verify recovery
+    EXPECT_EQ(message_count.load(), 3); // Should have received recovery messages
+
+    server->stop();
+}
+
 }  // namespace atom::async::connection

@@ -68,19 +68,22 @@ void SHA1::update(const u8* data, usize length) {
 auto SHA1::digest() noexcept -> std::array<u8, SHA1::DIGEST_SIZE> {
     u64 bitLength = bitCount_;
 
-    // Backup current state to ensure digest() operation doesn't affect object
-    // state
-    auto hashCopy = hash_;
+    // Backup current state to ensure digest() operation doesn't affect object state
+    const auto originalHash = hash_;
     auto bufferCopy = buffer_;
-    auto bitCountCopy = bitCount_;
+    const auto bitCountCopy = bitCount_;
 
     // Padding
-    usize bufferOffset = (bitCountCopy / 8) % BLOCK_SIZE;
+    const usize bufferOffset = (bitCountCopy / 8) % BLOCK_SIZE;
     bufferCopy[bufferOffset] = PADDING_BYTE;  // Append the bit '1'
 
     // Fill the rest of the buffer with zeros
     std::fill(bufferCopy.begin() + bufferOffset + 1,
               bufferCopy.begin() + BLOCK_SIZE, 0);
+
+    // We'll compute the digest using the member hash_ as a working state,
+    // then restore it to avoid observable side effects.
+    hash_ = originalHash;
 
     if (bufferOffset >= BLOCK_SIZE - LENGTH_SIZE) {
         // Process current block, create new block for storing length
@@ -88,7 +91,7 @@ auto SHA1::digest() noexcept -> std::array<u8, SHA1::DIGEST_SIZE> {
         std::fill(bufferCopy.begin(), bufferCopy.end(), 0);
     }
 
-    // Use C++20 bit operations to handle byte order
+    // Use C++20 bit operations to handle byte order for 64-bit length (big endian output)
     if constexpr (std::endian::native == std::endian::little) {
         // Convert on little endian systems
         bitLength = ((bitLength & 0xff00000000000000ULL) >> 56) |
@@ -102,16 +105,15 @@ auto SHA1::digest() noexcept -> std::array<u8, SHA1::DIGEST_SIZE> {
     }
 
     // Append message length
-    std::memcpy(bufferCopy.data() + BLOCK_SIZE - LENGTH_SIZE, &bitLength,
-                LENGTH_SIZE);
+    std::memcpy(bufferCopy.data() + BLOCK_SIZE - LENGTH_SIZE, &bitLength, LENGTH_SIZE);
 
+    // Process final padded block
     processBlock(bufferCopy.data());
 
-    // Generate final hash value
-    std::array<u8, DIGEST_SIZE> result;
-
+    // Generate final hash value from the working state
+    std::array<u8, DIGEST_SIZE> result{};
     for (usize i = 0; i < HASH_SIZE; ++i) {
-        u32 value = hashCopy[i];
+        u32 value = hash_[i];
         if constexpr (std::endian::native == std::endian::little) {
             // Byte order conversion needed on little endian systems
             value = ((value & 0xff000000) >> 24) | ((value & 0x00ff0000) >> 8) |
@@ -119,6 +121,9 @@ auto SHA1::digest() noexcept -> std::array<u8, SHA1::DIGEST_SIZE> {
         }
         std::memcpy(&result[i * 4], &value, 4);
     }
+
+    // Restore original state
+    hash_ = originalHash;
 
     return result;
 }

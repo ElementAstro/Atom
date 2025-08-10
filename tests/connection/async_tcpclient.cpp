@@ -448,6 +448,133 @@ TEST_F(TcpClientSslTest, SslConnectsSuccessfully) {
     EXPECT_EQ(received_string, message);
 }
 
+// ============================================================================
+// ENHANCED TESTS FOR COMPREHENSIVE COVERAGE
+// ============================================================================
+
+// Test async connection method
+TEST_F(TcpClientTest, AsyncConnect) {
+    client_ = std::make_unique<TcpClient>();
+
+    auto connect_future = client_->connectAsync("127.0.0.1", port_);
+
+    // Wait for connection to complete
+    ASSERT_EQ(connect_future.wait_for(2s), std::future_status::ready);
+    EXPECT_TRUE(connect_future.get());
+    EXPECT_TRUE(client_->isConnected());
+}
+
+// Test connection timeout handling
+TEST_F(TcpClientTest, ConnectionTimeout) {
+    ConnectionConfig config;
+    config.connect_timeout = std::chrono::milliseconds(100);
+    client_ = std::make_unique<TcpClient>(config);
+
+    // Try to connect to a non-existent server (should timeout)
+    auto start_time = std::chrono::steady_clock::now();
+    bool connected = client_->connect("192.0.2.1", 12345, std::chrono::milliseconds(200)); // RFC5737 test address
+    auto end_time = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+    EXPECT_FALSE(connected);
+    EXPECT_GE(duration.count(), 100); // Should respect timeout
+    EXPECT_LE(duration.count(), 500); // Should not take much longer
+}
+
+// Test send with timeout
+TEST_F(TcpClientTest, SendWithTimeout) {
+    client_ = std::make_unique<TcpClient>();
+    ASSERT_TRUE(client_->connect("127.0.0.1", port_));
+
+    std::vector<char> large_data(1024 * 1024, 'A'); // 1MB of data
+
+    auto start_time = std::chrono::steady_clock::now();
+    bool sent = client_->sendWithTimeout(large_data, std::chrono::milliseconds(1000));
+    auto end_time = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+    // Should complete within timeout and succeed
+    EXPECT_TRUE(sent);
+    EXPECT_LE(duration.count(), 1200); // Allow some tolerance
+}
+
+// Test receive with specific size
+TEST_F(TcpClientTest, ReceiveSpecificSize) {
+    client_ = std::make_unique<TcpClient>();
+    ASSERT_TRUE(client_->connect("127.0.0.1", port_));
+
+    std::string test_message = "Hello, World!";
+    client_->sendString(test_message);
+
+    auto receive_future = client_->receive(test_message.size());
+    ASSERT_EQ(receive_future.wait_for(1s), std::future_status::ready);
+
+    auto received_data = receive_future.get();
+    std::string received_string(received_data.begin(), received_data.end());
+    EXPECT_EQ(received_string, test_message);
+}
+
+// Test receive until delimiter
+TEST_F(TcpClientTest, ReceiveUntilDelimiter) {
+    client_ = std::make_unique<TcpClient>();
+    ASSERT_TRUE(client_->connect("127.0.0.1", port_));
+
+    std::string test_message = "Line1\nLine2\n";
+    client_->sendString(test_message);
+
+    auto receive_future = client_->receiveUntil('\n');
+    ASSERT_EQ(receive_future.wait_for(1s), std::future_status::ready);
+
+    auto received_string = receive_future.get();
+    EXPECT_EQ(received_string, "Line1\n");
+}
+
+// Test request-response cycle
+TEST_F(TcpClientTest, RequestResponseCycle) {
+    client_ = std::make_unique<TcpClient>();
+    ASSERT_TRUE(client_->connect("127.0.0.1", port_));
+
+    std::string request = "REQUEST";
+    std::vector<char> request_data(request.begin(), request.end());
+
+    auto response_future = client_->requestResponse(request_data, request.size());
+    ASSERT_EQ(response_future.wait_for(2s), std::future_status::ready);
+
+    auto response = response_future.get();
+    std::string response_string(response.begin(), response.end());
+    EXPECT_EQ(response_string, request); // Echo server returns same data
+}
+
+// Test concurrent request-response cycles
+TEST_F(TcpClientTest, ConcurrentRequestResponse) {
+    client_ = std::make_unique<TcpClient>();
+    ASSERT_TRUE(client_->connect("127.0.0.1", port_));
+
+    const int num_requests = 5;
+    std::vector<std::future<std::vector<char>>> futures;
+
+    // Send multiple concurrent requests
+    for (int i = 0; i < num_requests; ++i) {
+        std::string request = "Request" + std::to_string(i);
+        std::vector<char> request_data(request.begin(), request.end());
+        futures.push_back(client_->requestResponse(request_data, request.size()));
+    }
+
+    // Wait for all responses
+    int successful_responses = 0;
+    for (int i = 0; i < num_requests; ++i) {
+        if (futures[i].wait_for(2s) == std::future_status::ready) {
+            auto response = futures[i].get();
+            if (!response.empty()) {
+                successful_responses++;
+            }
+        }
+    }
+
+    // At least some requests should succeed
+    EXPECT_GT(successful_responses, 0);
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

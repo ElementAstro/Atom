@@ -135,9 +135,9 @@ TEST_F(TTLCacheOptimizationTest, EnhancedStatistics) {
     // Perform various operations
     cache.put("test1", "value1");
     cache.put("test2", "value2");
-    cache.get("test1");
-    cache.get("test1");  // Hit
-    cache.get("nonexistent");  // Miss
+    [[maybe_unused]] auto val1 = cache.get("test1");
+    [[maybe_unused]] auto val2 = cache.get("test1");  // Hit
+    [[maybe_unused]] auto val3 = cache.get("nonexistent");  // Miss
     cache.remove("test2");
 
     auto stats = cache.get_statistics();
@@ -169,12 +169,12 @@ TEST_F(TTLCacheOptimizationTest, HealthMonitoring) {
 
     // Generate mostly misses
     for (int i = 100; i < 200; ++i) {
-        cache.get("nonexistent_" + std::to_string(i));
+        [[maybe_unused]] auto val = cache.get("nonexistent_" + std::to_string(i));
     }
 
     // Generate some hits
     for (int i = 0; i < 5; ++i) {
-        cache.get("key_" + std::to_string(i));
+        [[maybe_unused]] auto val = cache.get("key_" + std::to_string(i));
     }
 
     auto health_report = cache.get_health_report();
@@ -201,10 +201,10 @@ TEST_F(TTLCacheOptimizationTest, EfficiencyMetrics) {
 
     // Generate hits and misses
     for (int i = 0; i < 10; ++i) {
-        cache.get("eff_key_" + std::to_string(i));  // Hits
+        [[maybe_unused]] auto val = cache.get("eff_key_" + std::to_string(i));  // Hits
     }
     for (int i = 100; i < 110; ++i) {
-        cache.get("nonexistent_" + std::to_string(i));  // Misses
+        [[maybe_unused]] auto val = cache.get("nonexistent_" + std::to_string(i));  // Misses
     }
 
     auto efficiency = cache.get_efficiency_metrics();
@@ -357,21 +357,26 @@ TEST_F(TTLCacheOptimizationTest, ThreadSafety) {
                     case 0:
                         cache.put(key, value, 2000ms);
                         break;
-                    case 1:
-                        cache.get(key);
+                    case 1: {
+                        [[maybe_unused]] auto val = cache.get(key);
                         break;
-                    case 2:
-                        cache.contains(key);
+                    }
+                    case 2: {
+                        [[maybe_unused]] auto contains = cache.contains(key);
                         break;
-                    case 3:
-                        cache.remove(key);
+                    }
+                    case 3: {
+                        [[maybe_unused]] auto removed = cache.remove(key);
                         break;
-                    case 4:
-                        cache.get_statistics();
+                    }
+                    case 4: {
+                        [[maybe_unused]] auto stats = cache.get_statistics();
                         break;
-                    case 5:
-                        cache.get_health_report();
+                    }
+                    case 5: {
+                        [[maybe_unused]] auto health = cache.get_health_report();
                         break;
+                    }
                 }
             }
         });

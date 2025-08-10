@@ -38,7 +38,7 @@ Description: Timer class for C++
 namespace atom::async {
 
 template <typename F, typename... Args>
-concept Invocable = requires(F &&f, Args &&...args) {
+concept TimerInvocable = requires(F &&f, Args &&...args) {
     std::invoke(std::forward<F>(f), std::forward<Args>(args)...);
 };
 
@@ -125,7 +125,7 @@ public:
      * @throws std::invalid_argument If the function is null or delay is invalid
      */
     template <typename Function, typename... Args>
-        requires Invocable<Function, Args...>
+        requires TimerInvocable<Function, Args...>
     [[nodiscard]] auto setTimeout(Function &&func, unsigned int delay,
                                   Args &&...args) noexcept(false)
         -> EnhancedFuture<std::invoke_result_t<Function, Args...>>;
@@ -146,7 +146,7 @@ public:
      * repeatCount is < -1
      */
     template <typename Function, typename... Args>
-        requires Invocable<Function, Args...>
+        requires TimerInvocable<Function, Args...>
     void setInterval(Function &&func, unsigned int interval, int repeatCount,
                      int priority, Args &&...args) noexcept(false);
 
@@ -186,7 +186,7 @@ public:
      * @throws std::invalid_argument If the function is null
      */
     template <typename Function>
-        requires Invocable<Function>
+        requires TimerInvocable<Function>
     void setCallback(Function &&func) noexcept(false);
 
     [[nodiscard]] auto getTaskCount() const noexcept -> size_t;
@@ -207,7 +207,7 @@ private:
      * @throws std::invalid_argument If func is null or parameters are invalid
      */
     template <typename Function, typename... Args>
-        requires Invocable<Function, Args...>
+        requires TimerInvocable<Function, Args...>
     auto addTask(Function &&func, unsigned int delay, int repeatCount,
                  int priority, Args &&...args) noexcept(false)
         -> EnhancedFuture<std::invoke_result_t<Function, Args...>>;
@@ -307,7 +307,7 @@ private:
 };
 
 template <typename Function, typename... Args>
-    requires Invocable<Function, Args...>
+    requires TimerInvocable<Function, Args...>
 auto Timer::setTimeout(Function &&func, unsigned int delay,
                        Args &&...args) noexcept(false)
     -> EnhancedFuture<std::invoke_result_t<Function, Args...>> {
@@ -362,7 +362,7 @@ auto Timer::setTimeout(Function &&func, unsigned int delay,
 }
 
 template <typename Function, typename... Args>
-    requires Invocable<Function, Args...>
+    requires TimerInvocable<Function, Args...>
 void Timer::setInterval(Function &&func, unsigned int interval, int repeatCount,
                         int priority, Args &&...args) noexcept(false) {
     if (interval == 0) {
@@ -375,7 +375,7 @@ void Timer::setInterval(Function &&func, unsigned int interval, int repeatCount,
 }
 
 template <typename Function, typename... Args>
-    requires Invocable<Function, Args...>
+    requires TimerInvocable<Function, Args...>
 auto Timer::addTask(Function &&func, unsigned int delay, int repeatCount,
                     int priority, Args &&...args) noexcept(false)
     -> EnhancedFuture<std::invoke_result_t<Function, Args...>> {
@@ -458,7 +458,7 @@ auto Timer::addTask(Function &&func, unsigned int delay, int repeatCount,
 }
 
 template <typename Function>
-    requires Invocable<Function>
+    requires TimerInvocable<Function>
 void Timer::setCallback(Function &&func) noexcept(false) {
     std::scoped_lock lock(m_mutex);
     m_callback = std::forward<Function>(func);

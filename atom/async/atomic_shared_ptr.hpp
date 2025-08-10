@@ -174,6 +174,10 @@ public:
     }
 
     template <typename... Args>
+        requires (!std::same_as<std::decay_t<Args>, AtomicSharedPtrConfig> && ...) &&
+                 (!std::same_as<std::decay_t<Args>, std::shared_ptr<T>> && ...) &&
+                 (sizeof...(Args) > 0) &&
+                 std::constructible_from<T, Args...>
     explicit AtomicSharedPtr(Args&&... args) {
         auto ptr = std::make_unique<T>(std::forward<Args>(args)...);
         T* raw_ptr = ptr.release();
@@ -648,8 +652,9 @@ using atomic_shared_ptr = AtomicSharedPtr<T>;
  * @brief **Make atomic shared_ptr with arguments**
  */
 template <typename T, typename... Args>
+    requires (!std::same_as<std::decay_t<std::tuple_element_t<0, std::tuple<Args...>>>, AtomicSharedPtrConfig> || sizeof...(Args) == 0)
 AtomicSharedPtr<T> make_atomic_shared(Args&&... args) {
-    return AtomicSharedPtr<T>::template make_shared<Args...>(
+    return AtomicSharedPtr<T>::make_shared(
         AtomicSharedPtrConfig{}, std::forward<Args>(args)...);
 }
 
@@ -659,7 +664,7 @@ AtomicSharedPtr<T> make_atomic_shared(Args&&... args) {
 template <typename T, typename... Args>
 AtomicSharedPtr<T> make_atomic_shared(const AtomicSharedPtrConfig& config,
                                       Args&&... args) {
-    return AtomicSharedPtr<T>::template make_shared<Args...>(
+    return AtomicSharedPtr<T>::make_shared(
         config, std::forward<Args>(args)...);
 }
 

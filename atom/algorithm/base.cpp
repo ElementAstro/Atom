@@ -541,24 +541,68 @@ auto base64Encode(std::string_view input, bool padding) noexcept
 auto base64Decode(std::string_view input) noexcept
     -> atom::type::expected<std::string> {
     try {
+        spdlog::debug("base64Decode called with input: '{}'", input);
         // Validate input
         if (input.empty()) {
             return std::string{};
         }
 
-        // Base64 strings must have a length that is a multiple of 4
-        if (input.size() % 4 != 0) {
-            spdlog::error("Invalid Base64 input length: not a multiple of 4");
+        // Remove whitespace characters and validate characters
+        std::string cleanInput;
+        cleanInput.reserve(input.size());
+        for (char c : input) {
+            if (std::isspace(static_cast<unsigned char>(c))) {
+                continue;  // Skip whitespace
+            }
+
+            u8 uc = static_cast<u8>(c);
+            if (!((uc >= 'A' && uc <= 'Z') || (uc >= 'a' && uc <= 'z') ||
+                  (uc >= '0' && uc <= '9') || uc == '+' || uc == '/' || uc == '=')) {
+                spdlog::error("INVALID CHAR DETECTED: '{}' - RETURNING ERROR NOW", c);
+                return atom::type::make_unexpected("Invalid character in Base64 input");
+            }
+            cleanInput.push_back(c);
+        }
+
+        // Handle padding: add padding if needed, but validate the result
+        usize remainder = cleanInput.size() % 4;
+
+        if (remainder == 1) {
+            // Length 1 mod 4 is always invalid for Base64
+            spdlog::error("Invalid Base64 input length: {} (returning error)", cleanInput.size());
             return atom::type::make_unexpected("Invalid Base64 input length");
+        } else if (remainder != 0) {
+            // Add padding and try to decode - if decoding fails, the original was invalid
+            std::string paddedInput = cleanInput;
+            while (paddedInput.size() % 4 != 0) {
+                paddedInput.push_back('=');
+            }
+
+            // Try decoding with the padded version first to validate
+            std::string testOutput;
+            testOutput.reserve((paddedInput.size() / 4) * 3);
+
+#ifdef ATOM_USE_SIMD
+            auto testResult = base64DecodeSIMD(paddedInput, std::back_inserter(testOutput));
+#else
+            auto testResult = base64DecodeImpl(paddedInput, std::back_inserter(testOutput));
+#endif
+
+            if (!testResult.has_value()) {
+                spdlog::error("Invalid Base64 input: padding validation failed");
+                return atom::type::make_unexpected("Invalid Base64 input");
+            }
+
+            cleanInput = std::move(paddedInput);
         }
 
         std::string output;
-        output.reserve((input.size() / 4) * 3);
+        output.reserve((cleanInput.size() / 4) * 3);
 
 #ifdef ATOM_USE_SIMD
-        auto result = base64DecodeSIMD(input, std::back_inserter(output));
+        auto result = base64DecodeSIMD(cleanInput, std::back_inserter(output));
 #else
-        auto result = base64DecodeImpl(input, std::back_inserter(output));
+        auto result = base64DecodeImpl(cleanInput, std::back_inserter(output));
 #endif
 
         if (!result.has_value()) {
@@ -567,6 +611,7 @@ auto base64Decode(std::string_view input) noexcept
 
         // Adjust output size to actual decoded byte count
         output.resize(result.value());
+        spdlog::debug("base64Decode returning success with output size: {}", output.size());
         return output;
     } catch (const std::exception& e) {
         spdlog::error("Base64 decode error: {}", e.what());
@@ -581,16 +626,42 @@ auto base64Decode(std::string_view input) noexcept
 
 // Check if valid Base64 string
 auto isBase64(std::string_view str) noexcept -> bool {
-    if (str.empty() || str.length() % 4 != 0) {
-        return false;
+    // Empty string is considered valid Base64
+    if (str.empty()) {
+        return true;
     }
 
-    // Quick validation using ranges
-    return std::ranges::all_of(str, [&](char c_char) {
+    // Remove whitespace and check if remaining characters are valid
+    std::string cleanStr;
+    cleanStr.reserve(str.size());
+    for (char c : str) {
+        if (!std::isspace(static_cast<unsigned char>(c))) {
+            cleanStr.push_back(c);
+        }
+    }
+
+    // Check character validity first
+    bool hasValidChars = std::ranges::all_of(cleanStr, [&](char c_char) {
         u8 c = static_cast<u8>(c_char);
         return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
                (c >= '0' && c <= '9') || c == '+' || c == '/' || c == '=';
     });
+
+    if (!hasValidChars) {
+        return false;
+    }
+
+    // Check length validity
+    bool hasAnyPadding = cleanStr.find('=') != std::string::npos;
+    usize remainder = cleanStr.size() % 4;
+
+    if (remainder == 1) {
+        return false;  // Length 1 mod 4 is always invalid
+    } else if (remainder != 0 && hasAnyPadding) {
+        return false;  // Malformed padding
+    }
+
+    return true;
 }
 
 // XOR encrypt/decrypt - now noexcept and uses string_view

@@ -1,8 +1,9 @@
-// filepath: atom/async/test_daemon.hpp
+// filepath: tests/async/daemon.cpp
 #include <gtest/gtest.h>
 
 #include <filesystem>
 #include <fstream>
+#include <thread>
 
 #include "atom/async/daemon.hpp"
 #include "spdlog/sinks/stdout_color_sinks.h"
@@ -491,3 +492,289 @@ TEST_F(DaemonTest, InvalidArgsStartDaemonModern) {
 // These are more akin to integration tests than unit tests.
 // The current tests cover the non-daemon path and the initial setup/error
 // handling of the daemon path in the parent process.
+
+// Additional tests for comprehensive coverage
+
+TEST_F(DaemonTest, ProcessIdComparison) {
+    ProcessId pid1 = ProcessId::current();
+    ProcessId pid2 = ProcessId::current();
+
+    // Both should be valid and equal
+    EXPECT_TRUE(pid1.valid());
+    EXPECT_TRUE(pid2.valid());
+    EXPECT_EQ(pid1.id, pid2.id);
+
+    // Test reset
+    pid1.reset();
+    EXPECT_FALSE(pid1.valid());
+    EXPECT_NE(pid1.id, pid2.id);
+}
+
+TEST_F(DaemonTest, GlobalDaemonState) {
+    // Test initial state
+    EXPECT_FALSE(g_is_daemon.load(std::memory_order_relaxed));
+
+    // Test setting daemon state
+    std::atomic_store_explicit(&g_is_daemon, true, std::memory_order_relaxed);
+    EXPECT_TRUE(g_is_daemon.load(std::memory_order_relaxed));
+
+    // Reset for other tests
+    std::atomic_store_explicit(&g_is_daemon, false, std::memory_order_relaxed);
+    EXPECT_FALSE(g_is_daemon.load(std::memory_order_relaxed));
+}
+
+TEST_F(DaemonTest, GlobalPidFilePath) {
+    fs::path original_path = g_pid_file_path;
+
+    // Test setting global PID file path
+    fs::path new_path = test_pid_dir / "global_test.pid";
+    g_pid_file_path = new_path;
+    EXPECT_EQ(g_pid_file_path, new_path);
+
+    // Restore original path
+    g_pid_file_path = original_path;
+}
+
+TEST_F(DaemonTest, DaemonRestartIntervalEdgeCases) {
+    // Test minimum valid value
+    setDaemonRestartInterval(1);
+    EXPECT_EQ(getDaemonRestartInterval(), 1);
+
+    // Test large value
+    setDaemonRestartInterval(3600);
+    EXPECT_EQ(getDaemonRestartInterval(), 3600);
+
+    // Test thread safety by accessing from multiple threads
+    std::vector<std::thread> threads;
+    std::atomic<bool> all_success{true};
+
+    for (int i = 0; i < 5; ++i) {
+        threads.emplace_back([&, i]() {
+            try {
+                setDaemonRestartInterval(10 + i);
+                int value = getDaemonRestartInterval();
+                if (value < 10 || value > 14) {
+                    all_success = false;
+                }
+            } catch (...) {
+                all_success = false;
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    EXPECT_TRUE(all_success.load());
+
+    // Reset to default
+    setDaemonRestartInterval(10);
+}
+
+TEST_F(DaemonTest, WritePidFileErrorHandling) {
+    // Test writing to a read-only directory (if possible)
+    fs::path readonly_dir = test_pid_dir / "readonly";
+    fs::create_directories(readonly_dir);
+
+    // Try to make directory read-only (this might not work on all systems)
+    fs::permissions(readonly_dir, fs::perms::owner_read | fs::perms::group_read | fs::perms::others_read);
+
+    fs::path readonly_pid_file = readonly_dir / "readonly.pid";
+
+    // This might throw or might succeed depending on the system
+    // We just ensure it doesn't crash
+    try {
+        writePidFile(readonly_pid_file);
+        // If it succeeds, clean up
+        if (fs::exists(readonly_pid_file)) {
+            fs::remove(readonly_pid_file);
+        }
+    } catch (const DaemonException&) {
+        // Expected on some systems
+    }
+
+    // Restore permissions for cleanup
+    fs::permissions(readonly_dir, fs::perms::owner_all);
+}
+
+TEST_F(DaemonTest, CheckPidFileEdgeCases) {
+    // Test with very large PID number
+    fs::path large_pid_file = test_pid_dir / "large.pid";
+    std::ofstream ofs(large_pid_file);
+    ofs << "999999999";
+    ofs.close();
+
+    // Should return false as this PID is unlikely to exist
+    EXPECT_FALSE(checkPidFile(large_pid_file));
+
+    // Test with negative PID
+    fs::path negative_pid_file = test_pid_dir / "negative.pid";
+    std::ofstream ofs_neg(negative_pid_file);
+    ofs_neg << "-123";
+    ofs_neg.close();
+
+    EXPECT_FALSE(checkPidFile(negative_pid_file));
+
+    // Test with zero PID
+    fs::path zero_pid_file = test_pid_dir / "zero.pid";
+    std::ofstream ofs_zero(zero_pid_file);
+    ofs_zero << "0";
+    ofs_zero.close();
+
+    EXPECT_FALSE(checkPidFile(zero_pid_file));
+}
+
+TEST_F(DaemonTest, DaemonGuardRestartCount) {
+    DaemonGuard guard;
+
+    // Initial restart count should be 0
+    EXPECT_EQ(guard.getRestartCount(), 0);
+
+    // The restart count is typically incremented by daemon restart logic
+    // which is not easily testable in unit tests, but we can verify the getter works
+}
+
+TEST_F(DaemonTest, DaemonGuardToStringWithData) {
+    DaemonGuard guard;
+
+    // Set some data
+    guard.setMainId(ProcessId::current());
+    guard.setPidFilePath(test_pid_file);
+
+    std::string str = guard.toString();
+
+    // Should contain non-zero mainId now
+    EXPECT_NE(str.find("mainId="), std::string::npos);
+    EXPECT_NE(str.find("restartCount=0"), std::string::npos);
+
+    // The exact format depends on the implementation, but it should be informative
+    EXPECT_GT(str.length(), 20);  // Should be a reasonable length
+}
+
+TEST_F(DaemonTest, ProcessCleanupManagerMultipleRegistrations) {
+    ProcessCleanupManager::cleanup();  // Start clean
+
+    // Register the same file multiple times
+    fs::path test_file = test_pid_dir / "multi.pid";
+
+    ProcessCleanupManager::registerPidFile(test_file);
+    ProcessCleanupManager::registerPidFile(test_file);
+    ProcessCleanupManager::registerPidFile(test_file);
+
+    // Create the file
+    std::ofstream ofs(test_file);
+    ofs << "123";
+    ofs.close();
+    EXPECT_TRUE(fs::exists(test_file));
+
+    // Cleanup should handle duplicates gracefully
+    ProcessCleanupManager::cleanup();
+    EXPECT_FALSE(fs::exists(test_file));
+}
+
+TEST_F(DaemonTest, DaemonExceptionInheritance) {
+    // Test that DaemonException is properly derived from std::exception
+    try {
+        throw DaemonException("Test message");
+    } catch (const std::exception& e) {
+        std::string what_str = e.what();
+        EXPECT_NE(what_str.find("Test message"), std::string::npos);
+    }
+}
+
+TEST_F(DaemonTest, SignalHandlerRegistrationEdgeCases) {
+    // Test with empty signal list
+    std::vector<int> empty_signals;
+    EXPECT_TRUE(registerSignalHandlers(empty_signals));
+
+    // Test with duplicate signals
+    std::vector<int> duplicate_signals = {SIGINT, SIGINT, SIGTERM, SIGTERM};
+    EXPECT_TRUE(registerSignalHandlers(duplicate_signals));
+}
+
+TEST_F(DaemonTest, PidFilePathHandling) {
+    DaemonGuard guard;
+
+    // Test with relative path
+    fs::path relative_path = "relative_test.pid";
+    guard.setPidFilePath(relative_path);
+    EXPECT_EQ(guard.getPidFilePath().value(), relative_path);
+
+    // Test with absolute path
+    fs::path absolute_path = fs::absolute(test_pid_file);
+    guard.setPidFilePath(absolute_path);
+    EXPECT_EQ(guard.getPidFilePath().value(), absolute_path);
+
+    // Test clearing the path
+    guard.setPidFilePath({});
+    EXPECT_FALSE(guard.getPidFilePath().has_value());
+}
+
+TEST_F(DaemonTest, RealStartWithNoPidFile) {
+    DaemonGuard guard;
+    // Don't set PID file path
+
+    char arg0[] = "test_program";
+    char* argv[] = {arg0, nullptr};
+    int argc = 1;
+
+    // Should work without PID file
+    int result = guard.realStart(argc, argv, dummyMainCallback);
+    EXPECT_EQ(result, 0);
+
+    // No PID file should be created
+    EXPECT_FALSE(fs::exists(test_pid_file));
+}
+
+TEST_F(DaemonTest, RealStartModernWithNoPidFile) {
+    DaemonGuard guard;
+    // Don't set PID file path
+
+    char arg0[] = "test_program";
+    std::vector<char*> args_vec = {arg0};
+    std::span<char*> args(args_vec.data(), args_vec.size());
+
+    // Should work without PID file
+    int result = guard.realStartModern(args, dummyMainCallbackModern);
+    EXPECT_EQ(result, 0);
+
+    // No PID file should be created
+    EXPECT_FALSE(fs::exists(test_pid_file));
+}
+
+// Test callback that returns non-zero
+int failingCallback(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+    return 42;  // Non-zero return code
+}
+
+int failingCallbackModern(std::span<char*> args) {
+    (void)args;
+    return 42;  // Non-zero return code
+}
+
+TEST_F(DaemonTest, CallbackReturnValue) {
+    DaemonGuard guard;
+
+    char arg0[] = "test_program";
+    char* argv[] = {arg0, nullptr};
+    int argc = 1;
+
+    // Test that callback return value is propagated
+    int result = guard.realStart(argc, argv, failingCallback);
+    EXPECT_EQ(result, 42);
+}
+
+TEST_F(DaemonTest, CallbackReturnValueModern) {
+    DaemonGuard guard;
+
+    char arg0[] = "test_program";
+    std::vector<char*> args_vec = {arg0};
+    std::span<char*> args(args_vec.data(), args_vec.size());
+
+    // Test that callback return value is propagated
+    int result = guard.realStartModern(args, failingCallbackModern);
+    EXPECT_EQ(result, 42);
+}

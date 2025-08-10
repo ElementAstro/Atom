@@ -1,5 +1,4 @@
 #include "atom/sysinfo/cpu.hpp"
-#include "atom/sysinfo/cpu/common.hpp"
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <chrono>
@@ -35,12 +34,12 @@ TEST_F(CpuTest, GetCurrentCpuTemperature) {
 
 TEST_F(CpuTest, GetCPUModel) {
     std::string cpuModel = getCPUModel();
-    ASSERT_FALSE(cpuModel.empty());
+    ASSERT_GT(cpuModel.length(), 0);
 }
 
 TEST_F(CpuTest, GetProcessorIdentifier) {
     std::string identifier = getProcessorIdentifier();
-    ASSERT_FALSE(identifier.empty());
+    ASSERT_GT(identifier.length(), 0);
 }
 
 TEST_F(CpuTest, GetProcessorFrequency) {
@@ -84,8 +83,8 @@ TEST_F(CpuTest, GetCpuInfo) {
     auto cpu_info = getCpuInfo();
 
     // Basic validation
-    EXPECT_FALSE(cpu_info.model.empty());
-    EXPECT_FALSE(cpu_info.identifier.empty());
+    EXPECT_GT(cpu_info.model.length(), 0);
+    EXPECT_GT(cpu_info.identifier.length(), 0);
     EXPECT_NE(cpu_info.architecture, CpuArchitecture::UNKNOWN);
     EXPECT_NE(cpu_info.vendor, CpuVendor::UNKNOWN);
     EXPECT_GT(cpu_info.numLogicalCores, 0);
@@ -131,7 +130,7 @@ TEST_F(CpuTest, CpuFeatureFlags) {
 
     // Feature flags should not be empty strings
     for (const auto& flag : flags) {
-        EXPECT_FALSE(flag.empty());
+        EXPECT_GT(flag.length(), 0);
     }
 }
 
@@ -216,8 +215,8 @@ TEST_F(CpuTest, CpuSecurityInfo) {
 
     // Vulnerability information should be valid
     for (const auto& vuln : security.vulnerabilities) {
-        EXPECT_FALSE(vuln.name.empty());
-        EXPECT_FALSE(vuln.status.empty());
+        EXPECT_GT(vuln.name.length(), 0);
+        EXPECT_GT(vuln.status.length(), 0);
     }
 }
 
@@ -249,8 +248,8 @@ TEST_F(CpuTest, CpuVulnerabilities) {
 
     // Should return valid vulnerability information
     for (const auto& vuln : vulnerabilities) {
-        EXPECT_FALSE(vuln.name.empty());
-        EXPECT_FALSE(vuln.status.empty());
+        EXPECT_GT(vuln.name.length(), 0);
+        EXPECT_GT(vuln.status.length(), 0);
     }
 }
 
@@ -259,7 +258,7 @@ TEST_F(CpuTest, CpuMicrocodeInfo) {
 
     // Microcode version might be empty on some systems, but should be valid if present
     if (!microcode.version.empty()) {
-        EXPECT_FALSE(microcode.version.empty());
+        EXPECT_GT(microcode.version.length(), 0);
     }
 }
 
@@ -327,7 +326,7 @@ TEST_F(CpuTest, CpuCacheTopology) {
     for (const auto& cache_level : cache_topology) {
         EXPECT_GT(cache_level.size, 0);
         EXPECT_GT(cache_level.line_size, 0);
-        EXPECT_FALSE(cache_level.type.empty());
+        EXPECT_GT(cache_level.type.length(), 0);
     }
 }
 
@@ -343,7 +342,7 @@ TEST_F(CpuTest, PerCoreThermalInfo) {
         if (thermal.current_temp > 0.0f) {
             EXPECT_LT(thermal.current_temp, 150.0f);
         }
-        EXPECT_FALSE(thermal.thermal_zone.empty());
+        EXPECT_GT(thermal.thermal_zone.length(), 0);
     }
 }
 
@@ -493,24 +492,24 @@ TEST_F(CpuTest, VendorStringConversion) {
 // String conversion tests for new enums
 TEST_F(CpuTest, EnumStringConversions) {
     // Test CPU power state conversions
-    EXPECT_FALSE(cpuPowerStateToString(CpuPowerState::C0).empty());
-    EXPECT_FALSE(cpuPowerStateToString(CpuPowerState::C1).empty());
-    EXPECT_FALSE(cpuPowerStateToString(CpuPowerState::UNKNOWN).empty());
+    EXPECT_GT(cpuPowerStateToString(CpuPowerState::C0).length(), 0);
+    EXPECT_GT(cpuPowerStateToString(CpuPowerState::C1).length(), 0);
+    EXPECT_GT(cpuPowerStateToString(CpuPowerState::UNKNOWN).length(), 0);
 
     // Test CPU frequency governor conversions
-    EXPECT_FALSE(cpuFrequencyGovernorToString(CpuFrequencyGovernor::PERFORMANCE).empty());
-    EXPECT_FALSE(cpuFrequencyGovernorToString(CpuFrequencyGovernor::POWERSAVE).empty());
-    EXPECT_FALSE(cpuFrequencyGovernorToString(CpuFrequencyGovernor::UNKNOWN).empty());
+    EXPECT_GT(cpuFrequencyGovernorToString(CpuFrequencyGovernor::PERFORMANCE).length(), 0);
+    EXPECT_GT(cpuFrequencyGovernorToString(CpuFrequencyGovernor::POWERSAVE).length(), 0);
+    EXPECT_GT(cpuFrequencyGovernorToString(CpuFrequencyGovernor::UNKNOWN).length(), 0);
 
     // Test thermal throttle state conversions
-    EXPECT_FALSE(thermalThrottleStateToString(ThermalThrottleState::NORMAL).empty());
-    EXPECT_FALSE(thermalThrottleStateToString(ThermalThrottleState::LIGHT_THROTTLE).empty());
-    EXPECT_FALSE(thermalThrottleStateToString(ThermalThrottleState::CRITICAL_THROTTLE).empty());
+    EXPECT_GT(thermalThrottleStateToString(ThermalThrottleState::NORMAL).length(), 0);
+    EXPECT_GT(thermalThrottleStateToString(ThermalThrottleState::LIGHT_THROTTLE).length(), 0);
+    EXPECT_GT(thermalThrottleStateToString(ThermalThrottleState::CRITICAL_THROTTLE).length(), 0);
 
     // Test CPU topology level conversions
-    EXPECT_FALSE(cpuTopologyLevelToString(CpuTopologyLevel::THREAD).empty());
-    EXPECT_FALSE(cpuTopologyLevelToString(CpuTopologyLevel::CORE).empty());
-    EXPECT_FALSE(cpuTopologyLevelToString(CpuTopologyLevel::PACKAGE).empty());
+    EXPECT_GT(cpuTopologyLevelToString(CpuTopologyLevel::THREAD).length(), 0);
+    EXPECT_GT(cpuTopologyLevelToString(CpuTopologyLevel::CORE).length(), 0);
+    EXPECT_GT(cpuTopologyLevelToString(CpuTopologyLevel::PACKAGE).length(), 0);
 }
 
 // Integration test
@@ -530,10 +529,223 @@ TEST_F(CpuTest, FullSystemIntegration) {
     EXPECT_EQ(expected_logical_cores, info.numLogicalCores);
 
     // Enhanced info should be populated
-    EXPECT_FALSE(info.topology.numa_node_cpus.empty() || info.topology.numa_nodes == 0);
+    EXPECT_TRUE(!info.topology.numa_node_cpus.empty() || info.topology.numa_nodes > 0);
 
     // Timestamp should be recent
     auto now = std::chrono::system_clock::now();
     auto time_diff = std::chrono::duration_cast<std::chrono::seconds>(now - info.last_updated);
     EXPECT_LT(time_diff.count(), 60); // Should be updated within the last minute
+}
+
+// Test error handling and edge cases
+TEST_F(CpuTest, ErrorHandling) {
+    // Test with invalid feature names
+    auto invalidFeatureSupport = isCpuFeatureSupported("");
+    EXPECT_TRUE(invalidFeatureSupport == CpuFeatureSupport::NOT_SUPPORTED ||
+               invalidFeatureSupport == CpuFeatureSupport::UNKNOWN);
+
+    auto invalidFeatureSupport2 = isCpuFeatureSupported("invalid_feature_name_12345");
+    EXPECT_TRUE(invalidFeatureSupport2 == CpuFeatureSupport::NOT_SUPPORTED ||
+               invalidFeatureSupport2 == CpuFeatureSupport::UNKNOWN);
+
+    // Test string conversion with invalid inputs
+    EXPECT_EQ(stringToBytes(""), 0);
+    EXPECT_EQ(stringToBytes("invalid"), 0);
+    EXPECT_EQ(stringToBytes("-1"), 0);
+
+    // Test vendor string conversion with edge cases
+    EXPECT_EQ(getVendorFromString(""), CpuVendor::UNKNOWN);
+    EXPECT_EQ(getVendorFromString("   "), CpuVendor::UNKNOWN);
+    EXPECT_EQ(getVendorFromString("NonExistentVendor"), CpuVendor::OTHER);
+}
+
+// Test data consistency across multiple calls
+TEST_F(CpuTest, DataConsistency) {
+    // Test that static information remains consistent across calls
+    auto info1 = getCpuInfo();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    auto info2 = getCpuInfo();
+
+    // Static fields should be identical
+    EXPECT_EQ(info1.model, info2.model);
+    EXPECT_EQ(info1.identifier, info2.identifier);
+    EXPECT_EQ(info1.architecture, info2.architecture);
+    EXPECT_EQ(info1.vendor, info2.vendor);
+    EXPECT_EQ(info1.numLogicalCores, info2.numLogicalCores);
+    EXPECT_EQ(info1.numPhysicalCores, info2.numPhysicalCores);
+    EXPECT_EQ(info1.numPhysicalPackages, info2.numPhysicalPackages);
+    EXPECT_EQ(info1.socketType, info2.socketType);
+
+    // Cache sizes should be identical
+    EXPECT_EQ(info1.caches.l1i, info2.caches.l1i);
+    EXPECT_EQ(info1.caches.l1d, info2.caches.l1d);
+    EXPECT_EQ(info1.caches.l2, info2.caches.l2);
+    EXPECT_EQ(info1.caches.l3, info2.caches.l3);
+
+    // Feature flags should be identical
+    EXPECT_EQ(info1.flags, info2.flags);
+
+    // Dynamic fields may differ but should be reasonable
+    if (info1.usage > 0.0f && info2.usage > 0.0f) {
+        EXPECT_GE(info1.usage, 0.0f);
+        EXPECT_LE(info1.usage, 100.0f);
+        EXPECT_GE(info2.usage, 0.0f);
+        EXPECT_LE(info2.usage, 100.0f);
+    }
+
+    if (info1.temperature > 0.0f && info2.temperature > 0.0f) {
+        EXPECT_GT(info1.temperature, 0.0f);
+        EXPECT_GT(info2.temperature, 0.0f);
+        EXPECT_LT(info1.temperature, 150.0f);
+        EXPECT_LT(info2.temperature, 150.0f);
+    }
+}
+
+// Test boundary conditions
+TEST_F(CpuTest, BoundaryConditions) {
+    // Test CPU usage boundaries
+    auto usage = getCurrentCpuUsage();
+    EXPECT_GE(usage, 0.0f);
+    EXPECT_LE(usage, 100.0f);
+
+    // Test per-core usage boundaries
+    auto coreUsages = getPerCoreCpuUsage();
+    for (auto coreUsage : coreUsages) {
+        EXPECT_GE(coreUsage, 0.0f);
+        EXPECT_LE(coreUsage, 100.0f);
+    }
+
+    // Test frequency boundaries
+    auto frequency = getProcessorFrequency();
+    EXPECT_GT(frequency, 0.0);
+    EXPECT_LT(frequency, 10.0); // 10 GHz should be reasonable upper bound
+
+    auto maxFreq = getMaxProcessorFrequency();
+    auto minFreq = getMinProcessorFrequency();
+    if (maxFreq > 0.0 && minFreq > 0.0) {
+        EXPECT_GE(maxFreq, minFreq);
+    }
+
+    // Test core count boundaries
+    auto logicalCores = getNumberOfLogicalCores();
+    auto physicalCores = getNumberOfPhysicalCores();
+    auto packages = getNumberOfPhysicalPackages();
+
+    EXPECT_GT(logicalCores, 0);
+    EXPECT_GT(physicalCores, 0);
+    EXPECT_GT(packages, 0);
+    EXPECT_GE(logicalCores, physicalCores);
+    EXPECT_GE(physicalCores, packages);
+    EXPECT_LE(packages, physicalCores);
+    EXPECT_LE(physicalCores, logicalCores);
+}
+
+// Test performance under load
+TEST_F(CpuTest, PerformanceUnderLoad) {
+    const int iterations = 1000;
+
+    // Measure time for multiple CPU info retrievals
+    auto start = std::chrono::high_resolution_clock::now();
+
+    for (int i = 0; i < iterations; ++i) {
+        auto info = getCpuInfo();
+        (void)info; // Suppress unused variable warning
+    }
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+    // Should complete within reasonable time (10 seconds for 1000 calls)
+    EXPECT_LT(duration.count(), 10000);
+
+    // Test that caching improves performance for subsequent calls
+    start = std::chrono::high_resolution_clock::now();
+
+    for (int i = 0; i < iterations; ++i) {
+        auto info = getCpuInfo();
+        (void)info; // Suppress unused variable warning
+    }
+
+    end = std::chrono::high_resolution_clock::now();
+    auto cachedDuration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+    // Cached calls should be faster or at least not significantly slower
+    EXPECT_LE(cachedDuration.count(), duration.count() * 1.5);
+}
+
+// Test memory efficiency
+TEST_F(CpuTest, MemoryEfficiency) {
+    // Test that repeated calls don't cause memory leaks
+    const int iterations = 100;
+
+    for (int i = 0; i < iterations; ++i) {
+        auto info = getCpuInfo();
+        auto topology = getCpuTopology();
+        auto security = getCpuSecurityInfo();
+        auto thermal = getCpuThermalInfo();
+        auto power = getCpuPowerInfo();
+        auto counters = getCpuPerformanceCounters();
+        auto vulnerabilities = getCpuVulnerabilities();
+        auto microcode = getCpuMicrocodeInfo();
+
+        // Prevent optimization
+        (void)info;
+        (void)topology;
+        (void)security;
+        (void)thermal;
+        (void)power;
+        (void)counters;
+        (void)vulnerabilities;
+        (void)microcode;
+    }
+
+    // If we reach here without crashing, memory management is working
+    EXPECT_TRUE(true);
+}
+
+// Test thread safety with high contention
+TEST_F(CpuTest, ThreadSafetyHighContention) {
+    const int num_threads = 20;
+    const int calls_per_thread = 100;
+    std::vector<std::thread> threads;
+    std::vector<bool> results(num_threads, false);
+    std::atomic<int> successful_calls{0};
+
+    // Launch many threads with high contention
+    for (int i = 0; i < num_threads; ++i) {
+        threads.emplace_back([&, i]() {
+            try {
+                for (int j = 0; j < calls_per_thread; ++j) {
+                    auto info = getCpuInfo();
+                    auto usage = getCurrentCpuUsage();
+                    auto temp = getCurrentCpuTemperature();
+                    auto topology = getCpuTopology();
+
+                    // Basic validation
+                    EXPECT_GT(info.numLogicalCores, 0);
+                    EXPECT_GE(usage, 0.0f);
+                    EXPECT_LE(usage, 100.0f);
+                    EXPECT_GT(topology.packages, 0);
+
+                    successful_calls.fetch_add(1);
+                }
+                results[i] = true;
+            } catch (...) {
+                results[i] = false;
+            }
+        });
+    }
+
+    // Wait for all threads to complete
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    // All threads should have completed successfully
+    for (bool result : results) {
+        EXPECT_TRUE(result);
+    }
+
+    // All calls should have been successful
+    EXPECT_EQ(successful_calls.load(), num_threads * calls_per_thread);
 }

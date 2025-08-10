@@ -300,6 +300,223 @@ TEST_F(UdpClientTest, ErrorCallback) {
     EXPECT_NE(future.get().find("Socket not open"), std::string::npos);
 }
 
+// ============================================================================
+// ENHANCED TESTS FOR COMPREHENSIVE COVERAGE
+// ============================================================================
+
+// Test send with timeout functionality
+TEST_F(UdpClientTest, SendWithTimeout) {
+    client_ = std::make_unique<UdpClient>();
+    ASSERT_TRUE(client_->bind(0)); // Bind to any available port
+
+    std::vector<char> test_data = {'H', 'e', 'l', 'l', 'o'};
+
+    auto start_time = std::chrono::steady_clock::now();
+    bool result = client_->sendWithTimeout("127.0.0.1", server_->getPort(), test_data, std::chrono::milliseconds(1000));
+    auto end_time = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+    EXPECT_TRUE(result);
+    EXPECT_LT(duration.count(), 1200); // Should complete within timeout + tolerance
+}
+
+// Test batch send functionality
+TEST_F(UdpClientTest, BatchSend) {
+    client_ = std::make_unique<UdpClient>();
+    ASSERT_TRUE(client_->bind(0));
+
+    std::vector<std::pair<std::string, int>> destinations = {
+        {"127.0.0.1", server_->getPort()},
+        {"127.0.0.1", server_->getPort()},
+        {"127.0.0.1", server_->getPort()}
+    };
+
+    std::vector<char> test_data = {'B', 'a', 't', 'c', 'h'};
+
+    int success_count = client_->batchSend(destinations, test_data);
+    EXPECT_EQ(success_count, 3); // All sends should succeed
+}
+
+// Test multicast functionality
+TEST_F(UdpClientTest, MulticastOperations) {
+    client_ = std::make_unique<UdpClient>();
+    ASSERT_TRUE(client_->bind(0));
+
+    std::string multicast_address = "224.0.0.1";
+    std::string interface_address = "127.0.0.1";
+
+    // Join multicast group
+    bool joined = client_->joinMulticastGroup(multicast_address, interface_address);
+    EXPECT_TRUE(joined);
+
+    // Leave multicast group
+    bool left = client_->leaveMulticastGroup(multicast_address, interface_address);
+    EXPECT_TRUE(left);
+}
+
+// Test TTL setting
+TEST_F(UdpClientTest, TTLSetting) {
+    client_ = std::make_unique<UdpClient>();
+    ASSERT_TRUE(client_->bind(0));
+
+    // Set TTL
+    bool ttl_set = client_->setTTL(64);
+    EXPECT_TRUE(ttl_set);
+
+    // Try invalid TTL
+    bool invalid_ttl = client_->setTTL(-1);
+    EXPECT_FALSE(invalid_ttl);
+}
+
+// Test socket options
+TEST_F(UdpClientTest, SocketOptions) {
+    client_ = std::make_unique<UdpClient>();
+    ASSERT_TRUE(client_->bind(0));
+
+    // Test broadcast option
+    bool broadcast_set = client_->setSocketOption(UdpClient::SocketOption::Broadcast, 1);
+    EXPECT_TRUE(broadcast_set);
+
+    // Test reuse address option
+    bool reuse_set = client_->setSocketOption(UdpClient::SocketOption::ReuseAddress, 1);
+    EXPECT_TRUE(reuse_set);
+
+    // Test buffer size options
+    bool recv_buffer_set = client_->setSocketOption(UdpClient::SocketOption::ReceiveBufferSize, 8192);
+    EXPECT_TRUE(recv_buffer_set);
+
+    bool send_buffer_set = client_->setSocketOption(UdpClient::SocketOption::SendBufferSize, 8192);
+    EXPECT_TRUE(send_buffer_set);
+}
+
+// Test asynchronous receiving
+TEST_F(UdpClientTest, AsynchronousReceiving) {
+    client_ = std::make_unique<UdpClient>();
+    ASSERT_TRUE(client_->bind(0));
+
+    std::atomic<int> received_count{0};
+    std::vector<std::string> received_messages;
+    std::mutex messages_mutex;
+
+    // Set up data received callback
+    client_->setOnDataReceivedCallback([&](const std::vector<char>& data, const std::string& /*ip*/, int /*port*/) {
+        std::lock_guard<std::mutex> lock(messages_mutex);
+        received_messages.emplace_back(data.begin(), data.end());
+        received_count.fetch_add(1);
+    });
+
+    // Start receiving
+    client_->startReceiving(1024);
+
+    // Send some test data to ourselves
+    auto local_endpoint = client_->getLocalEndpoint();
+    std::string test_message = "Async test message";
+
+    for (int i = 0; i < 3; ++i) {
+        bool sent = client_->send("127.0.0.1", local_endpoint.second, test_message + std::to_string(i));
+        EXPECT_TRUE(sent);
+        std::this_thread::sleep_for(10ms);
+    }
+
+    // Wait for messages to be received
+    std::this_thread::sleep_for(200ms);
+
+    // Stop receiving
+    client_->stopReceiving();
+
+    // Verify messages were received
+    EXPECT_GT(received_count.load(), 0);
+    EXPECT_GT(received_messages.size(), 0);
+}
+
+// Test error handling callbacks
+TEST_F(UdpClientTest, ErrorHandlingCallbacks) {
+    client_ = std::make_unique<UdpClient>();
+
+    std::atomic<int> error_count{0};
+    std::vector<std::string> error_messages;
+    std::mutex errors_mutex;
+
+    // Set up error callback
+    client_->setOnErrorCallback([&](const std::string& error, int /*code*/) {
+        std::lock_guard<std::mutex> lock(errors_mutex);
+        error_messages.push_back(error);
+        error_count.fetch_add(1);
+    });
+
+    // Try operations that should cause errors
+    // Send without binding
+    [[maybe_unused]] bool sent = client_->send("127.0.0.1", 12345, "Error test");
+    // This might succeed or fail depending on implementation
+
+    // Try to bind to an invalid port
+    bool bound = client_->bind(99999); // Invalid port
+    EXPECT_FALSE(bound);
+
+    std::this_thread::sleep_for(100ms);
+
+    // Should have captured some errors
+    EXPECT_GT(error_count.load(), 0);
+}
+
+// Test statistics functionality
+TEST_F(UdpClientTest, Statistics) {
+    client_ = std::make_unique<UdpClient>();
+    ASSERT_TRUE(client_->bind(0));
+
+    // Get initial statistics
+    auto initial_stats = client_->getStatistics();
+
+    // Send some data
+    std::string test_data = "Statistics test";
+    for (int i = 0; i < 5; ++i) {
+        client_->send("127.0.0.1", server_->getPort(), test_data);
+    }
+
+    // Get updated statistics
+    auto updated_stats = client_->getStatistics();
+    EXPECT_GT(updated_stats.packets_sent, initial_stats.packets_sent);
+    EXPECT_GT(updated_stats.bytes_sent, initial_stats.bytes_sent);
+
+    // Reset statistics
+    client_->resetStatistics();
+    auto reset_stats = client_->getStatistics();
+    EXPECT_EQ(reset_stats.packets_sent, 0);
+    EXPECT_EQ(reset_stats.bytes_sent, 0);
+}
+
+// Test concurrent operations
+TEST_F(UdpClientTest, ConcurrentOperations) {
+    client_ = std::make_unique<UdpClient>();
+    ASSERT_TRUE(client_->bind(0));
+
+    const int num_threads = 10;
+    const int messages_per_thread = 10;
+    std::vector<std::thread> threads;
+    std::atomic<int> success_count{0};
+
+    // Start multiple threads sending data concurrently
+    for (int t = 0; t < num_threads; ++t) {
+        threads.emplace_back([this, t, &success_count]() {
+            for (int i = 0; i < messages_per_thread; ++i) {
+                std::string message = "Thread" + std::to_string(t) + "_Msg" + std::to_string(i);
+                if (client_->send("127.0.0.1", server_->getPort(), message)) {
+                    success_count.fetch_add(1);
+                }
+                std::this_thread::sleep_for(1ms); // Small delay
+            }
+        });
+    }
+
+    // Wait for all threads to complete
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    // Most sends should succeed
+    EXPECT_GT(success_count.load(), (num_threads * messages_per_thread) / 2);
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

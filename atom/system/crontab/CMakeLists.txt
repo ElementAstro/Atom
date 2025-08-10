@@ -33,6 +33,6 @@ install(FILES ${ATOM_SYSTEM_CRONTAB_HEADERS}
 
 # Add tests subdirectory
 option(BUILD_CRON_TESTS "Build cron system tests" ON)
-if(BUILD_CRON_TESTS)
+if(BUILD_CRON_TESTS AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests)
     add_subdirectory(tests)
 endif()

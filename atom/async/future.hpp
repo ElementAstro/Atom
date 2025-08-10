@@ -1426,6 +1426,100 @@ protected:
 };
 
 /**
+ * @brief Create a thread pool optimized EnhancedFuture.
+ * @tparam F Function type.
+ * @tparam Args Parameter types.
+ * @param f Function to be called.
+ * @param args Parameters to pass to the function.
+ * @return EnhancedFuture of the function result.
+ */
+template <typename F, typename... Args>
+    requires ValidCallable<F, Args...>
+auto makeOptimizedFuture(F&& f, Args&&... args) {
+    using result_type = std::invoke_result_t<F, Args...>;
+
+#ifdef ATOM_USE_ASIO
+    std::promise<result_type> promise;
+    auto future = promise.get_future();
+
+    asio::post(
+        atom::async::internal::get_asio_thread_pool(),
+        [p = std::move(promise), func_capture = std::forward<F>(f),
+         args_tuple = std::make_tuple(std::forward<Args>(args)...)]() mutable {
+            try {
+                if constexpr (std::is_void_v<result_type>) {
+                    std::apply(func_capture, std::move(args_tuple));
+                    p.set_value();
+                } else {
+                    p.set_value(
+                        std::apply(func_capture, std::move(args_tuple)));
+                }
+            } catch (const std::exception& e) {
+                spdlog::error("Exception in Asio task: {}", e.what());
+                p.set_exception(std::current_exception());
+            } catch (...) {
+                spdlog::error("Unknown exception in Asio task.");
+                p.set_exception(std::current_exception());
+            }
+        });
+    return EnhancedFuture<result_type>(future.share());
+
+#elif defined(ATOM_PLATFORM_MACOS) && !defined(ATOM_USE_ASIO)
+    std::promise<result_type> promise;
+    auto future = promise.get_future();
+
+    struct CallData {
+        std::promise<result_type> promise;
+        std::function<void()> work;
+
+        template <typename F_inner, typename... Args_inner>
+        CallData(std::promise<result_type>&& p, F_inner&& f_inner,
+                 Args_inner&&... args_inner)
+            : promise(std::move(p)) {
+            work = [this, f_capture = std::forward<F_inner>(f_inner),
+                    args_capture_tuple = std::make_tuple(
+                        std::forward<Args_inner>(args_inner)...)]() mutable {
+                try {
+                    if constexpr (std::is_void_v<result_type>) {
+                        std::apply(f_capture, std::move(args_capture_tuple));
+                        this->promise.set_value();
+                    } else {
+                        this->promise.set_value(std::apply(
+                            f_capture, std::move(args_capture_tuple)));
+                    }
+                } catch (const std::exception& e) {
+                    spdlog::error("Exception in macOS dispatch task: {}",
+                                  e.what());
+                    this->promise.set_exception(std::current_exception());
+                } catch (...) {
+                    spdlog::error("Unknown exception in macOS dispatch task.");
+                    this->promise.set_exception(std::current_exception());
+                }
+            };
+        }
+        static void execute(void* context) {
+            auto* data = static_cast<CallData*>(context);
+            data->work();
+            delete data;
+        }
+    };
+    auto* callData = new CallData(std::move(promise), std::forward<F>(f),
+                                  std::forward<Args>(args)...);
+    dispatch_async_f(
+        dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), callData,
+        &CallData::execute);
+    return EnhancedFuture<result_type>(future.share());
+
+#else  // Default to std::async (covers Windows if not ATOM_USE_ASIO, and
+       // generic Linux)
+    return EnhancedFuture<result_type>(std::async(std::launch::async,
+                                                  std::forward<F>(f),
+                                                  std::forward<Args>(args)...)
+                                           .share());
+#endif
+}
+
+/**
  * @brief Helper function to create an EnhancedFuture.
  * @tparam F The type of the function to call.
  * @tparam Args The types of the arguments to pass to the function.
@@ -1451,10 +1545,10 @@ template <std::input_iterator InputIt>
 auto whenAll(InputIt first, InputIt last,
              std::optional<std::chrono::milliseconds> timeout = std::nullopt)
     -> std::future<std::vector<
-        typename std::iterator_traits<InputIt>::value_type::value_type>> {
+        std::remove_cvref_t<decltype(std::declval<typename std::iterator_traits<InputIt>::value_type>().get())>>> {
     using EnhancedFutureType =
         typename std::iterator_traits<InputIt>::value_type;
-    using ValueType = decltype(std::declval<EnhancedFutureType>().get());
+    using ValueType = std::remove_cvref_t<decltype(std::declval<EnhancedFutureType>().get())>;
     using ResultType = std::vector<ValueType>;
 
     if (std::distance(first, last) < 0) {
@@ -1487,24 +1581,22 @@ auto whenAll(InputIt first, InputIt last,
             for (size_t i = 0; i < total_count; ++i) {
                 auto& fut = (*futures_vec)[i];
                 if (timeout.has_value()) {
-                    if (!fut.isReady()) {
-                        auto opt_val = fut.waitFor(timeout.value());
-                        if (!opt_val.has_value() && !fut.isReady()) {
-                            if (!promise_fulfilled->exchange(true)) {
-                                spdlog::warn(
-                                    "whenAll: Timeout while waiting for future "
-                                    "{} of {}.",
-                                    i + 1, total_count);
-                                promise_ptr->set_exception(
-                                    std::make_exception_ptr(
-                                        InvalidFutureException(
-                                            ATOM_FILE_NAME, ATOM_FILE_LINE,
-                                            ATOM_FUNC_NAME,
-                                            "Timeout while waiting for a "
-                                            "future in whenAll.")));
-                            }
-                            return;
+                    auto status = fut.wait_for(timeout.value());
+                    if (status == std::future_status::timeout) {
+                        if (!promise_fulfilled->exchange(true)) {
+                            spdlog::warn(
+                                "whenAll: Timeout while waiting for future "
+                                "{} of {}.",
+                                i + 1, total_count);
+                            promise_ptr->set_exception(
+                                std::make_exception_ptr(
+                                    InvalidFutureException(
+                                        ATOM_FILE_NAME, ATOM_FILE_LINE,
+                                        ATOM_FUNC_NAME,
+                                        "Timeout while waiting for a "
+                                        "future in whenAll.")));
                         }
+                        return;
                     }
                 }
 
@@ -1704,99 +1796,7 @@ auto parallelProcess(Range&& range, Func&& func, size_t numTasks = 0) {
     return futures;
 }
 
-/**
- * @brief Create a thread pool optimized EnhancedFuture.
- * @tparam F Function type.
- * @tparam Args Parameter types.
- * @param f Function to be called.
- * @param args Parameters to pass to the function.
- * @return EnhancedFuture of the function result.
- */
-template <typename F, typename... Args>
-    requires ValidCallable<F, Args...>
-auto makeOptimizedFuture(F&& f, Args&&... args) {
-    using result_type = std::invoke_result_t<F, Args...>;
 
-#ifdef ATOM_USE_ASIO
-    std::promise<result_type> promise;
-    auto future = promise.get_future();
-
-    asio::post(
-        atom::async::internal::get_asio_thread_pool(),
-        [p = std::move(promise), func_capture = std::forward<F>(f),
-         args_tuple = std::make_tuple(std::forward<Args>(args)...)]() mutable {
-            try {
-                if constexpr (std::is_void_v<result_type>) {
-                    std::apply(func_capture, std::move(args_tuple));
-                    p.set_value();
-                } else {
-                    p.set_value(
-                        std::apply(func_capture, std::move(args_tuple)));
-                }
-            } catch (const std::exception& e) {
-                spdlog::error("Exception in Asio task: {}", e.what());
-                p.set_exception(std::current_exception());
-            } catch (...) {
-                spdlog::error("Unknown exception in Asio task.");
-                p.set_exception(std::current_exception());
-            }
-        });
-    return EnhancedFuture<result_type>(future.share());
-
-#elif defined(ATOM_PLATFORM_MACOS) && !defined(ATOM_USE_ASIO)
-    std::promise<result_type> promise;
-    auto future = promise.get_future();
-
-    struct CallData {
-        std::promise<result_type> promise;
-        std::function<void()> work;
-
-        template <typename F_inner, typename... Args_inner>
-        CallData(std::promise<result_type>&& p, F_inner&& f_inner,
-                 Args_inner&&... args_inner)
-            : promise(std::move(p)) {
-            work = [this, f_capture = std::forward<F_inner>(f_inner),
-                    args_capture_tuple = std::make_tuple(
-                        std::forward<Args_inner>(args_inner)...)]() mutable {
-                try {
-                    if constexpr (std::is_void_v<result_type>) {
-                        std::apply(f_capture, std::move(args_capture_tuple));
-                        this->promise.set_value();
-                    } else {
-                        this->promise.set_value(std::apply(
-                            f_capture, std::move(args_capture_tuple)));
-                    }
-                } catch (const std::exception& e) {
-                    spdlog::error("Exception in macOS dispatch task: {}",
-                                  e.what());
-                    this->promise.set_exception(std::current_exception());
-                } catch (...) {
-                    spdlog::error("Unknown exception in macOS dispatch task.");
-                    this->promise.set_exception(std::current_exception());
-                }
-            };
-        }
-        static void execute(void* context) {
-            auto* data = static_cast<CallData*>(context);
-            data->work();
-            delete data;
-        }
-    };
-    auto* callData = new CallData(std::move(promise), std::forward<F>(f),
-                                  std::forward<Args>(args)...);
-    dispatch_async_f(
-        dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), callData,
-        &CallData::execute);
-    return EnhancedFuture<result_type>(future.share());
-
-#else  // Default to std::async (covers Windows if not ATOM_USE_ASIO, and
-       // generic Linux)
-    return EnhancedFuture<result_type>(std::async(std::launch::async,
-                                                  std::forward<F>(f),
-                                                  std::forward<Args>(args)...)
-                                           .share());
-#endif
-}
 
 }  // namespace atom::async
 

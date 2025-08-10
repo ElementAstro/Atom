@@ -406,7 +406,7 @@ TEST_F(DecorateTest, CombiningDecorators) {
     // Add decorators in reverse execution order
     // 1. Retry (innermost, executed first)
     stepper.addDecorator<atom::meta::RetryDecorator<int, int>>(
-        baseFunc, 2, std::chrono::milliseconds(10));
+        2, std::chrono::milliseconds(10));
 
     // 2. Validation (middle)
     auto validator = [](int val) { return val >= 0; };

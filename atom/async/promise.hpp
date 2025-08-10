@@ -41,7 +41,9 @@ class PromiseCancelledException : public atom::error::RuntimeError {
 public:
     using atom::error::RuntimeError::RuntimeError;
 
-    // Make the class more efficient with move semantics
+    // Make the class copyable and movable
+    PromiseCancelledException(const PromiseCancelledException&) = default;
+    PromiseCancelledException& operator=(const PromiseCancelledException&) = default;
     PromiseCancelledException(PromiseCancelledException&&) noexcept = default;
     PromiseCancelledException& operator=(PromiseCancelledException&&) noexcept =
         default;
@@ -300,7 +302,6 @@ public:
             auto* wrapper = new CallbackWrapper(std::forward<F>(func));
             callbacks_.push(wrapper);
 
-            // Check if the callback should be run immediately
             shouldRunCallback =
                 future_.valid() && future_.wait_for(std::chrono::seconds(0)) ==
                                        std::future_status::ready;
@@ -323,7 +324,7 @@ public:
         // Run callback outside the lock if needed
         if (shouldRunCallback) {
             try {
-                future_.get();  // Get the value (void)
+                future_.get();
 #ifdef ATOM_USE_BOOST_LOCKFREE
                 // For lock-free queue, we need to handle callback execution
                 // manually

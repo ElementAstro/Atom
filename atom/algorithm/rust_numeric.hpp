@@ -2,7 +2,8 @@
 #pragma once
 
 #include <algorithm>
-#include <cctype>  // Include for std::tolower
+#include <bit>       // Include for std::byteswap (C++23)
+#include <cctype>    // Include for std::tolower
 #include <cmath>
 #include <cstdint>
 #include <iomanip>
@@ -783,19 +784,19 @@ public:
         // Use unsigned type for bitwise operations
         using U = typename std::make_unsigned<Int>::type;
         U uval = static_cast<U>(value);
-        U result = 0;
-        const int byte_count = sizeof(Int);
 
         // Use std::byteswap from C++23 for potentially better performance
-        if constexpr (__cplusplus >= 202302L) {
+        #if __cplusplus >= 202302L && __has_include(<bit>)
             return static_cast<Int>(std::byteswap(uval));
-        } else {
+        #else
+            U result = 0;
+            const int byte_count = sizeof(Int);
             for (int i = 0; i < byte_count; ++i) {
                 result |= ((uval >> (i * 8)) & 0xFF)
                           << ((byte_count - 1 - i) * 8);
             }
             return static_cast<Int>(result);
-        }
+        #endif
     }
 
     static Int min(Int a, Int b) { return std::min(a, b); }  // Use std::min

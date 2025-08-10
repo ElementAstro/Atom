@@ -1,8 +1,15 @@
-// filepath: atom/async/test_generator.hpp
+// filepath: tests/async/generator.cpp
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <future>
+#include <memory>
+#include <mutex>
+#include <numeric>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <tuple>  // Required for std::tuple
@@ -11,6 +18,17 @@
 #include "atom/async/generator.hpp"
 
 using namespace atom::async;
+using namespace std::chrono_literals;
+
+// Helper function to convert integers to appropriate types for testing
+template<typename T>
+T makeTestValue(int value) {
+    if constexpr (std::is_same_v<T, std::string>) {
+        return std::to_string(value);
+    } else {
+        return static_cast<T>(value);
+    }
+}
 
 // Test fixture for Generator
 template <typename T>
@@ -27,26 +45,26 @@ TYPED_TEST(GeneratorTest, EmptyGenerator) {
 
 TYPED_TEST(GeneratorTest, SingleYield) {
     auto gen_func = []() -> Generator<TypeParam> {
-        co_yield static_cast<TypeParam>(1);
+        co_yield makeTestValue<TypeParam>(1);
     };
     Generator<TypeParam> gen = gen_func();
     auto it = gen.begin();
     ASSERT_FALSE(it == gen.end());
-    EXPECT_EQ(*it, static_cast<TypeParam>(1));
+    EXPECT_EQ(*it, makeTestValue<TypeParam>(1));
     ++it;
     EXPECT_TRUE(it == gen.end());
 }
 
 TYPED_TEST(GeneratorTest, MultipleYields) {
     auto gen_func = []() -> Generator<TypeParam> {
-        co_yield static_cast<TypeParam>(1);
-        co_yield static_cast<TypeParam>(2);
-        co_yield static_cast<TypeParam>(3);
+        co_yield makeTestValue<TypeParam>(1);
+        co_yield makeTestValue<TypeParam>(2);
+        co_yield makeTestValue<TypeParam>(3);
     };
     Generator<TypeParam> gen = gen_func();
-    std::vector<TypeParam> expected = {static_cast<TypeParam>(1),
-                                       static_cast<TypeParam>(2),
-                                       static_cast<TypeParam>(3)};
+    std::vector<TypeParam> expected = {makeTestValue<TypeParam>(1),
+                                       makeTestValue<TypeParam>(2),
+                                       makeTestValue<TypeParam>(3)};
     std::vector<TypeParam> actual;
     for (const auto& val : gen) {
         actual.push_back(val);
@@ -56,14 +74,14 @@ TYPED_TEST(GeneratorTest, MultipleYields) {
 
 TYPED_TEST(GeneratorTest, ExceptionHandling) {
     auto gen_func = []() -> Generator<TypeParam> {
-        co_yield static_cast<TypeParam>(1);
+        co_yield makeTestValue<TypeParam>(1);
         throw std::runtime_error("Test Exception");
-        co_yield static_cast<TypeParam>(2);  // Unreachable
+        co_yield makeTestValue<TypeParam>(2);  // Unreachable
     };
     Generator<TypeParam> gen = gen_func();
     auto it = gen.begin();
     ASSERT_FALSE(it == gen.end());
-    EXPECT_EQ(*it, static_cast<TypeParam>(1));
+    EXPECT_EQ(*it, makeTestValue<TypeParam>(1));
     ++it;
     EXPECT_THROW(*it, std::runtime_error);
     EXPECT_TRUE(it == gen.end());  // After exception, generator should be done
@@ -71,21 +89,21 @@ TYPED_TEST(GeneratorTest, ExceptionHandling) {
 
 TYPED_TEST(GeneratorTest, MoveSemantics) {
     auto gen_func = []() -> Generator<TypeParam> {
-        co_yield static_cast<TypeParam>(10);
-        co_yield static_cast<TypeParam>(20);
+        co_yield makeTestValue<TypeParam>(10);
+        co_yield makeTestValue<TypeParam>(20);
     };
     Generator<TypeParam> gen1 = gen_func();
     Generator<TypeParam> gen2 = std::move(gen1);  // Move constructor
 
     auto it = gen2.begin();
     ASSERT_FALSE(it == gen2.end());
-    EXPECT_EQ(*it, static_cast<TypeParam>(10));
+    EXPECT_EQ(*it, makeTestValue<TypeParam>(10));
 
     Generator<TypeParam> gen3 = gen_func();
     gen2 = std::move(gen3);  // Move assignment
     it = gen2.begin();
     ASSERT_FALSE(it == gen2.end());
-    EXPECT_EQ(*it, static_cast<TypeParam>(10));
+    EXPECT_EQ(*it, makeTestValue<TypeParam>(10));
 }
 
 // Test cases for from_range
@@ -301,7 +319,7 @@ TYPED_TEST_SUITE(ConcurrentGeneratorTest, ConcurrentGeneratorTypes);
 TYPED_TEST(ConcurrentGeneratorTest, BasicOperation) {
     auto gen_func = []() -> Generator<TypeParam> {
         for (int i = 0; i < 5; ++i) {
-            co_yield static_cast<TypeParam>(i);
+            co_yield makeTestValue<TypeParam>(i);
         }
     };
 
@@ -313,23 +331,23 @@ TYPED_TEST(ConcurrentGeneratorTest, BasicOperation) {
     EXPECT_TRUE(c_gen.done());
     EXPECT_EQ(actual.size(), 5);
     for (int i = 0; i < 5; ++i) {
-        EXPECT_EQ(actual[i], static_cast<TypeParam>(i));
+        EXPECT_EQ(actual[i], makeTestValue<TypeParam>(i));
     }
     EXPECT_THROW(c_gen.next(), std::runtime_error);  // Should throw when done
 }
 
 TYPED_TEST(ConcurrentGeneratorTest, TryNextOperation) {
     auto gen_func = []() -> Generator<TypeParam> {
-        co_yield static_cast<TypeParam>(100);
-        co_yield static_cast<TypeParam>(200);
+        co_yield makeTestValue<TypeParam>(100);
+        co_yield makeTestValue<TypeParam>(200);
     };
 
     ConcurrentGenerator<TypeParam> c_gen(gen_func);
     TypeParam val;
     EXPECT_TRUE(c_gen.try_next(val));
-    EXPECT_EQ(val, static_cast<TypeParam>(100));
+    EXPECT_EQ(val, makeTestValue<TypeParam>(100));
     EXPECT_TRUE(c_gen.try_next(val));
-    EXPECT_EQ(val, static_cast<TypeParam>(200));
+    EXPECT_EQ(val, makeTestValue<TypeParam>(200));
     EXPECT_FALSE(c_gen.try_next(val));  // No more values
     EXPECT_TRUE(c_gen.done());
 }
@@ -379,35 +397,35 @@ TYPED_TEST(ConcurrentGeneratorTest, ConcurrentConsumption) {
 
 TYPED_TEST(ConcurrentGeneratorTest, ExceptionPropagation) {
     auto gen_func = []() -> Generator<TypeParam> {
-        co_yield static_cast<TypeParam>(1);
+        co_yield makeTestValue<TypeParam>(1);
         throw std::runtime_error("Producer error");
-        co_yield static_cast<TypeParam>(2);
+        co_yield makeTestValue<TypeParam>(2);
     };
 
     ConcurrentGenerator<TypeParam> c_gen(gen_func);
-    EXPECT_EQ(c_gen.next(), static_cast<TypeParam>(1));
+    EXPECT_EQ(c_gen.next(), makeTestValue<TypeParam>(1));
     EXPECT_THROW(c_gen.next(), std::runtime_error);
     EXPECT_TRUE(c_gen.done());
 }
 
 TYPED_TEST(ConcurrentGeneratorTest, MoveSemanticsConcurrent) {
     auto gen_func = []() -> Generator<TypeParam> {
-        co_yield static_cast<TypeParam>(10);
-        co_yield static_cast<TypeParam>(20);
+        co_yield makeTestValue<TypeParam>(10);
+        co_yield makeTestValue<TypeParam>(20);
     };
 
     ConcurrentGenerator<TypeParam> c_gen1(gen_func);
     ConcurrentGenerator<TypeParam> c_gen2 =
         std::move(c_gen1);  // Move constructor
 
-    EXPECT_EQ(c_gen2.next(), static_cast<TypeParam>(10));
-    EXPECT_EQ(c_gen2.next(), static_cast<TypeParam>(20));
+    EXPECT_EQ(c_gen2.next(), makeTestValue<TypeParam>(10));
+    EXPECT_EQ(c_gen2.next(), makeTestValue<TypeParam>(20));
     EXPECT_TRUE(c_gen2.done());
 
     ConcurrentGenerator<TypeParam> c_gen3(gen_func);
     c_gen2 = std::move(c_gen3);  // Move assignment
-    EXPECT_EQ(c_gen2.next(), static_cast<TypeParam>(10));
-    EXPECT_EQ(c_gen2.next(), static_cast<TypeParam>(20));
+    EXPECT_EQ(c_gen2.next(), makeTestValue<TypeParam>(10));
+    EXPECT_EQ(c_gen2.next(), makeTestValue<TypeParam>(20));
     EXPECT_TRUE(c_gen2.done());
 }
 
@@ -563,9 +581,8 @@ TEST(LockFreeTwoWayGeneratorVoidReceiveTest, ExceptionPropagation) {
 }
 
 TEST(LockFreeTwoWayGeneratorVoidReceiveTest, ConcurrentNext) {
-    const int num_elements = 1000;
-    auto coroutine_func = [num_elements]() -> TwoWayGenerator<int, void> {
-        for (int i = 0; i < num_elements; ++i) {
+    auto coroutine_func = []() -> TwoWayGenerator<int, void> {
+        for (int i = 0; i < 1000; ++i) {
             co_yield i;
         }
         co_return;
@@ -574,7 +591,7 @@ TEST(LockFreeTwoWayGeneratorVoidReceiveTest, ConcurrentNext) {
     LockFreeTwoWayGenerator<int, void> gen(coroutine_func);
 
     std::vector<std::future<int>> futures;
-    for (int i = 0; i < num_elements; ++i) {
+    for (int i = 0; i < 1000; ++i) {
         futures.push_back(
             std::async(std::launch::async, [&gen]() { return gen.next(); }));
     }
@@ -585,7 +602,7 @@ TEST(LockFreeTwoWayGeneratorVoidReceiveTest, ConcurrentNext) {
     }
 
     std::sort(results.begin(), results.end());
-    for (int i = 0; i < num_elements; ++i) {
+    for (int i = 0; i < 1000; ++i) {
         EXPECT_EQ(results[i], i);
     }
     EXPECT_TRUE(gen.done());
@@ -695,3 +712,287 @@ TYPED_TEST(ThreadSafeGeneratorTest, MoveSemanticsThreadSafe) {
 }
 
 #endif  // ATOM_USE_BOOST_LOCKS
+
+// Enhanced edge case and performance tests
+class GeneratorEnhancedTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        large_data.resize(10000);
+        std::iota(large_data.begin(), large_data.end(), 1);
+    }
+
+    std::vector<int> large_data;
+};
+
+// Memory management tests
+TEST_F(GeneratorEnhancedTest, LargeGeneratorMemoryUsage) {
+    auto gen_func = []() -> Generator<int> {
+        for (int i = 0; i < 100000; ++i) {
+            co_yield i;
+        }
+    };
+
+    Generator<int> gen = gen_func();
+    int count = 0;
+
+    // Process generator in chunks to test memory stability
+    for ([[maybe_unused]] const auto& val : gen) {
+        count++;
+        if (count >= 50000) break;  // Process half
+    }
+
+    EXPECT_EQ(count, 50000);
+}
+
+TEST_F(GeneratorEnhancedTest, GeneratorResourceCleanup) {
+    std::atomic<int> destructor_count{0};
+
+    struct TestResource {
+        std::atomic<int>* counter;
+        TestResource(std::atomic<int>* c) : counter(c) {}
+        ~TestResource() { if (counter) counter->fetch_add(1); }
+    };
+
+    {
+        auto gen_func = [&destructor_count]() -> Generator<int> {
+            TestResource resource(&destructor_count);
+            for (int i = 0; i < 5; ++i) {
+                co_yield i;
+            }
+        };
+
+        Generator<int> gen = gen_func();
+        auto it = gen.begin();
+        ++it;  // Partially consume
+        // Generator goes out of scope here
+    }
+
+    // Give some time for cleanup
+    std::this_thread::sleep_for(10ms);
+    EXPECT_EQ(destructor_count.load(), 1);
+}
+
+// Performance tests
+TEST_F(GeneratorEnhancedTest, GeneratorPerformance) {
+    auto gen_func = []() -> Generator<int> {
+        for (int i = 0; i < 100000; ++i) {
+            co_yield i;
+        }
+    };
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    Generator<int> gen = gen_func();
+    int sum = 0;
+    for (const auto& val : gen) {
+        sum += val;
+    }
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+    // Sum of 0 to 99999 = 99999 * 100000 / 2 = 4999950000
+    EXPECT_EQ(sum, 4999950000LL);
+    EXPECT_LT(duration.count(), 1000);  // Should complete within 1 second
+}
+
+// Complex exception scenarios
+TEST_F(GeneratorEnhancedTest, ExceptionInMiddleOfGeneration) {
+    auto gen_func = []() -> Generator<int> {
+        for (int i = 0; i < 10; ++i) {
+            if (i == 5) {
+                throw std::runtime_error("Exception at 5");
+            }
+            co_yield i;
+        }
+    };
+
+    Generator<int> gen = gen_func();
+    std::vector<int> collected;
+
+    try {
+        for (const auto& val : gen) {
+            collected.push_back(val);
+        }
+        FAIL() << "Expected exception";
+    } catch (const std::runtime_error& e) {
+        EXPECT_STREQ(e.what(), "Exception at 5");
+    }
+
+    // Should have collected values before exception
+    std::vector<int> expected = {0, 1, 2, 3, 4};
+    EXPECT_EQ(collected, expected);
+}
+
+TEST_F(GeneratorEnhancedTest, ExceptionRecovery) {
+    auto gen_func = []() -> Generator<int> {
+        for (int i = 0; i < 5; ++i) {
+            if (i == 2) {
+                // Simulate error recovery by yielding error indicator
+                co_yield -1;
+                break;
+            }
+            co_yield i;
+        }
+    };
+
+    Generator<int> gen = gen_func();
+    std::vector<int> collected;
+
+    for (const auto& val : gen) {
+        collected.push_back(val);
+    }
+
+    std::vector<int> expected = {0, 1, -1};
+    EXPECT_EQ(collected, expected);
+}
+
+// Iterator edge cases
+TEST_F(GeneratorEnhancedTest, IteratorComparison) {
+    auto gen_func = []() -> Generator<int> {
+        co_yield 1;
+        co_yield 2;
+    };
+
+    Generator<int> gen = gen_func();
+    auto it1 = gen.begin();
+    auto it2 = gen.begin();  // Second begin call
+
+    // Both iterators should be equal initially
+    EXPECT_TRUE(it1 == it2);
+
+    ++it1;
+    EXPECT_FALSE(it1 == it2);  // Now they should be different
+}
+
+TEST_F(GeneratorEnhancedTest, IteratorPostIncrement) {
+    auto gen_func = []() -> Generator<int> {
+        co_yield 10;
+        co_yield 20;
+        co_yield 30;
+    };
+
+    Generator<int> gen = gen_func();
+    auto it = gen.begin();
+
+    EXPECT_EQ(*it, 10);
+    auto old_it = it++;
+    EXPECT_EQ(*old_it, 10);  // Post-increment returns old value
+    EXPECT_EQ(*it, 20);      // Iterator has advanced
+}
+
+// Concurrent generator tests
+TEST_F(GeneratorEnhancedTest, ConcurrentGeneratorStress) {
+    auto gen_func = []() -> Generator<int> {
+        for (int i = 0; i < 10000; ++i) {
+            co_yield i;
+        }
+    };
+
+    ConcurrentGenerator<int> c_gen(gen_func);
+    std::vector<int> consumed_values;
+    std::mutex mtx;
+    std::atomic<bool> done{false};
+
+    // Multiple consumer threads
+    std::vector<std::thread> consumers;
+    for (int i = 0; i < 8; ++i) {
+        consumers.emplace_back([&]() {
+            while (!done.load()) {
+                int val;
+                if (c_gen.try_next(val)) {
+                    std::lock_guard<std::mutex> lock(mtx);
+                    consumed_values.push_back(val);
+                } else if (c_gen.done()) {
+                    break;
+                } else {
+                    std::this_thread::yield();
+                }
+            }
+        });
+    }
+
+    // Wait for completion
+    while (!c_gen.done()) {
+        std::this_thread::sleep_for(1ms);
+    }
+    done.store(true);
+
+    for (auto& t : consumers) {
+        t.join();
+    }
+
+    // Verify all elements were consumed
+    std::sort(consumed_values.begin(), consumed_values.end());
+    EXPECT_EQ(consumed_values.size(), 10000);
+    for (int i = 0; i < 10000; ++i) {
+        EXPECT_EQ(consumed_values[i], i);
+    }
+}
+
+// Integration with other async components
+TEST_F(GeneratorEnhancedTest, GeneratorWithFutures) {
+    auto gen_func = []() -> Generator<std::future<int>> {
+        for (int i = 0; i < 5; ++i) {
+            auto promise = std::make_shared<std::promise<int>>();
+            auto future = promise->get_future();
+
+            // Simulate async work
+            std::thread([promise, i]() {
+                std::this_thread::sleep_for(10ms);
+                promise->set_value(i * i);
+            }).detach();
+
+            co_yield std::move(future);
+        }
+    };
+
+    Generator<std::future<int>> gen = gen_func();
+    std::vector<int> results;
+
+    for (auto& future : gen) {
+        results.push_back(const_cast<std::future<int>&>(future).get());
+    }
+
+    std::vector<int> expected = {0, 1, 4, 9, 16};
+    EXPECT_EQ(results, expected);
+}
+
+// Range utility edge cases
+TEST_F(GeneratorEnhancedTest, RangeWithLargeStep) {
+    auto gen = range(0, 100, 25);
+    std::vector<int> actual;
+
+    for (const auto& val : gen) {
+        actual.push_back(val);
+    }
+
+    std::vector<int> expected = {0, 25, 50, 75};
+    EXPECT_EQ(actual, expected);
+}
+
+TEST_F(GeneratorEnhancedTest, RangeWithNegativeNumbers) {
+    auto gen = range(-10, -5, 2);
+    std::vector<int> actual;
+
+    for (const auto& val : gen) {
+        actual.push_back(val);
+    }
+
+    std::vector<int> expected = {-10, -8, -6};
+    EXPECT_EQ(actual, expected);
+}
+
+TEST_F(GeneratorEnhancedTest, InfiniteRangePartialConsumption) {
+    auto gen = infinite_range(100, 3);
+    std::vector<int> actual;
+
+    auto it = gen.begin();
+    for (int i = 0; i < 5; ++i) {
+        actual.push_back(*it);
+        ++it;
+    }
+
+    std::vector<int> expected = {100, 103, 106, 109, 112};
+    EXPECT_EQ(actual, expected);
+}

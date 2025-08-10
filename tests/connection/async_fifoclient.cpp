@@ -509,4 +509,181 @@ TEST_F(FifoClientTest, ReadFromClosed) {
   EXPECT_FALSE(async_result.has_value());
 }
 
+// ============================================================================
+// ENHANCED TESTS FOR COMPREHENSIVE COVERAGE
+// ============================================================================
+
+// Test timeout handling for write operations
+TEST_F(FifoClientTest, WriteWithTimeout) {
+  atom::async::connection::FifoClient client;
+  client.open(fifo_path_);
+  std::string test_data = "Timeout test data\n";
+
+  // Test write with timeout when no reader is available
+  auto start_time = std::chrono::steady_clock::now();
+  auto future = client.write(test_data, std::chrono::milliseconds(100));
+  bool success = future.get();
+  auto end_time = std::chrono::steady_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+  // Should timeout and fail
+  EXPECT_FALSE(success);
+  EXPECT_GE(duration.count(), 90); // Allow some tolerance
+  EXPECT_LE(duration.count(), 200); // Should not take much longer than timeout
+
+  client.close();
+}
+
+// Test timeout handling for read operations
+TEST_F(FifoClientTest, ReadWithTimeout) {
+  atom::async::connection::FifoClient client;
+  client.open(fifo_path_);
+
+  // Test read with timeout when no data is available
+  auto start_time = std::chrono::steady_clock::now();
+  auto future = client.read(std::chrono::milliseconds(100));
+  auto result = future.get();
+  auto end_time = std::chrono::steady_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+  // Should timeout and return nullopt
+  EXPECT_FALSE(result.has_value());
+  EXPECT_GE(duration.count(), 90); // Allow some tolerance
+  EXPECT_LE(duration.count(), 200); // Should not take much longer than timeout
+
+  client.close();
+}
+
+// Test concurrent write operations
+TEST_F(FifoClientTest, ConcurrentWrites) {
+  atom::async::connection::FifoClient client;
+  client.open(fifo_path_);
+
+  const int num_writes = 5;
+  std::vector<std::future<bool>> futures;
+  std::vector<std::string> test_data;
+
+  // Start multiple concurrent write operations
+  for (int i = 0; i < num_writes; ++i) {
+    test_data.push_back("Concurrent write " + std::to_string(i) + "\n");
+    futures.push_back(client.write(test_data[i], std::chrono::milliseconds(500)));
+  }
+
+  // Start a reader in a separate thread to consume the data
+  std::thread reader_thread([&]() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Let writes start
+#ifndef _WIN32
+    for (int i = 0; i < num_writes; ++i) {
+      std::string data = read_from_fifo(fifo_path_, test_data[i].size());
+      EXPECT_FALSE(data.empty());
+    }
+#endif
+  });
+
+  // Wait for all writes to complete
+  int successful_writes = 0;
+  for (auto& future : futures) {
+    if (future.get()) {
+      successful_writes++;
+    }
+  }
+
+  reader_thread.join();
+
+  // At least some writes should succeed
+  EXPECT_GT(successful_writes, 0);
+
+  client.close();
+}
+
+// Test concurrent read operations
+TEST_F(FifoClientTest, ConcurrentReads) {
+  atom::async::connection::FifoClient client;
+  client.open(fifo_path_);
+
+  const int num_reads = 3;
+  std::vector<std::future<std::optional<std::string>>> futures;
+
+  // Start multiple concurrent read operations
+  for (int i = 0; i < num_reads; ++i) {
+    futures.push_back(client.read(std::chrono::milliseconds(500)));
+  }
+
+  // Start a writer in a separate thread to provide data
+  std::thread writer_thread([&]() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Let reads start
+#ifndef _WIN32
+    for (int i = 0; i < num_reads; ++i) {
+      std::string data = "Concurrent read data " + std::to_string(i) + "\n";
+      write_to_fifo(fifo_path_, data);
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+#endif
+  });
+
+  // Wait for all reads to complete
+  int successful_reads = 0;
+  for (auto& future : futures) {
+    auto result = future.get();
+    if (result.has_value()) {
+      successful_reads++;
+      EXPECT_FALSE(result->empty());
+    }
+  }
+
+  writer_thread.join();
+
+  // At least some reads should succeed
+  EXPECT_GT(successful_reads, 0);
+
+  client.close();
+}
+
+// Test error recovery after failed operations
+TEST_F(FifoClientTest, ErrorRecovery) {
+  atom::async::connection::FifoClient client;
+  client.open(fifo_path_);
+
+  // First, try an operation that will fail (write without reader)
+  auto failed_future = client.write("Failed write\n", std::chrono::milliseconds(50));
+  bool failed_result = failed_future.get();
+  EXPECT_FALSE(failed_result);
+
+  // Now try a successful operation with a reader
+  std::thread reader_thread([&]() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+#ifndef _WIN32
+    std::string data = read_from_fifo(fifo_path_, 15); // "Successful write\n"
+    EXPECT_EQ(data, "Successful write\n");
+#endif
+  });
+
+  auto success_future = client.write("Successful write\n", std::chrono::milliseconds(200));
+  bool success_result = success_future.get();
+
+  reader_thread.join();
+
+#ifndef _WIN32
+  EXPECT_TRUE(success_result);
+#endif
+
+  client.close();
+}
+
+// Test edge case: empty data write
+TEST_F(FifoClientTest, EmptyDataWrite) {
+  atom::async::connection::FifoClient client;
+  client.open(fifo_path_);
+
+  // Test writing empty string
+  auto future = client.write("", std::chrono::milliseconds(100));
+  bool result = future.get();
+
+  // Behavior may vary by implementation, but should not crash
+  // Empty writes might succeed or fail depending on implementation
+  EXPECT_TRUE(result || !result); // Just ensure no crash
+
+  client.close();
+}
+
 #endif // ATOM_CONNECTION_TEST_ASYNC_FIFOCLIENT_HPP

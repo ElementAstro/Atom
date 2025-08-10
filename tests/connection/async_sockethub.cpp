@@ -395,7 +395,7 @@ TEST_F(SocketHubTest, ConnectionTimeout) {
     asio::io_context ctx;
     TestClient client(ctx);
     ASSERT_TRUE(client.connect("127.0.0.1", port_));
-    size_t client_id = connect_promise.get_future().get();
+    [[maybe_unused]] size_t client_id = connect_promise.get_future().get();
 
     // Client is now connected but idle. The server's internal timer should kick
     // in. The timer check runs every minute, so this test as written won't work
@@ -405,7 +405,7 @@ TEST_F(SocketHubTest, ConnectionTimeout) {
     // to make this testable. For now, we will wait longer than the timeout and
     // hope the check runs.
 
-    auto status = disconnect_promise.get_future().wait_for(1.5s);
+    [[maybe_unused]] auto status = disconnect_promise.get_future().wait_for(1.5s);
     // Note: The internal timer in the provided code runs every 60s. This test
     // will fail unless that interval is reduced for testing. Let's comment this
     // assertion and note the limitation. ASSERT_EQ(status,
@@ -534,6 +534,176 @@ TEST_F(SocketHubSslTest, SslClientConnects) {
     // Shut down gracefully
     ssl_socket.shutdown(ec);
     ssl_socket.lowest_layer().close(ec);
+}
+
+// ============================================================================
+// ENHANCED TESTS FOR COMPREHENSIVE COVERAGE
+// ============================================================================
+
+// Test rate limiting functionality
+TEST_F(SocketHubTest, RateLimiting) {
+    hub_->setRateLimit(5, std::chrono::seconds(1)); // 5 messages per second
+    ASSERT_TRUE(hub_->start(port_));
+
+    std::atomic<int> message_count{0};
+    hub_->setMessageHandler([&](const std::string&, std::shared_ptr<asio::ip::tcp::socket>) {
+        message_count.fetch_add(1);
+    });
+
+    // Connect a client
+    asio::io_context io_context;
+    asio::ip::tcp::socket socket(io_context);
+    asio::ip::tcp::endpoint endpoint(asio::ip::address::from_string("127.0.0.1"), port_);
+
+    asio::error_code ec;
+    socket.connect(endpoint, ec);
+    ASSERT_FALSE(ec);
+
+    // Send messages rapidly (should be rate limited)
+    for (int i = 0; i < 10; ++i) {
+        std::string msg = "Rate test " + std::to_string(i);
+        asio::write(socket, asio::buffer(msg), ec);
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    // Should have received fewer messages due to rate limiting
+    EXPECT_LT(message_count.load(), 10);
+    EXPECT_GT(message_count.load(), 0);
+
+    socket.close();
+}
+
+// Test client management and broadcasting
+TEST_F(SocketHubTest, ClientManagementAndBroadcasting) {
+    ASSERT_TRUE(hub_->start(port_));
+
+    std::atomic<int> connect_count{0};
+    std::atomic<int> disconnect_count{0};
+    std::atomic<int> message_count{0};
+
+    hub_->setClientHandler([&](std::shared_ptr<asio::ip::tcp::socket> socket, bool connected) {
+        if (connected) {
+            connect_count.fetch_add(1);
+        } else {
+            disconnect_count.fetch_add(1);
+        }
+    });
+
+    hub_->setMessageHandler([&](const std::string&, std::shared_ptr<asio::ip::tcp::socket>) {
+        message_count.fetch_add(1);
+    });
+
+    const int num_clients = 5;
+    std::vector<std::unique_ptr<asio::ip::tcp::socket>> clients;
+    asio::io_context io_context;
+
+    // Connect multiple clients
+    for (int i = 0; i < num_clients; ++i) {
+        auto client = std::make_unique<asio::ip::tcp::socket>(io_context);
+        asio::ip::tcp::endpoint endpoint(asio::ip::address::from_string("127.0.0.1"), port_);
+
+        asio::error_code ec;
+        client->connect(endpoint, ec);
+        ASSERT_FALSE(ec);
+        clients.push_back(std::move(client));
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    // Verify connections
+    EXPECT_EQ(connect_count.load(), num_clients);
+    EXPECT_EQ(hub_->getClientCount(), num_clients);
+
+    // Test broadcasting
+    std::string broadcast_message = "Broadcast to all clients";
+    hub_->broadcast(broadcast_message);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    // Disconnect all clients
+    for (auto& client : clients) {
+        client->close();
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    // Verify disconnections
+    EXPECT_EQ(disconnect_count.load(), num_clients);
+    EXPECT_EQ(hub_->getClientCount(), 0);
+}
+
+// Test high-concurrency scenarios
+TEST_F(SocketHubTest, HighConcurrencyScenario) {
+    ASSERT_TRUE(hub_->start(port_));
+
+    std::atomic<int> total_messages{0};
+    std::atomic<int> total_connections{0};
+    std::mutex messages_mutex;
+    std::vector<std::string> all_messages;
+
+    hub_->setClientHandler([&](std::shared_ptr<asio::ip::tcp::socket>, bool connected) {
+        if (connected) {
+            total_connections.fetch_add(1);
+        }
+    });
+
+    hub_->setMessageHandler([&](const std::string& message, std::shared_ptr<asio::ip::tcp::socket>) {
+        {
+            std::lock_guard<std::mutex> lock(messages_mutex);
+            all_messages.push_back(message);
+        }
+        total_messages.fetch_add(1);
+    });
+
+    const int num_threads = 20;
+    const int messages_per_thread = 10;
+    std::vector<std::thread> client_threads;
+
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    // Start multiple threads with concurrent clients
+    for (int t = 0; t < num_threads; ++t) {
+        client_threads.emplace_back([this, t]() {
+            asio::io_context io_context;
+            asio::ip::tcp::socket socket(io_context);
+            asio::ip::tcp::endpoint endpoint(asio::ip::address::from_string("127.0.0.1"), port_);
+
+            asio::error_code ec;
+            socket.connect(endpoint, ec);
+            if (!ec) {
+                for (int i = 0; i < messages_per_thread; ++i) {
+                    std::string msg = "Thread" + std::to_string(t) + "_Msg" + std::to_string(i);
+                    asio::write(socket, asio::buffer(msg), ec);
+                    if (ec) break;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                }
+                socket.close();
+            }
+        });
+    }
+
+    // Wait for all threads to complete
+    for (auto& thread : client_threads) {
+        thread.join();
+    }
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+    // Give server time to process remaining messages
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+    // Verify performance metrics
+    EXPECT_GT(total_connections.load(), num_threads / 2); // At least half should connect
+    EXPECT_GT(total_messages.load(), (num_threads * messages_per_thread) / 2); // At least half should succeed
+    EXPECT_LT(duration.count(), 30000); // Should complete within 30 seconds
+
+    // Verify message uniqueness (no duplicates)
+    std::set<std::string> unique_messages(all_messages.begin(), all_messages.end());
+    EXPECT_EQ(unique_messages.size(), all_messages.size());
 }
 
 int main(int argc, char** argv) {

@@ -17,8 +17,18 @@ else()
   include(GoogleTest)
 endif()
 
-# Only include TTY tests for now since other connection classes have missing implementations
-set(TEST_SOURCES ${PROJECT_SOURCE_DIR}/ttybase.cpp)
+# Include all connection tests
+set(TEST_SOURCES
+    ${PROJECT_SOURCE_DIR}/ttybase.cpp
+    ${PROJECT_SOURCE_DIR}/async_fifoclient.cpp
+    ${PROJECT_SOURCE_DIR}/async_fifoserver.cpp
+    ${PROJECT_SOURCE_DIR}/async_tcpclient.cpp
+    ${PROJECT_SOURCE_DIR}/async_udpclient.cpp
+    ${PROJECT_SOURCE_DIR}/async_udpserver.cpp
+    ${PROJECT_SOURCE_DIR}/async_sockethub.cpp
+    ${PROJECT_SOURCE_DIR}/async_integration_tests.cpp
+    ${PROJECT_SOURCE_DIR}/async_performance_tests.cpp
+)
 
 # Only create executable if there are source files
 if(TEST_SOURCES)

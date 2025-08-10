@@ -165,6 +165,6 @@ install(
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/atom-system-clipboard)
 
 # Add subdirectories
-if(BUILD_TESTING)
+if(BUILD_TESTING AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests)
     add_subdirectory(tests)
 endif()

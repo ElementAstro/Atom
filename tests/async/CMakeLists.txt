@@ -23,6 +23,16 @@ file(GLOB_RECURSE TEST_SOURCES ${PROJECT_SOURCE_DIR}/*.cpp)
 if(TEST_SOURCES)
     add_executable(${PROJECT_NAME} ${TEST_SOURCES})
 
+    # Add include directories
+    target_include_directories(${PROJECT_NAME} PRIVATE
+        ${CMAKE_SOURCE_DIR}/../../
+        ${CMAKE_SOURCE_DIR}/../../atom
+        ${CMAKE_SOURCE_DIR}/../../atom/async
+    )
+
+    # Set C++ standard
+    target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
+
     target_link_libraries(${PROJECT_NAME} gtest gtest_main gmock gmock_main atom-async atom-error loguru)
 
     # Register tests with CTest

@@ -1,6 +1,7 @@
-#include "http.hpp"
+#include "atom/extra/beast/http.hpp"
 
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/core.hpp>
@@ -18,6 +19,7 @@ namespace http = beast::http;
 namespace net = boost::asio;
 using tcp = boost::asio::ip::tcp;
 namespace fs = std::filesystem;
+using json = nlohmann::json;
 
 class HttpClientTest : public ::testing::Test {
 protected:
@@ -179,12 +181,17 @@ TEST_F(HttpClientTest, CustomHeaders) {
 // Test JSON request
 TEST_F(HttpClientTest, JsonRequest) {
     json req_body = {{"key1", "value1"}, {"key2", 42}};
+    std::string json_string = req_body.dump();
 
-    auto response = client_->jsonRequest(http::verb::post, test_host, test_port,
-                                         "/json", req_body);
+    auto response = client_->request(http::verb::post, test_host, test_port,
+                                     "/json", 11, "application/json", json_string);
 
-    EXPECT_EQ(response["status"], "success");
-    EXPECT_EQ(response["message"], "JSON response");
+    EXPECT_EQ(response.result(), http::status::ok);
+
+    // Parse the response body as JSON
+    json response_json = json::parse(response.body());
+    EXPECT_EQ(response_json["status"], "success");
+    EXPECT_EQ(response_json["message"], "JSON response");
 }
 
 // Test timeout setting

@@ -150,10 +150,23 @@ TEST_F(Base64Test, DecodeWithWhitespace) {
 TEST_F(Base64Test, DecodeInvalidInput) {
     std::string invalidChars = "SGVsbG8sIFdvcmxkIQ=!";
     auto result = base64Decode(invalidChars);
-    EXPECT_FALSE(result.has_value());
+    std::cout << "First call result has_value: " << result.has_value() << std::endl;
+    if (!result.has_value()) {
+        std::cout << "First call error: " << result.error().error() << std::endl;
+    } else {
+        std::cout << "First call value: " << result.value() << std::endl;
+    }
+    EXPECT_FALSE(result.has_value()) << "First call (invalid chars) should fail";
+
     std::string invalidLength = "SGVsbG";
     result = base64Decode(invalidLength);
-    EXPECT_FALSE(result.has_value());
+    std::cout << "Second call result has_value: " << result.has_value() << std::endl;
+    if (!result.has_value()) {
+        std::cout << "Second call error: " << result.error().error() << std::endl;
+    } else {
+        std::cout << "Second call value: " << result.value() << std::endl;
+    }
+    EXPECT_FALSE(result.has_value()) << "Second call (invalid length) should fail";
 }
 
 TEST_F(Base64Test, RoundTrip) {

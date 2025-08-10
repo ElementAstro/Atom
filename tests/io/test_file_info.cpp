@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 #include "file_info.hpp"
+#include "file_permission.hpp"
+#include "io.hpp"
 
 #include <chrono>
 #include <cstring>
@@ -208,7 +210,7 @@ TEST_F(FileInfoTest, RenameFile) {
     ASSERT_TRUE(fs::exists(regular_file));
     ASSERT_FALSE(fs::exists(new_path));
 
-    EXPECT_NO_THROW({ atom::io::renameFile(regular_file, new_path); });
+    EXPECT_TRUE(atom::io::renameFile(regular_file, new_path));
 
     EXPECT_FALSE(fs::exists(regular_file));
     EXPECT_TRUE(fs::exists(new_path));
@@ -261,7 +263,7 @@ TEST_F(FileInfoTest, DeleteFile) {
 
     ASSERT_TRUE(fs::exists(temp_file));
 
-    EXPECT_NO_THROW({ atom::io::deleteFile(temp_file); });
+    EXPECT_TRUE(atom::io::removeFile(temp_file));
 
     EXPECT_FALSE(fs::exists(temp_file));
 }
@@ -274,9 +276,7 @@ TEST_F(FileInfoTest, RenameToExistingFile) {
     another << "This is another file";
     another.close();
 
-    EXPECT_THROW(
-        { atom::io::renameFile(regular_file, another_file); },
-        std::runtime_error);
+    EXPECT_FALSE(atom::io::renameFile(regular_file, another_file));
 
     // Cleanup
     fs::remove(another_file);
@@ -284,8 +284,7 @@ TEST_F(FileInfoTest, RenameToExistingFile) {
 
 // Test file operations: trying to delete non-existent file (should throw)
 TEST_F(FileInfoTest, DeleteNonExistentFile) {
-    EXPECT_THROW(
-        { atom::io::deleteFile(non_existent_file); }, std::runtime_error);
+    EXPECT_FALSE(atom::io::removeFile(non_existent_file));
 }
 
 // Test file operations: changing permissions of non-existent file (should

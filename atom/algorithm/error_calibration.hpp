@@ -49,6 +49,13 @@ private:
     T mse_ = 0.0;  // Mean Squared Error
     T mae_ = 0.0;  // Mean Absolute Error
 
+    // Non-linear calibration parameters
+    std::vector<T> poly_coeffs_;
+    bool is_polynomial_ = false;
+    bool is_exponential_ = false;
+    bool is_logarithmic_ = false;
+    bool is_power_law_ = false;
+
     std::mutex metrics_mutex_;
     std::unique_ptr<atom::async::ThreadPool> thread_pool_;
 
@@ -221,7 +228,7 @@ private:
             boost::numeric::ublas::permutation_matrix<usize> pm(A.size1());
             bool singular = boost::numeric::ublas::lu_factorize(A, pm);
             if (singular) {
-                THROW_RUNTIME_ERROR("Matrix is singular.");
+                throw std::runtime_error("Matrix is singular.");
             }
             boost::numeric::ublas::lu_substitute(A, pm, b);
 
@@ -288,7 +295,7 @@ private:
                 }
             }
             if (std::abs(augmented[maxRow][i]) < 1e-12) {
-                THROW_RUNTIME_ERROR("Matrix is singular or nearly singular.");
+                throw std::runtime_error("Matrix is singular or nearly singular.");
             }
             std::swap(augmented[i], augmented[maxRow]);
 
@@ -304,7 +311,7 @@ private:
         std::vector<T> x(n, 0.0);
         for (i32 i = n - 1; i >= 0; --i) {
             if (std::abs(augmented[i][i]) < 1e-12) {
-                THROW_RUNTIME_ERROR(
+                throw std::runtime_error(
                     "Division by zero during back substitution.");
             }
             x[i] = augmented[i][n];
@@ -345,7 +352,7 @@ public:
     void linearCalibrate(const std::vector<T>& measured,
                          const std::vector<T>& actual) {
         if (measured.size() != actual.size() || measured.empty()) {
-            THROW_INVALID_ARGUMENT(
+            throw std::invalid_argument(
                 "Input vectors must be non-empty and of equal size");
         }
 
@@ -358,10 +365,17 @@ public:
 
         T n = static_cast<T>(measured.size());
         if (n * sumXx - sumX * sumX == 0) {
-            THROW_RUNTIME_ERROR("Division by zero in slope calculation.");
+            throw std::runtime_error("Division by zero in slope calculation.");
         }
         slope_ = (n * sumXy - sumX * sumY) / (n * sumXx - sumX * sumX);
         intercept_ = (sumY - slope_ * sumX) / n;
+
+        // Reset all non-linear modes for linear calibration
+        is_polynomial_ = false;
+        is_exponential_ = false;
+        is_logarithmic_ = false;
+        is_power_law_ = false;
+        poly_coeffs_.clear();
 
         calculateMetrics(measured, actual);
     }
@@ -376,19 +390,19 @@ public:
                              const std::vector<T>& actual, i32 degree) {
         // Enhanced input validation
         if (measured.size() != actual.size()) {
-            THROW_INVALID_ARGUMENT("Input vectors must be of equal size");
+            throw std::invalid_argument("Input vectors must be of equal size");
         }
 
         if (measured.empty()) {
-            THROW_INVALID_ARGUMENT("Input vectors must be non-empty");
+            throw std::invalid_argument("Input vectors must be non-empty");
         }
 
         if (degree < 1) {
-            THROW_INVALID_ARGUMENT("Polynomial degree must be at least 1.");
+            throw std::invalid_argument("Polynomial degree must be at least 1.");
         }
 
         if (measured.size() <= static_cast<usize>(degree)) {
-            THROW_INVALID_ARGUMENT(
+            throw std::invalid_argument(
                 "Number of data points must exceed polynomial degree.");
         }
 
@@ -397,7 +411,7 @@ public:
                 measured, [](T x) { return std::isnan(x) || std::isinf(x); }) ||
             std::ranges::any_of(
                 actual, [](T y) { return std::isnan(y) || std::isinf(y); })) {
-            THROW_INVALID_ARGUMENT(
+            throw std::invalid_argument(
                 "Input vectors contain NaN or infinity values.");
         }
 
@@ -415,16 +429,21 @@ public:
                 levenbergMarquardt(measured, actual, polyFunc, initialParams);
 
             if (params.size() < 2) {
-                THROW_RUNTIME_ERROR(
+                throw std::runtime_error(
                     "Insufficient parameters returned from calibration.");
             }
 
+            // Store polynomial coefficients
+            poly_coeffs_ = params;
+            is_polynomial_ = true;
+
+            // Also store linear approximation for compatibility
             slope_ = params[1];      // First-order coefficient as slope
             intercept_ = params[0];  // Constant term as intercept
 
             calculateMetrics(measured, actual);
         } catch (const std::exception& e) {
-            THROW_RUNTIME_ERROR(std::string("Polynomial calibration failed: ") +
+            throw std::runtime_error(std::string("Polynomial calibration failed: ") +
                                 e.what());
         }
     }
@@ -437,30 +456,50 @@ public:
     void exponentialCalibrate(const std::vector<T>& measured,
                               const std::vector<T>& actual) {
         if (measured.size() != actual.size() || measured.empty()) {
-            THROW_INVALID_ARGUMENT(
+            throw std::invalid_argument(
                 "Input vectors must be non-empty and of equal size");
         }
         if (std::any_of(actual.begin(), actual.end(),
                         [](T val) { return val <= 0; })) {
-            THROW_INVALID_ARGUMENT(
+            throw std::invalid_argument(
                 "Actual values must be positive for exponential calibration.");
         }
 
-        auto expFunc = [](T x, const std::vector<T>& params) -> T {
-            return params[0] * std::exp(params[1] * x);
-        };
+        // Use logarithmic transformation: ln(y) = ln(a) + b*x
+        // This converts the exponential model to a linear model
+        std::vector<T> ln_actual;
+        ln_actual.reserve(actual.size());
 
-        std::vector<T> initialParams = {1.0, 0.1};
-        auto params =
-            levenbergMarquardt(measured, actual, expFunc, initialParams);
-
-        if (params.size() < 2) {
-            THROW_RUNTIME_ERROR(
-                "Insufficient parameters returned from calibration.");
+        for (T val : actual) {
+            if (val <= 0) {
+                throw std::invalid_argument("Actual values must be positive for exponential calibration.");
+            }
+            ln_actual.push_back(std::log(val));
         }
 
-        slope_ = params[1];
-        intercept_ = params[0];
+        // Perform linear regression on (measured, ln_actual)
+        T sumX = std::accumulate(measured.begin(), measured.end(), T(0));
+        T sumY = std::accumulate(ln_actual.begin(), ln_actual.end(), T(0));
+        T sumXy = std::inner_product(measured.begin(), measured.end(), ln_actual.begin(), T(0));
+        T sumXx = std::inner_product(measured.begin(), measured.end(), measured.begin(), T(0));
+
+        T n = static_cast<T>(measured.size());
+        if (n * sumXx - sumX * sumX == 0) {
+            throw std::runtime_error("Division by zero in exponential calibration.");
+        }
+
+        T b = (n * sumXy - sumX * sumY) / (n * sumXx - sumX * sumX);  // slope in ln space
+        T ln_a = (sumY - b * sumX) / n;  // intercept in ln space
+        T a = std::exp(ln_a);  // convert back to original space
+
+        slope_ = b;      // b parameter (exponent coefficient)
+        intercept_ = a;  // a parameter (amplitude)
+
+        // Set exponential mode
+        is_exponential_ = true;
+        is_polynomial_ = false;
+        is_logarithmic_ = false;
+        is_power_law_ = false;
 
         calculateMetrics(measured, actual);
     }
@@ -473,31 +512,50 @@ public:
     void logarithmicCalibrate(const std::vector<T>& measured,
                               const std::vector<T>& actual) {
         if (measured.size() != actual.size() || measured.empty()) {
-            THROW_INVALID_ARGUMENT(
+            throw std::invalid_argument(
                 "Input vectors must be non-empty and of equal size");
         }
         if (std::any_of(measured.begin(), measured.end(),
                         [](T val) { return val <= 0; })) {
-            THROW_INVALID_ARGUMENT(
+            throw std::invalid_argument(
                 "Measured values must be positive for logarithmic "
                 "calibration.");
         }
 
-        auto logFunc = [](T x, const std::vector<T>& params) -> T {
-            return params[0] + params[1] * std::log(x);
-        };
+        // Use direct linear regression: y = a + b * ln(x)
+        // Transform measured values to ln(measured)
+        std::vector<T> ln_measured;
+        ln_measured.reserve(measured.size());
 
-        std::vector<T> initialParams = {0.0, 1.0};
-        auto params =
-            levenbergMarquardt(measured, actual, logFunc, initialParams);
-
-        if (params.size() < 2) {
-            THROW_RUNTIME_ERROR(
-                "Insufficient parameters returned from calibration.");
+        for (T val : measured) {
+            if (val <= 0) {
+                throw std::invalid_argument("Measured values must be positive for logarithmic calibration.");
+            }
+            ln_measured.push_back(std::log(val));
         }
 
-        slope_ = params[1];
-        intercept_ = params[0];
+        // Perform linear regression on (ln_measured, actual)
+        T sumX = std::accumulate(ln_measured.begin(), ln_measured.end(), T(0));
+        T sumY = std::accumulate(actual.begin(), actual.end(), T(0));
+        T sumXy = std::inner_product(ln_measured.begin(), ln_measured.end(), actual.begin(), T(0));
+        T sumXx = std::inner_product(ln_measured.begin(), ln_measured.end(), ln_measured.begin(), T(0));
+
+        T n = static_cast<T>(measured.size());
+        if (n * sumXx - sumX * sumX == 0) {
+            throw std::runtime_error("Division by zero in logarithmic calibration.");
+        }
+
+        T b = (n * sumXy - sumX * sumY) / (n * sumXx - sumX * sumX);  // slope
+        T a = (sumY - b * sumX) / n;  // intercept
+
+        slope_ = b;      // b parameter (logarithmic coefficient)
+        intercept_ = a;  // a parameter (intercept)
+
+        // Set logarithmic mode
+        is_logarithmic_ = true;
+        is_polynomial_ = false;
+        is_exponential_ = false;
+        is_power_law_ = false;
 
         calculateMetrics(measured, actual);
     }
@@ -510,38 +568,81 @@ public:
     void powerLawCalibrate(const std::vector<T>& measured,
                            const std::vector<T>& actual) {
         if (measured.size() != actual.size() || measured.empty()) {
-            THROW_INVALID_ARGUMENT(
+            throw std::invalid_argument(
                 "Input vectors must be non-empty and of equal size");
         }
         if (std::any_of(measured.begin(), measured.end(),
                         [](T val) { return val <= 0; }) ||
             std::any_of(actual.begin(), actual.end(),
                         [](T val) { return val <= 0; })) {
-            THROW_INVALID_ARGUMENT(
+            throw std::invalid_argument(
                 "Values must be positive for power law calibration.");
         }
 
-        auto powerFunc = [](T x, const std::vector<T>& params) -> T {
-            return params[0] * std::pow(x, params[1]);
-        };
+        // Use logarithmic transformation: ln(y) = ln(a) + b * ln(x)
+        // Transform both measured and actual values to log space
+        std::vector<T> ln_measured, ln_actual;
+        ln_measured.reserve(measured.size());
+        ln_actual.reserve(actual.size());
 
-        std::vector<T> initialParams = {1.0, 1.0};
-        auto params =
-            levenbergMarquardt(measured, actual, powerFunc, initialParams);
-
-        if (params.size() < 2) {
-            THROW_RUNTIME_ERROR(
-                "Insufficient parameters returned from calibration.");
+        for (size_t i = 0; i < measured.size(); ++i) {
+            if (measured[i] <= 0 || actual[i] <= 0) {
+                throw std::invalid_argument("Values must be positive for power law calibration.");
+            }
+            ln_measured.push_back(std::log(measured[i]));
+            ln_actual.push_back(std::log(actual[i]));
         }
 
-        slope_ = params[1];
-        intercept_ = params[0];
+        // Perform linear regression on (ln_measured, ln_actual)
+        T sumX = std::accumulate(ln_measured.begin(), ln_measured.end(), T(0));
+        T sumY = std::accumulate(ln_actual.begin(), ln_actual.end(), T(0));
+        T sumXy = std::inner_product(ln_measured.begin(), ln_measured.end(), ln_actual.begin(), T(0));
+        T sumXx = std::inner_product(ln_measured.begin(), ln_measured.end(), ln_measured.begin(), T(0));
+
+        T n = static_cast<T>(measured.size());
+        if (n * sumXx - sumX * sumX == 0) {
+            throw std::runtime_error("Division by zero in power law calibration.");
+        }
+
+        T b = (n * sumXy - sumX * sumY) / (n * sumXx - sumX * sumX);  // power exponent
+        T ln_a = (sumY - b * sumX) / n;  // intercept in ln space
+        T a = std::exp(ln_a);  // convert back to original space
+
+        slope_ = b;      // b parameter (power exponent)
+        intercept_ = a;  // a parameter (amplitude)
+
+        // Set power law mode
+        is_power_law_ = true;
+        is_polynomial_ = false;
+        is_exponential_ = false;
+        is_logarithmic_ = false;
 
         calculateMetrics(measured, actual);
     }
 
     [[nodiscard]] auto apply(T value) const -> T {
-        return slope_ * value + intercept_;
+        if (is_polynomial_ && !poly_coeffs_.empty()) {
+            // Use polynomial model: sum(coeffs[i] * x^i)
+            T result = 0;
+            T power = 1;
+            for (size_t i = 0; i < poly_coeffs_.size(); ++i) {
+                result += poly_coeffs_[i] * power;
+                power *= value;
+            }
+            return result;
+        } else if (is_exponential_) {
+            // Use exponential model: a * exp(b * x)
+            return intercept_ * std::exp(slope_ * value);
+        } else if (is_logarithmic_) {
+            // Use logarithmic model: a + b * ln(x)
+            return intercept_ + slope_ * std::log(value);
+        } else if (is_power_law_) {
+            // Use power law model: a * x^b
+            return intercept_ * std::pow(value, slope_);
+        } else {
+            // Use linear model
+            return slope_ * value + intercept_;
+        }
     }
 
     void printParameters() const {
@@ -583,10 +684,10 @@ public:
                                      f64 confidence_level = 0.95)
         -> std::pair<T, T> {
         if (n_iterations <= 0) {
-            THROW_INVALID_ARGUMENT("Number of iterations must be positive.");
+            throw std::invalid_argument("Number of iterations must be positive.");
         }
         if (confidence_level <= 0 || confidence_level >= 1) {
-            THROW_INVALID_ARGUMENT("Confidence level must be between 0 and 1.");
+            throw std::invalid_argument("Confidence level must be between 0 and 1.");
         }
 
         std::vector<T> bootstrapSlopes;
@@ -622,7 +723,7 @@ public:
         }
 
         if (bootstrapSlopes.empty()) {
-            THROW_RUNTIME_ERROR("All bootstrap iterations failed.");
+            throw std::runtime_error("All bootstrap iterations failed.");
         }
 
         std::sort(bootstrapSlopes.begin(), bootstrapSlopes.end());
@@ -678,9 +779,9 @@ public:
 
     void crossValidation(const std::vector<T>& measured,
                          const std::vector<T>& actual, i32 k = 5) {
-        if (measured.size() != actual.size() ||
+        if (measured.size() != actual.size() || measured.empty() || k <= 0 ||
             measured.size() < static_cast<usize>(k)) {
-            THROW_INVALID_ARGUMENT(
+            throw std::invalid_argument(
                 "Input vectors must be non-empty and of size greater than k");
         }
 
@@ -736,7 +837,7 @@ public:
         }
 
         if (mseValues.empty()) {
-            THROW_RUNTIME_ERROR("All cross-validation folds failed.");
+            throw std::runtime_error("All cross-validation folds failed.");
         }
 
         T avgRSquared = 0;
@@ -807,18 +908,13 @@ AsyncCalibrationTask<T> calibrateAsync(const std::vector<T>& measured,
                                        const std::vector<T>& actual) {
     auto calibrator = new ErrorCalibration<T>();
 
-    // Execute calibration in background thread
-    std::thread worker([calibrator, measured, actual]() {
-        try {
-            calibrator->linearCalibrate(measured, actual);
-        } catch (const std::exception& e) {
-            spdlog::error("Async calibration failed: {}", e.what());
-        }
-    });
-    worker.detach();  // Let the thread run in the background
-
-    // Wait for some ready flag
-    co_await std::suspend_always{};
+    // Execute calibration synchronously for now to avoid race conditions
+    // In a real implementation, this would use proper async mechanisms
+    try {
+        calibrator->linearCalibrate(measured, actual);
+    } catch (const std::exception& e) {
+        spdlog::error("Async calibration failed: {}", e.what());
+    }
 
     co_return calibrator;
 }

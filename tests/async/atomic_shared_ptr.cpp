@@ -322,9 +322,8 @@ TEST_F(AtomicSharedPtrTest, Transform) {
     AtomicSharedPtr<MyObject> concurrent_ptr(
         std::make_shared<MyObject>(1),
         AtomicSharedPtrConfig{.max_retry_attempts = 100});
-    std::atomic<int> final_value = 0;
 
-    auto increment_func = [&](int thread_id) {
+    auto increment_func = [&](int) {
         concurrent_ptr.transform([&](const std::shared_ptr<MyObject>& p) {
             // Simulate some work
             std::this_thread::sleep_for(std::chrono::microseconds(10));
@@ -363,7 +362,7 @@ TEST_F(AtomicSharedPtrTest, Update) {
         std::make_shared<MyObject>(1),
         AtomicSharedPtrConfig{.max_retry_attempts = 100});
 
-    auto increment_func = [&](int thread_id) {
+    auto increment_func = [&](int) {
         concurrent_ptr.update([&](const std::shared_ptr<MyObject>& p) {
             // Simulate some work
             std::this_thread::sleep_for(std::chrono::microseconds(10));
@@ -446,7 +445,7 @@ TEST_F(AtomicSharedPtrTest, WithExclusiveAccess) {
     // Test with null pointer (should throw)
     AtomicSharedPtr<MyObject> null_ptr;
     EXPECT_THROW(
-        { null_ptr.with_exclusive_access([](MyObject* obj) { return 0; }); },
+        { null_ptr.with_exclusive_access([](MyObject*) { return 0; }); },
         AtomicSharedPtrException);
 }
 
@@ -665,7 +664,7 @@ TEST_F(AtomicSharedPtrTest, ConcurrentLoadStore) {
                     std::shared_ptr<MyObject> obj = ptr.load();
                     if (obj) {
                         // Do something with obj to ensure it's valid
-                        volatile int id = obj->id;
+                        [[maybe_unused]] volatile int id = obj->id;
                     }
                 }
             }
@@ -905,4 +904,248 @@ TEST_F(AtomicSharedPtrTest, NullSharedPtrHandling) {
     EXPECT_FALSE(ptr.is_null());
     EXPECT_EQ(ptr.load()->id, 3);
     EXPECT_EQ(MyObject::instance_count, 1);
+}
+
+// Additional tests for missing functionality
+
+// Test make_shared static method
+TEST_F(AtomicSharedPtrTest, MakeSharedStatic) {
+    AtomicSharedPtrConfig config;
+    config.enable_statistics = true;
+
+    auto ptr = AtomicSharedPtr<MyObject>::make_shared(config, 100);
+    EXPECT_FALSE(ptr.is_null());
+    EXPECT_EQ(ptr.load()->id, 100);
+    EXPECT_TRUE(ptr.get_config().enable_statistics);
+    EXPECT_TRUE(ptr.get_stats() != nullptr);
+    EXPECT_EQ(MyObject::instance_count, 1);
+}
+
+// Test exponential backoff configuration
+TEST_F(AtomicSharedPtrTest, ExponentialBackoffConfig) {
+    AtomicSharedPtrConfig config;
+    config.use_exponential_backoff = true;
+    config.retry_delay = std::chrono::nanoseconds(10);
+    config.max_retry_attempts = 5;
+
+    AtomicSharedPtr<MyObject> ptr(std::make_shared<MyObject>(200), config);
+
+    // Test that configuration is properly set
+    EXPECT_TRUE(ptr.get_config().use_exponential_backoff);
+    EXPECT_EQ(ptr.get_config().retry_delay, std::chrono::nanoseconds(10));
+    EXPECT_EQ(ptr.get_config().max_retry_attempts, 5);
+}
+
+// Test linear backoff (when exponential is disabled)
+TEST_F(AtomicSharedPtrTest, LinearBackoffConfig) {
+    AtomicSharedPtrConfig config;
+    config.use_exponential_backoff = false;
+    config.retry_delay = std::chrono::nanoseconds(5);
+    config.max_retry_attempts = 10;
+
+    AtomicSharedPtr<MyObject> ptr(std::make_shared<MyObject>(300), config);
+
+    // Test that configuration is properly set
+    EXPECT_FALSE(ptr.get_config().use_exponential_backoff);
+    EXPECT_EQ(ptr.get_config().retry_delay, std::chrono::nanoseconds(5));
+    EXPECT_EQ(ptr.get_config().max_retry_attempts, 10);
+}
+
+// Test AtomicSharedPtrException
+TEST_F(AtomicSharedPtrTest, ExceptionHandling) {
+    // Test exception construction and what() method
+    AtomicSharedPtrException ex("Test exception message");
+    EXPECT_STREQ(ex.what(), "Test exception message");
+
+    // Test exception thrown by make_with_deleter with null pointer
+    EXPECT_THROW({
+        AtomicSharedPtr<MyObject>::make_with_deleter(nullptr, [](MyObject*){});
+    }, AtomicSharedPtrException);
+
+    // Test exception thrown by operator-> on null pointer
+    AtomicSharedPtr<MyObject> null_ptr;
+    EXPECT_THROW({
+        [[maybe_unused]] auto id = null_ptr->id;
+    }, AtomicSharedPtrException);
+}
+
+// Test statistics structure methods
+TEST_F(AtomicSharedPtrTest, StatisticsStructure) {
+    AtomicSharedPtrStats stats;
+
+    // Test initial values
+    EXPECT_EQ(stats.load_operations.load(), 0);
+    EXPECT_EQ(stats.store_operations.load(), 0);
+    EXPECT_EQ(stats.cas_operations.load(), 0);
+    EXPECT_EQ(stats.cas_failures.load(), 0);
+    EXPECT_EQ(stats.reference_increments.load(), 0);
+    EXPECT_EQ(stats.reference_decrements.load(), 0);
+
+    // Modify values
+    stats.load_operations.store(10);
+    stats.store_operations.store(5);
+    stats.cas_operations.store(3);
+    stats.cas_failures.store(1);
+    stats.reference_increments.store(20);
+    stats.reference_decrements.store(15);
+
+    // Test reset
+    stats.reset();
+    EXPECT_EQ(stats.load_operations.load(), 0);
+    EXPECT_EQ(stats.store_operations.load(), 0);
+    EXPECT_EQ(stats.cas_operations.load(), 0);
+    EXPECT_EQ(stats.cas_failures.load(), 0);
+    EXPECT_EQ(stats.reference_increments.load(), 0);
+    EXPECT_EQ(stats.reference_decrements.load(), 0);
+}
+
+// Test configuration default values
+TEST_F(AtomicSharedPtrTest, ConfigurationDefaults) {
+    AtomicSharedPtrConfig config;
+
+    EXPECT_FALSE(config.enable_statistics);
+    EXPECT_EQ(config.max_retry_attempts, 10000);
+    EXPECT_EQ(config.retry_delay, std::chrono::nanoseconds(100));
+    EXPECT_TRUE(config.use_exponential_backoff);
+}
+
+// Test type aliases
+TEST_F(AtomicSharedPtrTest, TypeAliases) {
+    // Test that atomic_shared_ptr is an alias for AtomicSharedPtr
+    atomic_shared_ptr<MyObject> ptr(400);
+    EXPECT_FALSE(ptr.is_null());
+    EXPECT_EQ(ptr.load()->id, 400);
+    EXPECT_EQ(MyObject::instance_count, 1);
+}
+
+// Test edge cases for compare_exchange operations
+TEST_F(AtomicSharedPtrTest, CompareExchangeEdgeCases) {
+    AtomicSharedPtr<MyObject> ptr;
+
+    // CAS on null pointer
+    std::shared_ptr<MyObject> expected = nullptr;
+    std::shared_ptr<MyObject> desired = std::make_shared<MyObject>(500);
+
+    bool success = ptr.compare_exchange_weak(expected, desired);
+    EXPECT_TRUE(success);
+    EXPECT_EQ(ptr.load()->id, 500);
+    EXPECT_EQ(MyObject::instance_count, 1);
+
+    // CAS to null
+    expected = ptr.load();
+    desired = nullptr;
+    success = ptr.compare_exchange_strong(expected, desired);
+    EXPECT_TRUE(success);
+    EXPECT_TRUE(ptr.is_null());
+    EXPECT_EQ(MyObject::instance_count, 0);
+}
+
+// Test memory ordering parameters
+TEST_F(AtomicSharedPtrTest, MemoryOrderingParameters) {
+    AtomicSharedPtr<MyObject> ptr(600);
+
+    // Test different memory orderings for load
+    auto obj1 = ptr.load(std::memory_order_relaxed);
+    auto obj2 = ptr.load(std::memory_order_acquire);
+    auto obj3 = ptr.load(std::memory_order_seq_cst);
+
+    EXPECT_EQ(obj1->id, 600);
+    EXPECT_EQ(obj2->id, 600);
+    EXPECT_EQ(obj3->id, 600);
+
+    // Test different memory orderings for store
+    ptr.store(std::make_shared<MyObject>(601), std::memory_order_relaxed);
+    EXPECT_EQ(ptr.load()->id, 601);
+
+    ptr.store(std::make_shared<MyObject>(602), std::memory_order_release);
+    EXPECT_EQ(ptr.load()->id, 602);
+
+    ptr.store(std::make_shared<MyObject>(603), std::memory_order_seq_cst);
+    EXPECT_EQ(ptr.load()->id, 603);
+
+    // Test different memory orderings for exchange
+    auto old1 = ptr.exchange(std::make_shared<MyObject>(604), std::memory_order_relaxed);
+    EXPECT_EQ(old1->id, 603);
+    EXPECT_EQ(ptr.load()->id, 604);
+
+    auto old2 = ptr.exchange(std::make_shared<MyObject>(605), std::memory_order_acq_rel);
+    EXPECT_EQ(old2->id, 604);
+    EXPECT_EQ(ptr.load()->id, 605);
+
+    // Test different memory orderings for use_count and unique
+    EXPECT_EQ(ptr.use_count(std::memory_order_relaxed), 1);
+    EXPECT_EQ(ptr.use_count(std::memory_order_acquire), 1);
+    EXPECT_TRUE(ptr.unique(std::memory_order_relaxed));
+    EXPECT_TRUE(ptr.unique(std::memory_order_acquire));
+
+    // Test different memory orderings for version
+    auto ver1 = ptr.version(std::memory_order_relaxed);
+    auto ver2 = ptr.version(std::memory_order_acquire);
+    EXPECT_EQ(ver1, ver2);
+
+    // Test different memory orderings for reset
+    ptr.reset(std::memory_order_relaxed);
+    EXPECT_TRUE(ptr.is_null());
+
+    ptr.store(std::make_shared<MyObject>(606));
+    ptr.reset(std::memory_order_release);
+    EXPECT_TRUE(ptr.is_null());
+
+    ptr.store(std::make_shared<MyObject>(607));
+    ptr.reset(std::memory_order_seq_cst);
+    EXPECT_TRUE(ptr.is_null());
+
+    // Test different memory orderings for get_raw_unsafe
+    ptr.store(std::make_shared<MyObject>(608));
+    auto raw1 = ptr.get_raw_unsafe(std::memory_order_relaxed);
+    auto raw2 = ptr.get_raw_unsafe(std::memory_order_acquire);
+    EXPECT_EQ(raw1, raw2);
+    EXPECT_EQ(raw1->id, 608);
+}
+
+// Test wait_for with infinite timeout
+TEST_F(AtomicSharedPtrTest, WaitForInfiniteTimeout) {
+    AtomicSharedPtr<MyObject> ptr(700);
+
+    // Test wait_for with max timeout (infinite)
+    auto result = ptr.wait_for(
+        [](const std::shared_ptr<MyObject>& p) { return p && p->id == 700; });
+    EXPECT_EQ(result->id, 700);
+}
+
+// Test concurrent access to statistics
+TEST_F(AtomicSharedPtrTest, ConcurrentStatistics) {
+    AtomicSharedPtrConfig config;
+    config.enable_statistics = true;
+    AtomicSharedPtr<MyObject> ptr(std::make_shared<MyObject>(800), config);
+
+    const int num_threads = 5;
+    const int operations_per_thread = 100;
+
+    std::vector<std::thread> threads;
+    for (int i = 0; i < num_threads; ++i) {
+        threads.emplace_back([&]() {
+            for (int j = 0; j < operations_per_thread; ++j) {
+                // Mix of operations to generate statistics
+                if (j % 3 == 0) {
+                    ptr.load();
+                } else if (j % 3 == 1) {
+                    ptr.store(std::make_shared<MyObject>(800 + j));
+                } else {
+                    std::shared_ptr<MyObject> expected = ptr.load();
+                    ptr.compare_exchange_weak(expected, std::make_shared<MyObject>(800 + j));
+                }
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    const AtomicSharedPtrStats* stats = ptr.get_stats();
+    EXPECT_GT(stats->load_operations.load(), 0);
+    EXPECT_GT(stats->store_operations.load(), 0);
+    EXPECT_GT(stats->cas_operations.load(), 0);
+    // cas_failures might be 0 or more depending on contention
 }

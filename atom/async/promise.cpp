@@ -134,67 +134,7 @@ void Promise<void>::setException(std::exception_ptr exception) noexcept(false) {
     }
 }
 
-template <typename F>
-    requires VoidCallbackInvocable<F>
-void Promise<void>::onComplete(F&& func) {
-    // First check if cancelled without acquiring the lock for better
-    // performance
-    if (isCancelled()) {
-        return;  // No callbacks should be added if the promise is cancelled
-    }
 
-    bool shouldRunCallback = false;
-    {
-#ifdef ATOM_USE_BOOST_LOCKFREE
-        // Lock-free queue implementation
-        auto* wrapper = new CallbackWrapper(std::forward<F>(func));
-        callbacks_.push(wrapper);
-
-        shouldRunCallback =
-            future_.valid() && future_.wait_for(std::chrono::seconds(0)) ==
-                                   std::future_status::ready;
-#else
-        std::unique_lock lock(mutex_);
-        if (isCancelled()) {
-            return;  // Double-check after acquiring the lock
-        }
-
-        // Store callback
-        callbacks_.emplace_back(std::forward<F>(func));
-
-        // Check if we should run the callback immediately
-        shouldRunCallback =
-            future_.valid() && future_.wait_for(std::chrono::seconds(0)) ==
-                                   std::future_status::ready;
-#endif
-    }
-
-    // Run callback outside the lock if needed
-    if (shouldRunCallback) {
-        try {
-            future_.get();
-#ifdef ATOM_USE_BOOST_LOCKFREE
-            // For lock-free queue, we need to handle callback execution
-            // manually
-            CallbackWrapper* wrapper = nullptr;
-            while (callbacks_.pop(wrapper)) {
-                if (wrapper && wrapper->callback) {
-                    try {
-                        wrapper->callback();
-                    } catch (...) {
-                        // Ignore exceptions in callbacks
-                    }
-                    delete wrapper;
-                }
-            }
-#else
-            func();
-#endif
-        } catch (...) {
-            // Ignore exceptions from callback execution after the fact
-        }
-    }
-}
 
 void Promise<void>::setCancellable(std::stop_token stopToken) {
     if (stopToken.stop_possible()) {

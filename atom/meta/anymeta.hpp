@@ -73,6 +73,28 @@ public:
         mutable std::atomic<uint64_t> fire_count{0};
         mutable std::atomic<uint64_t> listener_count{0};
 
+        // Copy constructor
+        Event(const Event& other)
+            : listeners(other.listeners),
+              description(other.description),
+              fire_count(other.fire_count.load()),
+              listener_count(other.listener_count.load()) {
+        }
+
+        // Copy assignment operator
+        Event& operator=(const Event& other) {
+            if (this != &other) {
+                listeners = other.listeners;
+                description = other.description;
+                fire_count.store(other.fire_count.load());
+                listener_count.store(other.listener_count.load());
+            }
+            return *this;
+        }
+
+        // Default constructor
+        Event() = default;
+
         void updateListenerCount() {
             listener_count.store(listeners.size(), std::memory_order_relaxed);
         }

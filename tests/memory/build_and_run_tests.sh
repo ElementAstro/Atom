@@ -85,6 +85,8 @@ $CXX_COMPILER $CXX_FLAGS $INCLUDE_DIRS \
     ../test_memory_pool.cpp \
     ../test_object_pool.cpp \
     ../test_ring_buffer.cpp \
+    ../../../atom/error/exception.cpp \
+    ../../../atom/error/stacktrace.cpp \
     -o comprehensive_tests
 
 if [ $? -eq 0 ]; then
@@ -101,18 +103,24 @@ print_status "Building individual test components..."
 $CXX_COMPILER $CXX_FLAGS $INCLUDE_DIRS \
     -DSTANDALONE_TEST \
     ../test_memory_pool.cpp \
+    ../../../atom/error/exception.cpp \
+    ../../../atom/error/stacktrace.cpp \
     -o memory_pool_tests
 
 # Object Pool Tests
 $CXX_COMPILER $CXX_FLAGS $INCLUDE_DIRS \
     -DSTANDALONE_TEST \
     ../test_object_pool.cpp \
+    ../../../atom/error/exception.cpp \
+    ../../../atom/error/stacktrace.cpp \
     -o object_pool_tests
 
 # Ring Buffer Tests
 $CXX_COMPILER $CXX_FLAGS $INCLUDE_DIRS \
     -DSTANDALONE_TEST \
     ../test_ring_buffer.cpp \
+    ../../../atom/error/exception.cpp \
+    ../../../atom/error/stacktrace.cpp \
     -o ring_buffer_tests
 
 print_success "All test executables built successfully!"

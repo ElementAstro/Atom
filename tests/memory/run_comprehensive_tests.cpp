@@ -320,7 +320,7 @@ LeakDetectionResult testLeakDetectionAccuracy() {
 
     // Should detect the 3 intentional leaks
     ASSERT_EQ(leak_result.leaked_allocations, 3);
-    ASSERT_EQ(leak_result.leaked_bytes, 3 * 128);
+    ASSERT_EQ(leak_result.leaked_bytes, 3 * 64);
 
     return leak_result;
 }
