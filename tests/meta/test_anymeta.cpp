@@ -23,15 +23,15 @@ protected:
     public:
         int value;
         std::string name;
-        
+
         TestClass(int v = 0, std::string n = "") : value(v), name(std::move(n)) {}
-        
+
         int getValue() const { return value; }
         void setValue(int v) { value = v; }
-        
+
         std::string getName() const { return name; }
         void setName(const std::string& n) { name = n; }
-        
+
         int add(int a, int b) { return a + b; }
         std::string concatenate(const std::string& a, const std::string& b) {
             return a + b;

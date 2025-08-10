@@ -56,7 +56,7 @@ public:
 
             std::vector<char> buffer(1024);
             asio::ip::udp::endpoint sender_endpoint;
-            
+
             auto start = std::chrono::steady_clock::now();
             while (std::chrono::steady_clock::now() - start < timeout) {
                 asio::error_code ec;
@@ -101,10 +101,10 @@ protected:
 // Basic functionality tests
 TEST_F(UdpSocketHubTest, StartStop) {
     EXPECT_FALSE(server_->isRunning());
-    
+
     ASSERT_TRUE(server_->start(port_));
     EXPECT_TRUE(server_->isRunning());
-    
+
     server_->stop();
     EXPECT_FALSE(server_->isRunning());
 }
@@ -195,7 +195,7 @@ TEST_F(UdpSocketHubTest, MulticastJoinLeave) {
     ASSERT_TRUE(server_->start(port_));
 
     std::string multicast_address = "224.0.0.1";
-    
+
     // Join multicast group
     bool joined = server_->joinMulticastGroup(multicast_address);
     EXPECT_TRUE(joined);

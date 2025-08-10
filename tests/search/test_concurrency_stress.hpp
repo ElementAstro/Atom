@@ -122,7 +122,7 @@ TEST_F(ConcurrencyStressTest, ConcurrentSearchOperations) {
             for (int i = 0; i < searches_per_thread; ++i) {
                 try {
                     std::string term = search_terms[term_dis(gen)];
-                    
+
                     // Mix different types of searches
                     if (i % 4 == 0) {
                         auto results = engine->search_by_content(term);
@@ -243,7 +243,7 @@ TEST_F(ConcurrencyStressTest, ConcurrentCacheAccess) {
             for (int i = 0; i < searches_per_thread; ++i) {
                 // Alternate between a few search terms to increase cache hit probability
                 std::string term = (i % 3 == 0) ? "machine" : (i % 3 == 1) ? "learning" : "data";
-                
+
                 auto results = engine->search_by_content_enhanced(term, pagination);
                 if (results.from_cache) {
                     cache_hits++;
@@ -289,7 +289,7 @@ TEST_F(ConcurrencyStressTest, BulkOperationsStress) {
             std::vector<Document> docs;
             for (int j = 0; j < docs_per_bulk; ++j) {
                 std::string doc_id = "bulk_" + std::to_string(i) + "_" + std::to_string(j);
-                docs.emplace_back(doc_id, "bulk content " + std::to_string(j), 
+                docs.emplace_back(doc_id, "bulk content " + std::to_string(j),
                                 std::vector<std::string>{"bulk", "test"});
             }
             return engine->bulk_insert(docs);
@@ -309,7 +309,7 @@ TEST_F(ConcurrencyStressTest, BulkOperationsStress) {
     for (int i = 0; i < 50; ++i) {
         std::string doc_id = "bulk_0_" + std::to_string(i);
         if (engine->has_document(doc_id)) {
-            update_docs.emplace_back(doc_id, "updated bulk content", 
+            update_docs.emplace_back(doc_id, "updated bulk content",
                                    std::vector<std::string>{"bulk", "updated"});
         }
     }

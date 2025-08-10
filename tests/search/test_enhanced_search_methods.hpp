@@ -125,7 +125,7 @@ TEST_F(EnhancedSearchMethodsTest, EnhancedContentSearch) {
     SearchPagination pagination{0, 5};
 
     auto results = engine->search_by_content_enhanced("machine learning", pagination);
-    
+
     EXPECT_GT(results.total_count, 0);
     EXPECT_FALSE(results.results.empty());
     EXPECT_LE(results.results.size(), 5);  // Respects pagination limit
@@ -151,7 +151,7 @@ TEST_F(EnhancedSearchMethodsTest, EnhancedTagSearch) {
     SearchPagination pagination{0, 10};
 
     auto results = engine->search_by_tag_enhanced("ai", pagination);
-    
+
     EXPECT_GT(results.total_count, 0);
     EXPECT_FALSE(results.results.empty());
     EXPECT_EQ(results.offset, 0);
@@ -175,7 +175,7 @@ TEST_F(EnhancedSearchMethodsTest, EnhancedMultiTagSearch) {
 
     std::vector<std::string> tags = {"ai", "ml"};
     auto results = engine->search_by_tags_enhanced(tags, pagination);
-    
+
     EXPECT_GT(results.total_count, 0);
     EXPECT_FALSE(results.results.empty());
     EXPECT_EQ(results.offset, 0);
@@ -218,7 +218,7 @@ TEST_F(EnhancedSearchMethodsTest, SearchResultMetadata) {
     SearchPagination pagination{0, 10};
 
     auto results = engine->search_by_content_enhanced("machine learning algorithms", pagination);
-    
+
     EXPECT_FALSE(results.results.empty());
 
     for (const auto& result : results.results) {

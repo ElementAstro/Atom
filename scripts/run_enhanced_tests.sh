@@ -50,31 +50,31 @@ cd "$BUILD_DIR"
 # Function to build tests
 build_tests() {
     print_status "Building tests..."
-    
+
     # Build system tests
     if make -j$(nproc) atom_system.test 2>/dev/null; then
         print_success "System tests built successfully"
     else
         print_warning "Failed to build system tests (may not be configured)"
     fi
-    
+
     # Build sysinfo tests
     if make -j$(nproc) atom_sysinfo.test 2>/dev/null; then
         print_success "Sysinfo tests built successfully"
     else
         print_warning "Failed to build sysinfo tests (may not be configured)"
     fi
-    
+
     # Build individual test targets
     print_status "Building individual test targets..."
-    
+
     # Try to build advanced executor tests
     if make -j$(nproc) test_advanced_executor_individual 2>/dev/null; then
         print_success "Advanced executor tests built successfully"
     else
         print_warning "Advanced executor tests not built (may need configuration)"
     fi
-    
+
     # Try to build enhanced features tests
     if make -j$(nproc) test_enhanced_features_test 2>/dev/null; then
         print_success "Enhanced features tests built successfully"
@@ -86,11 +86,11 @@ build_tests() {
 # Function to run tests
 run_tests() {
     print_status "Running tests..."
-    
+
     local test_results=()
     local total_tests=0
     local passed_tests=0
-    
+
     # Run system tests
     if [ -f "tests/system/atom_system.test" ]; then
         print_status "Running system tests..."
@@ -103,7 +103,7 @@ run_tests() {
         fi
         ((total_tests++))
     fi
-    
+
     # Run sysinfo tests
     if [ -f "tests/sysinfo/atom_sysinfo.test" ]; then
         print_status "Running sysinfo tests..."
@@ -116,7 +116,7 @@ run_tests() {
         fi
         ((total_tests++))
     fi
-    
+
     # Run individual tests if available
     if [ -f "tests/system/test_advanced_executor_individual" ]; then
         print_status "Running advanced executor tests..."
@@ -129,7 +129,7 @@ run_tests() {
         fi
         ((total_tests++))
     fi
-    
+
     # Run battery tests if available
     if [ -f "tests/battery_tests" ]; then
         print_status "Running battery tests..."
@@ -142,7 +142,7 @@ run_tests() {
         fi
         ((total_tests++))
     fi
-    
+
     # Print summary
     echo
     print_status "Test Summary:"
@@ -150,7 +150,7 @@ run_tests() {
     echo "Total test suites: $total_tests"
     echo "Passed: $passed_tests"
     echo "Failed: $((total_tests - passed_tests))"
-    
+
     if [ ${#test_results[@]} -gt 0 ]; then
         echo
         print_error "Failed tests:"
@@ -158,7 +158,7 @@ run_tests() {
             echo "  - $result"
         done
     fi
-    
+
     if [ $passed_tests -eq $total_tests ]; then
         print_success "All tests passed!"
         return 0
@@ -171,7 +171,7 @@ run_tests() {
 # Function to run specific test categories
 run_category_tests() {
     local category="$1"
-    
+
     case "$category" in
         "system")
             print_status "Running system-specific tests..."

@@ -36,10 +36,10 @@ protected:
     void SetUp() override {
         tcp_port_ = find_free_port();
         udp_port_ = find_free_port();
-        
+
         // Generate unique FIFO path
         auto now = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-        fifo_path_ = (std::filesystem::temp_directory_path() / 
+        fifo_path_ = (std::filesystem::temp_directory_path() /
                      ("integration_fifo_" + std::to_string(now))).string();
     }
 
@@ -154,7 +154,7 @@ TEST_F(AsyncIntegrationTest, UdpClientServerCommunication) {
 
     // Wait for response
     auto start_time = std::chrono::steady_clock::now();
-    while (!response_received && 
+    while (!response_received &&
            std::chrono::steady_clock::now() - start_time < 2s) {
         std::this_thread::sleep_for(10ms);
     }
@@ -239,7 +239,7 @@ TEST_F(AsyncIntegrationTest, MixedProtocolCommunication) {
 
     // Send messages from both clients
     const int num_messages = 10;
-    
+
     for (int i = 0; i < num_messages; ++i) {
         tcp_client->sendString("TCP message " + std::to_string(i));
         udp_client->send("127.0.0.1", udp_port_, "UDP message " + std::to_string(i));

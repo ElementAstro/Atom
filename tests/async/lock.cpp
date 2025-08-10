@@ -18,12 +18,12 @@ protected:
 // Test Spinlock basic operations
 TEST_F(LockTest, SpinlockBasicOperations) {
     Spinlock lock;
-    
+
     // Test basic lock/unlock
     lock.lock();
     EXPECT_FALSE(lock.tryLock());  // Should fail when already locked
     lock.unlock();
-    
+
     // Test tryLock
     EXPECT_TRUE(lock.tryLock());
     lock.unlock();
@@ -35,7 +35,7 @@ TEST_F(LockTest, SpinlockConcurrentAccess) {
     std::atomic<int> counter{0};
     const int num_threads = 10;
     const int increments_per_thread = 1000;
-    
+
     std::vector<std::thread> threads;
     for (int i = 0; i < num_threads; ++i) {
         threads.emplace_back([&lock, &counter]() {
@@ -46,11 +46,11 @@ TEST_F(LockTest, SpinlockConcurrentAccess) {
             }
         });
     }
-    
+
     for (auto& t : threads) {
         t.join();
     }
-    
+
     EXPECT_EQ(counter.load(), num_threads * increments_per_thread);
 }
 
@@ -77,7 +77,7 @@ TEST_F(LockTest, TicketSpinlockFairness) {
     std::vector<int> order;
     std::mutex order_mutex;
     const int num_threads = 5;
-    
+
     std::vector<std::thread> threads;
     for (int i = 0; i < num_threads; ++i) {
         threads.emplace_back([&lock, &order, &order_mutex, i]() {
@@ -90,11 +90,11 @@ TEST_F(LockTest, TicketSpinlockFairness) {
             lock.unlock(ticket);
         });
     }
-    
+
     for (auto& t : threads) {
         t.join();
     }
-    
+
     // Ticket spinlock should provide fairness, but exact order isn't guaranteed
     // due to thread scheduling, so we just check that all threads executed
     EXPECT_EQ(order.size(), num_threads);
@@ -104,15 +104,15 @@ TEST_F(LockTest, TicketSpinlockFairness) {
 TEST_F(LockTest, ScopedLockRAII) {
     Spinlock lock;
     std::atomic<bool> critical_section_entered{false};
-    
+
     {
         ScopedLock<Spinlock> scoped_lock(lock);
         critical_section_entered.store(true);
-        
+
         // Lock should be held here
         EXPECT_FALSE(lock.tryLock());
     }
-    
+
     // Lock should be released here
     EXPECT_TRUE(lock.tryLock());
     lock.unlock();
@@ -140,12 +140,12 @@ TEST_F(LockTest, ScopedTicketLock) {
 // Test AdaptiveSpinlock basic operations
 TEST_F(LockTest, AdaptiveSpinlockBasicOperations) {
     AdaptiveSpinlock lock;
-    
+
     // Test basic lock/unlock
     lock.lock();
     EXPECT_FALSE(lock.tryLock());  // Should fail when already locked
     lock.unlock();
-    
+
     // Test tryLock
     EXPECT_TRUE(lock.tryLock());
     lock.unlock();
@@ -157,7 +157,7 @@ TEST_F(LockTest, AdaptiveSpinlockConcurrentAccess) {
     std::atomic<int> counter{0};
     const int num_threads = 8;
     const int increments_per_thread = 500;
-    
+
     std::vector<std::thread> threads;
     for (int i = 0; i < num_threads; ++i) {
         threads.emplace_back([&lock, &counter]() {
@@ -168,11 +168,11 @@ TEST_F(LockTest, AdaptiveSpinlockConcurrentAccess) {
             }
         });
     }
-    
+
     for (auto& t : threads) {
         t.join();
     }
-    
+
     EXPECT_EQ(counter.load(), num_threads * increments_per_thread);
 }
 
@@ -262,25 +262,25 @@ TEST_F(LockTest, LockFactoryBasicOperations) {
 TEST_F(LockTest, PerformanceComparison) {
     const int iterations = 10000;
     std::atomic<int> counter{0};
-    
+
     // Test Spinlock performance
     {
         Spinlock lock;
         auto start = std::chrono::high_resolution_clock::now();
-        
+
         for (int i = 0; i < iterations; ++i) {
             lock.lock();
             counter.fetch_add(1);
             lock.unlock();
         }
-        
+
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        
+
         // Just verify it completes in reasonable time (less than 1 second)
         EXPECT_LT(duration.count(), 1000000);
     }
-    
+
     EXPECT_EQ(counter.load(), iterations);
 }
 
@@ -291,12 +291,12 @@ TEST_F(LockTest, EdgeCases) {
     lock.lock();
     lock.unlock();
     // Second unlock might be undefined behavior, so we don't test it
-    
+
     // Test TicketSpinlock with invalid ticket (should not crash)
     TicketSpinlock ticket_lock;
     auto valid_ticket = ticket_lock.lock();
     ticket_lock.unlock(valid_ticket);
-    
+
     // Test CountingSemaphore edge cases
     CountingSemaphore<1> single_semaphore(1);
     single_semaphore.acquire();

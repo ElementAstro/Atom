@@ -32,9 +32,9 @@ protected:
     struct TestStruct {
         int id;
         std::string name;
-        
+
         TestStruct(int i, std::string n) : id(i), name(std::move(n)) {}
-        
+
         bool operator==(const TestStruct& other) const {
             return id == other.id && name == other.name;
         }

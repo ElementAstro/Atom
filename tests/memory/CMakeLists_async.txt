@@ -25,9 +25,9 @@ set(ASYNC_TEST_SOURCES
 add_executable(async_memory_tests ${ASYNC_TEST_SOURCES})
 
 # Link libraries
-target_link_libraries(async_memory_tests 
-    GTest::gtest 
-    GTest::gtest_main 
+target_link_libraries(async_memory_tests
+    GTest::gtest
+    GTest::gtest_main
     Threads::Threads
     rt  # For shared memory on Linux
 )

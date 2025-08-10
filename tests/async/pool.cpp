@@ -31,13 +31,13 @@ TEST_F(ThreadPoolTest, BasicCreationDestruction) {
 // Test submitting a simple task
 TEST_F(ThreadPoolTest, SubmitSimpleTask) {
     ThreadPool pool(ThreadPool::Options::createDefault());
-    
+
     std::atomic<int> result{0};
     auto future = pool.submit([&result]() {
         result = 42;
         return 42;
     });
-    
+
     EXPECT_EQ(future.get(), 42);
     EXPECT_EQ(result.load(), 42);
 }
@@ -61,11 +61,11 @@ TEST_F(ThreadPoolTest, SubmitMultipleTasks) {
 // Test task with parameters
 TEST_F(ThreadPoolTest, TaskWithParameters) {
     ThreadPool pool(ThreadPool::Options::createDefault());
-    
+
     auto future = pool.submit([](int a, int b, int c) {
         return a + b + c;
     }, 1, 2, 3);
-    
+
     EXPECT_EQ(future.get(), 6);
 }
 
@@ -97,9 +97,9 @@ TEST_F(ThreadPoolTest, ThreadPoolOptions) {
     options.initialThreadCount = 4;
     options.maxThreadCount = 8;
     options.allowThreadGrowth = true;
-    
+
     ThreadPool pool(options);
-    
+
     EXPECT_EQ(pool.getOptions().initialThreadCount, 4);
     EXPECT_EQ(pool.getOptions().maxThreadCount, 8);
     EXPECT_TRUE(pool.getOptions().allowThreadGrowth);
@@ -109,7 +109,7 @@ TEST_F(ThreadPoolTest, ThreadPoolOptions) {
 TEST_F(ThreadPoolTest, HighPerformanceConfiguration) {
     auto options = ThreadPool::Options::createHighPerformance();
     ThreadPool pool(options);
-    
+
     EXPECT_GT(pool.getThreadCount(), 0);
     EXPECT_TRUE(pool.getOptions().useWorkStealing);
 }
@@ -118,7 +118,7 @@ TEST_F(ThreadPoolTest, HighPerformanceConfiguration) {
 TEST_F(ThreadPoolTest, LowLatencyConfiguration) {
     auto options = ThreadPool::Options::createLowLatency();
     ThreadPool pool(options);
-    
+
     EXPECT_GT(pool.getThreadCount(), 0);
     EXPECT_EQ(pool.getOptions().threadPriority, ThreadPool::Options::ThreadPriority::Highest);
 }
@@ -127,7 +127,7 @@ TEST_F(ThreadPoolTest, LowLatencyConfiguration) {
 TEST_F(ThreadPoolTest, EnergyEfficientConfiguration) {
     auto options = ThreadPool::Options::createEnergyEfficient();
     ThreadPool pool(options);
-    
+
     EXPECT_GT(pool.getThreadCount(), 0);
     EXPECT_TRUE(pool.getOptions().allowThreadShrink);
 }
@@ -157,12 +157,12 @@ TEST_F(ThreadPoolTest, WaitForCompletion) {
 // Test shutdown
 TEST_F(ThreadPoolTest, Shutdown) {
     ThreadPool pool(ThreadPool::Options::createDefault());
-    
+
     EXPECT_FALSE(pool.isShutdown());
-    
+
     pool.shutdown();
     EXPECT_TRUE(pool.isShutdown());
-    
+
     // Submitting tasks after shutdown should throw
     EXPECT_THROW(pool.submit([]() { return 42; }), std::runtime_error);
 }
@@ -170,14 +170,14 @@ TEST_F(ThreadPoolTest, Shutdown) {
 // Test immediate shutdown
 TEST_F(ThreadPoolTest, ImmediateShutdown) {
     ThreadPool pool(ThreadPool::Options::createDefault());
-    
+
     // Submit some long-running tasks
     for (int i = 0; i < 5; ++i) {
         pool.submit([]() {
             std::this_thread::sleep_for(1s);
         });
     }
-    
+
     pool.shutdownNow();
     EXPECT_TRUE(pool.isShutdown());
 }
@@ -185,11 +185,11 @@ TEST_F(ThreadPoolTest, ImmediateShutdown) {
 // Test exception handling in tasks
 TEST_F(ThreadPoolTest, ExceptionHandling) {
     ThreadPool pool(ThreadPool::Options::createDefault());
-    
+
     auto future = pool.submit([]() -> int {
         throw std::runtime_error("Test exception");
     });
-    
+
     EXPECT_THROW(future.get(), std::runtime_error);
 }
 
@@ -208,13 +208,13 @@ TEST_F(ThreadPoolTest, PromiseBasedSubmission) {
 // Test execute method
 TEST_F(ThreadPoolTest, ExecuteMethod) {
     ThreadPool pool(ThreadPool::Options::createDefault());
-    
+
     std::atomic<bool> executed{false};
-    
+
     pool.execute([&executed]() {
         executed = true;
     });
-    
+
     // Wait a bit for execution
     std::this_thread::sleep_for(100ms);
     EXPECT_TRUE(executed.load());
@@ -226,9 +226,9 @@ TEST_F(ThreadPoolTest, ThreadCountManagement) {
     options.initialThreadCount = 2;
     options.maxThreadCount = 4;
     options.allowThreadGrowth = true;
-    
+
     ThreadPool pool(options);
-    
+
     EXPECT_EQ(pool.getThreadCount(), 2);
     EXPECT_LE(pool.getActiveThreadCount(), 2);
 }
@@ -236,7 +236,7 @@ TEST_F(ThreadPoolTest, ThreadCountManagement) {
 // Test global thread pool
 TEST_F(ThreadPoolTest, GlobalThreadPool) {
     auto& pool = globalThreadPool();
-    
+
     auto future = pool.submit([]() { return 123; });
     EXPECT_EQ(future.get(), 123);
 }
@@ -244,7 +244,7 @@ TEST_F(ThreadPoolTest, GlobalThreadPool) {
 // Test high performance thread pool singleton
 TEST_F(ThreadPoolTest, HighPerformanceThreadPool) {
     auto& pool = highPerformanceThreadPool();
-    
+
     auto future = pool.submit([]() { return 456; });
     EXPECT_EQ(future.get(), 456);
 }
@@ -252,7 +252,7 @@ TEST_F(ThreadPoolTest, HighPerformanceThreadPool) {
 // Test low latency thread pool singleton
 TEST_F(ThreadPoolTest, LowLatencyThreadPool) {
     auto& pool = lowLatencyThreadPool();
-    
+
     auto future = pool.submit([]() { return 789; });
     EXPECT_EQ(future.get(), 789);
 }
@@ -260,7 +260,7 @@ TEST_F(ThreadPoolTest, LowLatencyThreadPool) {
 // Test energy efficient thread pool singleton
 TEST_F(ThreadPoolTest, EnergyEfficientThreadPool) {
     auto& pool = energyEfficientThreadPool();
-    
+
     auto future = pool.submit([]() { return 101112; });
     EXPECT_EQ(future.get(), 101112);
 }
@@ -283,20 +283,20 @@ TEST_F(ThreadPoolTest, ParallelExecution) {
         std::this_thread::sleep_for(100ms);
         return 1;
     });
-    
+
     auto future2 = async([]() {
         std::this_thread::sleep_for(100ms);
         return 2;
     });
-    
+
     auto start = std::chrono::steady_clock::now();
     int result1 = future1.get();
     int result2 = future2.get();
     auto end = std::chrono::steady_clock::now();
-    
+
     EXPECT_EQ(result1, 1);
     EXPECT_EQ(result2, 2);
-    
+
     // Should take less than 200ms if executed in parallel
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     EXPECT_LT(duration.count(), 200);
@@ -305,21 +305,21 @@ TEST_F(ThreadPoolTest, ParallelExecution) {
 // Test ThreadSafeQueue basic operations
 TEST_F(ThreadPoolTest, ThreadSafeQueueBasicOperations) {
     ThreadSafeQueue<int> queue;
-    
+
     EXPECT_TRUE(queue.empty());
     EXPECT_EQ(queue.size(), 0);
-    
+
     queue.pushBack(1);
     queue.pushBack(2);
     queue.pushBack(3);
-    
+
     EXPECT_FALSE(queue.empty());
     EXPECT_EQ(queue.size(), 3);
-    
+
     auto item = queue.popFront();
     ASSERT_TRUE(item.has_value());
     EXPECT_EQ(item.value(), 1);
-    
+
     EXPECT_EQ(queue.size(), 2);
 }
 
@@ -329,10 +329,10 @@ TEST_F(ThreadPoolTest, ThreadSafeQueueConcurrentOperations) {
     const int num_producers = 4;
     const int num_consumers = 2;
     const int items_per_producer = 100;
-    
+
     std::atomic<int> total_consumed{0};
     std::vector<std::thread> threads;
-    
+
     // Producer threads
     for (int i = 0; i < num_producers; ++i) {
         threads.emplace_back([&queue, i]() {
@@ -355,11 +355,11 @@ TEST_F(ThreadPoolTest, ThreadSafeQueueConcurrentOperations) {
             }
         });
     }
-    
+
     for (auto& t : threads) {
         t.join();
     }
-    
+
     EXPECT_EQ(total_consumed.load(), num_producers * items_per_producer);
     EXPECT_TRUE(queue.empty());
 }

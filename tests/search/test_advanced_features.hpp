@@ -45,11 +45,11 @@ protected:
             "deep", "algorithm", "data", "science", "computer", "vision", "natural",
             "language", "processing", "programming", "software", "development"
         };
-        
+
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<> dis(0, words.size() - 1);
-        
+
         std::string content;
         for (size_t i = 0; i < word_count; ++i) {
             if (i > 0) content += " ";
@@ -108,7 +108,7 @@ TEST_F(AdvancedFeaturesTest, ConfigurationUpdates) {
 TEST_F(AdvancedFeaturesTest, IndexOptimization) {
     // Add more documents
     for (int i = 0; i < 20; ++i) {
-        engine->add_document(Document("opt" + std::to_string(i), 
+        engine->add_document(Document("opt" + std::to_string(i),
                                     "optimization test document " + std::to_string(i),
                                     {"optimization", "test"}));
     }
@@ -250,11 +250,11 @@ TEST_F(AdvancedFeaturesTest, CacheTTLAndExpiration) {
 TEST_F(AdvancedFeaturesTest, RankedAutocomplete) {
     // Add documents with varying frequencies of terms
     for (int i = 0; i < 5; ++i) {
-        engine->add_document(Document("freq" + std::to_string(i), 
+        engine->add_document(Document("freq" + std::to_string(i),
                                     "machine learning artificial intelligence",
                                     {"frequent"}));
     }
-    
+
     engine->add_document(Document("rare1", "machine vision", {"rare"}));
 
     // Test ranked autocomplete

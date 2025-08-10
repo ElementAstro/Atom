@@ -53,12 +53,12 @@ protected:
 TEST_F(AdvancedExecutorTest, CancellationTokenBasic) {
     auto token = createCancellationToken();
     ASSERT_NE(token, nullptr);
-    
+
     EXPECT_FALSE(token->isCancelled());
-    
+
     token->cancel();
     EXPECT_TRUE(token->isCancelled());
-    
+
     token->reset();
     EXPECT_FALSE(token->isCancelled());
 }
@@ -67,20 +67,20 @@ TEST_F(AdvancedExecutorTest, CancellationTokenBasic) {
 TEST_F(AdvancedExecutorTest, ExecutionResourcePool) {
     auto pool = createExecutionResourcePool(3);
     ASSERT_NE(pool, nullptr);
-    
+
     EXPECT_EQ(pool->getTotalResources(), 3);
     EXPECT_EQ(pool->getAvailableResources(), 3);
-    
+
     // Acquire resources
     auto resource1 = pool->acquireResource();
     EXPECT_EQ(pool->getAvailableResources(), 2);
-    
+
     auto resource2 = pool->acquireResource();
     EXPECT_EQ(pool->getAvailableResources(), 1);
-    
+
     auto resource3 = pool->acquireResource();
     EXPECT_EQ(pool->getAvailableResources(), 0);
-    
+
     // Release a resource
     pool->releaseResource(resource1);
     EXPECT_EQ(pool->getAvailableResources(), 1);
@@ -91,9 +91,9 @@ TEST_F(AdvancedExecutorTest, BasicAdvancedExecution) {
     AdvancedExecutionConfig config;
     config.baseConfig.enableLogging = true;
     config.baseConfig.validateCommand = true;
-    
+
     auto result = executeCommandAdvanced(echoCommand, config);
-    
+
     EXPECT_EQ(result.exitCode, 0);
     EXPECT_FALSE(result.output.empty());
     EXPECT_FALSE(result.timedOut);
@@ -106,9 +106,9 @@ TEST_F(AdvancedExecutorTest, EnvironmentVariableHandling) {
     std::unordered_map<std::string, std::string> envVars = {
         {"TEST_VAR", "test_value_123"}
     };
-    
+
     auto result = executeCommandWithEnv(envTestCommand, envVars);
-    
+
     EXPECT_THAT(result, HasSubstr("test_value_123"));
 }
 
@@ -118,13 +118,13 @@ TEST_F(AdvancedExecutorTest, MultipleCommandsWithCommonEnv) {
         envTestCommand,
         echoCommand
     };
-    
+
     std::unordered_map<std::string, std::string> envVars = {
         {"TEST_VAR", "shared_value"}
     };
-    
+
     auto results = executeCommandsWithCommonEnv(commands, envVars, true);
-    
+
     EXPECT_EQ(results.size(), 2);
     EXPECT_EQ(results[0].second, 0);  // Exit code
     EXPECT_EQ(results[1].second, 0);  // Exit code
@@ -134,22 +134,22 @@ TEST_F(AdvancedExecutorTest, MultipleCommandsWithCommonEnv) {
 // Test cancellation functionality
 TEST_F(AdvancedExecutorTest, CommandCancellation) {
     auto token = createCancellationToken();
-    
+
     AdvancedExecutionConfig config;
     config.cancellationToken = token;
     config.baseConfig.timeout = 5000ms;
-    
+
     // Start a long-running command
     auto future = std::async(std::launch::async, [&]() {
         return executeCommandAdvanced(longRunningCommand, config);
     });
-    
+
     // Cancel after a short delay
     std::this_thread::sleep_for(100ms);
     token->cancel();
-    
+
     auto result = future.get();
-    
+
     // The command should be cancelled or timeout
     EXPECT_TRUE(result.timedOut || result.wasKilled || result.exitCode != 0);
 }
@@ -157,7 +157,7 @@ TEST_F(AdvancedExecutorTest, CommandCancellation) {
 // Test timeout functionality
 TEST_F(AdvancedExecutorTest, TimeoutHandling) {
     auto result = executeCommandWithTimeout(longRunningCommand, 500ms);
-    
+
     // Should timeout and return empty optional or empty string
     EXPECT_FALSE(result.has_value() || (result.has_value() && result->empty()));
 }
@@ -167,10 +167,10 @@ TEST_F(AdvancedExecutorTest, AdvancedTimeoutHandling) {
     auto token = createCancellationToken();
     ExecutionConfig config;
     config.enableLogging = true;
-    
+
     auto result = executeCommandWithTimeoutAdvanced(
         longRunningCommand, 500ms, token, config);
-    
+
     EXPECT_FALSE(result.has_value());
 }
 
@@ -183,9 +183,9 @@ TEST_F(AdvancedExecutorTest, RetryOnFailure) {
     config.shouldRetry = [](const ExecutionResult& result) {
         return result.exitCode != 0;
     };
-    
+
     auto result = executeCommandAdvanced(failCommand, config);
-    
+
     // Should have attempted retries
     EXPECT_NE(result.exitCode, 0);  // Still fails after retries
     EXPECT_GT(result.executionTime.count(), 200);  // Should take longer due to retries
@@ -198,19 +198,19 @@ TEST_F(AdvancedExecutorTest, ParallelExecution) {
         echoCommand,
         echoCommand
     };
-    
+
     AdvancedExecutionConfig config;
     config.baseConfig.enableLogging = false;  // Reduce noise
-    
+
     auto start = std::chrono::steady_clock::now();
     auto results = executeCommandsAdvanced(commands, config, true, false);
     auto end = std::chrono::steady_clock::now();
-    
+
     EXPECT_EQ(results.size(), 3);
-    
+
     // Parallel execution should be faster than sequential
     auto parallelTime = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    
+
     // All commands should succeed
     for (const auto& result : results) {
         EXPECT_EQ(result.exitCode, 0);
@@ -220,26 +220,26 @@ TEST_F(AdvancedExecutorTest, ParallelExecution) {
 // Test resource pool with concurrent execution
 TEST_F(AdvancedExecutorTest, ResourcePoolConcurrentExecution) {
     auto pool = createExecutionResourcePool(2);  // Limit to 2 concurrent executions
-    
+
     AdvancedExecutionConfig config;
     config.resourcePool = pool;
     config.baseConfig.enableLogging = false;
-    
+
     std::vector<std::future<ExecutionResult>> futures;
-    
+
     // Start multiple commands
     for (int i = 0; i < 4; ++i) {
         futures.push_back(std::async(std::launch::async, [&]() {
             return executeCommandAdvanced(sleepCommand, config);
         }));
     }
-    
+
     // Wait for all to complete
     for (auto& future : futures) {
         auto result = future.get();
         EXPECT_EQ(result.exitCode, 0);
     }
-    
+
     // Pool should be back to full capacity
     EXPECT_EQ(pool->getAvailableResources(), pool->getTotalResources());
 }
@@ -248,11 +248,11 @@ TEST_F(AdvancedExecutorTest, ResourcePoolConcurrentExecution) {
 TEST_F(AdvancedExecutorTest, AsyncExecution) {
     AdvancedExecutionConfig config;
     config.baseConfig.enableLogging = false;
-    
+
     auto future = executeCommandAsyncAdvanced(echoCommand, config);
-    
+
     EXPECT_TRUE(future.valid());
-    
+
     auto result = future.get();
     EXPECT_EQ(result.exitCode, 0);
     EXPECT_FALSE(result.output.empty());
@@ -261,16 +261,16 @@ TEST_F(AdvancedExecutorTest, AsyncExecution) {
 // Test line processing callback
 TEST_F(AdvancedExecutorTest, LineProcessingCallback) {
     std::vector<std::string> processedLines;
-    
+
     auto processLine = [&processedLines](const std::string& line) {
         processedLines.push_back(line);
     };
-    
+
     AdvancedExecutionConfig config;
     config.baseConfig.streamOutput = true;
-    
+
     auto result = executeCommandAdvanced(echoCommand, config, processLine);
-    
+
     EXPECT_EQ(result.exitCode, 0);
     EXPECT_FALSE(processedLines.empty());
 }

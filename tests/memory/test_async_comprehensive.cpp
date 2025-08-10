@@ -59,29 +59,29 @@ protected:
 // Test concurrent async read/write operations
 TEST_F(AsyncMemoryTest, ConcurrentAsyncOperations) {
     SharedMemory<TestData> shm(shm_name_, true);
-    
+
     const int num_threads = 8;
     const int operations_per_thread = 50;
     std::atomic<int> successful_reads{0};
     std::atomic<int> successful_writes{0};
     std::atomic<int> errors{0};
-    
+
     std::vector<std::thread> threads;
-    
+
     // Create mixed reader/writer threads
     for (int i = 0; i < num_threads; ++i) {
         threads.emplace_back([&, i]() {
             std::random_device rd;
             std::mt19937 gen(rd());
             std::uniform_int_distribution<> op_dist(0, 1);
-            
+
             for (int j = 0; j < operations_per_thread; ++j) {
                 try {
                     if (op_dist(gen) == 0) {
                         // Async write
                         TestData data{i * 1000 + j, static_cast<double>(i + j), {}};
                         snprintf(data.buffer, sizeof(data.buffer), "thread_%d_op_%d", i, j);
-                        
+
                         auto future = shm.writeAsync(data);
                         future.get(); // Wait for completion
                         successful_writes++;
@@ -97,12 +97,12 @@ TEST_F(AsyncMemoryTest, ConcurrentAsyncOperations) {
             }
         });
     }
-    
+
     // Wait for all threads to complete
     for (auto& thread : threads) {
         thread.join();
     }
-    
+
     EXPECT_GT(successful_reads.load(), 0);
     EXPECT_GT(successful_writes.load(), 0);
     EXPECT_EQ(errors.load(), 0);
@@ -111,16 +111,16 @@ TEST_F(AsyncMemoryTest, ConcurrentAsyncOperations) {
 // Test async operations with timeouts
 TEST_F(AsyncMemoryTest, AsyncOperationsWithTimeouts) {
     SharedMemory<TestData> shm(shm_name_, true);
-    
+
     // Test async read with timeout
     TestData writeData{42, 3.14159, "test_data"};
     auto writeFuture = shm.writeAsync(writeData, std::chrono::milliseconds(1000));
     EXPECT_NO_THROW(writeFuture.get());
-    
+
     auto readFuture = shm.readAsync(std::chrono::milliseconds(1000));
     TestData readData;
     EXPECT_NO_THROW(readData = readFuture.get());
-    
+
     EXPECT_EQ(readData.id, writeData.id);
     EXPECT_DOUBLE_EQ(readData.value, writeData.value);
     EXPECT_STREQ(readData.buffer, writeData.buffer);
@@ -129,24 +129,24 @@ TEST_F(AsyncMemoryTest, AsyncOperationsWithTimeouts) {
 // Test async operations under memory pressure
 TEST_F(AsyncMemoryTest, AsyncOperationsUnderMemoryPressure) {
     SharedMemory<TestData> shm(shm_name_, true);
-    
+
     const int num_concurrent_ops = 100;
     std::vector<std::future<void>> write_futures;
     std::vector<std::future<TestData>> read_futures;
-    
+
     // Create memory pressure with many concurrent operations
     for (int i = 0; i < num_concurrent_ops; ++i) {
         TestData data{i, static_cast<double>(i), {}};
         snprintf(data.buffer, sizeof(data.buffer), "pressure_test_%d", i);
-        
+
         write_futures.push_back(shm.writeAsync(data));
         read_futures.push_back(shm.readAsync());
     }
-    
+
     // Wait for all operations to complete
     int successful_writes = 0;
     int successful_reads = 0;
-    
+
     for (auto& future : write_futures) {
         try {
             future.get();
@@ -155,7 +155,7 @@ TEST_F(AsyncMemoryTest, AsyncOperationsUnderMemoryPressure) {
             // Some operations may fail under extreme pressure
         }
     }
-    
+
     for (auto& future : read_futures) {
         try {
             [[maybe_unused]] auto data = future.get();
@@ -164,7 +164,7 @@ TEST_F(AsyncMemoryTest, AsyncOperationsUnderMemoryPressure) {
             // Some operations may fail under extreme pressure
         }
     }
-    
+
     // At least some operations should succeed
     EXPECT_GT(successful_writes, num_concurrent_ops / 2);
     EXPECT_GT(successful_reads, num_concurrent_ops / 2);
@@ -173,18 +173,18 @@ TEST_F(AsyncMemoryTest, AsyncOperationsUnderMemoryPressure) {
 // Test lock-free memory pool concurrent operations
 TEST_F(AsyncMemoryTest, LockFreeMemoryPoolConcurrency) {
     atom::memory::MemoryPool<64, 1024, true> pool; // Enable lock-free mode
-    
+
     const int num_threads = 8;
     const int allocations_per_thread = 100;
     std::atomic<int> successful_allocations{0};
     std::atomic<int> successful_deallocations{0};
-    
+
     std::vector<std::thread> threads;
-    
+
     for (int i = 0; i < num_threads; ++i) {
         threads.emplace_back([&]() {
             std::vector<void*> allocated_ptrs;
-            
+
             // Allocation phase
             for (int j = 0; j < allocations_per_thread; ++j) {
                 try {
@@ -197,7 +197,7 @@ TEST_F(AsyncMemoryTest, LockFreeMemoryPoolConcurrency) {
                     // Handle allocation failures
                 }
             }
-            
+
             // Deallocation phase
             for (void* ptr : allocated_ptrs) {
                 try {
@@ -209,14 +209,14 @@ TEST_F(AsyncMemoryTest, LockFreeMemoryPoolConcurrency) {
             }
         });
     }
-    
+
     for (auto& thread : threads) {
         thread.join();
     }
-    
+
     EXPECT_EQ(successful_allocations.load(), successful_deallocations.load());
     EXPECT_GT(successful_allocations.load(), 0);
-    
+
     // Verify pool statistics
     auto stats = pool.get_stats();
     EXPECT_EQ(stats.first, 0); // current allocations
@@ -227,16 +227,16 @@ TEST_F(AsyncMemoryTest, LockFreeMemoryPoolConcurrency) {
 TEST_F(AsyncMemoryTest, MemoryPoolPerformanceTest) {
     atom::memory::MemoryPool<128, 2048, true> lock_free_pool;
     atom::memory::MemoryPool<128, 2048, false> mutex_pool;
-    
+
     const int num_threads = 4;
     const int operations_per_thread = 1000;
-    
+
     auto test_pool = [&](auto& pool, const std::string& pool_type) {
         auto start_time = std::chrono::high_resolution_clock::now();
-        
+
         std::vector<std::thread> threads;
         std::atomic<int> total_ops{0};
-        
+
         for (int i = 0; i < num_threads; ++i) {
             threads.emplace_back([&]() {
                 for (int j = 0; j < operations_per_thread; ++j) {
@@ -250,30 +250,30 @@ TEST_F(AsyncMemoryTest, MemoryPoolPerformanceTest) {
                 }
             });
         }
-        
+
         for (auto& thread : threads) {
             thread.join();
         }
-        
+
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-        
+
         double ops_per_second = (total_ops.load() * 1000000.0) / duration.count();
-        
-        std::cout << pool_type << " Pool Performance: " 
+
+        std::cout << pool_type << " Pool Performance: "
                   << ops_per_second << " ops/sec, "
                   << "Total ops: " << total_ops.load() << std::endl;
-        
+
         return ops_per_second;
     };
-    
+
     double lock_free_perf = test_pool(lock_free_pool, "Lock-free");
     double mutex_perf = test_pool(mutex_pool, "Mutex-based");
-    
+
     // Lock-free should generally be faster, but this depends on the system
     EXPECT_GT(lock_free_perf, 0);
     EXPECT_GT(mutex_perf, 0);
-    
+
     std::cout << "Performance ratio (lock-free/mutex): "
               << (lock_free_perf / mutex_perf) << std::endl;
 }

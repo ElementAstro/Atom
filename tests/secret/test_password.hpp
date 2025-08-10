@@ -307,14 +307,3 @@ TEST_F(PasswordManagerTest, AnalyzePasswordStrength) {
     EXPECT_EQ(manager->analyzePasswordStrength("Abcdefgh123456!@#$%^&*()"),
               PasswordStrength::VeryStrong);
 }
-
-
-
-
-
-
-
-
-
-
-

@@ -144,7 +144,7 @@ TEST_F(ErrorHandlingTest, MemoryAndResourceLimits) {
             std::string content = "document " + std::to_string(i) + " with some content";
             engine->add_document(Document("stress_" + std::to_string(i), content, {"stress"}));
         }
-        
+
         // Verify engine still works
         auto results = engine->search_by_tag("stress");
         EXPECT_GT(results.size(), 0);

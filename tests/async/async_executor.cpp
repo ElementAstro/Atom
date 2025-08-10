@@ -63,7 +63,7 @@ int longRunningTask(int duration_ms) {
 // Basic functionality tests
 TEST_F(AsyncExecutorTest, ConstructorAndBasicProperties) {
     AsyncExecutor executor(config);
-    
+
     EXPECT_FALSE(executor.isRunning());
     EXPECT_EQ(executor.getActiveThreadCount(), 0);
     EXPECT_EQ(executor.getPendingTaskCount(), 0);
@@ -72,11 +72,11 @@ TEST_F(AsyncExecutorTest, ConstructorAndBasicProperties) {
 
 TEST_F(AsyncExecutorTest, StartAndStop) {
     AsyncExecutor executor(config);
-    
+
     executor.start();
     EXPECT_TRUE(executor.isRunning());
     EXPECT_GE(executor.getActiveThreadCount(), 0);
-    
+
     executor.stop();
     EXPECT_FALSE(executor.isRunning());
     EXPECT_EQ(executor.getActiveThreadCount(), 0);
@@ -85,26 +85,26 @@ TEST_F(AsyncExecutorTest, StartAndStop) {
 TEST_F(AsyncExecutorTest, ExecuteVoidTask) {
     AsyncExecutor executor(config);
     executor.start();
-    
+
     std::atomic<bool> taskExecuted{false};
     executor.execute([&taskExecuted]() {
         taskExecuted = true;
     });
-    
+
     // Wait a bit for task to complete
     std::this_thread::sleep_for(50ms);
     EXPECT_TRUE(taskExecuted.load());
-    
+
     executor.stop();
 }
 
 TEST_F(AsyncExecutorTest, ExecuteTaskWithReturnValue) {
     AsyncExecutor executor(config);
     executor.start();
-    
+
     auto future = executor.execute([](){ return 42; });
     EXPECT_EQ(future.get(), 42);
-    
+
     executor.stop();
 }
 
@@ -121,10 +121,10 @@ TEST_F(AsyncExecutorTest, ExecuteTaskWithParameters) {
 TEST_F(AsyncExecutorTest, TaskPriorities) {
     AsyncExecutor executor(config);
     executor.start();
-    
+
     std::vector<int> execution_order;
     std::mutex order_mutex;
-    
+
     // Submit tasks with different priorities
     // Higher priority tasks should execute first
     auto low_future = executor.execute([&]() {
@@ -132,137 +132,137 @@ TEST_F(AsyncExecutorTest, TaskPriorities) {
         execution_order.push_back(1);
         return 1;
     }, AsyncExecutor::Priority::Low);
-    
+
     auto high_future = executor.execute([&]() {
         std::lock_guard<std::mutex> lock(order_mutex);
         execution_order.push_back(3);
         return 3;
     }, AsyncExecutor::Priority::High);
-    
+
     auto normal_future = executor.execute([&]() {
         std::lock_guard<std::mutex> lock(order_mutex);
         execution_order.push_back(2);
         return 2;
     }, AsyncExecutor::Priority::Normal);
-    
+
     // Wait for all tasks to complete
     low_future.get();
     high_future.get();
     normal_future.get();
-    
+
     // Note: Due to threading, exact order isn't guaranteed, but we can check
     // that high priority task executed
     EXPECT_EQ(execution_order.size(), 3);
     EXPECT_THAT(execution_order, ::testing::Contains(1));
     EXPECT_THAT(execution_order, ::testing::Contains(2));
     EXPECT_THAT(execution_order, ::testing::Contains(3));
-    
+
     executor.stop();
 }
 
 TEST_F(AsyncExecutorTest, ExceptionHandling) {
     AsyncExecutor executor(config);
     executor.start();
-    
+
     auto future = executor.execute([]() {
         throw std::runtime_error("Test exception");
         return 42;
     });
-    
+
     EXPECT_THROW(future.get(), std::runtime_error);
-    
+
     executor.stop();
 }
 
 TEST_F(AsyncExecutorTest, MultipleTasksExecution) {
     AsyncExecutor executor(config);
     executor.start();
-    
+
     const int num_tasks = 10;
     std::vector<std::future<int>> futures;
-    
+
     for (int i = 0; i < num_tasks; ++i) {
         futures.push_back(executor.execute([i]() {
             std::this_thread::sleep_for(10ms);
             return i * i;
         }));
     }
-    
+
     // Verify all tasks complete with correct results
     for (int i = 0; i < num_tasks; ++i) {
         EXPECT_EQ(futures[i].get(), i * i);
     }
-    
+
     executor.stop();
 }
 
 TEST_F(AsyncExecutorTest, TaskCounters) {
     AsyncExecutor executor(config);
     executor.start();
-    
+
     const int num_tasks = 5;
     std::vector<std::future<int>> futures;
-    
+
     for (int i = 0; i < num_tasks; ++i) {
         futures.push_back(executor.execute([i]() {
             std::this_thread::sleep_for(20ms);
             return i;
         }));
     }
-    
+
     // Check that pending tasks are tracked
     EXPECT_GT(executor.getPendingTaskCount(), 0);
-    
+
     // Wait for all tasks to complete
     for (auto& future : futures) {
         future.get();
     }
-    
+
     // Give some time for counters to update
     std::this_thread::sleep_for(50ms);
-    
+
     EXPECT_EQ(executor.getPendingTaskCount(), 0);
     EXPECT_EQ(executor.getCompletedTaskCount(), num_tasks);
-    
+
     executor.stop();
 }
 
 TEST_F(AsyncExecutorTest, ExecutorNotRunningThrows) {
     AsyncExecutor executor(config);
     // Don't start the executor
-    
+
     EXPECT_THROW(executor.execute([]() { return 42; }), ExecutorException);
 }
 
 TEST_F(AsyncExecutorTest, MoveConstructor) {
     AsyncExecutor executor1(config);
     executor1.start();
-    
+
     AsyncExecutor executor2 = std::move(executor1);
-    
+
     // executor2 should be running, executor1 should be stopped
     EXPECT_TRUE(executor2.isRunning());
-    
+
     // Should be able to execute tasks on moved executor
     auto future = executor2.execute([]() { return 123; });
     EXPECT_EQ(future.get(), 123);
-    
+
     executor2.stop();
 }
 
 TEST_F(AsyncExecutorTest, MoveAssignment) {
     AsyncExecutor executor1(config);
     AsyncExecutor executor2(config);
-    
+
     executor1.start();
-    
+
     executor2 = std::move(executor1);
-    
+
     EXPECT_TRUE(executor2.isRunning());
-    
+
     auto future = executor2.execute([]() { return 456; });
     EXPECT_EQ(future.get(), 456);
-    
+
     executor2.stop();
 }
 

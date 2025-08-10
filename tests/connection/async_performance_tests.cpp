@@ -76,7 +76,7 @@ TEST_F(AsyncPerformanceTest, TcpThroughputTest) {
 
     // Wait for all messages to be received
     auto timeout = std::chrono::steady_clock::now() + 30s;
-    while (messages_received.load() < num_messages && 
+    while (messages_received.load() < num_messages &&
            std::chrono::steady_clock::now() < timeout) {
         std::this_thread::sleep_for(10ms);
     }
@@ -186,11 +186,11 @@ TEST_F(AsyncPerformanceTest, ConnectionLatencyTest) {
     for (int i = 0; i < num_connections; ++i) {
         connection_threads.emplace_back([this, &connection_times, &times_mutex]() {
             auto client = std::make_unique<TcpClient>();
-            
+
             auto start_time = std::chrono::high_resolution_clock::now();
             bool connected = client->connect("127.0.0.1", tcp_port_);
             auto end_time = std::chrono::high_resolution_clock::now();
-            
+
             if (connected) {
                 auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
                 std::lock_guard<std::mutex> lock(times_mutex);
@@ -209,7 +209,7 @@ TEST_F(AsyncPerformanceTest, ConnectionLatencyTest) {
     if (!connection_times.empty()) {
         auto min_time = *std::min_element(connection_times.begin(), connection_times.end());
         auto max_time = *std::max_element(connection_times.begin(), connection_times.end());
-        auto avg_time = std::accumulate(connection_times.begin(), connection_times.end(), 
+        auto avg_time = std::accumulate(connection_times.begin(), connection_times.end(),
                                        std::chrono::microseconds(0)) / connection_times.size();
 
         std::cout << "Connection Latency Test Results:\n";
@@ -350,7 +350,7 @@ TEST_F(AsyncPerformanceTest, HighFrequencyMessageTest) {
 
     // Wait for all messages to be processed
     auto timeout = std::chrono::steady_clock::now() + 10s;
-    while (message_count.load() < num_messages && 
+    while (message_count.load() < num_messages &&
            std::chrono::steady_clock::now() < timeout) {
         std::this_thread::sleep_for(10ms);
     }
