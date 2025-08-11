@@ -21,22 +21,22 @@ local time_headers = {
 -- Build Object Library
 target("atom-web-time-object")
     set_kind("object")
-    
+
     -- Add files
     add_headerfiles(table.unpack(time_headers))
     add_files(table.unpack(time_sources))
-    
+
     -- Add dependencies
     add_packages("loguru")
-    
+
     -- Add include directories
     add_includedirs("$(projectdir)/atom", {public = true})
-    
+
     -- Platform-specific settings
     if is_plat("windows") then
         add_syslinks("wsock32", "ws2_32")
     end
-    
+
     -- Set C++ standard
     set_languages("c++20")
 target_end()

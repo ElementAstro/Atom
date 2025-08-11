@@ -251,21 +251,21 @@ public:
 
     /**
      * @brief Removes all comments from the header
-     * 
+     *
      * @return The number of comments removed
      */
     size_t clearComments() noexcept;
 
     /**
      * @brief Get the number of records in the header
-     * 
+     *
      * @return The number of keyword records
      */
     [[nodiscard]] size_t size() const noexcept { return records.size(); }
 
     /**
      * @brief Check if the header is empty
-     * 
+     *
      * @return true if there are no records, false otherwise
      */
     [[nodiscard]] bool empty() const noexcept { return records.empty(); }
@@ -286,7 +286,7 @@ private:
 
     /**
      * @brief Finds a keyword in the records
-     * 
+     *
      * @param keyword The keyword to find
      * @return The index of the keyword record, or std::string::npos if not found
      */

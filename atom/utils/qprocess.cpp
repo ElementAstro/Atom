@@ -868,7 +868,7 @@ void QProcess::Impl::startAsyncReaders() {
 #else
                 pollfd pfd = {childStdout_, POLLIN, 0};
                 int poll_result = poll(&pfd, 1, 100);
-                
+
                 if (poll_result > 0 && (pfd.revents & POLLIN)) {
                     ssize_t bytesRead = ::read(childStdout_, buffer.data(), buffer.size());
                     if (bytesRead > 0) {
@@ -907,7 +907,7 @@ void QProcess::Impl::startAsyncReaders() {
 #else
                 pollfd pfd = {childStderr_, POLLIN, 0};
                 int poll_result = poll(&pfd, 1, 100);
-                
+
                 if (poll_result > 0 && (pfd.revents & POLLIN)) {
                     ssize_t bytesRead = ::read(childStderr_, buffer.data(), buffer.size());
                     if (bytesRead > 0) {

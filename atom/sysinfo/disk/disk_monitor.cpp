@@ -197,11 +197,11 @@ std::future<void> startDeviceMonitoring(std::function<void(const StorageDevice&)
                     const char* devnode = udev_device_get_devnode(dev);
                     const char* devtype = udev_device_get_devtype(dev);
 
-                    if (action && devnode && devtype && 
-                        strcmp(action, "add") == 0 && 
+                    if (action && devnode && devtype &&
+                        strcmp(action, "add") == 0 &&
                         strcmp(devtype, "disk") == 0 &&
                         existingDevices.find(devnode) == existingDevices.end()) {
-                        
+
                         existingDevices.insert(devnode);
 
                         StorageDevice device;

@@ -23,7 +23,7 @@ protected:
 
         // Get a list of network interfaces for testing
         interfaces = manager->getNetworkInterfaces();
-        
+
         // If we have at least one interface, save its name for tests
         if (!interfaces.empty()) {
             test_interface_name = interfaces[0].getName();
@@ -47,7 +47,7 @@ protected:
 
     // Helper method: wait for a condition to be true
     template <typename Func>
-    bool wait_for_condition(Func condition, 
+    bool wait_for_condition(Func condition,
                          std::chrono::milliseconds timeout = 5s) {
         auto start = std::chrono::steady_clock::now();
         while (!condition()) {
@@ -85,7 +85,7 @@ TEST_F(NetworkManagerTest, NetworkInterfaceBasics) {
     ASSERT_FALSE(mutable_addresses.empty());
     std::string original_address = mutable_addresses[0];
     mutable_addresses[0] = "10.0.0.1";
-    
+
     EXPECT_EQ(interface.getAddresses()[0], "10.0.0.1");
     EXPECT_NE(interface.getAddresses()[0], original_address);
 }
@@ -100,7 +100,7 @@ TEST_F(NetworkManagerTest, ConstructorDefault) {
 // Test getting network interfaces
 TEST_F(NetworkManagerTest, GetNetworkInterfaces) {
     auto interfaces = manager->getNetworkInterfaces();
-    
+
     // We should get at least one interface on most systems
     EXPECT_FALSE(interfaces.empty());
 
@@ -108,7 +108,7 @@ TEST_F(NetworkManagerTest, GetNetworkInterfaces) {
     for (const auto& interface : interfaces) {
         EXPECT_FALSE(interface.getName().empty());
         EXPECT_FALSE(interface.getMac().empty());
-        
+
         // An interface may not have addresses, but if it does they should be valid
         for (const auto& address : interface.getAddresses()) {
             EXPECT_FALSE(address.empty());
@@ -128,10 +128,10 @@ TEST_F(NetworkManagerTest, EnableDisableInterface) {
     // Just verify the methods don't throw exceptions
     EXPECT_NO_THROW(NetworkManager::enableInterface(test_interface_name));
     std::this_thread::sleep_for(wait_time);
-    
+
     EXPECT_NO_THROW(NetworkManager::disableInterface(test_interface_name));
     std::this_thread::sleep_for(wait_time);
-    
+
     // Re-enable for good measure
     EXPECT_NO_THROW(NetworkManager::enableInterface(test_interface_name));
 }
@@ -140,10 +140,10 @@ TEST_F(NetworkManagerTest, EnableDisableInterface) {
 TEST_F(NetworkManagerTest, ResolveDNS) {
     // Try to resolve a common hostname
     std::string ip = NetworkManager::resolveDNS(test_hostname);
-    
+
     // Verify we got a non-empty result
     EXPECT_FALSE(ip.empty());
-    
+
     // Check that it looks like an IPv4 or IPv6 address
     bool valid_format = ip.find('.') != std::string::npos || ip.find(':') != std::string::npos;
     EXPECT_TRUE(valid_format);
@@ -153,7 +153,7 @@ TEST_F(NetworkManagerTest, ResolveDNS) {
 TEST_F(NetworkManagerTest, MonitorConnectionStatus) {
     // Since this starts a background task, we just verify it doesn't throw
     EXPECT_NO_THROW(manager->monitorConnectionStatus());
-    
+
     // Give it some time to run
     std::this_thread::sleep_for(300ms);
 }
@@ -164,10 +164,10 @@ TEST_F(NetworkManagerTest, GetInterfaceStatus) {
     if (interfaces.empty()) {
         GTEST_SKIP() << "No network interfaces found for testing";
     }
-    
+
     // Get status of an interface
     std::string status = manager->getInterfaceStatus(test_interface_name);
-    
+
     // Status should not be empty
     EXPECT_FALSE(status.empty());
 }
@@ -176,25 +176,25 @@ TEST_F(NetworkManagerTest, GetInterfaceStatus) {
 TEST_F(NetworkManagerTest, DNSServerManagement) {
     // Get current DNS servers
     auto original_dns = NetworkManager::getDNSServers();
-    
+
     // Add a test DNS server
     std::string test_dns = "8.8.8.8";
     NetworkManager::addDNSServer(test_dns);
-    
+
     // Get updated DNS servers
     auto updated_dns = NetworkManager::getDNSServers();
-    
+
     // The list may have changed but we can't always verify the exact content
     // as it may require admin privileges to actually change DNS settings
-    
+
     // Try to restore original settings
     NetworkManager::setDNSServers(original_dns);
-    
+
     // Try to remove a DNS server
     if (!updated_dns.empty()) {
         NetworkManager::removeDNSServer(updated_dns[0]);
     }
-    
+
     // These tests mainly check that the methods don't throw exceptions
     SUCCEED();
 }
@@ -203,20 +203,20 @@ TEST_F(NetworkManagerTest, DNSServerManagement) {
 TEST_F(NetworkManagerTest, GetMacAddress) {
     // This test accesses a private method, so we can't directly test it
     // We can indirectly test it through the NetworkInterface objects
-    
+
     // Skip if no interfaces
     if (interfaces.empty()) {
         GTEST_SKIP() << "No network interfaces found for testing";
     }
-    
+
     // Check that all interfaces have a MAC address
     for (const auto& interface : interfaces) {
         EXPECT_FALSE(interface.getMac().empty());
-        
+
         // Verify MAC address format (XX:XX:XX:XX:XX:XX)
         std::string mac = interface.getMac();
         EXPECT_EQ(17, mac.length()); // 6 pairs of 2 hex digits + 5 colons
-        
+
         int colon_count = 0;
         for (char c : mac) {
             if (c == ':') colon_count++;
@@ -231,7 +231,7 @@ TEST_F(NetworkManagerTest, IsInterfaceUp) {
     if (interfaces.empty()) {
         GTEST_SKIP() << "No network interfaces found for testing";
     }
-    
+
     // We know each interface has an isUp method, so we can test it
     for (const auto& interface : interfaces) {
         // Just verify that we can get a status - can't predict what it should be
@@ -243,19 +243,19 @@ TEST_F(NetworkManagerTest, IsInterfaceUp) {
 // Test getting network connections for a process
 TEST_F(NetworkManagerTest, GetNetworkConnections) {
     // Use the current process ID or a known process
-    int pid = 
+    int pid =
 #ifdef _WIN32
         4; // System process on Windows often has network connections
 #else
         1; // Init process on Unix-like systems
 #endif
-    
+
     // Get connections for the process
     auto connections = getNetworkConnections(pid);
-    
+
     // We can't predict if there will be connections, but we can verify the method runs
     SUCCEED();
-    
+
     // If there are connections, check they have valid data
     for (const auto& conn : connections) {
         EXPECT_FALSE(conn.protocol.empty());
@@ -269,11 +269,11 @@ TEST_F(NetworkManagerTest, GetNetworkConnections) {
 // Test with invalid interface name
 TEST_F(NetworkManagerTest, InvalidInterfaceName) {
     std::string invalid_name = "nonexistent_interface_xyz";
-    
+
     // Test interface status for non-existent interface
     std::string status = manager->getInterfaceStatus(invalid_name);
     EXPECT_FALSE(status.empty()); // Should return some kind of error status
-    
+
     // Test enable/disable with invalid interface
     // Should not throw, but probably won't succeed
     EXPECT_NO_THROW(NetworkManager::enableInterface(invalid_name));
@@ -283,7 +283,7 @@ TEST_F(NetworkManagerTest, InvalidInterfaceName) {
 // Test DNS resolution with invalid hostname
 TEST_F(NetworkManagerTest, InvalidHostname) {
     std::string invalid_hostname = "thishostnamedoesnotexist.example.xyz";
-    
+
     // Resolving non-existent hostname should either return empty string,
     // an error message, or throw an exception that we can catch
     try {
@@ -301,11 +301,11 @@ TEST_F(NetworkManagerTest, ConcurrentAccess) {
     if (interfaces.empty()) {
         GTEST_SKIP() << "No network interfaces found for testing";
     }
-    
+
     // Create multiple threads to access NetworkManager simultaneously
     const int num_threads = 5;
     std::vector<std::future<void>> futures;
-    
+
     for (int i = 0; i < num_threads; ++i) {
         futures.push_back(std::async(std::launch::async, [this, i]() {
             for (int j = 0; j < 10; ++j) {
@@ -324,12 +324,12 @@ TEST_F(NetworkManagerTest, ConcurrentAccess) {
             }
         }));
     }
-    
+
     // Wait for all threads to finish
     for (auto& future : futures) {
         future.wait();
     }
-    
+
     // If we got here without crashes or exceptions, the test passed
     SUCCEED();
 }
@@ -337,25 +337,25 @@ TEST_F(NetworkManagerTest, ConcurrentAccess) {
 // Test with network stress
 TEST_F(NetworkManagerTest, DISABLED_NetworkStress) {
     // This is a potentially intensive test, so it's disabled by default
-    
+
     // Rapidly get network interfaces and other info
     const int iterations = 100;
-    
+
     for (int i = 0; i < iterations; ++i) {
         auto interfaces = manager->getNetworkInterfaces();
         for (const auto& interface : interfaces) {
             manager->getInterfaceStatus(interface.getName());
         }
-        
+
         auto dns_servers = NetworkManager::getDNSServers();
         NetworkManager::resolveDNS(test_hostname);
-        
+
         if (i % 10 == 0) {
             // Every 10 iterations, output progress
             std::cout << "Network stress test progress: " << i << "/" << iterations << std::endl;
         }
     }
-    
+
     // If we got here without errors, the test passed
     SUCCEED();
 }
@@ -364,15 +364,15 @@ TEST_F(NetworkManagerTest, DISABLED_NetworkStress) {
 // This is difficult to fully automate as it requires changing network state
 TEST_F(NetworkManagerTest, DISABLED_NetworkStateChanges) {
     // This test is disabled as it would require manual intervention
-    
+
     std::cout << "This test requires manually changing network state:" << std::endl;
     std::cout << "1. Run the test" << std::endl;
     std::cout << "2. Manually disable/enable network interfaces or connections" << std::endl;
     std::cout << "3. The test will check for appropriate state changes" << std::endl;
-    
+
     // Start monitoring connection status
     manager->monitorConnectionStatus();
-    
+
     // Monitor for 30 seconds, periodically checking interface status
     const int check_intervals = 30;
     for (int i = 0; i < check_intervals; ++i) {
@@ -381,10 +381,10 @@ TEST_F(NetworkManagerTest, DISABLED_NetworkStateChanges) {
             std::string status = manager->getInterfaceStatus(interface.getName());
             std::cout << "Interface " << interface.getName() << " status: " << status << std::endl;
         }
-        
+
         std::this_thread::sleep_for(1s);
     }
-    
+
     // If we got here without crashes, the test passed
     SUCCEED();
 }

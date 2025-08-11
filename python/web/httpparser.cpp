@@ -551,7 +551,7 @@ Returns:
 
 Examples:
     >>> from atom.web.httpparser import create_request, HttpMethod, HttpVersion
-    >>> parser = create_request(HttpMethod.POST, "/api/data", HttpVersion.HTTP_1_1, 
+    >>> parser = create_request(HttpMethod.POST, "/api/data", HttpVersion.HTTP_1_1,
     ...                         {"Content-Type": ["application/json"]}, '{"key": "value"}')
     >>> parser.build_request()
     'POST /api/data HTTP/1.1\r\nContent-Type: application/json\r\n\r\n{"key": "value"}'
@@ -587,7 +587,7 @@ Returns:
 
 Examples:
     >>> from atom.web.httpparser import create_response, HttpStatus, HttpVersion
-    >>> parser = create_response(HttpStatus.OK(), HttpVersion.HTTP_1_1, 
+    >>> parser = create_response(HttpStatus.OK(), HttpVersion.HTTP_1_1,
     ...                          {"Content-Type": ["text/html"]}, '<html>Hello</html>')
     >>> parser.build_response()
     'HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<html>Hello</html>'

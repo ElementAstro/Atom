@@ -96,23 +96,23 @@ Args:
 
 Examples:
     >>> from atom.async.message_queue import PyIOContext, MessageQueueString
-    >>> 
+    >>>
     >>> # Create an IO context for async operations
     >>> io_context = PyIOContext()
-    >>> 
+    >>>
     >>> # Create a message queue
     >>> queue = MessageQueueString(io_context)
-    >>> 
+    >>>
     >>> # Define a message handler
     >>> def message_handler(message):
     >>>     print(f"Received: {message}")
-    >>> 
+    >>>
     >>> # Subscribe to messages
     >>> queue.subscribe(message_handler, "my_subscriber")
-    >>> 
+    >>>
     >>> # Start processing messages
     >>> queue.start_processing()
-    >>> 
+    >>>
     >>> # Publish messages
     >>> queue.publish("Hello, world!")
     >>> queue.publish("Another message", 10)  # Higher priority
@@ -169,19 +169,19 @@ Args:
 Examples:
     >>> # Basic subscription
     >>> queue.subscribe(lambda msg: print(msg), "basic_subscriber")
-    >>> 
+    >>>
     >>> # Priority subscription
-    >>> queue.subscribe(lambda msg: print(f"High priority: {msg}"), 
+    >>> queue.subscribe(lambda msg: print(f"High priority: {msg}"),
     >>>                "high_priority", 10)
-    >>> 
+    >>>
     >>> # With filter
-    >>> queue.subscribe(lambda msg: print(f"Filtered: {msg}"), 
-    >>>                "filtered", 0, 
+    >>> queue.subscribe(lambda msg: print(f"Filtered: {msg}"),
+    >>>                "filtered", 0,
     >>>                lambda msg: "important" in msg)
-    >>> 
+    >>>
     >>> # With timeout
-    >>> queue.subscribe(lambda msg: process_message(msg), 
-    >>>                "timeout_protected", 0, None, 
+    >>> queue.subscribe(lambda msg: process_message(msg),
+    >>>                "timeout_protected", 0, None,
     >>>                timeout=5000)  # 5 seconds
 )")
 
@@ -206,10 +206,10 @@ Examples:
     >>> # Define a handler
     >>> def my_handler(msg):
     >>>     print(msg)
-    >>> 
+    >>>
     >>> # Subscribe
     >>> queue.subscribe(my_handler, "my_subscriber")
-    >>> 
+    >>>
     >>> # Later, unsubscribe
     >>> queue.unsubscribe(my_handler)
 )")
@@ -225,7 +225,7 @@ Args:
 Examples:
     >>> # Publish a basic message
     >>> queue.publish("Hello, world!")
-    >>> 
+    >>>
     >>> # Publish a high-priority message
     >>> queue.publish("Urgent message", 10)
 )")
@@ -369,7 +369,7 @@ Examples:
     >>>     # Wait for a message
     >>>     msg = await queue.await_message()
     >>>     print(f"Received: {msg}")
-    >>>     
+    >>>
     >>>     # Wait for a filtered message
     >>>     important_msg = await queue.await_message(
     >>>         lambda m: "important" in m)
@@ -388,11 +388,11 @@ PYBIND11_MODULE(message_queue, m) {
 
         This module provides a priority-based message queue with filtering, timeouts,
         and support for both synchronous and asynchronous message processing.
-        
+
         The message queue allows components to communicate through a publish-subscribe
-        pattern with priority handling, ensuring that high-priority messages are 
+        pattern with priority handling, ensuring that high-priority messages are
         processed before lower-priority ones.
-        
+
         Features:
           - Priority-based message processing
           - Message filtering
@@ -400,30 +400,30 @@ PYBIND11_MODULE(message_queue, m) {
           - Asynchronous message processing
           - Python async/await support
           - Cancellation of pending messages
-          
+
         Example:
             >>> from atom.async.message_queue import PyIOContext, MessageQueueString
-            >>> 
+            >>>
             >>> # Create an IO context for async operations
             >>> io_context = PyIOContext()
-            >>> 
+            >>>
             >>> # Create a message queue
             >>> queue = MessageQueueString(io_context)
-            >>> 
+            >>>
             >>> # Define a message handler
             >>> def message_handler(message):
             >>>     print(f"Received: {message}")
-            >>> 
+            >>>
             >>> # Subscribe to messages
             >>> queue.subscribe(message_handler, "my_subscriber")
-            >>> 
+            >>>
             >>> # Start processing messages
             >>> queue.start_processing()
-            >>> 
+            >>>
             >>> # Publish messages
             >>> queue.publish("Hello, world!")
             >>> queue.publish("Another message", 10)  # Higher priority
-            >>> 
+            >>>
             >>> # Using async/await
             >>> async def process_messages():
             >>>     message = await queue.await_message()
@@ -461,13 +461,13 @@ PYBIND11_MODULE(message_queue, m) {
     // Define the IO context wrapper
     py::class_<PyIOContext>(m, "PyIOContext", R"(
         Python-friendly wrapper for asio::io_context.
-        
+
         This class manages a thread that processes asynchronous operations
         for the message queue.
-        
+
         The IO context is automatically started on creation and stopped
         when the object is garbage collected.
-        
+
         Examples:
             >>> io_context = PyIOContext()
             >>> queue = MessageQueueString(io_context)

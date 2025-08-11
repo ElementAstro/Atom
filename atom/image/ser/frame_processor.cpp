@@ -9,23 +9,23 @@ std::vector<cv::Mat> FrameProcessor::process(const std::vector<cv::Mat>& frames,
                                           const ProgressCallback& progress) {
     std::vector<cv::Mat> results;
     results.reserve(frames.size());
-    
+
     cancelRequested = false;
-    
+
     for (size_t i = 0; i < frames.size(); ++i) {
         if (cancelRequested) {
             break;
         }
-        
+
         results.push_back(process(frames[i]));
-        
+
         if (progress) {
             double progressValue = static_cast<double>(i + 1) / frames.size();
-            progress(progressValue, std::format("{}: Processing frame {}/{}", 
+            progress(progressValue, std::format("{}: Processing frame {}/{}",
                                               getName(), i + 1, frames.size()));
         }
     }
-    
+
     return results;
 }
 
@@ -84,37 +84,37 @@ ProcessingPipeline::ProcessingPipeline() = default;
 
 cv::Mat ProcessingPipeline::process(const cv::Mat& frame) {
     cv::Mat result = frame.clone();
-    
+
     for (auto& processor : processors) {
         if (cancelRequested) {
             break;
         }
-        
+
         result = processor->process(result);
     }
-    
+
     return result;
 }
 
 std::vector<cv::Mat> ProcessingPipeline::process(const std::vector<cv::Mat>& frames,
                                               const ProgressCallback& progress) {
     std::vector<cv::Mat> results = frames;
-    
+
     cancelRequested = false;
-    
+
     for (size_t i = 0; i < processors.size(); ++i) {
         if (cancelRequested) {
             break;
         }
-        
+
         auto& processor = processors[i];
-        
+
         if (progress) {
             progress(static_cast<double>(i) / processors.size(),
-                   std::format("Running processor {}/{}: {}", 
+                   std::format("Running processor {}/{}: {}",
                               i + 1, processors.size(), processor->getName()));
         }
-        
+
         // Create a wrapper progress function that scales appropriately
         ProgressCallback processorProgress = nullptr;
         if (progress) {
@@ -124,14 +124,14 @@ std::vector<cv::Mat> ProcessingPipeline::process(const std::vector<cv::Mat>& fra
                 progress(overallProgress, message);
             };
         }
-        
+
         results = processor->process(results, processorProgress);
-        
+
         if (processor->isCancelled()) {
             cancelRequested = true;
         }
     }
-    
+
     return results;
 }
 

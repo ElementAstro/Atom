@@ -108,10 +108,10 @@ Returns:
 Examples:
     >>> def handler(message):
     >>>     print(f"Received: {message}")
-    >>> 
+    >>>
     >>> # Subscribe to string messages
     >>> token = subscribe_string(bus, "notifications.system", handler)
-    >>> 
+    >>>
     >>> # Unsubscribe later
     >>> unsubscribe_string(bus, token)
 )");
@@ -170,7 +170,7 @@ Args:
 Examples:
     >>> # Publish a string message
     >>> publish_string(bus, "notifications.system", "System is shutting down")
-    >>> 
+    >>>
     >>> # Publish with delay
     >>> publish_string(bus, "notifications.system", "Delayed message", 5000)
 )");
@@ -271,10 +271,10 @@ PYBIND11_MODULE(message_bus, m) {
 
         This module provides an event-driven communication system with
         hierarchical routing, filtering, and asynchronous message handling.
-        
+
         The message bus allows components to communicate without direct coupling,
         enabling a modular, extensible architecture.
-        
+
         Features:
           - Hierarchical message routing with namespace support
           - Type-safe message passing
@@ -282,27 +282,27 @@ PYBIND11_MODULE(message_bus, m) {
           - Message filtering
           - Message history tracking
           - Delayed message publishing
-          
+
         Example:
             >>> from atom.async.message_bus import PyIOContext, MessageBus
             >>> from atom.async.message_bus import publish_string, subscribe_string
-            >>> 
+            >>>
             >>> # Create an IO context for async operations
             >>> io_context = PyIOContext()
-            >>> 
+            >>>
             >>> # Create a message bus
             >>> bus = MessageBus.create_shared(io_context)
-            >>> 
+            >>>
             >>> # Define a message handler
             >>> def message_handler(message):
             >>>     print(f"Received: {message}")
-            >>> 
+            >>>
             >>> # Subscribe to a message type
             >>> token = subscribe_string(bus, "system.notifications", message_handler)
-            >>> 
+            >>>
             >>> # Publish a message
             >>> publish_string(bus, "system.notifications", "Hello from the message bus!")
-            >>> 
+            >>>
             >>> # Publish with delay (5 seconds)
             >>> publish_string(bus, "system.notifications", "Delayed message", 5000)
     )pbdoc";
@@ -329,13 +329,13 @@ PYBIND11_MODULE(message_bus, m) {
     // Define the IO context wrapper
     py::class_<PyIOContext>(m, "PyIOContext", R"(
         Python-friendly wrapper for asio::io_context.
-        
+
         This class manages a thread that processes asynchronous operations
         for the message bus.
-        
+
         The IO context is automatically started on creation and stopped
         when the object is garbage collected.
-        
+
         Examples:
             >>> io_context = PyIOContext()
             >>> bus = MessageBus.create_shared(io_context)
@@ -346,10 +346,10 @@ PYBIND11_MODULE(message_bus, m) {
     py::class_<atom::async::MessageBus,
                std::shared_ptr<atom::async::MessageBus>>(m, "MessageBus", R"(
         A message bus for asynchronous event-driven communication.
-        
+
         The MessageBus provides a way for components to communicate without
         direct coupling, using a publish-subscribe pattern with hierarchical routing.
-        
+
         Examples:
             >>> io_context = PyIOContext()
             >>> bus = MessageBus.create_shared(io_context)

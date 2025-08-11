@@ -14,7 +14,7 @@ int main() {
     try {
         // Create detector instance
         shortcut_detector::ShortcutDetector detector;
-        
+
         // Test various shortcuts
         std::vector<std::pair<std::string, shortcut_detector::Shortcut>> testShortcuts = {
             {"Ctrl+C", shortcut_detector::ShortcutFactory::create('C', true, false, false, false)},
@@ -28,12 +28,12 @@ int main() {
 
         for (const auto& [name, shortcut] : testShortcuts) {
             spdlog::info("Testing shortcut: {} ({})", name, shortcut.toString());
-            
+
             const auto result = detector.isShortcutCaptured(shortcut);
-            
+
             std::cout << "Shortcut: " << name << " (" << shortcut.toString() << ")\n";
             std::cout << "  Status: ";
-            
+
             switch (result.status) {
                 case shortcut_detector::ShortcutStatus::Available:
                     std::cout << "Available";
@@ -48,7 +48,7 @@ int main() {
                     std::cout << "Reserved by Windows";
                     break;
             }
-            
+
             std::cout << "\n  Details: " << result.details << "\n\n";
         }
 

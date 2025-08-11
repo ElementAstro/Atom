@@ -71,21 +71,21 @@ struct EnumTraits<test::Color> {
     }
 };
 
-// Complete EnumTraits specialization for Permissions (as flag enum)  
+// Complete EnumTraits specialization for Permissions (as flag enum)
 template <>
 struct EnumTraits<test::Permissions> {
     using enum_type = test::Permissions;
     using underlying_type = std::underlying_type_t<test::Permissions>;
 
     static constexpr std::array<test::Permissions, 5> values = {
-        test::Permissions::None, test::Permissions::Read, test::Permissions::Write, 
+        test::Permissions::None, test::Permissions::Read, test::Permissions::Write,
         test::Permissions::Execute, test::Permissions::All};
 
     static constexpr std::array<std::string_view, 5> names = {
         "None", "Read", "Write", "Execute", "All"};
 
     static constexpr std::array<std::string_view, 5> descriptions = {
-        "No permissions", "Read permission", "Write permission", 
+        "No permissions", "Read permission", "Write permission",
         "Execute permission", "All permissions"};
 
     static constexpr std::array<std::string_view, 5> aliases = {
@@ -409,10 +409,10 @@ TEST_F(EnumTest, FlagEnumFunctions) {
 // Test get_set_flags function
 TEST_F(EnumTest, GetSetFlags) {
     Permissions readWrite = Permissions::Read | Permissions::Write;
-    
+
     auto setFlags = atom::meta::get_set_flags(readWrite);
     EXPECT_EQ(setFlags.size(), 2);
-    
+
     // Flags should be in the order they appear in the enum values array
     bool foundRead = false, foundWrite = false;
     for (const auto& flag : setFlags) {
@@ -441,7 +441,7 @@ TEST_F(EnumTest, FlagSerialization) {
     // Test serializing combined flags
     Permissions readWrite = Permissions::Read | Permissions::Write;
     std::string readWriteStr = atom::meta::serialize_flags(readWrite);
-    
+
     // Should contain both flag names separated by |
     EXPECT_TRUE(readWriteStr.find("Read") != std::string::npos);
     EXPECT_TRUE(readWriteStr.find("Write") != std::string::npos);
@@ -495,8 +495,8 @@ TEST_F(EnumTest, FlagDeserialization) {
 TEST_F(EnumTest, EnumValidator) {
     // Create validator that only allows primary colors
     atom::meta::EnumValidator<Color> primaryColorValidator(
-        [](Color c) { 
-            return c == Color::Red || c == Color::Green || c == Color::Blue; 
+        [](Color c) {
+            return c == Color::Red || c == Color::Green || c == Color::Blue;
         },
         "Only primary colors allowed"
     );
@@ -546,7 +546,7 @@ TEST_F(EnumTest, EnumIteratorAndRange) {
     for (auto color : atom::meta::enum_range<Color>()) {
         colors.push_back(color);
     }
-    
+
     EXPECT_EQ(colors.size(), 4);
     EXPECT_EQ(colors[0], Color::Red);
     EXPECT_EQ(colors[1], Color::Green);

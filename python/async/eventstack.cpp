@@ -24,26 +24,26 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
 
         Args:
             None (default constructor)
-            
+
         Examples:
             >>> from atom.async.eventstack import EventStackInt
-            >>> 
+            >>>
             >>> # Create an event stack
             >>> stack = EventStackInt()
-            >>> 
+            >>>
             >>> # Add some events
             >>> stack.push_event(42)
             >>> stack.push_event(100)
             >>> stack.push_event(7)
-            >>> 
+            >>>
             >>> # Access the top event without removing it
             >>> top = stack.peek_top_event()
             >>> print(top)  # Output: 7
-            >>> 
+            >>>
             >>> # Pop an event
             >>> event = stack.pop_event()
             >>> print(event)  # Output: 7
-            >>> 
+            >>>
             >>> # Check size
             >>> print(len(stack))  # Output: 2
         )pbdoc")
@@ -55,35 +55,35 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
              /*
             .def(py::init<EventStackType&&>(), py::arg("other"),
              "Move constructor - creates a new stack by taking ownership of "
-             "another stack") 
+             "another stack")
              */
-        
+
 
         // Core stack operations
         .def("push_event", &EventStackType::pushEvent, py::arg("event"),
              R"pbdoc(
              Pushes an event onto the stack.
-             
+
              Args:
                  event: The event to push onto the stack
-                 
+
              Raises:
                  RuntimeError: If memory allocation fails
              )pbdoc")
         .def("pop_event", &EventStackType::popEvent,
              R"pbdoc(
              Pops an event from the stack.
-             
+
              Returns:
                  The popped event, or None if the stack is empty
              )pbdoc")
         .def("peek_top_event", &EventStackType::peekTopEvent,
              R"pbdoc(
              Returns the top event in the stack without removing it.
-             
+
              Returns:
                  The top event, or None if the stack is empty
-                 
+
              Raises:
                  RuntimeError: If the stack is empty and exceptions are enabled
              )pbdoc")
@@ -110,11 +110,11 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
             py::arg("predicate"),
             R"pbdoc(
              Filters events based on a custom filter function.
-             
+
              Args:
                  predicate: A function that takes an event and returns a boolean.
                             Events are kept if the function returns True.
-                            
+
              Examples:
                  >>> # Keep only events greater than 50
                  >>> stack.filter_events(lambda event: event > 50)
@@ -130,13 +130,13 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
             py::arg("predicate"),
             R"pbdoc(
              Finds the first event that satisfies a predicate.
-             
+
              Args:
                  predicate: A function that takes an event and returns a boolean
-                 
+
              Returns:
                  The first event satisfying the predicate, or None if not found
-                 
+
              Examples:
                  >>> # Find first event divisible by 10
                  >>> event = stack.find_event(lambda e: e % 10 == 0)
@@ -154,13 +154,13 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
             py::arg("predicate"),
             R"pbdoc(
              Counts the number of events that satisfy a predicate.
-             
+
              Args:
                  predicate: A function that takes an event and returns a boolean
-                 
+
              Returns:
                  The count of events satisfying the predicate
-                 
+
              Examples:
                  >>> # Count events less than 100
                  >>> count = stack.count_events(lambda e: e < 100)
@@ -176,10 +176,10 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
             py::arg("predicate"),
             R"pbdoc(
              Checks if any event in the stack satisfies a predicate.
-             
+
              Args:
                  predicate: A function that takes an event and returns a boolean
-                 
+
              Returns:
                  True if any event satisfies the predicate, False otherwise
              )pbdoc")
@@ -194,10 +194,10 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
             py::arg("predicate"),
             R"pbdoc(
              Checks if all events in the stack satisfy a predicate.
-             
+
              Args:
                  predicate: A function that takes an event and returns a boolean
-                 
+
              Returns:
                  True if all events satisfy the predicate, False otherwise
              )pbdoc")
@@ -217,10 +217,10 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
             py::arg("transform_func"),
             R"pbdoc(
              Transforms events using the provided function.
-             
+
              Args:
                  transform_func: A function that takes an event and returns a new event or None
-                 
+
              Examples:
                  >>> # Double all event values
                  >>> stack.transform_events(lambda e: e * 2)
@@ -236,11 +236,11 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
             py::arg("compare_func"),
             R"pbdoc(
              Sorts the events in the stack based on a custom comparison function.
-             
+
              Args:
                  compare_func: A function that takes two events and returns a boolean.
                                Returns true if the first argument should be placed before the second.
-                               
+
              Examples:
                  >>> # Sort in descending order
                  >>> stack.sort_events(lambda a, b: a > b)
@@ -260,10 +260,10 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
             py::arg("func"),
             R"pbdoc(
              Applies a function to each event in the stack.
-             
+
              Args:
                  func: A function to apply to each event
-                 
+
              Examples:
                  >>> # Print each event
                  >>> stack.for_each(lambda e: print(e))
@@ -293,7 +293,7 @@ PYBIND11_MODULE(eventstack, m) {
 
         This module provides a thread-safe stack data structure for managing events
         with support for various filtering, transformation, and querying operations.
-        
+
         Features:
           - Thread-safe event storage with LIFO (Last In, First Out) semantics
           - Atomic operations for push, pop, and peek
@@ -301,32 +301,32 @@ PYBIND11_MODULE(eventstack, m) {
           - Search functionality
           - Statistical queries
           - Support for various data types
-          
+
         The module includes implementations for common data types:
           - EventStackInt: For integer events
-          - EventStackFloat: For floating-point events 
+          - EventStackFloat: For floating-point events
           - EventStackString: For string events
           - EventStackBool: For boolean events
-          
+
         Example:
             >>> from atom.async.eventstack import EventStackInt
-            >>> 
+            >>>
             >>> # Create an event stack
             >>> stack = EventStackInt()
-            >>> 
+            >>>
             >>> # Add events
             >>> for i in range(10):
             >>>     stack.push_event(i)
-            >>> 
+            >>>
             >>> # Check if any event satisfies a condition
             >>> has_even = stack.any_event(lambda e: e % 2 == 0)
             >>> print(f"Has even numbers: {has_even}")
-            >>> 
+            >>>
             >>> # Find an event
             >>> five = stack.find_event(lambda e: e == 5)
             >>> if five is not None:
             >>>     print(f"Found: {five}")
-            >>> 
+            >>>
             >>> # Filter events
             >>> stack.filter_events(lambda e: e > 5)
             >>> print(f"Events after filtering: {stack.size()}")
@@ -386,22 +386,22 @@ PYBIND11_MODULE(eventstack, m) {
         py::arg("sample_event"),
         R"pbdoc(
           Factory function to create an appropriate EventStack based on the input type.
-          
+
           Args:
               sample_event: An example event of the type you want to store
                             (used only to determine the type)
-              
+
           Returns:
               A new EventStack of the appropriate type
-              
+
           Raises:
               TypeError: If the event type is not supported
-              
+
           Examples:
               >>> # Create an integer event stack
               >>> int_stack = create_event_stack(42)
-              >>> 
-              >>> # Create a string event stack 
+              >>>
+              >>> # Create a string event stack
               >>> str_stack = create_event_stack("hello")
           )pbdoc");
 

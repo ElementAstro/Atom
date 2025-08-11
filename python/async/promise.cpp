@@ -348,7 +348,7 @@ Returns:
     A new Promise that is resolved/rejected with the return value of the called handler.
 
 Examples:
-    >>> promise.then(lambda value: print(f"Success: {value}"), 
+    >>> promise.then(lambda value: print(f"Success: {value}"),
     ...              lambda reason: print(f"Failed: {reason}"))
 )")
         .def(

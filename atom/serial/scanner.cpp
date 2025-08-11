@@ -1269,7 +1269,7 @@ SerialPortScanner::get_port_details_linux(std::string_view port_name) {
 
     } catch (const std::exception& e) {
         if (config_.enable_debug_logging) {
-            spdlog::warn("Failed to get Linux port details for {}: {}", 
+            spdlog::warn("Failed to get Linux port details for {}: {}",
                          port_name, e.what());
         }
     }

@@ -411,18 +411,18 @@ Args:
 Examples:
     >>> from atom.sysinfo import memory
     >>> import time
-    >>> 
+    >>>
     >>> # Define a callback function
     >>> def on_memory_update(info):
     ...     print(f"Memory usage: {info.memory_load_percentage:.1f}%")
     ...     print(f"Available: {info.available_physical_memory / (1024**3):.2f} GB")
-    ... 
+    ...
     >>> # Start monitoring
     >>> memory.start_memory_monitoring(on_memory_update)
-    >>> 
+    >>>
     >>> # Let it run for a while
     >>> time.sleep(10)
-    >>> 
+    >>>
     >>> # Stop monitoring
     >>> memory.stop_memory_monitoring()
 )");
@@ -452,11 +452,11 @@ Returns:
 Examples:
     >>> from atom.sysinfo import memory
     >>> import datetime
-    >>> 
+    >>>
     >>> # Get memory timeline for 1 minute
     >>> timeline = memory.get_memory_timeline(datetime.timedelta(minutes=1))
     >>> print(f"Collected {len(timeline)} memory snapshots")
-    >>> 
+    >>>
     >>> # Analyze the data
     >>> for i, snapshot in enumerate(timeline):
     ...     print(f"Snapshot {i}: {snapshot.memory_load_percentage:.1f}% used")
@@ -590,17 +590,17 @@ Returns:
 Examples:
     >>> from atom.sysinfo import memory
     >>> import time
-    >>> 
+    >>>
     >>> # Define a callback function
     >>> def on_memory_update(info):
     ...     print(f"Memory usage: {info.memory_load_percentage:.1f}%")
     ...     print(f"Available: {info.available_physical_memory / (1024**3):.2f} GB")
-    ... 
+    ...
     >>> # Use as a context manager
     >>> with memory.monitor_memory(on_memory_update):
     ...     print("Monitoring memory for 5 seconds...")
     ...     time.sleep(5)
-    ... 
+    ...
     >>> print("Monitoring stopped")
 )");
 

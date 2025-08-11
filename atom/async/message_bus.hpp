@@ -694,7 +694,7 @@ public:
                         // Optimization: if 'once' subscribers are common, breaking here might be too early
                         // if a token could somehow be associated with multiple names (not current design).
                         // For now, assume a token is unique across all names for a given type.
-                        // break; 
+                        // break;
                     }
                 }
 
@@ -956,7 +956,7 @@ private:
         for (auto& subscriber : subscribersList) { // Iterate by reference to allow modification if needed (though not directly here)
             try {
                 // Ensure message is converted to std::any for filter and handler
-                std::any msg_any = message; 
+                std::any msg_any = message;
                 if (subscriber.filter(msg_any) && calledSubscribers.insert(subscriber.token).second) {
                     auto handler_task = [handlerFunc = subscriber.handler, message_for_handler = msg_any, token = subscriber.token]() { // Capture message_any by value
                         try {
@@ -998,7 +998,7 @@ private:
                 subscribersList.end());
             if (subscribersList.empty()) {
                 // If list becomes empty, remove 'name' entry from typeIter->second
-                typeIter->second.erase(nameIterator); 
+                typeIter->second.erase(nameIterator);
                 if (typeIter->second.empty()) {
                     // If type map becomes empty, remove type_index entry from subscribers_
                     subscribers_.erase(typeIter);

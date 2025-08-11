@@ -282,7 +282,7 @@ public:
             // 检查字段是否已存在
             auto it = this->find(key);
             bool fieldExists = (it != this->end());
-            
+
             // 如果启用了事件监听，准备事件数据
 #if INICPP_CONFIG_EVENT_LISTENERS
             std::string oldValue;
@@ -293,7 +293,7 @@ public:
 
             // 设置或更新字段值
             (*this)[key] = value;
-            
+
             // 如果启用了事件监听，触发事件
 #if INICPP_CONFIG_EVENT_LISTENERS
             // 准备事件数据
@@ -301,18 +301,18 @@ public:
             eventData.sectionName = sectionName_;
             eventData.fieldName = key;
             eventData.newValue = (*this)[key].template as<std::string>();
-            
+
             if (fieldExists) {
                 eventData.oldValue = oldValue;
                 eventData.eventType = SectionEventType::FIELD_MODIFIED;
             } else {
                 eventData.eventType = SectionEventType::FIELD_ADDED;
             }
-            
+
             // 通知监听器
             notifyListeners(eventData);
 #endif
-            
+
         } catch (const std::exception& ex) {
             throw std::invalid_argument("Failed to set field '" + key +
                                         "': " + ex.what());
@@ -329,7 +329,7 @@ public:
         if (it == this->end()) {
             return false;
         }
-        
+
 #if INICPP_CONFIG_EVENT_LISTENERS
         // 准备事件数据
         SectionEventData eventData;
@@ -338,15 +338,15 @@ public:
         eventData.oldValue = it->second.template as<std::string>();
         eventData.eventType = SectionEventType::FIELD_REMOVED;
 #endif
-        
+
         // 删除字段
         this->erase(it);
-        
+
 #if INICPP_CONFIG_EVENT_LISTENERS
         // 通知监听器
         notifyListeners(eventData);
 #endif
-        
+
         return true;
     }
 
@@ -369,10 +369,10 @@ public:
         eventData.sectionName = sectionName_;
         eventData.eventType = SectionEventType::SECTION_CLEARED;
 #endif
-        
+
         // 清空所有字段
         this->clear();
-        
+
 #if INICPP_CONFIG_EVENT_LISTENERS
         // 通知监听器
         notifyListeners(eventData);

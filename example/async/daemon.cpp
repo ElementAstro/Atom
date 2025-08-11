@@ -16,16 +16,16 @@ namespace examples {
 int simpleTask(int argc, char** argv) {
     std::cout << "简单任务开始执行" << std::endl;
     std::cout << "参数数量: " << argc << std::endl;
-    
+
     for (int i = 0; i < argc; ++i) {
         std::cout << "参数[" << i << "]: " << (argv[i] ? argv[i] : "nullptr") << std::endl;
     }
-    
+
     // 模拟工作
     std::cout << "任务正在执行..." << std::endl;
     std::this_thread::sleep_for(std::chrono::seconds(2));
     std::cout << "简单任务执行完成" << std::endl;
-    
+
     return 0;
 }
 
@@ -48,16 +48,16 @@ namespace examples {
 int simpleTask(int argc, char** argv) {
     std::cout << "简单任务开始执行" << std::endl;
     std::cout << "参数数量: " << argc << std::endl;
-    
+
     for (int i = 0; i < argc; ++i) {
         std::cout << "参数[" << i << "]: " << (argv[i] ? argv[i] : "nullptr") << std::endl;
     }
-    
+
     // 模拟工作
     std::cout << "任务正在执行..." << std::endl;
     std::this_thread::sleep_for(std::chrono::seconds(2));
     std::cout << "简单任务执行完成" << std::endl;
-    
+
     return 0;
 }
 

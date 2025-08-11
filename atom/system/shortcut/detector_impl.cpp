@@ -44,13 +44,13 @@ ShortcutCheckResult ShortcutDetectorImpl::isShortcutCaptured(
     if (!canRegister) {
         const auto capturingApp = findCapturingApplication(shortcut);
         if (capturingApp.empty()) {
-            spdlog::debug("Shortcut {} is captured by unknown system component", 
+            spdlog::debug("Shortcut {} is captured by unknown system component",
                          shortcut.toString());
             return {ShortcutStatus::CapturedBySystem,
                     "Unknown System Component",
                     "The shortcut is captured by the system"};
         } else {
-            spdlog::debug("Shortcut {} is captured by application: {}", 
+            spdlog::debug("Shortcut {} is captured by application: {}",
                          shortcut.toString(), capturingApp);
             return {ShortcutStatus::CapturedByApp, capturingApp,
                     "The shortcut is registered by another application"};
@@ -59,7 +59,7 @@ ShortcutCheckResult ShortcutDetectorImpl::isShortcutCaptured(
 
     if (hasInterceptingKeyboardHook(shortcut)) {
         const auto hookOwner = findKeyboardHookOwner();
-        spdlog::debug("Shortcut {} may be intercepted by keyboard hook owned by: {}", 
+        spdlog::debug("Shortcut {} may be intercepted by keyboard hook owned by: {}",
                      shortcut.toString(), hookOwner);
         return {ShortcutStatus::CapturedByApp, hookOwner,
                 "A keyboard hook may intercept this shortcut"};

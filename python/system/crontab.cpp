@@ -364,21 +364,21 @@ This module provides classes for managing cron jobs in both memory and the syste
 
 Examples:
     >>> from atom.system.crontab import CronManager, CronJob
-    >>> 
+    >>>
     >>> # Create a new cron manager
     >>> manager = CronManager()
-    >>> 
+    >>>
     >>> # Create a job that runs every day at midnight
     >>> job = CronJob("0 0 * * *", "backup.sh", True, "backups", "Daily backup")
-    >>> 
+    >>>
     >>> # Add the job to the manager
     >>> manager.create_cron_job(job)
-    >>> 
+    >>>
     >>> # Validate a cron expression
     >>> result = CronManager.validate_cron_expression("0 0 * * *")
     >>> if result.valid:
     ...     print("Valid cron expression")
-    >>> 
+    >>>
     >>> # Export jobs to system crontab
     >>> manager.export_to_crontab()
 )";

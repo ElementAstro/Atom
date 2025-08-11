@@ -25,11 +25,11 @@ cv::Mat convertToRGB(const cv::Mat& src);
 // Normalization
 cv::Mat normalize(const cv::Mat& src, double alpha = 0.0, double beta = 1.0);
 cv::Mat normalizeMinMax(const cv::Mat& src);
-cv::Mat normalizePercentile(const cv::Mat& src, double lowPercentile = 0.5, 
+cv::Mat normalizePercentile(const cv::Mat& src, double lowPercentile = 0.5,
                            double highPercentile = 99.5);
 
 // File utilities
-std::vector<std::filesystem::path> findSerFiles(const std::filesystem::path& directory, 
+std::vector<std::filesystem::path> findSerFiles(const std::filesystem::path& directory,
                                                bool recursive = false);
 std::optional<size_t> estimateFrameCount(const std::filesystem::path& serFile);
 bool isValidSerFile(const std::filesystem::path& serFile);
@@ -62,7 +62,7 @@ std::vector<cv::Point> detectHotPixels(const cv::Mat& image, double threshold = 
 std::vector<cv::Point> detectColdPixels(const cv::Mat& image, double threshold = 0.05);
 
 // Create bad pixel map
-cv::Mat createBadPixelMask(const cv::Mat& image, double hotThreshold = 0.95, 
+cv::Mat createBadPixelMask(const cv::Mat& image, double hotThreshold = 0.95,
                            double coldThreshold = 0.05);
 
 // Fix bad pixels

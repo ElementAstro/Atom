@@ -235,11 +235,11 @@ Examples:
     >>> t.value += 10
     >>> print(t.value)
     52
-    >>> 
+    >>>
     >>> # With change callback
     >>> def on_change(old, new):
     ...     print(f"Value changed from {old} to {new}")
-    ... 
+    ...
     >>> t.subscribe(on_change)
     >>> t.value = 100  # This will trigger the callback
 )",

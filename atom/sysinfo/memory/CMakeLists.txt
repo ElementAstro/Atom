@@ -20,10 +20,10 @@ add_library(atom_sysinfo_memory STATIC ${MEMORY_SOURCES})
 
 # 设置包含目录
 target_include_directories(atom_sysinfo_memory
-    PUBLIC 
+    PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/..
         ${CMAKE_CURRENT_SOURCE_DIR}/../..
-    PRIVATE 
+    PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
@@ -55,7 +55,7 @@ install(TARGETS atom_sysinfo_memory
     RUNTIME DESTINATION bin
 )
 
-install(FILES 
+install(FILES
         memory.hpp
         common.hpp
         $<$<PLATFORM_ID:Windows>:windows.hpp>
